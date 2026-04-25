@@ -33,6 +33,7 @@ func TestRunEndToEnd(t *testing.T) {
 		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "Launch Group"},
 		{"messages", []string{"--db", dbPath, "messages", "--chat", "123@g.us", "--asc"}, "launch now"},
 		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "[launch] now"},
+		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "[launch] now"},
 		{"json", []string{"--db", dbPath, "--json", "search", "launch"}, `"message_id"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -107,6 +108,19 @@ func TestCLIHelpers(t *testing.T) {
 	}
 	if firstNonEmpty("", "x") != "x" || firstNonEmpty("", "") != "" {
 		t.Fatal("firstNonEmpty mismatch")
+	}
+	args, query, err := splitSearchArgs([]string{"launch", "--limit", "5", "--from-them"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != "launch" || strings.Join(args, " ") != "--limit 5 --from-them" {
+		t.Fatalf("unexpected split args=%v query=%q", args, query)
+	}
+	if _, _, err := splitSearchArgs([]string{"one", "two"}); err == nil {
+		t.Fatal("expected multi-query split error")
+	}
+	if _, _, err := splitSearchArgs([]string{"--limit"}); err == nil {
+		t.Fatal("expected missing flag value error")
 	}
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	flags := bindMessageFlags(fs)

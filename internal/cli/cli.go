@@ -183,17 +183,18 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	filter := bindMessageFlags(fs)
-	if err := fs.Parse(args); err != nil {
+	flagArgs, query, err := splitSearchArgs(args)
+	if err != nil {
 		return usageErr(err)
 	}
-	if fs.NArg() != 1 {
-		return usageErr(errors.New("search requires exactly one query"))
+	if err := fs.Parse(flagArgs); err != nil {
+		return usageErr(err)
 	}
 	resolved, err := filter.resolve()
 	if err != nil {
 		return usageErr(err)
 	}
-	resolved.Query = fs.Arg(0)
+	resolved.Query = query
 	return a.withStore(ctx, func(st *store.Store) error {
 		msgs, err := st.Search(ctx, resolved)
 		if err != nil {
@@ -201,6 +202,49 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		}
 		return a.print(msgs)
 	})
+}
+
+func splitSearchArgs(args []string) ([]string, string, error) {
+	var flags []string
+	var positionals []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			if searchFlagNeedsValue(arg) && !strings.Contains(arg, "=") {
+				next := i + 1
+				if next >= len(args) {
+					return nil, "", fmt.Errorf("flag needs an argument: %s", arg)
+				}
+				flags = append(flags, args[next]) // #nosec G602 -- next is checked against len(args) above.
+				i = next
+			}
+			continue
+		}
+		positionals = append(positionals, arg)
+	}
+	if len(positionals) != 1 {
+		return nil, "", errors.New("search requires exactly one query")
+	}
+	return flags, positionals[0], nil
+}
+
+func searchFlagNeedsValue(arg string) bool {
+	name := strings.TrimPrefix(arg, "-")
+	name = strings.TrimPrefix(name, "-")
+	if before, _, ok := strings.Cut(name, "="); ok {
+		name = before
+	}
+	switch name {
+	case "chat", "sender", "limit", "after", "before":
+		return true
+	default:
+		return false
+	}
 }
 
 type messageFlags struct {
