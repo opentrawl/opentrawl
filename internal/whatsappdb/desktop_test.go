@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -92,13 +93,13 @@ func TestDiscoverAndHelpers(t *testing.T) {
 		t.Fatalf("missing source should not be available: %+v", missing)
 	}
 
-	if DefaultPath() == "" {
-		t.Fatal("default path should be set on darwin test host")
+	if runtime.GOOS == "darwin" && DefaultPath() == "" {
+		t.Fatal("default path should be set on darwin")
 	}
 	if defaultedPath(source) != source {
 		t.Fatal("explicit path should win")
 	}
-	if defaultedPath("") == "" {
+	if runtime.GOOS == "darwin" && defaultedPath("") == "" {
 		t.Fatal("empty path should default")
 	}
 
