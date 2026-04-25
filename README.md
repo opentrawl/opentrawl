@@ -12,8 +12,24 @@ WhatsApp Web, or write back into WhatsApp's app container.
 
 ## Install
 
+Homebrew is the easiest path. Install directly from my tap:
+
 ```bash
 brew install steipete/tap/wacrawl
+```
+
+Or tap it once, then install by name:
+
+```bash
+brew tap steipete/tap
+brew install wacrawl
+```
+
+Upgrade later with:
+
+```bash
+brew update
+brew upgrade wacrawl
 ```
 
 Or from source:
