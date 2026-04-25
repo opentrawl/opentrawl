@@ -4,7 +4,7 @@ All notable changes to this project are documented here.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
-## [Unreleased]
+## [0.1.0] - 2026-04-25
 
 ### Added
 
@@ -45,6 +45,6 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 ### Quality
 
 - Coverage gate added at 85% total statement coverage.
-- Current test coverage: 86.2%.
+- Current test coverage: 86.3%.
 - Focused tests cover CLI behavior, archive storage, import fixtures, filtering,
   search, JSON output, schema edge cases, and failure paths.
