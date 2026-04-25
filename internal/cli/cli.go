@@ -49,8 +49,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	jsonOut := global.Bool("json", false, "")
 	dbPath := global.String("db", defaultDBPath(), "")
 	source := global.String("source", "", "")
+	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		return usageErr(err)
+	}
+	if *versionFlag {
+		_, _ = io.WriteString(stdout, version+"\n")
+		return nil
 	}
 	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source}
 	rest := global.Args()
@@ -302,6 +307,7 @@ func printUsage(w io.Writer) {
 
 Usage:
   wacrawl [--db PATH] [--source PATH] [--json] <command> [args]
+  wacrawl --version
 
 Commands:
   doctor      Inspect WhatsApp Desktop source and archive paths.

@@ -24,6 +24,11 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 - Group sender resolution through `ZWAMESSAGE.ZGROUPMEMBER`.
 - Media metadata extraction through both message-to-media join paths.
 - Build, lint, coverage, and test automation through `make check`.
+- GitHub Actions CI mirroring Discrawl: lint, tests, race tests, dependency
+  checks, vulnerability scan, secret scan, and GoReleaser snapshot check.
+- GoReleaser config for macOS, Linux, and Windows release archives.
+- Release workflow for `v*` tags and manual tag reruns.
+- `--version` flag with release-time ldflags injection.
 
 ### Changed
 

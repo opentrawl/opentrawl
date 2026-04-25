@@ -53,7 +53,7 @@ From this checkout:
 
 ```bash
 make build
-./bin/wacrawl help
+./bin/wacrawl --version
 ```
 
 ## Quick Start
@@ -100,6 +100,7 @@ wacrawl search "clawcon"
 --db PATH       Archive database path. Default: ~/.wacrawl/wacrawl.db
 --source PATH   WhatsApp Desktop source path.
 --json          Emit JSON instead of human-readable output.
+--version       Print the CLI version.
 ```
 
 Examples:
@@ -235,6 +236,33 @@ go build -o bin/wacrawl ./cmd/wacrawl
 ```
 
 The coverage gate fails below 85% total statement coverage.
+
+## Release
+
+CI mirrors the Discrawl setup:
+
+- pull requests and `main` pushes run lint, tests, race tests, dependency
+  checks, vulnerability scanning, secret scanning, and a GoReleaser snapshot.
+- tags matching `v*` run GoReleaser and publish GitHub release artifacts.
+- manual release reruns can target an existing tag from the `release` workflow.
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+GoReleaser builds:
+
+```text
+darwin/amd64
+darwin/arm64
+linux/amd64
+linux/arm64
+windows/amd64
+windows/arm64
+```
 
 ## License
 
