@@ -1,157 +1,171 @@
 # wacrawl
 
-`wacrawl` is a read-only command line archive for the macOS WhatsApp Desktop app.
+Read-only local archive and search for the macOS WhatsApp Desktop app.
 
-It snapshots WhatsApp's local SQLite databases, imports messages into a separate
-SQLite archive, and gives you fast local listing and search without mutating
-WhatsApp's app container.
+`wacrawl` copies WhatsApp Desktop's local SQLite databases into a temporary
+snapshot, imports the useful chat data into its own SQLite archive, and gives
+you scriptable commands for status, chat listing, message listing, and full-text
+search.
 
-## Why
-
-WhatsApp Desktop keeps useful local state, but the data lives in CoreData-shaped
-SQLite files with Apple-epoch timestamps, group sender indirection, media joins,
-and an app-owned FTS database that depends on WhatsApp's custom tokenizer.
-
-`wacrawl` turns that into a stable archive you can query from scripts.
-
-## Safety Model
-
-- Read-only against WhatsApp data.
-- Copies SQLite database triads to a temp snapshot before reading.
-- Writes only to `~/.wacrawl/wacrawl.db` by default.
-- Does not use WhatsApp private APIs.
-- Does not decrypt, send, upload, or modify messages.
-- Does not currently write back to WhatsApp.
-
-## Requirements
-
-- macOS with WhatsApp Desktop installed.
-- Go 1.26 or newer.
-- Local filesystem access to WhatsApp's group container.
-
-Default WhatsApp source:
-
-```text
-~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared
-```
-
-Default archive:
-
-```text
-~/.wacrawl/wacrawl.db
-```
+It is for local inspection. It does not send messages, decrypt backups, talk to
+WhatsApp Web, or write back into WhatsApp's app container.
 
 ## Install
 
-From source:
+```bash
+brew install steipete/tap/wacrawl
+```
+
+Or from source:
 
 ```bash
 go install github.com/steipete/wacrawl/cmd/wacrawl@latest
 ```
 
-From this checkout:
+Check the installed binary:
 
 ```bash
-make build
-./bin/wacrawl --version
+wacrawl --version
 ```
 
 ## Quick Start
 
-Inspect the WhatsApp source:
+First, check whether `wacrawl` can see the local WhatsApp Desktop data:
 
 ```bash
 wacrawl doctor
 ```
 
-Import a fresh archive snapshot:
+Import a fresh local archive:
 
 ```bash
 wacrawl import
 ```
 
-Check archive counts:
+Inspect what was imported:
 
 ```bash
 wacrawl status
-```
-
-List recent chats:
-
-```bash
 wacrawl chats --limit 20
-```
-
-List recent messages:
-
-```bash
 wacrawl messages --limit 20
 ```
 
 Search message text:
 
 ```bash
-wacrawl search "summit"
+wacrawl search "release notes"
 ```
 
-## Global Flags
-
-```text
---db PATH       Archive database path. Default: ~/.wacrawl/wacrawl.db
---source PATH   WhatsApp Desktop source path.
---json          Emit JSON instead of human-readable output.
---version       Print the CLI version.
-```
-
-Examples:
+Use JSON for scripts:
 
 ```bash
-wacrawl --json status
-wacrawl --db /tmp/wa.db import
-wacrawl --source "$HOME/Library/Group Containers/group.net.whatsapp.WhatsApp.shared" doctor
+wacrawl --json search "invoice" --from-them --after 2026-01-01
 ```
+
+## What It Reads
+
+On macOS, WhatsApp Desktop stores app data in:
+
+```text
+~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared
+```
+
+`wacrawl` currently imports from:
+
+```text
+ChatStorage.sqlite
+ContactsV2.sqlite
+Message/Media/
+```
+
+It writes its own archive to:
+
+```text
+~/.wacrawl/wacrawl.db
+```
+
+Override either path when needed:
+
+```bash
+wacrawl --source "$HOME/Library/Group Containers/group.net.whatsapp.WhatsApp.shared" doctor
+wacrawl --db /tmp/wacrawl.db import
+```
+
+## Safety
+
+- Opens WhatsApp data read-only.
+- Copies SQLite database, WAL, and SHM files into a temp snapshot before import.
+- Replaces only the `wacrawl` archive database.
+- Does not modify WhatsApp databases, settings, contacts, chats, or media.
+- Does not use the WhatsApp network protocol.
+- Does not upload data.
+
+The archive can contain private message data. Keep `~/.wacrawl/wacrawl.db`
+local and out of commits, backups, and shared logs unless that is intentional.
 
 ## Commands
 
 ### `doctor`
 
-Reports whether the WhatsApp Desktop source is available, which database files
-exist, row counts, message date range, and schema notes.
+Inspect the source path and database shape:
 
 ```bash
+wacrawl doctor
 wacrawl --json doctor
 ```
 
+Reports source availability, discovered database files, row counts, message date
+range, and importer schema notes.
+
 ### `import`
 
-Creates a temporary copy of WhatsApp's SQLite files, extracts chats, contacts,
-groups, participants, messages, and media references, then replaces the archive
-contents in one transaction.
+Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 
 ```bash
 wacrawl import
 ```
 
+Imports:
+
+- chats
+- contacts
+- groups
+- group participants
+- messages
+- media metadata and local media paths
+
 ### `status`
 
-Shows archive counts, oldest/newest message timestamps, last import time, and
-the source used for the last import.
+Show archive counts and import metadata:
 
 ```bash
 wacrawl status
 ```
 
+Includes chat, contact, group, participant, message, media-message, oldest,
+newest, last-import, and source fields.
+
 ### `chats`
 
-Lists chats ordered by newest message.
+List chats ordered by newest message:
 
 ```bash
+wacrawl chats
 wacrawl chats --limit 100
 ```
 
 ### `messages`
 
-Lists archived messages. Filters:
+List archived messages:
+
+```bash
+wacrawl messages
+wacrawl messages --chat 1234567890@s.whatsapp.net
+wacrawl messages --after 2026-01-01 --from-them
+wacrawl messages --has-media --json
+```
+
+Filters:
 
 ```text
 --chat JID       Restrict to one chat.
@@ -165,42 +179,32 @@ Lists archived messages. Filters:
 --asc            Oldest first.
 ```
 
-Examples:
-
-```bash
-wacrawl messages --chat 1234567890@s.whatsapp.net --limit 25
-wacrawl messages --after 2026-01-01 --from-them
-wacrawl messages --has-media --json
-```
-
 ### `search`
 
-Runs FTS5 search over the archive's message text, chat name, sender name, and
-media title fields. It accepts the same message filters as `messages`.
+Search the archive with SQLite FTS5:
 
 ```bash
-wacrawl search "release notes" --after 2026-01-01
-wacrawl search "invoice" --from-them --json
+wacrawl search "launch"
+wacrawl search "invoice" --from-them --after 2026-01-01
+wacrawl --json search "restaurant"
 ```
 
-## WhatsApp Data Shape
+Search uses message text, chat name, sender name, and media title fields. It
+accepts the same filters as `messages`.
 
-Current macOS WhatsApp Desktop data lives under:
+## Global Flags
 
 ```text
-~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared
+--db PATH       Archive database path. Default: ~/.wacrawl/wacrawl.db
+--source PATH   WhatsApp Desktop source path.
+--json          Emit JSON instead of human-readable output.
+--version       Print the CLI version.
 ```
 
-Important files:
+## Data Format Notes
 
-```text
-ChatStorage.sqlite
-ContactsV2.sqlite
-fts/ChatSearchV5f.sqlite
-Message/Media/
-```
-
-Important CoreData tables:
+WhatsApp Desktop uses CoreData-style SQLite tables. The importer currently knows
+about:
 
 ```text
 ZWACHATSESSION
@@ -210,18 +214,20 @@ ZWAGROUPINFO
 ZWAGROUPMEMBER
 ```
 
-Notes from the current importer:
+Important details:
 
 - WhatsApp timestamps are seconds since `2001-01-01T00:00:00Z`.
-- `ZWAMESSAGE.Z_PK` is used as the stable source row identity.
-- `ZSTANZAID` is not globally unique enough for archive identity.
+- `ZWAMESSAGE.Z_PK` is used as the source row identity.
+- `ZSTANZAID` is not unique enough for archive identity.
 - Group senders are resolved through `ZWAMESSAGE.ZGROUPMEMBER`.
-- Media joins are checked through both `ZWAMESSAGE.ZMEDIAITEM` and
+- Media is joined through both `ZWAMESSAGE.ZMEDIAITEM` and
   `ZWAMEDIAITEM.ZMESSAGE`.
-- WhatsApp's own search DB uses a custom `wa_tokenizer`; `wacrawl` builds its
-  own portable FTS5 table instead.
+- WhatsApp's own search database uses a custom `wa_tokenizer`; `wacrawl` builds
+  a portable FTS5 index instead.
 
 ## Development
+
+Requires Go 1.26 or newer.
 
 ```bash
 make check
@@ -235,25 +241,25 @@ golangci-lint run ./...
 go build -o bin/wacrawl ./cmd/wacrawl
 ```
 
-The coverage gate fails below 85% total statement coverage.
+Extra release-parity checks:
+
+```bash
+go test -count=1 -race ./...
+goreleaser release --snapshot --clean --skip=publish
+```
+
+Coverage must stay at or above 85%.
 
 ## Release
 
-CI mirrors the Discrawl setup:
-
-- pull requests and `main` pushes run lint, tests, race tests, dependency
-  checks, vulnerability scanning, secret scanning, and a GoReleaser snapshot.
-- tags matching `v*` run GoReleaser and publish GitHub release artifacts.
-- manual release reruns can target an existing tag from the `release` workflow.
-
-To cut a release:
+Releases are tag-driven through GoReleaser.
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag -a v0.1.0 -m "Release 0.1.0"
+git push origin main --tags
 ```
 
-GoReleaser builds:
+CI publishes GitHub release artifacts for:
 
 ```text
 darwin/amd64
@@ -262,6 +268,12 @@ linux/amd64
 linux/arm64
 windows/amd64
 windows/arm64
+```
+
+The Homebrew formula lives in:
+
+```text
+~/Projects/homebrew-tap/Formula/wacrawl.rb
 ```
 
 ## License
