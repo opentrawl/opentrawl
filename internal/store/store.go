@@ -1,0 +1,416 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+const schemaVersion = 1
+
+type Store struct {
+	db   *sql.DB
+	path string
+}
+
+type ImportStats struct {
+	SourcePath    string    `json:"source_path"`
+	DBPath        string    `json:"db_path"`
+	Chats         int       `json:"chats"`
+	Contacts      int       `json:"contacts"`
+	Groups        int       `json:"groups"`
+	Participants  int       `json:"participants"`
+	Messages      int       `json:"messages"`
+	MediaMessages int       `json:"media_messages"`
+	StartedAt     time.Time `json:"started_at"`
+	FinishedAt    time.Time `json:"finished_at"`
+}
+
+type Status struct {
+	DBPath        string    `json:"db_path"`
+	Chats         int       `json:"chats"`
+	Contacts      int       `json:"contacts"`
+	Groups        int       `json:"groups"`
+	Participants  int       `json:"participants"`
+	Messages      int       `json:"messages"`
+	MediaMessages int       `json:"media_messages"`
+	OldestMessage time.Time `json:"oldest_message,omitzero"`
+	NewestMessage time.Time `json:"newest_message,omitzero"`
+	LastImportAt  time.Time `json:"last_import_at,omitzero"`
+	LastSource    string    `json:"last_source,omitempty"`
+}
+
+type Chat struct {
+	JID            string
+	Kind           string
+	Name           string
+	LastMessageAt  time.Time
+	UnreadCount    int
+	Archived       bool
+	Removed        bool
+	Hidden         bool
+	RawSessionType int
+	MessageCount   int
+}
+
+type Contact struct {
+	JID          string
+	Phone        string
+	FullName     string
+	FirstName    string
+	LastName     string
+	BusinessName string
+	Username     string
+	LID          string
+	AboutText    string
+	UpdatedAt    time.Time
+}
+
+type Group struct {
+	JID       string
+	Name      string
+	OwnerJID  string
+	CreatedAt time.Time
+}
+
+type GroupParticipant struct {
+	GroupJID    string
+	UserJID     string
+	ContactName string
+	FirstName   string
+	IsAdmin     bool
+	IsActive    bool
+}
+
+type Message struct {
+	SourcePK    int64     `json:"source_pk"`
+	ChatJID     string    `json:"chat_jid"`
+	ChatName    string    `json:"chat_name,omitempty"`
+	MessageID   string    `json:"message_id"`
+	SenderJID   string    `json:"sender_jid,omitempty"`
+	SenderName  string    `json:"sender_name,omitempty"`
+	Timestamp   time.Time `json:"timestamp"`
+	FromMe      bool      `json:"from_me"`
+	Text        string    `json:"text,omitempty"`
+	RawType     int       `json:"raw_type"`
+	MessageType string    `json:"message_type,omitempty"`
+	MediaType   string    `json:"media_type,omitempty"`
+	MediaTitle  string    `json:"media_title,omitempty"`
+	MediaPath   string    `json:"media_path,omitempty"`
+	MediaURL    string    `json:"media_url,omitempty"`
+	MediaSize   int64     `json:"media_size,omitempty"`
+	Starred     bool      `json:"starred,omitempty"`
+	Snippet     string    `json:"snippet,omitempty"`
+}
+
+type MessageFilter struct {
+	Query    string
+	ChatJID  string
+	Sender   string
+	Limit    int
+	After    *time.Time
+	Before   *time.Time
+	FromMe   *bool
+	HasMedia bool
+	Asc      bool
+}
+
+func Open(ctx context.Context, path string) (*Store, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("db path is required")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, fmt.Errorf("mkdir db dir: %w", err)
+	}
+	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)", path)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping sqlite: %w", err)
+	}
+	s := &Store{db: db, path: path}
+	if err := s.migrate(ctx); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func (s *Store) Close() error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Close()
+}
+
+func (s *Store) DB() *sql.DB {
+	return s.db
+}
+
+func (s *Store) Path() string {
+	return s.path
+}
+
+func (s *Store) migrate(ctx context.Context) error {
+	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
+		return fmt.Errorf("migrate schema: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
+		return fmt.Errorf("set schema version: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, groups []Group, participants []GroupParticipant, messages []Message) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer rollback(tx)
+
+	for _, q := range []string{
+		"delete from messages_fts",
+		"delete from messages",
+		"delete from group_participants",
+		"delete from groups",
+		"delete from chats",
+		"delete from contacts",
+		"delete from sync_state",
+	} {
+		if _, err := tx.ExecContext(ctx, q); err != nil {
+			return err
+		}
+	}
+	for _, c := range contacts {
+		if _, err := tx.ExecContext(ctx, `insert into contacts(jid, phone, full_name, first_name, last_name, business_name, username, lid, about_text, updated_at) values(?,?,?,?,?,?,?,?,?,?)`,
+			c.JID, c.Phone, c.FullName, c.FirstName, c.LastName, c.BusinessName, c.Username, c.LID, c.AboutText, unix(c.UpdatedAt)); err != nil {
+			return err
+		}
+	}
+	for _, c := range chats {
+		if _, err := tx.ExecContext(ctx, `insert into chats(jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type) values(?,?,?,?,?,?,?,?,?)`,
+			c.JID, c.Kind, c.Name, unix(c.LastMessageAt), c.UnreadCount, boolInt(c.Archived), boolInt(c.Removed), boolInt(c.Hidden), c.RawSessionType); err != nil {
+			return err
+		}
+	}
+	for _, g := range groups {
+		if _, err := tx.ExecContext(ctx, `insert into groups(jid, name, owner_jid, created_at) values(?,?,?,?)`,
+			g.JID, g.Name, g.OwnerJID, unix(g.CreatedAt)); err != nil {
+			return err
+		}
+	}
+	for _, p := range participants {
+		if _, err := tx.ExecContext(ctx, `insert into group_participants(group_jid, user_jid, contact_name, first_name, is_admin, is_active) values(?,?,?,?,?,?)`,
+			p.GroupJID, p.UserJID, p.ContactName, p.FirstName, boolInt(p.IsAdmin), boolInt(p.IsActive)); err != nil {
+			return err
+		}
+	}
+	for _, m := range messages {
+		if _, err := tx.ExecContext(ctx, `insert into messages(source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			m.SourcePK, m.ChatJID, m.ChatName, m.MessageID, m.SenderJID, m.SenderName, unix(m.Timestamp), boolInt(m.FromMe), m.Text, m.RawType, m.MessageType, m.MediaType, m.MediaTitle, m.MediaPath, m.MediaURL, m.MediaSize, boolInt(m.Starred)); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, text, chat, sender, media) values((select rowid from messages where source_pk=?), ?, ?, ?, ?)`,
+			m.SourcePK, strings.TrimSpace(m.Text+" "+m.MediaTitle), m.ChatName, m.SenderName, m.MediaType); err != nil {
+			return err
+		}
+	}
+	now := stats.FinishedAt
+	if now.IsZero() {
+		now = time.Now().UTC()
+	}
+	for key, value := range map[string]string{
+		"last_import_at": now.Format(time.RFC3339Nano),
+		"source_path":    stats.SourcePath,
+	} {
+		if _, err := tx.ExecContext(ctx, `insert into sync_state(key, value, updated_at) values(?,?,?)`, key, value, unix(now)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (s *Store) Status(ctx context.Context) (Status, error) {
+	out := Status{DBPath: s.path}
+	counts := []struct {
+		dst *int
+		q   string
+	}{
+		{&out.Chats, "select count(*) from chats"},
+		{&out.Contacts, "select count(*) from contacts"},
+		{&out.Groups, "select count(*) from groups"},
+		{&out.Participants, "select count(*) from group_participants"},
+		{&out.Messages, "select count(*) from messages"},
+		{&out.MediaMessages, "select count(*) from messages where media_type <> '' or media_path <> '' or media_url <> ''"},
+	}
+	for _, c := range counts {
+		if err := s.db.QueryRowContext(ctx, c.q).Scan(c.dst); err != nil {
+			return out, err
+		}
+	}
+	var oldest, newest sql.NullInt64
+	if err := s.db.QueryRowContext(ctx, `select min(ts), max(ts) from messages`).Scan(&oldest, &newest); err != nil {
+		return out, err
+	}
+	if oldest.Valid && oldest.Int64 > 0 {
+		out.OldestMessage = time.Unix(oldest.Int64, 0).UTC()
+	}
+	if newest.Valid && newest.Int64 > 0 {
+		out.NewestMessage = time.Unix(newest.Int64, 0).UTC()
+	}
+	var lastImport string
+	_ = s.db.QueryRowContext(ctx, `select value from sync_state where key='last_import_at'`).Scan(&lastImport)
+	if t, err := time.Parse(time.RFC3339Nano, lastImport); err == nil {
+		out.LastImportAt = t
+	}
+	_ = s.db.QueryRowContext(ctx, `select value from sync_state where key='source_path'`).Scan(&out.LastSource)
+	return out, nil
+}
+
+func (s *Store) ListChats(ctx context.Context, limit int) ([]Chat, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	rows, err := s.db.QueryContext(ctx, `select c.jid,c.kind,c.name,c.last_message_at,c.unread_count,c.archived,c.removed,c.hidden,c.raw_session_type,count(m.rowid) from chats c left join messages m on m.chat_jid=c.jid group by c.jid order by c.last_message_at desc limit ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Chat
+	for rows.Next() {
+		var c Chat
+		var ts int64
+		var archived, removed, hidden int
+		if err := rows.Scan(&c.JID, &c.Kind, &c.Name, &ts, &c.UnreadCount, &archived, &removed, &hidden, &c.RawSessionType, &c.MessageCount); err != nil {
+			return nil, err
+		}
+		c.LastMessageAt = fromUnix(ts)
+		c.Archived = archived != 0
+		c.Removed = removed != 0
+		c.Hidden = hidden != 0
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	query := `select source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, '' from messages where 1=1`
+	var args []any
+	query, args = applyMessageFilters(query, args, filter, false)
+	if filter.Asc {
+		query += " order by ts asc, source_pk asc limit ?"
+	} else {
+		query += " order by ts desc, source_pk desc limit ?"
+	}
+	args = append(args, filter.Limit)
+	return scanMessages(ctx, s.db, query, args...)
+}
+
+func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, error) {
+	if strings.TrimSpace(filter.Query) == "" {
+		return nil, errors.New("search query required")
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 50
+	}
+	query := `select m.source_pk, m.chat_jid, m.chat_name, m.msg_id, m.sender_jid, m.sender_name, m.ts, m.from_me, m.text, m.raw_type, m.message_type, m.media_type, m.media_title, m.media_path, m.media_url, m.media_size, m.starred, snippet(messages_fts, 0, '[', ']', '...', 12) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
+	args := []any{filter.Query}
+	query, args = applyMessageFilters(query, args, filter, true)
+	query += " order by bm25(messages_fts) limit ?"
+	args = append(args, filter.Limit)
+	return scanMessages(ctx, s.db, query, args...)
+}
+
+func applyMessageFilters(query string, args []any, filter MessageFilter, joined bool) (string, []any) {
+	prefix := ""
+	if joined {
+		prefix = "m."
+	}
+	if strings.TrimSpace(filter.ChatJID) != "" {
+		query += " and " + prefix + "chat_jid = ?"
+		args = append(args, filter.ChatJID)
+	}
+	if strings.TrimSpace(filter.Sender) != "" {
+		query += " and " + prefix + "sender_jid = ?"
+		args = append(args, filter.Sender)
+	}
+	if filter.After != nil {
+		query += " and " + prefix + "ts >= ?"
+		args = append(args, unix(*filter.After))
+	}
+	if filter.Before != nil {
+		query += " and " + prefix + "ts <= ?"
+		args = append(args, unix(*filter.Before))
+	}
+	if filter.FromMe != nil {
+		query += " and " + prefix + "from_me = ?"
+		args = append(args, boolInt(*filter.FromMe))
+	}
+	if filter.HasMedia {
+		query += " and (" + prefix + "media_type <> '' or " + prefix + "media_path <> '' or " + prefix + "media_url <> '')"
+	}
+	return query, args
+}
+
+func scanMessages(ctx context.Context, db *sql.DB, query string, args ...any) ([]Message, error) {
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Message
+	for rows.Next() {
+		var m Message
+		var ts int64
+		var fromMe, starred int
+		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &m.SenderJID, &m.SenderName, &ts, &fromMe, &m.Text, &m.RawType, &m.MessageType, &m.MediaType, &m.MediaTitle, &m.MediaPath, &m.MediaURL, &m.MediaSize, &starred, &m.Snippet); err != nil {
+			return nil, err
+		}
+		m.Timestamp = fromUnix(ts)
+		m.FromMe = fromMe != 0
+		m.Starred = starred != 0
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+func boolInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
+}
+
+func unix(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UTC().Unix()
+}
+
+func fromUnix(v int64) time.Time {
+	if v <= 0 {
+		return time.Time{}
+	}
+	return time.Unix(v, 0).UTC()
+}
+
+func rollback(tx *sql.Tx) {
+	_ = tx.Rollback()
+}
