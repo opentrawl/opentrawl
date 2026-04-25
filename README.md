@@ -18,18 +18,11 @@ Homebrew is the easiest path. Install directly from my tap:
 brew install steipete/tap/wacrawl
 ```
 
-Or tap it once, then install by name:
-
-```bash
-brew tap steipete/tap
-brew install wacrawl
-```
-
-Upgrade later with:
+After that, upgrades stay simple:
 
 ```bash
 brew update
-brew upgrade wacrawl
+brew upgrade steipete/tap/wacrawl
 ```
 
 Or from source:
