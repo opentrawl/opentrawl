@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [0.1.1] - Unreleased
+
+### Fixed
+
+- Allow `search` filters before or after the query, so documented examples like
+  `wacrawl search "invoice" --from-them` work as expected.
+
 ## [0.1.0] - 2026-04-25
 
 ### Added
