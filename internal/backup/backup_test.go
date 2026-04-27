@@ -315,6 +315,12 @@ func TestSnapshotErrorAndUtilityPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	repo := t.TempDir()
+	if _, err := resolveShardPath(repo, "../outside.age"); err == nil {
+		t.Fatal("expected escaping shard path error")
+	}
+	if _, err := resolveShardPath(repo, "manifest.json"); err == nil {
+		t.Fatal("expected invalid shard path error")
+	}
 	encrypted, hash, err := encryptShard([]byte("{}\n"), []string{recipient})
 	if err != nil {
 		t.Fatal(err)
