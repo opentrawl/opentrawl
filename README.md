@@ -1,4 +1,6 @@
-# wacrawl
+# 🧾 wacrawl
+
+WhatsApp archaeology with encrypted receipts.
 
 Read-only local archive and search for the macOS WhatsApp Desktop app.
 
