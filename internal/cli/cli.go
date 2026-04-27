@@ -13,6 +13,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/steipete/wacrawl/internal/backup"
 	"github.com/steipete/wacrawl/internal/store"
 	"github.com/steipete/wacrawl/internal/whatsappdb"
 )
@@ -84,6 +85,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return a.runMessages(ctx, rest[1:])
 	case "search":
 		return a.runSearch(ctx, rest[1:])
+	case "backup":
+		return a.runBackup(ctx, rest[1:])
 	default:
 		return usageErr(fmt.Errorf("unknown command %q", rest[0]))
 	}
@@ -368,6 +371,12 @@ func (a *app) print(value any) error {
 			}
 		}
 		return nil
+	case backup.Result:
+		_, err := fmt.Fprintf(a.stdout, "repo=%s\nchanged=%t\nencrypted=%t\nshards=%d\nmessages=%d\n", v.Repo, v.Changed, v.Encrypted, v.Shards, v.Messages)
+		return err
+	case backup.Manifest:
+		_, err := fmt.Fprintf(a.stdout, "encrypted=%t\nshards=%d\nmessages=%d\nexported=%s\n", v.Encrypted, len(v.Shards), v.Counts.Messages, formatTime(v.Exported))
+		return err
 	default:
 		enc := json.NewEncoder(a.stdout)
 		enc.SetIndent("", "  ")
@@ -390,6 +399,7 @@ Commands:
   chats       List chats.
   messages    List archived messages.
   search      Search archived messages.
+  backup      Init, push, pull, or inspect encrypted Git backups.
 
 Options:
   --db PATH                 Archive database path.

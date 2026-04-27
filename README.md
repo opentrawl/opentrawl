@@ -247,6 +247,64 @@ If the WhatsApp Desktop source is unavailable and the archive already has data,
 `--sync auto` warns on stderr and continues with the existing archive.
 `--sync always` treats an unavailable source as an error.
 
+## Encrypted Git Backup
+
+`wacrawl` can back up the archive to a private Git repository using age-encrypted
+JSONL shards. The repository stores encrypted `*.jsonl.gz.age` data files plus a
+cleartext `manifest.json` with counts, shard paths, byte sizes, and plaintext
+hashes. Message text, contacts, chat names, participant IDs, and media metadata
+are encrypted before they are committed.
+
+Initialize a backup repo and local age identity:
+
+```bash
+wacrawl backup init \
+  --repo ~/Projects/backup-wacrawl \
+  --remote https://github.com/steipete/backup-wacrawl.git
+```
+
+This writes `~/.wacrawl/backup.json`, creates `~/.wacrawl/age.key` if needed,
+and prints the public age recipient. Keep the identity private; only recipients
+belong in config or docs.
+
+Push an encrypted backup:
+
+```bash
+wacrawl backup push
+```
+
+`backup push` first uses the normal read-time sync policy, exports stable JSONL
+shards, encrypts changed shards, commits changes, pulls/rebases the backup repo,
+and pushes to the configured remote. Re-running it without archive changes leaves
+Git clean.
+
+Restore from the backup repo:
+
+```bash
+wacrawl backup pull
+```
+
+Inspect backup metadata:
+
+```bash
+wacrawl backup status
+```
+
+Useful flags:
+
+```text
+--config PATH        Backup config path. Default: ~/.wacrawl/backup.json
+--repo PATH          Local backup Git checkout.
+--remote URL         Backup Git remote.
+--identity PATH      Local age identity. Default: ~/.wacrawl/age.key
+--recipient AGE      Public age recipient. Repeat for multiple machines.
+--no-push            Commit locally but do not push.
+```
+
+For multiple machines, generate or add one age identity per machine and include
+all public recipients in `~/.wacrawl/backup.json`. Any listed machine can decrypt
+and restore the backup; GitHub only receives encrypted shards.
+
 ## Global Flags
 
 ```text

@@ -85,6 +85,41 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	if len(chatsOut) != 1 || chatsOut[0].JID != "chat@g.us" {
 		t.Fatalf("unexpected chats: %+v", chatsOut)
 	}
+
+	exported, err := st.ExportAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := exported.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if len(exported.Contacts) != 1 || len(exported.Chats) != 1 || len(exported.Groups) != 1 || len(exported.Participants) != 1 || len(exported.Messages) != 2 {
+		t.Fatalf("unexpected export: %+v", exported)
+	}
+	if stats := exported.ImportStats("backup", st.Path(), now); stats.Messages != 2 || stats.MediaMessages != 1 || stats.SourcePath != "backup" {
+		t.Fatalf("unexpected export stats: %+v", stats)
+	}
+	restored, err := Open(ctx, filepath.Join(t.TempDir(), "restored.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = restored.Close() }()
+	if err := restored.ImportSnapshot(ctx, exported, "backup", now); err != nil {
+		t.Fatal(err)
+	}
+	restoredStatus, err := restored.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restoredStatus.Messages != 2 || restoredStatus.LastSource != "backup" {
+		t.Fatalf("unexpected restored status: %+v", restoredStatus)
+	}
+	if err := (SnapshotData{Messages: []Message{{SourcePK: 1}, {SourcePK: 1}}}).Validate(); err == nil {
+		t.Fatal("expected duplicate source_pk validation error")
+	}
+	if err := (SnapshotData{Messages: []Message{{}}}).Validate(); err == nil {
+		t.Fatal("expected empty source_pk validation error")
+	}
 }
 
 func TestOpenRequiresPath(t *testing.T) {

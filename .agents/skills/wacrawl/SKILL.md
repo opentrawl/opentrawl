@@ -34,6 +34,13 @@ Inspect counts:
 wacrawl status
 ```
 
+Encrypted Git backup:
+
+```bash
+wacrawl backup status
+wacrawl backup push
+```
+
 ## Query Workflow
 
 1. Refresh/import if the question depends on recent WhatsApp state.

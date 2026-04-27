@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"flag"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -147,6 +148,63 @@ func TestReadCommandsSyncArchive(t *testing.T) {
 	err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", filepath.Join(source, "missing"), "--sync", "always", "status"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "source unavailable") {
 		t.Fatalf("expected --sync always to fail without source, got %v", err)
+	}
+}
+
+func TestBackupCommands(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	createDesktopFixture(t, source)
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	if err := exec.Command("git", "init", "--bare", remote).Run(); err != nil { // #nosec G204 -- test creates a temp bare Git remote.
+		t.Fatal(err)
+	}
+	config := filepath.Join(t.TempDir(), "backup.json")
+	repo := filepath.Join(t.TempDir(), "backup")
+	identity := filepath.Join(t.TempDir(), "age.key")
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("sync error = %v stderr=%s", err, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"backup", "init", "--config", config, "--repo", repo, "--remote", remote, "--identity", identity, "--no-push"}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup init error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "recipient=age1") {
+		t.Fatalf("backup init did not print recipient:\n%s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--sync", "never", "backup", "push", "--config", config, "--no-push"}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup push error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "encrypted=true") || !strings.Contains(stdout.String(), "messages=3") {
+		t.Fatalf("backup push output mismatch:\n%s", stdout.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"backup", "status", "--config", config}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup status error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "encrypted=true") || !strings.Contains(stdout.String(), "repo="+repo) {
+		t.Fatalf("backup status output mismatch:\n%s", stdout.String())
+	}
+	restoredDB := filepath.Join(t.TempDir(), "restored.db")
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", restoredDB, "backup", "pull", "--config", config}, &stdout, &stderr); err != nil {
+		t.Fatalf("backup pull error = %v stderr=%s", err, stderr.String())
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", restoredDB, "--sync", "never", "search", "launch"}, &stdout, &stderr); err != nil {
+		t.Fatalf("restored search error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "[launch] now") {
+		t.Fatalf("restored search mismatch:\n%s", stdout.String())
 	}
 }
 

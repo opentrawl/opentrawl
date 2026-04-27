@@ -9,6 +9,7 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 ### Added
 
 - Add read-time sync for `status`, `chats`, `messages`, and `search`, with `--sync auto|always|never`, `--sync-max-age`, and `sync` as an alias for `import`.
+- Add encrypted Git backups with `backup init`, `backup push`, `backup pull`, and `backup status`, storing age-encrypted JSONL shards in a configured repository.
 
 ### Fixed
 
