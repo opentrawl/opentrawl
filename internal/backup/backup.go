@@ -406,18 +406,33 @@ func removeStaleShards(repo string, shards []ShardEntry) error {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil
 	}
-	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	var stale []string
+	if err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil || d == nil || d.IsDir() {
 			return err
 		}
 		if !strings.HasSuffix(path, ".age") {
 			return nil
 		}
-		if _, ok := keep[filepath.Clean(path)]; ok {
+		clean := filepath.Clean(path)
+		if _, ok := keep[clean]; ok {
 			return nil
 		}
-		return os.Remove(path)
-	})
+		stale = append(stale, clean)
+		return nil
+	}); err != nil {
+		return err
+	}
+	for _, path := range stale {
+		rel, err := filepath.Rel(root, path)
+		if err != nil || rel == "." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+			return fmt.Errorf("stale shard path escapes backup root: %s", path)
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeBackupReadme(repo string) error {
