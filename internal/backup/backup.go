@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -265,7 +266,10 @@ func readSnapshot(cfg Config, manifest Manifest) (store.SnapshotData, error) {
 
 func writeShard(cfg Config, old Manifest, table, rel string, plaintext []byte, rows int, reuseEncrypted bool) (ShardEntry, error) {
 	hash := sha256Hex(plaintext)
-	path := filepath.Join(cfg.Repo, filepath.FromSlash(rel))
+	path, err := resolveShardPath(cfg.Repo, rel)
+	if err != nil {
+		return ShardEntry{}, err
+	}
 	if oldEntry, ok := old.entry(rel); reuseEncrypted && ok && oldEntry.SHA256 == hash {
 		if info, err := os.Stat(path); err == nil {
 			oldEntry.Bytes = info.Size()
@@ -286,11 +290,32 @@ func writeShard(cfg Config, old Manifest, table, rel string, plaintext []byte, r
 }
 
 func decryptShardFile(cfg Config, shard ShardEntry) ([]byte, error) {
-	ciphertext, err := os.ReadFile(filepath.Join(cfg.Repo, filepath.FromSlash(shard.Path)))
+	path, err := resolveShardPath(cfg.Repo, shard.Path)
+	if err != nil {
+		return nil, err
+	}
+	ciphertext, err := os.ReadFile(path) // #nosec G304 -- resolveShardPath confines manifest-controlled shard paths to data/*.age inside the backup repo.
 	if err != nil {
 		return nil, err
 	}
 	return decryptShard(ciphertext, cfg.Identity)
+}
+
+func resolveShardPath(repo, rel string) (string, error) {
+	clean := path.Clean(strings.TrimSpace(rel))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, "../") || path.IsAbs(clean) {
+		return "", fmt.Errorf("backup shard path escapes backup root: %s", rel)
+	}
+	if !strings.HasPrefix(clean, "data/") || !strings.HasSuffix(clean, ".age") {
+		return "", fmt.Errorf("invalid backup shard path: %s", rel)
+	}
+	full := filepath.Join(repo, filepath.FromSlash(clean))
+	root := filepath.Clean(filepath.Join(repo, "data"))
+	parent := filepath.Clean(filepath.Dir(full))
+	if parent != root && !strings.HasPrefix(parent, root+string(filepath.Separator)) {
+		return "", fmt.Errorf("backup shard path escapes backup root: %s", rel)
+	}
+	return full, nil
 }
 
 func encodeJSONL(rows any) ([]byte, int, error) {
@@ -499,15 +524,33 @@ public age recipients, table counts, shard paths, encrypted byte sizes, and
 plaintext hashes used for restore verification. Message text, contacts, chat
 names, participant IDs, and media metadata stay inside encrypted ` + "`*.jsonl.gz.age`" + ` shards.
 
+## Security Model
+
+Shard contents are JSONL, gzip-compressed with a fixed gzip timestamp, and
+encrypted with age for every configured public recipient. The local
+` + "`~/.wacrawl/age.key`" + ` identity is required to decrypt.
+
+Git can still see manifest metadata: export time, public recipients, table
+names, row counts, shard paths, encrypted byte sizes, plaintext shard hashes,
+backup cadence, and which encrypted shards changed. Git cannot read message
+text, contacts, chat names, participant IDs, or media metadata without an age
+identity.
+
+Anyone who can push to this repository can replace encrypted backup data with
+different data encrypted to your public recipient. Keep repository write access
+restricted and review unexpected backup commits. If an age identity is
+compromised, remove its public recipient and push a new backup; old Git history
+may still contain shards decryptable by the compromised key.
+
 ## Push
 
 ` + "```bash" + `
 wacrawl backup push
 ` + "```" + `
 
-The command refreshes the local wacrawl archive according to the normal sync
-policy, writes encrypted shards, updates the manifest, commits, pulls/rebases,
-and pushes this repository.
+The command pulls/rebases this checkout, refreshes the local wacrawl archive
+according to the normal sync policy, writes encrypted shards, updates the
+manifest, commits, and pushes this repository.
 
 ## Restore
 

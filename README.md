@@ -311,6 +311,67 @@ You should not need to run `git` manually for normal use. `backup push` handles
 the backup repo pull/rebase, commit, and push. `backup pull` handles the backup
 repo pull/rebase before decrypting.
 
+### Encryption and Security Model
+
+Backups use the Go `filippo.io/age` library with X25519 age identities. There
+is no backup password. Each machine has an age identity file, usually:
+
+```text
+~/.wacrawl/age.key
+```
+
+That file contains an `AGE-SECRET-KEY-...` private identity and is written with
+0600 permissions. Its matching public recipient starts with `age1...` and is
+safe to place in `~/.wacrawl/backup.json`, `manifest.json`, or docs.
+
+For each shard, `wacrawl backup push`:
+
+1. Exports rows from the local archive as deterministic JSONL.
+2. Gzip-compresses the JSONL with a fixed gzip timestamp.
+3. Encrypts the compressed bytes with age for every configured recipient.
+4. Writes only the encrypted `*.jsonl.gz.age` shard to Git.
+5. Writes `manifest.json` with cleartext metadata used for status, diffing, and restore verification.
+
+`wacrawl backup pull` does the reverse: it pulls/rebases the backup repo,
+checks manifest shard paths, decrypts each shard with the local age identity,
+verifies the shard hash, validates cross-table references, and imports the
+snapshot into the configured archive database in one transaction.
+
+What the backup protects:
+
+- A GitHub read-only compromise or accidental clone does not reveal message text,
+  contacts, chat names, participant IDs, or media metadata.
+- Each encrypted shard can be decrypted by any listed age recipient, so multiple
+  machines can share one backup without sharing one private key.
+- Age provides encrypted-file integrity; corrupted or wrong-key shards fail to
+  decrypt, and `wacrawl` also checks manifest hashes after decrypting.
+
+What remains visible in Git:
+
+- `manifest.json` is cleartext.
+- The manifest reveals export time, public recipients, table names, row counts,
+  shard paths, encrypted byte sizes, and plaintext shard hashes.
+- Message shard paths reveal activity by year and month, for example
+  `data/messages/2026/04.jsonl.gz.age`.
+- Git history reveals backup cadence and which encrypted shards changed.
+
+Important limits:
+
+- This is not end-to-end provenance. Someone who can push to the backup repo can
+  replace the backup with different data encrypted to your public recipient.
+  Use normal GitHub access control and review unexpected backup commits.
+- If `~/.wacrawl/age.key` is lost and no other configured recipient exists, the
+  encrypted backup cannot be restored.
+- If an age identity is compromised, remove its public recipient, run
+  `wacrawl backup push` to re-encrypt current shards, and consider rewriting or
+  deleting old Git history because older commits may still be decryptable with
+  the compromised key.
+- X25519 age recipients are not post-quantum. They are a practical modern
+  default, but not a post-quantum archival guarantee.
+- The local archive database `~/.wacrawl/wacrawl.db` and the WhatsApp Desktop
+  source data remain plaintext on the machine. Protect the machine and local
+  backups accordingly.
+
 ### Initial Setup
 
 Initialize the backup repository and local age identity:

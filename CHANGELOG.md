@@ -4,6 +4,13 @@ All notable changes to this project are documented here.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
+## [Unreleased]
+
+### Security
+
+- Document the encrypted Git backup threat model, visible metadata, key recovery, and rotation limits.
+- Reject backup manifest shard paths that do not point to encrypted files under the backup `data/` tree.
+
 ## [0.2.0] - 2026-04-27
 
 ### Added
