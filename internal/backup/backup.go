@@ -19,11 +19,12 @@ import (
 const formatVersion = 1
 
 type Manifest struct {
-	Format    int          `json:"format"`
-	Encrypted bool         `json:"encrypted"`
-	Exported  time.Time    `json:"exported"`
-	Counts    Counts       `json:"counts"`
-	Shards    []ShardEntry `json:"shards"`
+	Format     int          `json:"format"`
+	Encrypted  bool         `json:"encrypted"`
+	Exported   time.Time    `json:"exported"`
+	Recipients []string     `json:"recipients,omitempty"`
+	Counts     Counts       `json:"counts"`
+	Shards     []ShardEntry `json:"shards"`
 }
 
 type Counts struct {
@@ -151,13 +152,15 @@ func Status(ctx context.Context, opts Options) (Manifest, string, error) {
 
 func writeSnapshot(ctx context.Context, cfg Config, data store.SnapshotData, old Manifest) (Manifest, error) {
 	_ = ctx
+	recipients := normalizedStrings(cfg.Recipients)
+	reuseEncrypted := sameStrings(old.Recipients, recipients)
 	var shards []ShardEntry
 	add := func(table, rel string, rows any) error {
 		plaintext, count, err := encodeJSONL(rows)
 		if err != nil {
 			return err
 		}
-		entry, err := writeShard(cfg, old, table, rel, plaintext, count)
+		entry, err := writeShard(cfg, old, table, rel, plaintext, count, reuseEncrypted)
 		if err != nil {
 			return err
 		}
@@ -186,9 +189,10 @@ func writeSnapshot(ctx context.Context, cfg Config, data store.SnapshotData, old
 	}
 	sort.Slice(shards, func(i, j int) bool { return shards[i].Path < shards[j].Path })
 	manifest := Manifest{
-		Format:    formatVersion,
-		Encrypted: true,
-		Exported:  time.Now().UTC(),
+		Format:     formatVersion,
+		Encrypted:  true,
+		Exported:   time.Now().UTC(),
+		Recipients: recipients,
 		Counts: Counts{
 			Contacts:     len(data.Contacts),
 			Chats:        len(data.Chats),
@@ -259,10 +263,10 @@ func readSnapshot(cfg Config, manifest Manifest) (store.SnapshotData, error) {
 	return data, nil
 }
 
-func writeShard(cfg Config, old Manifest, table, rel string, plaintext []byte, rows int) (ShardEntry, error) {
+func writeShard(cfg Config, old Manifest, table, rel string, plaintext []byte, rows int, reuseEncrypted bool) (ShardEntry, error) {
 	hash := sha256Hex(plaintext)
 	path := filepath.Join(cfg.Repo, filepath.FromSlash(rel))
-	if oldEntry, ok := old.entry(rel); ok && oldEntry.SHA256 == hash {
+	if oldEntry, ok := old.entry(rel); reuseEncrypted && ok && oldEntry.SHA256 == hash {
 		if info, err := os.Stat(path); err == nil {
 			oldEntry.Bytes = info.Size()
 			return oldEntry, nil
@@ -384,13 +388,44 @@ func (m Manifest) entry(path string) (ShardEntry, bool) {
 }
 
 func equivalentManifest(a, b Manifest) bool {
-	if a.Format != b.Format || a.Encrypted != b.Encrypted || a.Counts != b.Counts || len(a.Shards) != len(b.Shards) {
+	if a.Format != b.Format || a.Encrypted != b.Encrypted || !sameStrings(a.Recipients, b.Recipients) || a.Counts != b.Counts || len(a.Shards) != len(b.Shards) {
 		return false
 	}
 	for i := range a.Shards {
 		left, right := a.Shards[i], b.Shards[i]
 		left.Bytes, right.Bytes = 0, 0
 		if left != right {
+			return false
+		}
+	}
+	return true
+}
+
+func normalizedStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func sameStrings(a, b []string) bool {
+	a, b = normalizedStrings(a), normalizedStrings(b)
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -444,15 +479,58 @@ func writeBackupReadme(repo string) error {
 
 Encrypted Git backup for a local wacrawl archive.
 
-The repository stores age-encrypted JSONL shards and a cleartext manifest with
-counts, hashes, and shard paths. Message text, contact details, chat names, and
-media metadata stay inside encrypted *.age files.
+This repository is written by ` + "`wacrawl backup push`" + `. It is safe to keep on
+GitHub because the archive payload is encrypted before Git sees it.
 
-Restore with:
+## Layout
+
+` + "```text" + `
+README.md
+manifest.json
+data/chats.jsonl.gz.age
+data/contacts.jsonl.gz.age
+data/groups.jsonl.gz.age
+data/group_participants.jsonl.gz.age
+data/messages/YYYY/MM.jsonl.gz.age
+` + "```" + `
+
+` + "`manifest.json`" + ` is cleartext and contains format version, export time,
+public age recipients, table counts, shard paths, encrypted byte sizes, and
+plaintext hashes used for restore verification. Message text, contacts, chat
+names, participant IDs, and media metadata stay inside encrypted ` + "`*.jsonl.gz.age`" + ` shards.
+
+## Push
+
+` + "```bash" + `
+wacrawl backup push
+` + "```" + `
+
+The command refreshes the local wacrawl archive according to the normal sync
+policy, writes encrypted shards, updates the manifest, commits, pulls/rebases,
+and pushes this repository.
+
+## Restore
 
 ` + "```bash" + `
 wacrawl backup pull
 ` + "```" + `
+
+` + "`backup pull`" + ` decrypts every shard with the local age identity, verifies the
+manifest hashes, validates the snapshot, and imports it into the configured
+wacrawl archive database.
+
+## Recovery
+
+Install wacrawl, clone this repo to the path in ` + "`~/.wacrawl/backup.json`" + `,
+restore the local age identity file, then run:
+
+` + "```bash" + `
+wacrawl backup pull
+wacrawl --sync never status
+` + "```" + `
+
+Do not commit the age identity. Only public ` + "`age1...`" + ` recipients belong in
+config; ` + "`AGE-SECRET-KEY-...`" + ` values must stay local or in a password manager.
 `
 	return os.WriteFile(path, []byte(body), 0o600)
 }

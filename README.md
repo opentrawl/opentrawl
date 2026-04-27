@@ -109,7 +109,8 @@ wacrawl --db /tmp/wacrawl.db import
 - Replaces only the `wacrawl` archive database.
 - Does not modify WhatsApp databases, settings, contacts, chats, or media.
 - Does not use the WhatsApp network protocol.
-- Does not upload data.
+- Does not upload data during normal archive/search commands. `backup push`
+  uploads only age-encrypted backup shards when you explicitly run it.
 
 The archive can contain private message data. Keep `~/.wacrawl/wacrawl.db`
 local and out of commits, backups, and shared logs unless that is intentional.
@@ -249,13 +250,70 @@ If the WhatsApp Desktop source is unavailable and the archive already has data,
 
 ## Encrypted Git Backup
 
-`wacrawl` can back up the archive to a private Git repository using age-encrypted
-JSONL shards. The repository stores encrypted `*.jsonl.gz.age` data files plus a
-cleartext `manifest.json` with counts, shard paths, byte sizes, and plaintext
-hashes. Message text, contacts, chat names, participant IDs, and media metadata
-are encrypted before they are committed.
+`wacrawl` can back up the archive to a Git repository using age-encrypted JSONL
+shards. This is meant for a private repository such as
+`https://github.com/steipete/backup-wacrawl`, but the message data is encrypted
+before Git sees it.
 
-Initialize a backup repo and local age identity:
+The backup repo contains:
+
+```text
+README.md
+manifest.json
+data/chats.jsonl.gz.age
+data/contacts.jsonl.gz.age
+data/groups.jsonl.gz.age
+data/group_participants.jsonl.gz.age
+data/messages/YYYY/MM.jsonl.gz.age
+```
+
+`manifest.json` is intentionally cleartext so a machine can inspect backup
+freshness, public age recipients, counts, shard paths, encrypted byte sizes, and
+plaintext hashes without decrypting message contents. It does not contain
+message text, chat names, contacts, participant IDs, or media metadata. Those
+fields live inside the `*.jsonl.gz.age` shards.
+
+### Command Cheat Sheet
+
+Use these most of the time:
+
+```bash
+# First-time setup on a machine.
+wacrawl backup init \
+  --repo ~/Projects/backup-wacrawl \
+  --remote https://github.com/steipete/backup-wacrawl.git
+
+# Refresh WhatsApp data if needed, encrypt, commit, and push to GitHub.
+wacrawl backup push
+
+# Pull the Git backup, decrypt, verify, and import into the local archive.
+wacrawl backup pull
+
+# Inspect the backup manifest without decrypting message data.
+wacrawl backup status
+```
+
+Useful safety variants:
+
+```bash
+# Force a fresh WhatsApp import before writing the backup.
+wacrawl --sync always backup push
+
+# Write and commit locally, but do not push to GitHub.
+wacrawl backup push --no-push
+
+# Restore into a throwaway database for testing.
+wacrawl --db /tmp/wacrawl-restore-test.db backup pull
+wacrawl --db /tmp/wacrawl-restore-test.db --sync never status
+```
+
+You should not need to run `git` manually for normal use. `backup push` handles
+the backup repo pull/rebase, commit, and push. `backup pull` handles the backup
+repo pull/rebase before decrypting.
+
+### Initial Setup
+
+Initialize the backup repository and local age identity:
 
 ```bash
 wacrawl backup init \
@@ -264,8 +322,25 @@ wacrawl backup init \
 ```
 
 This writes `~/.wacrawl/backup.json`, creates `~/.wacrawl/age.key` if needed,
-and prints the public age recipient. Keep the identity private; only recipients
-belong in config or docs.
+clones or initializes the local backup checkout, and prints the public age
+recipient.
+
+The generated config looks like this:
+
+```json
+{
+  "repo": "~/Projects/backup-wacrawl",
+  "remote": "https://github.com/steipete/backup-wacrawl.git",
+  "identity": "~/.wacrawl/age.key",
+  "recipients": ["age1..."]
+}
+```
+
+Keep `~/.wacrawl/age.key` private. The public `age1...` recipient can be stored
+in `backup.json`; the `AGE-SECRET-KEY-...` identity must stay local or in a
+password manager.
+
+### Push
 
 Push an encrypted backup:
 
@@ -273,10 +348,26 @@ Push an encrypted backup:
 wacrawl backup push
 ```
 
-`backup push` first uses the normal read-time sync policy, exports stable JSONL
-shards, encrypts changed shards, commits changes, pulls/rebases the backup repo,
-and pushes to the configured remote. Re-running it without archive changes leaves
-Git clean.
+`backup push` first pulls/rebases the configured backup checkout, then uses the
+normal read-time sync policy. With the default `--sync auto --sync-max-age 15m`,
+it refreshes the local archive only when the WhatsApp Desktop source is stale
+and newer than the archive. Then it exports stable JSONL, gzip-compresses each
+shard, encrypts each shard for every configured recipient, updates
+`manifest.json`, removes stale encrypted shards, commits, and pushes the backup
+repo.
+
+Re-running `backup push` without archive changes leaves Git clean. The command
+prints the repo path, whether anything changed, whether the backup is encrypted,
+the shard count, and the message count.
+
+Use `--no-push` for local dry runs that commit into the backup checkout but do
+not push to the remote:
+
+```bash
+wacrawl backup push --no-push
+```
+
+### Restore
 
 Restore from the backup repo:
 
@@ -284,11 +375,57 @@ Restore from the backup repo:
 wacrawl backup pull
 ```
 
+`backup pull` pulls/rebases the configured backup repo, decrypts every shard with
+the local age identity, verifies each plaintext shard hash from the manifest,
+validates cross-table references, and replaces the configured `wacrawl` archive
+database in one import transaction.
+
+To test a restore without touching your real archive:
+
+```bash
+wacrawl --db /tmp/wacrawl-restore-test.db backup pull
+wacrawl --db /tmp/wacrawl-restore-test.db --sync never status
+```
+
+### Status
+
 Inspect backup metadata:
 
 ```bash
 wacrawl backup status
 ```
+
+This reports encryption status, shard count, message count, export timestamp,
+and repo path. It reads `manifest.json`; it does not need to decrypt shards.
+
+### Multiple Machines
+
+Each machine that should restore needs its own age identity. On the new machine:
+
+```bash
+wacrawl backup init \
+  --repo ~/Projects/backup-wacrawl \
+  --remote https://github.com/steipete/backup-wacrawl.git
+```
+
+Copy the printed public recipient (`age1...`) into the `recipients` list in
+`~/.wacrawl/backup.json` on a machine that can already decrypt the backup, then
+run:
+
+```bash
+wacrawl backup push
+```
+
+After that push, newly written shards are encrypted for all configured
+recipients. If you added a recipient after data already existed, run a normal
+`wacrawl backup push`; unchanged plaintext shards are re-encrypted when the
+manifest/config changes.
+
+For personal setup, storing a copy of `~/.wacrawl/age.key` in 1Password is a
+good recovery path. Do not commit the identity file. Do not paste the
+`AGE-SECRET-KEY-...` value into issues, logs, docs, or chat.
+
+### Flags
 
 Useful flags:
 
@@ -301,9 +438,38 @@ Useful flags:
 --no-push            Commit locally but do not push.
 ```
 
-For multiple machines, generate or add one age identity per machine and include
-all public recipients in `~/.wacrawl/backup.json`. Any listed machine can decrypt
-and restore the backup; GitHub only receives encrypted shards.
+### Recovery Checklist
+
+On a new Mac:
+
+```bash
+brew install steipete/tap/wacrawl
+git clone https://github.com/steipete/backup-wacrawl.git ~/Projects/backup-wacrawl
+mkdir -p ~/.wacrawl
+```
+
+Then restore `~/.wacrawl/age.key` from your password manager and create
+`~/.wacrawl/backup.json` pointing at the clone:
+
+```json
+{
+  "repo": "~/Projects/backup-wacrawl",
+  "remote": "https://github.com/steipete/backup-wacrawl.git",
+  "identity": "~/.wacrawl/age.key",
+  "recipients": ["age1..."]
+}
+```
+
+Finally:
+
+```bash
+wacrawl backup pull
+wacrawl --sync never status
+```
+
+If decryption fails, the local `identity` does not match any recipient used for
+the encrypted shards. If Git push fails, fix normal GitHub permissions for the
+backup repository; the archive data is already encrypted before the push.
 
 ## Global Flags
 
@@ -370,7 +536,7 @@ Coverage must stay at or above 85%.
 Releases are tag-driven through GoReleaser.
 
 ```bash
-git tag -a v0.1.0 -m "Release 0.1.0"
+git tag -a v0.2.0 -m "Release 0.2.0"
 git push origin main --tags
 ```
 

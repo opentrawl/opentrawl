@@ -4,17 +4,25 @@ All notable changes to this project are documented here.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
-## [0.2.0] - Unreleased
+## [0.2.0] - 2026-04-27
 
 ### Added
 
+- Add encrypted Git backups with `backup init`, `backup push`, `backup pull`, and `backup status`, storing WhatsApp archive data as age-encrypted JSONL gzip shards in a Git repository.
+- Add multi-machine backup support with explicit age recipients, recipient-aware manifests, and automatic re-encryption of unchanged shards when recipients change.
+- Add restore verification for encrypted backups, including plaintext shard hashes, cross-table validation, and import into a configured archive database.
 - Add read-time sync for `status`, `chats`, `messages`, and `search`, with `--sync auto|always|never`, `--sync-max-age`, and `sync` as an alias for `import`.
-- Add encrypted Git backups with `backup init`, `backup push`, `backup pull`, and `backup status`, storing age-encrypted JSONL shards in a configured repository.
+- Add a `wacrawl` Codex skill for local WhatsApp archive workflows.
+
+### Changed
+
+- Expand the README with Homebrew install instructions, automatic sync behavior, encrypted Git backup setup, command cheat sheet, multi-machine setup, and recovery checklist.
+- Document the `backup-wacrawl` repository layout and restore flow in the generated backup README.
 
 ### Fixed
 
-- Allow `search` filters before or after the query, so documented examples like
-  `wacrawl search "invoice" --from-them` work as expected.
+- Allow `search` filters before or after the query, so documented examples like `wacrawl search "invoice" --from-them` work as expected.
+- Keep Go module metadata tidy and CI-clean after adding age encryption dependencies.
 
 ## [0.1.0] - 2026-04-25
 

@@ -95,6 +95,49 @@ func TestEncryptedBackupPushPull(t *testing.T) {
 		t.Fatalf("restore search mismatch: %+v", results)
 	}
 
+	secondIdentity := filepath.Join(t.TempDir(), "second-age.key")
+	secondRecipient, err := EnsureIdentity(secondIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedCfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedCfg.Recipients = append(updatedCfg.Recipients, secondRecipient)
+	if err := SaveConfig(configPath, updatedCfg); err != nil {
+		t.Fatal(err)
+	}
+	recipientChange, err := Push(ctx, source, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !recipientChange.Changed {
+		t.Fatal("adding a recipient should re-encrypt unchanged shards")
+	}
+	secondRestored := openFixtureStore(t, "second-restored.db")
+	secondPulled, err := Pull(ctx, secondRestored, Options{ConfigPath: configPath, Identity: secondIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondPulled.Messages != 1 {
+		t.Fatalf("unexpected second-recipient pull result: %+v", secondPulled)
+	}
+	secondResults, err := secondRestored.Search(ctx, store.MessageFilter{Query: "secret", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(secondResults) != 1 || secondResults[0].Text != "secret launch text" {
+		t.Fatalf("second-recipient restore mismatch: %+v", secondResults)
+	}
+	sameRecipients, err := Push(ctx, source, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sameRecipients.Changed {
+		t.Fatalf("unchanged recipients should not rewrite backup: %+v", sameRecipients)
+	}
+
 	derivedRepo := filepath.Join(t.TempDir(), "derived-recipient")
 	if err := os.MkdirAll(derivedRepo, 0o700); err != nil {
 		t.Fatal(err)
