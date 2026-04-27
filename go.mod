@@ -2,10 +2,12 @@ module github.com/steipete/wacrawl
 
 go 1.26
 
-require modernc.org/sqlite v1.50.0
+require (
+	filippo.io/age v1.3.1
+	modernc.org/sqlite v1.50.0
+)
 
 require (
-	filippo.io/age v1.3.1 // indirect
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
