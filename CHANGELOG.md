@@ -4,7 +4,11 @@ All notable changes to this project are documented here.
 
 The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
-## [0.1.1] - Unreleased
+## [0.2.0] - Unreleased
+
+### Added
+
+- Add read-time sync for `status`, `chats`, `messages`, and `search`, with `--sync auto|always|never`, `--sync-max-age`, and `sync` as an alias for `import`.
 
 ### Fixed
 

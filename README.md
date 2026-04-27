@@ -45,13 +45,15 @@ First, check whether `wacrawl` can see the local WhatsApp Desktop data:
 wacrawl doctor
 ```
 
-Import a fresh local archive:
+Sync a fresh local archive:
 
 ```bash
-wacrawl import
+wacrawl sync
 ```
 
-Inspect what was imported:
+Inspect what was imported. Read commands sync automatically by default, so
+`status`, `chats`, `messages`, and `search` refresh the archive before reading
+when the local WhatsApp Desktop source is newer:
 
 ```bash
 wacrawl status
@@ -134,6 +136,12 @@ Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 wacrawl import
 ```
 
+`sync` is the same command with a clearer name:
+
+```bash
+wacrawl sync
+```
+
 Imports:
 
 - chats
@@ -153,6 +161,9 @@ wacrawl status
 
 Includes chat, contact, group, participant, message, media-message, oldest,
 newest, last-import, and source fields.
+
+By default, `status` first syncs the archive when the last sync is older than
+`--sync-max-age` and the WhatsApp Desktop source has newer data.
 
 ### `chats`
 
@@ -201,13 +212,50 @@ wacrawl --json search "restaurant"
 Search uses message text, chat name, sender name, and media title fields. It
 accepts the same filters as `messages`.
 
+## Sync Behavior
+
+`wacrawl` keeps normal reads fresh without a daemon or background service.
+Before `status`, `chats`, `messages`, or `search`, it checks the archive's
+last import time. If the archive is stale, it inspects the WhatsApp Desktop
+source and imports a fresh snapshot only when the source is ahead.
+
+The default policy is:
+
+```text
+--sync auto
+--sync-max-age 15m
+```
+
+Sync modes:
+
+```text
+--sync auto     Sync before reads when the archive is stale and source is ahead.
+--sync always   Force a sync before every read command.
+--sync never    Read only the existing archive.
+```
+
+Examples:
+
+```bash
+wacrawl search "release notes"
+wacrawl --sync always status
+wacrawl --sync never --json messages --limit 10
+wacrawl --sync-max-age 1h chats
+```
+
+If the WhatsApp Desktop source is unavailable and the archive already has data,
+`--sync auto` warns on stderr and continues with the existing archive.
+`--sync always` treats an unavailable source as an error.
+
 ## Global Flags
 
 ```text
---db PATH       Archive database path. Default: ~/.wacrawl/wacrawl.db
---source PATH   WhatsApp Desktop source path.
---json          Emit JSON instead of human-readable output.
---version       Print the CLI version.
+--db PATH               Archive database path. Default: ~/.wacrawl/wacrawl.db
+--source PATH           WhatsApp Desktop source path.
+--sync MODE             Read-time sync policy: auto, always, or never. Default: auto.
+--sync-max-age DURATION Staleness window for --sync auto. Default: 15m.
+--json                  Emit JSON instead of human-readable output.
+--version               Print the CLI version.
 ```
 
 ## Data Format Notes

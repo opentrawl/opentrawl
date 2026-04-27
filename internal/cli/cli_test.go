@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/steipete/wacrawl/internal/store"
+	"github.com/steipete/wacrawl/internal/whatsappdb"
 	_ "modernc.org/sqlite"
 )
 
@@ -26,7 +28,7 @@ func TestRunEndToEnd(t *testing.T) {
 		want string
 	}{
 		{"help", []string{"--db", dbPath, "help"}, "wacrawl reads local WhatsApp"},
-		{"version", []string{"--version"}, "0.1.1"},
+		{"version", []string{"--version"}, "0.2.0"},
 		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "message_rows"},
 		{"import", []string{"--db", dbPath, "--source", source, "import"}, "messages=3"},
 		{"status", []string{"--db", dbPath, "status"}, "messages=3"},
@@ -82,6 +84,7 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"import", "extra"},
+		{"sync", "extra"},
 		{"chats", "extra"},
 		{"messages", "extra"},
 	} {
@@ -93,6 +96,113 @@ func TestRunUsageErrors(t *testing.T) {
 	err = Run(context.Background(), []string{"--db", "", "status"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "db path is required") {
 		t.Fatalf("expected db path error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"--sync", "sometimes", "status"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--sync must be one of") {
+		t.Fatalf("expected sync mode error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"status", "extra"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "flags only") {
+		t.Fatalf("expected status args error, got %v", err)
+	}
+}
+
+func TestReadCommandsSyncArchive(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	createDesktopFixture(t, source)
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "messages=3") || !strings.Contains(stdout.String(), "last_import=20") {
+		t.Fatalf("status should auto-sync archive:\n%s", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
+		t.Fatalf("stderr should note sync, got %q", stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", source, "--sync", "never", "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status --sync never error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "messages=0") || !strings.Contains(stdout.String(), "last_import=-") {
+		t.Fatalf("status should stay archive-only with --sync never:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", source, "--sync", "always", "search", "launch"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search --sync always error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "[launch] now") {
+		t.Fatalf("search should sync before reading:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", filepath.Join(source, "missing"), "--sync", "always", "status"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "source unavailable") {
+		t.Fatalf("expected --sync always to fail without source, got %v", err)
+	}
+}
+
+func TestSyncArchiveKeepsExistingArchiveWhenSourceUnavailable(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "archive.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Now().UTC().Add(-time.Hour)
+	if err := st.ReplaceAll(ctx,
+		store.ImportStats{SourcePath: "/missing", DBPath: st.Path(), FinishedAt: now},
+		nil,
+		[]store.Chat{{JID: "chat", Kind: "dm", Name: "Chat", LastMessageAt: now}},
+		nil,
+		nil,
+		[]store.Message{{SourcePK: 1, ChatJID: "chat", MessageID: "a", Timestamp: now, RawType: 0, Text: "cached"}},
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	a := app{stderr: &stderr, source: filepath.Join(t.TempDir(), "missing"), syncMode: archiveSyncAuto, syncMaxAge: 0}
+	if err := a.syncArchive(ctx, st); err != nil {
+		t.Fatalf("syncArchive should keep existing archive, got %v", err)
+	}
+	if !strings.Contains(stderr.String(), "using existing archive") {
+		t.Fatalf("expected fallback warning, got %q", stderr.String())
+	}
+}
+
+func TestSyncDecisionHelpers(t *testing.T) {
+	now := time.Now().UTC()
+	status := store.Status{Messages: 3, NewestMessage: now, LastImportAt: now.Add(-time.Hour)}
+	if !archiveNeedsSyncCheck(status, 15*time.Minute) {
+		t.Fatal("old import should need sync check")
+	}
+	if archiveNeedsSyncCheck(status, -1) {
+		t.Fatal("negative max age should disable auto checks")
+	}
+	if !sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: now.Add(time.Second).Format(time.RFC3339)}, status) {
+		t.Fatal("newer source timestamp should be ahead")
+	}
+	if !sourceAheadOfArchive(whatsappdb.Source{MessageRows: 4, NewestMessage: now.Format(time.RFC3339)}, status) {
+		t.Fatal("different source row count should be ahead")
+	}
+	if sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: now.Format(time.RFC3339)}, status) {
+		t.Fatal("equal source should not be ahead")
+	}
+	if sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: "not-time"}, status) {
+		t.Fatal("invalid source timestamp should not be ahead")
+	}
+	if !sourceAheadOfArchive(whatsappdb.Source{}, store.Status{}) {
+		t.Fatal("empty archive should sync")
 	}
 }
 
@@ -133,6 +243,12 @@ func TestCLIHelpers(t *testing.T) {
 	}
 	if filter.FromMe == nil || *filter.FromMe || filter.After == nil || filter.Before == nil {
 		t.Fatalf("unexpected resolved filter: %+v", filter)
+	}
+	if mode, err := parseArchiveSyncMode("auto"); err != nil || mode != archiveSyncAuto {
+		t.Fatalf("unexpected sync mode parse: %q %v", mode, err)
+	}
+	if _, err := parseArchiveSyncMode("nope"); err == nil {
+		t.Fatal("expected invalid sync mode error")
 	}
 }
 

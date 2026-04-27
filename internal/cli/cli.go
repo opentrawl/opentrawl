@@ -36,11 +36,13 @@ func ExitCode(err error) int {
 }
 
 type app struct {
-	stdout io.Writer
-	stderr io.Writer
-	json   bool
-	dbPath string
-	source string
+	stdout     io.Writer
+	stderr     io.Writer
+	json       bool
+	dbPath     string
+	source     string
+	syncMode   archiveSyncMode
+	syncMaxAge time.Duration
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -49,6 +51,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	jsonOut := global.Bool("json", false, "")
 	dbPath := global.String("db", defaultDBPath(), "")
 	source := global.String("source", "", "")
+	syncFlag := global.String("sync", string(archiveSyncAuto), "")
+	syncMaxAge := global.Duration("sync-max-age", 15*time.Minute, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		return usageErr(err)
@@ -57,7 +61,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
-	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source}
+	syncMode, err := parseArchiveSyncMode(*syncFlag)
+	if err != nil {
+		return usageErr(err)
+	}
+	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source, syncMode: syncMode, syncMaxAge: *syncMaxAge}
 	rest := global.Args()
 	if len(rest) == 0 || rest[0] == "help" {
 		printUsage(stdout)
@@ -66,16 +74,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	switch rest[0] {
 	case "doctor":
 		return a.runDoctor(ctx, rest[1:])
-	case "import":
-		return a.runImport(ctx, rest[1:])
+	case "import", "sync":
+		return a.runImport(ctx, rest[0], rest[1:])
 	case "status":
-		return a.withStore(ctx, func(st *store.Store) error {
-			status, err := st.Status(ctx)
-			if err != nil {
-				return err
-			}
-			return a.print(status)
-		})
+		return a.runStatus(ctx, rest[1:])
 	case "chats":
 		return a.runChats(ctx, rest[1:])
 	case "messages":
@@ -94,6 +96,33 @@ func (a *app) withStore(ctx context.Context, fn func(*store.Store) error) error 
 	}
 	defer func() { _ = st.Close() }()
 	return fn(st)
+}
+
+func (a *app) withArchiveStore(ctx context.Context, fn func(*store.Store) error) error {
+	return a.withStore(ctx, func(st *store.Store) error {
+		if err := a.syncArchive(ctx, st); err != nil {
+			return err
+		}
+		return fn(st)
+	})
+}
+
+func (a *app) runStatus(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		return usageErr(err)
+	}
+	if fs.NArg() != 0 {
+		return usageErr(errors.New("status takes flags only"))
+	}
+	return a.withArchiveStore(ctx, func(st *store.Store) error {
+		status, err := st.Status(ctx)
+		if err != nil {
+			return err
+		}
+		return a.print(status)
+	})
 }
 
 func (a *app) runDoctor(ctx context.Context, args []string) error {
@@ -118,15 +147,15 @@ func (a *app) runDoctor(ctx context.Context, args []string) error {
 	return a.print(report)
 }
 
-func (a *app) runImport(ctx context.Context, args []string) error {
-	fs := flag.NewFlagSet("import", flag.ContinueOnError)
+func (a *app) runImport(ctx context.Context, command string, args []string) error {
+	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	source := fs.String("source", a.source, "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
-		return usageErr(errors.New("import takes flags only"))
+		return usageErr(fmt.Errorf("%s takes flags only", command))
 	}
 	return a.withStore(ctx, func(st *store.Store) error {
 		stats, err := whatsappdb.Import(ctx, st, *source)
@@ -147,7 +176,7 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	return a.withStore(ctx, func(st *store.Store) error {
+	return a.withArchiveStore(ctx, func(st *store.Store) error {
 		chats, err := st.ListChats(ctx, *limit)
 		if err != nil {
 			return err
@@ -166,11 +195,11 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("messages takes flags only"))
 	}
-	return a.withStore(ctx, func(st *store.Store) error {
-		resolved, err := filter.resolve()
-		if err != nil {
-			return usageErr(err)
-		}
+	resolved, err := filter.resolve()
+	if err != nil {
+		return usageErr(err)
+	}
+	return a.withArchiveStore(ctx, func(st *store.Store) error {
 		msgs, err := st.Messages(ctx, resolved)
 		if err != nil {
 			return err
@@ -195,7 +224,7 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		return usageErr(err)
 	}
 	resolved.Query = query
-	return a.withStore(ctx, func(st *store.Store) error {
+	return a.withArchiveStore(ctx, func(st *store.Store) error {
 		msgs, err := st.Search(ctx, resolved)
 		if err != nil {
 			return err
@@ -350,16 +379,25 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `wacrawl reads local WhatsApp Desktop data into a readonly archive.
 
 Usage:
-  wacrawl [--db PATH] [--source PATH] [--json] <command> [args]
+  wacrawl [--db PATH] [--source PATH] [--json] [--sync auto|always|never] <command> [args]
   wacrawl --version
 
 Commands:
   doctor      Inspect WhatsApp Desktop source and archive paths.
   import      Snapshot WhatsApp Desktop SQLite data into the archive.
+  sync        Alias for import.
   status      Show archive status.
   chats       List chats.
   messages    List archived messages.
   search      Search archived messages.
+
+Options:
+  --db PATH                 Archive database path.
+  --source PATH             WhatsApp Desktop source path.
+  --sync auto|always|never  Read-time sync policy. Default: auto.
+  --sync-max-age DURATION   Staleness window for --sync auto. Default: 15m.
+  --json                    Emit JSON output.
+  --version                 Print the CLI version.
 `)
 }
 
