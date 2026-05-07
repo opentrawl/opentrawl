@@ -8,6 +8,7 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
 ### Added
 
+- Add `import --copy-media` / `sync --copy-media` to copy referenced WhatsApp media into the archive media directory while treating missing files as non-fatal import stats.
 - Surface WhatsApp Desktop per-chat unread counts in `status` and `chats`, with `chats --unread` and an `unread` shortcut command.
 
 ### Fixed

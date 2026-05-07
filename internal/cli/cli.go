@@ -156,6 +156,7 @@ func (a *app) runImport(ctx context.Context, command string, args []string) erro
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	source := fs.String("source", a.source, "")
+	copyMedia := fs.Bool("copy-media", false, "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
@@ -163,7 +164,7 @@ func (a *app) runImport(ctx context.Context, command string, args []string) erro
 		return usageErr(fmt.Errorf("%s takes flags only", command))
 	}
 	return a.withStore(ctx, func(st *store.Store) error {
-		stats, err := whatsappdb.Import(ctx, st, *source)
+		stats, err := whatsappdb.ImportWithOptions(ctx, st, whatsappdb.ImportOptions{SourcePath: *source, CopyMedia: *copyMedia})
 		if err != nil {
 			return err
 		}
@@ -379,8 +380,8 @@ func (a *app) print(value any) error {
 	}
 	switch v := value.(type) {
 	case store.ImportStats:
-		_, err := fmt.Fprintf(a.stdout, "source=%s\ndb=%s\nchats=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\n",
-			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages)
+		_, err := fmt.Fprintf(a.stdout, "source=%s\ndb=%s\nchats=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\nmedia_copied=%d\nmedia_missing=%d\n",
+			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, v.MediaCopied, v.MediaMissing)
 		return err
 	case store.Status:
 		_, err := fmt.Fprintf(a.stdout, "db=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
@@ -439,6 +440,9 @@ Options:
   --sync-max-age DURATION   Staleness window for --sync auto. Default: 15m.
   --json                    Emit JSON output.
   --version                 Print the CLI version.
+
+Import flags:
+  --copy-media              Copy referenced media files into the archive media directory.
 `)
 }
 

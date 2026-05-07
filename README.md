@@ -51,6 +51,7 @@ Sync a fresh local archive:
 
 ```bash
 wacrawl sync
+wacrawl import --copy-media
 ```
 
 Inspect what was imported. Read commands sync automatically by default, so
@@ -138,12 +139,14 @@ Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 
 ```bash
 wacrawl import
+wacrawl import --copy-media
 ```
 
 `sync` is the same command with a clearer name:
 
 ```bash
 wacrawl sync
+wacrawl sync --copy-media
 ```
 
 Imports:
@@ -154,6 +157,11 @@ Imports:
 - group participants
 - messages
 - media metadata and local media paths
+
+By default, media paths continue to point at WhatsApp Desktop's app container.
+Pass `--copy-media` to copy referenced media files into `media/` next to the
+archive database and rewrite copied message media paths to that archive copy.
+Missing media files are counted in the import output and do not fail the import.
 
 ### `status`
 
@@ -557,6 +565,12 @@ backup repository; the archive data is already encrypted before the push.
 --sync-max-age DURATION Staleness window for --sync auto. Default: 15m.
 --json                  Emit JSON instead of human-readable output.
 --version               Print the CLI version.
+```
+
+Import/sync flags:
+
+```text
+--copy-media            Copy referenced media during import/sync.
 ```
 
 ## Data Format Notes

@@ -125,6 +125,117 @@ insert into ZWAGROUPMEMBER values (2, 2, '222@lid', 'Alice Duplicate', 'Alicia',
 	}
 }
 
+func TestImportDesktopCopyMedia(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	createFixtureDBs(t, source)
+	mediaPath := filepath.Join(source, "Media", "123@g.us", "a", "test.jpg")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	chatDB, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, chatDB, `
+insert into ZWAMEDIAITEM values (2, 5, 'Media/123@g.us/a/missing.jpg', 'https://example.invalid/missing.enc', 'missing image', '', 7);
+insert into ZWAMESSAGE values (5, 2, 1, 2, 'missing-media', 0, 700000004, 'missing media', 1, 0, '123@g.us', '', 'Alice');
+`)
+	if err := chatDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	archivePath := filepath.Join(t.TempDir(), "archive.db")
+	archive, err := store.Open(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = archive.Close() }()
+
+	stats, err := ImportWithOptions(ctx, archive, ImportOptions{SourcePath: source, CopyMedia: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.MediaCopied != 1 || stats.MediaMissing != 1 || stats.MediaMessages != 2 {
+		t.Fatalf("unexpected media stats: %+v", stats)
+	}
+
+	msgs, err := archive.Messages(ctx, store.MessageFilter{ChatJID: "123@g.us", Limit: 10, Asc: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var copiedPath, missingPath string
+	for _, msg := range msgs {
+		switch msg.MessageID {
+		case "group-image":
+			copiedPath = msg.MediaPath
+		case "missing-media":
+			missingPath = msg.MediaPath
+		}
+	}
+	wantCopied := filepath.Join(filepath.Dir(archivePath), "media", "Media", "123@g.us", "a", "test.jpg")
+	if copiedPath != wantCopied {
+		t.Fatalf("copied media path = %q, want %q", copiedPath, wantCopied)
+	}
+	if data, err := os.ReadFile(copiedPath); err != nil || string(data) != "image" { // #nosec G304 -- copiedPath is asserted against the expected temp archive path above.
+		t.Fatalf("copied media content = %q err=%v", data, err)
+	}
+	wantMissing := filepath.Join(source, "Media", "123@g.us", "a", "missing.jpg")
+	if missingPath != wantMissing {
+		t.Fatalf("missing media path = %q, want original %q", missingPath, wantMissing)
+	}
+}
+
+func TestCopyArchiveMediaDeduplicatesAndConfinesPaths(t *testing.T) {
+	source := t.TempDir()
+	mediaRoot := filepath.Join(t.TempDir(), "media")
+	mediaPath := filepath.Join(source, "Message", "Media", "chat", "photo.jpg")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	missingPath := filepath.Join(source, "Message", "Media", "chat", "missing.jpg")
+	messages := []store.Message{
+		{MediaPath: mediaPath},
+		{MediaPath: mediaPath},
+		{MediaPath: missingPath},
+		{MediaPath: missingPath},
+	}
+
+	copied, missing, err := copyArchiveMedia(messages, source, mediaRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if copied != 1 || missing != 1 {
+		t.Fatalf("copy stats = %d/%d, want 1/1", copied, missing)
+	}
+	wantCopied := filepath.Join(mediaRoot, "Message", "Media", "chat", "photo.jpg")
+	if messages[0].MediaPath != wantCopied || messages[1].MediaPath != wantCopied {
+		t.Fatalf("duplicate copied media paths not rewritten: %+v", messages[:2])
+	}
+	if messages[2].MediaPath != missingPath || messages[3].MediaPath != missingPath {
+		t.Fatalf("duplicate missing media paths should stay original: %+v", messages[2:])
+	}
+
+	outsidePath := filepath.Join(t.TempDir(), "outside.jpg")
+	dest, err := archiveMediaPath(source, mediaRoot, outsidePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dest != filepath.Join(mediaRoot, "outside.jpg") {
+		t.Fatalf("outside path fallback = %q", dest)
+	}
+	if _, err := archiveMediaPath(source, mediaRoot, source); err == nil {
+		t.Fatal("expected source root path to be rejected")
+	}
+}
+
 func TestDiscoverAndHelpers(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()

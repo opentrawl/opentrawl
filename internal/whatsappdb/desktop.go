@@ -53,6 +53,12 @@ type Data struct {
 	MediaCount   int
 }
 
+type ImportOptions struct {
+	SourcePath string
+	CopyMedia  bool
+	MediaRoot  string
+}
+
 func DefaultPath() string {
 	home, _ := os.UserHomeDir()
 	if runtime.GOOS == "darwin" {
@@ -155,7 +161,11 @@ func Extract(ctx context.Context, snap Snapshot) (Data, error) {
 }
 
 func Import(ctx context.Context, st *store.Store, path string) (store.ImportStats, error) {
-	sourcePath := defaultedPath(path)
+	return ImportWithOptions(ctx, st, ImportOptions{SourcePath: path})
+}
+
+func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions) (store.ImportStats, error) {
+	sourcePath := defaultedPath(opts.SourcePath)
 	stats := store.ImportStats{SourcePath: sourcePath, DBPath: st.Path(), StartedAt: time.Now().UTC()}
 	snap, err := SnapshotPath(sourcePath)
 	if err != nil {
@@ -165,6 +175,18 @@ func Import(ctx context.Context, st *store.Store, path string) (store.ImportStat
 	data, err := Extract(ctx, snap)
 	if err != nil {
 		return stats, err
+	}
+	if opts.CopyMedia {
+		mediaRoot := opts.MediaRoot
+		if strings.TrimSpace(mediaRoot) == "" {
+			mediaRoot = filepath.Join(filepath.Dir(st.Path()), "media")
+		}
+		copied, missing, err := copyArchiveMedia(data.Messages, sourcePath, mediaRoot)
+		if err != nil {
+			return stats, err
+		}
+		stats.MediaCopied = copied
+		stats.MediaMissing = missing
 	}
 	stats.Chats = len(data.Chats)
 	stats.Contacts = len(data.Contacts)
@@ -177,6 +199,89 @@ func Import(ctx context.Context, st *store.Store, path string) (store.ImportStat
 		return stats, err
 	}
 	return stats, nil
+}
+
+func copyArchiveMedia(messages []store.Message, sourceRoot, mediaRoot string) (int, int, error) {
+	type result struct {
+		path    string
+		missing bool
+	}
+	seen := map[string]result{}
+	copied := 0
+	missing := 0
+	for i := range messages {
+		src := strings.TrimSpace(messages[i].MediaPath)
+		if src == "" {
+			continue
+		}
+		if r, ok := seen[src]; ok {
+			if !r.missing {
+				messages[i].MediaPath = r.path
+			}
+			continue
+		}
+		dest, err := archiveMediaPath(sourceRoot, mediaRoot, src)
+		if err != nil {
+			return copied, missing, err
+		}
+		if err := copyMediaFile(src, dest); err != nil {
+			if os.IsNotExist(err) {
+				missing++
+				seen[src] = result{missing: true}
+				continue
+			}
+			return copied, missing, err
+		}
+		copied++
+		seen[src] = result{path: dest}
+		messages[i].MediaPath = dest
+	}
+	return copied, missing, nil
+}
+
+func archiveMediaPath(sourceRoot, mediaRoot, src string) (string, error) {
+	rel, err := filepath.Rel(sourceRoot, src)
+	if err != nil || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || rel == ".." || filepath.IsAbs(rel) {
+		rel = filepath.Base(src)
+	}
+	rel = filepath.Clean(rel)
+	if rel == "." || rel == string(os.PathSeparator) || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) || rel == ".." {
+		return "", fmt.Errorf("invalid media path: %s", src)
+	}
+	dest := filepath.Join(mediaRoot, rel)
+	cleanRoot := filepath.Clean(mediaRoot)
+	cleanDest := filepath.Clean(dest)
+	if cleanDest != cleanRoot && !strings.HasPrefix(cleanDest, cleanRoot+string(os.PathSeparator)) {
+		return "", fmt.Errorf("media path escapes archive root: %s", src)
+	}
+	return cleanDest, nil
+}
+
+func copyMediaFile(src, dest string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("media source is not a regular file: %s", src)
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o700); err != nil {
+		return err
+	}
+	in, err := os.Open(src) // #nosec G304 -- media path comes from the local WhatsApp DB and is copied only on explicit request.
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(dest, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600) // #nosec G304 -- destination is confined under the archive media root.
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		return err
+	}
+	return out.Close()
 }
 
 func readContacts(ctx context.Context, path string) ([]store.Contact, map[string]string, error) {
