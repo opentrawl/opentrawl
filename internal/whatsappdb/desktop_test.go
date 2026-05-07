@@ -36,7 +36,7 @@ func TestImportDesktopCoreDataShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Messages != 4 || status.MediaMessages != 1 {
+	if status.Messages != 4 || status.MediaMessages != 1 || status.UnreadChats != 1 || status.UnreadMessages != 2 {
 		t.Fatalf("unexpected status: %+v", status)
 	}
 

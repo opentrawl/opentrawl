@@ -34,17 +34,19 @@ type ImportStats struct {
 }
 
 type Status struct {
-	DBPath        string    `json:"db_path"`
-	Chats         int       `json:"chats"`
-	Contacts      int       `json:"contacts"`
-	Groups        int       `json:"groups"`
-	Participants  int       `json:"participants"`
-	Messages      int       `json:"messages"`
-	MediaMessages int       `json:"media_messages"`
-	OldestMessage time.Time `json:"oldest_message,omitzero"`
-	NewestMessage time.Time `json:"newest_message,omitzero"`
-	LastImportAt  time.Time `json:"last_import_at,omitzero"`
-	LastSource    string    `json:"last_source,omitempty"`
+	DBPath         string    `json:"db_path"`
+	Chats          int       `json:"chats"`
+	UnreadChats    int       `json:"unread_chats"`
+	UnreadMessages int       `json:"unread_messages"`
+	Contacts       int       `json:"contacts"`
+	Groups         int       `json:"groups"`
+	Participants   int       `json:"participants"`
+	Messages       int       `json:"messages"`
+	MediaMessages  int       `json:"media_messages"`
+	OldestMessage  time.Time `json:"oldest_message,omitzero"`
+	NewestMessage  time.Time `json:"newest_message,omitzero"`
+	LastImportAt   time.Time `json:"last_import_at,omitzero"`
+	LastSource     string    `json:"last_source,omitempty"`
 }
 
 type Chat struct {
@@ -58,6 +60,11 @@ type Chat struct {
 	Hidden         bool
 	RawSessionType int
 	MessageCount   int
+}
+
+type ChatFilter struct {
+	Limit      int
+	OnlyUnread bool
 }
 
 type Contact struct {
@@ -250,6 +257,8 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		q   string
 	}{
 		{&out.Chats, "select count(*) from chats"},
+		{&out.UnreadChats, "select count(*) from chats where unread_count > 0"},
+		{&out.UnreadMessages, "select coalesce(sum(unread_count), 0) from chats"},
 		{&out.Contacts, "select count(*) from contacts"},
 		{&out.Groups, "select count(*) from groups"},
 		{&out.Participants, "select count(*) from group_participants"},
@@ -281,10 +290,22 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 }
 
 func (s *Store) ListChats(ctx context.Context, limit int) ([]Chat, error) {
-	if limit <= 0 {
-		limit = 50
+	return s.listChats(ctx, ChatFilter{Limit: limit})
+}
+
+func (s *Store) ListUnreadChats(ctx context.Context, limit int) ([]Chat, error) {
+	return s.listChats(ctx, ChatFilter{Limit: limit, OnlyUnread: true})
+}
+
+func (s *Store) listChats(ctx context.Context, filter ChatFilter) ([]Chat, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 50
 	}
-	rows, err := s.db.QueryContext(ctx, `select c.jid,c.kind,c.name,c.last_message_at,c.unread_count,c.archived,c.removed,c.hidden,c.raw_session_type,count(m.rowid) from chats c left join messages m on m.chat_jid=c.jid group by c.jid order by c.last_message_at desc limit ?`, limit)
+	where := ""
+	if filter.OnlyUnread {
+		where = "where c.unread_count > 0"
+	}
+	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select c.jid,c.kind,c.name,c.last_message_at,c.unread_count,c.archived,c.removed,c.hidden,c.raw_session_type,count(m.rowid) from chats c left join messages m on m.chat_jid=c.jid %s group by c.jid order by c.last_message_at desc limit ?`, where), filter.Limit)
 	if err != nil {
 		return nil, err
 	}

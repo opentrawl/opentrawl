@@ -18,7 +18,7 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
 	stats := ImportStats{SourcePath: "/tmp/source", DBPath: st.Path(), StartedAt: now.Add(-time.Second), FinishedAt: now}
 	contacts := []Contact{{JID: "alice@s.whatsapp.net", FullName: "Alice", UpdatedAt: now}}
-	chats := []Chat{{JID: "chat@g.us", Kind: "group", Name: "Chat", LastMessageAt: now, MessageCount: 2}}
+	chats := []Chat{{JID: "chat@g.us", Kind: "group", Name: "Chat", LastMessageAt: now, UnreadCount: 2, MessageCount: 2}}
 	groups := []Group{{JID: "chat@g.us", Name: "Chat", OwnerJID: "owner@s.whatsapp.net", CreatedAt: now.Add(-time.Hour)}}
 	participants := []GroupParticipant{{GroupJID: "chat@g.us", UserJID: "alice@s.whatsapp.net", ContactName: "Alice", IsAdmin: true, IsActive: true}}
 	messages := []Message{
@@ -33,7 +33,7 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Messages != 2 || status.MediaMessages != 1 || status.LastSource != "/tmp/source" {
+	if status.Messages != 2 || status.MediaMessages != 1 || status.UnreadChats != 1 || status.UnreadMessages != 2 || status.LastSource != "/tmp/source" {
 		t.Fatalf("unexpected status: %+v", status)
 	}
 	if st.DB() == nil {
@@ -84,6 +84,13 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	}
 	if len(chatsOut) != 1 || chatsOut[0].JID != "chat@g.us" {
 		t.Fatalf("unexpected chats: %+v", chatsOut)
+	}
+	unreadChats, err := st.ListUnreadChats(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unreadChats) != 1 || unreadChats[0].UnreadCount != 2 {
+		t.Fatalf("unexpected unread chats: %+v", unreadChats)
 	}
 
 	exported, err := st.ExportAll(ctx)

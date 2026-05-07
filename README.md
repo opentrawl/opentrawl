@@ -60,6 +60,7 @@ when the local WhatsApp Desktop source is newer:
 ```bash
 wacrawl status
 wacrawl chats --limit 20
+wacrawl unread --limit 20
 wacrawl messages --limit 20
 ```
 
@@ -162,8 +163,8 @@ Show archive counts and import metadata:
 wacrawl status
 ```
 
-Includes chat, contact, group, participant, message, media-message, oldest,
-newest, last-import, and source fields.
+Includes chat, unread-chat, unread-message, contact, group, participant,
+message, media-message, oldest, newest, last-import, and source fields.
 
 By default, `status` first syncs the archive when the last sync is older than
 `--sync-max-age` and the WhatsApp Desktop source has newer data.
@@ -175,6 +176,19 @@ List chats ordered by newest message:
 ```bash
 wacrawl chats
 wacrawl chats --limit 100
+wacrawl chats --unread
+```
+
+Unread state comes from WhatsApp Desktop's per-chat unread counter. Message
+rows do not expose a reliable incoming per-message "read by me" flag.
+
+### `unread`
+
+List only chats with unread messages:
+
+```bash
+wacrawl unread
+wacrawl unread --limit 100
 ```
 
 ### `messages`

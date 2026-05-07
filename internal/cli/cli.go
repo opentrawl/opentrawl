@@ -81,6 +81,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return a.runStatus(ctx, rest[1:])
 	case "chats":
 		return a.runChats(ctx, rest[1:])
+	case "unread":
+		return a.runUnread(ctx, rest[1:])
 	case "messages":
 		return a.runMessages(ctx, rest[1:])
 	case "search":
@@ -173,6 +175,7 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("chats", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 50, "")
+	unread := fs.Bool("unread", false, "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
@@ -180,7 +183,34 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 		return usageErr(errors.New("chats takes flags only"))
 	}
 	return a.withArchiveStore(ctx, func(st *store.Store) error {
-		chats, err := st.ListChats(ctx, *limit)
+		var (
+			chats []store.Chat
+			err   error
+		)
+		if *unread {
+			chats, err = st.ListUnreadChats(ctx, *limit)
+		} else {
+			chats, err = st.ListChats(ctx, *limit)
+		}
+		if err != nil {
+			return err
+		}
+		return a.print(chats)
+	})
+}
+
+func (a *app) runUnread(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("unread", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	limit := fs.Int("limit", 50, "")
+	if err := fs.Parse(args); err != nil {
+		return usageErr(err)
+	}
+	if fs.NArg() != 0 {
+		return usageErr(errors.New("unread takes flags only"))
+	}
+	return a.withArchiveStore(ctx, func(st *store.Store) error {
+		chats, err := st.ListUnreadChats(ctx, *limit)
 		if err != nil {
 			return err
 		}
@@ -353,14 +383,14 @@ func (a *app) print(value any) error {
 			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages)
 		return err
 	case store.Status:
-		_, err := fmt.Fprintf(a.stdout, "db=%s\nchats=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
-			v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, formatTime(v.OldestMessage), formatTime(v.NewestMessage), formatTime(v.LastImportAt), v.LastSource)
+		_, err := fmt.Fprintf(a.stdout, "db=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
+			v.DBPath, v.Chats, v.UnreadChats, v.UnreadMessages, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, formatTime(v.OldestMessage), formatTime(v.NewestMessage), formatTime(v.LastImportAt), v.LastSource)
 		return err
 	case []store.Chat:
 		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "LAST\tKIND\tMESSAGES\tJID\tNAME")
+		_, _ = fmt.Fprintln(tw, "LAST\tKIND\tUNREAD\tMESSAGES\tJID\tNAME")
 		for _, c := range v {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%s\t%s\n", formatTime(c.LastMessageAt), c.Kind, c.MessageCount, c.JID, c.Name)
+			_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\t%s\n", formatTime(c.LastMessageAt), c.Kind, c.UnreadCount, c.MessageCount, c.JID, c.Name)
 		}
 		return tw.Flush()
 	case []store.Message:
@@ -397,6 +427,7 @@ Commands:
   sync        Alias for import.
   status      Show archive status.
   chats       List chats.
+  unread      List chats with unread messages.
   messages    List archived messages.
   search      Search archived messages.
   backup      Init, push, pull, or inspect encrypted Git backups.

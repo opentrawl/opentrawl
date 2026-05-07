@@ -32,8 +32,10 @@ func TestRunEndToEnd(t *testing.T) {
 		{"version", []string{"--version"}, "0.2.0"},
 		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "message_rows"},
 		{"import", []string{"--db", dbPath, "--source", source, "import"}, "messages=3"},
-		{"status", []string{"--db", dbPath, "status"}, "messages=3"},
-		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "Launch Group"},
+		{"status", []string{"--db", dbPath, "status"}, "unread_messages=2"},
+		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "UNREAD"},
+		{"chats unread", []string{"--db", dbPath, "chats", "--unread", "--limit", "5"}, "Launch Group"},
+		{"unread", []string{"--db", dbPath, "unread", "--limit", "5"}, "Launch Group"},
 		{"messages", []string{"--db", dbPath, "messages", "--chat", "123@g.us", "--asc"}, "launch now"},
 		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "[launch] now"},
 		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "[launch] now"},
@@ -88,6 +90,7 @@ func TestRunUsageErrors(t *testing.T) {
 		{"sync", "extra"},
 		{"chats", "extra"},
 		{"messages", "extra"},
+		{"unread", "extra"},
 	} {
 		err = Run(context.Background(), args, &stdout, &stderr)
 		if err == nil || !strings.Contains(err.Error(), "flags only") {
