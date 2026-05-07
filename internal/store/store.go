@@ -29,6 +29,8 @@ type ImportStats struct {
 	Participants  int       `json:"participants"`
 	Messages      int       `json:"messages"`
 	MediaMessages int       `json:"media_messages"`
+	MediaCopied   int       `json:"media_copied,omitempty"`
+	MediaMissing  int       `json:"media_missing,omitempty"`
 	StartedAt     time.Time `json:"started_at"`
 	FinishedAt    time.Time `json:"finished_at"`
 }

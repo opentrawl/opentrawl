@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"flag"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -32,6 +33,7 @@ func TestRunEndToEnd(t *testing.T) {
 		{"version", []string{"--version"}, "0.2.0"},
 		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "message_rows"},
 		{"import", []string{"--db", dbPath, "--source", source, "import"}, "messages=3"},
+		{"import copy media", []string{"--db", dbPath, "--source", source, "import", "--copy-media"}, "media_copied=1"},
 		{"status", []string{"--db", dbPath, "status"}, "unread_messages=2"},
 		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "UNREAD"},
 		{"chats unread", []string{"--db", dbPath, "chats", "--unread", "--limit", "5"}, "Launch Group"},
@@ -347,6 +349,13 @@ create table ZWAADDRESSBOOKCONTACT (ZWHATSAPPID varchar, ZPHONENUMBER varchar, Z
 insert into ZWAADDRESSBOOKCONTACT values ('111@s.whatsapp.net', '+111', 'Bob', 'Bob', '', '', '', '', '', 700000000);
 insert into ZWAADDRESSBOOKCONTACT values ('222@s.whatsapp.net', '+222', 'Alice Contact', 'Alice', '', '', '', '222', '', 700000000);
 `)
+	mediaPath := filepath.Join(dir, "Media", "123@g.us", "a", "test.jpg")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func mustExec(t *testing.T, db *sql.DB, query string) {
