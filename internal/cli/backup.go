@@ -6,14 +6,26 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/steipete/wacrawl/internal/backup"
 	"github.com/steipete/wacrawl/internal/store"
 )
 
 func (a *app) runBackup(ctx context.Context, args []string) error {
-	if len(args) == 0 {
-		return usageErr(errors.New("backup requires init, push, pull, or status"))
+	if len(args) == 0 || args[0] == "-h" || args[0] == "--help" {
+		printCommandUsage(a.stdout, "backup")
+		return nil
+	}
+	if args[0] == "help" {
+		if len(args) == 1 {
+			printCommandUsage(a.stdout, "backup")
+			return nil
+		}
+		if printCommandUsage(a.stdout, append([]string{"backup"}, args[1:]...)...) {
+			return nil
+		}
+		return usageErr(fmt.Errorf("unknown backup help topic %q", strings.Join(args[1:], " ")))
 	}
 	switch args[0] {
 	case "init":
@@ -32,6 +44,10 @@ func (a *app) runBackup(ctx context.Context, args []string) error {
 func (a *app) runBackupInit(ctx context.Context, args []string) error {
 	fs, opts, noPush := backupFlagSet("backup init")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "backup", "init")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -52,6 +68,10 @@ func (a *app) runBackupInit(ctx context.Context, args []string) error {
 func (a *app) runBackupPush(ctx context.Context, args []string) error {
 	fs, opts, noPush := backupFlagSet("backup push")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "backup", "push")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -70,6 +90,10 @@ func (a *app) runBackupPush(ctx context.Context, args []string) error {
 func (a *app) runBackupPull(ctx context.Context, args []string) error {
 	fs, opts, _ := backupFlagSet("backup pull")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "backup", "pull")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -87,6 +111,10 @@ func (a *app) runBackupPull(ctx context.Context, args []string) error {
 func (a *app) runBackupStatus(ctx context.Context, args []string) error {
 	fs, opts, _ := backupFlagSet("backup status")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "backup", "status")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {

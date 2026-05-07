@@ -113,6 +113,58 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 }
 
+func TestRunHelpMenus(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{"global short", []string{"--help"}, "Examples:"},
+		{"backup help", []string{"backup", "help"}, "wacrawl backup <init|push|pull|status>"},
+		{"backup topic", []string{"help", "backup"}, "wacrawl backup <init|push|pull|status>"},
+		{"doctor topic", []string{"help", "doctor"}, "wacrawl doctor [--source PATH]"},
+		{"command help topic", []string{"help", "messages"}, "wacrawl messages [flags]"},
+		{"doctor flag", []string{"doctor", "--help"}, "wacrawl doctor [--source PATH]"},
+		{"status flag", []string{"status", "--help"}, "unread counts"},
+		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N] [--unread]"},
+		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
+		{"command flag", []string{"messages", "--help"}, "--has-media"},
+		{"search flag", []string{"search", "--help"}, "wacrawl search [flags] <query>"},
+		{"import flag", []string{"import", "--help"}, "--copy-media"},
+		{"sync topic", []string{"help", "sync"}, "wacrawl sync [--source PATH]"},
+		{"backup flag", []string{"backup", "--help"}, "wacrawl backup <init|push|pull|status>"},
+		{"backup nested flag", []string{"backup", "init", "--help"}, "wacrawl backup init [flags]"},
+		{"backup nested topic", []string{"backup", "help", "push"}, "wacrawl backup push [flags]"},
+		{"backup pull topic", []string{"help", "backup", "pull"}, "wacrawl backup pull [flags]"},
+		{"backup status topic", []string{"help", "backup", "status"}, "wacrawl backup status [flags]"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			if err := Run(context.Background(), tc.args, &stdout, &stderr); err != nil {
+				t.Fatalf("Run() error = %v stderr=%s", err, stderr.String())
+			}
+			if !strings.Contains(stdout.String(), tc.want) {
+				t.Fatalf("stdout missing %q:\n%s", tc.want, stdout.String())
+			}
+		})
+	}
+	var discard bytes.Buffer
+	if printCommandUsage(&discard, "missing") {
+		t.Fatal("unknown help topic should return false")
+	}
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"help", "missing"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), "unknown help topic") {
+		t.Fatalf("expected unknown help topic error, got %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(context.Background(), []string{"backup", "help", "missing"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 2 || !strings.Contains(err.Error(), "unknown backup help topic") {
+		t.Fatalf("expected unknown backup help topic error, got %v", err)
+	}
+}
+
 func TestReadCommandsSyncArchive(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()

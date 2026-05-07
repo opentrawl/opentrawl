@@ -56,6 +56,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	syncMaxAge := global.Duration("sync-max-age", 15*time.Minute, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printUsage(stdout)
+			return nil
+		}
 		return usageErr(err)
 	}
 	if *versionFlag {
@@ -68,9 +72,19 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source, syncMode: syncMode, syncMaxAge: *syncMaxAge}
 	rest := global.Args()
-	if len(rest) == 0 || rest[0] == "help" {
+	if len(rest) == 0 {
 		printUsage(stdout)
 		return nil
+	}
+	if rest[0] == "help" {
+		if len(rest) == 1 {
+			printUsage(stdout)
+			return nil
+		}
+		if printCommandUsage(stdout, rest[1:]...) {
+			return nil
+		}
+		return usageErr(fmt.Errorf("unknown help topic %q", strings.Join(rest[1:], " ")))
 	}
 	switch rest[0] {
 	case "doctor":
@@ -116,6 +130,10 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "status")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -135,6 +153,10 @@ func (a *app) runDoctor(ctx context.Context, args []string) error {
 	fs.SetOutput(io.Discard)
 	source := fs.String("source", a.source, "")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "doctor")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -158,6 +180,10 @@ func (a *app) runImport(ctx context.Context, command string, args []string) erro
 	source := fs.String("source", a.source, "")
 	copyMedia := fs.Bool("copy-media", false, "")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, command)
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -178,6 +204,10 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 50, "")
 	unread := fs.Bool("unread", false, "")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "chats")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -205,6 +235,10 @@ func (a *app) runUnread(ctx context.Context, args []string) error {
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 50, "")
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "unread")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -224,6 +258,10 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 	fs.SetOutput(io.Discard)
 	filter := bindMessageFlags(fs)
 	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "messages")
+			return nil
+		}
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
@@ -246,11 +284,19 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	filter := bindMessageFlags(fs)
+	if commandWantsHelp(args) {
+		printCommandUsage(a.stdout, "search")
+		return nil
+	}
 	flagArgs, query, err := splitSearchArgs(args)
 	if err != nil {
 		return usageErr(err)
 	}
 	if err := fs.Parse(flagArgs); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "search")
+			return nil
+		}
 		return usageErr(err)
 	}
 	resolved, err := filter.resolve()
@@ -443,7 +489,223 @@ Options:
 
 Import flags:
   --copy-media              Copy referenced media files into the archive media directory.
+
+Examples:
+  wacrawl doctor
+  wacrawl sync
+  wacrawl unread --limit 20
+  wacrawl --json search "invoice" --from-them --after 2026-01-01
+  wacrawl help messages
 `)
+}
+
+func commandWantsHelp(args []string) bool {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+func printCommandUsage(w io.Writer, topic ...string) bool {
+	name := strings.Join(topic, " ")
+	switch name {
+	case "doctor":
+		_, _ = fmt.Fprint(w, `Inspect the WhatsApp Desktop source and archive paths.
+
+Usage:
+  wacrawl doctor [--source PATH]
+
+Flags:
+  --source PATH   WhatsApp Desktop source path.
+
+Examples:
+  wacrawl doctor
+  wacrawl --json doctor
+`)
+	case "import", "sync":
+		_, _ = fmt.Fprintf(w, `Snapshot WhatsApp Desktop SQLite data into the archive.
+
+Usage:
+  wacrawl %s [--source PATH] [--copy-media]
+
+Flags:
+  --source PATH   WhatsApp Desktop source path.
+  --copy-media    Copy referenced media files into media/ next to the archive DB.
+
+Examples:
+  wacrawl %s
+  wacrawl %s --copy-media
+  wacrawl --db /tmp/wacrawl.db %s
+`, name, name, name, name)
+	case "status":
+		_, _ = fmt.Fprint(w, `Show archive status, counts, date span, unread counts, and last import metadata.
+
+Usage:
+  wacrawl status
+
+Examples:
+  wacrawl status
+  wacrawl --sync never status
+  wacrawl --json status
+`)
+	case "chats":
+		_, _ = fmt.Fprint(w, `List archived chats.
+
+Usage:
+  wacrawl chats [--limit N] [--unread]
+
+Flags:
+  --limit N   Maximum chats to print. Default: 50.
+  --unread    Show only chats with unread messages.
+
+Examples:
+  wacrawl chats --limit 20
+  wacrawl chats --unread
+  wacrawl --json chats --limit 100
+`)
+	case "unread":
+		_, _ = fmt.Fprint(w, `List chats with unread messages.
+
+Usage:
+  wacrawl unread [--limit N]
+
+Flags:
+  --limit N   Maximum chats to print. Default: 50.
+
+Examples:
+  wacrawl unread
+  wacrawl unread --limit 20
+`)
+	case "messages":
+		_, _ = fmt.Fprint(w, `List archived messages.
+
+Usage:
+  wacrawl messages [flags]
+
+Flags:
+  --chat JID       Filter by chat JID.
+  --sender JID     Filter by sender JID.
+  --limit N        Maximum messages to print. Default: 50.
+  --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
+  --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
+  --from-me        Only messages sent by me.
+  --from-them      Only messages received from others.
+  --has-media      Only messages with media metadata.
+  --asc            Show oldest messages first.
+
+Examples:
+  wacrawl messages --limit 20
+  wacrawl messages --chat 1234567890@s.whatsapp.net --asc
+  wacrawl messages --after 2026-01-01 --from-them
+  wacrawl --json messages --has-media --limit 100
+`)
+	case "search":
+		_, _ = fmt.Fprint(w, `Search archived messages.
+
+Usage:
+  wacrawl search [flags] <query>
+  wacrawl search <query> [flags]
+
+Flags:
+  --chat JID       Filter by chat JID.
+  --sender JID     Filter by sender JID.
+  --limit N        Maximum messages to print. Default: 50.
+  --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
+  --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
+  --from-me        Only messages sent by me.
+  --from-them      Only messages received from others.
+  --has-media      Only messages with media metadata.
+  --asc            Show oldest messages first.
+
+Examples:
+  wacrawl search "invoice"
+  wacrawl search "flight" --after 2026-01-01 --from-them
+  wacrawl --json search --chat 1234567890@s.whatsapp.net "release notes"
+`)
+	case "backup":
+		_, _ = fmt.Fprint(w, `Manage encrypted Git backups of the wacrawl archive.
+
+Usage:
+  wacrawl backup <init|push|pull|status> [flags]
+
+Commands:
+  init      Create backup config, age identity, and first encrypted backup.
+  push      Export the archive and push encrypted shards.
+  pull      Restore encrypted shards into the configured archive DB.
+  status    Inspect backup config and manifest.
+
+Common flags:
+  --config PATH      Backup config path.
+  --repo PATH        Backup Git repository path.
+  --remote URL       Backup Git remote.
+  --identity PATH    Age identity path.
+  --recipient AGE    Age recipient. Repeatable.
+  --no-push          Commit locally without pushing.
+
+Examples:
+  wacrawl backup status
+  wacrawl backup push
+  wacrawl --sync never backup push
+  wacrawl backup init --repo ~/Projects/backup-wacrawl --remote https://github.com/steipete/backup-wacrawl.git
+`)
+	case "backup init":
+		_, _ = fmt.Fprint(w, `Initialize encrypted Git backup configuration.
+
+Usage:
+  wacrawl backup init [flags]
+
+Flags:
+  --config PATH      Backup config path.
+  --repo PATH        Backup Git repository path.
+  --remote URL       Backup Git remote.
+  --identity PATH    Age identity path.
+  --recipient AGE    Age recipient. Repeatable.
+  --no-push          Commit locally without pushing.
+`)
+	case "backup push":
+		_, _ = fmt.Fprint(w, `Export and push encrypted archive shards.
+
+Usage:
+  wacrawl backup push [flags]
+
+Flags:
+  --config PATH      Backup config path.
+  --repo PATH        Backup Git repository path.
+  --remote URL       Backup Git remote.
+  --identity PATH    Age identity path.
+  --recipient AGE    Age recipient. Repeatable.
+  --no-push          Commit locally without pushing.
+`)
+	case "backup pull":
+		_, _ = fmt.Fprint(w, `Restore encrypted archive shards into the archive database.
+
+Usage:
+  wacrawl backup pull [flags]
+
+Flags:
+  --config PATH      Backup config path.
+  --repo PATH        Backup Git repository path.
+  --remote URL       Backup Git remote.
+  --identity PATH    Age identity path.
+`)
+	case "backup status":
+		_, _ = fmt.Fprint(w, `Show encrypted backup status and manifest metadata.
+
+Usage:
+  wacrawl backup status [flags]
+
+Flags:
+  --config PATH      Backup config path.
+  --repo PATH        Backup Git repository path.
+  --remote URL       Backup Git remote.
+  --identity PATH    Age identity path.
+`)
+	default:
+		return false
+	}
+	return true
 }
 
 func defaultDBPath() string {
