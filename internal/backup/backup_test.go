@@ -208,11 +208,11 @@ func TestConfigRoundTrip(t *testing.T) {
 		t.Fatal(err)
 	}
 	resolved, err := ResolveOptions(Options{
-		ConfigPath:  overridePath,
-		Repo:        "~/Projects/backup",
-		Remote:      "https://example.invalid/repo.git",
-		Identity:    "~/.wacrawl/test.key",
-		Recipients:  []string{" age1two ", "age1one"},
+		ConfigPath: overridePath,
+		Repo:       "~/Projects/backup",
+		Remote:     "https://example.invalid/repo.git",
+		Identity:   "~/.wacrawl/test.key",
+		Recipients: []string{" age1two ", "age1one"},
 	})
 	if err != nil {
 		t.Fatal(err)

@@ -6,6 +6,13 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-05-08
+
+### Fixed
+
+- Format the backup coverage regression test so the release branch passes CI
+  lint.
+
 ## [0.2.2] - 2026-05-08
 
 ### Fixed
