@@ -234,13 +234,17 @@ func TestCryptoHelpers(t *testing.T) {
 	if string(plain) != "private text\n" {
 		t.Fatalf("decrypt mismatch: %q", plain)
 	}
-	if _, err := parseRecipients([]string{"bad"}); err == nil {
+	if _, _, err := encryptShard([]byte("x"), []string{"bad"}); err == nil {
 		t.Fatal("expected bad recipient error")
 	}
 	if _, _, err := encryptShard([]byte("x"), nil); err == nil {
 		t.Fatal("expected missing recipient encrypt error")
 	}
-	if _, err := parseIdentity([]byte("# comment\n\n")); err == nil {
+	emptyIdentity := filepath.Join(t.TempDir(), "empty.key")
+	if err := os.WriteFile(emptyIdentity, []byte("# comment\n\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RecipientFromIdentity(emptyIdentity); err == nil {
 		t.Fatal("expected empty identity error")
 	}
 	badIdentity := filepath.Join(t.TempDir(), "bad.key")

@@ -6,6 +6,13 @@ The format follows Keep a Changelog, and this project uses Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-08
+
+### Changed
+
+- Reuse `crawlkit`'s shared encrypted backup helpers for age identities,
+  JSONL/Gzip shard encryption, hashes, and restore verification.
+
 ### Added
 
 - Add command-specific help menus with examples for `doctor`, `import`, `sync`, `status`, `chats`, `unread`, `messages`, `search`, and backup subcommands.
