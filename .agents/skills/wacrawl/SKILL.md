@@ -1,6 +1,6 @@
 ---
 name: wacrawl
-description: Use when explicitly working with wacrawl: WhatsApp Desktop archive import/search, message slices, backups, and Wacrawl repo/release work.
+description: "wacrawl: WhatsApp Desktop archive import/search, slices, backups, repo/release work."
 ---
 
 # Wacrawl
