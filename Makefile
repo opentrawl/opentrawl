@@ -1,4 +1,4 @@
-.PHONY: build test lint coverage check
+.PHONY: build test lint coverage sqlc check
 
 COVERAGE_THRESHOLD ?= 85.0
 
@@ -13,5 +13,8 @@ lint:
 
 coverage:
 	./scripts/coverage.sh $(COVERAGE_THRESHOLD)
+
+sqlc:
+	go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 
 check: lint coverage build

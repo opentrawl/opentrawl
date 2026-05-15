@@ -1,9 +1,7 @@
-package store
+-- Compile-time schema for sqlc. Runtime migrations remain authoritative in
+-- internal/store/schema.go.
 
-// Runtime migration schema. Keep internal/store/sqlc/schema.sql in sync when
-// changing archive tables used by generated queries.
-const schemaSQL = `
-create table if not exists chats (
+create table chats (
 	jid text primary key,
 	kind text not null,
 	name text,
@@ -15,7 +13,7 @@ create table if not exists chats (
 	raw_session_type integer not null default 0
 );
 
-create table if not exists contacts (
+create table contacts (
 	jid text primary key,
 	phone text,
 	full_name text,
@@ -28,14 +26,14 @@ create table if not exists contacts (
 	updated_at integer
 );
 
-create table if not exists groups (
+create table groups (
 	jid text primary key,
 	name text,
 	owner_jid text,
 	created_at integer
 );
 
-create table if not exists group_participants (
+create table group_participants (
 	group_jid text not null,
 	user_jid text not null,
 	contact_name text,
@@ -45,7 +43,7 @@ create table if not exists group_participants (
 	primary key (group_jid, user_jid)
 );
 
-create table if not exists messages (
+create table messages (
 	rowid integer primary key autoincrement,
 	source_pk integer not null unique,
 	chat_jid text not null,
@@ -66,16 +64,23 @@ create table if not exists messages (
 	starred integer not null default 0
 );
 
-create index if not exists idx_messages_chat_ts on messages(chat_jid, ts);
-create index if not exists idx_messages_chat_msg on messages(chat_jid, msg_id);
-create index if not exists idx_messages_ts on messages(ts);
-create index if not exists idx_messages_sender on messages(sender_jid);
+create index idx_messages_chat_ts on messages(chat_jid, ts);
+create index idx_messages_chat_msg on messages(chat_jid, msg_id);
+create index idx_messages_ts on messages(ts);
+create index idx_messages_sender on messages(sender_jid);
 
-create virtual table if not exists messages_fts using fts5(text, chat, sender, media);
+-- sqlc does not need FTS behavior here; it only validates archive-store writes.
+-- Runtime schema.go creates the real fts5 virtual table.
+create table messages_fts (
+	rowid integer primary key,
+	text text,
+	chat text,
+	sender text,
+	media text
+);
 
-create table if not exists sync_state (
+create table sync_state (
 	key text primary key,
 	value text not null,
 	updated_at integer not null
 );
-`
