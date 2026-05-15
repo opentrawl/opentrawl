@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/steipete/wacrawl/internal/store/storedb"
 	_ "modernc.org/sqlite"
 )
 
@@ -17,6 +18,7 @@ const schemaVersion = 1
 
 type Store struct {
 	db   *sql.DB
+	q    *storedb.Queries
 	path string
 }
 
@@ -150,7 +152,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
-	s := &Store{db: db, path: path}
+	s := &Store{db: db, q: storedb.New(db), path: path}
 	if err := s.migrate(ctx); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -189,51 +191,109 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		return err
 	}
 	defer rollback(tx)
+	q := s.q.WithTx(tx)
 
-	for _, q := range []string{
-		"delete from messages_fts",
-		"delete from messages",
-		"delete from group_participants",
-		"delete from groups",
-		"delete from chats",
-		"delete from contacts",
-		"delete from sync_state",
+	for _, deleteQuery := range []func(context.Context) error{
+		q.DeleteMessagesFTS,
+		q.DeleteMessages,
+		q.DeleteGroupParticipants,
+		q.DeleteGroups,
+		q.DeleteChats,
+		q.DeleteContacts,
+		q.DeleteSyncState,
 	} {
-		if _, err := tx.ExecContext(ctx, q); err != nil {
+		if err := deleteQuery(ctx); err != nil {
 			return err
 		}
 	}
 	for _, c := range contacts {
-		if _, err := tx.ExecContext(ctx, `insert into contacts(jid, phone, full_name, first_name, last_name, business_name, username, lid, about_text, updated_at) values(?,?,?,?,?,?,?,?,?,?)`,
-			c.JID, c.Phone, c.FullName, c.FirstName, c.LastName, c.BusinessName, c.Username, c.LID, c.AboutText, unix(c.UpdatedAt)); err != nil {
+		err := q.InsertContact(ctx, storedb.InsertContactParams{
+			Jid:          c.JID,
+			Phone:        nullString(c.Phone),
+			FullName:     nullString(c.FullName),
+			FirstName:    nullString(c.FirstName),
+			LastName:     nullString(c.LastName),
+			BusinessName: nullString(c.BusinessName),
+			Username:     nullString(c.Username),
+			Lid:          nullString(c.LID),
+			AboutText:    nullString(c.AboutText),
+			UpdatedAt:    nullInt64(unix(c.UpdatedAt)),
+		})
+		if err != nil {
 			return err
 		}
 	}
 	for _, c := range chats {
-		if _, err := tx.ExecContext(ctx, `insert into chats(jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type) values(?,?,?,?,?,?,?,?,?)`,
-			c.JID, c.Kind, c.Name, unix(c.LastMessageAt), c.UnreadCount, boolInt(c.Archived), boolInt(c.Removed), boolInt(c.Hidden), c.RawSessionType); err != nil {
+		err := q.InsertChat(ctx, storedb.InsertChatParams{
+			Jid:            c.JID,
+			Kind:           c.Kind,
+			Name:           nullString(c.Name),
+			LastMessageAt:  nullInt64(unix(c.LastMessageAt)),
+			UnreadCount:    int64(c.UnreadCount),
+			Archived:       int64(boolInt(c.Archived)),
+			Removed:        int64(boolInt(c.Removed)),
+			Hidden:         int64(boolInt(c.Hidden)),
+			RawSessionType: int64(c.RawSessionType),
+		})
+		if err != nil {
 			return err
 		}
 	}
 	for _, g := range groups {
-		if _, err := tx.ExecContext(ctx, `insert into groups(jid, name, owner_jid, created_at) values(?,?,?,?)`,
-			g.JID, g.Name, g.OwnerJID, unix(g.CreatedAt)); err != nil {
+		err := q.InsertGroup(ctx, storedb.InsertGroupParams{
+			Jid:       g.JID,
+			Name:      nullString(g.Name),
+			OwnerJid:  nullString(g.OwnerJID),
+			CreatedAt: nullInt64(unix(g.CreatedAt)),
+		})
+		if err != nil {
 			return err
 		}
 	}
 	for _, p := range participants {
-		if _, err := tx.ExecContext(ctx, `insert into group_participants(group_jid, user_jid, contact_name, first_name, is_admin, is_active) values(?,?,?,?,?,?)`,
-			p.GroupJID, p.UserJID, p.ContactName, p.FirstName, boolInt(p.IsAdmin), boolInt(p.IsActive)); err != nil {
+		err := q.InsertParticipant(ctx, storedb.InsertParticipantParams{
+			GroupJid:    p.GroupJID,
+			UserJid:     p.UserJID,
+			ContactName: nullString(p.ContactName),
+			FirstName:   nullString(p.FirstName),
+			IsAdmin:     int64(boolInt(p.IsAdmin)),
+			IsActive:    int64(boolInt(p.IsActive)),
+		})
+		if err != nil {
 			return err
 		}
 	}
 	for _, m := range messages {
-		if _, err := tx.ExecContext(ctx, `insert into messages(source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-			m.SourcePK, m.ChatJID, m.ChatName, m.MessageID, m.SenderJID, m.SenderName, unix(m.Timestamp), boolInt(m.FromMe), m.Text, m.RawType, m.MessageType, m.MediaType, m.MediaTitle, m.MediaPath, m.MediaURL, m.MediaSize, boolInt(m.Starred)); err != nil {
+		err := q.InsertMessage(ctx, storedb.InsertMessageParams{
+			SourcePk:    m.SourcePK,
+			ChatJid:     m.ChatJID,
+			ChatName:    nullString(m.ChatName),
+			MsgID:       m.MessageID,
+			SenderJid:   nullString(m.SenderJID),
+			SenderName:  nullString(m.SenderName),
+			Ts:          unix(m.Timestamp),
+			FromMe:      int64(boolInt(m.FromMe)),
+			Text:        nullString(m.Text),
+			RawType:     int64(m.RawType),
+			MessageType: nullString(m.MessageType),
+			MediaType:   nullString(m.MediaType),
+			MediaTitle:  nullString(m.MediaTitle),
+			MediaPath:   nullString(m.MediaPath),
+			MediaUrl:    nullString(m.MediaURL),
+			MediaSize:   nullInt64(m.MediaSize),
+			Starred:     int64(boolInt(m.Starred)),
+		})
+		if err != nil {
 			return err
 		}
-		if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid, text, chat, sender, media) values((select rowid from messages where source_pk=?), ?, ?, ?, ?)`,
-			m.SourcePK, strings.TrimSpace(m.Text+" "+m.MediaTitle), m.ChatName, m.SenderName, m.MediaType); err != nil {
+		err = q.InsertMessageFTS(ctx, storedb.InsertMessageFTSParams{
+			SourcePk: m.SourcePK,
+			Text:     nullString(strings.TrimSpace(m.Text + " " + m.MediaTitle)),
+			Chat:     nullString(m.ChatName),
+			Sender:   nullString(m.SenderName),
+			Media:    nullString(m.MediaType),
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -245,7 +305,12 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		"last_import_at": now.Format(time.RFC3339Nano),
 		"source_path":    stats.SourcePath,
 	} {
-		if _, err := tx.ExecContext(ctx, `insert into sync_state(key, value, updated_at) values(?,?,?)`, key, value, unix(now)); err != nil {
+		err := q.InsertSyncState(ctx, storedb.InsertSyncStateParams{
+			Key:       key,
+			Value:     value,
+			UpdatedAt: unix(now),
+		})
+		if err != nil {
 			return err
 		}
 	}
@@ -254,40 +319,46 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	out := Status{DBPath: s.path}
-	counts := []struct {
-		dst *int
-		q   string
-	}{
-		{&out.Chats, "select count(*) from chats"},
-		{&out.UnreadChats, "select count(*) from chats where unread_count > 0"},
-		{&out.UnreadMessages, "select coalesce(sum(unread_count), 0) from chats"},
-		{&out.Contacts, "select count(*) from contacts"},
-		{&out.Groups, "select count(*) from groups"},
-		{&out.Participants, "select count(*) from group_participants"},
-		{&out.Messages, "select count(*) from messages"},
-		{&out.MediaMessages, "select count(*) from messages where media_type <> '' or media_path <> '' or media_url <> ''"},
-	}
-	for _, c := range counts {
-		if err := s.db.QueryRowContext(ctx, c.q).Scan(c.dst); err != nil {
-			return out, err
-		}
-	}
-	var oldest, newest sql.NullInt64
-	if err := s.db.QueryRowContext(ctx, `select min(ts), max(ts) from messages`).Scan(&oldest, &newest); err != nil {
+	var err error
+	if out.Chats, err = countInt(ctx, s.q.CountChats); err != nil {
 		return out, err
 	}
-	if oldest.Valid && oldest.Int64 > 0 {
-		out.OldestMessage = time.Unix(oldest.Int64, 0).UTC()
+	if out.UnreadChats, err = countInt(ctx, s.q.CountUnreadChats); err != nil {
+		return out, err
 	}
-	if newest.Valid && newest.Int64 > 0 {
-		out.NewestMessage = time.Unix(newest.Int64, 0).UTC()
+	if out.UnreadMessages, err = countInt(ctx, s.q.CountUnreadMessages); err != nil {
+		return out, err
 	}
-	var lastImport string
-	_ = s.db.QueryRowContext(ctx, `select value from sync_state where key='last_import_at'`).Scan(&lastImport)
+	if out.Contacts, err = countInt(ctx, s.q.CountContacts); err != nil {
+		return out, err
+	}
+	if out.Groups, err = countInt(ctx, s.q.CountGroups); err != nil {
+		return out, err
+	}
+	if out.Participants, err = countInt(ctx, s.q.CountParticipants); err != nil {
+		return out, err
+	}
+	if out.Messages, err = countInt(ctx, s.q.CountMessages); err != nil {
+		return out, err
+	}
+	if out.MediaMessages, err = countInt(ctx, s.q.CountMediaMessages); err != nil {
+		return out, err
+	}
+	bounds, err := s.q.GetMessageTimeBounds(ctx)
+	if err != nil {
+		return out, err
+	}
+	if bounds.OldestTs > 0 {
+		out.OldestMessage = time.Unix(bounds.OldestTs, 0).UTC()
+	}
+	if bounds.NewestTs > 0 {
+		out.NewestMessage = time.Unix(bounds.NewestTs, 0).UTC()
+	}
+	lastImport, _ := s.q.GetSyncState(ctx, "last_import_at")
 	if t, err := time.Parse(time.RFC3339Nano, lastImport); err == nil {
 		out.LastImportAt = t
 	}
-	_ = s.db.QueryRowContext(ctx, `select value from sync_state where key='source_path'`).Scan(&out.LastSource)
+	out.LastSource, _ = s.q.GetSyncState(ctx, "source_path")
 	return out, nil
 }
 
@@ -303,30 +374,26 @@ func (s *Store) listChats(ctx context.Context, filter ChatFilter) ([]Chat, error
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
-	where := ""
 	if filter.OnlyUnread {
-		where = "where c.unread_count > 0"
+		rows, err := s.q.ListUnreadChats(ctx, int64(filter.Limit))
+		if err != nil {
+			return nil, err
+		}
+		out := make([]Chat, 0, len(rows))
+		for _, row := range rows {
+			out = append(out, unreadChatFromRow(row))
+		}
+		return out, nil
 	}
-	rows, err := s.db.QueryContext(ctx, fmt.Sprintf(`select c.jid,c.kind,c.name,c.last_message_at,c.unread_count,c.archived,c.removed,c.hidden,c.raw_session_type,count(m.rowid) from chats c left join messages m on m.chat_jid=c.jid %s group by c.jid order by c.last_message_at desc limit ?`, where), filter.Limit)
+	rows, err := s.q.ListChats(ctx, int64(filter.Limit))
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = rows.Close() }()
-	var out []Chat
-	for rows.Next() {
-		var c Chat
-		var ts int64
-		var archived, removed, hidden int
-		if err := rows.Scan(&c.JID, &c.Kind, &c.Name, &ts, &c.UnreadCount, &archived, &removed, &hidden, &c.RawSessionType, &c.MessageCount); err != nil {
-			return nil, err
-		}
-		c.LastMessageAt = fromUnix(ts)
-		c.Archived = archived != 0
-		c.Removed = removed != 0
-		c.Hidden = hidden != 0
-		out = append(out, c)
+	out := make([]Chat, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, chatFromRow(row))
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {
@@ -432,6 +499,52 @@ func fromUnix(v int64) time.Time {
 		return time.Time{}
 	}
 	return time.Unix(v, 0).UTC()
+}
+
+func nullString(v string) sql.NullString {
+	return sql.NullString{String: v, Valid: true}
+}
+
+func nullInt64(v int64) sql.NullInt64 {
+	return sql.NullInt64{Int64: v, Valid: true}
+}
+
+func countInt(ctx context.Context, count func(context.Context) (int64, error)) (int, error) {
+	v, err := count(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int(v), nil
+}
+
+func chatFromRow(row storedb.ListChatsRow) Chat {
+	return Chat{
+		JID:            row.Jid,
+		Kind:           row.Kind,
+		Name:           row.Name,
+		LastMessageAt:  fromUnix(row.LastMessageAt),
+		UnreadCount:    int(row.UnreadCount),
+		Archived:       row.Archived != 0,
+		Removed:        row.Removed != 0,
+		Hidden:         row.Hidden != 0,
+		RawSessionType: int(row.RawSessionType),
+		MessageCount:   int(row.MessageCount),
+	}
+}
+
+func unreadChatFromRow(row storedb.ListUnreadChatsRow) Chat {
+	return Chat{
+		JID:            row.Jid,
+		Kind:           row.Kind,
+		Name:           row.Name,
+		LastMessageAt:  fromUnix(row.LastMessageAt),
+		UnreadCount:    int(row.UnreadCount),
+		Archived:       row.Archived != 0,
+		Removed:        row.Removed != 0,
+		Hidden:         row.Hidden != 0,
+		RawSessionType: int(row.RawSessionType),
+		MessageCount:   int(row.MessageCount),
+	}
 }
 
 func rollback(tx *sql.Tx) {
