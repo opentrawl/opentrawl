@@ -1,6 +1,14 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.6] - Unreleased
+
+### Added
+
+- Add `metadata --json` crawlkit control metadata for schedulers and local automation.
+
+### Changed
+
+- Update `crawlkit` to v0.7.0.
 
 ## [0.2.5] - 2026-05-15
 
