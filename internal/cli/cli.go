@@ -87,6 +87,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return usageErr(fmt.Errorf("unknown help topic %q", strings.Join(rest[1:], " ")))
 	}
 	switch rest[0] {
+	case "metadata":
+		return a.print(controlManifest())
 	case "doctor":
 		return a.runDoctor(ctx, rest[1:])
 	case "import", "sync":
@@ -469,6 +471,7 @@ Usage:
   wacrawl --version
 
 Commands:
+  metadata    Print crawlkit control metadata.
   doctor      Inspect WhatsApp Desktop source and archive paths.
   import      Snapshot WhatsApp Desktop SQLite data into the archive.
   sync        Alias for import.
