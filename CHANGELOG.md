@@ -10,6 +10,10 @@
 
 - Update `crawlkit` to v0.7.0.
 
+### Fixed
+
+- Resolve WhatsApp Desktop `Media/...` paths through `Message/Media` before copying archive media (#9, thanks @pasogott).
+
 ## [0.2.5] - 2026-05-15
 
 ### Changed

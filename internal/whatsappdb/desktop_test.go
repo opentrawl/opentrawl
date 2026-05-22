@@ -191,7 +191,7 @@ func TestImportDesktopCopyMedia(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
 	createFixtureDBs(t, source)
-	mediaPath := filepath.Join(source, "Media", "123@g.us", "a", "test.jpg")
+	mediaPath := filepath.Join(source, "Message", "Media", "123@g.us", "a", "test.jpg")
 	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -239,16 +239,57 @@ insert into ZWAMESSAGE values (5, 2, 1, 2, 'missing-media', 0, 700000004, 'missi
 			missingPath = msg.MediaPath
 		}
 	}
-	wantCopied := filepath.Join(filepath.Dir(archivePath), "media", "Media", "123@g.us", "a", "test.jpg")
+	wantCopied := filepath.Join(filepath.Dir(archivePath), "media", "Message", "Media", "123@g.us", "a", "test.jpg")
 	if copiedPath != wantCopied {
 		t.Fatalf("copied media path = %q, want %q", copiedPath, wantCopied)
 	}
 	if data, err := os.ReadFile(copiedPath); err != nil || string(data) != "image" { // #nosec G304 -- copiedPath is asserted against the expected temp archive path above.
 		t.Fatalf("copied media content = %q err=%v", data, err)
 	}
-	wantMissing := filepath.Join(source, "Media", "123@g.us", "a", "missing.jpg")
+	wantMissing := filepath.Join(source, "Message", "Media", "123@g.us", "a", "missing.jpg")
 	if missingPath != wantMissing {
 		t.Fatalf("missing media path = %q, want original %q", missingPath, wantMissing)
+	}
+}
+
+func TestResolveDesktopMediaPathPrefersMessageMedia(t *testing.T) {
+	source := t.TempDir()
+	messageMedia := filepath.Join(source, "Message", "Media", "chat", "photo.jpg")
+	if err := os.MkdirAll(filepath.Dir(messageMedia), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(messageMedia, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolveDesktopMediaPath(source, "Media/chat/photo.jpg"); got != messageMedia {
+		t.Fatalf("resolved media path = %q, want %q", got, messageMedia)
+	}
+
+	legacyMedia := filepath.Join(source, "Media", "chat", "legacy.jpg")
+	if err := os.MkdirAll(filepath.Dir(legacyMedia), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyMedia, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolveDesktopMediaPath(source, "Media/chat/legacy.jpg"); got != legacyMedia {
+		t.Fatalf("legacy media path = %q, want %q", got, legacyMedia)
+	}
+
+	missing := filepath.Join(source, "Message", "Media", "chat", "missing.jpg")
+	if got := resolveDesktopMediaPath(source, "Media/chat/missing.jpg"); got != missing {
+		t.Fatalf("missing media path = %q, want %q", got, missing)
+	}
+
+	absolute := filepath.Join(string(os.PathSeparator), "tmp", "outside.jpg")
+	confined := filepath.Join(source, "tmp", "outside.jpg")
+	if got := resolveDesktopMediaPath(source, absolute); got != confined {
+		t.Fatalf("absolute media path = %q, want confined %q", got, confined)
+	}
+
+	traversal := filepath.Join(source, "outside.jpg")
+	if got := resolveDesktopMediaPath(source, "../outside.jpg"); got != traversal {
+		t.Fatalf("traversal media path = %q, want confined %q", got, traversal)
 	}
 }
 

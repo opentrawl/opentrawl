@@ -576,7 +576,7 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 		m.MediaType = mediaType(m.RawType)
 		m.MediaTitle = firstNonEmpty(mediaTitle, vcardName)
 		if mediaPath != "" {
-			m.MediaPath = filepath.Join(sourceRoot, filepath.FromSlash(mediaPath))
+			m.MediaPath = resolveDesktopMediaPath(sourceRoot, mediaPath)
 		}
 		m.MediaURL = mediaURL
 		m.SenderJID, m.SenderName = sender(m.FromMe, m.ChatJID, fromJID, toJID, pushName, memberJID, memberName, memberFirst, names)
@@ -589,6 +589,57 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 		out = append(out, m)
 	}
 	return out, mediaCount, rows.Err()
+}
+
+func resolveDesktopMediaPath(sourceRoot, dbPath string) string {
+	dbPath = strings.TrimSpace(dbPath)
+	if dbPath == "" {
+		return ""
+	}
+	rel := cleanDesktopMediaRel(filepath.FromSlash(dbPath))
+	if rel == "" {
+		return ""
+	}
+	primary := filepath.Join(sourceRoot, rel)
+	if firstPathElement(rel) != "Media" {
+		return primary
+	}
+	messageMedia := filepath.Join(sourceRoot, "Message", rel)
+	if _, err := os.Stat(messageMedia); err == nil {
+		return messageMedia
+	}
+	if _, err := os.Stat(primary); err == nil {
+		return primary
+	}
+	return messageMedia
+}
+
+func cleanDesktopMediaRel(path string) string {
+	rel := filepath.Clean(path)
+	if filepath.IsAbs(rel) {
+		rel = strings.TrimLeft(rel, string(os.PathSeparator))
+		rel = filepath.Clean(rel)
+	}
+	if rel == "." || rel == ".." {
+		return ""
+	}
+	if strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		rel = filepath.Base(rel)
+		if rel == "." || rel == ".." {
+			return ""
+		}
+	}
+	return rel
+}
+
+func firstPathElement(path string) string {
+	if path == "." || path == "" {
+		return ""
+	}
+	if i := strings.IndexRune(path, os.PathSeparator); i >= 0 {
+		return path[:i]
+	}
+	return path
 }
 
 func sender(fromMe bool, chatJID, fromJID, toJID, pushName, memberJID, memberName, memberFirst string, names map[string]string) (string, string) {
