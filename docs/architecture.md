@@ -86,5 +86,11 @@ The first query layer is object/evidence traversal:
   photo, similar image, nearby time/place candidates.
 - `evidence`: why a row or edge exists.
 
+Neighbors are source-level adjacency, not truth. Each returned neighbor must
+name the method and evidence ids behind the link. v1 neighbor reasons are
+limited to deterministic archive facts such as same album id, same burst id,
+same resource hash, nearby timestamp, nearby raw GPS, or shared local observation
+labels.
+
 Higher concepts like trips, recurring places, drone flights, or named places are
 later hypotheses built from these facts.

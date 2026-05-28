@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/joshp123/photoscrawl/internal/photos"
+	"github.com/openclaw/crawlkit/control"
 )
 
 func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
@@ -91,6 +92,25 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	}
 	if len(observationEvidence.Evidence) == 0 {
 		t.Fatal("expected observation evidence")
+	}
+	status, err := Status(ctx, paths)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.Summary == "" || status.LastImportAt == "" {
+		t.Fatalf("status summary=%q last_import_at=%q", status.Summary, status.LastImportAt)
+	}
+	for _, want := range []string{
+		"asset.media_type.image",
+		"asset.with_location",
+		"asset.with_observation",
+		"resource.availability.local",
+		"resource.availability.remote_needs_download",
+		"observation.type.document_signal",
+	} {
+		if !hasStatusCount(status.Counts, want) {
+			t.Fatalf("missing useful status count %q in %#v", want, status.Counts)
+		}
 	}
 
 	provider.snapshot = fakeSnapshot(true, false)
@@ -198,4 +218,13 @@ func pick(changed bool, ifChanged, otherwise string) string {
 		return ifChanged
 	}
 	return otherwise
+}
+
+func hasStatusCount(counts []control.Count, id string) bool {
+	for _, count := range counts {
+		if count.ID == id {
+			return true
+		}
+	}
+	return false
 }

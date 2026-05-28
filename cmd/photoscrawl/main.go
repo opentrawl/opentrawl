@@ -187,7 +187,28 @@ func run(ctx context.Context, args []string) error {
 		}
 		return output.Write(os.Stdout, format, "evidence", result)
 	case "neighbors":
-		return output.UsageError{Err: fmt.Errorf("%s needs a tested source-level definition before implementation", args[0])}
+		fs := flag.NewFlagSet("neighbors", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		dbPath := fs.String("db", "", "photos.sqlite path")
+		id := fs.String("id", "", "asset id")
+		limit := fs.Int("limit", 20, "max results")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if *dbPath != "" {
+			paths.Database = *dbPath
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		result, err := archive.Neighbors(ctx, paths, archive.NeighborOptions{ID: *id, Limit: *limit})
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "neighbors", result)
 	default:
 		return usage()
 	}

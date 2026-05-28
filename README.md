@@ -28,13 +28,14 @@ go run ./cmd/photoscrawl crawl --library "$HOME/Pictures/Photos Library.photosli
 go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl search --query "drone beach portugal" --json
 go run ./cmd/photoscrawl open --id asset:<id> --json
+go run ./cmd/photoscrawl neighbors --id asset:<id> --json
 go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
 ```
 
 Planned crawl-family commands:
 
 ```sh
-photoscrawl neighbors --id asset:<id> --json
+photoscrawl export --format lifecrawler --json
 ```
 
 `crawl` tries PhotoKit first for metadata. PhotoKit enumerates the active system
@@ -51,6 +52,31 @@ queued for `classify`.
 observations only. It does not open originals, thumbnails, or iCloud content.
 Vision/OCR/barcode/face classification belongs behind the same queue and evidence
 shape once bounded content access lands.
+
+`neighbors` returns source-level adjacent assets only. It does not create trips,
+people, places, or clusters. Current reasons are deterministic archive facts:
+same burst id, same album id, same resource hash, nearby creation time, nearby
+raw GPS, and shared local observation labels.
+
+## Current Useful Output
+
+Today the POC sees useful source facts, not full computer vision yet:
+
+- asset timing, media type, dimensions, favorite/hidden state, timezone, and
+  burst metadata;
+- resource type, UTI, filename, local/remote availability, iCloud download need,
+  and resource hash when already local;
+- album membership and raw GPS observations with evidence refs;
+- metadata-only observations for media type, local content availability,
+  geometry, burst membership, resource UTI/type, and weak
+  screenshot/document/receipt candidates from filenames, albums, and metadata;
+- status coverage counts for GPS, observations, local resources, remote
+  resources, classification queue state, and observation types;
+- search/open/evidence/neighbors JSON that points every claim back to source
+  rows or evidence ids.
+
+It does not run OCR, face detection, barcode detection, scene labels, embeddings,
+or similar-image matching yet.
 
 ## Why This Shape
 
