@@ -61,6 +61,38 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 		t.Fatal("expected asset evidence")
 	}
 
+	classified, err := Classify(ctx, paths, ClassifyOptions{
+		All: true,
+		Now: fixedClock("2026-05-28T10:15:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if classified.Processed != 2 || classified.MetadataClassified != 2 || classified.WaitingForLocalContent != 1 || classified.VisualObservationsWritten == 0 {
+		t.Fatalf("classify result = processed %d metadata %d waiting %d visual %d", classified.Processed, classified.MetadataClassified, classified.WaitingForLocalContent, classified.VisualObservationsWritten)
+	}
+	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "screenshot_candidate", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(observationSearch.Results) != 1 || observationSearch.Results[0].HitType != "observation" || observationSearch.Results[0].ObservationID == "" {
+		t.Fatalf("observation search = %#v", observationSearch.Results)
+	}
+	opened, err = Open(ctx, paths, observationSearch.Results[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(opened.VisualObservations) == 0 {
+		t.Fatal("expected visual observations on open")
+	}
+	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ObservationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(observationEvidence.Evidence) == 0 {
+		t.Fatal("expected observation evidence")
+	}
+
 	provider.snapshot = fakeSnapshot(true, false)
 	result, err = Crawl(ctx, paths, CrawlOptions{
 		LibraryPath: libraryPath,
@@ -130,7 +162,7 @@ func fakeSnapshot(changed, includeSecond bool) photos.LibrarySnapshot {
 					HorizontalAccuracy: &accuracy,
 				},
 				Resources: []photos.Resource{
-					{Type: "photo", UTI: "public.heic", OriginalFilename: "beach-fixture.heic", Availability: "remote", NeedsDownload: true},
+					{Type: "photo", UTI: "public.heic", OriginalFilename: "Screenshot Beach Fixture.heic", Availability: "remote", NeedsDownload: true},
 				},
 				Albums: []photos.AlbumMembership{
 					{AlbumID: "fixture-album-1", AlbumTitle: "Beach", AlbumKind: "album:1:2"},

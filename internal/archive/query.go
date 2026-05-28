@@ -22,19 +22,25 @@ type SearchResult struct {
 }
 
 type SearchHit struct {
-	ID           string `json:"id"`
-	MediaType    string `json:"media_type"`
-	CreationDate string `json:"creation_date"`
-	Title        string `json:"title"`
-	Snippet      string `json:"snippet"`
+	ID            string `json:"id"`
+	HitType       string `json:"hit_type"`
+	ObservationID string `json:"observation_id,omitempty"`
+	MediaType     string `json:"media_type"`
+	CreationDate  string `json:"creation_date"`
+	Title         string `json:"title"`
+	Snippet       string `json:"snippet"`
 }
 
 type OpenResult struct {
-	Asset     map[string]any   `json:"asset"`
-	Resources []map[string]any `json:"resources"`
-	Albums    []map[string]any `json:"albums"`
-	Locations []map[string]any `json:"locations"`
-	Evidence  []map[string]any `json:"evidence"`
+	Asset              map[string]any   `json:"asset"`
+	Resources          []map[string]any `json:"resources"`
+	Albums             []map[string]any `json:"albums"`
+	Locations          []map[string]any `json:"locations"`
+	VisualObservations []map[string]any `json:"visual_observations"`
+	TextObservations   []map[string]any `json:"text_observations"`
+	FaceObservations   []map[string]any `json:"face_observations"`
+	Edges              []map[string]any `json:"edges"`
+	Evidence           []map[string]any `json:"evidence"`
 }
 
 type EvidenceResult struct {
@@ -81,10 +87,39 @@ limit ?
 		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Snippet); err != nil {
 			return SearchResult{}, err
 		}
+		hit.HitType = "asset"
 		result.Results = append(result.Results, hit)
 	}
 	if err := rows.Err(); err != nil {
 		return SearchResult{}, err
+	}
+
+	if len(result.Results) < limit {
+		observationLimit := limit - len(result.Results)
+		observationRows, err := db.DB().QueryContext(ctx, `
+select asset.id, observation_fts.id, asset.media_type, asset.creation_date, observation_fts.title,
+       snippet(observation_fts, 3, '[', ']', ' ... ', 12) as snippet
+from observation_fts
+join asset on asset.id = observation_fts.asset_id
+where observation_fts match ?
+order by rank
+limit ?
+`, fts, observationLimit)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("search observations: %w", err)
+		}
+		defer observationRows.Close()
+		for observationRows.Next() {
+			var hit SearchHit
+			if err := observationRows.Scan(&hit.ID, &hit.ObservationID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Snippet); err != nil {
+				return SearchResult{}, err
+			}
+			hit.HitType = "observation"
+			result.Results = append(result.Results, hit)
+		}
+		if err := observationRows.Err(); err != nil {
+			return SearchResult{}, err
+		}
 	}
 	return result, nil
 }
@@ -139,11 +174,57 @@ where asset_id = ?
 	if err != nil {
 		return OpenResult{}, err
 	}
+	visualObservations, err := rows(ctx, db.DB(), `
+select id, observation_type, label, confidence, bounding_box_json, source, model_id, evidence_id
+from visual_observation
+where asset_id = ?
+order by observation_type, confidence desc, label
+`, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	textObservations, err := rows(ctx, db.DB(), `
+select id, text, confidence, bounding_box_json, language, source, evidence_id
+from text_observation
+where asset_id = ?
+order by confidence desc, id
+`, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	faceObservations, err := rows(ctx, db.DB(), `
+select id, face_local_id, person_label, confidence, bounding_box_json, source, evidence_id
+from face_observation
+where asset_id = ?
+order by confidence desc, id
+`, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	edges, err := rows(ctx, db.DB(), `
+select id, edge_type, from_id, to_id, method, confidence, reason_json, evidence_id
+from edge
+where from_id = ? or to_id = ?
+order by confidence desc, edge_type, id
+`, rowID, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
 	evidence, err := evidenceRows(ctx, db.DB(), rowID)
 	if err != nil {
 		return OpenResult{}, err
 	}
-	return OpenResult{Asset: asset, Resources: resources, Albums: albums, Locations: locations, Evidence: evidence}, nil
+	return OpenResult{
+		Asset:              asset,
+		Resources:          resources,
+		Albums:             albums,
+		Locations:          locations,
+		VisualObservations: visualObservations,
+		TextObservations:   textObservations,
+		FaceObservations:   faceObservations,
+		Edges:              edges,
+		Evidence:           evidence,
+	}, nil
 }
 
 func Evidence(ctx context.Context, paths Paths, rowID string) (EvidenceResult, error) {
@@ -167,9 +248,19 @@ func evidenceRows(ctx context.Context, db *sql.DB, rowID string) ([]map[string]a
 	return rows(ctx, db, `
 select id, asset_id, evidence_kind, source, pointer, value_json
 from evidence_ref
-where asset_id = ? or id = ?
+where asset_id = ? or id = ? or id in (
+  select evidence_id from location_observation where id = ?
+  union
+  select evidence_id from visual_observation where id = ?
+  union
+  select evidence_id from text_observation where id = ?
+  union
+  select evidence_id from face_observation where id = ?
+  union
+  select evidence_id from edge where id = ?
+)
 order by evidence_kind, id
-`, rowID, rowID)
+`, rowID, rowID, rowID, rowID, rowID, rowID, rowID)
 }
 
 func oneRow(ctx context.Context, db *sql.DB, query string, args ...any) (map[string]any, error) {

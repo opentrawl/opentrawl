@@ -348,13 +348,27 @@ func (c *crawlImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sou
 }
 
 func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
-	tables := []string{"asset_resource", "album_membership", "location_observation", "asset_fts", "evidence_ref"}
+	tables := []string{
+		"asset_resource", "album_membership", "location_observation",
+		"visual_observation", "text_observation", "face_observation",
+		"asset_fts", "observation_fts", "edge", "evidence_ref",
+	}
 	for _, table := range tables {
 		column := "asset_id"
 		if table == "asset_fts" {
 			column = "id"
 		}
-		if _, err := tx.ExecContext(ctx, "delete from "+store.QuoteIdent(table)+" where "+store.QuoteIdent(column)+" = ?", assetID); err != nil {
+		query := "delete from " + store.QuoteIdent(table) + " where " + store.QuoteIdent(column) + " = ?"
+		if table == "edge" {
+			query = "delete from edge where from_id = ? or to_id = ?"
+		}
+		var err error
+		if table == "edge" {
+			_, err = tx.ExecContext(ctx, query, assetID, assetID)
+		} else {
+			_, err = tx.ExecContext(ctx, query, assetID)
+		}
+		if err != nil {
 			return fmt.Errorf("clear %s for asset: %w", table, err)
 		}
 	}

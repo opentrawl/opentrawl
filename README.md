@@ -25,6 +25,7 @@ evidence supports each result.
 go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
 go run ./cmd/photoscrawl crawl --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl search --query "drone beach portugal" --json
 go run ./cmd/photoscrawl open --id asset:<id> --json
 go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
@@ -33,7 +34,6 @@ go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
 Planned crawl-family commands:
 
 ```sh
-photoscrawl classify --all --json
 photoscrawl neighbors --id asset:<id> --json
 ```
 
@@ -45,7 +45,12 @@ source. If PhotoKit is unavailable or denied, the POC falls back to a read-only
 
 `crawl` does not export originals or force iCloud downloads. Resource rows carry
 local/remote availability when the source exposes it, and every imported asset is
-queued for the later `classify` stage.
+queued for `classify`.
+
+`classify` currently drains that queue into evidence-backed local metadata
+observations only. It does not open originals, thumbnails, or iCloud content.
+Vision/OCR/barcode/face classification belongs behind the same queue and evidence
+shape once bounded content access lands.
 
 ## Why This Shape
 

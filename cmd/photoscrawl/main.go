@@ -96,6 +96,29 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "crawl", result)
+	case "classify":
+		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		dbPath := fs.String("db", "", "photos.sqlite path")
+		all := fs.Bool("all", false, "classify all pending assets")
+		limit := fs.Int("limit", 100, "max pending assets to classify")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if *dbPath != "" {
+			paths.Database = *dbPath
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		result, err := archive.Classify(ctx, paths, archive.ClassifyOptions{All: *all, Limit: *limit})
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "classify", result)
 	case "search":
 		fs := flag.NewFlagSet("search", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -163,7 +186,7 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "evidence", result)
-	case "classify", "neighbors":
+	case "neighbors":
 		return output.UsageError{Err: fmt.Errorf("%s is planned but not implemented in this POC slice", args[0])}
 	default:
 		return usage()
