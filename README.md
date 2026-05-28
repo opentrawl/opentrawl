@@ -1,6 +1,6 @@
-![clawdex banner](docs/assets/readme-banner.jpg)
-
 # 🧩 clawdex
+
+![clawdex banner](docs/assets/readme-banner.jpg)
 
 Local-first contact crawler and markdown archive CLI.
 
