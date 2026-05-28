@@ -57,7 +57,11 @@ func Status(ctx context.Context, paths Paths) (control.Status, error) {
 }
 
 func counts(ctx context.Context, dbPath string) ([]control.Count, string, string, []string, error) {
-	db, err := store.OpenReadOnly(ctx, dbPath)
+	db, err := store.Open(ctx, store.Options{
+		Path:          dbPath,
+		Schema:        Schema,
+		SchemaVersion: SchemaVersion,
+	})
 	if err != nil {
 		return nil, "", "", nil, err
 	}
@@ -66,7 +70,8 @@ func counts(ctx context.Context, dbPath string) ([]control.Count, string, string
 		"source_library", "crawl_snapshot", "crawl_seen_asset", "sync_state",
 		"classification_queue", "asset", "asset_resource", "album_membership",
 		"location_observation", "visual_observation", "text_observation",
-		"face_observation", "evidence_ref", "edge",
+		"face_observation", "model_run", "model_observation",
+		"observation_term", "evidence_ref", "edge",
 	}
 	out := make([]control.Count, 0, len(tables))
 	for _, table := range tables {
@@ -121,6 +126,18 @@ from visual_observation
 group by observation_type
 order by count(*) desc, observation_type
 `},
+		{"model_observation.type", "model observation type", `
+select observation_type, count(*)
+from model_observation
+group by observation_type
+order by count(*) desc, observation_type
+`},
+		{"observation_term.type", "observation term type", `
+select term_type, count(*)
+from observation_term
+group by term_type
+order by count(*) desc, term_type
+`},
 	}
 	for _, group := range groupQueries {
 		counts, err := groupedCounts(ctx, db, group.prefix, group.label, group.query)
@@ -136,8 +153,16 @@ order by count(*) desc, observation_type
 	}{
 		{"asset.with_location", "assets with location", `select count(distinct asset_id) from location_observation`},
 		{"asset.without_location", "assets without location", `select count(*) from asset where id not in (select asset_id from location_observation)`},
-		{"asset.with_observation", "assets with local observations", `select count(distinct asset_id) from visual_observation`},
-		{"asset.without_observation", "assets without local observations", `select count(*) from asset where id not in (select asset_id from visual_observation)`},
+		{"asset.with_observation", "assets with local observations", `select count(distinct asset_id) from (
+  select asset_id from visual_observation
+  union
+  select asset_id from model_observation
+)`},
+		{"asset.without_observation", "assets without local observations", `select count(*) from asset where id not in (
+  select asset_id from visual_observation
+  union
+  select asset_id from model_observation
+)`},
 		{"asset.with_local_resource", "assets with local resource", `select count(distinct asset_id) from asset_resource where available_locally <> 0`},
 		{"asset.needing_download", "assets needing download", `select count(distinct asset_id) from asset_resource where needs_download <> 0`},
 	}
@@ -181,7 +206,11 @@ func statusSummary(ctx context.Context, db *sql.DB) (string, error) {
 	if err := db.QueryRowContext(ctx, `select count(distinct asset_id) from location_observation`).Scan(&located); err != nil {
 		return "", err
 	}
-	if err := db.QueryRowContext(ctx, `select count(distinct asset_id) from visual_observation`).Scan(&observations); err != nil {
+	if err := db.QueryRowContext(ctx, `select count(distinct asset_id) from (
+  select asset_id from visual_observation
+  union
+  select asset_id from model_observation
+)`).Scan(&observations); err != nil {
 		return "", err
 	}
 	if err := db.QueryRowContext(ctx, `select count(*) from classification_queue where state = 'pending'`).Scan(&pending); err != nil {

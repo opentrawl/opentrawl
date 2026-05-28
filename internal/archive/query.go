@@ -39,6 +39,8 @@ type OpenResult struct {
 	VisualObservations []map[string]any `json:"visual_observations"`
 	TextObservations   []map[string]any `json:"text_observations"`
 	FaceObservations   []map[string]any `json:"face_observations"`
+	ModelObservations  []map[string]any `json:"model_observations"`
+	ObservationTerms   []map[string]any `json:"observation_terms"`
 	Edges              []map[string]any `json:"edges"`
 	Evidence           []map[string]any `json:"evidence"`
 }
@@ -201,6 +203,24 @@ order by confidence desc, id
 	if err != nil {
 		return OpenResult{}, err
 	}
+	modelObservations, err := rows(ctx, db.DB(), `
+select id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id
+from model_observation
+where asset_id = ?
+order by observation_type, confidence desc, value_text
+`, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	observationTerms, err := rows(ctx, db.DB(), `
+select id, observation_id, term, term_type, source, model_id
+from observation_term
+where asset_id = ?
+order by term_type, term
+`, rowID)
+	if err != nil {
+		return OpenResult{}, err
+	}
 	edges, err := rows(ctx, db.DB(), `
 select id, edge_type, from_id, to_id, method, confidence, reason_json, evidence_id
 from edge
@@ -222,6 +242,8 @@ order by confidence desc, edge_type, id
 		VisualObservations: visualObservations,
 		TextObservations:   textObservations,
 		FaceObservations:   faceObservations,
+		ModelObservations:  modelObservations,
+		ObservationTerms:   observationTerms,
 		Edges:              edges,
 		Evidence:           evidence,
 	}, nil
@@ -257,10 +279,12 @@ where asset_id = ? or id = ? or id in (
   union
   select evidence_id from face_observation where id = ?
   union
+  select evidence_id from model_observation where id = ?
+  union
   select evidence_id from edge where id = ?
 )
 order by evidence_kind, id
-`, rowID, rowID, rowID, rowID, rowID, rowID, rowID)
+`, rowID, rowID, rowID, rowID, rowID, rowID, rowID, rowID)
 }
 
 func oneRow(ctx context.Context, db *sql.DB, query string, args ...any) (map[string]any, error) {

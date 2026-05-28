@@ -68,6 +68,9 @@ func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, er
 	if snapshot.LibraryPath == "" {
 		snapshot.LibraryPath = absLibraryPath
 	}
+	if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
+		return CrawlResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
+	}
 
 	db, err := store.Open(ctx, store.Options{
 		Path:          paths.Database,
@@ -253,10 +256,11 @@ func (c *crawlImporter) insertResource(ctx context.Context, tx *sql.Tx, assetID,
 		"needs_download":    resource.NeedsDownload,
 		"file_size":         resource.FileSize,
 		"stable_hash":       resource.StableHash,
+		"local_path":        resource.LocalPath,
 		"metadata":          resource.Metadata,
 	}
 	resourceID := stableID("asset_resource", assetID, fmt.Sprintf("%06d", index), resource.Type, resource.UTI, resource.OriginalFilename)
-	if _, err := c.stmts.resource.ExecContext(ctx, resourceID, assetID, resource.Type, resource.UTI, resource.OriginalFilename, "", resource.FileSize, resource.StableHash, boolInt(resource.AvailableLocally), boolInt(resource.NeedsDownload)); err != nil {
+	if _, err := c.stmts.resource.ExecContext(ctx, resourceID, assetID, resource.Type, resource.UTI, resource.OriginalFilename, resource.LocalPath, resource.FileSize, resource.StableHash, boolInt(resource.AvailableLocally), boolInt(resource.NeedsDownload)); err != nil {
 		return fmt.Errorf("insert asset resource: %w", err)
 	}
 	return c.insertEvidence(ctx, tx, assetID, "asset_resource", c.snapshot.Provider, "asset:"+localIdentifier+"/resource:"+resourceID, evidenceValue)
@@ -329,13 +333,17 @@ func (c *crawlImporter) upsertSeenAsset(ctx context.Context, tx *sql.Tx, sourceI
 }
 
 func (c *crawlImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
+	hasLocalContent := false
 	needsDownload := false
 	for _, resource := range asset.Resources {
+		if resource.AvailableLocally || strings.TrimSpace(resource.LocalPath) != "" {
+			hasLocalContent = true
+		}
 		if resource.NeedsDownload {
 			needsDownload = true
-			break
 		}
 	}
+	needsDownload = needsDownload && !hasLocalContent
 	queueID := stableID("classification_queue", assetID)
 	if _, err := c.stmts.queue.ExecContext(ctx, queueID, assetID, sourceID, "pending", "metadata_ingested", boolInt(needsDownload), c.completedAt.Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("upsert classification queue: %w", err)
@@ -351,6 +359,7 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) erro
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
 		"visual_observation", "text_observation", "face_observation",
+		"model_observation", "observation_term",
 		"asset_fts", "observation_fts", "edge", "evidence_ref",
 	}
 	for _, table := range tables {

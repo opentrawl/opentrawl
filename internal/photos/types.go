@@ -40,6 +40,7 @@ type Resource struct {
 	Type             string         `json:"type"`
 	UTI              string         `json:"uti"`
 	OriginalFilename string         `json:"original_filename"`
+	LocalPath        string         `json:"local_path,omitempty"`
 	Availability     string         `json:"availability"`
 	FileSize         int64          `json:"file_size,omitempty"`
 	StableHash       string         `json:"stable_hash,omitempty"`

@@ -18,21 +18,28 @@ const (
 )
 
 type ClassifyOptions struct {
-	All   bool
-	Limit int
-	Now   func() time.Time
+	All           bool
+	Limit         int
+	LocalModel    string
+	LocalModelURL string
+	Now           func() time.Time
 }
 
 type ClassifyResult struct {
-	Database                  string `json:"database"`
-	Classifier                string `json:"classifier"`
-	ModelID                   string `json:"model_id"`
-	InputVersion              string `json:"input_version"`
-	Limit                     int    `json:"limit"`
-	Processed                 int    `json:"processed"`
-	MetadataClassified        int    `json:"metadata_classified"`
-	WaitingForLocalContent    int    `json:"waiting_for_local_content"`
-	VisualObservationsWritten int    `json:"visual_observations_written"`
+	Database                      string `json:"database"`
+	Classifier                    string `json:"classifier"`
+	ModelID                       string `json:"model_id"`
+	InputVersion                  string `json:"input_version"`
+	Limit                         int    `json:"limit"`
+	Processed                     int    `json:"processed"`
+	MetadataClassified            int    `json:"metadata_classified"`
+	WaitingForLocalContent        int    `json:"waiting_for_local_content"`
+	VisualObservationsWritten     int    `json:"visual_observations_written"`
+	LocalModel                    string `json:"local_model,omitempty"`
+	ModelRunID                    string `json:"model_run_id,omitempty"`
+	ContentClassified             int    `json:"content_classified"`
+	ContentObservationsWritten    int    `json:"content_observations_written"`
+	ContentClassificationFailures int    `json:"content_classification_failures"`
 }
 
 type classifyInput struct {
@@ -54,9 +61,11 @@ type classifyInput struct {
 }
 
 type classifyResource struct {
+	ID               string
 	ResourceType     string
 	UTI              string
 	OriginalFilename string
+	LocalPath        string
 	AvailableLocally bool
 	NeedsDownload    bool
 }
@@ -104,12 +113,43 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		InputVersion: metadataClassifierInputVersion,
 		Limit:        limit,
 	}
+	localModel := strings.TrimSpace(opts.LocalModel)
+	var classifier *localModelClassifier
+	if localModel != "" {
+		localClassifier := newLocalModelClassifier(localModel, opts.LocalModelURL)
+		classifier = &localClassifier
+		result.Classifier = metadataClassifierSource + "+" + localModelClassifierSource
+		result.ModelID = localModel
+		result.LocalModel = localModel
+		result.ModelRunID = stableID("model_run", localModelClassifierSource, localModel, localModelPromptVersion, now().UTC().Format(time.RFC3339Nano))
+	}
+
+	var inputs []classifyInput
 	err = db.WithTx(ctx, func(tx *sql.Tx) error {
-		inputs, err := loadClassifyInputs(ctx, tx, limit)
+		var err error
+		inputs, err = loadClassifyInputs(ctx, tx, limit, classifier != nil)
 		if err != nil {
 			return err
 		}
-		for _, input := range inputs {
+		return nil
+	})
+	if err != nil {
+		return ClassifyResult{}, err
+	}
+	for _, input := range inputs {
+		var contentResult *localModelResult
+		var contentErr error
+		imagePath, hasImage := input.contentImagePath()
+		if classifier != nil && hasImage {
+			modelResult, err := classifier.classify(ctx, imagePath)
+			if err != nil {
+				contentErr = err
+			} else {
+				contentResult = &modelResult
+			}
+		}
+
+		err := db.WithTx(ctx, func(tx *sql.Tx) error {
 			observations := classifyFromMetadata(input)
 			written, err := writeMetadataClassification(ctx, tx, input, observations, now().UTC())
 			if err != nil {
@@ -118,27 +158,48 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 			result.Processed++
 			result.MetadataClassified++
 			result.VisualObservationsWritten += written
-			if input.NeedsDownload || !input.hasLocalContent() {
+			if !input.hasLocalContent() {
 				result.WaitingForLocalContent++
 			}
+			if classifier == nil || !hasImage {
+				return nil
+			}
+			if contentErr != nil {
+				result.ContentClassificationFailures++
+				return updateClassificationQueue(ctx, tx, input.QueueID, "content_failed", truncateReason(contentErr.Error()), now().UTC())
+			}
+			contentWritten, err := writeLocalModelClassification(ctx, tx, input, *classifier, *contentResult, now().UTC())
+			if err != nil {
+				return err
+			}
+			result.ContentClassified++
+			result.ContentObservationsWritten += contentWritten
+			return nil
+		})
+		if err != nil {
+			return ClassifyResult{}, err
 		}
-		return nil
-	})
-	if err != nil {
-		return ClassifyResult{}, err
+	}
+	if classifier != nil {
+		err := db.WithTx(ctx, func(tx *sql.Tx) error {
+			return writeModelRun(ctx, tx, result.ModelRunID, *classifier, len(inputs), result.ContentClassified, result.ContentClassificationFailures, now().UTC())
+		})
+		if err != nil {
+			return ClassifyResult{}, err
+		}
 	}
 	return result, nil
 }
 
-func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int) ([]classifyInput, error) {
+func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, includeMetadataClassified bool) ([]classifyInput, error) {
 	query := `
 select q.id, q.asset_id, q.source_library_id, q.needs_download,
        a.media_type, a.media_subtypes, a.creation_date, a.width, a.height,
        a.favorite, a.hidden, a.burst_identifier, a.metadata_json
 from classification_queue q
 join asset a on a.id = q.asset_id
-where q.state = 'pending'
-order by a.creation_date, q.id
+where q.state in (` + classifyQueueStates(includeMetadataClassified) + `)
+order by a.creation_date desc, q.id
 `
 	args := []any{}
 	if limit > 0 {
@@ -188,9 +249,16 @@ order by a.creation_date, q.id
 	return inputs, rows.Err()
 }
 
+func classifyQueueStates(includeMetadataClassified bool) string {
+	if includeMetadataClassified {
+		return "'pending', 'metadata_classified'"
+	}
+	return "'pending'"
+}
+
 func loadClassifyResources(ctx context.Context, tx *sql.Tx, assetID string) ([]classifyResource, error) {
 	rows, err := tx.QueryContext(ctx, `
-select resource_type, uti, original_filename, available_locally, needs_download
+select id, resource_type, uti, original_filename, local_path, available_locally, needs_download
 from asset_resource
 where asset_id = ?
 order by resource_type, original_filename
@@ -204,7 +272,7 @@ order by resource_type, original_filename
 	for rows.Next() {
 		var resource classifyResource
 		var availableLocally, needsDownload int
-		if err := rows.Scan(&resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &availableLocally, &needsDownload); err != nil {
+		if err := rows.Scan(&resource.ID, &resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &resource.LocalPath, &availableLocally, &needsDownload); err != nil {
 			return nil, err
 		}
 		resource.AvailableLocally = availableLocally != 0
@@ -340,7 +408,7 @@ values (?, ?, ?, ?)
 
 	state := "metadata_classified"
 	reason := "local_metadata_observations"
-	if input.NeedsDownload || !input.hasLocalContent() {
+	if !input.hasLocalContent() {
 		reason = "local_metadata_observations_waiting_for_content"
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -351,6 +419,17 @@ where id = ?
 		return written, fmt.Errorf("update classification queue: %w", err)
 	}
 	return written, nil
+}
+
+func updateClassificationQueue(ctx context.Context, tx *sql.Tx, queueID, state, reason string, updatedAt time.Time) error {
+	if _, err := tx.ExecContext(ctx, `
+update classification_queue
+set state = ?, reason = ?, updated_at = ?
+where id = ?
+`, state, reason, updatedAt.Format(time.RFC3339Nano), queueID); err != nil {
+		return fmt.Errorf("update classification queue: %w", err)
+	}
+	return nil
 }
 
 func clearMetadataObservations(ctx context.Context, tx *sql.Tx, assetID string) error {
@@ -378,7 +457,7 @@ where asset_id = ? and source = ? and model_id = ?
 
 func (input classifyInput) hasLocalContent() bool {
 	for _, resource := range input.Resources {
-		if resource.AvailableLocally {
+		if resource.AvailableLocally || strings.TrimSpace(resource.LocalPath) != "" {
 			return true
 		}
 	}

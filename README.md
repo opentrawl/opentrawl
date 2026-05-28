@@ -26,6 +26,7 @@ go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
 go run ./cmd/photoscrawl crawl --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 go run ./cmd/photoscrawl classify --limit 100 --json
+go run ./cmd/photoscrawl classify --local-model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search --query "drone beach portugal" --json
 go run ./cmd/photoscrawl open --id asset:<id> --json
 go run ./cmd/photoscrawl neighbors --id asset:<id> --json
@@ -44,14 +45,18 @@ source. If PhotoKit is unavailable or denied, the POC falls back to a read-only
 `database/Photos.sqlite` transaction and labels that evidence as
 `photos_sqlite_snapshot`.
 
-`crawl` does not export originals or force iCloud downloads. Resource rows carry
-local/remote availability when the source exposes it, and every imported asset is
-queued for `classify`.
+`crawl` does not export originals or force iCloud downloads. It records already
+local package media paths for derivatives/renders/originals when they exist, so
+content classification can use local files without changing Photos or iCloud
+state. Every imported asset is queued for `classify`.
 
-`classify` currently drains that queue into evidence-backed local metadata
-observations only. It does not open originals, thumbnails, or iCloud content.
-Vision/OCR/barcode/face classification belongs behind the same queue and evidence
-shape once bounded content access lands.
+`classify` drains that queue into evidence-backed local metadata observations.
+With `--local-model <ollama-model>`, it also sends already-local image bytes to a
+local Ollama vision model and stores typed candidate observations:
+scene summaries, visible-text summaries, place-type/name/venue candidates,
+objects/foods, anonymous people presence, privacy hints, cluster terms, and
+uncertainties. These are evidence-backed model observations, not durable
+people/place/trip truth.
 
 `neighbors` returns source-level adjacent assets only. It does not create trips,
 people, places, or clusters. Current reasons are deterministic archive facts:
@@ -60,7 +65,7 @@ raw GPS, and shared local observation labels.
 
 ## Current Useful Output
 
-Today the POC sees useful source facts, not full computer vision yet:
+Today the POC sees useful source facts and optional local multimodal observations:
 
 - asset timing, media type, dimensions, favorite/hidden state, timezone, and
   burst metadata;
@@ -70,13 +75,16 @@ Today the POC sees useful source facts, not full computer vision yet:
 - metadata-only observations for media type, local content availability,
   geometry, burst membership, resource UTI/type, and weak
   screenshot/document/receipt candidates from filenames, albums, and metadata;
+- optional local model observations from already-local image derivatives or
+  originals, plus normalized terms for search and later clustering;
+- quality observations for model failures such as prompt leakage;
 - status coverage counts for GPS, observations, local resources, remote
   resources, classification queue state, and observation types;
 - search/open/evidence/neighbors JSON that points every claim back to source
   rows or evidence ids.
 
-It does not run OCR, face detection, barcode detection, scene labels, embeddings,
-or similar-image matching yet.
+It does not create durable identities, trips, places, relationships, embeddings,
+or global clusters yet.
 
 ## Why This Shape
 
