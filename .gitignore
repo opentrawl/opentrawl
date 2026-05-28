@@ -1,0 +1,7 @@
+.DS_Store
+.devenv/
+.devenv.flake.nix
+photos.sqlite
+photos.sqlite-*
+tmp/
+dist/
