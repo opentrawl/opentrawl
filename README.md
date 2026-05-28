@@ -3,11 +3,10 @@
 Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
 
 `photoscrawl` builds a `photos.sqlite` archive from a user's Photos library. The
-goal is not photo backup. The goal is to extract high-signal life observations:
-where photos were taken, when they were taken, what is visible, who appears, what
-documents/screenshots/receipts exist, which assets belong together, and which
-facts can later be linked to calendar, mail, contacts, messages, maps, and legal
-corpora.
+goal is not photo backup. The goal is to help users understand their own library:
+where photos were taken, when they were taken, what is visible, which
+documents/screenshots/receipts exist, which assets belong together, and what
+evidence supports each result.
 
 ## Principles
 
@@ -50,7 +49,7 @@ queued for the later `classify` stage.
 
 ## Why This Shape
 
-This is a non-creepy Palantir-style media ontology:
+This is a local-first personal media index:
 
 - typed local objects;
 - provenance on every derived claim;
@@ -59,11 +58,10 @@ This is a non-creepy Palantir-style media ontology:
 - clusters and trips as later hypotheses, not v1 truth;
 - user-owned local archive with no sharing or hidden scoring by default.
 
-Photos are high-signal because a saved image usually records something the user
-cared about: a place, person, document, trip, purchase, home, event, hobby,
-meal, screenshot, drone flight, or life phase. The crawler's job is to preserve
-that signal without pretending GPS, face labels, or classifier labels are
-perfect facts.
+Photos are useful because a saved image usually records something the user cared
+about: a place, person, document, trip, purchase, home, event, hobby, meal,
+screenshot, or drone flight. The crawler's job is to preserve that context
+without pretending GPS, face labels, or classifier labels are perfect facts.
 
 ## v1 Scope
 

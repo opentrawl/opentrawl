@@ -8,8 +8,8 @@ reads Josh's Photos library read-only through the safest Apple-supported path.
 
 ## Product Goal
 
-Create a local-first personal-media archive that can later feed a "Palantir for
-humans" life graph without becoming creepy:
+Create a local-first personal-media archive that helps a user understand their
+own Photos library while staying user-controlled and privacy-first:
 
 - user-owned local SQLite archive;
 - no cloud calls by default;

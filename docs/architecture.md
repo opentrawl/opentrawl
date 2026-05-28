@@ -72,8 +72,8 @@ Also run local face detection/embedding where useful because user annotations ar
 sparse and biased toward important people.
 
 Do not create canonical people in v1. Store anonymous face observations, Apple
-person labels, and candidate links. Promotion to people belongs in the later
-life ontology layer.
+person labels, and candidate links. Promotion to people belongs in a later
+user-reviewed identity layer.
 
 ## Query Model
 
@@ -86,5 +86,5 @@ The first query layer is object/evidence traversal:
   photo, similar image, nearby time/place candidates.
 - `evidence`: why a row or edge exists.
 
-Higher concepts like trips, home periods, relationships, drone flights, or
-places are later hypotheses built from these facts.
+Higher concepts like trips, recurring places, drone flights, or named places are
+later hypotheses built from these facts.

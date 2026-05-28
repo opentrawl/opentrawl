@@ -33,6 +33,10 @@ without uploading private media by default.
   or synthetic examples only. Do not paste or save private asset identifiers,
   filenames, locations, OCR text, people labels, or media-derived content into
   tracked files.
+- Keep public repo language user-helping and privacy-first. Do not add framing
+  that makes the project sound like coercive profiling, public-sector targeting,
+  data-broker tooling, dossier building, investigations, or unrelated casework.
+  This is open source software for users to understand their own Photos data.
 - Read from Apple Photos only through explicit read-only/snapshot flows.
 - Never mutate Photos, albums, metadata, faces, or iCloud state.
 - Cloud model calls are opt-in only and must identify exactly which assets or
