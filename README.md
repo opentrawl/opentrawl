@@ -25,18 +25,28 @@ corpora.
 ```sh
 go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
+go run ./cmd/photoscrawl crawl --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+go run ./cmd/photoscrawl search --query "drone beach portugal" --json
+go run ./cmd/photoscrawl open --id asset:<id> --json
+go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
 ```
 
 Planned crawl-family commands:
 
 ```sh
-photoscrawl crawl --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 photoscrawl classify --all --json
-photoscrawl search --query "drone beach portugal" --json
-photoscrawl open --id asset:<id> --json
 photoscrawl neighbors --id asset:<id> --json
-photoscrawl evidence --row-id asset:<id> --json
 ```
+
+`crawl` tries PhotoKit first for metadata. PhotoKit enumerates the active system
+Photos library; the `--library` path is validated and recorded as the requested
+source. If PhotoKit is unavailable or denied, the POC falls back to a read-only
+`database/Photos.sqlite` transaction and labels that evidence as
+`photos_sqlite_snapshot`.
+
+`crawl` does not export originals or force iCloud downloads. Resource rows carry
+local/remote availability when the source exposes it, and every imported asset is
+queued for the later `classify` stage.
 
 ## Why This Shape
 

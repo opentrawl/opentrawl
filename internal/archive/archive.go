@@ -57,7 +57,8 @@ func counts(ctx context.Context, dbPath string) ([]control.Count, error) {
 	}
 	defer db.Close()
 	tables := []string{
-		"source_library", "asset", "asset_resource", "album_membership",
+		"source_library", "crawl_snapshot", "crawl_seen_asset", "sync_state",
+		"classification_queue", "asset", "asset_resource", "album_membership",
 		"location_observation", "visual_observation", "text_observation",
 		"face_observation", "evidence_ref", "edge",
 	}

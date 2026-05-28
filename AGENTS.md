@@ -22,6 +22,17 @@ without uploading private media by default.
 
 ## Product Boundaries
 
+- NO PRIVATE DATA IN THE REPO. Do not commit, stage, copy, or write private
+  Photos data into this checkout: Photos libraries, `photos.sqlite`, snapshots,
+  thumbnails, originals, exported media, extracted metadata dumps, GPS dumps,
+  face data, OCR text, classifier output, logs containing asset metadata, or
+  any other user-derived archive material.
+- Keep private crawl artifacts outside the repo, preferably under
+  `~/.photoscrawl`, XDG cache/data dirs, or `/tmp/` for short-lived fixtures.
+- If verification needs real Photos access, run it read-only and report counts
+  or synthetic examples only. Do not paste or save private asset identifiers,
+  filenames, locations, OCR text, people labels, or media-derived content into
+  tracked files.
 - Read from Apple Photos only through explicit read-only/snapshot flows.
 - Never mutate Photos, albums, metadata, faces, or iCloud state.
 - Cloud model calls are opt-in only and must identify exactly which assets or

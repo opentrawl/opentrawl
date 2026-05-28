@@ -12,6 +12,48 @@ create table if not exists source_library (
   metadata_json text not null
 );
 
+create table if not exists crawl_snapshot (
+  id text primary key,
+  source_library_id text not null references source_library(id),
+  started_at text not null,
+  completed_at text not null,
+  provider text not null,
+  asset_count integer not null,
+  resource_count integer not null,
+  album_membership_count integer not null,
+  location_count integer not null,
+  metadata_json text not null
+);
+
+create table if not exists crawl_seen_asset (
+  source_library_id text not null references source_library(id),
+  asset_id text not null,
+  first_seen_snapshot_id text not null references crawl_snapshot(id),
+  last_seen_snapshot_id text not null references crawl_snapshot(id),
+  source_fingerprint text not null,
+  last_seen_at text not null,
+  primary key (source_library_id, asset_id)
+);
+
+create table if not exists sync_state (
+  source text not null,
+  entity_type text not null,
+  entity_id text not null,
+  cursor text not null,
+  synced_at text not null,
+  primary key (source, entity_type, entity_id)
+);
+
+create table if not exists classification_queue (
+  id text primary key,
+  asset_id text not null unique references asset(id),
+  source_library_id text not null references source_library(id),
+  state text not null,
+  reason text not null,
+  needs_download integer not null,
+  updated_at text not null
+);
+
 create table if not exists asset (
   id text primary key,
   local_identifier text not null unique,
@@ -123,6 +165,10 @@ create virtual table if not exists observation_fts using fts5(id unindexed, asse
 
 create index if not exists asset_creation_idx on asset(creation_date);
 create index if not exists asset_burst_idx on asset(burst_identifier);
+create index if not exists crawl_snapshot_source_idx on crawl_snapshot(source_library_id, completed_at desc);
+create index if not exists crawl_seen_asset_snapshot_idx on crawl_seen_asset(last_seen_snapshot_id);
+create index if not exists sync_state_synced_at_idx on sync_state(synced_at desc);
+create index if not exists classification_queue_state_idx on classification_queue(state, needs_download);
 create index if not exists resource_asset_idx on asset_resource(asset_id);
 create index if not exists resource_sha_idx on asset_resource(sha256);
 create index if not exists album_asset_idx on album_membership(asset_id);
