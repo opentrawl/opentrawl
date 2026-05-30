@@ -8,10 +8,20 @@ import (
 	"strings"
 )
 
-type localMediaCandidate struct {
-	path  string
-	class string
-	size  int64
+type LocalMediaCandidate struct {
+	Path  string `json:"path"`
+	Class string `json:"class"`
+	Size  int64  `json:"size"`
+}
+
+type LocalMediaIndex map[string][]LocalMediaCandidate
+
+func BuildLocalMediaIndex(libraryPath string) (LocalMediaIndex, error) {
+	return localMediaIndex(libraryPath)
+}
+
+func (index LocalMediaIndex) Candidates(localIdentifier string) []LocalMediaCandidate {
+	return append([]LocalMediaCandidate(nil), index[mediaUUID(localIdentifier)]...)
 }
 
 // AttachLocalMediaPaths finds already-local Photos package media without asking
@@ -44,32 +54,32 @@ func AttachLocalMediaPaths(snapshot *LibrarySnapshot, libraryPath string) error 
 			if assigned || !classifiableResource(*resource) {
 				continue
 			}
-			resource.LocalPath = candidate.path
+			resource.LocalPath = candidate.Path
 			resource.Availability = "local"
 			resource.AvailableLocally = true
 			resource.NeedsDownload = false
 			if resource.FileSize == 0 {
-				resource.FileSize = candidate.size
+				resource.FileSize = candidate.Size
 			}
 			if resource.Metadata == nil {
 				resource.Metadata = map[string]any{}
 			}
-			resource.Metadata["local_path_class"] = candidate.class
+			resource.Metadata["local_path_class"] = candidate.Class
 			resource.Metadata["local_path_source"] = "photos_library_package"
 			assigned = true
 		}
 		if !assigned && asset.MediaType == "image" {
 			asset.Resources = append(asset.Resources, Resource{
-				Type:             "local_" + candidate.class,
-				UTI:              utiForPath(candidate.path),
-				OriginalFilename: filepath.Base(candidate.path),
-				LocalPath:        candidate.path,
+				Type:             "local_" + candidate.Class,
+				UTI:              utiForPath(candidate.Path),
+				OriginalFilename: filepath.Base(candidate.Path),
+				LocalPath:        candidate.Path,
 				Availability:     "local",
-				FileSize:         candidate.size,
+				FileSize:         candidate.Size,
 				AvailableLocally: true,
 				NeedsDownload:    false,
 				Metadata: map[string]any{
-					"local_path_class":  candidate.class,
+					"local_path_class":  candidate.Class,
 					"local_path_source": "photos_library_package",
 				},
 			})
@@ -78,7 +88,15 @@ func AttachLocalMediaPaths(snapshot *LibrarySnapshot, libraryPath string) error 
 	return nil
 }
 
-func localMediaIndex(libraryPath string) (map[string][]localMediaCandidate, error) {
+func FindLocalMediaCandidates(libraryPath, localIdentifier string) ([]LocalMediaCandidate, error) {
+	index, err := localMediaIndex(libraryPath)
+	if err != nil {
+		return nil, err
+	}
+	return index.Candidates(localIdentifier), nil
+}
+
+func localMediaIndex(libraryPath string) (LocalMediaIndex, error) {
 	roots := []struct {
 		path  string
 		class string
@@ -87,7 +105,7 @@ func localMediaIndex(libraryPath string) (map[string][]localMediaCandidate, erro
 		{filepath.Join(libraryPath, "resources", "renders"), "render"},
 		{filepath.Join(libraryPath, "originals"), "original"},
 	}
-	out := map[string][]localMediaCandidate{}
+	out := LocalMediaIndex{}
 	for _, root := range roots {
 		if _, err := os.Stat(root.path); err != nil {
 			if os.IsNotExist(err) {
@@ -110,10 +128,10 @@ func localMediaIndex(libraryPath string) (map[string][]localMediaCandidate, erro
 			if err != nil {
 				return err
 			}
-			out[uuid] = append(out[uuid], localMediaCandidate{
-				path:  path,
-				class: root.class,
-				size:  info.Size(),
+			out[uuid] = append(out[uuid], LocalMediaCandidate{
+				Path:  path,
+				Class: root.class,
+				Size:  info.Size(),
 			})
 			return nil
 		})
@@ -126,17 +144,17 @@ func localMediaIndex(libraryPath string) (map[string][]localMediaCandidate, erro
 			if localMediaPriority(out[uuid][i]) != localMediaPriority(out[uuid][j]) {
 				return localMediaPriority(out[uuid][i]) < localMediaPriority(out[uuid][j])
 			}
-			if out[uuid][i].size != out[uuid][j].size {
-				return out[uuid][i].size < out[uuid][j].size
+			if out[uuid][i].Size != out[uuid][j].Size {
+				return out[uuid][i].Size < out[uuid][j].Size
 			}
-			return out[uuid][i].path < out[uuid][j].path
+			return out[uuid][i].Path < out[uuid][j].Path
 		})
 	}
 	return out, nil
 }
 
-func localMediaPriority(candidate localMediaCandidate) int {
-	switch candidate.class {
+func localMediaPriority(candidate LocalMediaCandidate) int {
+	switch candidate.Class {
 	case "derivative":
 		return 1
 	case "render":

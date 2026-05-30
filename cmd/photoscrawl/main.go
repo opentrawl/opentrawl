@@ -6,8 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/joshp123/photoscrawl/internal/archive"
+	"github.com/joshp123/photoscrawl/internal/evalcard"
 	"github.com/joshp123/photoscrawl/internal/photos"
 	"github.com/openclaw/crawlkit/output"
 )
@@ -210,11 +212,64 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "neighbors", result)
+	case "eval-card":
+		fs := flag.NewFlagSet("eval-card", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
+		outDir := fs.String("out", "", "private eval output directory")
+		cacheDir := fs.String("cache-dir", "", "private original cache directory")
+		promptPath := fs.String("prompt", "", "photo-card prompt file")
+		models := fs.String("models", "", "comma-separated Ollama models")
+		ollamaURL := fs.String("ollama-url", "", "Ollama generate URL or base URL")
+		allowICloud := fs.Bool("allow-icloud-downloads", false, "allow PhotoKit to download missing originals")
+		limit := fs.Int("limit", 15, "max images to prepare")
+		concurrency := fs.Int("concurrency", 4, "max concurrent model calls")
+		sample := fs.String("sample", "latest", "sample mode: latest or random")
+		seed := fs.Uint64("seed", 1, "random sample seed")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		result, err := evalcard.Run(ctx, evalcard.Options{
+			LibraryPath:          *libraryPath,
+			OutputDir:            *outDir,
+			CacheDir:             *cacheDir,
+			PromptPath:           *promptPath,
+			Models:               splitList(*models),
+			OllamaGenerateURL:    *ollamaURL,
+			OllamaAPIKey:         os.Getenv("OLLAMA_API_KEY"),
+			Limit:                *limit,
+			Concurrency:          *concurrency,
+			Sample:               *sample,
+			Seed:                 *seed,
+			AllowICloudDownloads: *allowICloud,
+			Provider:             photos.NewProvider(),
+		})
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "eval_card", result)
 	default:
 		return usage()
 	}
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <init|status|crawl|classify|search|open|neighbors|evidence>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl <init|status|crawl|classify|search|open|neighbors|evidence|eval-card>")}
+}
+
+func splitList(value string) []string {
+	out := []string{}
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
 }

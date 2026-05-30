@@ -46,6 +46,32 @@ without uploading private media by default.
 - CPU is acceptable when it buys signal quality. Disk pressure is not; classify
   originals through a bounded local cache/ringbuffer when downloads are needed.
 
+## File Storage And Eval Artifacts
+
+- Do not hide product/design work in random private state dirs. Private media,
+  raw model outputs, OCR dumps, GPS dumps, and live-library eval results stay
+  outside the repo; reusable prompts, prompt versions, eval harnesses, scoring
+  rubrics, schemas, synthetic fixtures, and non-private design decisions belong
+  in the repo.
+- Private eval directories are scratch only. When an experiment teaches
+  something durable, extract the non-private prompt/code/rubric into tracked
+  files and leave the private directory as disposable run evidence.
+- Do not create repo-local private `AGENTS.md` copies, `.agents-private`
+  directories, ignored design docs, or `.git/info/exclude` rules as a substitute
+  for proper tracked prompts/code. Use ignored/private files only for secrets,
+  raw private artifacts, and one-off scratch that must never be committed.
+- Model prompts should be first-class project artifacts. Keep the current
+  classifier prompt text and prompt-change rationale in tracked files with no
+  private examples. Use synthetic examples or heavily generalized examples when
+  a prompt needs tests.
+- Eval harnesses may run against a real local Photos library, but their outputs
+  must default outside the repo. Do not commit real eval manifests, rendered
+  images, metadata sidecars, OCR/barcode extracts, model responses, summaries, or
+  reports.
+- Eval code must respect the stack boundary. Product-path code is Go/crawlkit;
+  temporary shell/Python snippets are acceptable only during exploration and
+  should be promoted to Go or removed once the shape is known.
+
 ## Query Surface
 
 Keep crawl-family JSON commands:

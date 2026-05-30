@@ -31,6 +31,7 @@ go run ./cmd/photoscrawl search --query "drone beach portugal" --json
 go run ./cmd/photoscrawl open --id asset:<id> --json
 go run ./cmd/photoscrawl neighbors --id asset:<id> --json
 go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
+go run ./cmd/photoscrawl eval-card --library "$HOME/Pictures/Photos Library.photoslibrary" --allow-icloud-downloads --limit 1 --models gemma4:31b-cloud --ollama-url https://ollama.com/api --json
 ```
 
 Planned crawl-family commands:
@@ -62,6 +63,14 @@ people/place/trip truth.
 people, places, or clusters. Current reasons are deterministic archive facts:
 same burst id, same album id, same resource hash, nearby creation time, nearby
 raw GPS, and shared local observation labels.
+
+`eval-card` is an opt-in research harness for prompt/model evaluation. It uses
+the tracked prompt files in `prompts/`, prepares canonical full-resolution JPEGs
+from originals, passes full metadata as a sidecar prompt input, and writes all
+private images, metadata, and model responses under `~/.photoscrawl/evals`. If
+`--allow-icloud-downloads` is set, PhotoKit may download missing originals into
+`~/.photoscrawl/cache/originals`; normal crawl/classify commands do not force
+iCloud downloads.
 
 ## Current Useful Output
 

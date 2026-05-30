@@ -1,6 +1,9 @@
 #import <Foundation/Foundation.h>
 #import <Photos/Photos.h>
 #import <CoreLocation/CoreLocation.h>
+#import <CoreImage/CoreImage.h>
+#import <CoreGraphics/CoreGraphics.h>
+#import <ImageIO/ImageIO.h>
 #import <dispatch/dispatch.h>
 #include <stdlib.h>
 #include <string.h>
@@ -102,6 +105,45 @@ static void pcSetError(char **errorOut, NSString *message) {
   *errorOut = pcCopyCString(message);
 }
 
+static BOOL pcEnsureParentDirectory(NSURL *url, char **errorOut) {
+  NSURL *parent = [url URLByDeletingLastPathComponent];
+  if (parent == nil) {
+    pcSetError(errorOut, @"missing destination parent directory");
+    return NO;
+  }
+  NSError *error = nil;
+  if (![[NSFileManager defaultManager] createDirectoryAtURL:parent withIntermediateDirectories:YES attributes:nil error:&error]) {
+    pcSetError(errorOut, [NSString stringWithFormat:@"create destination directory: %@", error.localizedDescription]);
+    return NO;
+  }
+  return YES;
+}
+
+static id pcJSONSafe(id value) {
+  if (value == nil || value == (id)kCFNull) {
+    return [NSNull null];
+  }
+  if ([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSNull class]]) {
+    return value;
+  }
+  if ([value isKindOfClass:[NSArray class]]) {
+    NSMutableArray *out = [NSMutableArray array];
+    for (id item in (NSArray *)value) {
+      [out addObject:pcJSONSafe(item)];
+    }
+    return out;
+  }
+  if ([value isKindOfClass:[NSDictionary class]]) {
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    for (id key in (NSDictionary *)value) {
+      NSString *stringKey = [key isKindOfClass:[NSString class]] ? key : [key description];
+      out[stringKey] = pcJSONSafe([(NSDictionary *)value objectForKey:key]);
+    }
+    return out;
+  }
+  return [value description];
+}
+
 static PHAuthorizationStatus pcEnsureAuthorized(void) {
   __block PHAuthorizationStatus status;
   if (@available(macOS 11.0, *)) {
@@ -158,6 +200,34 @@ static NSArray *pcResources(PHAsset *asset) {
     [out addObject:entry];
   }
   return out;
+}
+
+static NSInteger pcOriginalResourceRank(PHAssetResourceType type) {
+  switch (type) {
+    case PHAssetResourceTypeFullSizePhoto:
+      return 1;
+    case PHAssetResourceTypePhoto:
+      return 2;
+    case PHAssetResourceTypeAlternatePhoto:
+      return 3;
+    case PHAssetResourceTypeAdjustmentBasePhoto:
+      return 4;
+    default:
+      return 100;
+  }
+}
+
+static PHAssetResource *pcPreferredOriginalResource(PHAsset *asset) {
+  PHAssetResource *best = nil;
+  NSInteger bestRank = 1000;
+  for (PHAssetResource *resource in [PHAssetResource assetResourcesForAsset:asset]) {
+    NSInteger rank = pcOriginalResourceRank(resource.type);
+    if (rank < bestRank) {
+      best = resource;
+      bestRank = rank;
+    }
+  }
+  return bestRank < 100 ? best : nil;
 }
 
 static NSArray *pcAlbums(PHAsset *asset) {
@@ -270,6 +340,164 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
     char *json = malloc(data.length + 1);
     if (json == NULL) {
       pcSetError(errorOut, @"allocate PhotoKit JSON snapshot");
+      return NULL;
+    }
+    memcpy(json, data.bytes, data.length);
+    json[data.length] = '\0';
+    return json;
+  }
+}
+
+int photoscrawl_export_original_resource(const char *localIdentifier, const char *destinationPath, int allowNetwork, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    if (!@available(macOS 10.15, *)) {
+      pcSetError(errorOut, @"PhotoKit export requires macOS 10.15 or newer");
+      return 0;
+    }
+
+    NSString *identifier = localIdentifier == NULL ? @"" : [NSString stringWithUTF8String:localIdentifier];
+    NSString *path = destinationPath == NULL ? @"" : [NSString stringWithUTF8String:destinationPath];
+    if (identifier.length == 0 || path.length == 0) {
+      pcSetError(errorOut, @"asset identifier and destination path are required");
+      return 0;
+    }
+
+    PHAuthorizationStatus status = pcEnsureAuthorized();
+    if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) {
+      pcSetError(errorOut, [NSString stringWithFormat:@"Photos access is %@ for this process", pcAuthorizationStatus(status)]);
+      return 0;
+    }
+
+    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithLocalIdentifiers:@[identifier] options:nil];
+    PHAsset *asset = fetch.firstObject;
+    if (asset == nil) {
+      pcSetError(errorOut, @"PhotoKit asset not found");
+      return 0;
+    }
+    PHAssetResource *resource = pcPreferredOriginalResource(asset);
+    if (resource == nil) {
+      pcSetError(errorOut, @"PhotoKit asset has no image original resource");
+      return 0;
+    }
+
+    NSURL *destination = [NSURL fileURLWithPath:path];
+    if (!pcEnsureParentDirectory(destination, errorOut)) {
+      return 0;
+    }
+    [[NSFileManager defaultManager] removeItemAtURL:destination error:nil];
+
+    PHAssetResourceRequestOptions *options = [[PHAssetResourceRequestOptions alloc] init];
+    options.networkAccessAllowed = allowNetwork ? YES : NO;
+
+    __block NSError *writeError = nil;
+    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+    [[PHAssetResourceManager defaultManager] writeDataForAssetResource:resource toFile:destination options:options completionHandler:^(NSError * _Nullable error) {
+      writeError = error;
+      dispatch_semaphore_signal(semaphore);
+    }];
+    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+    if (writeError != nil) {
+      pcSetError(errorOut, [NSString stringWithFormat:@"export original resource: %@", writeError.localizedDescription]);
+      return 0;
+    }
+    return 1;
+  }
+}
+
+int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    NSString *source = sourcePath == NULL ? @"" : [NSString stringWithUTF8String:sourcePath];
+    NSString *destinationPathString = destinationPath == NULL ? @"" : [NSString stringWithUTF8String:destinationPath];
+    if (source.length == 0 || destinationPathString.length == 0) {
+      pcSetError(errorOut, @"source and destination paths are required");
+      return 0;
+    }
+
+    NSURL *sourceURL = [NSURL fileURLWithPath:source];
+    NSURL *destinationURL = [NSURL fileURLWithPath:destinationPathString];
+    if (!pcEnsureParentDirectory(destinationURL, errorOut)) {
+      return 0;
+    }
+
+    CIImage *image = [CIImage imageWithContentsOfURL:sourceURL options:@{ kCIImageApplyOrientationProperty: @YES }];
+    if (image == nil || CGRectIsEmpty(image.extent)) {
+      pcSetError(errorOut, @"load source image for canonical render");
+      return 0;
+    }
+
+    CIContext *context = [CIContext contextWithOptions:nil];
+    CGImageRef cgImage = [context createCGImage:image fromRect:image.extent];
+    if (cgImage == NULL) {
+      pcSetError(errorOut, @"create canonical CGImage");
+      return 0;
+    }
+
+    [[NSFileManager defaultManager] removeItemAtURL:destinationURL error:nil];
+    CGImageDestinationRef destination = CGImageDestinationCreateWithURL((__bridge CFURLRef)destinationURL, CFSTR("public.jpeg"), 1, NULL);
+    if (destination == NULL) {
+      CGImageRelease(cgImage);
+      pcSetError(errorOut, @"create JPEG destination");
+      return 0;
+    }
+
+    double boundedQuality = quality;
+    if (boundedQuality <= 0 || boundedQuality > 1) {
+      boundedQuality = 0.92;
+    }
+    NSDictionary *properties = @{
+      (NSString *)kCGImageDestinationLossyCompressionQuality: @(boundedQuality),
+      (NSString *)kCGImagePropertyOrientation: @1
+    };
+    CGImageDestinationAddImage(destination, cgImage, (__bridge CFDictionaryRef)properties);
+    BOOL ok = CGImageDestinationFinalize(destination);
+    CFRelease(destination);
+    CGImageRelease(cgImage);
+    if (!ok) {
+      pcSetError(errorOut, @"write canonical JPEG");
+      return 0;
+    }
+    return 1;
+  }
+}
+
+char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    NSString *source = sourcePath == NULL ? @"" : [NSString stringWithUTF8String:sourcePath];
+    if (source.length == 0) {
+      pcSetError(errorOut, @"source path is required");
+      return NULL;
+    }
+    NSURL *sourceURL = [NSURL fileURLWithPath:source];
+    CGImageSourceRef imageSource = CGImageSourceCreateWithURL((__bridge CFURLRef)sourceURL, NULL);
+    if (imageSource == NULL) {
+      pcSetError(errorOut, @"open source image metadata");
+      return NULL;
+    }
+    NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(imageSource, 0, NULL));
+    CFRelease(imageSource);
+    if (properties == nil) {
+      properties = @{};
+    }
+    id safe = pcJSONSafe(properties);
+    NSError *jsonError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:safe options:0 error:&jsonError];
+    if (data == nil) {
+      pcSetError(errorOut, [NSString stringWithFormat:@"encode image metadata: %@", jsonError.localizedDescription]);
+      return NULL;
+    }
+    char *json = malloc(data.length + 1);
+    if (json == NULL) {
+      pcSetError(errorOut, @"allocate image metadata JSON");
       return NULL;
     }
     memcpy(json, data.bytes, data.length);
