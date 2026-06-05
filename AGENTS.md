@@ -50,7 +50,9 @@ The first contact-export contract is intentionally narrow:
 - root object key: `contacts`
 - each contact has only `display_name` and `phone_numbers`
 - one row per normalized phone value
-- phone fallback display names are allowed when Messages has no human name
+- v0 allows phone fallback display names when Messages has no human name, but
+  this is a compatibility choice to revisit before clawdex treats imported
+  crawler names as canonical human names
 
 Do not add `email_addresses` or source backrefs to the v0 export until clawdex,
 telecrawl, wacrawl, and imsgcrawl are changed together.
@@ -60,6 +62,10 @@ telecrawl, wacrawl, and imsgcrawl are changed together.
 Prefer simple, source-native code over framework-shaped abstractions. Do not
 add flags, modes, daemons, background services, graph terminology, or generic
 crawler-to-crawler interfaces before repeated crawler evidence requires them.
+
+Keep files under 400 lines of code. If a file grows past that, do the smallest
+sensible refactor into human-named files unless Josh explicitly says a larger
+file is acceptable.
 
 Tests must use temporary SQLite fixtures. Do not touch the live
 `~/Library/Messages/chat.db` in unit tests.

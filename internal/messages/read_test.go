@@ -33,3 +33,32 @@ func TestLooksPhoneLikeAllowsShortCodesButRejectsOpaqueIDs(t *testing.T) {
 		}
 	}
 }
+
+func TestDecodeAttributedBody(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+	}{
+		{name: "short", text: "Hello world"},
+		{name: "long", text: "This is a longer message that exercises the multi-byte length path in the streamtyped attributedBody decoder."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := decodeAttributedBody(makeStreamtypedAttributedBody(tc.text))
+			if got != tc.text {
+				t.Fatalf("got %q, want %q", got, tc.text)
+			}
+		})
+	}
+}
+
+func makeStreamtypedAttributedBody(text string) []byte {
+	var out []byte
+	out = append(out, "\x04\x0bstreamtyped\x81\xe8\x03\x84\x01@\x84\x84\x84"...)
+	out = append(out, "\x12NSAttributedString"...)
+	out = append(out, "\x00\x84\x84\x08NSObject\x00\x85\x92\x84\x84\x84\x08NSString\x01\x94"...)
+	out = append(out, "\x84\x01+"...)
+	out = append(out, 0x81, byte(len(text)), 0x92, 0x00)
+	out = append(out, text...)
+	out = append(out, 0x86)
+	return out
+}

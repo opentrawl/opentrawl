@@ -3,15 +3,13 @@ package cli
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
-
-	_ "modernc.org/sqlite"
 )
 
 func TestRunEndToEnd(t *testing.T) {
@@ -81,7 +79,167 @@ func TestContactsExportShapeAndDedupe(t *testing.T) {
 	}
 }
 
-func TestMetadataAdvertisesContactExport(t *testing.T) {
+func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+
+	syncOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+	var syncResult struct {
+		Handles      int `json:"handles"`
+		Chats        int `json:"chats"`
+		Participants int `json:"participants"`
+		ChatMessages int `json:"chat_messages"`
+		Messages     int `json:"messages"`
+	}
+	if err := json.Unmarshal([]byte(syncOut), &syncResult); err != nil {
+		t.Fatalf("sync json = %s err=%v", syncOut, err)
+	}
+	if syncResult.Chats != 4 || syncResult.Participants != 3 || syncResult.ChatMessages != 5 || syncResult.Messages != 4 {
+		t.Fatalf("sync result = %#v", syncResult)
+	}
+
+	statusOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "status")
+	var status statusOutput
+	if err := json.Unmarshal([]byte(statusOut), &status); err != nil {
+		t.Fatalf("status json = %s err=%v", statusOut, err)
+	}
+	if status.Source == nil || status.Archive == nil {
+		t.Fatalf("status missing source/archive = %#v", status)
+	}
+	if status.Source.Messages != status.Archive.Messages || status.Archive.ChatMessages != 5 {
+		t.Fatalf("status counts = source %#v archive %#v", status.Source, status.Archive)
+	}
+
+	if err := os.Remove(dbPath); err != nil {
+		t.Fatal(err)
+	}
+
+	chatsOut := runOK(t, "--archive", archivePath, "--json", "chats", "--limit", "4")
+	var chats []struct {
+		ChatID            string `json:"chat_id"`
+		Title             string `json:"title"`
+		MessageCount      int64  `json:"message_count"`
+		LatestMessageDate int64  `json:"latest_message_date"`
+	}
+	if err := json.Unmarshal([]byte(chatsOut), &chats); err != nil {
+		t.Fatalf("chats json = %s err=%v", chatsOut, err)
+	}
+	if len(chats) != 4 {
+		t.Fatalf("chats = %#v", chats)
+	}
+	if !chatHasMessage(t, chats, "3", "+15550103", 1) || !chatHasMessage(t, chats, "4", "group-chat", 1) {
+		t.Fatalf("chats did not preserve chat_message_join rows: %#v", chats)
+	}
+
+	messagesOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "2", "--asc")
+	var messageRows []struct {
+		MessageID string `json:"message_id"`
+		GUID      string `json:"guid"`
+		ChatID    string `json:"chat_id"`
+		Service   string `json:"service"`
+		Text      string `json:"text"`
+		FromMe    bool   `json:"from_me"`
+	}
+	if err := json.Unmarshal([]byte(messagesOut), &messageRows); err != nil {
+		t.Fatalf("messages json = %s err=%v", messagesOut, err)
+	}
+	if len(messageRows) != 2 || messageRows[0].Text != "earlier launch note" || messageRows[1].Text != "latest launch note" {
+		t.Fatalf("messages = %#v", messageRows)
+	}
+	if messageRows[1].GUID != "message-three" || !messageRows[1].FromMe || messageRows[1].Service != "SMS" {
+		t.Fatalf("source message fields = %#v", messageRows[1])
+	}
+
+	attachedOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "3", "--asc")
+	var attachedRows []struct {
+		MessageID      string `json:"message_id"`
+		HasAttachments bool   `json:"has_attachments"`
+	}
+	if err := json.Unmarshal([]byte(attachedOut), &attachedRows); err != nil {
+		t.Fatalf("attached json = %s err=%v", attachedOut, err)
+	}
+	if len(attachedRows) != 1 || !attachedRows[0].HasAttachments {
+		t.Fatalf("attached rows = %#v", attachedRows)
+	}
+
+	emptyMessagesOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "999")
+	if emptyMessagesOut != "[]\n" {
+		t.Fatalf("empty messages output = %q", emptyMessagesOut)
+	}
+
+	searchOut := runOK(t, "--archive", archivePath, "--json", "search", "launch")
+	var results []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(searchOut), &results); err != nil {
+		t.Fatalf("search json = %s err=%v", searchOut, err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("search results = %#v", results)
+	}
+	for _, result := range results {
+		if _, ok := result["snippet"]; !ok {
+			t.Fatalf("search result missing snippet = %#v", result)
+		}
+		if _, ok := result["text"]; ok {
+			t.Fatalf("search result leaked full text = %#v", result)
+		}
+	}
+
+	emptySearchOut := runOK(t, "--archive", archivePath, "--json", "search", "zzznomatchimsgcrawl")
+	if emptySearchOut != "[]\n" {
+		t.Fatalf("empty search output = %q", emptySearchOut)
+	}
+}
+
+func TestArchiveCommandsRequireSync(t *testing.T) {
+	for _, args := range [][]string{
+		{"--json", "chats"},
+		{"--json", "messages", "--chat", "1"},
+		{"--json", "search", "hello"},
+	} {
+		var stdout, stderr bytes.Buffer
+		missingPath := filepath.Join(t.TempDir(), "missing.db")
+		withArchive := append([]string{"--archive", missingPath}, args...)
+		err := Run(context.Background(), withArchive, &stdout, &stderr)
+		if err == nil {
+			t.Fatalf("Run(%v) expected missing archive error", withArchive)
+		}
+		if !strings.Contains(err.Error(), "run imsgcrawl sync first") {
+			t.Fatalf("err = %v", err)
+		}
+	}
+}
+
+func TestStatusArchiveStates(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	createMessagesFixture(t, dbPath)
+
+	missingOut := runOK(t, "--db", dbPath, "--archive", filepath.Join(dir, "missing.db"), "--json", "status")
+	var missing statusOutput
+	if err := json.Unmarshal([]byte(missingOut), &missing); err != nil {
+		t.Fatalf("missing status json = %s err=%v", missingOut, err)
+	}
+	if missing.State != "ok" || !hasWarning(missing.Warnings, "archive has not been synced") {
+		t.Fatalf("missing archive status = %#v", missing)
+	}
+
+	corruptPath := filepath.Join(dir, "corrupt.db")
+	if err := os.WriteFile(corruptPath, []byte("not sqlite"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	corruptOut := runOK(t, "--db", dbPath, "--archive", corruptPath, "--json", "status")
+	var corrupt statusOutput
+	if err := json.Unmarshal([]byte(corruptOut), &corrupt); err != nil {
+		t.Fatalf("corrupt status json = %s err=%v", corruptOut, err)
+	}
+	if corrupt.State != "archive_error" || len(corrupt.Warnings) == 0 {
+		t.Fatalf("corrupt archive status = %#v", corrupt)
+	}
+}
+
+func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	manifest := controlManifest()
 	command, ok := manifest.Commands["contact-export"]
 	if !ok {
@@ -93,6 +251,23 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	want := []string{"imsgcrawl", "--json", "contacts", "export"}
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
+	}
+	for _, name := range []string{"sync", "chats", "messages", "search"} {
+		command, ok := manifest.Commands[name]
+		if !ok {
+			t.Fatalf("missing command %q in %#v", name, manifest.Commands)
+		}
+		if !command.JSON {
+			t.Fatalf("%s command is not JSON = %#v", name, command)
+		}
+	}
+	if !manifest.Commands["sync"].Mutates {
+		t.Fatalf("sync should be marked mutating = %#v", manifest.Commands["sync"])
+	}
+	for _, want := range []string{"message-archive", "message-text-search"} {
+		if !hasString(manifest.Privacy.LocalOnlyScopes, want) {
+			t.Fatalf("local_only_scopes = %#v, missing %q", manifest.Privacy.LocalOnlyScopes, want)
+		}
 	}
 }
 
@@ -133,49 +308,6 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 		}
 		if len(contact) != 2 {
 			t.Fatalf("contact keys = %#v, want only display_name and phone_numbers", contact)
-		}
-	}
-}
-
-func createMessagesFixture(t *testing.T, path string) {
-	t.Helper()
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = db.Close() }()
-	schema := []string{
-		`create table handle (ROWID integer primary key, id text not null, service text not null)`,
-		`create table chat (ROWID integer primary key, guid text not null, display_name text, chat_identifier text, service_name text)`,
-		`create table chat_handle_join (chat_id integer, handle_id integer)`,
-		`create table message (ROWID integer primary key, handle_id integer, date integer)`,
-	}
-	for _, stmt := range schema {
-		if _, err := db.Exec(stmt); err != nil {
-			t.Fatal(err)
-		}
-	}
-	inserts := []string{
-		`insert into handle(rowid, id, service) values (1, '+15550100', 'iMessage')`,
-		`insert into handle(rowid, id, service) values (2, '0015550100', 'SMS')`,
-		`insert into handle(rowid, id, service) values (3, 'person@example.test', 'iMessage')`,
-		`insert into handle(rowid, id, service) values (4, '+15550103', 'SMS')`,
-		`insert into handle(rowid, id, service) values (5, 'opaque-handle', 'SMS')`,
-		`insert into handle(rowid, id, service) values (6, 'opaque123', 'SMS')`,
-		`insert into chat(rowid, guid, display_name, chat_identifier, service_name) values (1, 'chat-one', 'Older Name', '+15550100', 'iMessage')`,
-		`insert into chat(rowid, guid, display_name, chat_identifier, service_name) values (2, 'chat-two', 'Most Recent Name', '0015550100', 'SMS')`,
-		`insert into chat(rowid, guid, display_name, chat_identifier, service_name) values (3, 'chat-three', '', '+15550103', 'SMS')`,
-		`insert into chat_handle_join(chat_id, handle_id) values (1, 1)`,
-		`insert into chat_handle_join(chat_id, handle_id) values (2, 2)`,
-		`insert into chat_handle_join(chat_id, handle_id) values (3, 4)`,
-		`insert into message(rowid, handle_id, date) values (1, 1, 100)`,
-		`insert into message(rowid, handle_id, date) values (2, 2, 200)`,
-		`insert into message(rowid, handle_id, date) values (3, 2, 250)`,
-		`insert into message(rowid, handle_id, date) values (4, 4, 300)`,
-	}
-	for _, stmt := range inserts {
-		if _, err := db.Exec(stmt); err != nil {
-			t.Fatal(err)
 		}
 	}
 }

@@ -25,16 +25,17 @@ This matters because contact export only solves the clawdex identity-entrypoint 
 ## Progress
 
 - [x] (2026-06-06 01:05+02:00) Defined Slice 2 as separate from the contact-export slice.
-- [ ] Implement only after Slice 1 has passed tests and real local smoke.
-- [ ] Design and create the local archive schema.
-- [ ] Add `sync`, `chats`, `messages`, and `search` commands.
-- [ ] Add privacy-preserving fixtures and archive tests.
-- [ ] Smoke on a copied local Messages database and report aggregate proof.
+- [x] (2026-06-06) Began Slice 2 implementation in the normal checkout after Slice 1 local tests and real smoke had passed.
+- [x] (2026-06-06) Designed and created the local archive schema for handles, chats, participants, messages, FTS, and sync state.
+- [x] (2026-06-06) Added first `sync`, `chats`, `messages`, and `search` command implementations.
+- [x] (2026-06-06) Added privacy-preserving fixture tests for `sync`, archive-aware `status`, `chats`, `messages`, and `search`.
+- [x] (2026-06-06) Smoked against the real local Messages database using a temporary archive under `/tmp`; source and archive aggregate counts matched, and private read commands exited successfully without printing rows.
+- [x] (2026-06-06) Ran adversarial review and resolved accepted findings: preserved `chat_message_join`, added `attributedBody` text fallback, made search snippet-only, fixed corrupt-archive status, strengthened tests, tightened smoke instructions, and kept files under 400 LOC.
 
 ## Surprises & Discoveries
 
-- Observation: iMessage email handles exist and some are missing from clawdex, but Slice 1 cannot carry them.
-  Evidence: earlier local aggregate found 17 distinct email-form iMessage handles, 13 with messages, 9 with five or more messages, and 9 missing from clawdex email index.
+- Observation: iMessage email handles exist, but Slice 1 cannot carry them.
+  Evidence: local aggregate checks found email-form iMessage handles. Counts and examples are private evidence and should not be committed to this public repo.
 
 ## Decision Log
 
@@ -46,9 +47,26 @@ This matters because contact export only solves the clawdex identity-entrypoint 
   Rationale: these are Apple Messages concepts visible in the database. They are understandable and avoid model-invented graph or ontology language.
   Date/Author: 2026-06-06 / Codex.
 
+- Decision: Keep phone fallback display names only as a v0 compatibility behavior, and revisit it before clawdex treats imported crawler names as canonical human names.
+  Rationale: when Messages has no human name, using the phone number as `display_name` keeps the current shared contact-export contract working, but it may be safer long term for crawlers to emit no name and let clawdex represent an unnamed phone-only contact.
+  Date/Author: 2026-06-06 / Josh/Codex.
+
+- Decision: Archive `chat_message_join` as `chat_messages` instead of storing one chat id on each message.
+  Rationale: Apple Messages models chat membership as a join table. Preserving it avoids lossy guesses and keeps `chats` and `messages --chat` source-native.
+  Date/Author: 2026-06-06 / Codex.
+
+- Decision: `search` returns source ids and snippets, not full message text.
+  Rationale: broad search is easier to run accidentally than `messages --chat`, so it should provide enough context to locate evidence without dumping full private message bodies.
+  Date/Author: 2026-06-06 / Codex.
+
+- Decision: Store message text from `message.text` first, with `message.attributedBody` streamtyped decode as a fallback.
+  Rationale: real Messages rows often have empty plain text and readable `attributedBody`. Without this fallback the archive would look mostly blank and search would miss ordinary iMessage bodies.
+  Date/Author: 2026-06-06 / Codex.
+
 ## Outcomes & Retrospective
 
-Not started. This plan is intentionally deferred until Slice 1 is proven.
+In progress. Slice 2 now has a reviewed, tested archive/sync/read/search implementation.
+The remaining work is final diff review, commit, and push.
 
 ## Context and Orientation
 
@@ -63,7 +81,8 @@ First add an internal archive store, probably under `internal/store`, with a sma
 - `handles`: source handle row id, handle value, service, uncanonicalized value when present.
 - `chats`: source chat row id, guid, chat identifier, service name, display name, room name, archive flags.
 - `chat_participants`: chat row id plus handle row id.
-- `messages`: source message row id, guid, handle row id, chat row id when known, date, service, from-me flag, text, attachment flag, and searchable body.
+- `chat_messages`: chat row id plus message row id, preserving Apple's source join.
+- `messages`: source message row id, guid, handle row id, date, service, from-me flag, text, attachment flag, and searchable body.
 - `sync_state`: last sync time, source database path, source database modified time, and schema version.
 
 Then add `sync`, which snapshots the live SQLite triad, reads source tables in deterministic order, and replaces or upserts the archive. Keep the first sync simple and full-replace unless real performance evidence requires incremental cursors.
@@ -84,16 +103,17 @@ From the repository root, after Slice 1 passes:
     go test ./...
     imsgcrawl sync
     imsgcrawl --json status
-    imsgcrawl --json chats --limit 20
-    imsgcrawl --json search test --limit 20
+    imsgcrawl --json chats --limit 1 >/dev/null
+    imsgcrawl --json messages --chat <chat-id> --limit 1 >/dev/null
+    imsgcrawl --json search --limit 1 <query> >/dev/null
 
-The real local smoke may print private message snippets. If the user asks for raw output in chat, show it there. Do not commit or publish that output.
+The real local read/search smoke can print private chat titles, message text, or snippets. Send those outputs to `/dev/null` or a private temporary file unless Josh explicitly asks for raw local output in chat. Do not commit or publish that output.
 
 ## Validation and Acceptance
 
 Acceptance requires fixture-backed tests for sync, chats, messages, and search; a real local smoke against a Messages snapshot; status output that distinguishes live source DB readability from archive freshness; and command output that does not leak private data in public docs.
 
-Search must prove that a query returns a source message row with a stable chat id and source id. `messages --chat` must prove that a selected chat can be read without touching the live database after sync.
+Search must prove that a query returns a source message row with a stable source id, optional chat id, and snippet without returning full text. `messages --chat` must prove that a selected chat can be read without touching the live database after sync.
 
 ## Idempotence and Recovery
 

@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/openclaw/imsgcrawl/internal/archive"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
 
@@ -37,11 +38,12 @@ func ExitCode(err error) int {
 }
 
 type runtime struct {
-	ctx    context.Context
-	stdout io.Writer
-	stderr io.Writer
-	json   bool
-	dbPath string
+	ctx         context.Context
+	stdout      io.Writer
+	stderr      io.Writer
+	json        bool
+	dbPath      string
+	archivePath string
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -53,6 +55,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	global := flag.NewFlagSet("imsgcrawl", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
 	dbPath := global.String("db", messages.DefaultChatDBPath(), "")
+	archivePath := global.String("archive", archive.DefaultPath(), "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		return usageErr(err)
@@ -70,7 +73,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath}
+	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath, archivePath: *archivePath}
 	return r.dispatch(rest)
 }
 
@@ -91,29 +94,21 @@ func (r *runtime) dispatch(args []string) error {
 	switch args[0] {
 	case "metadata":
 		return r.print(controlManifest())
+	case "sync":
+		return r.runSync(args[1:])
 	case "status":
 		return r.runStatus(args[1:])
+	case "chats":
+		return r.runChats(args[1:])
+	case "messages":
+		return r.runMessages(args[1:])
+	case "search":
+		return r.runSearch(args[1:])
 	case "contacts":
 		return r.runContacts(args[1:])
 	default:
 		return usageErr(fmt.Errorf("unknown command %q", args[0]))
 	}
-}
-
-func (r *runtime) runStatus(args []string) error {
-	fs := flag.NewFlagSet("imsgcrawl status", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
-	if fs.NArg() != 0 {
-		return usageErr(errors.New("status takes no arguments"))
-	}
-	status, err := messages.Status(r.ctx, r.dbPath)
-	if err != nil {
-		return err
-	}
-	return r.print(status)
 }
 
 func (r *runtime) runContacts(args []string) error {
@@ -155,10 +150,28 @@ func (r *runtime) print(v any) error {
 		return enc.Encode(v)
 	}
 	switch value := v.(type) {
-	case messages.StatusReport:
-		_, err := fmt.Fprintf(r.stdout, "db_path: %s\nstate: %s\nhandles: %d\nchats: %d\nmessages: %d\nphone_handles: %d\nemail_handles: %d\nother_handles: %d\n",
-			value.DatabasePath, value.State, value.Handles, value.Chats, value.Messages, value.PhoneHandles, value.EmailHandles, value.OtherHandles)
-		return err
+	case statusOutput:
+		if value.Source != nil {
+			if _, err := fmt.Fprintf(r.stdout, "source_db_path: %s\nsource_handles: %d\nsource_chats: %d\nsource_messages: %d\n", value.Source.DatabasePath, value.Source.Handles, value.Source.Chats, value.Source.Messages); err != nil {
+				return err
+			}
+		}
+		if value.Archive != nil {
+			if _, err := fmt.Fprintf(r.stdout, "archive_path: %s\narchive_handles: %d\narchive_chats: %d\narchive_messages: %d\n", value.Archive.ArchivePath, value.Archive.Handles, value.Archive.Chats, value.Archive.Messages); err != nil {
+				return err
+			}
+		}
+		for _, warning := range value.Warnings {
+			if _, err := fmt.Fprintf(r.stdout, "warning: %s\n", warning); err != nil {
+				return err
+			}
+		}
+		for _, msg := range value.Errors {
+			if _, err := fmt.Fprintf(r.stdout, "error: %s\n", msg); err != nil {
+				return err
+			}
+		}
+		return nil
 	case contactExport:
 		for _, contact := range value.Contacts {
 			_, err := fmt.Fprintf(r.stdout, "%s\t%s\n", contact.DisplayName, strings.Join(contact.PhoneNumbers, ","))
@@ -177,7 +190,11 @@ func printUsage(w io.Writer) {
 
 Usage:
   imsgcrawl [--json] [--db PATH] metadata
-  imsgcrawl [--json] [--db PATH] status
+  imsgcrawl [--json] [--db PATH] [--archive PATH] sync
+  imsgcrawl [--json] [--db PATH] [--archive PATH] status
+  imsgcrawl [--json] [--archive PATH] chats [--limit N]
+  imsgcrawl [--json] [--archive PATH] messages --chat ID [--limit N] [--asc]
+  imsgcrawl [--json] [--archive PATH] search [--limit N] QUERY
   imsgcrawl [--json] [--db PATH] contacts export
   imsgcrawl --version
 `)

@@ -52,8 +52,8 @@ The design is intentionally small. The crawler owns the Messages SQLite read and
   Rationale: clawdex, telecrawl, and wacrawl currently share a v0 contract with only `display_name` and `phone_numbers`. iMessage has real email handles, but expanding the contract belongs in a later coordinated change.
   Date/Author: 2026-06-06 / Codex.
 
-- Decision: Use phone fallback display names.
-  Rationale: named-only export would mostly re-export Apple Contacts and miss the point of surfacing iMessage-only contacts. Phone fallback is honest: it creates a reviewable clawdex person with the only identifier the source can prove.
+- Decision: Use phone fallback display names only for the v0 contact-export contract, and revisit this before clawdex treats crawler names as canonical human names.
+  Rationale: named-only export would mostly re-export Apple Contacts and miss the point of surfacing iMessage-only contacts, but a phone number is not a human name. The safer later shape may be an unnamed phone-only contact, once the shared contract and clawdex importer can represent that.
   Date/Author: 2026-06-06 / Codex.
 
 - Decision: Deduplicate by clawdex-style normalized phone digits and choose the most recent Messages handle row.
@@ -136,3 +136,5 @@ Revision note: Updated after `go mod tidy`, `go test ./...`, real `metadata` and
 Revision note: Removed an exact local checkout path from the plan so the public repo does not contain a private machine-specific path.
 
 Revision note: Updated after review tightened phone-handle filtering to allow short codes while rejecting opaque alphanumeric handles; reran `go test ./...`, `go vet ./...`, real `status`, and real contact-export aggregate smoke.
+
+Revision note: Updated after Josh flagged phone-number display names as risky for clawdex canonical naming; v0 keeps compatibility, but the design debt is explicit.
