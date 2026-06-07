@@ -16,6 +16,7 @@ func TestPersonRoundTrip(t *testing.T) {
 	now := time.Date(2026, 5, 8, 9, 15, 0, 0, time.UTC)
 	p := NewPerson("Ada Lovelace", now)
 	p.Tags = []string{"math"}
+	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada Lovelace"}, Phones: []string{"15550100"}}}
 	p.Body = "# Ada Lovelace\n\nNotes."
 	if err := WritePerson(path, p); err != nil {
 		t.Fatal(err)
@@ -29,6 +30,9 @@ func TestPersonRoundTrip(t *testing.T) {
 	}
 	if got.ID != p.ID || got.Name != p.Name || strings.TrimSpace(got.Body) != strings.TrimSpace(p.Body) {
 		t.Fatalf("roundtrip mismatch: %#v", got)
+	}
+	if got.Sources["telecrawl"].Phones[0] != "15550100" {
+		t.Fatalf("sources = %#v", got.Sources)
 	}
 }
 
@@ -152,6 +156,7 @@ func TestWritePersonOmitsEmptyStructsButKeepsNonEmpty(t *testing.T) {
 	path := filepath.Join(dir, "person.md")
 	p := NewPerson("Ada", time.Now())
 	p.Accounts = map[string][]string{"github": {"ada"}}
+	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada"}, Phones: []string{"123"}}}
 	p.Avatar.Path = "avatars/avatar.png"
 	p.Avatar.Source = "manual"
 	p.Google.Resource = "people/c1"
@@ -163,7 +168,7 @@ func TestWritePersonOmitsEmptyStructsButKeepsNonEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	if !strings.Contains(text, "accounts:") || !strings.Contains(text, "avatar:") || !strings.Contains(text, "google:") || strings.Contains(text, "apple:") {
+	if !strings.Contains(text, "accounts:") || !strings.Contains(text, "sources:") || !strings.Contains(text, "avatar:") || !strings.Contains(text, "google:") || strings.Contains(text, "apple:") {
 		t.Fatalf("frontmatter = %s", text)
 	}
 }

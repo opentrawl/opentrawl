@@ -26,6 +26,12 @@ type AvatarRef struct {
 	UpdatedAt time.Time `json:"updated_at,omitzero" yaml:"updated_at,omitempty"`
 }
 
+type PersonSource struct {
+	Names  []string `json:"names,omitempty" yaml:"names,omitempty"`
+	Emails []string `json:"emails,omitempty" yaml:"emails,omitempty"`
+	Phones []string `json:"phones,omitempty" yaml:"phones,omitempty"`
+}
+
 type Person struct {
 	ID        string                    `json:"id" yaml:"id"`
 	Name      string                    `json:"name" yaml:"name"`
@@ -35,6 +41,7 @@ type Person struct {
 	Phones    []ContactValue            `json:"phones,omitempty" yaml:"phones,omitempty"`
 	Avatar    AvatarRef                 `json:"avatar,omitzero" yaml:"avatar,omitempty"`
 	Accounts  map[string][]string       `json:"accounts,omitempty" yaml:"accounts,omitempty"`
+	Sources   map[string]PersonSource   `json:"sources,omitempty" yaml:"sources,omitempty"`
 	Apple     ExternalRef               `json:"apple,omitzero" yaml:"apple,omitempty"`
 	Google    ExternalRef               `json:"google,omitzero" yaml:"google,omitempty"`
 	CreatedAt time.Time                 `json:"created_at" yaml:"created_at"`

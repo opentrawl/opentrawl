@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package openclaw.clawdex.contactexport.v0;
+
+message ContactExport {
+  repeated Contact contacts = 1;
+}
+
+message Contact {
+  string display_name = 1;
+  repeated string phone_numbers = 2;
+}
