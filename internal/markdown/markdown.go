@@ -212,18 +212,19 @@ func inferNote(n *model.Note, path string) {
 }
 
 type personFront struct {
-	ID        string               `yaml:"id"`
-	Name      string               `yaml:"name"`
-	SortName  string               `yaml:"sort_name,omitempty"`
-	Tags      []string             `yaml:"tags,omitempty"`
-	Emails    []model.ContactValue `yaml:"emails,omitempty"`
-	Phones    []model.ContactValue `yaml:"phones,omitempty"`
-	Avatar    *model.AvatarRef     `yaml:"avatar,omitempty"`
-	Accounts  map[string][]string  `yaml:"accounts,omitempty"`
-	Apple     *model.ExternalRef   `yaml:"apple,omitempty"`
-	Google    *model.ExternalRef   `yaml:"google,omitempty"`
-	CreatedAt time.Time            `yaml:"created_at"`
-	UpdatedAt time.Time            `yaml:"updated_at"`
+	ID        string                        `yaml:"id"`
+	Name      string                        `yaml:"name"`
+	SortName  string                        `yaml:"sort_name,omitempty"`
+	Tags      []string                      `yaml:"tags,omitempty"`
+	Emails    []model.ContactValue          `yaml:"emails,omitempty"`
+	Phones    []model.ContactValue          `yaml:"phones,omitempty"`
+	Avatar    *model.AvatarRef              `yaml:"avatar,omitempty"`
+	Accounts  map[string][]string           `yaml:"accounts,omitempty"`
+	Sources   map[string]model.PersonSource `yaml:"sources,omitempty"`
+	Apple     *model.ExternalRef            `yaml:"apple,omitempty"`
+	Google    *model.ExternalRef            `yaml:"google,omitempty"`
+	CreatedAt time.Time                     `yaml:"created_at"`
+	UpdatedAt time.Time                     `yaml:"updated_at"`
 }
 
 func personFrontmatter(p model.Person) personFront {
@@ -236,6 +237,7 @@ func personFrontmatter(p model.Person) personFront {
 		Phones:    p.Phones,
 		Avatar:    nonEmptyAvatar(p.Avatar),
 		Accounts:  nonEmptyAccounts(p.Accounts),
+		Sources:   nonEmptySources(p.Sources),
 		Apple:     nonEmptyExternal(p.Apple),
 		Google:    nonEmptyExternal(p.Google),
 		CreatedAt: p.CreatedAt,
@@ -296,6 +298,13 @@ func nonEmptyAccounts(accounts map[string][]string) map[string][]string {
 		return nil
 	}
 	return accounts
+}
+
+func nonEmptySources(sources map[string]model.PersonSource) map[string]model.PersonSource {
+	if len(sources) == 0 {
+		return nil
+	}
+	return sources
 }
 
 func nonZeroTime(t time.Time) *time.Time {
