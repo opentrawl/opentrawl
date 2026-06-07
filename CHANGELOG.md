@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.6] - Unreleased
+## [0.2.6] - 2026-06-07
 
 ### Added
 
@@ -8,7 +8,8 @@
 
 ### Changed
 
-- Update `crawlkit` to v0.7.0.
+- Move source, install, and release automation references to `openclaw/wacrawl` and `openclaw/tap`.
+- Update Go to 1.26.4 and refresh Go dependencies, including `crawlkit` to v0.11.0 and `modernc.org/sqlite` to v1.52.0.
 
 ### Fixed
 
@@ -28,9 +29,7 @@
 
 ### Fixed
 
-- Update the baked-in CLI version fallback so binaries installed with
-  `go install github.com/steipete/wacrawl/cmd/wacrawl@v0.2.4` report the
-  released version.
+- Update the baked-in CLI version fallback so binaries installed with `go install` report the released version.
 
 ## [0.2.3] - 2026-05-08
 

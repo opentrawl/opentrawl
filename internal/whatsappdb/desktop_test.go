@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
 

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"filippo.io/age"
-	"github.com/steipete/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/store"
 )
 
 func TestEncryptedBackupPushPull(t *testing.T) {

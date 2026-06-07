@@ -8,8 +8,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/steipete/wacrawl/internal/backup"
-	"github.com/steipete/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/backup"
+	"github.com/openclaw/wacrawl/internal/store"
 )
 
 func (a *app) runBackup(ctx context.Context, args []string) error {

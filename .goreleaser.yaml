@@ -12,7 +12,7 @@ builds:
     env:
       - CGO_ENABLED=0
     ldflags:
-      - -s -w -X github.com/steipete/wacrawl/internal/cli.version={{ .Version }}
+      - -s -w -X github.com/openclaw/wacrawl/internal/cli.version={{ .Version }}
     targets:
       - darwin_amd64
       - darwin_arm64
