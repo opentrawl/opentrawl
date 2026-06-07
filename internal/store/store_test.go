@@ -97,6 +97,13 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	contactsOut, err := st.Contacts(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contactsOut) != 1 || contactsOut[0].JID != "alice@s.whatsapp.net" {
+		t.Fatalf("unexpected contacts: %+v", contactsOut)
+	}
 	if err := exported.Validate(); err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +112,9 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	}
 	if stats := exported.ImportStats("backup", st.Path(), now); stats.Messages != 2 || stats.MediaMessages != 1 || stats.SourcePath != "backup" {
 		t.Fatalf("unexpected export stats: %+v", stats)
+	}
+	if stats := exported.ImportStats("backup", st.Path(), time.Time{}); stats.FinishedAt.IsZero() || stats.StartedAt.IsZero() {
+		t.Fatalf("zero finished time was not defaulted: %+v", stats)
 	}
 	restored, err := Open(ctx, filepath.Join(t.TempDir(), "restored.db"))
 	if err != nil {
