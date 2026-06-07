@@ -219,6 +219,18 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "flags only") {
 		t.Fatalf("expected status args error, got %v", err)
 	}
+	err = Run(context.Background(), []string{"contacts"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "contacts supports export only") {
+		t.Fatalf("expected contacts command error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"contacts", "import"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "contacts supports export only") {
+		t.Fatalf("expected contacts subcommand error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"contacts", "export", "extra"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "contacts export takes no arguments") {
+		t.Fatalf("expected contacts export args error, got %v", err)
+	}
 }
 
 func TestRunHelpMenus(t *testing.T) {
@@ -235,6 +247,8 @@ func TestRunHelpMenus(t *testing.T) {
 		{"doctor flag", []string{"doctor", "--help"}, "wacrawl doctor [--source PATH]"},
 		{"status flag", []string{"status", "--help"}, "unread counts"},
 		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N] [--unread]"},
+		{"contacts topic", []string{"help", "contacts"}, "wacrawl [--json] [--sync auto|always|never] contacts export"},
+		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] [--sync auto|always|never] contacts export"},
 		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
 		{"search flag", []string{"search", "--help"}, "wacrawl search [flags] <query>"},
