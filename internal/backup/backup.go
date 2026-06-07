@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/store"
 )
 
 const formatVersion = 1

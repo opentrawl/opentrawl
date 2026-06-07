@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/steipete/wacrawl/internal/cli"
+	"github.com/openclaw/wacrawl/internal/cli"
 )
 
 func main() {

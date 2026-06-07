@@ -16,23 +16,23 @@ WhatsApp Web, or write back into WhatsApp's app container.
 
 ## Install
 
-Homebrew is the easiest path. Install directly from my tap:
+Homebrew is the easiest path. Install directly from the OpenClaw tap:
 
 ```bash
-brew install steipete/tap/wacrawl
+brew install openclaw/tap/wacrawl
 ```
 
 After that, upgrades stay simple:
 
 ```bash
 brew update
-brew upgrade steipete/tap/wacrawl
+brew upgrade openclaw/tap/wacrawl
 ```
 
 Or from source:
 
 ```bash
-go install github.com/steipete/wacrawl/cmd/wacrawl@latest
+go install github.com/openclaw/wacrawl/cmd/wacrawl@latest
 ```
 
 Check the installed binary:
@@ -530,7 +530,7 @@ Useful flags:
 On a new Mac:
 
 ```bash
-brew install steipete/tap/wacrawl
+brew install openclaw/tap/wacrawl
 git clone https://github.com/steipete/backup-wacrawl.git ~/Projects/backup-wacrawl
 mkdir -p ~/.wacrawl
 ```
@@ -647,7 +647,7 @@ windows/arm64
 The Homebrew formula lives in:
 
 ```text
-~/Projects/homebrew-tap/Formula/wacrawl.rb
+~/Projects/openclaw-homebrew-tap/Formula/wacrawl.rb
 ```
 
 ## License

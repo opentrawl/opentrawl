@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store"
-	"github.com/steipete/wacrawl/internal/whatsappdb"
+	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/whatsappdb"
 )
 
 type archiveSyncMode string

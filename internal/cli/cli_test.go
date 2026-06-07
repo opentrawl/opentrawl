@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store"
-	"github.com/steipete/wacrawl/internal/whatsappdb"
+	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/whatsappdb"
 	_ "modernc.org/sqlite"
 )
 

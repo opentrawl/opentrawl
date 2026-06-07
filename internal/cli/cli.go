@@ -14,9 +14,9 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/steipete/wacrawl/internal/backup"
-	"github.com/steipete/wacrawl/internal/store"
-	"github.com/steipete/wacrawl/internal/whatsappdb"
+	"github.com/openclaw/wacrawl/internal/backup"
+	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/openclaw/wacrawl/internal/whatsappdb"
 )
 
 type cliError struct {

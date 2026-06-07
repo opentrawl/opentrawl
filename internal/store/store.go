@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store/storedb"
+	"github.com/openclaw/wacrawl/internal/store/storedb"
 	_ "modernc.org/sqlite"
 )
 

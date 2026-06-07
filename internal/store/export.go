@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/steipete/wacrawl/internal/store/storedb"
+	"github.com/openclaw/wacrawl/internal/store/storedb"
 )
 
 type SnapshotData struct {
