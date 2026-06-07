@@ -29,3 +29,19 @@ func TestRenderTextTableDoesNotPadFinalColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchColumnsWrapContextWithoutEllipsis(t *testing.T) {
+	var out bytes.Buffer
+	err := renderTextTable(&out, searchTextColumns(88), [][]string{{
+		"2026-06-07 09:10",
+		"person2@example.com",
+		"group with person2@example.com, person1@example.com",
+		"And banana",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out.String(), "...") {
+		t.Fatalf("search table truncated context:\n%s", out.String())
+	}
+}
