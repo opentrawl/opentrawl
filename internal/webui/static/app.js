@@ -37,6 +37,7 @@
     chats: [],
     selectedChat: "",
     searching: false,
+    viewRequest: 0,
   };
 
   async function api(path) {
@@ -231,6 +232,7 @@
   }
 
   async function selectChat(chat) {
+    const request = ++state.viewRequest;
     state.searching = false;
     state.selectedChat = chat.jid;
     elements.clearSearch.hidden = true;
@@ -242,16 +244,21 @@
     elements.messagePanel.setAttribute("aria-busy", "true");
     try {
       const messages = await api(`/api/messages?chat=${encodeURIComponent(chat.jid)}&limit=150`);
+      if (request !== state.viewRequest) return;
       renderMessages(messages);
     } catch (error) {
+      if (request !== state.viewRequest) return;
       showToast(error.message);
       renderMessages([]);
     } finally {
-      elements.messagePanel.setAttribute("aria-busy", "false");
+      if (request === state.viewRequest) {
+        elements.messagePanel.setAttribute("aria-busy", "false");
+      }
     }
   }
 
   async function runSearch(query) {
+    const request = ++state.viewRequest;
     state.searching = true;
     elements.clearSearch.hidden = false;
     elements.panelKicker.textContent = "FULL-TEXT SEARCH";
@@ -262,36 +269,52 @@
     elements.messagePanel.setAttribute("aria-busy", "true");
     try {
       const messages = await api(`/api/search?q=${encodeURIComponent(query)}&limit=150`);
+      if (request !== state.viewRequest) return;
       elements.panelSubtitle.textContent = `${formatCount(messages.length)} matches across the local archive.`;
       renderMessages(messages, true);
     } catch (error) {
+      if (request !== state.viewRequest) return;
       showToast(error.message);
       renderMessages([], true);
     } finally {
-      elements.messagePanel.setAttribute("aria-busy", "false");
+      if (request === state.viewRequest) {
+        elements.messagePanel.setAttribute("aria-busy", "false");
+      }
     }
   }
 
+  async function reloadCurrentView(chats) {
+    if (state.searching) {
+      const query = elements.searchInput.value.trim();
+      if (query) {
+        await runSearch(query);
+        return;
+      }
+    }
+    const chat = chats.find((item) => item.jid === state.selectedChat) || chats[0];
+    if (chat) await selectChat(chat);
+  }
+
   async function load() {
+    const request = ++state.viewRequest;
     elements.refresh.disabled = true;
+    elements.messagePanel.setAttribute("aria-busy", "true");
     try {
       const [status, chats] = await Promise.all([api("/api/status"), api("/api/chats?limit=200")]);
+      if (request !== state.viewRequest) return;
       renderStatus(status);
       state.chats = chats;
       renderChats(chats);
-      if (state.searching) {
-        const query = elements.searchInput.value.trim();
-        if (query) await runSearch(query);
-      } else if (state.selectedChat) {
-        const current = chats.find((chat) => chat.jid === state.selectedChat);
-        if (current) await selectChat(current);
-      } else if (chats[0]) {
-        await selectChat(chats[0]);
-      }
+      await reloadCurrentView(chats);
     } catch (error) {
+      if (request !== state.viewRequest) return;
       showToast(error.message);
+      await reloadCurrentView(state.chats);
     } finally {
       elements.refresh.disabled = false;
+      if (request === state.viewRequest) {
+        elements.messagePanel.setAttribute("aria-busy", "false");
+      }
     }
   }
 
