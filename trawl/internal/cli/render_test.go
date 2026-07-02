@@ -55,6 +55,20 @@ func TestRenderStatusTable(t *testing.T) {
 	}
 }
 
+func TestStatusHeadlineDropsZeroSinceAndYearCounts(t *testing.T) {
+	headline := statusHeadline(StatusEnvelope{Counts: []Count{
+		{ID: "messages", Label: "messages", Value: countValue(int64(0))},
+		{ID: "since", Label: "since", Value: countValue(int64(0))},
+		{ID: "oldest_year", Label: "oldest year", Value: countValue(int64(0))},
+		{ID: "senders", Label: "senders", Value: countValue(int64(2))},
+	}})
+
+	want := "0 messages · 2 senders"
+	if headline != want {
+		t.Fatalf("headline = %q, want %q", headline, want)
+	}
+}
+
 func TestRenderDoctor(t *testing.T) {
 	results := []DoctorResult{{
 		Source: "imessage",

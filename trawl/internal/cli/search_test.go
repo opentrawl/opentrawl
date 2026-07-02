@@ -158,7 +158,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				},
 			},
 			wantCode:   3,
-			wantStdout: "imessage:msg/1",
+			wantStdout: "note: 1 of 2 sources unavailable — results are partial (see stderr)",
 			wantStderr: "telegram search failed. Remedy: run: trawl doctor telegram",
 		},
 		{
@@ -190,6 +190,35 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				t.Fatalf("stderr missing %q:\n%s", tt.wantStderr, stderr)
 			}
 		})
+	}
+}
+
+func TestSearchJSONIncludesFailedSources(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+			search:   `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
+		},
+		fakeCrawler{
+			name:     "telecrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"id":"telegram","display_name":"Telegram"}`,
+			search:   `not-json`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
+	if code != 3 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false,"failed_sources":["telegram"]}` + "\n"
+	if stdout != want {
+		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	}
+	if !strings.Contains(stderr, "telegram search failed. Remedy: run: trawl doctor telegram") {
+		t.Fatalf("stderr missing failure:\n%s", stderr)
 	}
 }
 

@@ -32,7 +32,7 @@ func (c *OpenCmd) Run(r *Runtime) error {
 		_, err := r.stdout.Write(data)
 		return err
 	}
-	return renderOpenPayload(r.stdout, payload)
+	return renderOpenPayload(r.stdout, payload, c.Ref)
 }
 
 func splitOpenRef(ref string) (string, string, bool) {
