@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # Photo Card Eval Protocol
 
 This protocol evaluates whether a vision model can turn a user's own Apple
@@ -32,7 +36,7 @@ photoscrawl eval-card \
 The harness uses originals only. It first looks for a local original inside the
 Photos package. If `--allow-icloud-downloads` is set and the original is not
 local, it asks PhotoKit to download/export the original into a private cache
-under the crawlkit cache dir's `originals` subtree. Normal crawl behavior
+under the crawlkit cache dir's `originals` subtree. Normal sync behavior
 remains read-only/local-first and does not force iCloud downloads.
 
 For each asset, the harness writes a canonical full-resolution JPEG to the
@@ -48,7 +52,7 @@ Default run output is:
 <crawlkit-data-dir>/evals/<run-id>/
   images/E001.jpg
   metadata/E001.json
-  raw/E001__ollama__<model>__photo-card-v1.json
+  raw/E001__ollama__<model>__photo-card-v2.json
   manifest.jsonl
   summary.json
 ```
@@ -57,7 +61,7 @@ Nothing in that directory is commit-safe.
 
 Tracked repo artifacts are only:
 
-- prompt text in `prompts/`;
+- the current prompt text in `prompts/`;
 - protocol docs in `docs/evals/`;
 - Go harness code;
 - tests that use synthetic provider stubs and do not touch Photos.
@@ -78,5 +82,6 @@ Review outputs manually against these questions:
 - Did the card avoid tags, PR-review evidence sections, and generic usefulness
   commentary?
 
-The current baseline prompt is `prompts/photo-card-v1.md`. New prompt iterations
-should be added as separate prompt files and compared with the same image set.
+The current baseline prompt is `prompts/photo-card-v2.md`. The product tree
+ships one photo-card prompt file. Record future prompt trials, hashes, and
+scores in `docs/evals/runs.md`; only promote the winner into `prompts/`.

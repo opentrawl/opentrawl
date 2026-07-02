@@ -1,4 +1,10 @@
-# photoscrawl Photo Card Prompt v1
+---
+written_by: ai
+prompt_version: photo-card-v2
+change_rationale: "Tests one change: richer urban area context before venue claims."
+---
+
+# photoscrawl Photo Card Prompt v2
 
 Create a personal photo-library card for the supplied image.
 
@@ -35,10 +41,12 @@ generic sign into a precise place claim.
 ## Location
 
 Write a human-readable location trail when metadata or place context supports
-one, from coarse to specific: country, city/region, district/area, candidate
-venue/address/POI. If the specific place is not directly visible or otherwise
-well supported, label it as a candidate or likely area. Do not quote raw
-latitude/longitude.
+one, from coarse to specific: country, city/region, neighbourhood/district/area,
+street/complex/hub area, then candidate venue/address/POI when supported. For
+urban scenes, include useful neighbourhood, station, airport, rail-hub, street,
+or complex context before naming a venue. If the specific place is not directly
+visible or otherwise well supported, label it as nearby, candidate, or likely
+area. Do not quote raw latitude/longitude.
 
 ## OCR and machine-readable text
 
