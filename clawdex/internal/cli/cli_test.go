@@ -397,7 +397,7 @@ func TestExecuteImportContactsFromCrawler(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", "telecrawl"}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "create\tAda Source") {
+	if !strings.Contains(out.String(), "stage\tAda Source") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -414,12 +414,75 @@ func TestExecuteImportContactsFromCrawlerPath(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "create\tAda Path") {
+	if !strings.Contains(out.String(), "stage\tAda Path") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
 
-func TestExecuteImportContactsNoopJSONIsEmptyArray(t *testing.T) {
+func TestExecuteImportContactsFromAll(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	telecrawl := writeFakeContactCrawler(t, "telecrawl", `{"contacts":[{"display_name":"Telegram Source","phone_numbers":["+1 555 0100"]}]}`)
+	wacrawl := writeFakeContactCrawler(t, "wacrawl", `{"contacts":[{"display_name":"WhatsApp Source","phone_numbers":["+1 555 0101"]}]}`)
+	t.Setenv("PATH", filepath.Dir(telecrawl)+string(os.PathListSeparator)+filepath.Dir(wacrawl)+string(os.PathListSeparator)+"/bin"+string(os.PathListSeparator)+"/usr/bin")
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from-all"}, &out, &errOut); err != nil {
+		t.Fatalf("import contacts --from-all: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "stage\tTelegram Source") || !strings.Contains(out.String(), "stage\tWhatsApp Source") {
+		t.Fatalf("from-all output = %s", out.String())
+	}
+}
+
+func TestExecuteImportContactsFromAllReportsSuccessesAndFailures(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	writeFakeContactCrawlerScript(t, dir, "telecrawl", fakeContactCrawlerManifest("telecrawl"), "echo telecrawl failed >&2\nexit 9\n")
+	writeFakeContactCrawlerScript(t, dir, "wacrawl", fakeContactCrawlerManifest("wacrawl"), "cat <<'JSON'\n{\"contacts\":[{\"display_name\":\"WhatsApp Source\",\"phone_numbers\":[\"+1 555 0101\"]}]}\nJSON\n")
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+"/bin"+string(os.PathListSeparator)+"/usr/bin")
+	out.Reset()
+	errOut.Reset()
+	err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from-all"}, &out, &errOut)
+	if err == nil {
+		t.Fatal("expected from-all aggregate error")
+	}
+	if !strings.Contains(err.Error(), "1 crawler import failed") {
+		t.Fatalf("error = %v", err)
+	}
+	if !strings.Contains(out.String(), "stage\tWhatsApp Source") {
+		t.Fatalf("from-all stdout = %s", out.String())
+	}
+	if !strings.Contains(errOut.String(), "telecrawl failed") {
+		t.Fatalf("from-all stderr = %s", errOut.String())
+	}
+}
+
+func TestExecuteImportContactsReportsSkippedIdentifierlessContacts(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	fake := writeFakeContactCrawler(t, "telecrawl", `{"contacts":[{"display_name":"Ada Source","phone_numbers":["+1 555 0100"]},{"display_name":"No IDs"}]}`)
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
+		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "stage\tAda Source") || !strings.Contains(out.String(), "skipped 1 contacts without identifiers") {
+		t.Fatalf("import contacts out = %s", out.String())
+	}
+}
+
+func TestExecuteImportContactsNoopJSONHasEmptyChanges(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
@@ -436,12 +499,12 @@ func TestExecuteImportContactsNoopJSONIsEmptyArray(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--json", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("second import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	var changes []model.ImportChange
-	if err := json.Unmarshal(out.Bytes(), &changes); err != nil {
-		t.Fatalf("noop import output is not an array: %s", out.String())
+	var result importContactsResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatalf("noop import output is not an import result: %s", out.String())
 	}
-	if len(changes) != 0 {
-		t.Fatalf("noop import changes = %#v", changes)
+	if len(result.Changes) != 0 {
+		t.Fatalf("noop import changes = %#v", result.Changes)
 	}
 }
 
@@ -453,13 +516,13 @@ func TestExecuteImportContactsDoesNotShellExpandManifestArgv(t *testing.T) {
 	}
 	dir := t.TempDir()
 	fake := filepath.Join(dir, "telecrawl")
-	manifest := `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Fake Crawler","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export;echo shell-expanded"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
+	manifest := `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Fake Crawler","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export","--json",";echo shell-expanded"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
 	script := "#!/bin/sh\n" +
 		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"metadata\" ]; then\n" +
 		"cat <<'JSON'\n" + manifest + "\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +
-		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"contacts\" ] && [ \"$3\" = \"export;echo shell-expanded\" ]; then\n" +
+		"if [ \"$1\" = \"contacts\" ] && [ \"$2\" = \"export\" ] && [ \"$3\" = \"--json\" ]; then\n" +
 		"cat <<'JSON'\n{\"contacts\":[{\"display_name\":\"Ada Argv\",\"phone_numbers\":[\"123\"]}]}\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +
@@ -472,7 +535,7 @@ func TestExecuteImportContactsDoesNotShellExpandManifestArgv(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "create\tAda Argv") {
+	if !strings.Contains(out.String(), "stage\tAda Argv") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -548,17 +611,20 @@ func TestExecuteImportContactsRejectsBadPayload(t *testing.T) {
 	}
 }
 
-func TestExecuteImportContactsRejectsDifferentManifestBinary(t *testing.T) {
+func TestExecuteImportContactsAcceptsContactsExportCommandKey(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["othercrawl","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[]}`)
+	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contacts_export":{"argv":["telecrawl","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[{"display_name":"Ada Contacts","phone_numbers":["123"]}]}`)
 	out.Reset()
 	errOut.Reset()
-	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err == nil {
-		t.Fatal("expected mismatched manifest binary error")
+	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
+		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "stage\tAda Contacts") {
+		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
 
@@ -594,27 +660,15 @@ func TestReadCrawlerContactsReportsExportFailure(t *testing.T) {
 	if err := os.WriteFile(fake, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := readCrawlerContacts(t.Context(), fake); err == nil {
+	if _, _, _, err := readCrawlerContacts(t.Context(), fake); err == nil {
 		t.Fatal("expected export command error")
 	}
 }
 
 func TestContactExportArgv(t *testing.T) {
-	got, err := contactExportArgv("/tmp/telecrawl", []string{"telecrawl", "--json", "contacts", "export"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got[0] != "/tmp/telecrawl" || got[1] != "--json" {
+	got := contactExportArgv("/tmp/telecrawl")
+	if !reflect.DeepEqual(got, []string{"/tmp/telecrawl", "contacts", "export", "--json"}) {
 		t.Fatalf("argv = %#v", got)
-	}
-	if _, err := contactExportArgv("telecrawl", nil); err == nil {
-		t.Fatal("expected empty argv error")
-	}
-	if _, err := contactExportArgv("telecrawl", []string{"othercrawl"}); err == nil {
-		t.Fatal("expected mismatched argv error")
-	}
-	if _, err := contactExportArgv("telecrawl", []string{"telecrawl", "contacts", "export"}); err == nil {
-		t.Fatal("expected missing json flag error")
 	}
 }
 
@@ -622,12 +676,15 @@ func TestSourceContactsFromExportMapsPhones(t *testing.T) {
 	contacts := sourceContactsFromExport("telecrawl", contactexport.ContactExport{Contacts: []contactexport.Contact{{
 		DisplayName:  "Ada",
 		PhoneNumbers: []string{"123", "456"},
+		Emails:       []string{"ada@example.com"},
+		Accounts:     map[string][]string{"telegram": {"ada"}},
+		Handles:      map[string][]string{"github": {"ada-gh"}},
 	}}})
 	if len(contacts) != 1 {
 		t.Fatalf("contacts = %#v", contacts)
 	}
 	got := contacts[0]
-	if got.Source != "telecrawl" || got.Name != "Ada" || len(got.Phones) != 2 {
+	if got.Source != "telecrawl" || got.Name != "Ada" || len(got.Phones) != 2 || len(got.Emails) != 1 {
 		t.Fatalf("mapped contact = %#v", got)
 	}
 	if !got.Phones[0].Primary || got.Phones[1].Primary {
@@ -635,6 +692,9 @@ func TestSourceContactsFromExportMapsPhones(t *testing.T) {
 	}
 	if got.Phones[1].Value != "456" || got.Phones[1].Source != "telecrawl" {
 		t.Fatalf("second phone = %#v", got.Phones[1])
+	}
+	if got.Accounts["telegram"][0] != "ada" || got.Accounts["github"][0] != "ada-gh" {
+		t.Fatalf("accounts = %#v", got.Accounts)
 	}
 }
 
@@ -1026,28 +1086,37 @@ func writeFakeSQLite(t *testing.T, output string) string {
 
 func writeFakeContactCrawler(t *testing.T, name, contacts string) string {
 	t.Helper()
-	manifest := `{"schema_version":"crawlkit.control.v1","id":"` + name + `","display_name":"Fake Crawler","binary":{"name":"` + name + `"},"commands":{"contact-export":{"argv":["` + name + `","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
-	return writeFakeContactCrawlerManifest(t, name, manifest, contacts)
+	return writeFakeContactCrawlerManifest(t, name, fakeContactCrawlerManifest(name), contacts)
+}
+
+func fakeContactCrawlerManifest(name string) string {
+	return `{"schema_version":"crawlkit.control.v1","id":"` + name + `","display_name":"Fake Crawler","binary":{"name":"` + name + `"},"commands":{"contact-export":{"argv":["` + name + `","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
 }
 
 func writeFakeContactCrawlerManifest(t *testing.T, name, manifest, contacts string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, name)
+	writeFakeContactCrawlerScript(t, dir, name, manifest, "cat <<'JSON'\n"+contacts+"\nJSON\n")
+	return path
+}
+
+func writeFakeContactCrawlerScript(t *testing.T, dir, name, manifest, exportScript string) {
+	t.Helper()
+	path := filepath.Join(dir, name)
 	script := "#!/bin/sh\n" +
 		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"metadata\" ]; then\n" +
 		"cat <<'JSON'\n" + manifest + "\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +
-		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"contacts\" ] && [ \"$3\" = \"export\" ]; then\n" +
-		"cat <<'JSON'\n" + contacts + "\nJSON\n" +
-		"exit 0\n" +
+		"if [ \"$1\" = \"contacts\" ] && [ \"$2\" = \"export\" ] && [ \"$3\" = \"--json\" ]; then\n" +
+		exportScript +
+		"exit $?\n" +
 		"fi\n" +
 		"echo unexpected args: \"$@\" >&2\nexit 2\n"
 	if err := os.WriteFile(path, []byte(script), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	return path
 }
 
 func runShell(t *testing.T, dir string, name string, args ...string) {

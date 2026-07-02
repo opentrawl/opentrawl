@@ -13,9 +13,11 @@ import (
 )
 
 type importOptions struct {
-	DryRun       bool
-	MatchNames   bool
-	TrackSources bool
+	DryRun         bool
+	MatchNames     bool
+	TrackSources   bool
+	StageUnmatched bool
+	UseIndexMatch  bool
 }
 
 func (s Store) ImportContacts(source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
@@ -23,7 +25,7 @@ func (s Store) ImportContacts(source string, contacts []model.SourceContact, dry
 }
 
 func (s Store) ImportCrawlerContacts(source string, contacts []model.SourceContact, dryRun bool, now time.Time) ([]model.ImportChange, error) {
-	return s.importContacts(source, contacts, importOptions{DryRun: dryRun, TrackSources: true}, now)
+	return s.importContacts(source, contacts, importOptions{DryRun: dryRun, TrackSources: true, StageUnmatched: true, UseIndexMatch: true}, now)
 }
 
 func (s Store) importContacts(source string, contacts []model.SourceContact, opts importOptions, now time.Time) ([]model.ImportChange, error) {
@@ -31,21 +33,38 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 	if err != nil {
 		return nil, err
 	}
+	var identifiers map[identifierKey][]string
+	if opts.UseIndexMatch {
+		identifiers, err = s.indexedIdentifiers()
+		if err != nil {
+			return nil, err
+		}
+	}
 	changes := make([]model.ImportChange, 0)
+	var unmatched []model.SourceContact
 	for _, contact := range contacts {
 		contact.Source = source
 		if strings.TrimSpace(contact.Name) == "" {
 			continue
 		}
-		idx := matchContact(people, contact, opts.MatchNames)
+		idx := -1
+		if opts.UseIndexMatch {
+			idx = matchContactByIndexedIdentifier(people, identifiers, contact)
+		} else {
+			idx = matchContact(people, contact, opts.MatchNames)
+		}
 		if idx < 0 {
+			if opts.StageUnmatched {
+				unmatched = append(unmatched, contact)
+				continue
+			}
 			p := markdown.NewPerson(contact.Name, now)
 			p.Tags = cleanList(contact.Tags)
 			p.Emails = sourceValues(contact.Emails, source, model.NormalizeEmail)
 			p.Phones = sourceValues(contact.Phones, source, model.NormalizePhone)
 			p.Accounts = cleanAccounts(contact.Accounts)
 			if opts.TrackSources {
-				p.Sources = mergePersonSources(p.Sources, source, contact)
+				p.Sources = mergePersonSources(p.Sources, source, contact, now)
 			}
 			setExternal(&p, source, contact, now)
 			change := model.ImportChange{Action: "create", PersonID: p.ID, Name: p.Name, Source: contact}
@@ -92,9 +111,9 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		p.Tags = appendMissingStrings(p.Tags, contact.Tags)
 		p.Emails = appendMissingValues(p.Emails, matchedContact.Emails, source, model.NormalizeEmail)
 		p.Phones = appendMissingValues(p.Phones, matchedContact.Phones, source, model.NormalizePhone)
-		p.Accounts = mergeAccounts(p.Accounts, contact.Accounts)
+		p.Accounts = mergeAccounts(p.Accounts, matchedContact.Accounts)
 		if opts.TrackSources {
-			p.Sources = mergePersonSources(p.Sources, source, matchedContact)
+			p.Sources = mergePersonSources(p.Sources, source, matchedContact, now)
 		}
 		setExternal(&p, source, contact, now)
 		avatarChanged := avatarWouldChange(beforeAvatar, contact.Avatar, source)
@@ -122,6 +141,13 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		people[idx] = p
 		changes = append(changes, change)
 	}
+	if len(unmatched) > 0 {
+		staged, err := s.stageUnmatchedContacts(unmatched, opts.DryRun)
+		if err != nil {
+			return nil, err
+		}
+		changes = append(changes, staged...)
+	}
 	if !opts.DryRun {
 		return changes, s.Rebuild()
 	}
@@ -131,6 +157,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 func contactForPerson(people []model.Person, idx int, contact model.SourceContact) model.SourceContact {
 	contact.Emails = contactValuesForPerson(people, idx, contact.Emails, model.NormalizeEmail, personHasEmail)
 	contact.Phones = contactValuesForPerson(people, idx, contact.Phones, model.NormalizePhone, personHasPhone)
+	contact.Accounts = contactAccountsForPerson(people, idx, contact.Accounts)
 	return contact
 }
 
@@ -150,6 +177,43 @@ func valueOwnedByOtherPerson(people []model.Person, idx int, key string, has fun
 	for i, person := range people {
 		if i != idx && has(person, key) {
 			return true
+		}
+	}
+	return false
+}
+
+func contactAccountsForPerson(people []model.Person, idx int, accounts map[string][]string) map[string][]string {
+	if len(accounts) == 0 {
+		return nil
+	}
+	out := map[string][]string{}
+	for service, values := range cleanAccounts(accounts) {
+		for _, value := range values {
+			if valueOwnedByOtherAccountPerson(people, idx, service, value) {
+				continue
+			}
+			out[service] = append(out[service], value)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func valueOwnedByOtherAccountPerson(people []model.Person, idx int, service, value string) bool {
+	key := strings.ToLower(strings.TrimSpace(value))
+	if key == "" {
+		return false
+	}
+	for i, person := range people {
+		if i == idx {
+			continue
+		}
+		for _, current := range person.Accounts[service] {
+			if strings.ToLower(strings.TrimSpace(current)) == key {
+				return true
+			}
 		}
 	}
 	return false
@@ -216,6 +280,46 @@ func matchContact(people []model.Person, contact model.SourceContact, matchNames
 	return -1
 }
 
+func matchContactByIndexedIdentifier(people []model.Person, identifiers map[identifierKey][]string, contact model.SourceContact) int {
+	personIndex := make(map[string]int, len(people))
+	for i, person := range people {
+		personIndex[person.ID] = i
+	}
+	for _, key := range contactIdentifierKeys(contact) {
+		for _, personID := range identifiers[key] {
+			if idx, ok := personIndex[personID]; ok {
+				return idx
+			}
+		}
+	}
+	return -1
+}
+
+func contactIdentifierKeys(contact model.SourceContact) []identifierKey {
+	var keys []identifierKey
+	seen := map[identifierKey]bool{}
+	add := func(key identifierKey) {
+		if key.value == "" || seen[key] {
+			return
+		}
+		keys = append(keys, key)
+		seen[key] = true
+	}
+	for _, phone := range contact.Phones {
+		add(identifierKey{kind: "phone", value: model.NormalizePhone(phone.Value)})
+	}
+	for _, email := range contact.Emails {
+		add(identifierKey{kind: "email", value: model.NormalizeEmail(email.Value)})
+	}
+	for service, values := range cleanAccounts(contact.Accounts) {
+		for _, value := range values {
+			value = strings.TrimSpace(strings.ToLower(value))
+			add(identifierKey{kind: "handle", value: service + ":" + value})
+		}
+	}
+	return keys
+}
+
 func sourceValues(values []model.ContactValue, source string, normalize func(string) string) []model.ContactValue {
 	out := make([]model.ContactValue, 0, len(values))
 	seen := map[string]bool{}
@@ -276,9 +380,11 @@ func cloneSources(sources map[string]model.PersonSource) map[string]model.Person
 	out := make(map[string]model.PersonSource, len(sources))
 	for source, value := range sources {
 		out[source] = model.PersonSource{
-			Names:  append([]string(nil), value.Names...),
-			Emails: append([]string(nil), value.Emails...),
-			Phones: append([]string(nil), value.Phones...),
+			Names:      append([]string(nil), value.Names...),
+			Emails:     append([]string(nil), value.Emails...),
+			Phones:     append([]string(nil), value.Phones...),
+			Accounts:   cloneAccounts(value.Accounts),
+			LastSeenAt: value.LastSeenAt,
 		}
 	}
 	return out
@@ -371,7 +477,7 @@ func appendMissingValues(existing []model.ContactValue, incoming []model.Contact
 	return existing
 }
 
-func mergePersonSources(existing map[string]model.PersonSource, source string, contact model.SourceContact) map[string]model.PersonSource {
+func mergePersonSources(existing map[string]model.PersonSource, source string, contact model.SourceContact, now time.Time) map[string]model.PersonSource {
 	source = strings.TrimSpace(strings.ToLower(source))
 	if source == "" {
 		return existing
@@ -380,15 +486,33 @@ func mergePersonSources(existing map[string]model.PersonSource, source string, c
 		existing = map[string]model.PersonSource{}
 	}
 	current := existing[source]
+	before := model.PersonSource{
+		Names:      append([]string(nil), current.Names...),
+		Emails:     append([]string(nil), current.Emails...),
+		Phones:     append([]string(nil), current.Phones...),
+		Accounts:   cloneAccounts(current.Accounts),
+		LastSeenAt: current.LastSeenAt,
+	}
 	current.Names = appendMissingNormalizedStrings(current.Names, []string{contact.Name}, model.NormalizeName)
 	current.Emails = appendMissingContactValues(current.Emails, contact.Emails, model.NormalizeEmail)
 	current.Phones = appendMissingContactValues(current.Phones, contact.Phones, model.NormalizePhone)
-	if len(current.Names) == 0 && len(current.Emails) == 0 && len(current.Phones) == 0 {
+	current.Accounts = mergeAccounts(current.Accounts, contact.Accounts)
+	if sourceChanged(before, current) || current.LastSeenAt.IsZero() {
+		current.LastSeenAt = now.UTC()
+	}
+	if len(current.Names) == 0 && len(current.Emails) == 0 && len(current.Phones) == 0 && len(current.Accounts) == 0 {
 		delete(existing, source)
 		return existing
 	}
 	existing[source] = current
 	return existing
+}
+
+func sourceChanged(before, after model.PersonSource) bool {
+	return strings.Join(before.Names, "\x00") != strings.Join(after.Names, "\x00") ||
+		strings.Join(before.Emails, "\x00") != strings.Join(after.Emails, "\x00") ||
+		strings.Join(before.Phones, "\x00") != strings.Join(after.Phones, "\x00") ||
+		!accountsEqual(before.Accounts, after.Accounts)
 }
 
 func appendMissingContactValues(existing []string, incoming []model.ContactValue, normalize func(string) string) []string {

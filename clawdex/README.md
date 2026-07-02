@@ -8,8 +8,9 @@ written_by: ai
 
 Local-first contact crawler and markdown archive CLI.
 
-`clawdex` is a local-first contact crawler and markdown archive CLI. The app lives in this
-repo; your contacts live in a separate private Git-backed markdown repo.
+`clawdex` is a local-first contact crawler and markdown archive CLI. The app
+lives in this repo; your contacts live in a separate private Git-backed
+markdown repo.
 
 Contacts stay local by default. To back up or sync across machines, configure a
 private Git remote you own:
@@ -38,7 +39,7 @@ clawdex config set repo_path ~/.clawdex/contacts
 clawdex config set git.remote https://github.com/<you>/backup-clawdex.git
 ```
 
-Or set the backup remote during initialization:
+Or set the backup remote during initialisation:
 
 ```bash
 clawdex init ~/.clawdex/contacts --remote https://github.com/<you>/backup-clawdex.git
@@ -73,17 +74,19 @@ clawdex git commit -m "sync: update contacts"
 clawdex git push
 ```
 
-## Imports And Sync Safety
+## Imports and sync safety
 
-Apple and Google imports write only to the local markdown data repo.
+Imports write only to the local markdown data repo.
 
 ```bash
 clawdex import apple --dry-run
 clawdex import apple --avatars
-clawdex import google --account steipete@gmail.com --dry-run
-clawdex import google --account steipete@gmail.com --avatars --dry-run
+clawdex import google --account you@example.com --dry-run
+clawdex import google --account you@example.com --avatars --dry-run
 clawdex import birdclaw --min-messages 4 --dry-run
 clawdex import discrawl --min-messages 4 --dry-run
+clawdex import contacts --from imsgcrawl --dry-run
+clawdex import contacts --from-all --dry-run
 ```
 
 Apple direct import uses macOS `Contacts.framework`. Linux builds still support
@@ -98,6 +101,11 @@ avatars are not overwritten by Apple/Google imports.
 Birdclaw and Discrawl DM imports read local archives only. They import DM
 conversations with more than `--min-messages` messages, add source-specific
 tags, and store stable pointers under `accounts.x` or `accounts.discord`.
+
+Crawler contact imports run `<crawler> contacts export --json`. They update
+existing people when a phone, email, or handle matches the sqlite index. They
+do not create person files for unknown contacts. Unknown contacts are staged
+one line at a time in `index/unmatched.md` for deliberate review.
 
 `sync apple` and `sync google` are preview-only placeholders for now. Remote
 address-book writes need a conflict report before they become active. Notes stay

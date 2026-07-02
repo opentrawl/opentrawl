@@ -65,6 +65,10 @@ func (r Repo) IndexDir() string {
 	return filepath.Join(r.Path, "index")
 }
 
+func (r Repo) UnmatchedContactsPath() string {
+	return filepath.Join(r.IndexDir(), "unmatched.md")
+}
+
 func (r Repo) RepairDir() string {
 	return filepath.Join(r.Path, ".clawdex", "repairs")
 }

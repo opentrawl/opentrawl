@@ -96,11 +96,18 @@ func TestExecuteStatusJSONStates(t *testing.T) {
 	out.Reset()
 	errOut.Reset()
 	if err := Execute([]string{"--config", cfg, "status", "--json"}, &out, &errOut); err != nil {
-		t.Fatalf("status ok: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+		t.Fatalf("status after staged imports: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
 	status = decodeStatus(t, out.Bytes())
-	if status.State != "ok" || countValue(status.Counts, "people") != 1 || countValue(status.Counts, "sources") != 2 {
-		t.Fatalf("ok status = %#v", status)
+	if status.State != "empty" || countValue(status.Counts, "people") != 0 || hasCount(status.Counts, "sources") {
+		t.Fatalf("staged-only status = %#v", status)
+	}
+	stage, err := os.ReadFile(filepath.Join(data, "index", "unmatched.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(stage), `name="Riley Stone"`) != 2 {
+		t.Fatalf("unmatched staging = %s", stage)
 	}
 	if status.Freshness != nil {
 		t.Fatalf("freshness should be omitted: %#v", status.Freshness)

@@ -32,6 +32,11 @@ type markdownFingerprint struct {
 	FrontHash   string
 }
 
+type identifierKey struct {
+	kind  string
+	value string
+}
+
 func (s Store) IndexStatus() (IndexStatus, error) {
 	people, _, err := s.ensureIndex()
 	return IndexStatus{People: people}, err
@@ -374,6 +379,32 @@ func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
 		}
 	}
 	return hits, rows.Err()
+}
+
+func (s Store) indexedIdentifiers() (map[identifierKey][]string, error) {
+	if _, _, err := s.ensureIndex(); err != nil {
+		return nil, err
+	}
+	db, err := sql.Open("sqlite", s.indexPath())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query(`select kind, value, person_id from identifiers order by kind, value, person_id`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[identifierKey][]string{}
+	for rows.Next() {
+		var kind, value, personID string
+		if err := rows.Scan(&kind, &value, &personID); err != nil {
+			return nil, err
+		}
+		key := identifierKey{kind: kind, value: value}
+		out[key] = append(out[key], personID)
+	}
+	return out, rows.Err()
 }
 
 func scanPersonIDs(rows *sql.Rows) ([]string, error) {

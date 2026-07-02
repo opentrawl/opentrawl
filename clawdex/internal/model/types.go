@@ -27,9 +27,11 @@ type AvatarRef struct {
 }
 
 type PersonSource struct {
-	Names  []string `json:"names,omitempty" yaml:"names,omitempty"`
-	Emails []string `json:"emails,omitempty" yaml:"emails,omitempty"`
-	Phones []string `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Names      []string            `json:"names,omitempty" yaml:"names,omitempty"`
+	Emails     []string            `json:"emails,omitempty" yaml:"emails,omitempty"`
+	Phones     []string            `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Accounts   map[string][]string `json:"accounts,omitempty" yaml:"accounts,omitempty"`
+	LastSeenAt time.Time           `json:"last_seen_at,omitzero" yaml:"last_seen_at,omitempty"`
 }
 
 type Person struct {

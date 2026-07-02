@@ -5,9 +5,9 @@ written_by: ai
 # Imports
 
 Imports project an external contact graph into the same markdown shape
-clawdex uses everywhere else. They are **local-only**: every import only
-writes to your data repo. No address book on Apple, Google, X, or Discord
-is mutated by any `clawdex import` subcommand.
+clawdex uses everywhere else. They are local-only: every import only writes
+to your data repo. No address book on Apple, Google, X, or Discord is
+mutated by any `clawdex import` subcommand.
 
 If you want to push changes back into Apple Contacts or Google Contacts, see
 [Sync](#sync-preview-only) below — it's preview-only today.
@@ -17,16 +17,16 @@ If you want to push changes back into Apple Contacts or Google Contacts, see
 Each import returns a list of `ImportChange` rows, printed as TSV:
 
 ```text
-add        Sally O'Malley   sally-o-malley
-update     Bo Burnham       bo-burnham
-unchanged  Frank Booth      frank-booth
+create  Sally O'Malley   person_...
+update  Bo Burnham       person_...
+stage   Unknown Sender
 ```
 
 Combine with `--dry-run` to preview without writing:
 
 ```bash
 clawdex import apple --dry-run
-clawdex import google --account you@gmail.com --dry-run
+clawdex import google --account you@example.com --dry-run
 ```
 
 ## Apple Contacts
@@ -52,9 +52,9 @@ are preserved.
 ## Google Contacts
 
 ```bash
-clawdex import google --account you@gmail.com --dry-run
-clawdex import google --account you@gmail.com
-clawdex import google --account you@gmail.com --avatars
+clawdex import google --account you@example.com --dry-run
+clawdex import google --account you@example.com
+clawdex import google --account you@example.com --avatars
 ```
 
 The Google adapter shells out to [`gog`](https://github.com/steipete/gogcli),
@@ -63,14 +63,14 @@ first:
 
 ```bash
 gog auth credentials ~/Downloads/client_secret_*.json
-gog auth add you@gmail.com --services contacts
+gog auth add you@example.com --services contacts
 ```
 
 If `--account` is omitted, clawdex falls back to `google.default_account`
 from your config — set it once with:
 
 ```bash
-clawdex config set google.default_account you@gmail.com
+clawdex config set google.default_account you@example.com
 ```
 
 `--avatars` fetches photo bytes through `gog contacts raw --person-fields photos`
@@ -105,32 +105,45 @@ Same shape as birdclaw, but reads from
 [discrawl](https://github.com/steipete/discrawl)'s SQLite cache. Discord
 handles land under `accounts.discord`.
 
-## Crawler Contacts
+## Crawler contacts
 
 ```bash
 clawdex import contacts --from telecrawl --dry-run
 clawdex import contacts --from wacrawl --dry-run
 clawdex import contacts --from /path/to/crawler --dry-run
+clawdex import contacts --from-all --dry-run
 ```
 
-Reads a local crawler's crawlkit metadata and runs its advertised
-`contact-export` command. This is the v0 machine contract for source crawler
-contacts:
+Reads a local crawler's crawlkit metadata, checks that it declares a read-only
+JSON contacts export, then runs:
+
+```bash
+<crawler> contacts export --json
+```
+
+This is the v0 machine contract for source crawler contacts:
 
 - metadata schema is `crawlkit.control.v1`
-- command name is `contact-export`
-- command is read-only and advertises `json: true`
-- advertised `argv` includes `--json` plus any source-safe flags
+- command key can be `contact-export` or `contacts_export`
+- command is read-only, advertises `json: true`, and declares `contacts export`
 - payload root is `contacts`
-- each contact has only `display_name` and `phone_numbers`
+- each contact has `display_name` plus one or more identifiers:
+  `phone_numbers`, `emails`, `accounts`, or `handles`
 
 Source crawlers own source-native extraction and privacy filtering. Clawdex
 owns canonical people, markdown storage, matching, and human edits.
 
-Crawler contact imports match existing people by source accounts, external IDs,
-emails, or normalized phone numbers. They do not automatically merge by name
-alone; a matching display name without a matching phone is treated as a new
-person for now instead of risking a bad join.
+Crawler contact imports match existing people through the sqlite index, using
+normalised phone numbers, email addresses, and handles such as
+`telegram:alice`. They never merge by name alone.
+
+If a crawler contact matches an existing person, clawdex adds any missing
+identifiers to that person's `person.md`. The source evidence is recorded in
+frontmatter with `last_seen_at`.
+
+If a crawler contact does not match, clawdex does not create a person file.
+It appends one review line to `index/unmatched.md`. Promote that contact by
+editing an existing `person.md` or adding a new one, then rerun the import.
 
 If one exported crawler contact contains a phone already owned by a different
 person, clawdex leaves that conflicting phone off the matched person instead of
@@ -144,20 +157,22 @@ sources:
   telecrawl:
     names: ["Ada Example"]
     phones: ["15550100"]
+    last_seen_at: 2026-07-02T10:00:00Z
   wacrawl:
     names: ["Ada Example"]
     phones: ["+1 555 0100"]
+    last_seen_at: 2026-07-02T10:00:00Z
 ```
 
-That source evidence is local-only and stable across repeated imports. It lets
-clawdex answer that a person was seen in Telegram or WhatsApp even when the
-incoming phone number was already present and no canonical phone field changed.
+That source evidence is local-only and stable across repeated imports. A
+second import of the same crawler payload does not rewrite person markdown or
+duplicate unmatched staging lines.
 
 ## Sync (preview-only)
 
 ```bash
 clawdex sync apple
-clawdex sync google --account you@gmail.com
+clawdex sync google --account you@example.com
 ```
 
 These commands exist as placeholders. They report:

@@ -427,80 +427,175 @@ type ImportCmd struct {
 }
 
 type ImportContactsCmd struct {
-	From string `name:"from" help:"Crawler binary to import contacts from" required:""`
+	From    string `name:"from" help:"Crawler binary to import contacts from"`
+	FromAll bool   `name:"from-all" help:"Import contacts from every installed crawler that declares contacts export"`
+}
+
+type importContactsResult struct {
+	Changes                   []model.ImportChange `json:"changes"`
+	SkippedWithoutIdentifiers int                  `json:"skipped_without_identifiers,omitempty"`
+}
+
+type crawlerImportFailures []error
+
+func (f crawlerImportFailures) Error() string {
+	if len(f) == 1 {
+		return "1 crawler import failed"
+	}
+	return fmt.Sprintf("%d crawler imports failed", len(f))
+}
+
+func (f crawlerImportFailures) Unwrap() []error {
+	return []error(f)
 }
 
 func (c *ImportContactsCmd) Run(r *Runtime) error {
-	source, contacts, err := readCrawlerContacts(r.ctx, c.From)
-	if err != nil {
+	switch {
+	case c.From != "" && c.FromAll:
+		return usageErr{errors.New("use --from or --from-all, not both")}
+	case c.From == "" && !c.FromAll:
+		return usageErr{errors.New("provide --from CRAWLER or --from-all")}
+	}
+	var result importContactsResult
+	var failures crawlerImportFailures
+	if c.From != "" {
+		imported, skipped, err := r.importCrawlerContacts(c.From)
+		if err != nil {
+			return err
+		}
+		result.Changes = append(result.Changes, imported...)
+		result.SkippedWithoutIdentifiers += skipped
+	} else {
+		binaries := discoverContactCrawlerBinaries(r.ctx)
+		if len(binaries) == 0 {
+			return errors.New("no installed crawler declares contacts export")
+		}
+		for _, binary := range binaries {
+			imported, skipped, err := r.importCrawlerContacts(binary)
+			if err != nil {
+				failures = append(failures, err)
+				if _, printErr := fmt.Fprintln(r.stderr, err); printErr != nil {
+					return printErr
+				}
+				continue
+			}
+			result.Changes = append(result.Changes, imported...)
+			result.SkippedWithoutIdentifiers += skipped
+		}
+	}
+	if err := r.print(result); err != nil {
 		return err
 	}
-	changes, err := r.store.ImportCrawlerContacts(source, contacts, r.root.DryRun, time.Now())
-	if err != nil {
-		return err
+	if len(failures) > 0 {
+		return failures
 	}
-	return r.print(changes)
+	return nil
 }
 
-func readCrawlerContacts(ctx context.Context, binary string) (string, []model.SourceContact, error) {
+func (r *Runtime) importCrawlerContacts(binary string) ([]model.ImportChange, int, error) {
+	source, contacts, skipped, err := readCrawlerContacts(r.ctx, binary)
+	if err != nil {
+		return nil, 0, err
+	}
+	changes, err := r.store.ImportCrawlerContacts(source, contacts, r.root.DryRun, time.Now())
+	return changes, skipped, err
+}
+
+func readCrawlerContacts(ctx context.Context, binary string) (string, []model.SourceContact, int, error) {
 	manifest, err := readCrawlerManifest(ctx, binary)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, err
 	}
-	command, ok := manifest.Commands["contact-export"]
+	command, ok := contactsExportCommand(manifest)
 	if !ok {
-		return "", nil, fmt.Errorf("%s metadata does not advertise contact-export", binary)
+		return "", nil, 0, fmt.Errorf("%s metadata does not declare contacts export", binary)
 	}
 	if !command.JSON {
-		return "", nil, fmt.Errorf("%s contact-export must advertise json output", binary)
+		return "", nil, 0, fmt.Errorf("%s contacts export must advertise json output", binary)
 	}
 	if command.Mutates {
-		return "", nil, fmt.Errorf("%s contact-export must be read-only", binary)
+		return "", nil, 0, fmt.Errorf("%s contacts export must be read-only", binary)
 	}
-	if len(command.Argv) == 0 {
-		return "", nil, fmt.Errorf("%s contact-export argv is empty", binary)
-	}
-	argv, err := contactExportArgv(binary, command.Argv)
-	if err != nil {
-		return "", nil, err
-	}
-	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- argv comes from the local crawler manifest and is executed without a shell.
+	argv := contactExportArgv(binary)
+	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- binary is an explicit local crawler command and no shell is used.
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	data, err := cmd.Output()
 	if err != nil {
 		msg := strings.TrimSpace(stderr.String())
 		if msg != "" {
-			return "", nil, fmt.Errorf("%s contact-export failed: %w: %s", binary, err, msg)
+			return "", nil, 0, fmt.Errorf("%s contacts export failed: %w: %s", binary, err, msg)
 		}
-		return "", nil, fmt.Errorf("%s contact-export failed: %w", binary, err)
+		return "", nil, 0, fmt.Errorf("%s contacts export failed: %w", binary, err)
 	}
 	export, err := contactexport.Decode(bytes.NewReader(data))
 	if err != nil {
-		return "", nil, fmt.Errorf("%s contact-export decode failed: %w", binary, err)
+		return "", nil, 0, fmt.Errorf("%s contacts export decode failed: %w", binary, err)
 	}
 	source := strings.TrimSpace(manifest.ID)
 	if source == "" {
 		source = filepath.Base(binary)
 	}
-	return source, sourceContactsFromExport(source, export), nil
+	return source, sourceContactsFromExport(source, export), export.SkippedWithoutIdentifiers, nil
 }
 
-func contactExportArgv(binary string, advertised []string) ([]string, error) {
-	if len(advertised) == 0 {
-		return nil, fmt.Errorf("%s contact-export argv is empty", binary)
+func contactsExportCommand(manifest control.Manifest) (control.Command, bool) {
+	for _, name := range []string{"contact-export", "contacts_export"} {
+		command, ok := manifest.Commands[name]
+		if ok && commandDeclaresContactsExport(command) {
+			return command, true
+		}
 	}
-	requestedName := filepath.Base(binary)
-	advertisedName := filepath.Base(advertised[0])
-	if requestedName != "" && advertisedName != "" && requestedName != advertisedName {
-		return nil, fmt.Errorf("%s contact-export argv starts with %q, want %q", binary, advertised[0], requestedName)
+	for _, command := range manifest.Commands {
+		if commandDeclaresContactsExport(command) {
+			return command, true
+		}
 	}
-	if !slices.Contains(advertised, "--json") {
-		return nil, fmt.Errorf("%s contact-export argv must include --json", binary)
+	return control.Command{}, false
+}
+
+func commandDeclaresContactsExport(command control.Command) bool {
+	if len(command.Argv) == 0 || !slices.Contains(command.Argv, "--json") {
+		return false
 	}
-	argv := append([]string(nil), advertised...)
-	argv[0] = binary
-	return argv, nil
+	seenContacts := false
+	for _, arg := range command.Argv {
+		switch arg {
+		case "contacts":
+			seenContacts = true
+		case "export":
+			if seenContacts {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func contactExportArgv(binary string) []string {
+	return []string{binary, "contacts", "export", "--json"}
+}
+
+func discoverContactCrawlerBinaries(ctx context.Context) []string {
+	var binaries []string
+	seen := map[string]bool{}
+	// This fixed list only probes crawlers with a reviewed contacts export contract.
+	for _, name := range []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcrawl"} {
+		path, err := exec.LookPath(name)
+		if err != nil || seen[path] {
+			continue
+		}
+		manifest, err := readCrawlerManifest(ctx, path)
+		if err != nil {
+			continue
+		}
+		if command, ok := contactsExportCommand(manifest); ok && command.JSON && !command.Mutates {
+			binaries = append(binaries, path)
+			seen[path] = true
+		}
+	}
+	sort.Strings(binaries)
+	return binaries
 }
 
 func readCrawlerManifest(ctx context.Context, binary string) (control.Manifest, error) {
@@ -532,9 +627,38 @@ func sourceContactsFromExport(source string, export contactexport.ContactExport)
 		for i, phone := range c.PhoneNumbers {
 			contact.Phones = append(contact.Phones, model.ContactValue{Value: phone, Source: source, Primary: i == 0})
 		}
+		for i, email := range c.Emails {
+			contact.Emails = append(contact.Emails, model.ContactValue{Value: email, Source: source, Primary: i == 0 && len(contact.Phones) == 0})
+		}
+		contact.Accounts = mergeCrawlerExportAccounts(c.Accounts, c.Handles)
 		contacts = append(contacts, contact)
 	}
 	return contacts
+}
+
+func mergeCrawlerExportAccounts(values ...map[string][]string) map[string][]string {
+	out := map[string][]string{}
+	for _, accounts := range values {
+		for service, handles := range accounts {
+			service = strings.TrimSpace(strings.ToLower(service))
+			if service == "" {
+				continue
+			}
+			for _, handle := range handles {
+				handle = strings.TrimSpace(handle)
+				if handle == "" {
+					continue
+				}
+				if !slices.Contains(out[service], handle) {
+					out[service] = append(out[service], handle)
+				}
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 type ImportAppleCmd struct {
@@ -818,10 +942,14 @@ func (r *Runtime) print(value any) error {
 	case []model.SearchHit:
 		return r.printHits(v)
 	case []model.ImportChange:
-		for _, change := range v {
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", change.Action, change.Name, change.PersonID); err != nil {
-				return err
-			}
+		return r.printImportChanges(v)
+	case importContactsResult:
+		if err := r.printImportChanges(v.Changes); err != nil {
+			return err
+		}
+		if v.SkippedWithoutIdentifiers > 0 {
+			_, err := fmt.Fprintf(r.stdout, "skipped %d contacts without identifiers\n", v.SkippedWithoutIdentifiers)
+			return err
 		}
 		return nil
 	default:
@@ -829,6 +957,15 @@ func (r *Runtime) print(value any) error {
 		enc.SetIndent("", "  ")
 		return enc.Encode(value)
 	}
+}
+
+func (r *Runtime) printImportChanges(changes []model.ImportChange) error {
+	for _, change := range changes {
+		if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", change.Action, change.Name, change.PersonID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *Runtime) printPerson(p model.Person) error {

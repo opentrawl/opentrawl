@@ -2,12 +2,14 @@ package index
 
 import (
 	"bytes"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,7 +272,7 @@ func TestImportMatchesEmail(t *testing.T) {
 func TestCrawlerImportDedupePhonesAndRecordsSources(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
-	now := time.Now()
+	now := time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC)
 	if _, err := s.AddPerson("Ada Lovelace", nil, []string{"+31 6 1234 5678"}, nil, now); err != nil {
 		t.Fatal(err)
 	}
@@ -293,6 +295,9 @@ func TestCrawlerImportDedupePhonesAndRecordsSources(t *testing.T) {
 	}
 	if got := p.Sources["telecrawl"]; len(got.Names) != 1 || got.Names[0] != "Ada Telegram" || len(got.Phones) != 1 || got.Phones[0] != "31612345678" {
 		t.Fatalf("telecrawl source = %#v", got)
+	}
+	if !p.Sources["telecrawl"].LastSeenAt.Equal(now.UTC()) {
+		t.Fatalf("telecrawl last seen = %#v", p.Sources["telecrawl"].LastSeenAt)
 	}
 
 	changes, err = s.ImportCrawlerContacts("wacrawl", []model.SourceContact{{
@@ -328,6 +333,61 @@ func TestCrawlerImportDedupePhonesAndRecordsSources(t *testing.T) {
 	}
 }
 
+func TestCrawlerImportMatchesEmailAndHandleIdentifiers(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC)
+	if _, err := s.AddPerson("Email Existing", []string{"email@example.com"}, nil, nil, now); err != nil {
+		t.Fatal(err)
+	}
+	handlePerson, err := s.AddPerson("Handle Existing", nil, nil, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handlePerson.Accounts = map[string][]string{"telegram": {"handle-existing"}}
+	if err := markdown.WritePerson(handlePerson.Path, handlePerson); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rebuild(); err != nil {
+		t.Fatal(err)
+	}
+	changes, err := s.ImportCrawlerContacts("telecrawl", []model.SourceContact{
+		{
+			Name:   "Email Source",
+			Emails: []model.ContactValue{{Value: "EMAIL@example.com"}},
+			Phones: []model.ContactValue{{Value: "+1 555 0102"}},
+		},
+		{
+			Name:     "Handle Source",
+			Accounts: map[string][]string{"telegram": {"handle-existing"}},
+			Phones:   []model.ContactValue{{Value: "+1 555 0103"}},
+		},
+	}, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 2 || changes[0].Action != "update" || changes[1].Action != "update" {
+		t.Fatalf("changes = %#v", changes)
+	}
+	emailPerson, err := s.FindPerson("+1 555 0102")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emailPerson.Name != "Email Existing" || emailPerson.Sources["telecrawl"].Emails[0] != "EMAIL@example.com" {
+		t.Fatalf("email person = %#v", emailPerson)
+	}
+	handlePerson, err = s.FindPerson("+1 555 0103")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handlePerson.Name != "Handle Existing" || handlePerson.Sources["telecrawl"].Accounts["telegram"][0] != "handle-existing" {
+		t.Fatalf("handle person = %#v", handlePerson)
+	}
+	if _, err := os.Stat(r.UnmatchedContactsPath()); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("unexpected unmatched file err = %v", err)
+	}
+}
+
 func TestCrawlerImportDoesNotMatchByNameOnly(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
@@ -343,19 +403,25 @@ func TestCrawlerImportDoesNotMatchByNameOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Action != "create" {
+	if len(changes) != 1 || changes[0].Action != "stage" {
 		t.Fatalf("changes = %#v", changes)
 	}
-	created, err := s.FindPerson("+1 555 0101")
+	if _, err := s.FindPerson("+1 555 0101"); err == nil {
+		t.Fatal("crawler import created unmatched person")
+	}
+	got, err := os.ReadFile(r.UnmatchedContactsPath())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.ID == existing.ID {
-		t.Fatalf("crawler import name-only merged into existing person: %#v", created)
+	if !strings.Contains(string(got), `name="Common Name"`) || !strings.Contains(string(got), `phones="15550101"`) {
+		t.Fatalf("unmatched file = %s", got)
+	}
+	if existing.ID == "" {
+		t.Fatal("existing person was not created")
 	}
 }
 
-func TestCrawlerImportCreateDedupeNormalizedPhoneValues(t *testing.T) {
+func TestCrawlerImportStagesAndDedupesNormalizedPhoneValues(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
 	now := time.Now()
@@ -369,18 +435,59 @@ func TestCrawlerImportCreateDedupeNormalizedPhoneValues(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Action != "create" {
+	if len(changes) != 1 || changes[0].Action != "stage" {
 		t.Fatalf("changes = %#v", changes)
 	}
-	p, err := s.FindPerson("+1 555 0100")
+	if _, err := s.FindPerson("+1 555 0100"); err == nil {
+		t.Fatal("crawler import created unmatched person")
+	}
+	got, err := os.ReadFile(r.UnmatchedContactsPath())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(p.Phones) != 1 {
-		t.Fatalf("phones = %#v", p.Phones)
+	if count := strings.Count(string(got), `name="Duplicate Phone"`); count != 1 {
+		t.Fatalf("unmatched duplicate count = %d\n%s", count, got)
 	}
-	if got := p.Sources["telecrawl"]; len(got.Phones) != 1 || got.Phones[0] != "+1 555 0100" {
-		t.Fatalf("telecrawl source = %#v", got)
+}
+
+func TestCrawlerImportReplacesStaleUnmatchedLineByStableIdentity(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Now()
+	changes, err := s.ImportCrawlerContacts("telecrawl", []model.SourceContact{{
+		Name:   "Old Display",
+		Emails: []model.ContactValue{{Value: "ada@example.com"}},
+	}}, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != "stage" {
+		t.Fatalf("first changes = %#v", changes)
+	}
+	changes, err = s.ImportCrawlerContacts("telecrawl", []model.SourceContact{{
+		Name:   "New Display",
+		Emails: []model.ContactValue{{Value: "ADA@example.com"}},
+		Phones: []model.ContactValue{{Value: "+1 555 0101"}},
+	}}, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != "stage" {
+		t.Fatalf("second changes = %#v", changes)
+	}
+	got, err := os.ReadFile(r.UnmatchedContactsPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(got)
+	if count := strings.Count(text, `- source="telecrawl"`); count != 1 {
+		t.Fatalf("unmatched duplicate count = %d\n%s", count, text)
+	}
+	if strings.Contains(text, `name="Old Display"`) || !strings.Contains(text, `name="New Display"`) {
+		t.Fatalf("unmatched name was not replaced:\n%s", text)
+	}
+	if !strings.Contains(text, `phones="15550101"`) || !strings.Contains(text, `emails="ada@example.com"`) {
+		t.Fatalf("unmatched identifiers were not updated:\n%s", text)
 	}
 }
 
@@ -431,7 +538,7 @@ func TestCrawlerImportSkipsPhoneOwnedByAnotherPerson(t *testing.T) {
 	}
 }
 
-func TestCrawlerImportDryRunMatchesRealDuplicateCollapse(t *testing.T) {
+func TestCrawlerImportStagesUnmatchedIdempotently(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
 	now := time.Now()
@@ -443,18 +550,28 @@ func TestCrawlerImportDryRunMatchesRealDuplicateCollapse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Action != "create" {
+	if len(changes) != 1 || changes[0].Action != "stage" {
 		t.Fatalf("dry-run changes = %#v", changes)
 	}
 	if _, err := s.FindPerson("+1 555 0100"); err == nil {
 		t.Fatal("dry-run created person")
 	}
+	if _, err := os.Stat(r.UnmatchedContactsPath()); err == nil {
+		t.Fatal("dry-run wrote unmatched staging file")
+	}
 	changes, err = s.ImportCrawlerContacts("telecrawl", contacts, false, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(changes) != 1 || changes[0].Action != "create" {
+	if len(changes) != 1 || changes[0].Action != "stage" {
 		t.Fatalf("real changes = %#v", changes)
+	}
+	changes, err = s.ImportCrawlerContacts("telecrawl", contacts, false, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("second import changes = %#v", changes)
 	}
 }
 
