@@ -16,6 +16,7 @@ const (
 	CheckSecrets          = "secrets scan"
 	CheckReadsNeverMutate = "reads never mutate"
 	CheckSearch           = "search"
+	CheckOpen             = "open"
 )
 
 type CheckResult struct {
