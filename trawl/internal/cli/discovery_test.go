@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -73,6 +74,21 @@ func TestDiscoverCrawlers(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestRegistryBinariesIncludesBuiltIns(t *testing.T) {
+	want := []string{
+		"imsgcrawl",
+		"telecrawl",
+		"wacrawl",
+		"clawdex",
+		"photoscrawl",
+		"gogcrawl",
+		"calcrawl",
+	}
+	if got := registryBinaries(""); !slices.Equal(got, want) {
+		t.Fatalf("registryBinaries() = %#v, want %#v", got, want)
 	}
 }
 

@@ -17,6 +17,14 @@ type fakeCrawler struct {
 	statusExit   int
 	doctor       string
 	doctorExit   int
+	search       string
+	searchExit   int
+	searchLimit  string
+	open         string
+	openExit     int
+	openRef      string
+	sync         string
+	syncExit     int
 }
 
 func runCLI(t *testing.T, args ...string) (string, string, int) {
@@ -46,26 +54,73 @@ func writeFakeCrawler(t *testing.T, dir string, crawler fakeCrawler) {
 	if crawler.doctor == "" && crawler.doctorExit == 0 {
 		crawler.doctor = `{"checks":[{"id":"source_store","state":"ok"}]}`
 	}
+	if crawler.search == "" && crawler.searchExit == 0 {
+		crawler.search = searchJSON("query")
+	}
+	if crawler.open == "" && crawler.openExit == 0 {
+		crawler.open = `{"body":"Example body","ref":"msg/1"}`
+	}
+	if crawler.sync == "" && crawler.syncExit == 0 {
+		crawler.sync = `{"state":"ok","message":"0 new items"}`
+	}
 	script := fmt.Sprintf(`#!/bin/sh
-if [ "$#" -ne 2 ]; then
+if [ "$#" -lt 2 ]; then
   exit 64
 fi
-case "$1 $2" in
-  "metadata --json")
+expected_open_ref=%s
+expected_search_limit=%s
+case "$1" in
+  "metadata")
+    if [ "$#" -ne 2 ] || [ "$2" != "--json" ]; then
+      exit 64
+    fi
     printf '%%s\n' %s
     exit %d
     ;;
-  "status --json")
+  "status")
+    if [ "$#" -ne 2 ] || [ "$2" != "--json" ]; then
+      exit 64
+    fi
     printf '%%s\n' %s
     exit %d
     ;;
-  "doctor --json")
+  "doctor")
+    if [ "$#" -ne 2 ] || [ "$2" != "--json" ]; then
+      exit 64
+    fi
+    printf '%%s\n' %s
+    exit %d
+    ;;
+  "search")
+    if [ "$#" -lt 5 ] || [ "$3" != "--json" ] || [ "$4" != "--limit" ]; then
+      exit 64
+    fi
+    if [ -n "$expected_search_limit" ] && [ "$5" != "$expected_search_limit" ]; then
+      exit 64
+    fi
+    printf '%%s\n' %s
+    exit %d
+    ;;
+  "open")
+    if [ "$#" -ne 3 ] || [ "$3" != "--json" ]; then
+      exit 64
+    fi
+    if [ -n "$expected_open_ref" ] && [ "$2" != "$expected_open_ref" ]; then
+      exit 64
+    fi
+    printf '%%s\n' %s
+    exit %d
+    ;;
+  "sync")
+    if [ "$#" -ne 2 ] || [ "$2" != "--json" ]; then
+      exit 64
+    fi
     printf '%%s\n' %s
     exit %d
     ;;
 esac
 exit 64
-`, shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit)
+`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.open), crawler.openExit, shellQuote(crawler.sync), crawler.syncExit)
 	path := filepath.Join(dir, crawler.name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -82,6 +137,10 @@ func metadataJSON(id string) string {
 
 func statusJSON(id, state string) string {
 	return fmt.Sprintf(`{"app_id":%q,"state":%q,"freshness":{"last_sync":"2026-07-02T14:03:00Z"},"counts":[{"id":"messages","label":"messages","value":12345}],"auth":{"authorized":true,"expires":null}}`, id, state)
+}
+
+func searchJSON(query string) string {
+	return fmt.Sprintf(`{"query":%q,"results":[],"total_matches":0,"truncated":false}`, query)
 }
 
 func failingDoctorJSON() string {
