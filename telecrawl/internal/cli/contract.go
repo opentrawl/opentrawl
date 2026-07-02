@@ -14,6 +14,8 @@ const (
 	defaultMessageLimit = 50
 	defaultSearchLimit  = 20
 	maxSearchLimit      = 200
+	openContextRadius   = 10
+	messageRefPrefix    = "telecrawl:msg/"
 
 	// Telegram archives older than a day are stale for status surfaces that imply source parity.
 	statusFreshFor = 24 * time.Hour
@@ -78,6 +80,76 @@ type searchResult struct {
 	Snippet string `json:"snippet"`
 }
 
+type errorEnvelope struct {
+	Error contractErrorBody `json:"error"`
+}
+
+type contractErrorBody struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Remedy  string `json:"remedy"`
+}
+
+type openEnvelope struct {
+	Ref            string        `json:"ref"`
+	Chat           openChat      `json:"chat"`
+	Message        openMessage   `json:"message"`
+	Context        []openMessage `json:"context"`
+	ContextWindow  openWindow    `json:"context_window"`
+	TargetPosition int           `json:"target_position"`
+}
+
+type openWindow struct {
+	Before          int  `json:"before"`
+	After           int  `json:"after"`
+	BeforeTruncated bool `json:"before_truncated"`
+	AfterTruncated  bool `json:"after_truncated"`
+}
+
+type openChat struct {
+	Ref  string `json:"ref"`
+	Name string `json:"name"`
+}
+
+type openParticipant struct {
+	Ref         string `json:"ref,omitempty"`
+	DisplayName string `json:"display_name"`
+}
+
+type openMessage struct {
+	Ref           string          `json:"ref"`
+	IsTarget      bool            `json:"is_target,omitempty"`
+	Time          string          `json:"time"`
+	EditTime      string          `json:"edit_time,omitempty"`
+	Chat          openChat        `json:"chat"`
+	Sender        openParticipant `json:"sender"`
+	FromMe        bool            `json:"from_me"`
+	Text          string          `json:"text,omitempty"`
+	MessageID     string          `json:"message_id"`
+	MessageType   string          `json:"message_type,omitempty"`
+	RawType       int             `json:"raw_type,omitempty"`
+	MediaType     string          `json:"media_type,omitempty"`
+	MediaTitle    string          `json:"media_title,omitempty"`
+	MediaPath     string          `json:"media_path,omitempty"`
+	MediaURL      string          `json:"media_url,omitempty"`
+	MediaSize     int64           `json:"media_size,omitempty"`
+	MetadataType  string          `json:"metadata_type,omitempty"`
+	MetadataTitle string          `json:"metadata_title,omitempty"`
+	MetadataURL   string          `json:"metadata_url,omitempty"`
+	MetadataJSON  string          `json:"metadata_json,omitempty"`
+	Starred       bool            `json:"starred,omitempty"`
+	TopicID       string          `json:"topic_id,omitempty"`
+	ReplyToID     string          `json:"reply_to_message_id,omitempty"`
+	ReplyToChat   string          `json:"reply_to_chat_ref,omitempty"`
+	ThreadID      string          `json:"thread_id,omitempty"`
+	ForwardJSON   string          `json:"forward_json,omitempty"`
+	ReactionsJSON string          `json:"reactions_json,omitempty"`
+	Views         int             `json:"views,omitempty"`
+	Forwards      int             `json:"forwards,omitempty"`
+	RepliesCount  int             `json:"replies_count,omitempty"`
+	Pinned        bool            `json:"pinned,omitempty"`
+}
+
 func contractMetadata() metadataEnvelope {
 	return metadataEnvelope{
 		SchemaVersion:   1,
@@ -85,7 +157,7 @@ func contractMetadata() metadataEnvelope {
 		ID:              "telecrawl",
 		DisplayName:     "Telegram",
 		Version:         version,
-		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "contacts_export", "backup"},
+		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "contacts_export", "backup"},
 	}
 }
 
@@ -237,7 +309,7 @@ func searchResults(messages []store.Message) []searchResult {
 	out := make([]searchResult, 0, len(messages))
 	for _, message := range messages {
 		out = append(out, searchResult{
-			Ref:     fmt.Sprintf("telecrawl:msg/%d", message.SourcePK),
+			Ref:     messageRef(message.SourcePK),
 			Time:    message.Timestamp.Format(time.RFC3339),
 			Who:     messageWho(message),
 			Where:   messageWhere(message),
@@ -245,6 +317,95 @@ func searchResults(messages []store.Message) []searchResult {
 		})
 	}
 	return out
+}
+
+func messageRef(sourcePK int64) string {
+	return fmt.Sprintf("%s%d", messageRefPrefix, sourcePK)
+}
+
+func newOpenEnvelope(window store.MessageWindow) openEnvelope {
+	targetRef := messageRef(window.Target.SourcePK)
+	context := make([]openMessage, 0, len(window.Messages))
+	targetPosition := -1
+	for i, message := range window.Messages {
+		isTarget := message.SourcePK == window.Target.SourcePK
+		if isTarget {
+			targetPosition = i
+		}
+		context = append(context, openMessageFromStore(message, isTarget))
+	}
+	return openEnvelope{
+		Ref:     targetRef,
+		Chat:    openChatFromMessage(window.Target),
+		Message: openMessageFromStore(window.Target, true),
+		Context: context,
+		ContextWindow: openWindow{
+			Before:          targetPosition,
+			After:           len(context) - targetPosition - 1,
+			BeforeTruncated: window.BeforeTruncated,
+			AfterTruncated:  window.AfterTruncated,
+		},
+		TargetPosition: targetPosition,
+	}
+}
+
+func openMessageFromStore(message store.Message, isTarget bool) openMessage {
+	return openMessage{
+		Ref:           messageRef(message.SourcePK),
+		IsTarget:      isTarget,
+		Time:          formatOptionalTime(message.Timestamp),
+		EditTime:      formatOptionalTime(message.EditTime),
+		Chat:          openChatFromMessage(message),
+		Sender:        openSenderFromMessage(message),
+		FromMe:        message.FromMe,
+		Text:          strings.TrimSpace(message.Text),
+		MessageID:     message.MessageID,
+		MessageType:   message.MessageType,
+		RawType:       message.RawType,
+		MediaType:     message.MediaType,
+		MediaTitle:    message.MediaTitle,
+		MediaPath:     message.MediaPath,
+		MediaURL:      message.MediaURL,
+		MediaSize:     message.MediaSize,
+		MetadataType:  message.MetadataType,
+		MetadataTitle: message.MetadataTitle,
+		MetadataURL:   message.MetadataURL,
+		MetadataJSON:  message.MetadataJSON,
+		Starred:       message.Starred,
+		TopicID:       message.TopicID,
+		ReplyToID:     message.ReplyToID,
+		ReplyToChat:   chatRef(message.ReplyToChat),
+		ThreadID:      message.ThreadID,
+		ForwardJSON:   message.ForwardJSON,
+		ReactionsJSON: message.ReactionsJSON,
+		Views:         message.Views,
+		Forwards:      message.Forwards,
+		RepliesCount:  message.RepliesCount,
+		Pinned:        message.Pinned,
+	}
+}
+
+func openChatFromMessage(message store.Message) openChat {
+	return openChat{Ref: chatRef(message.ChatJID), Name: messageWhere(message)}
+}
+
+func openSenderFromMessage(message store.Message) openParticipant {
+	return openParticipant{Ref: chatRef(message.SenderJID), DisplayName: messageWho(message)}
+}
+
+func chatRef(jid string) string {
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return ""
+	}
+	return "telecrawl:chat/" + jid
+}
+
+func formatOptionalTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func messageWho(message store.Message) string {

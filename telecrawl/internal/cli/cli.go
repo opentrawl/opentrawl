@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -21,8 +22,9 @@ import (
 )
 
 type cliError struct {
-	code int
-	err  error
+	code  int
+	err   error
+	quiet bool
 }
 
 func (e *cliError) Error() string {
@@ -45,6 +47,14 @@ func ExitCode(err error) int {
 		return codeErr.code
 	}
 	return 1
+}
+
+func ShouldPrintError(err error) bool {
+	var codeErr *cliError
+	if errors.As(err, &codeErr) {
+		return !codeErr.quiet
+	}
+	return err != nil
 }
 
 type runtime struct {
@@ -81,6 +91,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	if rest[0] == "version" {
+		if hasHelpFlag(rest[1:]) {
+			printCommandUsage(stdout, []string{"version"})
+			return nil
+		}
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
@@ -102,6 +116,10 @@ func pullJSONFlag(args []string) (bool, []string) {
 }
 
 func (r *runtime) dispatch(args []string) error {
+	if len(args) > 1 && hasHelpFlag(args[1:]) {
+		printCommandUsage(r.stdout, args)
+		return nil
+	}
 	switch args[0] {
 	case "metadata":
 		if r.json {
@@ -126,6 +144,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runMessages(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
+	case "open":
+		return r.runOpen(args[1:])
 	case "backup":
 		return r.runBackup(args[1:])
 	case "wiretap":
@@ -137,6 +157,15 @@ func (r *runtime) dispatch(args []string) error {
 
 func (r *runtime) withStore(fn func(*store.Store) error) error {
 	st, err := store.Open(r.ctx, r.dbPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	return fn(st)
+}
+
+func (r *runtime) withReadOnlyStore(fn func(*store.Store) error) error {
+	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
 	if err != nil {
 		return err
 	}
@@ -639,6 +668,53 @@ func (r *runtime) runSearch(args []string) error {
 	})
 }
 
+func (r *runtime) runOpen(args []string) error {
+	if len(args) != 1 {
+		return usageErr(errors.New("open takes exactly one ref"))
+	}
+	sourcePK, err := parseMessageRef(args[0])
+	if err != nil {
+		return r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by telecrawl search --json, such as telecrawl:msg/<id>.")
+	}
+	return r.withReadOnlyStore(func(st *store.Store) error {
+		window, err := st.OpenMessageWindow(r.ctx, sourcePK, openContextRadius)
+		if errors.Is(err, store.ErrMessageNotFound) {
+			return r.contractError("not_found", "message was not found in this archive", "Run telecrawl search --json again and use one of the returned refs.")
+		}
+		if err != nil {
+			return err
+		}
+		return r.print(newOpenEnvelope(window))
+	})
+}
+
+func parseMessageRef(ref string) (int64, error) {
+	if !strings.HasPrefix(ref, messageRefPrefix) {
+		return 0, errors.New("invalid message ref")
+	}
+	rawID := strings.TrimPrefix(ref, messageRefPrefix)
+	if rawID == "" {
+		return 0, errors.New("invalid message ref")
+	}
+	id, err := strconv.ParseInt(rawID, 10, 64)
+	if err != nil || id <= 0 || strconv.FormatInt(id, 10) != rawID {
+		return 0, errors.New("invalid message ref")
+	}
+	return id, nil
+}
+
+func (r *runtime) contractError(code, message, remedy string) error {
+	body := contractErrorBody{Code: code, Message: message, Remedy: remedy}
+	err := errors.New(message + ". " + remedy)
+	if r.json {
+		if printErr := r.print(errorEnvelope{Error: body}); printErr != nil {
+			return printErr
+		}
+		return &cliError{code: 1, err: err, quiet: true}
+	}
+	return &cliError{code: 1, err: err}
+}
+
 // messageFilterValueFlags are the filter flags that consume a value, so
 // splitFlagArgs can keep flag/value pairs together when flags follow the
 // query on the command line.
@@ -956,9 +1032,64 @@ func (r *runtime) print(v any) error {
 			}
 		}
 		return nil
+	case openEnvelope:
+		return r.printOpen(value)
 	default:
 		enc.SetIndent("", "  ")
 		return enc.Encode(v)
+	}
+}
+
+func (r *runtime) printOpen(value openEnvelope) error {
+	if _, err := fmt.Fprintf(r.stdout, "chat: %s (%s)\n", value.Chat.Name, value.Chat.Ref); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(r.stdout, "ref: %s\n", value.Ref); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(r.stdout, "target: %s %s\n", value.Message.Time, value.Message.Sender.DisplayName); err != nil {
+		return err
+	}
+	if strings.TrimSpace(value.Message.Text) != "" {
+		if _, err := fmt.Fprintf(r.stdout, "text: %s\n", value.Message.Text); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(r.stdout, "context: %d before, %d after", value.ContextWindow.Before, value.ContextWindow.After); err != nil {
+		return err
+	}
+	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
+		if _, err := io.WriteString(r.stdout, " (bounded; more messages omitted)"); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(r.stdout, "\n"); err != nil {
+		return err
+	}
+	for _, message := range value.Context {
+		marker := " "
+		if message.IsTarget {
+			marker = ">"
+		}
+		text := strings.TrimSpace(message.Text)
+		if text == "" {
+			text = mediaSummary(message)
+		}
+		if _, err := fmt.Fprintf(r.stdout, "%s %s  %s: %s\n", marker, message.Time, message.Sender.DisplayName, text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mediaSummary(message openMessage) string {
+	switch {
+	case message.MediaTitle != "":
+		return "[" + message.MediaTitle + "]"
+	case message.MediaType != "":
+		return "[" + message.MediaType + "]"
+	default:
+		return "[empty message]"
 	}
 }
 
@@ -976,6 +1107,19 @@ func usageErr(err error) error {
 	return &cliError{code: 2, err: err}
 }
 
+func hasHelpFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		switch arg {
+		case "--help", "-help", "-h":
+			return true
+		}
+	}
+	return false
+}
+
 func printUsage(w io.Writer) {
 	_, _ = io.WriteString(w, `telecrawl: Telegram archive probe/import CLI
 
@@ -990,7 +1134,8 @@ usage:
   telecrawl chats [--limit N] [--unread] [--folder ID] [--json]
   telecrawl topics --chat ID [--limit N] [--json]
   telecrawl messages [--chat ID] [--topic ID] [--limit N] [--after DATE] [--json]
-  telecrawl search "query" [--chat ID] [--topic ID] [--json]
+  telecrawl search "query" [--chat ID] [--topic ID] [--limit N] [--json]
+  telecrawl open telecrawl:msg/ID [--json]
   telecrawl backup init|push|pull|status|snapshots [--json]
   telecrawl version
 
@@ -999,6 +1144,75 @@ notes:
   import archives local cached Postbox media by default; --fetch-media also tries Telegram cloud media
   backup writes encrypted age shards to a git repo
 `)
+}
+
+func printCommandUsage(w io.Writer, args []string) {
+	_, _ = io.WriteString(w, commandUsage(args))
+}
+
+func commandUsage(args []string) string {
+	if len(args) == 0 {
+		return topUsageText()
+	}
+	switch args[0] {
+	case "doctor":
+		return "usage: telecrawl doctor [--path PATH] [--json]\n\nChecks Telegram source access and archive readability.\n"
+	case "metadata":
+		return "usage: telecrawl metadata [--json]\n\nPrints the crawler manifest and contract capabilities.\n"
+	case "import", "sync", "wiretap":
+		return "usage: telecrawl import [--path PATH] [--chat ID] [--dialogs-limit N] [--messages-limit N] [--fetch-media] [--json]\n\nImports Telegram data into the local archive. This mutates the archive.\n"
+	case "status":
+		return "usage: telecrawl status [--json]\n\nReads archive status without importing or syncing.\n"
+	case "folders":
+		return "usage: telecrawl folders [--json]\n\nLists Telegram folders from the local archive.\n"
+	case "contacts":
+		if len(args) > 1 && args[1] == "export" {
+			return "usage: telecrawl contacts export [--json]\n\nExports safe contact records from archived conversation evidence.\n"
+		}
+		return "usage: telecrawl contacts [--limit N] [--json]\n\nLists contacts from the local archive.\n"
+	case "chats":
+		return "usage: telecrawl chats [--limit N] [--unread] [--folder ID] [--json]\n\nLists chats from the local archive.\n"
+	case "topics":
+		return "usage: telecrawl topics --chat ID [--limit N] [--json]\n\nLists forum topics for one archived chat.\n"
+	case "messages":
+		return "usage: telecrawl messages [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--asc] [--json]\n\nLists a bounded set of archived messages.\n"
+	case "search":
+		return "usage: telecrawl search \"query\" [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearches archived messages and returns refs for telecrawl open.\n"
+	case "open":
+		return "usage: telecrawl open telecrawl:msg/ID [--json]\n\nOpens one search ref with a bounded same-chat context window.\n"
+	case "backup":
+		if len(args) > 1 {
+			return backupCommandUsage(args[1])
+		}
+		return "usage: telecrawl backup init|push|pull|status|snapshots [--json]\n\nManages encrypted archive backups.\n"
+	case "version":
+		return "usage: telecrawl version\n\nPrints the telecrawl version.\n"
+	default:
+		return topUsageText()
+	}
+}
+
+func backupCommandUsage(command string) string {
+	switch command {
+	case "init":
+		return "usage: telecrawl backup init [--config PATH] [--repo PATH] [--remote URL] [--identity PATH] [--recipient AGE-RECIPIENT] [--no-push] [--json]\n\nInitialises encrypted archive backup settings.\n"
+	case "push":
+		return "usage: telecrawl backup push [--config PATH] [--repo PATH] [--remote URL] [--identity PATH] [--recipient AGE-RECIPIENT] [--tag TAG] [--no-push] [--json]\n\nExports and pushes an encrypted archive backup.\n"
+	case "pull":
+		return "usage: telecrawl backup pull [--config PATH] [--repo PATH] [--remote URL] [--identity PATH] [--ref REF] [--json]\n\nRestores the archive from an encrypted backup.\n"
+	case "status":
+		return "usage: telecrawl backup status [--config PATH] [--repo PATH] [--remote URL] [--identity PATH] [--json]\n\nReads backup repository status.\n"
+	case "snapshots":
+		return "usage: telecrawl backup snapshots [--config PATH] [--repo PATH] [--remote URL] [--identity PATH] [--limit N] [--json]\n\nLists encrypted backup snapshots.\n"
+	default:
+		return "usage: telecrawl backup init|push|pull|status|snapshots [--json]\n\nManages encrypted archive backups.\n"
+	}
+}
+
+func topUsageText() string {
+	var out strings.Builder
+	printUsage(&out)
+	return out.String()
 }
 
 func defaultDBPath() string {

@@ -50,8 +50,8 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	if !slices.Contains(payload.Capabilities, "contacts_export") {
 		t.Fatalf("metadata capabilities = %#v, want contacts_export", payload.Capabilities)
 	}
-	if slices.Contains(payload.Capabilities, "open") {
-		t.Fatalf("metadata capabilities must not advertise open: %#v", payload.Capabilities)
+	if !slices.Contains(payload.Capabilities, "open") {
+		t.Fatalf("metadata capabilities = %#v, want open", payload.Capabilities)
 	}
 }
 
@@ -174,6 +174,118 @@ func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
 	})
 }
 
+func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
+	db := seedSearchArchive(t, 25)
+	search := runSearchJSON(t, db, "search", "launch", "--json")
+	if len(search.Results) == 0 {
+		t.Fatal("search returned no refs")
+	}
+	payload := runOpenJSON(t, db, search.Results[0].Ref)
+	if payload.Ref != search.Results[0].Ref || payload.Message.Ref != search.Results[0].Ref || !payload.Message.IsTarget {
+		t.Fatalf("open target = %#v, want %s", payload, search.Results[0].Ref)
+	}
+	if payload.Chat.Name != "example chat" || payload.Message.Chat.Name != "example chat" {
+		t.Fatalf("chat names = root %q message %q", payload.Chat.Name, payload.Message.Chat.Name)
+	}
+	if payload.Message.Sender.DisplayName != "Example Sender" || payload.Message.Text == "" {
+		t.Fatalf("message = %#v", payload.Message)
+	}
+	if _, err := time.Parse(time.RFC3339, payload.Message.Time); err != nil {
+		t.Fatalf("message time = %q err=%v", payload.Message.Time, err)
+	}
+	if payload.TargetPosition < 0 || payload.TargetPosition >= len(payload.Context) || !payload.Context[payload.TargetPosition].IsTarget {
+		t.Fatalf("target position = %d context = %#v", payload.TargetPosition, payload.Context)
+	}
+	for _, message := range payload.Context {
+		if message.Chat.Name != "example chat" || message.Sender.DisplayName == "" {
+			t.Fatalf("context message = %#v", message)
+		}
+		if _, err := time.Parse(time.RFC3339, message.Time); err != nil {
+			t.Fatalf("context time = %q err=%v", message.Time, err)
+		}
+	}
+}
+
+func TestOpenRejectsForeignRefWithContractError(t *testing.T) {
+	db := seedSearchArchive(t, 1)
+	stdout, stderr, err := runCLI(t, "--db", db, "open", "othercrawl:msg/1", "--json")
+	if err == nil {
+		t.Fatalf("open foreign ref succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if code := ExitCode(err); code != 1 {
+		t.Fatalf("exit code = %d, want 1", code)
+	}
+	var payload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Remedy  string `json:"remedy"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "invalid_ref" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("error payload = %#v", payload)
+	}
+}
+
+func TestOpenContextWindowIsBounded(t *testing.T) {
+	db := seedSearchArchive(t, 35)
+	payload := runOpenJSON(t, db, "telecrawl:msg/18")
+	if len(payload.Context) != 21 {
+		t.Fatalf("context messages = %d, want 21", len(payload.Context))
+	}
+	if payload.ContextWindow.Before != 10 || payload.ContextWindow.After != 10 {
+		t.Fatalf("context window = %#v", payload.ContextWindow)
+	}
+	if !payload.ContextWindow.BeforeTruncated || !payload.ContextWindow.AfterTruncated {
+		t.Fatalf("context truncation = %#v", payload.ContextWindow)
+	}
+	if payload.Context[0].Ref != "telecrawl:msg/8" || payload.Context[20].Ref != "telecrawl:msg/28" {
+		t.Fatalf("context refs = first %s last %s", payload.Context[0].Ref, payload.Context[20].Ref)
+	}
+}
+
+func TestPerVerbHelpExitsZero(t *testing.T) {
+	tests := [][]string{
+		{"metadata", "--help"},
+		{"doctor", "--help"},
+		{"import", "--help"},
+		{"sync", "--help"},
+		{"status", "--help"},
+		{"folders", "--help"},
+		{"contacts", "--help"},
+		{"contacts", "export", "--help"},
+		{"chats", "--help"},
+		{"topics", "--help"},
+		{"messages", "--help"},
+		{"search", "--help"},
+		{"open", "--help"},
+		{"backup", "--help"},
+		{"backup", "init", "--help"},
+		{"backup", "push", "--help"},
+		{"backup", "pull", "--help"},
+		{"backup", "status", "--help"},
+		{"backup", "snapshots", "--help"},
+		{"version", "--help"},
+	}
+	for _, args := range tests {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr, err := runCLI(t, args...)
+			if err != nil {
+				t.Fatalf("%v: err=%v stderr=%s stdout=%s", args, err, stderr, stdout)
+			}
+			if stderr != "" {
+				t.Fatalf("%v: stderr=%q", args, stderr)
+			}
+			if !strings.Contains(stdout, "usage: telecrawl") {
+				t.Fatalf("%v: help missing usage:\n%s", args, stdout)
+			}
+		})
+	}
+}
+
 type statusJSON struct {
 	AppID     string `json:"app_id"`
 	State     string `json:"state"`
@@ -210,6 +322,38 @@ type searchJSON struct {
 	} `json:"results"`
 	TotalMatches int  `json:"total_matches"`
 	Truncated    bool `json:"truncated"`
+}
+
+type openJSON struct {
+	Ref  string `json:"ref"`
+	Chat struct {
+		Ref  string `json:"ref"`
+		Name string `json:"name"`
+	} `json:"chat"`
+	Message       openMessageJSON   `json:"message"`
+	Context       []openMessageJSON `json:"context"`
+	ContextWindow struct {
+		Before          int  `json:"before"`
+		After           int  `json:"after"`
+		BeforeTruncated bool `json:"before_truncated"`
+		AfterTruncated  bool `json:"after_truncated"`
+	} `json:"context_window"`
+	TargetPosition int `json:"target_position"`
+}
+
+type openMessageJSON struct {
+	Ref      string `json:"ref"`
+	IsTarget bool   `json:"is_target"`
+	Time     string `json:"time"`
+	Chat     struct {
+		Ref  string `json:"ref"`
+		Name string `json:"name"`
+	} `json:"chat"`
+	Sender struct {
+		Ref         string `json:"ref"`
+		DisplayName string `json:"display_name"`
+	} `json:"sender"`
+	Text string `json:"text"`
 }
 
 func runCLI(t *testing.T, args ...string) (string, string, error) {
@@ -275,6 +419,19 @@ func runSearchJSON(t *testing.T, db string, args ...string) searchJSON {
 	var payload searchJSON
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout, err)
+	}
+	return payload
+}
+
+func runOpenJSON(t *testing.T, db string, ref string) openJSON {
+	t.Helper()
+	stdout, stderr, err := runCLI(t, "--db", db, "open", ref, "--json")
+	if err != nil {
+		t.Fatalf("open: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	var payload openJSON
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("open json = %s err=%v", stdout, err)
 	}
 	return payload
 }
