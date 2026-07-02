@@ -26,12 +26,19 @@ type SearchCmd struct {
 	Limit  int      `name:"limit" default:"20" help:"Maximum rows"`
 	After  string   `name:"after" help:"Start date"`
 	Before string   `name:"before" help:"End date"`
+	Who    string   `name:"who" placeholder:"identity" help:"Filter by exact identity; example: trawl search invoice --who \"Vendor Support\""`
+}
+
+func (SearchCmd) Help() string {
+	return `Examples:
+  trawl search invoice --who "Vendor Support"`
 }
 
 type searchOptions struct {
 	limit  int
 	after  string
 	before string
+	who    string
 }
 
 type SearchRow struct {
@@ -47,11 +54,14 @@ type SearchRow struct {
 }
 
 type searchSourceResult struct {
-	Source    Source
-	Rows      []SearchRow
-	Total     int
-	Truncated bool
-	Err       error
+	Source     Source
+	Rows       []SearchRow
+	Total      int
+	Truncated  bool
+	WhoMatched []string
+	Skipped    bool
+	SkipReason string
+	Err        error
 }
 
 type crawlerSearchResult struct {
@@ -67,14 +77,17 @@ type crawlerSearchEnvelope struct {
 	Results      []crawlerSearchResult `json:"results"`
 	TotalMatches int                   `json:"total_matches"`
 	Truncated    bool                  `json:"truncated"`
+	WhoMatched   []string              `json:"who_matched,omitempty"`
 }
 
 type federatedSearchEnvelope struct {
-	Query         string      `json:"query"`
-	Results       []SearchRow `json:"results"`
-	TotalMatches  int         `json:"total_matches"`
-	Truncated     bool        `json:"truncated"`
-	FailedSources []string    `json:"failed_sources,omitempty"`
+	Query          string      `json:"query"`
+	Results        []SearchRow `json:"results"`
+	TotalMatches   int         `json:"total_matches"`
+	Truncated      bool        `json:"truncated"`
+	WhoMatched     []string    `json:"who_matched,omitempty"`
+	FailedSources  []string    `json:"failed_sources,omitempty"`
+	SkippedSources []string    `json:"skipped_sources,omitempty"`
 }
 
 type mergedSearchResult struct {
@@ -82,6 +95,7 @@ type mergedSearchResult struct {
 	TotalMatches int
 	Truncated    bool
 	More         int
+	WhoMatched   []string
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
@@ -105,22 +119,28 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		limit:  limit,
 		after:  c.After,
 		before: c.Before,
+		who:    strings.TrimSpace(c.Who),
 	})
 	merged := mergedSearchRows(results, limit)
 	r.reportSearchFailures(results)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, federatedSearchEnvelope{
-			Query:         query,
-			Results:       merged.Rows,
-			TotalMatches:  merged.TotalMatches,
-			Truncated:     merged.Truncated,
-			FailedSources: failedSearchSources(results),
+			Query:          query,
+			Results:        merged.Rows,
+			TotalMatches:   merged.TotalMatches,
+			Truncated:      merged.Truncated,
+			WhoMatched:     merged.WhoMatched,
+			FailedSources:  failedSearchSources(results),
+			SkippedSources: skippedSearchSources(results),
 		}); err != nil {
 			return err
 		}
 		return searchExit(results)
 	}
 	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
+		if err := renderWhoMatchedNote(r.stdout, merged.WhoMatched, strings.TrimSpace(c.Who)); err != nil {
+			return err
+		}
 		if err := renderSearchTable(r.stdout, merged.Rows, merged.More); err != nil {
 			return err
 		}
@@ -158,14 +178,20 @@ func (r *Runtime) resolveSearchTarget(words []string, sourceCSV string) (string,
 func searchable(sources []Source) []Source {
 	var out []Source
 	for _, source := range sources {
-		for _, capability := range source.Capabilities {
-			if strings.EqualFold(strings.TrimSpace(capability), "search") {
-				out = append(out, source)
-				break
-			}
+		if hasCapability(source, "search") {
+			out = append(out, source)
 		}
 	}
 	return out
+}
+
+func hasCapability(source Source, capability string) bool {
+	for _, candidate := range source.Capabilities {
+		if strings.EqualFold(strings.TrimSpace(candidate), capability) {
+			return true
+		}
+	}
+	return false
 }
 
 func emptySearchEnvelope(query string) federatedSearchEnvelope {
@@ -210,6 +236,11 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		result.Err = source.MetadataErr
 		return result
 	}
+	if options.who != "" && !hasCapability(source, "who") {
+		result.Skipped = true
+		result.SkipReason = "cannot_filter_who"
+		return result
+	}
 	args := searchCommandArgs(query, options)
 	data, err := runCrawlerCommandJSON(ctx, source.Path, args...)
 	if err != nil {
@@ -223,6 +254,7 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 	}
 	result.Total = envelope.TotalMatches
 	result.Truncated = envelope.Truncated
+	result.WhoMatched = envelope.WhoMatched
 	result.Rows = make([]SearchRow, 0, len(envelope.Results))
 	for _, item := range envelope.Results {
 		parsed, ok := parseSearchTime(item.Time)
@@ -248,6 +280,9 @@ func searchCommandArgs(query string, options searchOptions) []string {
 	if options.before != "" {
 		args = append(args, "--before", options.before)
 	}
+	if options.who != "" {
+		args = append(args, "--who", options.who)
+	}
 	return args
 }
 
@@ -257,6 +292,7 @@ func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
 		Results      json.RawMessage `json:"results"`
 		TotalMatches int             `json:"total_matches"`
 		Truncated    bool            `json:"truncated"`
+		WhoMatched   []string        `json:"who_matched"`
 	}
 	if err := decodeContractJSON(data, &raw); err != nil {
 		return crawlerSearchEnvelope{}, err
@@ -274,6 +310,7 @@ func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
 		Results:      results,
 		TotalMatches: raw.TotalMatches,
 		Truncated:    raw.Truncated,
+		WhoMatched:   raw.WhoMatched,
 	}, nil
 }
 
@@ -281,13 +318,15 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 	var rows []SearchRow
 	total := 0
 	truncated := false
+	whoMatched := whoMatchedSet{}
 	for _, result := range results {
-		if result.Err != nil {
+		if result.Err != nil || result.Skipped {
 			continue
 		}
 		rows = append(rows, result.Rows...)
 		total += result.Total
 		truncated = truncated || result.Truncated
+		whoMatched.add(result.WhoMatched)
 	}
 	stableSearchSort(rows)
 	if len(rows) > limit {
@@ -306,7 +345,42 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 		TotalMatches: total,
 		Truncated:    truncated,
 		More:         more,
+		WhoMatched:   whoMatched.values(),
 	}
+}
+
+type whoMatchedSet struct {
+	seen       map[string]bool
+	valuesList []string
+}
+
+func (s *whoMatchedSet) add(values []string) {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if s.seen == nil {
+			s.seen = map[string]bool{}
+		}
+		if s.seen[key] {
+			continue
+		}
+		s.seen[key] = true
+		s.valuesList = append(s.valuesList, value)
+	}
+}
+
+func (s whoMatchedSet) values() []string {
+	if len(s.valuesList) == 0 {
+		return nil
+	}
+	values := append([]string(nil), s.valuesList...)
+	sort.SliceStable(values, func(i, j int) bool {
+		return strings.ToLower(values[i]) < strings.ToLower(values[j])
+	})
+	return values
 }
 
 func stableSearchSort(rows []SearchRow) {
@@ -341,7 +415,7 @@ func normalizeSearchLimit(limit int) int {
 func searchSuccesses(results []searchSourceResult) int {
 	successes := 0
 	for _, result := range results {
-		if result.Err == nil {
+		if result.Err == nil && !result.Skipped {
 			successes++
 		}
 	}
@@ -352,7 +426,7 @@ func searchExit(results []searchSourceResult) error {
 	failures := 0
 	successes := 0
 	for _, result := range results {
-		if result.Err != nil {
+		if result.Err != nil || result.Skipped {
 			failures++
 			continue
 		}
@@ -369,6 +443,10 @@ func searchExit(results []searchSourceResult) error {
 
 func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
 	for _, result := range results {
+		if result.Skipped {
+			_, _ = fmt.Fprintf(r.stderr, "%s cannot filter by person yet\n", result.Source.ID)
+			continue
+		}
 		if result.Err == nil {
 			continue
 		}
@@ -386,11 +464,37 @@ func failedSearchSources(results []searchSourceResult) []string {
 	return failures
 }
 
+func skippedSearchSources(results []searchSourceResult) []string {
+	var skipped []string
+	for _, result := range results {
+		if result.Skipped {
+			skipped = append(skipped, result.Source.ID)
+		}
+	}
+	return skipped
+}
+
 func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
 	failures := len(failedSearchSources(results))
-	if failures == 0 || failures == len(results) {
+	skipped := len(skippedSearchSources(results))
+	blocked := failures + skipped
+	if blocked == 0 || blocked == len(results) {
 		return nil
 	}
-	_, err := fmt.Fprintf(w, "note: %d of %d sources unavailable — results are partial (see stderr)\n", failures, len(results))
+	reason := "unavailable"
+	if skipped > 0 && failures == 0 {
+		reason = "skipped"
+	} else if skipped > 0 {
+		reason = "skipped or unavailable"
+	}
+	_, err := fmt.Fprintf(w, "note: %d of %d sources %s — results are partial (see stderr)\n", blocked, len(results), reason)
+	return err
+}
+
+func renderWhoMatchedNote(w io.Writer, whoMatched []string, input string) error {
+	if len(whoMatched) <= 1 {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "%d people matched '%s' — narrow with the exact name\n", len(whoMatched), input)
 	return err
 }
