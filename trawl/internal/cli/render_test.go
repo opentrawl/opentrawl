@@ -10,7 +10,7 @@ func TestRenderStatusTable(t *testing.T) {
 	now := time.Date(2026, 7, 2, 14, 5, 0, 0, time.UTC)
 	results := []StatusResult{
 		{
-			Source: Source{ID: "imessage"},
+			Source: Source{ID: "imessage", DisplayName: "iMessage"},
 			Status: StatusEnvelope{
 				AppID:     "imessage",
 				State:     "ok",
@@ -23,7 +23,7 @@ func TestRenderStatusTable(t *testing.T) {
 			},
 		},
 		{
-			Source: Source{ID: "telegram"},
+			Source: Source{ID: "telegram", DisplayName: "Telegram"},
 			Status: StatusEnvelope{
 				AppID:     "telegram",
 				State:     "stale",
@@ -34,7 +34,7 @@ func TestRenderStatusTable(t *testing.T) {
 			},
 		},
 		{
-			Source: Source{ID: "gmail"},
+			Source: Source{ID: "gmail", DisplayName: "Gmail"},
 			Status: StatusEnvelope{
 				AppID:   "gmail",
 				State:   "error",
@@ -46,10 +46,10 @@ func TestRenderStatusTable(t *testing.T) {
 	if err := renderStatusTable(&out, results, now); err != nil {
 		t.Fatal(err)
 	}
-	want := "SOURCE    STATE  FRESH   HEADLINE\n" +
-		"imessage  ok     2m ago  12,345 messages · 87 chats · since 2014\n" +
-		"telegram  stale  3d ago  23,456 messages\n" +
-		"gmail     error  —       auth expired — run: trawl doctor gmail\n"
+	want := "SOURCE    SURFACE   STATE  FRESH   HEADLINE\n" +
+		"imessage  iMessage  ok     2m ago  12,345 messages · 87 chats · since 2014\n" +
+		"telegram  Telegram  stale  3d ago  23,456 messages\n" +
+		"gmail     Gmail     error  —       auth expired — run: trawl doctor gmail\n"
 	if out.String() != want {
 		t.Fatalf("status table:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -72,9 +72,8 @@ func TestRenderDoctor(t *testing.T) {
 	if err := renderDoctor(&out, results); err != nil {
 		t.Fatal(err)
 	}
-	want := "SOURCE    CHECK                 STATE  MESSAGE\n" +
-		"imessage  source_store          ok\n" +
-		"imessage  tcc_full_disk_access  fail   cannot read the source database\n" +
+	want := "SOURCE    STATE  CHECKS\n" +
+		"imessage  FAIL   tcc_full_disk_access: cannot read the source database\n" +
 		"  remedy: grant Full Disk Access to Trawl in System Settings > Privacy\n"
 	if out.String() != want {
 		t.Fatalf("doctor output:\n%s\nwant:\n%s", out.String(), want)

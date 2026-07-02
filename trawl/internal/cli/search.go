@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -19,11 +20,11 @@ const (
 )
 
 type SearchCmd struct {
-	Query  string `arg:"" help:"Search query"`
-	Source string `name:"source" help:"Comma-separated source ids"`
-	Limit  int    `name:"limit" default:"20" help:"Maximum rows"`
-	After  string `name:"after" help:"Start date"`
-	Before string `name:"before" help:"End date"`
+	Query  []string `arg:"" help:"Search words; the first may name a source (trawl search imessage dinner)"`
+	Source string   `name:"source" help:"Comma-separated source ids"`
+	Limit  int      `name:"limit" default:"20" help:"Maximum rows"`
+	After  string   `name:"after" help:"Start date"`
+	Before string   `name:"before" help:"End date"`
 }
 
 type searchOptions struct {
@@ -83,13 +84,13 @@ type mergedSearchResult struct {
 
 func (c *SearchCmd) Run(r *Runtime) error {
 	limit := normalizeSearchLimit(c.Limit)
-	sources, err := r.selectedSourcesCSV(c.Source)
+	query, sources, err := r.resolveSearchTarget(c.Query, c.Source)
 	if err != nil {
 		return err
 	}
 	if len(sources) == 0 {
 		if r.root.JSON {
-			if err := writeJSON(r.stdout, emptySearchEnvelope(c.Query)); err != nil {
+			if err := writeJSON(r.stdout, emptySearchEnvelope(query)); err != nil {
 				return err
 			}
 		} else if _, err := fmt.Fprintln(r.stdout, "No crawlers found."); err != nil {
@@ -98,22 +99,22 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return nil
 	}
 
-	results := collectSearch(r.ctx, sources, c.Query, searchOptions{
+	results := collectSearch(r.ctx, sources, query, searchOptions{
 		limit:  limit,
 		after:  c.After,
 		before: c.Before,
 	})
 	merged := mergedSearchRows(results, limit)
+	r.reportSearchFailures(results)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, federatedSearchEnvelope{
-			Query:        c.Query,
+			Query:        query,
 			Results:      merged.Rows,
 			TotalMatches: merged.TotalMatches,
 			Truncated:    merged.Truncated,
 		}); err != nil {
 			return err
 		}
-		r.reportSearchFailures(results)
 		return searchExit(results)
 	}
 	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
@@ -121,8 +122,29 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			return err
 		}
 	}
-	r.reportSearchFailures(results)
 	return searchExit(results)
+}
+
+// resolveSearchTarget joins the query words, honouring one convenience:
+// when the first word names an installed source and more words follow,
+// it scopes the search — `trawl search imessage dinner` reads the way
+// people type it. --source always wins, and a query that genuinely
+// starts with a source name still works there.
+func (r *Runtime) resolveSearchTarget(words []string, sourceCSV string) (string, []Source, error) {
+	installed := discoverCrawlers(r.ctx, r.appsDir)
+	if sourceCSV == "" && len(words) >= 2 {
+		if source, ok := findSource(installed, words[0]); ok {
+			return strings.Join(words[1:], " "), []Source{source}, nil
+		}
+	}
+	if sourceCSV == "" {
+		return strings.Join(words, " "), installed, nil
+	}
+	sources, err := r.selectedSourcesCSV(sourceCSV)
+	if err != nil {
+		return "", nil, err
+	}
+	return strings.Join(words, " "), sources, nil
 }
 
 func emptySearchEnvelope(query string) federatedSearchEnvelope {

@@ -42,13 +42,27 @@ type DoctorCmd struct {
 	Source string `arg:"" optional:"" help:"Source id"`
 }
 
-func Execute(args []string, stdout, stderr io.Writer) error {
+// helpShown unwinds the stack when kong renders help, so help works
+// the same from the binary and from tests without exiting the process.
+type helpShown struct{}
+
+func Execute(args []string, stdout, stderr io.Writer) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			if _, ok := recovered.(helpShown); ok {
+				err = nil
+				return
+			}
+			panic(recovered)
+		}
+	}()
 	var root CLI
 	parser, err := kong.New(&root,
 		kong.Name("trawl"),
-		kong.Description("Federated control CLI for local-first crawlers."),
+		kong.Description("Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them. Start with `trawl status`."),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
+		kong.Exit(func(int) { panic(helpShown{}) }),
 		kong.Vars{"version": Version},
 	)
 	if err != nil {
@@ -58,7 +72,7 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		_, err := fmt.Fprintln(stdout, Version)
 		return err
 	}
-	args = normalizeGlobalFlags(args)
+	args = rewriteHelp(normalizeGlobalFlags(args))
 	if err := unknownCommand(args); err != nil {
 		return err
 	}
@@ -299,6 +313,26 @@ func normalizeGlobalFlags(args []string) []string {
 		rest = append(rest, arg)
 	}
 	return append(globals, rest...)
+}
+
+// rewriteHelp keeps `trawl` and `trawl help [command]` working the way
+// people type them: both become the --help kong already renders.
+func rewriteHelp(args []string) []string {
+	var flags, rest []string
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			continue
+		}
+		rest = append(rest, arg)
+	}
+	if len(rest) == 0 && len(flags) == 0 {
+		return []string{"--help"}
+	}
+	if len(rest) > 0 && rest[0] == "help" {
+		return append(rest[1:], "--help")
+	}
+	return args
 }
 
 func unknownCommand(args []string) error {

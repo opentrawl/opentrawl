@@ -24,7 +24,7 @@ func TestStatusExitCodes(t *testing.T) {
 			}},
 			args:       []string{"status"},
 			wantCode:   0,
-			wantStdout: "imessage  ok",
+			wantStdout: "imessage  Messages  ok",
 		},
 		{
 			name:       "requested source missing",
@@ -49,7 +49,7 @@ func TestStatusExitCodes(t *testing.T) {
 			},
 			args:       []string{"status"},
 			wantCode:   3,
-			wantStdout: "telegram  error",
+			wantStdout: "telegram  Telegram  error",
 			wantStderr: "telegram failed. Remedy: run: trawl doctor telegram",
 		},
 		{
@@ -60,7 +60,7 @@ func TestStatusExitCodes(t *testing.T) {
 			}},
 			args:       []string{"status"},
 			wantCode:   1,
-			wantStdout: "telecrawl  error",
+			wantStdout: "telecrawl  —",
 			wantStderr: "telecrawl failed. Remedy: run: trawl doctor telecrawl",
 		},
 	}
@@ -102,7 +102,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			}},
 			args:       []string{"doctor"},
 			wantCode:   0,
-			wantStdout: "imessage  source_store",
+			wantStdout: "imessage  ok     1 check: source_store",
 		},
 		{
 			name: "failing check",

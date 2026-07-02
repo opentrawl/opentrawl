@@ -24,28 +24,31 @@ func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error
 		_, err := fmt.Fprintln(w, "No crawlers found.")
 		return err
 	}
-	rows := make([][4]string, 0, len(results))
+	rows := make([][]string, 0, len(results))
 	for _, result := range results {
-		rows = append(rows, [4]string{
+		rows = append(rows, []string{
 			result.Source.ID,
+			firstNonEmpty(result.Source.DisplayName, "—"),
 			result.Status.State,
 			freshnessText(result.Status, now),
 			statusHeadline(result.Status),
 		})
 	}
-	return writeTable(w, [4]string{"SOURCE", "STATE", "FRESH", "HEADLINE"}, rows, nil)
+	return writeTable(w, []string{"SOURCE", "SURFACE", "STATE", "FRESH", "HEADLINE"}, rows, nil)
 }
 
-// writeTable sizes the first three columns to their widest cell and lets
-// the last column run free. remedies, when present, holds one indented
-// follow-up line per row (empty for none).
-func writeTable(w io.Writer, header [4]string, rows [][4]string, remedies []string) error {
+// writeTable sizes every column but the last to its widest cell; the
+// last column absorbs what remains of the output width and truncates
+// with an ellipsis rather than wrap. remedies, when present, holds one
+// indented follow-up line per row (empty for none).
+func writeTable(w io.Writer, header []string, rows [][]string, remedies []string) error {
 	widths := columnWidths(header, rows)
-	if err := writeTableRow(w, header, widths); err != nil {
+	free := lastColumnBudget(widths)
+	if err := writeTableRow(w, header, widths, free); err != nil {
 		return err
 	}
 	for i, row := range rows {
-		if err := writeTableRow(w, row, widths); err != nil {
+		if err := writeTableRow(w, row, widths, free); err != nil {
 			return err
 		}
 		if remedies != nil && remedies[i] != "" {
@@ -57,12 +60,28 @@ func writeTable(w io.Writer, header [4]string, rows [][4]string, remedies []stri
 	return nil
 }
 
-func writeTableRow(w io.Writer, row [4]string, widths [3]int) error {
-	line := padCell(row[0], widths[0]) + "  " +
-		padCell(row[1], widths[1]) + "  " +
-		padCell(row[2], widths[2]) + "  " +
-		row[3]
-	_, err := fmt.Fprintln(w, strings.TrimRight(line, " "))
+// lastColumnBudget is the room left for the free-running last column
+// after the fixed columns and their separators.
+func lastColumnBudget(widths []int) int {
+	used := 0
+	for _, width := range widths {
+		used += width + 2
+	}
+	free := outputWidth() - used
+	if free < 24 {
+		free = 24
+	}
+	return free
+}
+
+func writeTableRow(w io.Writer, row []string, widths []int, free int) error {
+	var line strings.Builder
+	for column, width := range widths {
+		line.WriteString(padCell(row[column], width))
+		line.WriteString("  ")
+	}
+	line.WriteString(truncateCell(row[len(row)-1], free))
+	_, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " "))
 	return err
 }
 
@@ -75,8 +94,18 @@ func padCell(cell string, width int) string {
 	return cell + strings.Repeat(" ", gap)
 }
 
-func columnWidths(header [4]string, rows [][4]string) [3]int {
-	var widths [3]int
+// truncateCell cuts a cell to width runes, marking the cut.
+func truncateCell(cell string, width int) string {
+	if utf8.RuneCountInString(cell) <= width || width < 2 {
+		return cell
+	}
+	runes := []rune(cell)
+	return strings.TrimRight(string(runes[:width-1]), " ") + "…"
+}
+
+// columnWidths sizes every column except the last, which runs free.
+func columnWidths(header []string, rows [][]string) []int {
+	widths := make([]int, len(header)-1)
 	for column := range widths {
 		widths[column] = utf8.RuneCountInString(header[column])
 		for _, row := range rows {
@@ -116,20 +145,39 @@ func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 	return renderAuth(w, status.Auth)
 }
 
+// renderDoctor is a glance first: healthy sources collapse to one line,
+// and only failing checks expand into message and remedy detail.
 func renderDoctor(w io.Writer, results []DoctorResult) error {
 	if len(results) == 0 {
 		_, err := fmt.Fprintln(w, "No crawlers found.")
 		return err
 	}
-	rows := make([][4]string, 0, len(results))
+	rows := make([][]string, 0, len(results))
 	remedies := make([]string, 0, len(results))
 	for _, result := range results {
+		var failed []DoctorCheck
+		names := make([]string, 0, len(result.Checks))
 		for _, check := range result.Checks {
-			rows = append(rows, [4]string{result.Source, check.ID, check.State, check.Message})
+			names = append(names, check.ID)
+			if checkFailed(check) {
+				failed = append(failed, check)
+			}
+		}
+		if len(failed) == 0 {
+			plural := "checks"
+			if len(result.Checks) == 1 {
+				plural = "check"
+			}
+			rows = append(rows, []string{result.Source, "ok", fmt.Sprintf("%d %s: %s", len(result.Checks), plural, strings.Join(names, ", "))})
+			remedies = append(remedies, "")
+			continue
+		}
+		for _, check := range failed {
+			rows = append(rows, []string{result.Source, "FAIL", check.ID + ": " + firstNonEmpty(check.Message, "check failed")})
 			remedies = append(remedies, check.Remedy)
 		}
 	}
-	return writeTable(w, [4]string{"SOURCE", "CHECK", "STATE", "MESSAGE"}, rows, remedies)
+	return writeTable(w, []string{"SOURCE", "STATE", "CHECKS"}, rows, remedies)
 }
 
 func renderDatabases(w io.Writer, status StatusEnvelope) error {

@@ -9,7 +9,7 @@ import (
 
 const (
 	AppID         = "calcrawl"
-	DisplayName   = "Calendar Crawl"
+	DisplayName   = "Calendar"
 	SchemaVersion = 2
 
 	DefaultSearchLimit = 20

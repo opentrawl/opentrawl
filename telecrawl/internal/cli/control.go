@@ -7,7 +7,7 @@ import (
 )
 
 func controlManifest() control.Manifest {
-	m := control.NewManifest("telecrawl", "Telegram Crawl", "telecrawl")
+	m := control.NewManifest("telecrawl", "Telegram", "telecrawl")
 	m.Description = "Local-first Telegram archive crawler."
 	m.Branding = control.Branding{SymbolName: "paperplane.fill", AccentColor: "#229ed9", BundleIdentifier: "org.telegram.desktop"}
 	m.Paths = control.Paths{
