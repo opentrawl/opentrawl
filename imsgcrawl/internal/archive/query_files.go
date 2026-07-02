@@ -26,6 +26,9 @@ var countSearchSQL string
 //go:embed queries/status/latest_message_date.sql
 var latestMessageDateSQL string
 
+//go:embed queries/status/earliest_message_date.sql
+var earliestMessageDateSQL string
+
 //go:embed queries/status/sync_state.sql
 var syncStateSQL string
 

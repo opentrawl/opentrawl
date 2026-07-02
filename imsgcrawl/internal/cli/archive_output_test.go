@@ -29,6 +29,7 @@ type messageJSONItem struct {
 	ChatID         string `json:"chat_id"`
 	SenderHandle   string `json:"sender_handle"`
 	SenderLabel    string `json:"sender_label"`
+	Time           string `json:"time"`
 	Service        string `json:"service"`
 	Text           string `json:"text"`
 	FromMe         bool   `json:"from_me"`

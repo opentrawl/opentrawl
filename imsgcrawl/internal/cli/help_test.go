@@ -21,6 +21,7 @@ func TestHelpIsCligDevShaped(t *testing.T) {
 		{"metadata help", []string{"metadata", "--help"}, "Print crawlkit control metadata"},
 		{"sync help", []string{"sync", "--help"}, "Refresh the local imsgcrawl archive"},
 		{"status help", []string{"status", "-h"}, "aggregate counts"},
+		{"doctor help", []string{"doctor", "--help"}, "Full Disk Access"},
 		{"chats help", []string{"chats", "--help"}, "--all"},
 		{"messages help", []string{"messages", "--help"}, "Default: 20"},
 		{"search help", []string{"search", "--help"}, "Default: 20"},

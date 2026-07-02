@@ -26,6 +26,8 @@ func (r *runtime) print(v any) error {
 		return printSyncText(r.stdout, value)
 	case statusOutput:
 		return printStatusText(r.stdout, value)
+	case doctorOutput:
+		return printDoctorText(r.stdout, value)
 	case chatListOutput:
 		return printChatsText(r.stdout, value)
 	case messageListOutput:
@@ -57,7 +59,7 @@ func printManifestText(w io.Writer, value control.Manifest) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, name := range []string{"metadata", "status", "sync", "chats", "messages", "search", "contact-export"} {
+	for _, name := range []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "contact-export"} {
 		command, ok := value.Commands[name]
 		if !ok {
 			continue
@@ -93,6 +95,11 @@ func printStatusText(w io.Writer, value statusOutput) error {
 			return err
 		}
 	}
+	if value.Freshness != nil {
+		if _, err := fmt.Fprintf(w, "\nFreshness:\n  Last sync: %s\n", value.Freshness.LastSync); err != nil {
+			return err
+		}
+	}
 	if len(value.Warnings) > 0 {
 		if _, err := io.WriteString(w, "\nWarnings:\n"); err != nil {
 			return err
@@ -109,6 +116,27 @@ func printStatusText(w io.Writer, value statusOutput) error {
 		}
 		for _, msg := range value.Errors {
 			if _, err := fmt.Fprintf(w, "  - %s\n", msg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func printDoctorText(w io.Writer, value doctorOutput) error {
+	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
+		return err
+	}
+	for _, check := range value.Checks {
+		line := fmt.Sprintf("  %s: %s", check.ID, check.State)
+		if check.Message != "" {
+			line += " - " + check.Message
+		}
+		if _, err := io.WriteString(w, line+"\n"); err != nil {
+			return err
+		}
+		if check.Remedy != "" {
+			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
 				return err
 			}
 		}
@@ -164,7 +192,7 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	rows := tableRows(len(value.Items))
 	for _, item := range value.Items {
 		rows = append(rows, []string{
-			formatAppleDate(item.Date),
+			formatArchiveTime(item.Time),
 			senderName(item.FromMe, item.SenderLabel),
 			displayMessageText(item.Text, item.HasAttachments),
 		})
@@ -189,7 +217,7 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 	rows := tableRows(len(value.Items))
 	for _, item := range value.Items {
 		rows = append(rows, []string{
-			formatAppleDate(item.Date),
+			formatArchiveTime(item.Time),
 			senderName(item.FromMe, item.SenderLabel),
 			searchConversation(item),
 			searchText(item),
@@ -220,11 +248,18 @@ func nextLimit(limit int, total int64) int {
 }
 
 func formatAppleDate(value int64) string {
-	if value <= 0 {
+	return formatArchiveTime(archive.FormatAppleDateTime(value))
+}
+
+func formatArchiveTime(value string) string {
+	if strings.TrimSpace(value) == "" {
 		return "-"
 	}
-	epoch := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
-	return epoch.Add(time.Duration(value)).Local().Format("2006-01-02 15:04")
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return value
+	}
+	return t.Format("2006-01-02 15:04")
 }
 
 func emptyDash(value string) string {

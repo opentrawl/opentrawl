@@ -9,6 +9,7 @@ const (
 	defaultChatLimit    = 50
 	defaultMessageLimit = 20
 	defaultSearchLimit  = 20
+	maxListLimit        = 200
 )
 
 type listHeader struct {

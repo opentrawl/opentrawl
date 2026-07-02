@@ -77,7 +77,7 @@ func createMessagesFixture(t *testing.T, path string) {
 		`insert into handle(rowid, id, service, uncanonicalized_id) values (6, 'opaque123', 'SMS', '')`,
 		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (1, 'chat-one', 'Older Name', '+15550100', 'iMessage', '', 0)`,
 		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (2, 'chat-two', 'Most Recent Name', '0015550100', 'SMS', '', 0)`,
-		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (3, 'chat-three', '', '+15550103', 'SMS', '', 0)`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (3, 'chat-three', 'Fixture Person', '+15550103', 'SMS', '', 0)`,
 		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (4, 'chat-four', '', 'group-chat', 'SMS', 'Cabinet Group', 0)`,
 		`insert into chat_handle_join(chat_id, handle_id) values (1, 1)`,
 		`insert into chat_handle_join(chat_id, handle_id) values (2, 2)`,
@@ -89,11 +89,13 @@ func createMessagesFixture(t *testing.T, path string) {
 		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (2, 'message-two', 2, 200, 'SMS', 0, '', null)`,
 		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (3, 'message-three', 2, 250, 'SMS', 1, 'latest launch note', null)`,
 		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (4, 'message-four', 4, 300, 'SMS', 0, 'group fallback row', null)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (5, 'message-five', 5, 350, 'SMS', 0, 'opaque sender row', null)`,
 		`insert into chat_message_join(chat_id, message_id) values (1, 1)`,
 		`insert into chat_message_join(chat_id, message_id) values (2, 2)`,
 		`insert into chat_message_join(chat_id, message_id) values (2, 3)`,
 		`insert into chat_message_join(chat_id, message_id) values (3, 4)`,
 		`insert into chat_message_join(chat_id, message_id) values (4, 4)`,
+		`insert into chat_message_join(chat_id, message_id) values (4, 5)`,
 		`insert into message_attachment_join(message_id, attachment_id) values (4, 42)`,
 	}
 	for _, stmt := range inserts {

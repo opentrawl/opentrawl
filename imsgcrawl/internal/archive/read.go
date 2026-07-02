@@ -36,6 +36,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if status.Messages, err = countTable(ctx, db, "messages"); err != nil {
 		return Status{}, err
 	}
+	_ = db.QueryRowContext(ctx, earliestMessageDateSQL).Scan(&status.EarliestMessageDate)
 	_ = db.QueryRowContext(ctx, latestMessageDateSQL).Scan(&status.LatestMessageDate)
 	return status, nil
 }
@@ -45,6 +46,9 @@ func (s *Store) CountChats(ctx context.Context) (int64, error) {
 }
 
 func (s *Store) Messages(ctx context.Context, chatID string, limit int, asc bool) ([]MessageRow, error) {
+	if s.schemaOutdated {
+		return nil, ErrSchemaOutdated
+	}
 	id, err := parseID(chatID, "chat")
 	if err != nil {
 		return nil, err
@@ -80,6 +84,9 @@ func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error)
 }
 
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	if s.schemaOutdated {
+		return nil, ErrSchemaOutdated
+	}
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, errors.New("search query is required")
@@ -100,9 +107,10 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchRe
 		var messageID, chatIDValue, handleID int64
 		var participantCount int64
 		var fromMe, hasAttachments int
-		var senderHandle, chatDisplayName string
+		var senderHandle, senderDisplayName, chatDisplayName string
 		var result SearchResult
-		if err := rows.Scan(&messageID, &result.GUID, &chatIDValue, &result.ChatTitle, &result.ChatKind, &result.ChatParticipantCount, &handleID, &senderHandle, &result.Date, &result.Service, &fromMe, &hasAttachments, &result.Text, &chatDisplayName, &participantCount, &result.Snippet); err != nil {
+		var rawDate int64
+		if err := rows.Scan(&messageID, &result.GUID, &chatIDValue, &result.ChatTitle, &result.ChatKind, &result.ChatParticipantCount, &handleID, &senderHandle, &senderDisplayName, &rawDate, &result.Service, &fromMe, &hasAttachments, &result.Text, &chatDisplayName, &participantCount, &result.Snippet); err != nil {
 			return nil, err
 		}
 		result.MessageID = strconv.FormatInt(messageID, 10)
@@ -113,9 +121,10 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchRe
 			result.HandleID = strconv.FormatInt(handleID, 10)
 		}
 		result.SenderHandle = senderHandle
+		result.Time = FormatAppleDateTime(rawDate)
 		result.FromMe = fromMe != 0
 		result.HasAttachments = hasAttachments != 0
-		result.SenderLabel = senderLabel(result.FromMe, senderHandle, chatDisplayName, participantCount)
+		result.SenderLabel = senderLabel(result.FromMe, senderDisplayName, senderHandle, chatDisplayName, participantCount)
 		out = append(out, result)
 	}
 	if err := rows.Err(); err != nil {
@@ -151,8 +160,9 @@ func scanMessages(rows *sql.Rows) ([]MessageRow, error) {
 		var messageID, chatID, handleID int64
 		var participantCount int64
 		var fromMe, hasAttachments int
-		var chatDisplayName string
-		if err := rows.Scan(&messageID, &row.GUID, &chatID, &handleID, &row.SenderHandle, &row.Date, &row.Service, &fromMe, &row.Text, &hasAttachments, &chatDisplayName, &participantCount); err != nil {
+		var senderDisplayName, chatDisplayName string
+		var rawDate int64
+		if err := rows.Scan(&messageID, &row.GUID, &chatID, &handleID, &row.SenderHandle, &senderDisplayName, &rawDate, &row.Service, &fromMe, &row.Text, &hasAttachments, &chatDisplayName, &participantCount); err != nil {
 			return nil, err
 		}
 		row.MessageID = strconv.FormatInt(messageID, 10)
@@ -160,17 +170,21 @@ func scanMessages(rows *sql.Rows) ([]MessageRow, error) {
 		if handleID != 0 {
 			row.HandleID = strconv.FormatInt(handleID, 10)
 		}
+		row.Time = FormatAppleDateTime(rawDate)
 		row.FromMe = fromMe != 0
 		row.HasAttachments = hasAttachments != 0
-		row.SenderLabel = senderLabel(row.FromMe, row.SenderHandle, chatDisplayName, participantCount)
+		row.SenderLabel = senderLabel(row.FromMe, senderDisplayName, row.SenderHandle, chatDisplayName, participantCount)
 		out = append(out, row)
 	}
 	return out, rows.Err()
 }
 
-func senderLabel(fromMe bool, handle, chatDisplayName string, participantCount int64) string {
+func senderLabel(fromMe bool, displayName, handle, chatDisplayName string, participantCount int64) string {
 	if fromMe {
 		return "me"
+	}
+	if display := strings.TrimSpace(displayName); display != "" {
+		return display
 	}
 	if participantCount <= 1 {
 		if display := strings.TrimSpace(chatDisplayName); display != "" {

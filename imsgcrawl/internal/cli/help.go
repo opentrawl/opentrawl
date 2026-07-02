@@ -10,13 +10,14 @@ func printUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `imsgcrawl reads local iMessage Messages data.
 
 Usage:
-  imsgcrawl [--json] [--db PATH] metadata
-  imsgcrawl [--json] [--db PATH] [--archive PATH] sync
-  imsgcrawl [--json] [--db PATH] [--archive PATH] status
-  imsgcrawl [--json] [--archive PATH] chats [--limit N|--all]
-  imsgcrawl [--json] [--archive PATH] messages --chat ID [--limit N|--all] [--asc]
-  imsgcrawl [--json] [--archive PATH] search [--limit N|--all] QUERY
-  imsgcrawl [--json] [--db PATH] contacts export
+  imsgcrawl [--db PATH] metadata [--json]
+  imsgcrawl [--db PATH] [--archive PATH] sync [--json]
+  imsgcrawl [--db PATH] [--archive PATH] status [--json]
+  imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
+  imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
+  imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
+  imsgcrawl [--archive PATH] search [--limit N|--all] QUERY [--json]
+  imsgcrawl [--db PATH] contacts export [--json]
   imsgcrawl help COMMAND
   imsgcrawl --version
 
@@ -42,25 +43,31 @@ func printCommandUsage(w io.Writer, args []string) error {
 	switch topic {
 	case "metadata":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--db PATH] metadata
+  imsgcrawl [--db PATH] metadata [--json]
 
 Print crawlkit control metadata.
 `)
 	case "sync":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--db PATH] [--archive PATH] sync
+  imsgcrawl [--db PATH] [--archive PATH] sync [--json]
 
 Refresh the local imsgcrawl archive from the Messages database.
 `)
 	case "status":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--db PATH] [--archive PATH] status
+  imsgcrawl [--db PATH] [--archive PATH] status [--json]
 
 Report source/archive readability and aggregate counts.
 `)
+	case "doctor":
+		_, _ = fmt.Fprint(w, `Usage:
+  imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
+
+Check source, archive and Full Disk Access readiness.
+`)
 	case "chats":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--archive PATH] chats [--limit N|--all]
+  imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
 
 List archived chats.
 
@@ -70,7 +77,7 @@ Flags:
 `)
 	case "messages":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--archive PATH] messages --chat ID [--limit N|--all] [--asc]
+  imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
 
 List archived messages for one chat.
 
@@ -82,7 +89,7 @@ Flags:
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--archive PATH] search [--limit N|--all] QUERY
+  imsgcrawl [--archive PATH] search [--limit N|--all] QUERY [--json]
 
 Search archived message text.
 
@@ -92,7 +99,7 @@ Flags:
 `)
 	case "contacts", "contacts export":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--json] [--db PATH] contacts export
+  imsgcrawl [--db PATH] contacts export [--json]
 
 Export phone contacts from the Messages source database.
 `)

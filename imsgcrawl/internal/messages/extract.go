@@ -25,6 +25,7 @@ type Handle struct {
 	ID                string
 	Service           string
 	UncanonicalizedID string
+	DisplayName       string
 }
 
 type Chat struct {
@@ -123,7 +124,7 @@ func extractHandles(ctx context.Context, db *sql.DB) ([]Handle, error) {
 	var out []Handle
 	for rows.Next() {
 		var h Handle
-		if err := rows.Scan(&h.SourceRowID, &h.ID, &h.Service, &h.UncanonicalizedID); err != nil {
+		if err := rows.Scan(&h.SourceRowID, &h.ID, &h.Service, &h.UncanonicalizedID, &h.DisplayName); err != nil {
 			return nil, err
 		}
 		out = append(out, h)

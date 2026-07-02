@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	ckstore "github.com/openclaw/crawlkit/store"
 )
@@ -48,4 +49,16 @@ func fileSize(path string) int64 {
 		return 0
 	}
 	return info.Size()
+}
+
+func AppleDateTime(value int64) time.Time {
+	epoch := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+	return epoch.Add(time.Duration(value)).Local()
+}
+
+func FormatAppleDateTime(value int64) string {
+	if value <= 0 {
+		return ""
+	}
+	return AppleDateTime(value).Format(time.RFC3339)
 }

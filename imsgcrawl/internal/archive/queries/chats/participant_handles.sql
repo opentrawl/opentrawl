@@ -1,4 +1,4 @@
-select h.handle
+select coalesce(nullif(trim(h.display_name), ''), h.handle)
 from chat_participants cp
 join handles h on h.source_rowid = cp.handle_rowid
 where cp.chat_rowid = ?

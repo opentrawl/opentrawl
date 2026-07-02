@@ -3,6 +3,8 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,8 +15,9 @@ import (
 )
 
 type Store struct {
-	store *store.Store
-	path  string
+	store          *store.Store
+	path           string
+	schemaOutdated bool
 }
 
 func DefaultPath() string {
@@ -41,8 +44,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{store: st, path: path}, nil
+	out := &Store{store: st, path: path}
+	if err := ensureArchiveSchema(ctx, st.DB()); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	return out, nil
 }
+
+// ErrSchemaOutdated means the archive predates a schema addition this
+// binary's read queries need. Reads never migrate (they open the archive
+// read-only), so the remedy is one sync, which upgrades the schema.
+var ErrSchemaOutdated = errors.New("archive schema predates this version; run: imsgcrawl sync")
 
 func OpenExisting(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
@@ -55,7 +68,12 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{store: st, path: path}, nil
+	hasDisplayName, err := tableHasColumn(ctx, st.DB(), "handles", "display_name")
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName}, nil
 }
 
 func (s *Store) Close() error {
@@ -101,7 +119,7 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, synce
 			}
 		}
 		for _, h := range data.Handles {
-			if _, err := tx.ExecContext(ctx, insertHandlesSQL, h.SourceRowID, h.ID, h.Service, h.UncanonicalizedID); err != nil {
+			if _, err := tx.ExecContext(ctx, insertHandlesSQL, h.SourceRowID, h.ID, h.Service, h.UncanonicalizedID, h.DisplayName); err != nil {
 				return err
 			}
 		}
@@ -150,4 +168,39 @@ func replaceSyncState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData
 		}
 	}
 	return nil
+}
+
+func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
+	hasDisplayName, err := tableHasColumn(ctx, db, "handles", "display_name")
+	if err != nil {
+		return err
+	}
+	if hasDisplayName {
+		return nil
+	}
+	if _, err := db.ExecContext(ctx, `alter table handles add column display_name text`); err != nil {
+		return fmt.Errorf("add handles.display_name: %w", err)
+	}
+	return nil
+}
+
+func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.QueryContext(ctx, `pragma table_info(`+table+`)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int
+		var name, columnType string
+		var notNull, pk int
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

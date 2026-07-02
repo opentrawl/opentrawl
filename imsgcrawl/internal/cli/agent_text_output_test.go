@@ -26,7 +26,8 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 		"conversation",
 		"group",
 		"Cabinet Group",
-		"+15550103",
+		"Fixture Person",
+		"opaque-handle",
 	)
 	assertNotSecretJSON(t, chats)
 
@@ -73,7 +74,7 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 	assertTextContains(t, directSender, "Most Recent Name")
 
 	groupSender := runOK(t, "--archive", archivePath, "messages", "--chat", "4", "--asc")
-	assertTextContains(t, groupSender, "Cabinet Group", "+15550103")
+	assertTextContains(t, groupSender, "Cabinet Group", "Fixture Person", "opaque-handle")
 }
 
 func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
@@ -97,7 +98,7 @@ func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 		"Messages source:",
 		"Local archive:",
 		"Chats: 4",
-		"Messages: 4",
+		"Messages: 5",
 	)
 	assertNotSecretJSON(t, syncOut)
 }
