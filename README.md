@@ -4,56 +4,88 @@ written_by: ai
 
 # OpenTrawl
 
-Local-first crawlers for your digital life. OpenTrawl crawls the
-services you use — iMessage, Telegram, WhatsApp, Gmail, Calendar,
-contacts, and more — into local SQLite archives, and gives humans and
-AI agents one entry point to all of them: the `trawl` CLI and a macOS
-app.
+One searchable archive of your digital life, on your machine.
 
-A trawl net drags the deep and brings everything up. Your data stays on
-your machine.
+Your history is scattered across apps that each lock it away: years of
+iMessage, Telegram, WhatsApp, Gmail, calendars, notes. Finding one
+conversation means searching five apps with five different search
+boxes. And an AI agent working for you can see none of it.
 
-Status: pre-v1. The design is settled; the suite is being assembled.
-Start with [docs/vision.md](docs/vision.md), then
-[docs/roadmap.md](docs/roadmap.md).
+OpenTrawl fixes both problems:
 
-## How it fits together
+- it crawls each service into a plain SQLite archive on your machine,
+  so your data is finally yours to query
+- it puts one standard interface over all of them — one CLI, one Mac
+  app — so you search everything at once instead of app by app
+- the archives are built for agents: give an assistant access and it
+  can onboard into your life in one shot — who the people around you
+  are, what is going on, what changed this week — instead of you
+  explaining yourself to it one prompt at a time
 
-1. One crawler per source. Each is a standalone Go binary that owns
-   extraction, its own SQLite archive, auth and privacy policy.
-2. Every crawler speaks the same control contract: `metadata`,
-   `status`, `sync`, `search`, `open`, `doctor`, all with `--json`, all
-   bounded, all readable by a human cold.
-3. The `trawl` CLI discovers installed crawlers through the contract
-   and federates them: `trawl status`, `trawl sync imessage`,
-   `trawl search "invoice" --source gmail,imessage`.
-4. The Mac app shows per-crawler health and handles authorisation. No
-   settings maze.
+Everything is local first. Archives live on your disk, nothing leaves
+your machine unless you explicitly send it somewhere, and read
+commands never write.
 
-Anyone can add a source: implement the contract in any language and
-your crawler appears in the CLI and the app.
+## How it works
 
-## Crawlers in this repo
+One crawler per service. Each is a standalone binary that extracts
+your data into its own local SQLite archive and speaks a small,
+common command contract. On top of that contract sit two surfaces:
 
-| directory | source | upstream |
+- `trawl`, a CLI that finds your installed crawlers and federates
+  them: `trawl status`, `trawl sync`, `trawl search "boat trip"`,
+  `trawl open <ref>`, `trawl doctor`
+- Trawl, a macOS menu bar app that handles authorisation, runs syncs
+  on a schedule, and shows the health of each archive
+
+Because the contract is the only coupling, anyone can add a service:
+implement the contract in any language and your crawler appears in
+the CLI and the app. See [docs/contract.md](docs/contract.md).
+
+## Crawlers
+
+| service | crawler | origin |
 |---|---|---|
-| imsgcrawl | iMessage | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
-| telecrawl | Telegram | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
-| wacrawl | WhatsApp | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
-| clawdex | contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
-| photoscrawl | Apple Photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
-| crawlkit | shared Go substrate | [openclaw/crawlkit](https://github.com/openclaw/crawlkit) |
+| iMessage | imsgcrawl | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
+| Telegram | telecrawl | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
+| WhatsApp | wacrawl | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
+| Contacts | clawdex | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
+| Apple Photos | photoscrawl | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
+| shared substrate | crawlkit | [openclaw/crawlkit](https://github.com/openclaw/crawlkit) |
 
-Gmail, Calendar, Apple Notes and Signal crawlers are on the
-[roadmap](docs/roadmap.md). Crawler directories are git subtrees synced
-both ways with their upstreams; see [docs/sync.md](docs/sync.md).
-OpenTrawl builds on the [OpenClaw](https://github.com/openclaw)
-ecosystem's crawler work rather than reinventing it.
+Gmail, Calendar, Apple Notes and Signal are in progress — see the
+[roadmap](docs/roadmap.md).
+
+## Status
+
+Pre-v1 and moving fast. The design is settled
+([vision](docs/vision.md)); the `trawl` CLI and the app are being
+built; the crawlers work today at varying levels of polish. Not yet
+packaged for end users.
+
+## Working on it
+
+Clone, run `devenv shell`, and everything works — crawlers build from
+source into a repo-local bin directory that `trawl` discovers. No
+global installs. Read [AGENTS.md](AGENTS.md) first (this repo is
+public and the privacy rules are enforced in CI), then
+[docs/sync.md](docs/sync.md) for how crawler directories sync with
+their upstreams.
+
+## Thanks
+
+OpenTrawl is derivative work. The crawlers and the crawlkit substrate
+originate in the [OpenClaw](https://github.com/openclaw) organisation,
+where much of this suite was built and is still actively improved —
+particular thanks to the maintainers there. Crawler directories are
+imported as git subtrees with their full history, keep their original
+LICENSE files, and changes flow back upstream as pull requests.
 
 ## Licence
 
-MIT (see [LICENSE](LICENSE)). Imported crawler directories keep their
-own LICENSE files and upstream attribution through full git history.
+MIT for the monorepo (see [LICENSE](LICENSE)). Each imported crawler
+directory keeps its own upstream licence, which governs that
+directory.
 
 ---
 
