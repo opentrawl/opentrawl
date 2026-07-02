@@ -8,6 +8,11 @@ Decision record for how OpenTrawl handles macOS privacy permissions
 (TCC). Decided early because attribution rules shape the process
 architecture.
 
+The binding constraint, from the vision's engineering principles:
+agents run unimpeded. TCC must never recurringly block the dev loop —
+after the one-time terminal grant, every agent builds, runs, crawls
+and verifies with zero humans in the loop.
+
 ## Facts that decide it
 
 - One permission covers almost everything in v1. iMessage, Apple

@@ -122,6 +122,12 @@ The bar for every line of code and every surface in this repo:
   abbreviated or hand-massaged fixtures for the paths that matter. This
   is the only way to prove the thing actually works and to catch quiet
   degradation.
+- Agents run unimpeded. The full dev loop — build, run, test, crawl,
+  verify — works end to end with zero humans in the loop. One-time
+  human setup (a permission grant, a signing certificate) is
+  acceptable exactly once per machine; anything that recurringly needs
+  a human is a design failure. If an agent hits a wall a human must
+  clear, the wall is the bug.
 - Declarative, minimal install surface. The dev loop needs no install
   step at all: one devenv at the monorepo root, crawlers run from
   source, and a repo-local bin directory on the shell's PATH is where

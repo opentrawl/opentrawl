@@ -40,6 +40,12 @@ cleanest slice so far).
 - [ ] no secret material in any output, error or log
 - [ ] reads never mutate: search/open/status trigger no sync, no
       import, no writes
+- [ ] renders properly across terminal widths: wrapping and column
+      layout tested at narrow and wide sizes, no broken tables
+- [ ] the screenshot test: a screenshot of any command's output is
+      grokkable on its own — someone who has never seen the tool
+      understands what they are looking at
+
 
 ## Product
 
