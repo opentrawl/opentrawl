@@ -85,7 +85,29 @@ while read -r source state; do
     fi
   fi
 
-  # 4. Documented truthfully: every "$source <verb>" line the README
+  # 4. Human output is a first-class surface: capture it raw for the
+  # model review, and catch outputs that are not even prose — leaked
+  # JSON, Go struct dumps, fmt errors. The JSON side is covered above;
+  # both modes go into the transcript.
+  for verb in status doctor; do
+    out="$("$source" "$verb" 2>&1 | head -40)"
+    printf '%s\n' "$out" > "$rawdir/$source-$verb-human.txt"
+    case "$out" in
+      ""|\{*|\[*)
+        bad "$verb human output is empty or leaks JSON" ;;
+      *"%!"*|*"map["*|*"{[{"*)
+        bad "$verb human output prints raw Go values" ;;
+      *) ok "$verb human output is prose" ;;
+    esac
+  done
+  if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
+    "$source" search "the" --limit 3 > "$rawdir/$source-search-human.txt" 2>&1
+    if [ -n "$ref" ]; then
+      "$source" open "$ref" > "$rawdir/$source-open-human.txt" 2>&1
+    fi
+  fi
+
+  # 5. Documented truthfully: every "$source <verb>" line the README
   # shows in a shell block must at least be a real command.
   readme="$repo/$source/README.md"
   if [ -f "$readme" ]; then
@@ -105,6 +127,8 @@ done <<< "$sources"
 
 echo
 echo "== cross-source, through trawl =="
+trawl status > "$rawdir/trawl-status-human.txt" 2>&1
+trawl search "the" --limit 5 > "$rawdir/trawl-search-human.txt" 2>&1
 probe() { # probe <query> <source-or-empty> -> search results JSON
   local capture="$rawdir/trawl-search-$(echo "$1" | tr -c 'a-zA-Z0-9' '-').json"
   if [ -n "$2" ]; then
