@@ -43,7 +43,9 @@ type CLI struct {
 
 	Version kong.VersionFlag `name:"version" help:"Print version and exit"`
 
+	Metadata MetadataCmd `cmd:"" help:"Print control metadata"`
 	Init     InitCmd     `cmd:"" help:"Initialize a contacts data repo"`
+	Status   StatusCmd   `cmd:"" help:"Show contacts repo status"`
 	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit clawdex config"`
 	Person   PersonCmd   `cmd:"" help:"Manage people"`
 	Note     NoteCmd     `cmd:"" help:"Manage notes"`
@@ -724,10 +726,17 @@ type DoctorCmd struct {
 }
 
 func (c *DoctorCmd) Run(r *Runtime) error {
-	store := r.store
-	if c.Repair {
-		store.Repo.Config.Repair.AutoRepair = false
+	// Contract JSON diagnostics are read-only; --repair keeps clawdex's legacy repair report.
+	if r.root.JSON && !c.Repair {
+		return r.print(r.doctorReport())
 	}
+	if !c.Repair {
+		if err := r.repo.Require(); err != nil {
+			return r.printDoctorReport(r.doctorReport())
+		}
+	}
+	store := r.store
+	store.Repo.Config.Repair.AutoRepair = false
 	people, err := store.People()
 	if err != nil {
 		return err

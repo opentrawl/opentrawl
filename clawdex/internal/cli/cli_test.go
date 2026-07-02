@@ -838,13 +838,20 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "person", "add", "No Repo"},
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "person", "list"},
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "export", "vcard", "--all", "-o", "-"},
-		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "doctor"},
 	} {
 		out.Reset()
 		errOut.Reset()
 		if err := Execute(args, &out, &errOut); err == nil {
 			t.Fatalf("expected error for %v", args)
 		}
+	}
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "doctor"}, &out, &errOut); err != nil {
+		t.Fatalf("doctor should diagnose a missing repo: %v stdout=%s stderr=%s", err, out.String(), errOut.String())
+	}
+	if !strings.Contains(out.String(), "contacts_repo: fail") || !strings.Contains(out.String(), "run clawdex init") {
+		t.Fatalf("doctor missing repo out = %s", out.String())
 	}
 	out.Reset()
 	errOut.Reset()
