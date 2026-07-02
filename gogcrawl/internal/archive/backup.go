@@ -143,9 +143,12 @@ func (r backupMessageRow) message() (Message, error) {
 	if err != nil {
 		return Message{}, fmt.Errorf("message %s raw: %w", id, err)
 	}
-	parsed, err := parseRawMail(raw)
-	if err != nil {
-		return Message{}, fmt.Errorf("message %s rfc822: %w", id, err)
+	// Real mailboxes contain mail with garbage headers (spam with HTML
+	// where headers belong). A message that will not parse is archived
+	// degraded — id, time, size — never dropped, never fatal.
+	parsed, parseErr := parseRawMail(raw)
+	if parseErr != nil {
+		parsed = parsedMail{Subject: "(unparseable message)"}
 	}
 	// A rare message carries no internalDate; fall back to the RFC822
 	// Date header, else archive it dateless. One odd message must
