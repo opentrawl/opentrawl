@@ -124,7 +124,11 @@ threads window around the target, never dump.
 }
 ```
 
-Every failing check names the exact remedy.
+Every failing check names the exact remedy. doctor diagnoses only
+what genuinely needs the world to change: permissions, expired auth,
+a costly sync, a missing source store. A check whose remedy would be
+safe, idempotent and local is a design bug — the crawler should have
+healed that state during normal operation.
 
 ## Output rules
 
@@ -145,8 +149,11 @@ These apply to every command, both output modes:
 - Progress (sync) is JSONL events in JSON mode
   (`{"event": "progress", "stage": "messages", "done": 120, "total": 900}`),
   human progress on stderr otherwise.
-- Reads never mutate. `search`, `open`, `status`, `metadata` never
-  trigger a sync, never auto-import, never write to the archive.
+- Reads never change content. `search`, `open`, `status`, `metadata`
+  never trigger a sync, never auto-import, never touch messages,
+  contacts or events. They may refresh derived caches (indexes) at
+  the point of use, logging one line when they do — derived state
+  self-heals; there are no repair verbs.
 
 ## Conformance
 
