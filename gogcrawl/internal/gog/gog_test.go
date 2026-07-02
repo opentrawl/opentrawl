@@ -4,34 +4,20 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
 
-func TestSearchMessagesParsesSearchPage(t *testing.T) {
-	client := New(fakeGog(t, `cat <<'JSON'
-{"messages":[{"id":"m1","threadId":"t1","date":"Thu, 02 Jul 2026 14:03:11 +0200","from":"Alice Example <alice@example.com>","subject":"Re: project sync","labels":["INBOX"],"body":"Project sync moved to Friday."}],"nextPageToken":"p2"}
-JSON
+func TestVersionReturnsRawVersion(t *testing.T) {
+	client := New(fakeGog(t, `printf 'v0.31.1 (test)\n'
 `))
-	page, err := client.SearchMessages(context.Background(), SearchRequest{Query: DefaultArchiveQuery, Max: 10})
+	version, err := client.Version(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.NextPageToken != "p2" {
-		t.Fatalf("next page = %q, want p2", page.NextPageToken)
-	}
-	if len(page.Messages) != 1 {
-		t.Fatalf("messages = %d, want 1", len(page.Messages))
-	}
-	msg := page.Messages[0]
-	if msg.ID != "m1" || msg.ThreadID != "t1" {
-		t.Fatalf("message ids = %#v", msg)
-	}
-	if msg.FromName != "Alice Example" || msg.FromAddress != "alice@example.com" {
-		t.Fatalf("from = %q <%s>", msg.FromName, msg.FromAddress)
-	}
-	if got := msg.Time.Format(time.RFC3339); got != "2026-07-02T14:03:11+02:00" {
-		t.Fatalf("time = %s", got)
+	if version != "v0.31.1 (test)" {
+		t.Fatalf("version = %q", version)
 	}
 }
 
@@ -67,6 +53,36 @@ JSON
 	}
 }
 
+func TestBackupWrappersUseRepoAndNoPush(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "calls.log")
+	client := New(fakeGog(t, `printf '%s\n' "$*" >> "`+logPath+`"
+`))
+	ctx := context.Background()
+	if err := client.BackupInit(ctx, "/tmp/repo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.BackupGmailPush(ctx, BackupPushRequest{Repo: "/tmp/repo", Query: "from:me", Max: 25}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.BackupCat(ctx, "/tmp/repo", "data/gmail/account/messages/part-000001.jsonl.gz.age"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(data)
+	for _, want := range []string{
+		"backup init --no-push --repo /tmp/repo",
+		"backup gmail push --no-push --gmail-cache --repo /tmp/repo --query from:me --max 25",
+		"backup cat --no-pull --repo /tmp/repo data/gmail/account/messages/part-000001.jsonl.gz.age",
+	} {
+		if !strings.Contains(log, want) {
+			t.Fatalf("calls missing %q in:\n%s", want, log)
+		}
+	}
+}
+
 func fakeGog(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "gog")
@@ -75,26 +91,4 @@ func fakeGog(t *testing.T, body string) string {
 		t.Fatal(err)
 	}
 	return path
-}
-
-func TestParseDateAcceptsGogFormats(t *testing.T) {
-	for _, value := range []string{
-		"2026-07-02 15:19",
-		"17 mar 2026 11:09:45",
-		"Mon, 02 Jan 2006 15:04:05 -0700",
-	} {
-		if _, err := parseDate(value); err != nil {
-			t.Errorf("parseDate(%q) = %v", value, err)
-		}
-	}
-}
-
-func TestParseSearchMessageToleratesBadDate(t *testing.T) {
-	msg, err := parseSearchMessage(searchMessage{ID: "m1", Date: ""})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !msg.Time.IsZero() {
-		t.Fatalf("time = %v, want zero", msg.Time)
-	}
 }

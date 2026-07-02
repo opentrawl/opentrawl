@@ -40,6 +40,14 @@ func DefaultPaths() (config.Paths, error) {
 	return (config.App{Name: "gogcrawl", BaseDir: "~/.gogcrawl"}).DefaultPaths()
 }
 
+func DefaultBackupRepoPath() string {
+	paths, err := DefaultPaths()
+	if err != nil {
+		return filepath.Join(".gogcrawl", "backup")
+	}
+	return filepath.Join(paths.BaseDir, "backup")
+}
+
 func Exists(path string) bool {
 	if path == "" {
 		path = DefaultPath()
@@ -158,31 +166,52 @@ func recordTime(rec state.Record) time.Time {
 }
 
 func insertMessage(ctx context.Context, tx *sql.Tx, msg Message) (bool, error) {
-	// A rare message arrives with no readable date; archive it dateless
-	// ('' and 0, rendered as no time on read) rather than losing it or
-	// halting the crawl.
 	timeText, timeUnix := "", int64(0)
 	if when := msg.Time; !when.IsZero() {
 		timeText = formatArchiveTime(when)
 		timeUnix = when.Unix()
 	}
-	result, err := tx.ExecContext(ctx, `
-insert or ignore into messages(
-  id, thread_id, time, time_unix, from_name, from_address, to_address, subject, body, labels_json
-) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, msg.ID, msg.ThreadID, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels))
-	if err != nil {
-		return false, fmt.Errorf("insert message: %w", err)
-	}
-	rows, err := result.RowsAffected()
-	if err != nil {
+	var existed int
+	if err := tx.QueryRowContext(ctx, `select count(*) from messages where id = ?`, msg.ID).Scan(&existed); err != nil {
 		return false, err
 	}
-	if rows == 0 {
-		return false, nil
+	if _, err := tx.ExecContext(ctx, `delete from messages_fts where id = ?`, msg.ID); err != nil {
+		return false, fmt.Errorf("delete message fts: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `delete from attachments where message_id = ?`, msg.ID); err != nil {
+		return false, fmt.Errorf("delete attachments: %w", err)
+	}
+	_, err := tx.ExecContext(ctx, `
+insert into messages(
+  id, thread_id, history_id, internal_date_ms, time, time_unix, from_name, from_address, to_address, cc_address, subject, body, labels_json
+) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(id) do update set
+  thread_id = excluded.thread_id,
+  history_id = excluded.history_id,
+  internal_date_ms = excluded.internal_date_ms,
+  time = excluded.time,
+  time_unix = excluded.time_unix,
+  from_name = excluded.from_name,
+  from_address = excluded.from_address,
+  to_address = excluded.to_address,
+  cc_address = excluded.cc_address,
+  subject = excluded.subject,
+  body = excluded.body,
+  labels_json = excluded.labels_json
+`, msg.ID, msg.ThreadID, msg.HistoryID, msg.InternalDateMS, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.CcAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels))
+	if err != nil {
+		return false, fmt.Errorf("insert message: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, msg.ID, msg.Subject, msg.Body); err != nil {
 		return false, fmt.Errorf("insert message fts: %w", err)
 	}
-	return true, nil
+	for _, attachment := range msg.Attachments {
+		if _, err := tx.ExecContext(ctx, `
+insert into attachments(message_id, filename, mime_type, size_bytes)
+values (?, ?, ?, ?)
+`, msg.ID, attachment.Filename, attachment.MIMEType, attachment.Size); err != nil {
+			return false, fmt.Errorf("insert attachment: %w", err)
+		}
+	}
+	return existed == 0, nil
 }

@@ -79,3 +79,54 @@ func displaySender(name, address string) string {
 	}
 	return "unknown sender"
 }
+
+func plainSnippet(query, subject, body string) string {
+	// Keep this local until crawlkit grows the canonical helper: plain
+	// fragment, flattened whitespace, no FTS marker brackets.
+	text := flattenWhitespace(strings.TrimSpace(subject + " " + body))
+	if text == "" {
+		return ""
+	}
+	needle := firstSearchTerm(query)
+	start := 0
+	if needle != "" {
+		if idx := strings.Index(strings.ToLower(text), strings.ToLower(needle)); idx >= 0 {
+			start = snippetRuneStart(text, idx, 60)
+		}
+	}
+	const limit = 180
+	runes := []rune(text)
+	if len(runes)-start <= limit {
+		return strings.TrimSpace(string(runes[start:]))
+	}
+	return strings.TrimSpace(string(runes[start : start+limit]))
+}
+
+func flattenWhitespace(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func firstSearchTerm(query string) string {
+	for _, field := range strings.Fields(query) {
+		field = strings.Trim(field, `"'()`)
+		if field != "" {
+			return field
+		}
+	}
+	return ""
+}
+
+func snippetRuneStart(text string, byteIndex, contextRunes int) int {
+	start := 0
+	for byteOffset := range text {
+		if byteOffset >= byteIndex {
+			break
+		}
+		start++
+	}
+	start -= contextRunes
+	if start < 0 {
+		return 0
+	}
+	return start
+}

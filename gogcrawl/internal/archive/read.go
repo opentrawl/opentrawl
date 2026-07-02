@@ -49,8 +49,7 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 		limit = 20
 	}
 	rows, err := s.store.DB().QueryContext(ctx, `
-select m.id, m.time, m.from_name, m.from_address, m.subject,
-       snippet(messages_fts, -1, '[', ']', '...', 12)
+select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
 from messages_fts
 join messages m on m.id = messages_fts.id
 `+where+`
@@ -63,8 +62,8 @@ limit ?
 	defer func() { _ = rows.Close() }()
 	result := SearchResult{Query: query, TotalMatches: total, Truncated: total > int64(limit)}
 	for rows.Next() {
-		var id, when, fromName, fromAddress, subject, snippet string
-		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &snippet); err != nil {
+		var id, when, fromName, fromAddress, subject, body string
+		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body); err != nil {
 			return SearchResult{}, err
 		}
 		result.Results = append(result.Results, SearchHit{
@@ -72,7 +71,7 @@ limit ?
 			Time:    when,
 			Who:     displaySender(fromName, fromAddress),
 			Where:   subject,
-			Snippet: strings.TrimSpace(snippet),
+			Snippet: plainSnippet(query, subject, body),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -92,10 +91,10 @@ func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error)
 	var out OpenResult
 	var labels string
 	err = s.store.DB().QueryRowContext(ctx, `
-select id, thread_id, time, from_name, from_address, to_address, subject, body, labels_json
+select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json
 from messages
 where id = ?
-`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.Subject, &out.Body, &labels)
+`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.CcAddress, &out.Headers.Subject, &out.Body, &labels)
 	if err == sql.ErrNoRows {
 		return OpenResult{}, fmt.Errorf("message not found: %s", ref)
 	}
@@ -104,6 +103,35 @@ where id = ?
 	}
 	out.Ref = RefPrefix + out.ID
 	out.Labels = parseLabels(labels)
+	out.Attachments, err = s.messageAttachments(ctx, out.ID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	return out, nil
+}
+
+func (s *Store) messageAttachments(ctx context.Context, id string) ([]Attachment, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `
+select filename, mime_type, size_bytes
+from attachments
+where message_id = ?
+order by id
+`, id)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Attachment
+	for rows.Next() {
+		var attachment Attachment
+		if err := rows.Scan(&attachment.Filename, &attachment.MIMEType, &attachment.Size); err != nil {
+			return nil, err
+		}
+		out = append(out, attachment)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

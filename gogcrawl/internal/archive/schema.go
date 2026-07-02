@@ -1,19 +1,45 @@
 package archive
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 create table if not exists messages (
   id text primary key,
   thread_id text not null,
+  history_id text not null default '',
+  internal_date_ms integer not null default 0,
   time text not null,
   time_unix integer not null,
   from_name text not null default '',
   from_address text not null default '',
   to_address text not null default '',
+  cc_address text not null default '',
   subject text not null default '',
   body text not null default '',
   labels_json text not null default '[]'
+);
+
+create table if not exists attachments (
+  id integer primary key autoincrement,
+  message_id text not null references messages(id) on delete cascade,
+  filename text not null default '',
+  mime_type text not null default '',
+  size_bytes integer not null default 0
+);
+
+create table if not exists gmail_labels (
+  id text primary key,
+  name text not null default '',
+  type text not null default '',
+  raw_json text not null default '{}'
+);
+
+create table if not exists ingested_shards (
+  path text primary key,
+  hash text not null,
+  kind text not null,
+  rows integer not null default 0,
+  ingested_at text not null
 );
 
 create virtual table if not exists messages_fts using fts5(
@@ -24,4 +50,5 @@ create virtual table if not exists messages_fts using fts5(
 
 create index if not exists idx_messages_time on messages(time_unix desc, id);
 create index if not exists idx_messages_from_address on messages(from_address);
+create index if not exists idx_attachments_message_id on attachments(message_id);
 `

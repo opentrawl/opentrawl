@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -16,7 +17,7 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 	defer st.Close()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	result, err := st.InsertMessages(ctx, []Message{
-		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", Subject: "Project sync", Body: "The project sync is Friday.", Labels: []string{"INBOX"}},
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", ToAddress: "bob@example.com", CcAddress: "carol@example.com", Subject: "Project sync", Body: "The project sync is Friday.", Labels: []string{"INBOX"}},
 		{ID: "m2", ThreadID: "t2", Time: now.Add(-time.Hour), FromName: "Bob", FromAddress: "bob@example.com", Subject: "Lunch", Body: "Lunch moved later.", Labels: []string{"SENT"}},
 	})
 	if err != nil {
@@ -48,12 +49,15 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 	if search.Results[0].Ref != RefPrefix+"m1" || search.Results[0].Who != "Alice" {
 		t.Fatalf("hit = %#v", search.Results[0])
 	}
+	if strings.ContainsAny(search.Results[0].Snippet, "[]") {
+		t.Fatalf("snippet has marker brackets: %q", search.Results[0].Snippet)
+	}
 	open, err := st.OpenMessage(ctx, RefPrefix+"m1")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if open.Headers.ToAddress != "" {
-		t.Fatalf("to address = %q, want empty", open.Headers.ToAddress)
+	if open.Headers.ToAddress != "bob@example.com" || open.Headers.CcAddress != "carol@example.com" {
+		t.Fatalf("headers = %#v", open.Headers)
 	}
 	if open.Body != "The project sync is Friday." {
 		t.Fatalf("body = %q", open.Body)

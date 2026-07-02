@@ -7,19 +7,35 @@ written_by: ai
 `gogcrawl` archives Gmail locally through the authenticated `gog` CLI.
 It does not call Google APIs itself.
 
-The archive lives at `~/.gogcrawl/gogcrawl.db` by default. It stores
-Gmail message IDs, thread IDs, message time, sender name and address,
-subject, labels and the plain-text body returned by:
+Requirements:
+
+- `gog` 0.31 or newer
+- a valid `gog` Gmail login
+
+`gogcli` releases weekly. Check the installed version with:
 
 ```sh
-gog gmail messages search "-in:chats" --json --max 100 --include-body
+gog --version
 ```
 
-The query keeps the archive broad while excluding Gmail chat records.
-Sync starts at the newest page, writes one SQLite transaction per page,
-and stops at the first already-archived page after a completed sync. If
-a previous sync did not complete, the next run crawls through instead of
-using that early stop.
+The archive lives at `~/.gogcrawl/gogcrawl.db` by default. `gogcrawl`
+also owns a local encrypted backup repo at `~/.gogcrawl/backup`.
+
+Sync runs:
+
+```sh
+gog backup gmail push --no-push --repo ~/.gogcrawl/backup
+```
+
+`gog` owns Gmail fetch, cache resume and checkpointing. `gogcrawl`
+decrypts new or changed backup shards with `gog backup cat`, then writes
+derived SQLite rows for search and open. The backup repo must not have a
+git remote, because `gogcrawl` never pushes mail data anywhere.
+
+The SQLite archive stores Gmail message IDs, thread IDs, precise message
+time from `internalDate`, sender, `to`, `cc`, subject, label IDs, labels,
+plain-text body and attachment metadata. It does not store attachment
+bytes.
 
 ## Commands
 
@@ -27,6 +43,7 @@ using that early stop.
 gogcrawl metadata --json
 gogcrawl status --json
 gogcrawl sync --json
+gogcrawl sync --query "from:me" --max 25 --json
 gogcrawl search "project sync" --json
 gogcrawl open gogcrawl:msg/<gmail-message-id> --json
 gogcrawl doctor --json
@@ -48,10 +65,3 @@ All message content and contact data stays on the local machine.
 
 This repository is public. Tests and examples use synthetic data only,
 such as `alice@example.com`, `bob@example.com` and `+15550101000`.
-
-## v0 gap
-
-`gog gmail messages search --include-body` does not return a `to`
-header. `gogcrawl` stores `to_address` as an empty string in v0 rather
-than calling `gog gmail get` for every message during sync. `open` is an
-archive-only read and does not refresh headers from `gog`.

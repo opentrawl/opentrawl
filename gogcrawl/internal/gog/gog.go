@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/mail"
 	"os/exec"
@@ -14,35 +13,12 @@ import (
 )
 
 const (
-	DefaultBinary       = "gog"
-	DefaultPageSize     = 100
-	DefaultArchiveQuery = "-in:chats"
+	DefaultBinary   = "gog"
+	DefaultPageSize = 100
 )
 
 type Client struct {
 	Binary string
-}
-
-type MessagePage struct {
-	Messages      []Message
-	NextPageToken string
-}
-
-type Message struct {
-	ID          string
-	ThreadID    string
-	Time        time.Time
-	FromName    string
-	FromAddress string
-	Subject     string
-	Labels      []string
-	Body        string
-}
-
-type SearchRequest struct {
-	Query     string
-	Max       int
-	PageToken string
 }
 
 type AuthStatus struct {
@@ -62,19 +38,10 @@ type Contact struct {
 	Phone    string
 }
 
-type searchResponse struct {
-	Messages      []searchMessage `json:"messages"`
-	NextPageToken string          `json:"nextPageToken"`
-}
-
-type searchMessage struct {
-	ID       string   `json:"id"`
-	ThreadID string   `json:"threadId"`
-	Date     string   `json:"date"`
-	From     string   `json:"from"`
-	Subject  string   `json:"subject"`
-	Labels   []string `json:"labels"`
-	Body     string   `json:"body"`
+type BackupPushRequest struct {
+	Repo  string
+	Query string
+	Max   int
 }
 
 type contactsResponse struct {
@@ -90,35 +57,12 @@ func New(binary string) Client {
 	return Client{Binary: binary}
 }
 
-func (c Client) SearchMessages(ctx context.Context, req SearchRequest) (MessagePage, error) {
-	max := req.Max
-	if max <= 0 {
-		max = DefaultPageSize
-	}
-	args := []string{"gmail", "messages", "search", "--json", "--max", strconv.Itoa(max)}
-	if token := strings.TrimSpace(req.PageToken); token != "" {
-		args = append(args, "--page", token)
-	}
-	// The query goes last, behind "--": archive queries like "-in:chats"
-	// start with a dash and gog would otherwise read them as flags.
-	args = append(args, "--include-body", "--", strings.TrimSpace(req.Query))
-	data, err := c.run(ctx, args...)
+func (c Client) Version(ctx context.Context) (string, error) {
+	data, err := c.run(ctx, "--version")
 	if err != nil {
-		return MessagePage{}, err
+		return "", err
 	}
-	var raw searchResponse
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return MessagePage{}, fmt.Errorf("decode gog message search: %w", err)
-	}
-	out := MessagePage{NextPageToken: strings.TrimSpace(raw.NextPageToken)}
-	for _, item := range raw.Messages {
-		msg, err := parseSearchMessage(item)
-		if err != nil {
-			return MessagePage{}, err
-		}
-		out.Messages = append(out.Messages, msg)
-	}
-	return out, nil
+	return strings.TrimSpace(string(data)), nil
 }
 
 func (c Client) AuthStatus(ctx context.Context) (AuthStatus, error) {
@@ -172,6 +116,39 @@ func (c Client) Contacts(ctx context.Context, max int, pageToken string) (Contac
 	return ContactPage(raw), nil
 }
 
+func (c Client) BackupInit(ctx context.Context, repo string) error {
+	if strings.TrimSpace(repo) == "" {
+		return fmt.Errorf("backup repo path is required")
+	}
+	_, err := c.run(ctx, "backup", "init", "--no-push", "--repo", repo)
+	return err
+}
+
+func (c Client) BackupGmailPush(ctx context.Context, req BackupPushRequest) error {
+	if strings.TrimSpace(req.Repo) == "" {
+		return fmt.Errorf("backup repo path is required")
+	}
+	args := []string{"backup", "gmail", "push", "--no-push", "--gmail-cache", "--repo", req.Repo}
+	if query := strings.TrimSpace(req.Query); query != "" {
+		args = append(args, "--query", query)
+	}
+	if req.Max > 0 {
+		args = append(args, "--max", strconv.Itoa(req.Max))
+	}
+	_, err := c.run(ctx, args...)
+	return err
+}
+
+func (c Client) BackupCat(ctx context.Context, repo, shard string) ([]byte, error) {
+	if strings.TrimSpace(repo) == "" {
+		return nil, fmt.Errorf("backup repo path is required")
+	}
+	if strings.TrimSpace(shard) == "" {
+		return nil, fmt.Errorf("backup shard path is required")
+	}
+	return c.run(ctx, "backup", "cat", "--no-pull", "--repo", repo, shard)
+}
+
 func (c Client) LookPath() (string, error) {
 	return exec.LookPath(c.binary())
 }
@@ -187,6 +164,14 @@ func (c Client) run(ctx context.Context, args ...string) ([]byte, error) {
 	return stdout.Bytes(), nil
 }
 
+func commandError(args []string, err error, stderr string) error {
+	stderr = strings.TrimSpace(stderr)
+	if stderr == "" {
+		return fmt.Errorf("gog %s: %w", strings.Join(args, " "), err)
+	}
+	return fmt.Errorf("gog %s: %w: %s", strings.Join(args, " "), err, stderr)
+}
+
 func (c Client) binary() string {
 	if strings.TrimSpace(c.Binary) == "" {
 		return DefaultBinary
@@ -194,57 +179,13 @@ func (c Client) binary() string {
 	return c.Binary
 }
 
-func parseSearchMessage(raw searchMessage) (Message, error) {
-	// A message with an unreadable or absent date keeps a zero time
-	// rather than aborting the crawl; the read path renders it dateless.
-	when, _ := parseDate(raw.Date)
-	name, address := parseAddress(raw.From)
-	return Message{
-		ID:          strings.TrimSpace(raw.ID),
-		ThreadID:    strings.TrimSpace(raw.ThreadID),
-		Time:        when,
-		FromName:    name,
-		FromAddress: address,
-		Subject:     strings.TrimSpace(raw.Subject),
-		Labels:      append([]string(nil), raw.Labels...),
-		Body:        raw.Body,
-	}, nil
-}
-
-func parseAddress(value string) (string, string) {
+func ParseAddress(value string) (string, string) {
 	value = strings.TrimSpace(value)
 	addr, err := mail.ParseAddress(value)
 	if err != nil {
 		return "", value
 	}
 	return strings.TrimSpace(addr.Name), strings.TrimSpace(addr.Address)
-}
-
-func parseDate(value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return time.Time{}, errors.New("empty date")
-	}
-	if parsed, err := mail.ParseDate(value); err == nil {
-		return parsed, nil
-	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, time.RFC1123Z, time.RFC1123} {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed, nil
-		}
-	}
-	// gog renders message dates in local time, usually "2026-07-02 15:19"
-	// but sometimes "17 mar 2026 11:09:45" (lowercase month) for older mail.
-	titled := strings.Title(strings.ToLower(value)) //nolint:staticcheck // ASCII month names only
-	for _, layout := range []string{"2006-01-02 15:04:05", "2006-01-02 15:04", "2 Jan 2006 15:04:05", "2 Jan 2006 15:04"} {
-		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			return parsed, nil
-		}
-		if parsed, err := time.ParseInLocation(layout, titled, time.Local); err == nil {
-			return parsed, nil
-		}
-	}
-	return time.Time{}, fmt.Errorf("unsupported date %q", value)
 }
 
 func parseExpiry(value string) *time.Time {
@@ -257,23 +198,4 @@ func parseExpiry(value string) *time.Time {
 		return nil
 	}
 	return &parsed
-}
-
-func commandError(args []string, err error, stderr string) error {
-	name := "gog"
-	if len(args) > 0 {
-		limit := len(args)
-		if limit > 3 {
-			limit = 3
-		}
-		name += " " + strings.Join(args[:limit], " ")
-	}
-	stderr = strings.TrimSpace(stderr)
-	if stderr == "" {
-		return fmt.Errorf("%s failed: %w", name, err)
-	}
-	if lines := strings.Split(stderr, "\n"); len(lines) > 1 {
-		stderr = lines[len(lines)-1]
-	}
-	return fmt.Errorf("%s failed: %w: %s", name, err, stderr)
 }

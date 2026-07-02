@@ -79,8 +79,29 @@ func printSearchText(w io.Writer, value archive.SearchResult) error {
 }
 
 func printOpenText(w io.Writer, value archive.OpenResult) error {
-	if _, err := fmt.Fprintf(w, "Message %s\nTime: %s\nFrom: %s\nTo: %s\nSubject: %s\n\n%s\n",
-		value.Ref, value.Time, senderText(value.Headers), emptyDash(value.Headers.ToAddress), emptyDash(value.Headers.Subject), value.Body); err != nil {
+	if _, err := fmt.Fprintf(w, "Message %s\nTime: %s\nFrom: %s\nTo: %s\n",
+		value.Ref, value.Time, senderText(value.Headers), emptyDash(value.Headers.ToAddress)); err != nil {
+		return err
+	}
+	if value.Headers.CcAddress != "" {
+		if _, err := fmt.Fprintf(w, "Cc: %s\n", value.Headers.CcAddress); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(w, "Subject: %s\n", emptyDash(value.Headers.Subject)); err != nil {
+		return err
+	}
+	if len(value.Attachments) > 0 {
+		if _, err := io.WriteString(w, "Attachments:\n"); err != nil {
+			return err
+		}
+		for _, attachment := range value.Attachments {
+			if _, err := fmt.Fprintf(w, "  %s (%s, %d bytes)\n", emptyDash(attachment.Filename), emptyDash(attachment.MIMEType), attachment.Size); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := fmt.Fprintf(w, "\n%s\n", value.Body); err != nil {
 		return err
 	}
 	return nil
