@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+# Creates the persistent OpenTrawl dev code-signing identity, once.
+# Rerunning is a no-op. See docs/tcc.md: TCC grants are keyed to the
+# signing identity, so dev builds must always sign with this exact
+# certificate — never ad hoc — or the app's Full Disk Access grant dies
+# on the next rebuild.
+#
+# Everything lives in a dedicated keychain so no login-keychain password
+# prompt is ever needed. The keychain password is random, stored only in
+# a user-private file, and protects nothing sensitive (a self-signed dev
+# cert), so this stays scriptable end to end.
+set -euo pipefail
+
+identity="OpenTrawl Dev Signing"
+keychain="opentrawl-dev.keychain"
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl"
+pass_file="$config_dir/dev-keychain-pass"
+
+# A self-signed cert is not trust-anchored, so `security find-identity`
+# will not list it even though codesign can sign with it. The only
+# reliable existence check is to actually try signing something.
+already_signs() {
+  security unlock-keychain -p "$(cat "$pass_file" 2>/dev/null)" "$keychain" 2>/dev/null || return 1
+  local probe
+  probe="$(mktemp)"
+  cp /bin/echo "$probe" # a real Mach-O, so codesign behaves as in production
+  local ok=1
+  # grep reads to EOF (no -q): with pipefail, -q's early exit would
+  # SIGPIPE codesign and turn a successful probe into a false negative.
+  if codesign --sign "$identity" --keychain "$keychain" --force "$probe" 2>/dev/null &&
+     codesign -dvvv "$probe" 2>&1 | grep "^Authority=$identity" >/dev/null; then
+    ok=0
+  fi
+  rm -f "$probe"
+  return $ok
+}
+
+if [ -f "$pass_file" ] && already_signs; then
+  echo "dev signing identity already works: $identity"
+  exit 0
+fi
+
+mkdir -p "$config_dir"
+if [ ! -f "$pass_file" ]; then
+  (umask 177 && openssl rand -hex 24 > "$pass_file")
+fi
+pass="$(cat "$pass_file")"
+
+if ! security show-keychain-info "$keychain" >/dev/null 2>&1; then
+  security create-keychain -p "$pass" "$keychain"
+fi
+security unlock-keychain -p "$pass" "$keychain"
+security set-keychain-settings "$keychain"
+
+workdir="$(mktemp -d)"
+trap 'rm -rf "$workdir"' EXIT
+openssl req -new -x509 -newkey rsa:2048 -nodes -days 3650 \
+  -keyout "$workdir/key.pem" -out "$workdir/cert.pem" \
+  -subj "/CN=$identity" \
+  -addext "keyUsage=critical,digitalSignature" \
+  -addext "extendedKeyUsage=critical,codeSigning" \
+  -addext "basicConstraints=critical,CA:false" 2>/dev/null
+# macOS `security import` only understands the legacy PKCS12
+# algorithms, not OpenSSL 3 defaults.
+openssl pkcs12 -export -out "$workdir/identity.p12" \
+  -inkey "$workdir/key.pem" -in "$workdir/cert.pem" \
+  -name "$identity" -passout pass:transient \
+  -certpbe PBE-SHA1-3DES -keypbe PBE-SHA1-3DES -macalg sha1
+
+security import "$workdir/identity.p12" -k "$keychain" -P transient \
+  -T /usr/bin/codesign
+security set-key-partition-list -S apple-tool:,apple:,codesign: \
+  -s -k "$pass" "$keychain" >/dev/null
+
+keychains=$(security list-keychains -d user | tr -d '" ')
+if ! echo "$keychains" | grep -q "$keychain"; then
+  # shellcheck disable=SC2086
+  security list-keychains -d user -s $keychains "$HOME/Library/Keychains/$keychain-db"
+fi
+
+if already_signs; then
+  echo "created dev signing identity: $identity"
+  echo "sign with: codesign --sign \"$identity\" --keychain \"$keychain\" <target>"
+else
+  echo "error: identity imported but codesign cannot use it" >&2
+  exit 1
+fi
