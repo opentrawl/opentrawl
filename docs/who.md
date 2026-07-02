@@ -57,7 +57,28 @@ reading help is the API we should have built. The observed grammar
 decides the final surface; this document records the starting
 hypothesis, not the answer.
 
-Open questions the stub must answer:
+### Experiment record (2026-07-02, two cold agents)
+
+Both agents (gpt-5.5, Opus) behaved identically at the decision points:
+read `--help` then `search --help` first, then used `--who` correctly
+on their very first real search — one help line was enough teaching.
+Neither ever reached for Gmail-style `with:`/`from:` operators, killing
+that option. Neither used the `who` resolver to orient; both ran it
+late, as verification. One agent passed `--who "Vendor Support"` — an
+organization, not a person — and one typed a multi-word name unquoted
+after `--who`, taking only the first word.
+
+Design consequences, adopted:
+- `--who` is the grammar. No search operators.
+- Resolve-first dies as a workflow assumption. Ambiguity surfaces in
+  search output instead: when the filter matches several people, the
+  result says so and names `trawl who` as the disambiguator.
+- `--who` filters any sender identity — people and senders like
+  organizations — not a curated-person allowlist.
+- Multi-word names need an unambiguous exact form agents can pass
+  after resolving; the resolver's output must hand it to them.
+
+Open questions the stub answered or replaced:
 - Do agents reach for `--who alice` or `search alice: boat` or
   `search with:alice boat`? (Gmail taught the world `from:`-style
   operators; they may be the more discoverable grammar.)
