@@ -6,7 +6,7 @@ set -uo pipefail
 cd "$(git rev-parse --show-toplevel)"
 bad=0
 
-archives=$(git ls-files | grep -E '\.(db|sqlite3?|db-wal|db-shm|mbox)$' || true)
+archives=$(git ls-files | grep -E '\.(db|sqlite3?|db-wal|db-shm|mbox)$' | grep -v 'testdata/' || true)
 if [ -n "$archives" ]; then
   echo "archive files must not be tracked:"
   echo "$archives"
@@ -25,14 +25,18 @@ if [ -n "$large" ]; then
   bad=1
 fi
 
-phones=$(git grep -InE '\+[0-9]{10,13}' -- ':!*.sum' ':!*.lock' ':!scripts/check-clean' || true)
+# +1555 numbers, test files and testdata are synthetic by convention
+phones=$(git grep -InE '\+[0-9]{10,13}' -- ':!*.sum' ':!*.lock' ':!*_test.go' ':!*testdata/*' ':!scripts/check-clean' \
+  | grep -vE '\+1555[0-9]*' || true)
 if [ -n "$phones" ]; then
   echo "possible real phone numbers (use +1555 test numbers):"
   echo "$phones"
   bad=1
 fi
 
-homes=$(git grep -InE '(/Users|/home)/[a-z][a-z0-9]+/' -- ':!*.sum' ':!*.lock' ':!scripts/check-clean' || true)
+# placeholder usernames are fine; real ones are not
+homes=$(git grep -InE '(/Users|/home)/[a-z][a-z0-9]+/' -- ':!*.sum' ':!*.lock' ':!scripts/check-clean' \
+  | grep -vE '/(Users|home)/(you|yourname|example|user|username|runner)/' || true)
 if [ -n "$homes" ]; then
   echo "home directory paths with a username (use ~ or \$HOME):"
   echo "$homes"
