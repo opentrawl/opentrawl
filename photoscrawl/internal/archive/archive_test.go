@@ -32,10 +32,13 @@ func TestInitAndStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after.State != "ready" {
-		t.Fatalf("state after init = %q, want ready", after.State)
+	if after.State != "empty" {
+		t.Fatalf("state after init = %q, want empty", after.State)
 	}
-	if len(after.Counts) == 0 {
-		t.Fatal("status returned no counts")
+	if len(after.Counts) != 1 || after.Counts[0].ID != "photos" || after.Counts[0].Value != 0 {
+		t.Fatalf("status counts after init = %#v", after.Counts)
+	}
+	if after.Freshness != nil {
+		t.Fatalf("freshness after init = %#v", after.Freshness)
 	}
 }

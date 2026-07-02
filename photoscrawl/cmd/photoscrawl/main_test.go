@@ -10,3 +10,21 @@ func TestJoinedQueryPreservesLauncherArguments(t *testing.T) {
 		t.Fatalf("positional query = %q", got)
 	}
 }
+
+func TestStripTrailingJSON(t *testing.T) {
+	args, ok := stripTrailingJSON([]string{"boat", "trip", "--json"})
+	if !ok {
+		t.Fatal("expected trailing JSON flag")
+	}
+	if got := joinedQuery("", args); got != "boat trip" {
+		t.Fatalf("query after strip = %q", got)
+	}
+
+	args, ok = stripTrailingJSON([]string{"--json", "boat"})
+	if ok {
+		t.Fatal("did not expect non-trailing JSON flag to be stripped")
+	}
+	if got := joinedQuery("", args); got != "--json boat" {
+		t.Fatalf("query without strip = %q", got)
+	}
+}

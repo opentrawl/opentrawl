@@ -2,8 +2,19 @@ package archive
 
 import "github.com/openclaw/crawlkit/control"
 
-func ControlManifest(paths Paths) control.Manifest {
-	manifest := control.NewManifest("photoscrawl", "Apple Photos", "photoscrawl")
+const (
+	Version         = "dev"
+	ContractVersion = 1
+)
+
+type Manifest struct {
+	control.Manifest
+	Version         string `json:"version"`
+	ContractVersion int    `json:"contract_version"`
+}
+
+func ControlManifest(paths Paths) Manifest {
+	manifest := control.NewManifest("photoscrawl", "Photos", "photoscrawl")
 	manifest.Description = "Local-first, read-only Apple Photos archive crawler."
 	manifest.Branding = control.Branding{
 		SymbolName:       "photo.on.rectangle.angled",
@@ -17,7 +28,7 @@ func ControlManifest(paths Paths) control.Manifest {
 		DefaultLogs:     paths.LogDir,
 		DefaultShare:    paths.ShareDir,
 	}
-	manifest.Capabilities = []string{"metadata", "status", "init", "search"}
+	manifest.Capabilities = []string{"status", "crawl", "search", "open", "doctor"}
 	manifest.Privacy = control.Privacy{
 		ExportsSecrets: false,
 		LocalOnlyScopes: []string{
@@ -32,7 +43,14 @@ func ControlManifest(paths Paths) control.Manifest {
 		"metadata": {Title: "Metadata", Argv: []string{"photoscrawl", "metadata", "--json"}, JSON: true},
 		"status":   {Title: "Status", Argv: []string{"photoscrawl", "status", "--json"}, JSON: true},
 		"init":     {Title: "Initialize archive", Argv: []string{"photoscrawl", "init", "--json"}, JSON: true, Mutates: true},
-		"query":    {Title: "Search", Argv: []string{"photoscrawl", "search", "--json", "--query"}, JSON: true},
+		"crawl":    {Title: "Crawl", Argv: []string{"photoscrawl", "crawl", "--library", "<path>", "--json"}, JSON: true, Mutates: true},
+		"search":   {Title: "Search", Argv: []string{"photoscrawl", "search", "<query>", "--json"}, JSON: true},
+		"open":     {Title: "Open", Argv: []string{"photoscrawl", "open", "<id>", "--json"}, JSON: true},
+		"doctor":   {Title: "Doctor", Argv: []string{"photoscrawl", "doctor", "--json"}, JSON: true},
 	}
-	return manifest
+	return Manifest{
+		Manifest:        manifest,
+		Version:         Version,
+		ContractVersion: ContractVersion,
+	}
 }
