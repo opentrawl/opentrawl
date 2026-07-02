@@ -100,6 +100,17 @@ self-declared headline metrics, in display order — the app and
 `--limit` defaults to 20, hard maximum 200. `--after`/`--before`
 narrow by time.
 
+v1.1 adds `--who <identity>` for crawlers that declare the `who`
+capability: filter matches to items where the identity is a
+participant — sender, recipient or chat member — by case-insensitive
+full-name match against stored display names. It matches any sender
+identity, organisations included, and applies no fuzziness: fuzzy
+resolution happens before the filter, in `trawl who`. When the given
+name matches more than one distinct participant, the envelope carries
+`who_matched` listing them, so callers can surface the ambiguity.
+Crawlers that build alias indexes declare `short_refs` (see
+[short-refs.md](short-refs.md)).
+
 A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item
 is what `open` is for.
