@@ -1,42 +1,17 @@
 package cli
 
 import (
-	"path/filepath"
 	"strings"
-	"time"
 
 	crawlog "github.com/openclaw/crawlkit/log"
+	ckrender "github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
-type logTailOutput struct {
-	Path            string         `json:"path,omitempty"`
-	LastRun         *logRunOutput  `json:"last_run,omitempty"`
-	MostRecentError *logLineOutput `json:"most_recent_error,omitempty"`
-	Errors          []string       `json:"errors,omitempty"`
-}
-
-type logRunOutput struct {
-	RunID      string         `json:"run_id"`
-	Command    string         `json:"command"`
-	Outcome    string         `json:"outcome"`
-	StartedAt  string         `json:"started_at,omitempty"`
-	FinishedAt string         `json:"finished_at,omitempty"`
-	LastEvent  string         `json:"last_event,omitempty"`
-	LineCount  int            `json:"line_count"`
-	Error      *logLineOutput `json:"error,omitempty"`
-}
-
-type logLineOutput struct {
-	Time    string `json:"time"`
-	RunID   string `json:"run_id"`
-	Command string `json:"command"`
-	Event   string `json:"event"`
-	Message string `json:"message"`
-}
+type logTailOutput = ckrender.LogTail
 
 func (r *runtime) logTail() logTailOutput {
-	out := logTailOutput{Path: filepath.Join(defaultBaseDir(), archive.AppID, "logs", "current.log")}
+	out := logTailOutput{}
 	reader, err := crawlog.NewReader(defaultBaseDir(), archive.AppID)
 	if err != nil {
 		out.Errors = []string{err.Error()}
@@ -52,7 +27,8 @@ func (r *runtime) logTail() logTailOutput {
 		out.LastRun = summarizeLogRun(runID, filterLogRun(lines, runID))
 	}
 	if line, ok := mostRecentLogError(lines, currentRunID); ok {
-		out.MostRecentError = newLogLineOutput(line)
+		copied := line
+		out.MostRecentError = &copied
 	}
 	return out
 }
@@ -78,11 +54,11 @@ func filterLogRun(lines []crawlog.Line, runID string) []crawlog.Line {
 	return out
 }
 
-func summarizeLogRun(runID string, lines []crawlog.Line) *logRunOutput {
+func summarizeLogRun(runID string, lines []crawlog.Line) *crawlog.RunSummary {
 	if len(lines) == 0 {
 		return nil
 	}
-	out := &logRunOutput{RunID: runID, Outcome: "running"}
+	out := &crawlog.RunSummary{RunID: runID, Outcome: "running"}
 	for _, line := range lines {
 		if line.Event == "grammar" {
 			continue
@@ -92,15 +68,16 @@ func summarizeLogRun(runID string, lines []crawlog.Line) *logRunOutput {
 		}
 		out.LastEvent = line.Event
 		out.LineCount++
-		if out.StartedAt == "" || line.Event == "start" {
-			out.StartedAt = line.Timestamp.Format(time.RFC3339)
+		if out.StartedAt.IsZero() || line.Event == "start" {
+			out.StartedAt = line.Timestamp
 		}
 		if line.Level == crawlog.LevelError {
 			out.Outcome = "error"
-			out.Error = newLogLineOutput(line)
+			copied := line
+			out.Error = &copied
 		}
 		if line.Event == "finish" {
-			out.FinishedAt = line.Timestamp.Format(time.RFC3339)
+			out.FinishedAt = line.Timestamp
 			if strings.Contains(line.Message, "outcome=success") {
 				out.Outcome = "success"
 			} else if strings.Contains(line.Message, "outcome=error") {
@@ -125,14 +102,4 @@ func mostRecentLogError(lines []crawlog.Line, currentRunID string) (crawlog.Line
 		}
 	}
 	return crawlog.Line{}, false
-}
-
-func newLogLineOutput(line crawlog.Line) *logLineOutput {
-	return &logLineOutput{
-		Time:    line.Timestamp.Format(time.RFC3339),
-		RunID:   line.RunID,
-		Command: line.Command,
-		Event:   line.Event,
-		Message: line.Message,
-	}
 }

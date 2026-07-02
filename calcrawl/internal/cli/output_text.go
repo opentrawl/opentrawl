@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/openclaw/crawlkit/control"
+	ckrender "github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
@@ -46,42 +47,45 @@ func printManifestText(w io.Writer, value manifestOutput) error {
 }
 
 func printStatusText(w io.Writer, value statusText) error {
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", value.State, value.Summary); err != nil {
-		return err
+	return ckrender.WriteStatus(w, renderStatus(value))
+}
+
+func renderStatus(value statusText) ckrender.Status {
+	out := ckrender.Status{
+		State:   ckrender.StatusState(value.State),
+		Summary: value.Summary,
+		Log:     value.Log,
+		Errors:  value.Errors,
 	}
 	if value.Archive != nil {
-		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n", value.Archive.ArchivePath); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(w, "  Last sync: %s\n  Calendars: %d\n  Events: %d\n", emptyDash(value.LastSyncAt), value.Archive.Calendars, value.Archive.Events); err != nil {
-			return err
-		}
+		out.Sections = append(out.Sections, ckrender.Section{
+			Title: "Local archive",
+			Fields: []ckrender.Field{
+				{Label: "Database", Value: value.Archive.ArchivePath},
+				{Label: "Last sync", Value: value.LastSyncAt},
+				{Label: "Calendars", Value: fmt.Sprintf("%d", value.Archive.Calendars)},
+				{Label: "Events", Value: fmt.Sprintf("%d", value.Archive.Events)},
+			},
+		})
 	}
-	if err := printLogTailText(w, value.Log); err != nil {
-		return err
-	}
-	return printMessages(w, "Errors", value.Errors)
+	return out
 }
 
 func printDoctorText(w io.Writer, value doctorOutput) error {
-	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
-		return err
+	return ckrender.WriteDoctor(w, renderDoctorChecks(value.Checks), value.Log)
+}
+
+func renderDoctorChecks(checks []doctorCheck) []ckrender.Check {
+	out := make([]ckrender.Check, 0, len(checks))
+	for _, check := range checks {
+		out = append(out, ckrender.Check{
+			Name:    check.ID,
+			State:   ckrender.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
 	}
-	for _, check := range value.Checks {
-		line := fmt.Sprintf("  %s: %s", check.ID, check.State)
-		if check.Message != "" {
-			line += " - " + check.Message
-		}
-		if _, err := io.WriteString(w, line+"\n"); err != nil {
-			return err
-		}
-		if check.Remedy != "" {
-			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
-				return err
-			}
-		}
-	}
-	return printLogTailText(w, value.Log)
+	return out
 }
 
 func printSearchText(w io.Writer, value searchOutput) error {
@@ -169,49 +173,6 @@ func printContactsText(w io.Writer, value control.ContactExport) error {
 	}
 	for _, contact := range value.Contacts {
 		if _, err := fmt.Fprintf(w, "  - %s: %s\n", contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func printLogTailText(w io.Writer, value logTailOutput) error {
-	if value.LastRun == nil && value.MostRecentError == nil && len(value.Errors) == 0 {
-		return nil
-	}
-	if _, err := io.WriteString(w, "\nRecent log:\n"); err != nil {
-		return err
-	}
-	if value.LastRun != nil {
-		if _, err := fmt.Fprintf(w, "  Last run: %s %s", value.LastRun.Command, value.LastRun.Outcome); err != nil {
-			return err
-		}
-		if value.LastRun.FinishedAt != "" {
-			if _, err := fmt.Fprintf(w, " at %s", value.LastRun.FinishedAt); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
-	}
-	if value.MostRecentError != nil {
-		if _, err := fmt.Fprintf(w, "  Most recent error: %s %s: %s\n", value.MostRecentError.Command, value.MostRecentError.Event, value.MostRecentError.Message); err != nil {
-			return err
-		}
-	}
-	return printMessages(w, "Log errors", value.Errors)
-}
-
-func printMessages(w io.Writer, title string, values []string) error {
-	if len(values) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintf(w, "\n%s:\n", title); err != nil {
-		return err
-	}
-	for _, value := range values {
-		if _, err := fmt.Fprintf(w, "  - %s\n", value); err != nil {
 			return err
 		}
 	}
