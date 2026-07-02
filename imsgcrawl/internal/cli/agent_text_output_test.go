@@ -103,7 +103,7 @@ func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 
 	metadata := runOK(t, "--db", dbPath, "metadata")
 	assertTextContains(t, metadata,
-		"iMessage Crawl (imsgcrawl)",
+		"iMessage (imsgcrawl)",
 		"Agent-facing commands:",
 		"status",
 		"Machine output: add --json",

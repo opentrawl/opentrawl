@@ -8,7 +8,7 @@ import (
 )
 
 func controlManifest() control.Manifest {
-	m := control.NewManifest("imsgcrawl", "iMessage Crawl", "imsgcrawl")
+	m := control.NewManifest("imsgcrawl", "iMessage", "imsgcrawl")
 	m.Description = "Local-first iMessage archive crawler."
 	m.Branding = control.Branding{SymbolName: "message.fill", AccentColor: "#34c759", BundleIdentifier: "com.apple.MobileSMS"}
 	m.Paths = control.Paths{

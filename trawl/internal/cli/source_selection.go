@@ -55,11 +55,21 @@ func splitSourceCSV(sourceCSV string) []string {
 	return names
 }
 
+// findSource matches an id, a binary name, or the human name of the
+// surface — "imessage" and "gmail" work the way people say them.
 func findSource(sources []Source, name string) (Source, bool) {
+	want := strings.ToLower(strings.TrimSpace(name))
 	for _, candidate := range sources {
-		if candidate.ID == name || candidate.Binary == name {
+		if candidate.ID == want || candidate.Binary == want {
+			return candidate, true
+		}
+		if alias := sourceAlias(candidate.DisplayName); alias != "" && alias == want {
 			return candidate, true
 		}
 	}
 	return Source{}, false
+}
+
+func sourceAlias(displayName string) string {
+	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(displayName), " ", ""))
 }

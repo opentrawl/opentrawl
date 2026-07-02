@@ -31,10 +31,10 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		t.Fatalf("search code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"SOURCE    DATE        WHO             SNIPPET",
-		"imessage  2026-05-14  Alice → Family  …the boat trip is on Saturday…   imessage:msg/8842",
-		"telegram  2026-05-12  Bob             …book the boat before June…   telegram:msg/1930",
-		"…and 2 more; narrow with --after or --source",
+		"SOURCE    DATE        WHO             REF                SNIPPET",
+		"imessage  2026-05-14  Alice → Family  imessage:msg/8842  …the boat trip is on Saturday…",
+		"telegram  2026-05-12  Bob             telegram:msg/1930  …book the boat before June…",
+		"…and 2 more; narrow the query or add --after, or use --json",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
