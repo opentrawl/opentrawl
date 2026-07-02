@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -30,6 +31,20 @@ type statusFreshness struct {
 	LastSync string `json:"last_sync"`
 }
 
+type syncProgressEvent struct {
+	Event string `json:"event"`
+	Stage string `json:"stage"`
+	Done  int    `json:"done"`
+	Total int    `json:"total,omitempty"`
+}
+
+type syncCompleteEvent struct {
+	Event      string          `json:"event"`
+	State      string          `json:"state"`
+	Counts     []control.Count `json:"counts"`
+	FinishedAt string          `json:"finished_at"`
+}
+
 const statusStaleAfter = 7 * 24 * time.Hour
 
 func (r *runtime) runSync(args []string) error {
@@ -44,11 +59,40 @@ func (r *runtime) runSync(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("sync takes no arguments"))
 	}
+	enc := json.NewEncoder(r.stdout)
+	if r.json {
+		if err := enc.Encode(syncProgressEvent{Event: "progress", Stage: "messages", Done: 0}); err != nil {
+			return err
+		}
+	}
 	result, err := archive.Sync(r.ctx, r.archivePath, r.dbPath)
 	if err != nil {
 		return err
 	}
+	if r.json {
+		return printSyncJSONL(enc, result)
+	}
 	return r.print(result)
+}
+
+func printSyncJSONL(enc *json.Encoder, result archive.SyncResult) error {
+	if err := enc.Encode(syncProgressEvent{Event: "progress", Stage: "messages", Done: result.Messages, Total: result.Messages}); err != nil {
+		return err
+	}
+	return enc.Encode(syncCompleteEvent{
+		Event:      "complete",
+		State:      "ok",
+		Counts:     syncResultCounts(result),
+		FinishedAt: result.SyncedAt,
+	})
+}
+
+func syncResultCounts(result archive.SyncResult) []control.Count {
+	return []control.Count{
+		control.NewCount("messages", "messages", int64(result.Messages)),
+		control.NewCount("chats", "chats", int64(result.Chats)),
+		control.NewCount("participants", "participants", int64(result.Participants)),
+	}
 }
 
 func (r *runtime) runStatus(args []string) error {

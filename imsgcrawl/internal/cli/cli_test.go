@@ -91,18 +91,40 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	createMessagesFixture(t, dbPath)
 
 	syncOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+	syncLines := strings.Split(strings.TrimSpace(syncOut), "\n")
+	if len(syncLines) != 3 {
+		t.Fatalf("sync jsonl lines = %d, output:\n%s", len(syncLines), syncOut)
+	}
+	for i, line := range syncLines[:2] {
+		var progress struct {
+			Event string `json:"event"`
+			Stage string `json:"stage"`
+			Done  int    `json:"done"`
+			Total int    `json:"total"`
+		}
+		if err := json.Unmarshal([]byte(line), &progress); err != nil {
+			t.Fatalf("sync progress json = %s err=%v", line, err)
+		}
+		if progress.Event != "progress" || progress.Stage != "messages" {
+			t.Fatalf("sync progress %d = %#v", i, progress)
+		}
+	}
 	var syncResult struct {
-		Handles      int `json:"handles"`
-		Chats        int `json:"chats"`
-		Participants int `json:"participants"`
-		ChatMessages int `json:"chat_messages"`
-		Messages     int `json:"messages"`
+		Event      string          `json:"event"`
+		State      string          `json:"state"`
+		Counts     []control.Count `json:"counts"`
+		FinishedAt string          `json:"finished_at"`
 	}
-	if err := json.Unmarshal([]byte(syncOut), &syncResult); err != nil {
-		t.Fatalf("sync json = %s err=%v", syncOut, err)
+	if err := json.Unmarshal([]byte(syncLines[len(syncLines)-1]), &syncResult); err != nil {
+		t.Fatalf("sync final json = %s err=%v", syncLines[len(syncLines)-1], err)
 	}
-	if syncResult.Chats != 4 || syncResult.Participants != 6 || syncResult.ChatMessages != 6 || syncResult.Messages != 5 {
+	if syncResult.Event != "complete" || syncResult.State != "ok" {
 		t.Fatalf("sync result = %#v", syncResult)
+	}
+	assertRFC3339(t, syncResult.FinishedAt)
+	assertSyncCounts(t, syncResult.Counts, 5, 4, 6)
+	if strings.Contains(syncLines[len(syncLines)-1], "archive_path") || strings.Contains(syncLines[len(syncLines)-1], "source_path") {
+		t.Fatalf("sync final outcome leaked archive internals: %s", syncLines[len(syncLines)-1])
 	}
 
 	statusOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "status")
@@ -597,6 +619,23 @@ func assertStatusCounts(t *testing.T, counts []control.Count, messages, chats in
 	for _, count := range counts {
 		if got, ok := want[count.ID]; !ok || count.Value != got {
 			t.Fatalf("count %#v not in %#v", count, want)
+		}
+	}
+}
+
+func assertSyncCounts(t *testing.T, counts []control.Count, messages, chats, participants int64) {
+	t.Helper()
+	want := map[string]int64{
+		"messages":     messages,
+		"chats":        chats,
+		"participants": participants,
+	}
+	if len(counts) != len(want) {
+		t.Fatalf("sync counts = %#v, want 3 headline counts", counts)
+	}
+	for _, count := range counts {
+		if got, ok := want[count.ID]; !ok || count.Value != got {
+			t.Fatalf("sync count %#v not in %#v", count, want)
 		}
 	}
 }
