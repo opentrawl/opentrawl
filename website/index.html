@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OpenTrawl: your digital life, searchable by your AI, on your machine</title>
+<style>
+  :root {
+    --white: #ffffff;
+    --black: #101010;
+    --grey: #6f6f6f;
+    --hairline: #dcdcdc;
+    --red: #e63323;
+    --blue: #1c46d6;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--white); color: var(--black);
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex; justify-content: center;
+    padding: 0 24px;
+  }
+  main { width: 100%; max-width: 960px; }
+
+  .topbar {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 16px 0 14px;
+    border-bottom: 2px solid var(--black);
+  }
+  .wordmark { font-weight: 700; font-size: 16px; letter-spacing: -.01em; text-transform: lowercase; }
+  .wordmark span { color: var(--red); }
+  .topbar a.gh {
+    font-size: 13px; font-weight: 700;
+    border: 2px solid var(--black); border-radius: 0;
+    padding: 6px 14px; text-decoration: none; color: var(--black);
+  }
+  .topbar a.gh:hover, .topbar a.gh:focus-visible { background: var(--black); color: var(--white); outline: none; }
+
+  h1 {
+    margin-top: 40px;
+    font-size: clamp(30px, 4.6vw, 46px);
+    font-weight: 700;
+    letter-spacing: -.03em;
+    line-height: 1.04;
+  }
+  /* fixed-width slot; the word flips in like a split-flap board */
+  h1 .cycle { color: var(--red); display: inline-block; text-align: left; perspective: 600px; }
+  h1 .cycle .word {
+    display: inline-block;
+    transform-origin: center 55%;
+    transition: transform .26s ease-in;
+    backface-visibility: hidden;
+  }
+  .sub {
+    margin-top: 16px;
+    font-size: 16.5px; line-height: 1.45;
+    max-width: 42em;
+  }
+  .privacy { margin-top: 8px; font-size: 14px; color: var(--grey); }
+
+  .compare {
+    margin-top: 34px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+  .col { border-top: 1px solid var(--black); padding: 14px 28px 20px 0; }
+  .col.after {
+    background: var(--blue); color: var(--white);
+    border-top: 1px solid var(--blue);
+    padding: 14px 24px 20px;
+  }
+  .col h2 {
+    font-size: 12px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase;
+  }
+  .col h2 .n { color: var(--grey); font-weight: 400; margin-right: 8px; }
+  .col.before h2 { color: var(--red); }
+  .col.after h2 .n { color: rgba(255,255,255,.55); }
+
+  .transcript {
+    margin-top: 14px;
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 12px; line-height: 1.5;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .line { display: flex; gap: 10px; opacity: 0; animation: appear .3s forwards; }
+  .who { flex: 0 0 4ch; color: var(--grey); }
+  .line.you .who, .line.you .msg { color: var(--black); font-weight: 700; }
+  .line .msg { color: #3c3c3c; }
+  .col.after .who { color: rgba(255,255,255,.6); }
+  .col.after .line .msg { color: var(--white); }
+  .col.after .line.you .who, .col.after .line.you .msg { color: var(--white); }
+  .cmd { color: rgba(255,255,255,.75); }
+  @keyframes appear { to { opacity: 1; } }
+
+  /* before drips in (delays inline); after lands at once. The speed gap is the argument. */
+  .after .line:nth-child(1) { animation-delay: .3s; }
+  .after .line:nth-child(2) { animation-delay: .9s; }
+  .after .line:nth-child(3) { animation-delay: 1.05s; }
+  .after .line:nth-child(4) { animation-delay: 1.2s; }
+
+  .line.tool { gap: 6px; }
+  .line.tool .msg {
+    color: #9a9a9a; font-size: 11px;
+  }
+  .line.tool .msg::before { content: "▸ "; color: #c4c4c4; }
+  .line.tool .msg .res { color: var(--red); }
+
+  .redact {
+    background: var(--black); color: var(--white);
+    font-size: 9.5px; font-weight: 500;
+    letter-spacing: .09em; text-transform: uppercase;
+    padding: 1px 6px 2px; border-radius: 1px;
+    display: inline-block; line-height: 1.5; vertical-align: 1px;
+  }
+
+  .tally {
+    margin-top: 14px; font-size: 13.5px; font-weight: 700;
+    opacity: 0; animation: appear .3s forwards;
+  }
+  .before .tally { color: var(--red); animation-delay: 6.0s; }
+  .after .tally { color: var(--white); animation-delay: 1.5s; }
+  .tally small { display: block; font-weight: 400; font-size: 12px; margin-top: 2px; color: var(--grey); }
+  .after .tally small { color: rgba(255,255,255,.75); }
+
+  .facts {
+    margin-top: 30px;
+    border-top: 2px solid var(--black);
+    padding-top: 16px;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px 40px;
+    font-size: 14.5px; line-height: 1.45;
+  }
+  .facts p b { display: block; font-size: 12px; letter-spacing: .1em; text-transform: uppercase; margin-bottom: 3px; }
+
+  footer {
+    margin: 34px 0 28px;
+    border-top: 2px solid var(--black);
+    padding-top: 12px;
+    font-size: 12.5px; color: var(--grey);
+    display: flex; flex-wrap: wrap; gap: 3px 22px;
+  }
+  footer a { color: var(--black); text-decoration: none; border-bottom: 1px solid var(--black); }
+  footer a:hover, footer a:focus-visible { color: var(--red); border-color: var(--red); outline: none; }
+  .byline { width: 100%; }
+
+  @media (max-width: 680px) {
+    .compare { grid-template-columns: 1fr; }
+    .col { padding-right: 0; }
+    .col.after { margin-top: 14px; padding: 14px 20px 20px; }
+    .facts { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .line, .tally { animation: none; opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="wordmark">open<span>trawl</span></div>
+    <a class="gh" href="https://github.com/opentrawl/opentrawl">GitHub ↗</a>
+  </div>
+
+  <h1>AI is pretty smart. But it's also pretty&nbsp;<span class="cycle" id="cycle"><span class="word" id="cycleWord">forgetful.</span></span></h1>
+  <script>
+    const words = ["forgetful.", "stupid.", "impersonal.", "frustrating.", "sloppy.", "repetitive."];
+    let i = 0;
+    const slot = document.getElementById("cycle");
+    const word = document.getElementById("cycleWord");
+    function sizeSlot() {
+      let max = 0;
+      const probe = document.createElement("span");
+      probe.style.cssText = "visibility:hidden;position:absolute;white-space:nowrap";
+      slot.parentElement.appendChild(probe);
+      for (const w of words) { probe.textContent = w; max = Math.max(max, probe.offsetWidth); }
+      probe.remove();
+      slot.style.width = Math.ceil(max) + "px";
+    }
+    sizeSlot();
+    addEventListener("resize", sizeSlot);
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setInterval(() => {
+        word.style.transform = "rotateX(90deg)";
+        setTimeout(() => {
+          i = (i + 1) % words.length;
+          word.textContent = words[i];
+          word.style.transform = "rotateX(0deg)";
+        }, 270);
+      }, 2000);
+    }
+  </script>
+
+  <p class="sub">OpenTrawl crawls iMessage, WhatsApp, Telegram, Gmail and
+  Calendar into SQLite archives on your Mac, with standing lists of your
+  people, purchases and events. Your AI answers from your actual history:
+  one call, no interrogation.</p>
+  <p class="privacy">Everything stays on your machine, unless you choose to send it somewhere.</p>
+
+  <section class="compare" aria-label="The same question, with and without the archive">
+    <div class="col before">
+      <h2><span class="n">01</span>Today</h2>
+      <div class="transcript">
+        <div class="line you" style="animation-delay:.3s"><span class="who">you</span><span class="msg">when did i buy my <span class="redact">purchase</span> and what did it cost?</span></div>
+        <div class="line" style="animation-delay:1.3s"><span class="who">ai</span><span class="msg">Great question! Which shop was it from? I can also search your mail if you connect it.</span></div>
+        <div class="line tool" style="animation-delay:2.2s"><span class="who"></span><span class="msg">gmail.search_emails("<span class="redact">purchase</span>")</span></div>
+        <div class="line tool" style="animation-delay:2.4s"><span class="who"></span><span class="msg">gmail.search_emails("<span class="redact">brand</span> order") <span class="res">· ×14 more</span></span></div>
+        <div class="line tool" style="animation-delay:2.6s"><span class="who"></span><span class="msg">gmail.read_email_thread(<span class="redact">invoice no</span>)</span></div>
+        <div class="line tool" style="animation-delay:2.8s"><span class="who"></span><span class="msg">gmail.read_attachment(factuur.pdf) <span class="res">· unreadable</span></span></div>
+        <div class="line" style="animation-delay:3.5s"><span class="who">ai</span><span class="msg">Found it — a 2019 invoice from <span class="redact">shop</span>.</span></div>
+        <div class="line you" style="animation-delay:4.7s"><span class="who">you</span><span class="msg">@#$%. that's the <span class="redact">appliance</span>. we did this last week. you already know this.</span></div>
+        <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg">You're absolutely right! I don't keep context between sessions — could you paste the receipt?</span></div>
+      </div>
+      <p class="tally" style="animation-delay:7s">29 tool calls. 214,545 tokens. ≈ $1. Wrong once.
+        <small>Measured, July 2026: a frontier model with mail connectors and full disk access. It pays this again for every question.</small></p>
+    </div>
+
+    <div class="col after">
+      <h2><span class="n">02</span>With OpenTrawl</h2>
+      <div class="transcript">
+        <div class="line you"><span class="who">you</span><span class="msg">when did i buy my <span class="redact">purchase</span> and what did it cost?</span></div>
+        <div class="line"><span class="who">ai</span><span class="msg cmd">$ trawl search "<span class="redact">purchase</span>"</span></div>
+        <div class="line"><span class="who"></span><span class="msg cmd">gmail.sqlite · order confirmation · <span class="redact">shop</span> · 18 Jan 2025</span></div>
+        <div class="line"><span class="who">ai</span><span class="msg">18 January 2025, from <span class="redact">shop</span>, for <span class="redact">price</span>. A <span class="redact">amount</span> refund landed 10 days later.</span></div>
+      </div>
+      <p class="tally">The archive already knew.
+        <small>One query against a local file. Crawl once; every question after is a lookup.</small></p>
+    </div>
+  </section>
+
+  <section class="facts">
+    <p><b>It just works</b>
+    One Mac app authorises your sources and keeps the archives fresh. Ask
+    your AI anything about your life; it reads the answer.</p>
+    <p><b>For engineers</b>
+    One Go crawler and one SQLite file per source, one CLI over all of them:
+    status, sync, search. Durable context your agent can grep.</p>
+    <p><b>Private by construction</b>
+    Crawling and search run locally. The archives are plain SQLite files on
+    your disk. Open them yourself.</p>
+    <p><b>Open source</b>
+    Missing a source? Use our agent skill to write your own crawler; it
+    drops into the CLI and the app next to ours.</p>
+  </section>
+
+  <footer>
+    <a href="https://github.com/opentrawl/opentrawl">github.com/opentrawl</a>
+    <a href="https://x.com/jjpcodes">x.com/jjpcodes</a>
+    <div class="byline">Built by Josh Palmer · OpenClaw community maintainer · ex Spotify.</div>
+  </footer>
+</main>
+</body>
+</html>

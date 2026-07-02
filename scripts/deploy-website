@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Deploys website/ to the opentrawl.sh S3 bucket and invalidates
+# CloudFront. Needs the aws CLI and an AWS profile with access to the
+# account that hosts the site infra (see the maintainer's private
+# infra repo, infra/tofu/opentrawl).
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+bucket="opentrawl.sh"
+dist_id="$(aws cloudfront list-distributions \
+  --query "DistributionList.Items[?contains(Aliases.Items, '$bucket')].Id" \
+  --output text)"
+
+aws s3 sync website/ "s3://$bucket" --delete
+aws cloudfront create-invalidation --distribution-id "$dist_id" --paths "/*" >/dev/null
+echo "deployed website/ to https://$bucket (invalidated $dist_id)"
