@@ -1,6 +1,6 @@
 package archive
 
-const schemaVersion = 2
+const schemaVersion = 3
 
 const schema = `
 create table if not exists handles (
@@ -45,6 +45,13 @@ create table if not exists messages (
 );
 
 create virtual table if not exists messages_fts using fts5(source_rowid unindexed, text);
+
+create table if not exists contact_mappings (
+  kind text not null,
+  normalized_handle text not null,
+  display_name text not null,
+  primary key (kind, normalized_handle)
+);
 
 create table if not exists sync_state (
   key text primary key,

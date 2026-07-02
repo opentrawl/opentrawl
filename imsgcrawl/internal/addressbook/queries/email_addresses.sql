@@ -1,0 +1,9 @@
+select
+  coalesce(e.ZADDRESS, ''),
+  coalesce(r.ZFIRSTNAME, ''),
+  coalesce(r.ZLASTNAME, ''),
+  coalesce(r.ZORGANIZATION, '')
+from ZABCDEMAILADDRESS e
+join ZABCDRECORD r on r.Z_PK = e.ZOWNER
+where nullif(trim(e.ZADDRESS), '') is not null
+order by e.Z_PK

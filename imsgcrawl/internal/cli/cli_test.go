@@ -138,7 +138,7 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if status.Source.Messages != status.Archive.Messages || status.Archive.ChatMessages != 6 {
 		t.Fatalf("status counts = source %#v archive %#v", status.Source, status.Archive)
 	}
-	assertStatusCounts(t, status.Counts, status.Archive.Messages, status.Archive.Chats, archive.AppleDateTime(100).Year())
+	assertStatusCounts(t, status.Counts, status.Archive.Messages, status.Archive.Chats, status.Archive.NamedContacts, archive.AppleDateTime(100).Year())
 	if status.Freshness == nil {
 		t.Fatalf("status missing freshness = %#v", status)
 	}
@@ -606,15 +606,16 @@ func assertForeignOpenRefFailsCleanly(t *testing.T, archivePath string) {
 	}
 }
 
-func assertStatusCounts(t *testing.T, counts []control.Count, messages, chats int64, sinceYear int) {
+func assertStatusCounts(t *testing.T, counts []control.Count, messages, chats, namedContacts int64, sinceYear int) {
 	t.Helper()
 	want := map[string]int64{
-		"messages": messages,
-		"chats":    chats,
-		"since":    int64(sinceYear),
+		"messages":       messages,
+		"chats":          chats,
+		"named_contacts": namedContacts,
+		"since":          int64(sinceYear),
 	}
 	if len(counts) != len(want) {
-		t.Fatalf("counts = %#v, want 3 headline counts", counts)
+		t.Fatalf("counts = %#v, want 4 headline counts", counts)
 	}
 	for _, count := range counts {
 		if got, ok := want[count.ID]; !ok || count.Value != got {

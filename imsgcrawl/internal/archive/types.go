@@ -7,6 +7,7 @@ type SyncResult struct {
 	SourceModifiedAt string `json:"source_modified_at,omitempty"`
 	SyncedAt         string `json:"synced_at"`
 	Handles          int    `json:"handles"`
+	NamedContacts    int    `json:"named_contacts"`
 	Chats            int    `json:"chats"`
 	Participants     int    `json:"participants"`
 	ChatMessages     int    `json:"chat_messages"`
@@ -21,6 +22,7 @@ type Status struct {
 	SourceBytes         int64  `json:"source_bytes,omitempty"`
 	SourceModifiedAt    string `json:"source_modified_at,omitempty"`
 	Handles             int64  `json:"handles"`
+	NamedContacts       int64  `json:"named_contacts"`
 	Chats               int64  `json:"chats"`
 	Participants        int64  `json:"participants"`
 	ChatMessages        int64  `json:"chat_messages"`
@@ -81,4 +83,10 @@ type SearchResult struct {
 	HasAttachments         bool     `json:"has_attachments,omitempty"`
 	Text                   string   `json:"text,omitempty"`
 	Snippet                string   `json:"snippet,omitempty"`
+}
+
+type ContactMapping struct {
+	Kind             string
+	NormalizedHandle string
+	DisplayName      string
 }

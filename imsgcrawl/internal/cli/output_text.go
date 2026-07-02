@@ -93,7 +93,7 @@ func printStatusText(w io.Writer, value statusOutput) error {
 		}
 	}
 	if value.Archive != nil {
-		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n  Last sync: %s\n  Handles: %d\n  Chats: %d\n  Participants: %d\n  Chat-message links: %d\n  Messages: %d\n", value.Archive.ArchivePath, emptyDash(value.Archive.LastSyncAt), value.Archive.Handles, value.Archive.Chats, value.Archive.Participants, value.Archive.ChatMessages, value.Archive.Messages); err != nil {
+		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n  Last sync: %s\n  Handles: %d\n  Named contacts: %d\n  Chats: %d\n  Participants: %d\n  Chat-message links: %d\n  Messages: %d\n", value.Archive.ArchivePath, emptyDash(value.Archive.LastSyncAt), value.Archive.Handles, value.Archive.NamedContacts, value.Archive.Chats, value.Archive.Participants, value.Archive.ChatMessages, value.Archive.Messages); err != nil {
 			return err
 		}
 	}

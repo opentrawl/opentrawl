@@ -7,10 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openclaw/crawlkit/store"
+	"github.com/openclaw/imsgcrawl/internal/addressbook"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
 
@@ -18,6 +21,13 @@ type Store struct {
 	store          *store.Store
 	path           string
 	schemaOutdated bool
+}
+
+type SyncOptions struct {
+	ArchivePath           string
+	SourcePath            string
+	AddressBookPaths      []string
+	UseDefaultAddressBook bool
 }
 
 func DefaultPath() string {
@@ -84,17 +94,30 @@ func (s *Store) Close() error {
 }
 
 func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, error) {
-	data, err := messages.ExtractArchive(ctx, sourcePath)
+	options := SyncOptions{ArchivePath: archivePath, SourcePath: sourcePath}
+	if strings.TrimSpace(sourcePath) == "" || filepath.Clean(sourcePath) == filepath.Clean(messages.DefaultChatDBPath()) {
+		options.UseDefaultAddressBook = true
+	}
+	return SyncWithOptions(ctx, options)
+}
+
+func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, error) {
+	data, err := messages.ExtractArchive(ctx, options.SourcePath)
 	if err != nil {
 		return SyncResult{}, err
 	}
-	st, err := Open(ctx, archivePath)
+	contactNames, err := syncContactNames(ctx, options)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	contactMappings := applyContactNames(&data, contactNames)
+	st, err := Open(ctx, options.ArchivePath)
 	if err != nil {
 		return SyncResult{}, err
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Now().UTC()
-	if err := st.ReplaceAll(ctx, data, now); err != nil {
+	if err := st.ReplaceAll(ctx, data, contactMappings, now); err != nil {
 		return SyncResult{}, err
 	}
 	return SyncResult{
@@ -104,6 +127,7 @@ func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, erro
 		SourceModifiedAt: data.SourceModifiedAt.Format(time.RFC3339),
 		SyncedAt:         now.Format(time.RFC3339),
 		Handles:          len(data.Handles),
+		NamedContacts:    len(contactMappings),
 		Chats:            len(data.Chats),
 		Participants:     len(data.Participants),
 		ChatMessages:     len(data.ChatMessages),
@@ -111,15 +135,20 @@ func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, erro
 	}, nil
 }
 
-func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, syncedAt time.Time) error {
+func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, syncedAt time.Time) error {
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "sync_state"} {
+		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "sync_state"} {
 			if _, err := tx.ExecContext(ctx, "delete from "+table); err != nil {
 				return err
 			}
 		}
 		for _, h := range data.Handles {
 			if _, err := tx.ExecContext(ctx, insertHandlesSQL, h.SourceRowID, h.ID, h.Service, h.UncanonicalizedID, h.DisplayName); err != nil {
+				return err
+			}
+		}
+		for _, mapping := range contactMappings {
+			if _, err := tx.ExecContext(ctx, insertContactMappingSQL, mapping.Kind, mapping.NormalizedHandle, mapping.DisplayName); err != nil {
 				return err
 			}
 		}
@@ -154,6 +183,51 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, synce
 	})
 }
 
+func syncContactNames(ctx context.Context, options SyncOptions) ([]addressbook.ContactName, error) {
+	if options.AddressBookPaths != nil {
+		return addressbook.Extract(ctx, options.AddressBookPaths)
+	}
+	if options.UseDefaultAddressBook {
+		return addressbook.ExtractDefault(ctx)
+	}
+	return nil, nil
+}
+
+func applyContactNames(data *messages.ArchiveData, names []addressbook.ContactName) []ContactMapping {
+	if len(names) == 0 {
+		return nil
+	}
+	lookup := addressbook.NewLookup(names)
+	seen := map[string]ContactMapping{}
+	for i := range data.Handles {
+		name, ok := lookup.Match(data.Handles[i].ID)
+		if !ok {
+			continue
+		}
+		data.Handles[i].DisplayName = name.DisplayName
+		key := name.Kind + ":" + name.Handle
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = ContactMapping{
+			Kind:             name.Kind,
+			NormalizedHandle: name.Handle,
+			DisplayName:      name.DisplayName,
+		}
+	}
+	out := make([]ContactMapping, 0, len(seen))
+	for _, mapping := range seen {
+		out = append(out, mapping)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].NormalizedHandle < out[j].NormalizedHandle
+	})
+	return out
+}
+
 func replaceSyncState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData, syncedAt time.Time) error {
 	state := map[string]string{
 		"last_sync_at":        syncedAt.UTC().Format(time.RFC3339),
@@ -175,11 +249,18 @@ func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	if hasDisplayName {
-		return nil
+	if !hasDisplayName {
+		if _, err := db.ExecContext(ctx, `alter table handles add column display_name text`); err != nil {
+			return fmt.Errorf("add handles.display_name: %w", err)
+		}
 	}
-	if _, err := db.ExecContext(ctx, `alter table handles add column display_name text`); err != nil {
-		return fmt.Errorf("add handles.display_name: %w", err)
+	if _, err := db.ExecContext(ctx, `create table if not exists contact_mappings (
+  kind text not null,
+  normalized_handle text not null,
+  display_name text not null,
+  primary key (kind, normalized_handle)
+)`); err != nil {
+		return fmt.Errorf("create contact_mappings: %w", err)
 	}
 	return nil
 }
@@ -203,4 +284,17 @@ func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool
 		}
 	}
 	return false, rows.Err()
+}
+
+func tableExists(ctx context.Context, db *sql.DB, table string) (bool, error) {
+	rows, err := db.QueryContext(ctx, `select name from sqlite_master where type = 'table' and name = ?`, table)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	exists := rows.Next()
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return exists, nil
 }

@@ -164,11 +164,14 @@ func chatConversation(item archive.ChatSummary) string {
 			return "group chat"
 		}
 	}
-	if title != "" {
+	if title != "" && !isHandleLikeTitle(title) {
 		return title
 	}
 	if people != "" {
 		return people
+	}
+	if title != "" {
+		return title
 	}
 	if item.ChatID != "" {
 		return "chat " + item.ChatID
@@ -201,6 +204,32 @@ func allRunes(value string, match func(rune) bool) bool {
 
 func isHexRune(r rune) bool {
 	return (r >= '0' && r <= '9') || (r >= 'a' && r <= 'f')
+}
+
+func isHandleLikeTitle(title string) bool {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false
+	}
+	if strings.Contains(title, "@") {
+		return true
+	}
+	return looksPhoneLikeTitle(title)
+}
+
+func looksPhoneLikeTitle(value string) bool {
+	hasDigit := false
+	for _, r := range strings.TrimSpace(value) {
+		switch {
+		case r >= '0' && r <= '9':
+			hasDigit = true
+		case r == '+', r == ' ', r == '\t', r == '(', r == ')', r == '-', r == '.':
+			continue
+		default:
+			return false
+		}
+	}
+	return hasDigit
 }
 
 func searchConversation(item archive.SearchResult) string {
