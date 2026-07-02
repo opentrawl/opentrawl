@@ -57,6 +57,13 @@ type MessageRow struct {
 	HasAttachments bool   `json:"has_attachments,omitempty"`
 }
 
+type MessageContext struct {
+	Chat    ChatSummary
+	Message MessageRow
+	Before  []MessageRow
+	After   []MessageRow
+}
+
 type SearchResult struct {
 	MessageID              string   `json:"message_id"`
 	GUID                   string   `json:"guid"`

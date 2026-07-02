@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -55,8 +56,8 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 	assertTextContains(t, search,
 		"Search \"launch\": showing 1 of 2.",
 		"More: imsgcrawl search --limit 2 \"launch\"",
-		"All: imsgcrawl search --all \"launch\"",
-		"Use --json when you need local chat IDs for follow-up commands.",
+		"Open: imsgcrawl open REF",
+		"Use --json when you need refs for follow-up commands.",
 		"launch note",
 		"conversation",
 		"text",
@@ -69,6 +70,23 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 		t.Fatalf("search text kept raw result numbers or chat ID table shape:\n%s", search)
 	}
 	assertNotSecretJSON(t, search)
+
+	searchJSON := runOK(t, "--archive", archivePath, "--json", "search", "--limit", "1", "launch")
+	var searchPayload searchListJSON
+	if err := json.Unmarshal([]byte(searchJSON), &searchPayload); err != nil {
+		t.Fatalf("search json = %s err=%v", searchJSON, err)
+	}
+	if len(searchPayload.Results) != 1 {
+		t.Fatalf("search json results = %#v", searchPayload.Results)
+	}
+	open := runOK(t, "--archive", archivePath, "open", searchPayload.Results[0].Ref)
+	assertTextContains(t, open,
+		"Message "+searchPayload.Results[0].Ref+" in Most Recent Name",
+		"Context:",
+		"earlier launch note",
+		"latest launch note",
+	)
+	assertNotSecretJSON(t, open)
 
 	directSender := runOK(t, "--archive", archivePath, "messages", "--chat", "2", "--asc", "--limit", "1")
 	assertTextContains(t, directSender, "Most Recent Name")

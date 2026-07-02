@@ -121,6 +121,12 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		t.Fatalf("status missing freshness = %#v", status)
 	}
 	assertRFC3339(t, status.Freshness.LastSync)
+	firstRef := firstSearchRef(t, archivePath, "launch")
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+	secondRef := firstSearchRef(t, archivePath, "launch")
+	if firstRef != secondRef {
+		t.Fatalf("search ref changed across sync: %q then %q", firstRef, secondRef)
+	}
 
 	if err := os.Remove(dbPath); err != nil {
 		t.Fatal(err)
@@ -219,55 +225,66 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	}
 
 	searchOut := runOK(t, "--archive", archivePath, "--json", "search", "launch")
+	assertSearchEnvelopeKeys(t, []byte(searchOut))
 	var results searchListJSON
 	if err := json.Unmarshal([]byte(searchOut), &results); err != nil {
 		t.Fatalf("search json = %s err=%v", searchOut, err)
 	}
-	if results.Query != "launch" || results.Returned != 2 || results.Total != 2 || !results.Complete || len(results.Items) != 2 {
+	if results.Query != "launch" || results.TotalMatches != 2 || results.Truncated || len(results.Results) != 2 {
 		t.Fatalf("search results = %#v", results)
 	}
-	for _, result := range results.Items {
-		if _, ok := result["snippet"]; !ok {
-			t.Fatalf("search result missing snippet = %#v", result)
+	for _, result := range results.Results {
+		if !strings.HasPrefix(result.Ref, messageRefPrefix) {
+			t.Fatalf("search result ref = %#v", result)
 		}
-		if _, ok := result["chat_title"]; !ok {
-			t.Fatalf("search result missing chat title = %#v", result)
-		}
-		if _, ok := result["date"]; ok {
-			t.Fatalf("search result kept raw date = %#v", result)
-		}
-		timeValue, ok := result["time"]
-		if !ok {
-			t.Fatalf("search result missing time = %#v", result)
-		}
-		var timeText string
-		if err := json.Unmarshal(timeValue, &timeText); err != nil {
-			t.Fatalf("search time json = %s err=%v", string(timeValue), err)
-		}
-		assertRFC3339(t, timeText)
-		textValue, ok := result["text"]
-		if !ok {
-			t.Fatalf("search result missing full text = %#v", result)
-		}
-		if !strings.Contains(string(textValue), "launch note") {
-			t.Fatalf("search result text = %s", string(textValue))
+		assertRFC3339(t, result.Time)
+		if result.Who == "" || result.Where != "Most Recent Name" || !strings.Contains(result.Snippet, "launch") {
+			t.Fatalf("search result fields = %#v", result)
 		}
 	}
+
+	trailingFlagOut := runOK(t, "--archive", archivePath, "--json", "search", "launch", "--limit", "1")
+	var trailingFlagSearch searchListJSON
+	if err := json.Unmarshal([]byte(trailingFlagOut), &trailingFlagSearch); err != nil {
+		t.Fatalf("trailing flag search json = %s err=%v", trailingFlagOut, err)
+	}
+	if trailingFlagSearch.Query != "launch" || len(trailingFlagSearch.Results) != 1 || trailingFlagSearch.TotalMatches != 2 || !trailingFlagSearch.Truncated {
+		t.Fatalf("trailing flag search = %#v", trailingFlagSearch)
+	}
+
+	openOut := runOK(t, "--archive", archivePath, "--json", "open", results.Results[0].Ref)
+	var opened openJSON
+	if err := json.Unmarshal([]byte(openOut), &opened); err != nil {
+		t.Fatalf("open json = %s err=%v", openOut, err)
+	}
+	if opened.Ref != results.Results[0].Ref || opened.Message.Ref != results.Results[0].Ref || opened.Chat.Name != "Most Recent Name" {
+		t.Fatalf("open round trip = %#v", opened)
+	}
+	if len(opened.Context) == 0 || len(opened.Context) > 21 {
+		t.Fatalf("open context size = %#v", opened.Context)
+	}
+	targets := 0
+	for _, item := range opened.Context {
+		assertRFC3339(t, item.Time)
+		if item.Target {
+			targets++
+		}
+	}
+	if targets != 1 || !strings.Contains(opened.Message.Text, "launch note") {
+		t.Fatalf("open target/context = %#v", opened)
+	}
+	assertForeignOpenRefFailsCleanly(t, archivePath)
 
 	fallbackSearchOut := runOK(t, "--archive", archivePath, "--json", "search", "opaque")
 	var fallbackSearch searchListJSON
 	if err := json.Unmarshal([]byte(fallbackSearchOut), &fallbackSearch); err != nil {
 		t.Fatalf("fallback search json = %s err=%v", fallbackSearchOut, err)
 	}
-	if len(fallbackSearch.Items) != 1 {
+	if len(fallbackSearch.Results) != 1 {
 		t.Fatalf("fallback search results = %#v", fallbackSearch)
 	}
-	var senderLabel string
-	if err := json.Unmarshal(fallbackSearch.Items[0]["sender_label"], &senderLabel); err != nil {
-		t.Fatalf("sender label json = %s err=%v", string(fallbackSearch.Items[0]["sender_label"]), err)
-	}
-	if senderLabel != "opaque-handle" {
-		t.Fatalf("fallback sender label = %q", senderLabel)
+	if fallbackSearch.Results[0].Who != "opaque-handle" {
+		t.Fatalf("fallback sender label = %#v", fallbackSearch.Results[0])
 	}
 
 	emptySearchOut := runOK(t, "--archive", archivePath, "--json", "search", "zzznomatchimsgcrawl")
@@ -275,7 +292,7 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if err := json.Unmarshal([]byte(emptySearchOut), &emptySearch); err != nil {
 		t.Fatalf("empty search json = %s err=%v", emptySearchOut, err)
 	}
-	if emptySearch.Returned != 0 || emptySearch.Total != 0 || !emptySearch.Complete || len(emptySearch.Items) != 0 {
+	if emptySearch.TotalMatches != 0 || emptySearch.Truncated || len(emptySearch.Results) != 0 {
 		t.Fatalf("empty search output = %#v", emptySearch)
 	}
 }
@@ -292,6 +309,7 @@ func TestLimitFlagsAreExplicit(t *testing.T) {
 		{"--archive", archivePath, "chats", "--limit", "0"},
 		{"--archive", archivePath, "messages", "--chat", "1", "--all", "--limit", "2"},
 		{"--archive", archivePath, "search", "--all", "--limit", "2", "launch"},
+		{"--archive", archivePath, "search", "--all", "launch"},
 		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "0"},
 		{"--archive", archivePath, "search", "--limit", "0", "launch"},
 		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "201"},
@@ -312,15 +330,6 @@ func TestLimitFlagsAreExplicit(t *testing.T) {
 	if allMessages.Returned != 2 || allMessages.Total != 2 || !allMessages.Complete || len(allMessages.Items) != 2 {
 		t.Fatalf("all messages = %#v", allMessages)
 	}
-
-	allSearchOut := runOK(t, "--archive", archivePath, "--json", "search", "--all", "launch")
-	var allSearch searchListJSON
-	if err := json.Unmarshal([]byte(allSearchOut), &allSearch); err != nil {
-		t.Fatalf("all search json = %s err=%v", allSearchOut, err)
-	}
-	if allSearch.Returned != 2 || allSearch.Total != 2 || !allSearch.Complete || len(allSearch.Items) != 2 {
-		t.Fatalf("all search = %#v", allSearch)
-	}
 }
 
 func TestArchiveCommandsRequireSync(t *testing.T) {
@@ -328,6 +337,7 @@ func TestArchiveCommandsRequireSync(t *testing.T) {
 		{"--json", "chats"},
 		{"--json", "messages", "--chat", "1"},
 		{"--json", "search", "hello"},
+		{"--json", "open", "imsgcrawl:msg/1"},
 	} {
 		var stdout, stderr bytes.Buffer
 		missingPath := filepath.Join(t.TempDir(), "missing.db")
@@ -425,7 +435,7 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}
-	for _, name := range []string{"sync", "doctor", "chats", "messages", "search"} {
+	for _, name := range []string{"sync", "doctor", "chats", "messages", "search", "open"} {
 		command, ok := manifest.Commands[name]
 		if !ok {
 			t.Fatalf("missing command %q in %#v", name, manifest.Commands)
@@ -439,6 +449,9 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	}
 	if manifest.Commands["doctor"].Mutates {
 		t.Fatalf("doctor should not be marked mutating = %#v", manifest.Commands["doctor"])
+	}
+	if !reflect.DeepEqual(manifest.Commands["open"].Argv, []string{"imsgcrawl", "open", "REF", "--json"}) {
+		t.Fatalf("open argv = %#v", manifest.Commands["open"].Argv)
 	}
 	for _, want := range []string{"message-archive", "message-text-search"} {
 		if !hasString(manifest.Privacy.LocalOnlyScopes, want) {
@@ -511,6 +524,60 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 		if len(contact) != 2 {
 			t.Fatalf("contact keys = %#v, want only display_name and phone_numbers", contact)
 		}
+	}
+}
+
+func firstSearchRef(t *testing.T, archivePath, query string) string {
+	t.Helper()
+	out := runOK(t, "--archive", archivePath, "--json", "search", "--limit", "1", query)
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", out, err)
+	}
+	if len(payload.Results) != 1 {
+		t.Fatalf("search results = %#v, want one result", payload)
+	}
+	return payload.Results[0].Ref
+}
+
+func assertSearchEnvelopeKeys(t *testing.T, data []byte) {
+	t.Helper()
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"query":         true,
+		"results":       true,
+		"total_matches": true,
+		"truncated":     true,
+	}
+	if len(root) != len(want) {
+		t.Fatalf("search root keys = %#v", root)
+	}
+	for key := range root {
+		if !want[key] {
+			t.Fatalf("search root key %q not in contract keys %#v", key, want)
+		}
+	}
+}
+
+func assertForeignOpenRefFailsCleanly(t *testing.T, archivePath string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "open", "telecrawl:msg/1"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("foreign open ref error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("json error wrote stderr: %s", stderr.String())
+	}
+	var payload errorJSON
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("foreign ref json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "foreign_ref" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("foreign ref envelope = %#v", payload)
 	}
 }
 

@@ -259,11 +259,11 @@ func (r *runtime) runSearch(args []string) error {
 	fs := flag.NewFlagSet("imsgcrawl search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", defaultSearchLimit, "")
-	all := fs.Bool("all", false, "")
-	if err := fs.Parse(args); err != nil {
+	flagTokens, queryTokens := splitSearchFlagArgs(args)
+	if err := fs.Parse(flagTokens); err != nil {
 		return usageErr(err)
 	}
-	query := strings.TrimSpace(strings.Join(fs.Args(), " "))
+	query := strings.TrimSpace(strings.Join(queryTokens, " "))
 	if query == "" {
 		return usageErr(errors.New("search query is required"))
 	}
@@ -272,12 +272,6 @@ func (r *runtime) runSearch(args []string) error {
 	}
 	if *limit > maxListLimit {
 		return usageErr(fmt.Errorf("search --limit must be %d or less", maxListLimit))
-	}
-	if *all && flagPassed(fs, "limit") {
-		return usageErr(errors.New("use either --all or --limit"))
-	}
-	if *all {
-		*limit = 0
 	}
 	return r.withArchive(func(st *archive.Store) error {
 		results, err := st.Search(r.ctx, query, *limit)
@@ -288,11 +282,7 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(searchListOutput{
-			listHeader: newListHeader("search", len(results), total, *limit),
-			Query:      query,
-			Items:      results,
-		})
+		return r.print(newSearchListOutput(query, results, total, *limit))
 	})
 }
 

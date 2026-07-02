@@ -95,6 +95,16 @@ func searchColumnWidths(width int) (dateWidth int, fromWidth int, conversationWi
 	return dateWidth, fromWidth, conversationWidth, textWidth
 }
 
+func openTextColumns(width int) []textColumn {
+	dateWidth, fromWidth, textWidth := messageColumnWidths(width - 3)
+	return []textColumn{
+		{header: "", width: 1},
+		{header: "date", width: dateWidth},
+		{header: "from", width: fromWidth, wrap: true},
+		{header: "text", width: textWidth, wrap: true},
+	}
+}
+
 func clampWidth(value, min, max int) int {
 	if value < min {
 		return min

@@ -1,7 +1,5 @@
 package cli
 
-import "encoding/json"
-
 type chatJSONItem struct {
 	ChatID             string   `json:"chat_id"`
 	Title              string   `json:"title"`
@@ -51,13 +49,47 @@ type messageListJSON struct {
 }
 
 type searchListJSON struct {
-	SchemaVersion string                       `json:"schema_version"`
-	AppID         string                       `json:"app_id"`
-	Command       string                       `json:"command"`
-	Returned      int                          `json:"returned"`
-	Total         int64                        `json:"total"`
-	Limit         int                          `json:"limit"`
-	Complete      bool                         `json:"complete"`
-	Query         string                       `json:"query"`
-	Items         []map[string]json.RawMessage `json:"items"`
+	Query        string             `json:"query"`
+	Results      []searchResultJSON `json:"results"`
+	TotalMatches int64              `json:"total_matches"`
+	Truncated    bool               `json:"truncated"`
+}
+
+type searchResultJSON struct {
+	Ref     string `json:"ref"`
+	Time    string `json:"time"`
+	Who     string `json:"who"`
+	Where   string `json:"where"`
+	Snippet string `json:"snippet"`
+}
+
+type openJSON struct {
+	Ref     string            `json:"ref"`
+	Chat    openChatJSON      `json:"chat"`
+	Message openMessageJSON   `json:"message"`
+	Context []openMessageJSON `json:"context"`
+}
+
+type openChatJSON struct {
+	Name         string   `json:"name"`
+	Participants []string `json:"participants"`
+}
+
+type openMessageJSON struct {
+	Ref            string `json:"ref"`
+	Time           string `json:"time"`
+	Who            string `json:"who"`
+	Where          string `json:"where"`
+	Text           string `json:"text"`
+	FromMe         bool   `json:"from_me"`
+	HasAttachments bool   `json:"has_attachments"`
+	Target         bool   `json:"target"`
+}
+
+type errorJSON struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Remedy  string `json:"remedy"`
+	} `json:"error"`
 }

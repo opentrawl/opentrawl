@@ -25,6 +25,7 @@ func TestHelpIsCligDevShaped(t *testing.T) {
 		{"chats help", []string{"chats", "--help"}, "--all"},
 		{"messages help", []string{"messages", "--help"}, "Default: 20"},
 		{"search help", []string{"search", "--help"}, "Default: 20"},
+		{"open help", []string{"open", "--help"}, "bounded chat context"},
 		{"contacts help", []string{"contacts", "--help"}, "contacts export"},
 		{"contacts export help", []string{"contacts", "export", "--help"}, "--json"},
 		{"json contacts export help", []string{"--json", "contacts", "export", "--help"}, "--json"},

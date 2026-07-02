@@ -133,6 +133,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runMessages(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
+	case "open":
+		return r.runOpen(args[1:])
 	case "contacts":
 		return r.runContacts(args[1:])
 	default:

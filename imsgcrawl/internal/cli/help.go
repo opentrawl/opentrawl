@@ -16,7 +16,8 @@ Usage:
   imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
   imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
   imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
-  imsgcrawl [--archive PATH] search [--limit N|--all] QUERY [--json]
+  imsgcrawl [--archive PATH] search [--limit N] QUERY [--json]
+  imsgcrawl [--archive PATH] open REF [--json]
   imsgcrawl [--db PATH] contacts export [--json]
   imsgcrawl help COMMAND
   imsgcrawl --version
@@ -89,13 +90,18 @@ Flags:
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--archive PATH] search [--limit N|--all] QUERY [--json]
+  imsgcrawl [--archive PATH] search [--limit N] QUERY [--json]
 
 Search archived message text.
 
 Flags:
   --limit N   Maximum search results. Default: 20.
-  --all       Print all matching search results.
+`)
+	case "open":
+		_, _ = fmt.Fprint(w, `Usage:
+  imsgcrawl [--archive PATH] open REF [--json]
+
+Open one message ref from imsgcrawl search --json with a bounded chat context.
 `)
 	case "contacts", "contacts export":
 		_, _ = fmt.Fprint(w, `Usage:
