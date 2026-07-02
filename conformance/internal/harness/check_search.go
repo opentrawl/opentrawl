@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +12,12 @@ import (
 
 const searchProbeLimit = 3
 const searchProbeQuery = "test"
+
+var (
+	bracketedSnippetTermPattern = regexp.MustCompile(`\[[^\[\]]{1,40}\]`)
+	numericSearchPeerPattern    = regexp.MustCompile(`^[0-9]+$`)
+	phoneSearchPeerPattern      = regexp.MustCompile(`^\+[0-9]{7,15}$`)
+)
 
 func statusState(status StatusInfo) string {
 	if !status.Valid {
@@ -48,8 +55,9 @@ func (s Suite) CheckSearch(ctx context.Context, metadata MetadataInfo, status St
 	if len(rows) > searchProbeLimit {
 		return fail(CheckSearch, fmt.Sprintf("search returned %d rows for limit %d", len(rows), searchProbeLimit), "apply --limit before writing search results")
 	}
-	if failure := validateSearchRows(rows, metadata.AppID); failure.Status == StatusFail {
-		return failure
+	rowResult := validateSearchRows(rows, metadata.AppID, searchProbeQuery)
+	if rowResult.Status == StatusFail || rowResult.Status == StatusWarn {
+		return rowResult
 	}
 	return pass(CheckSearch, fmt.Sprintf("search returned %d rows within limit", len(rows)))
 }
@@ -133,7 +141,8 @@ func jsonNumber(value any) (float64, bool) {
 	}
 }
 
-func validateSearchRows(rows []any, appID string) CheckResult {
+func validateSearchRows(rows []any, appID string, query string) CheckResult {
+	var warning CheckResult
 	for index, item := range rows {
 		row, ok := item.(map[string]any)
 		if !ok {
@@ -145,11 +154,107 @@ func validateSearchRows(rows []any, appID string) CheckResult {
 		if failure := validateSearchRowTime(row, index); failure.Status == StatusFail {
 			return failure
 		}
-		if failure := validateOptionalSearchFields(row, index); failure.Status == StatusFail {
-			return failure
+		fieldResult := validateOptionalSearchFields(row, index, query)
+		if fieldResult.Status == StatusFail {
+			return fieldResult
+		}
+		if fieldResult.Status == StatusWarn && warning.Status != StatusWarn {
+			warning = fieldResult
 		}
 	}
+	if warning.Status == StatusWarn {
+		return warning
+	}
 	return pass(CheckSearch, "search rows are shaped correctly")
+}
+
+func validateOptionalSearchFields(row map[string]any, index int, query string) CheckResult {
+	var warning CheckResult
+	for _, field := range []string{"who", "where", "snippet"} {
+		value, ok := row[field]
+		if !ok {
+			continue
+		}
+		text, ok := value.(string)
+		if !ok {
+			return fail(CheckSearch, fmt.Sprintf("search row %d %s is not a string", index+1, field), "emit who, where and snippet as strings when present")
+		}
+		fieldResult := validateSearchHumanField(field, text, index, query)
+		if fieldResult.Status == StatusFail {
+			return fieldResult
+		}
+		if fieldResult.Status == StatusWarn && warning.Status != StatusWarn {
+			warning = fieldResult
+		}
+	}
+	if warning.Status == StatusWarn {
+		return warning
+	}
+	return pass(CheckSearch, "optional search fields are valid")
+}
+
+func validateSearchHumanField(field string, text string, index int, query string) CheckResult {
+	if containsLineBreakOrTab(text) {
+		return fail(CheckSearch, fmt.Sprintf("search row %d %s contains newline or tab characters", index+1, field), "flatten whitespace")
+	}
+	if isSearchPlaceholder(text) {
+		return fail(CheckSearch, fmt.Sprintf("search row %d %s is a placeholder", index+1, field), "omit instead of placeholder")
+	}
+	if field == "who" || field == "where" {
+		if isNumericSearchPeer(text) {
+			return fail(CheckSearch, fmt.Sprintf("search row %d %s is a raw numeric id", index+1, field), "map ids to display names or omit the field")
+		}
+		if isPhoneSearchPeer(text) {
+			return warn(CheckSearch, fmt.Sprintf("search row %d %s looks like a phone number; contact mapping may be missing", index+1, field))
+		}
+	}
+	if field == "snippet" && hasMarkedSearchTerm(text, query) {
+		return fail(CheckSearch, fmt.Sprintf("search row %d snippet marks a search term with brackets", index+1), "emit plain snippets without match markers")
+	}
+	return pass(CheckSearch, "optional search field is valid")
+}
+
+func containsLineBreakOrTab(text string) bool {
+	return strings.ContainsAny(text, "\n\r\t")
+}
+
+func isSearchPlaceholder(text string) bool {
+	switch strings.ToLower(strings.TrimSpace(text)) {
+	case "unknown", "n/a":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNumericSearchPeer(text string) bool {
+	return numericSearchPeerPattern.MatchString(strings.TrimSpace(text))
+}
+
+func isPhoneSearchPeer(text string) bool {
+	return phoneSearchPeerPattern.MatchString(strings.TrimSpace(text))
+}
+
+func hasMarkedSearchTerm(snippet string, query string) bool {
+	terms := searchQueryTerms(query)
+	if len(terms) == 0 {
+		return false
+	}
+	for _, match := range bracketedSnippetTermPattern.FindAllString(snippet, -1) {
+		content := strings.ToLower(match[1 : len(match)-1])
+		if _, ok := terms[content]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func searchQueryTerms(query string) map[string]struct{} {
+	terms := map[string]struct{}{}
+	for _, term := range strings.Fields(query) {
+		terms[strings.ToLower(term)] = struct{}{}
+	}
+	return terms
 }
 
 func validateSearchRowRef(row map[string]any, index int, appID string) CheckResult {
@@ -181,17 +286,4 @@ func validateSearchRowTime(row map[string]any, index int) CheckResult {
 		return fail(CheckSearch, fmt.Sprintf("search row %d time is not RFC 3339", index+1), "emit result time as RFC 3339")
 	}
 	return pass(CheckSearch, "search time is valid")
-}
-
-func validateOptionalSearchFields(row map[string]any, index int) CheckResult {
-	for _, field := range []string{"who", "where", "snippet"} {
-		value, ok := row[field]
-		if !ok {
-			continue
-		}
-		if _, ok := value.(string); !ok {
-			return fail(CheckSearch, fmt.Sprintf("search row %d %s is not a string", index+1, field), "emit who, where and snippet as strings when present")
-		}
-	}
-	return pass(CheckSearch, "optional search fields are valid")
 }

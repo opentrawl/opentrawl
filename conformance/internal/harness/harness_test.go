@@ -196,17 +196,33 @@ func TestReadsNeverMutateCheck(t *testing.T) {
 
 func TestSearchCheck(t *testing.T) {
 	validTime := "2026-07-02T12:00:00Z"
+	searchResult := func(extraFields string) string {
+		return fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime), extraFields)
+	}
 	tests := []struct {
-		name         string
-		capabilities string
-		search       string
-		want         Status
+		name               string
+		capabilities       string
+		search             string
+		want               Status
+		wantRemedy         string
+		wantDetailContains string
 	}{
 		{
 			name:         "bounded results pass",
 			capabilities: `["search"]`,
-			search:       fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime)),
+			search:       searchResult(""),
 			want:         StatusPass,
+		},
+		{
+			name:         "human optional fields pass",
+			capabilities: `["search"]`,
+			search: searchResult(fmt.Sprintf(
+				`,"who":%s,"where":%s,"snippet":%s`,
+				jsonString(t, "Alex Example"),
+				jsonString(t, "Example project"),
+				jsonString(t, "plain test result"),
+			)),
+			want: StatusPass,
 		},
 		{
 			name:         "too many results fails",
@@ -251,6 +267,82 @@ func TestSearchCheck(t *testing.T) {
 			want:         StatusFail,
 		},
 		{
+			name:         "numeric who fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"who":"123456"`),
+			want:         StatusFail,
+			wantRemedy:   "map ids to display names or omit the field",
+		},
+		{
+			name:         "numeric where fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"where":"987654"`),
+			want:         StatusFail,
+			wantRemedy:   "map ids to display names or omit the field",
+		},
+		{
+			name:         "unknown who placeholder fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"who":"Unknown"`),
+			want:         StatusFail,
+			wantRemedy:   "omit instead of placeholder",
+		},
+		{
+			name:         "n/a where placeholder fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"where":"n/a"`),
+			want:         StatusFail,
+			wantRemedy:   "omit instead of placeholder",
+		},
+		{
+			name:         "unknown snippet placeholder fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"snippet":"unknown"`),
+			want:         StatusFail,
+			wantRemedy:   "omit instead of placeholder",
+		},
+		{
+			name:         "newline where fails",
+			capabilities: `["search"]`,
+			search:       searchResult(fmt.Sprintf(`,"where":%s`, jsonString(t, "Example\nproject"))),
+			want:         StatusFail,
+			wantRemedy:   "flatten whitespace",
+		},
+		{
+			name:         "tab snippet fails",
+			capabilities: `["search"]`,
+			search:       searchResult(fmt.Sprintf(`,"snippet":%s`, jsonString(t, "plain\ttest result"))),
+			want:         StatusFail,
+			wantRemedy:   "flatten whitespace",
+		},
+		{
+			name:         "highlight marker fails",
+			capabilities: `["search"]`,
+			search:       searchResult(fmt.Sprintf(`,"snippet":%s`, jsonString(t, "plain [TEST] result"))),
+			want:         StatusFail,
+			wantRemedy:   "emit plain snippets without match markers",
+		},
+		{
+			name:         "non-query brackets pass",
+			capabilities: `["search"]`,
+			search:       searchResult(fmt.Sprintf(`,"snippet":%s`, jsonString(t, "plain [today] test result"))),
+			want:         StatusPass,
+		},
+		{
+			name:               "phone where warns",
+			capabilities:       `["search"]`,
+			search:             searchResult(`,"where":"+15551234567"`),
+			want:               StatusWarn,
+			wantDetailContains: "contact mapping",
+		},
+		{
+			name:               "phone who warns",
+			capabilities:       `["search"]`,
+			search:             searchResult(`,"who":"+15551234567"`),
+			want:               StatusWarn,
+			wantDetailContains: "contact mapping",
+		},
+		{
 			name:         "undeclared search warns",
 			capabilities: `["status"]`,
 			search:       `{"results":[]}`,
@@ -267,6 +359,12 @@ func TestSearchCheck(t *testing.T) {
 			_, status := suite.CheckStatus(context.Background())
 			result := suite.CheckSearch(context.Background(), metadata, status)
 			assertStatus(t, result, tc.want)
+			if tc.wantRemedy != "" && result.Remedy != tc.wantRemedy {
+				t.Fatalf("remedy = %q, want %q; result=%#v", result.Remedy, tc.wantRemedy, result)
+			}
+			if tc.wantDetailContains != "" && !strings.Contains(result.Detail, tc.wantDetailContains) {
+				t.Fatalf("detail = %q, want it to contain %q; result=%#v", result.Detail, tc.wantDetailContains, result)
+			}
 		})
 	}
 }
