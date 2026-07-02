@@ -3,15 +3,25 @@ package archive
 import "time"
 
 type Message struct {
-	ID          string
-	ThreadID    string
-	Time        time.Time
-	FromName    string
-	FromAddress string
-	ToAddress   string
-	Subject     string
-	Body        string
-	Labels      []string
+	ID             string
+	ThreadID       string
+	HistoryID      string
+	InternalDateMS int64
+	Time           time.Time
+	FromName       string
+	FromAddress    string
+	ToAddress      string
+	CcAddress      string
+	Subject        string
+	Body           string
+	Labels         []string
+	Attachments    []Attachment
+}
+
+type Attachment struct {
+	Filename string `json:"filename"`
+	MIMEType string `json:"mime_type"`
+	Size     int64  `json:"size"`
 }
 
 type InsertResult struct {
@@ -57,18 +67,41 @@ type SearchHit struct {
 }
 
 type OpenResult struct {
-	Ref      string      `json:"ref"`
-	ID       string      `json:"id"`
-	ThreadID string      `json:"thread_id"`
-	Time     string      `json:"time"`
-	Headers  MailHeaders `json:"headers"`
-	Labels   []string    `json:"labels,omitempty"`
-	Body     string      `json:"body"`
+	Ref         string       `json:"ref"`
+	ID          string       `json:"id"`
+	ThreadID    string       `json:"thread_id"`
+	Time        string       `json:"time"`
+	Headers     MailHeaders  `json:"headers"`
+	Labels      []string     `json:"labels,omitempty"`
+	Attachments []Attachment `json:"attachments,omitempty"`
+	Body        string       `json:"body"`
 }
 
 type MailHeaders struct {
 	FromName    string `json:"from_name,omitempty"`
 	FromAddress string `json:"from_address,omitempty"`
 	ToAddress   string `json:"to_address"`
+	CcAddress   string `json:"cc_address,omitempty"`
 	Subject     string `json:"subject"`
+}
+
+type BackupShardKind string
+
+const (
+	BackupShardMessages BackupShardKind = "messages"
+	BackupShardLabels   BackupShardKind = "labels"
+)
+
+type BackupShard struct {
+	Path string
+	Hash string
+	Kind BackupShardKind
+	Rows int64
+}
+
+type IngestResult struct {
+	Shard    BackupShard
+	Seen     int
+	Inserted int
+	Labels   int
 }

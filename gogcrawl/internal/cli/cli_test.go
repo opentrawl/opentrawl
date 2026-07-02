@@ -13,42 +13,51 @@ import (
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
-func TestSyncResumeAndCheapCompletedRun(t *testing.T) {
+func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	fake := installFakeGog(t)
 	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
-	t.Setenv("GOG_FAKE_FAIL_PAGE", "p2")
-	err := Run(context.Background(), []string{"sync", "--json", "--archive", dbPath}, &bytes.Buffer{}, &bytes.Buffer{})
-	if err == nil {
-		t.Fatal("first sync succeeded, want simulated failure")
-	}
-	t.Setenv("GOG_FAKE_FAIL_PAGE", "")
-	clearLog(t, fake.log)
-	err = Run(context.Background(), []string{"sync", "--json", "--archive", dbPath}, &bytes.Buffer{}, &bytes.Buffer{})
+	repoPath := filepath.Join(t.TempDir(), "backup")
+	err := Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := countLogLines(t, fake.log, "gmail messages search"); got != 3 {
-		t.Fatalf("resume search calls = %d, want 3", got)
+	if got := countLogLines(t, fake.log, "backup gmail push"); got != 1 {
+		t.Fatalf("backup push calls = %d, want 1", got)
+	}
+	if got := countLogLines(t, fake.log, "backup cat"); got != 2 {
+		t.Fatalf("backup cat calls = %d, want 2", got)
 	}
 	st, err := archive.OpenExisting(context.Background(), dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	status, err := st.Status(context.Background())
+	if err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if status.Messages != 3 {
+		_ = st.Close()
+		t.Fatalf("messages after sync = %d, want 3", status.Messages)
+	}
+	open, err := st.OpenMessage(context.Background(), archive.RefPrefix+"m3")
 	_ = st.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if status.Messages != 3 {
-		t.Fatalf("messages after resume = %d, want 3", status.Messages)
+	if open.Headers.ToAddress == "" || open.Headers.CcAddress == "" {
+		t.Fatalf("headers = %#v", open.Headers)
 	}
 	clearLog(t, fake.log)
-	err = Run(context.Background(), []string{"sync", "--json", "--archive", dbPath}, &bytes.Buffer{}, &bytes.Buffer{})
+	err = Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := countLogLines(t, fake.log, "gmail messages search"); got != 1 {
-		t.Fatalf("completed sync search calls = %d, want 1", got)
+	if got := countLogLines(t, fake.log, "backup gmail push"); got != 1 {
+		t.Fatalf("second backup push calls = %d, want 1", got)
+	}
+	if got := countLogLines(t, fake.log, "backup cat"); got != 0 {
+		t.Fatalf("second backup cat calls = %d, want 0", got)
 	}
 }
 
@@ -96,6 +105,22 @@ func TestDoctorReportsMissingArchive(t *testing.T) {
 	found := false
 	for _, check := range out.Checks {
 		if check.ID == "archive" && check.State == "fail" && check.Remedy == "run gogcrawl sync" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("doctor checks = %#v", out.Checks)
+	}
+}
+
+func TestDoctorChecksGogVersion(t *testing.T) {
+	installFakeGog(t)
+	t.Setenv("GOG_FAKE_VERSION", "v0.30.9")
+	var out doctorOutput
+	runJSON(t, context.Background(), []string{"doctor", "--json", "--archive", filepath.Join(t.TempDir(), "missing.db")}, &out)
+	found := false
+	for _, check := range out.Checks {
+		if check.ID == "gog_version" && check.State == "fail" && check.Remedy == "upgrade gogcli" {
 			found = true
 		}
 	}
@@ -198,8 +223,74 @@ func contains(values []string, want string) bool {
 const fakeGogScript = `#!/bin/sh
 printf '%s\n' "$*" >> "$GOG_FAKE_LOG"
 
+if [ "$1" = "--version" ]; then
+  if [ -n "$GOG_FAKE_VERSION" ]; then
+    printf '%s\n' "$GOG_FAKE_VERSION"
+  else
+    printf 'v0.31.1 (test 2026-07-02T00:00:00Z)\n'
+  fi
+  exit 0
+fi
+
 if [ "$1" = "auth" ] && [ "$2" = "list" ]; then
   printf 'alice@example.com\tmain\tgmail\t2030-01-02T03:04:05Z\ttrue\t\toauth\n'
+  exit 0
+fi
+
+if [ "$1" = "backup" ] && [ "$2" = "init" ]; then
+  repo=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--repo" ]; then
+      repo="$2"
+      shift 2
+      continue
+    fi
+    shift
+  done
+  mkdir -p "$repo/.git"
+  printf '[core]\n\trepositoryformatversion = 0\n' > "$repo/.git/config"
+  exit 0
+fi
+
+if [ "$1" = "backup" ] && [ "$2" = "gmail" ] && [ "$3" = "push" ]; then
+  repo=""
+  while [ "$#" -gt 0 ]; do
+    if [ "$1" = "--repo" ]; then
+      repo="$2"
+      shift 2
+      continue
+    fi
+    shift
+  done
+  mkdir -p "$repo"
+  cat > "$repo/manifest.json" <<'JSON'
+{"services":{"gmail":{"shards":[
+{"path":"data/gmail/account/labels.jsonl.gz.age","plaintext_sha256":"labels-hash","rows":1},
+{"path":"data/gmail/account/messages/part-000001.jsonl.gz.age","plaintext_sha256":"messages-hash","rows":3}
+]}}}
+JSON
+  exit 0
+fi
+
+if [ "$1" = "backup" ] && [ "$2" = "cat" ]; then
+  shard=""
+  for arg in "$@"; do
+    case "$arg" in
+      *.jsonl.gz.age) shard="$arg" ;;
+    esac
+  done
+  case "$shard" in
+    *labels.jsonl.gz.age)
+      printf '{"id":"INBOX","name":"Inbox","type":"system"}\n'
+      ;;
+    *part-000001.jsonl.gz.age)
+      cat <<'JSON'
+{"id":"m3","threadId":"t3","historyId":"h3","internalDate":1783000991000,"labelIds":["INBOX"],"sizeEstimate":100,"raw":"RnJvbTogQWxpY2UgRXhhbXBsZSA8YWxpY2VAZXhhbXBsZS5jb20-DQpUbzogQm9iIEV4YW1wbGUgPGJvYkBleGFtcGxlLmNvbT4NCkNjOiBDYXJvbCBFeGFtcGxlIDxjYXJvbEBleGFtcGxlLmNvbT4NClN1YmplY3Q6IE5ld2VzdCBwcm9qZWN0IHN5bmMNCg0KTmV3ZXN0IHByb2plY3Qgc3luYyBib2R5Lg0K"}
+{"id":"m2","threadId":"t2","historyId":"h2","internalDate":1782997391000,"labelIds":["SENT"],"sizeEstimate":100,"raw":"RnJvbTogQWxpY2UgRXhhbXBsZSA8YWxpY2VAZXhhbXBsZS5jb20-DQpUbzogQm9iIEV4YW1wbGUgPGJvYkBleGFtcGxlLmNvbT4NCkNjOiBDYXJvbCBFeGFtcGxlIDxjYXJvbEBleGFtcGxlLmNvbT4NClN1YmplY3Q6IE1pZGRsZSBwcm9qZWN0IHN5bmMNCg0KTWlkZGxlIHByb2plY3Qgc3luYyBib2R5Lg0K"}
+{"id":"m1","threadId":"t1","historyId":"h1","internalDate":1782993791000,"labelIds":["ARCHIVE"],"sizeEstimate":100,"raw":"RnJvbTogQWxpY2UgRXhhbXBsZSA8YWxpY2VAZXhhbXBsZS5jb20-DQpUbzogQm9iIEV4YW1wbGUgPGJvYkBleGFtcGxlLmNvbT4NCkNjOiBDYXJvbCBFeGFtcGxlIDxjYXJvbEBleGFtcGxlLmNvbT4NClN1YmplY3Q6IE9sZCBwcm9qZWN0IHN5bmMNCg0KT2xkIHByb2plY3Qgc3luYyBib2R5Lg0K"}
+JSON
+      ;;
+  esac
   exit 0
 fi
 
@@ -207,39 +298,6 @@ if [ "$1" = "contacts" ] && [ "$2" = "list" ]; then
   cat <<'JSON'
 {"contacts":[{"resource":"people/c1","name":"Alice Example","phone":"+15550101000"},{"resource":"people/c2","name":"Bob Example","phone":""}],"nextPageToken":""}
 JSON
-  exit 0
-fi
-
-if [ "$1" = "gmail" ] && [ "$2" = "messages" ] && [ "$3" = "search" ]; then
-  page=""
-  while [ "$#" -gt 0 ]; do
-    if [ "$1" = "--page" ]; then
-      page="$2"
-      shift 2
-      continue
-    fi
-    shift
-  done
-  if [ -n "$GOG_FAKE_FAIL_PAGE" ] && [ "$GOG_FAKE_FAIL_PAGE" = "$page" ]; then
-    exit 2
-  fi
-  case "$page" in
-    "")
-      cat <<'JSON'
-{"messages":[{"id":"m3","threadId":"t3","date":"Thu, 02 Jul 2026 14:03:11 +0200","from":"Alice Example <alice@example.com>","subject":"Newest project sync","labels":["INBOX"],"body":"Newest project sync body."}],"nextPageToken":"p2"}
-JSON
-      ;;
-    "p2")
-      cat <<'JSON'
-{"messages":[{"id":"m2","threadId":"t2","date":"Thu, 02 Jul 2026 13:03:11 +0200","from":"Bob Example <bob@example.com>","subject":"Middle project sync","labels":["SENT"],"body":"Middle project sync body."}],"nextPageToken":"p3"}
-JSON
-      ;;
-    "p3")
-      cat <<'JSON'
-{"messages":[{"id":"m1","threadId":"t1","date":"Thu, 02 Jul 2026 12:03:11 +0200","from":"Alice Example <alice@example.com>","subject":"Old project sync","labels":["ARCHIVE"],"body":"Old project sync body."}],"nextPageToken":""}
-JSON
-      ;;
-  esac
   exit 0
 fi
 

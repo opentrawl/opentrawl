@@ -21,8 +21,9 @@ Usage:
   gogcrawl --version
 
 Global flags:
-  --archive PATH  Local gogcrawl archive path.
-  --json          Print machine-readable output.
+  --archive PATH     Local gogcrawl archive database path.
+  --backup-repo PATH Local gog backup repository path.
+  --json             Print machine-readable output.
 
 Output:
   Default output is compact text for humans and agents.
@@ -47,9 +48,13 @@ Report archive state, freshness, counts and safe auth state.
 `)
 	case "sync":
 		_, _ = fmt.Fprint(w, `Usage:
-  gogcrawl sync [--json]
+  gogcrawl sync [--query QUERY] [--max N] [--json]
 
 Refresh the local Gmail archive from gog.
+
+Flags:
+  --query QUERY  Optional Gmail query for bounded test syncs.
+  --max N        Maximum messages to back up. Default: 0, meaning all.
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:

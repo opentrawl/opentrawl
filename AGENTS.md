@@ -79,3 +79,12 @@ written for end users:
   short sentences, sentence case, British English, no filler.
 - Outputs of every crawler command must be readable by a human cold;
   that is the bar that makes them agent-safe too.
+
+## Upstream tool drift
+
+Upstream tools such as `gogcli` and `crawlkit` move fast. Pin minimum
+versions explicitly, and periodically re-check upstream for new
+primitives before building workarounds. Concrete example: `gogcrawl`
+originally paginated Gmail search because the pinned `gog` 0.11
+predated `gog backup gmail`; the crawler now depends on the backup
+pipeline instead.

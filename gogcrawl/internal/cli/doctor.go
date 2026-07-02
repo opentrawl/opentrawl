@@ -2,9 +2,14 @@ package cli
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
+
+const minGogVersion = "0.31.0"
 
 type doctorOutput struct {
 	Checks []doctorCheck `json:"checks"`
@@ -26,6 +31,7 @@ func (r *runtime) runDoctor(args []string) error {
 	}
 	return r.print(doctorOutput{Checks: []doctorCheck{
 		r.checkGogBinary(),
+		r.checkGogVersion(),
 		r.checkGogAuth(),
 		r.checkArchive(),
 	}})
@@ -41,6 +47,27 @@ func (r *runtime) checkGogBinary() doctorCheck {
 		}
 	}
 	return doctorCheck{ID: "gog_binary", State: "ok"}
+}
+
+func (r *runtime) checkGogVersion() doctorCheck {
+	version, err := r.gog.Version(r.ctx)
+	if err != nil {
+		return doctorCheck{
+			ID:      "gog_version",
+			State:   "fail",
+			Message: "gog version cannot be checked",
+			Remedy:  "upgrade gogcli",
+		}
+	}
+	if !versionAtLeast(version, minGogVersion) {
+		return doctorCheck{
+			ID:      "gog_version",
+			State:   "fail",
+			Message: fmt.Sprintf("gog version %s is below %s", version, minGogVersion),
+			Remedy:  "upgrade gogcli",
+		}
+	}
+	return doctorCheck{ID: "gog_version", State: "ok", Message: version}
 }
 
 func (r *runtime) checkGogAuth() doctorCheck {
@@ -85,7 +112,7 @@ func (r *runtime) checkArchive() doctorCheck {
 	if err != nil {
 		remedy := "run gogcrawl sync to rebuild the archive"
 		if errors.Is(err, archive.ErrSchemaMismatch) {
-			remedy = "run gogcrawl sync to upgrade the archive schema"
+			remedy = "remove the old archive and run gogcrawl sync"
 		}
 		return doctorCheck{
 			ID:      "archive",
@@ -104,4 +131,35 @@ func (r *runtime) checkArchive() doctorCheck {
 		}
 	}
 	return doctorCheck{ID: "archive", State: "ok"}
+}
+
+func versionAtLeast(raw, minimum string) bool {
+	got := parseVersion(raw)
+	want := parseVersion(minimum)
+	for i := 0; i < len(want); i++ {
+		if got[i] > want[i] {
+			return true
+		}
+		if got[i] < want[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func parseVersion(raw string) [3]int {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "v")
+	if before, _, ok := strings.Cut(raw, " "); ok {
+		raw = before
+	}
+	parts := strings.Split(raw, ".")
+	var out [3]int
+	for i := 0; i < len(out) && i < len(parts); i++ {
+		value, _ := strconv.Atoi(strings.TrimFunc(parts[i], func(r rune) bool {
+			return r < '0' || r > '9'
+		}))
+		out[i] = value
+	}
+	return out
 }

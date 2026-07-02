@@ -30,12 +30,13 @@ func (e *cliError) Error() string {
 func (e *cliError) Unwrap() error { return e.err }
 
 type runtime struct {
-	ctx         context.Context
-	stdout      io.Writer
-	stderr      io.Writer
-	json        bool
-	archivePath string
-	gog         gog.Client
+	ctx            context.Context
+	stdout         io.Writer
+	stderr         io.Writer
+	json           bool
+	archivePath    string
+	backupRepoPath string
+	gog            gog.Client
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -44,6 +45,16 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	archivePath, args, err := pullValueFlag(args, "--archive")
 	if err != nil {
 		return writeJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
+	}
+	if strings.TrimSpace(archivePath) == "" {
+		archivePath = archive.DefaultPath()
+	}
+	backupRepoPath, args, err := pullValueFlag(args, "--backup-repo")
+	if err != nil {
+		return writeJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
+	}
+	if strings.TrimSpace(backupRepoPath) == "" {
+		backupRepoPath = archive.DefaultBackupRepoPath()
 	}
 	if versionOut {
 		_, _ = io.WriteString(stdout, version+"\n")
@@ -61,12 +72,13 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return printCommandUsage(stdout, args[1:])
 	}
 	r := &runtime{
-		ctx:         ctx,
-		stdout:      stdout,
-		stderr:      stderr,
-		json:        jsonOut,
-		archivePath: archivePath,
-		gog:         gog.New(gog.DefaultBinary),
+		ctx:            ctx,
+		stdout:         stdout,
+		stderr:         stderr,
+		json:           jsonOut,
+		archivePath:    archivePath,
+		backupRepoPath: backupRepoPath,
+		gog:            gog.New(gog.DefaultBinary),
 	}
 	err = r.dispatch(args)
 	return writeJSONErrorIfNeeded(stdout, jsonOut, err)
@@ -148,9 +160,6 @@ func pullValueFlag(args []string, name string) (string, []string, error) {
 			continue
 		}
 		out = append(out, arg)
-	}
-	if strings.TrimSpace(value) == "" {
-		value = archive.DefaultPath()
 	}
 	return value, out, nil
 }
