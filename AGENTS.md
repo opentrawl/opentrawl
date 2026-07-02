@@ -97,3 +97,12 @@ concrete question with options in front of Josh the moment it becomes
 blocking, not in a status list. Track every blocked item with what
 unblocks it. The inverse also holds: never invent work to look busy —
 aligned and ready, or it doesn't run.
+
+## Josh reviews inline, in the files
+
+Josh's doc reviews arrive as inline comments saved into the files
+themselves (`-> COMMENT` style), not as chat messages. Before editing
+any doc, re-read it from disk — pattern-editing against a remembered
+version silently skips his commented lines and can clobber his review.
+Treat comment lines as review to answer, never text to delete; remove
+them only when resolving that comment with him.
