@@ -1,0 +1,76 @@
+---
+written_by: ai
+---
+
+# TCC strategy
+
+Decision record for how OpenTrawl handles macOS privacy permissions
+(TCC). Decided early because attribution rules shape the process
+architecture.
+
+## Facts that decide it
+
+- One permission covers almost everything in v1. iMessage, Apple
+  Notes, Photos (direct sqlite), WhatsApp and Telegram desktop stores
+  are all readable with Full Disk Access alone.
+- Apple Calendar is the one outlier: EventKit needs its own
+  interactive consent, FDA does not grant the API, and modern macOS
+  has no readable on-disk calendar store. The v1 route around it:
+  calcrawl reads iCloud calendars over CalDAV with an app-specific
+  password — headless, no TCC involved, same source of truth. A
+  native EventKit path (consent flow in the app) can come later for
+  calendars that never touch iCloud.
+- FDA and the App Sandbox do not compose. The app ships unsandboxed,
+  Developer ID signed, notarized, outside the Mac App Store.
+- TCC attributes terminal-spawned binaries to the terminal app, not
+  the binary. Granting FDA to a Go binary does nothing; the terminal
+  (or the app that spawned it) holds the grant.
+- Signature-keyed grants die when the signature changes, and every Go
+  rebuild re-signs ad hoc. Path-keyed grants and responsible-process
+  inheritance survive rebuilds. Ad-hoc-signed app builds lose their
+  grant on every rebuild — the app must always be signed with a stable
+  identity, including dev builds.
+- LaunchAgents are the least reliable TCC holders (attribution-chain
+  failures). Scheduling stays inside the app's process tree: login
+  item plus timer, never a LaunchAgent.
+- There is no API to check FDA. The probe is a canary read of a
+  protected path.
+
+## The decision
+
+Trawl.app holds Full Disk Access; crawlers run as its direct children
+and inherit the grant. Developers and agents grant FDA to their
+terminal once — the standard pattern for every tool in this space —
+and everything then works from a shell too.
+
+What this requires:
+
+1. Stable signing from day one: a persistent self-signed certificate
+   for dev builds, Developer ID plus notarization for releases. Never
+   ad hoc.
+2. Syncs are scheduled by the app from its own process tree (login
+   item + timer), so crawler children always have an FDA ancestor.
+3. `doctor` in every crawler and in `trawl` detects the permission
+   failure by canary read and prints the exact remedy: grant FDA to
+   Trawl (app users) or to your terminal (CLI users), with the System
+   Settings deep link (`Privacy_AllFiles` pane).
+4. App-side grant UX uses permiso's guided drag-into-Settings flow;
+   it needs a one-line upstream addition for the FDA panel.
+
+## Open risk, to spike before the app hardens
+
+Inheritance normally flows to direct children, but there is a
+documented case of macOS auto-denying a separately-signed child at a
+different path. Spike (30 minutes): grant FDA to a stably-signed app
+build, spawn a Go crawler, read a protected store. If inheritance
+fails, the fallback is to embed crawler binaries inside the app bundle
+under the app's signature — decide after the spike, not before.
+
+## Rejected
+
+- Path-based FDA grants per crawler binary: miserable consumer UX,
+  breaks on package-manager upgrades, N binaries means N grants.
+  Escape hatch only.
+- FDA-holding helper daemon with the CLI over RPC: no shipping product
+  in this space does it, launchd attribution is the least reliable,
+  and it contradicts crawlers owning their own reads.

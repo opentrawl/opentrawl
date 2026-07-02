@@ -93,7 +93,7 @@ correctly in `trawl`. Highly parallel.
 | telecrawl | works: archive and media proven | metadata drift, status envelope |
 | wacrawl | archive works, readiness unproven | readiness proof, stop auto-sync on read, status envelope; watch WhatsApp passkey pairing risk |
 | gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of upstream `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |
-| calcrawl (new) | private scaffold exists | rebuild clean in monorepo: Google (via `gogcli` calendar surfaces) and ICS sync, archive, search |
+| calcrawl (new) | private scaffold exists | rebuild clean in monorepo: Google (via `gogcli` calendar surfaces), Apple Calendar via iCloud CalDAV (app-specific password; TCC-free — see docs/tcc.md), ICS sync, archive, search |
 | clawdex | contact layer works | adopt the crawlkit contact-export contract, contract compliance, import loop from all v1 crawlers |
 
 Contact export is a v1 requirement for every crawler, because identity
