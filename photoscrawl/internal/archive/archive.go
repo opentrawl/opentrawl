@@ -6,11 +6,28 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/store"
 )
+
+type StatusResult struct {
+	SchemaVersion string             `json:"schema_version"`
+	AppID         string             `json:"app_id"`
+	GeneratedAt   string             `json:"generated_at"`
+	State         string             `json:"state"`
+	Summary       string             `json:"summary"`
+	DatabasePath  string             `json:"database_path,omitempty"`
+	DatabaseBytes int64              `json:"database_bytes,omitempty"`
+	LastImportAt  string             `json:"last_import_at,omitempty"`
+	Counts        []control.Count    `json:"counts,omitempty"`
+	Freshness     *StatusFreshness   `json:"freshness,omitempty"`
+	Databases     []control.Database `json:"databases,omitempty"`
+}
+
+type StatusFreshness struct {
+	LastSync string `json:"last_sync,omitempty"`
+}
 
 type InitResult struct {
 	Database string `json:"database"`
@@ -32,194 +49,96 @@ func Init(ctx context.Context, paths Paths) (InitResult, error) {
 	return InitResult{Database: paths.Database}, nil
 }
 
-func Status(ctx context.Context, paths Paths) (control.Status, error) {
-	status := control.NewStatus("photoscrawl", "photos archive")
+func Status(ctx context.Context, paths Paths) (StatusResult, error) {
+	status := newStatus("photos archive")
 	status.DatabasePath = paths.Database
-	if info, err := os.Stat(paths.Database); err == nil {
-		status.State = "ready"
-		status.DatabaseBytes = info.Size()
-		counts, summary, lastImportAt, warnings, err := counts(ctx, paths.Database)
-		if err != nil {
-			return control.Status{}, err
+	info, err := os.Stat(paths.Database)
+	if err != nil {
+		if os.IsNotExist(err) {
+			status.State = "missing"
+			status.Summary = "photos.sqlite has not been initialized"
+			return status, nil
 		}
-		status.Counts = counts
-		status.Summary = summary
-		status.LastImportAt = lastImportAt
-		status.Warnings = warnings
-		status.Databases = []control.Database{
-			control.SQLiteDatabase("photos", "photos.sqlite", "primary", paths.Database, true, counts),
-		}
-		return status, nil
+		return StatusResult{}, err
 	}
-	status.State = "missing"
-	status.Summary = "photos.sqlite has not been initialized"
+	status.DatabaseBytes = info.Size()
+	metrics, err := readStatusMetrics(ctx, paths.Database)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	if metrics.PhotoCount == 0 {
+		status.State = "empty"
+	} else {
+		status.State = "ok"
+	}
+	status.Summary = statusSummary(metrics.PhotoCount)
+	status.Counts = metrics.Counts
+	status.LastImportAt = metrics.LastImportAt
+	if metrics.LastImportAt != "" {
+		status.Freshness = &StatusFreshness{LastSync: metrics.LastImportAt}
+	}
+	status.Databases = []control.Database{
+		control.SQLiteDatabase("photos", "photos.sqlite", "primary", paths.Database, true, metrics.Counts),
+	}
 	return status, nil
 }
 
-func counts(ctx context.Context, dbPath string) ([]control.Count, string, string, []string, error) {
-	db, err := store.Open(ctx, store.Options{
-		Path:          dbPath,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+func newStatus(summary string) StatusResult {
+	base := control.NewStatus("photoscrawl", summary)
+	return StatusResult{
+		SchemaVersion: base.SchemaVersion,
+		AppID:         base.AppID,
+		GeneratedAt:   base.GeneratedAt,
+		State:         base.State,
+		Summary:       base.Summary,
+	}
+}
+
+type statusMetrics struct {
+	PhotoCount   int64
+	LastImportAt string
+	Counts       []control.Count
+}
+
+func readStatusMetrics(ctx context.Context, dbPath string) (statusMetrics, error) {
+	db, err := store.OpenReadOnly(ctx, dbPath)
 	if err != nil {
-		return nil, "", "", nil, err
+		return statusMetrics{}, err
 	}
 	defer db.Close()
-	tables := []string{
-		"source_library", "crawl_snapshot", "crawl_seen_asset", "sync_state",
-		"classification_queue", "asset", "asset_resource", "album_membership",
-		"location_observation", "visual_observation", "text_observation",
-		"face_observation", "model_run", "model_observation",
-		"observation_term", "evidence_ref", "edge",
+	var metrics statusMetrics
+	var since sql.NullInt64
+	if err := db.DB().QueryRowContext(ctx, `
+select count(*),
+       min(case
+         when creation_date glob '[0-9][0-9][0-9][0-9]*'
+         then cast(substr(creation_date, 1, 4) as integer)
+       end)
+from asset
+`).Scan(&metrics.PhotoCount, &since); err != nil {
+		return statusMetrics{}, fmt.Errorf("read photos status counts: %w", err)
 	}
-	out := make([]control.Count, 0, len(tables))
-	for _, table := range tables {
-		var n int64
-		if err := db.DB().QueryRowContext(ctx, "select count(*) from "+store.QuoteIdent(table)).Scan(&n); err != nil {
-			return nil, "", "", nil, err
-		}
-		out = append(out, control.NewCount(table, table, n))
-	}
-	useful, err := usefulCounts(ctx, db.DB())
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	out = append(out, useful...)
-	summary, err := statusSummary(ctx, db.DB())
-	if err != nil {
-		return nil, "", "", nil, err
+	metrics.Counts = []control.Count{control.NewCount("photos", "photos", metrics.PhotoCount)}
+	if since.Valid && since.Int64 > 0 {
+		metrics.Counts = append(metrics.Counts, control.NewCount("since", "since", since.Int64))
 	}
 	lastImportAt, err := lastImportAt(ctx, db.DB())
 	if err != nil {
-		return nil, "", "", nil, err
+		return statusMetrics{}, err
 	}
-	warnings, err := statusWarnings(ctx, db.DB())
-	if err != nil {
-		return nil, "", "", nil, err
-	}
-	return out, summary, lastImportAt, warnings, nil
+	metrics.LastImportAt = lastImportAt
+	return metrics, nil
 }
 
-func usefulCounts(ctx context.Context, db *sql.DB) ([]control.Count, error) {
-	out := []control.Count{}
-	groupQueries := []struct {
-		prefix string
-		label  string
-		query  string
-	}{
-		{"asset.media_type", "assets media type", `select media_type, count(*) from asset group by media_type order by count(*) desc, media_type`},
-		{"resource.availability", "resources availability", `
-select case
-  when available_locally <> 0 then 'local'
-  when needs_download <> 0 then 'remote_needs_download'
-  else 'unknown'
-end as availability, count(*)
-from asset_resource
-group by availability
-order by count(*) desc, availability
-`},
-		{"classification_queue.state", "classification queue state", `select state, count(*) from classification_queue group by state order by count(*) desc, state`},
-		{"observation.type", "observation type", `
-select observation_type, count(*)
-from visual_observation
-group by observation_type
-order by count(*) desc, observation_type
-`},
-		{"model_observation.type", "model observation type", `
-select observation_type, count(*)
-from model_observation
-group by observation_type
-order by count(*) desc, observation_type
-`},
-		{"observation_term.type", "observation term type", `
-select term_type, count(*)
-from observation_term
-group by term_type
-order by count(*) desc, term_type
-`},
+func statusSummary(photos int64) string {
+	switch photos {
+	case 0:
+		return "photos.sqlite is initialized but has no crawled photos"
+	case 1:
+		return "1 photo archived"
+	default:
+		return fmt.Sprintf("%d photos archived", photos)
 	}
-	for _, group := range groupQueries {
-		counts, err := groupedCounts(ctx, db, group.prefix, group.label, group.query)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, counts...)
-	}
-	scalarQueries := []struct {
-		id    string
-		label string
-		query string
-	}{
-		{"asset.with_location", "assets with location", `select count(distinct asset_id) from location_observation`},
-		{"asset.without_location", "assets without location", `select count(*) from asset where id not in (select asset_id from location_observation)`},
-		{"asset.with_observation", "assets with local observations", `select count(distinct asset_id) from (
-  select asset_id from visual_observation
-  union
-  select asset_id from model_observation
-)`},
-		{"asset.without_observation", "assets without local observations", `select count(*) from asset where id not in (
-  select asset_id from visual_observation
-  union
-  select asset_id from model_observation
-)`},
-		{"asset.with_local_resource", "assets with local resource", `select count(distinct asset_id) from asset_resource where available_locally <> 0`},
-		{"asset.needing_download", "assets needing download", `select count(distinct asset_id) from asset_resource where needs_download <> 0`},
-	}
-	for _, scalar := range scalarQueries {
-		var value int64
-		if err := db.QueryRowContext(ctx, scalar.query).Scan(&value); err != nil {
-			return nil, fmt.Errorf("status count %s: %w", scalar.id, err)
-		}
-		out = append(out, control.NewCount(scalar.id, scalar.label, value))
-	}
-	return out, nil
-}
-
-func groupedCounts(ctx context.Context, db *sql.DB, prefix, labelPrefix, query string) ([]control.Count, error) {
-	rows, err := db.QueryContext(ctx, query)
-	if err != nil {
-		return nil, fmt.Errorf("status group %s: %w", prefix, err)
-	}
-	defer rows.Close()
-	out := []control.Count{}
-	for rows.Next() {
-		var key string
-		var value int64
-		if err := rows.Scan(&key, &value); err != nil {
-			return nil, err
-		}
-		key = strings.TrimSpace(key)
-		if key == "" {
-			key = "unknown"
-		}
-		out = append(out, control.NewCount(prefix+"."+safeCountID(key), labelPrefix+" "+key, value))
-	}
-	return out, rows.Err()
-}
-
-func statusSummary(ctx context.Context, db *sql.DB) (string, error) {
-	var assets, located, observations, pending int64
-	if err := db.QueryRowContext(ctx, `select count(*) from asset`).Scan(&assets); err != nil {
-		return "", err
-	}
-	if err := db.QueryRowContext(ctx, `select count(distinct asset_id) from location_observation`).Scan(&located); err != nil {
-		return "", err
-	}
-	if err := db.QueryRowContext(ctx, `select count(distinct asset_id) from (
-  select asset_id from visual_observation
-  union
-  select asset_id from model_observation
-)`).Scan(&observations); err != nil {
-		return "", err
-	}
-	if err := db.QueryRowContext(ctx, `select count(*) from classification_queue where state = 'pending'`).Scan(&pending); err != nil {
-		return "", err
-	}
-	if assets == 0 {
-		return "photos.sqlite is initialized but has no crawled assets", nil
-	}
-	return fmt.Sprintf("%d assets; %d with raw GPS; %d with local observations; %d pending classification", assets, located, observations, pending), nil
 }
 
 func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {
@@ -231,36 +150,4 @@ func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {
 		return last.String, nil
 	}
 	return "", nil
-}
-
-func statusWarnings(ctx context.Context, db *sql.DB) ([]string, error) {
-	var pending int64
-	if err := db.QueryRowContext(ctx, `select count(*) from classification_queue where state = 'pending'`).Scan(&pending); err != nil {
-		return nil, err
-	}
-	warnings := []string{}
-	if pending > 0 {
-		warnings = append(warnings, "classification queue has pending assets")
-	}
-	return warnings, nil
-}
-
-func safeCountID(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	var builder strings.Builder
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z':
-			builder.WriteRune(r)
-		case r >= '0' && r <= '9':
-			builder.WriteRune(r)
-		default:
-			builder.WriteByte('_')
-		}
-	}
-	out := strings.Trim(builder.String(), "_")
-	if out == "" {
-		return "unknown"
-	}
-	return out
 }

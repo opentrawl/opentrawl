@@ -93,6 +93,31 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "status", status)
+	case "doctor":
+		fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		dbPath := fs.String("db", "", "photos.sqlite path")
+		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if fs.NArg() != 0 {
+			return output.UsageError{Err: errors.New("doctor takes flags only")}
+		}
+		if *dbPath != "" {
+			paths.Database = *dbPath
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		result, err := archive.Doctor(ctx, paths, archive.DoctorOptions{LibraryPath: *libraryPath})
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "doctor", result)
 	case "crawl":
 		fs := flag.NewFlagSet("crawl", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -150,13 +175,14 @@ func run(ctx context.Context, args []string) error {
 		limit := fs.Int("limit", 20, "max results")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
+		searchArgs, trailingJSON := stripTrailingJSON(args[1:])
+		if err := fs.Parse(searchArgs); err != nil {
 			return output.UsageError{Err: err}
 		}
 		if *dbPath != "" {
 			paths.Database = *dbPath
 		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		format, err := output.Resolve(*formatFlag, *jsonFlag || trailingJSON)
 		if err != nil {
 			return err
 		}
@@ -172,17 +198,28 @@ func run(ctx context.Context, args []string) error {
 		id := fs.String("id", "", "asset id")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
+		openArgs, trailingJSON := stripTrailingJSON(args[1:])
+		if err := fs.Parse(openArgs); err != nil {
 			return output.UsageError{Err: err}
+		}
+		if *id != "" && fs.NArg() != 0 {
+			return output.UsageError{Err: errors.New("open id must be passed once")}
+		}
+		idValue := *id
+		if idValue == "" && fs.NArg() == 1 {
+			idValue = fs.Arg(0)
+		}
+		if fs.NArg() > 1 {
+			return output.UsageError{Err: errors.New("open takes one id")}
 		}
 		if *dbPath != "" {
 			paths.Database = *dbPath
 		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		format, err := output.Resolve(*formatFlag, *jsonFlag || trailingJSON)
 		if err != nil {
 			return err
 		}
-		result, err := archive.Open(ctx, paths, *id)
+		result, err := archive.Open(ctx, paths, idValue)
 		if err != nil {
 			return err
 		}
@@ -346,7 +383,7 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|init|status|crawl|classify|search|open|neighbors|evidence|place-context|place-card|place-backfill|eval-card>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|init|status|doctor|crawl|classify|search|open|neighbors|evidence|place-context|place-card|place-backfill|eval-card>")}
 }
 
 func splitList(value string) []string {
@@ -363,4 +400,11 @@ func splitList(value string) []string {
 func joinedQuery(flagValue string, args []string) string {
 	parts := append([]string{strings.TrimSpace(flagValue)}, args...)
 	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+func stripTrailingJSON(args []string) ([]string, bool) {
+	if len(args) == 0 || args[len(args)-1] != "--json" {
+		return args, false
+	}
+	return args[:len(args)-1], true
 }

@@ -46,6 +46,9 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	if len(search.Results) != 1 {
 		t.Fatalf("search results = %d, want 1", len(search.Results))
 	}
+	if search.TotalMatches != 1 || search.Truncated {
+		t.Fatalf("search metadata = total %d truncated %t", search.TotalMatches, search.Truncated)
+	}
 
 	opened, err := Open(ctx, paths, search.Results[0].ID)
 	if err != nil {
@@ -100,17 +103,17 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	if status.Summary == "" || status.LastImportAt == "" {
 		t.Fatalf("status summary=%q last_import_at=%q", status.Summary, status.LastImportAt)
 	}
-	for _, want := range []string{
-		"asset.media_type.image",
-		"asset.with_location",
-		"asset.with_observation",
-		"resource.availability.local",
-		"resource.availability.remote_needs_download",
-		"observation.type.document_signal",
-	} {
-		if !hasStatusCount(status.Counts, want) {
-			t.Fatalf("missing useful status count %q in %#v", want, status.Counts)
-		}
+	if status.State != "ok" {
+		t.Fatalf("status state = %q, want ok", status.State)
+	}
+	if status.Freshness == nil || status.Freshness.LastSync == "" {
+		t.Fatalf("status freshness = %#v", status.Freshness)
+	}
+	if len(status.Counts) != 2 {
+		t.Fatalf("status counts = %#v", status.Counts)
+	}
+	if !hasStatusCount(status.Counts, "photos") || !hasStatusCount(status.Counts, "since") {
+		t.Fatalf("missing curated status counts in %#v", status.Counts)
 	}
 
 	provider.snapshot = fakeSnapshot(true, false)

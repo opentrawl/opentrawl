@@ -16,9 +16,11 @@ type SearchOptions struct {
 }
 
 type SearchResult struct {
-	Query   string      `json:"query"`
-	Limit   int         `json:"limit"`
-	Results []SearchHit `json:"results"`
+	Query        string      `json:"query"`
+	Limit        int         `json:"limit"`
+	Results      []SearchHit `json:"results"`
+	TotalMatches int         `json:"total_matches"`
+	Truncated    bool        `json:"truncated"`
 }
 
 type SearchHit struct {
@@ -59,8 +61,8 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if limit <= 0 {
 		limit = 20
 	}
-	if limit > 100 {
-		limit = 100
+	if limit > 200 {
+		limit = 200
 	}
 	db, err := store.OpenReadOnly(ctx, paths.Database)
 	if err != nil {
@@ -69,6 +71,15 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	defer db.Close()
 
 	fts := ftsQuery(query)
+	assetMatches, err := ftsCount(ctx, db.DB(), "asset_fts", fts)
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("count asset matches: %w", err)
+	}
+	observationMatches, err := ftsCount(ctx, db.DB(), "observation_fts", fts)
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("count observation matches: %w", err)
+	}
+	totalMatches := assetMatches + observationMatches
 	rows, err := db.DB().QueryContext(ctx, `
 select asset.id, asset.media_type, asset.creation_date, asset_fts.title,
        snippet(asset_fts, 2, '[', ']', ' ... ', 12) as snippet
@@ -83,7 +94,13 @@ limit ?
 	}
 	defer rows.Close()
 
-	result := SearchResult{Query: query, Limit: limit, Results: []SearchHit{}}
+	result := SearchResult{
+		Query:        query,
+		Limit:        limit,
+		Results:      []SearchHit{},
+		TotalMatches: totalMatches,
+		Truncated:    totalMatches > limit,
+	}
 	for rows.Next() {
 		var hit SearchHit
 		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Snippet); err != nil {
@@ -124,6 +141,23 @@ limit ?
 		}
 	}
 	return result, nil
+}
+
+func ftsCount(ctx context.Context, db *sql.DB, table, fts string) (int, error) {
+	var count int
+	var query string
+	switch table {
+	case "asset_fts":
+		query = `select count(*) from asset_fts where asset_fts match ?`
+	case "observation_fts":
+		query = `select count(*) from observation_fts where observation_fts match ?`
+	default:
+		return 0, fmt.Errorf("unknown FTS table %q", table)
+	}
+	if err := db.QueryRowContext(ctx, query, fts).Scan(&count); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
