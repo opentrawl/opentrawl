@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/conformance"
 )
 
 func TestExecuteMetadataJSON(t *testing.T) {
@@ -123,12 +124,25 @@ func TestExecuteStatusHumanOutputIsProse(t *testing.T) {
 	}
 	assertHumanProseOutput(t, out.String(),
 		"Status: missing",
-		"contacts repo not initialised",
-		"Counts:",
-		"people: 0",
-		"Paths:",
-		"Config:",
-		"Contacts repo:",
+		"Contacts repo not initialised.",
+		"Contacts:",
+		"People: 0",
+	)
+}
+
+func TestExecuteDoctorHumanOutputUsesRenderer(t *testing.T) {
+	cfg, _ := testPaths(t)
+	var out, errOut bytes.Buffer
+	missingRepo := filepath.Join(t.TempDir(), "missing")
+	if err := Execute([]string{"--config", cfg, "--repo", missingRepo, "doctor"}, &out, &errOut); err != nil {
+		t.Fatalf("doctor human: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	assertHumanProseOutput(t, out.String(),
+		"Doctor checks:",
+		"Config: ok",
+		"Contacts repo: missing",
+		"Index: missing",
+		"Remedy: run clawdex init",
 	)
 }
 
@@ -206,7 +220,12 @@ func TestExecuteDoctorRepairKeepsLegacyReport(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "doctor", "--repair"}, &out, &errOut); err != nil {
 		t.Fatalf("plain repair: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "repaired: 1") || strings.Contains(out.String(), "checks") {
+	assertHumanProseOutput(t, out.String(),
+		"Doctor checks:",
+		"Contacts repo: ok - 1 person",
+		"Markdown repair: ok - 1 person markdown file would be repaired",
+	)
+	if strings.Contains(out.String(), "repaired: 1") {
 		t.Fatalf("plain repair output = %s", out.String())
 	}
 
@@ -265,6 +284,7 @@ func hasCount(counts []control.Count, id string) bool {
 
 func assertHumanProseOutput(t *testing.T, got string, wants ...string) {
 	t.Helper()
+	conformance.AssertHumanOutput(t, got)
 	if strings.HasPrefix(strings.TrimSpace(got), "{") {
 		t.Fatalf("human output starts like JSON or a Go struct: %q", got)
 	}

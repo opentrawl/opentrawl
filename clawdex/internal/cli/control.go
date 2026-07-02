@@ -13,6 +13,7 @@ import (
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 )
 
 type MetadataCmd struct{}
@@ -179,19 +180,7 @@ func (r *Runtime) printDoctorReport(report DoctorReport) error {
 	if r.root.JSON {
 		return r.print(report)
 	}
-	for _, check := range report.Checks {
-		line := fmt.Sprintf("%s: %s", check.ID, check.State)
-		if check.Message != "" {
-			line += " - " + check.Message
-		}
-		if check.Remedy != "" {
-			line += " remedy: " + check.Remedy
-		}
-		if _, err := fmt.Fprintln(r.stdout, line); err != nil {
-			return err
-		}
-	}
-	return nil
+	return render.WriteDoctor(r.stdout, renderDoctorChecks(report), render.LogTail{})
 }
 
 func (r *Runtime) readOnlyStore() index.Store {
@@ -242,58 +231,179 @@ func statusCounts(people []model.Person) []control.Count {
 }
 
 func printStatusText(w io.Writer, status control.Status) error {
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", status.State, status.Summary); err != nil {
-		return err
+	return render.WriteStatus(w, renderStatus(status))
+}
+
+func renderStatus(status control.Status) render.Status {
+	return render.Status{
+		State:    renderStatusState(status.State),
+		Summary:  humanSentence(status.Summary),
+		Sections: statusSections(status),
+		Warnings: cleanMessages(status.Warnings),
+		Errors:   cleanMessages(status.Errors),
 	}
-	if _, err := io.WriteString(w, "\nCounts:\n"); err != nil {
-		return err
+}
+
+func statusSections(status control.Status) []render.Section {
+	var sections []render.Section
+	if len(status.Counts) > 0 {
+		fields := make([]render.Field, 0, len(status.Counts))
+		for _, count := range status.Counts {
+			fields = append(fields, render.Field{
+				Label: humanLabel(firstNonEmpty(count.Label, count.ID)),
+				Value: fmt.Sprint(count.Value),
+			})
+		}
+		sections = append(sections, render.Section{Title: "Contacts", Fields: fields})
 	}
-	if len(status.Counts) == 0 {
-		if _, err := io.WriteString(w, "  none\n"); err != nil {
-			return err
+	return sections
+}
+
+func renderStatusState(state string) render.StatusState {
+	switch strings.TrimSpace(state) {
+	case "ok":
+		return render.StatusOK
+	case "stale":
+		return render.StatusStale
+	case "empty":
+		return render.StatusEmpty
+	case "error":
+		return render.StatusError
+	case "missing":
+		return render.StatusMissing
+	default:
+		return render.StatusUnknown
+	}
+}
+
+func renderDoctorChecks(report DoctorReport) []render.Check {
+	checks := make([]render.Check, 0, len(report.Checks))
+	for _, check := range report.Checks {
+		checks = append(checks, render.Check{
+			Name:    doctorCheckName(check.ID),
+			State:   doctorCheckState(check),
+			Message: humanDoctorMessage(check),
+			Remedy:  humanDoctorRemedy(check),
+		})
+	}
+	return checks
+}
+
+func doctorCheckName(id string) string {
+	switch strings.TrimSpace(id) {
+	case "config":
+		return "Config"
+	case "contacts_repo":
+		return "Contacts repo"
+	case "index":
+		return "Index"
+	default:
+		return humanLabel(id)
+	}
+}
+
+func doctorCheckState(check DoctorCheck) render.CheckState {
+	switch strings.TrimSpace(check.State) {
+	case "ok":
+		return render.CheckOK
+	case "empty":
+		return render.CheckEmpty
+	case "missing":
+		return render.CheckMissing
+	case "fail":
+		if doctorFailureIsMissing(check) {
+			return render.CheckMissing
+		}
+		return render.CheckFail
+	default:
+		return render.CheckFail
+	}
+}
+
+func doctorFailureIsMissing(check DoctorCheck) bool {
+	message := strings.ToLower(check.Message)
+	return strings.Contains(message, "not initialised") ||
+		strings.Contains(message, "without a contacts repo") ||
+		strings.Contains(message, "not a git repo")
+}
+
+func humanDoctorMessage(check DoctorCheck) string {
+	message := strings.TrimSpace(check.Message)
+	switch strings.TrimSpace(check.ID) {
+	case "config":
+		if strings.Contains(message, "cannot read config") {
+			return "config file cannot be read"
+		}
+		if strings.Contains(message, "is invalid") {
+			return "config file is invalid"
+		}
+	case "contacts_repo":
+		switch {
+		case strings.Contains(message, "not initialised"):
+			return "contacts repo not initialised"
+		case strings.Contains(message, "is not a git repo"):
+			return "contacts repo is not a git repo"
+		case strings.Contains(message, "cannot inspect git repo"):
+			return "contacts repo cannot be inspected"
 		}
 	}
-	for _, count := range status.Counts {
-		if _, err := fmt.Fprintf(w, "  %s: %d\n", count.Label, count.Value); err != nil {
-			return err
+	return strings.ReplaceAll(strings.TrimSpace(message), "contacts_repo", "contacts repo")
+}
+
+func humanDoctorRemedy(check DoctorCheck) string {
+	remedy := strings.TrimSpace(check.Remedy)
+	if remedy == "" || remedy == "fix contacts_repo first" {
+		return ""
+	}
+	switch {
+	case strings.HasPrefix(remedy, "run clawdex init "):
+		return "run clawdex init"
+	case strings.HasPrefix(remedy, "check ") && strings.Contains(remedy, "valid TOML"):
+		return "check the config file is valid TOML and readable"
+	case strings.HasPrefix(remedy, "check ") && strings.Contains(remedy, "run clawdex init"):
+		return "check the contacts repo is readable or run clawdex init"
+	}
+	return strings.ReplaceAll(remedy, "contacts_repo", "contacts repo")
+}
+
+func cleanMessages(messages []string) []string {
+	cleaned := make([]string, 0, len(messages))
+	for _, message := range messages {
+		message = strings.TrimSpace(message)
+		if message != "" {
+			cleaned = append(cleaned, strings.ReplaceAll(message, "contacts_repo", "contacts repo"))
 		}
 	}
-	if status.ConfigPath != "" || status.DatabasePath != "" {
-		if _, err := io.WriteString(w, "\nPaths:\n"); err != nil {
-			return err
+	return cleaned
+}
+
+func humanSentence(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return value
+	}
+	if value[0] >= 'a' && value[0] <= 'z' {
+		value = string(value[0]-('a'-'A')) + value[1:]
+	}
+	switch value[len(value)-1] {
+	case '.', '!', '?':
+		return value
+	default:
+		return value + "."
+	}
+}
+
+func humanLabel(value string) string {
+	parts := strings.Fields(strings.ReplaceAll(strings.TrimSpace(value), "_", " "))
+	for i, part := range parts {
+		if part == "" {
+			continue
 		}
-		if status.ConfigPath != "" {
-			if _, err := fmt.Fprintf(w, "  Config: %s\n", status.ConfigPath); err != nil {
-				return err
-			}
-		}
-		if status.DatabasePath != "" {
-			if _, err := fmt.Fprintf(w, "  Contacts repo: %s\n", status.DatabasePath); err != nil {
-				return err
-			}
+		if part[0] >= 'a' && part[0] <= 'z' {
+			parts[i] = string(part[0]-('a'-'A')) + part[1:]
 		}
 	}
-	if len(status.Warnings) > 0 {
-		if _, err := io.WriteString(w, "\nWarnings:\n"); err != nil {
-			return err
-		}
-		for _, warning := range status.Warnings {
-			if _, err := fmt.Fprintf(w, "  - %s\n", warning); err != nil {
-				return err
-			}
-		}
-	}
-	if len(status.Errors) > 0 {
-		if _, err := io.WriteString(w, "\nErrors:\n"); err != nil {
-			return err
-		}
-		for _, msg := range status.Errors {
-			if _, err := fmt.Fprintf(w, "  - %s\n", msg); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return strings.Join(parts, " ")
 }
 
 func distinctSourceCount(people []model.Person) int {

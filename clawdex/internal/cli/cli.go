@@ -28,6 +28,7 @@ import (
 	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/clawdex/internal/vcard"
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 )
 
 var Version = "dev"
@@ -855,9 +856,7 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 		return r.print(r.doctorReport())
 	}
 	if !c.Repair {
-		if err := r.repo.Require(); err != nil {
-			return r.printDoctorReport(r.doctorReport())
-		}
+		return r.printDoctorReport(r.doctorReport())
 	}
 	store := r.store
 	store.Repo.Config.Repair.AutoRepair = false
@@ -910,7 +909,89 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 		result["avatar_repaired"] = avatarRepaired
 		result["dry_run"] = r.root.DryRun
 	}
-	return r.print(result)
+	if r.root.JSON {
+		return r.print(result)
+	}
+	return r.printDoctorRepairResult(result)
+}
+
+func (r *Runtime) printDoctorRepairResult(result map[string]any) error {
+	people := intFromResult(result, "people")
+	repaired := intFromResult(result, "repaired")
+	avatarProblems := intFromResult(result, "avatar_problems")
+	avatarRepaired := intFromResult(result, "avatar_repaired")
+	dryRun := boolFromResult(result, "dry_run")
+
+	checks := []render.Check{{
+		Name:    "Contacts repo",
+		State:   render.CheckOK,
+		Message: peopleMessage(people),
+	}, {
+		Name:    "Markdown repair",
+		State:   repairCheckState(repaired),
+		Message: repairMessage("person markdown file", repaired, dryRun),
+	}}
+	if avatarProblems > 0 || avatarRepaired > 0 {
+		checks = append(checks, render.Check{
+			Name:    "Avatar metadata",
+			State:   repairCheckState(avatarRepaired),
+			Message: repairMessage("avatar metadata entry", avatarRepaired, dryRun),
+		})
+	}
+	return render.WriteDoctor(r.stdout, checks, render.LogTail{})
+}
+
+func intFromResult(result map[string]any, key string) int {
+	switch value := result[key].(type) {
+	case int:
+		return value
+	case int64:
+		return int(value)
+	case float64:
+		return int(value)
+	default:
+		return 0
+	}
+}
+
+func boolFromResult(result map[string]any, key string) bool {
+	value, _ := result[key].(bool)
+	return value
+}
+
+func repairCheckState(count int) render.CheckState {
+	if count == 0 {
+		return render.CheckEmpty
+	}
+	return render.CheckOK
+}
+
+func peopleMessage(count int) string {
+	if count == 1 {
+		return "1 person"
+	}
+	return fmt.Sprintf("%d people", count)
+}
+
+func repairMessage(item string, count int, dryRun bool) string {
+	if count == 0 {
+		return fmt.Sprintf("no %s needed repair", pluralItem(item))
+	}
+	action := "repaired"
+	if dryRun {
+		action = "would be repaired"
+	}
+	if count == 1 {
+		return fmt.Sprintf("1 %s %s", item, action)
+	}
+	return fmt.Sprintf("%d %s %s", count, pluralItem(item), action)
+}
+
+func pluralItem(item string) string {
+	if strings.HasSuffix(item, "entry") {
+		return strings.TrimSuffix(item, "entry") + "entries"
+	}
+	return item + "s"
 }
 
 func (r *Runtime) print(value any) error {

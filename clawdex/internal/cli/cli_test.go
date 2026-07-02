@@ -18,6 +18,7 @@ import (
 
 	"github.com/openclaw/clawdex/internal/contactexport"
 	"github.com/openclaw/clawdex/internal/model"
+	"github.com/openclaw/crawlkit/conformance"
 )
 
 func TestExecuteEndToEndLocalCommands(t *testing.T) {
@@ -110,7 +111,8 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 		t.Fatalf("sync google out = %s", out)
 	}
 	out = run("doctor")
-	if !strings.Contains(out, "people: 1") {
+	conformance.AssertHumanOutput(t, out)
+	if !strings.Contains(out, "Doctor checks:") || !strings.Contains(out, "Contacts repo: ok") {
 		t.Fatalf("doctor out = %s", out)
 	}
 	out = run("git", "commit", "-m", "test: contacts")
@@ -921,14 +923,16 @@ func TestExecuteEditorExportPersonAndRepair(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "doctor", "--repair"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "repaired: 1") {
+	conformance.AssertHumanOutput(t, out.String())
+	if !strings.Contains(out.String(), "Markdown repair: ok - 1 person markdown file would be repaired") {
 		t.Fatalf("repair dry-run = %s", out.String())
 	}
 	out.Reset()
 	if err := Execute([]string{"--config", cfg, "doctor", "--repair"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "repaired: 1") {
+	conformance.AssertHumanOutput(t, out.String())
+	if !strings.Contains(out.String(), "Markdown repair: ok - 1 person markdown file repaired") {
 		t.Fatalf("repair = %s", out.String())
 	}
 	if err := os.WriteFile(personPath, []byte("---\nid: person_x\nname: Ada Edit\navatar:\n  path: avatars/missing.png\n---\n# Ada Edit\n"), 0o600); err != nil {
@@ -938,14 +942,16 @@ func TestExecuteEditorExportPersonAndRepair(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "doctor", "--repair"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "avatar_problems: 1") || !strings.Contains(out.String(), "avatar_repaired: 1") {
+	conformance.AssertHumanOutput(t, out.String())
+	if !strings.Contains(out.String(), "Avatar metadata: ok - 1 avatar metadata entry would be repaired") {
 		t.Fatalf("avatar repair dry-run = %s", out.String())
 	}
 	out.Reset()
 	if err := Execute([]string{"--config", cfg, "doctor", "--repair"}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "avatar_repaired: 1") {
+	conformance.AssertHumanOutput(t, out.String())
+	if !strings.Contains(out.String(), "Avatar metadata: ok - 1 avatar metadata entry repaired") {
 		t.Fatalf("avatar repair = %s", out.String())
 	}
 }
@@ -1008,7 +1014,8 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "doctor"}, &out, &errOut); err != nil {
 		t.Fatalf("doctor should diagnose a missing repo: %v stdout=%s stderr=%s", err, out.String(), errOut.String())
 	}
-	if !strings.Contains(out.String(), "contacts_repo: fail") || !strings.Contains(out.String(), "run clawdex init") {
+	conformance.AssertHumanOutput(t, out.String())
+	if !strings.Contains(out.String(), "Contacts repo: missing") || !strings.Contains(out.String(), "run clawdex init") {
 		t.Fatalf("doctor missing repo out = %s", out.String())
 	}
 	out.Reset()
