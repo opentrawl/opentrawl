@@ -23,9 +23,13 @@ type ImportOptions struct {
 	MessagesLimit           int
 	ChatID                  string
 	FetchMedia              bool
-	Progress                io.Writer
+	Progress                ProgressReporter
 	ExistingMediaSourcePath string
 	ExistingMediaRefs       []ExistingMediaRef
+}
+
+type ProgressReporter interface {
+	Report(done int64, message string) error
 }
 
 type ExistingMediaRef struct {

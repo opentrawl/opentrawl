@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -15,7 +14,6 @@ const (
 	defaultSearchLimit  = 20
 	maxSearchLimit      = 200
 	openContextRadius   = 10
-	messageRefPrefix    = "telecrawl:msg/"
 
 	// Telegram archives older than a day are stale for status surfaces that imply source parity.
 	statusFreshFor = 24 * time.Hour
@@ -37,6 +35,7 @@ type statusEnvelope struct {
 	Freshness freshnessEnvelope `json:"freshness"`
 	Counts    []countEnvelope   `json:"counts"`
 	Auth      authEnvelope      `json:"auth"`
+	Log       logTailEnvelope   `json:"log,omitempty"`
 }
 
 type freshnessEnvelope struct {
@@ -55,14 +54,39 @@ type authEnvelope struct {
 }
 
 type doctorOutput struct {
-	Checks []doctorCheck `json:"checks"`
+	Checks []doctorCheck   `json:"checks"`
+	Log    logTailEnvelope `json:"log,omitempty"`
 }
 
 type doctorCheck struct {
 	ID      string `json:"id"`
+	Label   string `json:"label,omitempty"`
 	State   string `json:"state"`
 	Message string `json:"message,omitempty"`
 	Remedy  string `json:"remedy,omitempty"`
+}
+
+type logTailEnvelope struct {
+	LastRun         *logRunEnvelope   `json:"last_run,omitempty"`
+	MostRecentError *logErrorEnvelope `json:"most_recent_error,omitempty"`
+}
+
+type logRunEnvelope struct {
+	RunID      string `json:"run_id"`
+	Command    string `json:"command"`
+	Outcome    string `json:"outcome"`
+	StartedAt  string `json:"started_at,omitempty"`
+	FinishedAt string `json:"finished_at,omitempty"`
+	LastEvent  string `json:"last_event,omitempty"`
+	Version    string `json:"version,omitempty"`
+}
+
+type logErrorEnvelope struct {
+	RunID   string `json:"run_id"`
+	Command string `json:"command"`
+	Event   string `json:"event"`
+	Time    string `json:"time"`
+	Message string `json:"message"`
 }
 
 type searchEnvelope struct {
@@ -74,11 +98,12 @@ type searchEnvelope struct {
 }
 
 type searchResult struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who,omitempty"`
-	Where   string `json:"where,omitempty"`
-	Snippet string `json:"snippet"`
+	Ref      string `json:"ref"`
+	ShortRef string `json:"-"`
+	Time     string `json:"time"`
+	Who      string `json:"who,omitempty"`
+	Where    string `json:"where,omitempty"`
+	Snippet  string `json:"snippet"`
 }
 
 type errorEnvelope struct {
@@ -158,32 +183,32 @@ func contractMetadata() metadataEnvelope {
 		ID:              "telecrawl",
 		DisplayName:     "Telegram",
 		Version:         version,
-		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "contacts_export", "backup"},
+		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "contacts_export", "backup"},
 	}
 }
 
 func (r *runtime) statusEnvelope() statusEnvelope {
 	if info, err := os.Stat(r.dbPath); err != nil {
 		if os.IsNotExist(err) {
-			return newStatusEnvelope("missing", "archive database is missing", store.Status{})
+			return r.newStatusEnvelope("missing", "archive database is missing", store.Status{})
 		}
-		return newStatusEnvelope("error", "archive database cannot be read", store.Status{})
+		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{})
 	} else if info.IsDir() {
-		return newStatusEnvelope("error", "archive database path is a directory", store.Status{})
+		return r.newStatusEnvelope("error", "archive database path is a directory", store.Status{})
 	}
-	st, err := store.Open(r.ctx, r.dbPath)
+	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
 	if err != nil {
-		return newStatusEnvelope("error", "archive database cannot be read", store.Status{})
+		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{})
 	}
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(r.ctx)
 	if err != nil {
-		return newStatusEnvelope("error", "archive status cannot be read", store.Status{})
+		return r.newStatusEnvelope("error", "archive status cannot be read", store.Status{})
 	}
-	return newStatusEnvelope(statusState(status), statusSummary(status), status)
+	return r.newStatusEnvelope(statusState(status), statusSummary(status), status)
 }
 
-func newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
+func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
 	return statusEnvelope{
 		AppID:     "telecrawl",
 		State:     state,
@@ -195,6 +220,7 @@ func newStatusEnvelope(state, summary string, status store.Status) statusEnvelop
 			{ID: "since", Label: "since", Value: oldestMessageYear(status)},
 		},
 		Auth: authEnvelope{Authorized: true},
+		Log:  r.logTail(),
 	}
 }
 
@@ -237,16 +263,17 @@ func oldestMessageYear(status store.Status) int64 {
 }
 
 func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
-	return doctorOutput{Checks: []doctorCheck{sourceStoreCheck(report), r.archiveCheck()}}
+	return doctorOutput{Checks: []doctorCheck{sourceStoreCheck(report), r.archiveCheck()}, Log: r.logTail()}
 }
 
 func sourceStoreCheck(report telegramdesktop.Report) doctorCheck {
 	if report.Exists && report.Accessible && report.Error == "" {
-		return doctorCheck{ID: "source_store", State: "ok"}
+		return doctorCheck{ID: "source_store", Label: "Telegram data", State: "ok", Message: "Telegram source data is readable."}
 	}
 	check := doctorCheck{
 		ID:     "source_store",
-		State:  "fail",
+		Label:  "Telegram data",
+		State:  "missing",
 		Remedy: "Install or open Telegram Desktop, or pass --path to a readable Telegram data directory.",
 	}
 	switch {
@@ -264,65 +291,75 @@ func (r *runtime) archiveCheck() doctorCheck {
 	if info, err := os.Stat(r.dbPath); err != nil {
 		return doctorCheck{
 			ID:      "archive",
-			State:   "fail",
+			Label:   "Archive",
+			State:   "missing",
 			Message: "telecrawl archive has not been created.",
 			Remedy:  "Run telecrawl import to create the archive.",
 		}
 	} else if info.IsDir() {
 		return doctorCheck{
 			ID:      "archive",
-			State:   "fail",
+			Label:   "Archive",
+			State:   "missing",
 			Message: "telecrawl archive path is a directory.",
 			Remedy:  "Pass --db with a sqlite archive path, then run telecrawl import.",
 		}
 	}
-	st, err := store.Open(r.ctx, r.dbPath)
+	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
 	if err != nil {
 		return doctorCheck{
 			ID:      "archive",
-			State:   "fail",
+			Label:   "Archive",
+			State:   "missing",
 			Message: "telecrawl archive cannot be read.",
 			Remedy:  "Run telecrawl import to rebuild the archive.",
 		}
 	}
 	defer func() { _ = st.Close() }()
-	if _, err := st.Status(r.ctx); err != nil {
+	status, err := st.Status(r.ctx)
+	if err != nil {
 		return doctorCheck{
 			ID:      "archive",
-			State:   "fail",
+			Label:   "Archive",
+			State:   "missing",
 			Message: "telecrawl archive status cannot be read.",
 			Remedy:  "Run telecrawl import to rebuild the archive.",
 		}
 	}
-	return doctorCheck{ID: "archive", State: "ok"}
+	if status.Messages == 0 {
+		return doctorCheck{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl import to fill the archive."}
+	}
+	return doctorCheck{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."}
 }
 
-func newSearchEnvelope(query string, messages []store.Message, total int, whoMatched []string) searchEnvelope {
+func newSearchEnvelope(query string, messages []store.Message, total int, whoMatched []string, shortRefs map[string]string) searchEnvelope {
 	return searchEnvelope{
 		Query:        query,
 		WhoMatched:   whoMatched,
-		Results:      searchResults(messages),
+		Results:      searchResults(messages, shortRefs),
 		TotalMatches: total,
 		Truncated:    total > len(messages),
 	}
 }
 
-func searchResults(messages []store.Message) []searchResult {
+func searchResults(messages []store.Message, shortRefs map[string]string) []searchResult {
 	out := make([]searchResult, 0, len(messages))
 	for _, message := range messages {
+		ref := messageRef(message.SourcePK)
 		out = append(out, searchResult{
-			Ref:     messageRef(message.SourcePK),
-			Time:    message.Timestamp.Format(time.RFC3339),
-			Who:     outputField(messageWho(message)),
-			Where:   outputField(messageWhere(message)),
-			Snippet: outputField(messageSnippet(message)),
+			Ref:      ref,
+			ShortRef: shortRefs[ref],
+			Time:     message.Timestamp.Format(time.RFC3339),
+			Who:      outputField(messageWho(message)),
+			Where:    outputField(messageWhere(message)),
+			Snippet:  outputField(messageSnippet(message)),
 		})
 	}
 	return out
 }
 
 func messageRef(sourcePK int64) string {
-	return fmt.Sprintf("%s%d", messageRefPrefix, sourcePK)
+	return store.MessageRef(sourcePK)
 }
 
 func newOpenEnvelope(window store.MessageWindow) openEnvelope {
@@ -416,6 +453,9 @@ func messageWho(message store.Message) string {
 	}
 	if message.FromMe {
 		return "me"
+	}
+	if strings.TrimSpace(message.SenderJID) == "" || strings.TrimSpace(message.SenderJID) == strings.TrimSpace(message.ChatJID) {
+		return outputField(messageWhere(message))
 	}
 	return ""
 }

@@ -14,9 +14,9 @@ func controlManifest() control.Manifest {
 		DefaultConfig:   filepath.Join(defaultBaseDir(), "backup.toml"),
 		DefaultDatabase: defaultDBPath(),
 		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
-		DefaultLogs:     filepath.Join(defaultBaseDir(), "logs"),
+		DefaultLogs:     defaultLogDir(),
 	}
-	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "backup"}
+	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "backup"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"telegram-desktop", "telegram-macos-postbox", "sqlite", "encrypted-git-backup"}}
 	m.Commands = map[string]control.Command{
 		"doctor":         {Title: "Doctor", Argv: []string{"telecrawl", "--json", "doctor"}, JSON: true},

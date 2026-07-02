@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strings"
 
@@ -21,7 +20,7 @@ const (
 	telegramMacAPIHash = "3975f648bb682ee889f35483bc618d1c" // gitleaks:allow
 )
 
-func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, progress io.Writer) postboxRemoteMediaStats {
+func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, progress ProgressReporter) postboxRemoteMediaStats {
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)
 	candidates := postboxRemoteMediaCandidateIndexes(messages)
@@ -109,7 +108,7 @@ func preferredPostboxSessions(accountID string, sessions map[string]*postboxpkg.
 	return ordered
 }
 
-func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, progress io.Writer) (postboxRemoteMediaStats, bool) {
+func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, progress ProgressReporter) (postboxRemoteMediaStats, bool) {
 	storage, err := postboxSessionStorage(ctx, nativeSession)
 	if err != nil {
 		return postboxRemoteMediaStats{}, false
