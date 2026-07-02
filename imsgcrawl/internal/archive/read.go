@@ -178,6 +178,7 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchRe
 		result.FromMe = fromMe != 0
 		result.HasAttachments = hasAttachments != 0
 		result.SenderLabel = senderLabel(result.FromMe, senderDisplayName, senderHandle, chatDisplayName, participantCount)
+		result.Snippet = contractSnippet(result.Text, query)
 		out = append(out, result)
 	}
 	if err := rows.Err(); err != nil {

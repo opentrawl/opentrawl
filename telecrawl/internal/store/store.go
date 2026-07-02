@@ -538,7 +538,7 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		if err != nil {
 			return nil, err
 		}
-		query = `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),snippet(messages_fts,0,'[',']','...',12) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
+		query = `select m.source_pk,m.chat_jid,coalesce(m.chat_name,''),m.msg_id,coalesce(m.sender_jid,''),coalesce(m.sender_name,''),m.ts,coalesce(m.edit_ts,0),m.from_me,coalesce(m.text,''),m.raw_type,coalesce(m.message_type,''),coalesce(m.media_type,''),coalesce(m.media_title,''),coalesce(m.media_path,''),coalesce(m.media_url,''),coalesce(m.media_size,0),coalesce(m.metadata_type,''),coalesce(m.metadata_title,''),coalesce(m.metadata_url,''),coalesce(m.metadata_json,''),m.starred,coalesce(m.topic_id,''),coalesce(m.reply_to_msg_id,''),coalesce(m.reply_to_chat_jid,''),coalesce(m.thread_id,''),coalesce(m.forward_json,''),coalesce(m.reactions_json,''),coalesce(m.views,0),coalesce(m.forwards,0),coalesce(m.replies_count,0),coalesce(m.pinned,0),'' from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
 		args = append(args, ftsQuery)
 		prefix = "m."
 	}
@@ -598,9 +598,22 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		m.FromMe = fromMe != 0
 		m.Starred = starred != 0
 		m.Pinned = pinned != 0
+		if search {
+			m.Snippet = contractSnippet(messageSnippetText(m), filter.Query)
+		}
 		out = append(out, m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.humanizeMessages(ctx, out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func messageSnippetText(message Message) string {
+	return strings.TrimSpace(message.Text + " " + message.MediaTitle + " " + message.MetadataTitle + " " + message.MetadataURL)
 }
 
 func migrate(ctx context.Context, db *sql.DB) error {

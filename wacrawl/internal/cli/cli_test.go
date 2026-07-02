@@ -45,8 +45,8 @@ func TestRunEndToEnd(t *testing.T) {
 		{"chats unread", []string{"--db", dbPath, "chats", "--unread", "--limit", "5"}, "Launch Group"},
 		{"unread", []string{"--db", dbPath, "unread", "--limit", "5"}, "Launch Group"},
 		{"messages", []string{"--db", dbPath, "messages", "--chat", "123@g.us", "--asc"}, "launch now"},
-		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "[launch] now"},
-		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "[launch] now"},
+		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "launch now"},
+		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "launch now"},
 		{"open", []string{"--db", dbPath, "open", "wacrawl:msg/group-image"}, "launch now"},
 		{"sql", []string{"--db", dbPath, "sql", "SELECT count(*) AS messages FROM messages"}, "messages"},
 		{"json", []string{"--db", dbPath, "--json", "search", "launch"}, `"ref": "wacrawl:msg/group-image"`},
@@ -530,6 +530,9 @@ func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
 	result := payload.Results[0]
 	if !strings.HasPrefix(result.Ref, messageRefPrefix) || result.Time == "" || result.Who == "" || result.Where != "Launch Group" || result.Snippet == "" {
 		t.Fatalf("result = %#v", result)
+	}
+	if strings.ContainsAny(result.Who+result.Where+result.Snippet, "\n\t") || strings.ContainsAny(result.Snippet, "[]") || strings.Contains(result.Snippet, "...") {
+		t.Fatalf("search result kept marker or multiline fields = %#v", result)
 	}
 	if _, err := time.Parse(time.RFC3339, result.Time); err != nil {
 		t.Fatalf("time = %q err=%v", result.Time, err)
@@ -1015,7 +1018,7 @@ func TestBackupCommands(t *testing.T) {
 	if err := Run(ctx, []string{"--db", restoredDB, "search", "launch"}, &stdout, &stderr); err != nil {
 		t.Fatalf("restored search error = %v stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "[launch] now") {
+	if !strings.Contains(stdout.String(), "launch now") || strings.Contains(stdout.String(), "[launch]") {
 		t.Fatalf("restored search mismatch:\n%s", stdout.String())
 	}
 	restoredMedia := filepath.Join(filepath.Dir(restoredDB), "media", "Media", "123@g.us", "a", "test.jpg")

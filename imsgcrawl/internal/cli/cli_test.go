@@ -241,6 +241,9 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		if result.Who == "" || result.Where != "Most Recent Name" || !strings.Contains(result.Snippet, "launch") {
 			t.Fatalf("search result fields = %#v", result)
 		}
+		if strings.ContainsAny(result.Who+result.Where+result.Snippet, "\n\t") || strings.ContainsAny(result.Snippet, "[]") || strings.Contains(result.Snippet, "...") {
+			t.Fatalf("search result kept marker or multiline fields = %#v", result)
+		}
 	}
 
 	trailingFlagOut := runOK(t, "--archive", archivePath, "--json", "search", "launch", "--limit", "1")

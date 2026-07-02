@@ -37,9 +37,9 @@ func newSearchListOutput(query string, items []archive.SearchResult, total int64
 		results = append(results, searchResultOutput{
 			Ref:     messageRef(item.MessageID),
 			Time:    item.Time,
-			Who:     senderName(item.FromMe, item.SenderLabel),
-			Where:   searchChatDisplayName(item),
-			Snippet: searchSnippet(item),
+			Who:     outputField(senderName(item.FromMe, item.SenderLabel)),
+			Where:   outputField(searchChatDisplayName(item)),
+			Snippet: outputField(searchSnippet(item)),
 		})
 	}
 	return searchListOutput{

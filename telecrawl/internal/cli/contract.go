@@ -75,8 +75,8 @@ type searchEnvelope struct {
 type searchResult struct {
 	Ref     string `json:"ref"`
 	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
+	Who     string `json:"who,omitempty"`
+	Where   string `json:"where,omitempty"`
 	Snippet string `json:"snippet"`
 }
 
@@ -113,7 +113,7 @@ type openChat struct {
 
 type openParticipant struct {
 	Ref         string `json:"ref,omitempty"`
-	DisplayName string `json:"display_name"`
+	DisplayName string `json:"display_name,omitempty"`
 }
 
 type openMessage struct {
@@ -311,9 +311,9 @@ func searchResults(messages []store.Message) []searchResult {
 		out = append(out, searchResult{
 			Ref:     messageRef(message.SourcePK),
 			Time:    message.Timestamp.Format(time.RFC3339),
-			Who:     messageWho(message),
-			Where:   messageWhere(message),
-			Snippet: messageSnippet(message),
+			Who:     outputField(messageWho(message)),
+			Where:   outputField(messageWhere(message)),
+			Snippet: outputField(messageSnippet(message)),
 		})
 	}
 	return out
@@ -410,30 +410,28 @@ func formatOptionalTime(t time.Time) string {
 
 func messageWho(message store.Message) string {
 	if value := strings.TrimSpace(message.SenderName); value != "" {
-		return value
+		return outputField(value)
 	}
 	if message.FromMe {
 		return "me"
 	}
-	if value := strings.TrimSpace(message.SenderJID); value != "" {
-		return value
-	}
-	return "unknown"
+	return ""
 }
 
 func messageWhere(message store.Message) string {
 	if value := strings.TrimSpace(message.ChatName); value != "" {
-		return value
+		return outputField(value)
 	}
-	if value := strings.TrimSpace(message.ChatJID); value != "" {
-		return value
-	}
-	return "unknown"
+	return "Telegram chat"
 }
 
 func messageSnippet(message store.Message) string {
 	if value := strings.TrimSpace(message.Snippet); value != "" {
-		return value
+		return outputField(value)
 	}
-	return strings.TrimSpace(message.Text)
+	return outputField(message.Text)
+}
+
+func outputField(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }

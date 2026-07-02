@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -64,6 +65,9 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	}
 	if len(results) != 2 {
 		t.Fatalf("expected 2 search results, got %d", len(results))
+	}
+	if strings.ContainsAny(results[0].Snippet, "[]") || strings.Contains(results[0].Snippet, "...") || strings.ContainsAny(results[0].Snippet, "\n\t") {
+		t.Fatalf("search snippet kept marker or multiline text: %q", results[0].Snippet)
 	}
 	total, err := st.SearchCount(ctx, MessageFilter{Query: "launch", Limit: 1})
 	if err != nil {

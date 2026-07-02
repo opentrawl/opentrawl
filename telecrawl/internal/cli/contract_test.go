@@ -174,6 +174,56 @@ func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
 	})
 }
 
+func TestSearchUsesHumaneWhoFallbacks(t *testing.T) {
+	db := seedSearchWhoArchive(t)
+
+	username := runSearchJSON(t, db, "search", "username-fallback", "--json")
+	if len(username.Results) != 1 || username.Results[0].Who != "fixture_user" {
+		t.Fatalf("username fallback result = %#v", username.Results)
+	}
+
+	firstName := runSearchJSON(t, db, "search", "firstname-fallback", "--json")
+	if len(firstName.Results) != 1 || firstName.Results[0].Who != "Ada" {
+		t.Fatalf("first-name fallback result = %#v", firstName.Results)
+	}
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "no-human-fallback", "--json")
+	if err != nil {
+		t.Fatalf("search without human fallback: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	var payload struct {
+		Results []map[string]json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout, err)
+	}
+	if len(payload.Results) != 1 {
+		t.Fatalf("search results = %#v", payload.Results)
+	}
+	if _, ok := payload.Results[0]["who"]; ok {
+		t.Fatalf("machine-only sender should omit who: %s", stdout)
+	}
+	if strings.Contains(stdout, "10000563") || strings.Contains(stdout, "unknown") {
+		t.Fatalf("search leaked raw peer fallback: %s", stdout)
+	}
+}
+
+func TestSearchTextUsesContractRows(t *testing.T) {
+	db := seedSearchArchive(t, 2)
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "launch")
+	if err != nil {
+		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	for _, disallowed := range []string{"[launch]", `"source_pk"`, `"sender_jid"`, "unknown"} {
+		if strings.Contains(stdout, disallowed) {
+			t.Fatalf("search text contains %q:\n%s", disallowed, stdout)
+		}
+	}
+	if !strings.Contains(stdout, "synthetic launch note") || !strings.Contains(stdout, "showing 2 of 2 matches") {
+		t.Fatalf("search text = %s", stdout)
+	}
+}
+
 func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 	db := seedSearchArchive(t, 25)
 	search := runSearchJSON(t, db, "search", "launch", "--json")
@@ -447,6 +497,9 @@ func assertSearchResultShape(t *testing.T, result struct {
 	if !strings.HasPrefix(result.Ref, "telecrawl:msg/") || result.Who == "" || result.Where == "" || result.Snippet == "" {
 		t.Fatalf("bad search result = %#v", result)
 	}
+	if strings.ContainsAny(result.Who+result.Where+result.Snippet, "\n\t") || strings.ContainsAny(result.Snippet, "[]") || strings.Contains(result.Snippet, "...") {
+		t.Fatalf("search result kept marker or multiline fields = %#v", result)
+	}
 	if _, err := time.Parse(time.RFC3339, result.Time); err != nil {
 		t.Fatalf("search result time = %q err=%v", result.Time, err)
 	}
@@ -507,6 +560,32 @@ func seedSearchArchive(t *testing.T, count int) string {
 		})
 	}
 	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, nil, chats, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func seedSearchWhoArchive(t *testing.T) string {
+	t.Helper()
+	db := filepath.Join(t.TempDir(), "telecrawl.db")
+	st, err := store.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "10000563", Username: "fixture_user"},
+		{JID: "87092564", FirstName: "Ada"},
+		{JID: "10000565", FirstName: "+15551234567"},
+	}
+	chats := []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now, MessageCount: 3}}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "100", ChatName: "example chat", MessageID: "0:1", SenderJID: "10000563", SenderName: "10000563", Timestamp: now, Text: "username-fallback needle"},
+		{SourcePK: 2, ChatJID: "100", ChatName: "example chat", MessageID: "0:2", SenderJID: "87092564", SenderName: "", Timestamp: now.Add(time.Minute), Text: "firstname-fallback needle"},
+		{SourcePK: 3, ChatJID: "100", ChatName: "example chat", MessageID: "0:3", SenderJID: "10000565", SenderName: "10000565", Timestamp: now.Add(2 * time.Minute), Text: "no-human-fallback needle"},
+	}
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	return db

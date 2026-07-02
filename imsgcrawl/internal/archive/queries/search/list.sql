@@ -19,7 +19,7 @@ select
   coalesce(m.text, ''),
   coalesce(c.display_name, ''),
   coalesce(pc.participants, 0),
-  snippet(messages_fts, 1, '[', ']', '...', 12)
+  ''
 from messages_fts
 join messages m on m.source_rowid = messages_fts.source_rowid
 left join (

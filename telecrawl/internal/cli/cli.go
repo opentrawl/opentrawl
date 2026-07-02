@@ -657,14 +657,11 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		if r.json {
-			total, err := st.CountSearch(r.ctx, filter)
-			if err != nil {
-				return err
-			}
-			return r.print(newSearchEnvelope(filter.Query, messages, total))
+		total, err := st.CountSearch(r.ctx, filter)
+		if err != nil {
+			return err
 		}
-		return r.print(messages)
+		return r.print(newSearchEnvelope(filter.Query, messages, total))
 	})
 }
 
@@ -1032,12 +1029,35 @@ func (r *runtime) print(v any) error {
 			}
 		}
 		return nil
+	case searchEnvelope:
+		return r.printSearch(value)
 	case openEnvelope:
 		return r.printOpen(value)
 	default:
 		enc.SetIndent("", "  ")
 		return enc.Encode(v)
 	}
+}
+
+func (r *runtime) printSearch(value searchEnvelope) error {
+	for _, item := range value.Results {
+		line := item.Time
+		if item.Who != "" {
+			line += " " + item.Who
+		}
+		if item.Where != "" {
+			line += " in " + item.Where
+		}
+		if _, err := fmt.Fprintf(r.stdout, "%s\n%s\nref: %s\n\n", line, item.Snippet, item.Ref); err != nil {
+			return err
+		}
+	}
+	if value.Truncated {
+		_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, or --chat\n", len(value.Results), value.TotalMatches)
+		return err
+	}
+	_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches\n", len(value.Results), value.TotalMatches)
+	return err
 }
 
 func (r *runtime) printOpen(value openEnvelope) error {

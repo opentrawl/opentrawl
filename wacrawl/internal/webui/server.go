@@ -22,11 +22,6 @@ import (
 //go:embed static/*
 var assets embed.FS
 
-const (
-	snippetStartMarker = "\ue000"
-	snippetEndMarker   = "\ue001"
-)
-
 type Config struct {
 	Port   int
 	Output io.Writer
@@ -290,10 +285,6 @@ func (h *handler) serveSearch(w http.ResponseWriter, r *http.Request) {
 	messages, err := h.store.Search(r.Context(), store.MessageFilter{
 		Query: query,
 		Limit: limit,
-		// Private-use markers cannot collide with real message text, so the
-		// client can turn them into highlight nodes without guessing.
-		SnippetStart: snippetStartMarker,
-		SnippetEnd:   snippetEndMarker,
 	})
 	if err != nil {
 		http.Error(w, "invalid search query", http.StatusBadRequest)

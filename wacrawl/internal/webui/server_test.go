@@ -77,8 +77,8 @@ func TestHandlerServesAuthenticatedArchiveViews(t *testing.T) {
 		t.Fatalf("search json results=%#v err=%v", results, err)
 	}
 	snippet, _ := results[0]["snippet"].(string)
-	if !strings.Contains(snippet, snippetStartMarker+"launch"+snippetEndMarker) {
-		t.Fatalf("search snippet markers missing: %q", snippet)
+	if strings.ContainsAny(snippet, "[]") || strings.Contains(snippet, "...") || !strings.Contains(snippet, "launch") {
+		t.Fatalf("search snippet should be marker-free: %q", snippet)
 	}
 }
 

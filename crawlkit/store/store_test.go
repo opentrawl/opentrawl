@@ -169,6 +169,33 @@ func TestFTS5Helpers(t *testing.T) {
 	if query := FTS5TokenQuery("e\u0301clair"); query != "\"e\u0301clair\"" {
 		t.Fatalf("decomposed Unicode token query = %q", query)
 	}
+	if snippet := FTS5Snippet("the sooner the better!", "the"); snippet != "the sooner the better!" {
+		t.Fatalf("snippet = %q", snippet)
+	}
+	if snippet := FTS5Snippet("alpha\n\t beta   gamma", "beta"); snippet != "alpha beta gamma" {
+		t.Fatalf("collapsed snippet = %q", snippet)
+	}
+	longText := strings.Join([]string{
+		"alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel", "india",
+		"juliet", "kilo", "lima", "the", "sooner", "the", "better", "november", "oscar",
+		"papa", "quebec", "romeo", "sierra", "tango", "uniform", "victor", "whiskey",
+		"xray", "yankee", "zulu",
+	}, " ")
+	snippet := FTS5Snippet(longText, "better")
+	if len([]rune(snippet)) > 120 {
+		t.Fatalf("snippet length = %d, want <= 120: %q", len([]rune(snippet)), snippet)
+	}
+	for _, marker := range []string{"[", "]", "...", "…", "\n", "\t"} {
+		if strings.Contains(snippet, marker) {
+			t.Fatalf("snippet contains marker/whitespace %q: %q", marker, snippet)
+		}
+	}
+	if !strings.Contains(snippet, "the sooner the better") {
+		t.Fatalf("snippet missed match context: %q", snippet)
+	}
+	if strings.HasPrefix(snippet, "lie") || strings.HasSuffix(snippet, "cto") {
+		t.Fatalf("snippet cut a word: %q", snippet)
+	}
 	for _, input := range []string{"", `-- ""`, `*:^()`} {
 		if query := FTS5TokenQuery(input); query != "" {
 			t.Fatalf("empty/punctuation-only token query = %q", query)

@@ -144,10 +144,6 @@ type MessageFilter struct {
 	FromMe   *bool
 	HasMedia bool
 	Asc      bool
-	// SnippetStart and SnippetEnd wrap search matches inside snippets.
-	// Both default to the CLI-friendly "[" and "]" markers.
-	SnippetStart string
-	SnippetEnd   string
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -506,20 +502,19 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 	if err != nil {
 		return nil, err
 	}
-	snippetStart := filter.SnippetStart
-	if snippetStart == "" {
-		snippetStart = "["
-	}
-	snippetEnd := filter.SnippetEnd
-	if snippetEnd == "" {
-		snippetEnd = "]"
-	}
-	query := `select m.source_pk, m.chat_jid, m.chat_name, m.msg_id, m.sender_jid, m.sender_name, m.ts, m.from_me, m.text, m.raw_type, m.message_type, m.media_type, m.media_title, m.media_path, m.media_url, m.media_size, m.starred, snippet(messages_fts, 0, ?, ?, '...', 12) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
-	args := []any{snippetStart, snippetEnd, ftsQuery}
+	query := `select m.source_pk, m.chat_jid, m.chat_name, m.msg_id, m.sender_jid, m.sender_name, m.ts, m.from_me, m.text, m.raw_type, m.message_type, m.media_type, m.media_title, m.media_path, m.media_url, m.media_size, m.starred, '' from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
+	args := []any{ftsQuery}
 	query, args = applyMessageFilters(query, args, filter, true)
 	query += " order by bm25(messages_fts) limit ?"
 	args = append(args, filter.Limit)
-	return scanMessages(ctx, s.db, query, args...)
+	messages, err := scanMessages(ctx, s.db, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	for i := range messages {
+		messages[i].Snippet = contractSnippet(messageSnippetText(messages[i]), filter.Query)
+	}
+	return messages, nil
 }
 
 func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, error) {
@@ -656,6 +651,10 @@ func scanMessages(ctx context.Context, db *sql.DB, query string, args ...any) ([
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+func messageSnippetText(message Message) string {
+	return strings.TrimSpace(message.Text + " " + message.MediaTitle)
 }
 
 func boolInt(v bool) int {

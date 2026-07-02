@@ -66,6 +66,15 @@ func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius in
 	messages = append(messages, before...)
 	messages = append(messages, target)
 	messages = append(messages, after...)
+	if err := s.humanizeMessages(ctx, messages); err != nil {
+		return MessageWindow{}, err
+	}
+	for _, message := range messages {
+		if message.SourcePK == target.SourcePK {
+			target = message
+			break
+		}
+	}
 	return MessageWindow{
 		Target:          target,
 		Messages:        messages,

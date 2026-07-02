@@ -94,6 +94,7 @@ func newOpenOutput(value archive.MessageContext) openOutput {
 	if where == "" {
 		where = "unknown chat"
 	}
+	where = outputField(where)
 	out := openOutput{
 		Ref: messageRef(value.Message.MessageID),
 		Chat: openChatOutput{
@@ -117,8 +118,8 @@ func openMessageItem(item archive.MessageRow, where string, target bool) openMes
 	return openMessageOutput{
 		Ref:            messageRef(item.MessageID),
 		Time:           item.Time,
-		Who:            senderName(item.FromMe, item.SenderLabel),
-		Where:          where,
+		Who:            outputField(senderName(item.FromMe, item.SenderLabel)),
+		Where:          outputField(where),
 		Text:           item.Text,
 		FromMe:         item.FromMe,
 		HasAttachments: item.HasAttachments,

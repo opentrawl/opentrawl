@@ -1004,7 +1004,7 @@ func (a *app) print(value any) error {
 
 func (a *app) printSearch(result searchEnvelope) error {
 	for _, item := range result.Results {
-		if _, err := fmt.Fprintf(a.stdout, "[%s] %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
+		if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
 			return err
 		}
 	}
@@ -1066,9 +1066,9 @@ func newSearchResult(message store.Message) searchResult {
 	return searchResult{
 		Ref:     messageRef(message),
 		Time:    formatTime(message.Timestamp),
-		Who:     messageWho(message),
-		Where:   messageWhere(message),
-		Snippet: messageSnippet(message),
+		Who:     outputField(messageWho(message)),
+		Where:   outputField(messageWhere(message)),
+		Snippet: outputField(messageSnippet(message)),
 	}
 }
 
@@ -1103,8 +1103,8 @@ func newOpenMessage(message store.Message, current bool) openMessage {
 	return openMessage{
 		Ref:     messageRef(message),
 		Time:    formatTime(message.Timestamp),
-		Who:     messageWho(message),
-		Where:   messageWhere(message),
+		Who:     outputField(messageWho(message)),
+		Where:   outputField(messageWhere(message)),
 		Text:    messageText(message),
 		Type:    firstNonEmpty(message.MessageType, message.MediaType),
 		Media:   media,
@@ -1142,7 +1142,7 @@ func messageWhere(message store.Message) string {
 }
 
 func messageSnippet(message store.Message) string {
-	return firstNonEmpty(message.Snippet, message.Text, message.MediaTitle, readableMessageType(message))
+	return outputField(firstNonEmpty(message.Snippet, message.Text, message.MediaTitle, readableMessageType(message)))
 }
 
 func messageText(message store.Message) string {
@@ -1158,7 +1158,7 @@ func readableMessageType(message store.Message) string {
 }
 
 func humanDisplayName(name string) string {
-	name = strings.TrimSpace(name)
+	name = outputField(name)
 	if strings.EqualFold(name, "me") {
 		return "Me"
 	}
@@ -1166,6 +1166,10 @@ func humanDisplayName(name string) string {
 		return ""
 	}
 	return name
+}
+
+func outputField(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func (a *app) failContract(contractErr contractError) error {

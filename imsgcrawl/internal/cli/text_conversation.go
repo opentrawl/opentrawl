@@ -142,6 +142,10 @@ func displayMessageText(text string, hasAttachments bool) string {
 	return strings.ReplaceAll(text, objectReplacementCharacter, "[attachment]")
 }
 
+func outputField(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
 func chatConversation(item archive.ChatSummary) string {
 	title := strings.TrimSpace(item.Title)
 	if isMachineChatTitle(title) {

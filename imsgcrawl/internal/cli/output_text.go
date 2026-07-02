@@ -227,7 +227,7 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 			formatArchiveTime(item.Time),
 			senderName(item.FromMe, item.SenderLabel),
 			searchConversation(item),
-			searchText(item),
+			outputField(searchSnippet(item)),
 		})
 	}
 	return renderTextTable(w, columns, rows)
