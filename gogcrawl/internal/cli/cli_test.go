@@ -128,6 +128,23 @@ func TestStatusMissingEmptyAndCorrupt(t *testing.T) {
 	}
 }
 
+func TestStatusAuthOmitsExpiryWhenCheckSucceeds(t *testing.T) {
+	installFakeGog(t)
+	t.Setenv("GOG_FAKE_AUTH_EXPIRES", "2000-01-02T03:04:05Z")
+	var out map[string]any
+	runJSON(t, context.Background(), []string{"status", "--json", "--archive", filepath.Join(t.TempDir(), "missing.db")}, &out)
+	auth, ok := out["auth"].(map[string]any)
+	if !ok {
+		t.Fatalf("auth = %#v", out["auth"])
+	}
+	if auth["authorized"] != true {
+		t.Fatalf("auth = %#v", auth)
+	}
+	if _, ok := auth["expires"]; ok {
+		t.Fatalf("auth exposed stale expiry: %#v", auth)
+	}
+}
+
 func TestDoctorReportsMissingArchive(t *testing.T) {
 	installFakeGog(t)
 	var out doctorOutput
@@ -140,6 +157,27 @@ func TestDoctorReportsMissingArchive(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("doctor checks = %#v", out.Checks)
+	}
+}
+
+func TestDoctorReportsInvalidAuthWithRemedy(t *testing.T) {
+	installFakeGog(t)
+	t.Setenv("GOG_FAKE_AUTH_VALID", "false")
+	t.Setenv("GOG_FAKE_AUTH_EXPIRES", "2000-01-02T03:04:05Z")
+	var out doctorOutput
+	runJSON(t, context.Background(), []string{"doctor", "--json", "--archive", filepath.Join(t.TempDir(), "missing.db")}, &out)
+	found := false
+	for _, check := range out.Checks {
+		if check.ID == "gog_auth" && check.State == "fail" && check.Remedy == "run gog login <email>" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("doctor checks = %#v", out.Checks)
+	}
+	status := runStatus(t, context.Background(), filepath.Join(t.TempDir(), "missing.db"))
+	if status.Auth.Authorized {
+		t.Fatalf("status auth = %#v", status.Auth)
 	}
 }
 
@@ -344,7 +382,9 @@ if [ "$1" = "--version" ]; then
 fi
 
 if [ "$1" = "auth" ] && [ "$2" = "list" ]; then
-  printf 'alice@example.com\tmain\tgmail\t2030-01-02T03:04:05Z\ttrue\t\toauth\n'
+  expires="${GOG_FAKE_AUTH_EXPIRES:-2030-01-02T03:04:05Z}"
+  valid="${GOG_FAKE_AUTH_VALID:-true}"
+  printf 'alice@example.com\tmain\tgmail\t%s\t%s\t\toauth\n' "$expires" "$valid"
   exit 0
 fi
 

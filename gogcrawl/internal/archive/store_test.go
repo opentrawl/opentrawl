@@ -161,6 +161,36 @@ func TestSearchWhoMatchedReportsDistinctParticipants(t *testing.T) {
 	}
 }
 
+func TestSearchSnippetMarksMidTokenCuts(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	body := strings.Repeat("a", 70) + " needle " + strings.Repeat("b", 220)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", Time: time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC), FromName: "Alice", FromAddress: "alice@example.com", Subject: "Receipt", Body: body},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	search, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 {
+		t.Fatalf("results = %#v", search.Results)
+	}
+	snippet := search.Results[0].Snippet
+	if !strings.HasPrefix(snippet, "…") || !strings.HasSuffix(snippet, "…") {
+		t.Fatalf("snippet should mark mid-token cuts: %q", snippet)
+	}
+	if !strings.Contains(snippet, "needle") {
+		t.Fatalf("snippet lost match: %q", snippet)
+	}
+}
+
 func TestShortRefsResolveAndFailSafely(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))

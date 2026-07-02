@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
@@ -24,7 +23,6 @@ type Client struct {
 type AuthStatus struct {
 	FoundAccount bool
 	Authorized   bool
-	Expires      *time.Time
 	AccountEmail string
 }
 
@@ -85,18 +83,11 @@ func (c Client) AuthStatus(ctx context.Context) (AuthStatus, error) {
 		if status.AccountEmail == "" {
 			status.AccountEmail = email
 		}
-		expires := parseExpiry(fields[3])
 		valid := strings.EqualFold(strings.TrimSpace(fields[4]), "true")
 		if valid {
 			status.Authorized = true
 			status.AccountEmail = email
-			if expires != nil {
-				status.Expires = expires
-			}
 			return status, nil
-		}
-		if status.Expires == nil && expires != nil {
-			status.Expires = expires
 		}
 	}
 	return status, nil
@@ -192,16 +183,4 @@ func ParseAddress(value string) (string, string) {
 		return "", value
 	}
 	return strings.TrimSpace(addr.Name), strings.TrimSpace(addr.Address)
-}
-
-func parseExpiry(value string) *time.Time {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
-	parsed, err := time.Parse(time.RFC3339, value)
-	if err != nil {
-		return nil
-	}
-	return &parsed
 }

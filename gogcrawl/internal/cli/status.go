@@ -33,8 +33,7 @@ type countEnvelope struct {
 }
 
 type authEnvelope struct {
-	Authorized bool    `json:"authorized"`
-	Expires    *string `json:"expires"`
+	Authorized bool `json:"authorized"`
 }
 
 type archiveStatusBlock struct {
@@ -124,10 +123,5 @@ func (r *runtime) authEnvelope() authEnvelope {
 	if err != nil {
 		return authEnvelope{Authorized: false}
 	}
-	var expires *string
-	if status.Expires != nil {
-		value := status.Expires.Local().Format(time.RFC3339)
-		expires = &value
-	}
-	return authEnvelope{Authorized: status.Authorized, Expires: expires}
+	return authEnvelope{Authorized: status.Authorized}
 }

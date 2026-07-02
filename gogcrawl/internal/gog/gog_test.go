@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestVersionReturnsRawVersion(t *testing.T) {
@@ -31,8 +30,29 @@ func TestAuthStatusParsesPlainRows(t *testing.T) {
 	if !status.FoundAccount || !status.Authorized || status.AccountEmail != "alice@example.com" {
 		t.Fatalf("status = %#v", status)
 	}
-	if status.Expires == nil || status.Expires.Format(time.RFC3339) != "2030-01-02T03:04:05Z" {
-		t.Fatalf("expires = %#v", status.Expires)
+}
+
+func TestAuthStatusTrustsCheckedValidityOverExpiry(t *testing.T) {
+	client := New(fakeGog(t, `printf 'alice@example.com\tmain\tgmail\t2000-01-02T03:04:05Z\ttrue\t\toauth\n'
+`))
+	status, err := client.AuthStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.FoundAccount || !status.Authorized {
+		t.Fatalf("status = %#v", status)
+	}
+}
+
+func TestAuthStatusRejectsInvalidCheckedRows(t *testing.T) {
+	client := New(fakeGog(t, `printf 'alice@example.com\tmain\tgmail\t2030-01-02T03:04:05Z\tfalse\t\toauth\n'
+`))
+	status, err := client.AuthStatus(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.FoundAccount || status.Authorized {
+		t.Fatalf("status = %#v", status)
 	}
 }
 

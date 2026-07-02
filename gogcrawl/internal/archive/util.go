@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	ckstore "github.com/openclaw/crawlkit/store"
 )
@@ -99,10 +100,21 @@ func plainSnippet(query, subject, body string) string {
 	}
 	const limit = 180
 	runes := []rune(text)
-	if len(runes)-start <= limit {
-		return strings.TrimSpace(string(runes[start:]))
+	end := len(runes)
+	if len(runes)-start > limit {
+		end = start + limit
 	}
-	return strings.TrimSpace(string(runes[start : start+limit]))
+	snippet := strings.TrimSpace(string(runes[start:end]))
+	if snippet == "" {
+		return ""
+	}
+	if nonBoundaryCut(runes, start) {
+		snippet = "…" + snippet
+	}
+	if end < len(runes) {
+		snippet += "…"
+	}
+	return snippet
 }
 
 func flattenWhitespace(value string) string {
@@ -132,4 +144,11 @@ func snippetRuneStart(text string, byteIndex, contextRunes int) int {
 		return 0
 	}
 	return start
+}
+
+func nonBoundaryCut(runes []rune, cut int) bool {
+	if cut <= 0 || cut >= len(runes) {
+		return false
+	}
+	return !unicode.IsSpace(runes[cut-1]) && !unicode.IsSpace(runes[cut])
 }
