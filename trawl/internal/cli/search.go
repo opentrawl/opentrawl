@@ -144,13 +144,28 @@ func (r *Runtime) resolveSearchTarget(words []string, sourceCSV string) (string,
 		}
 	}
 	if sourceCSV == "" {
-		return strings.Join(words, " "), installed, nil
+		return strings.Join(words, " "), searchable(installed), nil
 	}
 	sources, err := r.selectedSourcesCSV(sourceCSV)
 	if err != nil {
 		return "", nil, err
 	}
 	return strings.Join(words, " "), sources, nil
+}
+
+// searchable keeps sources that declare the search capability; a
+// contact layer or an uninitialised crawler is not a search failure.
+func searchable(sources []Source) []Source {
+	var out []Source
+	for _, source := range sources {
+		for _, capability := range source.Capabilities {
+			if strings.EqualFold(strings.TrimSpace(capability), "search") {
+				out = append(out, source)
+				break
+			}
+		}
+	}
+	return out
 }
 
 func emptySearchEnvelope(query string) federatedSearchEnvelope {

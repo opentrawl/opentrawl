@@ -19,7 +19,7 @@ func TestStatusExitCodes(t *testing.T) {
 			name: "success",
 			crawlers: []fakeCrawler{{
 				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 				status:   statusJSON("imessage", "ok"),
 			}},
 			args:       []string{"status"},
@@ -37,12 +37,12 @@ func TestStatusExitCodes(t *testing.T) {
 			crawlers: []fakeCrawler{
 				{
 					name:     "imsgcrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 					status:   statusJSON("imessage", "ok"),
 				},
 				{
 					name:       "telecrawl",
-					metadata:   `{"schema_version":1,"contract_version":1,"id":"telegram","display_name":"Telegram"}`,
+					metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
 					status:     `not-json`,
 					statusExit: 0,
 				},
@@ -97,7 +97,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			name: "success",
 			crawlers: []fakeCrawler{{
 				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 				doctor:   `{"checks":[{"id":"source_store","state":"ok"}]}`,
 			}},
 			args:       []string{"doctor"},
@@ -108,7 +108,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			name: "failing check",
 			crawlers: []fakeCrawler{{
 				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 				doctor:   failingDoctorJSON(),
 			}},
 			args:       []string{"doctor"},
@@ -145,7 +145,7 @@ func TestDoctorExitCodes(t *testing.T) {
 func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		status:   `{"app_id":"imessage","state":"ok","auth":{"authorized":true,"token":"should-not-leak"},"token":"should-not-leak"}`,
 	})
 	t.Setenv("PATH", binDir)

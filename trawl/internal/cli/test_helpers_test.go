@@ -132,7 +132,7 @@ func shellQuote(value string) string {
 }
 
 func metadataJSON(id string) string {
-	return fmt.Sprintf(`{"schema_version":1,"contract_version":1,"id":%q,"display_name":%q}`, id, id)
+	return fmt.Sprintf(`{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":%q,"display_name":%q}`, id, id)
 }
 
 func statusJSON(id, state string) string {
