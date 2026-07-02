@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -133,6 +134,8 @@ type MessageFilter struct {
 	Query   string
 	ChatJID string
 	Sender  string
+	Who     string
+	WhoKeys []string
 	Limit   int
 	After   *time.Time
 	Before  *time.Time
@@ -144,6 +147,11 @@ type MessageFilter struct {
 	FromMe   *bool
 	HasMedia bool
 	Asc      bool
+}
+
+type WhoResolution struct {
+	ParticipantKeys []string
+	DisplayNames    []string
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -495,6 +503,11 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 	if strings.TrimSpace(filter.Query) == "" {
 		return nil, errors.New("search query required")
 	}
+	var err error
+	filter, err = s.resolveMessageFilterWho(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
@@ -521,6 +534,11 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 	if strings.TrimSpace(filter.Query) == "" {
 		return 0, errors.New("search query required")
 	}
+	var err error
+	filter, err = s.resolveMessageFilterWho(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
 	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
 		return 0, err
@@ -533,6 +551,87 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 		return 0, err
 	}
 	return total, nil
+}
+
+func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
+	if normalizeWhoIdentity(filter.Who) == "" || filter.WhoKeys != nil {
+		return filter, nil
+	}
+	resolution, err := s.ResolveWho(ctx, filter.Who)
+	if err != nil {
+		return MessageFilter{}, err
+	}
+	filter.Who = normalizeWhoIdentity(filter.Who)
+	filter.WhoKeys = resolution.ParticipantKeys
+	return filter, nil
+}
+
+func (s *Store) WhoMatches(ctx context.Context, identity string) ([]string, error) {
+	resolution, err := s.ResolveWho(ctx, identity)
+	if err != nil {
+		return nil, err
+	}
+	return resolution.DisplayNames, nil
+}
+
+func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution, error) {
+	identity = normalizeWhoIdentity(identity)
+	if identity == "" {
+		return WhoResolution{}, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+select participant_key, display_name
+from (
+	select distinct participant_key, trim(display_name) as display_name
+	from (`+whoArchiveParticipantNamesQuery()+`)
+)
+where display_name <> ''
+order by display_name, participant_key`)
+	if err != nil {
+		return WhoResolution{}, err
+	}
+	defer func() { _ = rows.Close() }()
+	type whoCandidate struct {
+		key  string
+		name string
+	}
+	var matches []whoCandidate
+	seenKeys := map[string]struct{}{}
+	for rows.Next() {
+		var candidate whoCandidate
+		if err := rows.Scan(&candidate.key, &candidate.name); err != nil {
+			return WhoResolution{}, err
+		}
+		candidate.name = strings.TrimSpace(candidate.name)
+		if _, seen := seenKeys[candidate.key]; seen || !strings.EqualFold(candidate.name, identity) {
+			continue
+		}
+		seenKeys[candidate.key] = struct{}{}
+		matches = append(matches, candidate)
+	}
+	if err := rows.Err(); err != nil {
+		return WhoResolution{}, err
+	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		left := strings.ToLower(matches[i].name)
+		right := strings.ToLower(matches[j].name)
+		if left != right {
+			return left < right
+		}
+		if matches[i].name != matches[j].name {
+			return matches[i].name < matches[j].name
+		}
+		return matches[i].key < matches[j].key
+	})
+	resolution := WhoResolution{
+		ParticipantKeys: make([]string, 0, len(matches)),
+		DisplayNames:    make([]string, 0, len(matches)),
+	}
+	for _, match := range matches {
+		resolution.ParticipantKeys = append(resolution.ParticipantKeys, match.key)
+		resolution.DisplayNames = append(resolution.DisplayNames, match.name)
+	}
+	return resolution, nil
 }
 
 func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
@@ -628,7 +727,108 @@ func applyMessageFilters(query string, args []any, filter MessageFilter, joined 
 	if filter.HasMedia {
 		query += " and (" + prefix + "media_type <> '' or " + prefix + "media_path <> '' or " + prefix + "media_url <> '')"
 	}
+	if filter.WhoKeys != nil {
+		if len(filter.WhoKeys) == 0 {
+			query += " and 0=1"
+		} else {
+			query += " and exists (select 1 from (" + whoMessageParticipantKeysQuery(prefix) + ") where participant_key in (" + queryPlaceholders(len(filter.WhoKeys)) + "))"
+			for _, key := range filter.WhoKeys {
+				args = append(args, key)
+			}
+		}
+	}
 	return query, args
+}
+
+func queryPlaceholders(count int) string {
+	if count <= 0 {
+		return ""
+	}
+	placeholders := make([]string, count)
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	return strings.Join(placeholders, ",")
+}
+
+func normalizeWhoIdentity(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func whoArchiveParticipantNamesQuery() string {
+	senderContact := contactJIDPredicate("c", "m.sender_jid")
+	chatContact := contactJIDPredicate("c", "ch.jid")
+	groupContact := contactJIDPredicate("c", "gp.user_jid")
+	return `
+select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.sender_name as display_name
+from messages m
+left join contacts c on ` + senderContact + `
+where trim(m.sender_name) <> ''
+union all
+select 'jid:' || jid, full_name
+from contacts
+where trim(full_name) <> ''
+union all
+select 'jid:' || jid, business_name
+from contacts
+where trim(business_name) <> ''
+union all
+select 'jid:' || jid, trim(first_name || ' ' || last_name)
+from contacts
+where trim(first_name || ' ' || last_name) <> ''
+union all
+select 'jid:' || coalesce(c.jid, ch.jid), ch.name
+from chats ch
+left join contacts c on ` + chatContact + `
+where ch.kind <> 'group' and trim(ch.name) <> ''
+union all
+select 'jid:' || coalesce(c.jid, gp.user_jid), gp.contact_name
+from group_participants gp
+left join contacts c on ` + groupContact + `
+where trim(gp.contact_name) <> ''
+union all
+select 'jid:' || coalesce(c.jid, gp.user_jid), gp.first_name
+from group_participants gp
+left join contacts c on ` + groupContact + `
+where trim(gp.first_name) <> ''
+union all
+select 'jid:' || c.jid, c.full_name
+from group_participants gp
+join contacts c on ` + groupContact + `
+where trim(c.full_name) <> ''
+union all
+select 'jid:' || c.jid, c.business_name
+from group_participants gp
+join contacts c on ` + groupContact + `
+where trim(c.business_name) <> ''
+union all
+select 'jid:' || c.jid, trim(c.first_name || ' ' || c.last_name)
+from group_participants gp
+join contacts c on ` + groupContact + `
+where trim(c.first_name || ' ' || c.last_name) <> ''`
+}
+
+func whoMessageParticipantKeysQuery(prefix string) string {
+	senderContact := contactJIDPredicate("c", prefix+"sender_jid")
+	chatContact := contactJIDPredicate("c", prefix+"chat_jid")
+	groupContact := contactJIDPredicate("c", "gp.user_jid")
+	return `
+select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
+where trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> ''
+union all
+select 'jid:' || coalesce(c.jid, ch.jid)
+from chats ch
+left join contacts c on ` + chatContact + `
+where ch.jid = ` + prefix + `chat_jid and ch.kind <> 'group'
+union all
+select 'jid:' || coalesce(c.jid, gp.user_jid)
+from group_participants gp
+left join contacts c on ` + groupContact + `
+where gp.group_jid = ` + prefix + `chat_jid`
+}
+
+func contactJIDPredicate(contactAlias, jidExpr string) string {
+	return contactAlias + ".jid = " + jidExpr + " or " + contactAlias + ".lid = " + jidExpr + " or " + contactAlias + ".lid || '@lid' = " + jidExpr
 }
 
 func scanMessages(ctx context.Context, db *sql.DB, query string, args ...any) ([]Message, error) {
