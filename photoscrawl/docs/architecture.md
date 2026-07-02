@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # photoscrawl Architecture
 
 Date: 2026-05-28
@@ -12,26 +16,26 @@ surface. `crawlkit` owns reusable mechanics only.
 
 Use the safest source available for each job:
 
-1. PhotoKit for supported asset, collection, resource, location, and metadata
-   access.
-2. A read-only snapshot for library database inspection where PhotoKit does not
-   expose useful internal analysis.
+1. A crawlkit SQLite snapshot of `database/Photos.sqlite` for headless asset,
+   resource, album, and location enumeration.
+2. PhotoKit only for explicit media export flows, such as original export when
+   the user allows iCloud downloads.
 3. Apple's existing Photos analysis as evidence when it is extractable and good.
 4. Local Vision/Core ML classification to fill gaps or improve signal.
 5. Local multimodal models for higher-signal image understanding when the user
    opts into local content classification.
 
-Do not make private Photos SQLite tables the only path. Treat them as adapters
-with schema-version checks and evidence labels.
+Treat private Photos SQLite tables as source evidence with schema-version checks
+and evidence labels. Do not promote them into durable truth tables.
 
 ## Ingestion Model
 
 The crawler has two stages:
 
-- `crawl`: enumerate assets and cheap metadata for all assets.
+- `sync`: enumerate assets and cheap metadata for all assets.
 - `classify`: process image/video content through a resumable queue.
 
-`crawl` may record paths to files that already exist inside the Photos library
+`sync` may record paths to files that already exist inside the Photos library
 package, such as derivatives, renders, or originals. It must not export media,
 write to Photos, or trigger iCloud downloads.
 

@@ -17,11 +17,13 @@ import (
 
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
-		if output.IsUsage(err) {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(2)
+		if wantsJSON(os.Args[1:]) {
+			if writeErr := writeError(os.Stdout, err); writeErr != nil {
+				fmt.Fprintln(os.Stderr, writeErr)
+			}
+		} else {
+			fmt.Fprintln(os.Stderr, humanError(err))
 		}
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
@@ -50,7 +52,7 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "metadata", archive.ControlManifest(paths))
+		return writeMetadata(os.Stdout, format, archive.ControlManifest(paths))
 	case "init":
 		fs := flag.NewFlagSet("init", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -118,8 +120,8 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return writeDoctor(os.Stdout, format, result)
-	case "crawl":
-		fs := flag.NewFlagSet("crawl", flag.ContinueOnError)
+	case "sync":
+		fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
 		dbPath := fs.String("db", "", "photos.sqlite path")
 		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
@@ -135,14 +137,14 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		result, err := archive.Crawl(ctx, paths, archive.CrawlOptions{
+		result, err := archive.Sync(ctx, paths, archive.SyncOptions{
 			LibraryPath: *libraryPath,
 			Provider:    photos.NewProvider(),
 		})
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "crawl", result)
+		return writeSync(os.Stdout, format, result)
 	case "classify":
 		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -168,107 +170,57 @@ func run(ctx context.Context, args []string) error {
 		}
 		return output.Write(os.Stdout, format, "classify", result)
 	case "search":
-		fs := flag.NewFlagSet("search", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		query := fs.String("query", "", "search query")
-		limit := fs.Int("limit", 20, "max results")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		searchArgs, trailingJSON := stripTrailingJSON(args[1:])
-		if err := fs.Parse(searchArgs); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag || trailingJSON)
+		parsed, err := parseSearchCommand(args[1:])
 		if err != nil {
 			return err
 		}
-		result, err := archive.Search(ctx, paths, archive.SearchOptions{Query: joinedQuery(*query, fs.Args()), Limit: *limit})
+		if parsed.DBPath != "" {
+			paths.Database = parsed.DBPath
+		}
+		result, err := archive.Search(ctx, paths, archive.SearchOptions{Query: parsed.Query, Limit: parsed.Limit, After: parsed.After, Before: parsed.Before})
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "search", result)
+		return writeSearch(os.Stdout, parsed.Format, result)
 	case "open":
-		fs := flag.NewFlagSet("open", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		id := fs.String("id", "", "asset id")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		openArgs, trailingJSON := stripTrailingJSON(args[1:])
-		if err := fs.Parse(openArgs); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *id != "" && fs.NArg() != 0 {
-			return output.UsageError{Err: errors.New("open id must be passed once")}
-		}
-		idValue := *id
-		if idValue == "" && fs.NArg() == 1 {
-			idValue = fs.Arg(0)
-		}
-		if fs.NArg() > 1 {
-			return output.UsageError{Err: errors.New("open takes one id")}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag || trailingJSON)
+		parsed, err := parseRefCommand("open", args[1:], false)
 		if err != nil {
 			return err
 		}
-		result, err := archive.Open(ctx, paths, idValue)
+		if parsed.DBPath != "" {
+			paths.Database = parsed.DBPath
+		}
+		result, err := archive.Open(ctx, paths, parsed.Ref)
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "open", result)
+		return writeOpen(os.Stdout, parsed.Format, result)
 	case "evidence":
-		fs := flag.NewFlagSet("evidence", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		rowID := fs.String("row-id", "", "row id")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		parsed, err := parseRefCommand("evidence", args[1:], false)
 		if err != nil {
 			return err
 		}
-		result, err := archive.Evidence(ctx, paths, *rowID)
+		if parsed.DBPath != "" {
+			paths.Database = parsed.DBPath
+		}
+		result, err := archive.Evidence(ctx, paths, parsed.Ref)
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "evidence", result)
+		return writeEvidence(os.Stdout, parsed.Format, result)
 	case "neighbors":
-		fs := flag.NewFlagSet("neighbors", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		id := fs.String("id", "", "asset id")
-		limit := fs.Int("limit", 20, "max results")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		parsed, err := parseRefCommand("neighbors", args[1:], true)
 		if err != nil {
 			return err
 		}
-		result, err := archive.Neighbors(ctx, paths, archive.NeighborOptions{ID: *id, Limit: *limit})
+		if parsed.DBPath != "" {
+			paths.Database = parsed.DBPath
+		}
+		result, err := archive.Neighbors(ctx, paths, archive.NeighborOptions{ID: parsed.Ref, Limit: parsed.Limit})
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "neighbors", result)
+		return writeNeighbors(os.Stdout, parsed.Format, result)
 	case "place-context":
 		fs := flag.NewFlagSet("place-context", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -365,7 +317,7 @@ func run(ctx context.Context, args []string) error {
 			PromptPath:           *promptPath,
 			Models:               splitList(*models),
 			OllamaGenerateURL:    *ollamaURL,
-			OllamaAPIKey:         os.Getenv("OLLAMA_API_KEY"),
+			OllamaAPIKeyEnv:      "OLLAMA_API_KEY",
 			Limit:                *limit,
 			Concurrency:          *concurrency,
 			Sample:               *sample,
@@ -383,7 +335,7 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|init|status|doctor|crawl|classify|search|open|neighbors|evidence|place-context|place-card|place-backfill|eval-card>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|init|status|doctor|sync|classify|search|open|neighbors|evidence|place-context|place-card|place-backfill|eval-card>")}
 }
 
 func splitList(value string) []string {
@@ -400,11 +352,4 @@ func splitList(value string) []string {
 func joinedQuery(flagValue string, args []string) string {
 	parts := append([]string{strings.TrimSpace(flagValue)}, args...)
 	return strings.TrimSpace(strings.Join(parts, " "))
-}
-
-func stripTrailingJSON(args []string) ([]string, bool) {
-	if len(args) == 0 || args[len(args)-1] != "--json" {
-		return args, false
-	}
-	return args[:len(args)-1], true
 }

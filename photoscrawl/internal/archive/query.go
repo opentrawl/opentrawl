@@ -6,51 +6,73 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit/store"
 )
 
 type SearchOptions struct {
-	Query string
-	Limit int
+	Query  string
+	Limit  int
+	After  string
+	Before string
 }
 
 type SearchResult struct {
 	Query        string      `json:"query"`
-	Limit        int         `json:"limit"`
+	Limit        int         `json:"-"`
 	Results      []SearchHit `json:"results"`
 	TotalMatches int         `json:"total_matches"`
 	Truncated    bool        `json:"truncated"`
 }
 
 type SearchHit struct {
-	ID            string `json:"id"`
-	HitType       string `json:"hit_type"`
-	ObservationID string `json:"observation_id,omitempty"`
-	MediaType     string `json:"media_type"`
-	CreationDate  string `json:"creation_date"`
-	Title         string `json:"title"`
-	Snippet       string `json:"snippet"`
+	Ref     string `json:"ref"`
+	Time    string `json:"time"`
+	Who     string `json:"who"`
+	Where   string `json:"where"`
+	Snippet string `json:"snippet"`
+
+	ID            string `json:"-"`
+	HitType       string `json:"-"`
+	ObservationID string `json:"-"`
+	MediaType     string `json:"-"`
+	CreationDate  string `json:"-"`
+	Title         string `json:"-"`
 }
 
-type OpenResult struct {
-	Asset              map[string]any   `json:"asset"`
-	Resources          []map[string]any `json:"resources"`
-	Albums             []map[string]any `json:"albums"`
-	Locations          []map[string]any `json:"locations"`
-	VisualObservations []map[string]any `json:"visual_observations"`
-	TextObservations   []map[string]any `json:"text_observations"`
-	FaceObservations   []map[string]any `json:"face_observations"`
-	ModelObservations  []map[string]any `json:"model_observations"`
-	ObservationTerms   []map[string]any `json:"observation_terms"`
-	Edges              []map[string]any `json:"edges"`
-	Evidence           []map[string]any `json:"evidence"`
-}
+const searchWhoSQL = `coalesce((
+  select group_concat(person_label, ', ')
+  from (
+    select distinct person_label
+    from face_observation
+    where asset_id = asset.id and trim(person_label) <> ''
+    order by person_label
+    limit 3
+  )
+), '')`
 
-type EvidenceResult struct {
-	RowID    string           `json:"row_id"`
-	Evidence []map[string]any `json:"evidence"`
-}
+const searchWhereSQL = `coalesce((
+  select value_text
+  from model_observation
+  where asset_id = asset.id
+    and trim(value_text) <> ''
+    and observation_type in ('merchant_or_venue_name_candidate', 'landmark_or_place_name_candidate', 'place_type_candidate')
+  order by case observation_type
+    when 'merchant_or_venue_name_candidate' then 1
+    when 'landmark_or_place_name_candidate' then 2
+    when 'place_type_candidate' then 3
+    else 4
+  end, confidence desc, value_text
+  limit 1
+), (
+  select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
+         case when horizontal_accuracy is not null then ' +/-' || printf('%.0f', horizontal_accuracy) || 'm' else '' end
+  from location_observation
+  where asset_id = asset.id
+  order by id
+  limit 1
+), '')`
 
 func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
@@ -64,6 +86,14 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if limit > 200 {
 		limit = 200
 	}
+	after, err := searchTimeBound(opts.After)
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("after must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
+	}
+	before, err := searchTimeBound(opts.Before)
+	if err != nil {
+		return SearchResult{}, fmt.Errorf("before must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
+	}
 	db, err := store.OpenReadOnly(ctx, paths.Database)
 	if err != nil {
 		return SearchResult{}, err
@@ -71,24 +101,28 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	defer db.Close()
 
 	fts := ftsQuery(query)
-	assetMatches, err := ftsCount(ctx, db.DB(), "asset_fts", fts)
+	assetMatches, err := ftsCount(ctx, db.DB(), "asset_fts", fts, after, before)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("count asset matches: %w", err)
 	}
-	observationMatches, err := ftsCount(ctx, db.DB(), "observation_fts", fts)
+	observationMatches, err := ftsCount(ctx, db.DB(), "observation_fts", fts, after, before)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("count observation matches: %w", err)
 	}
 	totalMatches := assetMatches + observationMatches
 	rows, err := db.DB().QueryContext(ctx, `
 select asset.id, asset.media_type, asset.creation_date, asset_fts.title,
-       snippet(asset_fts, 2, '[', ']', ' ... ', 12) as snippet
+       `+searchWhoSQL+` as who,
+       `+searchWhereSQL+` as where_label,
+       snippet(asset_fts, 2, '', '', ' ', 12) as snippet
 from asset_fts
 join asset on asset.id = asset_fts.id
 where asset_fts match ?
+  and (? = '' or asset.creation_date >= ?)
+  and (? = '' or asset.creation_date <= ?)
 order by rank
 limit ?
-`, fts, limit)
+`, fts, after, after, before, before, limit)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search assets: %w", err)
 	}
@@ -103,10 +137,13 @@ limit ?
 	}
 	for rows.Next() {
 		var hit SearchHit
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Snippet); err != nil {
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Who, &hit.Where, &hit.Snippet); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
+		hit.Ref = assetRef(hit.ID)
+		hit.Time = localRFC3339(hit.CreationDate)
+		hit.Snippet = cleanSnippet(hit.Snippet)
 		result.Results = append(result.Results, hit)
 	}
 	if err := rows.Err(); err != nil {
@@ -117,23 +154,30 @@ limit ?
 		observationLimit := limit - len(result.Results)
 		observationRows, err := db.DB().QueryContext(ctx, `
 select asset.id, observation_fts.id, asset.media_type, asset.creation_date, observation_fts.title,
-       snippet(observation_fts, 3, '[', ']', ' ... ', 12) as snippet
+       `+searchWhoSQL+` as who,
+       `+searchWhereSQL+` as where_label,
+       snippet(observation_fts, 3, '', '', ' ', 12) as snippet
 from observation_fts
 join asset on asset.id = observation_fts.asset_id
 where observation_fts match ?
+  and (? = '' or asset.creation_date >= ?)
+  and (? = '' or asset.creation_date <= ?)
 order by rank
 limit ?
-`, fts, observationLimit)
+`, fts, after, after, before, before, observationLimit)
 		if err != nil {
 			return SearchResult{}, fmt.Errorf("search observations: %w", err)
 		}
 		defer observationRows.Close()
 		for observationRows.Next() {
 			var hit SearchHit
-			if err := observationRows.Scan(&hit.ID, &hit.ObservationID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Snippet); err != nil {
+			if err := observationRows.Scan(&hit.ID, &hit.ObservationID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Who, &hit.Where, &hit.Snippet); err != nil {
 				return SearchResult{}, err
 			}
 			hit.HitType = "observation"
+			hit.Ref = assetRef(hit.ID)
+			hit.Time = localRFC3339(hit.CreationDate)
+			hit.Snippet = cleanSnippet(hit.Snippet)
 			result.Results = append(result.Results, hit)
 		}
 		if err := observationRows.Err(); err != nil {
@@ -143,27 +187,27 @@ limit ?
 	return result, nil
 }
 
-func ftsCount(ctx context.Context, db *sql.DB, table, fts string) (int, error) {
+func ftsCount(ctx context.Context, db *sql.DB, table, fts, after, before string) (int, error) {
 	var count int
 	var query string
 	switch table {
 	case "asset_fts":
-		query = `select count(*) from asset_fts where asset_fts match ?`
+		query = `select count(*) from asset_fts join asset on asset.id = asset_fts.id where asset_fts match ? and (? = '' or asset.creation_date >= ?) and (? = '' or asset.creation_date <= ?)`
 	case "observation_fts":
-		query = `select count(*) from observation_fts where observation_fts match ?`
+		query = `select count(*) from observation_fts join asset on asset.id = observation_fts.asset_id where observation_fts match ? and (? = '' or asset.creation_date >= ?) and (? = '' or asset.creation_date <= ?)`
 	default:
 		return 0, fmt.Errorf("unknown FTS table %q", table)
 	}
-	if err := db.QueryRowContext(ctx, query, fts).Scan(&count); err != nil {
+	if err := db.QueryRowContext(ctx, query, fts, after, after, before, before).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
 }
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
-	rowID = strings.TrimSpace(rowID)
+	rowID = normalizeRef(rowID)
 	if rowID == "" {
-		return OpenResult{}, errors.New("id is required")
+		return OpenResult{}, errors.New("ref is required")
 	}
 	db, err := store.OpenReadOnly(ctx, paths.Database)
 	if err != nil {
@@ -172,9 +216,7 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 	defer db.Close()
 
 	asset, err := oneRow(ctx, db.DB(), `
-select id, local_identifier, media_type, media_subtypes, creation_date, modification_date, added_date,
-       timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
-       represents_burst, source_library_id, metadata_json
+select id, media_type, creation_date, width, height, duration_seconds, favorite, hidden
 from asset
 where id = ?
 `, rowID)
@@ -185,7 +227,7 @@ where id = ?
 		return OpenResult{}, err
 	}
 	resources, err := rows(ctx, db.DB(), `
-select id, resource_type, uti, original_filename, local_path, file_size, sha256, available_locally, needs_download
+select resource_type, uti, original_filename, file_size, available_locally, needs_download
 from asset_resource
 where asset_id = ?
 order by resource_type, original_filename
@@ -211,7 +253,7 @@ where asset_id = ?
 		return OpenResult{}, err
 	}
 	visualObservations, err := rows(ctx, db.DB(), `
-select id, observation_type, label, confidence, bounding_box_json, source, model_id, evidence_id
+select observation_type, label, confidence, evidence_id
 from visual_observation
 where asset_id = ?
 order by observation_type, confidence desc, label
@@ -220,7 +262,7 @@ order by observation_type, confidence desc, label
 		return OpenResult{}, err
 	}
 	textObservations, err := rows(ctx, db.DB(), `
-select id, text, confidence, bounding_box_json, language, source, evidence_id
+select text, confidence, evidence_id
 from text_observation
 where asset_id = ?
 order by confidence desc, id
@@ -229,7 +271,7 @@ order by confidence desc, id
 		return OpenResult{}, err
 	}
 	faceObservations, err := rows(ctx, db.DB(), `
-select id, face_local_id, person_label, confidence, bounding_box_json, source, evidence_id
+select person_label, confidence, evidence_id
 from face_observation
 where asset_id = ?
 order by confidence desc, id
@@ -238,7 +280,7 @@ order by confidence desc, id
 		return OpenResult{}, err
 	}
 	modelObservations, err := rows(ctx, db.DB(), `
-select id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id
+select observation_type, value_text, confidence, evidence_id
 from model_observation
 where asset_id = ?
 order by observation_type, confidence desc, value_text
@@ -246,47 +288,63 @@ order by observation_type, confidence desc, value_text
 	if err != nil {
 		return OpenResult{}, err
 	}
-	observationTerms, err := rows(ctx, db.DB(), `
-select id, observation_id, term, term_type, source, model_id
-from observation_term
-where asset_id = ?
-order by term_type, term
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	edges, err := rows(ctx, db.DB(), `
-select id, edge_type, from_id, to_id, method, confidence, reason_json, evidence_id
-from edge
-where from_id = ? or to_id = ?
-order by confidence desc, edge_type, id
-`, rowID, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
 	evidence, err := evidenceRows(ctx, db.DB(), rowID)
 	if err != nil {
 		return OpenResult{}, err
 	}
-	return OpenResult{
-		Asset:              asset,
-		Resources:          resources,
-		Albums:             albums,
-		Locations:          locations,
-		VisualObservations: visualObservations,
-		TextObservations:   textObservations,
-		FaceObservations:   faceObservations,
-		ModelObservations:  modelObservations,
-		ObservationTerms:   observationTerms,
-		Edges:              edges,
-		Evidence:           evidence,
-	}, nil
+	return newOpenResult(asset, resources, albums, locations, visualObservations, textObservations, faceObservations, modelObservations, evidence), nil
+}
+
+func assetRef(id string) string {
+	return photoscrawlRef(id)
+}
+
+func photoscrawlRef(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	return "photoscrawl:" + strings.Replace(id, ":", "/", 1)
+}
+
+func normalizeRef(ref string) string {
+	ref = strings.TrimPrefix(strings.TrimSpace(ref), "photoscrawl:")
+	return strings.Replace(ref, "/", ":", 1)
+}
+
+func searchTimeBound(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
+		if parsed, err := time.Parse(layout, value); err == nil {
+			return parsed.UTC().Format(time.RFC3339), nil
+		}
+	}
+	return "", fmt.Errorf("invalid time %q", value)
+}
+
+func localRFC3339(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return value
+	}
+	return parsed.Local().Format(time.RFC3339)
+}
+
+func cleanSnippet(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func Evidence(ctx context.Context, paths Paths, rowID string) (EvidenceResult, error) {
-	rowID = strings.TrimSpace(rowID)
+	rowID = normalizeRef(rowID)
 	if rowID == "" {
-		return EvidenceResult{}, errors.New("row id is required")
+		return EvidenceResult{}, errors.New("ref is required")
 	}
 	db, err := store.OpenReadOnly(ctx, paths.Database)
 	if err != nil {
@@ -297,12 +355,12 @@ func Evidence(ctx context.Context, paths Paths, rowID string) (EvidenceResult, e
 	if err != nil {
 		return EvidenceResult{}, err
 	}
-	return EvidenceResult{RowID: rowID, Evidence: evidence}, nil
+	return EvidenceResult{Ref: photoscrawlRef(rowID), Evidence: openEvidenceRefs(evidence)}, nil
 }
 
 func evidenceRows(ctx context.Context, db *sql.DB, rowID string) ([]map[string]any, error) {
 	return rows(ctx, db, `
-select id, asset_id, evidence_kind, source, pointer, value_json
+select id, asset_id, evidence_kind, source
 from evidence_ref
 where asset_id = ? or id = ? or id in (
   select evidence_id from location_observation where id = ?

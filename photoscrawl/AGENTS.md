@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # AGENTS.md
 
 ## Purpose
@@ -120,7 +124,7 @@ Keep crawl-family JSON commands:
 
 - `status`
 - `init`
-- `crawl`
+- `sync`
 - `classify`
 - `search`
 - `open`

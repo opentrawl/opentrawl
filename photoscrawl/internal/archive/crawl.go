@@ -18,13 +18,13 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-type CrawlOptions struct {
+type SyncOptions struct {
 	LibraryPath string
 	Provider    photos.Provider
 	Now         func() time.Time
 }
 
-type CrawlResult struct {
+type SyncResult struct {
 	Database              string `json:"database"`
 	Provider              string `json:"provider"`
 	SnapshotID            string `json:"snapshot_id"`
@@ -41,17 +41,17 @@ type CrawlResult struct {
 	PreviouslySeenMissing int    `json:"previously_seen_missing"`
 }
 
-func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, error) {
+func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
 	if opts.Provider == nil {
-		return CrawlResult{}, errors.New("photos provider is required")
+		return SyncResult{}, errors.New("photos provider is required")
 	}
 	libraryPath := crawlconfig.ExpandHome(strings.TrimSpace(opts.LibraryPath))
 	if libraryPath == "" {
-		return CrawlResult{}, errors.New("library path is required")
+		return SyncResult{}, errors.New("library path is required")
 	}
 	absLibraryPath, err := filepath.Abs(libraryPath)
 	if err != nil {
-		return CrawlResult{}, err
+		return SyncResult{}, err
 	}
 	now := opts.Now
 	if now == nil {
@@ -60,7 +60,7 @@ func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, er
 	startedAt := now().UTC()
 	snapshot, err := opts.Provider.Snapshot(ctx, absLibraryPath)
 	if err != nil {
-		return CrawlResult{}, err
+		return SyncResult{}, err
 	}
 	completedAt := now().UTC()
 	if snapshot.Provider == "" {
@@ -70,7 +70,7 @@ func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, er
 		snapshot.LibraryPath = absLibraryPath
 	}
 	if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
-		return CrawlResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
+		return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
 	}
 
 	db, err := store.Open(ctx, store.Options{
@@ -79,11 +79,11 @@ func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, er
 		SchemaVersion: SchemaVersion,
 	})
 	if err != nil {
-		return CrawlResult{}, err
+		return SyncResult{}, err
 	}
 	defer db.Close()
 
-	importer := crawlImporter{
+	importer := syncImporter{
 		ctx:         ctx,
 		snapshot:    snapshot,
 		libraryPath: absLibraryPath,
@@ -91,23 +91,23 @@ func Crawl(ctx context.Context, paths Paths, opts CrawlOptions) (CrawlResult, er
 		completedAt: completedAt,
 	}
 	if err := db.WithTx(ctx, importer.run); err != nil {
-		return CrawlResult{}, err
+		return SyncResult{}, err
 	}
 	importer.result.Database = paths.Database
 	return importer.result, nil
 }
 
-type crawlImporter struct {
+type syncImporter struct {
 	ctx         context.Context
 	snapshot    photos.LibrarySnapshot
 	libraryPath string
 	startedAt   time.Time
 	completedAt time.Time
 	stmts       *crawlStatements
-	result      CrawlResult
+	result      SyncResult
 }
 
-func (c *crawlImporter) run(tx *sql.Tx) error {
+func (c *syncImporter) run(tx *sql.Tx) error {
 	ctx := c.ctx
 	sourceID := stableID("source_library", c.libraryPath)
 	snapshotID := stableID("crawl_snapshot", sourceID, c.completedAt.Format(time.RFC3339Nano), c.sourceFingerprint())
@@ -138,10 +138,10 @@ on conflict(id) do update set
 insert into crawl_snapshot(id, source_library_id, started_at, completed_at, provider, asset_count, resource_count, album_membership_count, location_count, metadata_json)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, snapshotID, sourceID, c.startedAt.Format(time.RFC3339Nano), c.completedAt.Format(time.RFC3339Nano), c.snapshot.Provider, len(c.snapshot.Assets), resourceCount, albumCount, locationCount, metadataJSON); err != nil {
-		return fmt.Errorf("insert crawl snapshot: %w", err)
+		return fmt.Errorf("insert sync snapshot: %w", err)
 	}
 
-	c.result = CrawlResult{
+	c.result = SyncResult{
 		Provider:             c.snapshot.Provider,
 		SnapshotID:           snapshotID,
 		SourceLibraryID:      sourceID,
@@ -177,6 +177,10 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			c.result.AssetsChanged++
 		default:
 			c.result.AssetsUnchanged++
+			if err := c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint); err != nil {
+				return err
+			}
+			continue
 		}
 		if err := c.upsertAsset(ctx, tx, sourceID, snapshotID, assetID, fingerprint, seenBefore, asset); err != nil {
 			return err
@@ -210,7 +214,7 @@ where source_library_id = ? and last_seen_snapshot_id <> ?
 	return nil
 }
 
-func (c *crawlImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
+func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, snapshotID, assetID, fingerprint string, seenBefore bool, asset photos.Asset) error {
 	metadataJSON, err := jsonText(asset.Metadata)
 	if err != nil {
 		return err
@@ -257,10 +261,10 @@ func (c *crawlImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, s
 	if err := c.upsertClassifyQueue(ctx, tx, sourceID, assetID, asset); err != nil {
 		return err
 	}
-	return c.upsertSeenAsset(ctx, tx, sourceID, assetID, snapshotID, fingerprint)
+	return c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
 }
 
-func (c *crawlImporter) insertResource(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, index int, resource photos.Resource) error {
+func (c *syncImporter) insertResource(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, index int, resource photos.Resource) error {
 	evidenceValue := map[string]any{
 		"availability":      resource.Availability,
 		"available_locally": resource.AvailableLocally,
@@ -277,7 +281,7 @@ func (c *crawlImporter) insertResource(ctx context.Context, tx *sql.Tx, assetID,
 	return c.insertEvidence(ctx, tx, assetID, "asset_resource", c.snapshot.Provider, "asset:"+localIdentifier+"/resource:"+resourceID, evidenceValue)
 }
 
-func (c *crawlImporter) insertAlbum(ctx context.Context, tx *sql.Tx, assetID string, album photos.AlbumMembership) error {
+func (c *syncImporter) insertAlbum(ctx context.Context, tx *sql.Tx, assetID string, album photos.AlbumMembership) error {
 	membershipID := stableID("album_membership", assetID, album.AlbumID)
 	if _, err := c.stmts.album.ExecContext(ctx, membershipID, assetID, album.AlbumID, album.AlbumTitle, album.AlbumKind); err != nil {
 		return fmt.Errorf("insert album membership: %w", err)
@@ -285,7 +289,7 @@ func (c *crawlImporter) insertAlbum(ctx context.Context, tx *sql.Tx, assetID str
 	return c.insertEvidence(ctx, tx, assetID, "album_membership", c.snapshot.Provider, "album:"+album.AlbumID, album)
 }
 
-func (c *crawlImporter) insertLocation(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, location photos.Location) error {
+func (c *syncImporter) insertLocation(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, location photos.Location) error {
 	evidenceID := stableID("evidence", assetID, "location", localIdentifier)
 	valueJSON, err := jsonText(location)
 	if err != nil {
@@ -301,30 +305,43 @@ func (c *crawlImporter) insertLocation(ctx context.Context, tx *sql.Tx, assetID,
 	return nil
 }
 
-func (c *crawlImporter) insertFTS(ctx context.Context, tx *sql.Tx, assetID string, asset photos.Asset) error {
-	title := strings.Join(nonEmpty(asset.MediaType, asset.CreationDate), " ")
-	bodyParts := []string{
-		asset.MediaType,
-		asset.MediaSubtypes,
-		asset.CreationDate,
-		asset.ModificationDate,
-		asset.BurstIdentifier,
-		fmt.Sprintf("%dx%d", asset.Width, asset.Height),
-	}
+// insertFTS indexes only text a person would search for: filenames and album
+// titles. Machine fields (subtypes, dates, burst ids, dimensions, type codes)
+// stay out so snippets read clean; time narrowing is --after/--before's job.
+func (c *syncImporter) insertFTS(ctx context.Context, tx *sql.Tx, assetID string, asset photos.Asset) error {
+	title := ""
+	bodyParts := []string{asset.MediaType}
 	for _, resource := range asset.Resources {
-		bodyParts = append(bodyParts, resource.Type, resource.UTI, resource.OriginalFilename)
+		if title == "" {
+			title = resource.OriginalFilename
+		}
+		bodyParts = append(bodyParts, resource.OriginalFilename)
 	}
 	for _, album := range asset.Albums {
-		bodyParts = append(bodyParts, album.AlbumTitle, album.AlbumKind)
+		bodyParts = append(bodyParts, album.AlbumTitle)
 	}
-	body := strings.Join(nonEmpty(bodyParts...), " ")
+	body := strings.Join(uniqueNonEmpty(bodyParts), " ")
 	if _, err := c.stmts.fts.ExecContext(ctx, assetID, title, body); err != nil {
 		return fmt.Errorf("insert asset fts: %w", err)
 	}
 	return nil
 }
 
-func (c *crawlImporter) insertEvidence(ctx context.Context, tx *sql.Tx, assetID, kind, source, pointer string, value any) error {
+func uniqueNonEmpty(values []string) []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func (c *syncImporter) insertEvidence(ctx context.Context, tx *sql.Tx, assetID, kind, source, pointer string, value any) error {
 	valueJSON, err := jsonText(value)
 	if err != nil {
 		return err
@@ -336,14 +353,14 @@ func (c *crawlImporter) insertEvidence(ctx context.Context, tx *sql.Tx, assetID,
 	return nil
 }
 
-func (c *crawlImporter) upsertSeenAsset(ctx context.Context, tx *sql.Tx, sourceID, assetID, snapshotID, fingerprint string) error {
+func (c *syncImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID, snapshotID, fingerprint string) error {
 	if _, err := c.stmts.seen.ExecContext(ctx, sourceID, assetID, snapshotID, snapshotID, fingerprint, c.completedAt.Format(time.RFC3339Nano)); err != nil {
-		return fmt.Errorf("upsert crawl seen asset: %w", err)
+		return fmt.Errorf("upsert seen asset: %w", err)
 	}
 	return nil
 }
 
-func (c *crawlImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
+func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sourceID, assetID string, asset photos.Asset) error {
 	hasLocalContent := false
 	needsDownload := false
 	for _, resource := range asset.Resources {
@@ -395,7 +412,7 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) erro
 	return nil
 }
 
-func (c *crawlImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
+func (c *syncImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {
 	var fingerprint string
 	err := c.stmts.previousFingerprint.QueryRowContext(ctx, sourceID, assetID).Scan(&fingerprint)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -427,7 +444,7 @@ func assetFingerprint(asset photos.Asset) (string, error) {
 	return hex.EncodeToString(sum[:]), nil
 }
 
-func (c *crawlImporter) sourceFingerprint() string {
+func (c *syncImporter) sourceFingerprint() string {
 	hash := sha256.New()
 	for _, asset := range c.snapshot.Assets {
 		hash.Write([]byte(asset.LocalIdentifier))

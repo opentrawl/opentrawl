@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/openclaw/photoscrawl/internal/archive"
 )
 
 func TestJoinedQueryPreservesLauncherArguments(t *testing.T) {
@@ -18,21 +20,39 @@ func TestJoinedQueryPreservesLauncherArguments(t *testing.T) {
 	}
 }
 
-func TestStripTrailingJSON(t *testing.T) {
-	args, ok := stripTrailingJSON([]string{"boat", "trip", "--json"})
-	if !ok {
-		t.Fatal("expected trailing JSON flag")
+func TestParseSearchCommandRequiresFlagsAfterQuery(t *testing.T) {
+	parsed, err := parseSearchCommand([]string{"boat", "trip", "--limit", "5", "--json"})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := joinedQuery("", args); got != "boat trip" {
-		t.Fatalf("query after strip = %q", got)
+	if parsed.Query != "boat trip" || parsed.Limit != 5 || parsed.Format != "json" {
+		t.Fatalf("parsed search = %#v", parsed)
 	}
+	if _, err := parseSearchCommand([]string{"--json", "boat"}); err == nil {
+		t.Fatal("expected flags-before-query error")
+	}
+}
 
-	args, ok = stripTrailingJSON([]string{"--json", "boat"})
-	if ok {
-		t.Fatal("did not expect non-trailing JSON flag to be stripped")
+func TestParseRefCommandRequiresRefBeforeFlags(t *testing.T) {
+	parsed, err := parseRefCommand("open", []string{"photoscrawl:asset/fixture", "--json"}, false)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := joinedQuery("", args); got != "--json boat" {
-		t.Fatalf("query without strip = %q", got)
+	if parsed.Ref != "photoscrawl:asset/fixture" || parsed.Format != "json" {
+		t.Fatalf("parsed open = %#v", parsed)
+	}
+	if _, err := parseRefCommand("open", []string{"--json", "photoscrawl:asset/fixture"}, false); err == nil {
+		t.Fatal("expected flags-before-ref error")
+	}
+	if _, err := parseRefCommand("evidence", []string{"photoscrawl:asset/fixture", "--limit", "5"}, false); err == nil {
+		t.Fatal("expected unknown --limit error when limit is not allowed")
+	}
+	neighbors, err := parseRefCommand("neighbors", []string{"photoscrawl:asset/fixture", "--limit", "5"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if neighbors.Limit != 5 {
+		t.Fatalf("parsed neighbors = %#v", neighbors)
 	}
 }
 
@@ -52,6 +72,54 @@ func TestStatusHumanOutputIsProse(t *testing.T) {
 	)
 }
 
+func TestMetadataHumanOutputIsProse(t *testing.T) {
+	out, errOut, err := captureRunOutput(t, []string{"metadata"})
+	if err != nil {
+		t.Fatalf("metadata: %v stderr=%s stdout=%s", err, errOut, out)
+	}
+	assertHumanProseOutput(t, out,
+		"Photos (photoscrawl)",
+		"Contract version: 1",
+		"Capabilities: status, sync, search, open, doctor",
+		"sync: photoscrawl sync --library <path> --json",
+		"open: photoscrawl open <ref> --json",
+	)
+	if strings.Contains(out, "photoscrawl crawl") {
+		t.Fatalf("metadata still advertises crawl:\n%s", out)
+	}
+	if strings.Contains(out, "photoscrawl init") {
+		t.Fatalf("metadata advertises non-contract init command:\n%s", out)
+	}
+}
+
+func TestSyncHumanOutputIsProse(t *testing.T) {
+	var out strings.Builder
+	err := printSyncText(&out, archive.SyncResult{
+		Database:              filepath.Join("tmp", "photos.sqlite"),
+		Provider:              "photos_sqlite_snapshot",
+		AssetsSeen:            10,
+		AssetsNew:             0,
+		AssetsChanged:         0,
+		AssetsUnchanged:       10,
+		ResourcesSeen:         20,
+		AlbumMembershipsSeen:  3,
+		LocationsSeen:         7,
+		QueuedForClassify:     0,
+		QueuedNeedsDownload:   0,
+		PreviouslySeenMissing: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHumanProseOutput(t, out.String(),
+		"Sync complete",
+		"Provider: photos_sqlite_snapshot",
+		"Assets: 10 seen, 0 new, 0 changed, 10 unchanged, 0 missing",
+		"Evidence: 20 resources, 3 album memberships, 7 locations",
+		"Classification queue: 0 queued, 0 need download",
+	)
+}
+
 func TestDoctorHumanOutputIsProse(t *testing.T) {
 	dir := t.TempDir()
 	libraryPath := filepath.Join(dir, "Fixture Photos Library.photoslibrary")
@@ -68,6 +136,48 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 		"source_store:",
 		"archive:",
 		"Remedy:",
+	)
+}
+
+func TestOpenHumanOutputIsProse(t *testing.T) {
+	var out strings.Builder
+	err := printOpenText(&out, archive.OpenResult{
+		Ref:       "photoscrawl:asset/fixture",
+		Time:      "2026-05-28T12:00:00+02:00",
+		MediaType: "image",
+		Dimensions: &archive.OpenDimensions{
+			Width:  4032,
+			Height: 3024,
+		},
+		Where:         "Synthetic Pier",
+		Who:           []string{"Synthetic Person"},
+		LocationCount: 1,
+		Albums: []archive.OpenAlbum{{
+			Title: "Synthetic album",
+			Kind:  "user",
+		}},
+		Resources: []archive.OpenResource{{
+			Type:             "photo",
+			Filename:         "IMG_0001.JPG",
+			AvailableLocally: true,
+		}},
+		Observations: []archive.OpenObservation{{
+			Kind: "scene_summary",
+			Text: "Synthetic beach scene",
+		}},
+		Evidence: archive.OpenEvidence{
+			Refs: []archive.EvidenceReference{{Ref: "photoscrawl:fixture-evidence", Kind: "asset metadata"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHumanProseOutput(t, out.String(),
+		"Asset: photoscrawl:asset/fixture",
+		"Where: Synthetic Pier",
+		"Who: Synthetic Person",
+		"Evidence refs: 1",
+		"scene_summary: Synthetic beach scene",
 	)
 }
 

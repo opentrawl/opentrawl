@@ -51,6 +51,9 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if len(asset.Albums) != 1 || asset.Albums[0].AlbumTitle != "Synthetic Album" {
 		t.Fatalf("albums = %#v", asset.Albums)
 	}
+	if snapshot.Metadata["snapshot"] != "crawlkit_sqlite_copy" || snapshot.Metadata["album_join_table"] != "Z_34ASSETS" {
+		t.Fatalf("metadata = %#v", snapshot.Metadata)
+	}
 }
 
 func TestFallbackProviderUsesSecondaryAfterPrimaryError(t *testing.T) {
@@ -128,8 +131,8 @@ func createSyntheticPhotosDB(db *sql.DB) error {
 			ZCLOUDALBUMSUBTYPE integer,
 			ZTRASHEDSTATE integer
 		)`,
-		`create table Z_33ASSETS (
-			Z_33ALBUMS integer,
+		`create table Z_34ASSETS (
+			Z_34ALBUMS integer,
 			Z_3ASSETS integer
 		)`,
 	}
@@ -154,7 +157,7 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 	if _, err := db.Exec(`insert into ZGENERICALBUM(Z_PK, ZUUID, ZTITLE, ZKIND, ZCLOUDALBUMSUBTYPE, ZTRASHEDSTATE) values (10, 'album-uuid-1', 'Synthetic Album', 2, 0, 0)`); err != nil {
 		return err
 	}
-	_, err := db.Exec(`insert into Z_33ASSETS(Z_33ALBUMS, Z_3ASSETS) values (10, 1)`)
+	_, err := db.Exec(`insert into Z_34ASSETS(Z_34ALBUMS, Z_3ASSETS) values (10, 1)`)
 	return err
 }
 

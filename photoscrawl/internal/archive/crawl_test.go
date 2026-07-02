@@ -11,7 +11,7 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
+func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -21,7 +21,7 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	}
 
 	provider := fakeProvider{snapshot: fakeSnapshot(false, true)}
-	result, err := Crawl(ctx, paths, CrawlOptions{
+	result, err := Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
 		Provider:    provider,
 		Now:         fixedClock("2026-05-28T10:00:00Z"),
@@ -30,13 +30,13 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.AssetsSeen != 2 || result.AssetsNew != 2 || result.AssetsChanged != 0 || result.AssetsUnchanged != 0 {
-		t.Fatalf("first crawl delta = new %d changed %d unchanged %d seen %d", result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.AssetsSeen)
+		t.Fatalf("first sync delta = new %d changed %d unchanged %d seen %d", result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.AssetsSeen)
 	}
 	if result.ResourcesSeen != 2 || result.AlbumMembershipsSeen != 2 || result.LocationsSeen != 1 {
-		t.Fatalf("first crawl counts = resources %d albums %d locations %d", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen)
+		t.Fatalf("first sync counts = resources %d albums %d locations %d", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen)
 	}
 	if result.QueuedForClassify != 2 || result.QueuedNeedsDownload != 1 {
-		t.Fatalf("first crawl queue = classify %d download %d", result.QueuedForClassify, result.QueuedNeedsDownload)
+		t.Fatalf("first sync queue = classify %d download %d", result.QueuedForClassify, result.QueuedNeedsDownload)
 	}
 
 	search, err := Search(ctx, paths, SearchOptions{Query: "beach", Limit: 5})
@@ -54,8 +54,8 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.Resources) != 1 || len(opened.Albums) != 1 || len(opened.Locations) != 1 || len(opened.Evidence) == 0 {
-		t.Fatalf("open returned resources=%d albums=%d locations=%d evidence=%d", len(opened.Resources), len(opened.Albums), len(opened.Locations), len(opened.Evidence))
+	if len(opened.Resources) != 1 || len(opened.Albums) != 1 || opened.LocationCount != 1 || len(opened.Evidence.Refs) == 0 {
+		t.Fatalf("open returned resources=%d albums=%d locations=%d evidence=%d", len(opened.Resources), len(opened.Albums), opened.LocationCount, len(opened.Evidence.Refs))
 	}
 	evidence, err := Evidence(ctx, paths, search.Results[0].ID)
 	if err != nil {
@@ -86,7 +86,7 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.VisualObservations) == 0 {
+	if len(opened.Observations) == 0 {
 		t.Fatal("expected visual observations on open")
 	}
 	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ObservationID)
@@ -117,7 +117,7 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 	}
 
 	provider.snapshot = fakeSnapshot(true, false)
-	result, err = Crawl(ctx, paths, CrawlOptions{
+	result, err = Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
 		Provider:    provider,
 		Now:         fixedClock("2026-05-28T11:00:00Z"),
@@ -126,11 +126,23 @@ func TestCrawlImportsSnapshotAndTracksDelta(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.AssetsSeen != 1 || result.AssetsNew != 0 || result.AssetsChanged != 1 || result.AssetsUnchanged != 0 || result.PreviouslySeenMissing != 1 {
-		t.Fatalf("second crawl delta = seen %d new %d changed %d unchanged %d missing %d", result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.PreviouslySeenMissing)
+		t.Fatalf("second sync delta = seen %d new %d changed %d unchanged %d missing %d", result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.PreviouslySeenMissing)
+	}
+
+	result, err = Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T11:30:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AssetsSeen != 1 || result.AssetsNew != 0 || result.AssetsChanged != 0 || result.AssetsUnchanged != 1 || result.QueuedForClassify != 0 || result.PreviouslySeenMissing != 1 {
+		t.Fatalf("third sync delta = seen %d new %d changed %d unchanged %d queued %d missing %d", result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.QueuedForClassify, result.PreviouslySeenMissing)
 	}
 }
 
-func TestCrawlExpandsHomeInLibraryPath(t *testing.T) {
+func TestSyncExpandsHomeInLibraryPath(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	libraryPath := filepath.Join(home, "Pictures", "Fixture Photos Library.photoslibrary")
@@ -138,7 +150,7 @@ func TestCrawlExpandsHomeInLibraryPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider := &pathRecordingProvider{snapshot: fakeSnapshot(false, false)}
-	if _, err := Crawl(context.Background(), testPaths(t), CrawlOptions{
+	if _, err := Sync(context.Background(), testPaths(t), SyncOptions{
 		LibraryPath: "~/Pictures/Fixture Photos Library.photoslibrary",
 		Provider:    provider,
 		Now:         fixedClock("2026-05-28T10:00:00Z"),

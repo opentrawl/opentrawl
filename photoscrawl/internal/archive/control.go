@@ -28,7 +28,7 @@ func ControlManifest(paths Paths) Manifest {
 		DefaultLogs:     paths.LogDir,
 		DefaultShare:    paths.ShareDir,
 	}
-	manifest.Capabilities = []string{"status", "crawl", "search", "open", "doctor"}
+	manifest.Capabilities = []string{"status", "sync", "search", "open", "doctor"}
 	manifest.Privacy = control.Privacy{
 		ExportsSecrets: false,
 		LocalOnlyScopes: []string{
@@ -42,10 +42,9 @@ func ControlManifest(paths Paths) Manifest {
 	manifest.Commands = map[string]control.Command{
 		"metadata": {Title: "Metadata", Argv: []string{"photoscrawl", "metadata", "--json"}, JSON: true},
 		"status":   {Title: "Status", Argv: []string{"photoscrawl", "status", "--json"}, JSON: true},
-		"init":     {Title: "Initialize archive", Argv: []string{"photoscrawl", "init", "--json"}, JSON: true, Mutates: true},
-		"crawl":    {Title: "Crawl", Argv: []string{"photoscrawl", "crawl", "--library", "<path>", "--json"}, JSON: true, Mutates: true},
+		"sync":     {Title: "Sync", Argv: []string{"photoscrawl", "sync", "--library", "<path>", "--json"}, JSON: true, Mutates: true},
 		"search":   {Title: "Search", Argv: []string{"photoscrawl", "search", "<query>", "--json"}, JSON: true},
-		"open":     {Title: "Open", Argv: []string{"photoscrawl", "open", "<id>", "--json"}, JSON: true},
+		"open":     {Title: "Open", Argv: []string{"photoscrawl", "open", "<ref>", "--json"}, JSON: true},
 		"doctor":   {Title: "Doctor", Argv: []string{"photoscrawl", "doctor", "--json"}, JSON: true},
 	}
 	return Manifest{

@@ -9,17 +9,28 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/cache"
 	"github.com/openclaw/crawlkit/store"
 )
 
-type SQLiteSnapshotProvider struct{}
+const maxPhotosSQLiteSnapshotBytes int64 = 20 * 1024 * 1024 * 1024
 
-func (SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string) (LibrarySnapshot, error) {
+type SQLiteSnapshotProvider struct {
+	SnapshotDir string
+}
+
+func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string) (LibrarySnapshot, error) {
 	dbPath := filepath.Join(strings.TrimSpace(libraryPath), "database", "Photos.sqlite")
 	if _, err := os.Stat(dbPath); err != nil {
 		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
 	}
-	db, err := store.OpenReadOnly(ctx, dbPath)
+	snapshot, cleanup, err := snapshotPhotosSQLite(dbPath, p.SnapshotDir)
+	if err != nil {
+		return LibrarySnapshot{}, fmt.Errorf("snapshot Photos sqlite: %w", err)
+	}
+	defer cleanup()
+
+	db, err := store.OpenReadOnly(ctx, snapshot.Path)
 	if err != nil {
 		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
 	}
@@ -29,7 +40,7 @@ func (SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string) 
 	if err != nil {
 		return LibrarySnapshot{}, err
 	}
-	albums, err := sqliteAlbums(ctx, db.DB())
+	albums, albumJoinTable, err := sqliteAlbums(ctx, db.DB())
 	if err != nil {
 		return LibrarySnapshot{}, err
 	}
@@ -43,13 +54,40 @@ func (SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string) 
 		Provider:      "photos_sqlite_snapshot",
 		PhotosVersion: "unknown",
 		Metadata: map[string]any{
-			"source":        "Photos.sqlite",
-			"snapshot":      "read_only_sqlite_transaction",
-			"database_path": "database/Photos.sqlite",
-			"warning":       "Private Photos Core Data schema; use as fallback evidence, not as the only source strategy.",
+			"source":           "Photos.sqlite",
+			"snapshot":         "crawlkit_sqlite_copy",
+			"database_path":    "database/Photos.sqlite",
+			"snapshot_files":   len(snapshot.Files),
+			"snapshot_bytes":   snapshot.SizeBytes,
+			"album_join_table": albumJoinTable,
+			"warning":          "Private Photos Core Data schema; keep this as source evidence, not durable truth.",
 		},
 		Assets: assets,
 	}, nil
+}
+
+func snapshotPhotosSQLite(sourcePath, destinationDir string) (cache.SQLiteSnapshot, func(), error) {
+	cleanup := func() {}
+	destination := strings.TrimSpace(destinationDir)
+	if destination == "" {
+		tmpDir, err := os.MkdirTemp("", "photoscrawl-sqlite-snapshot-*")
+		if err != nil {
+			return cache.SQLiteSnapshot{}, cleanup, fmt.Errorf("create sqlite snapshot temp dir: %w", err)
+		}
+		destination = tmpDir
+		cleanup = func() { _ = os.RemoveAll(tmpDir) }
+	}
+	snapshot, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{
+		SourcePath:     sourcePath,
+		DestinationDir: destination,
+		Name:           "Photos.sqlite",
+		MaxFileBytes:   maxPhotosSQLiteSnapshotBytes,
+	})
+	if err != nil {
+		cleanup()
+		return cache.SQLiteSnapshot{}, func() {}, err
+	}
+	return snapshot, cleanup, nil
 }
 
 func sqliteAssets(ctx context.Context, db *sql.DB, resources map[int64][]Resource, albums map[int64][]AlbumMembership) ([]Asset, error) {
@@ -188,8 +226,8 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 		availableLocally := localAvailability > 0
 		needsDownload := !availableLocally && remoteAvailability > 0
 		out[assetPK] = append(out[assetPK], Resource{
-			Type:             fmt.Sprintf("internal_resource:%d", resourceType),
-			UTI:              uti,
+			Type:             sqliteResourceKind(resourceType),
+			UTI:              humanUTI(uti),
 			OriginalFilename: originalFilename,
 			Availability:     sqliteAvailability(availableLocally, needsDownload),
 			FileSize:         fileSize,
@@ -198,6 +236,7 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 			NeedsDownload:    needsDownload,
 			Metadata: map[string]any{
 				"sqlite_resource_type":    resourceType,
+				"sqlite_compact_uti":      uti,
 				"sqlite_version":          version,
 				"local_availability_raw":  localAvailability,
 				"remote_availability_raw": remoteAvailability,
@@ -211,20 +250,28 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 	return out, nil
 }
 
-func sqliteAlbums(ctx context.Context, db *sql.DB) (map[int64][]AlbumMembership, error) {
-	rows, err := db.QueryContext(ctx, `
-select m.Z_3ASSETS,
-       coalesce(g.ZUUID, printf('sqlite_album:%d', g.Z_PK)),
+func sqliteAlbums(ctx context.Context, db *sql.DB) (map[int64][]AlbumMembership, string, error) {
+	join, ok, err := sqliteAlbumJoin(ctx, db)
+	if err != nil {
+		return nil, "", err
+	}
+	if !ok {
+		return map[int64][]AlbumMembership{}, "", nil
+	}
+	query := fmt.Sprintf(`
+select m.%s,
+       coalesce(g.ZUUID, printf('sqlite_album:%%d', g.Z_PK)),
        coalesce(g.ZTITLE, ''),
        coalesce(g.ZKIND, -1),
        coalesce(g.ZCLOUDALBUMSUBTYPE, 0)
-from Z_33ASSETS m
-join ZGENERICALBUM g on g.Z_PK = m.Z_33ALBUMS
+from %s m
+join ZGENERICALBUM g on g.Z_PK = m.%s
 where coalesce(g.ZTRASHEDSTATE, 0) = 0
-order by m.Z_3ASSETS, g.ZTITLE
-`)
+order by m.%s, g.ZTITLE
+`, store.QuoteIdent(join.AssetColumn), store.QuoteIdent(join.Table), store.QuoteIdent(join.AlbumColumn), store.QuoteIdent(join.AssetColumn))
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("query sqlite albums: %w", err)
+		return nil, "", fmt.Errorf("query sqlite albums: %w", err)
 	}
 	defer rows.Close()
 
@@ -233,7 +280,7 @@ order by m.Z_3ASSETS, g.ZTITLE
 		var assetPK, kind, subtype int64
 		var albumID, title string
 		if err := rows.Scan(&assetPK, &albumID, &title, &kind, &subtype); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		out[assetPK] = append(out[assetPK], AlbumMembership{
 			AlbumID:    albumID,
@@ -242,9 +289,82 @@ order by m.Z_3ASSETS, g.ZTITLE
 		})
 	}
 	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+	return out, join.Table, nil
+}
+
+type sqliteAlbumJoinTable struct {
+	Table       string
+	AlbumColumn string
+	AssetColumn string
+}
+
+func sqliteAlbumJoin(ctx context.Context, db *sql.DB) (sqliteAlbumJoinTable, bool, error) {
+	rows, err := db.QueryContext(ctx, `select name from sqlite_schema where type = 'table' and name glob 'Z_*ASSETS' order by name`)
+	if err != nil {
+		return sqliteAlbumJoinTable{}, false, fmt.Errorf("list sqlite album join tables: %w", err)
+	}
+
+	tables := []string{}
+	for rows.Next() {
+		var table string
+		if err := rows.Scan(&table); err != nil {
+			_ = rows.Close()
+			return sqliteAlbumJoinTable{}, false, err
+		}
+		tables = append(tables, table)
+	}
+	if err := rows.Close(); err != nil {
+		return sqliteAlbumJoinTable{}, false, err
+	}
+	if err := rows.Err(); err != nil {
+		return sqliteAlbumJoinTable{}, false, err
+	}
+
+	for _, table := range tables {
+		columns, err := sqliteColumnNames(ctx, db, table)
+		if err != nil {
+			return sqliteAlbumJoinTable{}, false, err
+		}
+		var albumColumn, assetColumn string
+		for _, column := range columns {
+			upper := strings.ToUpper(column)
+			switch {
+			case strings.HasSuffix(upper, "ALBUMS"):
+				albumColumn = column
+			case strings.HasSuffix(upper, "ASSETS") && !strings.HasSuffix(upper, "ALBUMS"):
+				assetColumn = column
+			}
+		}
+		if albumColumn != "" && assetColumn != "" {
+			return sqliteAlbumJoinTable{Table: table, AlbumColumn: albumColumn, AssetColumn: assetColumn}, true, nil
+		}
+	}
+	return sqliteAlbumJoinTable{}, false, nil
+}
+
+func sqliteColumnNames(ctx context.Context, db *sql.DB, table string) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `pragma table_info(`+store.QuoteIdent(table)+`)`)
+	if err != nil {
+		return nil, fmt.Errorf("inspect sqlite table %s: %w", table, err)
+	}
+	defer rows.Close()
+
+	columns := []string{}
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue sql.NullString
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return nil, err
+		}
+		columns = append(columns, name)
+	}
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return columns, nil
 }
 
 type sqliteAssetRow struct {
@@ -279,6 +399,28 @@ func sqliteMediaType(kind int64) string {
 	default:
 		return fmt.Sprintf("kind:%d", kind)
 	}
+}
+
+// sqliteResourceKind names the ZRESOURCETYPE codes we know; unknown codes stay
+// empty here and remain available as sqlite_resource_type in the evidence.
+func sqliteResourceKind(code int64) string {
+	switch code {
+	case 0:
+		return "photo"
+	case 1:
+		return "video"
+	default:
+		return ""
+	}
+}
+
+// humanUTI keeps real type identifiers (public.jpeg) and drops Photos' numeric
+// compact codes, which mean nothing to a reader; the raw code stays in evidence.
+func humanUTI(uti string) string {
+	if strings.ContainsAny(uti, ".") {
+		return uti
+	}
+	return ""
 }
 
 func sqliteAvailability(local, remote bool) string {

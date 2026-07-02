@@ -14,5 +14,5 @@ func NewProvider() Provider {
 type unsupportedProvider struct{}
 
 func (unsupportedProvider) Snapshot(context.Context, string) (LibrarySnapshot, error) {
-	return LibrarySnapshot{}, errors.New("PhotoKit crawl is only supported on Darwin")
+	return LibrarySnapshot{}, errors.New("Photos sync is only supported on Darwin")
 }

@@ -283,7 +283,7 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
       *errorOut = NULL;
     }
     if (!@available(macOS 10.15, *)) {
-      pcSetError(errorOut, @"PhotoKit crawl requires macOS 10.15 or newer");
+      pcSetError(errorOut, @"PhotoKit sync requires macOS 10.15 or newer");
       return NULL;
     }
 
@@ -307,8 +307,7 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
       options.includeAllBurstAssets = YES;
     }
     options.sortDescriptors = @[
-      [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES],
-      [NSSortDescriptor sortDescriptorWithKey:@"localIdentifier" ascending:YES]
+      [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES]
     ];
 
     PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];

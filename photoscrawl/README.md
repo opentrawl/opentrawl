@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # photoscrawl
 
 Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
@@ -25,13 +29,13 @@ evidence supports each result.
 go run ./cmd/photoscrawl metadata --json
 go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
-go run ./cmd/photoscrawl crawl --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+go run ./cmd/photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl classify --local-model gemma4:e4b --limit 20 --json
-go run ./cmd/photoscrawl search --query "drone beach portugal" --json
-go run ./cmd/photoscrawl open --id asset:<id> --json
-go run ./cmd/photoscrawl neighbors --id asset:<id> --json
-go run ./cmd/photoscrawl evidence --row-id asset:<id> --json
+go run ./cmd/photoscrawl search "drone beach portugal" --json
+go run ./cmd/photoscrawl open photoscrawl:asset/<uuid> --json
+go run ./cmd/photoscrawl neighbors photoscrawl:asset/<uuid> --json
+go run ./cmd/photoscrawl evidence photoscrawl:asset/<uuid> --json
 go run ./cmd/photoscrawl place-context --input <private-eval-run>/metadata/E001.json --json
 go run ./cmd/photoscrawl place-card --input <crawlkit-cache-dir>/place-context/<key>.json
 go run ./cmd/photoscrawl place-backfill --json
@@ -45,13 +49,12 @@ originals use the crawlkit cache dir.
 A lifecrawler-format `export` command is planned but does not exist
 yet.
 
-`crawl` tries PhotoKit first for metadata. PhotoKit enumerates the active system
-Photos library; the `--library` path is validated and recorded as the requested
-source. If PhotoKit is unavailable or denied, the POC falls back to a read-only
-`database/Photos.sqlite` transaction and labels that evidence as
-`photos_sqlite_snapshot`.
+`sync` snapshots `database/Photos.sqlite` with crawlkit's SQLite snapshot helper
+and reads the copy. This is the headless path: it needs Full Disk Access for the
+terminal or app, not a recurring Photos TCC prompt. PhotoKit remains available
+only for explicit original export flows such as `eval-card --allow-icloud-downloads`.
 
-`crawl` does not export originals or force iCloud downloads. It records already
+`sync` does not export originals or force iCloud downloads. It records already
 local package media paths for derivatives/renders/originals when they exist, so
 content classification can use local files without changing Photos or iCloud
 state. Every imported asset is queued for `classify`.
@@ -95,7 +98,7 @@ from originals, passes full metadata as a sidecar prompt input, and writes all
 private images, metadata, and model responses under the crawlkit data dir's
 `evals` subtree. If `--allow-icloud-downloads` is set, PhotoKit may download
 missing originals into the crawlkit cache dir's `originals` subtree; normal
-crawl/classify commands do not force iCloud downloads.
+sync/classify commands do not force iCloud downloads.
 
 ## Current Useful Output
 

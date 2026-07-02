@@ -147,7 +147,7 @@ func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {
 		return "", err
 	}
 	if last.Valid {
-		return last.String, nil
+		return localRFC3339(last.String), nil
 	}
 	return "", nil
 }

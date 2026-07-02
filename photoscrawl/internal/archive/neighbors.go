@@ -23,18 +23,18 @@ type NeighborOptions struct {
 }
 
 type NeighborResult struct {
-	ID        string        `json:"id"`
+	Ref       string        `json:"ref"`
 	Limit     int           `json:"limit"`
 	Neighbors []NeighborHit `json:"neighbors"`
 }
 
 type NeighborHit struct {
-	ID           string           `json:"id"`
+	Ref          string           `json:"ref"`
 	MediaType    string           `json:"media_type"`
-	CreationDate string           `json:"creation_date"`
+	Time         string           `json:"time"`
 	Score        float64          `json:"score"`
 	Reasons      []NeighborReason `json:"reasons"`
-	EvidenceIDs  []string         `json:"evidence_ids"`
+	EvidenceRefs []string         `json:"evidence_refs"`
 }
 
 type NeighborReason struct {
@@ -53,9 +53,9 @@ type neighborCandidate struct {
 }
 
 func Neighbors(ctx context.Context, paths Paths, opts NeighborOptions) (NeighborResult, error) {
-	id := strings.TrimSpace(opts.ID)
+	id := normalizeRef(opts.ID)
 	if id == "" {
-		return NeighborResult{}, errors.New("id is required")
+		return NeighborResult{}, errors.New("ref is required")
 	}
 	limit := opts.Limit
 	if limit <= 0 {
@@ -103,15 +103,22 @@ func Neighbors(ctx context.Context, paths Paths, opts NeighborOptions) (Neighbor
 		if len(neighbors[i].Reasons) != len(neighbors[j].Reasons) {
 			return len(neighbors[i].Reasons) > len(neighbors[j].Reasons)
 		}
-		if neighbors[i].CreationDate != neighbors[j].CreationDate {
-			return neighbors[i].CreationDate < neighbors[j].CreationDate
+		if neighbors[i].Time != neighbors[j].Time {
+			return neighbors[i].Time < neighbors[j].Time
 		}
-		return neighbors[i].ID < neighbors[j].ID
+		return neighbors[i].Ref < neighbors[j].Ref
 	})
 	if len(neighbors) > limit {
 		neighbors = neighbors[:limit]
 	}
-	return NeighborResult{ID: id, Limit: limit, Neighbors: neighbors}, nil
+	for i := range neighbors {
+		neighbors[i].Ref = photoscrawlRef(neighbors[i].Ref)
+		neighbors[i].Time = localRFC3339(neighbors[i].Time)
+		for j := range neighbors[i].EvidenceRefs {
+			neighbors[i].EvidenceRefs[j] = photoscrawlRef(neighbors[i].EvidenceRefs[j])
+		}
+	}
+	return NeighborResult{Ref: photoscrawlRef(id), Limit: limit, Neighbors: neighbors}, nil
 }
 
 func sameBurstNeighbors(ctx context.Context, db *sql.DB, id string, limit int) ([]neighborCandidate, error) {
@@ -356,9 +363,9 @@ func aggregateNeighbors(candidates []neighborCandidate) []NeighborHit {
 		hit := byID[candidate.ID]
 		if hit == nil {
 			hit = &NeighborHit{
-				ID:           candidate.ID,
-				MediaType:    candidate.MediaType,
-				CreationDate: candidate.CreationDate,
+				Ref:       candidate.ID,
+				MediaType: candidate.MediaType,
+				Time:      candidate.CreationDate,
 			}
 			byID[candidate.ID] = hit
 		}
@@ -367,7 +374,7 @@ func aggregateNeighbors(candidates []neighborCandidate) []NeighborHit {
 		}
 		hit.Reasons = append(hit.Reasons, candidate.Reason)
 		hit.Score += candidate.Reason.Weight
-		hit.EvidenceIDs = appendUniqueStrings(hit.EvidenceIDs, candidate.EvidenceIDs...)
+		hit.EvidenceRefs = appendUniqueStrings(hit.EvidenceRefs, candidate.EvidenceIDs...)
 	}
 
 	out := make([]NeighborHit, 0, len(byID))
@@ -381,7 +388,7 @@ func aggregateNeighbors(candidates []neighborCandidate) []NeighborHit {
 			}
 			return hit.Reasons[i].Type < hit.Reasons[j].Type
 		})
-		sort.Strings(hit.EvidenceIDs)
+		sort.Strings(hit.EvidenceRefs)
 		out = append(out, *hit)
 	}
 	return out

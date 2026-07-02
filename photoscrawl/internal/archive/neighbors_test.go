@@ -17,7 +17,7 @@ func TestNeighborsReturnsDeterministicSourceReasons(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := Crawl(ctx, paths, CrawlOptions{
+	if _, err := Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
 		Provider:    fakeProvider{snapshot: fakeNeighborSnapshot()},
 		Now:         fixedClock("2026-05-28T12:00:00Z"),
@@ -37,20 +37,20 @@ func TestNeighborsReturnsDeterministicSourceReasons(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ID != assetID || result.Limit != 10 {
+	if result.Ref != photoscrawlRef(assetID) || result.Limit != 10 {
 		t.Fatalf("neighbor result header = %#v", result)
 	}
 	if len(result.Neighbors) != 1 {
 		t.Fatalf("neighbors = %#v, want exactly one neighbor", result.Neighbors)
 	}
 	got := result.Neighbors[0]
-	if got.ID != stableID("asset", sourceID, "neighbor-asset-2") {
-		t.Fatalf("neighbor id = %q", got.ID)
+	if got.Ref != photoscrawlRef(stableID("asset", sourceID, "neighbor-asset-2")) {
+		t.Fatalf("neighbor ref = %q", got.Ref)
 	}
 	if got.Score != 1 {
 		t.Fatalf("neighbor score = %f, want capped score 1", got.Score)
 	}
-	if len(got.EvidenceIDs) == 0 {
+	if len(got.EvidenceRefs) == 0 {
 		t.Fatal("expected evidence ids backing neighbor reasons")
 	}
 	reasonTypes := map[string]bool{}
