@@ -539,7 +539,7 @@ func TestClassifiers(t *testing.T) {
 	messageTypes := map[int]string{
 		0: "text", 1: "image", 2: "video", 3: "audio", 4: "location", 5: "contact",
 		6: "system", 7: "link", 8: "document", 10: "group_event", 11: "gif",
-		14: "reaction", 15: "sticker", 99: "type_99",
+		14: "reaction", 15: "sticker", 59: "status_update", 99: "",
 	}
 	for raw, want := range messageTypes {
 		if got := messageType(raw); got != want {

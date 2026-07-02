@@ -1534,7 +1534,7 @@ func (a *app) printSearch(result searchEnvelope) error {
 	}
 	for _, item := range result.Results {
 		if item.Alias != "" {
-			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\nfull_ref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Alias, item.Ref); err != nil {
+			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\nfull ref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Alias, item.Ref); err != nil {
 				return err
 			}
 		} else {
@@ -1569,7 +1569,7 @@ func (a *app) printOpen(result openEnvelope) error {
 
 func (a *app) printMessages(messages []store.Message, truncated bool, limit int) error {
 	for _, m := range messages {
-		body := firstNonEmpty(m.Snippet, m.Text, m.MediaTitle, m.MessageType)
+		body := firstNonEmpty(messageSnippet(m), messageText(m))
 		if _, err := fmt.Fprintf(a.stdout, "[%s] %s / %s / %s\n%s\n\n", formatTime(m.Timestamp), m.ChatName, firstNonEmpty(m.SenderName, m.SenderJID), m.MessageID, body); err != nil {
 			return err
 		}
@@ -1651,7 +1651,7 @@ func newOpenMessage(message store.Message, current bool) openMessage {
 		Who:     outputField(messageWho(message)),
 		Where:   outputField(messageWhere(message)),
 		Text:    messageText(message),
-		Type:    firstNonEmpty(message.MessageType, message.MediaType),
+		Type:    messageKind(message),
 		Media:   media,
 		Starred: message.Starred,
 		Current: current,
@@ -1695,19 +1695,150 @@ func messageWhere(message store.Message) string {
 }
 
 func messageSnippet(message store.Message) string {
-	return outputField(firstNonEmpty(message.Snippet, message.Text, message.MediaTitle, readableMessageType(message)))
+	if snippet := outputField(message.Snippet); snippet != "" && !containsOpaqueMediaReference(message, snippet) {
+		return snippet
+	}
+	return outputField(messageText(message))
 }
 
 func messageText(message store.Message) string {
-	return firstNonEmpty(message.Text, message.MediaTitle, readableMessageType(message))
+	if text := outputField(message.Text); text != "" && !containsOpaqueMediaReference(message, text) {
+		return text
+	}
+	if title := outputField(message.MediaTitle); title != "" {
+		return title
+	}
+	return readableMessageType(message)
 }
 
 func readableMessageType(message store.Message) string {
-	kind := firstNonEmpty(message.MessageType, message.MediaType)
+	kind := messageKind(message)
+	if kind == "" && (message.RawType != 0 || message.MessageType != "" || message.MediaType != "") {
+		return "[unsupported message]"
+	}
 	if kind == "" {
 		return ""
 	}
-	return "[" + kind + "]"
+	return "[" + strings.ReplaceAll(kind, "_", " ") + "]"
+}
+
+func messageKind(message store.Message) string {
+	for _, kind := range []string{message.MediaType, message.MessageType} {
+		kind = normalizeMessageKind(kind)
+		if kind != "" {
+			return kind
+		}
+	}
+	return knownMessageType(message.RawType)
+}
+
+func normalizeMessageKind(kind string) string {
+	kind = strings.ToLower(strings.TrimSpace(kind))
+	if kind == "" || numericInternalKind(kind) {
+		return ""
+	}
+	return kind
+}
+
+func knownMessageType(raw int) string {
+	switch raw {
+	case 0:
+		return "text"
+	case 1:
+		return "image"
+	case 2:
+		return "video"
+	case 3:
+		return "audio"
+	case 4:
+		return "location"
+	case 5:
+		return "contact"
+	case 6:
+		return "system"
+	case 7:
+		return "link"
+	case 8:
+		return "document"
+	case 10:
+		return "group_event"
+	case 11:
+		return "gif"
+	case 14:
+		return "reaction"
+	case 15:
+		return "sticker"
+	case 59:
+		return "status_update"
+	default:
+		return ""
+	}
+}
+
+func numericInternalKind(kind string) bool {
+	for _, prefix := range []string{"type_", "status_"} {
+		if suffix, ok := strings.CutPrefix(kind, prefix); ok {
+			return allDigits(suffix)
+		}
+	}
+	return false
+}
+
+func allDigits(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func containsOpaqueMediaReference(message store.Message, value string) bool {
+	if !messageCarriesMedia(message) {
+		return false
+	}
+	for _, field := range strings.Fields(value) {
+		if opaqueMediaToken(field) {
+			return true
+		}
+	}
+	return false
+}
+
+func messageCarriesMedia(message store.Message) bool {
+	switch messageKind(message) {
+	case "image", "video", "audio", "document", "gif", "sticker":
+		return true
+	}
+	return message.MediaPath != "" || message.MediaURL != "" || message.MediaSize > 0
+}
+
+func opaqueMediaToken(value string) bool {
+	value = strings.Trim(value, `"'.,;:()[]{}<>`)
+	if len(value) < 40 {
+		return false
+	}
+	allHex := true
+	allBase64 := true
+	hasBase64Mark := false
+	for _, r := range value {
+		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+			allHex = false
+		}
+		switch {
+		case r >= 'A' && r <= 'Z':
+		case r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9':
+		case r == '+', r == '/', r == '_', r == '-', r == '=':
+			hasBase64Mark = true
+		default:
+			allBase64 = false
+		}
+	}
+	return allHex || (allBase64 && (hasBase64Mark || len(value)%4 == 0))
 }
 
 func humanDisplayName(name string) string {
