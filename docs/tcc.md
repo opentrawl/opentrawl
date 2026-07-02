@@ -18,13 +18,14 @@ and verifies with zero humans in the loop.
 - One permission covers almost everything in v1. iMessage, Apple
   Notes, Photos (direct sqlite), WhatsApp and Telegram desktop stores
   are all readable with Full Disk Access alone.
-- Apple Calendar is the one outlier: EventKit needs its own
-  interactive consent, FDA does not grant the API, and modern macOS
-  has no readable on-disk calendar store. The v1 route around it:
-  calcrawl reads iCloud calendars over CalDAV with an app-specific
-  password — headless, no TCC involved, same source of truth. A
-  native EventKit path (consent flow in the app) can come later for
-  calendars that never touch iCloud.
+- Apple Calendar needs no outlier treatment after all. Earlier
+  research claimed modern macOS has no readable on-disk calendar
+  store; verified false on a live machine (2026-07-02): Calendar.app
+  keeps `Calendar.sqlitedb` in its group container, readable under
+  Full Disk Access with a clean relational schema, and it contains
+  every synced calendar — iCloud, Google and local. calcrawl reads it
+  with the same snapshot pattern as iMessage and WhatsApp. CalDAV and
+  EventKit stay unnecessary for v1.
 - FDA and the App Sandbox do not compose. The app ships unsandboxed,
   Developer ID signed, notarized, outside the Mac App Store.
 - TCC attributes terminal-spawned binaries to the terminal app, not
@@ -83,14 +84,14 @@ Formalised as phase 1 tasks:
    builds, so a packaging change cannot silently reintroduce ad-hoc
    signing.
 
-## Open risk, to spike before the app hardens
+## The inheritance spike: resolved
 
-Inheritance normally flows to direct children, but there is a
-documented case of macOS auto-denying a separately-signed child at a
-different path. Spike (30 minutes): grant FDA to a stably-signed app
-build, spawn a Go crawler, read a protected store. If inheritance
-fails, the fallback is to embed crawler binaries inside the app bundle
-under the app's signature — decide after the spike, not before.
+Run 2026-07-02 with a minimal app signed by the dev identity and
+granted Full Disk Access: the app read the protected store directly,
+and a spawned Go crawler binary (separately ad-hoc-signed, resolved
+from a plain directory on disk) inherited the grant — its doctor
+reported the source store readable. Verdict: children inherit; the app
+runs crawlers from PATH, no binary bundling needed.
 
 ## Rejected
 
