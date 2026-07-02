@@ -227,6 +227,16 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if !slices.Equal(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}
+	openCommand, ok := manifest.Commands["open"]
+	if !ok {
+		t.Fatalf("commands = %#v, want open", manifest.Commands)
+	}
+	if openCommand.Mutates || !openCommand.JSON {
+		t.Fatalf("open command = %#v", openCommand)
+	}
+	if !slices.Contains(manifest.Capabilities, "open") {
+		t.Fatalf("capabilities = %#v, want open", manifest.Capabilities)
+	}
 }
 
 func TestStoreImportResultPreservesArchivedMediaOnReimport(t *testing.T) {
