@@ -4,11 +4,21 @@ written_by: ai
 
 # Who: people as a first-class query dimension
 
-Design for the ship-blocking gap: "what did Alice and I say about the
-boat trip?" is the most natural personal-memory question, and today no
-surface answers it. Search shows who said things but cannot filter on
-it, and the instinctive `trawl search alice boat` full-text-matches
-the word "alice", which the messages that matter almost never contain.
+Design for the ship-blocking gap, grounded in mined evidence: a sweep
+of months of real agent sessions (the moments the owner got angry, and
+the questions actually asked) found that agents repeatedly fail on
+people. They run "getting to know you" interviews instead of reading
+archives that already hold the answer; they state stale personal facts
+with confidence; and in several sessions the agent itself names
+"resolve handles into people" as the unbuilt gap. Real requests are
+imperative — "check my emails for the specs", "we already discussed
+this, go find it" — and the retrieval verb constantly runs through a
+person or a vendor.
+
+Today no surface serves that. Search shows who said things but cannot
+filter on it, and full-text-matching a person's name finds messages
+that *mention* them, not conversations *with* them — the ones that
+matter almost never contain the name.
 
 ## The shape
 
@@ -38,10 +48,13 @@ Two additions, one dependency, in strict order.
 ## Method: stub before build
 
 Before any implementation, a stubbed `trawl` (canned `who` results,
-fake `--who` filtering) goes in front of cold agents with real tasks
-("what did Alice and I say about the boat trip?"). What they type
-before reading help is the API we should have built. The observed
-grammar decides the final surface; this document records the starting
+fake `--who` filtering) goes in front of cold agents with tasks taken
+from the mined corpus of real requests — vendor-charge hunts ("find
+the subscription that keeps charging me"), spec retrieval ("check my
+mail for the bike specs"), decision recall ("we already discussed
+this, go find it"), and person-scoped history. What agents type before
+reading help is the API we should have built. The observed grammar
+decides the final surface; this document records the starting
 hypothesis, not the answer.
 
 Open questions the stub must answer:
