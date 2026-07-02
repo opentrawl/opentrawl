@@ -87,15 +87,23 @@ func searchDate(row SearchRow) string {
 }
 
 func searchWho(row SearchRow) string {
-	who := strings.TrimSpace(row.Who)
-	where := strings.TrimSpace(row.Where)
-	// In a direct chat the chat is named after the person, so
-	// "Katja → Katja" collapses to the person.
-	if strings.EqualFold(who, where) {
-		return who
+	who := normalizeSelf(strings.TrimSpace(row.Who))
+	where := normalizeSelf(strings.TrimSpace(row.Where))
+	// In a direct chat the chat is named after the person, so an
+	// inbound "Katja → Katja" is really "Katja → me".
+	if strings.EqualFold(who, where) && who != "me" {
+		return who + " → me"
 	}
-	if who != "" && where != "" {
+	if who != "" && where != "" && !strings.EqualFold(who, where) {
 		return who + " → " + where
 	}
 	return firstNonEmpty(who, where)
+}
+
+// normalizeSelf makes every crawler's self-name read the same way.
+func normalizeSelf(name string) string {
+	if strings.EqualFold(name, "me") {
+		return "me"
+	}
+	return name
 }
