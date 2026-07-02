@@ -62,6 +62,13 @@ type ImportOptions struct {
 	SourcePath string
 	CopyMedia  bool
 	MediaRoot  string
+	Progress   func(ImportProgress)
+}
+
+type ImportProgress struct {
+	Done    int64
+	Total   int64
+	Message string
 }
 
 func DefaultPath() string {
@@ -173,16 +180,20 @@ func Import(ctx context.Context, st *store.Store, path string) (store.ImportStat
 func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions) (store.ImportStats, error) {
 	sourcePath := defaultedPath(opts.SourcePath)
 	stats := store.ImportStats{SourcePath: sourcePath, DBPath: st.Path(), StartedAt: time.Now().UTC()}
+	reportImportProgress(opts.Progress, 0, 5, "starting sync")
+	reportImportProgress(opts.Progress, 1, 5, "snapshotting WhatsApp databases")
 	snap, err := SnapshotPath(sourcePath)
 	if err != nil {
 		return stats, err
 	}
 	defer func() { _ = os.RemoveAll(snap.Root) }()
+	reportImportProgress(opts.Progress, 2, 5, "reading WhatsApp databases")
 	data, err := Extract(ctx, snap)
 	if err != nil {
 		return stats, err
 	}
 	if opts.CopyMedia {
+		reportImportProgress(opts.Progress, 3, 5, "copying media")
 		mediaRoot := opts.MediaRoot
 		if strings.TrimSpace(mediaRoot) == "" {
 			mediaRoot = filepath.Join(filepath.Dir(st.Path()), "media")
@@ -201,10 +212,18 @@ func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions)
 	stats.Messages = len(data.Messages)
 	stats.MediaMessages = data.MediaCount
 	stats.FinishedAt = time.Now().UTC()
+	reportImportProgress(opts.Progress, 4, 5, "writing archive indexes")
 	if err := st.ReplaceAll(ctx, stats, data.Contacts, data.Chats, data.Groups, data.Participants, data.Messages); err != nil {
 		return stats, err
 	}
+	reportImportProgress(opts.Progress, 5, 5, "sync complete")
 	return stats, nil
+}
+
+func reportImportProgress(progress func(ImportProgress), done, total int64, message string) {
+	if progress != nil {
+		progress(ImportProgress{Done: done, Total: total, Message: message})
+	}
 }
 
 func copyArchiveMedia(messages []store.Message, sourceRoot, mediaRoot string) (int, int, error) {

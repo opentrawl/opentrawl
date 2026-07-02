@@ -21,6 +21,17 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "wacrawl-home-*")
+	if err != nil {
+		panic(err)
+	}
+	_ = os.Setenv("HOME", home)
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
+}
+
 func TestRunEndToEnd(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
@@ -299,6 +310,9 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	}
 	if !hasCapability(manifest.Capabilities, "who") {
 		t.Fatalf("capabilities = %#v, missing who", manifest.Capabilities)
+	}
+	if !hasCapability(manifest.Capabilities, "short_refs") {
+		t.Fatalf("capabilities = %#v, missing short_refs", manifest.Capabilities)
 	}
 	openCommand, ok := manifest.Commands["open"]
 	if !ok {
@@ -763,6 +777,224 @@ func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 	}
 }
 
+func TestOpenAcceptsShortRefAndSearchJSONKeepsFullRef(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
+		{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: 1},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "short-target", SenderName: "Alice", Timestamp: now, RawType: 0, Text: "shortref target"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "search", "shortref"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "full_ref: wacrawl:msg/short-target") {
+		t.Fatalf("human search should print canonical full ref:\n%s", stdout.String())
+	}
+	alias := searchOutputRef(stdout.String())
+	if alias == "" || strings.HasPrefix(alias, "wacrawl:") {
+		t.Fatalf("human search ref should be a short alias, got %q in:\n%s", alias, stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "shortref"}, &stdout, &stderr); err != nil {
+		t.Fatalf("json search error = %v stderr=%s", err, stderr.String())
+	}
+	assertSearchResultKeys(t, stdout.Bytes())
+	var search searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if len(search.Results) != 1 || search.Results[0].Ref != "wacrawl:msg/short-target" || search.Results[0].Alias != "" {
+		t.Fatalf("search refs = %#v", search.Results)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "open", alias}, &stdout, &stderr); err != nil {
+		t.Fatalf("open alias error = %v stderr=%s", err, stderr.String())
+	}
+	var opened openEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &opened); err != nil {
+		t.Fatalf("open json = %s err=%v", stdout.String(), err)
+	}
+	if opened.Ref != "wacrawl:msg/short-target" || opened.Message.Text != "shortref target" {
+		t.Fatalf("opened payload = %#v", opened)
+	}
+}
+
+func TestOpenShortRefErrorsUseContractCodes(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
+		{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: 2},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "a", Text: "alpha"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "b", Text: "beta"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().Exec(`insert into short_refs(alias, full_ref) values('22222', 'wacrawl:msg/a'), ('22222', 'wacrawl:msg/b')`); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = Run(ctx, []string{"--db", dbPath, "--json", "open", "zzzzz"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("expected unknown short ref error, got %v", err)
+	}
+	var payload errorEnvelope
+	if jsonErr := json.Unmarshal(stdout.Bytes(), &payload); jsonErr != nil {
+		t.Fatalf("unknown error json = %s err=%v", stdout.String(), jsonErr)
+	}
+	if payload.Error.Code != "unknown_short_ref" {
+		t.Fatalf("unknown error payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(ctx, []string{"--db", dbPath, "--json", "open", "22222"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("expected ambiguous short ref error, got %v", err)
+	}
+	if jsonErr := json.Unmarshal(stdout.Bytes(), &payload); jsonErr != nil {
+		t.Fatalf("ambiguous error json = %s err=%v", stdout.String(), jsonErr)
+	}
+	if payload.Error.Code != "ambiguous_short_ref" {
+		t.Fatalf("ambiguous error payload = %#v", payload)
+	}
+}
+
+func TestOwnerIdentityRendersAsMe(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
+		{JID: "friend@s.whatsapp.net", Kind: "dm", Name: "Friend", MessageCount: 1},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "friend@s.whatsapp.net", ChatName: "Friend", MessageID: "mine", SenderJID: "owner@s.whatsapp.net", SenderName: "owner@s.whatsapp.net", FromMe: true, Text: "owner needle"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "owner"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	var search searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if len(search.Results) != 1 || search.Results[0].Who != "me" {
+		t.Fatalf("search owner rendering = %#v", search.Results)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "open", "wacrawl:msg/mine"}, &stdout, &stderr); err != nil {
+		t.Fatalf("open error = %v stderr=%s", err, stderr.String())
+	}
+	var opened openEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &opened); err != nil {
+		t.Fatalf("open json = %s err=%v", stdout.String(), err)
+	}
+	if opened.Message.Who != "me" || opened.Context[0].Who != "me" {
+		t.Fatalf("open owner rendering = %#v", opened)
+	}
+}
+
+func TestStatusAndDoctorReadLogTail(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
+		{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: 1},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "a", Text: "alpha"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = Run(ctx, []string{"--db", dbPath, "--json", "open", "zzzzz"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected open to fail")
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status error = %v stderr=%s", err, stderr.String())
+	}
+	var status statusEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &status); err != nil {
+		t.Fatalf("status json = %s err=%v", stdout.String(), err)
+	}
+	if status.LastRun == nil || status.LastRun.Command != "open" || status.LastRun.Outcome != "error" {
+		t.Fatalf("status last run = %#v", status.LastRun)
+	}
+	if status.Error == nil || status.Error.Event != "unknown_short_ref" || status.Error.Remedy == "" {
+		t.Fatalf("status recent error = %#v", status.Error)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "doctor"}, &stdout, &stderr); err != nil {
+		t.Fatalf("doctor error = %v stderr=%s", err, stderr.String())
+	}
+	var doctor doctorEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &doctor); err != nil {
+		t.Fatalf("doctor json = %s err=%v", stdout.String(), err)
+	}
+	if doctor.LastRun == nil || doctor.LastRun.Command != "status" || doctor.LastRun.Outcome != "success" {
+		t.Fatalf("doctor last run = %#v", doctor.LastRun)
+	}
+	if doctor.Error == nil || doctor.Error.Event != "unknown_short_ref" || doctor.Error.Remedy == "" {
+		t.Fatalf("doctor recent error = %#v", doctor.Error)
+	}
+}
+
+func searchOutputRef(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		if value, ok := strings.CutPrefix(line, "ref: "); ok {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
 func TestOpenRejectsForeignRefWithContractError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := Run(context.Background(), []string{"--json", "open", "imsgcrawl:msg/abc"}, &stdout, &stderr)
@@ -931,7 +1163,7 @@ func TestRunHelpMenus(t *testing.T) {
 	}
 }
 
-func TestReadCommandsNeverMutateArchive(t *testing.T) {
+func TestReadCommandsNeverMutateSourceContent(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
 	createDesktopFixture(t, source)
@@ -941,7 +1173,11 @@ func TestReadCommandsNeverMutateArchive(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "sync"}, &stdout, &stderr); err != nil {
 		t.Fatalf("sync error = %v stderr=%s", err, stderr.String())
 	}
-	before := archiveChecksum(t, dbPath)
+	// wacrawl keeps derived caches in archive.db: messages_fts, short_refs and
+	// the short-ref fingerprint in sync_state. The control contract allows read
+	// commands to refresh those caches at point of use, so this test protects the
+	// source-content tables instead of the whole SQLite file.
+	before := archiveSourceContentChecksum(t, dbPath)
 
 	missingSource := filepath.Join(t.TempDir(), "missing")
 	readCommands := [][]string{
@@ -964,9 +1200,9 @@ func TestReadCommandsNeverMutateArchive(t *testing.T) {
 		})
 	}
 
-	after := archiveChecksum(t, dbPath)
+	after := archiveSourceContentChecksum(t, dbPath)
 	if before != after {
-		t.Fatalf("read commands changed archive checksum: before=%x after=%x", before, after)
+		t.Fatalf("read commands changed source-content tables: before=%x after=%x", before, after)
 	}
 }
 
@@ -1018,26 +1254,77 @@ func TestNeverSyncedReadPath(t *testing.T) {
 	}
 }
 
-func archiveChecksum(t *testing.T, path string) [32]byte {
+func archiveSourceContentChecksum(t *testing.T, path string) [32]byte {
 	t.Helper()
-	checkpointArchive(t, path)
-	data, err := os.ReadFile(path) // #nosec G304 -- test reads its temp archive.
+	ctx := context.Background()
+	st, err := store.OpenReadOnly(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return sha256.Sum256(data)
-}
+	defer func() { _ = st.Close() }()
 
-func checkpointArchive(t *testing.T, path string) {
-	t.Helper()
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		t.Fatal(err)
+	hasher := sha256.New()
+	for _, table := range []struct {
+		name  string
+		query string
+	}{
+		{name: "chats", query: `select jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type from chats order by jid`},
+		{name: "contacts", query: `select jid, phone, full_name, first_name, last_name, business_name, username, lid, about_text, updated_at from contacts order by jid`},
+		{name: "groups", query: `select jid, name, owner_jid, created_at from groups order by jid`},
+		{name: "group_participants", query: `select group_jid, user_jid, contact_name, first_name, is_admin, is_active from group_participants order by group_jid, user_jid`},
+		{name: "messages", query: `select rowid, source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred from messages order by rowid`},
+	} {
+		fmt.Fprintf(hasher, "table:%s\n", table.name)
+		rows, err := st.DB().QueryContext(ctx, table.query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		columns, err := rows.Columns()
+		if err != nil {
+			_ = rows.Close()
+			t.Fatal(err)
+		}
+		columnBytes, err := json.Marshal(columns)
+		if err != nil {
+			_ = rows.Close()
+			t.Fatal(err)
+		}
+		hasher.Write(columnBytes)
+		hasher.Write([]byte{'\n'})
+
+		values := make([]any, len(columns))
+		scans := make([]any, len(columns))
+		for i := range values {
+			scans[i] = &values[i]
+		}
+		for rows.Next() {
+			if err := rows.Scan(scans...); err != nil {
+				_ = rows.Close()
+				t.Fatal(err)
+			}
+			for _, value := range values {
+				valueBytes, err := json.Marshal(value)
+				if err != nil {
+					_ = rows.Close()
+					t.Fatal(err)
+				}
+				fmt.Fprintf(hasher, "%T:", value)
+				hasher.Write(valueBytes)
+				hasher.Write([]byte{'\n'})
+			}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			t.Fatal(err)
+		}
+		if err := rows.Close(); err != nil {
+			t.Fatal(err)
+		}
 	}
-	defer func() { _ = db.Close() }()
-	if _, err := db.Exec("pragma wal_checkpoint(truncate)"); err != nil {
-		t.Fatal(err)
-	}
+
+	var sum [sha256.Size]byte
+	copy(sum[:], hasher.Sum(nil))
+	return sum
 }
 
 func statusCountIDs(counts []statusCountPayload) []string {

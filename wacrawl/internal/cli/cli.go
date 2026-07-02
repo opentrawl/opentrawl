@@ -10,12 +10,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 	"unicode"
 
 	"github.com/openclaw/crawlkit/control"
+	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/backup"
 	"github.com/openclaw/wacrawl/internal/store"
 	"github.com/openclaw/wacrawl/internal/whatsappdb"
@@ -24,7 +28,7 @@ import (
 const (
 	defaultMessageLimit = 20
 	maxMessageLimit     = 200
-	messageRefPrefix    = "wacrawl:msg/"
+	messageRefPrefix    = store.MessageRefPrefix
 	openWindowEachSide  = 10
 )
 
@@ -34,6 +38,8 @@ type cliError struct {
 }
 
 func (e *cliError) Error() string { return e.err.Error() }
+
+func (e *cliError) Unwrap() error { return e.err }
 
 func ExitCode(err error) int {
 	if err == nil {
@@ -52,6 +58,7 @@ type app struct {
 	json   bool
 	dbPath string
 	source string
+	runLog *cklog.Run
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -79,12 +86,32 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		printUsage(stdout)
 		return nil
 	}
+	return a.runCommand(ctx, rest)
+}
+
+func (a *app) runCommand(ctx context.Context, rest []string) error {
+	run, err := a.newLogRun(logCommandName(rest))
+	if err != nil {
+		return err
+	}
+	a.runLog = run
+	err = a.dispatch(ctx, rest)
+	if err != nil {
+		_ = run.Error(errorEvent(rest, err), err)
+	}
+	if finishErr := run.Finish(err); err == nil {
+		return finishErr
+	}
+	return err
+}
+
+func (a *app) dispatch(ctx context.Context, rest []string) error {
 	if rest[0] == "help" {
 		if len(rest) == 1 {
-			printUsage(stdout)
+			printUsage(a.stdout)
 			return nil
 		}
-		if printCommandUsage(stdout, rest[1:]...) {
+		if printCommandUsage(a.stdout, rest[1:]...) {
 			return nil
 		}
 		return usageErr(fmt.Errorf("unknown help topic %q", strings.Join(rest[1:], " ")))
@@ -144,6 +171,309 @@ func extractJSONFlag(args []string) ([]string, bool) {
 	return out, jsonOut
 }
 
+func (a *app) newLogRun(command string) (*cklog.Run, error) {
+	return cklog.NewRun(cklog.Options{
+		StateRoot:    logStateRoot(a.dbPath),
+		CrawlerID:    "wacrawl",
+		Command:      command,
+		Version:      version,
+		Stderr:       a.stderr,
+		JSONProgress: a.json,
+	})
+}
+
+func logStateRoot(dbPath string) string {
+	if strings.TrimSpace(dbPath) == "" {
+		return filepath.Dir(defaultDBPath())
+	}
+	dir := filepath.Dir(strings.TrimSpace(dbPath))
+	if dir == "" {
+		return "."
+	}
+	return dir
+}
+
+func logCommandName(rest []string) string {
+	if len(rest) == 0 {
+		return "command"
+	}
+	name := strings.ToLower(strings.TrimSpace(rest[0]))
+	var out strings.Builder
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			out.WriteRune(r)
+		case r == '_' || r == '-' || r == '.':
+			out.WriteRune(r)
+		default:
+			out.WriteRune('_')
+		}
+	}
+	if out.Len() == 0 {
+		return "command"
+	}
+	return out.String()
+}
+
+func errorEvent(rest []string, err error) string {
+	var contract *contractFailure
+	if errors.As(err, &contract) && contract.Code != "" {
+		return logEventName(contract.Code)
+	}
+	var ce *cliError
+	if errors.As(err, &ce) && ce.code == 2 {
+		return "usage_error"
+	}
+	if errors.Is(err, errNoArchive) {
+		return "archive_missing"
+	}
+	return logEventName(logCommandName(rest) + "_failed")
+}
+
+func logEventName(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	var out strings.Builder
+	for i, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+			out.WriteRune(r)
+		case (r >= '0' && r <= '9') || r == '_':
+			if i > 0 {
+				out.WriteRune(r)
+			}
+		default:
+			if i > 0 {
+				out.WriteRune('_')
+			}
+		}
+	}
+	name := strings.Trim(out.String(), "_")
+	if name == "" || name[0] < 'a' || name[0] > 'z' {
+		return "run_failed"
+	}
+	return name
+}
+
+func worldMustChange(err error, remedy string) error {
+	return cklog.WorldMustChange{Err: err, Message: err.Error(), Remedy: remedy}
+}
+
+func (a *app) importProgress(command string) (func(whatsappdb.ImportProgress), func()) {
+	if a.runLog == nil {
+		return func(whatsappdb.ImportProgress) {}, func() {}
+	}
+	progress := a.runLog.Progress(cklog.ProgressOptions{Event: logEventName(command + "_progress"), Unit: "stage", Total: 5})
+	var (
+		mu   sync.Mutex
+		last = whatsappdb.ImportProgress{Total: 5, Message: "starting sync"}
+	)
+	report := func(event whatsappdb.ImportProgress) {
+		if event.Total <= 0 {
+			event.Total = 5
+		}
+		if strings.TrimSpace(event.Message) == "" {
+			event.Message = "syncing"
+		}
+		mu.Lock()
+		last = event
+		mu.Unlock()
+		_ = progress.Report(event.Done, event.Message)
+	}
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				mu.Lock()
+				event := last
+				mu.Unlock()
+				if strings.TrimSpace(event.Message) != "" {
+					_ = progress.Report(event.Done, event.Message)
+				}
+			case <-done:
+				return
+			}
+		}
+	}()
+	stop := func() {
+		close(done)
+		<-stopped
+	}
+	return report, stop
+}
+
+func (a *app) logTail() logTailEnvelope {
+	reader, err := cklog.NewReader(logStateRoot(a.dbPath), "wacrawl")
+	if err != nil {
+		return logTailEnvelope{}
+	}
+	lines, err := reader.RecentLines("", 1000)
+	if err != nil {
+		return logTailEnvelope{}
+	}
+	currentRunID := ""
+	if a.runLog != nil {
+		currentRunID = a.runLog.RunID()
+	}
+	lastRunID := ""
+	for i := len(lines) - 1; i >= 0; i-- {
+		if lineBelongsToTail(lines[i], currentRunID) {
+			lastRunID = lines[i].RunID
+			break
+		}
+	}
+	var tail logTailEnvelope
+	if lastRunID != "" {
+		tail.LastRun = summarizeLogRun(lastRunID, lines)
+	}
+	var genericError *logErrorEnvelope
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if !lineBelongsToTail(line, currentRunID) || line.Level != cklog.LevelError {
+			continue
+		}
+		if genericError != nil && line.RunID != genericError.RunID {
+			break
+		}
+		envelope := newLogErrorEnvelope(line)
+		if line.Event == "run_failed" {
+			genericError = envelope
+			continue
+		}
+		tail.Error = envelope
+		break
+	}
+	if tail.Error == nil {
+		tail.Error = genericError
+	}
+	return tail
+}
+
+func lineBelongsToTail(line cklog.Line, currentRunID string) bool {
+	return line.RunID != "" && line.RunID != "-" && line.RunID != currentRunID && line.Event != "grammar"
+}
+
+func summarizeLogRun(runID string, lines []cklog.Line) *logRunEnvelope {
+	out := &logRunEnvelope{RunID: runID, Outcome: "running"}
+	for _, line := range lines {
+		if line.RunID != runID || line.Event == "grammar" {
+			continue
+		}
+		if out.Command == "" {
+			out.Command = line.Command
+		}
+		out.LastEvent = line.Event
+		if out.StartedAt == "" || line.Event == "start" {
+			out.StartedAt = formatTime(line.Timestamp)
+		}
+		fields := logMessageFields(line.Message)
+		if line.Event == "start" {
+			out.Version = fields["version"]
+			out.Commit = fields["commit"]
+			out.Platform = fields["platform"]
+		}
+		if line.Level == cklog.LevelError && out.Outcome == "running" {
+			out.Outcome = "error"
+		}
+		if line.Event == "finish" {
+			out.FinishedAt = formatTime(line.Timestamp)
+			if fields["outcome"] != "" {
+				out.Outcome = fields["outcome"]
+			} else if line.Level == cklog.LevelError {
+				out.Outcome = "error"
+			} else {
+				out.Outcome = "success"
+			}
+		}
+	}
+	return out
+}
+
+func newLogErrorEnvelope(line cklog.Line) *logErrorEnvelope {
+	fields := logMessageFields(line.Message)
+	message := line.Message
+	if fields["error"] != "" {
+		message = fields["error"]
+	}
+	return &logErrorEnvelope{
+		RunID:   line.RunID,
+		Command: line.Command,
+		Event:   line.Event,
+		Time:    formatTime(line.Timestamp),
+		Message: message,
+		Remedy:  fields["remedy"],
+	}
+}
+
+func logMessageFields(message string) map[string]string {
+	fields := map[string]string{}
+	for i := 0; i < len(message); {
+		for i < len(message) && unicode.IsSpace(rune(message[i])) {
+			i++
+		}
+		keyStart := i
+		for i < len(message) {
+			r := rune(message[i])
+			if r == '=' || unicode.IsSpace(r) {
+				break
+			}
+			i++
+		}
+		if keyStart == i || i >= len(message) || message[i] != '=' {
+			for i < len(message) && !unicode.IsSpace(rune(message[i])) {
+				i++
+			}
+			continue
+		}
+		key := message[keyStart:i]
+		i++
+		value := ""
+		if i < len(message) && message[i] == '"' {
+			valueStart := i
+			i++
+			escaped := false
+			closed := false
+			for i < len(message) {
+				switch {
+				case escaped:
+					escaped = false
+				case message[i] == '\\':
+					escaped = true
+				case message[i] == '"':
+					i++
+					if unquoted, err := strconv.Unquote(message[valueStart:i]); err == nil {
+						value = unquoted
+					} else {
+						value = message[valueStart:i]
+					}
+					closed = true
+				}
+				if closed {
+					break
+				}
+				i++
+			}
+			if value == "" && valueStart < len(message) {
+				value = strings.Trim(message[valueStart:i], `"`)
+			}
+		} else {
+			valueStart := i
+			for i < len(message) && !unicode.IsSpace(rune(message[i])) {
+				i++
+			}
+			value = message[valueStart:i]
+		}
+		if key != "" {
+			fields[key] = value
+		}
+	}
+	return fields
+}
+
 func (a *app) withStore(ctx context.Context, fn func(*store.Store) error) error {
 	st, err := store.Open(ctx, a.dbPath)
 	if err != nil {
@@ -161,12 +491,22 @@ func (a *app) withReadStore(ctx context.Context, fn func(*store.Store) error) er
 	st, err := store.OpenReadOnly(ctx, a.dbPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return errNoArchive
+			return worldMustChange(errNoArchive, "run wacrawl sync")
 		}
 		return err
 	}
 	defer func() { _ = st.Close() }()
 	return fn(st)
+}
+
+func (a *app) withExistingStore(ctx context.Context, fn func(*store.Store) error) error {
+	if _, err := os.Stat(a.dbPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return worldMustChange(errNoArchive, "run wacrawl sync")
+		}
+		return err
+	}
+	return a.withStore(ctx, fn)
 }
 
 func (a *app) runStatus(ctx context.Context, args []string) error {
@@ -182,15 +522,16 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("status takes flags only"))
 	}
+	logTail := a.logTail()
 	err := a.withReadStore(ctx, func(st *store.Store) error {
 		status, err := st.Status(ctx)
 		if err != nil {
 			return err
 		}
 		if a.json {
-			return a.print(newStatusEnvelope(status))
+			return a.print(newStatusEnvelope(status, logTail))
 		}
-		return a.print(status)
+		return a.printStatus(status, logTail)
 	})
 	if errors.Is(err, errNoArchive) {
 		if a.json {
@@ -199,9 +540,14 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 				State:   "missing",
 				Summary: errNoArchive.Error(),
 				Counts:  []statusCount{},
+				LastRun: logTail.LastRun,
+				Error:   logTail.Error,
 			})
 		}
 		_, werr := fmt.Fprintln(a.stdout, errNoArchive.Error())
+		if werr == nil {
+			werr = a.printLogTail(logTail)
+		}
 		return werr
 	}
 	return err
@@ -237,7 +583,8 @@ func (a *app) runDoctor(ctx context.Context, args []string) error {
 			checks = append(checks, check)
 		}
 	}
-	return a.print(doctorEnvelope{Checks: checks})
+	logTail := a.logTail()
+	return a.print(doctorEnvelope{Checks: checks, LastRun: logTail.LastRun, Error: logTail.Error})
 }
 
 func (a *app) runImport(ctx context.Context, command string, args []string) error {
@@ -255,8 +602,10 @@ func (a *app) runImport(ctx context.Context, command string, args []string) erro
 	if fs.NArg() != 0 {
 		return usageErr(fmt.Errorf("%s takes flags only", command))
 	}
+	progress, stopProgress := a.importProgress(command)
+	defer stopProgress()
 	return a.withStore(ctx, func(st *store.Store) error {
-		stats, err := whatsappdb.ImportWithOptions(ctx, st, whatsappdb.ImportOptions{SourcePath: *source, CopyMedia: *copyMedia})
+		stats, err := whatsappdb.ImportWithOptions(ctx, st, whatsappdb.ImportOptions{SourcePath: *source, CopyMedia: *copyMedia, Progress: progress})
 		if err != nil {
 			return err
 		}
@@ -318,10 +667,14 @@ type statusEnvelope struct {
 	Summary   string             `json:"summary,omitempty"`
 	Freshness *freshnessEnvelope `json:"freshness,omitempty"`
 	Counts    []statusCount      `json:"counts"`
+	LastRun   *logRunEnvelope    `json:"last_run,omitempty"`
+	Error     *logErrorEnvelope  `json:"recent_error,omitempty"`
 }
 
 type doctorEnvelope struct {
-	Checks []doctorCheck `json:"checks"`
+	Checks  []doctorCheck     `json:"checks"`
+	LastRun *logRunEnvelope   `json:"last_run,omitempty"`
+	Error   *logErrorEnvelope `json:"recent_error,omitempty"`
 }
 
 type doctorCheck struct {
@@ -452,7 +805,33 @@ type statusCount struct {
 	Value any    `json:"value"`
 }
 
-func newStatusEnvelope(status store.Status) statusEnvelope {
+type logTailEnvelope struct {
+	LastRun *logRunEnvelope
+	Error   *logErrorEnvelope
+}
+
+type logRunEnvelope struct {
+	RunID      string `json:"run_id"`
+	Command    string `json:"command"`
+	Outcome    string `json:"outcome"`
+	StartedAt  string `json:"started_at,omitempty"`
+	FinishedAt string `json:"finished_at,omitempty"`
+	LastEvent  string `json:"last_event,omitempty"`
+	Version    string `json:"version,omitempty"`
+	Commit     string `json:"commit,omitempty"`
+	Platform   string `json:"platform,omitempty"`
+}
+
+type logErrorEnvelope struct {
+	RunID   string `json:"run_id"`
+	Command string `json:"command"`
+	Event   string `json:"event"`
+	Time    string `json:"time,omitempty"`
+	Message string `json:"message"`
+	Remedy  string `json:"remedy,omitempty"`
+}
+
+func newStatusEnvelope(status store.Status, logTail logTailEnvelope) statusEnvelope {
 	state := "ok"
 	summary := "archive ready"
 	if status.Messages == 0 {
@@ -476,6 +855,8 @@ func newStatusEnvelope(status store.Status) statusEnvelope {
 		State:     state,
 		Summary:   summary,
 		Freshness: freshness,
+		LastRun:   logTail.LastRun,
+		Error:     logTail.Error,
 		Counts: []statusCount{
 			{ID: "messages", Label: "messages", Value: status.Messages},
 			{ID: "chats", Label: "chats", Value: status.Chats},
@@ -515,6 +896,7 @@ type searchEnvelope struct {
 
 type searchResult struct {
 	Ref     string `json:"ref"`
+	Alias   string `json:"-"`
 	Time    string `json:"time"`
 	Who     string `json:"who"`
 	Where   string `json:"where"`
@@ -560,6 +942,14 @@ type contractError struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
 	Remedy  string `json:"remedy"`
+}
+
+type contractFailure struct {
+	contractError
+}
+
+func (e *contractFailure) Error() string {
+	return e.Message
 }
 
 func contactDisplayName(contact store.Contact) string {
@@ -728,7 +1118,11 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		return usageErr(err)
 	}
 	resolved.Query = query
-	return a.withReadStore(ctx, func(st *store.Store) error {
+	withStore := a.withReadStore
+	if !a.json {
+		withStore = a.withExistingStore
+	}
+	return withStore(ctx, func(st *store.Store) error {
 		var whoMatched []string
 		if resolved.Who != "" {
 			resolution, err := st.ResolveWho(ctx, resolved.Who)
@@ -746,7 +1140,17 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return a.print(newSearchEnvelope(query, total, msgs, whoMatched))
+		aliases := map[string]string{}
+		if !a.json {
+			if err := st.EnsureShortRefs(ctx); err != nil {
+				return err
+			}
+			aliases, err = st.ShortRefAliases(ctx, messageRefs(msgs))
+			if err != nil {
+				return err
+			}
+		}
+		return a.print(newSearchEnvelope(query, total, msgs, whoMatched, aliases))
 	})
 }
 
@@ -767,28 +1171,71 @@ func (a *app) runOpen(ctx context.Context, args []string) error {
 	if fs.NArg() != 1 {
 		return usageErr(errors.New("open requires exactly one ref"))
 	}
-	messageID, contractErr := parseMessageRef(fs.Arg(0))
-	if contractErr != nil {
-		return a.failContract(*contractErr)
+	ref := strings.TrimSpace(fs.Arg(0))
+	if strings.Contains(ref, ":") {
+		messageID, contractErr := parseMessageRef(ref)
+		if contractErr != nil {
+			return a.failContract(*contractErr)
+		}
+		return a.withReadStore(ctx, func(st *store.Store) error {
+			return a.openMessageID(ctx, st, messageID)
+		})
 	}
-	return a.withReadStore(ctx, func(st *store.Store) error {
-		target, err := st.MessageByID(ctx, messageID)
+	if !shortref.ValidAlias(ref) {
+		return a.failContract(unknownShortRefError())
+	}
+	return a.withExistingStore(ctx, func(st *store.Store) error {
+		if err := st.EnsureShortRefs(ctx); err != nil {
+			return err
+		}
+		fullRefs, err := st.ResolveShortRef(ctx, ref)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return a.failContract(contractError{
-					Code:    "not_found",
-					Message: "message was not found",
-					Remedy:  "run wacrawl search again and pass one of its refs",
-				})
+			return err
+		}
+		switch len(fullRefs) {
+		case 0:
+			return a.failContract(unknownShortRefError())
+		case 1:
+			messageID, contractErr := parseMessageRef(fullRefs[0])
+			if contractErr != nil {
+				return a.failContract(*contractErr)
 			}
-			return err
+			return a.openMessageID(ctx, st, messageID)
+		default:
+			return a.failContract(contractError{
+				Code:    "ambiguous_short_ref",
+				Message: "short ref matches more than one message",
+				Remedy:  "rerun wacrawl search or use the full ref",
+			})
 		}
-		window, err := st.MessageWindow(ctx, target, openWindowEachSide)
-		if err != nil {
-			return err
-		}
-		return a.print(newOpenEnvelope(target, window))
 	})
+}
+
+func (a *app) openMessageID(ctx context.Context, st *store.Store, messageID string) error {
+	target, err := st.MessageByID(ctx, messageID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return a.failContract(contractError{
+				Code:    "not_found",
+				Message: "message was not found",
+				Remedy:  "run wacrawl search again and pass one of its refs",
+			})
+		}
+		return err
+	}
+	window, err := st.MessageWindow(ctx, target, openWindowEachSide)
+	if err != nil {
+		return err
+	}
+	return a.print(newOpenEnvelope(target, window))
+}
+
+func unknownShortRefError() contractError {
+	return contractError{
+		Code:    "unknown_short_ref",
+		Message: "short ref was not found",
+		Remedy:  "use a full ref from wacrawl search",
+	}
 }
 
 func parseMessageRef(ref string) (string, *contractError) {
@@ -972,10 +1419,7 @@ func (a *app) print(value any) error {
 			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, v.MediaCopied, v.MediaMissing)
 		return err
 	case store.Status:
-		envelope := newStatusEnvelope(v)
-		_, err := fmt.Fprintf(a.stdout, "state=%s\nsummary=%s\ndb=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
-			envelope.State, envelope.Summary, v.DBPath, v.Chats, v.UnreadChats, v.UnreadMessages, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, formatTime(v.OldestMessage), formatTime(v.NewestMessage), formatTime(v.LastImportAt), v.LastSource)
-		return err
+		return a.printStatus(v, logTailEnvelope{})
 	case []store.Chat:
 		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
 		_, _ = fmt.Fprintln(tw, "LAST\tKIND\tUNREAD\tMESSAGES\tJID\tNAME")
@@ -1007,7 +1451,7 @@ func (a *app) print(value any) error {
 				}
 			}
 		}
-		return nil
+		return a.printLogTail(logTailEnvelope{LastRun: v.LastRun, Error: v.Error})
 	case sqlQueryResult:
 		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
 		_, _ = fmt.Fprintln(tw, strings.Join(v.columns, "\t"))
@@ -1053,6 +1497,35 @@ func (a *app) print(value any) error {
 	}
 }
 
+func (a *app) printStatus(status store.Status, logTail logTailEnvelope) error {
+	envelope := newStatusEnvelope(status, logTail)
+	_, err := fmt.Fprintf(a.stdout, "state=%s\nsummary=%s\ndb=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
+		envelope.State, envelope.Summary, status.DBPath, status.Chats, status.UnreadChats, status.UnreadMessages, status.Contacts, status.Groups, status.Participants, status.Messages, status.MediaMessages, formatTime(status.OldestMessage), formatTime(status.NewestMessage), formatTime(status.LastImportAt), status.LastSource)
+	if err != nil {
+		return err
+	}
+	return a.printLogTail(logTail)
+}
+
+func (a *app) printLogTail(logTail logTailEnvelope) error {
+	if logTail.LastRun != nil {
+		if _, err := fmt.Fprintf(a.stdout, "last_run=%s\nlast_run_command=%s\nlast_run_outcome=%s\n", logTail.LastRun.RunID, logTail.LastRun.Command, logTail.LastRun.Outcome); err != nil {
+			return err
+		}
+	}
+	if logTail.Error != nil {
+		if _, err := fmt.Fprintf(a.stdout, "recent_error=%s\nrecent_error_event=%s\nrecent_error_message=%s\n", logTail.Error.RunID, logTail.Error.Event, logTail.Error.Message); err != nil {
+			return err
+		}
+		if logTail.Error.Remedy != "" {
+			if _, err := fmt.Fprintf(a.stdout, "recent_error_remedy=%s\n", logTail.Error.Remedy); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func (a *app) printSearch(result searchEnvelope) error {
 	if len(result.WhoMatched) > 1 {
 		if _, err := fmt.Fprintf(a.stdout, "who matched: %s\n\n", strings.Join(result.WhoMatched, ", ")); err != nil {
@@ -1060,8 +1533,14 @@ func (a *app) printSearch(result searchEnvelope) error {
 		}
 	}
 	for _, item := range result.Results {
-		if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
-			return err
+		if item.Alias != "" {
+			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\nfull_ref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Alias, item.Ref); err != nil {
+				return err
+			}
+		} else {
+			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
+				return err
+			}
 		}
 	}
 	if result.Truncated {
@@ -1102,13 +1581,14 @@ func (a *app) printMessages(messages []store.Message, truncated bool, limit int)
 	return nil
 }
 
-func newSearchEnvelope(query string, total int, messages []store.Message, whoMatched []string) searchEnvelope {
+func newSearchEnvelope(query string, total int, messages []store.Message, whoMatched []string, aliases map[string]string) searchEnvelope {
 	if messages == nil {
 		messages = []store.Message{}
 	}
 	results := make([]searchResult, 0, len(messages))
 	for _, message := range messages {
-		results = append(results, newSearchResult(message))
+		fullRef := messageRef(message)
+		results = append(results, newSearchResult(message, aliases[fullRef]))
 	}
 	return searchEnvelope{
 		Query:        query,
@@ -1126,9 +1606,10 @@ func ambiguousWhoMatches(names []string) []string {
 	return names
 }
 
-func newSearchResult(message store.Message) searchResult {
+func newSearchResult(message store.Message, alias string) searchResult {
 	return searchResult{
 		Ref:     messageRef(message),
+		Alias:   alias,
 		Time:    formatTime(message.Timestamp),
 		Who:     outputField(messageWho(message)),
 		Where:   outputField(messageWhere(message)),
@@ -1188,9 +1669,17 @@ func messageRef(message store.Message) string {
 	return messageRefPrefix + message.MessageID
 }
 
+func messageRefs(messages []store.Message) []string {
+	refs := make([]string, 0, len(messages))
+	for _, message := range messages {
+		refs = append(refs, messageRef(message))
+	}
+	return refs
+}
+
 func messageWho(message store.Message) string {
 	if message.FromMe {
-		return "Me"
+		return "me"
 	}
 	if name := humanDisplayName(message.SenderName); name != "" {
 		return name
@@ -1224,7 +1713,7 @@ func readableMessageType(message store.Message) string {
 func humanDisplayName(name string) string {
 	name = outputField(name)
 	if strings.EqualFold(name, "me") {
-		return "Me"
+		return "me"
 	}
 	if name == "" || strings.Contains(name, "@") || looksLikePhone(name) {
 		return ""
@@ -1244,7 +1733,8 @@ func (a *app) failContract(contractErr contractError) error {
 	} else {
 		_, _ = fmt.Fprintf(a.stderr, "%s. %s.\n", contractErr.Message, contractErr.Remedy)
 	}
-	return &cliError{code: 1, err: errors.New(contractErr.Message)}
+	failure := &contractFailure{contractError: contractErr}
+	return &cliError{code: 1, err: cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy}}
 }
 
 func printUsage(w io.Writer) {
@@ -1433,9 +1923,11 @@ Examples:
 Usage:
   wacrawl open <ref>
 
-The ref must come from wacrawl search and look like wacrawl:msg/MESSAGE_ID.
+The ref must come from wacrawl search. Use the short ref from text output or
+the full ref that looks like wacrawl:msg/MESSAGE_ID.
 
 Examples:
+  wacrawl open abc23
   wacrawl open wacrawl:msg/MESSAGE_ID
   wacrawl --json open wacrawl:msg/MESSAGE_ID
 `)

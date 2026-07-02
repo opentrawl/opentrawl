@@ -3,11 +3,14 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/openclaw/crawlkit/shortref"
 )
 
 func TestStoreReplaceStatusListSearch(t *testing.T) {
@@ -167,6 +170,62 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	}
 	if err := (SnapshotData{Messages: []Message{{}}}).Validate(); err == nil {
 		t.Fatal("expected empty source_pk validation error")
+	}
+}
+
+func TestShortRefsBuildResolveAndHeal(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Chat", MessageID: "a", Text: "alpha"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Chat", MessageID: "b", Text: "beta"},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{}, nil, []Chat{{JID: "chat@g.us", Kind: "group", Name: "Chat"}}, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := shortref.BuildSlice([]string{MessageRefPrefix + "a", MessageRefPrefix + "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases := map[string]string{}
+	for _, entry := range entries {
+		aliases[entry.FullRef] = entry.Alias
+	}
+	got, err := st.ResolveShortRef(ctx, aliases[MessageRefPrefix+"a"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{MessageRefPrefix + "a"}) {
+		t.Fatalf("resolved alias = %#v", got)
+	}
+	display, err := st.ShortRefAliases(ctx, []string{MessageRefPrefix + "a", MessageRefPrefix + "b"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(display, aliases) {
+		t.Fatalf("display aliases = %#v, want %#v", display, aliases)
+	}
+
+	if _, err := st.DB().ExecContext(ctx, `delete from short_refs`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ResolveShortRef(ctx, aliases[MessageRefPrefix+"a"]); !errors.Is(err, ErrShortRefIndexStale) {
+		t.Fatalf("stale resolve error = %v", err)
+	}
+	if err := st.EnsureShortRefs(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err = st.ResolveShortRef(ctx, aliases[MessageRefPrefix+"a"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{MessageRefPrefix + "a"}) {
+		t.Fatalf("healed alias = %#v", got)
 	}
 }
 
