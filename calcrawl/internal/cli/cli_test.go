@@ -10,7 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/cli"
@@ -133,6 +135,42 @@ func TestCoreDataTimesProvenanceSearchAndOpen(t *testing.T) {
 	if legacyAllDay.Results[0].Time == "2021-08-26" || !strings.Contains(legacyAllDay.Results[0].Time, "T00:00:00") {
 		t.Fatalf("legacy all-day search time = %q, want RFC3339 midnight", legacyAllDay.Results[0].Time)
 	}
+}
+
+func TestCLIOutputConformance(t *testing.T) {
+	db := setupCalendarFixture(t)
+
+	for _, command := range []struct {
+		name string
+		args []string
+	}{
+		{name: "status", args: []string{"status"}},
+		{name: "doctor", args: []string{"doctor"}},
+	} {
+		t.Run(command.name, func(t *testing.T) {
+			stdout, stderr, err := run(t, command.args...)
+			if err != nil {
+				t.Fatalf("calcrawl %v failed: %v\nstdout:\n%s\nstderr:\n%s", command.args, err, stdout, stderr)
+			}
+			conformance.AssertHumanOutput(t, stdout)
+		})
+	}
+
+	insertEvent(t, db, eventFixture{
+		rowID:       9000,
+		uniqueID:    "event-conformance",
+		summary:     "Conformance planning",
+		description: "Synthetic conformance event.",
+		start:       time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC),
+		end:         time.Date(2026, 8, 1, 10, 30, 0, 0, time.UTC),
+		calendarID:  10,
+		status:      1,
+	})
+	runSync(t)
+	searchText := runOK(t, "search", "conformance")
+	conformance.AssertHumanOutput(t, searchText)
+	searchJSON := runOK(t, "search", "conformance", "--json")
+	conformance.AssertSearchEnvelope(t, []byte(searchJSON))
 }
 
 func TestSearchWhoFiltersParticipants(t *testing.T) {
