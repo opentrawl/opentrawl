@@ -25,12 +25,22 @@ matter almost never contain the name.
 Two additions, one dependency, in strict order.
 
 1. **Resolve first.** `trawl who <fuzzy>` turns a human fragment into
-   a person: `trawl who mo` returns ranked candidates — display name,
-   the sources they appear in, message volume — so humans and agents
-   orient before filtering. Matching is prefix and substring over
-   names, aliases and identifiers (clawdex's self-healing FTS index is
-   exactly this; the command is a thin view over it). Ranked by
-   message volume: the people you actually talk to come first.
+   a person: `trawl who dave` returns every matching candidate with
+   the columns that decide between them — display name, how the name
+   matched (exact, prefix, contains), the sources they appear in,
+   message volume, and when you last exchanged anything. Matching is
+   prefix and substring over names, aliases and identifiers
+   (clawdex's self-healing FTS index is exactly this; the command is
+   a thin view over it).
+
+   The ranking is the columns, in order: name-match quality, then
+   recency, then volume — and every column is printed, so nothing is
+   scored in secret. Queries land all over the distribution (the Dave
+   you message daily, the Dave you emailed once in 2019), so the tool
+   must never guess which one you meant: it shows the evidence and
+   lets the caller decide. An agent that can see last-seen dates and
+   volumes can apply whatever context it has; a hidden relevance
+   score would take that away.
 
 2. **Then filter.** `search --who <person>` on every crawler that
    exports contacts, and federated on `trawl search`. The crawler
@@ -87,8 +97,18 @@ Open questions the stub answered or replaced:
 - Is ranking by message volume the right orientation, or do agents
   want per-source identifiers echoed back for exact re-use?
 
+## Later: relationship context
+
+Ranking by name, recency and volume cannot answer "the contract from
+Dave" when the frequent Dave is a friend and the rare Dave is your
+lawyer. That needs subject-matter knowledge per person — see
+[relationship-context.md](relationship-context.md) for the design
+direction. It is deliberately not in v1.1: it depends on derived
+layers (classification, clustering) that build on top of proven
+archives, never inside the crawlers.
+
 ## Non-goals
 
 No fuzzy matching inside `--who` itself: resolve fuzziness in `who`,
 filter with the exact resolved person. One obvious way; no similarity
-knobs.
+knobs.ye
