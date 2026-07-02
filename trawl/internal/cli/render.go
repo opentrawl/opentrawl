@@ -6,7 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
 )
 
 type StatusResult struct {
@@ -85,31 +86,31 @@ func writeTableRow(w io.Writer, row []string, widths []int, free int) error {
 	return err
 }
 
-// padCell pads by rune count, not bytes, so cells like "—" stay aligned.
+// padCell pads by display width, not bytes or runes, so emoji and wide
+// characters keep the columns aligned.
 func padCell(cell string, width int) string {
-	gap := width - utf8.RuneCountInString(cell)
+	gap := width - runewidth.StringWidth(cell)
 	if gap <= 0 {
 		return cell
 	}
 	return cell + strings.Repeat(" ", gap)
 }
 
-// truncateCell cuts a cell to width runes, marking the cut.
+// truncateCell cuts a cell to a display width, marking the cut.
 func truncateCell(cell string, width int) string {
-	if utf8.RuneCountInString(cell) <= width || width < 2 {
+	if runewidth.StringWidth(cell) <= width || width < 2 {
 		return cell
 	}
-	runes := []rune(cell)
-	return strings.TrimRight(string(runes[:width-1]), " ") + "…"
+	return strings.TrimRight(runewidth.Truncate(cell, width-1, ""), " ") + "…"
 }
 
 // columnWidths sizes every column except the last, which runs free.
 func columnWidths(header []string, rows [][]string) []int {
 	widths := make([]int, len(header)-1)
 	for column := range widths {
-		widths[column] = utf8.RuneCountInString(header[column])
+		widths[column] = runewidth.StringWidth(header[column])
 		for _, row := range rows {
-			if cells := utf8.RuneCountInString(row[column]); cells > widths[column] {
+			if cells := runewidth.StringWidth(row[column]); cells > widths[column] {
 				widths[column] = cells
 			}
 		}

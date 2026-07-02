@@ -59,7 +59,16 @@ func Execute(args []string, stdout, stderr io.Writer) (err error) {
 	var root CLI
 	parser, err := kong.New(&root,
 		kong.Name("trawl"),
-		kong.Description("Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them. Start with `trawl status`."),
+		kong.Description(`Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them.
+
+Sources go by id or surface name: imsgcrawl/imessage, telecrawl/telegram, wacrawl/whatsapp, gogcrawl/gmail, calcrawl/calendar — trawl status lists yours.
+
+Examples:
+  trawl status                          # every source: state, freshness, counts
+  trawl search "boat trip"              # all sources, newest first
+  trawl search imessage falafel         # one source, no quotes needed
+  trawl open imsgcrawl:msg/8842         # expand a ref search returned
+  trawl search falafel --json           # structured output; agents, prefer this`),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
 		kong.Exit(func(int) { panic(helpShown{}) }),
@@ -134,12 +143,12 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 		if err := writeJSON(r.stdout, results); err != nil {
 			return err
 		}
+		r.reportDoctorFailures(results)
 		return doctorExit(results)
 	}
 	if err := renderDoctor(r.stdout, results); err != nil {
 		return err
 	}
-	r.reportDoctorFailures(results)
 	return doctorExit(results)
 }
 
@@ -344,7 +353,7 @@ func unknownCommand(args []string) error {
 		case "status", "sync", "search", "open", "doctor", "help":
 			return nil
 		default:
-			return usageErr{fmt.Errorf("unknown command %q", arg)}
+			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, open, doctor; run: trawl --help", arg)}
 		}
 	}
 	return nil

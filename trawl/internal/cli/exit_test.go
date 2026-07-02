@@ -113,8 +113,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			}},
 			args:       []string{"doctor"},
 			wantCode:   3,
-			wantStdout: "tcc_full_disk_access",
-			wantStderr: "imessage tcc_full_disk_access failed. Remedy: grant Full Disk Access to Trawl in System Settings > Privacy",
+			wantStdout: "remedy: grant Full Disk Access to Trawl in System Settings > Privacy",
 		},
 		{
 			name:       "requested source missing",

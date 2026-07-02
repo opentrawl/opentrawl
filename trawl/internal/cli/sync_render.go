@@ -2,9 +2,9 @@ package cli
 
 import (
 	"fmt"
+	"github.com/mattn/go-runewidth"
 	"io"
 	"strings"
-	"unicode/utf8"
 )
 
 func renderSyncLine(w io.Writer, result SyncResult, sourceWidth, stateWidth int) error {
@@ -18,7 +18,7 @@ func renderSyncLine(w io.Writer, result SyncResult, sourceWidth, stateWidth int)
 func syncSourceWidth(sources []Source) int {
 	width := 0
 	for _, source := range sources {
-		if sourceWidth := utf8.RuneCountInString(source.ID); sourceWidth > width {
+		if sourceWidth := runewidth.StringWidth(source.ID); sourceWidth > width {
 			width = sourceWidth
 		}
 	}

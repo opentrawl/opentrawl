@@ -14,7 +14,7 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	if !ok {
 		return r.writeError("invalid_ref",
 			"Ref is missing a source or path.",
-			"refs look like <source>:<path>, for example imessage:msg/8842")
+			"refs look like <source>:<path>, for example imsgcrawl:msg/8842")
 	}
 	source, err := r.selectedSource(sourceID)
 	if err != nil {
