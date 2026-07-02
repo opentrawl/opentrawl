@@ -126,8 +126,16 @@ func (r *runtime) ensureBackupRepo() error {
 }
 
 func removeBackupRemotes(repo string) error {
+	if _, err := os.Stat(filepath.Join(repo, ".git")); os.IsNotExist(err) {
+		return nil // not a git repo: nothing to remove
+	}
 	out, err := exec.Command("git", "-C", repo, "remote").Output()
 	if err != nil {
+		// Not a listable repo (e.g. a bare fixture): fall back to the
+		// config parse; no remote configured means nothing to remove.
+		if hasRemote, cfgErr := backupRepoHasRemote(repo); cfgErr == nil && !hasRemote {
+			return nil
+		}
 		return fmt.Errorf("list git remotes: %w", err)
 	}
 	for _, remote := range strings.Fields(string(out)) {
