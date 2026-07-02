@@ -157,6 +157,16 @@ func createContactlessMessagesFixture(t *testing.T, path string) {
 
 func createAddressBookFixture(t *testing.T, path string) {
 	t.Helper()
+	createAddressBookRowsFixture(t, path, []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Robin', 'Example', '')`,
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (2, 'Alice', 'Mail', '')`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'ALICE@EXAMPLE.COM', 2)`,
+	})
+}
+
+func createAddressBookRowsFixture(t *testing.T, path string, inserts []string) {
+	t.Helper()
 	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
@@ -171,12 +181,6 @@ func createAddressBookFixture(t *testing.T, path string) {
 		if _, err := db.Exec(stmt); err != nil {
 			t.Fatal(err)
 		}
-	}
-	inserts := []string{
-		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Robin', 'Example', '')`,
-		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (2, 'Alice', 'Mail', '')`,
-		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
-		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'ALICE@EXAMPLE.COM', 2)`,
 	}
 	for _, stmt := range inserts {
 		if _, err := db.Exec(stmt); err != nil {

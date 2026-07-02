@@ -16,7 +16,7 @@ Usage:
   imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
   imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
   imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
-  imsgcrawl [--archive PATH] search [--limit N] QUERY [--json]
+  imsgcrawl [--archive PATH] search [--limit N] [--who NAME] QUERY [--json]
   imsgcrawl [--archive PATH] open REF [--json]
   imsgcrawl [--db PATH] contacts export [--json]
   imsgcrawl help COMMAND
@@ -90,12 +90,13 @@ Flags:
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--archive PATH] search [--limit N] QUERY [--json]
+  imsgcrawl [--archive PATH] search [--limit N] [--who NAME] QUERY [--json]
 
 Search archived message text.
 
 Flags:
   --limit N   Maximum search results. Default: 20.
+  --who NAME  Only search messages where this stored participant name appears.
 `)
 	case "open":
 		_, _ = fmt.Fprint(w, `Usage:

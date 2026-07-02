@@ -483,6 +483,9 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 			t.Fatalf("local_only_scopes = %#v, missing %q", manifest.Privacy.LocalOnlyScopes, want)
 		}
 	}
+	if !hasString(manifest.Capabilities, "who") {
+		t.Fatalf("capabilities = %#v, missing who", manifest.Capabilities)
+	}
 }
 
 func TestDoctorChecks(t *testing.T) {

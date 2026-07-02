@@ -83,7 +83,12 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, err
 	}
-	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName}, nil
+	hasContactKey, err := tableHasColumn(ctx, st.DB(), "contact_mappings", "contact_key")
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName || !hasContactKey}, nil
 }
 
 func (s *Store) Close() error {
@@ -148,7 +153,7 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 			}
 		}
 		for _, mapping := range contactMappings {
-			if _, err := tx.ExecContext(ctx, insertContactMappingSQL, mapping.Kind, mapping.NormalizedHandle, mapping.DisplayName); err != nil {
+			if _, err := tx.ExecContext(ctx, insertContactMappingSQL, mapping.Kind, mapping.NormalizedHandle, mapping.ContactKey, mapping.DisplayName); err != nil {
 				return err
 			}
 		}
@@ -212,6 +217,7 @@ func applyContactNames(data *messages.ArchiveData, names []addressbook.ContactNa
 		seen[key] = ContactMapping{
 			Kind:             name.Kind,
 			NormalizedHandle: name.Handle,
+			ContactKey:       name.ContactKey,
 			DisplayName:      name.DisplayName,
 		}
 	}
@@ -257,10 +263,20 @@ func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
 	if _, err := db.ExecContext(ctx, `create table if not exists contact_mappings (
   kind text not null,
   normalized_handle text not null,
+  contact_key text not null default '',
   display_name text not null,
   primary key (kind, normalized_handle)
 )`); err != nil {
 		return fmt.Errorf("create contact_mappings: %w", err)
+	}
+	hasContactKey, err := tableHasColumn(ctx, db, "contact_mappings", "contact_key")
+	if err != nil {
+		return err
+	}
+	if !hasContactKey {
+		if _, err := db.ExecContext(ctx, `alter table contact_mappings add column contact_key text not null default ''`); err != nil {
+			return fmt.Errorf("add contact_mappings.contact_key: %w", err)
+		}
 	}
 	return nil
 }

@@ -20,6 +20,7 @@ const (
 type ContactName struct {
 	Kind        string
 	Handle      string
+	ContactKey  string
 	DisplayName string
 }
 
@@ -27,8 +28,8 @@ type Lookup map[string]ContactName
 
 func Extract(ctx context.Context, paths []string) ([]ContactName, error) {
 	byHandle := map[string]ContactName{}
-	for _, path := range dedupePaths(paths) {
-		names, err := extractStore(ctx, path)
+	for sourceIndex, path := range dedupePaths(paths) {
+		names, err := extractStore(ctx, path, sourceIndex)
 		if err != nil {
 			return nil, fmt.Errorf("read Contacts store: %w", err)
 		}
@@ -114,7 +115,7 @@ func LooksPhoneLike(value string) bool {
 	return hasDigit
 }
 
-func extractStore(ctx context.Context, path string) ([]ContactName, error) {
+func extractStore(ctx context.Context, path string, sourceIndex int) ([]ContactName, error) {
 	if path == "" {
 		return nil, nil
 	}
@@ -137,11 +138,11 @@ func extractStore(ctx context.Context, path string) ([]ContactName, error) {
 	if err := requireSchema(ctx, st.DB()); err != nil {
 		return nil, err
 	}
-	names, err := phoneNames(ctx, st.DB())
+	names, err := phoneNames(ctx, st.DB(), sourceIndex)
 	if err != nil {
 		return nil, err
 	}
-	emailNames, err := emailNames(ctx, st.DB())
+	emailNames, err := emailNames(ctx, st.DB(), sourceIndex)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +199,7 @@ func requireColumns(ctx context.Context, db *sql.DB, table string, columns []str
 	return nil
 }
 
-func phoneNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
+func phoneNames(ctx context.Context, db *sql.DB, sourceIndex int) ([]ContactName, error) {
 	rows, err := db.QueryContext(ctx, phoneNumbersSQL)
 	if err != nil {
 		return nil, err
@@ -207,7 +208,8 @@ func phoneNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
 	var out []ContactName
 	for rows.Next() {
 		var full, country, area, local, first, last, organization string
-		if err := rows.Scan(&full, &country, &area, &local, &first, &last, &organization); err != nil {
+		var owner int64
+		if err := rows.Scan(&full, &country, &area, &local, &owner, &first, &last, &organization); err != nil {
 			return nil, err
 		}
 		handle := phoneHandle(full, country, area, local)
@@ -215,12 +217,12 @@ func phoneNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
 		if handle == "" || name == "" {
 			continue
 		}
-		out = append(out, ContactName{Kind: KindPhone, Handle: handle, DisplayName: name})
+		out = append(out, ContactName{Kind: KindPhone, Handle: handle, ContactKey: contactKey(sourceIndex, owner), DisplayName: name})
 	}
 	return out, rows.Err()
 }
 
-func emailNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
+func emailNames(ctx context.Context, db *sql.DB, sourceIndex int) ([]ContactName, error) {
 	rows, err := db.QueryContext(ctx, emailAddressesSQL)
 	if err != nil {
 		return nil, err
@@ -229,7 +231,8 @@ func emailNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
 	var out []ContactName
 	for rows.Next() {
 		var address, first, last, organization string
-		if err := rows.Scan(&address, &first, &last, &organization); err != nil {
+		var owner int64
+		if err := rows.Scan(&address, &owner, &first, &last, &organization); err != nil {
 			return nil, err
 		}
 		_, handle, ok := NormalizeHandle(address)
@@ -237,9 +240,16 @@ func emailNames(ctx context.Context, db *sql.DB) ([]ContactName, error) {
 		if !ok || name == "" {
 			continue
 		}
-		out = append(out, ContactName{Kind: KindEmail, Handle: handle, DisplayName: name})
+		out = append(out, ContactName{Kind: KindEmail, Handle: handle, ContactKey: contactKey(sourceIndex, owner), DisplayName: name})
 	}
 	return out, rows.Err()
+}
+
+func contactKey(sourceIndex int, owner int64) string {
+	if owner <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", sourceIndex, owner)
 }
 
 func phoneHandle(full, country, area, local string) string {

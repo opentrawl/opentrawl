@@ -8,6 +8,7 @@ import (
 
 var searchValueFlags = map[string]bool{
 	"limit": true,
+	"who":   true,
 }
 
 func splitSearchFlagArgs(args []string) (flags, query []string) {
@@ -31,9 +32,9 @@ func splitSearchFlagArgs(args []string) (flags, query []string) {
 	return flags, query
 }
 
-func newSearchListOutput(query string, items []archive.SearchResult, total int64, limit int) searchListOutput {
-	results := make([]searchResultOutput, 0, len(items))
-	for _, item := range items {
+func newSearchListOutput(query string, page archive.SearchPage, limit int, who string) searchListOutput {
+	results := make([]searchResultOutput, 0, len(page.Items))
+	for _, item := range page.Items {
 		results = append(results, searchResultOutput{
 			Ref:     messageRef(item.MessageID),
 			Time:    item.Time,
@@ -45,10 +46,12 @@ func newSearchListOutput(query string, items []archive.SearchResult, total int64
 	return searchListOutput{
 		Query:        query,
 		Results:      results,
-		TotalMatches: total,
-		Truncated:    total > int64(len(results)),
+		TotalMatches: page.Total,
+		Truncated:    page.Total > int64(len(results)),
 		Limit:        limit,
-		TextItems:    items,
+		Who:          strings.TrimSpace(who),
+		WhoMatched:   page.WhoMatched,
+		TextItems:    page.Items,
 	}
 }
 

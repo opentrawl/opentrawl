@@ -1,5 +1,6 @@
 select
   coalesce(e.ZADDRESS, ''),
+  coalesce(e.ZOWNER, 0),
   coalesce(r.ZFIRSTNAME, ''),
   coalesce(r.ZLASTNAME, ''),
   coalesce(r.ZORGANIZATION, '')

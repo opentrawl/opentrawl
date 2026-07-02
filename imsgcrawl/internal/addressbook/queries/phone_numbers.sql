@@ -3,6 +3,7 @@ select
   coalesce(p.ZCOUNTRYCODE, ''),
   coalesce(p.ZAREACODE, ''),
   coalesce(p.ZLOCALNUMBER, ''),
+  coalesce(p.ZOWNER, 0),
   coalesce(r.ZFIRSTNAME, ''),
   coalesce(r.ZLASTNAME, ''),
   coalesce(r.ZORGANIZATION, '')

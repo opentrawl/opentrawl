@@ -53,6 +53,7 @@ type searchListJSON struct {
 	Results      []searchResultJSON `json:"results"`
 	TotalMatches int64              `json:"total_matches"`
 	Truncated    bool               `json:"truncated"`
+	WhoMatched   []string           `json:"who_matched,omitempty"`
 }
 
 type searchResultJSON struct {

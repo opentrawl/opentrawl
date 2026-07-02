@@ -207,9 +207,22 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, returned, value.TotalMatches); err != nil {
 		return err
 	}
+	if len(value.WhoMatched) > 0 {
+		if _, err := fmt.Fprintf(w, "Who matched: %s.\n", strings.Join(value.WhoMatched, ", ")); err != nil {
+			return err
+		}
+	}
 	if value.Truncated {
 		if value.Limit < maxListLimit {
-			if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d %s\n", nextSearchLimit(value.Limit, value.TotalMatches), strconv.Quote(value.Query)); err != nil {
+			if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d", nextSearchLimit(value.Limit, value.TotalMatches)); err != nil {
+				return err
+			}
+			if value.Who != "" {
+				if _, err := fmt.Fprintf(w, " --who %s", strconv.Quote(value.Who)); err != nil {
+					return err
+				}
+			}
+			if _, err := fmt.Fprintf(w, " %s\n", strconv.Quote(value.Query)); err != nil {
 				return err
 			}
 		} else if _, err := io.WriteString(w, "Narrow the query to see more matches.\n"); err != nil {

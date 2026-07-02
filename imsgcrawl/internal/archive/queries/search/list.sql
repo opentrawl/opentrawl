@@ -1,3 +1,4 @@
+{{WITH}}
 select
   m.source_rowid,
   m.guid,
@@ -35,5 +36,6 @@ left join (
   group by chat_rowid
 ) pc on pc.chat_rowid = cm.chat_rowid
 where messages_fts match ?
+{{WHO_FILTER}}
 order by rank, cm.chat_rowid
 {{LIMIT}}

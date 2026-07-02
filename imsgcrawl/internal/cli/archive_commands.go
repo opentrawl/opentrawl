@@ -304,6 +304,7 @@ func (r *runtime) runSearch(args []string) error {
 	fs := flag.NewFlagSet("imsgcrawl search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", defaultSearchLimit, "")
+	who := fs.String("who", "", "")
 	flagTokens, queryTokens := splitSearchFlagArgs(args)
 	if err := fs.Parse(flagTokens); err != nil {
 		return usageErr(err)
@@ -318,16 +319,16 @@ func (r *runtime) runSearch(args []string) error {
 	if *limit > maxListLimit {
 		return usageErr(fmt.Errorf("search --limit must be %d or less", maxListLimit))
 	}
+	whoValue := strings.Join(strings.Fields(*who), " ")
+	if flagPassed(fs, "who") && whoValue == "" {
+		return usageErr(errors.New("search --who requires an identity"))
+	}
 	return r.withArchive(func(st *archive.Store) error {
-		results, err := st.Search(r.ctx, query, *limit)
+		page, err := st.SearchPage(r.ctx, query, archive.SearchOptions{Limit: *limit, Who: whoValue})
 		if err != nil {
 			return err
 		}
-		total, err := st.CountSearch(r.ctx, query)
-		if err != nil {
-			return err
-		}
-		return r.print(newSearchListOutput(query, results, total, *limit))
+		return r.print(newSearchListOutput(query, page, *limit, whoValue))
 	})
 }
 

@@ -66,6 +66,17 @@ type MessageContext struct {
 	After   []MessageRow
 }
 
+type SearchOptions struct {
+	Limit int
+	Who   string
+}
+
+type SearchPage struct {
+	Items      []SearchResult
+	Total      int64
+	WhoMatched []string
+}
+
 type SearchResult struct {
 	MessageID              string   `json:"message_id"`
 	GUID                   string   `json:"guid"`
@@ -88,5 +99,6 @@ type SearchResult struct {
 type ContactMapping struct {
 	Kind             string
 	NormalizedHandle string
+	ContactKey       string
 	DisplayName      string
 }

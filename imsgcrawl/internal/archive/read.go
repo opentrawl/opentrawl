@@ -146,20 +146,45 @@ func (s *Store) OpenMessage(ctx context.Context, messageID string, contextLimit 
 }
 
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
+	page, err := s.SearchPage(ctx, query, SearchOptions{Limit: limit})
+	if err != nil {
+		return nil, err
+	}
+	return page.Items, nil
+}
+
+func (s *Store) SearchPage(ctx context.Context, query string, options SearchOptions) (SearchPage, error) {
 	if s.schemaOutdated {
-		return nil, ErrSchemaOutdated
+		return SearchPage{}, ErrSchemaOutdated
 	}
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return nil, errors.New("search query is required")
+		return SearchPage{}, errors.New("search query is required")
 	}
+	who := normalizeSearchWho(options.Who)
+	whoMatch, err := s.searchWhoMatched(ctx, who)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	items, err := s.searchResults(ctx, query, options.Limit, whoMatch)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	total, err := s.countSearch(ctx, query, whoMatch)
+	if err != nil {
+		return SearchPage{}, err
+	}
+	return SearchPage{Items: items, Total: total, WhoMatched: ambiguousWhoMatches(whoMatch.names())}, nil
+}
+
+func (s *Store) searchResults(ctx context.Context, query string, limit int, who searchWhoMatch) ([]SearchResult, error) {
 	limitClause := ""
-	args := []any{ftsQuery(query)}
+	args := searchArgs(query, who)
 	if limit > 0 {
 		limitClause = "limit ?"
 		args = append(args, limit)
 	}
-	rows, err := s.store.DB().QueryContext(ctx, searchQuery(limitClause), args...)
+	rows, err := s.store.DB().QueryContext(ctx, searchQuery(limitClause, len(who.handleRowIDs), who.enabled), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -207,13 +232,200 @@ func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchRe
 }
 
 func (s *Store) CountSearch(ctx context.Context, query string) (int64, error) {
+	return s.countSearch(ctx, query, searchWhoMatch{})
+}
+
+func (s *Store) countSearch(ctx context.Context, query string, who searchWhoMatch) (int64, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return 0, errors.New("search query is required")
 	}
 	var count int64
-	err := s.store.DB().QueryRowContext(ctx, countSearchSQL, ftsQuery(query)).Scan(&count)
+	err := s.store.DB().QueryRowContext(ctx, countSearchQuery(len(who.handleRowIDs), who.enabled), searchArgs(query, who)...).Scan(&count)
 	return count, err
+}
+
+type searchWhoMatch struct {
+	enabled      bool
+	participants []searchWhoParticipant
+	handleRowIDs []int64
+}
+
+func (m searchWhoMatch) names() []string {
+	names := make([]string, 0, len(m.participants))
+	for _, participant := range m.participants {
+		names = append(names, participant.name)
+	}
+	return names
+}
+
+type searchWhoParticipant struct {
+	name         string
+	handleRowIDs []int64
+}
+
+type searchWhoHandle struct {
+	rowID       int64
+	handle      string
+	displayName string
+}
+
+type searchWhoMapping struct {
+	contactKey  string
+	displayName string
+}
+
+func (s *Store) searchWhoMatched(ctx context.Context, who string) (searchWhoMatch, error) {
+	who = normalizeSearchWho(who)
+	if who == "" {
+		return searchWhoMatch{}, nil
+	}
+	rows, err := s.store.DB().QueryContext(ctx, searchWhoMatchedSQL)
+	if err != nil {
+		return searchWhoMatch{}, err
+	}
+	defer func() { _ = rows.Close() }()
+	var handles []searchWhoHandle
+	mappings := map[string]searchWhoMapping{}
+	for rows.Next() {
+		var rowKind, handle, displayName, mappingKind, normalizedHandle, contactKey, mappingDisplayName string
+		var rowID int64
+		if err := rows.Scan(&rowKind, &rowID, &handle, &displayName, &mappingKind, &normalizedHandle, &contactKey, &mappingDisplayName); err != nil {
+			return searchWhoMatch{}, err
+		}
+		switch rowKind {
+		case "handle":
+			handles = append(handles, searchWhoHandle{
+				rowID:       rowID,
+				handle:      strings.TrimSpace(handle),
+				displayName: strings.TrimSpace(displayName),
+			})
+		case "mapping":
+			key := searchMappingKey(mappingKind, normalizedHandle)
+			if key == "" {
+				continue
+			}
+			mappings[key] = searchWhoMapping{
+				contactKey:  strings.TrimSpace(contactKey),
+				displayName: strings.TrimSpace(mappingDisplayName),
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return searchWhoMatch{}, err
+	}
+	return resolveSearchWho(who, handles, mappings), nil
+}
+
+func resolveSearchWho(who string, handles []searchWhoHandle, mappings map[string]searchWhoMapping) searchWhoMatch {
+	out := searchWhoMatch{enabled: true}
+	byParticipant := map[string]int{}
+	for _, handle := range handles {
+		if !matchesSearchWho(who, handle.displayName, handle.handle) {
+			continue
+		}
+		key, name := searchWhoParticipantKey(handle, mappings)
+		if key == "" || name == "" {
+			continue
+		}
+		index, ok := byParticipant[key]
+		if !ok {
+			index = len(out.participants)
+			byParticipant[key] = index
+			out.participants = append(out.participants, searchWhoParticipant{name: name})
+		}
+		out.participants[index].handleRowIDs = append(out.participants[index].handleRowIDs, handle.rowID)
+		out.handleRowIDs = append(out.handleRowIDs, handle.rowID)
+	}
+	return out
+}
+
+func matchesSearchWho(who string, values ...string) bool {
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = normalizeSearchWho(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		if strings.EqualFold(value, who) {
+			return true
+		}
+	}
+	return false
+}
+
+func searchWhoParticipantKey(handle searchWhoHandle, mappings map[string]searchWhoMapping) (string, string) {
+	if mapping, ok := mappings[normalizedSearchHandleKey(handle.handle)]; ok {
+		name := normalizeSearchWho(mapping.displayName)
+		if name != "" {
+			contactKey := strings.TrimSpace(mapping.contactKey)
+			if contactKey != "" {
+				return "contact:" + contactKey, name
+			}
+			return "contact-name:" + name, name
+		}
+	}
+	name := normalizeSearchWho(handle.displayName)
+	if name == "" {
+		name = normalizeSearchWho(handle.handle)
+	}
+	if name == "" {
+		return "", ""
+	}
+	return "handle:" + strconv.FormatInt(handle.rowID, 10), name
+}
+
+func normalizedSearchHandleKey(handle string) string {
+	if strings.Contains(handle, "@") {
+		return searchMappingKey("email", strings.ToLower(strings.TrimSpace(handle)))
+	}
+	normalized := normalizeSearchPhone(handle)
+	if normalized == "" {
+		return ""
+	}
+	return searchMappingKey("phone", normalized)
+}
+
+func searchMappingKey(kind, handle string) string {
+	kind = strings.TrimSpace(kind)
+	handle = strings.TrimSpace(handle)
+	if kind == "" || handle == "" {
+		return ""
+	}
+	return kind + ":" + handle
+}
+
+func normalizeSearchPhone(phone string) string {
+	var b strings.Builder
+	for _, r := range phone {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+		}
+	}
+	return strings.TrimPrefix(b.String(), "00")
+}
+
+func searchArgs(query string, who searchWhoMatch) []any {
+	args := make([]any, 0, len(who.handleRowIDs)+1)
+	for _, id := range who.handleRowIDs {
+		args = append(args, id)
+	}
+	return append(args, ftsQuery(query))
+}
+
+func ambiguousWhoMatches(names []string) []string {
+	if len(names) <= 1 {
+		return nil
+	}
+	return names
+}
+
+func normalizeSearchWho(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 type messageScanRow struct {

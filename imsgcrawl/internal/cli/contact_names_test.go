@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"path/filepath"
 	"strings"
@@ -69,6 +71,168 @@ func TestSyncedAddressBookNamesPopulateSearchAndOpen(t *testing.T) {
 	}
 }
 
+func TestSearchWhoFiltersSyncedNamesInArchiveQuery(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createContactlessMessagesFixture(t, dbPath)
+	createAddressBookFixture(t, addressBookPath)
+	addFixtureMessage(t, dbPath, 4, 1, 1, 400, "second phone dinner plan")
+
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	filteredOut := runOK(t, "--archive", archivePath, "--json", "search", "--who", "Robin Example", "--limit", "1", "dinner")
+	var filtered searchListJSON
+	if err := json.Unmarshal([]byte(filteredOut), &filtered); err != nil {
+		t.Fatalf("filtered search json = %s err=%v", filteredOut, err)
+	}
+	if filtered.TotalMatches != 2 || !filtered.Truncated || len(filtered.Results) != 1 {
+		t.Fatalf("filtered search envelope = %#v", filtered)
+	}
+	if filtered.Results[0].Who != "Robin Example" || filtered.Results[0].Where != "Robin Example" || !strings.Contains(filtered.Results[0].Snippet, "phone dinner") {
+		t.Fatalf("filtered search result = %#v", filtered.Results[0])
+	}
+	if len(filtered.WhoMatched) != 0 {
+		t.Fatalf("unique who should not report ambiguity = %#v", filtered.WhoMatched)
+	}
+	if strings.Contains(filteredOut, "email dinner plan") || strings.Contains(filteredOut, "unmatched dinner plan") {
+		t.Fatalf("filtered search leaked unfiltered matches: %s", filteredOut)
+	}
+
+	caseOut := runOK(t, "--archive", archivePath, "--json", "search", "dinner", "--who", "robin example", "--limit", "3")
+	var caseFiltered searchListJSON
+	if err := json.Unmarshal([]byte(caseOut), &caseFiltered); err != nil {
+		t.Fatalf("case search json = %s err=%v", caseOut, err)
+	}
+	if caseFiltered.TotalMatches != 2 || caseFiltered.Truncated || len(caseFiltered.Results) != 2 {
+		t.Fatalf("case-insensitive search = %#v", caseFiltered)
+	}
+
+	rawOut := runOK(t, "--archive", archivePath, "--json", "search", "dinner", "--who", "+15550999")
+	var rawFiltered searchListJSON
+	if err := json.Unmarshal([]byte(rawOut), &rawFiltered); err != nil {
+		t.Fatalf("raw handle search json = %s err=%v", rawOut, err)
+	}
+	if rawFiltered.TotalMatches != 1 || len(rawFiltered.Results) != 1 || rawFiltered.Results[0].Who != "+15550999" {
+		t.Fatalf("raw handle search = %#v", rawFiltered)
+	}
+}
+
+func TestSearchWhoMatchedDedupesMappedHandleVariants(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createMessagesFixture(t, dbPath)
+	makeSharedParticipantNameFixture(t, dbPath)
+	createAddressBookRowsFixture(t, addressBookPath, []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Shared', 'Example', '')`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+	})
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runOK(t, "--archive", archivePath, "--json", "search", "--who", " shared   example ", "shared")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("deduped search json = %s err=%v", out, err)
+	}
+	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("deduped search envelope = %#v", payload)
+	}
+	if len(payload.WhoMatched) != 0 {
+		t.Fatalf("mapped handle variants should not report ambiguity = %#v", payload.WhoMatched)
+	}
+	if !snippetsContain(payload.Results, "shared marker one") || !snippetsContain(payload.Results, "shared marker two") {
+		t.Fatalf("deduped search did not filter across both mapped handles = %#v", payload.Results)
+	}
+}
+
+func TestSearchWhoMatchedReportsDistinctUnmappedStoredNames(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+	makeSharedParticipantNameFixture(t, dbPath)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	out := runOK(t, "--archive", archivePath, "--json", "search", "--who", "shared example", "shared")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("ambiguous search json = %s err=%v", out, err)
+	}
+	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("ambiguous search envelope = %#v", payload)
+	}
+	if len(payload.WhoMatched) != 2 || payload.WhoMatched[0] != "Shared Example" || payload.WhoMatched[1] != "Shared Example" {
+		t.Fatalf("who_matched = %#v, want two distinct stored participants", payload.WhoMatched)
+	}
+	if !snippetsContain(payload.Results, "shared marker one") || !snippetsContain(payload.Results, "shared marker two") {
+		t.Fatalf("ambiguous search did not filter across both participants = %#v", payload.Results)
+	}
+}
+
+func TestSearchWhoDedupesOneContactWithPhoneAndEmail(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createContactlessMessagesFixture(t, dbPath)
+	createAddressBookRowsFixture(t, addressBookPath, []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Özel', 'Example', '')`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'ALICE@EXAMPLE.COM', 1)`,
+	})
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runOK(t, "--archive", archivePath, "--json", "search", "dinner", "--who", "özel   example")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("unicode search json = %s err=%v", out, err)
+	}
+	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("unicode search envelope = %#v", payload)
+	}
+	if len(payload.WhoMatched) != 0 {
+		t.Fatalf("one contact with two handles should not report ambiguity = %#v", payload.WhoMatched)
+	}
+	if !snippetsContain(payload.Results, "phone dinner plan") || !snippetsContain(payload.Results, "email dinner plan") {
+		t.Fatalf("unicode search did not filter across both contact handles = %#v", payload.Results)
+	}
+	if snippetsContain(payload.Results, "unmatched dinner plan") {
+		t.Fatalf("unicode search leaked unmatched handle = %#v", payload.Results)
+	}
+}
+
+func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"search", "--who", " \t ", "dinner"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 2 {
+		t.Fatalf("Run() expected usage error, got err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(err.Error(), "search --who requires an identity") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func assertSearchName(t *testing.T, results map[string]searchResultJSON, snippet, who, where string) {
 	t.Helper()
 	item, ok := results[snippet]
@@ -90,4 +254,47 @@ func countValue(counts []control.Count, id string) int64 {
 		}
 	}
 	return -1
+}
+
+func addFixtureMessage(t *testing.T, path string, messageID, handleID, chatID int64, date int64, text string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (?, ?, ?, ?, 'iMessage', 0, ?, null)`, messageID, "extra-message", handleID, date, text); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`insert into chat_message_join(chat_id, message_id) values (?, ?)`, chatID, messageID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func makeSharedParticipantNameFixture(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	updates := []string{
+		`update chat set display_name = 'Shared Example' where rowid in (1, 2)`,
+		`update message set text = 'shared marker one' where rowid = 1`,
+		`update message set text = 'shared marker two' where rowid = 3`,
+	}
+	for _, stmt := range updates {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func snippetsContain(results []searchResultJSON, want string) bool {
+	for _, result := range results {
+		if strings.Contains(result.Snippet, want) {
+			return true
+		}
+	}
+	return false
 }
