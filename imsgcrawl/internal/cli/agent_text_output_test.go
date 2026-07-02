@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -70,6 +71,7 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 		t.Fatalf("search text kept raw result numbers or chat ID table shape:\n%s", search)
 	}
 	assertNotSecretJSON(t, search)
+	conformance.AssertHumanOutput(t, search)
 
 	searchJSON := runOK(t, "--archive", archivePath, "--json", "search", "--limit", "1", "launch")
 	var searchPayload searchListJSON
@@ -119,6 +121,24 @@ func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 		"Messages: 5",
 	)
 	assertNotSecretJSON(t, syncOut)
+
+	status := runOK(t, "--db", dbPath, "--archive", archivePath, "status")
+	assertTextContains(t, status,
+		"Status: ok",
+		"Messages source:",
+		"Local archive:",
+		"Messages: 5",
+	)
+	conformance.AssertHumanOutput(t, status)
+
+	doctor := runOK(t, "--db", dbPath, "--archive", archivePath, "doctor")
+	assertTextContains(t, doctor,
+		"Doctor checks:",
+		"source_store: ok",
+		"archive: ok",
+		"full_disk_access: ok",
+	)
+	conformance.AssertHumanOutput(t, doctor)
 }
 
 func TestDisplayMessageTextNormalizesAttachmentPlaceholder(t *testing.T) {

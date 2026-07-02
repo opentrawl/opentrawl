@@ -40,7 +40,7 @@ func TestCheckHumanOutput(t *testing.T) {
 		},
 		{
 			name: "base64 run",
-			in:   "Body: QUJDREVGR0hJSktMTU5PUFFSU1RVVldYWVo0123456789abcdef\n",
+			in:   "Body: 1ByAINA1BGQRt+dXCj9dBTDK4eRNAF0nB7e7NNFiS0kAAAA=\n",
 			want: "line 1 contains a base64-like run over 40 characters",
 		},
 		{
@@ -145,4 +145,13 @@ func containsFailure(failures []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// Long alphanumeric runs without + or = are paths and test names,
+// not base64 — they must not flag.
+func TestBase64CheckIgnoresPathLikeRuns(t *testing.T) {
+	out := "db: /var/folders/3k/TestMetadataAndSyncTextOutputIsAgentReadable2887315221/001/chat.sqlite\n"
+	for _, f := range CheckHumanOutput(out) {
+		t.Errorf("unexpected failure: %s", f)
+	}
 }

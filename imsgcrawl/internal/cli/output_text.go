@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
+	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -84,66 +86,104 @@ func printSyncText(w io.Writer, value archive.SyncResult) error {
 }
 
 func printStatusText(w io.Writer, value statusOutput) error {
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", value.State, value.Summary); err != nil {
-		return err
-	}
+	return render.WriteStatus(w, render.Status{
+		State:     render.StatusState(value.State),
+		Summary:   value.Summary,
+		Sections:  statusRenderSections(value),
+		Freshness: statusRenderFreshness(value.Freshness),
+		Log:       renderLogTail(value.Log),
+		Warnings:  value.Warnings,
+		Errors:    value.Errors,
+	})
+}
+
+func statusRenderSections(value statusOutput) []render.Section {
+	var sections []render.Section
 	if value.Source != nil {
-		if _, err := fmt.Fprintf(w, "\nMessages source:\n  Database: %s\n  Handles: %d\n  Chats: %d\n  Messages: %d\n", value.Source.DatabasePath, value.Source.Handles, value.Source.Chats, value.Source.Messages); err != nil {
-			return err
-		}
+		sections = append(sections, render.Section{
+			Title: "Messages source",
+			Fields: []render.Field{
+				{Label: "Database", Value: value.Source.DatabasePath},
+				{Label: "Handles", Value: strconv.FormatInt(value.Source.Handles, 10)},
+				{Label: "Chats", Value: strconv.FormatInt(value.Source.Chats, 10)},
+				{Label: "Messages", Value: strconv.FormatInt(value.Source.Messages, 10)},
+			},
+		})
 	}
 	if value.Archive != nil {
-		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n  Last sync: %s\n  Handles: %d\n  Named contacts: %d\n  Chats: %d\n  Participants: %d\n  Chat-message links: %d\n  Messages: %d\n", value.Archive.ArchivePath, emptyDash(value.Archive.LastSyncAt), value.Archive.Handles, value.Archive.NamedContacts, value.Archive.Chats, value.Archive.Participants, value.Archive.ChatMessages, value.Archive.Messages); err != nil {
-			return err
+		sections = append(sections, render.Section{
+			Title: "Local archive",
+			Fields: []render.Field{
+				{Label: "Database", Value: value.Archive.ArchivePath},
+				{Label: "Last sync", Value: value.Archive.LastSyncAt},
+				{Label: "Handles", Value: strconv.FormatInt(value.Archive.Handles, 10)},
+				{Label: "Named contacts", Value: strconv.FormatInt(value.Archive.NamedContacts, 10)},
+				{Label: "Chats", Value: strconv.FormatInt(value.Archive.Chats, 10)},
+				{Label: "Participants", Value: strconv.FormatInt(value.Archive.Participants, 10)},
+				{Label: "Chat-message links", Value: strconv.FormatInt(value.Archive.ChatMessages, 10)},
+				{Label: "Messages", Value: strconv.FormatInt(value.Archive.Messages, 10)},
+			},
+		})
+	}
+	return sections
+}
+
+func statusRenderFreshness(value *statusFreshness) *render.Freshness {
+	if value == nil {
+		return nil
+	}
+	return &render.Freshness{LastSync: value.LastSync}
+}
+
+func renderLogTail(value *logTailOutput) render.LogTail {
+	if value == nil {
+		return render.LogTail{}
+	}
+	out := render.LogTail{}
+	if value.LastRun != nil {
+		out.LastRun = &cklog.RunSummary{
+			RunID:      value.LastRun.RunID,
+			Command:    value.LastRun.Command,
+			StartedAt:  parseLogTime(value.LastRun.StartedAt),
+			FinishedAt: parseLogTime(value.LastRun.FinishedAt),
+			Outcome:    value.LastRun.Outcome,
+			LastEvent:  value.LastRun.LastEvent,
 		}
 	}
-	if value.Freshness != nil {
-		if _, err := fmt.Fprintf(w, "\nFreshness:\n  Last sync: %s\n", value.Freshness.LastSync); err != nil {
-			return err
+	if value.MostRecentError != nil {
+		out.MostRecentError = &cklog.Line{
+			RunID:     value.MostRecentError.RunID,
+			Command:   value.MostRecentError.Command,
+			Event:     value.MostRecentError.Event,
+			Message:   value.MostRecentError.Message,
+			Timestamp: parseLogTime(value.MostRecentError.Timestamp),
 		}
 	}
-	if len(value.Warnings) > 0 {
-		if _, err := io.WriteString(w, "\nWarnings:\n"); err != nil {
-			return err
-		}
-		for _, warning := range value.Warnings {
-			if _, err := fmt.Fprintf(w, "  - %s\n", warning); err != nil {
-				return err
-			}
-		}
+	return out
+}
+
+func parseLogTime(value string) time.Time {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}
 	}
-	if len(value.Errors) > 0 {
-		if _, err := io.WriteString(w, "\nErrors:\n"); err != nil {
-			return err
-		}
-		for _, msg := range value.Errors {
-			if _, err := fmt.Fprintf(w, "  - %s\n", msg); err != nil {
-				return err
-			}
-		}
+	t, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}
 	}
-	return printLogTailText(w, value.Log)
+	return t
 }
 
 func printDoctorText(w io.Writer, value doctorOutput) error {
-	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
-		return err
-	}
+	checks := make([]render.Check, 0, len(value.Checks))
 	for _, check := range value.Checks {
-		line := fmt.Sprintf("  %s: %s", check.ID, check.State)
-		if check.Message != "" {
-			line += " - " + check.Message
-		}
-		if _, err := io.WriteString(w, line+"\n"); err != nil {
-			return err
-		}
-		if check.Remedy != "" {
-			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
-				return err
-			}
-		}
+		checks = append(checks, render.Check{
+			Name:    check.ID,
+			State:   render.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
 	}
-	return printLogTailText(w, value.Log)
+	return render.WriteDoctor(w, checks, renderLogTail(value.Log))
 }
 
 func printChatsText(w io.Writer, value chatListOutput) error {
@@ -336,32 +376,4 @@ func searchDisplayRef(item archive.SearchResult) string {
 		return item.ShortRef
 	}
 	return messageRef(item.MessageID)
-}
-
-func printLogTailText(w io.Writer, value *logTailOutput) error {
-	if value == nil {
-		return nil
-	}
-	if _, err := io.WriteString(w, "\nLog:\n"); err != nil {
-		return err
-	}
-	if value.LastRun != nil {
-		if _, err := fmt.Fprintf(w, "  Last run: %s %s", value.LastRun.Command, value.LastRun.Outcome); err != nil {
-			return err
-		}
-		if value.LastRun.FinishedAt != "" {
-			if _, err := fmt.Fprintf(w, " at %s", value.LastRun.FinishedAt); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
-	}
-	if value.MostRecentError != nil {
-		if _, err := fmt.Fprintf(w, "  Most recent error: %s %s\n", value.MostRecentError.Command, value.MostRecentError.Event); err != nil {
-			return err
-		}
-	}
-	return nil
 }

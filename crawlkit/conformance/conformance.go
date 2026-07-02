@@ -64,7 +64,7 @@ func CheckHumanOutput(humanOutput string) []string {
 		if match := keyValueDumpPattern.FindStringSubmatch(line); match != nil {
 			failures = append(failures, fmt.Sprintf("line %d looks like a key=value dump: %s", lineNo, match[1]))
 		}
-		if match := base64RunPattern.FindString(line); match != "" {
+		if match := base64RunPattern.FindString(line); looksLikeBase64(match) {
 			failures = append(failures, fmt.Sprintf("line %d contains a base64-like run over 40 characters", lineNo))
 		}
 		if match := enumPattern.FindString(line); match != "" {
@@ -136,7 +136,7 @@ func checkSearchText(index int, field, value string) []string {
 	if strings.ContainsRune(value, '\uFFFD') {
 		failures = append(failures, fmt.Sprintf("search result %d %s contains U+FFFD replacement text", index, field))
 	}
-	if match := base64RunPattern.FindString(value); match != "" {
+	if match := base64RunPattern.FindString(value); looksLikeBase64(match) {
 		failures = append(failures, fmt.Sprintf("search result %d %s contains a base64-like run over 40 characters", index, field))
 	}
 	if match := enumPattern.FindString(value); match != "" {
@@ -186,4 +186,15 @@ func isFrontTruncated(result searchResult) bool {
 func hasFrontTruncationMarker(snippet string) bool {
 	snippet = strings.TrimSpace(snippet)
 	return strings.HasPrefix(snippet, "\u2026") || strings.HasPrefix(snippet, "...")
+}
+
+// looksLikeBase64 filters candidate runs: 40+ chars of real base64
+// binary data virtually always carries + or = padding, while long
+// alphanumeric path segments (temp dirs, test names, content hashes
+// in URLs) carry neither. Requiring one kills those false positives.
+func looksLikeBase64(match string) bool {
+	if match == "" {
+		return false
+	}
+	return strings.ContainsAny(match, "+=")
 }

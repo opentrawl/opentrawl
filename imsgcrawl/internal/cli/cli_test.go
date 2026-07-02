@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
@@ -267,6 +268,7 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 
 	searchOut := runOK(t, "--archive", archivePath, "--json", "search", "launch")
 	assertSearchEnvelopeKeys(t, []byte(searchOut))
+	conformance.AssertSearchEnvelope(t, []byte(searchOut))
 	var results searchListJSON
 	if err := json.Unmarshal([]byte(searchOut), &results); err != nil {
 		t.Fatalf("search json = %s err=%v", searchOut, err)
