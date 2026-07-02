@@ -57,6 +57,7 @@ type runtime struct {
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	jsonFlag, args := pullJSONFlag(args)
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		printUsage(stdout)
 		return nil
@@ -83,13 +84,29 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source}
+	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonFlag || *jsonOut, dbPath: *dbPath, source: *source}
 	return r.dispatch(rest)
+}
+
+func pullJSONFlag(args []string) (bool, []string) {
+	out := make([]string, 0, len(args))
+	jsonOut := false
+	for _, arg := range args {
+		if arg == "--json" || arg == "-json" {
+			jsonOut = true
+			continue
+		}
+		out = append(out, arg)
+	}
+	return jsonOut, out
 }
 
 func (r *runtime) dispatch(args []string) error {
 	switch args[0] {
 	case "metadata":
+		if r.json {
+			return r.print(contractMetadata())
+		}
 		return r.print(controlManifest())
 	case "import", "sync":
 		return r.runImport(args[1:])
@@ -134,7 +151,11 @@ func (r *runtime) runDoctor(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
-	return r.printProbe(telegramdesktop.Probe(r.ctx, telegramdesktop.Options{Path: *path}))
+	report := telegramdesktop.Probe(r.ctx, telegramdesktop.Options{Path: *path})
+	if r.json {
+		return r.print(r.doctorEnvelope(report))
+	}
+	return r.printProbe(report)
 }
 
 func (r *runtime) runStatus(args []string) error {
@@ -142,6 +163,9 @@ func (r *runtime) runStatus(args []string) error {
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
+	}
+	if r.json {
+		return r.print(r.statusEnvelope())
 	}
 	return r.withStore(func(st *store.Store) error {
 		status, err := st.Status(r.ctx)
@@ -575,7 +599,7 @@ func (r *runtime) runTopics(args []string) error {
 }
 
 func (r *runtime) runMessages(args []string) error {
-	filter, err := r.messageFilter("telecrawl messages", args, false)
+	filter, err := r.messageFilter("telecrawl messages", args, false, defaultMessageLimit)
 	if err != nil {
 		return err
 	}
@@ -589,27 +613,71 @@ func (r *runtime) runMessages(args []string) error {
 }
 
 func (r *runtime) runSearch(args []string) error {
-	filter, err := r.messageFilter("telecrawl search", args, true)
+	filter, err := r.messageFilter("telecrawl search", args, true, defaultSearchLimit)
 	if err != nil {
 		return err
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = defaultSearchLimit
+	}
+	if filter.Limit > maxSearchLimit {
+		filter.Limit = maxSearchLimit
 	}
 	return r.withStore(func(st *store.Store) error {
 		messages, err := st.Search(r.ctx, filter)
 		if err != nil {
 			return err
 		}
+		if r.json {
+			total, err := st.CountSearch(r.ctx, filter)
+			if err != nil {
+				return err
+			}
+			return r.print(newSearchEnvelope(filter.Query, messages, total))
+		}
 		return r.print(messages)
 	})
 }
 
-func (r *runtime) messageFilter(name string, args []string, requireQuery bool) (store.MessageFilter, error) {
+// messageFilterValueFlags are the filter flags that consume a value, so
+// splitFlagArgs can keep flag/value pairs together when flags follow the
+// query on the command line.
+var messageFilterValueFlags = map[string]bool{
+	"chat": true, "sender": true, "topic": true,
+	"limit": true, "after": true, "before": true,
+}
+
+// splitFlagArgs lets flags appear after positional arguments, which Go's
+// flag package otherwise stops parsing at.
+func splitFlagArgs(args []string) (flags, positionals []string) {
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			positionals = append(positionals, args[i+1:]...)
+			break
+		}
+		if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			name := strings.TrimLeft(arg, "-")
+			if !strings.Contains(name, "=") && messageFilterValueFlags[name] && i+1 < len(args) {
+				i++
+				flags = append(flags, args[i])
+			}
+			continue
+		}
+		positionals = append(positionals, arg)
+	}
+	return flags, positionals
+}
+
+func (r *runtime) messageFilter(name string, args []string, requireQuery bool, defaultLimit int) (store.MessageFilter, error) {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var filter store.MessageFilter
 	fs.StringVar(&filter.ChatJID, "chat", "", "")
 	fs.StringVar(&filter.Sender, "sender", "", "")
 	fs.StringVar(&filter.TopicID, "topic", "", "")
-	fs.IntVar(&filter.Limit, "limit", 50, "")
+	fs.IntVar(&filter.Limit, "limit", defaultLimit, "")
 	after := fs.String("after", "", "")
 	before := fs.String("before", "", "")
 	fromMe := fs.Bool("from-me", false, "")
@@ -617,15 +685,16 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool) (
 	fs.BoolVar(&filter.HasMedia, "media", false, "")
 	fs.BoolVar(&filter.Pinned, "pinned", false, "")
 	fs.BoolVar(&filter.Asc, "asc", false, "")
-	if err := fs.Parse(args); err != nil {
+	flagTokens, positionals := splitFlagArgs(args)
+	if err := fs.Parse(flagTokens); err != nil {
 		return filter, usageErr(err)
 	}
 	if requireQuery {
-		if fs.NArg() != 1 {
+		if len(positionals) != 1 {
 			return filter, usageErr(errors.New("search takes exactly one query"))
 		}
-		filter.Query = fs.Arg(0)
-	} else if fs.NArg() != 0 {
+		filter.Query = positionals[0]
+	} else if len(positionals) != 0 {
 		return filter, usageErr(errors.New("messages takes flags only"))
 	}
 	if *after != "" {
@@ -911,18 +980,18 @@ func printUsage(w io.Writer) {
 	_, _ = io.WriteString(w, `telecrawl: Telegram archive probe/import CLI
 
 usage:
-  telecrawl [--json] doctor [--path PATH]
-  telecrawl [--json] metadata
-  telecrawl [--json] import [--path PATH] [--chat ID] [--dialogs-limit N] [--messages-limit N] [--fetch-media]
-  telecrawl [--json] status
-  telecrawl [--json] folders
-  telecrawl [--json] contacts [--limit N]
-  telecrawl [--json] contacts export
-  telecrawl [--json] chats [--limit N] [--unread] [--folder ID]
-  telecrawl [--json] topics --chat ID [--limit N]
-  telecrawl [--json] messages [--chat ID] [--topic ID] [--limit N] [--after DATE]
-  telecrawl [--json] search "query" [--chat ID] [--topic ID]
-  telecrawl [--json] backup init|push|pull|status|snapshots
+  telecrawl doctor [--path PATH] [--json]
+  telecrawl metadata [--json]
+  telecrawl import [--path PATH] [--chat ID] [--dialogs-limit N] [--messages-limit N] [--fetch-media] [--json]
+  telecrawl status [--json]
+  telecrawl folders [--json]
+  telecrawl contacts [--limit N] [--json]
+  telecrawl contacts export [--json]
+  telecrawl chats [--limit N] [--unread] [--folder ID] [--json]
+  telecrawl topics --chat ID [--limit N] [--json]
+  telecrawl messages [--chat ID] [--topic ID] [--limit N] [--after DATE] [--json]
+  telecrawl search "query" [--chat ID] [--topic ID] [--json]
+  telecrawl backup init|push|pull|status|snapshots [--json]
   telecrawl version
 
 notes:
