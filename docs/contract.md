@@ -100,6 +100,10 @@ self-declared headline metrics, in display order — the app and
 `--limit` defaults to 20, hard maximum 200. `--after`/`--before`
 narrow by time.
 
+A snippet is a plain text fragment: single line, whitespace
+collapsed, no highlight or match markers of any kind. The full item
+is what `open` is for.
+
 ## open
 
 Takes a ref this crawler issued; returns the full item with its
