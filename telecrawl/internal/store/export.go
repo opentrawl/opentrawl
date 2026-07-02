@@ -52,11 +52,15 @@ func (s *Store) ExportAll(ctx context.Context) (SnapshotData, error) {
 	if err != nil {
 		return SnapshotData{}, err
 	}
+	participants, err := s.allGroupParticipants(ctx)
+	if err != nil {
+		return SnapshotData{}, err
+	}
 	messages, err := s.Messages(ctx, MessageFilter{Limit: int(^uint(0) >> 1), Asc: true})
 	if err != nil {
 		return SnapshotData{}, err
 	}
-	return SnapshotData{Contacts: contacts, Chats: chats, Folders: folders, FolderChats: folderChats, Topics: topics, Messages: messages}, nil
+	return SnapshotData{Contacts: contacts, Chats: chats, Folders: folders, FolderChats: folderChats, Participants: participants, Topics: topics, Messages: messages}, nil
 }
 
 func (s *Store) ImportSnapshot(ctx context.Context, data SnapshotData, sourcePath string, finishedAt time.Time) error {
@@ -69,7 +73,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, data SnapshotData, sourcePat
 			stats.MediaMessages++
 		}
 	}
-	return s.ReplaceAll(ctx, stats, data.Contacts, data.Chats, data.Folders, data.FolderChats, data.Topics, data.Messages)
+	return s.ReplaceAll(ctx, stats, data.Contacts, data.Chats, data.Folders, data.FolderChats, data.Topics, data.Participants, data.Messages)
 }
 
 func (s *Store) ListContacts(ctx context.Context, limit int) ([]Contact, error) {
@@ -157,6 +161,26 @@ func (s *Store) allTopics(ctx context.Context) ([]Topic, error) {
 		t.Hidden = hidden != 0
 		t.LastMessageAt = fromUnix(ts)
 		out = append(out, t)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) allGroupParticipants(ctx context.Context) ([]GroupParticipant, error) {
+	rows, err := s.db.QueryContext(ctx, `select group_jid,user_jid,coalesce(contact_name,''),coalesce(first_name,''),is_admin,is_active from group_participants order by group_jid, user_jid`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []GroupParticipant
+	for rows.Next() {
+		var p GroupParticipant
+		var admin, active int
+		if err := rows.Scan(&p.GroupJID, &p.UserJID, &p.ContactName, &p.FirstName, &admin, &active); err != nil {
+			return nil, err
+		}
+		p.IsAdmin = admin != 0
+		p.IsActive = active != 0
+		out = append(out, p)
 	}
 	return out, rows.Err()
 }

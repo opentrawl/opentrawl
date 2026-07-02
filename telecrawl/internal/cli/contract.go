@@ -67,6 +67,7 @@ type doctorCheck struct {
 
 type searchEnvelope struct {
 	Query        string         `json:"query"`
+	WhoMatched   []string       `json:"who_matched,omitempty"`
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
@@ -157,7 +158,7 @@ func contractMetadata() metadataEnvelope {
 		ID:              "telecrawl",
 		DisplayName:     "Telegram",
 		Version:         version,
-		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "contacts_export", "backup"},
+		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "contacts_export", "backup"},
 	}
 }
 
@@ -296,9 +297,10 @@ func (r *runtime) archiveCheck() doctorCheck {
 	return doctorCheck{ID: "archive", State: "ok"}
 }
 
-func newSearchEnvelope(query string, messages []store.Message, total int) searchEnvelope {
+func newSearchEnvelope(query string, messages []store.Message, total int, whoMatched []string) searchEnvelope {
 	return searchEnvelope{
 		Query:        query,
+		WhoMatched:   whoMatched,
 		Results:      searchResults(messages),
 		TotalMatches: total,
 		Truncated:    total > len(messages),

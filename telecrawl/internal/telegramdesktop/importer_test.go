@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
@@ -67,6 +68,32 @@ func TestPostboxParserSanitizedFixture(t *testing.T) {
 	}
 	if len(result.Messages) != 1 || result.Messages[0].Text != "fixture hello" || result.Messages[0].MediaType != "photo_or_video" {
 		t.Fatalf("messages = %#v", result.Messages)
+	}
+}
+
+func TestGroupParticipantsFromMessagesUsesKnownGroupAuthors(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	participants := groupParticipantsFromMessages(
+		[]store.Chat{
+			{JID: "100", Kind: "group", Name: "team room"},
+			{JID: "200", Kind: "chat", Name: "direct chat"},
+		},
+		[]store.Contact{{JID: "600", FullName: "Alice Example", FirstName: "Alice"}},
+		[]store.Message{
+			{SourcePK: 1, ChatJID: "100", SenderJID: "600", SenderName: "Alice", Timestamp: now},
+			{SourcePK: 2, ChatJID: "100", SenderJID: "600", SenderName: "Alice", Timestamp: now.Add(time.Minute)},
+			{SourcePK: 3, ChatJID: "100", SenderJID: "700", SenderName: "Bob Example", Timestamp: now.Add(2 * time.Minute)},
+			{SourcePK: 4, ChatJID: "200", SenderJID: "800", SenderName: "Direct Person", Timestamp: now.Add(3 * time.Minute)},
+		},
+	)
+	if len(participants) != 2 {
+		t.Fatalf("participants = %#v, want 2 known group authors", participants)
+	}
+	if participants[0].GroupJID != "100" || participants[0].UserJID != "600" || participants[0].ContactName != "Alice Example" || !participants[0].IsActive {
+		t.Fatalf("first participant = %#v", participants[0])
+	}
+	if participants[1].GroupJID != "100" || participants[1].UserJID != "700" || participants[1].ContactName != "Bob Example" || !participants[1].IsActive {
+		t.Fatalf("second participant = %#v", participants[1])
 	}
 }
 

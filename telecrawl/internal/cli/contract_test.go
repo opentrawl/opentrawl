@@ -53,6 +53,9 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	if !slices.Contains(payload.Capabilities, "open") {
 		t.Fatalf("metadata capabilities = %#v, want open", payload.Capabilities)
 	}
+	if !slices.Contains(payload.Capabilities, "who") {
+		t.Fatalf("metadata capabilities = %#v, want who", payload.Capabilities)
+	}
 }
 
 func TestStatusJSONUsesContractShapeAndStates(t *testing.T) {
@@ -172,6 +175,76 @@ func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
 			t.Fatalf("search payload = %#v", payload)
 		}
 	})
+}
+
+func TestSearchWhoFiltersParticipants(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	beforeQuery := runSearchJSON(t, db, "search", "--who", "Alice Example", "needle", "--json")
+	if len(beforeQuery.Results) != 1 || beforeQuery.TotalMatches != 1 || beforeQuery.Results[0].Who != "Alice Example" {
+		t.Fatalf("search --who before query = %#v", beforeQuery)
+	}
+
+	afterQuery := runSearchJSON(t, db, "search", "needle", "--who", "Alice Example", "--json")
+	if len(afterQuery.Results) != 1 || afterQuery.TotalMatches != 1 || afterQuery.Results[0].Who != "Alice Example" {
+		t.Fatalf("search --who after query = %#v", afterQuery)
+	}
+
+	collapsed := runSearchJSON(t, db, "search", "needle", "--who", " Alice   Example ", "--json")
+	if len(collapsed.Results) != 1 || collapsed.TotalMatches != 1 || collapsed.Results[0].Who != "Alice Example" {
+		t.Fatalf("search --who collapsed whitespace = %#v", collapsed)
+	}
+}
+
+func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "needle", "--who", "   ", "--json")
+	if err == nil {
+		t.Fatalf("blank --who succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if !strings.Contains(err.Error(), "--who requires an identity") {
+		t.Fatalf("blank --who error = %v, want identity error", err)
+	}
+	if stdout != "" {
+		t.Fatalf("blank --who stdout = %q, want empty", stdout)
+	}
+}
+
+func TestSearchWhoReportsAmbiguousMatches(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	payload := runSearchJSON(t, db, "search", "needle", "--who", "jordan example", "--json")
+	if len(payload.Results) != 2 || payload.TotalMatches != 2 || payload.Truncated {
+		t.Fatalf("multi-match search payload = %#v", payload)
+	}
+	want := []string{"JORDAN EXAMPLE", "Jordan Example"}
+	if !slices.Equal(payload.WhoMatched, want) {
+		t.Fatalf("who_matched = %#v, want %#v", payload.WhoMatched, want)
+	}
+}
+
+func TestSearchWhoIsCaseInsensitive(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	payload := runSearchJSON(t, db, "search", "needle", "--who", "aLiCe eXaMpLe", "--json")
+	if len(payload.Results) != 1 || payload.TotalMatches != 1 || payload.Results[0].Who != "Alice Example" {
+		t.Fatalf("case-insensitive --who payload = %#v", payload)
+	}
+}
+
+func TestSearchWhoTotalsStayFilteredUnderLimit(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	payload := runSearchJSON(t, db, "search", "needle", "--who", "Recipient Person", "--limit", "1", "--json")
+	if len(payload.Results) != 1 || payload.TotalMatches != 2 || !payload.Truncated {
+		t.Fatalf("filtered limit payload = %#v", payload)
+	}
+	for _, result := range payload.Results {
+		if result.Where != "Recipient Person" {
+			t.Fatalf("result outside recipient chat = %#v", result)
+		}
+	}
 }
 
 func TestSearchUsesHumaneWhoFallbacks(t *testing.T) {
@@ -362,8 +435,9 @@ type doctorCheckJSON struct {
 }
 
 type searchJSON struct {
-	Query   string `json:"query"`
-	Results []struct {
+	Query      string   `json:"query"`
+	WhoMatched []string `json:"who_matched"`
+	Results    []struct {
 		Ref     string `json:"ref"`
 		Time    string `json:"time"`
 		Who     string `json:"who"`
@@ -530,7 +604,7 @@ func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 			})
 		}
 	}
-	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: finishedAt, FinishedAt: finishedAt}, nil, chats, nil, nil, nil, rows); err != nil {
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: finishedAt, FinishedAt: finishedAt}, nil, chats, nil, nil, nil, nil, rows); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -559,7 +633,40 @@ func seedSearchArchive(t *testing.T, count int) string {
 			Text:       fmt.Sprintf("synthetic launch note %03d", i+1),
 		})
 	}
-	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, nil, chats, nil, nil, nil, messages); err != nil {
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, nil, chats, nil, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func seedWhoSearchArchive(t *testing.T) string {
+	t.Helper()
+	db := filepath.Join(t.TempDir(), "telecrawl.db")
+	st, err := store.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "200", FullName: "Alice Example"},
+		{JID: "300", FullName: "Recipient Person"},
+		{JID: "400", FullName: "Jordan Example"},
+		{JID: "401", FullName: "JORDAN EXAMPLE"},
+	}
+	chats := []store.Chat{
+		{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now.Add(4 * time.Minute), MessageCount: 4},
+		{JID: "300", Kind: "chat", Name: "Recipient Person", LastMessageAt: now.Add(6 * time.Minute), MessageCount: 2},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "100", ChatName: "example chat", MessageID: "0:1", SenderJID: "200", SenderName: "Alice Example", Timestamp: now, Text: "needle from alice"},
+		{SourcePK: 2, ChatJID: "100", ChatName: "example chat", MessageID: "0:2", SenderJID: "201", SenderName: "Other Person", Timestamp: now.Add(time.Minute), Text: "needle from other"},
+		{SourcePK: 3, ChatJID: "100", ChatName: "example chat", MessageID: "0:3", SenderJID: "400", SenderName: "Jordan Example", Timestamp: now.Add(2 * time.Minute), Text: "needle from jordan lower"},
+		{SourcePK: 4, ChatJID: "100", ChatName: "example chat", MessageID: "0:4", SenderJID: "401", SenderName: "JORDAN EXAMPLE", Timestamp: now.Add(3 * time.Minute), Text: "needle from jordan upper"},
+		{SourcePK: 5, ChatJID: "300", ChatName: "Recipient Person", MessageID: "0:5", SenderJID: "999", SenderName: "Archive Owner", Timestamp: now.Add(5 * time.Minute), FromMe: true, Text: "needle to recipient"},
+		{SourcePK: 6, ChatJID: "300", ChatName: "Recipient Person", MessageID: "0:6", SenderJID: "300", SenderName: "Recipient Person", Timestamp: now.Add(6 * time.Minute), Text: "needle from recipient"},
+	}
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	return db
@@ -585,7 +692,7 @@ func seedSearchWhoArchive(t *testing.T) string {
 		{SourcePK: 2, ChatJID: "100", ChatName: "example chat", MessageID: "0:2", SenderJID: "87092564", SenderName: "", Timestamp: now.Add(time.Minute), Text: "firstname-fallback needle"},
 		{SourcePK: 3, ChatJID: "100", ChatName: "example chat", MessageID: "0:3", SenderJID: "87092565", SenderName: "87092565", Timestamp: now.Add(2 * time.Minute), Text: "no-human-fallback needle"},
 	}
-	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, messages); err != nil {
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	return db

@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/telecrawl/internal/backup"
@@ -255,14 +254,14 @@ func storeImportResult(ctx context.Context, st *store.Store, result *telegramdes
 	}
 	refreshImportMediaStats(result)
 	if strings.TrimSpace(chatFilter) == "" {
-		return st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Messages)
+		return st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
 	}
 	if len(result.Chats) == 0 {
 		return fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
 	}
 	for _, chat := range result.Chats {
 		partial := importResultForChat(*result, chat.JID)
-		if err := st.UpsertChat(ctx, partial.Stats, chat.JID, partial.Contacts, partial.Chats, partial.Folders, partial.FolderChats, partial.Topics, partial.Messages); err != nil {
+		if err := st.UpsertChat(ctx, partial.Stats, chat.JID, partial.Contacts, partial.Chats, partial.Folders, partial.FolderChats, partial.Topics, partial.Participants, partial.Messages); err != nil {
 			return err
 		}
 	}
@@ -387,16 +386,21 @@ func importResultForChat(result telegramdesktop.ImportResult, chatJID string) te
 			out.Topics = append(out.Topics, topic)
 		}
 	}
+	for _, participant := range result.Participants {
+		if participant.GroupJID == chatJID {
+			out.Participants = append(out.Participants, participant)
+		}
+	}
 	for _, message := range result.Messages {
 		if message.ChatJID == chatJID {
 			out.Messages = append(out.Messages, message)
 		}
 	}
-	out.Contacts = contactsForMessages(result.Contacts, out.Messages, chatJID)
+	out.Contacts = contactsForMessages(result.Contacts, out.Messages, out.Participants, chatJID)
 	return out
 }
 
-func contactsForMessages(contacts []store.Contact, messages []store.Message, chatJID string) []store.Contact {
+func contactsForMessages(contacts []store.Contact, messages []store.Message, participants []store.GroupParticipant, chatJID string) []store.Contact {
 	peerIDs := map[string]struct{}{}
 	if strings.TrimSpace(chatJID) != "" {
 		peerIDs[chatJID] = struct{}{}
@@ -407,6 +411,11 @@ func contactsForMessages(contacts []store.Contact, messages []store.Message, cha
 		}
 		if strings.TrimSpace(message.SenderJID) != "" {
 			peerIDs[message.SenderJID] = struct{}{}
+		}
+	}
+	for _, participant := range participants {
+		if strings.TrimSpace(participant.UserJID) != "" {
+			peerIDs[participant.UserJID] = struct{}{}
 		}
 	}
 	out := make([]store.Contact, 0, len(peerIDs))
@@ -546,32 +555,7 @@ func preferContactExportName(candidate, current store.Contact) bool {
 }
 
 func contactDisplayName(contact store.Contact) string {
-	if name := cleanContactName(contact.FullName, contact); name != "" {
-		return name
-	}
-	return cleanContactName(strings.TrimSpace(contact.FirstName+" "+contact.LastName), contact)
-}
-
-func cleanContactName(name string, contact store.Contact) string {
-	name = strings.TrimSpace(name)
-	switch {
-	case name == "":
-		return ""
-	case sameContactText(name, contact.Phone):
-		return ""
-	case sameContactText(name, contact.JID):
-		return ""
-	case sameContactText(name, contact.Username):
-		return ""
-	case sameContactText(name, contact.LID):
-		return ""
-	case strings.HasPrefix(name, "@"):
-		return ""
-	case looksLikePhone(name):
-		return ""
-	default:
-		return name
-	}
+	return store.ContactDisplayName(contact)
 }
 
 func sameContactText(a, b string) bool {
@@ -586,25 +570,6 @@ func isTelegramServiceContact(contact store.Contact) bool {
 		sameContactText(contact.FirstName, "Telegram") &&
 		strings.TrimSpace(contact.LastName) == "" &&
 		strings.TrimSpace(contact.Username) == ""
-}
-
-func looksLikePhone(value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return false
-	}
-	digits := 0
-	other := 0
-	for _, r := range value {
-		switch {
-		case unicode.IsDigit(r):
-			digits++
-		case strings.ContainsRune(" +()-.", r):
-		default:
-			other++
-		}
-	}
-	return digits >= 5 && other == 0
 }
 
 func (r *runtime) runTopics(args []string) error {
@@ -653,6 +618,10 @@ func (r *runtime) runSearch(args []string) error {
 		filter.Limit = maxSearchLimit
 	}
 	return r.withStore(func(st *store.Store) error {
+		whoMatched, err := r.resolveWhoFilter(st, &filter)
+		if err != nil {
+			return err
+		}
 		messages, err := st.Search(r.ctx, filter)
 		if err != nil {
 			return err
@@ -661,8 +630,28 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, messages, total))
+		return r.print(newSearchEnvelope(filter.Query, messages, total, whoMatched))
 	})
+}
+
+func (r *runtime) resolveWhoFilter(st *store.Store, filter *store.MessageFilter) ([]string, error) {
+	if strings.TrimSpace(filter.Who) == "" {
+		return nil, nil
+	}
+	matches, err := st.MatchParticipants(r.ctx, filter.Who)
+	if err != nil {
+		return nil, err
+	}
+	filter.WhoParticipants = matches
+	filter.WhoResolved = true
+	if len(matches) <= 1 {
+		return nil, nil
+	}
+	names := make([]string, 0, len(matches))
+	for _, match := range matches {
+		names = append(names, match.DisplayName)
+	}
+	return names, nil
 }
 
 func (r *runtime) runOpen(args []string) error {
@@ -716,7 +705,7 @@ func (r *runtime) contractError(code, message, remedy string) error {
 // splitFlagArgs can keep flag/value pairs together when flags follow the
 // query on the command line.
 var messageFilterValueFlags = map[string]bool{
-	"chat": true, "sender": true, "topic": true,
+	"chat": true, "sender": true, "topic": true, "who": true,
 	"limit": true, "after": true, "before": true,
 }
 
@@ -750,6 +739,9 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 	fs.StringVar(&filter.ChatJID, "chat", "", "")
 	fs.StringVar(&filter.Sender, "sender", "", "")
 	fs.StringVar(&filter.TopicID, "topic", "", "")
+	if requireQuery {
+		fs.StringVar(&filter.Who, "who", "", "")
+	}
 	fs.IntVar(&filter.Limit, "limit", defaultLimit, "")
 	after := fs.String("after", "", "")
 	before := fs.String("before", "", "")
@@ -762,7 +754,19 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 	if err := fs.Parse(flagTokens); err != nil {
 		return filter, usageErr(err)
 	}
+	whoProvided := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "who" {
+			whoProvided = true
+		}
+	})
 	if requireQuery {
+		if whoProvided {
+			filter.Who = strings.Join(strings.Fields(filter.Who), " ")
+			if filter.Who == "" {
+				return filter, usageErr(errors.New("--who requires an identity"))
+			}
+		}
 		if len(positionals) != 1 {
 			return filter, usageErr(errors.New("search takes exactly one query"))
 		}
@@ -1053,7 +1057,7 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 		}
 	}
 	if value.Truncated {
-		_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, or --chat\n", len(value.Results), value.TotalMatches)
+		_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, --chat, or --who\n", len(value.Results), value.TotalMatches)
 		return err
 	}
 	_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches\n", len(value.Results), value.TotalMatches)
@@ -1154,7 +1158,7 @@ usage:
   telecrawl chats [--limit N] [--unread] [--folder ID] [--json]
   telecrawl topics --chat ID [--limit N] [--json]
   telecrawl messages [--chat ID] [--topic ID] [--limit N] [--after DATE] [--json]
-  telecrawl search "query" [--chat ID] [--topic ID] [--limit N] [--json]
+  telecrawl search "query" [--who IDENTITY] [--chat ID] [--topic ID] [--limit N] [--json]
   telecrawl open telecrawl:msg/ID [--json]
   telecrawl backup init|push|pull|status|snapshots [--json]
   telecrawl version
@@ -1197,7 +1201,7 @@ func commandUsage(args []string) string {
 	case "messages":
 		return "usage: telecrawl messages [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--asc] [--json]\n\nLists a bounded set of archived messages.\n"
 	case "search":
-		return "usage: telecrawl search \"query\" [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearches archived messages and returns refs for telecrawl open.\n"
+		return "usage: telecrawl search \"query\" [--who IDENTITY] [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearches archived messages and returns refs for telecrawl open.\n"
 	case "open":
 		return "usage: telecrawl open telecrawl:msg/ID [--json]\n\nOpens one search ref with a bounded same-chat context window.\n"
 	case "backup":

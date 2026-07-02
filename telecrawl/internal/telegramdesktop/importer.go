@@ -37,13 +37,14 @@ type ExistingMediaRef struct {
 }
 
 type ImportResult struct {
-	Stats       store.ImportStats
-	Contacts    []store.Contact
-	Chats       []store.Chat
-	Folders     []store.Folder
-	FolderChats []store.FolderChat
-	Topics      []store.Topic
-	Messages    []store.Message
+	Stats        store.ImportStats
+	Contacts     []store.Contact
+	Chats        []store.Chat
+	Folders      []store.Folder
+	FolderChats  []store.FolderChat
+	Participants []store.GroupParticipant
+	Topics       []store.Topic
+	Messages     []store.Message
 }
 
 func Import(ctx context.Context, opts ImportOptions, dbPath string) (ImportResult, error) {
@@ -202,7 +203,7 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 		if chat == nil {
 			chat = &store.Chat{
 				JID:           msg.ChatID,
-				Kind:          "chat",
+				Kind:          postboxChatKind(msg.RawChatID),
 				Name:          firstNonEmpty(msg.ChatName, allPeers[msg.ChatID]),
 				LastMessageAt: parseTime(msg.Timestamp),
 			}
@@ -219,6 +220,7 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 	sort.Slice(result.Chats, func(i, j int) bool {
 		return result.Chats[i].LastMessageAt.After(result.Chats[j].LastMessageAt)
 	})
+	result.Participants = groupParticipantsFromMessages(result.Chats, result.Contacts, result.Messages)
 	finished := time.Now().UTC()
 	result.Stats.SourcePath = sourcePath
 	result.Stats.DBPath = dbPath
@@ -238,6 +240,17 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 
 func postboxMessageIdentity(msg postboxpkg.MessageRecord) string {
 	return strings.Join([]string{msg.AccountID, msg.ChatID, msg.MessageID}, "\x00")
+}
+
+func postboxChatKind(rawChatID int64) string {
+	switch postboxpkg.PeerTypeForID(rawChatID) {
+	case "group":
+		return "group"
+	case "channel":
+		return "channel"
+	default:
+		return "chat"
+	}
 }
 
 func filterPostboxChat(messages []postboxpkg.MessageRecord, chatID string) []postboxpkg.MessageRecord {
@@ -321,6 +334,67 @@ func filterPostboxContactsForMessages(contacts map[string]store.Contact, message
 			out = append(out, contact)
 		}
 	}
+	return out
+}
+
+func groupParticipantsFromMessages(chats []store.Chat, contacts []store.Contact, messages []store.Message) []store.GroupParticipant {
+	groupChats := map[string]struct{}{}
+	for _, chat := range chats {
+		switch strings.TrimSpace(chat.Kind) {
+		case "group", "channel":
+			if strings.TrimSpace(chat.JID) != "" {
+				groupChats[chat.JID] = struct{}{}
+			}
+		}
+	}
+	if len(groupChats) == 0 {
+		return nil
+	}
+	contactsByID := make(map[string]store.Contact, len(contacts))
+	for _, contact := range contacts {
+		if strings.TrimSpace(contact.JID) != "" {
+			contactsByID[contact.JID] = contact
+		}
+	}
+	byKey := map[string]store.GroupParticipant{}
+	for _, message := range messages {
+		if _, ok := groupChats[message.ChatJID]; !ok {
+			continue
+		}
+		if strings.TrimSpace(message.SenderJID) == "" || message.SenderJID == message.ChatJID {
+			continue
+		}
+		contact := contactsByID[message.SenderJID]
+		participant := store.GroupParticipant{
+			GroupJID:    message.ChatJID,
+			UserJID:     message.SenderJID,
+			ContactName: firstNonEmpty(store.ContactDisplayName(contact), message.SenderName),
+			FirstName:   contact.FirstName,
+			IsActive:    true,
+		}
+		key := participant.GroupJID + "\x00" + participant.UserJID
+		current := byKey[key]
+		if current.ContactName == "" {
+			current.ContactName = participant.ContactName
+		}
+		if current.FirstName == "" {
+			current.FirstName = participant.FirstName
+		}
+		current.GroupJID = participant.GroupJID
+		current.UserJID = participant.UserJID
+		current.IsActive = true
+		byKey[key] = current
+	}
+	out := make([]store.GroupParticipant, 0, len(byKey))
+	for _, participant := range byKey {
+		out = append(out, participant)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].GroupJID != out[j].GroupJID {
+			return out[i].GroupJID < out[j].GroupJID
+		}
+		return out[i].UserJID < out[j].UserJID
+	})
 	return out
 }
 

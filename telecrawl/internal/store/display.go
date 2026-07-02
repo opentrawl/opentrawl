@@ -71,6 +71,41 @@ func humanPeerName(stored string, contact Contact, refs ...string) string {
 	return cleanPeerFirstName(contact.FirstName, contact)
 }
 
+func ContactDisplayName(contact Contact) string {
+	if name := cleanContactDisplayName(contact.FullName, contact); name != "" {
+		return name
+	}
+	return cleanContactDisplayName(strings.TrimSpace(contact.FirstName+" "+contact.LastName), contact)
+}
+
+func cleanContactDisplayName(name string, contact Contact) string {
+	name = strings.Join(strings.Fields(name), " ")
+	switch {
+	case name == "":
+		return ""
+	case sameContactText(name, contact.Phone):
+		return ""
+	case sameContactText(name, contact.JID):
+		return ""
+	case sameContactText(name, contact.Username):
+		return ""
+	case sameContactText(name, contact.LID):
+		return ""
+	case strings.HasPrefix(name, "@"):
+		return ""
+	case looksLikePhone(name):
+		return ""
+	default:
+		return name
+	}
+}
+
+func sameContactText(a, b string) bool {
+	a = strings.TrimSpace(a)
+	b = strings.TrimSpace(b)
+	return a != "" && b != "" && strings.EqualFold(a, b)
+}
+
 func cleanPeerUsername(username string) string {
 	username = strings.TrimSpace(strings.TrimPrefix(username, "@"))
 	if username == "" || looksLikePhone(username) {

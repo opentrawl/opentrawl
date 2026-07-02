@@ -57,6 +57,13 @@ func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
 			Pinned:               true,
 			LastMessageAt:        now,
 		}},
+		Participants: []GroupParticipant{{
+			GroupJID:    "-10042",
+			UserJID:     "9",
+			ContactName: "Peter Example",
+			FirstName:   "Peter",
+			IsActive:    true,
+		}},
 		Messages: []Message{{
 			SourcePK:      1,
 			ChatJID:       "-10042",
@@ -107,6 +114,9 @@ func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
 	if got := len(exported.Contacts); got != 1 {
 		t.Fatalf("contacts = %d, want 1", got)
 	}
+	if got := len(exported.Participants); got != 1 {
+		t.Fatalf("participants = %d, want 1", got)
+	}
 
 	restored := openTestStore(t, filepath.Join(t.TempDir(), "restored.db"))
 	if err := restored.ImportSnapshot(ctx, exported, "backup", now); err != nil {
@@ -144,6 +154,9 @@ func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
 	if len(restoredExport.Contacts) != 1 || restoredExport.Contacts[0].Phone != "+15551234567" || restoredExport.Contacts[0].PeerType != "user" {
 		t.Fatalf("contact lost: %#v", restoredExport.Contacts)
 	}
+	if len(restoredExport.Participants) != 1 || restoredExport.Participants[0].UserJID != "9" || !restoredExport.Participants[0].IsActive {
+		t.Fatalf("participant lost: %#v", restoredExport.Participants)
+	}
 }
 
 func openTestStore(t *testing.T, path string) *Store {
@@ -158,6 +171,41 @@ func openTestStore(t *testing.T, path string) *Store {
 		}
 	})
 	return st
+}
+
+func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		[]Contact{{JID: "600", FullName: "Group Member"}},
+		[]Chat{{JID: "500", Kind: "group", Name: "team room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		nil,
+		nil,
+		nil,
+		nil,
+		[]Message{
+			{SourcePK: 1, ChatJID: "500", ChatName: "team room", MessageID: "1", SenderJID: "700", SenderName: "Other Sender", Timestamp: now, Text: "member needle from other"},
+			{SourcePK: 2, ChatJID: "500", ChatName: "team room", MessageID: "2", SenderJID: "600", SenderName: "Group Member", Timestamp: now.Add(time.Minute), Text: "member needle from group member"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.ExecContext(ctx, `insert into group_participants(group_jid,user_jid,contact_name,is_active) values(?,?,?,?)`, "500", "600", "Group Member", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	filter := MessageFilter{Query: "needle", Who: "group member", Limit: 10}
+	messages, err := st.Search(ctx, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total, err := st.CountSearch(ctx, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 || total != 2 {
+		t.Fatalf("group participant search = %d total %d, want 2/2", len(messages), total)
+	}
 }
 
 func TestOpenMigratesSchema2MessageMetadataColumns(t *testing.T) {
@@ -361,6 +409,7 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 		[]Folder{{ID: "1", Title: "F1"}, {ID: "2", Title: "F2"}},
 		[]FolderChat{fcA, fcB},
 		[]Topic{topicA, topicB},
+		nil,
 		[]Message{msgA, msgB1, msgB2},
 	); err != nil {
 		t.Fatal(err)
@@ -375,6 +424,7 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 		nil,
 		[]Chat{updatedChatA},
 		nil, nil,
+		nil,
 		nil,
 		[]Message{updatedMsgA},
 	); err != nil {
