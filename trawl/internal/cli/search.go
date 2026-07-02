@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -69,10 +70,11 @@ type crawlerSearchEnvelope struct {
 }
 
 type federatedSearchEnvelope struct {
-	Query        string      `json:"query"`
-	Results      []SearchRow `json:"results"`
-	TotalMatches int         `json:"total_matches"`
-	Truncated    bool        `json:"truncated"`
+	Query         string      `json:"query"`
+	Results       []SearchRow `json:"results"`
+	TotalMatches  int         `json:"total_matches"`
+	Truncated     bool        `json:"truncated"`
+	FailedSources []string    `json:"failed_sources,omitempty"`
 }
 
 type mergedSearchResult struct {
@@ -108,10 +110,11 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	r.reportSearchFailures(results)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, federatedSearchEnvelope{
-			Query:        query,
-			Results:      merged.Rows,
-			TotalMatches: merged.TotalMatches,
-			Truncated:    merged.Truncated,
+			Query:         query,
+			Results:       merged.Rows,
+			TotalMatches:  merged.TotalMatches,
+			Truncated:     merged.Truncated,
+			FailedSources: failedSearchSources(results),
 		}); err != nil {
 			return err
 		}
@@ -119,6 +122,9 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
 		if err := renderSearchTable(r.stdout, merged.Rows, merged.More); err != nil {
+			return err
+		}
+		if err := renderSearchPartialNote(r.stdout, results); err != nil {
 			return err
 		}
 	}
@@ -149,10 +155,11 @@ func (r *Runtime) resolveSearchTarget(words []string, sourceCSV string) (string,
 
 func emptySearchEnvelope(query string) federatedSearchEnvelope {
 	return federatedSearchEnvelope{
-		Query:        query,
-		Results:      []SearchRow{},
-		TotalMatches: 0,
-		Truncated:    false,
+		Query:         query,
+		Results:       []SearchRow{},
+		TotalMatches:  0,
+		Truncated:     false,
+		FailedSources: nil,
 	}
 }
 
@@ -352,4 +359,23 @@ func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
 		}
 		_, _ = fmt.Fprintf(r.stderr, "%s search failed. Remedy: run: trawl doctor %s\n", result.Source.ID, result.Source.ID)
 	}
+}
+
+func failedSearchSources(results []searchSourceResult) []string {
+	var failures []string
+	for _, result := range results {
+		if result.Err != nil {
+			failures = append(failures, result.Source.ID)
+		}
+	}
+	return failures
+}
+
+func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
+	failures := len(failedSearchSources(results))
+	if failures == 0 || failures == len(results) {
+		return nil
+	}
+	_, err := fmt.Fprintf(w, "note: %d of %d sources unavailable — results are partial (see stderr)\n", failures, len(results))
+	return err
 }

@@ -298,7 +298,10 @@ func statusHeadline(status StatusEnvelope) string {
 	if len(status.Counts) == 0 {
 		return status.Summary
 	}
-	counts := status.Counts
+	counts := headlineCounts(status.Counts)
+	if len(counts) == 0 {
+		return status.Summary
+	}
 	truncated := false
 	if len(counts) > headlineCountLimit {
 		counts = counts[:headlineCountLimit]
@@ -314,16 +317,51 @@ func statusHeadline(status StatusEnvelope) string {
 	return strings.Join(parts, " · ")
 }
 
+func headlineCounts(counts []Count) []Count {
+	out := make([]Count, 0, len(counts))
+	for _, count := range counts {
+		if isZeroSinceOrYearCount(count) {
+			continue
+		}
+		out = append(out, count)
+	}
+	return out
+}
+
+func isZeroSinceOrYearCount(count Count) bool {
+	if !isSinceOrYearLabel(count.ID, count.Label) {
+		return false
+	}
+	switch value := count.Value.value.(type) {
+	case int:
+		return value == 0
+	case int64:
+		return value == 0
+	case float64:
+		return value == 0
+	default:
+		return false
+	}
+}
+
 func formatCount(count Count) string {
 	label := firstNonEmpty(count.Label, count.ID)
 	value := count.Value.text(count.ID, label)
-	if strings.EqualFold(label, "since") {
+	if isSinceOrYearLabel(count.ID, label) && strings.EqualFold(strings.TrimSpace(label), "since") {
 		return strings.TrimSpace(label + " " + value)
 	}
 	if label == "" {
 		return value
 	}
 	return strings.TrimSpace(value + " " + label)
+}
+
+func isSinceOrYearLabel(id, label string) bool {
+	name := strings.ToLower(strings.TrimSpace(label))
+	if name == "" {
+		name = strings.ToLower(strings.TrimSpace(id))
+	}
+	return name == "since" || strings.Contains(name, "year")
 }
 
 func firstNonEmpty(values ...string) string {
