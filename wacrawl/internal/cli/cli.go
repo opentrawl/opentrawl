@@ -507,6 +507,7 @@ func newMessageListOutput(query string, limit int, messages []store.Message) mes
 
 type searchEnvelope struct {
 	Query        string         `json:"query"`
+	WhoMatched   []string       `json:"who_matched,omitempty"`
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
@@ -706,7 +707,7 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 func (a *app) runSearch(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	filter := bindMessageFlags(fs)
+	filter := bindSearchFlags(fs)
 	if commandWantsHelp(args) {
 		printCommandUsage(a.stdout, "search")
 		return nil
@@ -722,12 +723,21 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		}
 		return usageErr(err)
 	}
-	resolved, err := filter.resolve()
+	resolved, err := filter.resolve(flagWasProvided(fs, "who"))
 	if err != nil {
 		return usageErr(err)
 	}
 	resolved.Query = query
 	return a.withReadStore(ctx, func(st *store.Store) error {
+		var whoMatched []string
+		if resolved.Who != "" {
+			resolution, err := st.ResolveWho(ctx, resolved.Who)
+			if err != nil {
+				return err
+			}
+			resolved.WhoKeys = resolution.ParticipantKeys
+			whoMatched = resolution.DisplayNames
+		}
 		total, err := st.SearchCount(ctx, resolved)
 		if err != nil {
 			return err
@@ -736,7 +746,7 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return a.print(newSearchEnvelope(query, total, msgs))
+		return a.print(newSearchEnvelope(query, total, msgs, whoMatched))
 	})
 }
 
@@ -837,7 +847,7 @@ func searchFlagNeedsValue(arg string) bool {
 		name = before
 	}
 	switch name {
-	case "chat", "sender", "limit", "after", "before":
+	case "chat", "sender", "who", "limit", "after", "before":
 		return true
 	default:
 		return false
@@ -856,6 +866,11 @@ type messageFlags struct {
 	asc      *bool
 }
 
+type searchFlags struct {
+	messageFlags
+	who *string
+}
+
 func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 	return messageFlags{
 		chat:     fs.String("chat", "", ""),
@@ -867,6 +882,13 @@ func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 		fromThem: fs.Bool("from-them", false, ""),
 		hasMedia: fs.Bool("has-media", false, ""),
 		asc:      fs.Bool("asc", false, ""),
+	}
+}
+
+func bindSearchFlags(fs *flag.FlagSet) searchFlags {
+	return searchFlags{
+		messageFlags: bindMessageFlags(fs),
+		who:          fs.String("who", "", ""),
 	}
 }
 
@@ -907,6 +929,35 @@ func (f messageFlags) resolve() (store.MessageFilter, error) {
 		out.Before = &t
 	}
 	return out, nil
+}
+
+func (f searchFlags) resolve(whoProvided bool) (store.MessageFilter, error) {
+	out, err := f.messageFlags.resolve()
+	if err != nil {
+		return store.MessageFilter{}, err
+	}
+	if !whoProvided {
+		return out, nil
+	}
+	out.Who = normalizeWhoValue(*f.who)
+	if out.Who == "" {
+		return store.MessageFilter{}, errors.New("--who requires an identity")
+	}
+	return out, nil
+}
+
+func flagWasProvided(fs *flag.FlagSet, name string) bool {
+	provided := false
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == name {
+			provided = true
+		}
+	})
+	return provided
+}
+
+func normalizeWhoValue(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func (a *app) print(value any) error {
@@ -1003,6 +1054,11 @@ func (a *app) print(value any) error {
 }
 
 func (a *app) printSearch(result searchEnvelope) error {
+	if len(result.WhoMatched) > 1 {
+		if _, err := fmt.Fprintf(a.stdout, "who matched: %s\n\n", strings.Join(result.WhoMatched, ", ")); err != nil {
+			return err
+		}
+	}
 	for _, item := range result.Results {
 		if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
 			return err
@@ -1046,7 +1102,7 @@ func (a *app) printMessages(messages []store.Message, truncated bool, limit int)
 	return nil
 }
 
-func newSearchEnvelope(query string, total int, messages []store.Message) searchEnvelope {
+func newSearchEnvelope(query string, total int, messages []store.Message, whoMatched []string) searchEnvelope {
 	if messages == nil {
 		messages = []store.Message{}
 	}
@@ -1056,10 +1112,18 @@ func newSearchEnvelope(query string, total int, messages []store.Message) search
 	}
 	return searchEnvelope{
 		Query:        query,
+		WhoMatched:   ambiguousWhoMatches(whoMatched),
 		Results:      results,
 		TotalMatches: total,
 		Truncated:    total > len(results),
 	}
+}
+
+func ambiguousWhoMatches(names []string) []string {
+	if len(names) <= 1 {
+		return nil
+	}
+	return names
 }
 
 func newSearchResult(message store.Message) searchResult {
@@ -1348,6 +1412,7 @@ Usage:
 Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
+  --who NAME       Filter to messages where NAME is a sender, recipient, or chat member.
   --limit N        Maximum messages to print. Default: 20, maximum: 200.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
@@ -1358,6 +1423,7 @@ Flags:
 
 Examples:
   wacrawl search "invoice"
+  wacrawl search "invoice" --who "Alice Example"
   wacrawl search "flight" --after 2026-01-01 --from-them
   wacrawl --json search --chat 1234567890@s.whatsapp.net "release notes"
 `)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -324,6 +325,153 @@ func TestSearchMatchesNonSequentialSourcePK(t *testing.T) {
 	}
 	if len(results) != 1 || results[0].SourcePK != 9001 || results[0].MessageID != "non-sequential" {
 		t.Fatalf("FTS rowid mapping returned wrong message: %+v", results)
+	}
+}
+
+func TestSearchWhoFilterMatchesParticipantsAndCounts(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "bob@s.whatsapp.net", FullName: "Bob Example"},
+		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
+		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
+	}
+	chats := []Chat{
+		{JID: "bob@s.whatsapp.net", Kind: "dm", Name: "Bob Example", LastMessageAt: now, MessageCount: 2},
+		{JID: "team@g.us", Kind: "group", Name: "Team", LastMessageAt: now, MessageCount: 1},
+		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
+	}
+	participants := []GroupParticipant{
+		{GroupJID: "team@g.us", UserJID: "alice@s.whatsapp.net", ContactName: "Alice Example", IsActive: true},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-in", SenderJID: "bob@s.whatsapp.net", SenderName: "Bob Example", Timestamp: now, Text: "needle incoming", RawType: 0},
+		{SourcePK: 2, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-out", SenderJID: "bob@s.whatsapp.net", SenderName: "me", Timestamp: now.Add(time.Minute), FromMe: true, Text: "needle outgoing", RawType: 0},
+		{SourcePK: 3, ChatJID: "team@g.us", ChatName: "Team", MessageID: "group", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), Text: "needle group", RawType: 0},
+		{SourcePK: 4, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(3 * time.Minute), Text: "needle other", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, participants, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	total, err := st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "bob example", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 {
+		t.Fatalf("filtered total = %d, want 2", total)
+	}
+	results, err := st.Search(ctx, MessageFilter{Query: "needle", Who: "bob example", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("limit should apply after archive filter, got %d results", len(results))
+	}
+
+	results, err = st.Search(ctx, MessageFilter{Query: "needle", Who: "ALICE EXAMPLE", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].MessageID != "group" {
+		t.Fatalf("group participant filter returned %+v", results)
+	}
+
+	total, err = st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "No One", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 0 {
+		t.Fatalf("unmatched who total = %d, want 0", total)
+	}
+}
+
+func TestSearchWhoFilterMatchesUnicodeCaseFold(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "ozge@s.whatsapp.net", FullName: "Özge"},
+		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
+	}
+	chats := []Chat{
+		{JID: "ozge@s.whatsapp.net", Kind: "dm", Name: "Özge", LastMessageAt: now, MessageCount: 1},
+		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "ozge@s.whatsapp.net", ChatName: "Özge", MessageID: "unicode", SenderJID: "ozge@s.whatsapp.net", SenderName: "Özge", Timestamp: now, Text: "needle unicode", RawType: 0},
+		{SourcePK: 2, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(time.Minute), Text: "needle other", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	total, err := st.SearchCount(ctx, MessageFilter{Query: "needle", Who: "özge", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 {
+		t.Fatalf("filtered total = %d, want 1", total)
+	}
+	results, err := st.Search(ctx, MessageFilter{Query: "needle", Who: "özge", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 1 || results[0].MessageID != "unicode" {
+		t.Fatalf("unicode participant filter returned %+v", results)
+	}
+	matches, err := st.WhoMatches(ctx, "özge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(matches, []string{"Özge"}) {
+		t.Fatalf("matches = %#v, want Özge", matches)
+	}
+}
+
+func TestWhoMatchesReturnsDistinctParticipantNames(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "casey-one@s.whatsapp.net", FullName: "Casey Example"},
+		{JID: "casey-two@s.whatsapp.net", FullName: "casey example"},
+	}
+	chats := []Chat{
+		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey Example", LastMessageAt: now, MessageCount: 1},
+		{JID: "casey-two@s.whatsapp.net", Kind: "dm", Name: "casey example", LastMessageAt: now, MessageCount: 1},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "casey-one@s.whatsapp.net", ChatName: "Casey Example", MessageID: "casey-one", SenderJID: "casey-one@s.whatsapp.net", SenderName: "Casey Example", Timestamp: now, Text: "needle one", RawType: 0},
+		{SourcePK: 2, ChatJID: "casey-two@s.whatsapp.net", ChatName: "casey example", MessageID: "casey-two", SenderJID: "casey-two@s.whatsapp.net", SenderName: "casey example", Timestamp: now.Add(time.Minute), Text: "needle two", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	matches, err := st.WhoMatches(ctx, "CASEY EXAMPLE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"Casey Example", "casey example"}
+	if !reflect.DeepEqual(matches, want) {
+		t.Fatalf("matches = %#v, want %#v", matches, want)
 	}
 }
 

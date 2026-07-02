@@ -16,7 +16,7 @@ func controlManifest() control.Manifest {
 		DefaultCache:    filepath.Join(filepath.Dir(defaultDBPath()), "cache"),
 		DefaultLogs:     filepath.Join(filepath.Dir(defaultDBPath()), "logs"),
 	}
-	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "sql", "web", "backup", "contacts_export"}
+	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "sql", "web", "backup", "contacts_export", "who"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"whatsapp-desktop", "sqlite", "encrypted-git-backup"}}
 	m.Commands = map[string]control.Command{
 		"doctor":         {Title: "Doctor", Argv: []string{"wacrawl", "--json", "doctor"}, JSON: true},

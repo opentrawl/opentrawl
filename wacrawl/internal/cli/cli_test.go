@@ -297,6 +297,9 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if !hasCapability(manifest.Capabilities, "contacts_export") {
 		t.Fatalf("capabilities = %#v, missing contacts_export", manifest.Capabilities)
 	}
+	if !hasCapability(manifest.Capabilities, "who") {
+		t.Fatalf("capabilities = %#v, missing who", manifest.Capabilities)
+	}
 	openCommand, ok := manifest.Commands["open"]
 	if !ok {
 		t.Fatalf("commands = %#v", manifest.Commands)
@@ -552,6 +555,110 @@ func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
 	}
 }
 
+func TestSearchWhoFiltersAndKeepsFilteredTotals(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "bob@s.whatsapp.net", FullName: "Bob Example"},
+		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
+		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
+	}
+	chats := []store.Chat{
+		{JID: "bob@s.whatsapp.net", Kind: "dm", Name: "Bob Example", LastMessageAt: now, MessageCount: 2},
+		{JID: "team@g.us", Kind: "group", Name: "Team", LastMessageAt: now, MessageCount: 1},
+		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
+	}
+	participants := []store.GroupParticipant{
+		{GroupJID: "team@g.us", UserJID: "alice@s.whatsapp.net", ContactName: "Alice Example", IsActive: true},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-in", SenderJID: "bob@s.whatsapp.net", SenderName: "Bob Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle incoming"},
+		{SourcePK: 2, ChatJID: "bob@s.whatsapp.net", ChatName: "Bob Example", MessageID: "bob-out", SenderJID: "bob@s.whatsapp.net", SenderName: "me", Timestamp: now.Add(time.Minute), FromMe: true, RawType: 0, MessageType: "text", Text: "needle outgoing"},
+		{SourcePK: 3, ChatJID: "team@g.us", ChatName: "Team", MessageID: "group", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), RawType: 0, MessageType: "text", Text: "needle group"},
+		{SourcePK: 4, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(3 * time.Minute), RawType: 0, MessageType: "text", Text: "needle other"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, participants, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "needle", "--who", "  bob \t example  ", "--limit", "1"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	assertRootKeys(t, stdout.Bytes(), "query", "results", "total_matches", "truncated")
+	var payload searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if payload.TotalMatches != 2 || !payload.Truncated || len(payload.Results) != 1 || payload.WhoMatched != nil {
+		t.Fatalf("payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "ALICE EXAMPLE", "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if payload.TotalMatches != 1 || len(payload.Results) != 1 || payload.Results[0].Ref != "wacrawl:msg/group" {
+		t.Fatalf("group participant payload = %#v", payload)
+	}
+}
+
+func TestSearchWhoMatchedReportsAmbiguousParticipants(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "casey-one@s.whatsapp.net", FullName: "Casey Example"},
+		{JID: "casey-two@s.whatsapp.net", FullName: "casey example"},
+	}
+	chats := []store.Chat{
+		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey Example", LastMessageAt: now, MessageCount: 1},
+		{JID: "casey-two@s.whatsapp.net", Kind: "dm", Name: "casey example", LastMessageAt: now, MessageCount: 1},
+		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "casey-one@s.whatsapp.net", ChatName: "Casey Example", MessageID: "casey-one", SenderJID: "casey-one@s.whatsapp.net", SenderName: "Casey Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle one"},
+		{SourcePK: 2, ChatJID: "casey-two@s.whatsapp.net", ChatName: "casey example", MessageID: "casey-two", SenderJID: "casey-two@s.whatsapp.net", SenderName: "casey example", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "needle two"},
+		{SourcePK: 3, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), RawType: 0, MessageType: "text", Text: "needle other"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	assertRootKeys(t, stdout.Bytes(), "query", "who_matched", "results", "total_matches", "truncated")
+	var payload searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	wantMatched := []string{"Casey Example", "casey example"}
+	if !reflect.DeepEqual(payload.WhoMatched, wantMatched) || payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("payload = %#v, want who_matched %#v and 2 results", payload, wantMatched)
+	}
+}
+
 func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
@@ -712,6 +819,10 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
 		t.Fatalf("expected search limit error, got %v", err)
 	}
+	err = Run(context.Background(), []string{"search", "query", "--who", " \t "}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--who requires an identity") {
+		t.Fatalf("expected blank who error, got %v", err)
+	}
 	err = Run(context.Background(), []string{"doctor", "extra"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "flags only") {
 		t.Fatalf("expected doctor args error, got %v", err)
@@ -777,7 +888,7 @@ func TestRunHelpMenus(t *testing.T) {
 		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] contacts export"},
 		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
-		{"search flag", []string{"search", "--help"}, "wacrawl search [flags] <query>"},
+		{"search flag", []string{"search", "--help"}, "--who NAME"},
 		{"open topic", []string{"help", "open"}, "wacrawl open <ref>"},
 		{"open flag", []string{"open", "--help"}, "wacrawl:msg/MESSAGE_ID"},
 		{"sql topic", []string{"help", "sql"}, "wacrawl sql <select query>"},
@@ -1040,11 +1151,11 @@ func TestCLIHelpers(t *testing.T) {
 	if firstNonEmpty("", "x") != "x" || firstNonEmpty("", "") != "" {
 		t.Fatal("firstNonEmpty mismatch")
 	}
-	args, query, err := splitSearchArgs([]string{"launch", "--limit", "5", "--from-them"})
+	args, query, err := splitSearchArgs([]string{"launch", "--limit", "5", "--from-them", "--who", "Alice Example"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if query != "launch" || strings.Join(args, " ") != "--limit 5 --from-them" {
+	if query != "launch" || strings.Join(args, " ") != "--limit 5 --from-them --who Alice Example" {
 		t.Fatalf("unexpected split args=%v query=%q", args, query)
 	}
 	if _, _, err := splitSearchArgs([]string{"one", "two"}); err == nil {
