@@ -49,6 +49,25 @@ Do not edit a subtree without knowing where the change will land; see
 Everything else (docs, scripts, the `trawl` CLI, the app) is
 monorepo-native with no upstream.
 
+## Documentation rules
+
+All documentation — READMEs, docs/, PR text, error messages, anything a
+person reads — follows [docs/style.md](docs/style.md) (the anti-slop
+style: plain English, front-loaded, sentence case, no filler) and is
+written for end users:
+
+1. Respect the reader. Assume they are smart, busy, and new here.
+2. Be conscious of their time: front-load the point, cut what does not
+   help them act.
+3. Write external-facing and explanatory, always — explain what and
+   why, not internal status. Writing for outsiders is also what keeps
+   internal thinking sharp.
+4. Internal working files may exist but are held to the same standard;
+   good notes produce good work.
+5. Every generated document gets adversarial review against these rules
+   and docs/style.md before it merges. Reviewers are told to refute,
+   not to approve.
+
 ## Standards
 
 - Go for crawlers and the CLI, SwiftUI for the Mac app.

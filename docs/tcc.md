@@ -57,6 +57,27 @@ What this requires:
 4. App-side grant UX uses permiso's guided drag-into-Settings flow;
    it needs a one-line upstream addition for the FDA panel.
 
+## Idempotent permissions: the one-time setup
+
+The goal is zero permission overhead after day one: grants and signing
+are done once, done right, and never thought about again. Rebuilds,
+new crawlers and new machines must not re-trigger permission work.
+Formalised as phase 1 tasks:
+
+1. Create the persistent dev signing certificate and check the signing
+   step into the app packaging script. Every dev build signs with it;
+   release builds sign with Developer ID and notarize. No build path
+   exists that produces an ad-hoc-signed app.
+2. Grant FDA twice per machine, ever: once to the dev terminal, once
+   to the (stably signed) app. Document both grants with their
+   Settings deep links in the repo, verified by `trawl doctor`.
+3. Adding a crawler must require no new grants: it inherits from the
+   app or the terminal by design. Any proposal that adds a per-crawler
+   grant fails review.
+4. CI for the app verifies the signature identity is stable across
+   builds, so a packaging change cannot silently reintroduce ad-hoc
+   signing.
+
 ## Open risk, to spike before the app hardens
 
 Inheritance normally flows to direct children, but there is a
