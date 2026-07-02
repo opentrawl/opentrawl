@@ -652,7 +652,11 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	}
 	query, args = appendWhoParticipantFilter(query, args, prefix, filter)
 	if search {
-		query += " order by bm25(messages_fts) limit ?"
+		// Newest first, like every other crawler: with --limit the cut
+		// must be chronological or total_matches/truncated lie about
+		// what was kept. Relevance ranking is trawl's problem, not the
+		// archive's.
+		query += " order by ts desc, source_pk desc limit ?"
 	} else if filter.Asc {
 		query += " order by ts asc, source_pk asc limit ?"
 	} else {
