@@ -97,6 +97,12 @@ The layers, bottom to top:
 
 ## Engineering principles
 
+- Software fixes what it can fix. A printed remedy is an admission,
+  reserved for fixes that need the world to change (permissions,
+  auth, a costly sync). Derived state self-heals at the point of use;
+  diagnostics whose remedy is safe, idempotent and local are design
+  bugs.
+
 The bar for every line of code and every surface in this repo:
 
 - As simple as possible, but no simpler. KISS, YAGNI, less is more.

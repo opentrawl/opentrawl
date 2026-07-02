@@ -42,6 +42,13 @@ Two additions, one dependency, in strict order.
    volumes can apply whatever context it has; a hidden relevance
    score would take that away.
 
+   How this ranking grows later — clustering each person's corpus,
+   per-topic frequencies enriching the columns, and how those land —
+   is [relationship-context.md](relationship-context.md), including
+   the open question of query-time hints for specialised cases. The
+   v1.1 columns are chosen so those arrive as new evidence columns,
+   not as changed semantics.
+
 2. **Then filter.** `search --who <person>` on every crawler that
    exports contacts, and federated on `trawl search`. The crawler
    filters at the archive (trawl-level post-filtering would silently

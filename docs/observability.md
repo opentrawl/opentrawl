@@ -21,17 +21,31 @@ tracing; this is one machine.
 
 One plain text log per crawler, human-readable line by line:
 
+    2026-07-02 22:41:03 run 019f23a1 gogcrawl 0.4.1+8f3c2d start sync
     2026-07-02 22:41:03 ERROR sync gog_backup_failed: backup fetch
-    exited early. remedy: run gogcrawl doctor (run 019f23a1)
+    exited early (run 019f23a1)
 
-Timestamp, level, command, event, message, remedy when there is one,
-run id last. Plain lines because a person under stress reads them
-raw with tail and grep; no JSON wrapper to see through. The stable
-line shape is still machine-parseable for trawl and agents.
+Timestamp, level, command, event, message, run id. Plain lines
+because a person under stress reads them raw with tail and grep; no
+JSON wrapper to see through. The stable line shape is still
+machine-parseable for trawl and agents.
 
-Every command logs — not just sync. Start, outcome, and every error
-with its remedy, across the whole operating loop: discovery, auth,
-sync, reads, doctor. A failure that never reached a log line is a bug.
+Enrichment follows the canonical-log-line practice (Stripe popularised
+it): context that never changes within a run — version, commit,
+platform — lands once, on the run's start line, keyed by the run id
+every later line carries. Lines stay lean; nothing is repeated onto
+every line, and nothing needs a lookup outside the log itself.
+
+A logged remedy is an admission of unfinished design: software prints
+one only when the fix genuinely needs the world to change — grant a
+permission, renew auth, run a costly sync. Anything software can fix
+safely, it fixes and logs what it did (the self-healing rule in the
+contract). This holds repo-wide, not just here; it is recorded in the
+vision's engineering principles.
+
+Every command logs — not just sync. Start, outcome, and every error,
+across the whole operating loop: discovery, auth, sync, reads,
+doctor. A failure that never reached a log line is a bug.
 
 Bounded: fixed-size rotation per crawler, a few MB, oldest lines
 dropped. No settings for path, size, level or retention. Levels are
@@ -53,13 +67,17 @@ lines are content-safe by construction (never bodies, subjects,
 contacts or secrets) and status and doctor already expose versions
 and outcomes, a future report bundle is an afternoon of assembly the
 day real pain justifies it — not a design problem, and not a verb
-today.
+today. The same holds one step further out: sentry without sentry —
+recurring errors grouped across runs into one local view. The line
+shape (stable event codes, run ids) is chosen so that becomes a
+reader over existing logs when its day comes, never a new system.
 
 ## Out of scope, deliberately
 
 Metrics, SLOs, dashboards, remote telemetry, tracing infrastructure.
 One machine, local first. The horse is: every failure lands in a
-readable log with a remedy, and one command packages the evidence.
+readable log, healed if software could heal it, and the evidence is
+one read away.
 
 ## Conformance
 

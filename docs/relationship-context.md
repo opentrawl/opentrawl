@@ -34,6 +34,23 @@ vague request first time.
   default, remote only by explicit opt-in, since briefs summarise
   private conversations.
 
+## How it lands, mechanically
+
+The pipeline is derived layers all the way: per-person corpus in from
+the archives, topic clusters out, then a brief plus per-topic
+frequencies stored beside the person. Frequencies become new columns
+in the resolver (talks weekly about cycling, once ever about
+contracts); the brief becomes the sentence an agent reads. Everything
+re-derives from the archives on demand — wrong output is fixed by
+better derivation, never by hand-editing derived data.
+
+No agent-tweakable knobs: derived layers re-derive from evidence, and
+a knob would let configuration masquerade as knowledge. One open
+question is recorded, not decided: whether specialised queries (an
+organisation mailing from many domains, a person with heavy sender
+aliasing) justify query-time hints an agent can pass — hints, if they
+ever exist, are per-query arguments, never persisted configuration.
+
 ## Why not now
 
 - It depends on clustering and per-source derived layers that are
