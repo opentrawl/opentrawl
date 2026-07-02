@@ -8,6 +8,8 @@ OpenTrawl gets one local observability system from crawlkit. Every crawler write
 
 ## Problem evidence
 
+COMMENT (Josh, restored after an agent edit clobbered it): this is a good start but i don't feel like it's holistic enough for all of our services? the key problem is that agents should be able to own the entire dev lifecyle and operating loop without having to run into problems. right now this seems just for the sync idea? we should also consider the idea of - i can't rmemeber what the naame is - but software that either works or doesn't, but not one that you have to diagnose/fix/tweak or whatever -> it should be boring and all failures should be clear. zen of python idea.
+
 The contract already says sync progress must exist, but today's crawlers still depend on ad hoc output.
 
 - `gogcrawl/internal/cli/sync.go` emits progress only while ingesting backup shards. The long `gog backup gmail push` fetch runs first, and `gog.Client.run` captures stdout and stderr until the command exits. A Gmail backup can therefore run for an hour with no visible output.
