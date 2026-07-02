@@ -67,10 +67,26 @@ packaged for end users.
 
 Clone, run `devenv shell`, and everything works — crawlers build from
 source into a repo-local bin directory that `trawl` discovers. No
-global installs. Read [AGENTS.md](AGENTS.md) first (this repo is
-public and the privacy rules are enforced in CI), then
-[docs/sync.md](docs/sync.md) for how crawler directories sync with
-their upstreams.
+global installs. With [direnv](https://direnv.net), `direnv allow`
+once and every new terminal in this directory activates itself. Read
+[AGENTS.md](AGENTS.md) first (this repo is public and the privacy
+rules are enforced in CI), then [docs/sync.md](docs/sync.md) for how
+crawler directories sync with their upstreams.
+
+## Kick the tires
+
+From a fresh terminal in the repo, prove it works against your own
+data in five commands:
+
+```sh
+scripts/dev-bin          # build everything
+trawl status             # every source: state, freshness, counts
+trawl search "dinner"    # federated search with provenance
+trawl open <ref>         # expand any ref a search returned
+scripts/smoke            # the full proof: freshness, contract,
+                         # round-trips, doc truth — plus a raw
+                         # transcript for review
+```
 
 ## Thanks
 
