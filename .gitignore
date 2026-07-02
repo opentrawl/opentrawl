@@ -5,3 +5,5 @@
 *.db-wal
 *.db-shm
 dist/
+.dev/
+.devenv/

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+bin_dir="$repo_root/.dev/bin"
+
+mkdir -p "$bin_dir"
+
+while IFS= read -r go_mod; do
+  module_dir="$(dirname "$go_mod")"
+  cmd_dir="$module_dir/cmd"
+
+  if [[ ! -d "$cmd_dir" ]]; then
+    continue
+  fi
+
+  while IFS= read -r target_dir; do
+    name="$(basename "$target_dir")"
+    output="$bin_dir/$name"
+    module_path="${module_dir#./}"
+
+    printf 'building %s from %s/cmd/%s...\n' "$name" "$module_path" "$name"
+    (
+      cd "$module_dir"
+      go build -o "$output" "./cmd/$name"
+    )
+  done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
+done < <(find . -maxdepth 2 -name go.mod -print | sort)
