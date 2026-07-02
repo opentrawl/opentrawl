@@ -10,12 +10,12 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 			sync:     "{\"event\":\"progress\",\"stage\":\"messages\",\"done\":1,\"total\":2}\n{\"state\":\"ok\",\"message\":\"2 new messages in 1s\"}",
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
 			sync:     `{"state":"ok","counts":[{"id":"messages","label":"messages","value":89}]}`,
 		},
 	)
@@ -44,7 +44,7 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 func TestSyncJSONWritesOneEventPerSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		sync:     `{"state":"ok","message":"2 new messages in 1s","finished_at":"2026-07-02T14:03:00Z"}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -84,12 +84,12 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			crawlers: []fakeCrawler{
 				{
 					name:     "imsgcrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 					sync:     `{"state":"ok","message":"2 new messages in 1s"}`,
 				},
 				{
 					name:     "telecrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"id":"telegram","display_name":"Telegram"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
 					sync:     `not-json`,
 				},
 			},
@@ -102,7 +102,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			name: "all failed",
 			crawlers: []fakeCrawler{{
 				name:     "telecrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"telegram","display_name":"Telegram"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
 				sync:     `not-json`,
 			}},
 			args:       []string{"sync", "telegram"},

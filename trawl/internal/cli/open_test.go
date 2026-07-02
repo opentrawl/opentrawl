@@ -8,7 +8,7 @@ import (
 func TestOpenRendersTranscript(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		openRef:  "imessage:msg/8842",
 		open: `{
 			"ref":"imessage:msg/8842",
@@ -44,7 +44,7 @@ func TestOpenRendersTranscript(t *testing.T) {
 func TestOpenRendersMailHeadersAsProse(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "gogcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"gmail","display_name":"Gmail"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"gmail","display_name":"Gmail"}`,
 		openRef:  "gmail:msg/m3",
 		open: `{
 			"ref":"gmail:msg/m3",
@@ -87,7 +87,7 @@ func TestOpenRendersMailHeadersAsProse(t *testing.T) {
 func TestOpenRendersCalendarAttendeesAsProse(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "calcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"calendar","display_name":"Calendar"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
 		openRef:  "calendar:event/11111111-1111-1111-1111-111111111111",
 		open: `{
 			"ref":"calendar:event/11111111-1111-1111-1111-111111111111",
@@ -131,7 +131,7 @@ func TestOpenRendersCalendarAttendeesAsProse(t *testing.T) {
 func TestOpenFallsBackToGenericJSONForUnknownShapes(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"fake","display_name":"Fake"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"fake","display_name":"Fake"}`,
 		openRef:  "fake:item/1",
 		open: `{
 			"body":"Example body",
@@ -161,7 +161,7 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 	payload := `{"body":"Example body","ref":"imessage:msg/8842"}`
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		openRef:  "imessage:msg/8842",
 		open:     payload,
 	})
@@ -181,7 +181,7 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	payload := `{"body":"Example body","ref":"fake:msg/1"}`
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"fake","display_name":"Fake"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"fake","display_name":"Fake"}`,
 		openRef:  "fake:msg/1",
 		open:     payload,
 	})
@@ -219,7 +219,7 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 func TestOpenReportsCrawlerFailure(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		openRef:  "imessage:msg/8842",
 		open:     `not-json`,
 	})

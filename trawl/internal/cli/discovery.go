@@ -28,11 +28,12 @@ var builtInBinaries = []string{
 }
 
 type Source struct {
-	ID          string
-	Binary      string
-	Path        string
-	DisplayName string
-	MetadataErr error
+	ID           string
+	Binary       string
+	Path         string
+	DisplayName  string
+	Capabilities []string
+	MetadataErr  error
 }
 
 type dropInManifest struct {
@@ -60,6 +61,7 @@ func discoverCrawlers(ctx context.Context, appsDir string) []Source {
 		}
 		source.ID = metadata.ID
 		source.DisplayName = metadata.DisplayName
+		source.Capabilities = metadata.Capabilities
 		sources = append(sources, source)
 	}
 	return sources

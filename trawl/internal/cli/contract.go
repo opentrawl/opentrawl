@@ -13,9 +13,10 @@ import (
 const unknownFreshness = "—"
 
 type Metadata struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name,omitempty"`
-	Version     string `json:"version,omitempty"`
+	ID           string   `json:"id"`
+	DisplayName  string   `json:"display_name,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 type StatusEnvelope struct {
