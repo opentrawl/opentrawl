@@ -9,6 +9,7 @@ const (
 	defaultChatLimit    = 50
 	defaultMessageLimit = 20
 	defaultSearchLimit  = 20
+	defaultOpenWindow   = 10
 	maxListLimit        = 200
 )
 
@@ -36,9 +37,43 @@ type messageListOutput struct {
 }
 
 type searchListOutput struct {
-	listHeader
-	Query string                 `json:"query"`
-	Items []archive.SearchResult `json:"items"`
+	Query        string                 `json:"query"`
+	Results      []searchResultOutput   `json:"results"`
+	TotalMatches int64                  `json:"total_matches"`
+	Truncated    bool                   `json:"truncated"`
+	Limit        int                    `json:"-"`
+	TextItems    []archive.SearchResult `json:"-"`
+}
+
+type searchResultOutput struct {
+	Ref     string `json:"ref"`
+	Time    string `json:"time"`
+	Who     string `json:"who"`
+	Where   string `json:"where"`
+	Snippet string `json:"snippet"`
+}
+
+type openOutput struct {
+	Ref     string              `json:"ref"`
+	Chat    openChatOutput      `json:"chat"`
+	Message openMessageOutput   `json:"message"`
+	Context []openMessageOutput `json:"context"`
+}
+
+type openChatOutput struct {
+	Name         string   `json:"name"`
+	Participants []string `json:"participants,omitempty"`
+}
+
+type openMessageOutput struct {
+	Ref            string `json:"ref"`
+	Time           string `json:"time"`
+	Who            string `json:"who"`
+	Where          string `json:"where"`
+	Text           string `json:"text"`
+	FromMe         bool   `json:"from_me"`
+	HasAttachments bool   `json:"has_attachments,omitempty"`
+	Target         bool   `json:"target,omitempty"`
 }
 
 func newListHeader(command string, returned int, total int64, limit int) listHeader {

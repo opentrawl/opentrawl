@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var ErrMessageNotFound = errors.New("message not found")
+
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	status := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
 	state, err := s.syncState(ctx)
@@ -83,6 +85,57 @@ func (s *Store) CountMessages(ctx context.Context, chatID string) (int64, error)
 	return count, err
 }
 
+func (s *Store) OpenMessage(ctx context.Context, messageID string, contextLimit int) (MessageContext, error) {
+	if s.schemaOutdated {
+		return MessageContext{}, ErrSchemaOutdated
+	}
+	id, err := parseID(messageID, "message")
+	if err != nil {
+		return MessageContext{}, err
+	}
+	if contextLimit < 0 {
+		contextLimit = 0
+	}
+	targetRows, err := s.messageRows(ctx, openMessageSQL, id)
+	if err != nil {
+		return MessageContext{}, err
+	}
+	if len(targetRows) == 0 {
+		return MessageContext{}, ErrMessageNotFound
+	}
+	target := targetRows[0]
+	out := MessageContext{Message: target.MessageRow}
+	if target.ChatID == "" {
+		return out, nil
+	}
+	chat, err := s.Chat(ctx, target.ChatID)
+	if err != nil {
+		return MessageContext{}, err
+	}
+	out.Chat = chat
+	if contextLimit == 0 {
+		return out, nil
+	}
+	chatID, err := parseID(target.ChatID, "chat")
+	if err != nil {
+		return MessageContext{}, err
+	}
+	before, err := s.messageRows(ctx, openBeforeSQL, chatID, target.rawDate, target.rawDate, id, contextLimit)
+	if err != nil {
+		return MessageContext{}, err
+	}
+	for i, j := 0, len(before)-1; i < j; i, j = i+1, j-1 {
+		before[i], before[j] = before[j], before[i]
+	}
+	after, err := s.messageRows(ctx, openAfterSQL, chatID, target.rawDate, target.rawDate, id, contextLimit)
+	if err != nil {
+		return MessageContext{}, err
+	}
+	out.Before = plainMessages(before)
+	out.After = plainMessages(after)
+	return out, nil
+}
+
 func (s *Store) Search(ctx context.Context, query string, limit int) ([]SearchResult, error) {
 	if s.schemaOutdated {
 		return nil, ErrSchemaOutdated
@@ -153,10 +206,40 @@ func (s *Store) CountSearch(ctx context.Context, query string) (int64, error) {
 	return count, err
 }
 
+type messageScanRow struct {
+	MessageRow
+	rawDate int64
+}
+
+func (s *Store) messageRows(ctx context.Context, query string, args ...any) ([]messageScanRow, error) {
+	rows, err := s.store.DB().QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	return scanMessageRows(rows)
+}
+
+func plainMessages(rows []messageScanRow) []MessageRow {
+	out := make([]MessageRow, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, row.MessageRow)
+	}
+	return out
+}
+
 func scanMessages(rows *sql.Rows) ([]MessageRow, error) {
-	out := []MessageRow{}
+	scanned, err := scanMessageRows(rows)
+	if err != nil {
+		return nil, err
+	}
+	return plainMessages(scanned), nil
+}
+
+func scanMessageRows(rows *sql.Rows) ([]messageScanRow, error) {
+	out := []messageScanRow{}
 	for rows.Next() {
-		var row MessageRow
+		var row messageScanRow
 		var messageID, chatID, handleID int64
 		var participantCount int64
 		var fromMe, hasAttachments int
@@ -166,11 +249,14 @@ func scanMessages(rows *sql.Rows) ([]MessageRow, error) {
 			return nil, err
 		}
 		row.MessageID = strconv.FormatInt(messageID, 10)
-		row.ChatID = strconv.FormatInt(chatID, 10)
+		if chatID != 0 {
+			row.ChatID = strconv.FormatInt(chatID, 10)
+		}
 		if handleID != 0 {
 			row.HandleID = strconv.FormatInt(handleID, 10)
 		}
-		row.Time = FormatAppleDateTime(rawDate)
+		row.rawDate = rawDate
+		row.Time = FormatAppleDateTime(row.rawDate)
 		row.FromMe = fromMe != 0
 		row.HasAttachments = hasAttachments != 0
 		row.SenderLabel = senderLabel(row.FromMe, senderDisplayName, row.SenderHandle, chatDisplayName, participantCount)

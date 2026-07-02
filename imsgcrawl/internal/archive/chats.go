@@ -33,6 +33,9 @@ func (s *Store) Chats(ctx context.Context, limit int) ([]ChatSummary, error) {
 }
 
 func (s *Store) Chat(ctx context.Context, chatID string) (ChatSummary, error) {
+	if s.schemaOutdated {
+		return ChatSummary{}, ErrSchemaOutdated
+	}
 	id, err := parseID(chatID, "chat")
 	if err != nil {
 		return ChatSummary{}, err

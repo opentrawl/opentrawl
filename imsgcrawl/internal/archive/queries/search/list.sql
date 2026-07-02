@@ -22,7 +22,11 @@ select
   snippet(messages_fts, 1, '[', ']', '...', 12)
 from messages_fts
 join messages m on m.source_rowid = messages_fts.source_rowid
-left join chat_messages cm on cm.message_rowid = m.source_rowid
+left join (
+  select message_rowid, min(chat_rowid) as chat_rowid
+  from chat_messages
+  group by message_rowid
+) cm on cm.message_rowid = m.source_rowid
 left join handles h on h.source_rowid = m.handle_rowid
 left join chats c on c.source_rowid = cm.chat_rowid
 left join (

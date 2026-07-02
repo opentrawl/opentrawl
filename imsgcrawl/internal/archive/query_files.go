@@ -17,6 +17,15 @@ var messagesListSQL string
 //go:embed queries/messages/count.sql
 var countMessagesSQL string
 
+//go:embed queries/open/message.sql
+var openMessageSQL string
+
+//go:embed queries/open/before.sql
+var openBeforeSQL string
+
+//go:embed queries/open/after.sql
+var openAfterSQL string
+
 //go:embed queries/search/list.sql
 var searchListSQL string
 

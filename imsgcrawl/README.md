@@ -21,12 +21,13 @@ imsgcrawl sync
 imsgcrawl chats
 imsgcrawl messages --chat 42
 imsgcrawl search "candles budget"
+imsgcrawl open imsgcrawl:msg/8831
 imsgcrawl contacts export
 ```
 
 List commands are bounded by default. They show how many rows were returned and
-how to ask for more. Use `--all` only when you really want complete local
-output.
+how to ask for more. Use `--all` for chats or one chat's messages only when you
+really want complete local output.
 
 ## What You See
 
@@ -39,15 +40,17 @@ Messages output.
 iMessage Crawl (imsgcrawl)
 Local-first iMessage archive crawler.
 
-Capabilities: metadata, status, sync, chats, messages, search, contact-export
+Capabilities: metadata, status, sync, doctor, chats, messages, search, open, contact-export
 
 Agent-facing commands:
-  status          imsgcrawl --json status
-  sync            imsgcrawl --json sync
-  chats           imsgcrawl --json chats
-  messages        imsgcrawl --json messages
-  search          imsgcrawl --json search
-  contact-export  imsgcrawl --json contacts export
+  status          imsgcrawl status --json
+  sync            imsgcrawl sync --json
+  doctor          imsgcrawl doctor --json
+  chats           imsgcrawl chats --json
+  messages        imsgcrawl messages --json
+  search          imsgcrawl search QUERY --json
+  open            imsgcrawl open REF --json
+  contact-export  imsgcrawl contacts export --json
 
 Machine output: add --json to print the structured manifest.
 ```
@@ -116,15 +119,38 @@ date              from        text
 ### Search
 
 `search` shows which conversation a hit came from and keeps the full matched
-text in the table. Use JSON when an agent or script needs local chat IDs.
+text in the table. Use JSON when an agent or script needs refs for follow-up
+commands.
 
 ```text
 Search "candles budget": showing 1 of 1.
-Use --json when you need local chat IDs for follow-up commands.
+Open: imsgcrawl open REF
+Use --json when you need refs for follow-up commands.
 
 date              from  conversation                  text
 2026-06-07 09:10  me    Cabinet Group (Elon, JD,      The candles budget is CORRECT.
                          Xi, +1 more)
+```
+
+### Open
+
+`open` takes a ref from `search --json` and prints the full message with a
+bounded window from the same chat.
+
+```text
+Message imsgcrawl:msg/8831 in Cabinet Group
+Participants: Elon, JD, Xi
+
+Time: 2026-06-07 09:10
+From: me
+Text: The candles budget is CORRECT.
+
+Context: 3 messages around this one.
+
+   date              from        text
+   2026-06-07 09:09  JD Vance    Sir, I have prepared bullet points.
+>  2026-06-07 09:10  me          The candles budget is CORRECT.
+   2026-06-07 09:11  Failing Elon  We need more candles.
 ```
 
 ### Contacts
@@ -148,6 +174,7 @@ imsgcrawl --json status
 imsgcrawl --json chats --limit 20
 imsgcrawl --json messages --chat 42 --limit 20
 imsgcrawl --json search --limit 20 "candles budget"
+imsgcrawl --json open imsgcrawl:msg/8831
 imsgcrawl --json contacts export
 ```
 
@@ -155,22 +182,18 @@ Search JSON keeps the envelope small and parseable:
 
 ```json
 {
-  "schema_version": "crawlkit.control.v1",
-  "app_id": "imsgcrawl",
-  "command": "search",
-  "returned": 1,
-  "total": 1,
-  "limit": 20,
-  "complete": true,
   "query": "candles budget",
-  "items": [
+  "results": [
     {
-      "chat_id": "42",
-      "chat_title": "Cabinet Group",
-      "sender_label": "me",
-      "text": "The candles budget is CORRECT."
+      "ref": "imsgcrawl:msg/8831",
+      "time": "2026-06-07T09:10:00+02:00",
+      "who": "me",
+      "where": "Cabinet Group",
+      "snippet": "The candles budget is CORRECT."
     }
-  ]
+  ],
+  "total_matches": 1,
+  "truncated": false
 }
 ```
 

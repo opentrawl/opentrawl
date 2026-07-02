@@ -34,6 +34,8 @@ func (r *runtime) print(v any) error {
 		return printMessagesText(r.stdout, value)
 	case searchListOutput:
 		return printSearchText(r.stdout, value)
+	case openOutput:
+		return printOpenText(r.stdout, value)
 	case control.ContactExport:
 		return printContactsText(r.stdout, value)
 	default:
@@ -59,7 +61,7 @@ func printManifestText(w io.Writer, value control.Manifest) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, name := range []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "contact-export"} {
+	for _, name := range []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "open", "contact-export"} {
 		command, ok := value.Commands[name]
 		if !ok {
 			continue
@@ -201,26 +203,64 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 }
 
 func printSearchText(w io.Writer, value searchListOutput) error {
-	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, value.Returned, value.Total); err != nil {
+	returned := len(value.Results)
+	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, returned, value.TotalMatches); err != nil {
 		return err
 	}
-	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d %s\nAll: imsgcrawl search --all %s\n", nextLimit(value.Limit, value.Total), strconv.Quote(value.Query), strconv.Quote(value.Query)); err != nil {
+	if value.Truncated {
+		if value.Limit < maxListLimit {
+			if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d %s\n", nextSearchLimit(value.Limit, value.TotalMatches), strconv.Quote(value.Query)); err != nil {
+				return err
+			}
+		} else if _, err := io.WriteString(w, "Narrow the query to see more matches.\n"); err != nil {
 			return err
 		}
 	}
-	if _, err := io.WriteString(w, "Use --json when you need local chat IDs for follow-up commands.\n\n"); err != nil {
+	if _, err := io.WriteString(w, "Open: imsgcrawl open REF\nUse --json when you need refs for follow-up commands.\n\n"); err != nil {
 		return err
 	}
 	width := textOutputWidth(w)
 	columns := searchTextColumns(width)
-	rows := tableRows(len(value.Items))
-	for _, item := range value.Items {
+	rows := tableRows(len(value.TextItems))
+	for _, item := range value.TextItems {
 		rows = append(rows, []string{
 			formatArchiveTime(item.Time),
 			senderName(item.FromMe, item.SenderLabel),
 			searchConversation(item),
 			searchText(item),
+		})
+	}
+	return renderTextTable(w, columns, rows)
+}
+
+func printOpenText(w io.Writer, value openOutput) error {
+	if _, err := fmt.Fprintf(w, "Message %s in %s\n", value.Ref, value.Chat.Name); err != nil {
+		return err
+	}
+	if len(value.Chat.Participants) > 0 {
+		if _, err := fmt.Fprintf(w, "Participants: %s\n", strings.Join(value.Chat.Participants, ", ")); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\nText: %s\n\n", formatArchiveTime(value.Message.Time), value.Message.Who, displayMessageText(value.Message.Text, value.Message.HasAttachments)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Context: %d messages around this one.\n\n", len(value.Context)); err != nil {
+		return err
+	}
+	width := textOutputWidth(w)
+	columns := openTextColumns(width)
+	rows := tableRows(len(value.Context))
+	for _, item := range value.Context {
+		marker := ""
+		if item.Target {
+			marker = ">"
+		}
+		rows = append(rows, []string{
+			marker,
+			formatArchiveTime(item.Time),
+			item.Who,
+			displayMessageText(item.Text, item.HasAttachments),
 		})
 	}
 	return renderTextTable(w, columns, rows)
@@ -243,6 +283,14 @@ func nextLimit(limit int, total int64) int {
 	next := limit * 2
 	if int64(next) > total {
 		return int(total)
+	}
+	return next
+}
+
+func nextSearchLimit(limit int, total int64) int {
+	next := nextLimit(limit, total)
+	if next > maxListLimit {
+		return maxListLimit
 	}
 	return next
 }

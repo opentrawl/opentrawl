@@ -2,7 +2,6 @@
 set -u
 
 search_query=""
-include_search_all=0
 max_all_messages=25
 out_dir=""
 preview_bytes=4000
@@ -11,7 +10,7 @@ inline_raw=0
 usage() {
   cat <<'USAGE'
 Usage:
-  scripts/agent-smoke-transcript.sh [--query TEXT] [--include-search-all] [--max-all-messages N] [--preview-bytes N] [--inline-raw] [--out-dir DIR]
+  scripts/agent-smoke-transcript.sh [--query TEXT] [--max-all-messages N] [--preview-bytes N] [--inline-raw] [--out-dir DIR]
 
 Runs the real imsgcrawl binary on PATH and captures exact stdout/stderr for a
 progressive agent smoke pass. Exact raw outputs are written only to the local
@@ -29,10 +28,6 @@ while [[ $# -gt 0 ]]; do
       fi
       search_query=$2
       shift 2
-      ;;
-    --include-search-all)
-      include_search_all=1
-      shift
       ;;
     --max-all-messages)
       if [[ $# -lt 2 ]]; then
@@ -262,6 +257,7 @@ run_step "help-chats-topic" imsgcrawl help chats
 run_step "help-chats-flag" imsgcrawl chats --help
 run_step "help-messages-topic" imsgcrawl help messages
 run_step "help-search-topic" imsgcrawl help search
+run_step "help-open-topic" imsgcrawl help open
 run_step "help-contacts-export-flag" imsgcrawl contacts export --help
 
 run_step "metadata-text" imsgcrawl metadata
@@ -304,11 +300,13 @@ fi
 if [[ -n "$search_query" ]]; then
   run_step "search-text-limit-three" imsgcrawl --archive "$archive" search --limit 3 "$search_query"
   run_step "search-json-limit-three" imsgcrawl --json --archive "$archive" search --limit 3 "$search_query"
-  if [[ "$include_search_all" -eq 1 ]]; then
-    run_step "search-text-all" imsgcrawl --archive "$archive" search --all "$search_query"
-    run_step "search-json-all" imsgcrawl --json --archive "$archive" search --all "$search_query"
+  search_json="$last_stdout"
+  first_search_ref=$(jq -r '.results[0].ref // empty' "$search_json" 2>/dev/null || true)
+  if [[ -n "$first_search_ref" ]]; then
+    run_step "open-text-first-search-result" imsgcrawl --archive "$archive" open "$first_search_ref"
+    run_step "open-json-first-search-result" imsgcrawl --json --archive "$archive" open "$first_search_ref"
   else
-    append_note "Search --all was skipped. Re-run with --include-search-all if the query is narrow enough for a full raw transcript."
+    append_note "Search returned no ref, so open was skipped."
   fi
 else
   run_step "search-text-empty-hit-shape" imsgcrawl --archive "$archive" search --limit 3 "imsgcrawl-agent-smoke-no-match"
@@ -337,7 +335,8 @@ IDs, completeness, privacy, or size needs full inspection.
 - Does text output show counts, completeness, and follow-up commands?
 - Does JSON output keep a stable small envelope instead of a giant unstructured blob?
 - Can IDs from `chats` be passed directly to `messages`?
-- Are message/search/contact outputs human-readable enough for an agent to use?
+- Can refs from `search --json` be passed directly to `open`?
+- Are message/search/open/contact outputs human-readable enough for an agent to use?
 - Are there machine-only fields, unstable IDs, hashes, or local internals that should not be agent-facing?
 - Are errors useful, or only Go/SQLite/parser noise?
 - Which outputs should become crawlkit-standard textproto or agent-friendly text later?
