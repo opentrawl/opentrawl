@@ -4,8 +4,9 @@ written_by: ai
 
 # Roadmap
 
-Companion to [vision.md](vision.md). Phases overlap; the contract leads,
-per-crawler hardening runs in parallel behind it.
+Companion to [vision.md](vision.md). Phases overlap; the contract and
+the single entry point lead, per-crawler hardening runs in parallel
+behind them.
 
 ## Decisions already made
 
@@ -39,60 +40,84 @@ Remaining:
 - retire the local crawlbar PR worktrees after confirming their content
   landed upstream.
 
-## Phase 1: contract v1
+## Phase 1: contract v1 and the trawl skeleton
 
-Goal: the control contract is written down, versioned and testable, so
-crawler work and app work can proceed against it independently.
+Goal: the single entry point exists from day one, and the contract
+behind it is written down, versioned and testable. Everything that
+follows is agent-testable through `trawl` from the start.
 
-- extend the crawlkit control contract to cover: `metadata`, `status`,
-  `sync`, `search`, `open`, `doctor`, `contacts export`; bounded and
-  paginated output rules; the secrets rule (booleans and expiry only);
-  human-shaped output rules (real timestamps, human names for IDs);
-  error and progress shapes.
+What exists versus what is missing: crawlkit's `control` package
+already defines the manifest, the status envelope (including declared
+counts) and the contact-export contract. What does not exist yet: read
+surfaces (`search`, `open`) in the contract, bounded and paginated
+output rules, the secrets rule (booleans and expiry only), human-shaped
+output rules (real timestamps, human names, semantically meaningful
+field names), error and progress shapes, and anything that enforces
+conformance — today every crawler drifts its own way (different flag
+grammars, missing metadata, unbounded dumps).
+
+- design the full `trawl` CLI surface first, to
+  [clig.dev](https://clig.dev) standard: `trawl status`, `trawl sync`,
+  `trawl search`, `trawl open`, `trawl doctor`. The surface is the API;
+  curate it hard and keep it small.
+- ship a walking-skeleton `trawl` immediately: discovery via crawler
+  manifests, `status` and `doctor` federation over whatever crawlers
+  are installed. Thin, but real — the single entry point everything
+  else plugs into and every agent tests through.
+- extend the crawlkit control contract with the missing pieces above,
+  pushed upstream as we go.
 - define the golden-path bar as a checklist derived from the crawler
   quality rubric and the imsgcrawl evaluation, so "done" is mechanical
   per crawler.
 - build a conformance harness: point it at any crawler binary and it
   verifies the contract (shapes, bounds, secret leaks, empty and corrupt
   archive behaviour). This is what makes the plugin story real.
-- push contract work upstream to crawlkit as we go.
 
 ## Phase 2: per-crawler hardening to the bar
 
-Goal: every v1 crawler passes the conformance harness. Highly parallel.
+Goal: every v1 crawler passes the conformance harness and shows up
+correctly in `trawl`. Highly parallel.
 
 | crawler | state | main gaps |
 |---|---|---|
 | imsgcrawl | golden path: archive with source parity, FTS proven | installed binary, human-shaped IDs and timestamps, attachment handling |
 | telecrawl | works: archive and media proven | metadata drift, status envelope |
 | wacrawl | archive works, readiness unproven | readiness proof, stop auto-sync on read, status envelope; watch WhatsApp passkey pairing risk |
-| gogcrawl (new) | private prototype exists | rebuild clean in monorepo: real archive CLI over a mail mirror, config-driven paths |
-| calcrawl (new) | private scaffold exists | rebuild clean in monorepo: Google and ICS sync, archive, search |
+| gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of upstream `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |
+| calcrawl (new) | private scaffold exists | rebuild clean in monorepo: Google (via `gogcli` calendar surfaces) and ICS sync, archive, search |
 | clawdex | contact layer works | adopt the crawlkit contact-export contract, contract compliance, import loop from all v1 crawlers |
 
 Contact export is a v1 requirement for every crawler, because identity
 joins are the horizon and re-crawling later is the expensive path.
 
-## Phase 3: the federation CLI
+## Phase 3: full federation
 
-Goal: one binary, one surface. `trawl status`, `trawl sync <source>`,
-`trawl search <query> --source a,b`, `trawl open <ref>`, `trawl doctor`.
+Goal: `trawl` grows from skeleton to the complete surface: `trawl
+search <query> --source a,b`, `trawl open <ref>`, `trawl sync
+<source>`, with output that interleaves sources and carries provenance
+on every row.
 
-- new Go binary in the monorepo. Start from crawlkit's `crawlctl`
-  (discovery, run locking, history) and keep the contract as the only
-  coupling to crawlers.
-- search federates across per-source FTS; output interleaves sources
-  with provenance on every row.
+- search federates across per-source FTS; the contract is the only
+  coupling to crawlers. Reuse crawlkit's `crawlctl` mechanics
+  (discovery, run locking, history) where they fit.
+- every surface stays clig.dev compliant and curated; adding a flag is
+  a design decision, not a default response to a feature request.
 - design hook for v2 deltas: sync cursors already exist in crawlkit, so
   `trawl diff --since 24h` is a federation feature later, not
   per-crawler work.
 
 ## Phase 4: the Mac app
 
-Goal: a consumer-grade menu bar app a human likes and trusts. Shows the
-key metrics per crawler (fresh or stale, counts, last sync, auth state),
-handles authorisation flows, runs syncs. No settings maze.
+Goal: a consumer-grade menu bar app a human likes and trusts. Handles
+authorisation flows, runs syncs, and shows per-crawler health at a
+glance. No settings maze.
 
+- each crawler self-declares its headline metrics through the counts it
+  already reports in the status envelope — "N messages, M people, K
+  chats since 2014" for iMessage, "N mails, M attachments, K senders"
+  for Gmail. The app renders the top few declared counts plus freshness
+  and auth state; it invents nothing per-crawler. Keep it KISS: no
+  metrics framework, just declared counts.
 - from scratch, SwiftUI, SwiftPM without an Xcode project, minimum
   macOS one below current.
 - keep upstream crawlbar's quality rubric as the review contract for the
@@ -112,8 +137,15 @@ handles authorisation flows, runs syncs. No settings maze.
 
 ## Way of working
 
+- roles: the newest Codex model (currently gpt-5.5) implements;
+  Claude (Fable/Opus tier) orchestrates, reviews and owns taste.
+  Anything user-facing needs the reviewer bar, not just the implementer
+  bar.
 - adversarial review on every substantial change: independent reviewers
-  told to refute, not confirm.
+  told to refute, not confirm. Reviews check explicitly against the
+  vision doc's engineering principles, against the user's stated
+  intent, and against real inputs and outputs — raw, unmodified,
+  untruncated.
 - all prose (docs, PRs, commits) follows plain-language style. Code must
   read as self-documenting or it does not merge.
 - verification over assertion: a crawler change is done when the

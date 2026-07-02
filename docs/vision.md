@@ -17,10 +17,22 @@ your life are, how you talk to them and where, what you did, and what is
 going on right now, by querying local archives of the services you
 actually use.
 
-The long-horizon test: an agent should be able to infer who someone's
-girlfriend is and how they message her across Telegram, WhatsApp and
-Gmail, what events they share in Calendar, what notes they share, and
-how many group chats they have in Signal, without being told.
+Long-horizon tests, all of the same shape — inferences an agent should
+make from the archives without being told:
+
+- who someone's girlfriend is, and how they message her across
+  Telegram, WhatsApp and Gmail, what events they share in Calendar,
+  what notes they share, how many group chats they have in Signal
+- who the family, close friends and colleagues are, and which channel
+  each relationship lives on
+- what the person does for work, what projects are active, and what
+  changed this month
+- where they lived and travelled, what they bought, what appointments
+  recur, which social groups meet and how often
+
+None of these are features to build one by one. They fall out of clean,
+complete, queryable archives plus a capable agent. Get the data out;
+the inferences follow.
 
 ## What the suite is
 
@@ -44,17 +56,26 @@ The layers, bottom to top:
    sources. One Mac app that shows the key per-crawler metrics and
    handles authorisation. No knobs.
 5. Derived layers (later): daily deltas, cross-source identity joins,
-   life orientation. These build on the substrate; they never reach
-   around it into source databases.
+   clustering and per-thing cards, life orientation. These build on the
+   substrate; they never reach around it into source databases. The
+   clustering and card mechanics OpenClaw already runs on maintainer
+   data (clawsweeper, gitcrawl, discrawl) are the working prior art
+   here; see below.
 
 ## Design principles
 
 - Agent first, human readable. Every output must make sense to a human
-  reading it cold; if a human can read it properly, an agent can too. No
-  machine row IDs, no raw epoch timestamps, no unbounded dumps.
-- Local first. Archives live on your machine. Nothing leaves it unless
-  you explicitly publish. Cloud and remote replicas are optional add-ons,
-  never dependencies.
+  reading it cold; if a human can read it properly, an agent can too.
+  This goes down to the field level: every field, name and value must
+  semantically make sense — real timestamps, human names, properly
+  named keys. No machine row IDs, no raw epoch timestamps, no unbounded
+  dumps.
+- Local first, privacy by design. Archives live on your machine.
+  Nothing leaves it unless you explicitly opt in. Sending content to
+  remote frontier models gives the best inference results today and is
+  supported, but it is never the default; the default is local and
+  private. Model access goes through one pluggable provider seam — not
+  a new integration surface per model.
 - Federated, not unified. Each source keeps its own source-native
   database. The single entry point is a query surface, not a shared
   schema. Cross-source joins happen in derived layers, later, on top of
@@ -62,19 +83,44 @@ The layers, bottom to top:
 - Contract first. The plugin story is the control contract. Anyone who
   wants to add their own messaging app implements the contract in any
   language and their crawler appears in the CLI and the app.
-- No knobs. Defaults over configuration. A settings surface is a design
-  failure until proven otherwise.
+- No knobs. One and only one obvious way of doing things. Defaults over
+  configuration. A settings surface is a design failure until proven
+  otherwise.
 - Secrets never in output. Auth state is reported as booleans and expiry
   dates. No command prints tokens, cookies or key material.
 - Bounded output everywhere. Every command paginates or truncates with an
   explicit indicator. Token budgets are a design axis, not an
   afterthought.
-- Boring Go for crawlers and the CLI. Swift and SwiftUI for the Mac app.
-  Code must be self-documenting: no magic constants, one obvious job per
-  function. Prose follows plain-language style.
 - Read only in v1. Write capability (sending messages) comes later
   through the existing upstream access CLIs, behind explicit
   authorisation.
+
+## Engineering principles
+
+The bar for every line of code and every surface in this repo:
+
+- As simple as possible, but no simpler. KISS, YAGNI, less is more.
+  Prefer deleting a concept to documenting it.
+- One and only one obvious way to do each thing. No modes, no
+  fallbacks, no compatibility shims without current evidence.
+- Human readable with no magic. Code must be self-explanatory: no magic
+  constants, one obvious job per function, boundaries in the Ousterhout
+  sense (deep modules, simple interfaces). If a reader needs a comment
+  to follow the code, rewrite the code.
+- Files under about 400 lines. Split when they grow.
+- The tree tells the story. Running `tree` should reveal what the repo
+  is and how it is organised — for humans and for agents. Structure is
+  documentation.
+- CLIs follow [clig.dev](https://clig.dev). Curated, minimal,
+  consistent surfaces; taste is a requirement, not a polish step.
+- Go for crawlers and the CLI. Swift and SwiftUI for the Mac app.
+- Trunk-based development. Small logical commits on main. Speed over
+  ceremony.
+- Test against real inputs and outputs. Agents and tests must exercise
+  raw, unmodified, untruncated real data flows — never faked,
+  abbreviated or hand-massaged fixtures for the paths that matter. This
+  is the only way to prove the thing actually works and to catch quiet
+  degradation.
 
 ## Now, next, later
 
@@ -86,9 +132,11 @@ The layers, bottom to top:
   plugin API with agent surfaces (MCP or an Executor source) as thin
   adapters over the contract.
 - Horizon: cross-source inference: identity resolution, relationship
-  inference, life orientation reports. The suite's job is to make this
-  possible by shipping clean archives and contact exports; the
-  inference layer stays out of the crawlers.
+  inference, life orientation reports. This is where clustering and
+  per-thing cards come in — the clawsweeper/gitcrawl pattern applied to
+  people, threads and events instead of issues and PRs. The suite's job
+  is to make this possible by shipping clean archives and contact
+  exports; the inference layer stays out of the crawlers.
 
 ## Prior art and how we relate to it
 
@@ -107,6 +155,43 @@ The layers, bottom to top:
   design and our secrets rule. Difference: Executor is a gateway service;
   we are local-first CLIs, so it is a v2 integration target, not a
   dependency.
+
+### Clustering and cards: the clawsweeper pattern
+
+OpenClaw already runs, in production on maintainer data, the exact
+inference pattern our horizon needs. It splits across three repos, and
+each half is reusable:
+
+- gitcrawl is the clustering engine. Every issue and PR gets an
+  embedding; edges combine cosine similarity with deterministic
+  reference links (explicit cross-references), because links catch what
+  embeddings miss; bounded union-find turns edges into clusters. The
+  governance layer is the real prize: clusters have stable
+  content-hashed identities, memberships move through a state machine
+  (active, excluded, removed), and human curation verbs (exclude,
+  include, set-canonical, merge, split, close) are stored as overrides
+  that survive every recomputation. Re-running the maths never destroys
+  human judgement.
+- clawsweeper is the per-thing card and judge. Each reviewed item gets
+  one durable card: a markdown record plus a typed JSON verdict
+  (decision, confidence, evidence with file and line references, risks,
+  suggested action) and one edit-in-place comment. An LLM judges over
+  hydrated context but is proposal-only; a deterministic apply step
+  re-checks live state before any mutation. It does not cluster itself
+  — it reads gitcrawl's SQLite snapshot by convention, proving the
+  crawl layer and the reasoning layer can stay decoupled through a
+  portable store.
+- discrawl supplies the archive-side primitives: per-message
+  embeddings, semantic and hybrid search, statistical roll-up reports,
+  and structured entity extraction over people (member profiles).
+
+Our horizon layer is this pattern generalised: gitcrawl's clustering
+and durable governance applied to people, threads and events instead
+of issues and PRs; clawsweeper-style typed cards and a proposal-only
+judge on top; per-source crawler archives underneath, exchanged
+through the same portable-SQLite seam. This one-shot orientation over
+a corpus — cluster it, card it, review it — is the same move as
+onboarding an agent into a life.
 
 ## Non-goals for v1
 
