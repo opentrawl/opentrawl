@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -23,6 +24,8 @@ import (
 const (
 	defaultMessageLimit = 20
 	maxMessageLimit     = 200
+	messageRefPrefix    = "wacrawl:msg/"
+	openWindowEachSide  = 10
 )
 
 type cliError struct {
@@ -105,6 +108,8 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return a.runMessages(ctx, rest[1:])
 	case "search":
 		return a.runSearch(ctx, rest[1:])
+	case "open":
+		return a.runOpen(ctx, rest[1:])
 	case "sql":
 		return a.runSQL(ctx, rest[1:])
 	case "web":
@@ -500,6 +505,62 @@ func newMessageListOutput(query string, limit int, messages []store.Message) mes
 	}
 }
 
+type searchEnvelope struct {
+	Query        string         `json:"query"`
+	Results      []searchResult `json:"results"`
+	TotalMatches int            `json:"total_matches"`
+	Truncated    bool           `json:"truncated"`
+}
+
+type searchResult struct {
+	Ref     string `json:"ref"`
+	Time    string `json:"time"`
+	Who     string `json:"who"`
+	Where   string `json:"where"`
+	Snippet string `json:"snippet"`
+}
+
+type openEnvelope struct {
+	Ref     string            `json:"ref"`
+	Chat    string            `json:"chat"`
+	Message openMessage       `json:"message"`
+	Context []openMessage     `json:"context"`
+	Window  openWindowSummary `json:"window"`
+}
+
+type openWindowSummary struct {
+	Before int `json:"before"`
+	After  int `json:"after"`
+}
+
+type openMessage struct {
+	Ref     string     `json:"ref"`
+	Time    string     `json:"time"`
+	Who     string     `json:"who"`
+	Where   string     `json:"where"`
+	Text    string     `json:"text"`
+	Type    string     `json:"type,omitempty"`
+	Media   *openMedia `json:"media,omitempty"`
+	Starred bool       `json:"starred,omitempty"`
+	Current bool       `json:"current,omitempty"`
+}
+
+type openMedia struct {
+	Type      string `json:"type,omitempty"`
+	Title     string `json:"title,omitempty"`
+	SizeBytes int64  `json:"size_bytes,omitempty"`
+}
+
+type errorEnvelope struct {
+	Error contractError `json:"error"`
+}
+
+type contractError struct {
+	Code    string `json:"code"`
+	Message string `json:"message"`
+	Remedy  string `json:"remedy"`
+}
+
 func contactDisplayName(contact store.Contact) string {
 	for _, name := range []string{
 		contact.FullName,
@@ -667,12 +728,77 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 	}
 	resolved.Query = query
 	return a.withReadStore(ctx, func(st *store.Store) error {
+		total, err := st.SearchCount(ctx, resolved)
+		if err != nil {
+			return err
+		}
 		msgs, err := st.Search(ctx, resolved)
 		if err != nil {
 			return err
 		}
-		return a.print(newMessageListOutput(query, resolved.Limit, msgs))
+		return a.print(newSearchEnvelope(query, total, msgs))
 	})
+}
+
+func (a *app) runOpen(ctx context.Context, args []string) error {
+	if commandWantsHelp(args) {
+		printCommandUsage(a.stdout, "open")
+		return nil
+	}
+	fs := flag.NewFlagSet("open", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "open")
+			return nil
+		}
+		return usageErr(err)
+	}
+	if fs.NArg() != 1 {
+		return usageErr(errors.New("open requires exactly one ref"))
+	}
+	messageID, contractErr := parseMessageRef(fs.Arg(0))
+	if contractErr != nil {
+		return a.failContract(*contractErr)
+	}
+	return a.withReadStore(ctx, func(st *store.Store) error {
+		target, err := st.MessageByID(ctx, messageID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return a.failContract(contractError{
+					Code:    "not_found",
+					Message: "message was not found",
+					Remedy:  "run wacrawl search again and pass one of its refs",
+				})
+			}
+			return err
+		}
+		window, err := st.MessageWindow(ctx, target, openWindowEachSide)
+		if err != nil {
+			return err
+		}
+		return a.print(newOpenEnvelope(target, window))
+	})
+}
+
+func parseMessageRef(ref string) (string, *contractError) {
+	ref = strings.TrimSpace(ref)
+	if !strings.HasPrefix(ref, messageRefPrefix) {
+		return "", &contractError{
+			Code:    "foreign_ref",
+			Message: "ref does not belong to wacrawl",
+			Remedy:  "pass a ref returned by wacrawl search",
+		}
+	}
+	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
+	if messageID == "" {
+		return "", &contractError{
+			Code:    "invalid_ref",
+			Message: "wacrawl message ref is missing its message id",
+			Remedy:  "pass a complete ref returned by wacrawl search",
+		}
+	}
+	return messageID, nil
 }
 
 func splitSearchArgs(args []string) ([]string, string, error) {
@@ -810,6 +936,10 @@ func (a *app) print(value any) error {
 		return a.printMessages(v, false, 0)
 	case messageListOutput:
 		return a.printMessages(v.Messages, v.Truncated, v.Limit)
+	case searchEnvelope:
+		return a.printSearch(v)
+	case openEnvelope:
+		return a.printOpen(v)
 	case doctorEnvelope:
 		for _, check := range v.Checks {
 			if _, err := fmt.Fprintf(a.stdout, "%s=%s\n", check.ID, check.State); err != nil {
@@ -872,6 +1002,36 @@ func (a *app) print(value any) error {
 	}
 }
 
+func (a *app) printSearch(result searchEnvelope) error {
+	for _, item := range result.Results {
+		if _, err := fmt.Fprintf(a.stdout, "[%s] %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
+			return err
+		}
+	}
+	if result.Truncated {
+		_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, or --chat\n", len(result.Results), result.TotalMatches)
+		return err
+	}
+	_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches\n", len(result.Results), result.TotalMatches)
+	return err
+}
+
+func (a *app) printOpen(result openEnvelope) error {
+	if _, err := fmt.Fprintf(a.stdout, "chat: %s\nref: %s\n\n", result.Chat, result.Ref); err != nil {
+		return err
+	}
+	for _, item := range result.Context {
+		marker := " "
+		if item.Current {
+			marker = ">"
+		}
+		if _, err := fmt.Fprintf(a.stdout, "%s [%s] %s: %s\n", marker, item.Time, item.Who, item.Text); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (a *app) printMessages(messages []store.Message, truncated bool, limit int) error {
 	for _, m := range messages {
 		body := firstNonEmpty(m.Snippet, m.Text, m.MediaTitle, m.MessageType)
@@ -884,6 +1044,139 @@ func (a *app) printMessages(messages []store.Message, truncated bool, limit int)
 		return err
 	}
 	return nil
+}
+
+func newSearchEnvelope(query string, total int, messages []store.Message) searchEnvelope {
+	if messages == nil {
+		messages = []store.Message{}
+	}
+	results := make([]searchResult, 0, len(messages))
+	for _, message := range messages {
+		results = append(results, newSearchResult(message))
+	}
+	return searchEnvelope{
+		Query:        query,
+		Results:      results,
+		TotalMatches: total,
+		Truncated:    total > len(results),
+	}
+}
+
+func newSearchResult(message store.Message) searchResult {
+	return searchResult{
+		Ref:     messageRef(message),
+		Time:    formatTime(message.Timestamp),
+		Who:     messageWho(message),
+		Where:   messageWhere(message),
+		Snippet: messageSnippet(message),
+	}
+}
+
+func newOpenEnvelope(target store.Message, context []store.Message) openEnvelope {
+	openContext := make([]openMessage, 0, len(context))
+	before := 0
+	after := 0
+	for _, message := range context {
+		current := message.SourcePK == target.SourcePK
+		if current {
+			openContext = append(openContext, newOpenMessage(message, true))
+			continue
+		}
+		if message.Timestamp.Before(target.Timestamp) || (message.Timestamp.Equal(target.Timestamp) && message.SourcePK < target.SourcePK) {
+			before++
+		} else {
+			after++
+		}
+		openContext = append(openContext, newOpenMessage(message, false))
+	}
+	return openEnvelope{
+		Ref:     messageRef(target),
+		Chat:    messageWhere(target),
+		Message: newOpenMessage(target, true),
+		Context: openContext,
+		Window:  openWindowSummary{Before: before, After: after},
+	}
+}
+
+func newOpenMessage(message store.Message, current bool) openMessage {
+	media := messageMedia(message)
+	return openMessage{
+		Ref:     messageRef(message),
+		Time:    formatTime(message.Timestamp),
+		Who:     messageWho(message),
+		Where:   messageWhere(message),
+		Text:    messageText(message),
+		Type:    firstNonEmpty(message.MessageType, message.MediaType),
+		Media:   media,
+		Starred: message.Starred,
+		Current: current,
+	}
+}
+
+func messageMedia(message store.Message) *openMedia {
+	if message.MediaType == "" && message.MediaTitle == "" && message.MediaSize == 0 {
+		return nil
+	}
+	return &openMedia{Type: message.MediaType, Title: message.MediaTitle, SizeBytes: message.MediaSize}
+}
+
+func messageRef(message store.Message) string {
+	return messageRefPrefix + message.MessageID
+}
+
+func messageWho(message store.Message) string {
+	if message.FromMe {
+		return "Me"
+	}
+	if name := humanDisplayName(message.SenderName); name != "" {
+		return name
+	}
+	return "Unknown sender"
+}
+
+func messageWhere(message store.Message) string {
+	if name := humanDisplayName(message.ChatName); name != "" {
+		return name
+	}
+	return "Unknown chat"
+}
+
+func messageSnippet(message store.Message) string {
+	return firstNonEmpty(message.Snippet, message.Text, message.MediaTitle, readableMessageType(message))
+}
+
+func messageText(message store.Message) string {
+	return firstNonEmpty(message.Text, message.MediaTitle, readableMessageType(message))
+}
+
+func readableMessageType(message store.Message) string {
+	kind := firstNonEmpty(message.MessageType, message.MediaType)
+	if kind == "" {
+		return ""
+	}
+	return "[" + kind + "]"
+}
+
+func humanDisplayName(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.EqualFold(name, "me") {
+		return "Me"
+	}
+	if name == "" || strings.Contains(name, "@") || looksLikePhone(name) {
+		return ""
+	}
+	return name
+}
+
+func (a *app) failContract(contractErr contractError) error {
+	if a.json {
+		if err := a.print(errorEnvelope{Error: contractErr}); err != nil {
+			return err
+		}
+	} else {
+		_, _ = fmt.Fprintf(a.stderr, "%s. %s.\n", contractErr.Message, contractErr.Remedy)
+	}
+	return &cliError{code: 1, err: errors.New(contractErr.Message)}
 }
 
 func printUsage(w io.Writer) {
@@ -904,6 +1197,7 @@ Commands:
   unread      List chats with unread messages.
   messages    List archived messages.
   search      Search archived messages.
+  open        Open a message ref from search.
   sql         Run a read-only SQL query.
   web         Browse the local archive in a private web viewer.
   backup      Init, push, pull, or inspect encrypted Git backups.
@@ -923,6 +1217,7 @@ Examples:
   wacrawl unread --limit 20
   wacrawl --json contacts export
   wacrawl --json search "invoice" --from-them --after 2026-01-01
+  wacrawl open wacrawl:msg/MESSAGE_ID
   wacrawl sql "SELECT count(*) FROM messages"
   wacrawl web
   wacrawl help messages
@@ -1061,6 +1356,18 @@ Examples:
   wacrawl search "invoice"
   wacrawl search "flight" --after 2026-01-01 --from-them
   wacrawl --json search --chat 1234567890@s.whatsapp.net "release notes"
+`)
+	case "open":
+		_, _ = fmt.Fprint(w, `Open an archived message by ref.
+
+Usage:
+  wacrawl open <ref>
+
+The ref must come from wacrawl search and look like wacrawl:msg/MESSAGE_ID.
+
+Examples:
+  wacrawl open wacrawl:msg/MESSAGE_ID
+  wacrawl --json open wacrawl:msg/MESSAGE_ID
 `)
 	case "sql":
 		_, _ = fmt.Fprint(w, `Run a read-only SQL query against the archive database.

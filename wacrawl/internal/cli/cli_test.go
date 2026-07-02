@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -46,8 +47,9 @@ func TestRunEndToEnd(t *testing.T) {
 		{"messages", []string{"--db", dbPath, "messages", "--chat", "123@g.us", "--asc"}, "launch now"},
 		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "[launch] now"},
 		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "[launch] now"},
+		{"open", []string{"--db", dbPath, "open", "wacrawl:msg/group-image"}, "launch now"},
 		{"sql", []string{"--db", dbPath, "sql", "SELECT count(*) AS messages FROM messages"}, "messages"},
-		{"json", []string{"--db", dbPath, "--json", "search", "launch"}, `"message_id"`},
+		{"json", []string{"--db", dbPath, "--json", "search", "launch"}, `"ref": "wacrawl:msg/group-image"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
@@ -198,13 +200,113 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 	}
 }
 
+func assertRootKeys(t *testing.T, data []byte, keys ...string) {
+	t.Helper()
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("json = %s err=%v", string(data), err)
+	}
+	want := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		want[key] = struct{}{}
+		if _, ok := root[key]; !ok {
+			t.Fatalf("root keys = %#v, missing %s", root, key)
+		}
+	}
+	if len(root) != len(want) {
+		t.Fatalf("root keys = %#v, want %#v", root, keys)
+	}
+}
+
+func assertSearchResultKeys(t *testing.T, data []byte) {
+	t.Helper()
+	var root struct {
+		Results []map[string]json.RawMessage `json:"results"`
+	}
+	if err := json.Unmarshal(data, &root); err != nil {
+		t.Fatalf("json = %s err=%v", string(data), err)
+	}
+	if len(root.Results) == 0 {
+		t.Fatal("search results are empty")
+	}
+	want := []string{"ref", "time", "who", "where", "snippet"}
+	for _, result := range root.Results {
+		assertRawMapKeys(t, result, want...)
+	}
+}
+
+func assertRawMapKeys(t *testing.T, got map[string]json.RawMessage, keys ...string) {
+	t.Helper()
+	want := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		want[key] = struct{}{}
+		if _, ok := got[key]; !ok {
+			t.Fatalf("keys = %#v, missing %s", got, key)
+		}
+	}
+	if len(got) != len(want) {
+		t.Fatalf("keys = %#v, want %#v", got, keys)
+	}
+}
+
+func assertNoRawFields(t *testing.T, data []byte) {
+	t.Helper()
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		t.Fatalf("json = %s err=%v", string(data), err)
+	}
+	raw := map[string]struct{}{
+		"source_pk":  {},
+		"chat_jid":   {},
+		"sender_jid": {},
+		"message_id": {},
+		"from_me":    {},
+		"raw_type":   {},
+		"timestamp":  {},
+		"media_path": {},
+		"media_url":  {},
+	}
+	assertNoRawFieldValue(t, value, raw)
+}
+
+func assertNoRawFieldValue(t *testing.T, value any, raw map[string]struct{}) {
+	t.Helper()
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			if _, ok := raw[key]; ok {
+				t.Fatalf("raw field %q leaked in %#v", key, typed)
+			}
+			assertNoRawFieldValue(t, nested, raw)
+		}
+	case []any:
+		for _, nested := range typed {
+			assertNoRawFieldValue(t, nested, raw)
+		}
+	}
+}
+
 func TestMetadataAdvertisesContactExport(t *testing.T) {
 	manifest := controlManifest()
 	if manifest.DisplayName != "WhatsApp" {
 		t.Fatalf("display_name = %q, want WhatsApp", manifest.DisplayName)
 	}
+	if !hasCapability(manifest.Capabilities, "open") {
+		t.Fatalf("capabilities = %#v, missing open", manifest.Capabilities)
+	}
 	if !hasCapability(manifest.Capabilities, "contacts_export") {
 		t.Fatalf("capabilities = %#v, missing contacts_export", manifest.Capabilities)
+	}
+	openCommand, ok := manifest.Commands["open"]
+	if !ok {
+		t.Fatalf("commands = %#v", manifest.Commands)
+	}
+	if openCommand.Mutates || !openCommand.JSON {
+		t.Fatalf("open command = %#v", openCommand)
+	}
+	openWant := []string{"wacrawl", "--json", "open", "REF"}
+	if !reflect.DeepEqual(openCommand.Argv, openWant) {
+		t.Fatalf("open argv = %#v, want %#v", openCommand.Argv, openWant)
 	}
 	webCommand, ok := manifest.Commands["web"]
 	if !ok {
@@ -384,8 +486,186 @@ func TestMessagesAndSearchReportTruncation(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "search", "--limit", "1", "launch"}, &stdout, &stderr); err != nil {
 		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "showing 1 of possibly more") {
+	if !strings.Contains(stdout.String(), "showing 1 of 2 matches") {
 		t.Fatalf("search should report truncation:\n%s", stdout.String())
+	}
+}
+
+func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "stable-1", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice", Timestamp: now, RawType: 0, MessageType: "text", Text: "launch alpha"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "stable-2", SenderJID: "bob@s.whatsapp.net", SenderName: "Bob", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "launch beta"},
+		{SourcePK: 3, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "other", SenderJID: "bob@s.whatsapp.net", SenderName: "Bob", Timestamp: now.Add(2 * time.Minute), RawType: 0, MessageType: "text", Text: "ship later"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: len(messages)}}, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--limit", "1", "launch"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	assertNoRawFields(t, stdout.Bytes())
+	assertRootKeys(t, stdout.Bytes(), "query", "results", "total_matches", "truncated")
+	assertSearchResultKeys(t, stdout.Bytes())
+	var payload searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	// All three fixture messages live in "Launch Group", and the FTS
+	// index covers chat names, so "launch" matches all of them.
+	if payload.Query != "launch" || payload.TotalMatches != 3 || !payload.Truncated || len(payload.Results) != 1 {
+		t.Fatalf("payload = %#v", payload)
+	}
+	result := payload.Results[0]
+	if !strings.HasPrefix(result.Ref, messageRefPrefix) || result.Time == "" || result.Who == "" || result.Where != "Launch Group" || result.Snippet == "" {
+		t.Fatalf("result = %#v", result)
+	}
+	if _, err := time.Parse(time.RFC3339, result.Time); err != nil {
+		t.Fatalf("time = %q err=%v", result.Time, err)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "alpha"}, &stdout, &stderr); err != nil {
+		t.Fatalf("stable search error = %v stderr=%s", err, stderr.String())
+	}
+	var stable searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &stable); err != nil {
+		t.Fatalf("stable search json = %s err=%v", stdout.String(), err)
+	}
+	if len(stable.Results) != 1 || stable.Results[0].Ref != "wacrawl:msg/stable-1" {
+		t.Fatalf("stable ref = %#v", stable.Results)
+	}
+}
+
+func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 2, 1, 9, 0, 0, 0, time.UTC)
+	messages := make([]store.Message, 0, 26)
+	for i := 0; i < 25; i++ {
+		text := fmt.Sprintf("context line %02d", i)
+		if i == 12 {
+			text = "roundtrip target"
+		}
+		fromMe := i%2 == 1
+		senderName := "Alice"
+		if fromMe {
+			senderName = "me"
+		}
+		messages = append(messages, store.Message{
+			SourcePK:    int64(i + 1),
+			ChatJID:     "chat@g.us",
+			ChatName:    "Launch Group",
+			MessageID:   fmt.Sprintf("msg-%02d", i),
+			SenderJID:   "alice@s.whatsapp.net",
+			SenderName:  senderName,
+			Timestamp:   now.Add(time.Duration(i) * time.Minute),
+			FromMe:      fromMe,
+			Text:        text,
+			RawType:     0,
+			MessageType: "text",
+		})
+	}
+	messages = append(messages, store.Message{
+		SourcePK:    100,
+		ChatJID:     "other@g.us",
+		ChatName:    "Other Chat",
+		MessageID:   "other-target",
+		SenderName:  "Eve",
+		Timestamp:   now,
+		Text:        "roundtrip other chat",
+		RawType:     0,
+		MessageType: "text",
+	})
+	chats := []store.Chat{
+		{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: 25},
+		{JID: "other@g.us", Kind: "group", Name: "Other Chat", MessageCount: 1},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "target", "--chat", "chat@g.us"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	var search searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if len(search.Results) != 1 {
+		t.Fatalf("search results = %#v", search.Results)
+	}
+	ref := search.Results[0].Ref
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "open", ref}, &stdout, &stderr); err != nil {
+		t.Fatalf("open error = %v stderr=%s", err, stderr.String())
+	}
+	assertNoRawFields(t, stdout.Bytes())
+	var payload openEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("open json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Ref != ref || payload.Chat != "Launch Group" || payload.Message.Ref != ref || payload.Message.Text != "roundtrip target" {
+		t.Fatalf("open payload = %#v", payload)
+	}
+	if payload.Window.Before != 10 || payload.Window.After != 10 || len(payload.Context) != 21 {
+		t.Fatalf("window = %#v context=%d", payload.Window, len(payload.Context))
+	}
+	if payload.Context[0].Ref != "wacrawl:msg/msg-02" || payload.Context[len(payload.Context)-1].Ref != "wacrawl:msg/msg-22" {
+		t.Fatalf("context bounds = %#v ... %#v", payload.Context[0], payload.Context[len(payload.Context)-1])
+	}
+	current := 0
+	for _, item := range payload.Context {
+		if item.Where != "Launch Group" {
+			t.Fatalf("context leaked another chat: %#v", item)
+		}
+		if _, err := time.Parse(time.RFC3339, item.Time); err != nil {
+			t.Fatalf("time = %q err=%v", item.Time, err)
+		}
+		if item.Current {
+			current++
+		}
+	}
+	if current != 1 {
+		t.Fatalf("current markers = %d", current)
+	}
+}
+
+func TestOpenRejectsForeignRefWithContractError(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--json", "open", "imsgcrawl:msg/abc"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("expected foreign ref exit 1, got err=%v code=%d", err, ExitCode(err))
+	}
+	assertRootKeys(t, stdout.Bytes(), "error")
+	var payload errorEnvelope
+	if jsonErr := json.Unmarshal(stdout.Bytes(), &payload); jsonErr != nil {
+		t.Fatalf("error json = %s err=%v", stdout.String(), jsonErr)
+	}
+	if payload.Error.Code != "foreign_ref" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("error payload = %#v", payload)
 	}
 }
 
@@ -420,6 +700,10 @@ func TestRunUsageErrors(t *testing.T) {
 	err = Run(context.Background(), []string{"search"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "exactly one query") {
 		t.Fatalf("expected query error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"open"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "exactly one ref") {
+		t.Fatalf("expected open ref error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search", "--limit", "0", "query"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
@@ -491,6 +775,8 @@ func TestRunHelpMenus(t *testing.T) {
 		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
 		{"search flag", []string{"search", "--help"}, "wacrawl search [flags] <query>"},
+		{"open topic", []string{"help", "open"}, "wacrawl open <ref>"},
+		{"open flag", []string{"open", "--help"}, "wacrawl:msg/MESSAGE_ID"},
 		{"sql topic", []string{"help", "sql"}, "wacrawl sql <select query>"},
 		{"sql flag", []string{"sql", "--help"}, "read-only SQL query"},
 		{"web topic", []string{"help", "web"}, "wacrawl web [--port N]"},
@@ -550,6 +836,7 @@ func TestReadCommandsNeverMutateArchive(t *testing.T) {
 		{"unread", "--limit", "5"},
 		{"messages", "--limit", "2"},
 		{"search", "--limit", "2", "launch"},
+		{"open", "wacrawl:msg/group-image"},
 		{"--json", "contacts", "export"},
 	}
 	for _, command := range readCommands {
@@ -599,6 +886,7 @@ func TestNeverSyncedReadPath(t *testing.T) {
 		{"unread"},
 		{"messages"},
 		{"search", "launch"},
+		{"open", "wacrawl:msg/group-image"},
 		{"--json", "contacts", "export"},
 	} {
 		t.Run(strings.Join(command, " "), func(t *testing.T) {

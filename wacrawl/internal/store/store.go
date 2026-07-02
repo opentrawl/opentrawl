@@ -522,6 +522,84 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 	return scanMessages(ctx, s.db, query, args...)
 }
 
+func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, error) {
+	if strings.TrimSpace(filter.Query) == "" {
+		return 0, errors.New("search query required")
+	}
+	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
+	if err != nil {
+		return 0, err
+	}
+	query := `select count(*) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
+	args := []any{ftsQuery}
+	query, args = applyMessageFilters(query, args, filter, true)
+	var total int
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
+func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return Message{}, errors.New("message id required")
+	}
+	messages, err := scanMessages(ctx, s.db, "select "+messageSelectColumns+" from messages where msg_id = ? order by ts desc, source_pk desc limit 1", messageID)
+	if err != nil {
+		return Message{}, err
+	}
+	if len(messages) == 0 {
+		return Message{}, sql.ErrNoRows
+	}
+	return messages[0], nil
+}
+
+func (s *Store) MessageWindow(ctx context.Context, target Message, eachSide int) ([]Message, error) {
+	if eachSide < 0 {
+		eachSide = 0
+	}
+	before, err := s.messagesBefore(ctx, target, eachSide)
+	if err != nil {
+		return nil, err
+	}
+	after, err := s.messagesAfter(ctx, target, eachSide)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Message, 0, len(before)+1+len(after))
+	out = append(out, before...)
+	out = append(out, target)
+	out = append(out, after...)
+	return out, nil
+}
+
+func (s *Store) messagesBefore(ctx context.Context, target Message, limit int) ([]Message, error) {
+	if limit == 0 {
+		return nil, nil
+	}
+	if target.Timestamp.IsZero() {
+		query := "select " + messageScanColumns + " from (select " + messageSelectColumns + " from messages where chat_jid = ? and source_pk < ? order by source_pk desc limit ?) order by source_pk asc"
+		return scanMessages(ctx, s.db, query, target.ChatJID, target.SourcePK, limit)
+	}
+	query := "select " + messageScanColumns + " from (select " + messageSelectColumns + " from messages where chat_jid = ? and (ts < ? or (ts = ? and source_pk < ?)) order by ts desc, source_pk desc limit ?) order by ts asc, source_pk asc"
+	ts := unix(target.Timestamp)
+	return scanMessages(ctx, s.db, query, target.ChatJID, ts, ts, target.SourcePK, limit)
+}
+
+func (s *Store) messagesAfter(ctx context.Context, target Message, limit int) ([]Message, error) {
+	if limit == 0 {
+		return nil, nil
+	}
+	if target.Timestamp.IsZero() {
+		query := "select " + messageSelectColumns + " from messages where chat_jid = ? and source_pk > ? order by source_pk asc limit ?"
+		return scanMessages(ctx, s.db, query, target.ChatJID, target.SourcePK, limit)
+	}
+	query := "select " + messageSelectColumns + " from messages where chat_jid = ? and (ts > ? or (ts = ? and source_pk > ?)) order by ts asc, source_pk asc limit ?"
+	ts := unix(target.Timestamp)
+	return scanMessages(ctx, s.db, query, target.ChatJID, ts, ts, target.SourcePK, limit)
+}
+
 func applyMessageFilters(query string, args []any, filter MessageFilter, joined bool) (string, []any) {
 	prefix := ""
 	if joined {
