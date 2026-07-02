@@ -122,12 +122,15 @@ The bar for every line of code and every surface in this repo:
   abbreviated or hand-massaged fixtures for the paths that matter. This
   is the only way to prove the thing actually works and to catch quiet
   degradation.
-- Declarative, minimal install surface. One obvious way in per
-  audience: the Mac app for consumers (the only global install), one
-  Homebrew tap plus a Nix flake for CLI users, devenv for development.
-  No ad-hoc global installs. State and config live under one root with
-  per-crawler subdirectories, not scattered dotfiles; existing crawlers
-  migrate to it through crawlkit's config defaults.
+- Declarative, minimal install surface. The dev loop needs no install
+  step at all: one devenv at the monorepo root, crawlers run from
+  source, and a repo-local bin directory on the shell's PATH is where
+  `trawl` discovers dev binaries — clone, `devenv shell`, everything
+  works. For consumers the Mac app is the main method and the only
+  global install; a Homebrew tap and a Nix flake cover CLI users. No
+  ad-hoc global installs, and no `trawl install` package manager. State
+  and config live under one root with per-crawler subdirectories, not
+  scattered dotfiles, via a crawlkit config option (no fork needed).
 - Observability for free. Structured logs, run history and doctor
   diagnostics come from crawlkit once, in one consistent, greppable,
   agent-first shape — a crawler gets debuggability by using the
