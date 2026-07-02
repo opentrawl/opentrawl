@@ -139,10 +139,6 @@ func (r backupMessageRow) message() (Message, error) {
 	if id == "" {
 		return Message{}, fmt.Errorf("message row has no id")
 	}
-	internalDateMS, err := parseInternalDateMS(r.InternalDate)
-	if err != nil {
-		return Message{}, fmt.Errorf("message %s internalDate: %w", id, err)
-	}
 	raw, err := decodeRawMessage(r.Raw)
 	if err != nil {
 		return Message{}, fmt.Errorf("message %s raw: %w", id, err)
@@ -151,7 +147,19 @@ func (r backupMessageRow) message() (Message, error) {
 	if err != nil {
 		return Message{}, fmt.Errorf("message %s rfc822: %w", id, err)
 	}
-	when := time.UnixMilli(internalDateMS)
+	// A rare message carries no internalDate; fall back to the RFC822
+	// Date header, else archive it dateless. One odd message must
+	// never halt the crawl.
+	when := time.Time{}
+	internalDateMS, err := parseInternalDateMS(r.InternalDate)
+	if err == nil {
+		when = time.UnixMilli(internalDateMS)
+	} else if !parsed.Date.IsZero() {
+		when = parsed.Date
+		internalDateMS = parsed.Date.UnixMilli()
+	} else {
+		internalDateMS = 0
+	}
 	return Message{
 		ID:             id,
 		ThreadID:       strings.TrimSpace(r.ThreadID),
@@ -205,6 +213,7 @@ func decodeRawMessage(value string) ([]byte, error) {
 }
 
 type parsedMail struct {
+	Date        time.Time
 	FromName    string
 	FromAddress string
 	ToAddress   string
@@ -220,11 +229,13 @@ func parseRawMail(raw []byte) (parsedMail, error) {
 		return parsedMail{}, err
 	}
 	fromName, fromAddress := parseAddressHeader(msg.Header.Get("From"))
+	date, _ := msg.Header.Date()
 	body, attachments, err := parseEntity(msg.Header, msg.Body)
 	if err != nil {
 		return parsedMail{}, err
 	}
 	return parsedMail{
+		Date:        date,
 		FromName:    fromName,
 		FromAddress: fromAddress,
 		ToAddress:   parseAddressListHeader(msg.Header.Get("To")),
