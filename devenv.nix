@@ -13,6 +13,7 @@
   packages = [
     pkgs.golangci-lint
     pkgs.sqlite
+    pkgs.jq
   ];
 
   enterShell = ''

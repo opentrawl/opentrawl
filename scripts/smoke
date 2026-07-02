@@ -1,0 +1,137 @@
+#!/usr/bin/env bash
+# Proves, on this machine's real archives, that the suite works. Four
+# questions per crawler: is the archive fresh, does it honour the
+# contract, does search -> open round-trip on real data, and do the
+# README's documented commands actually exist. Then cross-source: do
+# real questions get real answers through trawl.
+#
+# The script is generic and holds no personal data. Personal probe
+# queries live in an uncommitted local file, ~/.trawl/smoke.jsonl, one
+# JSON object per line:
+#   {"query": "boat trip", "source": "imsgcrawl", "expect": "Saturday"}
+# "source" and "expect" are optional: source pins where a hit must come
+# from, expect is a substring that must appear in some result snippet.
+# Without the file, the cross-source section runs a generic probe only.
+#
+# Output is a human report for the owner's eyes; it prints archive
+# content, so it never belongs in a commit, an issue, or CI logs.
+set -uo pipefail
+
+repo="$(cd "$(dirname "$0")/.." && pwd)"
+bin="$repo/.dev/bin"
+queries="${TRAWL_SMOKE_QUERIES:-$HOME/.trawl/smoke.jsonl}"
+export PATH="$bin:$PATH"
+
+pass=0 fail=0 warn=0
+declare -a failures
+
+ok()  { pass=$((pass + 1)); printf '  pass  %s\n' "$1"; }
+bad() { fail=$((fail + 1)); failures+=("$1"); printf '  FAIL  %s\n' "$1"; }
+meh() { warn=$((warn + 1)); printf '  warn  %s\n' "$1"; }
+
+[ -x "$bin/trawl" ] || { echo "run scripts/dev-bin first" >&2; exit 1; }
+
+echo "== sources =="
+sources="$(trawl status --json 2>/dev/null | jq -r '.[] | "\(.app_id) \(.state)"')"
+if [ -z "$sources" ]; then
+  echo "trawl status --json returned nothing usable" >&2
+  exit 1
+fi
+printf '%s\n' "$sources" | sed 's/^/  /'
+
+while read -r source state; do
+  echo
+  echo "== $source =="
+
+  # 1. Fresh: an archive that exists must be current. "missing" means
+  # never set up on this machine — flagged, but not a failure.
+  case "$state" in
+    ok) ok "state ok" ;;
+    stale) meh "state stale — run: trawl sync $source" ;;
+    empty) meh "state empty — archive exists but holds nothing yet" ;;
+    missing) meh "state missing — not set up on this machine" ;;
+    *) bad "state $state" ;;
+  esac
+
+  # 2. Contract: the conformance harness is the machine-checkable part.
+  if conformance "$source" >/dev/null 2>&1; then
+    ok "conformance"
+  else
+    bad "conformance (run: conformance $source)"
+  fi
+
+  # 3. Round-trip on real data: search issues a ref, open expands it.
+  # Only meaningful when the crawler declares search and has an archive.
+  declares_search="$("$source" metadata --json 2>/dev/null |
+    jq -r '(.capabilities // []) | map(ascii_downcase) | contains(["search"])')"
+  if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
+    ref="$("$source" search "the" --json --limit 1 2>/dev/null | jq -r '.results[0].ref // empty')"
+    if [ -z "$ref" ]; then
+      meh "round-trip skipped: search \"the\" matched nothing"
+    elif "$source" open "$ref" --json >/dev/null 2>&1; then
+      ok "search → open round-trip ($ref)"
+    else
+      bad "open failed on ref search issued: $ref"
+    fi
+  fi
+
+  # 4. Documented truthfully: every "$source <verb>" line the README
+  # shows in a shell block must at least be a real command.
+  readme="$repo/$source/README.md"
+  if [ -f "$readme" ]; then
+    verbs="$(awk '/^```/{code=!code; next} code && $1 == "'"$source"'" {print $2}' "$readme" | sort -u)"
+    for verb in $verbs; do
+      case "$verb" in -*|"") continue ;; esac
+      if "$source" "$verb" --help >/dev/null 2>&1; then
+        ok "README documents a real command: $verb"
+      else
+        bad "README documents \"$source $verb\" but the command fails --help"
+      fi
+    done
+  else
+    meh "no README at $source/README.md"
+  fi
+done <<< "$sources"
+
+echo
+echo "== cross-source, through trawl =="
+probe() { # probe <query> <source-or-empty> -> search results JSON
+  if [ -n "$2" ]; then
+    trawl search "$1" --json --limit 20 --source "$2" 2>/dev/null
+  else
+    trawl search "$1" --json --limit 20 2>/dev/null
+  fi
+}
+if [ -f "$queries" ]; then
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    query="$(jq -r '.query' <<<"$line")"
+    source="$(jq -r '.source // empty' <<<"$line")"
+    expect="$(jq -r '.expect // empty' <<<"$line")"
+    results="$(probe "$query" "$source" | jq '.results // []')"
+    if [ "$(jq 'length' <<<"${results:-[]}")" = "0" ]; then
+      bad "no results for: $query"
+      continue
+    fi
+    if [ -n "$expect" ] &&
+      ! jq -e --arg want "$expect" \
+        'map(.snippet // "" | ascii_downcase) | any(contains($want | ascii_downcase))' \
+        <<<"$results" >/dev/null; then
+      bad "results for \"$query\" never mention \"$expect\""
+      continue
+    fi
+    ok "\"$query\" → $(jq -r '.[0] | "\(.source) \(.time[:10] // "") \(.snippet[:60] // "")"' <<<"$results")"
+  done < "$queries"
+else
+  meh "no $queries — cross-source checks ran no personal probes"
+  if [ "$(probe "the" "" | jq '.results // [] | length')" -gt "0" ] 2>/dev/null; then
+    ok "trawl search federates and returns results"
+  else
+    bad "trawl search returned no results across all sources"
+  fi
+fi
+
+echo
+echo "== verdict: $pass pass, $warn warn, $fail fail =="
+for f in "${failures[@]-}"; do [ -n "$f" ] && echo "  FAIL: $f"; done
+[ "$fail" -eq 0 ]
