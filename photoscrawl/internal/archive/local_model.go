@@ -1,28 +1,25 @@
 package archive
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/openclaw/photoscrawl/internal/modelclient"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
 )
 
 const (
 	localModelClassifierSource = "local_multimodal"
 	localModelPromptVersion    = repoPrompts.LocalMultimodalObservationsV1Version
-	defaultOllamaGenerateURL   = "http://127.0.0.1:11434/api/generate"
 )
 
 type contentObservation struct {
@@ -44,34 +41,18 @@ type localModelResult struct {
 type localModelClassifier struct {
 	modelID       string
 	promptVersion string
-	generateURL   string
-	client        *http.Client
+	client        *modelclient.Client
 }
 
-type ollamaGenerateRequest struct {
-	Model   string         `json:"model"`
-	Prompt  string         `json:"prompt"`
-	Images  []string       `json:"images"`
-	Stream  bool           `json:"stream"`
-	Options map[string]any `json:"options,omitempty"`
-}
-
-type ollamaGenerateResponse struct {
-	Response string `json:"response"`
-	Done     bool   `json:"done"`
-	Error    string `json:"error,omitempty"`
-}
-
-func newLocalModelClassifier(modelID, generateURL string) localModelClassifier {
-	generateURL = strings.TrimSpace(generateURL)
-	if generateURL == "" {
-		generateURL = defaultOllamaGenerateURL
-	}
+func newLocalModelClassifier(modelID, baseURL, bearerKeyEnv string) localModelClassifier {
 	return localModelClassifier{
 		modelID:       strings.TrimSpace(modelID),
 		promptVersion: localModelPromptVersion,
-		generateURL:   generateURL,
-		client:        &http.Client{Timeout: 10 * time.Minute},
+		client: modelclient.New(modelclient.Config{
+			BaseURL:      baseURL,
+			Model:        modelID,
+			BearerKeyEnv: bearerKeyEnv,
+		}),
 	}
 }
 
@@ -81,45 +62,28 @@ func (c localModelClassifier) classify(ctx context.Context, imagePath string) (l
 		return localModelResult{}, fmt.Errorf("read local image: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	requestBody, err := json.Marshal(ollamaGenerateRequest{
-		Model:  c.modelID,
+	response, err := c.client.Generate(ctx, modelclient.Request{
 		Prompt: repoPrompts.LocalMultimodalObservationsV1,
-		Images: []string{base64.StdEncoding.EncodeToString(data)},
-		Stream: false,
-		Options: map[string]any{
-			"temperature": 0.1,
-		},
+		Images: []modelclient.Image{{
+			Data:     data,
+			MIMEType: mimeTypeForPath(imagePath),
+		}},
+		Temperature: 0.1,
 	})
 	if err != nil {
+		var httpErr *modelclient.HTTPError
+		if errors.As(err, &httpErr) {
+			return localModelResult{}, fmt.Errorf("local model returned %s", httpErr.Status)
+		}
 		return localModelResult{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.generateURL, bytes.NewReader(requestBody))
-	if err != nil {
-		return localModelResult{}, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return localModelResult{}, fmt.Errorf("call local model: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return localModelResult{}, fmt.Errorf("local model returned %s", resp.Status)
-	}
-	var generated ollamaGenerateResponse
-	if err := json.NewDecoder(resp.Body).Decode(&generated); err != nil {
-		return localModelResult{}, fmt.Errorf("decode local model response: %w", err)
-	}
-	if strings.TrimSpace(generated.Error) != "" {
-		return localModelResult{}, errors.New(generated.Error)
-	}
-	payload, err := parseModelPayload(generated.Response)
+	payload, err := parseModelPayload(response.Text)
 	if err != nil {
 		return localModelResult{}, err
 	}
 	return localModelResult{
 		Payload:      payload,
-		RawResponse:  strings.TrimSpace(generated.Response),
+		RawResponse:  response.Text,
 		ImageBytes:   int64(len(data)),
 		ImageSHA256:  hex.EncodeToString(sum[:]),
 		Observations: observationsFromPayload(payload),
@@ -476,5 +440,18 @@ func classifiableImagePath(path string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func mimeTypeForPath(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".heic":
+		return "image/heic"
+	default:
+		return "image/jpeg"
 	}
 }

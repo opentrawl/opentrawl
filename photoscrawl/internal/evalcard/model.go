@@ -3,41 +3,18 @@ package evalcard
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"text/template"
 	"time"
+
+	"github.com/openclaw/photoscrawl/internal/modelclient"
 )
-
-type ollamaGenerateRequest struct {
-	Model   string         `json:"model"`
-	Prompt  string         `json:"prompt"`
-	Images  []string       `json:"images"`
-	Stream  bool           `json:"stream"`
-	Options map[string]any `json:"options,omitempty"`
-}
-
-type ollamaGenerateResponse struct {
-	Model              string `json:"model,omitempty"`
-	CreatedAt          string `json:"created_at,omitempty"`
-	Response           string `json:"response"`
-	Done               bool   `json:"done"`
-	Error              string `json:"error,omitempty"`
-	TotalDuration      int64  `json:"total_duration,omitempty"`
-	LoadDuration       int64  `json:"load_duration,omitempty"`
-	PromptEvalCount    int64  `json:"prompt_eval_count,omitempty"`
-	PromptEvalDuration int64  `json:"prompt_eval_duration,omitempty"`
-	EvalCount          int64  `json:"eval_count,omitempty"`
-	EvalDuration       int64  `json:"eval_duration,omitempty"`
-}
 
 type storedModelOutput struct {
 	EvalID          string                 `json:"eval_id"`
@@ -54,7 +31,7 @@ type storedModelOutput struct {
 	OllamaTelemetry map[string]interface{} `json:"ollama_telemetry,omitempty"`
 }
 
-func runModelCalls(ctx context.Context, outputDir, promptText string, inputs []preparedInput, models []string, generateURL, apiKey string, concurrency int) (int, int) {
+func runModelCalls(ctx context.Context, outputDir, promptText string, inputs []preparedInput, models []string, baseURL, apiKeyEnv string, concurrency int) (int, int) {
 	type job struct {
 		input preparedInput
 		model string
@@ -64,12 +41,11 @@ func runModelCalls(ctx context.Context, outputDir, promptText string, inputs []p
 	var mu sync.Mutex
 	succeeded := 0
 	failed := 0
-	client := &http.Client{Timeout: 20 * time.Minute}
 
 	worker := func() {
 		defer wg.Done()
 		for job := range jobs {
-			if err := runOneModelCall(ctx, client, outputDir, promptText, job.input, job.model, generateURL, apiKey); err != nil {
+			if err := runOneModelCall(ctx, outputDir, promptText, job.input, job.model, baseURL, apiKeyEnv); err != nil {
 				mu.Lock()
 				failed++
 				mu.Unlock()
@@ -94,7 +70,7 @@ func runModelCalls(ctx context.Context, outputDir, promptText string, inputs []p
 	return succeeded, failed
 }
 
-func runOneModelCall(ctx context.Context, client *http.Client, outputDir, promptText string, input preparedInput, model, generateURL, apiKey string) error {
+func runOneModelCall(ctx context.Context, outputDir, promptText string, input preparedInput, model, baseURL, apiKeyEnv string) error {
 	started := time.Now().UTC()
 	out := storedModelOutput{
 		EvalID:        input.ID,
@@ -121,61 +97,30 @@ func runOneModelCall(ctx context.Context, client *http.Client, outputDir, prompt
 		out.Error = err.Error()
 		return err
 	}
-	requestBody, err := json.Marshal(ollamaGenerateRequest{
-		Model:  model,
+	client := modelclient.New(modelclient.Config{
+		BaseURL:      baseURL,
+		Model:        model,
+		BearerKeyEnv: apiKeyEnv,
+	})
+	response, err := client.Generate(ctx, modelclient.Request{
 		Prompt: renderedPrompt,
-		Images: []string{base64.StdEncoding.EncodeToString(imageBytes)},
-		Stream: false,
-		Options: map[string]any{
-			"temperature": 0.1,
-		},
+		Images: []modelclient.Image{{
+			Data:     imageBytes,
+			MIMEType: "image/jpeg",
+		}},
+		Temperature: 0.1,
 	})
 	if err != nil {
+		var httpErr *modelclient.HTTPError
+		if errors.As(err, &httpErr) {
+			out.Error = fmt.Sprintf("ollama returned %s: %s", httpErr.Status, strings.TrimSpace(httpErr.Body))
+			return errors.New(out.Error)
+		}
 		out.Error = err.Error()
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, generateURL, bytes.NewReader(requestBody))
-	if err != nil {
-		out.Error = err.Error()
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if strings.TrimSpace(apiKey) != "" {
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(apiKey))
-	}
-	resp, err := client.Do(req)
-	if err != nil {
-		out.Error = err.Error()
-		return err
-	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		out.Error = err.Error()
-		return err
-	}
-	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		out.Error = fmt.Sprintf("ollama returned %s: %s", resp.Status, strings.TrimSpace(string(body)))
-		return errors.New(out.Error)
-	}
-	var generated ollamaGenerateResponse
-	if err := json.Unmarshal(body, &generated); err != nil {
-		out.Error = err.Error()
-		return err
-	}
-	if strings.TrimSpace(generated.Error) != "" {
-		out.Error = generated.Error
-		return errors.New(generated.Error)
-	}
-	out.Response = strings.TrimSpace(generated.Response)
-	out.OllamaTelemetry = map[string]interface{}{
-		"total_duration":       generated.TotalDuration,
-		"load_duration":        generated.LoadDuration,
-		"prompt_eval_count":    generated.PromptEvalCount,
-		"prompt_eval_duration": generated.PromptEvalDuration,
-		"eval_count":           generated.EvalCount,
-		"eval_duration":        generated.EvalDuration,
-	}
+	out.Response = response.Text
+	out.OllamaTelemetry = response.Telemetry
 	return nil
 }
 

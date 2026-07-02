@@ -15,12 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/photoscrawl/internal/modelclient"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
 )
 
 const (
-	DefaultOllamaGenerateURL = "http://127.0.0.1:11434/api/generate"
+	DefaultOllamaGenerateURL = modelclient.DefaultGenerateURL
 )
 
 const PromptVersion = repoPrompts.PhotoCardV1Version
@@ -34,7 +35,7 @@ type Options struct {
 	PromptPath           string
 	Models               []string
 	OllamaGenerateURL    string
-	OllamaAPIKey         string
+	OllamaAPIKeyEnv      string
 	Limit                int
 	Concurrency          int
 	Sample               string
@@ -221,7 +222,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	result.AssetsPrepared = len(inputs)
 
 	if len(opts.Models) > 0 && len(inputs) > 0 {
-		succeeded, failed := runModelCalls(ctx, outputDir, string(promptBytes), inputs, opts.Models, result.OllamaGenerateURLUsed, opts.OllamaAPIKey, concurrency)
+		succeeded, failed := runModelCalls(ctx, outputDir, string(promptBytes), inputs, opts.Models, opts.OllamaGenerateURL, opts.OllamaAPIKeyEnv, concurrency)
 		result.ModelCallsAttempted = len(inputs) * len(opts.Models)
 		result.ModelCallsSucceeded = succeeded
 		result.ModelCallsFailed = failed
