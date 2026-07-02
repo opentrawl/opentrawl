@@ -89,6 +89,11 @@ func searchDate(row SearchRow) string {
 func searchWho(row SearchRow) string {
 	who := strings.TrimSpace(row.Who)
 	where := strings.TrimSpace(row.Where)
+	// In a direct chat the chat is named after the person, so
+	// "Katja → Katja" collapses to the person.
+	if strings.EqualFold(who, where) {
+		return who
+	}
 	if who != "" && where != "" {
 		return who + " → " + where
 	}
