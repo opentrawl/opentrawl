@@ -42,11 +42,8 @@ Default runtime paths come from crawlkit platform dirs. The primary database is
 `photos.sqlite` under the crawlkit data dir; provider caches and exported
 originals use the crawlkit cache dir.
 
-Planned crawl-family commands:
-
-```sh
-photoscrawl export --format lifecrawler --json
-```
+A lifecrawler-format `export` command is planned but does not exist
+yet.
 
 `crawl` tries PhotoKit first for metadata. PhotoKit enumerates the active system
 Photos library; the `--library` path is validated and recorded as the requested
