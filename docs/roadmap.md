@@ -123,6 +123,18 @@ on every row.
 
 ## Phase 4: the Mac app
 
+Gated on two proofs (decided 2026-07-02): the TCC signing and
+inheritance spike is done, and crawler correctness is proven by a
+smoke suite of genuinely useful cross-source queries through `trawl` —
+the app builds on trust, so trust gets built first.
+
+Also decided 2026-07-02: upstream PRs to openclaw are held until the
+product is stable — one coherent pass per repo later instead of
+drip-feeding changes that may still move. And contract v1 is ratified:
+Josh's review of contract.md and cli.md is complete, so the command
+grammar, field names, bounds and state enum are frozen; changes now
+require a version bump, not an edit.
+
 Goal: a consumer-grade menu bar app a human likes and trusts. Handles
 authorisation flows, runs syncs, and shows per-crawler health at a
 glance. No settings maze.

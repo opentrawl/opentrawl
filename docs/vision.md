@@ -214,7 +214,15 @@ through the same portable-SQLite seam. This one-shot orientation over
 a corpus — cluster it, card it, review it — is the same move as
 onboarding an agent into a life.
 
-COMMENT: yes, and important to state that what makes sense for clawsweeper (small units, one PR at a time) might not make sense for other surfaces, we have to eval it and test. bear in mind we have an ollama sub with some good cheap not-quite-frontier-but-still-quite-good models and some examples of this work in photoscralw and elsewhere; credentials in nix-secrets
+One caution: what works for clawsweeper's units (one issue, one PR,
+one verdict) will not automatically fit other surfaces — a person or a
+relationship is not a pull request. Each surface's unit of clustering
+and carding gets evaluated and tested on real archives before we adopt
+it. And the judge does not have to be a frontier model: cheap,
+good-enough hosted models handle much of the derived work (the Photos
+classification evals are the working example), with frontier models
+reserved for the judgments that earn them — all behind the single
+provider seam.
 
 ## Non-goals for v1
 
