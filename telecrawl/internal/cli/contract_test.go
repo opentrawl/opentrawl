@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -159,12 +160,13 @@ func TestStatusHumanUsesShapedSummary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("status: %v stderr=%s", err, stderr)
 	}
+	conformance.AssertHumanOutput(t, stdout)
 	for _, disallowed := range []string{"db_path:", "last_import_at:", "oldest_message:", "unread_chats:"} {
 		if strings.Contains(stdout, disallowed) {
 			t.Fatalf("status leaked raw key %q:\n%s", disallowed, stdout)
 		}
 	}
-	for _, want := range []string{"Telegram status:", "State:", "Messages:", "Chats:", "Last run:", "Most recent error:"} {
+	for _, want := range []string{"Status: ok", "archive is fresh", "Archive:", "Messages:", "Chats:", "Auth:", "Freshness:"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("status missing %q:\n%s", want, stdout)
 		}
@@ -178,12 +180,13 @@ func TestDoctorHumanUsesChecksList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("doctor: %v stderr=%s", err, stderr)
 	}
+	conformance.AssertHumanOutput(t, stdout)
 	for _, disallowed := range []string{"path:", "sqlite_files:", "tdesktop_files:", "files_scanned:"} {
 		if strings.Contains(stdout, disallowed) {
 			t.Fatalf("doctor leaked raw key %q:\n%s", disallowed, stdout)
 		}
 	}
-	for _, want := range []string{"Telegram doctor", "[ok] Telegram data:", "[ok] Archive:", "Last run:", "Most recent error:"} {
+	for _, want := range []string{"Doctor checks:", "source_store: ok", "archive: ok"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("doctor missing %q:\n%s", want, stdout)
 		}
@@ -321,6 +324,7 @@ func TestSearchUsesHumaneWhoFallbacks(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout, err)
 	}
+	conformance.AssertSearchEnvelope(t, []byte(stdout))
 	if len(payload.Results) != 1 {
 		t.Fatalf("search results = %#v", payload.Results)
 	}
@@ -338,6 +342,7 @@ func TestSearchTextUsesContractRows(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
 	}
+	conformance.AssertHumanOutput(t, stdout)
 	for _, disallowed := range []string{"[launch]", `"source_pk"`, `"sender_jid"`, "unknown"} {
 		if strings.Contains(stdout, disallowed) {
 			t.Fatalf("search text contains %q:\n%s", disallowed, stdout)
@@ -386,6 +391,7 @@ func TestOpenAcceptsShortRefAlias(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
 	}
+	conformance.AssertHumanOutput(t, stdout)
 	alias := firstSearchAlias(t, stdout)
 	payload := runOpenJSON(t, db, alias)
 	if payload.Ref == "" || !strings.HasPrefix(payload.Ref, "telecrawl:msg/") {
@@ -638,6 +644,7 @@ func runSearchJSON(t *testing.T, db string, args ...string) searchJSON {
 	if err != nil {
 		t.Fatalf("search: %v stderr=%s stdout=%s", err, stderr, stdout)
 	}
+	conformance.AssertSearchEnvelope(t, []byte(stdout))
 	var payload searchJSON
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout, err)

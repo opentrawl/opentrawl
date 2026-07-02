@@ -16,6 +16,7 @@ import (
 
 	"github.com/openclaw/crawlkit/control"
 	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
@@ -1186,28 +1187,44 @@ func (r *runtime) print(v any) error {
 }
 
 func (r *runtime) printStatus(value statusEnvelope) error {
-	if _, err := fmt.Fprintf(r.stdout, "Telegram status: %s\n", value.Summary); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "State: %s\n", value.State); err != nil {
-		return err
-	}
-	for _, count := range value.Counts {
+	return render.WriteStatus(r.stdout, render.Status{
+		State:   render.StatusState(value.State),
+		Summary: value.Summary,
+		Sections: []render.Section{
+			{Title: "Archive", Fields: statusRenderFields(value.Counts)},
+			{Title: "Auth", Fields: authRenderFields(value.Auth)},
+		},
+		Freshness: statusRenderFreshness(value.Freshness),
+		Log:       renderLogTail(value.Log),
+	})
+}
+
+func statusRenderFields(counts []countEnvelope) []render.Field {
+	fields := make([]render.Field, 0, len(counts))
+	for _, count := range counts {
 		label := statusCountLabel(count.ID, count.Label)
 		display := strconv.FormatInt(count.Value, 10)
 		if count.ID == "since" && count.Value == 0 {
 			display = "not available"
 		}
-		if _, err := fmt.Fprintf(r.stdout, "%s: %s\n", label, display); err != nil {
-			return err
-		}
+		fields = append(fields, render.Field{Label: label, Value: display})
 	}
-	if value.Freshness.LastSync != "" {
-		if _, err := fmt.Fprintf(r.stdout, "Last sync: %s\n", value.Freshness.LastSync); err != nil {
-			return err
-		}
+	return fields
+}
+
+func authRenderFields(auth authEnvelope) []render.Field {
+	fields := []render.Field{{Label: "Authorised", Value: strconv.FormatBool(auth.Authorized)}}
+	if auth.Expires != nil {
+		fields = append(fields, render.Field{Label: "Expires", Value: *auth.Expires})
 	}
-	return r.printLogTail(value.Log)
+	return fields
+}
+
+func statusRenderFreshness(freshness freshnessEnvelope) *render.Freshness {
+	if freshness.LastSync == "" {
+		return nil
+	}
+	return &render.Freshness{LastSync: freshness.LastSync}
 }
 
 func statusCountLabel(id, fallback string) string {
@@ -1224,94 +1241,24 @@ func statusCountLabel(id, fallback string) string {
 }
 
 func (r *runtime) printDoctor(value doctorOutput) error {
-	if _, err := io.WriteString(r.stdout, "Telegram doctor\n"); err != nil {
-		return err
-	}
-	for _, check := range value.Checks {
-		label := strings.TrimSpace(check.Label)
-		if label == "" {
-			label = humanLabel(check.ID)
-		}
-		message := strings.TrimSpace(check.Message)
-		if message == "" {
-			message = "No issue found."
-		}
-		if _, err := fmt.Fprintf(r.stdout, "[%s] %s: %s", check.State, label, message); err != nil {
-			return err
-		}
-		if strings.TrimSpace(check.Remedy) != "" && check.State != "ok" {
-			if _, err := fmt.Fprintf(r.stdout, " Remedy: %s", check.Remedy); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(r.stdout, "\n"); err != nil {
-			return err
-		}
-	}
-	return r.printLogTail(value.Log)
+	return render.WriteDoctor(r.stdout, doctorRenderChecks(value.Checks), renderLogTail(value.Log))
 }
 
-func (r *runtime) printLogTail(value logTailEnvelope) error {
-	if value.LastRun == nil {
-		if _, err := io.WriteString(r.stdout, "Last run: none recorded\n"); err != nil {
-			return err
+func doctorRenderChecks(checks []doctorCheck) []render.Check {
+	out := make([]render.Check, 0, len(checks))
+	for _, check := range checks {
+		name := strings.TrimSpace(check.ID)
+		if name == "" {
+			name = strings.TrimSpace(check.Label)
 		}
-	} else {
-		when := firstNonEmpty(value.LastRun.FinishedAt, value.LastRun.StartedAt)
-		if when == "" {
-			when = "time unknown"
-		}
-		if _, err := fmt.Fprintf(r.stdout, "Last run: %s %s at %s\n", humanLabel(value.LastRun.Command), value.LastRun.Outcome, when); err != nil {
-			return err
-		}
+		out = append(out, render.Check{
+			Name:    name,
+			State:   render.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
 	}
-	if value.MostRecentError == nil {
-		_, err := io.WriteString(r.stdout, "Most recent error: none recorded\n")
-		return err
-	}
-	message := humanLogErrorMessage(value.MostRecentError)
-	if _, err := fmt.Fprintf(r.stdout, "Most recent error: %s at %s\n", message, value.MostRecentError.Time); err != nil {
-		return err
-	}
-	return nil
-}
-
-func humanLogErrorMessage(value *logErrorEnvelope) string {
-	if value == nil {
-		return ""
-	}
-	if message := logMessageField(value.Message, "error"); message != "" {
-		return message
-	}
-	return strings.TrimSpace(value.Message)
-}
-
-func logMessageField(message, key string) string {
-	needle := key + "="
-	idx := strings.Index(message, needle)
-	if idx < 0 {
-		return ""
-	}
-	rest := strings.TrimSpace(message[idx+len(needle):])
-	if rest == "" {
-		return ""
-	}
-	if rest[0] != '"' {
-		if end := strings.IndexAny(rest, " \t"); end >= 0 {
-			return rest[:end]
-		}
-		return rest
-	}
-	for end := 1; end <= len(rest); end++ {
-		if rest[end-1] != '"' {
-			continue
-		}
-		value, err := strconv.Unquote(rest[:end])
-		if err == nil {
-			return value
-		}
-	}
-	return ""
+	return out
 }
 
 func humanLabel(value string) string {
@@ -1322,13 +1269,40 @@ func humanLabel(value string) string {
 	return strings.ToUpper(value[:1]) + value[1:]
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
+func renderLogTail(value logTailEnvelope) render.LogTail {
+	var tail render.LogTail
+	if value.LastRun != nil {
+		tail.LastRun = &cklog.RunSummary{
+			RunID:      value.LastRun.RunID,
+			Command:    value.LastRun.Command,
+			Outcome:    value.LastRun.Outcome,
+			StartedAt:  parseRenderTime(value.LastRun.StartedAt),
+			FinishedAt: parseRenderTime(value.LastRun.FinishedAt),
+			LastEvent:  value.LastRun.LastEvent,
+			Version:    value.LastRun.Version,
 		}
 	}
-	return ""
+	if value.MostRecentError != nil {
+		tail.MostRecentError = &cklog.Line{
+			RunID:     value.MostRecentError.RunID,
+			Command:   value.MostRecentError.Command,
+			Event:     value.MostRecentError.Event,
+			Timestamp: parseRenderTime(value.MostRecentError.Time),
+			Message:   value.MostRecentError.Message,
+		}
+	}
+	return tail
+}
+
+func parseRenderTime(value string) time.Time {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
