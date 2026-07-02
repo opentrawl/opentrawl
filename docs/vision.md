@@ -101,8 +101,9 @@ The bar for every line of code and every surface in this repo:
 
 - As simple as possible, but no simpler. KISS, YAGNI, less is more.
   Prefer deleting a concept to documenting it.
-- One and only one obvious way to do each thing. No modes, no
-  fallbacks, no compatibility shims without current evidence.
+- One and only one obvious way to do each thing, with as few knobs as
+  possible. No modes, no fallbacks, no compatibility shims without
+  current evidence.
 - Human readable with no magic. Code must be self-explanatory: no magic
   constants, one obvious job per function, boundaries in the Ousterhout
   sense (deep modules, simple interfaces). If a reader needs a comment
@@ -121,6 +122,17 @@ The bar for every line of code and every surface in this repo:
   abbreviated or hand-massaged fixtures for the paths that matter. This
   is the only way to prove the thing actually works and to catch quiet
   degradation.
+- Declarative, minimal install surface. One obvious way in per
+  audience: the Mac app for consumers (the only global install), one
+  Homebrew tap plus a Nix flake for CLI users, devenv for development.
+  No ad-hoc global installs. State and config live under one root with
+  per-crawler subdirectories, not scattered dotfiles; existing crawlers
+  migrate to it through crawlkit's config defaults.
+- Observability for free. Structured logs, run history and doctor
+  diagnostics come from crawlkit once, in one consistent, greppable,
+  agent-first shape — a crawler gets debuggability by using the
+  substrate, not by designing its own logging. Nothing leaves the
+  machine.
 
 ## Now, next, later
 
@@ -192,6 +204,8 @@ judge on top; per-source crawler archives underneath, exchanged
 through the same portable-SQLite seam. This one-shot orientation over
 a corpus — cluster it, card it, review it — is the same move as
 onboarding an agent into a life.
+
+COMMENT: yes, and important to state that what makes sense for clawsweeper (small units, one PR at a time) might not make sense for other surfaces, we have to eval it and test. bear in mind we have an ollama sub with some good cheap not-quite-frontier-but-still-quite-good models and some examples of this work in photoscralw and elsewhere; credentials in nix-secrets
 
 ## Non-goals for v1
 

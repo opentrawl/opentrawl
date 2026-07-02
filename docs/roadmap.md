@@ -72,6 +72,15 @@ grammars, missing metadata, unbounded dumps).
 - build a conformance harness: point it at any crawler binary and it
   verifies the contract (shapes, bounds, secret leaks, empty and corrupt
   archive behaviour). This is what makes the plugin story real.
+- solve macOS TCC (privacy permissions) holistically before the
+  architecture hardens. Crawlers read TCC-protected stores (Messages,
+  Notes, Photos), so decide once who holds Full Disk Access — the Mac
+  app with crawlers running as its children, a helper process the CLI
+  talks to, or the user's terminal — and build that shape in from the
+  start. [permiso](https://github.com/zats/permiso) covers the
+  app-side permission UX; the terminal story needs its own answer.
+  Getting this right early is what lets everything downstream run
+  without bashing into permission walls.
 
 ## Phase 2: per-crawler hardening to the bar
 
@@ -89,6 +98,12 @@ correctly in `trawl`. Highly parallel.
 
 Contact export is a v1 requirement for every crawler, because identity
 joins are the horizon and re-crawling later is the expensive path.
+
+Before fanning out, cut the lane boundaries and standardise the work
+itself: one brief template per crawler lane — same golden-path
+checklist, same PR shape, same review gates, same proof format — so
+parallel work lands uniformly instead of as six bespoke
+interpretations.
 
 ## Phase 3: full federation
 
