@@ -7,20 +7,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
 )
-
-type syncProgressEvent struct {
-	Event string `json:"event"`
-	Stage string `json:"stage"`
-	Done  int    `json:"done"`
-}
 
 type syncCompleteEvent struct {
 	Event       string `json:"event"`
@@ -56,6 +51,10 @@ func (r *runtime) runSync(args []string) error {
 	if *max < 0 {
 		return usageErr(errors.New("sync --max must be 0 or greater"))
 	}
+	progress := r.log.Progress(cklog.ProgressOptions{Event: "sync_progress", Unit: "messages"})
+	if err := progress.Report(0, "starting sync"); err != nil {
+		return err
+	}
 	st, err := archive.Open(r.ctx, r.archivePath)
 	if err != nil {
 		return commandErr("archive_open_failed", "cannot open the archive database", "remove the old archive and run gogcrawl sync again", err)
@@ -65,10 +64,20 @@ func (r *runtime) runSync(args []string) error {
 	if err := st.MarkSyncStarted(r.ctx, startedAt); err != nil {
 		return err
 	}
+	if status, err := r.gog.AuthStatus(r.ctx); err == nil {
+		if err := st.SetOwnerAccount(r.ctx, status.AccountEmail); err != nil {
+			return err
+		}
+	} else {
+		_ = r.log.Warn("owner_identity_unavailable", "account_email_unavailable")
+	}
 	if err := r.ensureBackupRepo(); err != nil {
 		return err
 	}
-	if err := r.gog.BackupGmailPush(r.ctx, gog.BackupPushRequest{Repo: r.backupRepoPath, Query: *query, Max: *max}); err != nil {
+	var done atomic.Int64
+	if err := r.withHeartbeat(progress, &done, "backing up Gmail", func() error {
+		return r.gog.BackupGmailPush(r.ctx, gog.BackupPushRequest{Repo: r.backupRepoPath, Query: *query, Max: *max})
+	}); err != nil {
 		return commandErr("gog_backup_failed", "Gmail backup failed", "run gogcrawl doctor", err)
 	}
 	shards, err := archive.LoadBackupManifest(r.backupRepoPath)
@@ -79,9 +88,19 @@ func (r *runtime) runSync(args []string) error {
 	if err != nil {
 		return err
 	}
-	event, err := r.ingestPendingShards(st, pending)
+	event, err := r.ingestPendingShards(st, pending, progress, &done)
 	if err != nil {
 		return err
+	}
+	if rebuilt, messages, err := st.EnsureParticipants(r.ctx); err != nil {
+		return err
+	} else if rebuilt {
+		_ = r.log.Info("participants_rebuilt", fmt.Sprintf("messages=%d", messages))
+	}
+	if rebuilt, refs, err := st.EnsureShortRefs(r.ctx); err != nil {
+		return err
+	} else if rebuilt {
+		_ = r.log.Info("short_refs_rebuilt", fmt.Sprintf("refs=%d", refs))
 	}
 	completedAt := time.Now().UTC()
 	if err := st.MarkSyncCompleted(r.ctx, completedAt); err != nil {
@@ -126,24 +145,19 @@ func (r *runtime) ensureBackupRepo() error {
 }
 
 func removeBackupRemotes(repo string) error {
-	if _, err := os.Stat(filepath.Join(repo, ".git")); os.IsNotExist(err) {
-		return nil // not a git repo: nothing to remove
+	configPath := filepath.Join(repo, ".git", "config")
+	data, err := os.ReadFile(configPath)
+	if os.IsNotExist(err) {
+		return nil
 	}
-	out, err := exec.Command("git", "-C", repo, "remote").Output()
 	if err != nil {
-		// Not a listable repo (e.g. a bare fixture): fall back to the
-		// config parse; no remote configured means nothing to remove.
-		if hasRemote, cfgErr := backupRepoHasRemote(repo); cfgErr == nil && !hasRemote {
-			return nil
-		}
-		return fmt.Errorf("list git remotes: %w", err)
+		return fmt.Errorf("read backup repo config: %w", err)
 	}
-	for _, remote := range strings.Fields(string(out)) {
-		if err := exec.Command("git", "-C", repo, "remote", "remove", remote).Run(); err != nil {
-			return fmt.Errorf("remove git remote %s: %w", remote, err)
-		}
+	cleaned := removeRemoteConfigSections(string(data))
+	if cleaned == string(data) {
+		return nil
 	}
-	return nil
+	return os.WriteFile(configPath, []byte(cleaned), 0o600)
 }
 
 func backupRepoHasRemote(repo string) (bool, error) {
@@ -162,10 +176,32 @@ func backupRepoHasRemote(repo string) (bool, error) {
 	return false, nil
 }
 
-func (r *runtime) ingestPendingShards(st *archive.Store, shards []archive.BackupShard) (syncCompleteEvent, error) {
+func removeRemoteConfigSections(config string) string {
+	lines := strings.Split(config, "\n")
+	out := make([]string, 0, len(lines))
+	inRemote := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			inRemote = strings.HasPrefix(trimmed, `[remote "`)
+		}
+		if inRemote {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+func (r *runtime) ingestPendingShards(st *archive.Store, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncCompleteEvent, error) {
 	event := syncCompleteEvent{Shards: len(shards)}
 	for _, shard := range shards {
-		plaintext, err := r.gog.BackupCat(r.ctx, r.backupRepoPath, shard.Path)
+		var plaintext []byte
+		err := r.withHeartbeat(progress, done, "decrypting backup shard", func() error {
+			var err error
+			plaintext, err = r.gog.BackupCat(r.ctx, r.backupRepoPath, shard.Path)
+			return err
+		})
 		if err != nil {
 			return event, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), "run gogcrawl doctor", err)
 		}
@@ -174,20 +210,38 @@ func (r *runtime) ingestPendingShards(st *archive.Store, shards []archive.Backup
 			return event, err
 		}
 		event.Done += result.Seen
+		done.Store(int64(event.Done))
 		event.Inserted += result.Inserted
 		event.Labels += result.Labels
-		if err := r.progress(event.Done); err != nil {
+		if err := progress.Report(int64(event.Done), "ingested backup shard"); err != nil {
 			return event, err
 		}
 	}
 	return event, nil
 }
 
-func (r *runtime) progress(done int) error {
-	if r.json {
-		return json.NewEncoder(r.stdout).Encode(syncProgressEvent{Event: "progress", Stage: "messages", Done: done})
+func (r *runtime) withHeartbeat(progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
+	if err := progress.Report(done.Load(), message); err != nil {
+		return err
 	}
-	_, err := fmt.Fprintf(r.stderr, "gogcrawl: ingested %d messages\n", done)
+	stop := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_ = progress.Report(done.Load(), message)
+			case <-stop:
+				return
+			}
+		}
+	}()
+	err := fn()
+	close(stop)
+	<-stopped
 	return err
 }
 

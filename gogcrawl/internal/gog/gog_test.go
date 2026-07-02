@@ -28,7 +28,7 @@ func TestAuthStatusParsesPlainRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !status.FoundAccount || !status.Authorized {
+	if !status.FoundAccount || !status.Authorized || status.AccountEmail != "alice@example.com" {
 		t.Fatalf("status = %#v", status)
 	}
 	if status.Expires == nil || status.Expires.Format(time.RFC3339) != "2030-01-02T03:04:05Z" {

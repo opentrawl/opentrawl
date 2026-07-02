@@ -12,7 +12,9 @@ import (
 const minGogVersion = "0.31.0"
 
 type doctorOutput struct {
-	Checks []doctorCheck `json:"checks"`
+	Checks      []doctorCheck     `json:"checks"`
+	LastRun     *logRunEnvelope   `json:"last_run,omitempty"`
+	RecentError *logErrorEnvelope `json:"recent_error,omitempty"`
 }
 
 type doctorCheck struct {
@@ -29,12 +31,13 @@ func (r *runtime) runDoctor(args []string) error {
 	if len(args) != 0 {
 		return usageErr(errors.New("doctor takes no arguments"))
 	}
+	lastRun, recentError := r.logTail()
 	return r.print(doctorOutput{Checks: []doctorCheck{
 		r.checkGogBinary(),
 		r.checkGogVersion(),
 		r.checkGogAuth(),
 		r.checkArchive(),
-	}})
+	}, LastRun: lastRun, RecentError: recentError})
 }
 
 func (r *runtime) checkGogBinary() doctorCheck {

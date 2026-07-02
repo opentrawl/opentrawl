@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,15 +12,20 @@ import (
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	_ "modernc.org/sqlite"
 )
 
 func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	fake := installFakeGog(t)
 	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
 	repoPath := filepath.Join(t.TempDir(), "backup")
-	err := Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &bytes.Buffer{})
+	var firstStderr bytes.Buffer
+	err := Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &firstStderr)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(firstStderr.String(), `"type":"progress"`) {
+		t.Fatalf("sync did not emit crawlkit progress to stderr:\n%s", firstStderr.String())
 	}
 	if got := countLogLines(t, fake.log, "backup gmail push"); got != 1 {
 		t.Fatalf("backup push calls = %d, want 1", got)
@@ -27,26 +33,46 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	if got := countLogLines(t, fake.log, "backup cat"); got != 2 {
 		t.Fatalf("backup cat calls = %d, want 2", got)
 	}
-	st, err := archive.OpenExisting(context.Background(), dbPath)
+	st, err := archive.Open(context.Background(), dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer st.Close()
 	status, err := st.Status(context.Background())
 	if err != nil {
-		_ = st.Close()
 		t.Fatal(err)
 	}
 	if status.Messages != 3 {
-		_ = st.Close()
 		t.Fatalf("messages after sync = %d, want 3", status.Messages)
 	}
 	open, err := st.OpenMessage(context.Background(), archive.RefPrefix+"m3")
-	_ = st.Close()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if open.Headers.ToAddress == "" || open.Headers.CcAddress == "" {
 		t.Fatalf("headers = %#v", open.Headers)
+	}
+	search, err := st.Search(context.Background(), archive.SearchOptions{Query: "project", Who: "me", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.TotalMatches != 3 || !search.Truncated || len(search.Results) != 1 || search.Results[0].Who != "me" || search.Results[0].ShortRef == "" {
+		t.Fatalf("owner short-ref search = %#v", search)
+	}
+	shortRef := search.Results[0].ShortRef
+	openedByShortRef, err := st.OpenMessage(context.Background(), shortRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if openedByShortRef.Ref != search.Results[0].Ref {
+		t.Fatalf("short ref opened %q, want %q", openedByShortRef.Ref, search.Results[0].Ref)
+	}
+	var jsonOut bytes.Buffer
+	if err := json.NewEncoder(&jsonOut).Encode(search); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(jsonOut.String(), shortRef) {
+		t.Fatalf("search JSON leaked short ref %q:\n%s", shortRef, jsonOut.String())
 	}
 	clearLog(t, fake.log)
 	err = Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &bytes.Buffer{})
@@ -58,6 +84,10 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	}
 	if got := countLogLines(t, fake.log, "backup cat"); got != 0 {
 		t.Fatalf("second backup cat calls = %d, want 0", got)
+	}
+	statusOut := runStatus(t, context.Background(), dbPath)
+	if statusOut.LastRun == nil || statusOut.LastRun.Command != "sync" || statusOut.LastRun.Outcome != "success" {
+		t.Fatalf("status log tail = %#v", statusOut.LastRun)
 	}
 }
 
@@ -148,8 +178,77 @@ func TestMetadataDeclaresContactsExport(t *testing.T) {
 	if manifest.ContractVersion != 1 || manifest.ID != "gogcrawl" {
 		t.Fatalf("manifest = %#v", manifest)
 	}
-	if !contains(manifest.Capabilities, "contacts_export") {
-		t.Fatalf("capabilities = %#v", manifest.Capabilities)
+	for _, capability := range []string{"contacts_export", "short_refs", "who"} {
+		if !contains(manifest.Capabilities, capability) {
+			t.Fatalf("capabilities = %#v", manifest.Capabilities)
+		}
+	}
+}
+
+func TestSearchRejectsEmptyWho(t *testing.T) {
+	installFakeGog(t)
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"search", "--who", " \t ", "project", "--archive", filepath.Join(t.TempDir(), "missing.db")}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "search --who requires an identity") {
+		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+}
+
+func TestOpenShortRefErrorsUseContractCodes(t *testing.T) {
+	installFakeGog(t)
+	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
+	st, err := archive.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = st.InsertMessages(context.Background(), []archive.Message{{ID: "m1", Subject: "Project", Body: "Needle"}})
+	if err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	_, err = st.RebuildShortRefs(context.Background())
+	if err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	_ = st.Close()
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.ExecContext(context.Background(), `
+insert into short_refs(alias, full_ref)
+values ('22222', ?), ('22222', ?)
+`, archive.RefPrefix+"m1", archive.RefPrefix+"missing"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		ref  string
+		code string
+	}{
+		{name: "unknown", ref: "33333", code: "unknown_short_ref"},
+		{name: "ambiguous", ref: "22222", code: "ambiguous_short_ref"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			var stdout bytes.Buffer
+			err := Run(context.Background(), []string{"open", tc.ref, "--json", "--archive", dbPath}, &stdout, &bytes.Buffer{})
+			if err == nil {
+				t.Fatal("open succeeded")
+			}
+			if jsonErr := json.Unmarshal(stdout.Bytes(), &out); jsonErr != nil {
+				t.Fatalf("decode error JSON: %v\n%s", jsonErr, stdout.String())
+			}
+			if out.Error.Code != tc.code {
+				t.Fatalf("code = %q, want %q; stdout=%s", out.Error.Code, tc.code, stdout.String())
+			}
+		})
 	}
 }
 
@@ -162,6 +261,7 @@ func runStatus(t *testing.T, ctx context.Context, dbPath string) statusEnvelope 
 
 func runJSON(t *testing.T, ctx context.Context, args []string, out any) {
 	t.Helper()
+	ensureTestHome(t)
 	var stdout, stderr bytes.Buffer
 	if err := Run(ctx, args, &stdout, &stderr); err != nil {
 		t.Fatalf("Run(%v) failed: %v\nstdout=%s\nstderr=%s", args, err, stdout.String(), stderr.String())
@@ -178,6 +278,7 @@ type fakeGogInstall struct {
 
 func installFakeGog(t *testing.T) fakeGogInstall {
 	t.Helper()
+	ensureTestHome(t)
 	dir := t.TempDir()
 	log := filepath.Join(dir, "calls.log")
 	path := filepath.Join(dir, "gog")
@@ -187,6 +288,16 @@ func installFakeGog(t *testing.T) fakeGogInstall {
 	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("GOG_FAKE_LOG", log)
 	return fakeGogInstall{dir: dir, log: log}
+}
+
+func ensureTestHome(t *testing.T) {
+	t.Helper()
+	if os.Getenv("GOGCRAWL_TEST_HOME") != "" {
+		return
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("GOGCRAWL_TEST_HOME", home)
 }
 
 func clearLog(t *testing.T, path string) {
