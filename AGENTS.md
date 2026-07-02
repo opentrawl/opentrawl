@@ -100,8 +100,8 @@ aligned and ready, or it doesn't run.
 
 ## Josh reviews inline, in the files
 
-Josh's doc reviews arrive as inline comments saved into the files
-themselves (`-> COMMENT` style), not as chat messages. Before editing
+Josh reviews both ways: inline comments saved into the files
+(`-> COMMENT` style) and chat messages. Before editing
 any doc, re-read it from disk — pattern-editing against a remembered
 version silently skips his commented lines and can clobber his review.
 Treat comment lines as review to answer, never text to delete; remove
