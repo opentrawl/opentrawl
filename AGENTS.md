@@ -89,6 +89,15 @@ originally paginated Gmail search because the pinned `gog` 0.11
 predated `gog backup gmail`; the crawler now depends on the backup
 pipeline instead.
 
+## Pre-1.0: breaking changes are free
+
+There is no external release and there are no external consumers.
+Break contracts, schemas and CLIs whenever breaking is simpler than
+compatibility — no shims, no deprecation periods, no migration code
+for data that can be re-derived by one sync. Contract versions exist
+for our own coherence. This ends at the first external release, not
+before.
+
 ## Blockers are surfaced, not sat on
 
 When work is aligned with the roadmap and ready, fire it — do not
