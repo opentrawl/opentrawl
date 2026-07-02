@@ -808,6 +808,8 @@ func (r *Runtime) print(value any) error {
 			}
 		}
 		return nil
+	case control.Status:
+		return printStatusText(r.stdout, v)
 	case model.Note:
 		_, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", v.ID, v.Kind, v.Source, v.Path)
 		return err

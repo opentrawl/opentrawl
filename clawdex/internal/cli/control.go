@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -288,6 +289,61 @@ func statusCounts(people []model.Person) []control.Count {
 		counts = append(counts, control.NewCount("sources", "sources", int64(distinctSourceCount(people))))
 	}
 	return counts
+}
+
+func printStatusText(w io.Writer, status control.Status) error {
+	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", status.State, status.Summary); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\nCounts:\n"); err != nil {
+		return err
+	}
+	if len(status.Counts) == 0 {
+		if _, err := io.WriteString(w, "  none\n"); err != nil {
+			return err
+		}
+	}
+	for _, count := range status.Counts {
+		if _, err := fmt.Fprintf(w, "  %s: %d\n", count.Label, count.Value); err != nil {
+			return err
+		}
+	}
+	if status.ConfigPath != "" || status.DatabasePath != "" {
+		if _, err := io.WriteString(w, "\nPaths:\n"); err != nil {
+			return err
+		}
+		if status.ConfigPath != "" {
+			if _, err := fmt.Fprintf(w, "  Config: %s\n", status.ConfigPath); err != nil {
+				return err
+			}
+		}
+		if status.DatabasePath != "" {
+			if _, err := fmt.Fprintf(w, "  Contacts repo: %s\n", status.DatabasePath); err != nil {
+				return err
+			}
+		}
+	}
+	if len(status.Warnings) > 0 {
+		if _, err := io.WriteString(w, "\nWarnings:\n"); err != nil {
+			return err
+		}
+		for _, warning := range status.Warnings {
+			if _, err := fmt.Fprintf(w, "  - %s\n", warning); err != nil {
+				return err
+			}
+		}
+	}
+	if len(status.Errors) > 0 {
+		if _, err := io.WriteString(w, "\nErrors:\n"); err != nil {
+			return err
+		}
+		for _, msg := range status.Errors {
+			if _, err := fmt.Fprintf(w, "  - %s\n", msg); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func distinctSourceCount(people []model.Person) int {

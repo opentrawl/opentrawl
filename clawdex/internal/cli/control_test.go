@@ -107,6 +107,24 @@ func TestExecuteStatusJSONStates(t *testing.T) {
 	}
 }
 
+func TestExecuteStatusHumanOutputIsProse(t *testing.T) {
+	cfg, _ := testPaths(t)
+	var out, errOut bytes.Buffer
+	missingRepo := filepath.Join(t.TempDir(), "missing")
+	if err := Execute([]string{"--config", cfg, "--repo", missingRepo, "status"}, &out, &errOut); err != nil {
+		t.Fatalf("status human: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	assertHumanProseOutput(t, out.String(),
+		"Status: missing",
+		"contacts repo not initialised",
+		"Counts:",
+		"people: 0",
+		"Paths:",
+		"Config:",
+		"Contacts repo:",
+	)
+}
+
 func TestExecuteDoctorJSONMissingHealthyAndCorrupt(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
@@ -236,4 +254,19 @@ func hasCount(counts []control.Count, id string) bool {
 		}
 	}
 	return false
+}
+
+func assertHumanProseOutput(t *testing.T, got string, wants ...string) {
+	t.Helper()
+	if strings.HasPrefix(strings.TrimSpace(got), "{") {
+		t.Fatalf("human output starts like JSON or a Go struct: %q", got)
+	}
+	if strings.Contains(got, "{[{") {
+		t.Fatalf("human output contains Go struct debris: %q", got)
+	}
+	for _, want := range wants {
+		if !strings.Contains(got, want) {
+			t.Fatalf("human output missing %q:\n%s", want, got)
+		}
+	}
 }

@@ -92,7 +92,7 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "status", status)
+		return writeStatus(os.Stdout, format, status)
 	case "doctor":
 		fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -117,7 +117,7 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return output.Write(os.Stdout, format, "doctor", result)
+		return writeDoctor(os.Stdout, format, result)
 	case "crawl":
 		fs := flag.NewFlagSet("crawl", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
