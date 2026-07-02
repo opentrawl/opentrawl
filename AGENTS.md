@@ -88,3 +88,12 @@ primitives before building workarounds. Concrete example: `gogcrawl`
 originally paginated Gmail search because the pinned `gog` 0.11
 predated `gog backup gmail`; the crawler now depends on the backup
 pipeline instead.
+
+## Blockers are surfaced, not sat on
+
+When work is aligned with the roadmap and ready, fire it — do not
+announce and wait. When a task needs a human decision, put the
+concrete question with options in front of Josh the moment it becomes
+blocking, not in a status list. Track every blocked item with what
+unblocks it. The inverse also holds: never invent work to look busy —
+aligned and ready, or it doesn't run.
