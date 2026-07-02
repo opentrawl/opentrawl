@@ -1,9 +1,9 @@
 package telegramdesktop
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -14,8 +14,8 @@ import (
 )
 
 func TestTelegramFloodWaitPolicyRetriesAndReports(t *testing.T) {
-	var progress bytes.Buffer
-	policy := newTelegramFloodWaitPolicy(&progress)
+	progress := &recordingProgress{}
+	policy := newTelegramFloodWaitPolicy(progress)
 	var waits []time.Duration
 	policy.sleep = func(_ context.Context, delay time.Duration) error {
 		waits = append(waits, delay)
@@ -40,9 +40,18 @@ func TestTelegramFloodWaitPolicyRetriesAndReports(t *testing.T) {
 	if len(waits) != 1 || waits[0] != 2*time.Second {
 		t.Fatalf("waits = %v, want [2s]", waits)
 	}
-	if got, want := progress.String(), "telecrawl: Telegram rate limit; waiting 2s before retry 1/3\n"; got != want {
+	if got, want := progress.messages, []string{"Telegram rate limit; waiting 2s before retry 1/3"}; !slices.Equal(got, want) {
 		t.Fatalf("progress = %q, want %q", got, want)
 	}
+}
+
+type recordingProgress struct {
+	messages []string
+}
+
+func (p *recordingProgress) Report(_ int64, message string) error {
+	p.messages = append(p.messages, message)
+	return nil
 }
 
 func TestTelegramFloodWaitPolicyCancellation(t *testing.T) {

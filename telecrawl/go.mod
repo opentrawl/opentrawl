@@ -2,6 +2,8 @@ module github.com/openclaw/telecrawl
 
 go 1.26.4
 
+replace github.com/openclaw/crawlkit => ../crawlkit
+
 require (
 	filippo.io/age v1.3.1
 	modernc.org/sqlite v1.53.0

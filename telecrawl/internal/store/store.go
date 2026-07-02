@@ -11,11 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/shortref"
 	ckstore "github.com/openclaw/crawlkit/store"
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 type Store struct {
 	db   *sql.DB
@@ -215,6 +216,14 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if err := shortref.EnsureSchema(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if _, err := db.ExecContext(ctx, `create index if not exists idx_short_refs_full_ref on short_refs(full_ref)`); err != nil {
 		_ = db.Close()
 		return nil, err
 	}

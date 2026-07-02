@@ -56,6 +56,9 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	if !slices.Contains(payload.Capabilities, "who") {
 		t.Fatalf("metadata capabilities = %#v, want who", payload.Capabilities)
 	}
+	if !slices.Contains(payload.Capabilities, "short_refs") {
+		t.Fatalf("metadata capabilities = %#v, want short_refs", payload.Capabilities)
+	}
 }
 
 func TestStatusJSONUsesContractShapeAndStates(t *testing.T) {
@@ -143,11 +146,48 @@ func TestDoctorJSONUsesChecksShape(t *testing.T) {
 			t.Fatalf("checks = %#v", checks)
 		}
 		for _, check := range checks {
-			if check.State != "fail" || check.Message == "" || check.Remedy == "" {
+			if check.State != "missing" || check.Message == "" || check.Remedy == "" {
 				t.Fatalf("failing check needs message and remedy: %#v", check)
 			}
 		}
 	})
+}
+
+func TestStatusHumanUsesShapedSummary(t *testing.T) {
+	db := seedArchive(t, 1, time.Now().Add(-time.Hour))
+	stdout, stderr, err := runCLI(t, "--db", db, "status")
+	if err != nil {
+		t.Fatalf("status: %v stderr=%s", err, stderr)
+	}
+	for _, disallowed := range []string{"db_path:", "last_import_at:", "oldest_message:", "unread_chats:"} {
+		if strings.Contains(stdout, disallowed) {
+			t.Fatalf("status leaked raw key %q:\n%s", disallowed, stdout)
+		}
+	}
+	for _, want := range []string{"Telegram status:", "State:", "Messages:", "Chats:", "Last run:", "Most recent error:"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("status missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestDoctorHumanUsesChecksList(t *testing.T) {
+	source := readableTelegramSource(t)
+	db := seedArchive(t, 1, time.Now())
+	stdout, stderr, err := runCLI(t, "--db", db, "doctor", "--path", source)
+	if err != nil {
+		t.Fatalf("doctor: %v stderr=%s", err, stderr)
+	}
+	for _, disallowed := range []string{"path:", "sqlite_files:", "tdesktop_files:", "files_scanned:"} {
+		if strings.Contains(stdout, disallowed) {
+			t.Fatalf("doctor leaked raw key %q:\n%s", disallowed, stdout)
+		}
+	}
+	for _, want := range []string{"Telegram doctor", "[ok] Telegram data:", "[ok] Archive:", "Last run:", "Most recent error:"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("doctor missing %q:\n%s", want, stdout)
+		}
+	}
 }
 
 func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
@@ -230,6 +270,17 @@ func TestSearchWhoIsCaseInsensitive(t *testing.T) {
 	payload := runSearchJSON(t, db, "search", "needle", "--who", "aLiCe eXaMpLe", "--json")
 	if len(payload.Results) != 1 || payload.TotalMatches != 1 || payload.Results[0].Who != "Alice Example" {
 		t.Fatalf("case-insensitive --who payload = %#v", payload)
+	}
+}
+
+func TestSearchJSONEmitsWhoForDirectSenderRows(t *testing.T) {
+	db := seedDirectSenderArchive(t)
+	payload := runSearchJSON(t, db, "search", "needle", "--json")
+	if len(payload.Results) != 1 {
+		t.Fatalf("search results = %#v", payload.Results)
+	}
+	if payload.Results[0].Who != "Direct Person" {
+		t.Fatalf("search who = %q, want Direct Person", payload.Results[0].Who)
 	}
 }
 
@@ -326,6 +377,38 @@ func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 		if _, err := time.Parse(time.RFC3339, message.Time); err != nil {
 			t.Fatalf("context time = %q err=%v", message.Time, err)
 		}
+	}
+}
+
+func TestOpenAcceptsShortRefAlias(t *testing.T) {
+	db := seedSearchArchive(t, 3)
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "launch")
+	if err != nil {
+		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	alias := firstSearchAlias(t, stdout)
+	payload := runOpenJSON(t, db, alias)
+	if payload.Ref == "" || !strings.HasPrefix(payload.Ref, "telecrawl:msg/") {
+		t.Fatalf("open by alias payload = %#v", payload)
+	}
+}
+
+func TestOpenShortRefErrorsAreContractCodes(t *testing.T) {
+	db := seedSearchArchive(t, 1)
+	stdout, _, err := runCLI(t, "--db", db, "open", "22222", "--json")
+	if err == nil {
+		t.Fatalf("unknown alias succeeded: stdout=%s", stdout)
+	}
+	var payload struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "unknown_short_ref" {
+		t.Fatalf("error code = %q, want unknown_short_ref", payload.Error.Code)
 	}
 }
 
@@ -482,9 +565,21 @@ type openMessageJSON struct {
 
 func runCLI(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
+	if !hasArg(args, "--db") {
+		args = append([]string{"--db", filepath.Join(t.TempDir(), "telecrawl.db")}, args...)
+	}
 	var stdout, stderr bytes.Buffer
 	err := Run(context.Background(), args, &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
+}
+
+func hasArg(args []string, name string) bool {
+	for _, arg := range args {
+		if arg == name || strings.HasPrefix(arg, name+"=") {
+			return true
+		}
+	}
+	return false
 }
 
 func runStatusJSON(t *testing.T, db string) statusJSON {
@@ -522,8 +617,11 @@ func decodeDoctorChecks(t *testing.T, stdout string) []doctorCheckJSON {
 	if err := json.Unmarshal([]byte(stdout), &root); err != nil {
 		t.Fatalf("doctor json = %s err=%v", stdout, err)
 	}
-	if len(root) != 1 {
-		t.Fatalf("doctor keys = %#v, want only checks", root)
+	if _, ok := root["checks"]; !ok {
+		t.Fatalf("doctor keys = %#v, want checks", root)
+	}
+	if len(root) > 2 {
+		t.Fatalf("doctor keys = %#v, want checks and optional log", root)
 	}
 	var payload struct {
 		Checks []doctorCheckJSON `json:"checks"`
@@ -579,6 +677,23 @@ func assertSearchResultShape(t *testing.T, result struct {
 	}
 }
 
+func firstSearchAlias(t *testing.T, stdout string) string {
+	t.Helper()
+	for _, line := range strings.Split(stdout, "\n") {
+		if !strings.HasPrefix(line, "ref: ") {
+			continue
+		}
+		ref := strings.TrimSpace(strings.TrimPrefix(line, "ref: "))
+		alias, _, _ := strings.Cut(ref, " ")
+		if alias == "" || strings.HasPrefix(alias, "telecrawl:") {
+			t.Fatalf("search ref line did not include alias: %q", line)
+		}
+		return alias
+	}
+	t.Fatalf("search output had no ref line:\n%s", stdout)
+	return ""
+}
+
 func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 	t.Helper()
 	db := filepath.Join(t.TempDir(), "telecrawl.db")
@@ -605,6 +720,35 @@ func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 		}
 	}
 	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: finishedAt, FinishedAt: finishedAt}, nil, chats, nil, nil, nil, nil, rows); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func seedDirectSenderArchive(t *testing.T) string {
+	t.Helper()
+	db := filepath.Join(t.TempDir(), "telecrawl.db")
+	st, err := store.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{{JID: "300", FullName: "Direct Person"}}
+	chats := []store.Chat{{JID: "300", Kind: "chat", Name: "Direct Person", LastMessageAt: now, MessageCount: 1}}
+	messages := []store.Message{{
+		SourcePK:  1,
+		ChatJID:   "300",
+		ChatName:  "Direct Person",
+		MessageID: "0:1",
+		SenderJID: "300",
+		Timestamp: now,
+		Text:      "direct sender needle",
+	}}
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.RebuildShortRefs(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	return db

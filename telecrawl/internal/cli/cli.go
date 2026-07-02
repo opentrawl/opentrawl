@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
@@ -24,6 +25,7 @@ type cliError struct {
 	code  int
 	err   error
 	quiet bool
+	event string
 }
 
 func (e *cliError) Error() string {
@@ -57,12 +59,14 @@ func ShouldPrintError(err error) bool {
 }
 
 type runtime struct {
-	ctx    context.Context
-	stdout io.Writer
-	stderr io.Writer
-	json   bool
-	dbPath string
-	source string
+	ctx          context.Context
+	stdout       io.Writer
+	stderr       io.Writer
+	json         bool
+	dbPath       string
+	source       string
+	logStateRoot string
+	log          *cklog.Run
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -89,16 +93,57 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		printUsage(stdout)
 		return nil
 	}
-	if rest[0] == "version" {
-		if hasHelpFlag(rest[1:]) {
-			printCommandUsage(stdout, []string{"version"})
-			return nil
-		}
-		_, _ = io.WriteString(stdout, version+"\n")
-		return nil
+	r := &runtime{
+		ctx:          ctx,
+		stdout:       stdout,
+		stderr:       stderr,
+		json:         jsonFlag || *jsonOut,
+		dbPath:       *dbPath,
+		source:       *source,
+		logStateRoot: logStateRoot(*dbPath),
 	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonFlag || *jsonOut, dbPath: *dbPath, source: *source}
-	return r.dispatch(rest)
+	run, err := cklog.NewRun(cklog.Options{
+		StateRoot: r.logStateRoot,
+		CrawlerID: "telecrawl",
+		Command:   logCommandName(rest[0]),
+		Version:   version,
+		Stderr:    stderr,
+	})
+	if err != nil {
+		return err
+	}
+	r.log = run
+	err = r.dispatch(rest)
+	if err != nil {
+		_ = r.log.Error(errorEventCode(err), err)
+	}
+	if finishErr := r.log.Finish(err); finishErr != nil {
+		return errors.Join(err, finishErr)
+	}
+	return err
+}
+
+func logCommandName(command string) string {
+	switch command {
+	case "metadata", "import", "sync", "wiretap", "doctor", "status", "chats", "folders", "contacts", "topics", "messages", "search", "open", "backup", "version":
+		return command
+	default:
+		return "unknown"
+	}
+}
+
+func errorEventCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	if errors.Is(err, context.Canceled) {
+		return "command_canceled"
+	}
+	var codeErr *cliError
+	if errors.As(err, &codeErr) && codeErr.event != "" {
+		return codeErr.event
+	}
+	return "command_failed"
 }
 
 func pullJSONFlag(args []string) (bool, []string) {
@@ -149,6 +194,9 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runBackup(args[1:])
 	case "wiretap":
 		return r.runImport(args[1:])
+	case "version":
+		_, _ = io.WriteString(r.stdout, version+"\n")
+		return nil
 	default:
 		return usageErr(fmt.Errorf("unknown command %q", args[0]))
 	}
@@ -172,6 +220,82 @@ func (r *runtime) withReadOnlyStore(fn func(*store.Store) error) error {
 	return fn(st)
 }
 
+func (r *runtime) logTail() logTailEnvelope {
+	reader, err := cklog.NewReader(r.logStateRoot, "telecrawl")
+	if err != nil {
+		return logTailEnvelope{}
+	}
+	lines, err := reader.RecentLines("", 1000)
+	if err != nil {
+		return logTailEnvelope{}
+	}
+	currentRunID := ""
+	if r.log != nil {
+		currentRunID = r.log.RunID()
+	}
+	var tail logTailEnvelope
+	if lastRunID := lastLoggedRunID(lines, currentRunID); lastRunID != "" {
+		if summary, ok, err := reader.LastRun(lastRunID); err == nil && ok {
+			tail.LastRun = logRunFromSummary(summary)
+		}
+	}
+	if line, ok := mostRecentLoggedError(lines, currentRunID); ok {
+		tail.MostRecentError = logErrorFromLine(line)
+	}
+	return tail
+}
+
+func lastLoggedRunID(lines []cklog.Line, skipRunID string) string {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line.RunID == "" || line.RunID == "-" || line.RunID == skipRunID || line.Event == "grammar" {
+			continue
+		}
+		return line.RunID
+	}
+	return ""
+}
+
+func mostRecentLoggedError(lines []cklog.Line, skipRunID string) (cklog.Line, bool) {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := lines[i]
+		if line.RunID == skipRunID || line.RunID == "-" {
+			continue
+		}
+		if line.Level == cklog.LevelError {
+			return line, true
+		}
+	}
+	return cklog.Line{}, false
+}
+
+func logRunFromSummary(summary cklog.RunSummary) *logRunEnvelope {
+	out := &logRunEnvelope{
+		RunID:     summary.RunID,
+		Command:   summary.Command,
+		Outcome:   summary.Outcome,
+		LastEvent: summary.LastEvent,
+		Version:   summary.Version,
+	}
+	if !summary.StartedAt.IsZero() {
+		out.StartedAt = summary.StartedAt.Format(time.RFC3339)
+	}
+	if !summary.FinishedAt.IsZero() {
+		out.FinishedAt = summary.FinishedAt.Format(time.RFC3339)
+	}
+	return out
+}
+
+func logErrorFromLine(line cklog.Line) *logErrorEnvelope {
+	return &logErrorEnvelope{
+		RunID:   line.RunID,
+		Command: line.Command,
+		Event:   line.Event,
+		Time:    line.Timestamp.Format(time.RFC3339),
+		Message: line.Message,
+	}
+}
+
 func (r *runtime) runDoctor(args []string) error {
 	fs := flag.NewFlagSet("telecrawl doctor", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -180,10 +304,7 @@ func (r *runtime) runDoctor(args []string) error {
 		return usageErr(err)
 	}
 	report := telegramdesktop.Probe(r.ctx, telegramdesktop.Options{Path: *path})
-	if r.json {
-		return r.print(r.doctorEnvelope(report))
-	}
-	return r.printProbe(report)
+	return r.print(r.doctorEnvelope(report))
 }
 
 func (r *runtime) runStatus(args []string) error {
@@ -192,16 +313,7 @@ func (r *runtime) runStatus(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
-	if r.json {
-		return r.print(r.statusEnvelope())
-	}
-	return r.withStore(func(st *store.Store) error {
-		status, err := st.Status(r.ctx)
-		if err != nil {
-			return err
-		}
-		return r.print(status)
-	})
+	return r.print(r.statusEnvelope())
 }
 
 func (r *runtime) runImport(args []string) error {
@@ -218,6 +330,8 @@ func (r *runtime) runImport(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("import takes flags only"))
 	}
+	progress, stopProgress := r.startCommandProgress("sync_progress", "starting sync")
+	defer stopProgress()
 	return r.withStore(func(st *store.Store) error {
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
@@ -234,7 +348,7 @@ func (r *runtime) runImport(args []string) error {
 			MessagesLimit:           *messagesLimit,
 			ChatID:                  *chat,
 			FetchMedia:              *fetchMedia,
-			Progress:                r.stderr,
+			Progress:                progress,
 			ExistingMediaSourcePath: existingMediaSourcePath,
 			ExistingMediaRefs:       existingMediaRefs,
 		}, st.Path())
@@ -244,8 +358,46 @@ func (r *runtime) runImport(args []string) error {
 		if err := storeImportResult(r.ctx, st, &result, *chat); err != nil {
 			return err
 		}
+		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
 		return r.print(result.Stats)
 	})
+}
+
+type commandProgress struct {
+	progress *cklog.Progress
+	done     chan struct{}
+}
+
+func (r *runtime) startCommandProgress(event, firstMessage string) (*commandProgress, func()) {
+	progress := &commandProgress{
+		progress: r.log.Progress(cklog.ProgressOptions{Event: event, Unit: "messages"}),
+		done:     make(chan struct{}),
+	}
+	_ = progress.Report(0, firstMessage)
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				_ = progress.Report(0, "sync running")
+			case <-progress.done:
+				return
+			case <-r.ctx.Done():
+				return
+			}
+		}
+	}()
+	return progress, func() {
+		close(progress.done)
+	}
+}
+
+func (p *commandProgress) Report(done int64, message string) error {
+	if p == nil || p.progress == nil {
+		return nil
+	}
+	return p.progress.Report(done, message)
 }
 
 func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) error {
@@ -254,7 +406,10 @@ func storeImportResult(ctx context.Context, st *store.Store, result *telegramdes
 	}
 	refreshImportMediaStats(result)
 	if strings.TrimSpace(chatFilter) == "" {
-		return st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
+		if err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages); err != nil {
+			return err
+		}
+		return st.RebuildShortRefs(ctx)
 	}
 	if len(result.Chats) == 0 {
 		return fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
@@ -265,7 +420,7 @@ func storeImportResult(ctx context.Context, st *store.Store, result *telegramdes
 			return err
 		}
 	}
-	return nil
+	return st.RebuildShortRefs(ctx)
 }
 
 func refreshImportMediaStats(result *telegramdesktop.ImportResult) {
@@ -630,8 +785,20 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, messages, total, whoMatched))
+		shortRefs, err := st.ShortRefsFor(r.ctx, messageRefs(messages))
+		if err != nil {
+			return err
+		}
+		return r.print(newSearchEnvelope(filter.Query, messages, total, whoMatched, shortRefs))
 	})
+}
+
+func messageRefs(messages []store.Message) []string {
+	refs := make([]string, 0, len(messages))
+	for _, message := range messages {
+		refs = append(refs, messageRef(message.SourcePK))
+	}
+	return refs
 }
 
 func (r *runtime) resolveWhoFilter(st *store.Store, filter *store.MessageFilter) ([]string, error) {
@@ -658,11 +825,11 @@ func (r *runtime) runOpen(args []string) error {
 	if len(args) != 1 {
 		return usageErr(errors.New("open takes exactly one ref"))
 	}
-	sourcePK, err := parseMessageRef(args[0])
-	if err != nil {
-		return r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by telecrawl search --json, such as telecrawl:msg/<id>.")
-	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
+	return r.withStore(func(st *store.Store) error {
+		sourcePK, err := r.resolveOpenMessageRef(st, args[0])
+		if err != nil {
+			return err
+		}
 		window, err := st.OpenMessageWindow(r.ctx, sourcePK, openContextRadius)
 		if errors.Is(err, store.ErrMessageNotFound) {
 			return r.contractError("not_found", "message was not found in this archive", "Run telecrawl search --json again and use one of the returned refs.")
@@ -674,11 +841,40 @@ func (r *runtime) runOpen(args []string) error {
 	})
 }
 
+func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, error) {
+	ref = strings.TrimSpace(ref)
+	if strings.Contains(ref, ":") {
+		sourcePK, err := parseMessageRef(ref)
+		if err != nil {
+			return 0, r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by telecrawl search --json, such as telecrawl:msg/<id>.")
+		}
+		return sourcePK, nil
+	}
+	fullRefs, err := st.ResolveShortRef(r.ctx, ref)
+	if errors.Is(err, store.ErrUnknownShortRef) {
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run telecrawl search and copy the displayed short ref, or use a full ref from telecrawl search --json.")
+	}
+	if errors.Is(err, store.ErrAmbiguousShortRef) {
+		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "Run telecrawl search again and use the longer displayed ref or the full ref from telecrawl search --json.")
+	}
+	if err != nil {
+		return 0, err
+	}
+	if len(fullRefs) != 1 {
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run telecrawl search and copy the displayed short ref, or use a full ref from telecrawl search --json.")
+	}
+	sourcePK, err := parseMessageRef(fullRefs[0])
+	if err != nil {
+		return 0, err
+	}
+	return sourcePK, nil
+}
+
 func parseMessageRef(ref string) (int64, error) {
-	if !strings.HasPrefix(ref, messageRefPrefix) {
+	if !strings.HasPrefix(ref, store.MessageRefPrefix) {
 		return 0, errors.New("invalid message ref")
 	}
-	rawID := strings.TrimPrefix(ref, messageRefPrefix)
+	rawID := strings.TrimPrefix(ref, store.MessageRefPrefix)
 	if rawID == "" {
 		return 0, errors.New("invalid message ref")
 	}
@@ -691,14 +887,38 @@ func parseMessageRef(ref string) (int64, error) {
 
 func (r *runtime) contractError(code, message, remedy string) error {
 	body := contractErrorBody{Code: code, Message: message, Remedy: remedy}
-	err := errors.New(message + ". " + remedy)
+	err := newRemediedError(message, remedy)
 	if r.json {
 		if printErr := r.print(errorEnvelope{Error: body}); printErr != nil {
 			return printErr
 		}
-		return &cliError{code: 1, err: err, quiet: true}
+		return &cliError{code: 1, err: err, quiet: true, event: code}
 	}
-	return &cliError{code: 1, err: err}
+	return &cliError{code: 1, err: err, event: code}
+}
+
+type remediedError struct {
+	message string
+	remedy  string
+}
+
+func newRemediedError(message, remedy string) error {
+	return remediedError{message: strings.TrimSpace(message), remedy: strings.TrimSpace(remedy)}
+}
+
+func (e remediedError) Error() string {
+	switch {
+	case e.message != "" && e.remedy != "":
+		return e.message + ". " + e.remedy
+	case e.message != "":
+		return e.message
+	default:
+		return e.remedy
+	}
+}
+
+func (e remediedError) Unwrap() error {
+	return cklog.WorldMustChange{Err: errors.New(e.message), Message: e.message, Remedy: e.remedy}
 }
 
 // messageFilterValueFlags are the filter flags that consume a value, so
@@ -912,64 +1132,6 @@ func (r *runtime) backupSnapshots(args []string) error {
 	return r.print(snapshots)
 }
 
-func (r *runtime) printProbe(report telegramdesktop.Report) error {
-	if r.json {
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(report)
-	}
-	if _, err := fmt.Fprintf(r.stdout, "path: %s\n", report.Path); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "exists: %t\n", report.Exists); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "accessible: %t\n", report.Accessible); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "store: %s\n", report.Store); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "sqlite_files: %d\n", report.SQLiteFiles); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "tdesktop_files: %d\n", report.TDesktopFiles); err != nil {
-		return err
-	}
-	if report.KeyFiles > 0 {
-		if _, err := fmt.Fprintf(r.stdout, "key_files: %d\n", report.KeyFiles); err != nil {
-			return err
-		}
-	}
-	if report.PostboxDBs > 0 {
-		if _, err := fmt.Fprintf(r.stdout, "postbox_dbs: %d\n", report.PostboxDBs); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(r.stdout, "files_scanned: %d\n", report.FilesScanned); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "bytes_scanned: %d\n", report.BytesScanned); err != nil {
-		return err
-	}
-	if report.AccountDirs > 0 {
-		if _, err := fmt.Fprintf(r.stdout, "account_dirs: %d\n", report.AccountDirs); err != nil {
-			return err
-		}
-	}
-	if report.Error != "" {
-		if _, err := fmt.Fprintf(r.stdout, "error: %s\n", report.Error); err != nil {
-			return err
-		}
-	}
-	if report.Note != "" {
-		if _, err := fmt.Fprintf(r.stdout, "note: %s\n", report.Note); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (r *runtime) print(v any) error {
 	enc := json.NewEncoder(r.stdout)
 	if r.json {
@@ -977,30 +1139,10 @@ func (r *runtime) print(v any) error {
 		return enc.Encode(v)
 	}
 	switch value := v.(type) {
-	case store.Status:
-		if _, err := fmt.Fprintf(r.stdout, "db_path: %s\nchats: %d\nmessages: %d\nunread_chats: %d\nunread_messages: %d\nmedia_messages: %d\n",
-			value.DBPath, value.Chats, value.Messages, value.UnreadChats, value.UnreadMessages, value.MediaMessages); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(r.stdout, "folders: %d\ntopics: %d\n", value.Folders, value.Topics); err != nil {
-			return err
-		}
-		if !value.OldestMessage.IsZero() {
-			if _, err := fmt.Fprintf(r.stdout, "oldest_message: %s\n", value.OldestMessage.Format(time.RFC3339)); err != nil {
-				return err
-			}
-		}
-		if !value.NewestMessage.IsZero() {
-			if _, err := fmt.Fprintf(r.stdout, "newest_message: %s\n", value.NewestMessage.Format(time.RFC3339)); err != nil {
-				return err
-			}
-		}
-		if !value.LastImportAt.IsZero() {
-			if _, err := fmt.Fprintf(r.stdout, "last_import_at: %s\n", value.LastImportAt.Format(time.RFC3339)); err != nil {
-				return err
-			}
-		}
-		return nil
+	case statusEnvelope:
+		return r.printStatus(value)
+	case doctorOutput:
+		return r.printDoctor(value)
 	case store.ImportStats:
 		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %d\nmessages: %d\nmedia_messages: %d\nmedia_files: %d\nmedia_bytes: %d\nstarted_at: %s\nfinished_at: %s\n",
 			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, value.StartedAt.Format(time.RFC3339), value.FinishedAt.Format(time.RFC3339)); err != nil {
@@ -1043,6 +1185,152 @@ func (r *runtime) print(v any) error {
 	}
 }
 
+func (r *runtime) printStatus(value statusEnvelope) error {
+	if _, err := fmt.Fprintf(r.stdout, "Telegram status: %s\n", value.Summary); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(r.stdout, "State: %s\n", value.State); err != nil {
+		return err
+	}
+	for _, count := range value.Counts {
+		label := statusCountLabel(count.ID, count.Label)
+		display := strconv.FormatInt(count.Value, 10)
+		if count.ID == "since" && count.Value == 0 {
+			display = "not available"
+		}
+		if _, err := fmt.Fprintf(r.stdout, "%s: %s\n", label, display); err != nil {
+			return err
+		}
+	}
+	if value.Freshness.LastSync != "" {
+		if _, err := fmt.Fprintf(r.stdout, "Last sync: %s\n", value.Freshness.LastSync); err != nil {
+			return err
+		}
+	}
+	return r.printLogTail(value.Log)
+}
+
+func statusCountLabel(id, fallback string) string {
+	switch id {
+	case "messages":
+		return "Messages"
+	case "chats":
+		return "Chats"
+	case "since":
+		return "Since"
+	default:
+		return humanLabel(fallback)
+	}
+}
+
+func (r *runtime) printDoctor(value doctorOutput) error {
+	if _, err := io.WriteString(r.stdout, "Telegram doctor\n"); err != nil {
+		return err
+	}
+	for _, check := range value.Checks {
+		label := strings.TrimSpace(check.Label)
+		if label == "" {
+			label = humanLabel(check.ID)
+		}
+		message := strings.TrimSpace(check.Message)
+		if message == "" {
+			message = "No issue found."
+		}
+		if _, err := fmt.Fprintf(r.stdout, "[%s] %s: %s", check.State, label, message); err != nil {
+			return err
+		}
+		if strings.TrimSpace(check.Remedy) != "" && check.State != "ok" {
+			if _, err := fmt.Fprintf(r.stdout, " Remedy: %s", check.Remedy); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(r.stdout, "\n"); err != nil {
+			return err
+		}
+	}
+	return r.printLogTail(value.Log)
+}
+
+func (r *runtime) printLogTail(value logTailEnvelope) error {
+	if value.LastRun == nil {
+		if _, err := io.WriteString(r.stdout, "Last run: none recorded\n"); err != nil {
+			return err
+		}
+	} else {
+		when := firstNonEmpty(value.LastRun.FinishedAt, value.LastRun.StartedAt)
+		if when == "" {
+			when = "time unknown"
+		}
+		if _, err := fmt.Fprintf(r.stdout, "Last run: %s %s at %s\n", humanLabel(value.LastRun.Command), value.LastRun.Outcome, when); err != nil {
+			return err
+		}
+	}
+	if value.MostRecentError == nil {
+		_, err := io.WriteString(r.stdout, "Most recent error: none recorded\n")
+		return err
+	}
+	message := humanLogErrorMessage(value.MostRecentError)
+	if _, err := fmt.Fprintf(r.stdout, "Most recent error: %s at %s\n", message, value.MostRecentError.Time); err != nil {
+		return err
+	}
+	return nil
+}
+
+func humanLogErrorMessage(value *logErrorEnvelope) string {
+	if value == nil {
+		return ""
+	}
+	if message := logMessageField(value.Message, "error"); message != "" {
+		return message
+	}
+	return strings.TrimSpace(value.Message)
+}
+
+func logMessageField(message, key string) string {
+	needle := key + "="
+	idx := strings.Index(message, needle)
+	if idx < 0 {
+		return ""
+	}
+	rest := strings.TrimSpace(message[idx+len(needle):])
+	if rest == "" {
+		return ""
+	}
+	if rest[0] != '"' {
+		if end := strings.IndexAny(rest, " \t"); end >= 0 {
+			return rest[:end]
+		}
+		return rest
+	}
+	for end := 1; end <= len(rest); end++ {
+		if rest[end-1] != '"' {
+			continue
+		}
+		value, err := strconv.Unquote(rest[:end])
+		if err == nil {
+			return value
+		}
+	}
+	return ""
+}
+
+func humanLabel(value string) string {
+	value = strings.TrimSpace(strings.ReplaceAll(value, "_", " "))
+	if value == "" {
+		return ""
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func (r *runtime) printSearch(value searchEnvelope) error {
 	for _, item := range value.Results {
 		line := item.Time
@@ -1052,7 +1340,11 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 		if item.Where != "" {
 			line += " in " + item.Where
 		}
-		if _, err := fmt.Fprintf(r.stdout, "%s\n%s\nref: %s\n\n", line, item.Snippet, item.Ref); err != nil {
+		ref := item.Ref
+		if item.ShortRef != "" {
+			ref = item.ShortRef + " (" + item.Ref + ")"
+		}
+		if _, err := fmt.Fprintf(r.stdout, "%s\n%s\nref: %s\n\n", line, item.Snippet, ref); err != nil {
 			return err
 		}
 	}
@@ -1128,7 +1420,7 @@ func hasRemoteMediaStats(stats store.ImportStats) bool {
 }
 
 func usageErr(err error) error {
-	return &cliError{code: 2, err: err}
+	return &cliError{code: 2, err: err, event: "usage_error"}
 }
 
 func hasHelpFlag(args []string) bool {
@@ -1245,6 +1537,22 @@ func defaultDBPath() string {
 		return "telecrawl.db"
 	}
 	return filepath.Join(home, ".telecrawl", "telecrawl.db")
+}
+
+func logStateRoot(dbPath string) string {
+	dbPath = strings.TrimSpace(dbPath)
+	if dbPath == "" {
+		return defaultBaseDir()
+	}
+	dir := filepath.Dir(dbPath)
+	if dir == "." || dir == "" {
+		return defaultBaseDir()
+	}
+	return dir
+}
+
+func defaultLogDir() string {
+	return filepath.Join(logStateRoot(defaultDBPath()), "telecrawl", "logs")
 }
 
 func parseDate(value string) (time.Time, error) {

@@ -3,7 +3,6 @@ package telegramdesktop
 import (
 	"context"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -23,12 +22,12 @@ const (
 )
 
 type telegramFloodWaitPolicy struct {
-	progress io.Writer
+	progress ProgressReporter
 	sleep    func(context.Context, time.Duration) error
 	mu       sync.Mutex
 }
 
-func newTelegramFloodWaitPolicy(progress io.Writer) *telegramFloodWaitPolicy {
+func newTelegramFloodWaitPolicy(progress ProgressReporter) *telegramFloodWaitPolicy {
 	return &telegramFloodWaitPolicy{
 		progress: progress,
 		sleep:    telegramFloodWaitSleep,
@@ -67,7 +66,7 @@ func (p *telegramFloodWaitPolicy) reportWait(wait time.Duration, retry int) {
 	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	_, _ = fmt.Fprintf(p.progress, "telecrawl: Telegram rate limit; waiting %s before retry %d/%d\n", wait, retry, telegramFloodWaitMaxRetries)
+	_ = p.progress.Report(0, fmt.Sprintf("Telegram rate limit; waiting %s before retry %d/%d", wait, retry, telegramFloodWaitMaxRetries))
 }
 
 func telegramFloodWaitSleep(ctx context.Context, delay time.Duration) error {
