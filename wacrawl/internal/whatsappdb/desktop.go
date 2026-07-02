@@ -728,8 +728,10 @@ func messageType(raw int) string {
 		return "reaction"
 	case 15:
 		return "sticker"
+	case 59:
+		return "status_update"
 	default:
-		return fmt.Sprintf("type_%d", raw)
+		return ""
 	}
 }
 

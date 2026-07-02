@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -532,6 +533,7 @@ func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--limit", "1", "launch"}, &stdout, &stderr); err != nil {
 		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
 	}
+	conformance.AssertSearchEnvelope(t, stdout.Bytes())
 	assertNoRawFields(t, stdout.Bytes())
 	assertRootKeys(t, stdout.Bytes(), "query", "results", "total_matches", "truncated")
 	assertSearchResultKeys(t, stdout.Bytes())
@@ -566,6 +568,76 @@ func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
 	}
 	if len(stable.Results) != 1 || stable.Results[0].Ref != "wacrawl:msg/stable-1" {
 		t.Fatalf("stable ref = %#v", stable.Results)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "search", "--limit", "1", "launch"}, &stdout, &stderr); err != nil {
+		t.Fatalf("human search error = %v stderr=%s", err, stderr.String())
+	}
+	conformance.AssertHumanOutput(t, stdout.String())
+}
+
+func TestSearchRendersHumanMessageKindsAndMediaText(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	opaqueMediaKey := "1ByAINA1BGQRt/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "status", SenderName: "Katja", Timestamp: now, RawType: 59, MessageType: "status_update"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "unsupported", SenderName: "Katja", Timestamp: now.Add(time.Minute), RawType: 99, MessageType: "type_99"},
+		{SourcePK: 3, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "image-key", SenderName: "Katja", Timestamp: now.Add(2 * time.Minute), RawType: 1, MessageType: "image", MediaType: "image", Text: opaqueMediaKey},
+		{SourcePK: 4, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "image-caption", SenderName: "Katja", Timestamp: now.Add(3 * time.Minute), RawType: 1, MessageType: "image", MediaType: "image", Text: "real caption launch"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{{JID: "chat@g.us", Kind: "group", Name: "Status chat", MessageCount: len(messages)}}, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "search", "Katja", "--limit", "10"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	human := stdout.String()
+	conformance.AssertHumanOutput(t, human)
+	for _, want := range []string{"[status update]", "[unsupported message]", "[image]", "real caption launch"} {
+		if !strings.Contains(human, want) {
+			t.Fatalf("human search missing %q:\n%s", want, human)
+		}
+	}
+	for _, forbidden := range []string{"type_99", opaqueMediaKey} {
+		if strings.Contains(human, forbidden) {
+			t.Fatalf("human search leaked %q:\n%s", forbidden, human)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "Katja", "--limit", "10"}, &stdout, &stderr); err != nil {
+		t.Fatalf("json search error = %v stderr=%s", err, stderr.String())
+	}
+	conformance.AssertSearchEnvelope(t, stdout.Bytes())
+	var payload searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	snippets := make(map[string]struct{}, len(payload.Results))
+	for _, result := range payload.Results {
+		snippets[result.Snippet] = struct{}{}
+		if strings.Contains(result.Snippet, "type_") || strings.Contains(result.Snippet, opaqueMediaKey) {
+			t.Fatalf("search json leaked internal text: %#v", payload.Results)
+		}
+	}
+	for _, want := range []string{"[status update]", "[unsupported message]", "[image]", "real caption launch"} {
+		if _, ok := snippets[want]; !ok {
+			t.Fatalf("json search snippets = %#v, missing %q", snippets, want)
+		}
 	}
 }
 
@@ -800,7 +872,7 @@ func TestOpenAcceptsShortRefAndSearchJSONKeepsFullRef(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "search", "shortref"}, &stdout, &stderr); err != nil {
 		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "full_ref: wacrawl:msg/short-target") {
+	if !strings.Contains(stdout.String(), "full ref: wacrawl:msg/short-target") {
 		t.Fatalf("human search should print canonical full ref:\n%s", stdout.String())
 	}
 	alias := searchOutputRef(stdout.String())
