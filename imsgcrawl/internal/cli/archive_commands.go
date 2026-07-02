@@ -156,6 +156,7 @@ func statusCounts(status archive.Status) []control.Count {
 	return []control.Count{
 		control.NewCount("messages", "messages", status.Messages),
 		control.NewCount("chats", "chats", status.Chats),
+		control.NewCount("named_contacts", "named contacts", status.NamedContacts),
 		control.NewCount("since", "since", since),
 	}
 }

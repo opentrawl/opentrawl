@@ -72,7 +72,7 @@ func searchChatDisplayName(item archive.SearchResult) string {
 
 func chatDisplayName(chat archive.ChatSummary) string {
 	title := strings.TrimSpace(chat.Title)
-	if title != "" && !isMachineChatTitle(title) {
+	if title != "" && !isMachineChatTitle(title) && !isHandleLikeTitle(title) {
 		return title
 	}
 	if chat.Kind == "group" {
@@ -83,6 +83,9 @@ func chatDisplayName(chat archive.ChatSummary) string {
 	}
 	if people := participantPreview(chat.ParticipantHandles, chat.ParticipantCount); people != "" {
 		return people
+	}
+	if title != "" && !isMachineChatTitle(title) {
+		return title
 	}
 	if chat.ChatID != "" {
 		return "chat " + chat.ChatID

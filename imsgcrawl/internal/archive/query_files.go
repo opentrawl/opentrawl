@@ -44,6 +44,9 @@ var syncStateSQL string
 //go:embed queries/sync/insert_handles.sql
 var insertHandlesSQL string
 
+//go:embed queries/sync/insert_contact_mapping.sql
+var insertContactMappingSQL string
+
 //go:embed queries/sync/insert_chats.sql
 var insertChatsSQL string
 

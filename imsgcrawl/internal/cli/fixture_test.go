@@ -111,6 +111,80 @@ func createMessagesFixture(t *testing.T, path string) {
 	}
 }
 
+func createContactlessMessagesFixture(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	schema := []string{
+		`create table handle (ROWID integer primary key, id text not null, service text not null, uncanonicalized_id text)`,
+		`create table chat (ROWID integer primary key, guid text not null, display_name text, chat_identifier text, service_name text, room_name text, is_archived integer)`,
+		`create table chat_handle_join (chat_id integer, handle_id integer)`,
+		`create table message (ROWID integer primary key, guid text not null, handle_id integer, date integer, service text, is_from_me integer, text text, attributedBody blob)`,
+		`create table chat_message_join (chat_id integer, message_id integer)`,
+		`create table message_attachment_join (message_id integer, attachment_id integer)`,
+	}
+	for _, stmt := range schema {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inserts := []string{
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (1, '+15550100', 'iMessage', '')`,
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (2, 'alice@example.com', 'iMessage', '')`,
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (3, '+15550999', 'SMS', '')`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (1, 'phone-chat', '', '+15550100', 'iMessage', '', 0)`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (2, 'email-chat', '', 'alice@example.com', 'iMessage', '', 0)`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (3, 'unmatched-chat', '', '+15550999', 'SMS', '', 0)`,
+		`insert into chat_handle_join(chat_id, handle_id) values (1, 1)`,
+		`insert into chat_handle_join(chat_id, handle_id) values (2, 2)`,
+		`insert into chat_handle_join(chat_id, handle_id) values (3, 3)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (1, 'phone-message', 1, 100, 'iMessage', 0, 'phone dinner plan', null)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (2, 'email-message', 2, 200, 'iMessage', 0, 'email dinner plan', null)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (3, 'unmatched-message', 3, 300, 'SMS', 0, 'unmatched dinner plan', null)`,
+		`insert into chat_message_join(chat_id, message_id) values (1, 1)`,
+		`insert into chat_message_join(chat_id, message_id) values (2, 2)`,
+		`insert into chat_message_join(chat_id, message_id) values (3, 3)`,
+	}
+	for _, stmt := range inserts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func createAddressBookFixture(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	schema := []string{
+		`create table ZABCDRECORD (Z_PK integer primary key, ZFIRSTNAME text, ZLASTNAME text, ZORGANIZATION text)`,
+		`create table ZABCDPHONENUMBER (Z_PK integer primary key, ZFULLNUMBER text, ZCOUNTRYCODE text, ZAREACODE text, ZLOCALNUMBER text, ZOWNER integer)`,
+		`create table ZABCDEMAILADDRESS (Z_PK integer primary key, ZADDRESS text, ZOWNER integer)`,
+	}
+	for _, stmt := range schema {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inserts := []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Katja', 'Example', '')`,
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (2, 'Alice', 'Mail', '')`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'ALICE@EXAMPLE.COM', 2)`,
+	}
+	for _, stmt := range inserts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func makeFixtureAttributedBody(text string) []byte {
 	var out []byte
 	out = append(out, "\x04\x0bstreamtyped\x81\xe8\x03\x84\x01@\x84\x84\x84"...)

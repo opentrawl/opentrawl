@@ -26,6 +26,15 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if status.Handles, err = countTable(ctx, db, "handles"); err != nil {
 		return Status{}, err
 	}
+	hasContactMappings, err := tableExists(ctx, db, "contact_mappings")
+	if err != nil {
+		return Status{}, err
+	}
+	if hasContactMappings {
+		if status.NamedContacts, err = countTable(ctx, db, "contact_mappings"); err != nil {
+			return Status{}, err
+		}
+	}
 	if status.Chats, err = countTable(ctx, db, "chats"); err != nil {
 		return Status{}, err
 	}
