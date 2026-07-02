@@ -1,0 +1,385 @@
+package harness
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+type fakeCommand struct {
+	stdout string
+	exit   int
+	mutate bool
+}
+
+type fakeCrawler struct {
+	dbPath          string
+	metadata        fakeCommand
+	status          fakeCommand
+	flagFirstStatus fakeCommand
+	doctor          fakeCommand
+	search          fakeCommand
+}
+
+func TestMetadataCheck(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata string
+		want     Status
+	}{
+		{
+			name:     "complete metadata passes",
+			metadata: `{"schema_version":1,"id":"fakecrawl","capabilities":["search"]}`,
+			want:     StatusPass,
+		},
+		{
+			name:     "missing version warns",
+			metadata: `{"id":"fakecrawl","capabilities":["search"]}`,
+			want:     StatusWarn,
+		},
+		{
+			name:     "missing id fails",
+			metadata: `{"schema_version":1,"capabilities":["search"]}`,
+			want:     StatusFail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.metadata.stdout = tc.metadata
+			result, _ := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}.CheckMetadata(context.Background())
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestStatusCheck(t *testing.T) {
+	tests := []struct {
+		name   string
+		status string
+		want   Status
+	}{
+		{
+			name:   "valid status passes",
+			status: `{"state":"ok","counts":[],"auth":{"authorized":true,"expires":null}}`,
+			want:   StatusPass,
+		},
+		{
+			name:   "too many counts warns",
+			status: `{"state":"ok","counts":[{"id":"a","label":"a","value":1},{"id":"b","label":"b","value":1},{"id":"c","label":"c","value":1},{"id":"d","label":"d","value":1},{"id":"e","label":"e","value":1}]}`,
+			want:   StatusWarn,
+		},
+		{
+			name:   "auth token fails",
+			status: `{"state":"ok","counts":[],"auth":{"authorized":true,"access_token":"sk-test-123456"}}`,
+			want:   StatusFail,
+		},
+		{
+			name:   "unknown state fails",
+			status: `{"state":"ready","counts":[]}`,
+			want:   StatusFail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.status.stdout = tc.status
+			result, _ := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}.CheckStatus(context.Background())
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestDoctorCheck(t *testing.T) {
+	tests := []struct {
+		name   string
+		doctor string
+		want   Status
+	}{
+		{
+			name:   "ok check passes",
+			doctor: `{"checks":[{"id":"archive","state":"ok"}]}`,
+			want:   StatusPass,
+		},
+		{
+			name:   "non-ok check with remedy passes",
+			doctor: `{"checks":[{"id":"auth","state":"fail","remedy":"refresh the fake session"}]}`,
+			want:   StatusPass,
+		},
+		{
+			name:   "non-ok check without remedy fails",
+			doctor: `{"checks":[{"id":"auth","state":"fail"}]}`,
+			want:   StatusFail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.doctor.stdout = tc.doctor
+			result := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}.CheckDoctor(context.Background())
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestSecretsCheck(t *testing.T) {
+	tests := []struct {
+		name   string
+		status string
+		doctor string
+		want   Status
+	}{
+		{
+			name:   "short key value passes",
+			status: `{"state":"ok","counts":[],"key":"ok"}`,
+			doctor: `{"checks":[{"id":"archive","state":"ok"}]}`,
+			want:   StatusPass,
+		},
+		{
+			name:   "token field fails",
+			status: `{"state":"ok","counts":[],"auth":{"authorized":true,"access_token":"sk-test-123456"}}`,
+			doctor: `{"checks":[{"id":"archive","state":"ok"}]}`,
+			want:   StatusFail,
+		},
+		{
+			name:   "long hex fails",
+			status: `{"state":"ok","counts":[]}`,
+			doctor: `{"checks":[{"id":"archive","state":"fail","message":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","remedy":"remove fake hex"}]}`,
+			want:   StatusFail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.status.stdout = tc.status
+			cfg.doctor.stdout = tc.doctor
+			result := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}.CheckSecrets(context.Background())
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestReadsNeverMutateCheck(t *testing.T) {
+	tests := []struct {
+		name      string
+		withDB    bool
+		mutate    bool
+		want      Status
+		wantValid bool
+	}{
+		{name: "stable database passes", withDB: true, want: StatusPass, wantValid: true},
+		{name: "missing path warns", withDB: false, want: StatusWarn, wantValid: true},
+		{name: "changed database fails", withDB: true, mutate: true, want: StatusFail, wantValid: true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, tc.withDB)
+			cfg.status.mutate = tc.mutate
+			suite := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}
+			_, status := suite.CheckStatus(context.Background())
+			if status.Valid != tc.wantValid {
+				t.Fatalf("status valid = %v, want %v", status.Valid, tc.wantValid)
+			}
+			result := suite.CheckReadsNeverMutate(context.Background(), status)
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestSearchCheck(t *testing.T) {
+	validTime := "2026-07-02T12:00:00Z"
+	tests := []struct {
+		name         string
+		capabilities string
+		search       string
+		want         Status
+	}{
+		{
+			name:         "bounded results pass",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"results":[{"ref":"fakecrawl:item/1","time":%s}],"truncated":false}`, jsonString(t, validTime)),
+			want:         StatusPass,
+		},
+		{
+			name:         "too many results fails",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"results":[{"ref":"fakecrawl:item/1","time":%s},{"ref":"fakecrawl:item/2","time":%s},{"ref":"fakecrawl:item/3","time":%s},{"ref":"fakecrawl:item/4","time":%s}]}`, jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime)),
+			want:         StatusFail,
+		},
+		{
+			name:         "bad time fails",
+			capabilities: `["search"]`,
+			search:       `{"results":[{"ref":"fakecrawl:item/1","time":"not-a-time"}]}`,
+			want:         StatusFail,
+		},
+		{
+			name:         "missing ref and time warns",
+			capabilities: `["search"]`,
+			search:       `{"results":[{"snippet":"synthetic result"}]}`,
+			want:         StatusWarn,
+		},
+		{
+			name:         "undeclared search warns",
+			capabilities: `["status"]`,
+			search:       `{"results":[]}`,
+			want:         StatusWarn,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.metadata.stdout = fmt.Sprintf(`{"schema_version":1,"id":"fakecrawl","capabilities":%s}`, tc.capabilities)
+			cfg.search.stdout = tc.search
+			suite := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}
+			_, metadata := suite.CheckMetadata(context.Background())
+			_, status := suite.CheckStatus(context.Background())
+			result := suite.CheckSearch(context.Background(), metadata, status)
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestGrammarCheck(t *testing.T) {
+	tests := []struct {
+		name            string
+		statusExit      int
+		flagFirstStatus fakeCommand
+		want            Status
+	}{
+		{
+			name: "verb-first status passes",
+			want: StatusPass,
+		},
+		{
+			name:       "flag-first only fails",
+			statusExit: 64,
+			flagFirstStatus: fakeCommand{
+				stdout: `{"state":"ok","counts":[]}`,
+			},
+			want: StatusFail,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.status.exit = tc.statusExit
+			if tc.flagFirstStatus.stdout != "" || tc.flagFirstStatus.exit != 0 {
+				cfg.flagFirstStatus = tc.flagFirstStatus
+			}
+			result := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}.CheckGrammar(context.Background())
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestRunReportHasNoFailuresForConformingFakeCrawler(t *testing.T) {
+	cfg := defaultFakeCrawler(t, true)
+	report := Run(context.Background(), writeFakeCrawler(t, cfg))
+	if report.HasFailures() {
+		t.Fatalf("report has failures: %#v", report)
+	}
+	for _, name := range []string{CheckMetadata, CheckGrammar, CheckStatus, CheckDoctor, CheckSecrets, CheckReadsNeverMutate, CheckSearch} {
+		if resultByName(report, name).Name == "" {
+			t.Fatalf("missing result %q in %#v", name, report)
+		}
+	}
+}
+
+func defaultFakeCrawler(t *testing.T, withDB bool) fakeCrawler {
+	t.Helper()
+	dbPath := ""
+	if withDB {
+		dbPath = filepath.Join(t.TempDir(), "archive.db")
+		if err := os.WriteFile(dbPath, []byte("synthetic archive"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	status := `{"state":"ok","counts":[],"auth":{"authorized":true,"expires":null}}`
+	if dbPath != "" {
+		status = fmt.Sprintf(`{"state":"ok","database_path":%s,"counts":[],"auth":{"authorized":true,"expires":null}}`, jsonString(t, dbPath))
+	}
+	return fakeCrawler{
+		dbPath:          dbPath,
+		metadata:        fakeCommand{stdout: `{"schema_version":1,"id":"fakecrawl","capabilities":["search"]}`},
+		status:          fakeCommand{stdout: status},
+		flagFirstStatus: fakeCommand{stdout: status},
+		doctor:          fakeCommand{stdout: `{"checks":[{"id":"archive","state":"ok"}]}`},
+		search:          fakeCommand{stdout: `{"results":[],"truncated":false}`},
+	}
+}
+
+func writeFakeCrawler(t *testing.T, cfg fakeCrawler) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "fakecrawl")
+	script := strings.Join([]string{
+		"#!/bin/sh",
+		"db_path=" + shellQuote(cfg.dbPath),
+		`if [ "$1" = "metadata" ] && [ "$2" = "--json" ]; then`,
+		commandScript(cfg.metadata),
+		"fi",
+		`if [ "$1" = "status" ] && [ "$2" = "--json" ]; then`,
+		commandScript(cfg.status),
+		"fi",
+		`if [ "$1" = "--json" ] && [ "$2" = "status" ]; then`,
+		commandScript(cfg.flagFirstStatus),
+		"fi",
+		`if [ "$1" = "doctor" ] && [ "$2" = "--json" ]; then`,
+		commandScript(cfg.doctor),
+		"fi",
+		`if [ "$1" = "search" ] && [ "$2" = "test" ] && [ "$3" = "--json" ] && [ "$4" = "--limit" ] && [ "$5" = "3" ]; then`,
+		commandScript(cfg.search),
+		"fi",
+		`printf '%s\n' "unsupported command" >&2`,
+		"exit 64",
+		"",
+	}, "\n")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func commandScript(command fakeCommand) string {
+	lines := []string{}
+	if command.mutate {
+		lines = append(lines, `printf '%s' "x" >> "$db_path"`)
+	}
+	if command.stdout != "" {
+		lines = append(lines, "printf '%s\\n' "+shellQuote(command.stdout))
+	}
+	lines = append(lines, fmt.Sprintf("exit %d", command.exit))
+	return strings.Join(lines, "\n")
+}
+
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func jsonString(t *testing.T, value string) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func assertStatus(t *testing.T, result CheckResult, want Status) {
+	t.Helper()
+	if result.Status != want {
+		t.Fatalf("status = %s, want %s; result=%#v", result.Status, want, result)
+	}
+}
+
+func resultByName(report Report, name string) CheckResult {
+	for _, result := range report {
+		if result.Name == name {
+			return result
+		}
+	}
+	return CheckResult{}
+}
