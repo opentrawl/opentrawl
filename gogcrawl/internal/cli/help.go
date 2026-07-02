@@ -1,0 +1,87 @@
+package cli
+
+import (
+	"fmt"
+	"io"
+	"strings"
+)
+
+func printUsage(w io.Writer) {
+	_, _ = fmt.Fprint(w, `gogcrawl archives Gmail through the authenticated gog CLI.
+
+Usage:
+  gogcrawl metadata [--json]
+  gogcrawl status [--json]
+  gogcrawl sync [--json]
+  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+  gogcrawl open REF [--json]
+  gogcrawl doctor [--json]
+  gogcrawl contacts export [--json]
+  gogcrawl help COMMAND
+  gogcrawl --version
+
+Global flags:
+  --archive PATH  Local gogcrawl archive path.
+  --json          Print machine-readable output.
+
+Output:
+  Default output is compact text for humans and agents.
+  Use --json for the frozen control contract.
+`)
+}
+
+func printCommandUsage(w io.Writer, args []string) error {
+	topic := strings.Join(args, " ")
+	switch topic {
+	case "metadata":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl metadata [--json]
+
+Print control metadata.
+`)
+	case "status":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl status [--json]
+
+Report archive state, freshness, counts and safe auth state.
+`)
+	case "sync":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl sync [--json]
+
+Refresh the local Gmail archive from gog.
+`)
+	case "search":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+
+Search archived Gmail subject and body text.
+
+Flags:
+  --limit N     Maximum results. Default: 20. Maximum: 200.
+  --after DATE  Only messages after RFC3339 or YYYY-MM-DD.
+  --before DATE Only messages before RFC3339 or YYYY-MM-DD.
+`)
+	case "open":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl open gogcrawl:msg/ID [--json]
+
+Open one archived Gmail message.
+`)
+	case "doctor":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl doctor [--json]
+
+Check gog, auth and archive readiness.
+`)
+	case "contacts", "contacts export":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl contacts export [--json]
+
+Export Google contacts with display names and phone numbers.
+`)
+	default:
+		return usageErr(fmt.Errorf("unknown help topic %q", topic))
+	}
+	return nil
+}
