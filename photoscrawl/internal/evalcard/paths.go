@@ -7,20 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/openclaw/photoscrawl/internal/modelclient"
 )
 
 func normalizeOllamaGenerateURL(raw string) string {
-	value := strings.TrimRight(strings.TrimSpace(raw), "/")
-	if value == "" {
-		return DefaultOllamaGenerateURL
-	}
-	if strings.HasSuffix(value, "/api/generate") {
-		return value
-	}
-	if strings.HasSuffix(value, "/api") {
-		return value + "/generate"
-	}
-	return value + "/api/generate"
+	return modelclient.GenerateEndpoint(raw)
 }
 
 func defaultedOutputDir(value string, defaultRoot string, now func() time.Time) (string, error) {

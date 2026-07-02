@@ -13,7 +13,6 @@ import (
 )
 
 func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
-	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -24,16 +23,24 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 	if err := os.WriteFile(imagePath, []byte("fixture image bytes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var request ollamaGenerateRequest
+	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/generate" {
+			t.Fatalf("path = %q", r.URL.Path)
+		}
+		var request struct {
+			Model   string         `json:"model"`
+			Images  []string       `json:"images"`
+			Stream  bool           `json:"stream"`
+			Options map[string]any `json:"options"`
+		}
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 		if request.Model != "fixture-vision" || len(request.Images) != 1 {
 			t.Fatalf("request = %#v", request)
 		}
-		_ = json.NewEncoder(w).Encode(ollamaGenerateResponse{
-			Response: `{
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"response": `{
 				"scene_summary":"Outdoor street-food meal with satay skewers, prawns, sauces, and a shared table.",
 				"visible_text_summary":"A small receipt-like slip is visible.",
 				"place_candidates":["hawker centre"],
@@ -45,10 +52,10 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 				"cluster_terms":["street_food","satay","shared_table"],
 				"uncertainties":["exact venue is not proven"]
 			}`,
-			Done: true,
+			"done": true,
 		})
 	}))
-	defer server.Close()
+	defer restoreTransport()
 
 	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
 		Provider:            "fake",
@@ -75,7 +82,7 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 			},
 		},
 	}}
-	if _, err := Crawl(ctx, paths, CrawlOptions{
+	if _, err := Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
 		Provider:    provider,
 		Now:         fixedClock("2026-05-28T10:00:00Z"),
@@ -96,7 +103,7 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:           true,
 		LocalModel:    "fixture-vision",
-		LocalModelURL: server.URL,
+		LocalModelURL: "http://fixture.test/api/generate",
 		Now:           fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
@@ -117,8 +124,8 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.ModelObservations) == 0 || len(opened.ObservationTerms) == 0 {
-		t.Fatalf("opened model observations=%d terms=%d", len(opened.ModelObservations), len(opened.ObservationTerms))
+	if len(opened.Observations) == 0 || len(opened.Evidence.Refs) == 0 {
+		t.Fatalf("opened observations=%d evidence=%d", len(opened.Observations), len(opened.Evidence.Refs))
 	}
 	evidence, err := Evidence(ctx, paths, search.Results[0].ObservationID)
 	if err != nil {
@@ -127,6 +134,23 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 	if len(evidence.Evidence) == 0 {
 		t.Fatal("expected local model evidence")
 	}
+}
+
+type archiveRoundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f archiveRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func useArchiveHandlerTransport(t *testing.T, handler http.Handler) func() {
+	t.Helper()
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = archiveRoundTripFunc(func(r *http.Request) (*http.Response, error) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, r)
+		return recorder.Result(), nil
+	})
+	return func() { http.DefaultTransport = oldTransport }
 }
 
 func TestPromptLeakageCreatesQualityIssue(t *testing.T) {
