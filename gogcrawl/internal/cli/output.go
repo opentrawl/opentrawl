@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit/control"
+	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
@@ -46,22 +49,32 @@ func printMetadataText(w io.Writer, value metadataEnvelope) error {
 }
 
 func printStatusText(w io.Writer, value statusEnvelope) error {
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", value.State, value.Summary); err != nil {
-		return err
+	return render.WriteStatus(w, renderStatus(value))
+}
+
+func renderStatus(value statusEnvelope) render.Status {
+	out := render.Status{
+		State:   render.StatusState(value.State),
+		Summary: value.Summary,
+		Log:     renderLogTail(value.LastRun, value.RecentError),
 	}
 	if value.Archive != nil {
-		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n  Last sync: %s\n  Messages: %d\n  Senders: %d\n  Since: %d\n",
-			value.Archive.ArchivePath, emptyDash(value.Archive.LastSyncAt), value.Archive.Messages, value.Archive.Senders, value.Archive.Since); err != nil {
-			return err
-		}
+		out.Sections = append(out.Sections, render.Section{
+			Title: "Local archive",
+			Fields: []render.Field{
+				{Label: "Database", Value: value.Archive.ArchivePath},
+				{Label: "Last sync", Value: value.Archive.LastSyncAt},
+				{Label: "Messages", Value: fmt.Sprint(value.Archive.Messages)},
+				{Label: "Senders", Value: fmt.Sprint(value.Archive.Senders)},
+				{Label: "Since", Value: fmt.Sprint(value.Archive.Since)},
+			},
+		})
 	}
-	if _, err := fmt.Fprintf(w, "\nAuth: %t\n", value.Auth.Authorized); err != nil {
-		return err
-	}
-	if err := printLogTailText(w, value.LastRun, value.RecentError); err != nil {
-		return err
-	}
-	return nil
+	out.Sections = append(out.Sections, render.Section{
+		Title:  "Auth",
+		Fields: []render.Field{{Label: "Authorised", Value: fmt.Sprint(value.Auth.Authorized)}},
+	})
+	return out
 }
 
 func printSearchText(w io.Writer, value archive.SearchResult) error {
@@ -120,56 +133,62 @@ func printOpenText(w io.Writer, value archive.OpenResult) error {
 }
 
 func printDoctorText(w io.Writer, value doctorOutput) error {
-	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
-		return err
-	}
-	for _, check := range value.Checks {
-		if _, err := fmt.Fprintf(w, "  %s: %s", check.ID, check.State); err != nil {
-			return err
-		}
-		if check.Message != "" {
-			if _, err := fmt.Fprintf(w, " - %s", check.Message); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
-		if check.Remedy != "" {
-			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
-				return err
-			}
-		}
-	}
-	return printLogTailText(w, value.LastRun, value.RecentError)
+	return render.WriteDoctor(w, renderDoctorChecks(value.Checks), renderLogTail(value.LastRun, value.RecentError))
 }
 
-func printLogTailText(w io.Writer, lastRun *logRunEnvelope, recentError *logErrorEnvelope) error {
-	if lastRun == nil && recentError == nil {
+func renderDoctorChecks(checks []doctorCheck) []render.Check {
+	out := make([]render.Check, 0, len(checks))
+	for _, check := range checks {
+		out = append(out, render.Check{
+			Name:    check.ID,
+			State:   render.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
+	}
+	return out
+}
+
+func renderLogTail(lastRun *logRunEnvelope, recentError *logErrorEnvelope) render.LogTail {
+	return render.LogTail{
+		LastRun:         renderRunSummary(lastRun),
+		MostRecentError: renderLogError(recentError),
+	}
+}
+
+func renderRunSummary(value *logRunEnvelope) *cklog.RunSummary {
+	if value == nil {
 		return nil
 	}
-	if _, err := io.WriteString(w, "\nLog tail:\n"); err != nil {
-		return err
+	return &cklog.RunSummary{
+		RunID:      value.RunID,
+		Command:    value.Command,
+		StartedAt:  parseLogRFC3339(value.StartedAt),
+		FinishedAt: parseLogRFC3339(value.FinishedAt),
+		Outcome:    value.Outcome,
+		LastEvent:  value.LastEvent,
 	}
-	if lastRun != nil {
-		if _, err := fmt.Fprintf(w, "  Last run: %s %s", lastRun.Command, lastRun.Outcome); err != nil {
-			return err
-		}
-		if lastRun.FinishedAt != "" {
-			if _, err := fmt.Fprintf(w, " at %s", lastRun.FinishedAt); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
+}
+
+func renderLogError(value *logErrorEnvelope) *cklog.Line {
+	if value == nil {
+		return nil
 	}
-	if recentError != nil {
-		if _, err := fmt.Fprintf(w, "  Recent error: %s %s\n", recentError.Event, recentError.Message); err != nil {
-			return err
-		}
+	return &cklog.Line{
+		RunID:     value.RunID,
+		Command:   value.Command,
+		Event:     value.Event,
+		Timestamp: parseLogRFC3339(value.Time),
+		Message:   value.Message,
 	}
-	return nil
+}
+
+func parseLogRFC3339(value string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func printContactsText(w io.Writer, value control.ContactExport) error {

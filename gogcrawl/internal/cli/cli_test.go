@@ -7,9 +7,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	_ "modernc.org/sqlite"
@@ -17,8 +19,16 @@ import (
 
 func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	fake := installFakeGog(t)
-	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
-	repoPath := filepath.Join(t.TempDir(), "backup")
+	workDir := filepath.Join("/private/tmp", "gogcrawl.test", strconv.Itoa(os.Getpid()))
+	if err := os.RemoveAll(workDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(workDir) })
+	dbPath := filepath.Join(workDir, "gogcrawl.db")
+	repoPath := filepath.Join(workDir, "backup")
 	var firstStderr bytes.Buffer
 	err := Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &firstStderr)
 	if err != nil {
@@ -89,6 +99,11 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	if statusOut.LastRun == nil || statusOut.LastRun.Command != "sync" || statusOut.LastRun.Outcome != "success" {
 		t.Fatalf("status log tail = %#v", statusOut.LastRun)
 	}
+	searchJSON := runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--json", "--archive", dbPath})
+	conformance.AssertSearchEnvelope(t, searchJSON)
+	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--archive", dbPath})))
+	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"status", "--archive", dbPath})))
+	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"doctor", "--archive", dbPath})))
 }
 
 func TestStatusMissingEmptyAndCorrupt(t *testing.T) {
@@ -299,14 +314,20 @@ func runStatus(t *testing.T, ctx context.Context, dbPath string) statusEnvelope 
 
 func runJSON(t *testing.T, ctx context.Context, args []string, out any) {
 	t.Helper()
+	data := runOutput(t, ctx, args)
+	if err := json.Unmarshal(data, out); err != nil {
+		t.Fatalf("decode JSON for %v: %v\n%s", args, err, string(data))
+	}
+}
+
+func runOutput(t *testing.T, ctx context.Context, args []string) []byte {
+	t.Helper()
 	ensureTestHome(t)
 	var stdout, stderr bytes.Buffer
 	if err := Run(ctx, args, &stdout, &stderr); err != nil {
 		t.Fatalf("Run(%v) failed: %v\nstdout=%s\nstderr=%s", args, err, stdout.String(), stderr.String())
 	}
-	if err := json.Unmarshal(stdout.Bytes(), out); err != nil {
-		t.Fatalf("decode JSON for %v: %v\n%s", args, err, stdout.String())
-	}
+	return append([]byte(nil), stdout.Bytes()...)
 }
 
 type fakeGogInstall struct {
