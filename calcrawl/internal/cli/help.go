@@ -13,7 +13,7 @@ Usage:
   calcrawl metadata [--json]
   calcrawl status [--json]
   calcrawl sync [--json]
-  calcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl search QUERY [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
   calcrawl open REF [--json]
   calcrawl doctor [--json]
   calcrawl contacts export [--json]
@@ -53,11 +53,12 @@ Refresh the local calendar archive from Calendar.app's SQLite store.
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  calcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl search QUERY [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
 
 Search archived calendar events.
 
 Flags:
+  --who NAME    Filter to events where the organizer or an attendee has that display name.
   --limit N      Maximum results. Default: 20. Maximum: 200.
   --after DATE   Include events at or after DATE.
   --before DATE  Include events at or before DATE.
@@ -66,7 +67,7 @@ Flags:
 		_, _ = fmt.Fprint(w, `Usage:
   calcrawl open REF [--json]
 
-Open one archived event ref returned by search.
+Open one archived event ref or short alias returned by search text.
 `)
 	case "doctor":
 		_, _ = fmt.Fprint(w, `Usage:

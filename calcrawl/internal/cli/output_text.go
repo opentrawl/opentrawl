@@ -49,13 +49,16 @@ func printStatusText(w io.Writer, value statusText) error {
 	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", value.State, value.Summary); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n", value.DatabasePath); err != nil {
-		return err
-	}
 	if value.Archive != nil {
+		if _, err := fmt.Fprintf(w, "\nLocal archive:\n  Database: %s\n", value.Archive.ArchivePath); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(w, "  Last sync: %s\n  Calendars: %d\n  Events: %d\n", emptyDash(value.LastSyncAt), value.Archive.Calendars, value.Archive.Events); err != nil {
 			return err
 		}
+	}
+	if err := printLogTailText(w, value.Log); err != nil {
+		return err
 	}
 	return printMessages(w, "Errors", value.Errors)
 }
@@ -78,12 +81,21 @@ func printDoctorText(w io.Writer, value doctorOutput) error {
 			}
 		}
 	}
-	return nil
+	return printLogTailText(w, value.Log)
 }
 
 func printSearchText(w io.Writer, value searchOutput) error {
-	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, len(value.Results), value.TotalMatches); err != nil {
+	label := fmt.Sprintf("Search %q", value.Query)
+	if value.Who != "" {
+		label += fmt.Sprintf(" with %q", value.Who)
+	}
+	if _, err := fmt.Fprintf(w, "%s: showing %d of %d.\n", label, len(value.Results), value.TotalMatches); err != nil {
 		return err
+	}
+	if len(value.WhoMatched) > 0 {
+		if _, err := fmt.Fprintf(w, "Who matched: %s.\n", strings.Join(value.WhoMatched, ", ")); err != nil {
+			return err
+		}
 	}
 	if value.Truncated {
 		if _, err := io.WriteString(w, "More: narrow with --after, --before or --limit.\n"); err != nil {
@@ -99,7 +111,11 @@ func printSearchText(w io.Writer, value searchOutput) error {
 		return err
 	}
 	for _, result := range value.Results {
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", result.Time, result.Who, result.Where, result.Snippet, result.Ref); err != nil {
+		ref := result.ShortRef
+		if ref == "" {
+			ref = result.Ref
+		}
+		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", result.Time, result.Who, result.Where, result.Snippet, ref); err != nil {
 			return err
 		}
 	}
@@ -157,6 +173,34 @@ func printContactsText(w io.Writer, value control.ContactExport) error {
 		}
 	}
 	return nil
+}
+
+func printLogTailText(w io.Writer, value logTailOutput) error {
+	if value.LastRun == nil && value.MostRecentError == nil && len(value.Errors) == 0 {
+		return nil
+	}
+	if _, err := io.WriteString(w, "\nRecent log:\n"); err != nil {
+		return err
+	}
+	if value.LastRun != nil {
+		if _, err := fmt.Fprintf(w, "  Last run: %s %s", value.LastRun.Command, value.LastRun.Outcome); err != nil {
+			return err
+		}
+		if value.LastRun.FinishedAt != "" {
+			if _, err := fmt.Fprintf(w, " at %s", value.LastRun.FinishedAt); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w, "\n"); err != nil {
+			return err
+		}
+	}
+	if value.MostRecentError != nil {
+		if _, err := fmt.Fprintf(w, "  Most recent error: %s %s: %s\n", value.MostRecentError.Command, value.MostRecentError.Event, value.MostRecentError.Message); err != nil {
+			return err
+		}
+	}
+	return printMessages(w, "Log errors", value.Errors)
 }
 
 func printMessages(w io.Writer, title string, values []string) error {

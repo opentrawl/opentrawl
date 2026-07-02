@@ -11,6 +11,7 @@ const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl i
 
 type doctorOutput struct {
 	Checks []doctorCheck `json:"checks"`
+	Log    logTailOutput `json:"-"`
 }
 
 type doctorCheck struct {
@@ -35,7 +36,7 @@ func (r *runtime) runDoctor(args []string) error {
 		r.checkSourceStore(),
 		r.checkArchivePresent(),
 		r.checkArchiveSchema(),
-	}})
+	}, Log: r.logTail()})
 }
 
 func (r *runtime) checkSourceStore() doctorCheck {

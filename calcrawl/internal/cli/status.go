@@ -12,8 +12,21 @@ import (
 const staleAfter = 24 * time.Hour
 
 type statusText struct {
-	control.Status
-	Archive *archive.Status `json:"archive,omitempty"`
+	SchemaVersion string           `json:"schema_version"`
+	AppID         string           `json:"app_id"`
+	GeneratedAt   string           `json:"generated_at"`
+	State         string           `json:"state"`
+	Summary       string           `json:"summary"`
+	LastSyncAt    string           `json:"last_sync_at,omitempty"`
+	Counts        []control.Count  `json:"counts,omitempty"`
+	Freshness     *statusFreshness `json:"freshness,omitempty"`
+	Errors        []string         `json:"errors,omitempty"`
+	Archive       *archive.Status  `json:"-"`
+	Log           logTailOutput    `json:"-"`
+}
+
+type statusFreshness struct {
+	LastSync string `json:"last_sync"`
 }
 
 func (r *runtime) runStatus(args []string) error {
@@ -32,11 +45,9 @@ func (r *runtime) runStatus(args []string) error {
 
 func (r *runtime) status() statusText {
 	archivePath := archive.DefaultPath()
-	sourcePath := calendarstore.DefaultPath()
-	out := statusText{Status: control.NewStatus(archive.AppID, "Archive has not been synced.")}
+	out := newStatusText("Archive has not been synced.")
 	out.State = "missing"
-	out.DatabasePath = archivePath
-	out.Databases = statusDatabases(sourcePath, archivePath, nil)
+	out.Log = r.logTail()
 	if !archive.Exists(archivePath) {
 		return out
 	}
@@ -56,10 +67,8 @@ func (r *runtime) status() statusText {
 		return out
 	}
 	out.Archive = &status
-	out.DatabaseBytes = status.ArchiveBytes
 	out.LastSyncAt = localRFC3339(status.LastSyncAt)
 	out.Counts = statusCounts(status)
-	out.Databases = statusDatabases(sourcePath, archivePath, out.Counts)
 	out.Freshness = freshness(status.LastSyncAt)
 	switch {
 	case status.Events == 0:
@@ -75,18 +84,22 @@ func (r *runtime) status() statusText {
 	return out
 }
 
+func newStatusText(summary string) statusText {
+	status := control.NewStatus(archive.AppID, summary)
+	return statusText{
+		SchemaVersion: status.SchemaVersion,
+		AppID:         status.AppID,
+		GeneratedAt:   status.GeneratedAt,
+		State:         status.State,
+		Summary:       status.Summary,
+	}
+}
+
 func statusCounts(status archive.Status) []control.Count {
 	return []control.Count{
 		control.NewCount("events", "events", status.Events),
 		control.NewCount("calendars", "calendars", status.Calendars),
 		control.NewCount("since", "since", archive.YearFromUnix(status.EarliestUnix)),
-	}
-}
-
-func statusDatabases(sourcePath, archivePath string, counts []control.Count) []control.Database {
-	return []control.Database{
-		control.SQLiteDatabase("source", "Calendar.app store", "source", sourcePath, true, nil),
-		control.SQLiteDatabase("archive", "Calendar archive", "archive", archivePath, false, counts),
 	}
 }
 
@@ -106,7 +119,7 @@ func isStale(status archive.Status) bool {
 	return sourceModified.UTC().After(syncedSource.Add(time.Second))
 }
 
-func freshness(value string) *control.Freshness {
+func freshness(value string) *statusFreshness {
 	if value == "" {
 		return nil
 	}
@@ -114,15 +127,7 @@ func freshness(value string) *control.Freshness {
 	if err != nil {
 		return nil
 	}
-	state := "fresh"
-	if time.Since(t) > staleAfter {
-		state = "stale"
-	}
-	return &control.Freshness{
-		Status:            state,
-		AgeSeconds:        int64(time.Since(t).Seconds()),
-		StaleAfterSeconds: int64(staleAfter.Seconds()),
-	}
+	return &statusFreshness{LastSync: t.Local().Format(time.RFC3339)}
 }
 
 func localRFC3339(value string) string {

@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit/control"
+	crawlog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
@@ -56,27 +57,38 @@ type runtime struct {
 	stdout io.Writer
 	stderr io.Writer
 	json   bool
+	log    *crawlog.Run
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	jsonOut, args := pullJSONFlag(args)
+	run, err := newLogRun(args, jsonOut, stderr)
+	if err != nil {
+		return err
+	}
+	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, log: run}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		printUsage(stdout)
-		return nil
+		return r.finish(nil)
 	}
 	if args[0] == "help" {
 		if len(args) == 1 {
 			printUsage(stdout)
-			return nil
+			return r.finish(nil)
 		}
-		return printCommandUsage(stdout, args[1:])
+		return r.finish(printCommandUsage(stdout, args[1:]))
 	}
 	if args[0] == "--version" || args[0] == "version" {
 		_, _ = io.WriteString(stdout, version+"\n")
-		return nil
+		return r.finish(nil)
 	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut}
-	err := r.dispatch(args)
+	err = r.dispatch(args)
+	if finishErr := r.finish(err); finishErr != nil {
+		if err == nil {
+			return finishErr
+		}
+		err = errors.Join(err, finishErr)
+	}
 	if err == nil || !jsonOut {
 		return err
 	}
@@ -84,6 +96,52 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return writeErr
 	}
 	return printedError{err: err, code: ExitCode(err)}
+}
+
+func newLogRun(args []string, jsonOut bool, stderr io.Writer) (*crawlog.Run, error) {
+	return crawlog.NewRun(crawlog.Options{
+		StateRoot:    defaultBaseDir(),
+		CrawlerID:    archive.AppID,
+		Command:      logCommand(args),
+		Version:      version,
+		JSONProgress: jsonOut,
+		Stderr:       stderr,
+	})
+}
+
+func logCommand(args []string) string {
+	if len(args) == 0 {
+		return "help"
+	}
+	command := strings.TrimSpace(args[0])
+	switch command {
+	case "-h", "--help", "help":
+		return "help"
+	case "--version":
+		return "version"
+	case "contacts":
+		if len(args) > 1 && strings.TrimSpace(args[1]) != "" && !strings.HasPrefix(args[1], "-") {
+			return "contacts_" + strings.TrimSpace(args[1])
+		}
+	}
+	command = strings.TrimLeft(command, "-")
+	command = strings.ReplaceAll(command, "-", "_")
+	if command == "" {
+		return "help"
+	}
+	return command
+}
+
+func (r *runtime) finish(err error) error {
+	if err != nil {
+		if logErr := r.log.Error(errorEvent(err), err); logErr != nil {
+			err = errors.Join(err, logErr)
+		}
+	}
+	if logErr := r.log.Finish(err); logErr != nil {
+		return logErr
+	}
+	return nil
 }
 
 func pullJSONFlag(args []string) (bool, []string) {
@@ -174,6 +232,9 @@ func (r *runtime) printJSONError(err error) error {
 		out.Error.Code = codeErr.kind
 		out.Error.Message = codeErr.err.Error()
 		out.Error.Remedy = codeErr.remedy
+		if out.Error.Remedy == "" {
+			out.Error.Remedy = worldRemedy(codeErr.err)
+		}
 	} else {
 		out.Error.Code = "command_failed"
 		out.Error.Message = err.Error()
@@ -189,11 +250,38 @@ func usageErr(err error) error {
 }
 
 func archiveErr(err error) error {
-	return &cliError{code: 1, err: err, kind: "archive", remedy: "run: calcrawl sync"}
+	return commandErr(1, "archive", err, "run: calcrawl sync")
 }
 
 func sourceErr(err error) error {
-	return &cliError{code: 1, err: err, kind: "source_store", remedy: fullDiskAccessRemedy}
+	return commandErr(1, "source_store", err, fullDiskAccessRemedy)
+}
+
+func commandErr(code int, kind string, err error, remedy string) error {
+	if strings.TrimSpace(remedy) != "" {
+		err = crawlog.WorldMustChange{Err: err, Message: err.Error(), Remedy: remedy}
+	}
+	return &cliError{code: code, err: err, kind: kind, remedy: remedy}
+}
+
+func worldRemedy(err error) string {
+	var world crawlog.WorldMustChange
+	if errors.As(err, &world) {
+		return strings.TrimSpace(world.Remedy)
+	}
+	var worldPtr *crawlog.WorldMustChange
+	if errors.As(err, &worldPtr) && worldPtr != nil {
+		return strings.TrimSpace(worldPtr.Remedy)
+	}
+	return ""
+}
+
+func errorEvent(err error) string {
+	var codeErr *cliError
+	if errors.As(err, &codeErr) && strings.TrimSpace(codeErr.kind) != "" {
+		return codeErr.kind
+	}
+	return "command_failed"
 }
 
 type errorOutput struct {

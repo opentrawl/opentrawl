@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/crawlkit/store"
 )
@@ -52,7 +53,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	st, err := store.Open(ctx, store.Options{
 		Path:          path,
-		Schema:        schema,
+		Schema:        schema + shortref.Schema,
 		SchemaVersion: SchemaVersion,
 	})
 	if err != nil {
@@ -86,6 +87,28 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
 	}
 	return &Store{store: st, path: path}, nil
+}
+
+func OpenExistingWritable(ctx context.Context, path string) (*Store, error) {
+	if path == "" {
+		path = DefaultPath()
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	check, err := store.OpenReadOnly(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	version, err := check.SchemaVersion(ctx)
+	_ = check.Close()
+	if err != nil {
+		return nil, err
+	}
+	if version != SchemaVersion {
+		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
+	}
+	return Open(ctx, path)
 }
 
 func (s *Store) Close() error {

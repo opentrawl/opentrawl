@@ -6,8 +6,8 @@ written_by: ai
 
 `calcrawl` is a local-first Apple Calendar crawler. It snapshots the local
 Calendar.app SQLite store, imports events into a private SQLite archive, and
-serves the OpenTrawl control contract for status, sync, search, open, doctor
-and contacts export.
+serves the OpenTrawl control contract for status, sync, search, open, doctor,
+contacts export, `--who` filtering and short refs.
 
 It does not use Google APIs, CalDAV, EventKit or helper CLIs. It does not shell
 out. It does not use the network.
@@ -36,12 +36,21 @@ The archive lives at:
 ~/.calcrawl/calcrawl.db
 ```
 
-It stores calendars, account/store provenance, events, start and end times,
-all-day dates, summaries, descriptions, locations, organisers, attendees, RSVP
-status, URLs and the recurrence flag.
+Logs live under:
+
+```text
+~/.calcrawl/calcrawl/logs/current.log
+```
+
+The archive stores calendars, account/store provenance, events, start and end
+times, all-day midnight timestamps, summaries, descriptions, locations,
+organisers, attendees, RSVP status, URLs and the recurrence flag.
 
 The search index covers event summaries, descriptions, location title/address
 and participant names/emails.
+
+The short-ref index is derived from canonical event refs and can be rebuilt at
+any time.
 
 ## Commands
 
@@ -50,6 +59,8 @@ calcrawl doctor
 calcrawl sync
 calcrawl status
 calcrawl search "planning"
+calcrawl search "planning" --who "Alice Example"
+calcrawl open t7k3f
 calcrawl open calcrawl:event/11111111-1111-1111-1111-111111111111
 calcrawl contacts export
 ```
@@ -64,8 +75,8 @@ search query.
   "schema_version": "crawlkit.control.v1",
   "contract_version": 1,
   "id": "calcrawl",
-  "display_name": "Calendar Crawl",
-  "capabilities": ["metadata", "status", "sync", "search", "open", "doctor", "contacts_export"]
+  "display_name": "Calendar",
+  "capabilities": ["metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "who", "short_refs"]
 }
 ```
 
@@ -76,6 +87,7 @@ search query.
   "app_id": "calcrawl",
   "state": "ok",
   "summary": "Archive is fresh.",
+  "freshness": {"last_sync": "2026-07-02T14:03:11+02:00"},
   "counts": [
     {"id": "events", "label": "events", "value": 1200},
     {"id": "calendars", "label": "calendars", "value": 12},
@@ -93,7 +105,7 @@ one day, and `ok` when the archive is current.
 JSON sync output is JSONL:
 
 ```jsonl
-{"event":"progress","stage":"source","done":1200,"total":1200}
+{"type":"progress","run_id":"019f23a1","command":"sync","event":"source_progress","message":"read Calendar source","done":1200,"unit":"events"}
 {"event":"complete","state":"ok","calendars":12,"events":1200,"new_events":4,"changed_events":2,"unchanged_events":1194,"deleted_events":0}
 ```
 
@@ -123,9 +135,22 @@ Search returns 20 rows by default and never more than 200:
 
 Use `--limit`, `--after` and `--before` to narrow results.
 
+Use `--who` to filter to events where the organiser or an attendee matches that
+identity. Matching checks stored display names, email addresses, phone numbers
+and source addresses. It is Unicode case-insensitive and exact after whitespace
+collapse. If the supplied identity matches more than one stored participant,
+JSON includes `who_matched`.
+
+Search text prints short refs when the alias index is available. Search JSON
+keeps `ref` as the full canonical ref.
+
 ### open
 
-`open` takes a ref returned by `search` and returns one bounded event object:
+`open` takes a full ref or short alias returned by search text. It never guesses:
+unknown aliases return `unknown_short_ref`, and ambiguous aliases return
+`ambiguous_short_ref`.
+
+`open` returns one bounded event object:
 
 ```json
 {
@@ -134,16 +159,18 @@ Use `--limit`, `--after` and `--before` to narrow results.
   "title": "Planning meeting",
   "start": "2026-03-04T10:00:00+01:00",
   "end": "2026-03-04T10:30:00+01:00",
-  "calendar": {"id": "10", "title": "Work", "type": 1, "external_id": "work-calendar"},
-  "account": {"name": "iCloud", "type": 1},
+  "calendar": "Work",
+  "account": "iCloud",
   "location": {"title": "Room 1", "address": "1 Example Street"},
   "attendees": [{"display_name": "Alice Example", "email": "alice@example.com", "rsvp_status": "accepted"}],
+  "status": "confirmed",
   "url": "https://example.com/event",
   "has_recurrences": true
 }
 ```
 
-All-day events render start and end as dates, for example `2026-05-05`.
+All-day events render start and end as RFC 3339 local-midnight timestamps, for
+example `2026-05-05T00:00:00+02:00`.
 
 ### doctor
 
@@ -152,6 +179,9 @@ All-day events render start and end as dates, for example `2026-05-05`.
 - source store readable
 - archive present
 - archive schema current
+
+Text output includes the last logged run and the most recent logged error when
+the log exists.
 
 If the Calendar store cannot be read, the remedy is to grant Full Disk Access to
 your terminal or Trawl in System Settings > Privacy and Security > Full Disk
@@ -175,8 +205,9 @@ contract exports only identities with phone numbers:
 All reads and writes are local. `calcrawl` does not send calendar content,
 metadata, contacts, paths or counts to any service.
 
-Read commands open the archive read-only. If the archive is missing, they return
-the missing state or a sync remedy and do not create files.
+Read commands do not sync or change source content. They may refresh derived
+caches such as the short-ref index. If the archive is missing, they return the
+missing state or a sync remedy and do not create the archive.
 
 Tests and public examples use synthetic data only.
 
@@ -188,4 +219,3 @@ Tests and public examples use synthetic data only.
   calendars are archived with the rest of the source.
 - Contact export is limited by the current crawlkit shape, so attendee emails
   without phone numbers are searchable but not exported as contacts.
-

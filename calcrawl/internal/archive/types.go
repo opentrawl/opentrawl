@@ -45,6 +45,13 @@ type Attendee struct {
 	Comment     string `json:"comment,omitempty"`
 }
 
+type WhoMatch struct {
+	DisplayName string
+	Email       string
+	PhoneNumber string
+	Address     string
+}
+
 type Location struct {
 	Title   string `json:"title,omitempty"`
 	Address string `json:"address,omitempty"`
@@ -112,11 +119,12 @@ type Status struct {
 }
 
 type SearchResult struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who,omitempty"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
+	Ref      string `json:"ref"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where"`
+	Snippet  string `json:"snippet"`
+	ShortRef string `json:"-"`
 }
 
 type EventDetail struct {

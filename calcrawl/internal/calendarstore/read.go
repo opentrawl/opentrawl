@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"math"
 	"os"
 	"strings"
@@ -266,7 +265,8 @@ func convertTime(coreDataSeconds float64, zoneName string, allDay bool) EventTim
 	seconds, fraction := math.Modf(coreDataSeconds + coreDataUnixOffset)
 	t := time.Unix(int64(seconds), int64(fraction*1e9)).In(location)
 	if allDay {
-		return EventTime{Value: t.Format("2006-01-02"), Unix: t.Unix()}
+		localMidnight := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, location)
+		return EventTime{Value: localMidnight.Format(time.RFC3339), Unix: localMidnight.Unix()}
 	}
 	return EventTime{Value: t.Format(time.RFC3339), Unix: t.Unix()}
 }
@@ -302,6 +302,8 @@ func firstNonEmpty(values ...string) string {
 
 func eventStatus(value int64) string {
 	switch value {
+	case 0:
+		return "confirmed"
 	case 1:
 		return "confirmed"
 	case 2:
@@ -309,7 +311,7 @@ func eventStatus(value int64) string {
 	case 3:
 		return "cancelled"
 	default:
-		return fmt.Sprintf("status_%d", value)
+		return "confirmed"
 	}
 }
 

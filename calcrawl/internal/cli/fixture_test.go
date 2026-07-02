@@ -90,11 +90,11 @@ func insertBaseCalendarRows(t *testing.T, db *sql.DB) {
 		description: "Subscribed holiday.",
 		start:       time.Date(2026, 5, 5, 0, 0, 0, 0, time.UTC),
 		end:         time.Date(2026, 5, 6, 0, 0, 0, 0, time.UTC),
-		startTZ:     "UTC",
-		endTZ:       "UTC",
+		startTZ:     "Europe/Amsterdam",
+		endTZ:       "Europe/Amsterdam",
 		allDay:      true,
 		calendarID:  11,
-		status:      1,
+		status:      0,
 		locationID:  901,
 	})
 	insertEvent(t, db, eventFixture{

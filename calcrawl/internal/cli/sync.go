@@ -7,16 +7,10 @@ import (
 	"strings"
 	"time"
 
+	crawlog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/calendarstore"
 )
-
-type progressEvent struct {
-	Event string `json:"event"`
-	Stage string `json:"stage"`
-	Done  int    `json:"done"`
-	Total int    `json:"total"`
-}
 
 type syncCompleteEvent struct {
 	Event            string `json:"event"`
@@ -44,11 +38,20 @@ func (r *runtime) runSync(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("sync takes no arguments"))
 	}
-	data, err := calendarstore.Read(r.ctx, calendarstore.DefaultPath())
+	sourceProgress := r.log.Progress(crawlog.ProgressOptions{Event: "source_progress", Unit: "events"})
+	if err := sourceProgress.Report(0, "reading Calendar source"); err != nil {
+		return err
+	}
+	var data calendarstore.Data
+	err = withHeartbeat(r.ctx, sourceProgress, 0, "reading Calendar source", func() error {
+		var readErr error
+		data, readErr = calendarstore.Read(r.ctx, calendarstore.DefaultPath())
+		return readErr
+	})
 	if err != nil {
 		return sourceErr(fmt.Errorf("read Calendar source: %w", err))
 	}
-	if err := r.progress("source", len(data.Events), len(data.Events)); err != nil {
+	if err := sourceProgress.Report(int64(len(data.Events)), "read Calendar source"); err != nil {
 		return err
 	}
 	st, err := archive.Open(r.ctx, archive.DefaultPath())
@@ -56,10 +59,23 @@ func (r *runtime) runSync(args []string) error {
 		return err
 	}
 	defer func() { _ = st.Close() }()
-	stats, err := st.ApplySnapshot(r.ctx, archiveCalendars(data.Calendars), archiveEvents(data.Events), archive.NewRunID(), time.Now(), data.SourcePath, data.SourceModifiedAt)
+	archiveProgress := r.log.Progress(crawlog.ProgressOptions{Event: "archive_progress", Unit: "events", Total: int64(len(data.Events))})
+	if err := archiveProgress.Report(0, "writing archive"); err != nil {
+		return err
+	}
+	var stats archive.SyncStats
+	err = withHeartbeat(r.ctx, archiveProgress, int64(len(data.Events)), "writing archive", func() error {
+		var applyErr error
+		stats, applyErr = st.ApplySnapshot(r.ctx, archiveCalendars(data.Calendars), archiveEvents(data.Events), archive.NewRunID(), time.Now(), data.SourcePath, data.SourceModifiedAt)
+		return applyErr
+	})
 	if err != nil {
 		return err
 	}
+	if err := archiveProgress.Report(int64(len(data.Events)), "wrote archive"); err != nil {
+		return err
+	}
+	_ = r.log.Info("sync_complete", fmt.Sprintf("calendars=%d events=%d new=%d changed=%d deleted=%d", stats.Calendars, stats.Events, stats.NewEvents, stats.ChangedEvents, stats.DeletedEvents))
 	return r.syncComplete(syncCompleteEvent{
 		Event:            "complete",
 		State:            "ok",
@@ -74,15 +90,6 @@ func (r *runtime) runSync(args []string) error {
 		SourceModifiedAt: stats.SourceModifiedAt,
 		Archive:          stats.ArchivePath,
 	})
-}
-
-func (r *runtime) progress(stage string, done, total int) error {
-	event := progressEvent{Event: "progress", Stage: stage, Done: done, Total: total}
-	if r.json {
-		return r.printJSONLine(event)
-	}
-	_, err := fmt.Fprintf(r.stderr, "%s: %d/%d\n", stage, done, total)
-	return err
 }
 
 func (r *runtime) syncComplete(event syncCompleteEvent) error {
