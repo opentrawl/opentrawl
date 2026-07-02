@@ -42,17 +42,18 @@ Sync must feel alive: first progress line immediately, then steady
 heartbeats; a long opaque stage (a backup fetch) heartbeats with
 elapsed time. Progress goes to stderr live and to the log.
 
-## The two commands
+## The operator surface
 
-`trawl status <source>` and `trawl doctor` read the recent log tail:
-last run, outcome, most recent error with remedy. Operating the suite
-starts and usually ends there.
+No new commands. `trawl status <source>` and `trawl doctor` read the
+recent log tail: last run, outcome, most recent error with remedy.
+Operating the suite starts and usually ends there.
 
-`trawl report <source>` produces the dispatchable bundle: versions,
-doctor output, status, and the recent log tail — content-safe (log
-lines never contain message bodies, subjects, contacts or secrets),
-so the bundle is shareable with a maintainer as-is. Where it gets
-sent is out of scope here; producing it is the contract.
+The dispatchable error report is prepared for, not built: because log
+lines are content-safe by construction (never bodies, subjects,
+contacts or secrets) and status and doctor already expose versions
+and outcomes, a future report bundle is an afternoon of assembly the
+day real pain justifies it — not a design problem, and not a verb
+today.
 
 ## Out of scope, deliberately
 
@@ -66,4 +67,4 @@ readable log with a remedy, and one command packages the evidence.
 - sync emits progress immediately and heartbeats through long stages
 - log lines match the stable shape and never contain content or secrets
 - rotation holds the size bound
-- trawl report bundles versions, doctor, status and log tail
+- status and doctor surface the most recent error and remedy
