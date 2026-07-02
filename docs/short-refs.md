@@ -55,6 +55,13 @@ refs, which extend to 6 characters (887 million); at millions of
 items the default simply starts at 6. Ambiguity is always detected at
 resolution time and always fails safely.
 
+To be explicit: the display length is dynamic, never a constant.
+When a crawler builds its alias index it knows exactly how many items
+it holds and picks the smallest length whose collision rate is
+negligible for that count — today that means 5 for the small archives
+and 6 for the large ones, and nobody ever configures it. The numbers
+above are the arithmetic behind that choice, not settings.
+
 Each crawler owns the archive and canonical refs. It may keep a derived alias
 index beside its search index for speed. That index is a cache, not state. It
 can be rebuilt, deleted, or healed on read under the same rules as other
@@ -91,6 +98,12 @@ For `trawl open t7k3f`:
 5. Call that source's normal `open` with the full ref.
 6. Render the normal open result.
 
+Resolution is one indexed lookup, not a scan: crawlkit ships the
+alias index (alias to full ref, computed at sync alongside the FTS
+index) so every crawler gets fast resolution for free. The index is
+derived data under the usual rules — rebuildable, self-healing, never
+a source of truth.
+
 Resolution is read-only. A crawler may refresh a derived alias index while it
 resolves, but it must not sync, import, or mutate source content.
 
@@ -99,7 +112,13 @@ resolves, but it must not sync, import, or mutate source content.
 Collisions may exist. They must never resolve silently.
 
 Search display should prefer the shortest safe alias. If 5 characters collide,
-show 6. If 6 still collides, show the full ref for those rows.
+show 6 — and this is precomputed, not runtime guessing. The crawler
+holds the full corpus, so when it builds the alias index it detects
+every colliding prefix with plain set arithmetic and stores each
+item's shortest unambiguous form. Display reads the answer; nothing
+is discovered at render time. Collisions only need handling at
+resolution when an alias from an older, smaller corpus has since
+become ambiguous — and that fails safely rather than picking.
 
 `trawl open t7k3f` has 3 outcomes:
 
@@ -143,7 +162,10 @@ should use the normal error shape, with codes such as `unknown_short_ref` and
 ## Contract impact
 
 Contract v1 full refs remain valid and authoritative. Add a v1.1 capability,
-`short_refs`, for crawlers that can resolve aliases. The capability means:
+`short_refs`, for crawlers that can resolve aliases. Since the suite
+is pre-1.0 with no external consumers, this can land as a breaking
+change wherever that is simpler — contract versioning is for our own
+coherence, not for compatibility theatre. The capability means:
 
 - the crawler can resolve a short alias to zero, one, or many full refs
 - the crawler can return the shortest safe alias for a known full ref
