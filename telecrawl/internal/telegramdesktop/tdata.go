@@ -158,6 +158,7 @@ func (s *tdataImportSession) importAccount(ctx context.Context) (ImportResult, e
 		}
 		return result.Messages[i].Timestamp.Before(result.Messages[j].Timestamp)
 	})
+	result.Participants = groupParticipantsFromMessages(result.Chats, result.Contacts, result.Messages)
 	result.Stats = store.ImportStats{
 		MediaMessages:          countTDataMediaMessages(result.Messages),
 		RemoteMediaCandidates:  s.remoteMedia.Candidates,

@@ -51,6 +51,50 @@ func TestStoreImportResultUpsertsReturnedAccountScopedChats(t *testing.T) {
 	}
 }
 
+func TestStoreImportResultPersistsGroupParticipants(t *testing.T) {
+	ctx := context.Background()
+	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Unix(1_800_000_000, 0).UTC()
+	result := telegramdesktop.ImportResult{
+		Stats: store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		Contacts: []store.Contact{
+			{JID: "600", FullName: "Group Member", FirstName: "Group"},
+			{JID: "700", FullName: "Other Sender", FirstName: "Other"},
+		},
+		Chats: []store.Chat{{JID: "500", Kind: "group", Name: "team room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		Participants: []store.GroupParticipant{
+			{GroupJID: "500", UserJID: "600", ContactName: "Group Member", FirstName: "Group", IsActive: true},
+		},
+		Messages: []store.Message{
+			{SourcePK: 1, ChatJID: "500", ChatName: "team room", MessageID: "1", SenderJID: "700", SenderName: "Other Sender", Timestamp: now, Text: "member needle from other"},
+			{SourcePK: 2, ChatJID: "500", ChatName: "team room", MessageID: "2", SenderJID: "600", SenderName: "Group Member", Timestamp: now.Add(time.Minute), Text: "member needle from group member"},
+		},
+	}
+	if err := storeImportResult(ctx, st, &result, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := st.ExportAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(exported.Participants) != 1 || exported.Participants[0].GroupJID != "500" || exported.Participants[0].UserJID != "600" {
+		t.Fatalf("participants = %#v, want persisted group member", exported.Participants)
+	}
+	messages, err := st.Search(ctx, store.MessageFilter{Query: "needle", Who: "Group Member", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 {
+		t.Fatalf("search --who group member = %d messages, want 2", len(messages))
+	}
+}
+
 func TestImportResultForChatFiltersContacts(t *testing.T) {
 	result := accountScopedImportResult("filtered")
 	partial := importResultForChat(result, "111")
@@ -110,7 +154,7 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 	addContact(store.Contact{JID: "short-phone-person", Phone: "12345", FullName: "Short Phone Person"}, true)
 	addContact(store.Contact{JID: "telegram-service", Phone: "42777", FullName: "Telegram", FirstName: "Telegram"}, true)
 	addContact(store.Contact{JID: "stale-peer", Phone: "+15559990007", FullName: "Stale Peer"}, false)
-	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, nil, nil, nil, nil, messages); err != nil {
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, nil, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
@@ -236,6 +280,9 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	}
 	if !slices.Contains(manifest.Capabilities, "open") {
 		t.Fatalf("capabilities = %#v, want open", manifest.Capabilities)
+	}
+	if !slices.Contains(manifest.Capabilities, "who") {
+		t.Fatalf("capabilities = %#v, want who", manifest.Capabilities)
 	}
 }
 

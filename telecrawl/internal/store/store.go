@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -112,6 +113,11 @@ type Contact struct {
 	UpdatedAt    time.Time `json:"updated_at,omitzero"`
 }
 
+type ParticipantMatch struct {
+	JID         string
+	DisplayName string
+}
+
 type Group struct {
 	JID       string    `json:"jid"`
 	Name      string    `json:"name,omitempty"`
@@ -169,6 +175,7 @@ type MessageFilter struct {
 	ChatJID  string
 	Sender   string
 	TopicID  string
+	Who      string
 	Limit    int
 	After    *time.Time
 	Before   *time.Time
@@ -176,6 +183,9 @@ type MessageFilter struct {
 	HasMedia bool
 	Pinned   bool
 	Asc      bool
+
+	WhoParticipants []ParticipantMatch
+	WhoResolved     bool
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -218,7 +228,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 func (s *Store) Path() string { return s.path }
 
-func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, messages []Message) error {
+func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -237,6 +247,7 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 		{"delete from messages_fts where rowid in (select rowid from messages where chat_jid = ?)", []any{chatJID}},
 		{"delete from messages where chat_jid = ?", []any{chatJID}},
 		{"delete from topics where chat_jid = ?", []any{chatJID}},
+		{"delete from group_participants where group_jid = ?", []any{chatJID}},
 		{"delete from chats where id = ?", []any{chatID}},
 	} {
 		if _, err := tx.ExecContext(ctx, q.sql, q.args...); err != nil {
@@ -278,6 +289,9 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 			return err
 		}
 	}
+	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
+		return err
+	}
 	if err := insertMessages(ctx, tx, messages); err != nil {
 		return err
 	}
@@ -293,7 +307,7 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 	return tx.Commit()
 }
 
-func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, messages []Message) error {
+func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -331,6 +345,9 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 			return err
 		}
 	}
+	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
+		return err
+	}
 	if err := insertMessages(ctx, tx, messages); err != nil {
 		return err
 	}
@@ -357,6 +374,53 @@ func insertContacts(ctx context.Context, tx *sql.Tx, contacts []Contact) error {
 		}
 	}
 	return nil
+}
+
+func insertGroupParticipants(ctx context.Context, tx *sql.Tx, participants []GroupParticipant) error {
+	for _, p := range mergeGroupParticipants(participants) {
+		if _, err := tx.ExecContext(ctx, `insert into group_participants(group_jid,user_jid,contact_name,first_name,is_admin,is_active) values(?,?,?,?,?,?) on conflict(group_jid,user_jid) do update set contact_name=excluded.contact_name, first_name=excluded.first_name, is_admin=excluded.is_admin, is_active=excluded.is_active`,
+			p.GroupJID, p.UserJID, p.ContactName, p.FirstName, boolInt(p.IsAdmin), boolInt(p.IsActive)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func mergeGroupParticipants(participants []GroupParticipant) []GroupParticipant {
+	byKey := map[string]GroupParticipant{}
+	for _, p := range participants {
+		p.GroupJID = strings.TrimSpace(p.GroupJID)
+		p.UserJID = strings.TrimSpace(p.UserJID)
+		p.ContactName = strings.Join(strings.Fields(p.ContactName), " ")
+		p.FirstName = strings.Join(strings.Fields(p.FirstName), " ")
+		if p.GroupJID == "" || p.UserJID == "" {
+			continue
+		}
+		key := p.GroupJID + "\x00" + p.UserJID
+		existing := byKey[key]
+		if existing.ContactName == "" {
+			existing.ContactName = p.ContactName
+		}
+		if existing.FirstName == "" {
+			existing.FirstName = p.FirstName
+		}
+		existing.GroupJID = p.GroupJID
+		existing.UserJID = p.UserJID
+		existing.IsAdmin = existing.IsAdmin || p.IsAdmin
+		existing.IsActive = existing.IsActive || p.IsActive
+		byKey[key] = existing
+	}
+	out := make([]GroupParticipant, 0, len(byKey))
+	for _, p := range byKey {
+		out = append(out, p)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].GroupJID != out[j].GroupJID {
+			return out[i].GroupJID < out[j].GroupJID
+		}
+		return out[i].UserJID < out[j].UserJID
+	})
+	return out
 }
 
 func insertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
@@ -527,6 +591,11 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 }
 
 func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool) ([]Message, error) {
+	var err error
+	filter, err = s.resolveWhoFilter(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
 	if filter.Limit <= 0 {
 		filter.Limit = 50
 	}
@@ -572,6 +641,7 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 	if filter.Pinned {
 		query += " and " + prefix + "pinned <> 0"
 	}
+	query, args = appendWhoParticipantFilter(query, args, prefix, filter)
 	if search {
 		query += " order by bm25(messages_fts) limit ?"
 	} else if filter.Asc {

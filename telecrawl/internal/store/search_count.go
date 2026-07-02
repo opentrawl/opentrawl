@@ -12,6 +12,11 @@ func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, err
 	if strings.TrimSpace(filter.Query) == "" {
 		return 0, errors.New("search query required")
 	}
+	var err error
+	filter, err = s.resolveWhoFilter(ctx, filter)
+	if err != nil {
+		return 0, err
+	}
 	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
 		return 0, err
@@ -48,6 +53,7 @@ func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, err
 	if filter.Pinned {
 		query += " and m.pinned <> 0"
 	}
+	query, args = appendWhoParticipantFilter(query, args, "m.", filter)
 	var total int
 	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
 		return 0, err
