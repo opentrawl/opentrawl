@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/imsgcrawl/internal/archive"
@@ -17,12 +18,19 @@ type statusOutput struct {
 	AppID         string                 `json:"app_id"`
 	State         string                 `json:"state"`
 	Summary       string                 `json:"summary"`
+	Freshness     *statusFreshness       `json:"freshness,omitempty"`
 	Source        *messages.StatusReport `json:"source,omitempty"`
 	Archive       *archive.Status        `json:"archive,omitempty"`
 	Counts        []control.Count        `json:"counts,omitempty"`
 	Warnings      []string               `json:"warnings,omitempty"`
 	Errors        []string               `json:"errors,omitempty"`
 }
+
+type statusFreshness struct {
+	LastSync string `json:"last_sync"`
+}
+
+const statusStaleAfter = 7 * 24 * time.Hour
 
 func (r *runtime) runSync(args []string) error {
 	if hasHelpFlag(args) {
@@ -59,21 +67,17 @@ func (r *runtime) runStatus(args []string) error {
 		SchemaVersion: control.SchemaVersion,
 		AppID:         "imsgcrawl",
 		State:         "ok",
-		Summary:       "Messages source is readable.",
+		Summary:       "Archive is readable.",
 	}
 	archiveProblem := false
+	sourceProblem := false
+	archiveMissing := false
 	source, err := messages.Status(r.ctx, r.dbPath)
 	if err != nil {
-		out.State = "source_error"
-		out.Summary = "Messages source could not be read."
+		sourceProblem = true
 		out.Errors = append(out.Errors, err.Error())
 	} else {
 		out.Source = &source
-		out.Counts = append(out.Counts,
-			control.NewCount("source_handles", "Source handles", source.Handles),
-			control.NewCount("source_chats", "Source chats", source.Chats),
-			control.NewCount("source_messages", "Source messages", source.Messages),
-		)
 	}
 	if archive.Exists(r.archivePath) {
 		st, err := archive.OpenExisting(r.ctx, r.archivePath)
@@ -88,34 +92,63 @@ func (r *runtime) runStatus(args []string) error {
 				out.Warnings = append(out.Warnings, "archive status failed: "+err.Error())
 			} else {
 				out.Archive = &archiveStatus
-				out.Counts = append(out.Counts,
-					control.NewCount("archive_handles", "Archive handles", archiveStatus.Handles),
-					control.NewCount("archive_chats", "Archive chats", archiveStatus.Chats),
-					control.NewCount("archive_chat_messages", "Archive chat messages", archiveStatus.ChatMessages),
-					control.NewCount("archive_messages", "Archive messages", archiveStatus.Messages),
-				)
+				out.Counts = statusCounts(archiveStatus)
+				setStatusFreshness(&out, archiveStatus.LastSyncAt)
 			}
 		}
 	} else {
+		archiveMissing = true
 		out.Warnings = append(out.Warnings, "archive has not been synced")
 	}
-	setStatusState(&out, archiveProblem)
+	setStatusState(&out, sourceProblem, archiveProblem, archiveMissing)
 	return r.print(out)
 }
 
-func setStatusState(out *statusOutput, archiveProblem bool) {
+func statusCounts(status archive.Status) []control.Count {
+	since := int64(0)
+	if status.EarliestMessageDate > 0 {
+		since = int64(archive.AppleDateTime(status.EarliestMessageDate).Year())
+	}
+	return []control.Count{
+		control.NewCount("messages", "messages", status.Messages),
+		control.NewCount("chats", "chats", status.Chats),
+		control.NewCount("since", "since", since),
+	}
+}
+
+func setStatusFreshness(out *statusOutput, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	lastSync, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		out.Warnings = append(out.Warnings, "archive last_sync_at is invalid: "+err.Error())
+		return
+	}
+	out.Freshness = &statusFreshness{LastSync: lastSync.Local().Format(time.RFC3339)}
+	if time.Since(lastSync) > statusStaleAfter && out.State == "ok" {
+		out.State = "stale"
+		out.Summary = "Archive is stale."
+	}
+}
+
+func setStatusState(out *statusOutput, sourceProblem, archiveProblem, archiveMissing bool) {
 	switch {
-	case archiveProblem && out.Source != nil:
-		out.State = "archive_error"
-		out.Summary = "Messages source is readable, but archive could not be read."
-	case archiveProblem && out.Source == nil:
+	case archiveProblem:
 		out.State = "error"
-		out.Summary = "Messages source and archive are unavailable."
-	case out.Source != nil && out.Archive != nil:
+		out.Summary = "Archive could not be read."
+	case archiveMissing:
+		out.State = "missing"
+		out.Summary = "Archive has not been synced."
+	case sourceProblem:
+		out.State = "error"
+		out.Summary = "Messages source could not be read."
+	case out.Archive != nil && out.Archive.Messages == 0:
+		out.State = "empty"
+		out.Summary = "Archive is empty."
+	case out.Source != nil && out.Archive != nil && out.State == "ok":
 		out.Summary = "Messages source and archive are readable."
-	case out.Source == nil && out.Archive != nil:
-		out.State = "source_error"
-		out.Summary = "Archive is readable, but Messages source could not be read."
 	case out.Source == nil && out.Archive == nil:
 		out.State = "error"
 		out.Summary = "Messages source and archive are unavailable."
@@ -183,6 +216,9 @@ func (r *runtime) runMessages(args []string) error {
 	if *limit <= 0 {
 		return usageErr(errors.New("messages --limit must be positive"))
 	}
+	if *limit > maxListLimit {
+		return usageErr(fmt.Errorf("messages --limit must be %d or less", maxListLimit))
+	}
 	if *all && flagPassed(fs, "limit") {
 		return usageErr(errors.New("use either --all or --limit"))
 	}
@@ -233,6 +269,9 @@ func (r *runtime) runSearch(args []string) error {
 	}
 	if *limit <= 0 {
 		return usageErr(errors.New("search --limit must be positive"))
+	}
+	if *limit > maxListLimit {
+		return usageErr(fmt.Errorf("search --limit must be %d or less", maxListLimit))
 	}
 	if *all && flagPassed(fs, "limit") {
 		return usageErr(errors.New("use either --all or --limit"))

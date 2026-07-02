@@ -11,6 +11,7 @@ select
   coalesce(pc.participants, 0),
   m.handle_rowid,
   coalesce(h.handle, ''),
+  coalesce(h.display_name, ''),
   m.date,
   coalesce(m.service, ''),
   m.is_from_me,

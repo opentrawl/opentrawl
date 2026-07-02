@@ -125,6 +125,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runSync(args[1:])
 	case "status":
 		return r.runStatus(args[1:])
+	case "doctor":
+		return r.runDoctor(args[1:])
 	case "chats":
 		return r.runChats(args[1:])
 	case "messages":

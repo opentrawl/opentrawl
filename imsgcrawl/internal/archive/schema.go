@@ -1,13 +1,14 @@
 package archive
 
-const schemaVersion = 1
+const schemaVersion = 2
 
 const schema = `
 create table if not exists handles (
   source_rowid integer primary key,
   handle text not null,
   service text not null,
-  uncanonicalized_id text
+  uncanonicalized_id text,
+  display_name text
 );
 
 create table if not exists chats (

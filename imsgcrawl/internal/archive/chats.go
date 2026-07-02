@@ -7,6 +7,9 @@ import (
 )
 
 func (s *Store) Chats(ctx context.Context, limit int) ([]ChatSummary, error) {
+	if s.schemaOutdated {
+		return nil, ErrSchemaOutdated
+	}
 	db := s.store.DB()
 	limitClause := ""
 	args := []any{}

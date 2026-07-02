@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,6 +11,10 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
 func TestRunEndToEnd(t *testing.T) {
@@ -25,8 +30,8 @@ func TestRunEndToEnd(t *testing.T) {
 		{"version", []string{"--version"}, version},
 		{"metadata global json", []string{"--json", "metadata"}, `"id": "imsgcrawl"`},
 		{"metadata trailing json", []string{"metadata", "--json"}, `"contact-export"`},
-		{"status", []string{"--db", dbPath, "--json", "status"}, `"messages": 4`},
-		{"contacts export", []string{"--db", dbPath, "--json", "contacts", "export"}, `"display_name": "+15550103"`},
+		{"status", []string{"--db", dbPath, "--json", "status"}, `"messages": 5`},
+		{"contacts export", []string{"--db", dbPath, "--json", "contacts", "export"}, `"display_name": "Fixture Person"`},
 		{"contacts export trailing json", []string{"--db", dbPath, "contacts", "export", "--json"}, `"phone_numbers"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -72,7 +77,7 @@ func TestContactsExportShapeAndDedupe(t *testing.T) {
 	}
 	want := map[string]string{
 		"0015550100": "Most Recent Name",
-		"+15550103":  "+15550103",
+		"+15550103":  "Fixture Person",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("contacts = %#v, want %#v", got, want)
@@ -96,7 +101,7 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if err := json.Unmarshal([]byte(syncOut), &syncResult); err != nil {
 		t.Fatalf("sync json = %s err=%v", syncOut, err)
 	}
-	if syncResult.Chats != 4 || syncResult.Participants != 6 || syncResult.ChatMessages != 5 || syncResult.Messages != 4 {
+	if syncResult.Chats != 4 || syncResult.Participants != 6 || syncResult.ChatMessages != 6 || syncResult.Messages != 5 {
 		t.Fatalf("sync result = %#v", syncResult)
 	}
 
@@ -108,9 +113,14 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if status.Source == nil || status.Archive == nil {
 		t.Fatalf("status missing source/archive = %#v", status)
 	}
-	if status.Source.Messages != status.Archive.Messages || status.Archive.ChatMessages != 5 {
+	if status.Source.Messages != status.Archive.Messages || status.Archive.ChatMessages != 6 {
 		t.Fatalf("status counts = source %#v archive %#v", status.Source, status.Archive)
 	}
+	assertStatusCounts(t, status.Counts, status.Archive.Messages, status.Archive.Chats, archive.AppleDateTime(100).Year())
+	if status.Freshness == nil {
+		t.Fatalf("status missing freshness = %#v", status)
+	}
+	assertRFC3339(t, status.Freshness.LastSync)
 
 	if err := os.Remove(dbPath); err != nil {
 		t.Fatal(err)
@@ -142,14 +152,14 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if len(chats.Items) != 4 {
 		t.Fatalf("chats = %#v", chats)
 	}
-	if !chatHasMessage(t, chats.Items, "3", "+15550103", 1) || !chatHasMessage(t, chats.Items, "4", "Cabinet Group", 1) {
+	if !chatHasMessage(t, chats.Items, "3", "Fixture Person", 1) || !chatHasMessage(t, chats.Items, "4", "Cabinet Group", 2) {
 		t.Fatalf("chats did not preserve chat_message_join rows: %#v", chats)
 	}
 	for _, chat := range chats.Items {
 		if chat.ChatID == "4" && (chat.Kind != "group" || chat.ParticipantCount != 3) {
 			t.Fatalf("group chat context = %#v", chat)
 		}
-		if chat.ChatID == "4" && !hasString(chat.ParticipantHandles, "+15550103") {
+		if chat.ChatID == "4" && (!hasString(chat.ParticipantHandles, "Fixture Person") || !hasString(chat.ParticipantHandles, "opaque-handle")) {
 			t.Fatalf("group participant handles = %#v", chat)
 		}
 		if chat.ChatID == "2" && (chat.Kind != "direct" || chat.ParticipantCount != 1) {
@@ -174,6 +184,10 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if messageRows.Items[1].GUID != "message-three" || !messageRows.Items[1].FromMe || messageRows.Items[1].Service != "SMS" {
 		t.Fatalf("source message fields = %#v", messageRows.Items[1])
 	}
+	if messageRows.Items[0].Time == "" || strings.Contains(messagesOut, `"date"`) {
+		t.Fatalf("message time fields = item %#v json %s", messageRows.Items[0], messagesOut)
+	}
+	assertRFC3339(t, messageRows.Items[0].Time)
 	if messageRows.Items[0].SenderLabel != "Most Recent Name" || messageRows.Items[0].SenderHandle != "0015550100" || messageRows.Items[1].SenderLabel != "me" {
 		t.Fatalf("sender labels = %#v", messageRows.Items)
 	}
@@ -191,8 +205,8 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if err := json.Unmarshal([]byte(groupOut), &groupRows); err != nil {
 		t.Fatalf("group json = %s err=%v", groupOut, err)
 	}
-	if len(groupRows.Items) != 1 || groupRows.Items[0].SenderLabel != "+15550103" {
-		t.Fatalf("group sender fallback = %#v", groupRows.Items)
+	if len(groupRows.Items) != 2 || groupRows.Items[0].SenderLabel != "Fixture Person" || groupRows.Items[1].SenderLabel != "opaque-handle" {
+		t.Fatalf("group sender labels = %#v", groupRows.Items)
 	}
 
 	emptyMessagesOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "999")
@@ -219,6 +233,18 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		if _, ok := result["chat_title"]; !ok {
 			t.Fatalf("search result missing chat title = %#v", result)
 		}
+		if _, ok := result["date"]; ok {
+			t.Fatalf("search result kept raw date = %#v", result)
+		}
+		timeValue, ok := result["time"]
+		if !ok {
+			t.Fatalf("search result missing time = %#v", result)
+		}
+		var timeText string
+		if err := json.Unmarshal(timeValue, &timeText); err != nil {
+			t.Fatalf("search time json = %s err=%v", string(timeValue), err)
+		}
+		assertRFC3339(t, timeText)
 		textValue, ok := result["text"]
 		if !ok {
 			t.Fatalf("search result missing full text = %#v", result)
@@ -226,6 +252,22 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		if !strings.Contains(string(textValue), "launch note") {
 			t.Fatalf("search result text = %s", string(textValue))
 		}
+	}
+
+	fallbackSearchOut := runOK(t, "--archive", archivePath, "--json", "search", "opaque")
+	var fallbackSearch searchListJSON
+	if err := json.Unmarshal([]byte(fallbackSearchOut), &fallbackSearch); err != nil {
+		t.Fatalf("fallback search json = %s err=%v", fallbackSearchOut, err)
+	}
+	if len(fallbackSearch.Items) != 1 {
+		t.Fatalf("fallback search results = %#v", fallbackSearch)
+	}
+	var senderLabel string
+	if err := json.Unmarshal(fallbackSearch.Items[0]["sender_label"], &senderLabel); err != nil {
+		t.Fatalf("sender label json = %s err=%v", string(fallbackSearch.Items[0]["sender_label"]), err)
+	}
+	if senderLabel != "opaque-handle" {
+		t.Fatalf("fallback sender label = %q", senderLabel)
 	}
 
 	emptySearchOut := runOK(t, "--archive", archivePath, "--json", "search", "zzznomatchimsgcrawl")
@@ -252,6 +294,8 @@ func TestLimitFlagsAreExplicit(t *testing.T) {
 		{"--archive", archivePath, "search", "--all", "--limit", "2", "launch"},
 		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "0"},
 		{"--archive", archivePath, "search", "--limit", "0", "launch"},
+		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "201"},
+		{"--archive", archivePath, "search", "--limit", "201", "launch"},
 	} {
 		var stdout, stderr bytes.Buffer
 		err := Run(context.Background(), args, &stdout, &stderr)
@@ -308,8 +352,28 @@ func TestStatusArchiveStates(t *testing.T) {
 	if err := json.Unmarshal([]byte(missingOut), &missing); err != nil {
 		t.Fatalf("missing status json = %s err=%v", missingOut, err)
 	}
-	if missing.State != "ok" || !hasWarning(missing.Warnings, "archive has not been synced") {
+	if missing.State != "missing" || !hasWarning(missing.Warnings, "archive has not been synced") {
 		t.Fatalf("missing archive status = %#v", missing)
+	}
+	if missing.Freshness != nil {
+		t.Fatalf("missing archive should omit freshness = %#v", missing.Freshness)
+	}
+
+	emptyArchivePath := filepath.Join(dir, "empty.db")
+	emptyStore, err := archive.Open(context.Background(), emptyArchivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := emptyStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	emptyOut := runOK(t, "--db", dbPath, "--archive", emptyArchivePath, "--json", "status")
+	var empty statusOutput
+	if err := json.Unmarshal([]byte(emptyOut), &empty); err != nil {
+		t.Fatalf("empty status json = %s err=%v", emptyOut, err)
+	}
+	if empty.State != "empty" || empty.Freshness != nil {
+		t.Fatalf("empty archive status = %#v", empty)
 	}
 
 	corruptPath := filepath.Join(dir, "corrupt.db")
@@ -321,8 +385,30 @@ func TestStatusArchiveStates(t *testing.T) {
 	if err := json.Unmarshal([]byte(corruptOut), &corrupt); err != nil {
 		t.Fatalf("corrupt status json = %s err=%v", corruptOut, err)
 	}
-	if corrupt.State != "archive_error" || len(corrupt.Warnings) == 0 {
+	if corrupt.State != "error" || len(corrupt.Warnings) == 0 {
 		t.Fatalf("corrupt archive status = %#v", corrupt)
+	}
+
+	archivePath := filepath.Join(dir, "archive.db")
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+	db, err := sql.Open("sqlite", archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staleSync := time.Now().Add(-statusStaleAfter - time.Hour).UTC().Format(time.RFC3339)
+	if _, err := db.Exec(`insert into sync_state(key, value) values('last_sync_at', ?) on conflict(key) do update set value = excluded.value`, staleSync); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	staleOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "status")
+	var stale statusOutput
+	if err := json.Unmarshal([]byte(staleOut), &stale); err != nil {
+		t.Fatalf("stale status json = %s err=%v", staleOut, err)
+	}
+	if stale.State != "stale" || stale.Freshness == nil {
+		t.Fatalf("stale status = %#v", stale)
 	}
 }
 
@@ -335,11 +421,11 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if command.Mutates || !command.JSON {
 		t.Fatalf("contact-export command = %#v", command)
 	}
-	want := []string{"imsgcrawl", "--json", "contacts", "export"}
+	want := []string{"imsgcrawl", "contacts", "export", "--json"}
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}
-	for _, name := range []string{"sync", "chats", "messages", "search"} {
+	for _, name := range []string{"sync", "doctor", "chats", "messages", "search"} {
 		command, ok := manifest.Commands[name]
 		if !ok {
 			t.Fatalf("missing command %q in %#v", name, manifest.Commands)
@@ -351,11 +437,40 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if !manifest.Commands["sync"].Mutates {
 		t.Fatalf("sync should be marked mutating = %#v", manifest.Commands["sync"])
 	}
+	if manifest.Commands["doctor"].Mutates {
+		t.Fatalf("doctor should not be marked mutating = %#v", manifest.Commands["doctor"])
+	}
 	for _, want := range []string{"message-archive", "message-text-search"} {
 		if !hasString(manifest.Privacy.LocalOnlyScopes, want) {
 			t.Fatalf("local_only_scopes = %#v, missing %q", manifest.Privacy.LocalOnlyScopes, want)
 		}
 	}
+}
+
+func TestDoctorChecks(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	successOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "doctor")
+	var success doctorOutput
+	if err := json.Unmarshal([]byte(successOut), &success); err != nil {
+		t.Fatalf("doctor json = %s err=%v", successOut, err)
+	}
+	assertDoctorCheck(t, success, "source_store", "ok", "")
+	assertDoctorCheck(t, success, "archive", "ok", "")
+	assertDoctorCheck(t, success, "full_disk_access", "ok", "")
+
+	failureOut := runOK(t, "--db", filepath.Join(dir, "missing", "chat.db"), "--archive", filepath.Join(dir, "missing-archive.db"), "--json", "doctor")
+	var failure doctorOutput
+	if err := json.Unmarshal([]byte(failureOut), &failure); err != nil {
+		t.Fatalf("doctor failure json = %s err=%v", failureOut, err)
+	}
+	assertDoctorCheck(t, failure, "source_store", "fail", "")
+	assertDoctorCheck(t, failure, "archive", "fail", "")
+	assertDoctorCheck(t, failure, "full_disk_access", "fail", fullDiskAccessRemedy)
 }
 
 func TestRunUsageErrors(t *testing.T) {
@@ -397,4 +512,57 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 			t.Fatalf("contact keys = %#v, want only display_name and phone_numbers", contact)
 		}
 	}
+}
+
+func assertStatusCounts(t *testing.T, counts []control.Count, messages, chats int64, sinceYear int) {
+	t.Helper()
+	want := map[string]int64{
+		"messages": messages,
+		"chats":    chats,
+		"since":    int64(sinceYear),
+	}
+	if len(counts) != len(want) {
+		t.Fatalf("counts = %#v, want 3 headline counts", counts)
+	}
+	for _, count := range counts {
+		if got, ok := want[count.ID]; !ok || count.Value != got {
+			t.Fatalf("count %#v not in %#v", count, want)
+		}
+	}
+}
+
+func assertRFC3339(t *testing.T, value string) {
+	t.Helper()
+	if value == "" {
+		t.Fatal("time value is empty")
+	}
+	if _, err := time.Parse(time.RFC3339, value); err != nil {
+		t.Fatalf("time %q is not RFC 3339: %v", value, err)
+	}
+}
+
+func assertDoctorCheck(t *testing.T, out doctorOutput, id, state, remedy string) {
+	t.Helper()
+	if len(out.Checks) != 3 {
+		t.Fatalf("doctor checks = %#v, want 3", out.Checks)
+	}
+	for _, check := range out.Checks {
+		if check.ID != id {
+			continue
+		}
+		if check.State != state {
+			t.Fatalf("check %s state = %s, want %s", id, check.State, state)
+		}
+		if state == "fail" && check.Remedy == "" {
+			t.Fatalf("check %s has no remedy: %#v", id, check)
+		}
+		if remedy != "" && check.Remedy != remedy {
+			t.Fatalf("check %s remedy = %q, want %q", id, check.Remedy, remedy)
+		}
+		if state == "ok" && check.Remedy != "" {
+			t.Fatalf("passing check %s should not have remedy: %#v", id, check)
+		}
+		return
+	}
+	t.Fatalf("missing doctor check %q in %#v", id, out.Checks)
 }

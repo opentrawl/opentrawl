@@ -16,15 +16,16 @@ func controlManifest() control.Manifest {
 		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
 		DefaultLogs:     filepath.Join(defaultBaseDir(), "logs"),
 	}
-	m.Capabilities = []string{"metadata", "status", "sync", "chats", "messages", "search", "contact-export"}
+	m.Capabilities = []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "contact-export"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"apple-messages", "sqlite", "contact-handles", "message-archive", "message-text-search"}}
 	m.Commands = map[string]control.Command{
-		"status":         {Title: "Status", Argv: []string{"imsgcrawl", "--json", "status"}, JSON: true},
-		"sync":           {Title: "Sync", Argv: []string{"imsgcrawl", "--json", "sync"}, JSON: true, Mutates: true},
-		"chats":          {Title: "Chats", Argv: []string{"imsgcrawl", "--json", "chats"}, JSON: true},
-		"messages":       {Title: "Messages", Argv: []string{"imsgcrawl", "--json", "messages"}, JSON: true},
-		"search":         {Title: "Search", Argv: []string{"imsgcrawl", "--json", "search"}, JSON: true},
-		"contact-export": {Title: "Export contacts", Argv: []string{"imsgcrawl", "--json", "contacts", "export"}, JSON: true},
+		"status":         {Title: "Status", Argv: []string{"imsgcrawl", "status", "--json"}, JSON: true},
+		"sync":           {Title: "Sync", Argv: []string{"imsgcrawl", "sync", "--json"}, JSON: true, Mutates: true},
+		"doctor":         {Title: "Doctor", Argv: []string{"imsgcrawl", "doctor", "--json"}, JSON: true},
+		"chats":          {Title: "Chats", Argv: []string{"imsgcrawl", "chats", "--json"}, JSON: true},
+		"messages":       {Title: "Messages", Argv: []string{"imsgcrawl", "messages", "--json"}, JSON: true},
+		"search":         {Title: "Search", Argv: []string{"imsgcrawl", "search", "--json"}, JSON: true},
+		"contact-export": {Title: "Export contacts", Argv: []string{"imsgcrawl", "contacts", "export", "--json"}, JSON: true},
 	}
 	return m
 }
