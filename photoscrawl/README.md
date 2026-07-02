@@ -93,7 +93,7 @@ outputs, and final errors under the crawlkit data dir's
 `backfills/place-context-full/apple-ingest` subtree.
 
 `eval-card` is an opt-in research harness for prompt/model evaluation. It uses
-the tracked prompt files in `prompts/`, prepares canonical full-resolution JPEGs
+the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs
 from originals, passes full metadata as a sidecar prompt input, and writes all
 private images, metadata, and model responses under the crawlkit data dir's
 `evals` subtree. If `--allow-icloud-downloads` is set, PhotoKit may download

@@ -24,7 +24,7 @@ const (
 	DefaultOllamaGenerateURL = modelclient.DefaultGenerateURL
 )
 
-const PromptVersion = repoPrompts.PhotoCardV1Version
+const PromptVersion = repoPrompts.PhotoCardVersion
 
 type Options struct {
 	LibraryPath          string
@@ -149,7 +149,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	promptPath := strings.TrimSpace(opts.PromptPath)
 	if promptPath == "" {
-		promptPath = repoPrompts.DefaultPhotoCardV1Path
+		promptPath = repoPrompts.DefaultPhotoCardPath
 	}
 	promptBytes, err := os.ReadFile(promptPath)
 	if err != nil {

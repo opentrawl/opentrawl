@@ -163,8 +163,6 @@ func mapFeatureRank(feature MapFeature) int {
 		return 0
 	case kind == "area":
 		return 1
-	case name != "":
-		return 2
 	default:
 		return 3
 	}
@@ -188,9 +186,6 @@ func normalizeMapFeature(feature MapFeature, noPOIs bool) (cardMapFeature, bool)
 		}
 		name = kind
 		kind = ""
-	}
-	if !noPOIs && lowValueMapFeature(kind) {
-		return cardMapFeature{}, false
 	}
 	if strings.EqualFold(name, kind) {
 		kind = ""
@@ -243,10 +238,7 @@ func usefulPOI(candidate POICandidate) bool {
 	if lowValuePOIName(name) {
 		return false
 	}
-	if category == "" {
-		return relevantPOIName(name)
-	}
-	return usefulPOICategory(category) || relevantPOIName(name)
+	return category != "" || relevantPOIName(name)
 }
 
 func relevantPOIName(name string) bool {

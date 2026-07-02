@@ -1,4 +1,8 @@
-# Geocoding Context For Photo Cards
+---
+written_by: ai
+---
+
+# Geocoding context for photo cards
 
 Raw GPS alone is not enough for good photo cards. The model needs a small,
 human-readable place context that is useful without pretending the exact POI is
@@ -65,7 +69,7 @@ Places, Foursquare, or another checked provider, but each candidate needs
 source, distance/accuracy, and deterministic status. Do not invent confidence
 labels from distance.
 
-## Provider Notes
+## Provider notes
 
 The first repo implementation uses Apple's native CoreLocation reverse geocoder
 plus MapKit nearby point-of-interest search. It is network-backed, cached under
@@ -104,3 +108,10 @@ Provider choice should be evidence-driven:
 
 Do not add a provider selector to the classifier prompt path. Add providers only
 behind this same JSON output contract after real provider outputs show the need.
+
+## China provider status
+
+Amap/Gaode is parked. It is blocked on human-gated developer registration and is
+queued for maintainer action. When a key exists, the provider should sit behind
+the same place-evidence seam as Apple. Until then, China-relevant work belongs
+in rural and non-POI prompt phrasing, not provider integration.

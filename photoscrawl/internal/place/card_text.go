@@ -7,16 +7,6 @@ import (
 	"unicode"
 )
 
-func lowValueMapFeature(kind string) bool {
-	switch strings.ToLower(strings.TrimSpace(kind)) {
-	case "", "house", "building", "apartment building", "bench", "parking", "telephone",
-		"waste basket", "atm", "drinking water", "guidepost", "shop":
-		return true
-	default:
-		return false
-	}
-}
-
 func unnamedMapKindUseful(kind string) bool {
 	switch kind {
 	case "trail", "road", "bridge", "tunnel", "viewpoint", "beach", "cliff", "cave",
