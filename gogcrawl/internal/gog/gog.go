@@ -25,6 +25,7 @@ type AuthStatus struct {
 	FoundAccount bool
 	Authorized   bool
 	Expires      *time.Time
+	AccountEmail string
 }
 
 type ContactPage struct {
@@ -80,10 +81,15 @@ func (c Client) AuthStatus(ctx context.Context) (AuthStatus, error) {
 		if len(fields) < 5 {
 			continue
 		}
+		email := strings.TrimSpace(fields[0])
+		if status.AccountEmail == "" {
+			status.AccountEmail = email
+		}
 		expires := parseExpiry(fields[3])
 		valid := strings.EqualFold(strings.TrimSpace(fields[4]), "true")
 		if valid {
 			status.Authorized = true
+			status.AccountEmail = email
 			if expires != nil {
 				status.Expires = expires
 			}

@@ -18,6 +18,8 @@ type statusEnvelope struct {
 	Auth         authEnvelope        `json:"auth"`
 	DatabasePath string              `json:"database_path,omitempty"`
 	Archive      *archiveStatusBlock `json:"archive,omitempty"`
+	LastRun      *logRunEnvelope     `json:"last_run,omitempty"`
+	RecentError  *logErrorEnvelope   `json:"recent_error,omitempty"`
 }
 
 type freshnessEnvelope struct {
@@ -59,6 +61,7 @@ func (r *runtime) runStatus(args []string) error {
 		Auth:         r.authEnvelope(),
 		DatabasePath: r.archivePath,
 	}
+	out.LastRun, out.RecentError = r.logTail()
 	if !archive.Exists(r.archivePath) {
 		return r.print(out)
 	}

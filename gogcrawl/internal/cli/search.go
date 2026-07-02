@@ -17,7 +17,7 @@ const (
 )
 
 var searchValueFlags = map[string]bool{
-	"limit": true, "after": true, "before": true,
+	"limit": true, "after": true, "before": true, "who": true,
 }
 
 func (r *runtime) runSearch(args []string) error {
@@ -29,6 +29,7 @@ func (r *runtime) runSearch(args []string) error {
 	limit := fs.Int("limit", defaultSearchLimit, "")
 	after := fs.String("after", "", "")
 	before := fs.String("before", "", "")
+	who := fs.String("who", "", "")
 	flagArgs, positionals := splitFlagArgs(args, searchValueFlags)
 	if err := fs.Parse(flagArgs); err != nil {
 		return usageErr(err)
@@ -40,7 +41,12 @@ func (r *runtime) runSearch(args []string) error {
 	if *limit < 1 || *limit > maxSearchLimit {
 		return usageErr(fmt.Errorf("search --limit must be between 1 and %d", maxSearchLimit))
 	}
-	opts := archive.SearchOptions{Query: query, Limit: *limit}
+	whoProvided := flagPassed(fs, "who")
+	whoValue := normalizeWhoValue(*who)
+	if whoProvided && whoValue == "" {
+		return usageErr(errors.New("search --who requires an identity"))
+	}
+	opts := archive.SearchOptions{Query: query, Limit: *limit, Who: whoValue}
 	if strings.TrimSpace(*after) != "" {
 		t, err := parseTime(*after)
 		if err != nil {
@@ -99,10 +105,27 @@ func parseTime(value string) (time.Time, error) {
 }
 
 func (r *runtime) withArchive(fn func(*archive.Store) error) error {
-	st, err := archive.OpenExisting(r.ctx, r.archivePath)
+	if !archive.Exists(r.archivePath) {
+		return commandErr("archive_missing", "archive database is not ready", "run gogcrawl sync", nil)
+	}
+	st, err := archive.Open(r.ctx, r.archivePath)
 	if err != nil {
 		return commandErr("archive_missing", "archive database is not ready", "run gogcrawl sync", err)
 	}
 	defer func() { _ = st.Close() }()
 	return fn(st)
+}
+
+func flagPassed(fs *flag.FlagSet, name string) bool {
+	passed := false
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == name {
+			passed = true
+		}
+	})
+	return passed
+}
+
+func normalizeWhoValue(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }

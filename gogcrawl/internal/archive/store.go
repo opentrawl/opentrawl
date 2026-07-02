@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/config"
+	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
 	ckstore "github.com/openclaw/crawlkit/store"
 )
@@ -62,7 +63,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	st, err := ckstore.Open(ctx, ckstore.Options{
 		Path:          path,
-		Schema:        schema + state.Schema,
+		Schema:        schema + state.Schema + shortref.Schema,
 		SchemaVersion: schemaVersion,
 	})
 	if err != nil {
@@ -181,6 +182,9 @@ func insertMessage(ctx context.Context, tx *sql.Tx, msg Message) (bool, error) {
 	if _, err := tx.ExecContext(ctx, `delete from attachments where message_id = ?`, msg.ID); err != nil {
 		return false, fmt.Errorf("delete attachments: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `delete from message_participants where message_id = ?`, msg.ID); err != nil {
+		return false, fmt.Errorf("delete message participants: %w", err)
+	}
 	_, err := tx.ExecContext(ctx, `
 insert into messages(
   id, thread_id, history_id, internal_date_ms, time, time_unix, from_name, from_address, to_address, cc_address, subject, body, labels_json
@@ -212,6 +216,9 @@ values (?, ?, ?, ?)
 `, msg.ID, attachment.Filename, attachment.MIMEType, attachment.Size); err != nil {
 			return false, fmt.Errorf("insert attachment: %w", err)
 		}
+	}
+	if err := insertMessageParticipants(ctx, tx, msg); err != nil {
+		return false, err
 	}
 	return existed == 0, nil
 }

@@ -70,7 +70,10 @@ func parseRef(ref string) (string, error) {
 	return strings.TrimSpace(id), nil
 }
 
-func displaySender(name, address string) string {
+func displaySender(name, address string, ownerEmails map[string]struct{}) string {
+	if isOwnerEmail(address, ownerEmails) {
+		return "me"
+	}
 	if strings.TrimSpace(name) != "" {
 		return strings.TrimSpace(name)
 	}

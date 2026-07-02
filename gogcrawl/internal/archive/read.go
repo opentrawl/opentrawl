@@ -39,7 +39,14 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	if query == "" {
 		return SearchResult{}, fmt.Errorf("search query is required")
 	}
-	where, args := searchWhere(opts, ftsQuery(query))
+	if _, _, err := s.EnsureParticipants(ctx); err != nil {
+		return SearchResult{}, err
+	}
+	whoMatch, err := s.searchWhoMatched(ctx, opts.Who)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	where, args := searchWhere(opts, ftsQuery(query), whoMatch)
 	total, err := s.countSearch(ctx, where, args)
 	if err != nil {
 		return SearchResult{}, err
@@ -47,6 +54,10 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
+	}
+	ownerEmails, err := s.OwnerEmails(ctx)
+	if err != nil {
+		return SearchResult{}, err
 	}
 	rows, err := s.store.DB().QueryContext(ctx, `
 select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
@@ -59,31 +70,48 @@ limit ?
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search messages: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-	result := SearchResult{Query: query, TotalMatches: total, Truncated: total > int64(limit)}
+	result := SearchResult{Query: query, WhoMatched: ambiguousWhoMatches(whoMatch.displayNames), TotalMatches: total, Truncated: total > int64(limit)}
+	refs := make([]string, 0, limit)
 	for rows.Next() {
 		var id, when, fromName, fromAddress, subject, body string
 		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body); err != nil {
 			return SearchResult{}, err
 		}
+		ref := RefPrefix + id
+		refs = append(refs, ref)
 		result.Results = append(result.Results, SearchHit{
-			Ref:     RefPrefix + id,
+			Ref:     ref,
 			Time:    when,
-			Who:     displaySender(fromName, fromAddress),
+			Who:     displaySender(fromName, fromAddress, ownerEmails),
 			Where:   subject,
 			Snippet: plainSnippet(query, subject, body),
 		})
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return SearchResult{}, err
+	}
+	if err := rows.Close(); err != nil {
 		return SearchResult{}, err
 	}
 	if result.Results == nil {
 		result.Results = []SearchHit{}
 	}
+	shortRefs, err := s.ShortRefs(ctx, refs)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	for i := range result.Results {
+		result.Results[i].ShortRef = shortRefs[result.Results[i].Ref]
+	}
 	return result, nil
 }
 
 func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error) {
+	ref, err := s.ResolveRef(ctx, ref)
+	if err != nil {
+		return OpenResult{}, err
+	}
 	id, err := parseRef(ref)
 	if err != nil {
 		return OpenResult{}, err
@@ -148,7 +176,7 @@ join messages m on m.id = messages_fts.id
 	return total, nil
 }
 
-func searchWhere(opts SearchOptions, fts string) (string, []any) {
+func searchWhere(opts SearchOptions, fts string, who searchWhoMatch) (string, []any) {
 	clauses := []string{"where messages_fts match ?"}
 	args := []any{fts}
 	if opts.After != nil {
@@ -159,5 +187,28 @@ func searchWhere(opts SearchOptions, fts string) (string, []any) {
 		clauses = append(clauses, "m.time_unix <= ?")
 		args = append(args, opts.Before.Unix())
 	}
+	if who.enabled {
+		if len(who.participantKeys) == 0 {
+			clauses = append(clauses, "0 = 1")
+		} else {
+			clauses = append(clauses, `exists (
+  select 1
+  from message_participants mp
+  where mp.message_id = m.id
+    and mp.participant_key in (`+placeholders(len(who.participantKeys))+`)
+)`)
+			for _, key := range who.participantKeys {
+				args = append(args, key)
+			}
+		}
+	}
 	return strings.Join(clauses, " and "), args
+}
+
+func placeholders(count int) string {
+	values := make([]string, count)
+	for i := range values {
+		values[i] = "?"
+	}
+	return strings.Join(values, ",")
 }

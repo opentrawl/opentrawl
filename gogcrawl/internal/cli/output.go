@@ -58,6 +58,9 @@ func printStatusText(w io.Writer, value statusEnvelope) error {
 	if _, err := fmt.Fprintf(w, "\nAuth: %t\n", value.Auth.Authorized); err != nil {
 		return err
 	}
+	if err := printLogTailText(w, value.LastRun, value.RecentError); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -70,8 +73,17 @@ func printSearchText(w io.Writer, value archive.SearchResult) error {
 			return err
 		}
 	}
+	if len(value.WhoMatched) > 0 {
+		if _, err := fmt.Fprintf(w, "Who matched: %s.\n", strings.Join(value.WhoMatched, ", ")); err != nil {
+			return err
+		}
+	}
 	for _, hit := range value.Results {
-		if _, err := fmt.Fprintf(w, "%s  %s  %s  %s\n", hit.Time, hit.Who, hit.Ref, hit.Snippet); err != nil {
+		ref := hit.Ref
+		if hit.ShortRef != "" {
+			ref = hit.ShortRef
+		}
+		if _, err := fmt.Fprintf(w, "%s  %s  %s  %s\n", hit.Time, hit.Who, ref, hit.Snippet); err != nil {
 			return err
 		}
 	}
@@ -127,6 +139,34 @@ func printDoctorText(w io.Writer, value doctorOutput) error {
 			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
 				return err
 			}
+		}
+	}
+	return printLogTailText(w, value.LastRun, value.RecentError)
+}
+
+func printLogTailText(w io.Writer, lastRun *logRunEnvelope, recentError *logErrorEnvelope) error {
+	if lastRun == nil && recentError == nil {
+		return nil
+	}
+	if _, err := io.WriteString(w, "\nLog tail:\n"); err != nil {
+		return err
+	}
+	if lastRun != nil {
+		if _, err := fmt.Fprintf(w, "  Last run: %s %s", lastRun.Command, lastRun.Outcome); err != nil {
+			return err
+		}
+		if lastRun.FinishedAt != "" {
+			if _, err := fmt.Fprintf(w, " at %s", lastRun.FinishedAt); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w, "\n"); err != nil {
+			return err
+		}
+	}
+	if recentError != nil {
+		if _, err := fmt.Fprintf(w, "  Recent error: %s %s\n", recentError.Event, recentError.Message); err != nil {
+			return err
 		}
 	}
 	return nil

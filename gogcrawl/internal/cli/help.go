@@ -13,7 +13,7 @@ Usage:
   gogcrawl metadata [--json]
   gogcrawl status [--json]
   gogcrawl sync [--json]
-  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--who NAME] [--json]
   gogcrawl open REF [--json]
   gogcrawl doctor [--json]
   gogcrawl contacts export [--json]
@@ -58,7 +58,7 @@ Flags:
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--json]
+  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--who NAME] [--json]
 
 Search archived Gmail subject and body text.
 
@@ -66,12 +66,13 @@ Flags:
   --limit N     Maximum results. Default: 20. Maximum: 200.
   --after DATE  Only messages after RFC3339 or YYYY-MM-DD.
   --before DATE Only messages before RFC3339 or YYYY-MM-DD.
+  --who NAME    Only messages where this stored participant name appears.
 `)
 	case "open":
 		_, _ = fmt.Fprint(w, `Usage:
-  gogcrawl open gogcrawl:msg/ID [--json]
+  gogcrawl open REF [--json]
 
-Open one archived Gmail message.
+Open one archived Gmail message by full ref or short ref.
 `)
 	case "doctor":
 		_, _ = fmt.Fprint(w, `Usage:

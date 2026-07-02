@@ -49,21 +49,24 @@ type SearchOptions struct {
 	Limit  int
 	After  *time.Time
 	Before *time.Time
+	Who    string
 }
 
 type SearchResult struct {
 	Query        string      `json:"query"`
+	WhoMatched   []string    `json:"who_matched,omitempty"`
 	Results      []SearchHit `json:"results"`
 	TotalMatches int64       `json:"total_matches"`
 	Truncated    bool        `json:"truncated"`
 }
 
 type SearchHit struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where,omitempty"`
-	Snippet string `json:"snippet"`
+	Ref      string `json:"ref"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where,omitempty"`
+	Snippet  string `json:"snippet"`
+	ShortRef string `json:"-"`
 }
 
 type OpenResult struct {
