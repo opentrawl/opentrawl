@@ -1,0 +1,8 @@
+{
+  "peer_display": "Fixture Person",
+  "text": "fixture hello",
+  "author_id": 4242,
+  "media_type": "photo_or_video",
+  "referenced_media_ids": [[7, 123456789]],
+  "single_account_peer_id": "100"
+}
