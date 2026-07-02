@@ -4,6 +4,7 @@ import "context"
 
 type MetadataInfo struct {
 	Capabilities []string
+	AppID        string
 	Valid        bool
 }
 
@@ -31,5 +32,6 @@ func (s Suite) Run(ctx context.Context) Report {
 		s.CheckSecrets(ctx),
 		s.CheckReadsNeverMutate(ctx, status),
 		s.CheckSearch(ctx, metadata, status),
+		s.CheckOpen(ctx, metadata, status),
 	}
 }

@@ -23,6 +23,10 @@ type fakeCrawler struct {
 	flagFirstStatus fakeCommand
 	doctor          fakeCommand
 	search          fakeCommand
+	searchA         fakeCommand
+	searchThe       fakeCommand
+	open            fakeCommand
+	openRef         string
 }
 
 func TestMetadataCheck(t *testing.T) {
@@ -201,26 +205,50 @@ func TestSearchCheck(t *testing.T) {
 		{
 			name:         "bounded results pass",
 			capabilities: `["search"]`,
-			search:       fmt.Sprintf(`{"results":[{"ref":"fakecrawl:item/1","time":%s}],"truncated":false}`, jsonString(t, validTime)),
+			search:       fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime)),
 			want:         StatusPass,
 		},
 		{
 			name:         "too many results fails",
 			capabilities: `["search"]`,
-			search:       fmt.Sprintf(`{"results":[{"ref":"fakecrawl:item/1","time":%s},{"ref":"fakecrawl:item/2","time":%s},{"ref":"fakecrawl:item/3","time":%s},{"ref":"fakecrawl:item/4","time":%s}]}`, jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime)),
+			search:       fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s},{"ref":"fakecrawl:item/2","time":%s},{"ref":"fakecrawl:item/3","time":%s},{"ref":"fakecrawl:item/4","time":%s}],"total_matches":4,"truncated":false}`, jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime), jsonString(t, validTime)),
 			want:         StatusFail,
 		},
 		{
 			name:         "bad time fails",
 			capabilities: `["search"]`,
-			search:       `{"results":[{"ref":"fakecrawl:item/1","time":"not-a-time"}]}`,
+			search:       `{"query":"test","results":[{"ref":"fakecrawl:item/1","time":"not-a-time"}],"total_matches":1,"truncated":false}`,
 			want:         StatusFail,
 		},
 		{
-			name:         "missing ref and time warns",
+			name:         "missing ref and time fails",
 			capabilities: `["search"]`,
-			search:       `{"results":[{"snippet":"synthetic result"}]}`,
-			want:         StatusWarn,
+			search:       `{"query":"test","results":[{"snippet":"synthetic result"}],"total_matches":1,"truncated":false}`,
+			want:         StatusFail,
+		},
+		{
+			name:         "missing total matches fails",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s}],"truncated":false}`, jsonString(t, validTime)),
+			want:         StatusFail,
+		},
+		{
+			name:         "query echo mismatch fails",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"query":"test --json --limit 3","results":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime)),
+			want:         StatusFail,
+		},
+		{
+			name:         "items only envelope fails",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"query":"test","items":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime)),
+			want:         StatusFail,
+		},
+		{
+			name:         "unprefixed ref fails",
+			capabilities: `["search"]`,
+			search:       fmt.Sprintf(`{"query":"test","results":[{"ref":"item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime)),
+			want:         StatusFail,
 		},
 		{
 			name:         "undeclared search warns",
@@ -238,6 +266,60 @@ func TestSearchCheck(t *testing.T) {
 			_, metadata := suite.CheckMetadata(context.Background())
 			_, status := suite.CheckStatus(context.Background())
 			result := suite.CheckSearch(context.Background(), metadata, status)
+			assertStatus(t, result, tc.want)
+		})
+	}
+}
+
+func TestOpenCheck(t *testing.T) {
+	validTime := "2026-07-02T12:00:00Z"
+	searchWithRef := fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, validTime))
+	tests := []struct {
+		name         string
+		capabilities string
+		search       fakeCommand
+		open         fakeCommand
+		want         Status
+	}{
+		{
+			name:         "round trip passes",
+			capabilities: `["search","open"]`,
+			search:       fakeCommand{stdout: searchWithRef},
+			open:         fakeCommand{stdout: `{"ref":"fakecrawl:item/1","body":"synthetic detail"}`},
+			want:         StatusPass,
+		},
+		{
+			name:         "open failure fails",
+			capabilities: `["search","open"]`,
+			search:       fakeCommand{stdout: searchWithRef},
+			open:         fakeCommand{exit: 64},
+			want:         StatusFail,
+		},
+		{
+			name:         "missing open capability fails",
+			capabilities: `["search"]`,
+			search:       fakeCommand{stdout: searchWithRef},
+			open:         fakeCommand{stdout: `{"ref":"fakecrawl:item/1"}`},
+			want:         StatusFail,
+		},
+		{
+			name:         "no search rows warns",
+			capabilities: `["search","open"]`,
+			search:       fakeCommand{stdout: `{"query":"test","results":[],"total_matches":0,"truncated":false}`},
+			open:         fakeCommand{stdout: `{"ref":"fakecrawl:item/1"}`},
+			want:         StatusWarn,
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := defaultFakeCrawler(t, true)
+			cfg.metadata.stdout = fmt.Sprintf(`{"schema_version":1,"id":"fakecrawl","capabilities":%s}`, tc.capabilities)
+			cfg.search = tc.search
+			cfg.open = tc.open
+			suite := Suite{Runner: NewRunner(writeFakeCrawler(t, cfg))}
+			_, metadata := suite.CheckMetadata(context.Background())
+			_, status := suite.CheckStatus(context.Background())
+			result := suite.CheckOpen(context.Background(), metadata, status)
 			assertStatus(t, result, tc.want)
 		})
 	}
@@ -282,7 +364,7 @@ func TestRunReportHasNoFailuresForConformingFakeCrawler(t *testing.T) {
 	if report.HasFailures() {
 		t.Fatalf("report has failures: %#v", report)
 	}
-	for _, name := range []string{CheckMetadata, CheckGrammar, CheckStatus, CheckDoctor, CheckSecrets, CheckReadsNeverMutate, CheckSearch} {
+	for _, name := range []string{CheckMetadata, CheckGrammar, CheckStatus, CheckDoctor, CheckSecrets, CheckReadsNeverMutate, CheckSearch, CheckOpen} {
 		if resultByName(report, name).Name == "" {
 			t.Fatalf("missing result %q in %#v", name, report)
 		}
@@ -304,11 +386,13 @@ func defaultFakeCrawler(t *testing.T, withDB bool) fakeCrawler {
 	}
 	return fakeCrawler{
 		dbPath:          dbPath,
-		metadata:        fakeCommand{stdout: `{"schema_version":1,"id":"fakecrawl","capabilities":["search"]}`},
+		metadata:        fakeCommand{stdout: `{"schema_version":1,"id":"fakecrawl","capabilities":["search","open"]}`},
 		status:          fakeCommand{stdout: status},
 		flagFirstStatus: fakeCommand{stdout: status},
 		doctor:          fakeCommand{stdout: `{"checks":[{"id":"archive","state":"ok"}]}`},
-		search:          fakeCommand{stdout: `{"results":[],"truncated":false}`},
+		search:          fakeCommand{stdout: fmt.Sprintf(`{"query":"test","results":[{"ref":"fakecrawl:item/1","time":%s}],"total_matches":1,"truncated":false}`, jsonString(t, "2026-07-02T12:00:00Z"))},
+		open:            fakeCommand{stdout: `{"ref":"fakecrawl:item/1","body":"synthetic detail"}`},
+		openRef:         "fakecrawl:item/1",
 	}
 }
 
@@ -332,6 +416,15 @@ func writeFakeCrawler(t *testing.T, cfg fakeCrawler) string {
 		"fi",
 		`if [ "$1" = "search" ] && [ "$2" = "test" ] && [ "$3" = "--json" ] && [ "$4" = "--limit" ] && [ "$5" = "3" ]; then`,
 		commandScript(cfg.search),
+		"fi",
+		`if [ "$1" = "search" ] && [ "$2" = "a" ] && [ "$3" = "--json" ] && [ "$4" = "--limit" ] && [ "$5" = "3" ]; then`,
+		commandScript(cfg.searchA),
+		"fi",
+		`if [ "$1" = "search" ] && [ "$2" = "the" ] && [ "$3" = "--json" ] && [ "$4" = "--limit" ] && [ "$5" = "3" ]; then`,
+		commandScript(cfg.searchThe),
+		"fi",
+		`if [ "$1" = "open" ] && [ "$2" = ` + shellQuote(cfg.openRef) + ` ] && [ "$3" = "--json" ]; then`,
+		commandScript(cfg.open),
 		"fi",
 		`printf '%s\n' "unsupported command" >&2`,
 		"exit 64",
