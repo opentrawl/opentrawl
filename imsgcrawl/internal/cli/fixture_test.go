@@ -173,7 +173,7 @@ func createAddressBookRowsFixture(t *testing.T, path string, inserts []string) {
 	}
 	defer func() { _ = db.Close() }()
 	schema := []string{
-		`create table ZABCDRECORD (Z_PK integer primary key, ZFIRSTNAME text, ZLASTNAME text, ZORGANIZATION text)`,
+		`create table ZABCDRECORD (Z_PK integer primary key, ZFIRSTNAME text, ZLASTNAME text, ZORGANIZATION text, ZISME integer not null default 0)`,
 		`create table ZABCDPHONENUMBER (Z_PK integer primary key, ZFULLNUMBER text, ZCOUNTRYCODE text, ZAREACODE text, ZLOCALNUMBER text, ZOWNER integer)`,
 		`create table ZABCDEMAILADDRESS (Z_PK integer primary key, ZADDRESS text, ZOWNER integer)`,
 	}

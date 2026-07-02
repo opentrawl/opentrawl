@@ -14,7 +14,8 @@ import (
 const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
 
 type doctorOutput struct {
-	Checks []doctorCheck `json:"checks"`
+	Checks []doctorCheck  `json:"checks"`
+	Log    *logTailOutput `json:"log,omitempty"`
 }
 
 type doctorCheck struct {
@@ -40,11 +41,12 @@ func (r *runtime) runDoctor(args []string) error {
 		r.checkSourceStore(),
 		r.checkArchive(),
 		r.checkFullDiskAccess(),
-	}})
+	}, Log: r.readLogTail()})
 }
 
 func (r *runtime) checkSourceStore() doctorCheck {
 	if _, err := messages.Status(r.ctx, r.dbPath); err != nil {
+		_ = r.logError("source_store_failed", worldMustChange(err, "cannot read the source database", "check the --db path and grant Full Disk Access if the Messages database is protected"))
 		return doctorCheck{
 			ID:      "source_store",
 			State:   "fail",
@@ -57,6 +59,7 @@ func (r *runtime) checkSourceStore() doctorCheck {
 
 func (r *runtime) checkArchive() doctorCheck {
 	if !archive.Exists(r.archivePath) {
+		_ = r.logError("archive_missing", worldMustChange(nil, "archive.db has not been synced", "run imsgcrawl sync"))
 		return doctorCheck{
 			ID:      "archive",
 			State:   "fail",
@@ -66,6 +69,7 @@ func (r *runtime) checkArchive() doctorCheck {
 	}
 	st, err := archive.OpenExisting(r.ctx, r.archivePath)
 	if err != nil {
+		_ = r.logError("archive_open_failed", worldMustChange(err, "cannot read the archive database", "run imsgcrawl sync to rebuild the archive"))
 		return doctorCheck{
 			ID:      "archive",
 			State:   "fail",
@@ -75,6 +79,7 @@ func (r *runtime) checkArchive() doctorCheck {
 	}
 	defer func() { _ = st.Close() }()
 	if _, err := st.Status(r.ctx); err != nil {
+		_ = r.logError("archive_status_failed", worldMustChange(err, "cannot inspect the archive database", "run imsgcrawl sync to rebuild the archive"))
 		return doctorCheck{
 			ID:      "archive",
 			State:   "fail",
@@ -83,6 +88,7 @@ func (r *runtime) checkArchive() doctorCheck {
 		}
 	}
 	if _, err := st.Chats(r.ctx, 1); errors.Is(err, archive.ErrSchemaOutdated) {
+		_ = r.logError("archive_schema_outdated", worldMustChange(err, err.Error(), "run imsgcrawl sync"))
 		return doctorCheck{
 			ID:      "archive",
 			State:   "fail",
@@ -96,6 +102,7 @@ func (r *runtime) checkArchive() doctorCheck {
 func (r *runtime) checkFullDiskAccess() doctorCheck {
 	dir := filepath.Dir(r.dbPath)
 	if err := canReadDirectory(dir); err != nil {
+		_ = r.logError("full_disk_access_failed", worldMustChange(err, "cannot read the Messages directory", fullDiskAccessRemedy))
 		return doctorCheck{
 			ID:      "full_disk_access",
 			State:   "fail",

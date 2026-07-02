@@ -122,7 +122,7 @@ func printStatusText(w io.Writer, value statusOutput) error {
 			}
 		}
 	}
-	return nil
+	return printLogTailText(w, value.Log)
 }
 
 func printDoctorText(w io.Writer, value doctorOutput) error {
@@ -143,7 +143,7 @@ func printDoctorText(w io.Writer, value doctorOutput) error {
 			}
 		}
 	}
-	return nil
+	return printLogTailText(w, value.Log)
 }
 
 func printChatsText(w io.Writer, value chatListOutput) error {
@@ -239,6 +239,7 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 		rows = append(rows, []string{
 			formatArchiveTime(item.Time),
 			senderName(item.FromMe, item.SenderLabel),
+			searchDisplayRef(item),
 			searchConversation(item),
 			outputField(searchSnippet(item)),
 		})
@@ -328,4 +329,39 @@ func emptyDash(value string) string {
 		return "-"
 	}
 	return value
+}
+
+func searchDisplayRef(item archive.SearchResult) string {
+	if item.ShortRef != "" {
+		return item.ShortRef
+	}
+	return messageRef(item.MessageID)
+}
+
+func printLogTailText(w io.Writer, value *logTailOutput) error {
+	if value == nil {
+		return nil
+	}
+	if _, err := io.WriteString(w, "\nLog:\n"); err != nil {
+		return err
+	}
+	if value.LastRun != nil {
+		if _, err := fmt.Fprintf(w, "  Last run: %s %s", value.LastRun.Command, value.LastRun.Outcome); err != nil {
+			return err
+		}
+		if value.LastRun.FinishedAt != "" {
+			if _, err := fmt.Fprintf(w, " at %s", value.LastRun.FinishedAt); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w, "\n"); err != nil {
+			return err
+		}
+	}
+	if value.MostRecentError != nil {
+		if _, err := fmt.Fprintf(w, "  Most recent error: %s %s\n", value.MostRecentError.Command, value.MostRecentError.Event); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -75,6 +75,9 @@ func searchChatDisplayName(item archive.SearchResult) string {
 
 func chatDisplayName(chat archive.ChatSummary) string {
 	title := strings.TrimSpace(chat.Title)
+	if chat.Kind != "group" && participantPreview(chat.ParticipantHandles, chat.ParticipantCount) == "me" {
+		return "me"
+	}
 	if title != "" && !isMachineChatTitle(title) && !isHandleLikeTitle(title) {
 		return title
 	}

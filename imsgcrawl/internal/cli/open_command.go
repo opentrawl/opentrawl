@@ -11,7 +11,7 @@ import (
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
-const messageRefPrefix = "imsgcrawl:msg/"
+const messageRefPrefix = archive.MessageRefPrefix
 
 var (
 	errForeignRef = errors.New("ref is not from imsgcrawl")
@@ -40,7 +40,11 @@ func (r *runtime) runOpen(args []string) error {
 	if fs.NArg() != 1 {
 		return usageErr(errors.New("open takes exactly one ref"))
 	}
-	messageID, err := parseMessageRef(fs.Arg(0))
+	ref := strings.TrimSpace(fs.Arg(0))
+	if !strings.Contains(ref, ":") {
+		return r.openShortRef(ref)
+	}
+	messageID, err := parseMessageRef(ref)
 	if err != nil {
 		if errors.Is(err, errForeignRef) {
 			return r.contractError("foreign_ref", "ref is not from imsgcrawl", "use a ref returned by imsgcrawl search --json")
@@ -59,7 +63,42 @@ func (r *runtime) runOpen(args []string) error {
 	})
 }
 
+func (r *runtime) openShortRef(alias string) error {
+	if !archive.ValidShortRef(alias) {
+		return r.contractError("invalid_ref", "ref is not an imsgcrawl message ref", "use a ref in the form imsgcrawl:msg/ID or a short ref from search")
+	}
+	return r.withWritableArchive(func(st *archive.Store) error {
+		resolved, err := st.ResolveShortRef(r.ctx, alias)
+		if err != nil {
+			return err
+		}
+		if resolved.Rebuilt {
+			_ = r.logInfo("short_refs_rebuilt", "alias_index=rebuilt")
+		}
+		switch len(resolved.FullRefs) {
+		case 0:
+			return r.contractError("unknown_short_ref", "short ref was not found", "rerun search or use the full ref")
+		case 1:
+			messageID, err := parseMessageRef(resolved.FullRefs[0])
+			if err != nil {
+				return err
+			}
+			result, err := st.OpenMessage(r.ctx, messageID, defaultOpenWindow)
+			if errors.Is(err, archive.ErrMessageNotFound) {
+				return r.contractError("not_found", "message ref was not found", "run imsgcrawl search --json again and use a current ref")
+			}
+			if err != nil {
+				return err
+			}
+			return r.print(newOpenOutput(result))
+		default:
+			return r.contractError("ambiguous_short_ref", "short ref matches more than one message", "rerun search or use the full ref")
+		}
+	})
+}
+
 func (r *runtime) contractError(code, message, remedy string) error {
+	_ = r.logError(code, worldMustChange(nil, message, remedy))
 	envelope := errorEnvelope{Error: commandError{Code: code, Message: message, Remedy: remedy}}
 	if r.json {
 		_ = r.print(envelope)
@@ -70,7 +109,7 @@ func (r *runtime) contractError(code, message, remedy string) error {
 }
 
 func messageRef(messageID string) string {
-	return messageRefPrefix + strings.TrimSpace(messageID)
+	return archive.MessageRef(messageID)
 }
 
 func parseMessageRef(ref string) (string, error) {

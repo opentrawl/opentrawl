@@ -6,7 +6,8 @@ select
   coalesce(p.ZOWNER, 0),
   coalesce(r.ZFIRSTNAME, ''),
   coalesce(r.ZLASTNAME, ''),
-  coalesce(r.ZORGANIZATION, '')
+  coalesce(r.ZORGANIZATION, ''),
+  {{IS_ME_EXPR}}
 from ZABCDPHONENUMBER p
 join ZABCDRECORD r on r.Z_PK = p.ZOWNER
 where nullif(trim(coalesce(nullif(p.ZFULLNUMBER, ''), p.ZLOCALNUMBER, '')), '') is not null

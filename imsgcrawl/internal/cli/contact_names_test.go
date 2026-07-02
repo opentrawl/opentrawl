@@ -222,6 +222,62 @@ func TestSearchWhoDedupesOneContactWithPhoneAndEmail(t *testing.T) {
 	}
 }
 
+func TestOwnerPhoneAndEmailHandlesFoldToMe(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createOwnerAliasMessagesFixture(t, dbPath)
+	createAddressBookRowsFixture(t, addressBookPath, []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION, ZISME) values (1, 'Owner', 'Example', '', 1)`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'OWNER@EXAMPLE.COM', 1)`,
+	})
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runOK(t, "--archive", archivePath, "--json", "search", "dinner", "--who", "me")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("owner search json = %s err=%v", out, err)
+	}
+	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("owner search envelope = %#v", payload)
+	}
+	if snippetsContain(payload.Results, "other dinner plan") {
+		t.Fatalf("owner search leaked non-owner row = %#v", payload.Results)
+	}
+	bySnippet := map[string]searchResultJSON{}
+	for _, item := range payload.Results {
+		bySnippet[item.Snippet] = item
+	}
+	assertSearchName(t, bySnippet, "owner alias dinner plan", "me", "me")
+	assertSearchName(t, bySnippet, "sent dinner plan", "me", "Other Person")
+
+	openOut := runOK(t, "--archive", archivePath, "--json", "open", bySnippet["owner alias dinner plan"].Ref)
+	var opened openJSON
+	if err := json.Unmarshal([]byte(openOut), &opened); err != nil {
+		t.Fatalf("owner open json = %s err=%v", openOut, err)
+	}
+	if opened.Message.Who != "me" || opened.Chat.Name != "me" || opened.Message.FromMe {
+		t.Fatalf("owner alias open = %#v", opened)
+	}
+
+	messagesOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "1", "--asc")
+	var messages messageListJSON
+	if err := json.Unmarshal([]byte(messagesOut), &messages); err != nil {
+		t.Fatalf("owner messages json = %s err=%v", messagesOut, err)
+	}
+	if len(messages.Items) != 1 || messages.Items[0].SenderLabel != "me" {
+		t.Fatalf("owner transcript labels = %#v", messages.Items)
+	}
+}
+
 func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := Run(context.Background(), []string{"search", "--who", " \t ", "dinner"}, &stdout, &stderr)
@@ -230,6 +286,48 @@ func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "search --who requires an identity") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+func createOwnerAliasMessagesFixture(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	schema := []string{
+		`create table handle (ROWID integer primary key, id text not null, service text not null, uncanonicalized_id text)`,
+		`create table chat (ROWID integer primary key, guid text not null, display_name text, chat_identifier text, service_name text, room_name text, is_archived integer)`,
+		`create table chat_handle_join (chat_id integer, handle_id integer)`,
+		`create table message (ROWID integer primary key, guid text not null, handle_id integer, date integer, service text, account text, is_from_me integer, text text, attributedBody blob)`,
+		`create table chat_message_join (chat_id integer, message_id integer)`,
+		`create table message_attachment_join (message_id integer, attachment_id integer)`,
+	}
+	for _, stmt := range schema {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	inserts := []string{
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (1, '+15550100', 'iMessage', '')`,
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (2, 'owner@example.com', 'iMessage', '')`,
+		`insert into handle(rowid, id, service, uncanonicalized_id) values (3, '+15550200', 'iMessage', '')`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (1, 'owner-email-chat', 'Owner Example', 'owner@example.com', 'iMessage', '', 0)`,
+		`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (2, 'other-chat', 'Other Person', '+15550200', 'iMessage', '', 0)`,
+		`insert into chat_handle_join(chat_id, handle_id) values (1, 2)`,
+		`insert into chat_handle_join(chat_id, handle_id) values (2, 3)`,
+		`insert into message(rowid, guid, handle_id, date, service, account, is_from_me, text, attributedBody) values (1, 'owner-alias-message', 2, 100, 'iMessage', '', 0, 'owner alias dinner plan', null)`,
+		`insert into message(rowid, guid, handle_id, date, service, account, is_from_me, text, attributedBody) values (2, 'sent-message', 3, 200, 'iMessage', '+15550100', 1, 'sent dinner plan', null)`,
+		`insert into message(rowid, guid, handle_id, date, service, account, is_from_me, text, attributedBody) values (3, 'other-message', 3, 300, 'iMessage', '', 0, 'other dinner plan', null)`,
+		`insert into chat_message_join(chat_id, message_id) values (1, 1)`,
+		`insert into chat_message_join(chat_id, message_id) values (2, 2)`,
+		`insert into chat_message_join(chat_id, message_id) values (2, 3)`,
+	}
+	for _, stmt := range inserts {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

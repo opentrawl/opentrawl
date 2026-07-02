@@ -184,7 +184,7 @@ func (s *Store) searchResults(ctx context.Context, query string, limit int, who 
 		limitClause = "limit ?"
 		args = append(args, limit)
 	}
-	rows, err := s.store.DB().QueryContext(ctx, searchQuery(limitClause, len(who.handleRowIDs), who.enabled), args...)
+	rows, err := s.store.DB().QueryContext(ctx, searchQuery(limitClause, who), args...)
 	if err != nil {
 		return nil, err
 	}
@@ -219,6 +219,9 @@ func (s *Store) searchResults(ctx context.Context, query string, limit int, who 
 		return nil, err
 	}
 	for i := range out {
+		if alias, err := s.ShortRefForMessage(ctx, out[i].MessageID); err == nil {
+			out[i].ShortRef = alias
+		}
 		if out[i].ChatID == "" {
 			continue
 		}
@@ -241,14 +244,15 @@ func (s *Store) countSearch(ctx context.Context, query string, who searchWhoMatc
 		return 0, errors.New("search query is required")
 	}
 	var count int64
-	err := s.store.DB().QueryRowContext(ctx, countSearchQuery(len(who.handleRowIDs), who.enabled), searchArgs(query, who)...).Scan(&count)
+	err := s.store.DB().QueryRowContext(ctx, countSearchQuery(who), searchArgs(query, who)...).Scan(&count)
 	return count, err
 }
 
 type searchWhoMatch struct {
-	enabled      bool
-	participants []searchWhoParticipant
-	handleRowIDs []int64
+	enabled       bool
+	includeFromMe bool
+	participants  []searchWhoParticipant
+	handleRowIDs  []int64
 }
 
 func (m searchWhoMatch) names() []string {
@@ -319,6 +323,9 @@ func (s *Store) searchWhoMatched(ctx context.Context, who string) (searchWhoMatc
 
 func resolveSearchWho(who string, handles []searchWhoHandle, mappings map[string]searchWhoMapping) searchWhoMatch {
 	out := searchWhoMatch{enabled: true}
+	if strings.EqualFold(who, ownerDisplayName) {
+		out.includeFromMe = true
+	}
 	byParticipant := map[string]int{}
 	for _, handle := range handles {
 		if !matchesSearchWho(who, handle.displayName, handle.handle) {

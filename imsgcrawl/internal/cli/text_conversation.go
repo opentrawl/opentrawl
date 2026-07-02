@@ -64,22 +64,25 @@ func messageColumnWidths(width int) (dateWidth int, fromWidth int, textWidth int
 }
 
 func searchTextColumns(width int) []textColumn {
-	dateWidth, fromWidth, conversationWidth, textWidth := searchColumnWidths(width)
+	dateWidth, fromWidth, refWidth, conversationWidth, textWidth := searchColumnWidths(width)
 	return []textColumn{
 		{header: "date", width: dateWidth},
 		{header: "from", width: fromWidth, wrap: true},
+		{header: "ref", width: refWidth},
 		{header: "conversation", width: conversationWidth, wrap: true},
 		{header: "text", width: textWidth, wrap: true},
 	}
 }
 
-func searchColumnWidths(width int) (dateWidth int, fromWidth int, conversationWidth int, textWidth int) {
+func searchColumnWidths(width int) (dateWidth int, fromWidth int, refWidth int, conversationWidth int, textWidth int) {
 	dateWidth = 16
-	gaps := 3 * len(textTableGap)
+	refWidth = 8
+	gaps := 4 * len(textTableGap)
 	remaining := width - dateWidth - gaps
 	if remaining < 50 {
 		remaining = 50
 	}
+	remaining -= refWidth
 	fromWidth = clampWidth(remaining/4, 12, 24)
 	conversationWidth = clampWidth(remaining/3, 18, 52)
 	textWidth = remaining - fromWidth - conversationWidth
@@ -92,7 +95,7 @@ func searchColumnWidths(width int) (dateWidth int, fromWidth int, conversationWi
 		fromWidth -= fromReduction
 		textWidth = remaining - fromWidth - conversationWidth
 	}
-	return dateWidth, fromWidth, conversationWidth, textWidth
+	return dateWidth, fromWidth, refWidth, conversationWidth, textWidth
 }
 
 func openTextColumns(width int) []textColumn {
@@ -152,6 +155,9 @@ func chatConversation(item archive.ChatSummary) string {
 		title = ""
 	}
 	people := participantPreview(item.ParticipantHandles, item.ParticipantCount)
+	if item.Kind != "group" && people == "me" {
+		return "me"
+	}
 	if item.Kind == "group" {
 		switch {
 		case title != "" && people != "":

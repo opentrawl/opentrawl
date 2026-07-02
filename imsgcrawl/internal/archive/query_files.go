@@ -91,6 +91,7 @@ const searchWhoWithEmpty = `with matched_who(handle_rowid) as (
 )`
 
 const searchWhoFilter = `  and (
+    {{FROM_ME_FILTER}}
     m.handle_rowid in (select handle_rowid from matched_who)
     or exists (
       select 1
@@ -101,15 +102,15 @@ const searchWhoFilter = `  and (
     )
   )`
 
-func searchQuery(limitClause string, whoHandleCount int, includeWho bool) string {
-	query := strings.Replace(searchListSQL, "{{WITH}}", searchWithClause(whoHandleCount, includeWho), 1)
-	query = strings.Replace(query, "{{WHO_FILTER}}", searchFilterClause(includeWho), 1)
+func searchQuery(limitClause string, who searchWhoMatch) string {
+	query := strings.Replace(searchListSQL, "{{WITH}}", searchWithClause(len(who.handleRowIDs), who.enabled), 1)
+	query = strings.Replace(query, "{{WHO_FILTER}}", searchFilterClause(who), 1)
 	return strings.Replace(query, "{{LIMIT}}", limitClause, 1)
 }
 
-func countSearchQuery(whoHandleCount int, includeWho bool) string {
-	query := strings.Replace(countSearchSQL, "{{WITH}}", searchWithClause(whoHandleCount, includeWho), 1)
-	return strings.Replace(query, "{{WHO_FILTER}}", searchFilterClause(includeWho), 1)
+func countSearchQuery(who searchWhoMatch) string {
+	query := strings.Replace(countSearchSQL, "{{WITH}}", searchWithClause(len(who.handleRowIDs), who.enabled), 1)
+	return strings.Replace(query, "{{WHO_FILTER}}", searchFilterClause(who), 1)
 }
 
 func searchWithClause(whoHandleCount int, includeWho bool) string {
@@ -122,11 +123,15 @@ func searchWithClause(whoHandleCount int, includeWho bool) string {
 	return strings.Replace(searchWhoWith, "{{WHO_HANDLES}}", placeholders(whoHandleCount), 1)
 }
 
-func searchFilterClause(includeWho bool) string {
-	if includeWho {
-		return searchWhoFilter
+func searchFilterClause(who searchWhoMatch) string {
+	if !who.enabled {
+		return ""
 	}
-	return ""
+	fromMeFilter := ""
+	if who.includeFromMe {
+		fromMeFilter = "m.is_from_me = 1 or"
+	}
+	return strings.Replace(searchWhoFilter, "{{FROM_ME_FILTER}}", fromMeFilter, 1)
 }
 
 func placeholders(count int) string {

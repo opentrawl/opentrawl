@@ -25,6 +25,7 @@ type statusOutput struct {
 	Counts        []control.Count        `json:"counts,omitempty"`
 	Warnings      []string               `json:"warnings,omitempty"`
 	Errors        []string               `json:"errors,omitempty"`
+	Log           *logTailOutput         `json:"log,omitempty"`
 }
 
 type statusFreshness struct {
@@ -65,8 +66,17 @@ func (r *runtime) runSync(args []string) error {
 			return err
 		}
 	}
+	progress := r.progress("sync_progress", "stage", 0)
+	if err := progress.Report(0, "sync started"); err != nil {
+		return err
+	}
+	stopHeartbeat := r.startHeartbeat(progress, "sync still running")
 	result, err := archive.Sync(r.ctx, r.archivePath, r.dbPath)
+	stopHeartbeat()
 	if err != nil {
+		return err
+	}
+	if err := progress.Report(int64(result.Messages), "sync complete"); err != nil {
 		return err
 	}
 	if r.json {
@@ -118,6 +128,7 @@ func (r *runtime) runStatus(args []string) error {
 	archiveMissing := false
 	source, err := messages.Status(r.ctx, r.dbPath)
 	if err != nil {
+		_ = r.logError("source_status_failed", worldMustChange(err, "messages source could not be read", "check the --db path and grant Full Disk Access if the Messages database is protected"))
 		sourceProblem = true
 		out.Errors = append(out.Errors, err.Error())
 	} else {
@@ -126,12 +137,14 @@ func (r *runtime) runStatus(args []string) error {
 	if archive.Exists(r.archivePath) {
 		st, err := archive.OpenExisting(r.ctx, r.archivePath)
 		if err != nil {
+			_ = r.logError("archive_open_failed", worldMustChange(err, "archive could not be read", "run imsgcrawl sync"))
 			archiveProblem = true
 			out.Warnings = append(out.Warnings, "archive unreadable: "+err.Error())
 		} else {
 			defer func() { _ = st.Close() }()
 			archiveStatus, err := st.Status(r.ctx)
 			if err != nil {
+				_ = r.logError("archive_status_failed", worldMustChange(err, "archive status could not be read", "run imsgcrawl sync"))
 				archiveProblem = true
 				out.Warnings = append(out.Warnings, "archive status failed: "+err.Error())
 			} else {
@@ -145,6 +158,7 @@ func (r *runtime) runStatus(args []string) error {
 		out.Warnings = append(out.Warnings, "archive has not been synced")
 	}
 	setStatusState(&out, sourceProblem, archiveProblem, archiveMissing)
+	out.Log = r.readLogTail()
 	return r.print(out)
 }
 
@@ -335,8 +349,28 @@ func (r *runtime) runSearch(args []string) error {
 func (r *runtime) withArchive(fn func(*archive.Store) error) error {
 	st, err := archive.OpenExisting(r.ctx, r.archivePath)
 	if err != nil {
-		return fmt.Errorf("open archive: %w; run imsgcrawl sync first", err)
+		return worldMustChange(err, "open archive failed; run imsgcrawl sync first", "run imsgcrawl sync")
 	}
 	defer func() { _ = st.Close() }()
-	return fn(st)
+	if err := fn(st); errors.Is(err, archive.ErrSchemaOutdated) {
+		return worldMustChange(err, err.Error(), "run imsgcrawl sync")
+	} else {
+		return err
+	}
+}
+
+func (r *runtime) withWritableArchive(fn func(*archive.Store) error) error {
+	if !archive.Exists(r.archivePath) {
+		return worldMustChange(nil, "open archive failed; run imsgcrawl sync first", "run imsgcrawl sync")
+	}
+	st, err := archive.OpenForDerivedRepair(r.ctx, r.archivePath)
+	if err != nil {
+		return worldMustChange(err, "open archive failed; run imsgcrawl sync first", "run imsgcrawl sync")
+	}
+	defer func() { _ = st.Close() }()
+	if err := fn(st); errors.Is(err, archive.ErrSchemaOutdated) {
+		return worldMustChange(err, err.Error(), "run imsgcrawl sync")
+	} else {
+		return err
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -143,12 +144,30 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		t.Fatalf("status missing freshness = %#v", status)
 	}
 	assertRFC3339(t, status.Freshness.LastSync)
+	if status.Log == nil || status.Log.LastRun == nil || status.Log.LastRun.Command != "sync" || status.Log.LastRun.Outcome != "success" {
+		t.Fatalf("status log tail = %#v", status.Log)
+	}
 	firstRef := firstSearchRef(t, archivePath, "launch")
 	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
 	secondRef := firstSearchRef(t, archivePath, "launch")
 	if firstRef != secondRef {
 		t.Fatalf("search ref changed across sync: %q then %q", firstRef, secondRef)
 	}
+	shortRef := firstSearchShortRef(t, archivePath, "launch")
+	if shortRef == "" {
+		t.Fatal("search did not expose a short ref for text output")
+	}
+	shortOpenOut := runOK(t, "--archive", archivePath, "--json", "open", shortRef)
+	var shortOpened openJSON
+	if err := json.Unmarshal([]byte(shortOpenOut), &shortOpened); err != nil {
+		t.Fatalf("short open json = %s err=%v", shortOpenOut, err)
+	}
+	if shortOpened.Ref != firstRef {
+		t.Fatalf("short ref opened %q, want %q", shortOpened.Ref, firstRef)
+	}
+	assertShortRefError(t, archivePath, unusedShortAlias(t, archivePath), "unknown_short_ref")
+	makeAmbiguousShortRef(t, archivePath, "22222")
+	assertShortRefError(t, archivePath, "22222", "ambiguous_short_ref")
 
 	if err := os.Remove(dbPath); err != nil {
 		t.Fatal(err)
@@ -486,6 +505,9 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if !hasString(manifest.Capabilities, "who") {
 		t.Fatalf("capabilities = %#v, missing who", manifest.Capabilities)
 	}
+	if !hasString(manifest.Capabilities, "short_refs") {
+		t.Fatalf("capabilities = %#v, missing short_refs", manifest.Capabilities)
+	}
 }
 
 func TestDoctorChecks(t *testing.T) {
@@ -566,6 +588,76 @@ func firstSearchRef(t *testing.T, archivePath, query string) string {
 		t.Fatalf("search results = %#v, want one result", payload)
 	}
 	return payload.Results[0].Ref
+}
+
+func firstSearchShortRef(t *testing.T, archivePath, query string) string {
+	t.Helper()
+	st, err := archive.OpenExisting(context.Background(), archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	page, err := st.SearchPage(context.Background(), query, archive.SearchOptions{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("search results = %#v, want one result", page.Items)
+	}
+	return page.Items[0].ShortRef
+}
+
+func unusedShortAlias(t *testing.T, archivePath string) string {
+	t.Helper()
+	db, err := sql.Open("sqlite", archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, alias := range []string{"22222", "33333", "44444", "55555", "66666"} {
+		var count int
+		if err := db.QueryRow(`select count(*) from short_refs where alias = ?`, alias).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count == 0 {
+			return alias
+		}
+	}
+	t.Fatal("no unused short alias candidate")
+	return ""
+}
+
+func makeAmbiguousShortRef(t *testing.T, archivePath, alias string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.Exec(`delete from short_refs`); err != nil {
+		t.Fatal(err)
+	}
+	for id := 1; id <= 5; id++ {
+		if _, err := db.Exec(`insert into short_refs(alias, full_ref) values(?, ?)`, alias, archive.MessageRef(strconv.Itoa(id))); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func assertShortRefError(t *testing.T, archivePath, alias, code string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "open", alias}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("open %q error = %v stdout=%s stderr=%s", alias, err, stdout.String(), stderr.String())
+	}
+	var payload errorJSON
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("short ref error json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != code || payload.Error.Remedy == "" {
+		t.Fatalf("short ref error = %#v, want code %q", payload, code)
+	}
 }
 
 func assertSearchEnvelopeKeys(t *testing.T, data []byte) {

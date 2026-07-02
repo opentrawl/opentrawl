@@ -54,6 +54,7 @@ type Message struct {
 	HandleRowID    int64
 	Date           int64
 	Service        string
+	Account        string
 	IsFromMe       bool
 	Text           string
 	HasAttachments bool
@@ -186,7 +187,11 @@ func extractChatMessages(ctx context.Context, db *sql.DB) ([]ChatMessage, error)
 }
 
 func extractMessages(ctx context.Context, db *sql.DB) ([]Message, error) {
-	rows, err := db.QueryContext(ctx, extractMessagesSQL)
+	query, err := extractMessagesQuery(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
 	}
@@ -197,7 +202,7 @@ func extractMessages(ctx context.Context, db *sql.DB) ([]Message, error) {
 		var fromMe int
 		var hasAttachments int
 		var attributedBody []byte
-		if err := rows.Scan(&m.SourceRowID, &m.GUID, &m.HandleRowID, &m.Date, &m.Service, &fromMe, &m.Text, &attributedBody, &hasAttachments); err != nil {
+		if err := rows.Scan(&m.SourceRowID, &m.GUID, &m.HandleRowID, &m.Date, &m.Service, &m.Account, &fromMe, &m.Text, &attributedBody, &hasAttachments); err != nil {
 			return nil, err
 		}
 		if m.Text == "" {

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/imsgcrawl/internal/addressbook"
 	"github.com/openclaw/imsgcrawl/internal/messages"
@@ -63,8 +64,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 }
 
 // ErrSchemaOutdated means the archive predates a schema addition this
-// binary's read queries need. Reads never migrate (they open the archive
-// read-only), so the remedy is one sync, which upgrades the schema.
+// binary's read queries need. Reads never migrate source-derived content, so
+// the remedy is one sync, which upgrades the schema.
 var ErrSchemaOutdated = errors.New("archive schema predates this version; run: imsgcrawl sync")
 
 func OpenExisting(ctx context.Context, path string) (*Store, error) {
@@ -76,6 +77,31 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 	}
 	st, err := store.OpenReadOnly(ctx, path)
 	if err != nil {
+		return nil, err
+	}
+	hasDisplayName, err := tableHasColumn(ctx, st.DB(), "handles", "display_name")
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	hasContactKey, err := tableHasColumn(ctx, st.DB(), "contact_mappings", "contact_key")
+	if err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName || !hasContactKey}, nil
+}
+
+func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
+	if path == "" {
+		path = DefaultPath()
+	}
+	st, err := store.Open(ctx, store.Options{Path: path})
+	if err != nil {
+		return nil, err
+	}
+	if err := shortref.EnsureSchema(ctx, st.DB()); err != nil {
+		_ = st.Close()
 		return nil, err
 	}
 	hasDisplayName, err := tableHasColumn(ctx, st.DB(), "handles", "display_name")
@@ -116,13 +142,14 @@ func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, erro
 		return SyncResult{}, err
 	}
 	contactMappings := applyContactNames(&data, contactNames)
+	ownerHandles := applyOwnerHandles(&data, contactNames, contactMappings)
 	st, err := Open(ctx, options.ArchivePath)
 	if err != nil {
 		return SyncResult{}, err
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Now().UTC()
-	if err := st.ReplaceAll(ctx, data, contactMappings, now); err != nil {
+	if err := st.ReplaceAll(ctx, data, contactMappings, ownerHandles, now); err != nil {
 		return SyncResult{}, err
 	}
 	return SyncResult{
@@ -140,9 +167,12 @@ func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, erro
 	}, nil
 }
 
-func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, syncedAt time.Time) error {
+func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, contactMappings []ContactMapping, ownerHandles []OwnerHandle, syncedAt time.Time) error {
 	return s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		for _, table := range []string{"messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "sync_state"} {
+		if err := shortref.EnsureSchema(ctx, tx); err != nil {
+			return err
+		}
+		for _, table := range []string{"short_refs", "messages_fts", "messages", "chat_messages", "chat_participants", "chats", "handles", "contact_mappings", "owner_handles", "sync_state"} {
 			if _, err := tx.ExecContext(ctx, "delete from "+table); err != nil {
 				return err
 			}
@@ -176,13 +206,21 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 		}
 		for _, m := range data.Messages {
 			_, err := tx.ExecContext(ctx, insertMessagesSQL,
-				m.SourceRowID, m.GUID, m.HandleRowID, m.Date, m.Service, boolInt(m.IsFromMe), m.Text, boolInt(m.HasAttachments))
+				m.SourceRowID, m.GUID, m.HandleRowID, m.Date, m.Service, m.Account, boolInt(m.IsFromMe), m.Text, boolInt(m.HasAttachments))
 			if err != nil {
 				return err
 			}
 			if _, err := tx.ExecContext(ctx, insertMessagesFTSSQL, m.SourceRowID, m.Text); err != nil {
 				return err
 			}
+		}
+		for _, h := range ownerHandles {
+			if _, err := tx.ExecContext(ctx, `insert or ignore into owner_handles(kind, normalized_handle) values(?, ?)`, h.Kind, h.NormalizedHandle); err != nil {
+				return err
+			}
+		}
+		if err := rebuildShortRefsInTx(ctx, tx, data.Messages, syncedAt); err != nil {
+			return err
 		}
 		return replaceSyncState(ctx, tx, data, syncedAt)
 	})
@@ -277,6 +315,25 @@ func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, `alter table contact_mappings add column contact_key text not null default ''`); err != nil {
 			return fmt.Errorf("add contact_mappings.contact_key: %w", err)
 		}
+	}
+	hasAccount, err := tableHasColumn(ctx, db, "messages", "account")
+	if err != nil {
+		return err
+	}
+	if !hasAccount {
+		if _, err := db.ExecContext(ctx, `alter table messages add column account text`); err != nil {
+			return fmt.Errorf("add messages.account: %w", err)
+		}
+	}
+	if _, err := db.ExecContext(ctx, `create table if not exists owner_handles (
+  kind text not null,
+  normalized_handle text not null,
+  primary key (kind, normalized_handle)
+)`); err != nil {
+		return fmt.Errorf("create owner_handles: %w", err)
+	}
+	if err := shortref.EnsureSchema(ctx, db); err != nil {
+		return err
 	}
 	return nil
 }

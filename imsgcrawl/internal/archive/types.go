@@ -79,6 +79,7 @@ type SearchPage struct {
 
 type SearchResult struct {
 	MessageID              string   `json:"message_id"`
+	ShortRef               string   `json:"-"`
 	GUID                   string   `json:"guid"`
 	ChatID                 string   `json:"chat_id,omitempty"`
 	ChatTitle              string   `json:"chat_title,omitempty"`
@@ -101,4 +102,9 @@ type ContactMapping struct {
 	NormalizedHandle string
 	ContactKey       string
 	DisplayName      string
+}
+
+type OwnerHandle struct {
+	Kind             string
+	NormalizedHandle string
 }

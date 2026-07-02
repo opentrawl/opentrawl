@@ -42,6 +42,8 @@ type runtime struct {
 	json        bool
 	dbPath      string
 	archivePath string
+	command     string
+	runLog      *logRun
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
@@ -81,8 +83,12 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath, archivePath: *archivePath}
-	return r.dispatch(rest)
+	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath, archivePath: *archivePath, command: logCommandName(rest[0])}
+	if err := r.startLogRun(); err != nil {
+		return err
+	}
+	err := r.dispatch(rest)
+	return r.finishLogRun(err)
 }
 
 func pullJSONFlag(args []string) (bool, []string) {

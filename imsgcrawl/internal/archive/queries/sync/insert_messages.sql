@@ -4,7 +4,8 @@ insert into messages(
   handle_rowid,
   date,
   service,
+  account,
   is_from_me,
   text,
   has_attachments
-) values(?, ?, ?, ?, ?, ?, ?, ?)
+) values(?, ?, ?, ?, ?, ?, ?, ?, ?)

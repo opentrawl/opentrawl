@@ -4,6 +4,7 @@ select
   coalesce(m.handle_id, 0),
   coalesce(m.date, 0),
   coalesce(m.service, ''),
+  {{ACCOUNT_EXPR}},
   coalesce(m.is_from_me, 0),
   coalesce(m.text, ''),
   coalesce(m.attributedBody, x''),

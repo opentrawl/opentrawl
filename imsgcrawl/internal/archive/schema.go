@@ -1,6 +1,6 @@
 package archive
 
-const schemaVersion = 4
+const schemaVersion = 5
 
 const schema = `
 create table if not exists handles (
@@ -39,6 +39,7 @@ create table if not exists messages (
   handle_rowid integer not null default 0,
   date integer not null default 0,
   service text,
+  account text,
   is_from_me integer not null default 0,
   text text,
   has_attachments integer not null default 0
@@ -51,6 +52,12 @@ create table if not exists contact_mappings (
   normalized_handle text not null,
   contact_key text not null default '',
   display_name text not null,
+  primary key (kind, normalized_handle)
+);
+
+create table if not exists owner_handles (
+  kind text not null,
+  normalized_handle text not null,
   primary key (kind, normalized_handle)
 );
 
