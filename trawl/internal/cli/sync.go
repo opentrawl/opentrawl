@@ -1,0 +1,206 @@
+package cli
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+)
+
+const syncStateWidth = 5
+
+type SyncCmd struct {
+	Sources []string `arg:"" optional:"" name:"source" help:"Source ids"`
+}
+
+type SyncResult struct {
+	Event      string     `json:"event"`
+	Source     string     `json:"source"`
+	State      string     `json:"state"`
+	Message    string     `json:"message,omitempty"`
+	Counts     []Count    `json:"counts,omitempty"`
+	FinishedAt string     `json:"finished_at,omitempty"`
+	Error      *ErrorBody `json:"error,omitempty"`
+}
+
+type syncCrawlerOutcome struct {
+	Event      string      `json:"event,omitempty"`
+	State      string      `json:"state,omitempty"`
+	Message    string      `json:"message,omitempty"`
+	Summary    string      `json:"summary,omitempty"`
+	Stage      string      `json:"stage,omitempty"`
+	Done       json.Number `json:"done,omitempty"`
+	Total      json.Number `json:"total,omitempty"`
+	Counts     []Count     `json:"counts,omitempty"`
+	FinishedAt string      `json:"finished_at,omitempty"`
+	Error      *ErrorBody  `json:"error,omitempty"`
+}
+
+func (c *SyncCmd) Run(r *Runtime) error {
+	sources, err := r.selectedSourceArgs(c.Sources)
+	if err != nil {
+		return err
+	}
+	if len(sources) == 0 {
+		return nil
+	}
+
+	sourceWidth := syncSourceWidth(sources)
+	results := make([]SyncResult, 0, len(sources))
+	for _, source := range sources {
+		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", source.ID)
+		result := syncSource(r, source)
+		results = append(results, result)
+		if r.root.JSON {
+			if err := writeJSON(r.stdout, result); err != nil {
+				return err
+			}
+		} else if err := renderSyncLine(r.stdout, result, sourceWidth, syncStateWidth); err != nil {
+			return err
+		}
+		if syncResultFailed(result) {
+			r.reportSyncFailure(result)
+		}
+	}
+	return syncExit(results)
+}
+
+func syncSource(r *Runtime, source Source) SyncResult {
+	if source.MetadataErr != nil {
+		return syncFailureResult(source, "metadata failed")
+	}
+	data, err := runCrawlerJSONNoTimeout(r.ctx, source.Path, "sync")
+	if err != nil {
+		return syncFailureResult(source, "sync failed")
+	}
+	outcome, ok := lastSyncOutcome(data)
+	if !ok {
+		return syncFailureResult(source, "sync did not return a final JSON outcome")
+	}
+	return normalizeSyncOutcome(source, outcome)
+}
+
+func lastSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
+	lines := strings.Split(string(data), "\n")
+	var last syncCrawlerOutcome
+	found := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		var outcome syncCrawlerOutcome
+		if err := decodeContractJSON([]byte(line), &outcome); err != nil {
+			continue
+		}
+		last = outcome
+		found = true
+	}
+	return last, found
+}
+
+func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult {
+	state := firstNonEmpty(outcome.State)
+	if state == "" {
+		state = "ok"
+	}
+	if outcome.Error != nil && state == "ok" {
+		state = "error"
+	}
+	message := firstNonEmpty(
+		outcome.Message,
+		outcome.Summary,
+		syncErrorMessage(outcome.Error),
+		syncCountsText(outcome.Counts),
+		syncProgressText(outcome),
+	)
+	return SyncResult{
+		Event:      "sync",
+		Source:     source.ID,
+		State:      state,
+		Message:    message,
+		Counts:     outcome.Counts,
+		FinishedAt: outcome.FinishedAt,
+		Error:      outcome.Error,
+	}
+}
+
+func syncFailureResult(source Source, message string) SyncResult {
+	return SyncResult{
+		Event:   "sync",
+		Source:  source.ID,
+		State:   "error",
+		Message: message,
+		Error: &ErrorBody{
+			Code:    "sync_failed",
+			Message: message,
+			Remedy:  fmt.Sprintf("run: trawl doctor %s", source.ID),
+		},
+	}
+}
+
+func syncErrorMessage(body *ErrorBody) string {
+	if body == nil {
+		return ""
+	}
+	return body.Message
+}
+
+func syncCountsText(counts []Count) string {
+	if len(counts) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(counts))
+	for _, count := range counts {
+		parts = append(parts, formatCount(count))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func syncProgressText(outcome syncCrawlerOutcome) string {
+	stage := strings.TrimSpace(outcome.Stage)
+	if stage == "" {
+		return ""
+	}
+	done := outcome.Done.String()
+	total := outcome.Total.String()
+	if done != "" && total != "" {
+		return fmt.Sprintf("%s %s/%s", stage, done, total)
+	}
+	return stage
+}
+
+func syncResultFailed(result SyncResult) bool {
+	switch result.State {
+	case "error", "fail", "missing":
+		return true
+	default:
+		return false
+	}
+}
+
+func syncExit(results []SyncResult) error {
+	failures := 0
+	successes := 0
+	for _, result := range results {
+		if syncResultFailed(result) {
+			failures++
+			continue
+		}
+		successes++
+	}
+	if failures == 0 {
+		return nil
+	}
+	if successes > 0 {
+		return exitErr{code: 3}
+	}
+	return exitErr{code: 1}
+}
+
+func (r *Runtime) reportSyncFailure(result SyncResult) {
+	remedy := fmt.Sprintf("run: trawl doctor %s", result.Source)
+	if result.Error != nil && result.Error.Remedy != "" {
+		remedy = result.Error.Remedy
+	}
+	_, _ = fmt.Fprintf(r.stderr, "%s sync failed. Remedy: %s\n", result.Source, remedy)
+}

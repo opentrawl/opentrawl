@@ -23,6 +23,8 @@ var builtInBinaries = []string{
 	"wacrawl",
 	"clawdex",
 	"photoscrawl",
+	"gogcrawl",
+	"calcrawl",
 }
 
 type Source struct {
@@ -135,18 +137,46 @@ func probeMetadata(ctx context.Context, path string) (Metadata, error) {
 }
 
 func runCrawlerJSON(ctx context.Context, path, verb string) ([]byte, error) {
-	commandCtx, cancel := context.WithTimeout(ctx, crawlerCommandTimeout)
+	return runCrawlerCommandWithTimeout(ctx, path, crawlerCommandTimeout, verb, "--json")
+}
+
+func runCrawlerJSONWithArgs(ctx context.Context, path, verb string, args ...string) ([]byte, error) {
+	commandArgs := append([]string{verb}, args...)
+	commandArgs = append(commandArgs, "--json")
+	return runCrawlerCommandWithTimeout(ctx, path, crawlerCommandTimeout, commandArgs...)
+}
+
+func runCrawlerCommandJSON(ctx context.Context, path string, args ...string) ([]byte, error) {
+	return runCrawlerCommandWithTimeout(ctx, path, crawlerCommandTimeout, args...)
+}
+
+func runCrawlerJSONNoTimeout(ctx context.Context, path, verb string, args ...string) ([]byte, error) {
+	commandArgs := append([]string{verb}, args...)
+	commandArgs = append(commandArgs, "--json")
+	return runCrawlerCommand(ctx, path, commandArgs...)
+}
+
+func runCrawlerCommandWithTimeout(ctx context.Context, path string, timeout time.Duration, args ...string) ([]byte, error) {
+	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(commandCtx, path, verb, "--json")
+	data, err := runCrawlerCommand(commandCtx, path, args...)
+	if err != nil {
+		if commandCtx.Err() != nil {
+			return nil, fmt.Errorf("%s timed out", strings.Join(args, " "))
+		}
+		return nil, err
+	}
+	return data, nil
+}
+
+func runCrawlerCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, path, args...)
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		if commandCtx.Err() != nil {
-			return nil, fmt.Errorf("%s --json timed out", verb)
-		}
-		return nil, fmt.Errorf("%s --json failed", verb)
+		return nil, fmt.Errorf("%s failed", strings.Join(args, " "))
 	}
 	return stdout.Bytes(), nil
 }

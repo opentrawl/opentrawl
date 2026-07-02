@@ -19,6 +19,9 @@ type CLI struct {
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
 	Status StatusCmd `cmd:"" help:"Show crawler health"`
+	Sync   SyncCmd   `cmd:"" help:"Run crawls"`
+	Search SearchCmd `cmd:"" help:"Search crawler archives"`
+	Open   OpenCmd   `cmd:"" help:"Open a crawler ref"`
 	Doctor DoctorCmd `cmd:"" help:"Run crawler diagnostics"`
 }
 
@@ -131,14 +134,11 @@ func (r *Runtime) selectedSources(source string) ([]Source, error) {
 	if source == "" {
 		return sources, nil
 	}
-	for _, candidate := range sources {
-		if candidate.ID == source || candidate.Binary == source {
-			return []Source{candidate}, nil
-		}
+	selected, ok := findSource(sources, source)
+	if ok {
+		return []Source{selected}, nil
 	}
-	return nil, r.writeError("source_not_found",
-		fmt.Sprintf("Source %q was not found.", source),
-		"install the crawler on PATH or add a drop-in manifest in ~/.trawl/apps")
+	return nil, r.writeSourceNotFound(source)
 }
 
 func collectStatus(ctx context.Context, sources []Source) []StatusResult {
@@ -307,7 +307,7 @@ func unknownCommand(args []string) error {
 			continue
 		}
 		switch arg {
-		case "status", "doctor", "help":
+		case "status", "sync", "search", "open", "doctor", "help":
 			return nil
 		default:
 			return usageErr{fmt.Errorf("unknown command %q", arg)}
