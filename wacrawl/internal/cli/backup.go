@@ -82,7 +82,7 @@ func (a *app) runBackupPush(ctx context.Context, args []string) error {
 		return usageErr(errors.New("backup push takes flags only"))
 	}
 	opts.Push = !*noPush
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withStore(ctx, func(st *store.Store) error {
 		result, err := backup.Push(ctx, st, *opts)
 		if err != nil {
 			return err

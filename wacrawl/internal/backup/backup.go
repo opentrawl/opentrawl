@@ -550,9 +550,9 @@ wacrawl backup push
 wacrawl backup push --tag snapshot/before-phone-migration
 ` + "```" + `
 
-The command pulls/rebases this checkout, refreshes the local wacrawl archive
-according to the normal sync policy, writes encrypted row shards and copied
-media blobs, updates the manifest, commits, and pushes this repository.
+The command pulls/rebases this checkout, exports the current local wacrawl
+archive, writes encrypted row shards and copied media blobs, updates the
+manifest, commits, and pushes this repository.
 
 Every changed backup is a Git commit. Optional tags name important checkpoints;
 tag names are visible Git metadata and should not contain sensitive text.
@@ -577,7 +577,7 @@ restore the local age identity file, then run:
 
 ` + "```bash" + `
 wacrawl backup pull
-wacrawl --sync never status
+wacrawl status
 ` + "```" + `
 
 Do not commit the age identity. Only public ` + "`age1...`" + ` recipients belong in

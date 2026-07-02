@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
-	"github.com/openclaw/wacrawl/internal/store"
 
 	_ "modernc.org/sqlite"
 )
@@ -39,13 +38,6 @@ func (a *app) runSQL(ctx context.Context, args []string) error {
 	}
 	if err := validateReadOnlySQL(query); err != nil {
 		return err
-	}
-	if a.syncMode != archiveSyncNever {
-		if err := a.withStore(ctx, func(st *store.Store) error {
-			return a.syncArchive(ctx, st)
-		}); err != nil {
-			return err
-		}
 	}
 	result, err := queryReadOnlySQL(ctx, a.dbPath, query)
 	if err != nil {

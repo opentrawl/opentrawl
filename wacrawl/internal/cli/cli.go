@@ -20,6 +20,11 @@ import (
 	"github.com/openclaw/wacrawl/internal/whatsappdb"
 )
 
+const (
+	defaultMessageLimit = 20
+	maxMessageLimit     = 200
+)
+
 type cliError struct {
 	code int
 	err  error
@@ -39,23 +44,20 @@ func ExitCode(err error) int {
 }
 
 type app struct {
-	stdout     io.Writer
-	stderr     io.Writer
-	json       bool
-	dbPath     string
-	source     string
-	syncMode   archiveSyncMode
-	syncMaxAge time.Duration
+	stdout io.Writer
+	stderr io.Writer
+	json   bool
+	dbPath string
+	source string
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	args, jsonAnywhere := extractJSONFlag(args)
 	global := flag.NewFlagSet("wacrawl", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
 	jsonOut := global.Bool("json", false, "")
 	dbPath := global.String("db", defaultDBPath(), "")
 	source := global.String("source", "", "")
-	syncFlag := global.String("sync", string(archiveSyncAuto), "")
-	syncMaxAge := global.Duration("sync-max-age", 15*time.Minute, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -68,11 +70,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}
-	syncMode, err := parseArchiveSyncMode(*syncFlag)
-	if err != nil {
-		return usageErr(err)
-	}
-	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut, dbPath: *dbPath, source: *source, syncMode: syncMode, syncMaxAge: *syncMaxAge}
+	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut || jsonAnywhere, dbPath: *dbPath, source: *source}
 	rest := global.Args()
 	if len(rest) == 0 {
 		printUsage(stdout)
@@ -118,6 +116,29 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 }
 
+func extractJSONFlag(args []string) ([]string, bool) {
+	out := make([]string, 0, len(args))
+	jsonOut := false
+	literalArgs := false
+	for _, arg := range args {
+		if literalArgs {
+			out = append(out, arg)
+			continue
+		}
+		if arg == "--" {
+			literalArgs = true
+			out = append(out, arg)
+			continue
+		}
+		if arg == "--json" {
+			jsonOut = true
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out, jsonOut
+}
+
 func (a *app) withStore(ctx context.Context, fn func(*store.Store) error) error {
 	st, err := store.Open(ctx, a.dbPath)
 	if err != nil {
@@ -127,13 +148,20 @@ func (a *app) withStore(ctx context.Context, fn func(*store.Store) error) error 
 	return fn(st)
 }
 
-func (a *app) withArchiveStore(ctx context.Context, fn func(*store.Store) error) error {
-	return a.withStore(ctx, func(st *store.Store) error {
-		if err := a.syncArchive(ctx, st); err != nil {
-			return err
+var errNoArchive = errors.New("no archive yet; run wacrawl sync to create it")
+
+// withReadStore opens the archive read-only so read commands cannot
+// change the archive file, per the reads-never-mutate contract rule.
+func (a *app) withReadStore(ctx context.Context, fn func(*store.Store) error) error {
+	st, err := store.OpenReadOnly(ctx, a.dbPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return errNoArchive
 		}
-		return fn(st)
-	})
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	return fn(st)
 }
 
 func (a *app) runStatus(ctx context.Context, args []string) error {
@@ -149,13 +177,29 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("status takes flags only"))
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	err := a.withReadStore(ctx, func(st *store.Store) error {
 		status, err := st.Status(ctx)
 		if err != nil {
 			return err
 		}
+		if a.json {
+			return a.print(newStatusEnvelope(status))
+		}
 		return a.print(status)
 	})
+	if errors.Is(err, errNoArchive) {
+		if a.json {
+			return a.print(statusEnvelope{
+				AppID:   "wacrawl",
+				State:   "missing",
+				Summary: errNoArchive.Error(),
+				Counts:  []statusCount{},
+			})
+		}
+		_, werr := fmt.Fprintln(a.stdout, errNoArchive.Error())
+		return werr
+	}
+	return err
 }
 
 func (a *app) runDoctor(ctx context.Context, args []string) error {
@@ -172,16 +216,23 @@ func (a *app) runDoctor(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("doctor takes flags only"))
 	}
-	src, err := whatsappdb.Discover(ctx, *source)
-	if err != nil {
-		return err
+	src, discoverErr := whatsappdb.Discover(ctx, *source)
+	canaryRan := src.Available && strings.TrimSpace(src.ChatDB) != ""
+	var canaryErr error
+	if canaryRan {
+		canaryErr = sourceCanary(ctx, src)
 	}
-	report := map[string]any{
-		"desktop":  src,
-		"db_path":  a.dbPath,
-		"readonly": true,
+	checks := []doctorCheck{
+		sourceStoreCheck(src, discoverErr, canaryErr),
+		a.archiveCheck(ctx),
 	}
-	return a.print(report)
+	if canaryRan {
+		check, ok := fullDiskAccessCheck(canaryErr)
+		if ok {
+			checks = append(checks, check)
+		}
+	}
+	return a.print(doctorEnvelope{Checks: checks})
 }
 
 func (a *app) runImport(ctx context.Context, command string, args []string) error {
@@ -224,7 +275,7 @@ func (a *app) runContacts(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("contacts export takes no arguments"))
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		contacts, err := st.Contacts(ctx)
 		if err != nil {
 			return err
@@ -254,6 +305,199 @@ func exportContacts(contacts []store.Contact) []control.Contact {
 		out = append(out, control.Contact{DisplayName: name, PhoneNumbers: []string{phone}})
 	}
 	return out
+}
+
+type statusEnvelope struct {
+	AppID     string             `json:"app_id"`
+	State     string             `json:"state"`
+	Summary   string             `json:"summary,omitempty"`
+	Freshness *freshnessEnvelope `json:"freshness,omitempty"`
+	Counts    []statusCount      `json:"counts"`
+}
+
+type doctorEnvelope struct {
+	Checks []doctorCheck `json:"checks"`
+}
+
+type doctorCheck struct {
+	ID      string `json:"id"`
+	State   string `json:"state"`
+	Message string `json:"message,omitempty"`
+	Remedy  string `json:"remedy,omitempty"`
+}
+
+func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) doctorCheck {
+	check := doctorCheck{ID: "source_store"}
+	chatDB := strings.TrimSpace(source.ChatDB)
+	var chatDBStatErr error
+	if chatDB != "" {
+		_, chatDBStatErr = os.Stat(chatDB)
+	}
+	switch {
+	case discoverErr != nil && isPermissionError(discoverErr):
+		check.State = "ok"
+		check.Message = "WhatsApp Desktop store path found"
+	case discoverErr != nil:
+		check.State = "fail"
+		check.Message = discoverErr.Error()
+		check.Remedy = "install WhatsApp Desktop, open it once, or pass --source PATH"
+	case !source.Available:
+		check.State = "missing"
+		check.Message = "WhatsApp Desktop store was not found"
+		check.Remedy = "install WhatsApp Desktop, open it once, or pass --source PATH"
+	case chatDB == "":
+		check.State = "missing"
+		check.Message = "WhatsApp Desktop chat database was not found"
+		check.Remedy = "open WhatsApp Desktop once, then run wacrawl sync"
+	case errors.Is(chatDBStatErr, os.ErrNotExist):
+		check.State = "missing"
+		check.Message = "WhatsApp Desktop chat database was not found"
+		check.Remedy = "open WhatsApp Desktop once, then run wacrawl sync"
+	case chatDBStatErr != nil && !isPermissionError(chatDBStatErr):
+		check.State = "fail"
+		check.Message = chatDBStatErr.Error()
+		check.Remedy = "check the WhatsApp Desktop store path, then run wacrawl doctor again"
+	case canaryErr != nil && !isPermissionError(canaryErr):
+		check.State = "fail"
+		check.Message = "cannot read WhatsApp Desktop database: " + canaryErr.Error()
+		check.Remedy = "close WhatsApp Desktop if it is busy, then run wacrawl doctor again"
+	default:
+		check.State = "ok"
+		check.Message = "WhatsApp Desktop store found"
+	}
+	return check
+}
+
+func sourceCanary(ctx context.Context, source whatsappdb.Source) error {
+	_, err := queryReadOnlySQL(ctx, source.ChatDB, "SELECT count(*) AS tables FROM sqlite_master")
+	return err
+}
+
+func (a *app) archiveCheck(ctx context.Context) doctorCheck {
+	check := doctorCheck{ID: "archive"}
+	info, err := os.Stat(a.dbPath)
+	switch {
+	case strings.TrimSpace(a.dbPath) == "":
+		check.State = "fail"
+		check.Message = "archive database path is empty"
+		check.Remedy = "pass --db PATH or run wacrawl sync with the default archive path"
+	case err != nil && errors.Is(err, os.ErrNotExist):
+		check.State = "missing"
+		check.Message = "archive database does not exist"
+		check.Remedy = "run wacrawl sync"
+	case err != nil:
+		check.State = "error"
+		check.Message = err.Error()
+		check.Remedy = "check the archive path, then run wacrawl sync"
+	case info.IsDir():
+		check.State = "fail"
+		check.Message = "archive path is a directory"
+		check.Remedy = "pass --db PATH pointing at a SQLite database, then run wacrawl sync"
+	default:
+		if _, err := queryReadOnlySQL(ctx, a.dbPath, "SELECT count(*) AS tables FROM sqlite_master"); err != nil {
+			check.State = "error"
+			check.Message = err.Error()
+			check.Remedy = "move the corrupt archive aside, then run wacrawl sync"
+			return check
+		}
+		check.State = "ok"
+		check.Message = "archive database opened"
+	}
+	return check
+}
+
+func fullDiskAccessCheck(canaryErr error) (doctorCheck, bool) {
+	check := doctorCheck{ID: "full_disk_access"}
+	switch {
+	case canaryErr == nil:
+		check.State = "ok"
+		check.Message = "source database canary read succeeded"
+		return check, true
+	case isPermissionError(canaryErr):
+		check.State = "fail"
+		check.Message = "cannot read the WhatsApp Desktop database"
+		check.Remedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
+		return check, true
+	default:
+		return doctorCheck{}, false
+	}
+}
+
+func isPermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "operation not permitted") ||
+		strings.Contains(message, "not authorized") ||
+		strings.Contains(message, "authorization denied")
+}
+
+type freshnessEnvelope struct {
+	LastSync string `json:"last_sync,omitempty"`
+}
+
+type statusCount struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Value any    `json:"value"`
+}
+
+func newStatusEnvelope(status store.Status) statusEnvelope {
+	state := "ok"
+	summary := "archive ready"
+	if status.Messages == 0 {
+		state = "empty"
+		if status.LastImportAt.IsZero() {
+			summary = "archive is empty; run wacrawl sync to populate it"
+		} else {
+			summary = "archive contains no messages from the last sync"
+		}
+	}
+	var freshness *freshnessEnvelope
+	if !status.LastImportAt.IsZero() {
+		freshness = &freshnessEnvelope{LastSync: formatTime(status.LastImportAt)}
+	}
+	var since any
+	if !status.OldestMessage.IsZero() {
+		since = status.OldestMessage.In(time.Local).Year()
+	}
+	return statusEnvelope{
+		AppID:     "wacrawl",
+		State:     state,
+		Summary:   summary,
+		Freshness: freshness,
+		Counts: []statusCount{
+			{ID: "messages", Label: "messages", Value: status.Messages},
+			{ID: "chats", Label: "chats", Value: status.Chats},
+			{ID: "since", Label: "since", Value: since},
+		},
+	}
+}
+
+type messageListOutput struct {
+	Query     string          `json:"query,omitempty"`
+	Returned  int             `json:"returned"`
+	Limit     int             `json:"limit"`
+	Truncated bool            `json:"truncated"`
+	Messages  []store.Message `json:"results"`
+}
+
+func newMessageListOutput(query string, limit int, messages []store.Message) messageListOutput {
+	if messages == nil {
+		messages = []store.Message{}
+	}
+	return messageListOutput{
+		Query:     query,
+		Returned:  len(messages),
+		Limit:     limit,
+		Truncated: limit > 0 && len(messages) == limit,
+		Messages:  messages,
+	}
 }
 
 func contactDisplayName(contact store.Contact) string {
@@ -331,7 +575,7 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		var (
 			chats []store.Chat
 			err   error
@@ -362,7 +606,7 @@ func (a *app) runUnread(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("unread takes flags only"))
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		chats, err := st.ListUnreadChats(ctx, *limit)
 		if err != nil {
 			return err
@@ -389,12 +633,12 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 	if err != nil {
 		return usageErr(err)
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		msgs, err := st.Messages(ctx, resolved)
 		if err != nil {
 			return err
 		}
-		return a.print(msgs)
+		return a.print(newMessageListOutput("", resolved.Limit, msgs))
 	})
 }
 
@@ -422,12 +666,12 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		return usageErr(err)
 	}
 	resolved.Query = query
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		msgs, err := st.Search(ctx, resolved)
 		if err != nil {
 			return err
 		}
-		return a.print(msgs)
+		return a.print(newMessageListOutput(query, resolved.Limit, msgs))
 	})
 }
 
@@ -490,7 +734,7 @@ func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 	return messageFlags{
 		chat:     fs.String("chat", "", ""),
 		sender:   fs.String("sender", "", ""),
-		limit:    fs.Int("limit", 50, ""),
+		limit:    fs.Int("limit", defaultMessageLimit, ""),
 		after:    fs.String("after", "", ""),
 		before:   fs.String("before", "", ""),
 		fromMe:   fs.Bool("from-me", false, ""),
@@ -503,6 +747,9 @@ func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 func (f messageFlags) resolve() (store.MessageFilter, error) {
 	if *f.fromMe && *f.fromThem {
 		return store.MessageFilter{}, errors.New("--from-me and --from-them are mutually exclusive")
+	}
+	if *f.limit < 1 || *f.limit > maxMessageLimit {
+		return store.MessageFilter{}, fmt.Errorf("--limit must be between 1 and %d", maxMessageLimit)
 	}
 	out := store.MessageFilter{
 		ChatJID:  *f.chat,
@@ -548,8 +795,9 @@ func (a *app) print(value any) error {
 			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, v.MediaCopied, v.MediaMissing)
 		return err
 	case store.Status:
-		_, err := fmt.Fprintf(a.stdout, "db=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
-			v.DBPath, v.Chats, v.UnreadChats, v.UnreadMessages, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, formatTime(v.OldestMessage), formatTime(v.NewestMessage), formatTime(v.LastImportAt), v.LastSource)
+		envelope := newStatusEnvelope(v)
+		_, err := fmt.Fprintf(a.stdout, "state=%s\nsummary=%s\ndb=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
+			envelope.State, envelope.Summary, v.DBPath, v.Chats, v.UnreadChats, v.UnreadMessages, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, formatTime(v.OldestMessage), formatTime(v.NewestMessage), formatTime(v.LastImportAt), v.LastSource)
 		return err
 	case []store.Chat:
 		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
@@ -559,10 +807,23 @@ func (a *app) print(value any) error {
 		}
 		return tw.Flush()
 	case []store.Message:
-		for _, m := range v {
-			body := firstNonEmpty(m.Snippet, m.Text, m.MediaTitle, m.MessageType)
-			if _, err := fmt.Fprintf(a.stdout, "[%s] %s / %s / %s\n%s\n\n", formatTime(m.Timestamp), m.ChatName, firstNonEmpty(m.SenderName, m.SenderJID), m.MessageID, body); err != nil {
+		return a.printMessages(v, false, 0)
+	case messageListOutput:
+		return a.printMessages(v.Messages, v.Truncated, v.Limit)
+	case doctorEnvelope:
+		for _, check := range v.Checks {
+			if _, err := fmt.Fprintf(a.stdout, "%s=%s\n", check.ID, check.State); err != nil {
 				return err
+			}
+			if check.Message != "" {
+				if _, err := fmt.Fprintf(a.stdout, "%s_message=%s\n", check.ID, check.Message); err != nil {
+					return err
+				}
+			}
+			if check.Remedy != "" {
+				if _, err := fmt.Fprintf(a.stdout, "%s_remedy=%s\n", check.ID, check.Remedy); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
@@ -611,11 +872,25 @@ func (a *app) print(value any) error {
 	}
 }
 
+func (a *app) printMessages(messages []store.Message, truncated bool, limit int) error {
+	for _, m := range messages {
+		body := firstNonEmpty(m.Snippet, m.Text, m.MediaTitle, m.MessageType)
+		if _, err := fmt.Fprintf(a.stdout, "[%s] %s / %s / %s\n%s\n\n", formatTime(m.Timestamp), m.ChatName, firstNonEmpty(m.SenderName, m.SenderJID), m.MessageID, body); err != nil {
+			return err
+		}
+	}
+	if truncated {
+		_, err := fmt.Fprintf(a.stdout, "showing %d of possibly more; narrow with --limit, --after, --before, or --chat\n", limit)
+		return err
+	}
+	return nil
+}
+
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `wacrawl reads local WhatsApp Desktop data into a readonly archive.
 
 Usage:
-  wacrawl [--db PATH] [--source PATH] [--json] [--sync auto|always|never] <command> [args]
+  wacrawl [--db PATH] [--source PATH] [--json] <command> [args]
   wacrawl --version
 
 Commands:
@@ -636,8 +911,6 @@ Commands:
 Options:
   --db PATH                 Archive database path.
   --source PATH             WhatsApp Desktop source path.
-  --sync auto|always|never  Read-time sync policy. Default: auto.
-  --sync-max-age DURATION   Staleness window for --sync auto. Default: 15m.
   --json                    Emit JSON output.
   --version                 Print the CLI version.
 
@@ -648,10 +921,10 @@ Examples:
   wacrawl doctor
   wacrawl sync
   wacrawl unread --limit 20
-  wacrawl --json --sync never contacts export
+  wacrawl --json contacts export
   wacrawl --json search "invoice" --from-them --after 2026-01-01
   wacrawl sql "SELECT count(*) FROM messages"
-  wacrawl --sync never web
+  wacrawl web
   wacrawl help messages
 `)
 }
@@ -704,7 +977,6 @@ Usage:
 
 Examples:
   wacrawl status
-  wacrawl --sync never status
   wacrawl --json status
 `)
 	case "chats":
@@ -726,10 +998,10 @@ Examples:
 		_, _ = fmt.Fprint(w, `Export archived contacts.
 
 Usage:
-  wacrawl [--json] [--sync auto|always|never] contacts export
+  wacrawl [--json] contacts export
 
 Examples:
-  wacrawl --json --sync never contacts export
+  wacrawl --json contacts export
 `)
 	case "unread":
 		_, _ = fmt.Fprint(w, `List chats with unread messages.
@@ -753,7 +1025,7 @@ Usage:
 Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
-  --limit N        Maximum messages to print. Default: 50.
+  --limit N        Maximum messages to print. Default: 20, maximum: 200.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.
@@ -777,7 +1049,7 @@ Usage:
 Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
-  --limit N        Maximum messages to print. Default: 50.
+  --limit N        Maximum messages to print. Default: 20, maximum: 200.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.
@@ -815,7 +1087,7 @@ Flags:
 
 Examples:
   wacrawl web
-  wacrawl --sync never web --port 8787
+  wacrawl web --port 8787
 `)
 	case "backup":
 		_, _ = fmt.Fprint(w, `Manage encrypted Git backups of the wacrawl archive.
@@ -842,7 +1114,6 @@ Examples:
   wacrawl backup status
   wacrawl backup snapshots
   wacrawl backup push
-  wacrawl --sync never backup push
   wacrawl backup init --repo ~/Projects/backup-wacrawl --remote https://github.com/steipete/backup-wacrawl.git
 `)
 	case "backup init":
@@ -948,7 +1219,7 @@ func formatTime(t time.Time) string {
 	if t.IsZero() {
 		return "-"
 	}
-	return t.UTC().Format(time.RFC3339)
+	return t.In(time.Local).Format(time.RFC3339)
 }
 
 func firstNonEmpty(values ...string) string {

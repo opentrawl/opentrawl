@@ -29,7 +29,7 @@ func (a *app) runWeb(ctx context.Context, args []string) error {
 	if a.json {
 		return usageErr(errors.New("web does not support --json"))
 	}
-	return a.withArchiveStore(ctx, func(st *store.Store) error {
+	return a.withReadStore(ctx, func(st *store.Store) error {
 		return webui.Serve(ctx, st, webui.Config{Port: *port, Output: a.stdout})
 	})
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -16,7 +17,6 @@ import (
 	"time"
 
 	"github.com/openclaw/wacrawl/internal/store"
-	"github.com/openclaw/wacrawl/internal/whatsappdb"
 	_ "modernc.org/sqlite"
 )
 
@@ -34,12 +34,13 @@ func TestRunEndToEnd(t *testing.T) {
 		{"help", []string{"--db", dbPath, "help"}, "wacrawl reads local WhatsApp"},
 		{"version", []string{"--version"}, version},
 		{"metadata", []string{"--json", "metadata"}, `"id": "wacrawl"`},
-		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "message_rows"},
+		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "source_store=ok"},
 		{"import", []string{"--db", dbPath, "--source", source, "import"}, "messages=3"},
 		{"import copy media", []string{"--db", dbPath, "--source", source, "import", "--copy-media"}, "media_copied=1"},
 		{"status", []string{"--db", dbPath, "status"}, "unread_messages=2"},
+		{"status trailing json", []string{"--db", dbPath, "status", "--json"}, `"app_id": "wacrawl"`},
 		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "UNREAD"},
-		{"contacts export", []string{"--db", dbPath, "--json", "--sync", "never", "contacts", "export"}, `"display_name": "Alice Contact"`},
+		{"contacts export", []string{"--db", dbPath, "--json", "contacts", "export"}, `"display_name": "Alice Contact"`},
 		{"chats unread", []string{"--db", dbPath, "chats", "--unread", "--limit", "5"}, "Launch Group"},
 		{"unread", []string{"--db", dbPath, "unread", "--limit", "5"}, "Launch Group"},
 		{"messages", []string{"--db", dbPath, "messages", "--chat", "123@g.us", "--asc"}, "launch now"},
@@ -106,9 +107,7 @@ func TestRunSQLJSONAndReadOnlyValidation(t *testing.T) {
 	}
 
 	invalidDBPath := filepath.Join(t.TempDir(), "archive.db")
-	source := t.TempDir()
-	createDesktopFixture(t, source)
-	err = Run(ctx, []string{"--db", invalidDBPath, "--source", source, "--sync", "always", "sql", "DELETE FROM messages"}, &stdout, &stderr)
+	err = Run(ctx, []string{"--db", invalidDBPath, "sql", "DELETE FROM messages"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), readOnlySelectError) {
 		t.Fatalf("expected read-only select error, got %v", err)
 	}
@@ -141,7 +140,7 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	if err := Run(ctx, []string{"--db", dbPath, "--json", "--sync", "never", "contacts", "export"}, &stdout, &stderr); err != nil {
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "contacts", "export"}, &stdout, &stderr); err != nil {
 		t.Fatalf("contacts export: %v stderr=%s", err, stderr.String())
 	}
 	var payload struct {
@@ -169,13 +168,6 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 	wantNames := []string{"Business Name", "First Last", "Safe Person"}
 	if !reflect.DeepEqual(gotNames, wantNames) {
 		t.Fatalf("names = %#v, want %#v", gotNames, wantNames)
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	err = Run(ctx, []string{"--db", dbPath, "--source", filepath.Join(t.TempDir(), "missing"), "--sync", "always", "contacts", "export"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "source unavailable") {
-		t.Fatalf("expected --sync always to fail without source, got %v", err)
 	}
 }
 
@@ -208,6 +200,12 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 
 func TestMetadataAdvertisesContactExport(t *testing.T) {
 	manifest := controlManifest()
+	if manifest.DisplayName != "WhatsApp" {
+		t.Fatalf("display_name = %q, want WhatsApp", manifest.DisplayName)
+	}
+	if !hasCapability(manifest.Capabilities, "contacts_export") {
+		t.Fatalf("capabilities = %#v, missing contacts_export", manifest.Capabilities)
+	}
 	webCommand, ok := manifest.Commands["web"]
 	if !ok {
 		t.Fatalf("commands = %#v", manifest.Commands)
@@ -215,7 +213,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if webCommand.Mutates || webCommand.JSON {
 		t.Fatalf("web command = %#v", webCommand)
 	}
-	webWant := []string{"wacrawl", "--sync", "never", "web"}
+	webWant := []string{"wacrawl", "web"}
 	if !reflect.DeepEqual(webCommand.Argv, webWant) {
 		t.Fatalf("web argv = %#v, want %#v", webCommand.Argv, webWant)
 	}
@@ -239,9 +237,155 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if command.Mutates || !command.JSON {
 		t.Fatalf("contact-export command = %#v", command)
 	}
-	want := []string{"wacrawl", "--json", "--sync", "never", "contacts", "export"}
+	want := []string{"wacrawl", "--json", "contacts", "export"}
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
+	}
+}
+
+func hasCapability(capabilities []string, want string) bool {
+	for _, capability := range capabilities {
+		if capability == want {
+			return true
+		}
+	}
+	return false
+}
+
+type statusCountPayload struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+	Value any    `json:"value"`
+}
+
+func TestStatusJSONUsesContractEnvelope(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	imported := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	if err := st.ReplaceAll(
+		ctx,
+		store.ImportStats{SourcePath: "/synthetic", DBPath: dbPath, FinishedAt: imported},
+		nil,
+		[]store.Chat{{JID: "chat@g.us", Kind: "group", Name: "Launch Group", LastMessageAt: imported, MessageCount: 1}},
+		nil,
+		nil,
+		[]store.Message{{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "m1", Timestamp: time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC), RawType: 0, Text: "hello"}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status error = %v stderr=%s", err, stderr.String())
+	}
+	var payload struct {
+		AppID     string `json:"app_id"`
+		State     string `json:"state"`
+		Summary   string `json:"summary"`
+		Freshness struct {
+			LastSync string `json:"last_sync"`
+		} `json:"freshness"`
+		Counts []statusCountPayload `json:"counts"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("status json = %s err=%v", stdout.String(), err)
+	}
+	if payload.AppID != "wacrawl" || payload.State != "ok" || payload.Summary == "" {
+		t.Fatalf("payload = %#v", payload)
+	}
+	if _, err := time.Parse(time.RFC3339, payload.Freshness.LastSync); err != nil {
+		t.Fatalf("last_sync = %q err=%v", payload.Freshness.LastSync, err)
+	}
+	if got := statusCountIDs(payload.Counts); !reflect.DeepEqual(got, []string{"messages", "chats", "since"}) {
+		t.Fatalf("status count ids = %#v", got)
+	}
+	if payload.Counts[2].Value != float64(2020) {
+		t.Fatalf("since count = %#v", payload.Counts[2])
+	}
+}
+
+func TestDoctorJSONUsesContractChecks(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	createDesktopFixture(t, source)
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "--json", "doctor"}, &stdout, &stderr); err != nil {
+		t.Fatalf("doctor error = %v stderr=%s", err, stderr.String())
+	}
+	var payload struct {
+		Checks []struct {
+			ID      string `json:"id"`
+			State   string `json:"state"`
+			Message string `json:"message"`
+			Remedy  string `json:"remedy"`
+		} `json:"checks"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("doctor json = %s err=%v", stdout.String(), err)
+	}
+	checks := map[string]string{}
+	for _, check := range payload.Checks {
+		checks[check.ID] = check.State
+		if check.State != "ok" && check.Remedy == "" {
+			t.Fatalf("failing check lacks remedy: %#v", check)
+		}
+	}
+	if checks["source_store"] != "ok" || checks["archive"] != "missing" || checks["full_disk_access"] != "ok" {
+		t.Fatalf("checks = %#v payload=%#v", checks, payload.Checks)
+	}
+}
+
+func TestMessagesAndSearchReportTruncation(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "m1", Timestamp: time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), RawType: 0, Text: "launch one"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "m2", Timestamp: time.Date(2026, 1, 1, 10, 1, 0, 0, time.UTC), RawType: 0, Text: "launch two"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: len(messages)}}, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "messages", "--limit", "1"}, &stdout, &stderr); err != nil {
+		t.Fatalf("messages error = %v stderr=%s", err, stderr.String())
+	}
+	var messagesPayload struct {
+		Returned  int             `json:"returned"`
+		Limit     int             `json:"limit"`
+		Truncated bool            `json:"truncated"`
+		Messages  []store.Message `json:"results"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &messagesPayload); err != nil {
+		t.Fatalf("messages json = %s err=%v", stdout.String(), err)
+	}
+	if messagesPayload.Returned != 1 || messagesPayload.Limit != 1 || !messagesPayload.Truncated || len(messagesPayload.Messages) != 1 {
+		t.Fatalf("messages payload = %#v", messagesPayload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "search", "--limit", "1", "launch"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "showing 1 of possibly more") {
+		t.Fatalf("search should report truncation:\n%s", stdout.String())
 	}
 }
 
@@ -269,9 +413,17 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "invalid time") {
 		t.Fatalf("expected invalid time error, got %v", err)
 	}
+	err = Run(context.Background(), []string{"messages", "--limit", "201"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
+		t.Fatalf("expected message limit error, got %v", err)
+	}
 	err = Run(context.Background(), []string{"search"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "exactly one query") {
 		t.Fatalf("expected query error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"search", "--limit", "0", "query"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
+		t.Fatalf("expected search limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"doctor", "extra"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "flags only") {
@@ -293,10 +445,6 @@ func TestRunUsageErrors(t *testing.T) {
 	err = Run(context.Background(), []string{"--db", "", "status"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "db path is required") {
 		t.Fatalf("expected db path error, got %v", err)
-	}
-	err = Run(context.Background(), []string{"--sync", "sometimes", "status"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "--sync must be one of") {
-		t.Fatalf("expected sync mode error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"status", "extra"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "flags only") {
@@ -338,8 +486,8 @@ func TestRunHelpMenus(t *testing.T) {
 		{"doctor flag", []string{"doctor", "--help"}, "wacrawl doctor [--source PATH]"},
 		{"status flag", []string{"status", "--help"}, "unread counts"},
 		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N] [--unread]"},
-		{"contacts topic", []string{"help", "contacts"}, "wacrawl [--json] [--sync auto|always|never] contacts export"},
-		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] [--sync auto|always|never] contacts export"},
+		{"contacts topic", []string{"help", "contacts"}, "wacrawl [--json] contacts export"},
+		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] contacts export"},
 		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
 		{"search flag", []string{"search", "--help"}, "wacrawl search [flags] <query>"},
@@ -383,148 +531,119 @@ func TestRunHelpMenus(t *testing.T) {
 	}
 }
 
-func TestReadCommandsSyncArchive(t *testing.T) {
+func TestReadCommandsNeverMutateArchive(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
 	createDesktopFixture(t, source)
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
 
 	var stdout, stderr bytes.Buffer
-	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "status"}, &stdout, &stderr); err != nil {
+	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "sync"}, &stdout, &stderr); err != nil {
+		t.Fatalf("sync error = %v stderr=%s", err, stderr.String())
+	}
+	before := archiveChecksum(t, dbPath)
+
+	missingSource := filepath.Join(t.TempDir(), "missing")
+	readCommands := [][]string{
+		{"status"},
+		{"chats", "--limit", "5"},
+		{"unread", "--limit", "5"},
+		{"messages", "--limit", "2"},
+		{"search", "--limit", "2", "launch"},
+		{"--json", "contacts", "export"},
+	}
+	for _, command := range readCommands {
+		t.Run(strings.Join(command, " "), func(t *testing.T) {
+			stdout.Reset()
+			stderr.Reset()
+			args := append([]string{"--db", dbPath, "--source", missingSource}, command...)
+			if err := Run(ctx, args, &stdout, &stderr); err != nil {
+				t.Fatalf("Run(%v) error = %v stderr=%s", args, err, stderr.String())
+			}
+		})
+	}
+
+	after := archiveChecksum(t, dbPath)
+	if before != after {
+		t.Fatalf("read commands changed archive checksum: before=%x after=%x", before, after)
+	}
+}
+
+func TestNeverSyncedReadPath(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	missingSource := filepath.Join(t.TempDir(), "missing")
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--source", missingSource, "--json", "status"}, &stdout, &stderr); err != nil {
 		t.Fatalf("status error = %v stderr=%s", err, stderr.String())
 	}
-	if !strings.Contains(stdout.String(), "messages=3") || !strings.Contains(stdout.String(), "last_import=20") {
-		t.Fatalf("status should auto-sync archive:\n%s", stdout.String())
+	var status struct {
+		AppID   string               `json:"app_id"`
+		State   string               `json:"state"`
+		Summary string               `json:"summary"`
+		Counts  []statusCountPayload `json:"counts"`
 	}
-	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
-		t.Fatalf("stderr should note sync, got %q", stderr.String())
+	if err := json.Unmarshal(stdout.Bytes(), &status); err != nil {
+		t.Fatalf("status json = %s err=%v", stdout.String(), err)
 	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", source, "--sync", "never", "status"}, &stdout, &stderr); err != nil {
-		t.Fatalf("status --sync never error = %v stderr=%s", err, stderr.String())
+	if status.AppID != "wacrawl" || status.State != "missing" || !strings.Contains(status.Summary, "wacrawl sync") {
+		t.Fatalf("status = %#v", status)
 	}
-	if !strings.Contains(stdout.String(), "messages=0") || !strings.Contains(stdout.String(), "last_import=-") {
-		t.Fatalf("status should stay archive-only with --sync never:\n%s", stdout.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", source, "--sync", "always", "search", "launch"}, &stdout, &stderr); err != nil {
-		t.Fatalf("search --sync always error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "[launch] now") {
-		t.Fatalf("search should sync before reading:\n%s", stdout.String())
+	if len(status.Counts) != 0 {
+		t.Fatalf("missing archive should declare no counts, got %#v", status.Counts)
 	}
 
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", source, "--sync", "always", "sql", "SELECT count(*) AS messages FROM messages"}, &stdout, &stderr); err != nil {
-		t.Fatalf("sql --sync always error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "messages") || !strings.Contains(stdout.String(), "3") {
-		t.Fatalf("sql should sync before reading:\n%s", stdout.String())
-	}
-	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
-		t.Fatalf("sql should report sync before reading, got %q", stderr.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "archive.db"), "--source", filepath.Join(source, "missing"), "--sync", "always", "status"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "source unavailable") {
-		t.Fatalf("expected --sync always to fail without source, got %v", err)
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "contacts.db"), "--source", source, "--sync", "always", "--json", "contacts", "export"}, &stdout, &stderr); err != nil {
-		t.Fatalf("contacts export --sync always error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), `"display_name": "Alice Contact"`) {
-		t.Fatalf("contacts export should sync before reading:\n%s", stdout.String())
-	}
-	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
-		t.Fatalf("contacts export should report sync before reading, got %q", stderr.String())
-	}
-
-	addDesktopContact(t, source, "333@s.whatsapp.net", "+333", "Charlie Contact")
-	autoDB := filepath.Join(t.TempDir(), "auto-contacts.db")
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", autoDB, "--source", source, "--sync", "always", "--json", "status"}, &stdout, &stderr); err != nil {
-		t.Fatalf("seed contact auto-sync archive: %v stderr=%s", err, stderr.String())
-	}
-	addDesktopContact(t, source, "444@s.whatsapp.net", "+444", "Delta Contact")
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", autoDB, "--source", source, "--sync", "auto", "--sync-max-age", "0s", "--json", "contacts", "export"}, &stdout, &stderr); err != nil {
-		t.Fatalf("contacts export --sync auto error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), `"display_name": "Delta Contact"`) {
-		t.Fatalf("contacts export should auto-sync contact count drift:\n%s", stdout.String())
-	}
-	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
-		t.Fatalf("contacts export should report contact drift sync, got %q", stderr.String())
-	}
-
-	updateDesktopContact(t, source, "444@s.whatsapp.net", "+444", "Delta Renamed")
-	markDesktopContactsModified(t, source, time.Now().Add(time.Second))
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", autoDB, "--source", source, "--sync", "auto", "--sync-max-age", "0s", "--json", "contacts", "export"}, &stdout, &stderr); err != nil {
-		t.Fatalf("contacts export --sync auto same-count edit error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), `"display_name": "Delta Renamed"`) {
-		t.Fatalf("contacts export should auto-sync contact DB mtime drift:\n%s", stdout.String())
-	}
-	if !strings.Contains(stderr.String(), "sync: syncing WhatsApp Desktop snapshot") {
-		t.Fatalf("contacts export should report contact mtime drift sync, got %q", stderr.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	if err := Run(ctx, []string{"--db", filepath.Join(t.TempDir(), "contacts.db"), "--source", source, "--sync", "never", "--json", "contacts", "export"}, &stdout, &stderr); err != nil {
-		t.Fatalf("contacts export --sync never error = %v stderr=%s", err, stderr.String())
-	}
-	if strings.Contains(stdout.String(), `"display_name"`) {
-		t.Fatalf("contacts export should stay archive-only with --sync never:\n%s", stdout.String())
+	for _, command := range [][]string{
+		{"chats"},
+		{"unread"},
+		{"messages"},
+		{"search", "launch"},
+		{"--json", "contacts", "export"},
+	} {
+		t.Run(strings.Join(command, " "), func(t *testing.T) {
+			stdout.Reset()
+			stderr.Reset()
+			args := append([]string{"--db", dbPath, "--source", missingSource}, command...)
+			err := Run(ctx, args, &stdout, &stderr)
+			if err == nil || !strings.Contains(err.Error(), "wacrawl sync") {
+				t.Fatalf("Run(%v) should fail with sync guidance, got err=%v", args, err)
+			}
+			if _, statErr := os.Stat(dbPath); !os.IsNotExist(statErr) {
+				t.Fatalf("read command created the archive at %s", dbPath)
+			}
+		})
 	}
 }
 
-func addDesktopContact(t *testing.T, dir, jid, phone, name string) {
+func archiveChecksum(t *testing.T, path string) [32]byte {
 	t.Helper()
-	db, err := sql.Open("sqlite", filepath.Join(dir, "ContactsV2.sqlite"))
+	checkpointArchive(t, path)
+	data, err := os.ReadFile(path) // #nosec G304 -- test reads its temp archive.
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sha256.Sum256(data)
+}
+
+func checkpointArchive(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = db.Close() }()
-	_, err = db.Exec(`insert into ZWAADDRESSBOOKCONTACT values (?, ?, ?, '', '', '', '', '', '', 700000000)`, jid, phone, name)
-	if err != nil {
+	if _, err := db.Exec("pragma wal_checkpoint(truncate)"); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func updateDesktopContact(t *testing.T, dir, jid, phone, name string) {
-	t.Helper()
-	db, err := sql.Open("sqlite", filepath.Join(dir, "ContactsV2.sqlite"))
-	if err != nil {
-		t.Fatal(err)
+func statusCountIDs(counts []statusCountPayload) []string {
+	ids := make([]string, 0, len(counts))
+	for _, count := range counts {
+		ids = append(ids, count.ID)
 	}
-	defer func() { _ = db.Close() }()
-	_, err = db.Exec(`update ZWAADDRESSBOOKCONTACT set ZPHONENUMBER = ?, ZFULLNAME = ?, ZLASTUPDATED = 700000100 where ZWHATSAPPID = ?`, phone, name, jid)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func markDesktopContactsModified(t *testing.T, dir string, ts time.Time) {
-	t.Helper()
-	path := filepath.Join(dir, "ContactsV2.sqlite")
-	if err := os.Chtimes(path, ts, ts); err != nil {
-		t.Fatal(err)
-	}
+	return ids
 }
 
 func TestBackupCommands(t *testing.T) {
@@ -554,7 +673,7 @@ func TestBackupCommands(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if err := Run(ctx, []string{"--db", dbPath, "--sync", "never", "backup", "push", "--config", config, "--no-push", "--tag", "snapshot/initial"}, &stdout, &stderr); err != nil {
+	if err := Run(ctx, []string{"--db", dbPath, "backup", "push", "--config", config, "--no-push", "--tag", "snapshot/initial"}, &stdout, &stderr); err != nil {
 		t.Fatalf("backup push error = %v stderr=%s", err, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "encrypted=true") || !strings.Contains(stdout.String(), "messages=3") || !strings.Contains(stdout.String(), "media_files=1") || !strings.Contains(stdout.String(), "tag=snapshot/initial") {
@@ -605,7 +724,7 @@ func TestBackupCommands(t *testing.T) {
 	}
 	stdout.Reset()
 	stderr.Reset()
-	if err := Run(ctx, []string{"--db", restoredDB, "--sync", "never", "search", "launch"}, &stdout, &stderr); err != nil {
+	if err := Run(ctx, []string{"--db", restoredDB, "search", "launch"}, &stdout, &stderr); err != nil {
 		t.Fatalf("restored search error = %v stderr=%s", err, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "[launch] now") {
@@ -614,63 +733,6 @@ func TestBackupCommands(t *testing.T) {
 	restoredMedia := filepath.Join(filepath.Dir(restoredDB), "media", "Media", "123@g.us", "a", "test.jpg")
 	if body, err := os.ReadFile(restoredMedia); err != nil || string(body) != "image" { // #nosec G304 -- test reads its expected temp restore path.
 		t.Fatalf("restored media = %q err=%v", body, err)
-	}
-}
-
-func TestSyncArchiveKeepsExistingArchiveWhenSourceUnavailable(t *testing.T) {
-	ctx := context.Background()
-	st, err := store.Open(ctx, filepath.Join(t.TempDir(), "archive.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = st.Close() }()
-
-	now := time.Now().UTC().Add(-time.Hour)
-	if err := st.ReplaceAll(
-		ctx,
-		store.ImportStats{SourcePath: "/missing", DBPath: st.Path(), FinishedAt: now},
-		nil,
-		[]store.Chat{{JID: "chat", Kind: "dm", Name: "Chat", LastMessageAt: now}},
-		nil,
-		nil,
-		[]store.Message{{SourcePK: 1, ChatJID: "chat", MessageID: "a", Timestamp: now, RawType: 0, Text: "cached"}},
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	var stderr bytes.Buffer
-	a := app{stderr: &stderr, source: filepath.Join(t.TempDir(), "missing"), syncMode: archiveSyncAuto, syncMaxAge: 0}
-	if err := a.syncArchive(ctx, st); err != nil {
-		t.Fatalf("syncArchive should keep existing archive, got %v", err)
-	}
-	if !strings.Contains(stderr.String(), "using existing archive") {
-		t.Fatalf("expected fallback warning, got %q", stderr.String())
-	}
-}
-
-func TestSyncDecisionHelpers(t *testing.T) {
-	now := time.Now().UTC()
-	status := store.Status{Messages: 3, NewestMessage: now, LastImportAt: now.Add(-time.Hour)}
-	if !archiveNeedsSyncCheck(status, 15*time.Minute) {
-		t.Fatal("old import should need sync check")
-	}
-	if archiveNeedsSyncCheck(status, -1) {
-		t.Fatal("negative max age should disable auto checks")
-	}
-	if !sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: now.Add(time.Second).Format(time.RFC3339)}, status) {
-		t.Fatal("newer source timestamp should be ahead")
-	}
-	if !sourceAheadOfArchive(whatsappdb.Source{MessageRows: 4, NewestMessage: now.Format(time.RFC3339)}, status) {
-		t.Fatal("different source row count should be ahead")
-	}
-	if sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: now.Format(time.RFC3339)}, status) {
-		t.Fatal("equal source should not be ahead")
-	}
-	if sourceAheadOfArchive(whatsappdb.Source{MessageRows: 3, NewestMessage: "not-time"}, status) {
-		t.Fatal("invalid source timestamp should not be ahead")
-	}
-	if !sourceAheadOfArchive(whatsappdb.Source{}, store.Status{}) {
-		t.Fatal("empty archive should sync")
 	}
 }
 
@@ -711,12 +773,6 @@ func TestCLIHelpers(t *testing.T) {
 	}
 	if filter.FromMe == nil || *filter.FromMe || filter.After == nil || filter.Before == nil {
 		t.Fatalf("unexpected resolved filter: %+v", filter)
-	}
-	if mode, err := parseArchiveSyncMode("auto"); err != nil || mode != archiveSyncAuto {
-		t.Fatalf("unexpected sync mode parse: %q %v", mode, err)
-	}
-	if _, err := parseArchiveSyncMode("nope"); err == nil {
-		t.Fatal("expected invalid sync mode error")
 	}
 }
 

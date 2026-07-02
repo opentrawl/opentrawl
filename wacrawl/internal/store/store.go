@@ -183,6 +183,36 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return s, nil
 }
 
+// OpenReadOnly opens an existing archive for read commands. It never
+// creates, migrates or checkpoints the database, so reads cannot change
+// the archive file. A missing archive surfaces as os.ErrNotExist.
+func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("db path is required")
+	}
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	dsn := sqlitedsn.File(
+		path,
+		sqlitedsn.P("mode", "ro"),
+		sqlitedsn.P("_pragma", "query_only(1)"),
+		sqlitedsn.P("_pragma", "busy_timeout(5000)"),
+	)
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite read-only: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping sqlite read-only: %w", err)
+	}
+	return &Store{db: db, q: storedb.New(db), path: path}, nil
+}
+
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
