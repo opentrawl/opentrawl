@@ -105,6 +105,30 @@ checklist, same PR shape, same review gates, same proof format — so
 parallel work lands uniformly instead of as six bespoke
 interpretations.
 
+## Phase 2.5: the proof — smoke suite
+
+Goal: demonstrate, not assert, that the suite works. This is the
+acceptance gate for everything: Josh reviews smoke results, not diffs.
+"Works" means all four of these, per crawler and across them:
+
+1. Fresh: every archive syncs to now, and freshness reporting is
+   honest (status says when the archive last matched the source).
+2. Useful: real questions get real answers through `trawl` — find a
+   specific conversation across sources, who said what when, what
+   happened last week, who is in which group — with correct,
+   verifiable results, not plausible ones.
+3. Correct: parity between archive and source proven by the crawler's
+   own commands wherever the source store is countable.
+4. Documented truthfully: each crawler's README claims match observed
+   behaviour — commands exist as documented, outputs look as shown,
+   privacy statements hold. Doc drift is a smoke failure.
+
+Mechanics: `scripts/smoke` lives in the repo and is generic (no
+personal data in the script or in anything committed); its output is a
+local-only report for Josh. Runs after every substantial change; the
+conformance harness checks the contract, the smoke suite checks
+reality.
+
 ## Phase 3: full federation
 
 Goal: `trawl` grows from skeleton to the complete surface: `trawl
@@ -124,9 +148,8 @@ on every row.
 ## Phase 4: the Mac app
 
 Gated on two proofs (decided 2026-07-02): the TCC signing and
-inheritance spike is done, and crawler correctness is proven by a
-smoke suite of genuinely useful cross-source queries through `trawl` —
-the app builds on trust, so trust gets built first.
+inheritance spike is done (it is — see docs/tcc.md), and phase 2.5
+passes — the app builds on trust, so trust gets built first.
 
 Also decided 2026-07-02: upstream PRs to openclaw are held until the
 product is stable — one coherent pass per repo later instead of
