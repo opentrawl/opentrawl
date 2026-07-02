@@ -15,11 +15,19 @@
 #
 # Output is a human report for the owner's eyes; it prints archive
 # content, so it never belongs in a commit, an issue, or CI logs.
+#
+# Every raw crawler output the run elicits is also saved, untruncated,
+# under ~/.trawl/smoke-raw/<timestamp>/. The script only checks what a
+# script can check; a model reads that transcript afterwards and judges
+# whether the outputs are actually correct — that review is part of the
+# gate, not an optional extra.
 set -uo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 bin="$repo/.dev/bin"
 queries="${TRAWL_SMOKE_QUERIES:-$HOME/.trawl/smoke.jsonl}"
+rawdir="$HOME/.trawl/smoke-raw/$(date +%Y%m%d-%H%M%S)"
+mkdir -p "$rawdir"
 export PATH="$bin:$PATH"
 
 pass=0 fail=0 warn=0
@@ -32,7 +40,8 @@ meh() { warn=$((warn + 1)); printf '  warn  %s\n' "$1"; }
 [ -x "$bin/trawl" ] || { echo "run scripts/dev-bin first" >&2; exit 1; }
 
 echo "== sources =="
-sources="$(trawl status --json 2>/dev/null | jq -r '.[] | "\(.app_id) \(.state)"')"
+trawl status --json > "$rawdir/trawl-status.json" 2>/dev/null
+sources="$(jq -r '.[] | "\(.app_id) \(.state)"' "$rawdir/trawl-status.json")"
 if [ -z "$sources" ]; then
   echo "trawl status --json returned nothing usable" >&2
   exit 1
@@ -65,10 +74,11 @@ while read -r source state; do
   declares_search="$("$source" metadata --json 2>/dev/null |
     jq -r '(.capabilities // []) | map(ascii_downcase) | contains(["search"])')"
   if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
-    ref="$("$source" search "the" --json --limit 1 2>/dev/null | jq -r '.results[0].ref // empty')"
+    "$source" search "the" --json --limit 3 > "$rawdir/$source-search.json" 2>/dev/null
+    ref="$(jq -r '.results[0].ref // empty' "$rawdir/$source-search.json" 2>/dev/null)"
     if [ -z "$ref" ]; then
       meh "round-trip skipped: search \"the\" matched nothing"
-    elif "$source" open "$ref" --json >/dev/null 2>&1; then
+    elif "$source" open "$ref" --json > "$rawdir/$source-open.json" 2>&1; then
       ok "search → open round-trip ($ref)"
     else
       bad "open failed on ref search issued: $ref"
@@ -96,11 +106,12 @@ done <<< "$sources"
 echo
 echo "== cross-source, through trawl =="
 probe() { # probe <query> <source-or-empty> -> search results JSON
+  local capture="$rawdir/trawl-search-$(echo "$1" | tr -c 'a-zA-Z0-9' '-').json"
   if [ -n "$2" ]; then
     trawl search "$1" --json --limit 20 --source "$2" 2>/dev/null
   else
     trawl search "$1" --json --limit 20 2>/dev/null
-  fi
+  fi | tee "$capture"
 }
 if [ -f "$queries" ]; then
   while IFS= read -r line; do
@@ -134,4 +145,5 @@ fi
 echo
 echo "== verdict: $pass pass, $warn warn, $fail fail =="
 for f in "${failures[@]-}"; do [ -n "$f" ] && echo "  FAIL: $f"; done
+echo "raw transcript for model review: $rawdir"
 [ "$fail" -eq 0 ]
