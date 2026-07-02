@@ -1,8 +1,12 @@
+---
+written_by: ai
+---
+
 # Markdown Storage
 
-Clawdex stores everything as files on disk. There is no database, no opaque
-binary format, no migration step that locks you out. If clawdex disappeared
-tomorrow, you would still have your data, in plaintext, in a Git repo.
+Clawdex stores person truth as files on disk. The only database is a derived
+SQLite lookup index. If clawdex disappeared tomorrow, you would still have
+your data, in plaintext, in a Git repo.
 
 ## Layout
 
@@ -20,9 +24,7 @@ tomorrow, you would still have your data, in plaintext, in a Git repo.
       attachments/
         ...                              # opt-in; not yet wired into the CLI
   index/
-    emails.json
-    phones.json
-    handles.json
+    index.db
   .clawdex/
     repairs/                             # backups written by `doctor --repair`
 ```
@@ -93,17 +95,21 @@ order, which is intentional — `ls notes/` is a serviceable timeline.
 
 See [Notes](notes.md) and [Timeline](timeline.md).
 
-## Index files
+## Index database
 
-`index/*.json` are derived caches:
+`index/index.db` is a derived SQLite cache. It stores:
 
-- `emails.json` — email → person ID
-- `phones.json` — normalized phone → person ID
-- `handles.json` — service handle (X, Discord, …) → person ID
+- `people` — person IDs and names
+- `identifiers` — normalized emails, phone numbers and handles
+- a FTS5 table for names, aliases and handles
 
-Clawdex rebuilds these on read whenever they're stale. They are safe to
-delete — the next command will regenerate them. They are *not* the source
-of truth: markdown is.
+Clawdex checks a fingerprint of the person markdown when it opens the index:
+person count, newest `person.md` mtime and a content hash of frontmatter. If
+the database is stale, clawdex rebuilds it and writes one stderr line:
+`index rebuilt: N people`.
+
+The database is safe to delete. The next read command will regenerate it. It
+is not the source of truth: markdown is.
 
 ## clawdex.toml
 

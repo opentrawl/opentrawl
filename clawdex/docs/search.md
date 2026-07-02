@@ -1,7 +1,11 @@
+---
+written_by: ai
+---
+
 # Search
 
-`clawdex search <query>` finds people and notes that match a substring. It's
-a local, offline, full-corpus search — no external service.
+`clawdex search <query>` finds people by indexed names, aliases and handles,
+and notes by text. It is local and offline. No external service is involved.
 
 ```bash
 clawdex search dinner
@@ -30,7 +34,10 @@ snippet for the stable ID, which is friendlier to scripts.
 
 ## How matching works
 
-The query is a case-insensitive substring match against indexed fields.
+Person lookup uses the derived SQLite index. Prefix queries work for names,
+aliases and handles, so `mo` matches `Mohamed`.
+
+Notes use a case-insensitive substring match against note fields.
 For phone numbers the search normalizes both the query and the stored
 value (strips spaces, dashes, parentheses, and a leading `+`), so any of
 these find Sally:
@@ -62,14 +69,12 @@ Derived indexes live under `index/`:
 
 ```text
 index/
-  emails.json
-  phones.json
-  handles.json
+  index.db
 ```
 
-These are rebuilt automatically as the markdown changes. They are
-*derivable*, not authoritative — delete the folder and clawdex regenerates
-it on the next read. Markdown is canonical; see
+This database is rebuilt automatically as the markdown changes. It is derived,
+not authoritative. Delete it and clawdex regenerates it on the next read.
+Markdown is canonical; see
 [Markdown Storage](markdown-storage.md).
 
 ## Related pages

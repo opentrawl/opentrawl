@@ -1,6 +1,7 @@
 package index
 
 import (
+	"bytes"
 	"image"
 	"image/color"
 	"image/png"
@@ -153,6 +154,58 @@ func TestFindPersonVariantsAndErrors(t *testing.T) {
 	}
 	if _, err := s.FindPerson(""); err == nil {
 		t.Fatal("expected empty query error")
+	}
+}
+
+func TestFindPersonUsesFTSPrefixAlias(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Date(2026, 5, 8, 9, 0, 0, 0, time.UTC)
+	p := markdown.NewPerson("M Example", now)
+	p.Path = filepath.Join(r.PeopleDir(), "m-example", "person.md")
+	p.Body = "# M Example\n"
+	p.Sources = map[string]model.PersonSource{"manual": {Names: []string{"Mohamed Example"}}}
+	if err := markdown.WritePerson(p.Path, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rebuild(); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.FindPerson("mo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != p.ID {
+		t.Fatalf("got %#v, want %s", got, p.ID)
+	}
+}
+
+func TestReadCommandsDoNotRewritePersonMarkdown(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	p, err := s.AddPerson("Read Only", []string{"read@example.com"}, []string{"+1 555 0100"}, []string{"keep"}, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(p.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.People(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FindPerson("read@example.com"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Search("read"); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(p.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("person markdown changed after reads\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 }
 

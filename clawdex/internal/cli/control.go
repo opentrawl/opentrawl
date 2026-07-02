@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -15,8 +14,6 @@ import (
 	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/crawlkit/control"
 )
-
-const indexRebuildRemedy = "run a write command that rebuilds the index, such as clawdex import contacts --from <crawler>"
 
 type MetadataCmd struct{}
 
@@ -168,28 +165,12 @@ func (r *Runtime) indexDoctorCheck(people []model.Person, contactsOK, contactsMi
 		}
 		return failCheck("index", "cannot check index until contacts_repo passes", "fix contacts_repo first")
 	}
-	info, err := os.Stat(r.repo.IndexDir())
+	status, err := r.readOnlyStore().IndexStatus()
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return failCheck("index", fmt.Sprintf("index not built at %s", r.repo.IndexDir()), indexRebuildRemedy)
-		}
-		return failCheck("index", fmt.Sprintf("cannot read index at %s: %v", r.repo.IndexDir(), err), indexRebuildRemedy)
+		return failCheck("index", fmt.Sprintf("index database cannot be opened: %v", err), "fix contacts_repo first")
 	}
-	if !info.IsDir() {
-		return failCheck("index", fmt.Sprintf("index path is not a directory at %s", r.repo.IndexDir()), indexRebuildRemedy)
-	}
-	indexIDs, err := readIndexPeopleIDs(r.repo.IndexDir())
-	if err != nil {
-		return failCheck("index", fmt.Sprintf("index file failed to parse: %v", err), indexRebuildRemedy)
-	}
-	markdownIDs := peopleIDSet(people)
-	if len(indexIDs) != len(markdownIDs) {
-		return failCheck("index", fmt.Sprintf("index has %d people, markdown has %d", len(indexIDs), len(markdownIDs)), indexRebuildRemedy)
-	}
-	for id := range markdownIDs {
-		if !indexIDs[id] {
-			return failCheck("index", "index people do not match markdown people", indexRebuildRemedy)
-		}
+	if status.People != len(people) {
+		return failCheck("index", fmt.Sprintf("index has %d people, markdown has %d", status.People, len(people)), "rerun clawdex doctor")
 	}
 	return okCheck("index")
 }
@@ -242,37 +223,6 @@ func (r *Runtime) personRepairProblemCount() (int, error) {
 		}
 	}
 	return problems, nil
-}
-
-func readIndexPeopleIDs(indexDir string) (map[string]bool, error) {
-	ids := map[string]bool{}
-	for _, name := range []string{"emails.json", "phones.json", "handles.json"} {
-		data, err := os.ReadFile(filepath.Join(indexDir, name))
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", name, err)
-		}
-		var values map[string]string
-		if err := json.Unmarshal(data, &values); err != nil {
-			return nil, fmt.Errorf("%s: %w", name, err)
-		}
-		for _, id := range values {
-			id = strings.TrimSpace(id)
-			if id != "" {
-				ids[id] = true
-			}
-		}
-	}
-	return ids, nil
-}
-
-func peopleIDSet(people []model.Person) map[string]bool {
-	ids := map[string]bool{}
-	for _, person := range people {
-		if strings.TrimSpace(person.ID) != "" {
-			ids[person.ID] = true
-		}
-	}
-	return ids
 }
 
 func peopleDirMissing(repoPath string) bool {

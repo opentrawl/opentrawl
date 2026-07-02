@@ -3,8 +3,8 @@ package google
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -219,21 +219,29 @@ func TestParseGogPhotoURL(t *testing.T) {
 }
 
 func TestFetchAvatarURL(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/missing" {
-			http.NotFound(w, r)
-			return
+	oldTransport := http.DefaultTransport
+	http.DefaultTransport = roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		resp := &http.Response{
+			StatusCode: http.StatusOK,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader("png")),
+			Request:    req,
 		}
-		if r.URL.Path == "/too-large" {
-			_, _ = w.Write(make([]byte, maxAvatarBytes+1))
-			return
+		switch req.URL.Path {
+		case "/missing":
+			resp.StatusCode = http.StatusNotFound
+			resp.Body = io.NopCloser(strings.NewReader("missing"))
+		case "/too-large":
+			resp.Body = io.NopCloser(strings.NewReader(strings.Repeat("x", maxAvatarBytes+1)))
+		default:
+			resp.Header.Set("Content-Type", "image/png; charset=utf-8")
 		}
-		w.Header().Set("Content-Type", "image/png; charset=utf-8")
-		_, _ = w.Write([]byte("png"))
-	}))
-	defer server.Close()
+		return resp, nil
+	})
+	defer func() { http.DefaultTransport = oldTransport }()
 
-	avatar, err := fetchAvatarURL(t.Context(), server.URL+"/avatar.png")
+	baseURL := "https://avatar.example.test"
+	avatar, err := fetchAvatarURL(t.Context(), baseURL+"/avatar.png")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,13 +254,19 @@ func TestFetchAvatarURL(t *testing.T) {
 	if _, err := fetchAvatarURL(t.Context(), "http://[::1"); err == nil {
 		t.Fatal("expected bad URL error")
 	}
-	if _, err := fetchAvatarURL(t.Context(), server.URL+"/missing"); err == nil {
+	if _, err := fetchAvatarURL(t.Context(), baseURL+"/missing"); err == nil {
 		t.Fatal("expected non-2xx error")
 	}
-	if _, err := fetchAvatarURL(t.Context(), server.URL+"/too-large"); err == nil {
+	if _, err := fetchAvatarURL(t.Context(), baseURL+"/too-large"); err == nil {
 		t.Fatal("expected too large error")
 	}
-	if avatar, err := (GogAdapter{}).fetchAvatar(t.Context(), server.URL+"/avatar.png"); err != nil || string(avatar.Data) != "png" {
+	if avatar, err := (GogAdapter{}).fetchAvatar(t.Context(), baseURL+"/avatar.png"); err != nil || string(avatar.Data) != "png" {
 		t.Fatalf("default fetchAvatar = %#v err=%v", avatar, err)
 	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }

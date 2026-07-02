@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -122,6 +123,76 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	}
 }
 
+func TestReadCommandRebuildsStaleIndexAndLogsOnce(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "person", "add", "Ada Indexed", "--email", "ada@example.com"}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+
+	personPath := filepath.Join(data, "people", "mohamed-prefix", "person.md")
+	personMarkdown := `---
+id: person_mohamed_prefix
+name: Mohamed Prefix
+emails:
+    - value: mohamed@example.com
+created_at: 2026-05-08T09:00:00Z
+updated_at: 2026-05-08T09:00:00Z
+---
+# Mohamed Prefix
+`
+	if err := os.MkdirAll(filepath.Dir(personPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(personPath, []byte(personMarkdown), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	legacyPath := filepath.Join(data, "index", "phones.json")
+	if err := os.WriteFile(legacyPath, []byte(`{"15550100":"person_old"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	before := readPersonFilesForTest(t, filepath.Join(data, "people"))
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "person", "list", "--plain"}, &out, &errOut); err != nil {
+		t.Fatalf("person list: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if got := errOut.String(); got != "index rebuilt: 2 people\n" {
+		t.Fatalf("stderr = %q", got)
+	}
+	if !strings.Contains(out.String(), "Mohamed Prefix") {
+		t.Fatalf("person list = %s", out.String())
+	}
+	if _, err := os.Stat(filepath.Join(data, "index", "index.db")); err != nil {
+		t.Fatalf("index.db missing: %v", err)
+	}
+	if _, err := os.Stat(legacyPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("legacy json index still exists: %v", err)
+	}
+	after := readPersonFilesForTest(t, filepath.Join(data, "people"))
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("person markdown changed after read\nbefore=%#v\nafter=%#v", before, after)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "person", "show", "mo"}, &out, &errOut); err != nil {
+		t.Fatalf("person show: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("unexpected second rebuild log: %q", errOut.String())
+	}
+	if !strings.Contains(out.String(), "Mohamed Prefix") {
+		t.Fatalf("person show = %s", out.String())
+	}
+}
+
 func writeCLITestPNG(t *testing.T, path string) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
@@ -137,6 +208,33 @@ func writeCLITestPNG(t *testing.T, path string) {
 	if err := png.Encode(f, img); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func readPersonFilesForTest(t *testing.T, peopleDir string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(peopleDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || filepath.Base(path) != "person.md" {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(peopleDir, path)
+		if err != nil {
+			return err
+		}
+		out[rel] = string(data)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestExecuteConfigJSONAndUsage(t *testing.T) {

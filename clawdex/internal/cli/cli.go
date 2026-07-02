@@ -103,7 +103,7 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		cfg:        cfg,
 		repo:       repo.Open(repoPath, cfg),
 	}
-	r.store = index.New(r.repo)
+	r.store = index.NewWithLog(r.repo, r.stderr)
 	kctx.Bind(r)
 	if err := kctx.Run(r); err != nil {
 		return err

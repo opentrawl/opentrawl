@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # 🧩 clawdex
 
 ![clawdex banner](docs/assets/readme-banner.jpg)
@@ -136,12 +140,11 @@ people/
       2026-05-08T09-15-00Z-whatsapp.md
     attachments/
 index/
-  emails.json
-  phones.json
-  handles.json
+  index.db
 ```
 
-The `index/*.json` files are derived and rebuildable. Markdown is canonical.
+`index/index.db` is derived and rebuildable. Clawdex refreshes it on reads when
+person markdown changes. Markdown is canonical.
 
 ## Releases
 

@@ -1,9 +1,9 @@
 package index
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,10 +17,15 @@ import (
 
 type Store struct {
 	Repo repo.Repo
+	Log  io.Writer
 }
 
 func New(r repo.Repo) Store {
 	return Store{Repo: r}
+}
+
+func NewWithLog(r repo.Repo, log io.Writer) Store {
+	return Store{Repo: r, Log: log}
 }
 
 func (s Store) AddPerson(name string, emails, phones, tags []string, now time.Time) (model.Person, error) {
@@ -46,6 +51,13 @@ func (s Store) AddPerson(name string, emails, phones, tags []string, now time.Ti
 }
 
 func (s Store) People() ([]model.Person, error) {
+	if _, _, err := s.ensureIndex(); err != nil {
+		return nil, err
+	}
+	return s.readPeople()
+}
+
+func (s Store) readPeople() ([]model.Person, error) {
 	if err := s.Repo.Require(); err != nil {
 		return nil, err
 	}
@@ -62,14 +74,9 @@ func (s Store) People() ([]model.Person, error) {
 		if _, err := os.Stat(path); err != nil {
 			continue
 		}
-		p, report, err := markdown.ReadPerson(path)
+		p, _, err := markdown.ReadPerson(path)
 		if err != nil {
 			return nil, err
-		}
-		if report.Needed && s.Repo.Config.Repair.AutoRepair {
-			if err := markdown.RepairPerson(path, s.Repo.RepairDir(), p, report, s.Repo.Config.Repair.BackupBeforeRepair); err != nil {
-				return nil, err
-			}
 		}
 		people = append(people, p)
 	}
@@ -84,30 +91,23 @@ func (s Store) FindPerson(query string) (model.Person, error) {
 	if query == "" {
 		return model.Person{}, errors.New("person query is required")
 	}
-	people, err := s.People()
+	ids, err := s.personIDsForQuery(query)
 	if err != nil {
 		return model.Person{}, err
 	}
-	var matches []model.Person
-	nq := model.NormalizeName(query)
-	eq := model.NormalizeEmail(query)
-	pq := model.NormalizePhone(query)
-	for _, p := range people {
-		switch {
-		case p.ID == query:
-			return p, nil
-		case model.Slug(p.Name) == model.Slug(query):
-			matches = append(matches, p)
-		case strings.Contains(model.NormalizeName(p.Name), nq):
-			matches = append(matches, p)
-		case personHasEmail(p, eq):
-			matches = append(matches, p)
-		case pq != "" && personHasPhone(p, pq):
+	if len(ids) == 0 {
+		return model.Person{}, fmt.Errorf("no person matched %q", query)
+	}
+	people, err := s.readPeople()
+	if err != nil {
+		return model.Person{}, err
+	}
+	byID := peopleByID(people)
+	matches := make([]model.Person, 0, len(ids))
+	for _, id := range ids {
+		if p, ok := byID[id]; ok {
 			matches = append(matches, p)
 		}
-	}
-	if len(matches) == 0 {
-		return model.Person{}, fmt.Errorf("no person matched %q", query)
 	}
 	if len(matches) > 1 {
 		names := make([]string, 0, len(matches))
@@ -184,14 +184,26 @@ func (s Store) Search(query string) ([]model.SearchHit, error) {
 	if query == "" {
 		return nil, errors.New("search query is required")
 	}
-	people, err := s.People()
+	if _, _, err := s.ensureIndex(); err != nil {
+		return nil, err
+	}
+	people, err := s.readPeople()
 	if err != nil {
 		return nil, err
 	}
 	var hits []model.SearchHit
+	personHitIDs := map[string]bool{}
+	indexHits, err := s.searchPersonIndex(query)
+	if err != nil {
+		return nil, err
+	}
+	for _, hit := range indexHits {
+		personHitIDs[hit.ID] = true
+		hits = append(hits, hit)
+	}
 	for _, p := range people {
 		text := personSearchText(p)
-		if score := scoreText(text, query); score > 0 {
+		if score := scoreText(text, query); score > 0 && !personHitIDs[p.ID] {
 			hits = append(hits, model.SearchHit{Kind: "person", ID: p.ID, Name: p.Name, Path: p.Path, Score: score, Snippet: p.Name})
 		}
 		notes, err := s.notesForPerson(p)
@@ -215,49 +227,24 @@ func (s Store) Search(query string) ([]model.SearchHit, error) {
 }
 
 func (s Store) Rebuild() error {
-	people, err := s.People()
+	people, err := s.readPeople()
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.Repo.IndexDir(), 0o755); err != nil {
+	fp, err := s.markdownFingerprint()
+	if err != nil {
 		return err
 	}
-	emails := map[string]string{}
-	phones := map[string]string{}
-	handles := map[string]string{}
+	_, err = s.rebuildIndex(people, fp)
+	return err
+}
+
+func peopleByID(people []model.Person) map[string]model.Person {
+	out := make(map[string]model.Person, len(people))
 	for _, p := range people {
-		for _, email := range p.Emails {
-			if v := model.NormalizeEmail(email.Value); v != "" {
-				emails[v] = p.ID
-			}
-		}
-		for _, phone := range p.Phones {
-			if v := model.NormalizePhone(phone.Value); v != "" {
-				phones[v] = p.ID
-			}
-		}
-		for service, values := range p.Accounts {
-			for _, value := range values {
-				if value = strings.TrimSpace(value); value != "" {
-					handles[strings.ToLower(service+":"+value)] = p.ID
-				}
-			}
-		}
+		out[p.ID] = p
 	}
-	for name, value := range map[string]map[string]string{
-		"emails.json":  emails,
-		"phones.json":  phones,
-		"handles.json": handles,
-	} {
-		data, err := json.MarshalIndent(value, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(s.Repo.IndexDir(), name), append(data, '\n'), 0o600); err != nil {
-			return err
-		}
-	}
-	return nil
+	return out
 }
 
 func (s Store) uniquePersonDir(slug string) (string, error) {
