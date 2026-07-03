@@ -17,8 +17,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"unsafe"
 )
@@ -59,7 +61,7 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
-		return errors.New(C.GoString(cErr))
+		return originalExportError(C.GoString(cErr))
 	}
 	if ok == 0 {
 		return errors.New("export original resource failed")
@@ -68,6 +70,17 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 		return err
 	}
 	return nil
+}
+
+func originalExportError(message string) error {
+	trimmed := strings.TrimSpace(message)
+	if strings.Contains(strings.ToLower(trimmed), "photokit asset not found") {
+		if trimmed == "" || strings.EqualFold(trimmed, ErrPhotoKitAssetNotFound.Error()) {
+			return ErrPhotoKitAssetNotFound
+		}
+		return fmt.Errorf("%w: %s", ErrPhotoKitAssetNotFound, trimmed)
+	}
+	return errors.New(trimmed)
 }
 
 type exportLock struct {
