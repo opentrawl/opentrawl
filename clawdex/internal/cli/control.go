@@ -35,11 +35,12 @@ func controlManifest() metadataManifest {
 		DefaultConfig:   repo.ResolveConfigPath(""),
 		DefaultDatabase: repo.DefaultConfig().RepoPath,
 	}
-	m.Capabilities = []string{"status", "doctor"}
+	m.Capabilities = []string{"status", "doctor", "who"}
 	m.Commands = map[string]control.Command{
 		"metadata": {Title: "Metadata", Argv: []string{"clawdex", "metadata", "--json"}, JSON: true},
 		"status":   {Title: "Status", Argv: []string{"clawdex", "status", "--json"}, JSON: true},
 		"doctor":   {Title: "Doctor", Argv: []string{"clawdex", "doctor", "--json"}, JSON: true},
+		"who":      {Title: "Who", Argv: []string{"clawdex", "who", "QUERY", "--json"}, JSON: true},
 	}
 	return metadataManifest{Manifest: m, ContractVersion: 1, Version: Version}
 }

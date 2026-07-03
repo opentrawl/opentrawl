@@ -19,7 +19,7 @@ import (
 
 const (
 	indexDBName        = "index.db"
-	indexSchemaVersion = "1"
+	indexSchemaVersion = "2"
 )
 
 type IndexStatus struct {
@@ -191,23 +191,9 @@ func insertIndexedPerson(tx *sql.Tx, p model.Person) error {
 	if _, err := tx.Exec(`insert into people(id, name) values (?, ?)`, p.ID, p.Name); err != nil {
 		return err
 	}
-	for _, email := range p.Emails {
-		if value := model.NormalizeEmail(email.Value); value != "" {
-			if _, err := tx.Exec(`insert or ignore into identifiers(person_id, kind, value) values (?, 'email', ?)`, p.ID, value); err != nil {
-				return err
-			}
-		}
-	}
-	for _, phone := range p.Phones {
-		if value := model.NormalizePhone(phone.Value); value != "" {
-			if _, err := tx.Exec(`insert or ignore into identifiers(person_id, kind, value) values (?, 'phone', ?)`, p.ID, value); err != nil {
-				return err
-			}
-		}
-	}
-	handles := normalizedHandles(p)
-	for _, handle := range handles {
-		if _, err := tx.Exec(`insert or ignore into identifiers(person_id, kind, value) values (?, 'handle', ?)`, p.ID, handle); err != nil {
+	identifiers := personIdentifierKeys(p)
+	for _, key := range identifiers {
+		if _, err := tx.Exec(`insert or ignore into identifiers(person_id, kind, value) values (?, ?, ?)`, p.ID, key.kind, key.value); err != nil {
 			return err
 		}
 	}
@@ -215,7 +201,7 @@ func insertIndexedPerson(tx *sql.Tx, p model.Person) error {
 		p.ID,
 		strings.Join(indexNames(p), " "),
 		strings.Join(indexAliases(p), " "),
-		strings.Join(handles, " "),
+		strings.Join(personHandleIdentifiers(identifiers), " "),
 	); err != nil {
 		return err
 	}
@@ -462,6 +448,12 @@ func (s Store) markdownFingerprint() (markdownFingerprint, error) {
 		if err != nil {
 			return markdownFingerprint{}, err
 		}
+		rel, err := filepath.Rel(s.Repo.PeopleDir(), path)
+		if err != nil {
+			return markdownFingerprint{}, err
+		}
+		hash.Write([]byte(filepath.ToSlash(rel)))
+		hash.Write([]byte{0})
 		hash.Write(frontmatterBytes(data))
 		hash.Write([]byte{0})
 	}
@@ -508,11 +500,12 @@ func frontmatterBytes(data []byte) []byte {
 }
 
 func indexNames(p model.Person) []string {
-	return cleanIndexStrings([]string{p.Name, p.SortName})
+	return cleanIndexStrings([]string{p.Name, p.SortName, personPathSlug(p)})
 }
 
 func indexAliases(p model.Person) []string {
 	var values []string
+	values = append(values, p.AKA...)
 	for _, source := range p.Sources {
 		values = append(values, source.Names...)
 	}
@@ -520,22 +513,102 @@ func indexAliases(p model.Person) []string {
 	return cleanIndexStrings(values)
 }
 
-func normalizedHandles(p model.Person) []string {
-	var handles []string
-	for service, values := range p.Accounts {
-		service = strings.TrimSpace(strings.ToLower(service))
-		if service == "" {
-			continue
+func personIdentifierKeys(p model.Person) []identifierKey {
+	var keys []identifierKey
+	add := func(kind, value string) {
+		value = strings.TrimSpace(strings.ToLower(value))
+		if value != "" {
+			keys = append(keys, identifierKey{kind: kind, value: value})
 		}
-		for _, value := range values {
-			value = strings.TrimSpace(strings.ToLower(value))
-			if value != "" {
-				handles = append(handles, service+":"+value)
+	}
+	addEmail := func(value string) {
+		add("email", model.NormalizeEmail(value))
+	}
+	addPhone := func(value string) {
+		add("phone", model.NormalizePhone(value))
+	}
+	addAccounts := func(accounts map[string][]string) {
+		for service, values := range accounts {
+			service = strings.TrimSpace(strings.ToLower(service))
+			if service == "" {
+				continue
+			}
+			for _, value := range values {
+				value = strings.TrimSpace(strings.ToLower(value))
+				if value != "" {
+					add("handle", service+":"+value)
+				}
 			}
 		}
 	}
-	sort.Strings(handles)
-	return compactSorted(handles)
+	addExternal := func(service string, ref model.ExternalRef) {
+		service = strings.TrimSpace(strings.ToLower(service))
+		if service == "" {
+			return
+		}
+		if ref.ID != "" {
+			add("handle", service+":"+ref.ID)
+		}
+		if ref.Resource != "" {
+			add("handle", service+":"+ref.Resource)
+		}
+	}
+
+	for _, email := range p.Emails {
+		addEmail(email.Value)
+	}
+	for _, phone := range p.Phones {
+		addPhone(phone.Value)
+	}
+	addAccounts(p.Accounts)
+	for _, source := range p.Sources {
+		for _, email := range source.Emails {
+			addEmail(email)
+		}
+		for _, phone := range source.Phones {
+			addPhone(phone)
+		}
+		addAccounts(source.Accounts)
+	}
+	addExternal("apple", p.Apple)
+	addExternal("google", p.Google)
+	return cleanIdentifierKeys(keys)
+}
+
+func cleanIdentifierKeys(keys []identifierKey) []identifierKey {
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].kind == keys[j].kind {
+			return keys[i].value < keys[j].value
+		}
+		return keys[i].kind < keys[j].kind
+	})
+	out := keys[:0]
+	var last identifierKey
+	for _, key := range keys {
+		if key == last {
+			continue
+		}
+		out = append(out, key)
+		last = key
+	}
+	return out
+}
+
+func personHandleIdentifiers(keys []identifierKey) []string {
+	handles := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if key.kind == "handle" {
+			handles = append(handles, key.value)
+		}
+	}
+	return handles
+}
+
+func personPathSlug(p model.Person) string {
+	if strings.TrimSpace(p.Path) == "" {
+		return ""
+	}
+	return model.PathSlug(p.Path)
 }
 
 func cleanIndexStrings(values []string) []string {

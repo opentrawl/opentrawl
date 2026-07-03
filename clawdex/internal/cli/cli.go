@@ -49,6 +49,7 @@ type CLI struct {
 	Status   StatusCmd   `cmd:"" help:"Show contacts repo status"`
 	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit clawdex config"`
 	Person   PersonCmd   `cmd:"" help:"Manage people"`
+	Who      WhoCmd      `cmd:"" help:"Resolve a person by name, alias, or identifier"`
 	Note     NoteCmd     `cmd:"" help:"Manage notes"`
 	Timeline TimelineCmd `cmd:"" help:"Show person timeline"`
 	Search   SearchCmd   `cmd:"" help:"Search people and notes"`

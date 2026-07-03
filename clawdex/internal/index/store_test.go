@@ -182,6 +182,132 @@ func TestFindPersonUsesFTSPrefixAlias(t *testing.T) {
 	}
 }
 
+func TestResolvePeopleMatchesNamesAliasesIdentifiersAndCloseSpellings(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC)
+	p := markdown.NewPerson("Alice Example", now)
+	p.Path = filepath.Join(r.PeopleDir(), "alice-example", "person.md")
+	p.AKA = []string{"Alicia"}
+	p.Tags = []string{"Ally"}
+	p.Emails = []model.ContactValue{{Value: "alice@example.com"}}
+	p.Phones = []model.ContactValue{{Value: "+1 555 0100"}}
+	p.Accounts = map[string][]string{"telegram": {"alice_handle"}}
+	p.Sources = map[string]model.PersonSource{
+		"telecrawl": {
+			Names:      []string{"Alice Telegram"},
+			Phones:     []string{"+1 555 0100"},
+			Accounts:   map[string][]string{"telegram": {"alice_handle"}},
+			LastSeenAt: now,
+		},
+		"wacrawl": {
+			Names:      []string{"Alice WhatsApp"},
+			Emails:     []string{"alice@example.com"},
+			LastSeenAt: now.Add(-24 * time.Hour),
+		},
+	}
+	if err := markdown.WritePerson(p.Path, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rebuild(); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		query string
+		match string
+	}{
+		{query: "Ali", match: "prefix"},
+		{query: "Alicia", match: "exact"},
+		{query: "Ally", match: "exact"},
+		{query: "alice@example.com", match: "exact"},
+		{query: "+1 555 0100", match: "exact"},
+		{query: "alice_handle", match: "exact"},
+		{query: "Alixe", match: "close"},
+	} {
+		got, err := s.ResolvePeople(tc.query)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.query, err)
+		}
+		if len(got) != 1 || got[0].Who != "Alice Example" || got[0].MatchQuality != tc.match {
+			t.Fatalf("%s: candidates = %#v", tc.query, got)
+		}
+	}
+
+	got, err := s.ResolvePeople("alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("candidates = %#v", got)
+	}
+	candidate := got[0]
+	for _, want := range []string{"alice@example.com", "15550100", "telegram:alice_handle"} {
+		if !slices.Contains(candidate.Identifiers, want) {
+			t.Fatalf("identifiers missing %q: %#v", want, candidate.Identifiers)
+		}
+	}
+	if !slices.Equal(candidate.Sources, []string{"telecrawl", "wacrawl"}) {
+		t.Fatalf("sources = %#v", candidate.Sources)
+	}
+	if candidate.LastSeen != now.Format(time.RFC3339) {
+		t.Fatalf("last seen = %q", candidate.LastSeen)
+	}
+}
+
+func TestResolvePeopleMatchesSlugWithMinimalFrontmatterAndHealedIndex(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	if _, err := s.AddPerson("Indexed Before", nil, nil, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	personPath := filepath.Join(r.PeopleDir(), "robin", "person.md")
+	if err := os.MkdirAll(filepath.Dir(personPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	person := `---
+id: person_minimal_slug
+created_at: 2026-07-03T09:00:00Z
+updated_at: 2026-07-03T09:00:00Z
+---
+# Imported placeholder
+
+Minimal profile.
+`
+	if err := os.WriteFile(personPath, []byte(person), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.ResolvePeople("robin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("candidates = %#v", got)
+	}
+	if got[0].Who != "Imported placeholder" || got[0].MatchQuality != "exact" {
+		t.Fatalf("candidate = %#v", got[0])
+	}
+	if !slices.Contains(got[0].Identifiers, "person_minimal_slug") {
+		t.Fatalf("identifiers = %#v", got[0].Identifiers)
+	}
+}
+
+func TestResolvePeopleReturnsEmptyCandidatesForMiss(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	if _, err := s.AddPerson("Alice Example", nil, nil, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.ResolvePeople("missing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("candidates = %#v", got)
+	}
+}
+
 func TestReadCommandsDoNotRewritePersonMarkdown(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)

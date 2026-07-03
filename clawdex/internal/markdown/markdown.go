@@ -56,11 +56,14 @@ func ReadPerson(path string) (model.Person, RepairReport, error) {
 	report := RepairReport{Path: path}
 	var p model.Person
 	if ok {
-		if err := yaml.Unmarshal([]byte(front), &p); err != nil {
+		var frontmatter personFront
+		if err := yaml.Unmarshal([]byte(front), &frontmatter); err != nil {
 			report.Needed = true
 			report.Problems = append(report.Problems, "invalid YAML frontmatter: "+err.Error())
 			report.RecoveredMetadata = front
 			p = salvagePerson(front)
+		} else {
+			p = personFromFrontmatter(frontmatter)
 		}
 	} else {
 		report.Needed = true
@@ -215,6 +218,7 @@ type personFront struct {
 	ID        string                        `yaml:"id"`
 	Name      string                        `yaml:"name"`
 	SortName  string                        `yaml:"sort_name,omitempty"`
+	AKA       stringList                    `yaml:"aka,omitempty"`
 	Tags      []string                      `yaml:"tags,omitempty"`
 	Emails    []model.ContactValue          `yaml:"emails,omitempty"`
 	Phones    []model.ContactValue          `yaml:"phones,omitempty"`
@@ -232,6 +236,7 @@ func personFrontmatter(p model.Person) personFront {
 		ID:        p.ID,
 		Name:      p.Name,
 		SortName:  p.SortName,
+		AKA:       stringList(p.AKA),
 		Tags:      p.Tags,
 		Emails:    p.Emails,
 		Phones:    p.Phones,
@@ -243,6 +248,32 @@ func personFrontmatter(p model.Person) personFront {
 		CreatedAt: p.CreatedAt,
 		UpdatedAt: p.UpdatedAt,
 	}
+}
+
+func personFromFrontmatter(front personFront) model.Person {
+	p := model.Person{
+		ID:        front.ID,
+		Name:      front.Name,
+		SortName:  front.SortName,
+		AKA:       []string(front.AKA),
+		Tags:      front.Tags,
+		Emails:    front.Emails,
+		Phones:    front.Phones,
+		Accounts:  front.Accounts,
+		Sources:   front.Sources,
+		CreatedAt: front.CreatedAt,
+		UpdatedAt: front.UpdatedAt,
+	}
+	if front.Avatar != nil {
+		p.Avatar = *front.Avatar
+	}
+	if front.Apple != nil {
+		p.Apple = *front.Apple
+	}
+	if front.Google != nil {
+		p.Google = *front.Google
+	}
+	return p
 }
 
 type noteFront struct {
@@ -276,6 +307,38 @@ func noteFrontmatter(n model.Note) noteFront {
 		Topics:     n.Topics,
 		FollowUpAt: nonZeroTime(n.FollowUpAt),
 		Privacy:    n.Privacy,
+	}
+}
+
+type stringList []string
+
+func (list *stringList) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		item := strings.TrimSpace(value.Value)
+		if item == "" {
+			*list = nil
+			return nil
+		}
+		*list = []string{item}
+		return nil
+	case yaml.SequenceNode:
+		values := make([]string, 0, len(value.Content))
+		for _, item := range value.Content {
+			var text string
+			if err := item.Decode(&text); err != nil {
+				return err
+			}
+			text = strings.TrimSpace(text)
+			if text != "" {
+				values = append(values, text)
+			}
+		}
+		*list = values
+		return nil
+	default:
+		*list = nil
+		return nil
 	}
 }
 
@@ -379,6 +442,7 @@ func salvagePerson(front string) model.Person {
 	p.ID = values["id"]
 	p.Name = values["name"]
 	p.SortName = values["sort_name"]
+	p.AKA = splitList(values["aka"])
 	p.Tags = splitList(values["tags"])
 	p.CreatedAt = parseTime(values["created_at"])
 	p.UpdatedAt = parseTime(values["updated_at"])

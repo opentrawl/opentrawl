@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/conformance"
+	"github.com/openclaw/crawlkit/control"
 )
 
 func TestExecuteMetadataJSON(t *testing.T) {
@@ -28,7 +28,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if manifest.ID != "clawdex" || manifest.DisplayName != "Contacts" {
 		t.Fatalf("manifest identity = %#v", manifest)
 	}
-	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor"}) {
+	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who"}) {
 		t.Fatalf("capabilities = %#v", manifest.Capabilities)
 	}
 	if _, ok := manifest.Commands["contact-export"]; ok {
@@ -38,6 +38,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 		"metadata": {"clawdex", "metadata", "--json"},
 		"status":   {"clawdex", "status", "--json"},
 		"doctor":   {"clawdex", "doctor", "--json"},
+		"who":      {"clawdex", "who", "QUERY", "--json"},
 	} {
 		got := manifest.Commands[name]
 		if !reflect.DeepEqual(got.Argv, argv) || !got.JSON {

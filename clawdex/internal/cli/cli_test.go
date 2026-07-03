@@ -195,6 +195,179 @@ updated_at: 2026-05-08T09:00:00Z
 	}
 }
 
+func TestExecuteWhoJSONMatchesContractAndTrawlInvocation(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	writeWhoFixturePerson(t, data)
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "who", "ali", "--json"}, &out, &errOut); err != nil {
+		t.Fatalf("who json: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	envelope := decodeWhoEnvelopeForTest(t, out.Bytes())
+	if envelope.Query != "ali" || len(envelope.Candidates) != 1 {
+		t.Fatalf("envelope = %#v", envelope)
+	}
+	candidate := envelope.Candidates[0]
+	if candidate.Who != "Alice Example" || candidate.Identity != "Alice Example" || candidate.MatchQuality != "prefix" {
+		t.Fatalf("candidate identity = %#v", candidate)
+	}
+	for _, want := range []string{"alice@example.com", "15550100", "telegram:alice_handle"} {
+		if !stringIn(candidate.Identifiers, want) {
+			t.Fatalf("identifiers missing %q: %#v", want, candidate.Identifiers)
+		}
+	}
+	if !reflect.DeepEqual(candidate.Sources, []string{"telecrawl", "wacrawl"}) {
+		t.Fatalf("sources = %#v", candidate.Sources)
+	}
+	if candidate.LastSeen != "2026-07-02T11:00:00Z" {
+		t.Fatalf("last_seen = %q", candidate.LastSeen)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("stderr = %s", errOut.String())
+	}
+}
+
+func TestExecuteWhoHumanUsesWidthFittedTable(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	writeWhoFixturePerson(t, data)
+	t.Setenv("COLUMNS", "72")
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "who", "Alixe"}, &out, &errOut); err != nil {
+		t.Fatalf("who human: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	conformance.AssertHumanOutput(t, out.String())
+	for _, want := range []string{
+		"WHO                 MATCH",
+		"Alice Example",
+		"close",
+		"telecrawl,",
+		"wacrawl",
+		"15550100",
+		"telegram:alice",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("who output missing %q:\n%s", want, out.String())
+		}
+	}
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		if len([]rune(line)) > 72 {
+			t.Fatalf("line exceeds COLUMNS=72 (%d): %q\n%s", len([]rune(line)), line, out.String())
+		}
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("stderr = %s", errOut.String())
+	}
+}
+
+func TestExecuteWhoJSONEmptyCandidatesExitZero(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	writeWhoFixturePerson(t, data)
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--json", "who", "missing"}, &out, &errOut); err != nil {
+		t.Fatalf("who miss should exit zero: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	envelope := decodeWhoEnvelopeForTest(t, out.Bytes())
+	if envelope.Query != "missing" || len(envelope.Candidates) != 0 || envelope.Candidates == nil {
+		t.Fatalf("empty envelope = %#v", envelope)
+	}
+}
+
+type whoEnvelopeForTest struct {
+	Query      string                `json:"query"`
+	Candidates []whoCandidateForTest `json:"candidates"`
+}
+
+type whoCandidateForTest struct {
+	Who          string   `json:"who"`
+	Identifiers  []string `json:"identifiers"`
+	Sources      []string `json:"sources"`
+	LastSeen     string   `json:"last_seen"`
+	MatchQuality string   `json:"match_quality"`
+	Identity     string   `json:"identity"`
+}
+
+func decodeWhoEnvelopeForTest(t *testing.T, data []byte) whoEnvelopeForTest {
+	t.Helper()
+	var envelope whoEnvelopeForTest
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		t.Fatalf("who json = %s err=%v", data, err)
+	}
+	if envelope.Candidates == nil {
+		t.Fatalf("who json missing candidates array: %s", data)
+	}
+	return envelope
+}
+
+func writeWhoFixturePerson(t *testing.T, data string) {
+	t.Helper()
+	personPath := filepath.Join(data, "people", "alice-example", "person.md")
+	if err := os.MkdirAll(filepath.Dir(personPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	person := `---
+id: person_alice_example
+name: Alice Example
+tags:
+  - Ally
+emails:
+  - value: alice@example.com
+phones:
+  - value: "+1 555 0100"
+accounts:
+  telegram:
+    - alice_handle
+sources:
+  telecrawl:
+    names:
+      - Alice Telegram
+    phones:
+      - "+1 555 0100"
+    accounts:
+      telegram:
+        - alice_handle
+    last_seen_at: 2026-07-02T11:00:00Z
+  wacrawl:
+    names:
+      - Alice WhatsApp
+    emails:
+      - alice@example.com
+    last_seen_at: 2026-07-01T11:00:00Z
+created_at: 2026-07-02T09:00:00Z
+updated_at: 2026-07-02T09:00:00Z
+---
+# Alice Example
+`
+	if err := os.WriteFile(personPath, []byte(person), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func stringIn(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func writeCLITestPNG(t *testing.T, path string) {
 	t.Helper()
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
