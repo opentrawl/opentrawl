@@ -136,6 +136,9 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		case 0:
 			return r.writeUnknownWho(query, whoInput, resolution, skippedWho)
 		case 1:
+			if closeResolution, ok := closeSpellingOnlyResolution(resolution); ok {
+				return r.writeUnknownWho(query, whoInput, closeResolution, skippedWho)
+			}
 			candidate := resolution.Candidates[0]
 			whoResolved = &candidate
 			whoBySource = searchWhoFilters(candidate, sources)

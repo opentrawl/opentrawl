@@ -56,7 +56,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 		"imessage, telegram",
 		"+15550100001",
 		"Dave Archive",
-		"contains",
+		"substring",
 		"2019-01-02",
 		"900",
 		"gmail",

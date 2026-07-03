@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 const whoWorkerLimit = 4
@@ -139,6 +141,28 @@ func collectFederatedWho(ctx context.Context, sources []Source, query string) fe
 	}
 }
 
+func closeSpellingOnlyResolution(resolution federatedWhoResolution) (federatedWhoResolution, bool) {
+	if len(resolution.Candidates) != 1 {
+		return resolution, false
+	}
+	rank, ok := matchQualityRank(resolution.Candidates[0].MatchQuality)
+	if !ok || rank != whomatch.RankCloseSpelling {
+		return resolution, false
+	}
+	resolution.DidYouMean = didYouMeanWithCandidate(resolution.Candidates[0], resolution.DidYouMean)
+	resolution.Candidates = []WhoCandidate{}
+	return resolution, true
+}
+
+func didYouMeanWithCandidate(candidate WhoCandidate, suggestions []WhoCandidate) []WhoCandidate {
+	records := make([]whoRecord, 0, 1+len(suggestions))
+	records = append(records, whoRecord{Candidate: candidate})
+	for _, suggestion := range suggestions {
+		records = append(records, whoRecord{Candidate: suggestion})
+	}
+	return mergeWhoRecords(records)
+}
+
 func collectWho(ctx context.Context, sources []Source, query string) []whoSourceResult {
 	results := make([]whoSourceResult, len(sources))
 	workers := whoWorkerLimit
@@ -269,9 +293,7 @@ func mergeWhoRecord(group *whoGroup, record whoRecord) {
 	}
 	group.Candidate.Identifiers = append(group.Candidate.Identifiers, candidate.Identifiers...)
 	group.Candidate.Sources = append(group.Candidate.Sources, candidate.Sources...)
-	if bestMatchQuality(candidate.MatchQuality, group.Candidate.MatchQuality) == candidate.MatchQuality {
-		group.Candidate.MatchQuality = candidate.MatchQuality
-	}
+	group.Candidate.MatchQuality = bestMatchQuality(candidate.MatchQuality, group.Candidate.MatchQuality)
 	if candidate.lastSeenOK && (!group.Candidate.lastSeenOK || candidate.lastSeenParsed.After(group.Candidate.lastSeenParsed)) {
 		group.Candidate.LastSeen = candidate.LastSeen
 		group.Candidate.lastSeenParsed = candidate.lastSeenParsed
@@ -299,31 +321,36 @@ func mergeWhoRecord(group *whoGroup, record whoRecord) {
 }
 
 func bestMatchQuality(left, right string) string {
-	if right == "" {
-		return left
+	leftRank, leftOK := matchQualityRank(left)
+	rightRank, rightOK := matchQualityRank(right)
+	switch {
+	case leftOK && !rightOK:
+		return leftRank.String()
+	case !leftOK && rightOK:
+		return rightRank.String()
+	case leftOK && rightOK:
+		if leftRank.BetterThan(rightRank) {
+			return leftRank.String()
+		}
+		return rightRank.String()
+	default:
+		return firstNonEmpty(left, right, "unknown")
 	}
-	if left == "" {
-		return right
-	}
-	if matchQualityRank(left) <= matchQualityRank(right) {
-		return left
-	}
-	return right
 }
 
 func normalisePersonName(value string) string {
-	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+	return whomatch.Normalize(value)
 }
 
 func normaliseIdentifier(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
 		return ""
 	}
 	digits := 0
 	phoneLike := true
 	var phone strings.Builder
-	for i, char := range value {
+	for i, char := range trimmed {
 		switch {
 		case char >= '0' && char <= '9':
 			digits++
@@ -338,7 +365,7 @@ func normaliseIdentifier(value string) string {
 	if phoneLike && digits >= 5 {
 		return phone.String()
 	}
-	return value
+	return whomatch.Normalize(trimmed)
 }
 
 func whoFilterValue(candidate WhoCandidate) string {
