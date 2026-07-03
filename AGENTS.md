@@ -79,6 +79,18 @@ written for end users:
   short sentences, sentence case, British English, no filler.
 - Outputs of every crawler command must be readable by a human cold;
   that is the bar that makes them agent-safe too.
+- Cognition belongs to models, shells stay deterministic. Code may do
+  IO, batching, schema validation, budget caps, exact matching and
+  mechanical transforms. Code must NOT rank, score, route by keyword,
+  infer meaning, or judge quality with local heuristics — any semantic
+  decision (is this a receipt? which item? what quality?) goes to a
+  model. Deterministic where the contract demands determinism (archive
+  substrate, refs, joins by exact identifiers); model-driven wherever
+  meaning is extracted or judged.
+- Every agent-produced diff gets a principles review by a model against
+  this file before it is committed — deterministic-vs-model boundary,
+  boring/lean, output rules. Human review is for taste, not for
+  catching principle violations.
 
 ## Upstream tool drift
 
