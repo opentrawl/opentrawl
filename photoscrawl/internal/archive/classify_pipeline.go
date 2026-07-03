@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	modelConcurrencyStart = 2
-	modelConcurrencyMax   = 8
+	modelConcurrencyStart = 8
+	modelConcurrencyMax   = 32
 )
 
 type modelJob struct {
