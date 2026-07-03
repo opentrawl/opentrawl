@@ -992,17 +992,17 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	}
 	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	contacts := []store.Contact{
-		{JID: "casey-one@s.whatsapp.net", FullName: "Casey Example"},
-		{JID: "casey-two@s.whatsapp.net", FullName: "casey example"},
+		{JID: "casey-one@s.whatsapp.net", FullName: "Casey One"},
+		{JID: "casey-two@s.whatsapp.net", FullName: "Casey Two"},
 	}
 	chats := []store.Chat{
-		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey Example", LastMessageAt: now, MessageCount: 1},
-		{JID: "casey-two@s.whatsapp.net", Kind: "dm", Name: "casey example", LastMessageAt: now, MessageCount: 1},
+		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey One", LastMessageAt: now, MessageCount: 1},
+		{JID: "casey-two@s.whatsapp.net", Kind: "dm", Name: "Casey Two", LastMessageAt: now, MessageCount: 1},
 		{JID: "other@s.whatsapp.net", Kind: "dm", Name: "Other Person", LastMessageAt: now, MessageCount: 1},
 	}
 	messages := []store.Message{
-		{SourcePK: 1, ChatJID: "casey-one@s.whatsapp.net", ChatName: "Casey Example", MessageID: "casey-one", SenderJID: "casey-one@s.whatsapp.net", SenderName: "Casey Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle one"},
-		{SourcePK: 2, ChatJID: "casey-two@s.whatsapp.net", ChatName: "casey example", MessageID: "casey-two", SenderJID: "casey-two@s.whatsapp.net", SenderName: "casey example", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "needle two"},
+		{SourcePK: 1, ChatJID: "casey-one@s.whatsapp.net", ChatName: "Casey One", MessageID: "casey-one", SenderJID: "casey-one@s.whatsapp.net", SenderName: "Casey One", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle one"},
+		{SourcePK: 2, ChatJID: "casey-two@s.whatsapp.net", ChatName: "Casey Two", MessageID: "casey-two", SenderJID: "casey-two@s.whatsapp.net", SenderName: "Casey Two", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "needle two"},
 		{SourcePK: 3, ChatJID: "other@s.whatsapp.net", ChatName: "Other Person", MessageID: "other", SenderJID: "other@s.whatsapp.net", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), RawType: 0, MessageType: "text", Text: "needle other"},
 	}
 	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
@@ -1013,7 +1013,7 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr)
+	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "CASEY", "needle"}, &stdout, &stderr)
 	if err == nil || ExitCode(err) != 4 {
 		t.Fatalf("expected ambiguous_who exit 4, got err=%v code=%d stderr=%s", err, ExitCode(err), stderr.String())
 	}
@@ -1028,7 +1028,7 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	err = Run(ctx, []string{"--db", dbPath, "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr)
+	err = Run(ctx, []string{"--db", dbPath, "search", "--who", "CASEY", "needle"}, &stdout, &stderr)
 	if err == nil || ExitCode(err) != 4 {
 		t.Fatalf("expected ambiguous_who human exit 4, got %v", err)
 	}
@@ -1058,6 +1058,45 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	}
 	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "search without --who") {
 		t.Fatalf("unknown human stdout=%q stderr=\n%s", stdout.String(), stderr.String())
+	}
+}
+
+func TestSearchWhoFuzzyOnlySingleMatchSuggests(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "dana@s.whatsapp.net", FullName: "Dana Example"},
+	}
+	chats := []store.Chat{
+		{JID: "dana@s.whatsapp.net", Kind: "dm", Name: "Dana Example", LastMessageAt: now, MessageCount: 1},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "dana@s.whatsapp.net", ChatName: "Dana Example", MessageID: "dana", SenderJID: "dana@s.whatsapp.net", SenderName: "Dana Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "Dona", "needle"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 5 {
+		t.Fatalf("expected unknown_who exit 5, got err=%v code=%d stderr=%s", err, ExitCode(err), stderr.String())
+	}
+	assertRootKeys(t, stdout.Bytes(), "error")
+	var payload errorEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("fuzzy-only json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || len(*payload.Error.DidYouMean) != 1 || (*payload.Error.DidYouMean)[0].Who != "Dana Example" {
+		t.Fatalf("fuzzy-only payload = %#v", payload)
 	}
 }
 

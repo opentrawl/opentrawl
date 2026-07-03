@@ -16,6 +16,7 @@ import (
 
 	"github.com/openclaw/crawlkit/shortref"
 	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
 	_ "modernc.org/sqlite"
@@ -163,6 +164,7 @@ type WhoResolution struct {
 	ParticipantKeys []string
 	DisplayNames    []string
 	Candidates      []WhoCandidate
+	matchRank       whomatch.Rank
 }
 
 type WhoCandidate struct {
@@ -171,6 +173,10 @@ type WhoCandidate struct {
 	LastSeen        time.Time `json:"last_seen"`
 	Messages        int       `json:"messages"`
 	ParticipantKeys []string  `json:"-"`
+}
+
+func (r WhoResolution) OnlyCloseSpellingMatch() bool {
+	return len(r.Candidates) == 1 && r.matchRank == whomatch.RankCloseSpelling
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -820,11 +826,21 @@ func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilte
 	if normalizeWhoIdentity(filter.Who) == "" || filter.WhoKeys != nil {
 		return filter, nil
 	}
-	resolution, err := s.ResolveWho(ctx, filter.Who)
+	resolution, err := s.ResolveWhoIdentifier(ctx, filter.Who)
 	if err != nil {
 		return MessageFilter{}, err
 	}
+	if len(resolution.Candidates) == 0 {
+		resolution, err = s.ResolveWho(ctx, filter.Who)
+		if err != nil {
+			return MessageFilter{}, err
+		}
+	}
 	filter.Who = normalizeWhoIdentity(filter.Who)
+	if len(resolution.Candidates) != 1 || resolution.OnlyCloseSpellingMatch() {
+		filter.WhoKeys = []string{}
+		return filter, nil
+	}
 	filter.WhoKeys = resolution.ParticipantKeys
 	return filter, nil
 }
@@ -848,12 +864,12 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 	}
 	type rankedCandidate struct {
 		record whoCandidateRecord
-		rank   int
+		rank   whomatch.Rank
 	}
 	var matches []rankedCandidate
 	for _, record := range records {
-		rank := whoCandidateMatchRank(query, record.matchValues)
-		if rank < 0 {
+		rank, ok := record.matchCandidate().MatchRank(query)
+		if !ok {
 			continue
 		}
 		matches = append(matches, rankedCandidate{record: record, rank: rank})
@@ -862,7 +878,7 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 		left := matches[i]
 		right := matches[j]
 		if left.rank != right.rank {
-			return left.rank < right.rank
+			return left.rank.BetterThan(right.rank)
 		}
 		if !left.record.LastSeen.Equal(right.record.LastSeen) {
 			return left.record.LastSeen.After(right.record.LastSeen)
@@ -876,6 +892,9 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 		ParticipantKeys: make([]string, 0, len(matches)),
 		DisplayNames:    make([]string, 0, len(matches)),
 		Candidates:      make([]WhoCandidate, 0, len(matches)),
+	}
+	if len(matches) > 0 {
+		resolution.matchRank = matches[0].rank
 	}
 	for _, match := range matches {
 		candidate := match.record.WhoCandidate
@@ -891,14 +910,15 @@ func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (Wh
 	if identifier == "" {
 		return WhoResolution{}, nil
 	}
-	records, err := s.whoCandidateRecords(ctx)
+	records, err := s.whoCandidateRecordsWithoutNameMerge(ctx)
 	if err != nil {
 		return WhoResolution{}, err
 	}
 	var matches []WhoCandidate
 	for _, record := range records {
 		for _, candidateIdentifier := range record.Identifiers {
-			if strings.EqualFold(candidateIdentifier, identifier) {
+			rank, ok := whomatch.MatchRank(identifier, []string{candidateIdentifier})
+			if ok && rank == whomatch.RankExact {
 				matches = append(matches, record.WhoCandidate)
 				break
 			}
@@ -918,6 +938,9 @@ func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (Wh
 		DisplayNames:    make([]string, 0, len(matches)),
 		Candidates:      matches,
 	}
+	if len(matches) > 0 {
+		resolution.matchRank = whomatch.RankExact
+	}
 	for _, match := range matches {
 		resolution.ParticipantKeys = append(resolution.ParticipantKeys, match.ParticipantKeys...)
 		resolution.DisplayNames = append(resolution.DisplayNames, match.Who)
@@ -927,7 +950,17 @@ func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (Wh
 
 type whoCandidateRecord struct {
 	WhoCandidate
-	matchValues []string
+	aliases []string
+}
+
+func (r whoCandidateRecord) matchCandidate() whomatch.Candidate {
+	return whomatch.Candidate{
+		Who:         r.Who,
+		Identifiers: r.Identifiers,
+		Aliases:     r.aliases,
+		LastSeen:    r.LastSeen,
+		Messages:    int64(r.Messages),
+	}
 }
 
 type whoCandidateBuilder struct {
@@ -946,6 +979,14 @@ type whoNameEvidence struct {
 }
 
 func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, error) {
+	return s.readWhoCandidateRecords(ctx, true)
+}
+
+func (s *Store) whoCandidateRecordsWithoutNameMerge(ctx context.Context) ([]whoCandidateRecord, error) {
+	return s.readWhoCandidateRecords(ctx, false)
+}
+
+func (s *Store) readWhoCandidateRecords(ctx context.Context, mergeSameName bool) ([]whoCandidateRecord, error) {
 	builders, err := s.readWhoCandidateAliases(ctx)
 	if err != nil {
 		return nil, err
@@ -965,8 +1006,6 @@ func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, 
 		if who == "" || len(participantKeys) == 0 {
 			continue
 		}
-		matchValues := append([]string{who}, names...)
-		matchValues = append(matchValues, identifiers...)
 		records = append(records, whoCandidateRecord{
 			WhoCandidate: WhoCandidate{
 				Who:             who,
@@ -975,8 +1014,11 @@ func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, 
 				Messages:        builder.messages,
 				ParticipantKeys: participantKeys,
 			},
-			matchValues: uniqueStrings(matchValues),
+			aliases: uniqueStrings(names),
 		})
+	}
+	if mergeSameName {
+		records = mergeWhoCandidateRecords(records)
 	}
 	sort.SliceStable(records, func(i, j int) bool {
 		if !records[i].LastSeen.Equal(records[j].LastSeen) {
@@ -988,6 +1030,51 @@ func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, 
 		return strings.ToLower(records[i].Who) < strings.ToLower(records[j].Who)
 	})
 	return records, nil
+}
+
+func mergeWhoCandidateRecords(records []whoCandidateRecord) []whoCandidateRecord {
+	if len(records) == 0 {
+		return nil
+	}
+	type extra struct {
+		aliases         []string
+		participantKeys []string
+	}
+	extras := map[string]*extra{}
+	candidates := make([]whomatch.Candidate, 0, len(records))
+	for _, record := range records {
+		key := whomatch.Normalize(record.Who)
+		if key == "" {
+			continue
+		}
+		candidates = append(candidates, record.matchCandidate())
+		group, ok := extras[key]
+		if !ok {
+			group = &extra{}
+			extras[key] = group
+		}
+		group.aliases = append(group.aliases, record.aliases...)
+		group.participantKeys = append(group.participantKeys, record.ParticipantKeys...)
+	}
+	merged := whomatch.MergeSameName(candidates)
+	out := make([]whoCandidateRecord, 0, len(merged))
+	for _, candidate := range merged {
+		group := extras[whomatch.Normalize(candidate.Who)]
+		if group == nil {
+			continue
+		}
+		out = append(out, whoCandidateRecord{
+			WhoCandidate: WhoCandidate{
+				Who:             candidate.Who,
+				Identifiers:     sortedUniqueValues(candidate.Identifiers),
+				LastSeen:        candidate.LastSeen,
+				Messages:        int(candidate.Messages),
+				ParticipantKeys: sortedUniqueValues(group.participantKeys),
+			},
+			aliases: sortedUniqueValues(append(group.aliases, candidate.Aliases...)),
+		})
+	}
+	return out
 }
 
 func (s *Store) readWhoCandidateAliases(ctx context.Context) (map[string]*whoCandidateBuilder, error) {
@@ -1240,6 +1327,18 @@ func sortedValues(values map[string]string) []string {
 	return out
 }
 
+func sortedUniqueValues(values []string) []string {
+	byValue := map[string]string{}
+	for _, value := range values {
+		value = normalizeWhoIdentity(value)
+		if value == "" {
+			continue
+		}
+		byValue[strings.ToLower(value)] = value
+	}
+	return sortedValues(byValue)
+}
+
 func uniqueStrings(values []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(values))
@@ -1254,120 +1353,6 @@ func uniqueStrings(values []string) []string {
 		}
 		seen[key] = struct{}{}
 		out = append(out, value)
-	}
-	return out
-}
-
-func whoCandidateMatchRank(query string, values []string) int {
-	query = normalizeMatchText(query)
-	if query == "" {
-		return -1
-	}
-	best := -1
-	for _, value := range values {
-		rank := whoValueMatchRank(query, normalizeMatchText(value))
-		if rank < 0 {
-			continue
-		}
-		if best < 0 || rank < best {
-			best = rank
-		}
-	}
-	return best
-}
-
-func whoValueMatchRank(query, value string) int {
-	if query == "" || value == "" {
-		return -1
-	}
-	switch {
-	case query == value:
-		return 0
-	case strings.HasPrefix(value, query):
-		return 1
-	case strings.Contains(value, query):
-		return 2
-	case closeWhoSpelling(query, value):
-		return 3
-	default:
-		return -1
-	}
-}
-
-func closeWhoSpelling(query, value string) bool {
-	if len([]rune(query)) < 3 {
-		return false
-	}
-	candidates := append([]string{value}, strings.Fields(value)...)
-	for _, candidate := range candidates {
-		distance := levenshteinDistance(query, candidate)
-		limit := 1
-		if len([]rune(query)) >= 6 && len([]rune(candidate)) >= 6 {
-			limit = 2
-		}
-		if distance <= limit {
-			return true
-		}
-	}
-	return false
-}
-
-func normalizeMatchText(value string) string {
-	value = strings.ToLower(normalizeWhoIdentity(value))
-	var out strings.Builder
-	previousSpace := false
-	for _, r := range value {
-		switch {
-		case unicode.IsLetter(r), unicode.IsDigit(r):
-			out.WriteRune(r)
-			previousSpace = false
-		case unicode.IsSpace(r):
-			if !previousSpace && out.Len() > 0 {
-				out.WriteByte(' ')
-				previousSpace = true
-			}
-		}
-	}
-	return strings.TrimSpace(out.String())
-}
-
-func levenshteinDistance(left, right string) int {
-	a := []rune(left)
-	b := []rune(right)
-	if len(a) == 0 {
-		return len(b)
-	}
-	if len(b) == 0 {
-		return len(a)
-	}
-	prev := make([]int, len(b)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i, ar := range a {
-		curr := make([]int, len(b)+1)
-		curr[0] = i + 1
-		for j, br := range b {
-			cost := 0
-			if ar != br {
-				cost = 1
-			}
-			curr[j+1] = minInt(curr[j]+1, prev[j+1]+1, prev[j]+cost)
-		}
-		prev = curr
-	}
-	return prev[len(b)]
-}
-
-func minInt(values ...int) int {
-	if len(values) == 0 {
-		return 0
-	}
-	out := values[0]
-	for _, value := range values[1:] {
-		if value < out {
-			out = value
-		}
 	}
 	return out
 }
