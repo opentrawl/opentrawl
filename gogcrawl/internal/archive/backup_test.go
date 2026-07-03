@@ -150,6 +150,82 @@ func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *test
 	requireNoReplacementChar(t, "undeclared body", open8Bit.Body)
 }
 
+func TestIngestBackupMessageShardDecodesResidualQuotedPrintableText(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	raw := strings.Join([]string{
+		"From: Shop <shop@example.com>",
+		"To: Bob Example <bob@example.com>",
+		"Subject: Sender bug",
+		"MIME-Version: 1.0",
+		`Content-Type: multipart/alternative; boundary="alt"`,
+		"",
+		"--alt",
+		"Content-Type: text/plain; charset=utf-8",
+		"Content-Transfer-Encoding: 7bit",
+		"",
+		"Open web-vie=",
+		"w?a=3DXJC92e",
+		"City: M=C3=BCnchen=E2=80=8B",
+		"--alt",
+		"Content-Type: text/html; charset=utf-8",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"<html><body>Open web-view</body></html>",
+		"--alt--",
+		"",
+	}, "\r\n")
+	row := backupMessageRowJSON("mresidualqp", "tresidualqp", []byte(raw))
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	if _, err := st.IngestBackupShard(ctx, shard, []byte(row)); err != nil {
+		t.Fatal(err)
+	}
+	open, err := st.OpenMessage(ctx, RefPrefix+"mresidualqp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Open web-view?a=XJC92e City: M\u00fcnchen\u200b"
+	if open.Body != want {
+		t.Fatalf("body = %q, want %q", open.Body, want)
+	}
+}
+
+func TestIngestBackupMessageShardKeepsLiteralQuotedPrintableText(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	raw := strings.Join([]string{
+		"From: Shop <shop@example.com>",
+		"To: Bob Example <bob@example.com>",
+		"Subject: Literal token",
+		"Content-Type: text/plain; charset=utf-8",
+		"Content-Transfer-Encoding: 7bit",
+		"",
+		"Literal token =3D stays.",
+		"",
+	}, "\r\n")
+	row := backupMessageRowJSON("mliteralqp", "tliteralqp", []byte(raw))
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	if _, err := st.IngestBackupShard(ctx, shard, []byte(row)); err != nil {
+		t.Fatal(err)
+	}
+	open, err := st.OpenMessage(ctx, RefPrefix+"mliteralqp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "Literal token =3D stays."
+	if open.Body != want {
+		t.Fatalf("body = %q, want %q", open.Body, want)
+	}
+}
+
 func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
