@@ -259,19 +259,8 @@ func (input classifyInput) placeContextForPrompt() map[string]any {
 	result := input.Place.Result
 	candidates := []map[string]any{}
 	if input.KnownPlace == nil {
-		for _, candidate := range result.POICandidates {
-			if len(candidates) >= 5 {
-				break
-			}
-			row := map[string]any{
-				"name":            candidate.Name,
-				"distance_meters": cardformat.Meters(candidate.DistanceM),
-				"tier":            candidate.Tier,
-			}
-			if category := cardformat.NormalizePOICategory(candidate.Category); category != "" {
-				row["category"] = category
-			}
-			candidates = append(candidates, row)
+		for _, candidate := range topPOICandidates(applyVenuePlausibility(result.POICandidates, venuePlausibility{})) {
+			candidates = append(candidates, promptVenueCandidate(candidate))
 		}
 	}
 	area := []map[string]string{}

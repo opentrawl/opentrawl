@@ -32,9 +32,13 @@ go run ./cmd/photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslib
 go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search "drone beach portugal" --json
-go run ./cmd/photoscrawl open photoscrawl:asset/<uuid> --json
-go run ./cmd/photoscrawl neighbors photoscrawl:asset/<uuid> --json
+go run ./cmd/photoscrawl open photoscrawl:asset/<32-hex> --json
+go run ./cmd/photoscrawl neighbors photoscrawl:asset/<32-hex> --json
 ```
+
+Human search output shows a short ref when the archive can resolve it safely.
+Use that alias with `open` or `neighbors` for local terminal work. JSON keeps
+the canonical `photoscrawl:asset/<32-hex>` ref.
 
 Default runtime paths come from crawlkit platform dirs. The primary database is
 `photos.sqlite` under the crawlkit data dir; provider caches and exported

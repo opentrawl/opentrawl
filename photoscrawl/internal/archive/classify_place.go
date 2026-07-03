@@ -92,7 +92,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	}
 	result := input.Place.Result
 	place.NormalizeResult(&result)
-	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
+	candidates := topPOICandidates(applyVenuePlausibility(result.POICandidates, plausibility))
 	evidenceID := stableID("evidence", input.AssetID, "place_context", result.Provider, input.Place.CacheStatus)
 	evidenceJSON, err := jsonText(map[string]any{
 		"provider":      result.Provider,
@@ -128,6 +128,9 @@ on conflict(id) do update set
 		}
 		written += n
 	}
+	if input.KnownPlace != nil {
+		return written, nil
+	}
 	seenCandidates := map[string]bool{}
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate.Name) == "" {
@@ -146,12 +149,6 @@ on conflict(id) do update set
 			return written, err
 		}
 		written += n
-		if input.KnownPlace != nil {
-			if n > 0 && len(seenCandidates) >= 2 {
-				break
-			}
-			continue
-		}
 		tier, ok := venueLineTier(candidate)
 		if !ok {
 			continue
@@ -280,14 +277,9 @@ func addressLine(address *place.Address) string {
 	return place.FormatAddress(address)
 }
 
-type venueCandidate struct {
-	place.POICandidate
-	Plausibility venuePlausibility
-}
-
 func applyVenuePlausibility(candidates []place.POICandidate, plausibility venuePlausibility) []venueCandidate {
 	out := make([]venueCandidate, 0, len(candidates))
-	topIndex := topProviderVenueCandidate(candidates)
+	topIndex := topProviderVenueCandidate(candidates, plausibility)
 	for i, candidate := range candidates {
 		row := venueCandidate{POICandidate: candidate}
 		if i == topIndex && plausibility.Verdict != "" {
@@ -304,7 +296,15 @@ func applyVenuePlausibility(candidates []place.POICandidate, plausibility venueP
 	return out
 }
 
-func topProviderVenueCandidate(candidates []place.POICandidate) int {
+func topProviderVenueCandidate(candidates []place.POICandidate, plausibility venuePlausibility) int {
+	if plausibility.CandidateName != "" {
+		target := strings.ToLower(strings.TrimSpace(plausibility.CandidateName))
+		for i, candidate := range candidates {
+			if strings.ToLower(strings.TrimSpace(candidate.Name)) == target {
+				return i
+			}
+		}
+	}
 	for i, candidate := range candidates {
 		if candidate.Tier == place.TierVenueCandidate {
 			return i

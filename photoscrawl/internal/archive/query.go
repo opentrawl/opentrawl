@@ -23,6 +23,8 @@ type SearchResult struct {
 	Results      []SearchHit `json:"results"`
 	TotalMatches int         `json:"total_matches"`
 	Truncated    bool        `json:"truncated"`
+
+	ShortRefsRebuilt bool `json:"-"`
 }
 
 type SearchHit struct {
@@ -33,6 +35,7 @@ type SearchHit struct {
 	Snippet string `json:"snippet"`
 
 	ID           string `json:"-"`
+	ShortRef     string `json:"-"`
 	HitType      string `json:"-"`
 	MediaType    string `json:"-"`
 	CreationDate string `json:"-"`
@@ -148,6 +151,10 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("count search matches: %w", err)
 	}
+	shortRefsReady, err := shortRefsCurrent(ctx, db.DB())
+	if err != nil {
+		return SearchResult{}, err
+	}
 	rows, err := db.DB().QueryContext(ctx, `
 with asset_matches as (
   select asset.id, asset_fts.rank as hit_rank
@@ -189,7 +196,6 @@ limit ?
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search assets: %w", err)
 	}
-	defer rows.Close()
 
 	result := SearchResult{
 		Query:        query,
@@ -214,7 +220,18 @@ limit ?
 		result.Results = append(result.Results, hit)
 	}
 	if err := rows.Err(); err != nil {
+		_ = rows.Close()
 		return SearchResult{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return SearchResult{}, err
+	}
+	if shortRefsReady {
+		for i := range result.Results {
+			if alias, err := shortRefForFullRef(ctx, db.DB(), result.Results[i].Ref); err == nil {
+				result.Results[i].ShortRef = alias
+			}
+		}
 	}
 	return result, nil
 }

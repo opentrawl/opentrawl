@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/openclaw/crawlkit/store"
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	"github.com/openclaw/photoscrawl/internal/place"
 )
@@ -747,6 +748,173 @@ func TestOpenVenueCandidatesCapsRoundsAndFlattens(t *testing.T) {
 			t.Fatalf("candidate JSON leaked %q: %s", forbidden, data)
 		}
 	}
+}
+
+func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	seedSyntheticPlaceAsset(t, paths)
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var input classifyInput
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		inputs, err := loadClassifyInputs(ctx, tx, 0, "")
+		if err != nil {
+			return err
+		}
+		if len(inputs) != 1 {
+			return fmt.Errorf("classify inputs = %d, want 1", len(inputs))
+		}
+		input = inputs[0]
+		input.Place = &classifyPlaceContext{
+			CacheStatus: "hit",
+			Result: place.Result{
+				Provider:     "apple",
+				Source:       "fixture",
+				RadiusMeters: 150,
+				POIStatus:    place.POIStatusFound,
+				POICandidates: []place.POICandidate{
+					{Name: "Nearby Bakery", Category: "MKPOICategoryStore", DistanceM: 4.2, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Nearby Bakery", Category: "MKPOICategoryStore", DistanceM: 4.6, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Corner Market", Category: "MKPOICategoryStore", DistanceM: 9.1, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Canal Pharmacy", Category: "pharmacy", DistanceM: 16.4, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Station Salon", Category: "personal care", DistanceM: 21.2, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Fysiochi", Category: "MKPOICategoryFitnessCenter", DistanceM: 33.3, Tier: place.TierNearbyPOI, Source: "fixture"},
+					{Name: "Book Casino", Category: "entertainment", DistanceM: 42.2, Tier: place.TierVenueCandidate, Source: "fixture"},
+					{Name: "Distant Cafe", Category: "cafe", DistanceM: 80.2, Tier: place.TierNearbyPOI, Source: "fixture"},
+				},
+			},
+		}
+		_, err = writePlaceClassification(ctx, tx, input, venuePlausibility{
+			CandidateName: "Book Casino",
+			Verdict:       venueVerdictPlausible,
+			Reason:        "synthetic fixture reason",
+		}, fixedClock("2026-05-28T10:15:00Z")())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	metadata, err := photoCardMetadataJSON(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sent := promptCandidateSnapshots(t, metadata)
+
+	storedRows, err := rows(ctx, db.DB(), `
+select observation_type, value_text, value_json, tier, distance_meters
+from place_observation
+where asset_id = ? and observation_type = 'poi_candidate'
+order by case when distance_meters is null then 1 else 0 end, distance_meters, value_text
+`, input.AssetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored := storedCandidateSnapshots(t, storedRows)
+
+	opened, err := Open(ctx, paths, input.AssetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shown := openCandidateSnapshots(opened.Mechanical.VenueCandidates)
+
+	want := []candidateSnapshot{
+		{Name: "Nearby Bakery", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 4},
+		{Name: "Corner Market", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 9},
+		{Name: "Canal Pharmacy", Category: "pharmacy", Tier: place.TierNearbyPOI, DistanceMeters: 16},
+		{Name: "Station Salon", Category: "personal care", Tier: place.TierNearbyPOI, DistanceMeters: 21},
+		{Name: "Book Casino", Category: "entertainment", Tier: place.TierVenueCandidate, DistanceMeters: 42},
+	}
+	if !reflect.DeepEqual(sent, want) {
+		t.Fatalf("prompt candidates = %#v, want %#v", sent, want)
+	}
+	if !reflect.DeepEqual(stored, sent) {
+		t.Fatalf("stored candidates = %#v, want sent %#v", stored, sent)
+	}
+	if !reflect.DeepEqual(shown, sent) {
+		t.Fatalf("open candidates = %#v, want sent %#v", shown, sent)
+	}
+}
+
+type candidateSnapshot struct {
+	Name           string
+	Category       string
+	Tier           string
+	DistanceMeters float64
+}
+
+func promptCandidateSnapshots(t *testing.T, metadata []byte) []candidateSnapshot {
+	t.Helper()
+	var payload map[string]any
+	if err := json.Unmarshal(metadata, &payload); err != nil {
+		t.Fatal(err)
+	}
+	location, ok := payload["location"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata missing location: %s", metadata)
+	}
+	placeContext, ok := location["place_context"].(map[string]any)
+	if !ok {
+		t.Fatalf("metadata missing place_context: %s", metadata)
+	}
+	candidates, ok := placeContext["venue_candidates"].([]any)
+	if !ok {
+		t.Fatalf("metadata venue_candidates = %#v", placeContext["venue_candidates"])
+	}
+	out := make([]candidateSnapshot, 0, len(candidates))
+	for _, item := range candidates {
+		row, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("candidate = %#v", item)
+		}
+		out = append(out, candidateSnapshot{
+			Name:           mapText(row, "name"),
+			Category:       mapText(row, "category"),
+			Tier:           mapText(row, "tier"),
+			DistanceMeters: mapFloat(row, "distance_meters"),
+		})
+	}
+	return out
+}
+
+func storedCandidateSnapshots(t *testing.T, rows []map[string]any) []candidateSnapshot {
+	t.Helper()
+	out := make([]candidateSnapshot, 0, len(rows))
+	for _, row := range rows {
+		var value map[string]any
+		if err := json.Unmarshal([]byte(rowString(row, "value_json")), &value); err != nil {
+			t.Fatal(err)
+		}
+		distance := rowFloat(row, "distance_meters")
+		if valueDistance := mapFloat(value, "distance_m"); valueDistance > 0 {
+			distance = valueDistance
+		}
+		out = append(out, candidateSnapshot{
+			Name:           rowString(row, "value_text"),
+			Category:       mapText(value, "category"),
+			Tier:           rowString(row, "tier"),
+			DistanceMeters: cardformat.Meters(distance),
+		})
+	}
+	return out
+}
+
+func openCandidateSnapshots(candidates []OpenVenueCandidate) []candidateSnapshot {
+	out := make([]candidateSnapshot, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, candidateSnapshot{
+			Name:           candidate.Name,
+			Category:       candidate.Category,
+			Tier:           candidate.Tier,
+			DistanceMeters: candidate.DistanceMeters,
+		})
+	}
+	return out
 }
 
 func openCandidateRow(name, tier string, distance float64, category, verdict string) map[string]any {

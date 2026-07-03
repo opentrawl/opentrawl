@@ -24,7 +24,7 @@ func TestControlManifest(t *testing.T) {
 	if manifest.Paths.DefaultDatabase != paths.Database || manifest.Paths.DefaultCache != paths.CacheDir {
 		t.Fatalf("paths = %#v", manifest.Paths)
 	}
-	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "search", "open", "neighbors"} {
+	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "search", "short_refs", "open", "neighbors"} {
 		if !slices.Contains(manifest.Capabilities, capability) {
 			t.Fatalf("missing capability %q in %#v", capability, manifest.Capabilities)
 		}

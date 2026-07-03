@@ -192,8 +192,8 @@ select count(*) from place_observation where asset_id = ? and observation_type =
 `, assetID).Scan(&venueCount); err != nil {
 		t.Fatal(err)
 	}
-	if poiCount != 2 || venueCount != 0 {
-		t.Fatalf("place rows poi=%d venue=%d, want poi=2 venue=0", poiCount, venueCount)
+	if poiCount != 0 || venueCount != 0 {
+		t.Fatalf("place rows poi=%d venue=%d, want poi=0 venue=0", poiCount, venueCount)
 	}
 
 	opened, err := Open(ctx, paths, assetID)

@@ -28,7 +28,7 @@ func ControlManifest(paths Paths) Manifest {
 		DefaultLogs:     paths.LogDir,
 		DefaultShare:    paths.ShareDir,
 	}
-	manifest.Capabilities = []string{"metadata", "status", "doctor", "sync", "classify", "search", "open", "neighbors"}
+	manifest.Capabilities = []string{"metadata", "status", "doctor", "sync", "classify", "search", "short_refs", "open", "neighbors"}
 	manifest.Privacy = control.Privacy{
 		ExportsSecrets: false,
 		LocalOnlyScopes: []string{

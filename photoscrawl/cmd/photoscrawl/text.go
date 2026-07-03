@@ -83,11 +83,21 @@ func printSyncText(w io.Writer, result archive.SyncResult) error {
 	return nil
 }
 
-func writeStatus(w io.Writer, format output.Format, status archive.StatusResult) error {
+type statusOutput struct {
+	archive.StatusResult
+	Log *logTailOutput `json:"log,omitempty"`
+}
+
+type doctorOutput struct {
+	archive.DoctorResult
+	Log *logTailOutput `json:"log,omitempty"`
+}
+
+func writeStatus(w io.Writer, format output.Format, status archive.StatusResult, tail *logTailOutput) error {
 	if format != output.Text && format != "" {
-		return output.Write(w, format, "status", status)
+		return output.Write(w, format, "status", statusOutput{StatusResult: status, Log: tail})
 	}
-	return ckrender.WriteStatus(w, renderStatus(status))
+	return ckrender.WriteStatus(w, renderStatus(status, tail))
 }
 
 func writeSearch(w io.Writer, format output.Format, result archive.SearchResult) error {
@@ -113,9 +123,9 @@ func printSearchText(w io.Writer, result archive.SearchResult) error {
 		return err
 	}
 	for _, hit := range result.Results {
-		line := strings.TrimSpace(strings.Join(nonEmptyText(hit.Time, hit.Who, hit.Where, hit.Ref), " | "))
+		line := strings.TrimSpace(strings.Join(nonEmptyText(hit.Time, hit.Who, hit.Where, searchDisplayRef(hit)), " | "))
 		if line == "" {
-			line = hit.Ref
+			line = searchDisplayRef(hit)
 		}
 		if _, err := fmt.Fprintf(w, "\n%s\n", line); err != nil {
 			return err
@@ -265,19 +275,20 @@ func printNeighborsText(w io.Writer, result archive.NeighborResult) error {
 	return nil
 }
 
-func writeDoctor(w io.Writer, format output.Format, result archive.DoctorResult) error {
+func writeDoctor(w io.Writer, format output.Format, result archive.DoctorResult, tail *logTailOutput) error {
 	if format != output.Text && format != "" {
-		return output.Write(w, format, "doctor", result)
+		return output.Write(w, format, "doctor", doctorOutput{DoctorResult: result, Log: tail})
 	}
-	return ckrender.WriteDoctor(w, renderDoctorChecks(result.Checks), ckrender.LogTail{})
+	return ckrender.WriteDoctor(w, renderDoctorChecks(result.Checks), renderLogTail(tail))
 }
 
-func renderStatus(status archive.StatusResult) ckrender.Status {
+func renderStatus(status archive.StatusResult, tail *logTailOutput) ckrender.Status {
 	return ckrender.Status{
 		State:     ckrender.StatusState(status.State),
 		Summary:   status.Summary,
 		Sections:  renderStatusSections(status),
 		Freshness: renderFreshness(status.Freshness),
+		Log:       renderLogTail(tail),
 	}
 }
 
@@ -345,6 +356,13 @@ func nonEmptyText(values ...string) []string {
 		}
 	}
 	return out
+}
+
+func searchDisplayRef(hit archive.SearchHit) string {
+	if strings.TrimSpace(hit.ShortRef) != "" {
+		return hit.ShortRef
+	}
+	return hit.Ref
 }
 
 func openTextTime(value string) string {

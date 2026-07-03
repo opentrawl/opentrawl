@@ -81,16 +81,14 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 	var jsonFlag bool
 	var formatFlag string
 	query := []string{}
-	flagsStarted := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if strings.HasPrefix(arg, "--") {
-			flagsStarted = true
 			name, value, hasValue := splitFlag(arg)
 			switch name {
 			case "--json":
 				if hasValue {
-					return parsed, commandError{Code: "usage", Message: "--json does not take a value", Remedy: "pass --json as a flag after the query"}
+					return parsed, commandError{Code: "usage", Message: "--json does not take a value", Remedy: "pass --json as a flag"}
 				}
 				jsonFlag = true
 			case "--limit":
@@ -132,9 +130,6 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 				return parsed, commandError{Code: "usage", Message: fmt.Sprintf("unknown search flag %s", name), Remedy: "use search <query> --limit N --json"}
 			}
 			continue
-		}
-		if flagsStarted {
-			return parsed, commandError{Code: "usage", Message: "search arguments must come before flags", Remedy: "use search <query> [flags]"}
 		}
 		query = append(query, arg)
 	}
