@@ -48,6 +48,10 @@ type KnownPlaceMatch struct {
 	Kind           string
 	Name           string
 	DistanceMeters float64
+	// After marks a photo taken after the place's validity window: the spot
+	// was the user's home or workplace once, and that relationship still
+	// explains the visit better than whichever business is registered nearby.
+	After bool
 }
 
 func SetKnownPlaces(ctx context.Context, paths Paths, places []KnownPlace) (KnownPlaceSetResult, error) {
@@ -218,35 +222,41 @@ func matchKnownPlace(places []KnownPlace, latitude, longitude float64, creationD
 	var best *KnownPlaceMatch
 	bestRank := 0
 	for _, place := range places {
-		if !knownPlaceWindowContains(place, takenAt) {
+		phase := knownPlaceWindowPhase(place, takenAt)
+		if phase < 0 {
 			continue
 		}
 		distance := knownPlaceDistanceMeters(latitude, longitude, place.Latitude, place.Longitude)
 		if distance > place.RadiusMeters {
 			continue
 		}
+		after := phase > 0
 		rank := knownPlaceKindRank(place.LabelKind)
-		if best == nil || distance < best.DistanceMeters || (distance == best.DistanceMeters && rank < bestRank) ||
-			(distance == best.DistanceMeters && rank == bestRank && place.DisplayName < best.Name) {
+		betterPhase := best != nil && best.After && !after
+		worsePhase := best != nil && !best.After && after
+		if best == nil || betterPhase || (!worsePhase && (distance < best.DistanceMeters ||
+			(distance == best.DistanceMeters && rank < bestRank) ||
+			(distance == best.DistanceMeters && rank == bestRank && place.DisplayName < best.Name))) {
 			bestRank = rank
 			best = &KnownPlaceMatch{
 				Kind:           place.LabelKind,
 				Name:           place.DisplayName,
 				DistanceMeters: distance,
+				After:          after,
 			}
 		}
 	}
 	return best
 }
 
-func knownPlaceWindowContains(place KnownPlace, takenAt time.Time) bool {
+func knownPlaceWindowPhase(place KnownPlace, takenAt time.Time) int {
 	if from, ok := parseKnownPlaceStoredTime(place.ValidFrom); ok && takenAt.Before(from) {
-		return false
+		return -1
 	}
 	if until, ok := parseKnownPlaceStoredTime(place.ValidUntil); ok && takenAt.After(until) {
-		return false
+		return 1
 	}
-	return true
+	return 0
 }
 
 func parseKnownPlaceStoredTime(value string) (time.Time, bool) {
@@ -289,8 +299,18 @@ func degreesToRadians(value float64) float64 {
 	return value * math.Pi / 180
 }
 
-func KnownPlaceCardLine(kind, name string) string {
+func KnownPlaceCardLine(kind, name string, after bool) string {
 	name = strings.TrimSpace(name)
+	if after {
+		label := "At former home"
+		if kind == KnownPlaceKindWork {
+			label = "At former workplace"
+		}
+		if name == "" {
+			return label
+		}
+		return label + " (" + name + ")"
+	}
 	switch kind {
 	case KnownPlaceKindHome:
 		return "At home"
@@ -309,8 +329,18 @@ func KnownPlaceCardLine(kind, name string) string {
 	}
 }
 
-func KnownPlaceWhereLabel(kind, name string) string {
+func KnownPlaceWhereLabel(kind, name string, after bool) string {
 	name = strings.TrimSpace(name)
+	if after {
+		label := "former home"
+		if kind == KnownPlaceKindWork {
+			label = "former workplace"
+		}
+		if name == "" {
+			return label
+		}
+		return label + " — " + name
+	}
 	switch kind {
 	case KnownPlaceKindHome:
 		return "home"
