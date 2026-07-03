@@ -165,3 +165,13 @@ the scene perfectly and exhaustively — what, where, when, with what device,
 in what context, with what certainty. Anything a blind person could not
 parse (raw enums, float noise, machine ids, cache accounting, provenance
 strings) is slop; anything they would still have to ask about is missing.
+
+## No invented label ontologies (ZFC)
+
+Never mint new deterministic label kinds/enums to carry meaning a model
+should express (ruled 2026-07-04, the "family home" case). Deterministic
+kinds exist only where code must gate on them mechanically, and the
+existing set is the ceiling until a gate genuinely needs more. Context
+that is meaning, not gating — whose house, what relationship, why a
+place matters — flows to the model as plain-language phrases and to
+readers as prose, never as new enum vocabulary.
