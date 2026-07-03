@@ -28,16 +28,54 @@ func TestOpenRendersTranscript(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := "Family chat\n\n" +
-		"2026-05-14 23:58  Alice: Yesterday\n" +
-		"▶ 2026-05-15 00:01  Me: Target message\n" +
-		"2026-05-15 00:02  Bob: [attachment]\n\n" +
+	want := "Family chat — Fri 15 May 2026\n\n" +
+		"23:58  Alice: Yesterday\n" +
+		"— Fri 15 May 2026 —\n" +
+		"▶ 00:01  Me: Target message\n" +
+		"00:02  Bob: [attachment]\n\n" +
 		"ref: imessage:msg/8842\n"
 	if stdout != want {
 		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
 	}
 	if strings.Contains(stdout, "msg/8841") || strings.Contains(stdout, "msg/8843") || strings.Contains(stdout, "alice@example.com") {
 		t.Fatalf("transcript leaked non-ref ids or participants:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "2026-05-14 23:58") || strings.Contains(stdout, "2026-05-15 00:01") {
+		t.Fatalf("transcript used per-line dates:\n%s", stdout)
+	}
+}
+
+func TestOpenRendersSingleDayTranscriptHeaderDate(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:     "imsgcrawl",
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		openRef:  "imessage:msg/2017",
+		open: `{
+			"ref":"imessage:msg/2017",
+			"chat":{"name":"Robin Example"},
+			"message":{"ref":"imessage:msg/2017","time":"2017-07-12T20:15:00+02:00","who":"Me","where":"Robin Example","text":"Target message"},
+			"context":[
+				{"ref":"imessage:msg/2016","time":"2017-07-12T20:12:00+02:00","who":"Robin","where":"Robin Example","text":"Are you around?"},
+				{"ref":"imessage:msg/2017","time":"2017-07-12T20:15:00+02:00","who":"Me","where":"Robin Example","text":"Target message","target":true}
+			]
+		}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "open", "imessage:msg/2017")
+	if code != 0 {
+		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	want := "Robin Example — Wed 12 Jul 2017\n\n" +
+		"20:12  Robin: Are you around?\n" +
+		"▶ 20:15  Me: Target message\n\n" +
+		"ref: imessage:msg/2017\n"
+	if stdout != want {
+		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
+	}
+	if strings.Contains(stdout, "2017-07-12 20:12") || strings.Contains(stdout, "— Wed 12 Jul 2017 —") {
+		t.Fatalf("single-day transcript should keep time-only lines and no day separator:\n%s", stdout)
 	}
 }
 

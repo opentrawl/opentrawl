@@ -77,12 +77,18 @@ func openTranscriptRenderer(object map[string]any, fallbackRef string) (openRend
 	}
 
 	return func(w io.Writer) error {
-		if _, err := fmt.Fprintf(w, "%s\n\n", title); err != nil {
+		if _, err := fmt.Fprintf(w, "%s\n\n", transcriptHeader(title, message, lines)); err != nil {
 			return err
 		}
-		showDate := transcriptSpansDays(lines)
+		showSeparators := transcriptSpansDays(lines)
+		previousDay := ""
 		for _, line := range lines {
-			if err := writeTranscriptLine(w, line, showDate); err != nil {
+			if showSeparators {
+				if err := writeTranscriptDaySeparator(w, line, &previousDay); err != nil {
+					return err
+				}
+			}
+			if err := writeTranscriptLine(w, line); err != nil {
 				return err
 			}
 		}
@@ -103,7 +109,52 @@ func transcriptLineFromMap(object map[string]any) transcriptLine {
 	}
 }
 
-func writeTranscriptLine(w io.Writer, line transcriptLine, showDate bool) error {
+func transcriptHeader(title string, message map[string]any, lines []transcriptLine) string {
+	openedAt, ok := transcriptOpenedAt(message, lines)
+	if !ok {
+		return title
+	}
+	return title + " — " + formatTranscriptDay(openedAt)
+}
+
+func transcriptOpenedAt(message map[string]any, lines []transcriptLine) (time.Time, bool) {
+	if message != nil {
+		stamp := stringField(message, "time", "date", "sent_at", "created_at", "start")
+		if parsed, ok := parseOpenTime(stamp); ok {
+			return parsed, true
+		}
+	}
+	for _, line := range lines {
+		if line.Target && line.timeOK {
+			return line.parsed, true
+		}
+	}
+	for _, line := range lines {
+		if line.timeOK {
+			return line.parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+func writeTranscriptDaySeparator(w io.Writer, line transcriptLine, previousDay *string) error {
+	if !line.timeOK {
+		return nil
+	}
+	day := line.parsed.Format("2006-01-02")
+	if *previousDay == "" {
+		*previousDay = day
+		return nil
+	}
+	if day == *previousDay {
+		return nil
+	}
+	*previousDay = day
+	_, err := fmt.Fprintf(w, "— %s —\n", formatTranscriptDay(line.parsed))
+	return err
+}
+
+func writeTranscriptLine(w io.Writer, line transcriptLine) error {
 	prefix := ""
 	if line.Target {
 		prefix = "▶ "
@@ -112,7 +163,7 @@ func writeTranscriptLine(w io.Writer, line transcriptLine, showDate bool) error 
 	if line.Who != "" {
 		speaker = line.Who + ": "
 	}
-	_, err := fmt.Fprintf(w, "%s%s  %s%s\n", prefix, transcriptStamp(line, showDate), speaker, line.Text)
+	_, err := fmt.Fprintf(w, "%s%s  %s%s\n", prefix, transcriptStamp(line), speaker, line.Text)
 	return err
 }
 
@@ -146,12 +197,13 @@ func transcriptSpansDays(lines []transcriptLine) bool {
 	return false
 }
 
-func transcriptStamp(line transcriptLine, showDate bool) string {
+func formatTranscriptDay(value time.Time) string {
+	return value.Format("Mon 2 Jan 2006")
+}
+
+func transcriptStamp(line transcriptLine) string {
 	if !line.timeOK {
 		return firstNonEmpty(line.Stamp, unknownFreshness)
-	}
-	if showDate {
-		return line.parsed.Format("2006-01-02 15:04")
 	}
 	return line.parsed.Format("15:04")
 }
