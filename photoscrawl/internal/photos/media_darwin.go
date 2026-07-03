@@ -7,6 +7,7 @@ package photos
 #include <stdlib.h>
 
 int photoscrawl_export_original_resource(const char *localIdentifier, const char *destinationPath, int allowNetwork, char **errorOut);
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut);
 */
@@ -23,6 +24,10 @@ import (
 )
 
 func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPath string, allowNetwork bool) error {
+	return ExportOriginalResourceMatching(ctx, OriginalExportQuery{LocalIdentifier: localIdentifier}, destinationPath, allowNetwork)
+}
+
+func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQuery, destinationPath string, allowNetwork bool) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -41,13 +46,17 @@ func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPat
 	_ = os.Remove(tempDestination)
 	defer os.Remove(tempDestination)
 
-	cIdentifier := C.CString(localIdentifier)
+	cIdentifier := C.CString(query.LocalIdentifier)
 	defer C.free(unsafe.Pointer(cIdentifier))
+	cCreationDate := C.CString(query.CreationDate)
+	defer C.free(unsafe.Pointer(cCreationDate))
+	cOriginalFilename := C.CString(query.OriginalFilename)
+	defer C.free(unsafe.Pointer(cOriginalFilename))
 	cDestination := C.CString(tempDestination)
 	defer C.free(unsafe.Pointer(cDestination))
 
 	var cErr *C.char
-	ok := C.photoscrawl_export_original_resource(cIdentifier, cDestination, boolInt(allowNetwork), &cErr)
+	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return errors.New(C.GoString(cErr))

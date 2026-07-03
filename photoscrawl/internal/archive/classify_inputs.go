@@ -11,6 +11,7 @@ type classifyInput struct {
 	QueueID         string
 	AssetID         string
 	SourceLibraryID string
+	LocalIdentifier string
 	NeedsDownload   bool
 	MediaType       string
 	MediaSubtypes   string
@@ -31,6 +32,7 @@ type classifyResource struct {
 	UTI              string
 	OriginalFilename string
 	LocalPath        string
+	FileSize         int64
 	AvailableLocally bool
 	NeedsDownload    bool
 }
@@ -42,13 +44,35 @@ type classifyAlbum struct {
 
 func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, includeMetadataClassified bool) ([]classifyInput, error) {
 	query := `
-select q.id, q.asset_id, q.source_library_id, q.needs_download,
+with queued as (
+select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
        a.media_type, a.media_subtypes, a.creation_date, a.width, a.height,
-       a.favorite, a.hidden, a.burst_identifier, a.metadata_json
+       a.favorite, a.hidden, a.burst_identifier, a.metadata_json,
+       exists(select 1 from location_observation lo where lo.asset_id = a.id) as has_location,
+       lower(
+         coalesce(a.metadata_json, '') || ' ' ||
+         coalesce((select group_concat(ar.resource_type || ' ' || ar.uti || ' ' || ar.original_filename, ' ') from asset_resource ar where ar.asset_id = a.id), '') || ' ' ||
+         coalesce((select group_concat(am.album_title || ' ' || am.album_kind, ' ') from album_membership am where am.asset_id = a.id), '')
+       ) as priority_text
 from classification_queue q
 join asset a on a.id = q.asset_id
 where q.state in (` + classifyQueueStates(includeMetadataClassified) + `)
-order by a.creation_date desc, q.id
+)
+select id, asset_id, source_library_id, local_identifier, needs_download,
+       media_type, media_subtypes, creation_date, width, height,
+       favorite, hidden, burst_identifier, metadata_json
+from queued
+order by creation_date desc,
+  has_location desc,
+  case when priority_text like '%receipt%'
+    or priority_text like '%invoice%'
+    or priority_text like '%document%'
+    or priority_text like '%passport%'
+    or priority_text like '%ticket%'
+    or priority_text like '%boarding pass%'
+    or priority_text like '%menu%'
+    then 1 else 0 end desc,
+  id
 `
 	args := []any{}
 	if limit > 0 {
@@ -69,6 +93,7 @@ order by a.creation_date desc, q.id
 			&input.QueueID,
 			&input.AssetID,
 			&input.SourceLibraryID,
+			&input.LocalIdentifier,
 			&needsDownload,
 			&input.MediaType,
 			&input.MediaSubtypes,
@@ -107,7 +132,7 @@ func classifyQueueStates(includeMetadataClassified bool) string {
 
 func loadClassifyResources(ctx context.Context, tx *sql.Tx, assetID string) ([]classifyResource, error) {
 	rows, err := tx.QueryContext(ctx, `
-select id, resource_type, uti, original_filename, local_path, available_locally, needs_download
+select id, resource_type, uti, original_filename, local_path, file_size, available_locally, needs_download
 from asset_resource
 where asset_id = ?
 order by resource_type, original_filename
@@ -121,7 +146,7 @@ order by resource_type, original_filename
 	for rows.Next() {
 		var resource classifyResource
 		var availableLocally, needsDownload int
-		if err := rows.Scan(&resource.ID, &resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &resource.LocalPath, &availableLocally, &needsDownload); err != nil {
+		if err := rows.Scan(&resource.ID, &resource.ResourceType, &resource.UTI, &resource.OriginalFilename, &resource.LocalPath, &resource.FileSize, &availableLocally, &needsDownload); err != nil {
 			return nil, err
 		}
 		resource.AvailableLocally = availableLocally != 0

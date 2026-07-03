@@ -15,6 +15,11 @@ import (
 	"github.com/openclaw/photoscrawl/internal/place"
 )
 
+const (
+	ollamaCloudBaseURL = "https://ollama.com/api"
+	ollamaAPIKeyEnv    = "OLLAMA_API_KEY"
+)
+
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		if wantsJSON(os.Args[1:]) {
@@ -164,7 +169,13 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		result, err := archive.Classify(ctx, paths, archive.ClassifyOptions{All: *all, Limit: *limit, Model: *model})
+		result, err := archive.Classify(ctx, paths, archive.ClassifyOptions{
+			All:         *all,
+			Limit:       *limit,
+			Model:       *model,
+			ModelURL:    ollamaCloudBaseURL,
+			ModelKeyEnv: ollamaAPIKeyEnv,
+		})
 		if err != nil {
 			return err
 		}

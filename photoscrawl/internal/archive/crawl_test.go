@@ -179,7 +179,7 @@ func TestSyncExpandsHomeInLibraryPath(t *testing.T) {
 func testPaths(t *testing.T) Paths {
 	t.Helper()
 	root := t.TempDir()
-	return Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite")}
+	return Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite"), CacheDir: filepath.Join(root, "cache")}
 }
 
 func mkdirLibrary(path string) error {
