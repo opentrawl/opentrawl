@@ -107,10 +107,7 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 		})
 	}
 	payload := map[string]any{
-		"capture": map[string]any{
-			"local_time": localCaptureTime(input.CreationDate, input.timezoneName()),
-			"timezone":   input.timezoneName(),
-		},
+		"capture": captureContext(input),
 		"media": map[string]any{
 			"kind":             openMediaType(input.MediaType),
 			"subtypes":         splitSubtypes(input.MediaSubtypes),
@@ -145,11 +142,22 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 	return json.MarshalIndent(payload, "", "  ")
 }
 
-func (input classifyInput) timezoneName() string {
-	if strings.TrimSpace(input.TimezoneName) != "" {
-		return strings.TrimSpace(input.TimezoneName)
+func captureContext(input classifyInput) map[string]any {
+	capture := map[string]any{
+		"local_time": localCaptureTime(input.CreationDate, input.timezoneName()),
 	}
-	return "local"
+	if zone := input.timezoneName(); zone != "local" {
+		capture["timezone"] = zone
+	}
+	return capture
+}
+
+func (input classifyInput) timezoneName() string {
+	name := strings.TrimSpace(input.TimezoneName)
+	if name == "" || strings.HasPrefix(name, "GMT") || strings.HasPrefix(name, "UTC") {
+		return "local"
+	}
+	return name
 }
 
 func localCaptureTime(value, timezoneName string) string {
@@ -165,14 +173,24 @@ func localCaptureTime(value, timezoneName string) string {
 	return parsed.Local().Format(time.RFC3339)
 }
 
+// splitSubtypes turns Photos' numeric kind subtypes into words a reader (and
+// the model) can use; unknown codes carry no meaning and are dropped.
 func splitSubtypes(value string) []string {
+	names := map[string]string{
+		"kind_subtype:1":   "panorama",
+		"kind_subtype:2":   "live_photo",
+		"kind_subtype:10":  "screenshot",
+		"kind_subtype:100": "video_streamed",
+		"kind_subtype:101": "time_lapse",
+		"kind_subtype:102": "slow_motion",
+	}
 	out := []string{}
 	for _, part := range strings.FieldsFunc(value, func(r rune) bool {
 		return r == ',' || r == ';' || r == '|'
 	}) {
 		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
+		if name, ok := names[part]; ok {
+			out = append(out, name)
 		}
 	}
 	return out
@@ -197,13 +215,14 @@ func (input classifyInput) originalContext() map[string]any {
 			resource = candidate
 		}
 	}
-	return map[string]any{
-		"uti":               resource.UTI,
-		"availability":      resource.Availability(),
-		"bytes":             resource.FileSize,
-		"available_locally": resource.AvailableLocally,
-		"needs_download":    resource.NeedsDownload,
+	original := map[string]any{
+		"availability": resource.Availability(),
+		"bytes":        resource.FileSize,
 	}
+	if filename := strings.TrimSpace(resource.OriginalFilename); filename != "" {
+		original["filename"] = filename
+	}
+	return original
 }
 
 func (resource classifyResource) Availability() string {
@@ -233,9 +252,13 @@ func (input classifyInput) placeContextForPrompt() map[string]any {
 		}
 		candidates = append(candidates, row)
 	}
+	area := []map[string]string{}
+	for _, level := range result.Area {
+		area = append(area, map[string]string{"level": level.Level, "name": level.Name})
+	}
 	return map[string]any{
 		"address_line":     addressLine(result.Address),
-		"area":             result.Area,
+		"area":             area,
 		"poi_status":       result.POIStatus,
 		"venue_candidates": candidates,
 	}
