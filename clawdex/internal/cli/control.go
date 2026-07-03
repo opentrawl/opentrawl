@@ -22,14 +22,9 @@ func (c *MetadataCmd) Run(r *Runtime) error {
 	return r.print(controlManifest())
 }
 
-type metadataManifest struct {
-	control.Manifest
-	ContractVersion int    `json:"contract_version"`
-	Version         string `json:"version"`
-}
-
-func controlManifest() metadataManifest {
+func controlManifest() control.Manifest {
 	m := control.NewManifest("clawdex", "Contacts", "clawdex")
+	m.Version = Version
 	m.Description = "Local-first contact identity layer backed by markdown and git."
 	m.Paths = control.Paths{
 		DefaultConfig:   repo.ResolveConfigPath(""),
@@ -42,7 +37,7 @@ func controlManifest() metadataManifest {
 		"doctor":   {Title: "Doctor", Argv: []string{"clawdex", "doctor", "--json"}, JSON: true},
 		"who":      {Title: "Who", Argv: []string{"clawdex", "who", "QUERY", "--json"}, JSON: true},
 	}
-	return metadataManifest{Manifest: m, ContractVersion: 1, Version: Version}
+	return m
 }
 
 type StatusCmd struct{}

@@ -683,6 +683,23 @@ func TestExecuteImportContactsNoopJSONHasEmptyChanges(t *testing.T) {
 	}
 }
 
+func TestExecuteImportContactsAcceptsTelecrawlContractMetadata(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	fake := writeFakeContactCrawlerManifest(t, "telecrawl", telecrawlContractMetadataJSON, `{"contacts":[{"display_name":"Ada Telegram","phone_numbers":["+15550100"]}]}`)
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
+		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if !strings.Contains(out.String(), "stage\tAda Telegram") {
+		t.Fatalf("import contacts out = %s", out.String())
+	}
+}
+
 func TestExecuteImportContactsDoesNotShellExpandManifestArgv(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
@@ -691,9 +708,9 @@ func TestExecuteImportContactsDoesNotShellExpandManifestArgv(t *testing.T) {
 	}
 	dir := t.TempDir()
 	fake := filepath.Join(dir, "telecrawl")
-	manifest := `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Fake Crawler","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export","--json",";echo shell-expanded"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
+	manifest := `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Fake Crawler","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export","--json",";echo shell-expanded"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
 	script := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"metadata\" ]; then\n" +
+		"if [ \"$1\" = \"metadata\" ] && [ \"$2\" = \"--json\" ]; then\n" +
 		"cat <<'JSON'\n" + manifest + "\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +
@@ -721,7 +738,7 @@ func TestExecuteImportContactsRejectsMutatingCommand(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true,"mutates":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[]}`)
+	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true,"mutates":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[]}`)
 	t.Setenv("PATH", filepath.Dir(fake)+string(os.PathListSeparator)+os.Getenv("PATH"))
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", "telecrawl"}, &out, &errOut); err == nil {
 		t.Fatal("expected mutating command error")
@@ -735,23 +752,27 @@ func TestExecuteImportContactsRejectsBadManifests(t *testing.T) {
 	}{
 		{
 			name:     "wrong schema",
-			manifest: `{"schema_version":"not-crawlkit","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			manifest: `{"schema_version":2,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 		{
-			name:     "missing command",
-			manifest: `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			name:     "wrong contract",
+			manifest: `{"schema_version":1,"contract_version":2,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+		},
+		{
+			name:     "missing capability",
+			manifest: `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":[],"binary":{"name":"telecrawl"},"commands":{},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 		{
 			name:     "not json",
-			manifest: `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export"]}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			manifest: `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export"]}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 		{
 			name:     "json command missing json flag",
-			manifest: `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			manifest: `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 		{
 			name:     "empty argv",
-			manifest: `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":[],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			manifest: `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":[],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -792,7 +813,7 @@ func TestExecuteImportContactsAcceptsContactsExportCommandKey(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Telegram Crawl","binary":{"name":"telecrawl"},"commands":{"contacts_export":{"argv":["telecrawl","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[{"display_name":"Ada Contacts","phone_numbers":["123"]}]}`)
+	fake := writeFakeContactCrawlerManifest(t, "telecrawl", `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contacts_export":{"argv":["telecrawl","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`, `{"contacts":[{"display_name":"Ada Contacts","phone_numbers":["123"]}]}`)
 	out.Reset()
 	errOut.Reset()
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
@@ -825,9 +846,9 @@ func TestReadCrawlerManifestErrors(t *testing.T) {
 func TestReadCrawlerContactsReportsExportFailure(t *testing.T) {
 	dir := t.TempDir()
 	fake := filepath.Join(dir, "telecrawl")
-	manifest := `{"schema_version":"crawlkit.control.v1","id":"telecrawl","display_name":"Fake Crawler","binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
+	manifest := `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Fake Crawler","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
 	script := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"metadata\" ]; then\n" +
+		"if [ \"$1\" = \"metadata\" ] && [ \"$2\" = \"--json\" ]; then\n" +
 		"cat <<'JSON'\n" + manifest + "\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +
@@ -1269,8 +1290,28 @@ func writeFakeContactCrawler(t *testing.T, name, contacts string) string {
 	return writeFakeContactCrawlerManifest(t, name, fakeContactCrawlerManifest(name), contacts)
 }
 
+const telecrawlContractMetadataJSON = `{
+  "schema_version": 1,
+  "contract_version": 1,
+  "id": "telecrawl",
+  "display_name": "Telegram",
+  "version": "0.3.1",
+  "capabilities": [
+    "metadata",
+    "doctor",
+    "status",
+    "sync",
+    "search",
+    "open",
+    "who",
+    "short_refs",
+    "contacts_export",
+    "backup"
+  ]
+}`
+
 func fakeContactCrawlerManifest(name string) string {
-	return `{"schema_version":"crawlkit.control.v1","id":"` + name + `","display_name":"Fake Crawler","binary":{"name":"` + name + `"},"commands":{"contact-export":{"argv":["` + name + `","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
+	return `{"schema_version":1,"contract_version":1,"id":"` + name + `","display_name":"Fake Crawler","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"` + name + `"},"commands":{"contact-export":{"argv":["` + name + `","contacts","export","--json"],"json":true}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`
 }
 
 func writeFakeContactCrawlerManifest(t *testing.T, name, manifest, contacts string) string {
@@ -1285,7 +1326,7 @@ func writeFakeContactCrawlerScript(t *testing.T, dir, name, manifest, exportScri
 	t.Helper()
 	path := filepath.Join(dir, name)
 	script := "#!/bin/sh\n" +
-		"if [ \"$1\" = \"--json\" ] && [ \"$2\" = \"metadata\" ]; then\n" +
+		"if [ \"$1\" = \"metadata\" ] && [ \"$2\" = \"--json\" ]; then\n" +
 		"cat <<'JSON'\n" + manifest + "\nJSON\n" +
 		"exit 0\n" +
 		"fi\n" +

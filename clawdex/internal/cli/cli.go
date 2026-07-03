@@ -508,16 +508,6 @@ func readCrawlerContacts(ctx context.Context, binary string) (string, []model.So
 	if err != nil {
 		return "", nil, 0, err
 	}
-	command, ok := contactsExportCommand(manifest)
-	if !ok {
-		return "", nil, 0, fmt.Errorf("%s metadata does not declare contacts export", binary)
-	}
-	if !command.JSON {
-		return "", nil, 0, fmt.Errorf("%s contacts export must advertise json output", binary)
-	}
-	if command.Mutates {
-		return "", nil, 0, fmt.Errorf("%s contacts export must be read-only", binary)
-	}
 	argv := contactExportArgv(binary)
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...) // #nosec G204 -- binary is an explicit local crawler command and no shell is used.
 	var stderr bytes.Buffer
@@ -544,7 +534,7 @@ func readCrawlerContacts(ctx context.Context, binary string) (string, []model.So
 func contactsExportCommand(manifest control.Manifest) (control.Command, bool) {
 	for _, name := range []string{"contact-export", "contacts_export"} {
 		command, ok := manifest.Commands[name]
-		if ok && commandDeclaresContactsExport(command) {
+		if ok {
 			return command, true
 		}
 	}
@@ -557,7 +547,11 @@ func contactsExportCommand(manifest control.Manifest) (control.Command, bool) {
 }
 
 func commandDeclaresContactsExport(command control.Command) bool {
-	if len(command.Argv) == 0 || !slices.Contains(command.Argv, "--json") {
+	return len(command.Argv) > 0 && slices.Contains(command.Argv, "--json") && commandRunsContactsExport(command)
+}
+
+func commandRunsContactsExport(command control.Command) bool {
+	if len(command.Argv) == 0 {
 		return false
 	}
 	seenContacts := false
@@ -574,6 +568,29 @@ func commandDeclaresContactsExport(command control.Command) bool {
 	return false
 }
 
+func validateContactsExportCommand(binary string, manifest control.Manifest) error {
+	command, ok := contactsExportCommand(manifest)
+	if !ok {
+		return nil
+	}
+	if len(command.Argv) == 0 {
+		return fmt.Errorf("%s contacts export command must have argv", binary)
+	}
+	if !command.JSON {
+		return fmt.Errorf("%s contacts export must advertise json output", binary)
+	}
+	if command.Mutates {
+		return fmt.Errorf("%s contacts export must be read-only", binary)
+	}
+	if !slices.Contains(command.Argv, "--json") {
+		return fmt.Errorf("%s contacts export command must include --json", binary)
+	}
+	if !commandRunsContactsExport(command) {
+		return fmt.Errorf("%s contacts export command must run contacts export", binary)
+	}
+	return nil
+}
+
 func contactExportArgv(binary string) []string {
 	return []string{binary, "contacts", "export", "--json"}
 }
@@ -587,21 +604,18 @@ func discoverContactCrawlerBinaries(ctx context.Context) []string {
 		if err != nil || seen[path] {
 			continue
 		}
-		manifest, err := readCrawlerManifest(ctx, path)
-		if err != nil {
+		if _, err := readCrawlerManifest(ctx, path); err != nil {
 			continue
 		}
-		if command, ok := contactsExportCommand(manifest); ok && command.JSON && !command.Mutates {
-			binaries = append(binaries, path)
-			seen[path] = true
-		}
+		binaries = append(binaries, path)
+		seen[path] = true
 	}
 	sort.Strings(binaries)
 	return binaries
 }
 
 func readCrawlerManifest(ctx context.Context, binary string) (control.Manifest, error) {
-	cmd := exec.CommandContext(ctx, binary, "--json", "metadata") // #nosec G204 -- binary is an explicit local crawler command.
+	cmd := exec.CommandContext(ctx, binary, "metadata", "--json") // #nosec G204 -- binary is an explicit local crawler command.
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	data, err := cmd.Output()
@@ -616,8 +630,17 @@ func readCrawlerManifest(ctx context.Context, binary string) (control.Manifest, 
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return control.Manifest{}, fmt.Errorf("%s metadata decode failed: %w", binary, err)
 	}
-	if strings.TrimSpace(manifest.SchemaVersion) != control.SchemaVersion {
-		return control.Manifest{}, fmt.Errorf("%s metadata schema_version = %q, want %q", binary, manifest.SchemaVersion, control.SchemaVersion)
+	if manifest.SchemaVersion != control.SchemaVersion {
+		return control.Manifest{}, fmt.Errorf("%s metadata schema_version = %d, want %d", binary, manifest.SchemaVersion, control.SchemaVersion)
+	}
+	if manifest.ContractVersion != control.ContractVersion {
+		return control.Manifest{}, fmt.Errorf("%s metadata contract_version = %d, want %d", binary, manifest.ContractVersion, control.ContractVersion)
+	}
+	if !slices.Contains(manifest.Capabilities, "contacts_export") {
+		return control.Manifest{}, fmt.Errorf("%s metadata does not declare contacts_export capability", binary)
+	}
+	if err := validateContactsExportCommand(binary, manifest); err != nil {
+		return control.Manifest{}, err
 	}
 	return manifest, nil
 }
