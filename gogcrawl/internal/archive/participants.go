@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/mail"
 	"strings"
 
 	"github.com/openclaw/crawlkit/state"
@@ -168,13 +167,9 @@ func messageParticipants(msg Message) []participant {
 }
 
 func addressListParticipants(role, value string) []participant {
-	value = strings.TrimSpace(value)
-	if value == "" {
+	addresses := parseAddressList(value)
+	if len(addresses) == 0 {
 		return nil
-	}
-	addresses, err := mail.ParseAddressList(value)
-	if err != nil {
-		return []participant{{Role: role, Address: value}}
 	}
 	out := make([]participant, 0, len(addresses))
 	for _, address := range addresses {

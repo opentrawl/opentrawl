@@ -79,6 +79,75 @@ func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
 	}
 }
 
+func TestIngestBackupMessageShardSplitsRecipientListParticipants(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	raw := strings.Join([]string{
+		"From: Sender Example <sender@example.com>",
+		"To: \"'first@example.com'\" <first@example.com>, \"Second, Example\" <second@example.com>, 'third@example.com' <third@example.com>",
+		"Subject: Recipient split",
+		"Content-Type: text/plain; charset=utf-8",
+		"",
+		"Hello.",
+		"",
+	}, "\r\n")
+	row := backupMessageRowJSON("mrecipients", "trecipients", []byte(raw))
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	if _, err := st.IngestBackupShard(ctx, shard, []byte(row)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.store.DB().QueryContext(ctx, `
+select name, address, display_name
+from message_participants
+where message_id = ? and role = 'to'
+order by address
+`, "mrecipients")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	type gotParticipant struct {
+		name    string
+		address string
+		display string
+	}
+	var got []gotParticipant
+	for rows.Next() {
+		var participant gotParticipant
+		if err := rows.Scan(&participant.name, &participant.address, &participant.display); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, participant)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	want := []gotParticipant{
+		{address: "first@example.com", display: "first@example.com"},
+		{name: "Second, Example", address: "second@example.com", display: "Second, Example"},
+		{address: "third@example.com", display: "third@example.com"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("participants = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("participant %d = %#v, want %#v", i, got[i], want[i])
+		}
+	}
+	open, err := st.OpenMessage(ctx, RefPrefix+"mrecipients")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(open.Headers.ToAddress, "'first@example.com'") || strings.Contains(open.Headers.ToAddress, "'third@example.com'") {
+		t.Fatalf("to header kept redundant quoted names: %q", open.Headers.ToAddress)
+	}
+}
+
 func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
@@ -165,7 +234,7 @@ func TestIngestBackupMessageShardDecodesResidualQuotedPrintableText(t *testing.T
 		`Content-Type: multipart/alternative; boundary="alt"`,
 		"",
 		"--alt",
-		"Content-Type: text/plain; charset=utf-8",
+		"Content-Type: text/plain; charset=US-ASCII",
 		"Content-Transfer-Encoding: 7bit",
 		"",
 		"Open web-vie=",
@@ -273,6 +342,32 @@ values (?, ?, ?, ?, ?)
 	}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 0 {
 		t.Fatalf("versioned hash pending = %#v, %v", pending, err)
+	}
+}
+
+func TestPendingBackupShardsReingestsV4MessageHashes(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	_, err = st.store.DB().ExecContext(ctx, `
+insert into ingested_shards(path, hash, kind, rows, ingested_at)
+values (?, ?, ?, ?, ?)
+`, shard.Path, "mail-decode-v4:"+shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
+		t.Fatalf("v4 hash pending = %#v, %v", pending, err)
+	}
+	if _, err := st.IngestBackupShard(ctx, shard, nil); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 0 {
+		t.Fatalf("v5 hash pending = %#v, %v", pending, err)
 	}
 }
 

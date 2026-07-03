@@ -16,9 +16,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
-const messageIngestHashVersion = "mail-decode-v4"
+const messageIngestHashVersion = "mail-decode-v5"
 
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {
 	var pending []BackupShard
@@ -313,8 +314,8 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 		}}, nil
 	}
 	if mediaType == "text/plain" || strings.HasPrefix(mediaType, "text/plain;") {
-		decoded = decodeResidualQuotedPrintable(decoded)
-		return []string{decodeTextPart(decoded, params["charset"])}, nil, nil
+		text := decodeTextPart(decoded, params["charset"])
+		return []string{decodeResidualQuotedPrintableText(text)}, nil, nil
 	}
 	return nil, nil, nil
 }
@@ -330,19 +331,28 @@ func decodeTransfer(body io.Reader, encoding string) io.Reader {
 	}
 }
 
-func decodeResidualQuotedPrintable(data []byte) []byte {
+// decodeResidualQuotedPrintableText handles the sender bug class where a
+// part declares 7bit/US-ASCII but its content carries quoted-printable
+// escapes. It runs AFTER charset conversion, so the escapes encode raw
+// bytes whose real charset the sender never declared — require the result
+// to be valid UTF-8, else keep the original.
+func decodeResidualQuotedPrintableText(text string) string {
+	data := []byte(text)
 	hexEscapes, distinctHexEscapes := quotedPrintableHexEscapeStats(data)
 	if !hasQuotedPrintableSoftBreak(data) && distinctHexEscapes < 3 {
-		return data
+		return text
 	}
 	decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(data)))
 	if err != nil {
-		return data
+		return text
+	}
+	if !utf8.Valid(decoded) {
+		return text
 	}
 	if decodedHexEscapes, _ := quotedPrintableHexEscapeStats(decoded); decodedHexEscapes >= hexEscapes {
-		return data
+		return text
 	}
-	return decoded
+	return string(decoded)
 }
 
 func hasQuotedPrintableSoftBreak(data []byte) bool {
@@ -380,31 +390,6 @@ func hexValue(b byte) byte {
 	default:
 		return b - 'a' + 10
 	}
-}
-
-func parseAddressHeader(value string) (string, string) {
-	value = decodeHeader(value)
-	addr, err := mail.ParseAddress(value)
-	if err != nil {
-		return "", strings.TrimSpace(value)
-	}
-	return strings.TrimSpace(addr.Name), strings.TrimSpace(addr.Address)
-}
-
-func parseAddressListHeader(value string) string {
-	value = strings.TrimSpace(decodeHeader(value))
-	if value == "" {
-		return ""
-	}
-	addresses, err := mail.ParseAddressList(value)
-	if err != nil {
-		return value
-	}
-	out := make([]string, 0, len(addresses))
-	for _, address := range addresses {
-		out = append(out, address.String())
-	}
-	return strings.Join(out, ", ")
 }
 
 func manifestString(value any) string {
