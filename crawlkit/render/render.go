@@ -85,7 +85,7 @@ func WriteChecks(w io.Writer, checks []Check) error {
 		return err
 	}
 	for _, check := range checks {
-		if _, err := fmt.Fprintf(w, "  %s: %s", strings.TrimSpace(check.Name), check.State); err != nil {
+		if _, err := fmt.Fprintf(w, "  %s: %s", displayCheckName(check.Name), check.State); err != nil {
 			return err
 		}
 		if message := strings.TrimSpace(check.Message); message != "" {
@@ -103,6 +103,10 @@ func WriteChecks(w io.Writer, checks []Check) error {
 		}
 	}
 	return nil
+}
+
+func displayCheckName(name string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(name), "_", " ")), " ")
 }
 
 func WriteStatus(w io.Writer, status Status) error {

@@ -306,20 +306,27 @@ func summarizeRun(runID string, lines []Line) RunSummary {
 		}
 		if line.Event == "finish" {
 			summary.FinishedAt = line.Timestamp
-			fields := parseFields(line.Message)
-			if outcome := fields["outcome"]; outcome != "" {
-				summary.Outcome = outcome
-			} else if line.Level == LevelError {
-				summary.Outcome = "error"
-			} else {
-				summary.Outcome = "success"
-			}
+			summary.Outcome = finishOutcome(line)
 		}
 	}
 	if summary.LineCount == 0 {
 		summary.Outcome = ""
 	}
 	return summary
+}
+
+func finishOutcome(line Line) string {
+	outcome := strings.ToLower(strings.TrimSpace(parseFields(line.Message)["outcome"]))
+	switch outcome {
+	case "success", "succeeded":
+		return "success"
+	case "error", "failed", "failure":
+		return "error"
+	}
+	if line.Level == LevelError {
+		return "error"
+	}
+	return "success"
 }
 
 func parseFields(message string) map[string]string {

@@ -119,12 +119,18 @@ func (r *Run) Info(event, message string) error {
 	if r == nil {
 		return nil
 	}
+	if err := guardPublicEvent(event); err != nil {
+		return err
+	}
 	return r.write(LevelInfo, event, message)
 }
 
 func (r *Run) Warn(event, message string) error {
 	if r == nil {
 		return nil
+	}
+	if err := guardPublicEvent(event); err != nil {
+		return err
 	}
 	return r.write(LevelWarn, event, message)
 }
@@ -133,12 +139,18 @@ func (r *Run) Debug(event, message string) error {
 	if r == nil || !r.debug {
 		return nil
 	}
+	if err := guardPublicEvent(event); err != nil {
+		return err
+	}
 	return r.write(LevelDebug, event, message)
 }
 
 func (r *Run) Error(event string, err error) error {
 	if r == nil {
 		return nil
+	}
+	if guardErr := guardPublicEvent(event); guardErr != nil {
+		return guardErr
 	}
 	if err == nil {
 		err = errors.New("unknown error")
@@ -169,6 +181,13 @@ func (r *Run) Finish(err error) error {
 		return logErr
 	}
 	return r.write(LevelInfo, "finish", "outcome=error")
+}
+
+func guardPublicEvent(event string) error {
+	if strings.TrimSpace(event) == "finish" {
+		return errors.New("log finish event is reserved; use Run.Finish")
+	}
+	return nil
 }
 
 func (r *Run) Progress(opts ProgressOptions) *Progress {

@@ -20,7 +20,7 @@ func TestWriteDoctor(t *testing.T) {
 	}
 	want := strings.Join([]string{
 		"Doctor checks:",
-		"  source_store: ok",
+		"  source store: ok",
 		"  archive: missing - archive has not been synced",
 		"    Remedy: run: examplecrawl sync",
 		"",
@@ -47,7 +47,7 @@ func TestWriteDoctorFiltersUsageRecentError(t *testing.T) {
 	}
 	want := strings.Join([]string{
 		"Doctor checks:",
-		"  source_store: ok",
+		"  source store: ok",
 		"",
 	}, "\n")
 	if buf.String() != want {
@@ -77,6 +77,28 @@ func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
 		"Recent log:",
 		"  Most recent error: sync permission_denied: calendar permission denied",
 		"    Remedy: grant Calendar access",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWriteDoctorHumanizesSnakeCaseCheckNames(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteDoctor(&buf, []Check{
+		{Name: "source_store", State: CheckOK},
+		{Name: "gog_binary", State: CheckMissing},
+		{Name: "full disk access", State: CheckOK},
+	}, LogTail{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Doctor checks:",
+		"  source store: ok",
+		"  gog binary: missing",
+		"  full disk access: ok",
 		"",
 	}, "\n")
 	if buf.String() != want {
