@@ -159,7 +159,8 @@ Use --json when you need refs for follow-up commands.
 bounded window from the same chat.
 
 ```text
-Message imsgcrawl:msg/8831 in Cabinet Group
+Transcript: Cabinet Group, 7 Jun 2026
+Ref: imsgcrawl:msg/8831
 Participants: Elon, JD, Xi
 
 Time: 2026-06-07 09:10
@@ -169,6 +170,7 @@ Text: The candles budget is CORRECT.
 Context: 3 messages around this one.
 
    date              from        text
+— Sun 7 Jun 2026 —
    2026-06-07 09:09  JD Vance    Sir, I have prepared bullet points.
 >  2026-06-07 09:10  me          The candles budget is CORRECT.
    2026-06-07 09:11  Failing Elon  We need more candles.

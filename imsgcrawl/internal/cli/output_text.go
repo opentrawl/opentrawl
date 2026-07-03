@@ -245,7 +245,15 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 }
 
 func printOpenText(w io.Writer, value openOutput) error {
-	if _, err := fmt.Fprintf(w, "Message %s in %s\n", value.Ref, value.Chat.Name); err != nil {
+	span := openDateSpan(value.Context)
+	title := fmt.Sprintf("Transcript: %s", value.Chat.Name)
+	if span != "" {
+		title += ", " + span
+	}
+	if _, err := fmt.Fprintf(w, "%s\n", title); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Ref: %s\n", value.Ref); err != nil {
 		return err
 	}
 	if len(value.Chat.Participants) > 0 {
@@ -261,20 +269,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 	}
 	width := textOutputWidth(w)
 	columns := openTextColumns(width)
-	rows := tableRows(len(value.Context))
-	for _, item := range value.Context {
-		marker := ""
-		if item.Target {
-			marker = ">"
-		}
-		rows = append(rows, []string{
-			marker,
-			formatArchiveTime(item.Time),
-			item.Who,
-			displayMessageText(item.Text, item.HasAttachments),
-		})
-	}
-	return renderTextTable(w, columns, rows)
+	return printOpenTranscript(w, columns, value.Context)
 }
 
 func printContactsText(w io.Writer, value control.ContactExport) error {

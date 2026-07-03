@@ -81,7 +81,9 @@ func renderTextRow(w io.Writer, columns []textColumn, row []string) error {
 		if i < len(row) {
 			value = row[i]
 		}
-		if column.wrap {
+		if column.header == "" && strings.TrimSpace(value) == "" {
+			cells[i] = []string{""}
+		} else if column.wrap {
 			cells[i] = wrapCell(value, column.width)
 		} else {
 			cells[i] = []string{truncateCell(value, column.width)}

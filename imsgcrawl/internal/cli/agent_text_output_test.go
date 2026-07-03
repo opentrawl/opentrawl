@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"path/filepath"
 	"strings"
@@ -83,7 +84,8 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 	}
 	open := runOK(t, "--archive", archivePath, "open", searchPayload.Results[0].Ref)
 	assertTextContains(t, open,
-		"Message "+searchPayload.Results[0].Ref+" in Most Recent Name",
+		"Transcript: Most Recent Name",
+		"Ref: "+searchPayload.Results[0].Ref,
 		"Context:",
 		"earlier launch note",
 		"latest launch note",
@@ -95,6 +97,44 @@ func TestArchiveTextOutputIsAgentReadable(t *testing.T) {
 
 	groupSender := runOK(t, "--archive", archivePath, "messages", "--chat", "4", "--asc")
 	assertTextContains(t, groupSender, "Cabinet Group", "Fixture Person", "opaque-handle")
+}
+
+func TestOpenTextShowsTranscriptDateContext(t *testing.T) {
+	value := openOutput{
+		Ref: "imsgcrawl:msg/2",
+		Chat: openChatOutput{
+			Name:         "Example Chat",
+			Participants: []string{"alice@example.com", "bob@example.com"},
+		},
+		Message: openMessageOutput{
+			Ref:    "imsgcrawl:msg/2",
+			Time:   "2025-06-11T09:00:00Z",
+			Who:    "me",
+			Text:   "target reply",
+			Target: true,
+		},
+		Context: []openMessageOutput{
+			{Ref: "imsgcrawl:msg/1", Time: "2025-06-10T23:50:00Z", Who: "Alice Example", Text: "earlier note"},
+			{Ref: "imsgcrawl:msg/2", Time: "2025-06-11T09:00:00Z", Who: "me", Text: "target reply", Target: true},
+			{Ref: "imsgcrawl:msg/3", Time: "2025-06-11T09:05:00Z", Who: "Alice Example", Text: "later note"},
+		},
+	}
+	var buf bytes.Buffer
+	if err := printOpenText(&buf, value); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	assertTextContains(t, got,
+		"Transcript: Example Chat, 10 Jun 2025 to 11 Jun 2025",
+		"Ref: imsgcrawl:msg/2",
+		"Participants: alice@example.com, bob@example.com",
+		"— Tue 10 Jun 2025 —",
+		"— Wed 11 Jun 2025 —",
+		"target reply",
+	)
+	if strings.Count(got, "— Wed 11 Jun 2025 —") != 1 {
+		t.Fatalf("transcript should show one separator per day:\n%s", got)
+	}
 }
 
 func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {

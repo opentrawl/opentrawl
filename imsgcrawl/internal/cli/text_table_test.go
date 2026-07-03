@@ -30,6 +30,27 @@ func TestRenderTextTableDoesNotPadFinalColumn(t *testing.T) {
 	}
 }
 
+func TestOpenMarkerColumnKeepsBlankCellsBlank(t *testing.T) {
+	var out bytes.Buffer
+	err := renderTextTable(&out, openTextColumns(88), [][]string{
+		{"", "2025-06-10 23:50", "Alice Example", "earlier note"},
+		{">", "2025-06-11 09:00", "me", "target reply"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSuffix(out.String(), "\n"), "\n")
+	if len(lines) < 3 {
+		t.Fatalf("open table lines = %#v", lines)
+	}
+	if strings.HasPrefix(lines[0], "-") || strings.HasPrefix(lines[1], "-") {
+		t.Fatalf("blank marker column rendered as data:\n%s", out.String())
+	}
+	if !strings.HasPrefix(lines[2], ">") {
+		t.Fatalf("target marker missing:\n%s", out.String())
+	}
+}
+
 func TestSearchColumnsWrapContextWithoutEllipsis(t *testing.T) {
 	var out bytes.Buffer
 	err := renderTextTable(&out, searchTextColumns(88), [][]string{{
