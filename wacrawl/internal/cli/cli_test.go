@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/conformance"
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -47,10 +48,10 @@ func TestRunEndToEnd(t *testing.T) {
 		{"help", []string{"--db", dbPath, "help"}, "wacrawl reads local WhatsApp"},
 		{"version", []string{"--version"}, version},
 		{"metadata", []string{"--json", "metadata"}, `"id": "wacrawl"`},
-		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "source_store=ok"},
+		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "source store: ok"},
 		{"import", []string{"--db", dbPath, "--source", source, "import"}, "messages=3"},
 		{"import copy media", []string{"--db", dbPath, "--source", source, "import", "--copy-media"}, "media_copied=1"},
-		{"status", []string{"--db", dbPath, "status"}, "unread_messages=2"},
+		{"status", []string{"--db", dbPath, "status"}, "Unread messages: 2"},
 		{"status trailing json", []string{"--db", dbPath, "status", "--json"}, `"app_id": "wacrawl"`},
 		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "UNREAD"},
 		{"contacts export", []string{"--db", dbPath, "--json", "contacts", "export"}, `"display_name": "Alice Contact"`},
@@ -464,6 +465,87 @@ func TestDoctorJSONUsesContractChecks(t *testing.T) {
 	}
 }
 
+func TestStatusAndDoctorHumanOutputUsesCrawlkitRender(t *testing.T) {
+	ctx := context.Background()
+	source := t.TempDir()
+	createDesktopFixture(t, source)
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
+		{JID: "chat@g.us", Kind: "group", Name: "Launch Group", MessageCount: 1},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Launch Group", MessageID: "a", Text: "alpha"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = Run(ctx, []string{"--db", dbPath, "--json", "open", "zzzzz"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("expected open to fail")
+	}
+	reader, err := cklog.NewReader(logStateRoot(dbPath), "wacrawl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	failedRun, ok, err := reader.LastRun("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || failedRun.RunID == "" {
+		t.Fatalf("missing failed run summary: %#v", failedRun)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status error = %v stderr=%s", err, stderr.String())
+	}
+	statusHuman := stdout.String()
+	conformance.AssertHumanOutput(t, statusHuman)
+	for _, want := range []string{"Status: ok", "Unread messages: 0", "Recent log:", "Last run: open failed", "Most recent error: open unknown_short_ref"} {
+		if !strings.Contains(statusHuman, want) {
+			t.Fatalf("status human missing %q:\n%s", want, statusHuman)
+		}
+	}
+	for _, forbidden := range []string{failedRun.RunID, "last_run=", "recent_error="} {
+		if strings.Contains(statusHuman, forbidden) {
+			t.Fatalf("status human leaked %q:\n%s", forbidden, statusHuman)
+		}
+	}
+
+	statusRun, ok, err := reader.LastRun("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || statusRun.RunID == "" {
+		t.Fatalf("missing status run summary: %#v", statusRun)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--source", source, "doctor"}, &stdout, &stderr); err != nil {
+		t.Fatalf("doctor error = %v stderr=%s", err, stderr.String())
+	}
+	doctorHuman := stdout.String()
+	conformance.AssertHumanOutput(t, doctorHuman)
+	for _, want := range []string{"Doctor checks:", "source store: ok", "archive: ok", "full disk access: ok", "Last run: status succeeded"} {
+		if !strings.Contains(doctorHuman, want) {
+			t.Fatalf("doctor human missing %q:\n%s", want, doctorHuman)
+		}
+	}
+	for _, forbidden := range []string{failedRun.RunID, statusRun.RunID, "last_run=", "recent_error="} {
+		if strings.Contains(doctorHuman, forbidden) {
+			t.Fatalf("doctor human leaked %q:\n%s", forbidden, doctorHuman)
+		}
+	}
+}
+
 func TestMessagesAndSearchReportTruncation(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
@@ -638,6 +720,65 @@ func TestSearchRendersHumanMessageKindsAndMediaText(t *testing.T) {
 		if _, ok := snippets[want]; !ok {
 			t.Fatalf("json search snippets = %#v, missing %q", snippets, want)
 		}
+	}
+}
+
+func TestOpenRendersHumanMessageKindsAndMediaText(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	opaqueMediaKey := "1ByAINA1BGQRt/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "status", SenderName: "Robin", Timestamp: now, RawType: 59, MessageType: "status_update"},
+		{SourcePK: 2, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "image-key", SenderName: "Robin", Timestamp: now.Add(time.Minute), RawType: 1, MessageType: "image", MediaType: "image", Text: opaqueMediaKey, MediaTitle: opaqueMediaKey, MediaPath: "/tmp/wacrawl-test/photo.jpg", MediaSize: 42},
+		{SourcePK: 3, ChatJID: "chat@g.us", ChatName: "Status chat", MessageID: "image-caption", SenderName: "Robin", Timestamp: now.Add(2 * time.Minute), RawType: 1, MessageType: "image", MediaType: "image", Text: "real caption launch", MediaTitle: opaqueMediaKey, MediaPath: "/tmp/wacrawl-test/caption.jpg", MediaSize: 43},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{{JID: "chat@g.us", Kind: "group", Name: "Status chat", MessageCount: len(messages)}}, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "open", "wacrawl:msg/image-key"}, &stdout, &stderr); err != nil {
+		t.Fatalf("open json error = %v stderr=%s", err, stderr.String())
+	}
+	assertNoRawFields(t, stdout.Bytes())
+	if strings.Contains(stdout.String(), opaqueMediaKey) {
+		t.Fatalf("open json leaked opaque media key:\n%s", stdout.String())
+	}
+	var payload openEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("open json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Message.Text != "[image]" || payload.Message.Media == nil || payload.Message.Media.Type != "image" || payload.Message.Media.Title != "photo.jpg" {
+		t.Fatalf("open media payload = %#v", payload.Message)
+	}
+	for _, message := range append([]openMessage{payload.Message}, payload.Context...) {
+		if message.Media != nil && strings.Contains(message.Media.Title, opaqueMediaKey) {
+			t.Fatalf("open media title leaked key: %#v", message)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "open", "wacrawl:msg/image-key"}, &stdout, &stderr); err != nil {
+		t.Fatalf("open human error = %v stderr=%s", err, stderr.String())
+	}
+	human := stdout.String()
+	conformance.AssertHumanOutput(t, human)
+	for _, want := range []string{"[status update]", "[image]", "real caption launch"} {
+		if !strings.Contains(human, want) {
+			t.Fatalf("open human missing %q:\n%s", want, human)
+		}
+	}
+	if strings.Contains(human, opaqueMediaKey) {
+		t.Fatalf("open human leaked opaque media key:\n%s", human)
 	}
 }
 

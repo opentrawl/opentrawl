@@ -19,6 +19,7 @@ import (
 
 	"github.com/openclaw/crawlkit/control"
 	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/backup"
 	"github.com/openclaw/wacrawl/internal/store"
@@ -544,11 +545,11 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 				Error:   logTail.Error,
 			})
 		}
-		_, werr := fmt.Fprintln(a.stdout, errNoArchive.Error())
-		if werr == nil {
-			werr = a.printLogTail(logTail)
-		}
-		return werr
+		return render.WriteStatus(a.stdout, render.Status{
+			State:   render.StatusMissing,
+			Summary: errNoArchive.Error(),
+			Log:     renderLogTail(logTail),
+		})
 	}
 	return err
 }
@@ -1436,22 +1437,7 @@ func (a *app) print(value any) error {
 	case openEnvelope:
 		return a.printOpen(v)
 	case doctorEnvelope:
-		for _, check := range v.Checks {
-			if _, err := fmt.Fprintf(a.stdout, "%s=%s\n", check.ID, check.State); err != nil {
-				return err
-			}
-			if check.Message != "" {
-				if _, err := fmt.Fprintf(a.stdout, "%s_message=%s\n", check.ID, check.Message); err != nil {
-					return err
-				}
-			}
-			if check.Remedy != "" {
-				if _, err := fmt.Fprintf(a.stdout, "%s_remedy=%s\n", check.ID, check.Remedy); err != nil {
-					return err
-				}
-			}
-		}
-		return a.printLogTail(logTailEnvelope{LastRun: v.LastRun, Error: v.Error})
+		return a.printDoctor(v)
 	case sqlQueryResult:
 		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
 		_, _ = fmt.Fprintln(tw, strings.Join(v.columns, "\t"))
@@ -1498,32 +1484,151 @@ func (a *app) print(value any) error {
 }
 
 func (a *app) printStatus(status store.Status, logTail logTailEnvelope) error {
-	envelope := newStatusEnvelope(status, logTail)
-	_, err := fmt.Fprintf(a.stdout, "state=%s\nsummary=%s\ndb=%s\nchats=%d\nunread_chats=%d\nunread_messages=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\noldest=%s\nnewest=%s\nlast_import=%s\nsource=%s\n",
-		envelope.State, envelope.Summary, status.DBPath, status.Chats, status.UnreadChats, status.UnreadMessages, status.Contacts, status.Groups, status.Participants, status.Messages, status.MediaMessages, formatTime(status.OldestMessage), formatTime(status.NewestMessage), formatTime(status.LastImportAt), status.LastSource)
-	if err != nil {
-		return err
-	}
-	return a.printLogTail(logTail)
+	return render.WriteStatus(a.stdout, renderStatus(status, logTail))
 }
 
-func (a *app) printLogTail(logTail logTailEnvelope) error {
-	if logTail.LastRun != nil {
-		if _, err := fmt.Fprintf(a.stdout, "last_run=%s\nlast_run_command=%s\nlast_run_outcome=%s\n", logTail.LastRun.RunID, logTail.LastRun.Command, logTail.LastRun.Outcome); err != nil {
-			return err
-		}
+func renderStatus(status store.Status, logTail logTailEnvelope) render.Status {
+	envelope := newStatusEnvelope(status, logTail)
+	sections := []render.Section{
+		{Title: "Archive", Fields: []render.Field{
+			{Label: "Database", Value: status.DBPath},
+			{Label: "Source", Value: status.LastSource},
+		}},
+		{Title: "Messages", Fields: []render.Field{
+			{Label: "Messages", Value: strconv.Itoa(status.Messages)},
+			{Label: "Media messages", Value: strconv.Itoa(status.MediaMessages)},
+			{Label: "Chats", Value: strconv.Itoa(status.Chats)},
+			{Label: "Unread chats", Value: strconv.Itoa(status.UnreadChats)},
+			{Label: "Unread messages", Value: strconv.Itoa(status.UnreadMessages)},
+			{Label: "Contacts", Value: strconv.Itoa(status.Contacts)},
+			{Label: "Groups", Value: strconv.Itoa(status.Groups)},
+			{Label: "Participants", Value: strconv.Itoa(status.Participants)},
+		}},
 	}
-	if logTail.Error != nil {
-		if _, err := fmt.Fprintf(a.stdout, "recent_error=%s\nrecent_error_event=%s\nrecent_error_message=%s\n", logTail.Error.RunID, logTail.Error.Event, logTail.Error.Message); err != nil {
-			return err
-		}
-		if logTail.Error.Remedy != "" {
-			if _, err := fmt.Fprintf(a.stdout, "recent_error_remedy=%s\n", logTail.Error.Remedy); err != nil {
-				return err
-			}
-		}
+	if !status.OldestMessage.IsZero() || !status.NewestMessage.IsZero() {
+		sections = append(sections, render.Section{Title: "Range", Fields: []render.Field{
+			{Label: "Oldest message", Value: formatTime(status.OldestMessage)},
+			{Label: "Newest message", Value: formatTime(status.NewestMessage)},
+		}})
 	}
-	return nil
+	var freshness *render.Freshness
+	if envelope.Freshness != nil {
+		freshness = &render.Freshness{LastSync: envelope.Freshness.LastSync}
+	}
+	return render.Status{
+		State:     renderStatusState(envelope.State),
+		Summary:   envelope.Summary,
+		Sections:  sections,
+		Freshness: freshness,
+		Log:       renderLogTail(logTail),
+	}
+}
+
+func renderStatusState(state string) render.StatusState {
+	switch state {
+	case "ok":
+		return render.StatusOK
+	case "empty":
+		return render.StatusEmpty
+	case "missing":
+		return render.StatusMissing
+	case "error":
+		return render.StatusError
+	default:
+		return render.StatusUnknown
+	}
+}
+
+func (a *app) printDoctor(envelope doctorEnvelope) error {
+	checks := make([]render.Check, 0, len(envelope.Checks))
+	for _, check := range envelope.Checks {
+		checks = append(checks, render.Check{
+			Name:    doctorCheckLabel(check.ID),
+			State:   render.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
+	}
+	return render.WriteDoctor(a.stdout, checks, renderLogTail(logTailEnvelope{LastRun: envelope.LastRun, Error: envelope.Error}))
+}
+
+func doctorCheckLabel(id string) string {
+	switch id {
+	case "source_store":
+		return "source store"
+	case "full_disk_access":
+		return "full disk access"
+	default:
+		return strings.ReplaceAll(id, "_", " ")
+	}
+}
+
+func renderLogTail(tail logTailEnvelope) render.LogTail {
+	return render.LogTail{
+		LastRun:         renderLogRun(tail.LastRun),
+		MostRecentError: renderLogError(tail.Error),
+	}
+}
+
+func renderLogRun(run *logRunEnvelope) *cklog.RunSummary {
+	if run == nil {
+		return nil
+	}
+	return &cklog.RunSummary{
+		Command:    run.Command,
+		StartedAt:  parseFormattedTime(run.StartedAt),
+		FinishedAt: parseFormattedTime(run.FinishedAt),
+		Outcome:    humanLogOutcome(run.Outcome),
+		LastEvent:  run.LastEvent,
+		Version:    run.Version,
+		Commit:     run.Commit,
+		Platform:   run.Platform,
+	}
+}
+
+func renderLogError(logError *logErrorEnvelope) *cklog.Line {
+	if logError == nil {
+		return nil
+	}
+	message := ""
+	if strings.TrimSpace(logError.Message) != "" {
+		message = "error=" + strconv.Quote(logError.Message)
+	}
+	if strings.TrimSpace(logError.Remedy) != "" {
+		if message != "" {
+			message += " "
+		}
+		message += "remedy=" + strconv.Quote(logError.Remedy)
+	}
+	return &cklog.Line{
+		Timestamp: parseFormattedTime(logError.Time),
+		Command:   logError.Command,
+		Event:     logError.Event,
+		Message:   message,
+	}
+}
+
+func parseFormattedTime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" || value == "-" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
+}
+
+func humanLogOutcome(outcome string) string {
+	switch outcome {
+	case "success":
+		return "succeeded"
+	case "error":
+		return "failed"
+	default:
+		return outcome
+	}
 }
 
 func (a *app) printSearch(result searchEnvelope) error {
@@ -1659,10 +1764,17 @@ func newOpenMessage(message store.Message, current bool) openMessage {
 }
 
 func messageMedia(message store.Message) *openMedia {
-	if message.MediaType == "" && message.MediaTitle == "" && message.MediaSize == 0 {
+	kind := ""
+	if messageCarriesMedia(message) {
+		kind = messageKind(message)
+	} else {
+		kind = normalizeMessageKind(message.MediaType)
+	}
+	title := safeMediaTitle(message)
+	if kind == "" && title == "" && message.MediaSize == 0 {
 		return nil
 	}
-	return &openMedia{Type: message.MediaType, Title: message.MediaTitle, SizeBytes: message.MediaSize}
+	return &openMedia{Type: kind, Title: title, SizeBytes: message.MediaSize}
 }
 
 func messageRef(message store.Message) string {
@@ -1705,10 +1817,44 @@ func messageText(message store.Message) string {
 	if text := outputField(message.Text); text != "" && !containsOpaqueMediaReference(message, text) {
 		return text
 	}
-	if title := outputField(message.MediaTitle); title != "" {
-		return title
+	if !messageCarriesMedia(message) {
+		if title := safeMediaTitle(message); title != "" {
+			return title
+		}
 	}
 	return readableMessageType(message)
+}
+
+func safeMediaTitle(message store.Message) string {
+	if title := safeMediaLabel(message.MediaTitle); title != "" {
+		return title
+	}
+	return safeMediaFilename(message.MediaPath)
+}
+
+func safeMediaFilename(mediaPath string) string {
+	mediaPath = strings.TrimSpace(mediaPath)
+	if mediaPath == "" {
+		return ""
+	}
+	return safeMediaLabel(filepath.Base(mediaPath))
+}
+
+func safeMediaLabel(value string) string {
+	value = outputField(value)
+	if value == "" || value == "." || value == "/" || value == `\` {
+		return ""
+	}
+	for _, field := range strings.Fields(value) {
+		if opaqueMediaToken(field) {
+			return ""
+		}
+		stem := strings.TrimSuffix(field, filepath.Ext(field))
+		if opaqueMediaToken(stem) {
+			return ""
+		}
+	}
+	return value
 }
 
 func readableMessageType(message store.Message) string {
