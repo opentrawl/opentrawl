@@ -30,7 +30,7 @@ func printManifestText(w io.Writer, value manifestOutput) error {
 		return err
 	}
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, name := range []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export"} {
+	for _, name := range []string{"metadata", "status", "sync", "search", "who", "open", "doctor", "contacts_export"} {
 		command, ok := value.Commands[name]
 		if !ok {
 			continue
@@ -89,17 +89,17 @@ func renderDoctorChecks(checks []doctorCheck) []ckrender.Check {
 }
 
 func printSearchText(w io.Writer, value searchOutput) error {
-	label := fmt.Sprintf("Search %q", value.Query)
-	if value.Who != "" {
-		label += fmt.Sprintf(" with %q", value.Who)
+	label := "Search"
+	if value.Query != "" {
+		label = fmt.Sprintf("Search %q", value.Query)
+	}
+	if value.WhoResolved != nil && value.WhoQuery != "" {
+		if _, err := fmt.Fprintf(w, "%s → %s\n", value.WhoQuery, value.WhoResolved.Who); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintf(w, "%s: showing %d of %d.\n", label, len(value.Results), value.TotalMatches); err != nil {
 		return err
-	}
-	if len(value.WhoMatched) > 0 {
-		if _, err := fmt.Fprintf(w, "Who matched: %s.\n", strings.Join(value.WhoMatched, ", ")); err != nil {
-			return err
-		}
 	}
 	if value.Truncated {
 		if _, err := io.WriteString(w, "More: narrow with --after, --before or --limit.\n"); err != nil {

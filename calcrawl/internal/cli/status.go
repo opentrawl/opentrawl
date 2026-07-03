@@ -17,7 +17,7 @@ type statusText struct {
 	GeneratedAt   string           `json:"generated_at"`
 	State         string           `json:"state"`
 	Summary       string           `json:"summary"`
-	LastSyncAt    string           `json:"last_sync_at,omitempty"`
+	LastSyncAt    string           `json:"-"`
 	Counts        []control.Count  `json:"counts,omitempty"`
 	Freshness     *statusFreshness `json:"freshness,omitempty"`
 	Errors        []string         `json:"errors,omitempty"`

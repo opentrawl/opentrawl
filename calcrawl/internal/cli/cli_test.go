@@ -42,6 +42,9 @@ func TestSyncImportsCalendarStore(t *testing.T) {
 	if !ok || freshness["last_sync"] == "" {
 		t.Fatalf("freshness = %#v, want last_sync", status["freshness"])
 	}
+	if _, ok := status["last_sync_at"]; ok {
+		t.Fatalf("status leaked top-level last_sync_at: %#v", status)
+	}
 	for _, oldKey := range []string{"status", "age_seconds", "stale_after_seconds"} {
 		if _, ok := freshness[oldKey]; ok {
 			t.Fatalf("freshness leaked %q: %#v", oldKey, freshness)
@@ -57,11 +60,25 @@ func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 	setupCalendarFixture(t)
 	manifest := runJSON[struct {
 		Capabilities []string `json:"capabilities"`
+		Commands     map[string]struct {
+			Argv []string `json:"argv"`
+		} `json:"commands"`
 	}](t, "metadata", "--json")
 	for _, want := range []string{"who", "short_refs"} {
 		if !hasString(manifest.Capabilities, want) {
 			t.Fatalf("capabilities = %#v, want %q", manifest.Capabilities, want)
 		}
+	}
+	if command, ok := manifest.Commands["who"]; !ok || strings.Join(command.Argv, " ") != "calcrawl who NAME --json" {
+		t.Fatalf("who command = %#v, want documented resolver", manifest.Commands["who"])
+	}
+	help := runOK(t, "help")
+	if !strings.Contains(help, "calcrawl who NAME [--json]") {
+		t.Fatalf("top-level help does not mention who:\n%s", help)
+	}
+	searchHelp := runOK(t, "help", "search")
+	if !strings.Contains(searchHelp, "Use calcrawl who NAME") {
+		t.Fatalf("search help does not mention resolver:\n%s", searchHelp)
 	}
 }
 
@@ -210,49 +227,176 @@ func TestCLIOutputConformance(t *testing.T) {
 	conformance.AssertHumanOutput(t, searchText)
 	searchJSON := runOK(t, "search", "conformance", "--json")
 	conformance.AssertSearchEnvelope(t, []byte(searchJSON))
+	whoText := runOK(t, "who", "alice")
+	conformance.AssertHumanOutput(t, whoText)
 }
 
-func TestSearchWhoFiltersParticipants(t *testing.T) {
+func TestWhoResolverDedupesAndMatchesGenerously(t *testing.T) {
+	db := setupCalendarFixture(t)
+	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
+		(503, 'Robin Example', 'robin@example.com', 'Robin', 'example'),
+		(504, 'robin example', 'robin.example@example.com', 'Robin', 'example')`)
+	mustExec(t, db, `insert into Participant(
+		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
+	) values
+		(1003, 2, 1, 2, 1, 503, 100, 'robin@example.com', '', 0, ''),
+		(1004, 2, 1, 2, 1, 504, 101, 'robin.example@example.com', '', 0, '')`)
+	runSync(t)
+
+	who := runJSON[whoResponse](t, "who", "alce", "--json")
+	if who.Query != "alce" || len(who.Candidates) != 1 {
+		t.Fatalf("who alce = %#v, want one generous match", who)
+	}
+	alice := who.Candidates[0]
+	if alice.Who != "Alice Example" || alice.Messages != 1 {
+		t.Fatalf("alice candidate = %#v, want deduped one-event identity", alice)
+	}
+	for _, want := range []string{"alice@example.com", "+15550100"} {
+		if !hasString(alice.Identifiers, want) {
+			t.Fatalf("alice identifiers = %#v, want %q", alice.Identifiers, want)
+		}
+	}
+	if alice.LastSeen != "2026-03-04T10:00:00+01:00" {
+		t.Fatalf("alice last_seen = %q", alice.LastSeen)
+	}
+
+	holiday := runJSON[whoResponse](t, "who", "bot", "--json")
+	if len(holiday.Candidates) != 1 || holiday.Candidates[0].Who != "Holiday Bot" {
+		t.Fatalf("who bot = %#v, want substring match", holiday)
+	}
+
+	robin := runJSON[whoResponse](t, "who", "robin", "--json")
+	if len(robin.Candidates) != 1 {
+		t.Fatalf("who robin = %#v, want one merged candidate", robin)
+	}
+	robinCandidate := robin.Candidates[0]
+	if robinCandidate.Who != "Robin Example" || robinCandidate.Messages != 2 {
+		t.Fatalf("robin candidate = %#v, want merged case variant identity", robinCandidate)
+	}
+	for _, want := range []string{"robin@example.com", "robin.example@example.com"} {
+		if !hasString(robinCandidate.Identifiers, want) {
+			t.Fatalf("robin identifiers = %#v, want %q", robinCandidate.Identifiers, want)
+		}
+	}
+}
+
+func TestSearchWhoResolvesOnePersonAndFiltersParticipants(t *testing.T) {
 	setupCalendarFixture(t)
 	runSync(t)
 
-	for _, args := range [][]string{
-		{"search", "planning", "--who", "alice example", "--json"},
-		{"search", "planning", "--who", "alice@example.com", "--json"},
-		{"search", "planning", "--who", "bob@example.com", "--json"},
-		{"search", "--who", " Alice   Example ", "planning", "--json"},
+	for _, tc := range []struct {
+		args        []string
+		resolvedWho string
+		identifier  string
+	}{
+		{args: []string{"search", "planning", "--who", "alice example", "--json"}, resolvedWho: "Alice Example", identifier: "alice@example.com"},
+		{args: []string{"search", "planning", "--who", "alice@example.com", "--json"}, resolvedWho: "Alice Example", identifier: "alice@example.com"},
+		{args: []string{"search", "planning", "--who", "bob@example.com", "--json"}, resolvedWho: "Bob Example", identifier: "bob@example.com"},
+		{args: []string{"search", "--who", " Alice   Example ", "planning", "--json"}, resolvedWho: "Alice Example", identifier: "alice@example.com"},
 	} {
-		search := runJSON[searchResponse](t, args...)
+		search := runJSON[searchResponse](t, tc.args...)
 		if len(search.Results) != 1 || search.TotalMatches != 1 || search.Results[0].Who != "Alice Example" {
-			t.Fatalf("calcrawl %v = %#v, want Alice match", args, search)
+			t.Fatalf("calcrawl %v = %#v, want planning match", tc.args, search)
 		}
-		if len(search.WhoMatched) != 0 {
-			t.Fatalf("unique who reported ambiguity: %#v", search.WhoMatched)
+		if search.WhoResolved == nil || search.WhoResolved.Who != tc.resolvedWho || !hasString(search.WhoResolved.Identifiers, tc.identifier) {
+			t.Fatalf("who_resolved for %v = %#v", tc.args, search.WhoResolved)
 		}
-	}
-
-	none := runJSON[searchResponse](t, "search", "planning", "--who", "No Such Person", "--json")
-	if len(none.Results) != 0 || none.TotalMatches != 0 || none.Truncated {
-		t.Fatalf("unknown who = %#v, want empty filtered result", none)
+		assertNoWhoMatched(t, tc.args...)
 	}
 }
 
-func TestSearchWhoReportsAmbiguousMatchedPeople(t *testing.T) {
+func TestSearchWhoAmbiguousDoesNotSearch(t *testing.T) {
 	db := setupCalendarFixture(t)
 	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
-		(503, 'ALICE EXAMPLE', 'alice.alt@example.com', 'Alice', 'Example')`)
+		(503, 'Alice Alternate', 'alice.alt@example.com', 'Alice', 'Alternate')`)
 	mustExec(t, db, `insert into Participant(
 		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
 	) values
 		(1003, 2, 1, 2, 1, 503, 101, 'alice.alt@example.com', '', 0, '')`)
 	runSync(t)
 
-	search := runJSON[searchResponse](t, "search", "holiday", "--who", "alice example", "--json")
-	if len(search.WhoMatched) != 2 || search.WhoMatched[0] != "ALICE EXAMPLE" || search.WhoMatched[1] != "Alice Example" {
-		t.Fatalf("who_matched = %#v, want two case-folded people", search.WhoMatched)
+	stdout, _, err := run(t, "search", "holiday", "--who", "alice", "--json")
+	if err == nil || cli.ExitCode(err) != 4 {
+		t.Fatalf("ambiguous who err = %v stdout = %s", err, stdout)
 	}
-	if len(search.Results) != 1 || search.TotalMatches != 1 {
-		t.Fatalf("ambiguous who filtered results = %#v", search)
+	var out errorResponse
+	if decodeErr := json.Unmarshal([]byte(stdout), &out); decodeErr != nil {
+		t.Fatalf("decode ambiguous error: %v\n%s", decodeErr, stdout)
+	}
+	if out.Error.Code != "ambiguous_who" || len(out.Error.Candidates) != 2 {
+		t.Fatalf("ambiguous error = %#v", out)
+	}
+	if strings.Contains(stdout, "results") || strings.Contains(stdout, "who_matched") {
+		t.Fatalf("ambiguous search returned search fields:\n%s", stdout)
+	}
+
+	_, _, err = run(t, "search", "holiday", "--who", "alice")
+	if err == nil {
+		t.Fatal("ambiguous who text succeeded")
+	}
+	text := err.Error()
+	for _, want := range []string{"--who \"alice\" matched more than one person.", "alice.alt@example.com", "Retry with an identifier: calcrawl search holiday --who alice.alt@example.com"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("ambiguous text missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestSearchWhoUnknownHasSuggestionsOrHint(t *testing.T) {
+	setupCalendarFixture(t)
+	runSync(t)
+
+	stdout, _, err := run(t, "search", "planning", "--who", "alice@exampl.com", "--json")
+	if err == nil || cli.ExitCode(err) != 5 {
+		t.Fatalf("unknown identifier err = %v stdout = %s", err, stdout)
+	}
+	var suggested errorResponse
+	if decodeErr := json.Unmarshal([]byte(stdout), &suggested); decodeErr != nil {
+		t.Fatalf("decode suggested error: %v\n%s", decodeErr, stdout)
+	}
+	if suggested.Error.Code != "unknown_who" || len(suggested.Error.DidYouMean) != 1 || suggested.Error.DidYouMean[0].Who != "Alice Example" {
+		t.Fatalf("suggested unknown error = %#v", suggested)
+	}
+
+	stdout, _, err = run(t, "search", "planning", "--who", "No Such Person", "--json")
+	if err == nil || cli.ExitCode(err) != 5 {
+		t.Fatalf("unknown who err = %v stdout = %s", err, stdout)
+	}
+	var unknown errorResponse
+	if decodeErr := json.Unmarshal([]byte(stdout), &unknown); decodeErr != nil {
+		t.Fatalf("decode unknown error: %v\n%s", decodeErr, stdout)
+	}
+	if unknown.Error.Code != "unknown_who" || len(unknown.Error.DidYouMean) != 0 || unknown.Error.Hint == "" {
+		t.Fatalf("unknown error = %#v, want empty did_you_mean and hint", unknown)
+	}
+	if !strings.Contains(unknown.Error.Hint, "Search without --who") {
+		t.Fatalf("unknown hint = %q", unknown.Error.Hint)
+	}
+}
+
+func TestSearchFilterOnlyAndIdentifierFiltering(t *testing.T) {
+	setupCalendarFixture(t)
+	runSync(t)
+
+	byPerson := runJSON[searchResponse](t, "search", "--who", "bob@example.com", "--json")
+	if byPerson.Query != "" || byPerson.TotalMatches != 1 || len(byPerson.Results) != 1 {
+		t.Fatalf("filter-only who search = %#v", byPerson)
+	}
+	if byPerson.WhoResolved == nil || byPerson.WhoResolved.Who != "Bob Example" {
+		t.Fatalf("filter-only who_resolved = %#v", byPerson.WhoResolved)
+	}
+
+	byDate := runJSON[searchResponse](t, "search", "--after", "2026-05-01", "--json")
+	if byDate.Query != "" || byDate.TotalMatches != 1 || byDate.Results[0].Snippet != "Public holiday - Netherlands" {
+		t.Fatalf("filter-only date search = %#v", byDate)
+	}
+
+	stdout, _, err := run(t, "search", "--json")
+	if err == nil {
+		t.Fatalf("search without query or filters succeeded: %s", stdout)
+	}
+	if cli.ExitCode(err) != 2 || !strings.Contains(err.Error(), "search query is required") {
+		t.Fatalf("search without query err = %v", err)
 	}
 }
 
@@ -361,6 +505,7 @@ func TestReadsNeverMutateArchive(t *testing.T) {
 	runJSON[map[string]any](t, "status", "--json")
 	runJSON[archive.EventDetail](t, "open", search.Results[0].Ref, "--json")
 	runJSON[control.ContactExport](t, "contacts", "export", "--json")
+	runJSON[whoResponse](t, "who", "alice", "--json")
 	after := fileHash(t, path)
 	if before != after {
 		t.Fatalf("archive hash changed across read commands: %s -> %s", before, after)
@@ -393,10 +538,26 @@ func TestMissingArchiveReadBehaviour(t *testing.T) {
 
 type searchResponse struct {
 	Query        string                 `json:"query"`
-	WhoMatched   []string               `json:"who_matched"`
+	WhoResolved  *archive.WhoResolved   `json:"who_resolved"`
 	Results      []archive.SearchResult `json:"results"`
 	TotalMatches int64                  `json:"total_matches"`
 	Truncated    bool                   `json:"truncated"`
+}
+
+type whoResponse struct {
+	Query      string                 `json:"query"`
+	Candidates []archive.WhoCandidate `json:"candidates"`
+}
+
+type errorResponse struct {
+	Error struct {
+		Code       string                 `json:"code"`
+		Message    string                 `json:"message"`
+		Remedy     string                 `json:"remedy"`
+		Candidates []archive.WhoCandidate `json:"candidates"`
+		DidYouMean []archive.WhoCandidate `json:"did_you_mean"`
+		Hint       string                 `json:"hint"`
+	} `json:"error"`
 }
 
 type syncComplete struct {
@@ -484,6 +645,18 @@ func hasString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func assertNoWhoMatched(t *testing.T, args ...string) {
+	t.Helper()
+	stdout := runOK(t, args...)
+	var raw map[string]any
+	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+		t.Fatalf("decode JSON from %v: %v\n%s", args, err, stdout)
+	}
+	if _, ok := raw["who_matched"]; ok {
+		t.Fatalf("who_matched leaked in %v: %s", args, stdout)
+	}
 }
 
 func lastTableField(value string) string {

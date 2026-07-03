@@ -51,6 +51,7 @@ func controlManifest() manifestOutput {
 		"status":          {Title: "Status", Argv: []string{"calcrawl", "status", "--json"}, JSON: true},
 		"sync":            {Title: "Sync", Argv: []string{"calcrawl", "sync", "--json"}, JSON: true, Mutates: true},
 		"search":          {Title: "Search", Argv: []string{"calcrawl", "search", "QUERY", "--json"}, JSON: true},
+		"who":             {Title: "Resolve person", Argv: []string{"calcrawl", "who", "NAME", "--json"}, JSON: true},
 		"open":            {Title: "Open", Argv: []string{"calcrawl", "open", "REF", "--json"}, JSON: true},
 		"doctor":          {Title: "Doctor", Argv: []string{"calcrawl", "doctor", "--json"}, JSON: true},
 		"contacts_export": {Title: "Export contacts", Argv: []string{"calcrawl", "contacts", "export", "--json"}, JSON: true},

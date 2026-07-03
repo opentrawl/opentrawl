@@ -45,11 +45,21 @@ type Attendee struct {
 	Comment     string `json:"comment,omitempty"`
 }
 
-type WhoMatch struct {
-	DisplayName string
-	Email       string
-	PhoneNumber string
-	Address     string
+type WhoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int64    `json:"messages"`
+}
+
+type WhoResolved struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+}
+
+type WhoFilter struct {
+	Who         string
+	Identifiers []string
 }
 
 type Location struct {

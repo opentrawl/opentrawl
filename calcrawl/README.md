@@ -60,6 +60,8 @@ calcrawl sync
 calcrawl status
 calcrawl search "planning"
 calcrawl search "planning" --who "Alice Example"
+calcrawl search --who alice@example.com
+calcrawl who alice
 calcrawl open t7k3f
 calcrawl open calcrawl:event/11111111-1111-1111-1111-111111111111
 calcrawl contacts export
@@ -135,14 +137,51 @@ Search returns 20 rows by default and never more than 200:
 
 Use `--limit`, `--after` and `--before` to narrow results.
 
-Use `--who` to filter to events where the organiser or an attendee matches that
-identity. Matching checks stored display names, email addresses, phone numbers
-and source addresses. It is Unicode case-insensitive and exact after whitespace
-collapse. If the supplied identity matches more than one stored participant,
-JSON includes `who_matched`.
+Use `--who` to filter to events where the organiser or an attendee is that
+person. Exact email addresses, phone numbers and source addresses filter
+directly. Names resolve first. One resolved person adds `who_resolved`:
+
+```json
+{
+  "query": "planning",
+  "who_resolved": {"who": "Alice Example", "identifiers": ["alice@example.com", "+15550100"]},
+  "results": [],
+  "total_matches": 0,
+  "truncated": false
+}
+```
+
+Ambiguous names do not search. They return `ambiguous_who` with candidates.
+Unknown people return `unknown_who` with `did_you_mean` candidates, or a hint to
+search without `--who` when nothing is close.
+
+The query is optional when `--who`, `--after` or `--before` is present. A
+filter-only search lists the newest matching events.
 
 Search text prints short refs when the alias index is available. Search JSON
 keeps `ref` as the full canonical ref.
+
+### who
+
+`who` resolves a name fragment against archived organisers and attendees:
+
+```json
+{
+  "query": "alice",
+  "candidates": [
+    {
+      "who": "Alice Example",
+      "identifiers": ["alice@example.com", "+15550100"],
+      "last_seen": "2026-03-04T10:00:00+01:00",
+      "messages": 1
+    }
+  ]
+}
+```
+
+Matching is generous over names and identifiers: case-insensitive prefix,
+substring and close spellings. Candidates are deduped by identity, so one person
+with several handles appears once.
 
 ### open
 

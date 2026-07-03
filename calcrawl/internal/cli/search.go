@@ -13,11 +13,11 @@ import (
 
 type searchOutput struct {
 	Query        string                 `json:"query"`
-	WhoMatched   []string               `json:"who_matched,omitempty"`
+	WhoResolved  *archive.WhoResolved   `json:"who_resolved,omitempty"`
 	Results      []archive.SearchResult `json:"results"`
 	TotalMatches int64                  `json:"total_matches"`
 	Truncated    bool                   `json:"truncated"`
-	Who          string                 `json:"-"`
+	WhoQuery     string                 `json:"-"`
 }
 
 func (r *runtime) runSearch(args []string) error {
@@ -28,7 +28,7 @@ func (r *runtime) runSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	if query == "" {
+	if query == "" && !whoPassed && strings.TrimSpace(afterValue) == "" && strings.TrimSpace(beforeValue) == "" {
 		return usageErr(errors.New("search query is required"))
 	}
 	if limit <= 0 {
@@ -59,26 +59,26 @@ func (r *runtime) runSearch(args []string) error {
 	if rebuilt {
 		_ = r.log.Info("short_refs_rebuilt", "reason=missing_or_stale")
 	}
-	var whoMatched []archive.WhoMatch
+	var whoResolved *archive.WhoResolved
+	var whoFilter *archive.WhoFilter
 	if whoPassed {
-		whoMatched, err = st.ResolveWho(r.ctx, whoValue)
+		candidate, err := r.resolveSearchWho(st, query, whoValue)
 		if err != nil {
 			return err
 		}
-		if len(whoMatched) == 0 {
-			_ = r.log.Info("search_complete", "returned=0 total=0")
-			return r.print(searchOutput{Query: query, Who: whoValue, Results: []archive.SearchResult{}, TotalMatches: 0, Truncated: false})
-		}
+		resolved := candidate.Resolved()
+		whoResolved = &resolved
+		whoFilter = candidate.Filter()
 	}
-	results, total, err := st.Search(r.ctx, query, archive.SearchOptions{Limit: limit, After: after, Before: before, Who: whoMatched})
+	results, total, err := st.Search(r.ctx, query, archive.SearchOptions{Limit: limit, After: after, Before: before, Who: whoFilter})
 	if err != nil {
 		return err
 	}
 	_ = r.log.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(results), total))
 	return r.print(searchOutput{
 		Query:        query,
-		Who:          whoValue,
-		WhoMatched:   ambiguousWhoMatches(whoMatched),
+		WhoQuery:     whoValue,
+		WhoResolved:  whoResolved,
 		Results:      results,
 		TotalMatches: total,
 		Truncated:    int64(len(results)) < total || capped,
@@ -246,26 +246,6 @@ func (r *runtime) resolveOpenRef(st *archive.Store, ref string) (string, error) 
 	}
 }
 
-func ambiguousWhoMatches(matches []archive.WhoMatch) []string {
-	if len(matches) <= 1 {
-		return nil
-	}
-	out := make([]string, 0, len(matches))
-	for _, match := range matches {
-		out = append(out, whoMatchLabel(match))
-	}
-	return out
-}
-
 func normalizeIdentity(value string) string {
 	return strings.Join(strings.Fields(value), " ")
-}
-
-func whoMatchLabel(match archive.WhoMatch) string {
-	for _, value := range []string{match.DisplayName, match.Email, match.PhoneNumber, match.Address} {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return "unknown"
 }

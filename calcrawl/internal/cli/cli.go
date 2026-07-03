@@ -15,13 +15,22 @@ import (
 )
 
 type cliError struct {
-	code   int
-	err    error
-	kind   string
-	remedy string
+	code       int
+	err        error
+	kind       string
+	remedy     string
+	human      string
+	candidates *[]archive.WhoCandidate
+	didYouMean *[]archive.WhoCandidate
+	hint       string
 }
 
-func (e *cliError) Error() string { return e.err.Error() }
+func (e *cliError) Error() string {
+	if strings.TrimSpace(e.human) != "" {
+		return e.human
+	}
+	return e.err.Error()
+}
 func (e *cliError) Unwrap() error { return e.err }
 
 type printedError struct {
@@ -176,6 +185,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runSync(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
+	case "who":
+		return r.runWho(args[1:])
 	case "open":
 		return r.runOpen(args[1:])
 	case "doctor":
@@ -211,6 +222,8 @@ func (r *runtime) print(value any) error {
 		return printDoctorText(r.stdout, typed)
 	case searchOutput:
 		return printSearchText(r.stdout, typed)
+	case whoOutput:
+		return printWhoText(r.stdout, typed)
 	case archive.EventDetail:
 		return printOpenText(r.stdout, typed)
 	case control.ContactExport:
@@ -232,6 +245,9 @@ func (r *runtime) printJSONError(err error) error {
 		out.Error.Code = codeErr.kind
 		out.Error.Message = codeErr.err.Error()
 		out.Error.Remedy = codeErr.remedy
+		out.Error.Candidates = codeErr.candidates
+		out.Error.DidYouMean = codeErr.didYouMean
+		out.Error.Hint = codeErr.hint
 		if out.Error.Remedy == "" {
 			out.Error.Remedy = worldRemedy(codeErr.err)
 		}
@@ -286,9 +302,12 @@ func errorEvent(err error) string {
 
 type errorOutput struct {
 	Error struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Remedy  string `json:"remedy,omitempty"`
+		Code       string                  `json:"code"`
+		Message    string                  `json:"message"`
+		Remedy     string                  `json:"remedy,omitempty"`
+		Candidates *[]archive.WhoCandidate `json:"candidates,omitempty"`
+		DidYouMean *[]archive.WhoCandidate `json:"did_you_mean,omitempty"`
+		Hint       string                  `json:"hint,omitempty"`
 	} `json:"error"`
 }
 

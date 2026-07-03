@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 
@@ -46,20 +45,26 @@ type SearchOptions struct {
 	Limit  int
 	After  int64
 	Before int64
-	Who    []WhoMatch
+	Who    *WhoFilter
 }
 
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int64, error) {
-	ftsQuery, err := store.FTS5Terms(query, "")
+	query = strings.TrimSpace(query)
+	ftsQuery := ""
+	hasQuery := query != ""
+	if hasQuery {
+		var err error
+		ftsQuery, err = store.FTS5Terms(query, "")
+		if err != nil {
+			return nil, 0, err
+		}
+	}
+	where, args := searchWhere(ftsQuery, hasQuery, options.After, options.Before, options.Who)
+	total, err := s.countSearch(ctx, where, args, hasQuery)
 	if err != nil {
 		return nil, 0, err
 	}
-	where, args := searchWhere(ftsQuery, options.After, options.Before, options.Who)
-	total, err := s.countSearch(ctx, where, args)
-	if err != nil {
-		return nil, 0, err
-	}
-	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where), append(args, options.Limit)...)
+	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, options.Limit)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -93,65 +98,6 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		results[i].ShortRef = shortRef
 	}
 	return results, total, nil
-}
-
-func (s *Store) ResolveWho(ctx context.Context, identity string) ([]WhoMatch, error) {
-	identity = normalizeWho(identity)
-	if identity == "" {
-		return nil, nil
-	}
-	rows, err := s.store.DB().QueryContext(ctx, `
-select display_name, email, phone_number, address from (
-  select distinct trim(organizer_name) as display_name,
-         trim(organizer_email) as email,
-         trim(organizer_phone) as phone_number,
-         '' as address
-  from events
-  where trim(organizer_name) <> '' or trim(organizer_email) <> '' or trim(organizer_phone) <> ''
-  union
-  select distinct trim(display_name) as display_name,
-         trim(email) as email,
-         trim(phone_number) as phone_number,
-         trim(address) as address
-  from participants
-  where trim(display_name) <> '' or trim(email) <> '' or trim(phone_number) <> '' or trim(address) <> ''
-)
-order by display_name`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	matches := []WhoMatch{}
-	seen := map[string]int{}
-	for rows.Next() {
-		var candidate WhoMatch
-		if err := rows.Scan(&candidate.DisplayName, &candidate.Email, &candidate.PhoneNumber, &candidate.Address); err != nil {
-			return nil, err
-		}
-		candidate = cleanWhoMatch(candidate)
-		if !identityMatches(identity, candidate.DisplayName, candidate.Email, candidate.PhoneNumber, candidate.Address) {
-			continue
-		}
-		key := whoMatchKey(candidate)
-		if index, ok := seen[key]; ok {
-			matches[index] = mergeWhoMatch(matches[index], candidate)
-			continue
-		}
-		seen[key] = len(matches)
-		matches = append(matches, candidate)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	sort.SliceStable(matches, func(i, j int) bool {
-		left := strings.ToLower(whoLabel(matches[i]))
-		right := strings.ToLower(whoLabel(matches[j]))
-		if left != right {
-			return left < right
-		}
-		return whoMatchKey(matches[i]) < whoMatchKey(matches[j])
-	})
-	return matches, nil
 }
 
 func (s *Store) OpenEvent(ctx context.Context, ref string) (EventDetail, error) {
@@ -256,15 +202,23 @@ func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	return count, err
 }
 
-func (s *Store) countSearch(ctx context.Context, where string, args []any) (int64, error) {
+func (s *Store) countSearch(ctx context.Context, where string, args []any, hasQuery bool) (int64, error) {
 	var total int64
-	err := s.store.DB().QueryRowContext(ctx, `select count(*) from events_fts join events e on e.event_uid = events_fts.event_uid `+where, args...).Scan(&total)
+	from := `events e`
+	if hasQuery {
+		from = `events_fts join events e on e.event_uid = events_fts.event_uid`
+	}
+	err := s.store.DB().QueryRowContext(ctx, `select count(*) from `+from+` `+where, args...).Scan(&total)
 	return total, err
 }
 
-func searchWhere(ftsQuery string, after, before int64, who []WhoMatch) (string, []any) {
-	parts := []string{"where events_fts match ?"}
-	args := []any{ftsQuery}
+func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFilter) (string, []any) {
+	parts := []string{}
+	args := []any{}
+	if hasQuery {
+		parts = append(parts, "events_fts match ?")
+		args = append(args, ftsQuery)
+	}
 	if after > 0 {
 		parts = append(parts, "e.start_unix >= ?")
 		args = append(args, after)
@@ -273,56 +227,43 @@ func searchWhere(ftsQuery string, after, before int64, who []WhoMatch) (string, 
 		parts = append(parts, "e.start_unix <= ?")
 		args = append(args, before)
 	}
-	if len(who) > 0 {
+	if who != nil {
 		whoClause, whoArgs := whoWhere(who)
 		if whoClause != "" {
 			parts = append(parts, whoClause)
 			args = append(args, whoArgs...)
 		}
 	}
-	return strings.Join(parts, " and "), args
+	if len(parts) == 0 {
+		return "", args
+	}
+	return "where " + strings.Join(parts, " and "), args
 }
 
-func whoWhere(who []WhoMatch) (string, []any) {
-	names := uniqueWhoValues(who, func(item WhoMatch) string { return item.DisplayName })
-	emails := uniqueWhoValues(who, func(item WhoMatch) string { return item.Email })
-	phones := uniqueWhoValues(who, func(item WhoMatch) string { return item.PhoneNumber })
-	addresses := uniqueWhoValues(who, func(item WhoMatch) string { return item.Address })
-
+func whoWhere(who *WhoFilter) (string, []any) {
 	clauses := []string{}
 	args := []any{}
-	if len(names) > 0 {
-		clauses = append(clauses, "e.organizer_name in ("+valuePlaceholders(len(names))+")")
-		args = appendValues(args, names)
-	}
-	if len(emails) > 0 {
-		clauses = append(clauses, "e.organizer_email in ("+valuePlaceholders(len(emails))+")")
-		args = appendValues(args, emails)
-	}
-	if len(phones) > 0 {
-		clauses = append(clauses, "e.organizer_phone in ("+valuePlaceholders(len(phones))+")")
-		args = appendValues(args, phones)
-	}
-
-	participantClauses := []string{}
-	if len(names) > 0 {
-		participantClauses = append(participantClauses, "p.display_name in ("+valuePlaceholders(len(names))+")")
-		args = appendValues(args, names)
-	}
-	if len(emails) > 0 {
-		participantClauses = append(participantClauses, "p.email in ("+valuePlaceholders(len(emails))+")")
-		args = appendValues(args, emails)
-	}
-	if len(phones) > 0 {
-		participantClauses = append(participantClauses, "p.phone_number in ("+valuePlaceholders(len(phones))+")")
-		args = appendValues(args, phones)
-	}
-	if len(addresses) > 0 {
-		participantClauses = append(participantClauses, "p.address in ("+valuePlaceholders(len(addresses))+")")
-		args = appendValues(args, addresses)
-	}
-	if len(participantClauses) > 0 {
+	values := uniqueStrings(who.Identifiers)
+	if len(values) > 0 {
+		clauses = append(clauses, "e.organizer_email in ("+valuePlaceholders(len(values))+")")
+		args = appendValues(args, values)
+		clauses = append(clauses, "e.organizer_phone in ("+valuePlaceholders(len(values))+")")
+		args = appendValues(args, values)
+		participantClauses := []string{
+			"p.email in (" + valuePlaceholders(len(values)) + ")",
+			"p.phone_number in (" + valuePlaceholders(len(values)) + ")",
+			"p.address in (" + valuePlaceholders(len(values)) + ")",
+		}
+		args = appendValues(args, values)
+		args = appendValues(args, values)
+		args = appendValues(args, values)
 		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and ("+strings.Join(participantClauses, " or ")+"))")
+	} else if strings.TrimSpace(who.Who) != "" {
+		name := strings.TrimSpace(who.Who)
+		clauses = append(clauses, "e.organizer_name = ?")
+		args = append(args, name)
+		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name = ?)")
+		args = append(args, name)
 	}
 	if len(clauses) == 0 {
 		return "", nil
@@ -330,11 +271,11 @@ func whoWhere(who []WhoMatch) (string, []any) {
 	return "(" + strings.Join(clauses, " or ") + ")", args
 }
 
-func uniqueWhoValues(who []WhoMatch, pick func(WhoMatch) string) []string {
+func uniqueStrings(input []string) []string {
 	values := []string{}
 	seen := map[string]struct{}{}
-	for _, item := range who {
-		value := strings.TrimSpace(pick(item))
+	for _, item := range input {
+		value := strings.TrimSpace(item)
 		if value == "" {
 			continue
 		}
@@ -365,17 +306,23 @@ func valuePlaceholders(count int) string {
 	return strings.Join(values, ", ")
 }
 
-func searchSQL(where string) string {
+func searchSQL(where string, hasQuery bool) string {
+	from := `events e`
+	order := `e.start_unix desc, e.event_uid`
+	if hasQuery {
+		from = `events_fts
+join events e on e.event_uid = events_fts.event_uid`
+		order = `rank, e.start_unix desc, e.event_uid`
+	}
 	return `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title,
        e.calendar_type, e.calendar_external_id, e.account_name, e.account_type,
        e.start_time, e.end_time, e.all_day, e.summary, e.description, e.status,
        e.url, e.has_recurrences, e.organizer_name, e.organizer_email,
        e.organizer_phone, e.location_title, e.location_address, e.attendees_json
-from events_fts
-join events e on e.event_uid = events_fts.event_uid
+from ` + from + `
 ` + where + `
-order by rank, e.start_unix desc, e.event_uid
+order by ` + order + `
 limit ?`
 }
 
@@ -506,24 +453,6 @@ func contactName(name, email, phone string) string {
 	return ""
 }
 
-func cleanWhoMatch(match WhoMatch) WhoMatch {
-	return WhoMatch{
-		DisplayName: strings.TrimSpace(match.DisplayName),
-		Email:       strings.TrimSpace(match.Email),
-		PhoneNumber: strings.TrimSpace(match.PhoneNumber),
-		Address:     strings.TrimSpace(match.Address),
-	}
-}
-
-func mergeWhoMatch(left, right WhoMatch) WhoMatch {
-	return WhoMatch{
-		DisplayName: firstNonEmpty(left.DisplayName, right.DisplayName),
-		Email:       firstNonEmpty(left.Email, right.Email),
-		PhoneNumber: firstNonEmpty(left.PhoneNumber, right.PhoneNumber),
-		Address:     firstNonEmpty(left.Address, right.Address),
-	}
-}
-
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
 		if strings.TrimSpace(value) != "" {
@@ -531,28 +460,6 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func identityMatches(identity string, values ...string) bool {
-	for _, value := range values {
-		if strings.EqualFold(normalizeWho(value), identity) {
-			return true
-		}
-	}
-	return false
-}
-
-func whoLabel(match WhoMatch) string {
-	for _, value := range []string{match.DisplayName, match.Email, match.PhoneNumber, match.Address} {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return "unknown"
-}
-
-func whoMatchKey(match WhoMatch) string {
-	return strings.Join([]string{match.DisplayName, match.Email, match.PhoneNumber}, "\x00")
 }
 
 func canonicalEventTime(value string) string {

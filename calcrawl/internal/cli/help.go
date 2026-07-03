@@ -13,7 +13,8 @@ Usage:
   calcrawl metadata [--json]
   calcrawl status [--json]
   calcrawl sync [--json]
-  calcrawl search QUERY [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl search [QUERY] [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl who NAME [--json]
   calcrawl open REF [--json]
   calcrawl doctor [--json]
   calcrawl contacts export [--json]
@@ -27,6 +28,7 @@ Output:
   Default output is compact text for humans and agents.
   Use --json for stable machine parsing.
   Search returns 20 rows by default and never more than 200.
+  Search may omit QUERY when --who, --after or --before is present.
 `)
 }
 
@@ -53,15 +55,24 @@ Refresh the local calendar archive from Calendar.app's SQLite store.
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  calcrawl search QUERY [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl search [QUERY] [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
 
 Search archived calendar events.
 
 Flags:
-  --who NAME    Filter to events where the organizer or an attendee has that display name.
+  --who NAME    Resolve a person, then filter to events where they are organizer or attendee.
   --limit N      Maximum results. Default: 20. Maximum: 200.
   --after DATE   Include events at or after DATE.
   --before DATE  Include events at or before DATE.
+
+QUERY is optional when --who, --after or --before is present.
+Use calcrawl who NAME to inspect ambiguous people.
+`)
+	case "who":
+		_, _ = fmt.Fprint(w, `Usage:
+  calcrawl who NAME [--json]
+
+Resolve a person against archived organizers and attendees.
 `)
 	case "open":
 		_, _ = fmt.Fprint(w, `Usage:
