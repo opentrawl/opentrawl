@@ -198,7 +198,7 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 		Organizer:            Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
 		Attendees:            attendees,
 		URL:                  row.URL,
-		Status:               row.Status,
+		Status:               NormalizeEventStatus(row.Status),
 		HasRecurrences:       row.HasRecurrences != 0,
 	}, nil
 }

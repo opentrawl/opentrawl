@@ -148,7 +148,7 @@ func archiveEvents(events []calendarstore.Event) []archive.Event {
 			AllDay:             event.AllDay,
 			Summary:            strings.TrimSpace(event.Summary),
 			Description:        strings.TrimSpace(event.Description),
-			Status:             strings.TrimSpace(event.Status),
+			Status:             archive.NormalizeEventStatus(event.Status),
 			URL:                strings.TrimSpace(event.URL),
 			HasRecurrences:     event.HasRecurrences,
 			Organizer:          archivePerson(event.Organizer),

@@ -311,7 +311,7 @@ func eventStatus(value int64) string {
 	case 3:
 		return "cancelled"
 	default:
-		return "confirmed"
+		return "unknown"
 	}
 }
 

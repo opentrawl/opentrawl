@@ -90,6 +90,7 @@ func upsertEvent(ctx context.Context, tx *sql.Tx, event Event, runID string) (st
 	if event.UID == "" {
 		return "", fmt.Errorf("event is missing unique id")
 	}
+	event.Status = NormalizeEventStatus(event.Status)
 	fingerprint := event.Fingerprint()
 	result := "unchanged"
 	var existing string

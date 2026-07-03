@@ -137,6 +137,45 @@ func TestCoreDataTimesProvenanceSearchAndOpen(t *testing.T) {
 	}
 }
 
+func TestOpenNormalizesStoredStatusEnums(t *testing.T) {
+	for _, tc := range []struct {
+		stored string
+		want   string
+	}{
+		{stored: "status_0", want: "confirmed"},
+		{stored: "status_1", want: "confirmed"},
+		{stored: "status_2", want: "tentative"},
+		{stored: "status_3", want: "cancelled"},
+		{stored: "status_99", want: "unknown"},
+	} {
+		t.Run(tc.stored, func(t *testing.T) {
+			setupCalendarFixture(t)
+			runSync(t)
+			ref := "calcrawl:event/11111111-1111-1111-1111-111111111111"
+			st, err := archive.OpenExistingWritable(context.Background(), archive.DefaultPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, st.DB(), `update events set status = ? where event_uid = '11111111-1111-1111-1111-111111111111'`, tc.stored)
+			if err := st.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			opened := runJSON[archive.EventDetail](t, "open", ref, "--json")
+			if opened.Status != tc.want {
+				t.Fatalf("open JSON status = %q, want %q", opened.Status, tc.want)
+			}
+			text, _, err := run(t, "open", ref)
+			if err != nil {
+				t.Fatalf("open text: %v\n%s", err, text)
+			}
+			if strings.Contains(text, tc.stored) || !strings.Contains(text, "Status: "+tc.want) {
+				t.Fatalf("open text leaked status enum, want %q and no %q:\n%s", tc.want, tc.stored, text)
+			}
+		})
+	}
+}
+
 func TestCLIOutputConformance(t *testing.T) {
 	db := setupCalendarFixture(t)
 
