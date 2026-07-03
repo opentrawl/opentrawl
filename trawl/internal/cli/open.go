@@ -30,6 +30,9 @@ func (c *OpenCmd) Run(r *Runtime) error {
 }
 
 func (r *Runtime) openWithSource(source Source, ref string) error {
+	if !r.root.JSON {
+		return runCrawlerCommandPassThroughWithTimeout(r.ctx, source.Path, crawlerCommandTimeout, r.stdout, r.stderr, "open", ref)
+	}
 	data, err := runCrawlerJSONWithArgs(r.ctx, source.Path, "open", ref)
 	if err != nil {
 		return r.openFailed(ref, source.ID)
@@ -38,11 +41,8 @@ func (r *Runtime) openWithSource(source Source, ref string) error {
 	if err := decodeContractJSON(data, &payload); err != nil {
 		return r.openFailed(ref, source.ID)
 	}
-	if r.root.JSON {
-		_, err := r.stdout.Write(data)
-		return err
-	}
-	return renderOpenPayload(r.stdout, payload, ref)
+	_, err = r.stdout.Write(data)
+	return err
 }
 
 func splitOpenRef(ref string) (string, string, bool) {

@@ -5,21 +5,14 @@ import (
 	"testing"
 )
 
-func TestOpenRendersTranscript(t *testing.T) {
+func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
+	human := "Crawler human open\nSubject: Example item\n\nLine one.\nref: imessage:msg/8842"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		openRef:  "imessage:msg/8842",
-		open: `{
-			"ref":"imessage:msg/8842",
-			"chat":{"name":"Family chat","participants":["alice@example.com"]},
-			"message":{"ref":"imessage:msg/8842","time":"2026-05-15T00:01:00Z","who":"Me","where":"Family chat","text":"Target\nmessage"},
-			"context":[
-				{"ref":"imessage:msg/8841","time":"2026-05-14T23:58:00Z","who":"Alice","where":"Family chat","text":"Yesterday"},
-				{"ref":"imessage:msg/8842","time":"2026-05-15T00:01:00Z","who":"Me","where":"Family chat","text":"Target\nmessage","target":true},
-				{"ref":"imessage:msg/8843","time":"2026-05-15T00:02:00Z","who":"Bob","where":"Family chat","has_attachments":true}
-			]
-		}`,
+		name:      "imsgcrawl",
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		openRef:   "imessage:msg/8842",
+		open:      `not-json`,
+		openHuman: human,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
@@ -28,180 +21,22 @@ func TestOpenRendersTranscript(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := "Family chat — Fri 15 May 2026\n\n" +
-		"23:58  Alice: Yesterday\n" +
-		"— Fri 15 May 2026 —\n" +
-		"▶ 00:01  Me: Target message\n" +
-		"00:02  Bob: [attachment]\n\n" +
-		"ref: imessage:msg/8842\n"
-	if stdout != want {
-		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
+	if stdout != human+"\n" {
+		t.Fatalf("stdout = %q, want crawler human output", stdout)
 	}
-	if strings.Contains(stdout, "msg/8841") || strings.Contains(stdout, "msg/8843") || strings.Contains(stdout, "alice@example.com") {
-		t.Fatalf("transcript leaked non-ref ids or participants:\n%s", stdout)
-	}
-	if strings.Contains(stdout, "2026-05-14 23:58") || strings.Contains(stdout, "2026-05-15 00:01") {
-		t.Fatalf("transcript used per-line dates:\n%s", stdout)
-	}
-}
-
-func TestOpenRendersSingleDayTranscriptHeaderDate(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		openRef:  "imessage:msg/2017",
-		open: `{
-			"ref":"imessage:msg/2017",
-			"chat":{"name":"Robin Example"},
-			"message":{"ref":"imessage:msg/2017","time":"2017-07-12T20:15:00+02:00","who":"Me","where":"Robin Example","text":"Target message"},
-			"context":[
-				{"ref":"imessage:msg/2016","time":"2017-07-12T20:12:00+02:00","who":"Robin","where":"Robin Example","text":"Are you around?"},
-				{"ref":"imessage:msg/2017","time":"2017-07-12T20:15:00+02:00","who":"Me","where":"Robin Example","text":"Target message","target":true}
-			]
-		}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "open", "imessage:msg/2017")
-	if code != 0 {
-		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-	want := "Robin Example — Wed 12 Jul 2017\n\n" +
-		"20:12  Robin: Are you around?\n" +
-		"▶ 20:15  Me: Target message\n\n" +
-		"ref: imessage:msg/2017\n"
-	if stdout != want {
-		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
-	}
-	if strings.Contains(stdout, "2017-07-12 20:12") || strings.Contains(stdout, "— Wed 12 Jul 2017 —") {
-		t.Fatalf("single-day transcript should keep time-only lines and no day separator:\n%s", stdout)
-	}
-}
-
-func TestOpenRendersMailHeadersAsProse(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "gogcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"gmail","display_name":"Gmail"}`,
-		openRef:  "gmail:msg/m3",
-		open: `{
-			"ref":"gmail:msg/m3",
-			"id":"m3",
-			"thread_id":"thread-1",
-			"time":"2026-05-14T09:12:00Z",
-			"headers":{
-				"from_name":"Alice Example",
-				"from_address":"alice@example.com",
-				"to_address":"bob@example.com",
-				"cc_address":"carol@example.com",
-				"subject":"Project update"
-			},
-			"body":"Line one.\n\nLine two.",
-			"attachments":[{"filename":"plan.pdf","mime_type":"application/pdf","size_bytes":42}]
-		}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "open", "gmail:msg/m3")
-	if code != 0 {
-		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-	want := "Project update\n" +
-		"From Alice Example <alice@example.com> to bob@example.com.\n" +
-		"Cc carol@example.com.\n" +
-		"Sent 2026-05-14 09:12.\n" +
-		"1 attachment.\n\n" +
-		"Line one.\n\nLine two.\n\n" +
-		"ref: gmail:msg/m3\n"
-	if stdout != want {
-		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
-	}
-	if strings.Contains(stdout, "thread_id") || strings.Contains(stdout, "thread-1") || strings.Contains(stdout, "id:") {
-		t.Fatalf("mail output leaked raw ids:\n%s", stdout)
-	}
-}
-
-func TestOpenRendersCalendarAttendeesAsProse(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "calcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
-		openRef:  "calendar:event/11111111-1111-1111-1111-111111111111",
-		open: `{
-			"ref":"calendar:event/11111111-1111-1111-1111-111111111111",
-			"uuid":"11111111-1111-1111-1111-111111111111",
-			"title":"Planning meeting",
-			"start":"2026-03-04T10:00:00+01:00",
-			"end":"2026-03-04T10:30:00+01:00",
-			"calendar":"Work",
-			"account":"iCloud",
-			"location":{"title":"Room 1","address":"1 Example Street"},
-			"organizer":{"display_name":"Dana Example","email":"dana@example.com"},
-			"attendees":[
-				{"display_name":"Alice Example","email":"alice@example.com","rsvp_status":"accepted"},
-				{"email":"bob@example.com","rsvp_status":"tentative"}
-			],
-			"description":"Discuss planning."
-		}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "open", "calendar:event/11111111-1111-1111-1111-111111111111")
-	if code != 0 {
-		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-	want := "Planning meeting\n" +
-		"2026-03-04 10:00 to 2026-03-04 10:30 on Work.\n" +
-		"Location: Room 1, 1 Example Street.\n" +
-		"Organiser: Dana Example.\n" +
-		"Attendees: Alice Example (accepted), bob@example.com (tentative).\n\n" +
-		"Discuss planning.\n\n" +
-		"ref: calendar:event/11111111-1111-1111-1111-111111111111\n"
-	if stdout != want {
-		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
-	}
-	if strings.Contains(stdout, "uuid") {
-		t.Fatalf("calendar output leaked raw ids:\n%s", stdout)
-	}
-}
-
-func TestOpenFallsBackToGenericJSONForUnknownShapes(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"fake","display_name":"Fake"}`,
-		openRef:  "fake:item/1",
-		open: `{
-			"body":"Example body",
-			"missing":null,
-			"priority":2,
-			"tags":["one"]
-		}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "open", "fake:item/1")
-	if code != 0 {
-		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-	want := "body: Example body\n" +
-		"missing: —\n" +
-		"priority: 2\n" +
-		"tags:\n" +
-		"  - one\n"
-	if stdout != want {
-		t.Fatalf("open output:\n%s\nwant:\n%s", stdout, want)
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
 	}
 }
 
 func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 	payload := `{"body":"Example body","ref":"imessage:msg/8842"}`
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		openRef:  "imessage:msg/8842",
-		open:     payload,
+		name:      "imsgcrawl",
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		openRef:   "imessage:msg/8842",
+		open:      payload,
+		openHuman: "human output",
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
@@ -236,24 +71,25 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 }
 
 func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
-	payload := `{"body":"Example body","ref":"imessage:msg/1"}`
+	human := "Resolved human item\nref: imessage:msg/1"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		shortRefs:     `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
 		openRef:       "imessage:msg/1",
-		open:          payload,
+		open:          `not-json`,
+		openHuman:     human,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
 
-	stdout, stderr, code := runCLI(t, "--json", "open", "t7k3f")
+	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if stdout != payload+"\n" {
-		t.Fatalf("stdout = %q, want raw payload", stdout)
+	if stdout != human+"\n" {
+		t.Fatalf("stdout = %q, want crawler human output", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -332,21 +168,26 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 	}
 }
 
-func TestOpenReportsCrawlerFailure(t *testing.T) {
+func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		openRef:  "imessage:msg/8842",
-		open:     `not-json`,
+		name:          "imsgcrawl",
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		openRef:       "imessage:msg/8842",
+		openHuman:     "partial crawler output",
+		openHumanExit: 7,
+		openStderr:    "crawler open failed",
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
 
 	stdout, stderr, code := runCLI(t, "open", "imessage:msg/8842")
-	if code != 1 {
+	if code != 7 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "Could not open ref") || !strings.Contains(stderr, "run: trawl doctor imessage") {
-		t.Fatalf("stderr missing open failure:\n%s", stderr)
+	if stdout != "partial crawler output\n" {
+		t.Fatalf("stdout = %q, want crawler stdout", stdout)
+	}
+	if stderr != "crawler open failed\n" {
+		t.Fatalf("stderr = %q, want crawler stderr", stderr)
 	}
 }

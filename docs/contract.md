@@ -153,6 +153,11 @@ natural context (a message inside its thread window, a mail with its
 headers, an event with attendees). Bounded like everything else: long
 threads window around the target, never dump.
 
+`trawl open <ref>` passes through the crawler's human rendering because
+open is single-source. The crawler's human mode is authoritative for
+its own items; search remains trawl-rendered so multiple sources can be
+merged consistently.
+
 ## doctor
 
 ```json
