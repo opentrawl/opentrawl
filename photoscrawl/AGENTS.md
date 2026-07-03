@@ -139,3 +139,29 @@ not a trip or relationship truth table.
 Provenance tables, evidence refs, raw provider responses, and model responses
 are machine-internal pipeline storage. Do not expose an `evidence` command or
 evidence refs/counts in `open`.
+
+## Output Review Protocol (mandatory, all agents including subagents)
+
+The gate for any change that touches what a command emits is a MODEL REVIEW,
+never a script. ZFC: deterministic checks own structure; quality judgment
+belongs to a model. Before committing any output-shape change:
+
+1. Generate RAW transcripts of every permutation the change touches: every
+   affected verb, JSON and human mode, photoscrawl-direct AND trawl-rendered
+   (`trawl open`/`trawl search` render our JSON — that is the surface users
+   and agents actually see). Include the model-input sidecar when the change
+   touches classification. Raw means raw: full, untruncated, uncensored — a
+   review over summarized output reviews nothing.
+2. Have a model that did not write the change review those transcripts
+   adversarially (refute, not approve) against the blind-person test below.
+3. The conformance regexes are tripwires that remember past defects. They are
+   never sufficient and passing them proves nothing new. When the model
+   review finds a defect class, add a tripwire so it cannot regress — but the
+   review itself is the gate.
+
+The blind-person test: both the card we SEND to the model (mechanical
+context) and the card we STORE from it must let a blind person understand
+the scene perfectly and exhaustively — what, where, when, with what device,
+in what context, with what certainty. Anything a blind person could not
+parse (raw enums, float noise, machine ids, cache accounting, provenance
+strings) is slop; anything they would still have to ask about is missing.
