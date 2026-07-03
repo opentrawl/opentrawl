@@ -239,6 +239,44 @@ func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 	}
 }
 
+func TestSearchWhoCloseSpellingOnlyFederatedResolutionJSON(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:       "imsgcrawl",
+		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		searchExit: 99,
+		whoQuery:   "alxe",
+		who: `{"query":"alxe","candidates":[
+			{"who":"Alex Jones","identifiers":["alex.jones@example.com"],"match_quality":"close_spelling","sources":["imessage"],"last_seen":"2026-06-30T20:30:00Z","messages":9}
+		]}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "alxe")
+	if code != 5 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload whoResolutionErrorEnvelope
+	if err := decodeContractJSON([]byte(stdout), &payload); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+	if payload.Error.Code != "unknown_who" {
+		t.Fatalf("code = %q payload=%+v", payload.Error.Code, payload)
+	}
+	if len(payload.Candidates) != 0 {
+		t.Fatalf("candidates = %+v, want none", payload.Candidates)
+	}
+	if len(payload.DidYouMean) != 1 || payload.DidYouMean[0].Who != "Alex Jones" {
+		t.Fatalf("did_you_mean = %+v", payload.DidYouMean)
+	}
+	if payload.DidYouMean[0].MatchQuality != "close_spelling" {
+		t.Fatalf("match_quality = %q, want close_spelling", payload.DidYouMean[0].MatchQuality)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
 func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{

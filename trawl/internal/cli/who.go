@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 type WhoCmd struct {
@@ -150,7 +152,7 @@ func decodeWhoCandidateList(data json.RawMessage, fallbackSource string) ([]WhoC
 
 func normalizeWhoCandidate(raw crawlerWhoCandidate, fallbackSource string) WhoCandidate {
 	who := firstNonEmpty(raw.Who, raw.Person, raw.DisplayName, raw.Name, raw.Identity, raw.ID, raw.PersonID)
-	matchQuality := strings.ToLower(firstNonEmpty(raw.MatchQuality, raw.NameMatch, raw.Match))
+	matchQuality := canonicalMatchQuality(firstNonEmpty(raw.MatchQuality, raw.NameMatch, raw.Match))
 	sources := append([]string(nil), raw.Sources...)
 	if len(sources) == 0 && strings.TrimSpace(raw.Source) != "" {
 		sources = []string{raw.Source}
@@ -165,7 +167,7 @@ func normalizeWhoCandidate(raw crawlerWhoCandidate, fallbackSource string) WhoCa
 	return WhoCandidate{
 		Who:            who,
 		Identifiers:    identifiers,
-		MatchQuality:   firstNonEmpty(matchQuality, "unknown"),
+		MatchQuality:   matchQuality,
 		Sources:        sources,
 		LastSeen:       lastSeen,
 		Messages:       firstNonZero(raw.Messages, raw.Volume, raw.MessageVolume, raw.MessageCount, raw.TotalMessages),
@@ -216,8 +218,13 @@ func sortWhoCandidates(candidates []WhoCandidate) {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
-		if leftRank, rightRank := matchQualityRank(left.MatchQuality), matchQualityRank(right.MatchQuality); leftRank != rightRank {
-			return leftRank < rightRank
+		leftRank, leftOK := matchQualityRank(left.MatchQuality)
+		rightRank, rightOK := matchQualityRank(right.MatchQuality)
+		if leftOK != rightOK {
+			return leftOK
+		}
+		if leftOK && rightOK && leftRank != rightRank {
+			return leftRank.BetterThan(rightRank)
 		}
 		if left.lastSeenOK != right.lastSeenOK {
 			return left.lastSeenOK
@@ -232,16 +239,26 @@ func sortWhoCandidates(candidates []WhoCandidate) {
 	})
 }
 
-func matchQualityRank(value string) int {
+func canonicalMatchQuality(value string) string {
+	rank, ok := matchQualityRank(value)
+	if !ok {
+		return "unknown"
+	}
+	return rank.String()
+}
+
+func matchQualityRank(value string) (whomatch.Rank, bool) {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "exact":
-		return 0
+		return whomatch.RankExact, true
 	case "prefix":
-		return 1
-	case "contains":
-		return 2
+		return whomatch.RankPrefix, true
+	case "substring", "contains":
+		return whomatch.RankSubstring, true
+	case "close_spelling", "close-spelling", "close spelling":
+		return whomatch.RankCloseSpelling, true
 	default:
-		return 3
+		return 0, false
 	}
 }
 
