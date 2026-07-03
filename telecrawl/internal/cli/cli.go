@@ -280,10 +280,10 @@ func logRunFromSummary(summary cklog.RunSummary) *logRunEnvelope {
 		Version:   summary.Version,
 	}
 	if !summary.StartedAt.IsZero() {
-		out.StartedAt = summary.StartedAt.Format(time.RFC3339)
+		out.StartedAt = formatLocalTime(summary.StartedAt)
 	}
 	if !summary.FinishedAt.IsZero() {
-		out.FinishedAt = summary.FinishedAt.Format(time.RFC3339)
+		out.FinishedAt = formatLocalTime(summary.FinishedAt)
 	}
 	return out
 }
@@ -293,7 +293,7 @@ func logErrorFromLine(line cklog.Line) *logErrorEnvelope {
 		RunID:   line.RunID,
 		Command: line.Command,
 		Event:   line.Event,
-		Time:    line.Timestamp.Format(time.RFC3339),
+		Time:    formatLocalTime(line.Timestamp),
 		Message: line.Message,
 	}
 }
@@ -1320,7 +1320,7 @@ func (r *runtime) print(v any) error {
 		return r.printDoctor(value)
 	case store.ImportStats:
 		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %d\nmessages: %d\nmedia_messages: %d\nmedia_files: %d\nmedia_bytes: %d\nstarted_at: %s\nfinished_at: %s\n",
-			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, value.StartedAt.Format(time.RFC3339), value.FinishedAt.Format(time.RFC3339)); err != nil {
+			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, formatLocalTime(value.StartedAt), formatLocalTime(value.FinishedAt)); err != nil {
 			return err
 		}
 		if hasRemoteMediaStats(value) {
@@ -1345,7 +1345,7 @@ func (r *runtime) print(v any) error {
 			if len(snapshot.Tags) > 0 {
 				ref = snapshot.Tags[0]
 			}
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%d\t%d\t%s\n", ref, snapshot.Exported.Format(time.RFC3339), snapshot.Counts.Messages, snapshot.Shards, strings.Join(snapshot.Tags, ",")); err != nil {
+			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%d\t%d\t%s\n", ref, formatLocalTime(snapshot.Exported), snapshot.Counts.Messages, snapshot.Shards, strings.Join(snapshot.Tags, ",")); err != nil {
 				return err
 			}
 		}

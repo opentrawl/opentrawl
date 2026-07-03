@@ -273,7 +273,7 @@ func statusFreshness(status store.Status) freshnessEnvelope {
 	if status.LastImportAt.IsZero() {
 		return freshnessEnvelope{}
 	}
-	return freshnessEnvelope{LastSync: status.LastImportAt.Format(time.RFC3339)}
+	return freshnessEnvelope{LastSync: formatLocalTime(status.LastImportAt)}
 }
 
 func oldestMessageYear(status store.Status) int64 {
@@ -395,7 +395,7 @@ func searchResults(messages []store.Message, shortRefs map[string]string) []sear
 		out = append(out, searchResult{
 			Ref:      ref,
 			ShortRef: shortRefs[ref],
-			Time:     message.Timestamp.Format(time.RFC3339),
+			Time:     formatLocalTime(message.Timestamp),
 			Who:      outputField(messageWho(message)),
 			Where:    outputField(messageWhere(message)),
 			Snippet:  outputField(messageSnippet(message)),
@@ -490,7 +490,11 @@ func formatOptionalTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.Format(time.RFC3339)
+	return formatLocalTime(t)
+}
+
+func formatLocalTime(t time.Time) string {
+	return t.Local().Format(time.RFC3339)
 }
 
 func messageWho(message store.Message) string {

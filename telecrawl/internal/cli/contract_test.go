@@ -684,6 +684,47 @@ func TestOpenContextWindowIsBounded(t *testing.T) {
 	}
 }
 
+func TestContractTimestampsUseLocalOffset(t *testing.T) {
+	loc := useFixedLocalZone(t)
+
+	statusTime := time.Now().Add(-time.Hour).UTC()
+	statusDB := seedArchive(t, 1, statusTime)
+	wantStatusTime := statusTime.In(loc).Format(time.RFC3339)
+	status := runStatusJSON(t, statusDB)
+	if status.Freshness.LastSync != wantStatusTime {
+		t.Fatalf("status last_sync = %q, want %q", status.Freshness.LastSync, wantStatusTime)
+	}
+	statusText, stderr, err := runCLI(t, "--db", statusDB, "status")
+	if err != nil {
+		t.Fatalf("status text: %v stderr=%s", err, stderr)
+	}
+	assertContainsLocalTime(t, statusText, wantStatusTime, statusTime)
+
+	db := seedSearchArchive(t, 1)
+	messageTime := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	wantMessageTime := messageTime.In(loc).Format(time.RFC3339)
+
+	search := runSearchJSON(t, db, "search", "launch", "--json")
+	if len(search.Results) != 1 || search.Results[0].Time != wantMessageTime {
+		t.Fatalf("search result time = %#v, want %q", search.Results, wantMessageTime)
+	}
+	searchText, stderr, err := runCLI(t, "--db", db, "search", "launch")
+	if err != nil {
+		t.Fatalf("search text: %v stderr=%s", err, stderr)
+	}
+	assertContainsLocalTime(t, searchText, wantMessageTime, messageTime)
+
+	open := runOpenJSON(t, db, "telecrawl:msg/1")
+	if open.Message.Time != wantMessageTime || len(open.Context) != 1 || open.Context[0].Time != wantMessageTime {
+		t.Fatalf("open times = message %q context %#v, want %q", open.Message.Time, open.Context, wantMessageTime)
+	}
+	openText, stderr, err := runCLI(t, "--db", db, "open", "telecrawl:msg/1")
+	if err != nil {
+		t.Fatalf("open text: %v stderr=%s", err, stderr)
+	}
+	assertContainsLocalTime(t, openText, wantMessageTime, messageTime)
+}
+
 func TestPerVerbHelpExitsZero(t *testing.T) {
 	tests := [][]string{
 		{"metadata", "--help"},
@@ -820,6 +861,27 @@ func runCLI(t *testing.T, args ...string) (string, string, error) {
 	var stdout, stderr bytes.Buffer
 	err := Run(context.Background(), args, &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
+}
+
+func useFixedLocalZone(t *testing.T) *time.Location {
+	t.Helper()
+	loc := time.FixedZone("test-local", 2*60*60)
+	previous := time.Local
+	time.Local = loc
+	t.Cleanup(func() {
+		time.Local = previous
+	})
+	return loc
+}
+
+func assertContainsLocalTime(t *testing.T, output, want string, utc time.Time) {
+	t.Helper()
+	if !strings.Contains(output, want) {
+		t.Fatalf("output missing local time %q:\n%s", want, output)
+	}
+	if utcText := utc.UTC().Format(time.RFC3339); strings.Contains(output, utcText) {
+		t.Fatalf("output contains UTC time %q:\n%s", utcText, output)
+	}
 }
 
 func hasArg(args []string, name string) bool {
