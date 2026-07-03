@@ -175,3 +175,14 @@ existing set is the ceiling until a gate genuinely needs more. Context
 that is meaning, not gating — whose house, what relationship, why a
 place matters — flows to the model as plain-language phrases and to
 readers as prose, never as new enum vocabulary.
+
+## Standing principles pass (recurring, not optional)
+
+Slop compounds. After every few landed slices — and always before a
+milestone claim — run a deslopify/ZFC/engineering-principles review
+over the recent diff range (not the whole tree): a non-authoring model
+reads the changes against this file, ../docs/vision.md's engineering
+principles, and the no-ontologies rule, and files defects. Workers
+drift (sandbox reverts, invented heuristics, knob creep) even with
+good prompts; only a recurring pass catches the drift before failures
+compound.
