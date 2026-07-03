@@ -219,7 +219,8 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 	if err != nil {
 		return err
 	}
-	if _, err := c.stmts.asset.ExecContext(ctx, assetID, asset.LocalIdentifier, asset.MediaType, asset.MediaSubtypes, asset.CreationDate, asset.ModificationDate, asset.AddedDate, asset.TimezoneName, asset.Width, asset.Height, asset.DurationSeconds, boolInt(asset.Favorite), boolInt(asset.Hidden), asset.BurstIdentifier, boolInt(asset.RepresentsBurst), sourceID, metadataJSON); err != nil {
+	camera := assetCameraValues(asset.Camera)
+	if _, err := c.stmts.asset.ExecContext(ctx, assetID, asset.LocalIdentifier, asset.MediaType, asset.MediaSubtypes, asset.CreationDate, asset.ModificationDate, asset.AddedDate, asset.TimezoneName, asset.Width, asset.Height, asset.DurationSeconds, boolInt(asset.Favorite), boolInt(asset.Hidden), asset.BurstIdentifier, boolInt(asset.RepresentsBurst), camera.make, camera.model, camera.lensModel, nullableFloat(camera.focalLengthMM), nullableFloat(camera.focalLength35MM), nullableFloat(camera.aperture), nullableFloat(camera.shutterSpeed), nullableInt(camera.iso), sourceID, metadataJSON); err != nil {
 		return fmt.Errorf("upsert asset %s: %w", assetID, err)
 	}
 
@@ -328,6 +329,40 @@ func nullableFloat(value *float64) any {
 		return nil
 	}
 	return *value
+}
+
+func nullableInt(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
+}
+
+type assetCamera struct {
+	make            string
+	model           string
+	lensModel       string
+	focalLengthMM   *float64
+	focalLength35MM *float64
+	aperture        *float64
+	shutterSpeed    *float64
+	iso             *int64
+}
+
+func assetCameraValues(camera *photos.Camera) assetCamera {
+	if camera == nil {
+		return assetCamera{}
+	}
+	return assetCamera{
+		make:            strings.TrimSpace(camera.Make),
+		model:           strings.TrimSpace(camera.Model),
+		lensModel:       strings.TrimSpace(camera.LensModel),
+		focalLengthMM:   camera.FocalLengthMM,
+		focalLength35MM: camera.FocalLength35MM,
+		aperture:        camera.Aperture,
+		shutterSpeed:    camera.ShutterSpeed,
+		iso:             camera.ISO,
+	}
 }
 
 func nonEmpty(values ...string) []string {

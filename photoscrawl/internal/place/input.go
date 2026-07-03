@@ -65,6 +65,7 @@ func decodeResult(data []byte) (Result, error) {
 	if err := json.Unmarshal(data, &result); err != nil {
 		return Result{}, err
 	}
+	NormalizeResult(&result)
 	if result.POITotal == 0 {
 		result.POITotal = len(result.POICandidates)
 	}

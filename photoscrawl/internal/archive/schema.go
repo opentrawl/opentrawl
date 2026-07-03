@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 4
+const SchemaVersion = 5
 
 const Schema = `
 create table if not exists source_library (
@@ -70,6 +70,14 @@ create table if not exists asset (
   hidden integer not null,
   burst_identifier text not null,
   represents_burst integer not null,
+  camera_make text not null,
+  camera_model text not null,
+  lens_model text not null,
+  focal_length_mm real,
+  focal_length_35mm real,
+  aperture real,
+  shutter_speed real,
+  iso integer,
   source_library_id text not null references source_library(id),
   metadata_json text not null
 );

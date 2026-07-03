@@ -155,3 +155,16 @@ func TestBase64CheckIgnoresPathLikeRuns(t *testing.T) {
 		t.Errorf("unexpected failure: %s", f)
 	}
 }
+
+func TestAppleConstantPattern(t *testing.T) {
+	for _, leak := range []string{"MKPOICategoryFitnessCenter", "PHAssetMediaTypeImage", "CLAuthorizationStatusDenied"} {
+		if appleConstantPattern.FindString(leak) == "" {
+			t.Fatalf("apple constant %q not caught", leak)
+		}
+	}
+	for _, clean := range []string{"fitness centre", "McDonald's Amsterdam", "IMG_8339.HEIC", "MacBook Pro"} {
+		if match := appleConstantPattern.FindString(clean); match != "" {
+			t.Fatalf("false positive %q in %q", match, clean)
+		}
+	}
+}

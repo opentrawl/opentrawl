@@ -10,6 +10,7 @@ import (
 	"github.com/openclaw/crawlkit/output"
 	ckrender "github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/photoscrawl/internal/archive"
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 )
 
 func writeMetadata(w io.Writer, format output.Format, manifest archive.Manifest) error {
@@ -187,9 +188,9 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 		}
 	}
 	if gps := mechanical.GPS; gps != nil {
-		value := fmt.Sprintf("%.5f, %.5f", gps.Latitude, gps.Longitude)
+		value := cardformat.FormatCoordinate(gps.Latitude) + ", " + cardformat.FormatCoordinate(gps.Longitude)
 		if gps.HorizontalAccuracyMeters > 0 {
-			value += fmt.Sprintf(", +/-%.0fm", gps.HorizontalAccuracyMeters)
+			value += ", +/-" + cardformat.FormatMeters(gps.HorizontalAccuracyMeters) + "m"
 		}
 		lines = append(lines, "GPS: "+value)
 	}
@@ -202,9 +203,12 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 			value += ", candidate"
 		}
 		if venue.DistanceMeters > 0 {
-			value += fmt.Sprintf(", %.0fm from GPS", venue.DistanceMeters)
+			value += ", " + cardformat.FormatMeters(venue.DistanceMeters) + "m from GPS"
 		}
 		lines = append(lines, "Venue: "+value)
+	}
+	if camera := mechanical.Camera; camera != nil && camera.Display != "" {
+		lines = append(lines, "Camera: "+camera.Display)
 	}
 	if len(mechanical.Albums) > 0 {
 		titles := []string{}

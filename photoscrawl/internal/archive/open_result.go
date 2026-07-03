@@ -6,6 +6,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 )
 
 type OpenResult struct {
@@ -22,6 +25,7 @@ type OpenMechanical struct {
 	Address         string               `json:"address,omitempty"`
 	Venue           *OpenVenue           `json:"venue,omitempty"`
 	VenueCandidates []OpenVenueCandidate `json:"venue_candidates,omitempty"`
+	Camera          *OpenCamera          `json:"camera,omitempty"`
 	Albums          []OpenAlbum          `json:"albums,omitempty"`
 	Original        *OpenOriginal        `json:"original,omitempty"`
 	Flags           []string             `json:"flags,omitempty"`
@@ -30,7 +34,6 @@ type OpenMechanical struct {
 type OpenCaptured struct {
 	Local    string `json:"local"`
 	Timezone string `json:"timezone,omitempty"`
-	Source   string `json:"source"`
 }
 
 type OpenMedia struct {
@@ -44,7 +47,6 @@ type OpenGPS struct {
 	Latitude                 float64 `json:"latitude"`
 	Longitude                float64 `json:"longitude"`
 	HorizontalAccuracyMeters float64 `json:"horizontal_accuracy_meters,omitempty"`
-	Source                   string  `json:"source"`
 }
 
 type OpenVenue struct {
@@ -52,22 +54,25 @@ type OpenVenue struct {
 	Category       string  `json:"category,omitempty"`
 	Tier           string  `json:"tier"`
 	DistanceMeters float64 `json:"distance_meters,omitempty"`
-	Source         string  `json:"source,omitempty"`
 }
 
 type OpenVenueCandidate struct {
-	Name              string                 `json:"name"`
-	Category          string                 `json:"category,omitempty"`
-	Tier              string                 `json:"tier,omitempty"`
-	DistanceMeters    float64                `json:"distance_meters,omitempty"`
-	Source            string                 `json:"source,omitempty"`
-	VenuePlausibility *OpenVenuePlausibility `json:"venue_plausibility,omitempty"`
+	Name           string  `json:"name"`
+	Category       string  `json:"category,omitempty"`
+	Tier           string  `json:"tier,omitempty"`
+	DistanceMeters float64 `json:"distance_meters,omitempty"`
 }
 
-type OpenVenuePlausibility struct {
-	CandidateName string `json:"candidate,omitempty"`
-	Verdict       string `json:"verdict"`
-	Reason        string `json:"reason,omitempty"`
+type OpenCamera struct {
+	Display         string  `json:"display,omitempty"`
+	Make            string  `json:"make,omitempty"`
+	Model           string  `json:"model,omitempty"`
+	LensModel       string  `json:"lens_model,omitempty"`
+	FocalLengthMM   float64 `json:"focal_length_mm,omitempty"`
+	FocalLength35MM float64 `json:"focal_length_35mm,omitempty"`
+	Aperture        float64 `json:"aperture,omitempty"`
+	ShutterSpeed    string  `json:"shutter_speed,omitempty"`
+	ISO             int64   `json:"iso,omitempty"`
 }
 
 type OpenAlbum struct {
@@ -101,6 +106,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 			Address:         openAddress(placeObservations),
 			Venue:           openVenue(placeObservations),
 			VenueCandidates: openVenueCandidates(placeObservations),
+			Camera:          openCamera(asset),
 			Albums:          openAlbums(albums),
 			Original:        openOriginal(resources),
 			Flags:           openFlags(asset),
@@ -117,9 +123,19 @@ func openCaptured(asset map[string]any) *OpenCaptured {
 	timezoneName := strings.TrimSpace(rowString(asset, "timezone_name"))
 	return &OpenCaptured{
 		Local:    localCaptureTime(created, timezoneName),
-		Timezone: timezoneName,
-		Source:   "apple_photos",
+		Timezone: displayTimezoneName(timezoneName),
 	}
+}
+
+func displayTimezoneName(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if _, err := time.LoadLocation(value); err != nil {
+		return ""
+	}
+	return value
 }
 
 func openMedia(asset map[string]any) *OpenMedia {
@@ -138,10 +154,9 @@ func openGPS(rows []map[string]any) *OpenGPS {
 			continue
 		}
 		return &OpenGPS{
-			Latitude:                 lat,
-			Longitude:                lon,
-			HorizontalAccuracyMeters: rowFloat(row, "horizontal_accuracy"),
-			Source:                   rowString(row, "source"),
+			Latitude:                 cardformat.Coordinate(lat),
+			Longitude:                cardformat.Coordinate(lon),
+			HorizontalAccuracyMeters: cardformat.Meters(rowFloat(row, "horizontal_accuracy")),
 		}
 	}
 	return nil
@@ -169,12 +184,11 @@ func openVenue(rows []map[string]any) *OpenVenue {
 		venue := OpenVenue{
 			Name:           rowString(row, "value_text"),
 			Tier:           tier,
-			DistanceMeters: rowFloat(row, "distance_meters"),
-			Source:         rowString(row, "provider"),
+			DistanceMeters: cardformat.Meters(rowFloat(row, "distance_meters")),
 		}
 		var value map[string]any
 		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			venue.Category = mapText(value, "category")
+			venue.Category = cardformat.NormalizePOICategory(mapText(value, "category"))
 		}
 		candidates = append(candidates, venue)
 	}
@@ -199,37 +213,98 @@ func openVenueCandidates(rows []map[string]any) []OpenVenueCandidate {
 		candidate := OpenVenueCandidate{
 			Name:           rowString(row, "value_text"),
 			Tier:           rowString(row, "tier"),
-			DistanceMeters: rowFloat(row, "distance_meters"),
-			Source:         rowString(row, "provider"),
+			DistanceMeters: cardformat.Meters(rowFloat(row, "distance_meters")),
 		}
 		var value map[string]any
 		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
-			candidate.Category = mapText(value, "category")
-			if source := mapText(value, "source"); source != "" {
-				candidate.Source = source
-			}
+			candidate.Category = cardformat.NormalizePOICategory(mapText(value, "category"))
 			if distance := mapFloat(value, "distance_m"); distance > 0 {
-				candidate.DistanceMeters = distance
-			}
-			if raw, ok := value["venue_plausibility"].(map[string]any); ok {
-				candidate.VenuePlausibility = &OpenVenuePlausibility{
-					CandidateName: mapText(raw, "candidate"),
-					Verdict:       mapText(raw, "verdict"),
-					Reason:        mapText(raw, "reason"),
-				}
+				candidate.DistanceMeters = cardformat.Meters(distance)
 			}
 		}
 		if candidate.Name != "" {
 			candidates = append(candidates, candidate)
 		}
 	}
+	return capVenueCandidates(candidates, 5)
+}
+
+func capVenueCandidates(candidates []OpenVenueCandidate, limit int) []OpenVenueCandidate {
+	if len(candidates) == 0 || limit <= 0 {
+		return nil
+	}
 	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].Tier != candidates[j].Tier {
-			return venueTierRank(candidates[i].Tier) < venueTierRank(candidates[j].Tier)
+		left, right := candidates[i], candidates[j]
+		if left.DistanceMeters != right.DistanceMeters {
+			if left.DistanceMeters == 0 {
+				return false
+			}
+			if right.DistanceMeters == 0 {
+				return true
+			}
+			return left.DistanceMeters < right.DistanceMeters
 		}
-		return candidates[i].DistanceMeters < candidates[j].DistanceMeters
+		if venueTierRank(left.Tier) != venueTierRank(right.Tier) {
+			return venueTierRank(left.Tier) < venueTierRank(right.Tier)
+		}
+		return left.Name < right.Name
 	})
-	return candidates
+	selected := make([]OpenVenueCandidate, 0, minInt(limit, len(candidates)))
+	seen := map[string]bool{}
+	for _, candidate := range candidates {
+		if !candidateAlwaysIncluded(candidate.Tier) {
+			continue
+		}
+		key := venueCandidateKey(candidate)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		selected = append(selected, candidate)
+		if len(selected) == limit {
+			return selected
+		}
+	}
+	for _, candidate := range candidates {
+		key := venueCandidateKey(candidate)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		selected = append(selected, candidate)
+		if len(selected) == limit {
+			break
+		}
+	}
+	sort.SliceStable(selected, func(i, j int) bool {
+		left, right := selected[i], selected[j]
+		if left.DistanceMeters != right.DistanceMeters {
+			if left.DistanceMeters == 0 {
+				return false
+			}
+			if right.DistanceMeters == 0 {
+				return true
+			}
+			return left.DistanceMeters < right.DistanceMeters
+		}
+		return left.Name < right.Name
+	})
+	return selected
+}
+
+func candidateAlwaysIncluded(tier string) bool {
+	return tier == "confirmed_venue" || tier == "venue_candidate"
+}
+
+func venueCandidateKey(candidate OpenVenueCandidate) string {
+	return strings.ToLower(strings.TrimSpace(candidate.Name)) + "\x00" + strings.TrimSpace(candidate.Tier)
+}
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
 }
 
 func venueTierRank(tier string) int {
@@ -243,6 +318,40 @@ func venueTierRank(tier string) int {
 	default:
 		return 3
 	}
+}
+
+func openCamera(asset map[string]any) *OpenCamera {
+	camera := cardformat.Camera{
+		Make:            rowString(asset, "camera_make"),
+		Model:           rowString(asset, "camera_model"),
+		LensModel:       rowString(asset, "lens_model"),
+		FocalLengthMM:   cardformat.FocalLength(rowFloat(asset, "focal_length_mm")),
+		FocalLength35MM: cardformat.Meters(rowFloat(asset, "focal_length_35mm")),
+		Aperture:        cardformat.Aperture(rowFloat(asset, "aperture")),
+		ShutterSpeed:    rowFloat(asset, "shutter_speed"),
+		ISO:             rowInt(asset, "iso"),
+	}
+	display := cardformat.CameraDisplay(camera)
+	if display == "" && strings.TrimSpace(camera.LensModel) == "" {
+		return nil
+	}
+	open := &OpenCamera{
+		Display:         display,
+		Make:            strings.TrimSpace(camera.Make),
+		Model:           strings.TrimSpace(camera.Model),
+		LensModel:       strings.TrimSpace(camera.LensModel),
+		FocalLengthMM:   camera.FocalLengthMM,
+		FocalLength35MM: camera.FocalLength35MM,
+		Aperture:        camera.Aperture,
+		ShutterSpeed:    cardformat.ShutterSpeedLabel(camera.ShutterSpeed),
+		ISO:             camera.ISO,
+	}
+	if open.Display == "" && open.Make == "" && open.Model == "" && open.LensModel == "" &&
+		open.FocalLengthMM == 0 && open.FocalLength35MM == 0 && open.Aperture == 0 &&
+		open.ShutterSpeed == "" && open.ISO == 0 {
+		return nil
+	}
+	return open
 }
 
 func openAlbums(rows []map[string]any) []OpenAlbum {

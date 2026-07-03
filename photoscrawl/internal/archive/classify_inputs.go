@@ -27,6 +27,14 @@ type classifyInput struct {
 	Hidden          bool
 	BurstIdentifier string
 	MetadataJSON    string
+	CameraMake      string
+	CameraModel     string
+	LensModel       string
+	FocalLengthMM   float64
+	FocalLength35MM float64
+	Aperture        float64
+	ShutterSpeed    float64
+	ISO             int64
 	HasLocation     bool
 	Latitude        float64
 	Longitude       float64
@@ -64,6 +72,12 @@ with queued as (
 select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
        a.media_type, a.media_subtypes, a.creation_date, a.timezone_name, a.width, a.height, a.duration_seconds,
        a.favorite, a.hidden, a.burst_identifier, a.metadata_json,
+       a.camera_make, a.camera_model, a.lens_model,
+       coalesce(a.focal_length_mm, 0) as focal_length_mm,
+       coalesce(a.focal_length_35mm, 0) as focal_length_35mm,
+       coalesce(a.aperture, 0) as aperture,
+       coalesce(a.shutter_speed, 0) as shutter_speed,
+       coalesce(a.iso, 0) as iso,
        exists(select 1 from location_observation lo where lo.asset_id = a.id) as has_location,
        lower(
          coalesce(a.metadata_json, '') || ' ' ||
@@ -85,7 +99,9 @@ where q.state in (` + classifyQueueStates(refreshModelID != "") + `)
 )
 select id, asset_id, source_library_id, local_identifier, needs_download,
        media_type, media_subtypes, creation_date, timezone_name, width, height, duration_seconds,
-       favorite, hidden, burst_identifier, metadata_json, has_location
+       favorite, hidden, burst_identifier, metadata_json,
+       camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,
+       has_location
 from queued
 order by creation_date desc,
   has_location desc,
@@ -131,6 +147,14 @@ order by creation_date desc,
 			&hidden,
 			&input.BurstIdentifier,
 			&input.MetadataJSON,
+			&input.CameraMake,
+			&input.CameraModel,
+			&input.LensModel,
+			&input.FocalLengthMM,
+			&input.FocalLength35MM,
+			&input.Aperture,
+			&input.ShutterSpeed,
+			&input.ISO,
 			&hasLocation,
 		); err != nil {
 			return nil, err

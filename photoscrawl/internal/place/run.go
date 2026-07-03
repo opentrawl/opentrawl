@@ -26,6 +26,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		if cached.RadiusMeters == 0 {
 			cached.RadiusMeters = radius
 		}
+		NormalizeResult(cached)
 		cached.Cached = true
 		cached.CacheStatus = "hit"
 		return *cached, nil
@@ -44,6 +45,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if data, err := os.ReadFile(cachePath); err == nil {
 		var cached Result
 		if err := json.Unmarshal(data, &cached); err == nil {
+			NormalizeResult(&cached)
 			if err := validateComplete(cached); err == nil {
 				cached.Cached = true
 				cached.CacheStatus = "hit"
@@ -55,6 +57,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		if data, err := os.ReadFile(legacyPath); err == nil {
 			var cached Result
 			if err := json.Unmarshal(data, &cached); err == nil {
+				NormalizeResult(&cached)
 				if err := validateComplete(cached); err == nil {
 					cached.Cached = true
 					cached.CacheStatus = "hit"
@@ -106,6 +109,7 @@ func rawAppleResult(ctx context.Context, input Input, radius float64) (Result, e
 	result.POITotal = len(result.POICandidates)
 	result.POIStatus = poiStatus(result)
 	result.POICandidates = calibrateCandidates(input, radius, result.POICandidates)
+	NormalizeResult(&result)
 	if err := validateComplete(result); err != nil {
 		return Result{}, err
 	}
@@ -174,11 +178,23 @@ func areaFromAddress(address *Address) []AreaLevel {
 }
 
 func calibrateCandidates(input Input, radius float64, candidates []POICandidate) []POICandidate {
+	for i := range candidates {
+		candidates[i].Category = shortCategory(candidates[i].Category)
+	}
 	candidates = TierCandidates(input, candidates)
 	if len(candidates) > maxCandidates {
 		candidates = candidates[:maxCandidates]
 	}
 	return candidates
+}
+
+func NormalizeResult(result *Result) {
+	if result == nil {
+		return
+	}
+	for i := range result.POICandidates {
+		result.POICandidates[i].Category = shortCategory(result.POICandidates[i].Category)
+	}
 }
 
 func cachePath(dir string, input Input, radius float64) (string, error) {

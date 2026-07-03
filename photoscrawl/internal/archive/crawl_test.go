@@ -59,6 +59,19 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if opened.Mechanical.Original == nil {
 		t.Fatalf("open returned original=%#v", opened.Mechanical.Original)
 	}
+	if opened.Mechanical.GPS == nil || opened.Mechanical.GPS.HorizontalAccuracyMeters != 8 {
+		t.Fatalf("open GPS = %#v", opened.Mechanical.GPS)
+	}
+	if opened.Mechanical.Camera == nil || opened.Mechanical.Camera.Display != "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64" {
+		t.Fatalf("open camera = %#v", opened.Mechanical.Camera)
+	}
+	openedJSON, err := json.Marshal(opened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(openedJSON), `"source"`) {
+		t.Fatalf("open JSON leaked provenance source: %s", openedJSON)
+	}
 
 	classified, err := Classify(ctx, paths, ClassifyOptions{
 		All: true,
@@ -81,7 +94,7 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	openedJSON, err := json.Marshal(opened)
+	openedJSON, err = json.Marshal(opened)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,6 +206,11 @@ func (p *pathRecordingProvider) Snapshot(_ context.Context, path string) (photos
 func fakeSnapshot(changed, includeSecond bool) photos.LibrarySnapshot {
 	altitude := 12.5
 	accuracy := 8.25
+	focalLength := 6.86
+	focalLength35MM := 24.0
+	aperture := 1.8
+	shutterSpeed := 0.008333333333333333
+	iso := int64(64)
 	snapshot := photos.LibrarySnapshot{
 		Provider:            "fake",
 		PhotosVersion:       "fixture",
@@ -217,6 +235,16 @@ func fakeSnapshot(changed, includeSecond bool) photos.LibrarySnapshot {
 					Longitude:          4.9041,
 					Altitude:           &altitude,
 					HorizontalAccuracy: &accuracy,
+				},
+				Camera: &photos.Camera{
+					Make:            "Apple",
+					Model:           "iPhone 15 Pro",
+					LensModel:       "back camera",
+					FocalLengthMM:   &focalLength,
+					FocalLength35MM: &focalLength35MM,
+					Aperture:        &aperture,
+					ShutterSpeed:    &shutterSpeed,
+					ISO:             &iso,
 				},
 				Resources: []photos.Resource{
 					{Type: "photo", UTI: "public.heic", OriginalFilename: "Screenshot Beach Fixture.heic", Availability: "remote", NeedsDownload: true},

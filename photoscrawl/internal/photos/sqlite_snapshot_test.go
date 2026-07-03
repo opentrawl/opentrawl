@@ -45,6 +45,12 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if asset.Location == nil || asset.Location.Latitude != 52.3676 || asset.Location.Longitude != 4.9041 {
 		t.Fatalf("location = %#v", asset.Location)
 	}
+	if asset.Camera == nil || asset.Camera.Make != "Apple" || asset.Camera.Model != "iPhone 15 Pro" || asset.Camera.FocalLength35MM == nil || *asset.Camera.FocalLength35MM != 24 {
+		t.Fatalf("camera = %#v", asset.Camera)
+	}
+	if asset.Camera.Aperture == nil || *asset.Camera.Aperture != 1.8 || asset.Camera.ISO == nil || *asset.Camera.ISO != 64 {
+		t.Fatalf("camera exposure = %#v", asset.Camera)
+	}
 	if len(asset.Resources) != 1 || !asset.Resources[0].NeedsDownload || asset.Resources[0].Availability != "remote" {
 		t.Fatalf("resources = %#v", asset.Resources)
 	}
@@ -112,6 +118,17 @@ func createSyntheticPhotosDB(db *sql.DB) error {
 			ZGPSHORIZONTALACCURACY float,
 			ZORIGINALFILENAME varchar
 		)`,
+		`create table ZEXTENDEDATTRIBUTES (
+			ZASSET integer,
+			ZCAMERAMAKE varchar,
+			ZCAMERAMODEL varchar,
+			ZLENSMODEL varchar,
+			ZFOCALLENGTH float,
+			ZFOCALLENGTHIN35MM float,
+			ZAPERTURE float,
+			ZSHUTTERSPEED float,
+			ZISO float
+		)`,
 		`create table ZINTERNALRESOURCE (
 			ZASSET integer,
 			ZRESOURCETYPE integer,
@@ -149,6 +166,9 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 		return err
 	}
 	if _, err := db.Exec(`insert into ZADDITIONALASSETATTRIBUTES(ZASSET, ZTIMEZONENAME, ZGPSHORIZONTALACCURACY, ZORIGINALFILENAME) values (1, 'Europe/Amsterdam', 8.25, 'synthetic.heic')`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZCAMERAMAKE, ZCAMERAMODEL, ZLENSMODEL, ZFOCALLENGTH, ZFOCALLENGTHIN35MM, ZAPERTURE, ZSHUTTERSPEED, ZISO) values (1, 'Apple', 'iPhone 15 Pro', 'back camera', 6.86, 24, 1.8, 0.008333333333333333, 64)`); err != nil {
 		return err
 	}
 	if _, err := db.Exec(`insert into ZINTERNALRESOURCE(ZASSET, ZRESOURCETYPE, ZCOMPACTUTI, ZDATALENGTH, ZSTABLEHASH, ZFINGERPRINT, ZLOCALAVAILABILITY, ZREMOTEAVAILABILITY, ZVERSION) values (1, 0, 'public.heic', 12345, 'stable-hash', '', 0, 1, 1)`); err != nil {
