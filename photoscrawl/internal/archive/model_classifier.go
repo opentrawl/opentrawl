@@ -106,22 +106,36 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 			"kind":  album.AlbumKind,
 		})
 	}
+	media := map[string]any{
+		"kind":   openMediaType(input.MediaType),
+		"width":  input.Width,
+		"height": input.Height,
+	}
+	if subtypes := splitSubtypes(input.MediaSubtypes); len(subtypes) > 0 {
+		media["subtypes"] = subtypes
+	}
+	if input.DurationSeconds > 0 {
+		media["duration_seconds"] = input.DurationSeconds
+	}
+	library := map[string]any{
+		"original": input.originalContext(),
+	}
+	if len(albums) > 0 {
+		library["albums"] = albums
+	}
+	if input.Favorite {
+		library["favorite"] = true
+	}
+	if input.Hidden {
+		library["hidden"] = true
+	}
+	if strings.TrimSpace(input.BurstIdentifier) != "" {
+		library["burst_member"] = true
+	}
 	payload := map[string]any{
-		"capture": captureContext(input),
-		"media": map[string]any{
-			"kind":             openMediaType(input.MediaType),
-			"subtypes":         splitSubtypes(input.MediaSubtypes),
-			"width":            input.Width,
-			"height":           input.Height,
-			"duration_seconds": input.DurationSeconds,
-		},
-		"library_context": map[string]any{
-			"albums":       albums,
-			"favorite":     input.Favorite,
-			"hidden":       input.Hidden,
-			"burst_member": strings.TrimSpace(input.BurstIdentifier) != "",
-			"original":     input.originalContext(),
-		},
+		"capture":         captureContext(input),
+		"media":           media,
+		"library_context": library,
 	}
 	if input.HasLocation {
 		location := map[string]any{

@@ -47,6 +47,11 @@ Do not treat visible brands, appliance labels, product packaging, menu supplier
 names, or screen text as venue names unless the place context independently
 supports the same venue.
 
+Describe only what is visible. Never mention metadata, candidates, addresses,
+coordinates, or "the data" in the description — reconciling context belongs in
+the Location and Uncertainty sections, in one short clause at most. If a place
+candidate is inconsistent with the scene, ignore it silently.
+
 ## Venue plausibility
 
 Answer for the top provider venue candidate only. Use exactly these fields:

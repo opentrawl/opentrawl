@@ -131,6 +131,10 @@ func ShutterSpeedLabel(value float64) string {
 	if denominator <= 0 {
 		return ""
 	}
+	// Cameras shoot standard stops; 1/121 is a stored-float artifact of 1/120.
+	if denominator > 30 {
+		denominator = math.Round(denominator/5) * 5
+	}
 	return fmt.Sprintf("1/%.0fs", denominator)
 }
 

@@ -140,7 +140,7 @@ func displayTimezoneName(value string) string {
 
 func openMedia(asset map[string]any) *OpenMedia {
 	return &OpenMedia{
-		Kind:            openMediaType(rowString(asset, "media_type")),
+		Kind:            openMediaKind(rowString(asset, "media_type"), rowString(asset, "media_subtypes")),
 		Width:           rowInt(asset, "width"),
 		Height:          rowInt(asset, "height"),
 		DurationSeconds: rowFloat(asset, "duration_seconds"),
@@ -572,4 +572,25 @@ func mapFloat(row map[string]any, key string) float64 {
 	default:
 		return 0
 	}
+}
+
+// openMediaKind names what the file is in words: "live photo", "screenshot",
+// "panorama" say more than "photo" when Apple recorded the distinction.
+func openMediaKind(mediaType, subtypes string) string {
+	kind := openMediaType(mediaType)
+	for _, subtype := range splitSubtypes(subtypes) {
+		switch subtype {
+		case "live_photo":
+			return "live photo"
+		case "screenshot":
+			return "screenshot"
+		case "panorama":
+			return "panorama"
+		case "time_lapse":
+			return "time lapse"
+		case "slow_motion":
+			return "slow motion video"
+		}
+	}
+	return kind
 }
