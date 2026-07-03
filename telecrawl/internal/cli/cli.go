@@ -836,6 +836,9 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 		return nil, r.ambiguousWhoError(filter.Query, filter.Who, candidates)
 	}
 	candidate := candidates[0]
+	if candidate.MatchedOnlyByCloseSpelling() {
+		return nil, r.unknownWhoError(filter.Who, candidates)
+	}
 	filter.WhoParticipants = candidate.Participants
 	filter.WhoResolved = true
 	return &candidate, nil
