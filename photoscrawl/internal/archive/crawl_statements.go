@@ -78,10 +78,19 @@ insert into classification_queue(id, asset_id, source_library_id, state, reason,
 values (?, ?, ?, ?, ?, ?, ?)
 on conflict(asset_id) do update set
   source_library_id = excluded.source_library_id,
-  state = excluded.state,
-  reason = excluded.reason,
+  state = case
+    when classification_queue.state = 'failed_download' then classification_queue.state
+    else excluded.state
+  end,
+  reason = case
+    when classification_queue.state = 'failed_download' then classification_queue.reason
+    else excluded.reason
+  end,
   needs_download = excluded.needs_download,
-  updated_at = excluded.updated_at
+  updated_at = case
+    when classification_queue.state = 'failed_download' then classification_queue.updated_at
+    else excluded.updated_at
+  end
 `},
 		{&stmts.seen, `
 insert into crawl_seen_asset(source_library_id, asset_id, first_seen_snapshot_id, last_seen_snapshot_id, source_fingerprint, last_seen_at)

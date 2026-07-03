@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -89,18 +90,108 @@ type exportLock struct {
 
 func acquireExportLock(destinationPath string) (*exportLock, error) {
 	lockPath := filepath.Join(filepath.Dir(destinationPath), ".photokit-export.lock")
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		_ = file.Close()
-		if errno, ok := err.(syscall.Errno); ok && (errno == syscall.EWOULDBLOCK || errno == syscall.EAGAIN) {
-			return nil, ErrExportAlreadyRunning
+	removedStale := false
+	for {
+		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+		if err != nil {
+			return nil, err
 		}
-		return nil, err
+		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			_ = file.Close()
+			if exportLockWouldBlock(err) {
+				if !removedStale {
+					removed, removeErr := removeDeadExportLock(lockPath)
+					if removeErr != nil {
+						return nil, removeErr
+					}
+					if removed {
+						removedStale = true
+						continue
+					}
+				}
+				return nil, ErrExportAlreadyRunning
+			}
+			return nil, err
+		}
+		if err := writeExportLockOwner(file); err != nil {
+			_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+			_ = file.Close()
+			return nil, err
+		}
+		return &exportLock{file: file}, nil
 	}
-	return &exportLock{file: file}, nil
+}
+
+func exportLockWouldBlock(err error) bool {
+	errno, ok := err.(syscall.Errno)
+	return ok && (errno == syscall.EWOULDBLOCK || errno == syscall.EAGAIN)
+}
+
+func writeExportLockOwner(file *os.File) error {
+	if err := file.Truncate(0); err != nil {
+		return err
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(file, "%d\n", os.Getpid()); err != nil {
+		return err
+	}
+	return file.Sync()
+}
+
+func removeDeadExportLock(lockPath string) (bool, error) {
+	pid, ok, err := readExportLockOwner(lockPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	if !ok || processAlive(pid) {
+		return false, nil
+	}
+	currentPID, currentOK, err := readExportLockOwner(lockPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	if !currentOK || currentPID != pid || processAlive(currentPID) {
+		return false, nil
+	}
+	if err := os.Remove(lockPath); err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
+func readExportLockOwner(lockPath string) (int, bool, error) {
+	data, err := os.ReadFile(lockPath)
+	if err != nil {
+		return 0, false, err
+	}
+	text := strings.TrimSpace(string(data))
+	if text == "" {
+		return 0, false, nil
+	}
+	pid, err := strconv.Atoi(text)
+	if err != nil || pid <= 0 {
+		return 0, false, nil
+	}
+	return pid, true, nil
+}
+
+func processAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	err := syscall.Kill(pid, 0)
+	return err == nil || err == syscall.EPERM
 }
 
 func (l *exportLock) Close() {

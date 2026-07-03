@@ -331,7 +331,7 @@ func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
 	case contentOutcomeFailedModel:
 		return "content_failed", "failed_model: " + classifyFailureReason(write.contentErr)
 	case contentOutcomeFailedDownload:
-		return "content_failed", "failed_download: " + classifyFailureReason(write.downloadErr)
+		return "failed_download", "failed_download: " + classifyFailureReason(write.downloadErr)
 	case contentOutcomeNotInPhotoKit:
 		return "content_not_in_photokit", "PhotoKit asset not found"
 	case contentOutcomeNoContentAvailable:
