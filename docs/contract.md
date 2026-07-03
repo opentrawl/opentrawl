@@ -117,6 +117,11 @@ participants before any filtering:
   from generous matching (prefix, substring, close spellings); when
   nothing is close, a hint to search without `--who`. Exit 5.
 
+Close-spelling matches never count toward "exactly one": a name that
+only matches by spelling distance (a lone Dana for `--who dan`) is
+`unknown_who` with the suggestion, never an auto-resolve — explicit
+beats implicit. Exact, prefix and substring matches resolve.
+
 Resolution is generous; filtering is exact. An ambiguous name is
 never filtered across all its matches (v1.1's blend-and-report
 `who_matched` behaviour is removed). The same rule as short refs:
