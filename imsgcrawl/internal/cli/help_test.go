@@ -24,6 +24,7 @@ func TestHelpIsCligDevShaped(t *testing.T) {
 		{"doctor help", []string{"doctor", "--help"}, "Full Disk Access"},
 		{"chats help", []string{"chats", "--help"}, "--all"},
 		{"messages help", []string{"messages", "--help"}, "Default: 20"},
+		{"who help", []string{"who", "--help"}, "Resolve a name"},
 		{"search help", []string{"search", "--help"}, "Default: 20"},
 		{"open help", []string{"open", "--help"}, "bounded chat context"},
 		{"contacts help", []string{"contacts", "--help"}, "contacts export"},
@@ -46,6 +47,7 @@ func TestHelpIgnoresOtherCommandArguments(t *testing.T) {
 	for _, args := range [][]string{
 		{"chats", "--limit", "-1", "--help"},
 		{"messages", "--chat", "", "--limit", "0", "--help"},
+		{"who", "--help", "ignored"},
 		{"search", "--limit", "0", "--help"},
 		{"contacts", "export", "unexpected", "--help"},
 	} {

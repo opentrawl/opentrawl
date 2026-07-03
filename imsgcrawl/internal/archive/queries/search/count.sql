@@ -1,6 +1,8 @@
 {{WITH}}
 select count(*)
-from messages_fts
-join messages m on m.source_rowid = messages_fts.source_rowid
-where messages_fts match ?
+from messages m
+{{FTS_JOIN}}
+where 1 = 1
+{{FTS_FILTER}}
 {{WHO_FILTER}}
+{{TIME_FILTER}}

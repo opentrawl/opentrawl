@@ -137,6 +137,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runChats(args[1:])
 	case "messages":
 		return r.runMessages(args[1:])
+	case "who":
+		return r.runWho(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
 	case "open":

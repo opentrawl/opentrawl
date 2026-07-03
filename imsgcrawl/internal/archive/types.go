@@ -67,14 +67,17 @@ type MessageContext struct {
 }
 
 type SearchOptions struct {
-	Limit int
-	Who   string
+	Limit     int
+	Who       *WhoCandidate
+	After     int64
+	HasAfter  bool
+	Before    int64
+	HasBefore bool
 }
 
 type SearchPage struct {
-	Items      []SearchResult
-	Total      int64
-	WhoMatched []string
+	Items []SearchResult
+	Total int64
 }
 
 type SearchResult struct {
@@ -107,4 +110,24 @@ type ContactMapping struct {
 type OwnerHandle struct {
 	Kind             string
 	NormalizedHandle string
+}
+
+type WhoResolution struct {
+	Query        string         `json:"query"`
+	Candidates   []WhoCandidate `json:"candidates"`
+	Returned     int            `json:"returned"`
+	TotalMatches int            `json:"total_matches"`
+	Truncated    bool           `json:"truncated"`
+}
+
+type WhoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int64    `json:"messages"`
+
+	includeFromMe bool
+	handleRowIDs  []int64
+	lastSeenRaw   int64
+	matchRank     int
 }

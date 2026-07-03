@@ -16,7 +16,8 @@ Usage:
   imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
   imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
   imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
-  imsgcrawl [--archive PATH] search [--limit N] [--who NAME] QUERY [--json]
+  imsgcrawl [--archive PATH] who NAME [--json]
+  imsgcrawl [--archive PATH] search [--limit N] [--after TIME] [--before TIME] [--who NAME] [QUERY] [--json]
   imsgcrawl [--archive PATH] open REF [--json]
   imsgcrawl [--db PATH] contacts export [--json]
   imsgcrawl help COMMAND
@@ -88,15 +89,23 @@ Flags:
   --all       Print all messages for the chat.
   --asc       Show oldest messages first.
 `)
+	case "who":
+		_, _ = fmt.Fprint(w, `Usage:
+  imsgcrawl [--archive PATH] who NAME [--json]
+
+Resolve a name, alias or identifier fragment to archived participants.
+`)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  imsgcrawl [--archive PATH] search [--limit N] [--who NAME] QUERY [--json]
+  imsgcrawl [--archive PATH] search [--limit N] [--after TIME] [--before TIME] [--who NAME] [QUERY] [--json]
 
 Search archived message text.
 
 Flags:
-  --limit N   Maximum search results. Default: 20.
-  --who NAME  Only search messages where this stored participant name appears.
+  --limit N     Maximum search results. Default: 20.
+  --after TIME  Only messages at or after RFC3339 or YYYY-MM-DD.
+  --before TIME Only messages at or before RFC3339 or YYYY-MM-DD.
+  --who NAME    Resolve a person first, then filter by their exact identifiers.
 `)
 	case "open":
 		_, _ = fmt.Fprint(w, `Usage:

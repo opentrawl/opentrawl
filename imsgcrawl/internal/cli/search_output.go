@@ -7,8 +7,10 @@ import (
 )
 
 var searchValueFlags = map[string]bool{
-	"limit": true,
-	"who":   true,
+	"limit":  true,
+	"after":  true,
+	"before": true,
+	"who":    true,
 }
 
 func splitSearchFlagArgs(args []string) (flags, query []string) {
@@ -32,7 +34,7 @@ func splitSearchFlagArgs(args []string) (flags, query []string) {
 	return flags, query
 }
 
-func newSearchListOutput(query string, page archive.SearchPage, limit int, who string) searchListOutput {
+func newSearchListOutput(query string, page archive.SearchPage, limit int, filters searchOutputFilters) searchListOutput {
 	results := make([]searchResultOutput, 0, len(page.Items))
 	for _, item := range page.Items {
 		results = append(results, searchResultOutput{
@@ -49,9 +51,28 @@ func newSearchListOutput(query string, page archive.SearchPage, limit int, who s
 		TotalMatches: page.Total,
 		Truncated:    page.Total > int64(len(results)),
 		Limit:        limit,
-		Who:          strings.TrimSpace(who),
-		WhoMatched:   page.WhoMatched,
+		Who:          strings.TrimSpace(filters.WhoQuery),
+		WhoResolved:  newWhoResolvedOutput(filters.WhoResolved),
+		After:        strings.TrimSpace(filters.After),
+		Before:       strings.TrimSpace(filters.Before),
 		TextItems:    page.Items,
+	}
+}
+
+type searchOutputFilters struct {
+	WhoQuery    string
+	WhoResolved *archive.WhoCandidate
+	After       string
+	Before      string
+}
+
+func newWhoResolvedOutput(candidate *archive.WhoCandidate) *whoResolvedOutput {
+	if candidate == nil {
+		return nil
+	}
+	return &whoResolvedOutput{
+		Who:         candidate.Who,
+		Identifiers: append([]string{}, candidate.Identifiers...),
 	}
 }
 

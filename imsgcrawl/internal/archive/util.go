@@ -56,6 +56,11 @@ func AppleDateTime(value int64) time.Time {
 	return epoch.Add(time.Duration(value)).Local()
 }
 
+func AppleDateFromTime(value time.Time) int64 {
+	epoch := time.Date(2001, 1, 1, 0, 0, 0, 0, time.UTC)
+	return int64(value.UTC().Sub(epoch))
+}
+
 func FormatAppleDateTime(value int64) string {
 	if value <= 0 {
 		return ""

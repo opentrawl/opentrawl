@@ -24,6 +24,7 @@ func controlManifest() control.Manifest {
 		"doctor":         {Title: "Doctor", Argv: []string{"imsgcrawl", "doctor", "--json"}, JSON: true},
 		"chats":          {Title: "Chats", Argv: []string{"imsgcrawl", "chats", "--json"}, JSON: true},
 		"messages":       {Title: "Messages", Argv: []string{"imsgcrawl", "messages", "--json"}, JSON: true},
+		"who":            {Title: "Who", Argv: []string{"imsgcrawl", "who", "NAME", "--json"}, JSON: true},
 		"search":         {Title: "Search", Argv: []string{"imsgcrawl", "search", "QUERY", "--json"}, JSON: true},
 		"open":           {Title: "Open", Argv: []string{"imsgcrawl", "open", "REF", "--json"}, JSON: true},
 		"contact-export": {Title: "Export contacts", Argv: []string{"imsgcrawl", "contacts", "export", "--json"}, JSON: true},

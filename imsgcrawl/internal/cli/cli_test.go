@@ -481,7 +481,7 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}
-	for _, name := range []string{"sync", "doctor", "chats", "messages", "search", "open"} {
+	for _, name := range []string{"sync", "doctor", "chats", "messages", "who", "search", "open"} {
 		command, ok := manifest.Commands[name]
 		if !ok {
 			t.Fatalf("missing command %q in %#v", name, manifest.Commands)
@@ -498,6 +498,9 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	}
 	if !reflect.DeepEqual(manifest.Commands["open"].Argv, []string{"imsgcrawl", "open", "REF", "--json"}) {
 		t.Fatalf("open argv = %#v", manifest.Commands["open"].Argv)
+	}
+	if !reflect.DeepEqual(manifest.Commands["who"].Argv, []string{"imsgcrawl", "who", "NAME", "--json"}) {
+		t.Fatalf("who argv = %#v", manifest.Commands["who"].Argv)
 	}
 	for _, want := range []string{"message-archive", "message-text-search"} {
 		if !hasString(manifest.Privacy.LocalOnlyScopes, want) {

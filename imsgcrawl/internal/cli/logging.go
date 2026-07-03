@@ -249,6 +249,8 @@ func errorEvent(command string, err error) string {
 		return "chats_failed"
 	case "messages":
 		return "messages_failed"
+	case "who":
+		return "who_failed"
 	case "search":
 		return "search_failed"
 	case "open":

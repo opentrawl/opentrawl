@@ -311,41 +311,6 @@ func (r *runtime) runMessages(args []string) error {
 	})
 }
 
-func (r *runtime) runSearch(args []string) error {
-	if hasHelpFlag(args) {
-		return printCommandUsage(r.stdout, []string{"search"})
-	}
-	fs := flag.NewFlagSet("imsgcrawl search", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	limit := fs.Int("limit", defaultSearchLimit, "")
-	who := fs.String("who", "", "")
-	flagTokens, queryTokens := splitSearchFlagArgs(args)
-	if err := fs.Parse(flagTokens); err != nil {
-		return usageErr(err)
-	}
-	query := strings.TrimSpace(strings.Join(queryTokens, " "))
-	if query == "" {
-		return usageErr(errors.New("search query is required"))
-	}
-	if *limit <= 0 {
-		return usageErr(errors.New("search --limit must be positive"))
-	}
-	if *limit > maxListLimit {
-		return usageErr(fmt.Errorf("search --limit must be %d or less", maxListLimit))
-	}
-	whoValue := strings.Join(strings.Fields(*who), " ")
-	if flagPassed(fs, "who") && whoValue == "" {
-		return usageErr(errors.New("search --who requires an identity"))
-	}
-	return r.withArchive(func(st *archive.Store) error {
-		page, err := st.SearchPage(r.ctx, query, archive.SearchOptions{Limit: *limit, Who: whoValue})
-		if err != nil {
-			return err
-		}
-		return r.print(newSearchListOutput(query, page, *limit, whoValue))
-	})
-}
-
 func (r *runtime) withArchive(fn func(*archive.Store) error) error {
 	st, err := archive.OpenExisting(r.ctx, r.archivePath)
 	if err != nil {

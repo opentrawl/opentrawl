@@ -53,7 +53,27 @@ type searchListJSON struct {
 	Results      []searchResultJSON `json:"results"`
 	TotalMatches int64              `json:"total_matches"`
 	Truncated    bool               `json:"truncated"`
-	WhoMatched   []string           `json:"who_matched,omitempty"`
+	WhoResolved  *whoResolvedJSON   `json:"who_resolved,omitempty"`
+}
+
+type whoResolvedJSON struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+}
+
+type whoEnvelopeJSON struct {
+	Query        string         `json:"query"`
+	Candidates   []whoCandidate `json:"candidates"`
+	Returned     int            `json:"returned"`
+	TotalMatches int            `json:"total_matches"`
+	Truncated    bool           `json:"truncated"`
+}
+
+type whoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int64    `json:"messages"`
 }
 
 type searchResultJSON struct {
@@ -89,8 +109,13 @@ type openMessageJSON struct {
 
 type errorJSON struct {
 	Error struct {
-		Code    string `json:"code"`
-		Message string `json:"message"`
-		Remedy  string `json:"remedy"`
+		Code            string         `json:"code"`
+		Message         string         `json:"message"`
+		Remedy          string         `json:"remedy"`
+		Candidates      []whoCandidate `json:"candidates"`
+		CandidateTotal  int            `json:"candidate_total"`
+		DidYouMean      []whoCandidate `json:"did_you_mean"`
+		DidYouMeanTotal int            `json:"did_you_mean_total"`
+		Hint            string         `json:"hint"`
 	} `json:"error"`
 }

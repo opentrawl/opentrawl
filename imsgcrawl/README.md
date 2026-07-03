@@ -7,7 +7,7 @@ written_by: ai
 `imsgcrawl` is a local-first iMessage crawler. It reads Apple Messages through
 a temporary read-only SQLite snapshot, syncs a source-native archive, and gives
 humans or agents a small command surface for status, chat listing, transcript
-reading, search, and contact export.
+reading, person resolution, search, and contact export.
 
 The default output is for humans first and agents second: bounded, readable,
 and explicit about follow-up commands. Use `--json` for machines, scripts,
@@ -20,6 +20,7 @@ imsgcrawl status
 imsgcrawl sync
 imsgcrawl chats
 imsgcrawl messages --chat 42
+imsgcrawl who elon
 imsgcrawl search "candles budget"
 imsgcrawl open imsgcrawl:msg/8831
 imsgcrawl contacts export
@@ -40,7 +41,7 @@ Messages output.
 iMessage Crawl (imsgcrawl)
 Local-first iMessage archive crawler.
 
-Capabilities: metadata, status, sync, doctor, chats, messages, search, open, contact-export
+Capabilities: metadata, status, sync, doctor, chats, messages, search, who, short_refs, open, contact-export
 
 Agent-facing commands:
   status          imsgcrawl status --json
@@ -48,6 +49,7 @@ Agent-facing commands:
   doctor          imsgcrawl doctor --json
   chats           imsgcrawl chats --json
   messages        imsgcrawl messages --json
+  who             imsgcrawl who NAME --json
   search          imsgcrawl search QUERY --json
   open            imsgcrawl open REF --json
   contact-export  imsgcrawl contacts export --json
@@ -118,9 +120,20 @@ date              from        text
 
 ### Search
 
-`search` shows which conversation a hit came from and keeps the full matched
-text in the table. Use JSON when an agent or script needs refs for follow-up
-commands.
+`who` resolves a name, alias or identifier fragment to archived participants.
+Use it before a person-filtered search when a name may match more than one
+person.
+
+```text
+Who "elon": 1 candidates.
+who            identifiers  last seen         messages
+Failing Elon   +15550102    2026-06-07 09:11  3
+```
+
+`search` shows which conversation a hit came from and keeps the matched text in
+the table. `--who` resolves first, then filters by exact identifiers. A search
+query is optional when `--who`, `--after` or `--before` is present. Use JSON
+when an agent or script needs refs for follow-up commands.
 
 ```text
 Search "candles budget": showing 1 of 1.
@@ -130,6 +143,14 @@ Use --json when you need refs for follow-up commands.
 date              from  conversation                  text
 2026-06-07 09:10  me    Cabinet Group (Elon, JD,      The candles budget is CORRECT.
                          Xi, +1 more)
+```
+
+```text
+Failing Elon → Failing Elon
+Search filters: showing 2 of 3.
+More: imsgcrawl search --limit 3 --who "Failing Elon"
+Open: imsgcrawl open REF
+Use --json when you need refs for follow-up commands.
 ```
 
 ### Open
@@ -173,7 +194,9 @@ or feed it to crawlkit/CrawlBar-style consumers.
 imsgcrawl --json status
 imsgcrawl --json chats --limit 20
 imsgcrawl --json messages --chat 42 --limit 20
+imsgcrawl --json who elon
 imsgcrawl --json search --limit 20 "candles budget"
+imsgcrawl --json search --who "Failing Elon" --limit 20
 imsgcrawl --json open imsgcrawl:msg/8831
 imsgcrawl --json contacts export
 ```
@@ -194,6 +217,21 @@ Search JSON keeps the envelope small and parseable:
   ],
   "total_matches": 1,
   "truncated": false
+}
+```
+
+A resolved person search includes the exact identifiers used by the filter:
+
+```json
+{
+  "query": "",
+  "results": [],
+  "total_matches": 0,
+  "truncated": false,
+  "who_resolved": {
+    "who": "Failing Elon",
+    "identifiers": ["+15550102"]
+  }
 }
 ```
 

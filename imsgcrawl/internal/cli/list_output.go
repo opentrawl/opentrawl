@@ -41,10 +41,17 @@ type searchListOutput struct {
 	Results      []searchResultOutput   `json:"results"`
 	TotalMatches int64                  `json:"total_matches"`
 	Truncated    bool                   `json:"truncated"`
-	WhoMatched   []string               `json:"who_matched,omitempty"`
+	WhoResolved  *whoResolvedOutput     `json:"who_resolved,omitempty"`
 	Limit        int                    `json:"-"`
 	Who          string                 `json:"-"`
+	After        string                 `json:"-"`
+	Before       string                 `json:"-"`
 	TextItems    []archive.SearchResult `json:"-"`
+}
+
+type whoResolvedOutput struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
 }
 
 type searchResultOutput struct {

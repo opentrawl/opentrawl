@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
@@ -96,11 +98,11 @@ func TestSearchWhoFiltersSyncedNamesInArchiveQuery(t *testing.T) {
 	if filtered.TotalMatches != 2 || !filtered.Truncated || len(filtered.Results) != 1 {
 		t.Fatalf("filtered search envelope = %#v", filtered)
 	}
+	if filtered.WhoResolved == nil || filtered.WhoResolved.Who != "Robin Example" || !hasString(filtered.WhoResolved.Identifiers, "+15550100") {
+		t.Fatalf("filtered search who_resolved = %#v", filtered.WhoResolved)
+	}
 	if filtered.Results[0].Who != "Robin Example" || filtered.Results[0].Where != "Robin Example" || !strings.Contains(filtered.Results[0].Snippet, "phone dinner") {
 		t.Fatalf("filtered search result = %#v", filtered.Results[0])
-	}
-	if len(filtered.WhoMatched) != 0 {
-		t.Fatalf("unique who should not report ambiguity = %#v", filtered.WhoMatched)
 	}
 	if strings.Contains(filteredOut, "email dinner plan") || strings.Contains(filteredOut, "unmatched dinner plan") {
 		t.Fatalf("filtered search leaked unfiltered matches: %s", filteredOut)
@@ -114,6 +116,9 @@ func TestSearchWhoFiltersSyncedNamesInArchiveQuery(t *testing.T) {
 	if caseFiltered.TotalMatches != 2 || caseFiltered.Truncated || len(caseFiltered.Results) != 2 {
 		t.Fatalf("case-insensitive search = %#v", caseFiltered)
 	}
+	if caseFiltered.WhoResolved == nil || caseFiltered.WhoResolved.Who != "Robin Example" {
+		t.Fatalf("case-insensitive who_resolved = %#v", caseFiltered.WhoResolved)
+	}
 
 	rawOut := runOK(t, "--archive", archivePath, "--json", "search", "dinner", "--who", "+15550999")
 	var rawFiltered searchListJSON
@@ -123,9 +128,135 @@ func TestSearchWhoFiltersSyncedNamesInArchiveQuery(t *testing.T) {
 	if rawFiltered.TotalMatches != 1 || len(rawFiltered.Results) != 1 || rawFiltered.Results[0].Who != "+15550999" {
 		t.Fatalf("raw handle search = %#v", rawFiltered)
 	}
+	if rawFiltered.WhoResolved == nil || rawFiltered.WhoResolved.Who != "+15550999" || !hasString(rawFiltered.WhoResolved.Identifiers, "+15550999") {
+		t.Fatalf("raw handle who_resolved = %#v", rawFiltered.WhoResolved)
+	}
 }
 
-func TestSearchWhoMatchedDedupesMappedHandleVariants(t *testing.T) {
+func TestWhoCommandResolvesGenerouslyAndDedupesContacts(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createContactlessMessagesFixture(t, dbPath)
+	createAddressBookRowsFixture(t, addressBookPath, []string{
+		`insert into ZABCDRECORD(Z_PK, ZFIRSTNAME, ZLASTNAME, ZORGANIZATION) values (1, 'Özel', 'Example', '')`,
+		`insert into ZABCDPHONENUMBER(Z_PK, ZFULLNUMBER, ZCOUNTRYCODE, ZAREACODE, ZLOCALNUMBER, ZOWNER) values (1, '555-0100', '+1', '', '5550100', 1)`,
+		`insert into ZABCDEMAILADDRESS(Z_PK, ZADDRESS, ZOWNER) values (1, 'ALICE@EXAMPLE.COM', 1)`,
+	})
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runOK(t, "--archive", archivePath, "--json", "who", "ozel")
+	var payload whoEnvelopeJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("who json = %s err=%v", out, err)
+	}
+	if payload.Query != "ozel" || len(payload.Candidates) != 1 {
+		t.Fatalf("who payload = %#v", payload)
+	}
+	candidate := payload.Candidates[0]
+	if candidate.Who != "Özel Example" || candidate.Messages != 2 || candidate.LastSeen == "" {
+		t.Fatalf("who candidate = %#v", candidate)
+	}
+	if !hasString(candidate.Identifiers, "+15550100") || !hasString(candidate.Identifiers, "alice@example.com") {
+		t.Fatalf("who identifiers = %#v", candidate.Identifiers)
+	}
+
+	human := runOK(t, "--archive", archivePath, "who", "ozel")
+	conformance.AssertHumanOutput(t, human)
+	if !strings.Contains(human, "who") || !strings.Contains(human, "identifiers") || !strings.Contains(human, "Özel Example") {
+		t.Fatalf("who human output =\n%s", human)
+	}
+}
+
+func TestWhoCommandCloseSpelling(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createContactlessMessagesFixture(t, dbPath)
+	createAddressBookFixture(t, addressBookPath)
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runOK(t, "--archive", archivePath, "--json", "who", "Robyn")
+	var payload whoEnvelopeJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("who close json = %s err=%v", out, err)
+	}
+	if len(payload.Candidates) != 1 || payload.Candidates[0].Who != "Robin Example" {
+		t.Fatalf("close spelling candidates = %#v", payload.Candidates)
+	}
+}
+
+func TestSearchWhoUnknownReturnsContractError(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "search", "--who", "nobody here", "launch"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 5 {
+		t.Fatalf("unknown who err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	var payload errorJSON
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unknown error json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || payload.Error.Hint == "" {
+		t.Fatalf("unknown error = %#v", payload)
+	}
+	if strings.Contains(stdout.String(), "results") {
+		t.Fatalf("unknown search ran: %s", stdout.String())
+	}
+}
+
+func TestSearchFilterOnlyUsesNewestMatchesAndHonestTotals(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	after := archive.AppleDateTime(199).Format(time.RFC3339Nano)
+	before := archive.AppleDateTime(301).Format(time.RFC3339Nano)
+	out := runOK(t, "--archive", archivePath, "--json", "search", "--after", after, "--before", before, "--limit", "2")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("filter-only json = %s err=%v", out, err)
+	}
+	if payload.Query != "" || payload.TotalMatches != 3 || !payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("filter-only envelope = %#v", payload)
+	}
+	if !strings.Contains(payload.Results[0].Snippet, "group fallback row") || !strings.Contains(payload.Results[1].Snippet, "latest launch note") {
+		t.Fatalf("filter-only order = %#v", payload.Results)
+	}
+	conformance.AssertSearchEnvelope(t, []byte(out))
+
+	filtered := runOK(t, "--archive", archivePath, "--json", "search", "--who", "Most Recent Name", "--limit", "1")
+	var whoOnly searchListJSON
+	if err := json.Unmarshal([]byte(filtered), &whoOnly); err != nil {
+		t.Fatalf("who-only json = %s err=%v", filtered, err)
+	}
+	if whoOnly.Query != "" || whoOnly.WhoResolved == nil || whoOnly.TotalMatches != 2 || len(whoOnly.Results) != 1 {
+		t.Fatalf("who-only filter search = %#v", whoOnly)
+	}
+}
+
+func TestSearchWhoDedupesMappedHandleVariants(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "chat.db")
 	archivePath := filepath.Join(dir, "archive.db")
@@ -152,15 +283,15 @@ func TestSearchWhoMatchedDedupesMappedHandleVariants(t *testing.T) {
 	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
 		t.Fatalf("deduped search envelope = %#v", payload)
 	}
-	if len(payload.WhoMatched) != 0 {
-		t.Fatalf("mapped handle variants should not report ambiguity = %#v", payload.WhoMatched)
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "Shared Example" || !hasString(payload.WhoResolved.Identifiers, "+15550100") || !hasString(payload.WhoResolved.Identifiers, "0015550100") {
+		t.Fatalf("deduped who_resolved = %#v", payload.WhoResolved)
 	}
 	if !snippetsContain(payload.Results, "shared marker one") || !snippetsContain(payload.Results, "shared marker two") {
 		t.Fatalf("deduped search did not filter across both mapped handles = %#v", payload.Results)
 	}
 }
 
-func TestSearchWhoMatchedReportsDistinctUnmappedStoredNames(t *testing.T) {
+func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "chat.db")
 	archivePath := filepath.Join(dir, "archive.db")
@@ -168,19 +299,43 @@ func TestSearchWhoMatchedReportsDistinctUnmappedStoredNames(t *testing.T) {
 	makeSharedParticipantNameFixture(t, dbPath)
 	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
 
-	out := runOK(t, "--archive", archivePath, "--json", "search", "--who", "shared example", "shared")
-	var payload searchListJSON
-	if err := json.Unmarshal([]byte(out), &payload); err != nil {
-		t.Fatalf("ambiguous search json = %s err=%v", out, err)
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "search", "--who", "shared example", "shared"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 4 {
+		t.Fatalf("ambiguous search err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 	}
-	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
-		t.Fatalf("ambiguous search envelope = %#v", payload)
+	var payload errorJSON
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("ambiguous error json = %s err=%v", stdout.String(), err)
 	}
-	if len(payload.WhoMatched) != 2 || payload.WhoMatched[0] != "Shared Example" || payload.WhoMatched[1] != "Shared Example" {
-		t.Fatalf("who_matched = %#v, want two distinct stored participants", payload.WhoMatched)
+	if payload.Error.Code != "ambiguous_who" || len(payload.Error.Candidates) != 2 {
+		t.Fatalf("ambiguous error = %#v", payload)
 	}
-	if !snippetsContain(payload.Results, "shared marker one") || !snippetsContain(payload.Results, "shared marker two") {
-		t.Fatalf("ambiguous search did not filter across both participants = %#v", payload.Results)
+	if payload.Error.Candidates[0].Who != "Shared Example" || len(payload.Error.Candidates[0].Identifiers) == 0 {
+		t.Fatalf("ambiguous candidates = %#v", payload.Error.Candidates)
+	}
+	if strings.Contains(stdout.String(), "results") {
+		t.Fatalf("ambiguous search ran: %s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(context.Background(), []string{"--archive", archivePath, "search", "--who", "shared example", "shared"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 4 {
+		t.Fatalf("human ambiguous search err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("human ambiguous wrote stdout: %s", stdout.String())
+	}
+	for _, want := range []string{
+		`ambiguous_who: "shared example" matches more than one person.`,
+		"who",
+		"identifiers",
+		"Retry: imsgcrawl search --who",
+	} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Fatalf("human ambiguous stderr missing %q:\n%s", want, stderr.String())
+		}
 	}
 }
 
@@ -211,8 +366,8 @@ func TestSearchWhoDedupesOneContactWithPhoneAndEmail(t *testing.T) {
 	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
 		t.Fatalf("unicode search envelope = %#v", payload)
 	}
-	if len(payload.WhoMatched) != 0 {
-		t.Fatalf("one contact with two handles should not report ambiguity = %#v", payload.WhoMatched)
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "Özel Example" || !hasString(payload.WhoResolved.Identifiers, "+15550100") || !hasString(payload.WhoResolved.Identifiers, "alice@example.com") {
+		t.Fatalf("unicode who_resolved = %#v", payload.WhoResolved)
 	}
 	if !snippetsContain(payload.Results, "phone dinner plan") || !snippetsContain(payload.Results, "email dinner plan") {
 		t.Fatalf("unicode search did not filter across both contact handles = %#v", payload.Results)
@@ -248,6 +403,9 @@ func TestOwnerPhoneAndEmailHandlesFoldToMe(t *testing.T) {
 	}
 	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
 		t.Fatalf("owner search envelope = %#v", payload)
+	}
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "me" {
+		t.Fatalf("owner who_resolved = %#v", payload.WhoResolved)
 	}
 	if snippetsContain(payload.Results, "other dinner plan") {
 		t.Fatalf("owner search leaked non-owner row = %#v", payload.Results)

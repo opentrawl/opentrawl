@@ -23,9 +23,14 @@ type errorEnvelope struct {
 }
 
 type commandError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy"`
+	Code            string                  `json:"code"`
+	Message         string                  `json:"message"`
+	Remedy          string                  `json:"remedy"`
+	Candidates      []archive.WhoCandidate  `json:"candidates,omitempty"`
+	CandidateTotal  int                     `json:"candidate_total,omitempty"`
+	DidYouMean      *[]archive.WhoCandidate `json:"did_you_mean,omitempty"`
+	DidYouMeanTotal int                     `json:"did_you_mean_total,omitempty"`
+	Hint            string                  `json:"hint,omitempty"`
 }
 
 func (r *runtime) runOpen(args []string) error {

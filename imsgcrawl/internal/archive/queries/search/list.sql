@@ -21,8 +21,8 @@ select
   coalesce(c.display_name, ''),
   coalesce(pc.participants, 0),
   ''
-from messages_fts
-join messages m on m.source_rowid = messages_fts.source_rowid
+from messages m
+{{FTS_JOIN}}
 left join (
   select message_rowid, min(chat_rowid) as chat_rowid
   from chat_messages
@@ -35,7 +35,9 @@ left join (
   from chat_participants
   group by chat_rowid
 ) pc on pc.chat_rowid = cm.chat_rowid
-where messages_fts match ?
+where 1 = 1
+{{FTS_FILTER}}
 {{WHO_FILTER}}
-order by rank, cm.chat_rowid
+{{TIME_FILTER}}
+order by {{ORDER}}
 {{LIMIT}}
