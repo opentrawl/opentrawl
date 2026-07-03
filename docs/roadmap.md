@@ -199,4 +199,6 @@ glance. No settings maze.
 - all prose (docs, PRs, commits) follows plain-language style. Code must
   read as self-documenting or it does not merge.
 - verification over assertion: a crawler change is done when the
-  conformance harness passes against a real archive, not when it builds.
+  conformance harness passes against a real archive AND a
+  non-authoring model review of raw output transcripts passes the
+  blind-person bar — not when it builds.

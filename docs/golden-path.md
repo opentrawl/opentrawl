@@ -41,6 +41,8 @@ Enforces: contract first; one obvious way — the contract is the plugin
 API, and drift in one crawler taxes every consumer.
 
 - [ ] passes the conformance harness against a real archive
+- [ ] output changes reviewed adversarially by a non-authoring model
+      over raw transcripts, both output modes, trawl-rendered included
 - [ ] all required commands present, grammar `verb args --json`
       ([contract.md](contract.md))
 - [ ] metadata declares capabilities truthfully: no advertised verb

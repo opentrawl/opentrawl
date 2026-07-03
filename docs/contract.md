@@ -208,4 +208,7 @@ The conformance harness (this repo, phase 1) verifies a binary against
 this document: command grammar, JSON shapes, bounds, secret patterns,
 read-only reads, and behaviour on empty and corrupt archives. A crawler
 that passes is in the suite; one that does not is not. The harness is
-the contract's teeth — prose drifts, tests do not.
+the contract's tripwires — prose drifts, tests do not. The harness
+remembers known defect classes; it is not the quality gate. Output
+changes additionally pass an adversarial model review of raw
+transcripts (see vision.md engineering principles).

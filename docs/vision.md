@@ -55,9 +55,13 @@ The layers, bottom to top:
    surface: status across everything, sync anything, search across
    sources. One Mac app that shows the key per-crawler metrics and
    handles authorisation. No knobs.
-5. Derived layers (later): daily deltas, cross-source identity joins,
-   clustering and per-thing cards, life orientation. These build on the
-   substrate; they never reach around it into source databases. The
+5. Derived layers: daily deltas, cross-source identity joins,
+   clustering and per-thing cards, life orientation. The per-thing
+   card is no longer hypothetical — photoscrawl ships it (photo
+   cards: model prose over deterministic facts, generated through a
+   classification queue behind the provider seam) and is the working
+   template for the rest. Derived layers build on the substrate; they
+   never reach around it into source databases. The
    clustering and card mechanics OpenClaw already runs on maintainer
    data (clawsweeper, gitcrawl, discrawl) are the working prior art
    here; see below.
@@ -129,6 +133,19 @@ The bar for every line of code and every surface in this repo:
 - Go for crawlers and the CLI. Swift and SwiftUI for the Mac app.
 - Trunk-based development. Small logical commits on main. Speed over
   ceremony.
+- Facts and gates are deterministic; interpretation belongs to the
+  model. Code computes, stores and gate-checks mechanical truth (time,
+  GPS, geometry, thresholds); models own all reading of meaning,
+  phrasing and confidence of claims. Code never inspects model prose
+  to judge or route it — cognitive decisions are asked of the model
+  as structured answers and gated mechanically.
+- Deterministic checks are tripwires, not gates. Regex/conformance
+  checks only remember previously discovered defects. The gate for
+  any output-shape change is an adversarial review by a model that
+  did not author the change, over raw transcripts of every affected
+  permutation, judged against the blind-person bar (a reader who
+  cannot see the source understands every field, and nothing is
+  missing they would still have to ask about).
 - Test against real inputs and outputs. Agents and tests must exercise
   raw, unmodified, untruncated real data flows — never faked,
   abbreviated or hand-massaged fixtures for the paths that matter. This
@@ -230,11 +247,13 @@ One caution: what works for clawsweeper's units (one issue, one PR,
 one verdict) will not automatically fit other surfaces — a person or a
 relationship is not a pull request. Each surface's unit of clustering
 and carding gets evaluated and tested on real archives before we adopt
-it. And the judge does not have to be a frontier model: cheap,
-good-enough hosted models handle much of the derived work (the Photos
-classification evals are the working example), with frontier models
-reserved for the judgments that earn them — all behind the single
-provider seam.
+it. The Photos classification evals set the honest baseline here:
+card quality currently needs a frontier-tier hosted vision model
+(Gemini flash class won; cheap models hallucinated places and leaked
+metadata and were dropped). Local-first stays the default posture,
+but it trades card quality until local models pass the same
+grounding bar — measured by the eval harness, not assumed. All model
+access stays behind the single provider seam.
 
 ## Non-goals for v1
 
