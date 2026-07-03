@@ -7,6 +7,9 @@
 #import <dispatch/dispatch.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut);
 
 static NSString *pcString(NSString *value) {
   return value == nil ? @"" : value;
@@ -230,6 +233,180 @@ static PHAssetResource *pcPreferredOriginalResource(PHAsset *asset) {
   return bestRank < 100 ? best : nil;
 }
 
+static NSString *pcIdentifierUUID(NSString *identifier) {
+  NSString *trimmed = [identifier stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (trimmed.length < 36) {
+    return @"";
+  }
+  NSString *candidate = [[trimmed substringToIndex:36] uppercaseString];
+  NSCharacterSet *hex = [NSCharacterSet characterSetWithCharactersInString:@"0123456789ABCDEF"];
+  for (NSUInteger i = 0; i < candidate.length; i++) {
+    unichar ch = [candidate characterAtIndex:i];
+    if (i == 8 || i == 13 || i == 18 || i == 23) {
+      if (ch != '-') {
+        return @"";
+      }
+      continue;
+    }
+    if (![hex characterIsMember:ch]) {
+      return @"";
+    }
+  }
+  return candidate;
+}
+
+static NSDictionary *pcAssetIdentifierIndex(void) {
+  static NSDictionary *index = nil;
+  static dispatch_once_t onceToken;
+  dispatch_once(&onceToken, ^{
+    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    PHFetchOptions *options = [[PHFetchOptions alloc] init];
+    options.includeHiddenAssets = YES;
+    options.wantsIncrementalChangeDetails = NO;
+    if (@available(macOS 10.15, *)) {
+      options.includeAllBurstAssets = YES;
+    }
+    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];
+    [fetch enumerateObjectsUsingBlock:^(PHAsset *asset, NSUInteger idx, BOOL *stop) {
+      NSString *uuid = pcIdentifierUUID(asset.localIdentifier);
+      if (uuid.length > 0 && out[uuid] == nil) {
+        out[uuid] = pcString(asset.localIdentifier);
+      }
+    }];
+    index = [out copy];
+  });
+  return index;
+}
+
+static PHAsset *pcFetchAssetForIdentifier(NSString *identifier) {
+  PHFetchResult<PHAsset *> *direct = [PHAsset fetchAssetsWithLocalIdentifiers:@[identifier] options:nil];
+  if (direct.firstObject != nil) {
+    return direct.firstObject;
+  }
+  NSString *uuid = pcIdentifierUUID(identifier);
+  if (uuid.length == 0) {
+    return nil;
+  }
+  NSString *fullIdentifier = [pcAssetIdentifierIndex() objectForKey:uuid];
+  if (fullIdentifier.length == 0) {
+    return nil;
+  }
+  PHFetchResult<PHAsset *> *resolved = [PHAsset fetchAssetsWithLocalIdentifiers:@[fullIdentifier] options:nil];
+  return resolved.firstObject;
+}
+
+static NSDate *pcParseDate(NSString *value) {
+  NSString *trimmed = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (trimmed.length == 0) {
+    return nil;
+  }
+  NSISO8601DateFormatter *formatter = [[NSISO8601DateFormatter alloc] init];
+  formatter.timeZone = [NSTimeZone timeZoneWithName:@"UTC"];
+  formatter.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+  NSDate *date = [formatter dateFromString:trimmed];
+  if (date != nil) {
+    return date;
+  }
+  formatter.formatOptions = NSISO8601DateFormatWithInternetDateTime;
+  return [formatter dateFromString:trimmed];
+}
+
+static BOOL pcAssetHasOriginalFilename(PHAsset *asset, NSString *filename) {
+  NSString *trimmed = [filename stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (trimmed.length == 0) {
+    return YES;
+  }
+  for (PHAssetResource *resource in [PHAssetResource assetResourcesForAsset:asset]) {
+    if ([pcString(resource.originalFilename) caseInsensitiveCompare:trimmed] == NSOrderedSame) {
+      return YES;
+    }
+  }
+  return NO;
+}
+
+static PHAsset *pcFetchAssetByMetadata(NSString *creationDate, long long width, long long height, NSString *originalFilename) {
+  NSDate *targetDate = pcParseDate(creationDate);
+  BOOL hasDate = targetDate != nil;
+  BOOL hasSize = width > 0 && height > 0;
+  NSString *filename = [originalFilename stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (!hasDate && !hasSize && filename.length == 0) {
+    return nil;
+  }
+
+  PHFetchOptions *options = [[PHFetchOptions alloc] init];
+  options.includeHiddenAssets = YES;
+  options.wantsIncrementalChangeDetails = NO;
+  if (@available(macOS 10.15, *)) {
+    options.includeAllBurstAssets = YES;
+  }
+  PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];
+  __block PHAsset *filenameMatch = nil;
+  __block PHAsset *uniqueShapeMatch = nil;
+  __block NSUInteger shapeMatches = 0;
+  [fetch enumerateObjectsUsingBlock:^(PHAsset *asset, NSUInteger idx, BOOL *stop) {
+    if (hasSize && ((long long)asset.pixelWidth != width || (long long)asset.pixelHeight != height)) {
+      return;
+    }
+    if (hasDate) {
+      if (asset.creationDate == nil || fabs([asset.creationDate timeIntervalSinceDate:targetDate]) > 2.0) {
+        return;
+      }
+    }
+    shapeMatches++;
+    if (shapeMatches == 1) {
+      uniqueShapeMatch = asset;
+    } else {
+      uniqueShapeMatch = nil;
+    }
+    if (pcAssetHasOriginalFilename(asset, filename)) {
+      filenameMatch = asset;
+      *stop = YES;
+    }
+  }];
+  if (filenameMatch != nil) {
+    return filenameMatch;
+  }
+  if (shapeMatches == 1) {
+    return uniqueShapeMatch;
+  }
+  return nil;
+}
+
+static int pcWriteOriginalResource(PHAsset *asset, NSString *path, int allowNetwork, char **errorOut) {
+  if (asset == nil) {
+    pcSetError(errorOut, @"PhotoKit asset not found");
+    return 0;
+  }
+  PHAssetResource *resource = pcPreferredOriginalResource(asset);
+  if (resource == nil) {
+    pcSetError(errorOut, @"PhotoKit asset has no image original resource");
+    return 0;
+  }
+
+  NSURL *destination = [NSURL fileURLWithPath:path];
+  if (!pcEnsureParentDirectory(destination, errorOut)) {
+    return 0;
+  }
+  [[NSFileManager defaultManager] removeItemAtURL:destination error:nil];
+
+  PHAssetResourceRequestOptions *options = [[PHAssetResourceRequestOptions alloc] init];
+  options.networkAccessAllowed = allowNetwork ? YES : NO;
+
+  __block NSError *writeError = nil;
+  dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
+  [[PHAssetResourceManager defaultManager] writeDataForAssetResource:resource toFile:destination options:options completionHandler:^(NSError * _Nullable error) {
+    writeError = error;
+    dispatch_semaphore_signal(semaphore);
+  }];
+  dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+
+  if (writeError != nil) {
+    pcSetError(errorOut, [NSString stringWithFormat:@"export original resource: %@", writeError.localizedDescription]);
+    return 0;
+  }
+  return 1;
+}
+
 static NSArray *pcAlbums(PHAsset *asset) {
   NSMutableArray *out = [NSMutableArray array];
   PHFetchResult<PHAssetCollection *> *collections = [PHAssetCollection fetchAssetCollectionsContainingAsset:asset withType:PHAssetCollectionTypeAlbum options:nil];
@@ -348,6 +525,10 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
 }
 
 int photoscrawl_export_original_resource(const char *localIdentifier, const char *destinationPath, int allowNetwork, char **errorOut) {
+  return photoscrawl_export_original_resource_matching(localIdentifier, "", 0, 0, "", destinationPath, allowNetwork, errorOut);
+}
+
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {
       *errorOut = NULL;
@@ -358,6 +539,8 @@ int photoscrawl_export_original_resource(const char *localIdentifier, const char
     }
 
     NSString *identifier = localIdentifier == NULL ? @"" : [NSString stringWithUTF8String:localIdentifier];
+    NSString *created = creationDate == NULL ? @"" : [NSString stringWithUTF8String:creationDate];
+    NSString *filename = originalFilename == NULL ? @"" : [NSString stringWithUTF8String:originalFilename];
     NSString *path = destinationPath == NULL ? @"" : [NSString stringWithUTF8String:destinationPath];
     if (identifier.length == 0 || path.length == 0) {
       pcSetError(errorOut, @"asset identifier and destination path are required");
@@ -370,40 +553,11 @@ int photoscrawl_export_original_resource(const char *localIdentifier, const char
       return 0;
     }
 
-    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithLocalIdentifiers:@[identifier] options:nil];
-    PHAsset *asset = fetch.firstObject;
+    PHAsset *asset = pcFetchAssetForIdentifier(identifier);
     if (asset == nil) {
-      pcSetError(errorOut, @"PhotoKit asset not found");
-      return 0;
+      asset = pcFetchAssetByMetadata(created, width, height, filename);
     }
-    PHAssetResource *resource = pcPreferredOriginalResource(asset);
-    if (resource == nil) {
-      pcSetError(errorOut, @"PhotoKit asset has no image original resource");
-      return 0;
-    }
-
-    NSURL *destination = [NSURL fileURLWithPath:path];
-    if (!pcEnsureParentDirectory(destination, errorOut)) {
-      return 0;
-    }
-    [[NSFileManager defaultManager] removeItemAtURL:destination error:nil];
-
-    PHAssetResourceRequestOptions *options = [[PHAssetResourceRequestOptions alloc] init];
-    options.networkAccessAllowed = allowNetwork ? YES : NO;
-
-    __block NSError *writeError = nil;
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    [[PHAssetResourceManager defaultManager] writeDataForAssetResource:resource toFile:destination options:options completionHandler:^(NSError * _Nullable error) {
-      writeError = error;
-      dispatch_semaphore_signal(semaphore);
-    }];
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-
-    if (writeError != nil) {
-      pcSetError(errorOut, [NSString stringWithFormat:@"export original resource: %@", writeError.localizedDescription]);
-      return 0;
-    }
-    return 1;
+    return pcWriteOriginalResource(asset, path, allowNetwork, errorOut);
   }
 }
 

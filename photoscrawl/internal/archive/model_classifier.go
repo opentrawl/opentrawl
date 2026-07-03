@@ -4,8 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,7 @@ const (
 type modelClassifier struct {
 	modelID       string
 	promptVersion string
+	baseURL       string
 	client        *modelclient.Client
 }
 
@@ -29,6 +31,7 @@ func newModelClassifier(modelID, baseURL, bearerKeyEnv string) modelClassifier {
 	return modelClassifier{
 		modelID:       strings.TrimSpace(modelID),
 		promptVersion: modelPromptVersion,
+		baseURL:       modelclient.NormalizeBaseURL(baseURL),
 		client: modelclient.New(modelclient.Config{
 			BaseURL:      baseURL,
 			Model:        modelID,
@@ -52,10 +55,6 @@ func (c modelClassifier) classify(ctx context.Context, imagePath string) (modelR
 		Temperature: 0.1,
 	})
 	if err != nil {
-		var httpErr *modelclient.HTTPError
-		if errors.As(err, &httpErr) {
-			return modelResult{}, fmt.Errorf("model returned %s", httpErr.Status)
-		}
 		return modelResult{}, err
 	}
 	payload, err := parseModelPayload(response.Text)
@@ -69,6 +68,19 @@ func (c modelClassifier) classify(ctx context.Context, imagePath string) (modelR
 		ImageSHA256:  hex.EncodeToString(sum[:]),
 		Observations: observationsFromPayload(payload),
 	}, nil
+}
+
+func (c modelClassifier) remote() bool {
+	parsed, err := url.Parse(strings.TrimSpace(c.baseURL))
+	if err != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if host == "" || host == "localhost" {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip == nil || !ip.IsLoopback()
 }
 
 func (input classifyInput) contentImagePath() (string, bool) {

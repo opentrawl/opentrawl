@@ -31,6 +31,7 @@ type ClassifyResult struct {
 	ModelID                       string `json:"model_id"`
 	InputVersion                  string `json:"input_version"`
 	Limit                         int    `json:"limit"`
+	ElapsedMillis                 int64  `json:"elapsed_millis"`
 	Processed                     int    `json:"processed"`
 	MetadataClassified            int    `json:"metadata_classified"`
 	WaitingForLocalContent        int    `json:"waiting_for_local_content"`
@@ -40,9 +41,23 @@ type ClassifyResult struct {
 	ContentClassified             int    `json:"content_classified"`
 	ContentObservationsWritten    int    `json:"content_observations_written"`
 	ContentClassificationFailures int    `json:"content_classification_failures"`
+	OriginalsDownloaded           int    `json:"originals_downloaded"`
+	OriginalDownloadFailures      int    `json:"original_download_failures"`
+	OriginalDownloadMillis        int64  `json:"original_download_millis"`
+	ModelCallAttempts             int    `json:"model_call_attempts"`
+	ModelCallMillis               int64  `json:"model_call_millis"`
+	ModelConcurrencyStart         int    `json:"model_concurrency_start,omitempty"`
+	ModelConcurrencyPeak          int    `json:"model_concurrency_peak,omitempty"`
+	ModelConcurrencyFinal         int    `json:"model_concurrency_final,omitempty"`
+	ModelRateLimitEvents          int    `json:"model_rate_limit_events"`
+	ModelTransientErrorEvents     int    `json:"model_transient_error_events"`
+	CacheMaxBytes                 int64  `json:"cache_max_bytes,omitempty"`
+	CacheHighWaterBytes           int64  `json:"cache_high_water_bytes,omitempty"`
+	BytesDownloaded               int64  `json:"bytes_downloaded"`
 }
 
 func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {
+	startedAt := time.Now()
 	now := opts.Now
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
@@ -127,51 +142,10 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 				return ClassifyResult{}, err
 			}
 		}
-		return result, nil
+		return finishClassifyResult(startedAt, result), nil
 	}
-	for _, input := range inputs {
-		var contentResult *modelResult
-		var contentErr error
-		imagePath, hasImage := input.contentImagePath()
-		if classifier != nil && hasImage {
-			modelResult, err := classifier.classify(ctx, imagePath)
-			if err != nil {
-				contentErr = err
-			} else {
-				contentResult = &modelResult
-			}
-		}
-
-		err := db.WithTx(ctx, func(tx *sql.Tx) error {
-			observations := classifyFromMetadata(input)
-			written, err := writeMetadataClassification(ctx, tx, input, observations, now().UTC(), true)
-			if err != nil {
-				return err
-			}
-			result.Processed++
-			result.MetadataClassified++
-			result.MetadataObservationsWritten += written
-			if !input.hasLocalContent() {
-				result.WaitingForLocalContent++
-			}
-			if classifier == nil || !hasImage {
-				return nil
-			}
-			if contentErr != nil {
-				result.ContentClassificationFailures++
-				return updateClassificationQueue(ctx, tx, input.QueueID, "content_failed", truncateReason(contentErr.Error()), now().UTC())
-			}
-			contentWritten, err := writeModelClassification(ctx, tx, input, *classifier, *contentResult, now().UTC())
-			if err != nil {
-				return err
-			}
-			result.ContentClassified++
-			result.ContentObservationsWritten += contentWritten
-			return nil
-		})
-		if err != nil {
-			return ClassifyResult{}, err
-		}
+	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result); err != nil {
+		return ClassifyResult{}, err
 	}
 	if classifier != nil {
 		err := db.WithTx(ctx, func(tx *sql.Tx) error {
@@ -181,5 +155,10 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 			return ClassifyResult{}, err
 		}
 	}
-	return result, nil
+	return finishClassifyResult(startedAt, result), nil
+}
+
+func finishClassifyResult(startedAt time.Time, result ClassifyResult) ClassifyResult {
+	result.ElapsedMillis = time.Since(startedAt).Milliseconds()
+	return result
 }

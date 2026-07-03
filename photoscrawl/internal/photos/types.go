@@ -49,6 +49,14 @@ type Resource struct {
 	Metadata         map[string]any `json:"metadata,omitempty"`
 }
 
+type OriginalExportQuery struct {
+	LocalIdentifier  string
+	CreationDate     string
+	Width            int64
+	Height           int64
+	OriginalFilename string
+}
+
 type AlbumMembership struct {
 	AlbumID    string `json:"album_id"`
 	AlbumTitle string `json:"album_title"`

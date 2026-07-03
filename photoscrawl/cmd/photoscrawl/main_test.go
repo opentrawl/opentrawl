@@ -152,6 +152,29 @@ func TestSearchHumanOutputIsProse(t *testing.T) {
 	)
 }
 
+func TestSearchHumanOutputOmitsEmptyWhoWhere(t *testing.T) {
+	var out strings.Builder
+	err := printSearchText(&out, archive.SearchResult{
+		Query:        "image",
+		TotalMatches: 1,
+		Results: []archive.SearchHit{{
+			Ref:     "photoscrawl:asset/fixture",
+			Time:    "2026-05-28T12:00:00+02:00",
+			Snippet: "image",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"2026-05-28T12:00:00+02:00 | photoscrawl:asset/fixture",
+	)
+	if strings.Contains(got, " |  | ") {
+		t.Fatalf("human search output kept empty who/where fields:\n%s", got)
+	}
+}
+
 func TestDoctorHumanOutputIsProse(t *testing.T) {
 	dir := t.TempDir()
 	libraryPath := filepath.Join(dir, "Fixture Photos Library.photoslibrary")
@@ -211,6 +234,34 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 		"Evidence refs: 1",
 		"scene summary: Synthetic beach scene",
 	)
+}
+
+func TestEvidenceHumanOutputUsesPlainLabels(t *testing.T) {
+	var out strings.Builder
+	err := printEvidenceText(&out, archive.EvidenceResult{
+		Ref: "photoscrawl:asset/fixture",
+		Evidence: []archive.EvidenceReference{{
+			Ref:      "photoscrawl:fixture-evidence",
+			Kind:     "classification input",
+			KindID:   "classification_input",
+			Source:   "Photo metadata",
+			SourceID: "archive_metadata",
+			Summary:  "derived from photo metadata",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"Photo metadata",
+		"derived from photo metadata",
+	)
+	for _, raw := range []string{"archive_metadata", "classification_input"} {
+		if strings.Contains(got, raw) {
+			t.Fatalf("human evidence output leaked raw provenance %q:\n%s", raw, got)
+		}
+	}
 }
 
 func captureRunOutput(t *testing.T, args []string) (string, string, error) {
