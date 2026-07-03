@@ -58,9 +58,11 @@ func classifyFromMetadata(input classifyInput) []visualObservation {
 	return dedupeVisualObservations(out)
 }
 
-func writeMetadataClassification(ctx context.Context, tx *sql.Tx, input classifyInput, observations []visualObservation, classifiedAt time.Time) (int, error) {
-	if err := clearMetadataObservations(ctx, tx, input.AssetID); err != nil {
-		return 0, err
+func writeMetadataClassification(ctx context.Context, tx *sql.Tx, input classifyInput, observations []visualObservation, classifiedAt time.Time, clearExisting bool) (int, error) {
+	if clearExisting {
+		if err := clearMetadataObservations(ctx, tx, input.AssetID); err != nil {
+			return 0, err
+		}
 	}
 	evidenceID := stableID("evidence", input.AssetID, "classification_input", metadataClassifierSource, metadataClassifierInputVersion)
 	evidenceJSON, err := jsonText(map[string]any{
@@ -146,20 +148,65 @@ func clearMetadataObservations(ctx context.Context, tx *sql.Tx, assetID string) 
 	if strings.TrimSpace(assetID) == "" {
 		return errors.New("asset id is required")
 	}
+	return clearMetadataObservationsForAssets(ctx, tx, []string{assetID})
+}
+
+func clearMetadataObservationsForInputs(ctx context.Context, tx *sql.Tx, inputs []classifyInput) error {
+	assetIDs := make([]string, 0, len(inputs))
+	seen := map[string]bool{}
+	for _, input := range inputs {
+		assetID := strings.TrimSpace(input.AssetID)
+		if assetID == "" {
+			return errors.New("asset id is required")
+		}
+		if seen[assetID] {
+			continue
+		}
+		seen[assetID] = true
+		assetIDs = append(assetIDs, assetID)
+	}
+	return clearMetadataObservationsForAssets(ctx, tx, assetIDs)
+}
+
+func clearMetadataObservationsForAssets(ctx context.Context, tx *sql.Tx, assetIDs []string) error {
+	if len(assetIDs) == 0 {
+		return nil
+	}
+	for start := 0; start < len(assetIDs); start += metadataClassificationBatchSize {
+		end := start + metadataClassificationBatchSize
+		if end > len(assetIDs) {
+			end = len(assetIDs)
+		}
+		if err := clearMetadataObservationsForAssetBatch(ctx, tx, assetIDs[start:end]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func clearMetadataObservationsForAssetBatch(ctx context.Context, tx *sql.Tx, assetIDs []string) error {
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(assetIDs)), ",")
+	args := []any{metadataClassifierSource, metadataClassifierModelID}
+	for _, assetID := range assetIDs {
+		args = append(args, assetID)
+	}
 	if _, err := tx.ExecContext(ctx, `
 delete from observation_fts
-where asset_id = ?
-  and id in (
+where id in (
     select id from visual_observation
-    where asset_id = ? and source = ? and model_id = ?
+    where source = ? and model_id = ? and asset_id in (`+placeholders+`)
   )
-`, assetID, assetID, metadataClassifierSource, metadataClassifierModelID); err != nil {
+`, args...); err != nil {
 		return fmt.Errorf("clear metadata observation fts: %w", err)
+	}
+	args = []any{metadataClassifierSource, metadataClassifierModelID}
+	for _, assetID := range assetIDs {
+		args = append(args, assetID)
 	}
 	if _, err := tx.ExecContext(ctx, `
 delete from visual_observation
-where asset_id = ? and source = ? and model_id = ?
-`, assetID, metadataClassifierSource, metadataClassifierModelID); err != nil {
+where source = ? and model_id = ? and asset_id in (`+placeholders+`)
+`, args...); err != nil {
 		return fmt.Errorf("clear metadata visual observations: %w", err)
 	}
 	return nil

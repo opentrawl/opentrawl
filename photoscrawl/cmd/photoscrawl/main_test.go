@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -53,6 +54,13 @@ func TestParseRefCommandRequiresRefBeforeFlags(t *testing.T) {
 	}
 	if neighbors.Limit != 5 {
 		t.Fatalf("parsed neighbors = %#v", neighbors)
+	}
+}
+
+func TestExportAlreadyRunningErrorIsStructured(t *testing.T) {
+	got := normaliseError(errors.New("photokit export already running"))
+	if got.Code != "export_already_running" || !strings.Contains(got.Remedy, "wait for the other eval-card run") {
+		t.Fatalf("normaliseError = %#v", got)
 	}
 }
 

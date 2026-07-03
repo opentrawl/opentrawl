@@ -18,6 +18,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"syscall"
 	"unsafe"
 )
 
@@ -30,9 +31,19 @@ func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPat
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return err
 	}
+	lock, err := acquireExportLock(destinationPath)
+	if err != nil {
+		return err
+	}
+	defer lock.Close()
+
+	tempDestination := destinationPath + ".exporting"
+	_ = os.Remove(tempDestination)
+	defer os.Remove(tempDestination)
+
 	cIdentifier := C.CString(localIdentifier)
 	defer C.free(unsafe.Pointer(cIdentifier))
-	cDestination := C.CString(destinationPath)
+	cDestination := C.CString(tempDestination)
 	defer C.free(unsafe.Pointer(cDestination))
 
 	var cErr *C.char
@@ -44,7 +55,38 @@ func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPat
 	if ok == 0 {
 		return errors.New("export original resource failed")
 	}
+	if err := os.Rename(tempDestination, destinationPath); err != nil {
+		return err
+	}
 	return nil
+}
+
+type exportLock struct {
+	file *os.File
+}
+
+func acquireExportLock(destinationPath string) (*exportLock, error) {
+	lockPath := filepath.Join(filepath.Dir(destinationPath), ".photokit-export.lock")
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = file.Close()
+		if errno, ok := err.(syscall.Errno); ok && (errno == syscall.EWOULDBLOCK || errno == syscall.EAGAIN) {
+			return nil, ErrExportAlreadyRunning
+		}
+		return nil, err
+	}
+	return &exportLock{file: file}, nil
+}
+
+func (l *exportLock) Close() {
+	if l == nil || l.file == nil {
+		return
+	}
+	_ = syscall.Flock(int(l.file.Fd()), syscall.LOCK_UN)
+	_ = l.file.Close()
 }
 
 func RenderCanonicalJPEG(ctx context.Context, sourcePath, destinationPath string, quality float64) error {

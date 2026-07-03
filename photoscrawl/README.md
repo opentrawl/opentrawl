@@ -31,7 +31,7 @@ go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
 go run ./cmd/photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 go run ./cmd/photoscrawl classify --limit 100 --json
-go run ./cmd/photoscrawl classify --local-model gemma4:e4b --limit 20 --json
+go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search "drone beach portugal" --json
 go run ./cmd/photoscrawl open photoscrawl:asset/<uuid> --json
 go run ./cmd/photoscrawl neighbors photoscrawl:asset/<uuid> --json
@@ -60,8 +60,8 @@ content classification can use local files without changing Photos or iCloud
 state. Every imported asset is queued for `classify`.
 
 `classify` drains that queue into evidence-backed local metadata observations.
-With `--local-model <ollama-model>`, it also sends already-local image bytes to a
-local Ollama vision model and stores typed candidate observations:
+With `--model <ollama-model>`, it also sends already-local image bytes to an
+Ollama-API vision model and stores typed candidate observations:
 scene summaries, visible-text summaries, place-type/name/venue candidates,
 objects/foods, anonymous people presence, privacy hints, cluster terms, and
 uncertainties. These are evidence-backed model observations, not durable
@@ -102,7 +102,7 @@ sync/classify commands do not force iCloud downloads.
 
 ## Current Useful Output
 
-Today the POC sees useful source facts and optional local multimodal observations:
+Today the POC sees useful source facts and optional model observations:
 
 - asset timing, media type, dimensions, favorite/hidden state, timezone, and
   burst metadata;
@@ -112,7 +112,7 @@ Today the POC sees useful source facts and optional local multimodal observation
 - metadata-only observations for media type, local content availability,
   geometry, burst membership, resource UTI/type, and weak
   screenshot/document/receipt candidates from filenames, albums, and metadata;
-- optional local model observations from already-local image derivatives or
+- optional model observations from already-local image derivatives or
   originals, plus normalized terms for search and later clustering;
 - quality observations for model failures such as prompt leakage;
 - status coverage counts for GPS, observations, local resources, remote

@@ -10,18 +10,19 @@ import (
 )
 
 const (
-	metadataClassifierSource       = "archive_metadata"
-	metadataClassifierModelID      = "photoscrawl.archive-metadata.v1"
-	metadataClassifierInputVersion = "asset-resource-album.v1"
+	metadataClassifierSource        = "archive_metadata"
+	metadataClassifierModelID       = "photoscrawl.archive-metadata.v1"
+	metadataClassifierInputVersion  = "asset-resource-album.v1"
+	metadataClassificationBatchSize = 500
 )
 
 type ClassifyOptions struct {
-	All              bool
-	Limit            int
-	LocalModel       string
-	LocalModelURL    string
-	LocalModelKeyEnv string
-	Now              func() time.Time
+	All         bool
+	Limit       int
+	Model       string
+	ModelURL    string
+	ModelKeyEnv string
+	Now         func() time.Time
 }
 
 type ClassifyResult struct {
@@ -34,7 +35,7 @@ type ClassifyResult struct {
 	MetadataClassified            int    `json:"metadata_classified"`
 	WaitingForLocalContent        int    `json:"waiting_for_local_content"`
 	VisualObservationsWritten     int    `json:"visual_observations_written"`
-	LocalModel                    string `json:"local_model,omitempty"`
+	Model                         string `json:"model,omitempty"`
 	ModelRunID                    string `json:"model_run_id,omitempty"`
 	ContentClassified             int    `json:"content_classified"`
 	ContentObservationsWritten    int    `json:"content_observations_written"`
@@ -73,15 +74,15 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		InputVersion: metadataClassifierInputVersion,
 		Limit:        limit,
 	}
-	localModel := strings.TrimSpace(opts.LocalModel)
-	var classifier *localModelClassifier
-	if localModel != "" {
-		localClassifier := newLocalModelClassifier(localModel, opts.LocalModelURL, opts.LocalModelKeyEnv)
-		classifier = &localClassifier
-		result.Classifier = metadataClassifierSource + "+" + localModelClassifierSource
-		result.ModelID = localModel
-		result.LocalModel = localModel
-		result.ModelRunID = stableID("model_run", localModelClassifierSource, localModel, localModelPromptVersion, now().UTC().Format(time.RFC3339Nano))
+	modelID := strings.TrimSpace(opts.Model)
+	var classifier *modelClassifier
+	if modelID != "" {
+		modelClassifier := newModelClassifier(modelID, opts.ModelURL, opts.ModelKeyEnv)
+		classifier = &modelClassifier
+		result.Classifier = metadataClassifierSource + "+" + modelClassifierSource
+		result.ModelID = modelID
+		result.Model = modelID
+		result.ModelRunID = stableID("model_run", modelClassifierSource, modelID, modelPromptVersion, now().UTC().Format(time.RFC3339Nano))
 	}
 
 	var inputs []classifyInput
@@ -96,8 +97,40 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	if err != nil {
 		return ClassifyResult{}, err
 	}
+	if classifier == nil {
+		for start := 0; start < len(inputs); start += metadataClassificationBatchSize {
+			end := start + metadataClassificationBatchSize
+			if end > len(inputs) {
+				end = len(inputs)
+			}
+			batch := inputs[start:end]
+			err := db.WithTx(ctx, func(tx *sql.Tx) error {
+				if err := clearMetadataObservationsForInputs(ctx, tx, batch); err != nil {
+					return err
+				}
+				for _, input := range batch {
+					observations := classifyFromMetadata(input)
+					written, err := writeMetadataClassification(ctx, tx, input, observations, now().UTC(), false)
+					if err != nil {
+						return err
+					}
+					result.Processed++
+					result.MetadataClassified++
+					result.VisualObservationsWritten += written
+					if !input.hasLocalContent() {
+						result.WaitingForLocalContent++
+					}
+				}
+				return nil
+			})
+			if err != nil {
+				return ClassifyResult{}, err
+			}
+		}
+		return result, nil
+	}
 	for _, input := range inputs {
-		var contentResult *localModelResult
+		var contentResult *modelResult
 		var contentErr error
 		imagePath, hasImage := input.contentImagePath()
 		if classifier != nil && hasImage {
@@ -111,7 +144,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 
 		err := db.WithTx(ctx, func(tx *sql.Tx) error {
 			observations := classifyFromMetadata(input)
-			written, err := writeMetadataClassification(ctx, tx, input, observations, now().UTC())
+			written, err := writeMetadataClassification(ctx, tx, input, observations, now().UTC(), true)
 			if err != nil {
 				return err
 			}
@@ -128,7 +161,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 				result.ContentClassificationFailures++
 				return updateClassificationQueue(ctx, tx, input.QueueID, "content_failed", truncateReason(contentErr.Error()), now().UTC())
 			}
-			contentWritten, err := writeLocalModelClassification(ctx, tx, input, *classifier, *contentResult, now().UTC())
+			contentWritten, err := writeModelClassification(ctx, tx, input, *classifier, *contentResult, now().UTC())
 			if err != nil {
 				return err
 			}

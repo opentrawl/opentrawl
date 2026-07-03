@@ -36,7 +36,7 @@ func ControlManifest(paths Paths) Manifest {
 			"sqlite",
 			"media-metadata",
 			"location-observations",
-			"local-model-observations",
+			"model-observations",
 		},
 	}
 	manifest.Commands = map[string]control.Command{
