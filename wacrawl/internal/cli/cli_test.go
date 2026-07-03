@@ -922,6 +922,75 @@ func TestSearchWhoResolutionLineUsesCleanCanonicalName(t *testing.T) {
 	}
 }
 
+func TestSearchAndOpenRenderCanonicalSenderWho(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "alice@s.whatsapp.net", Phone: "+15550101", FullName: "Alice Example", LID: "alice-lid"},
+		{JID: "junk@s.whatsapp.net", Phone: "+15550102"},
+	}
+	chats := []store.Chat{
+		{JID: "alice@s.whatsapp.net", Kind: "dm", LastMessageAt: now, MessageCount: 1},
+		{JID: "junk@s.whatsapp.net", Kind: "dm", LastMessageAt: now.Add(time.Minute), MessageCount: 1},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", MessageID: "contact-clean", SenderJID: "alice-lid@lid", SenderName: "IAA=", Timestamp: now, RawType: 0, MessageType: "text", Text: "contactneedle"},
+		{SourcePK: 2, ChatJID: "junk@s.whatsapp.net", MessageID: "junk-phone", SenderJID: "junk@s.whatsapp.net", SenderName: "IAA=", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "junkneedle"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	assertSearchAndOpenWho := func(query, want string) {
+		t.Helper()
+		var stdout, stderr bytes.Buffer
+		if err := Run(ctx, []string{"--db", dbPath, "--json", "search", query}, &stdout, &stderr); err != nil {
+			t.Fatalf("search %q error = %v stderr=%s", query, err, stderr.String())
+		}
+		var search searchEnvelope
+		if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
+			t.Fatalf("search %q json = %s err=%v", query, stdout.String(), err)
+		}
+		if len(search.Results) != 1 || search.Results[0].Who != want {
+			t.Fatalf("search %q results = %#v, want who %q", query, search.Results, want)
+		}
+		if strings.Contains(stdout.String(), "IAA=") {
+			t.Fatalf("search %q rendered junk sender name:\n%s", query, stdout.String())
+		}
+
+		ref := search.Results[0].Ref
+		stdout.Reset()
+		stderr.Reset()
+		if err := Run(ctx, []string{"--db", dbPath, "--json", "open", ref}, &stdout, &stderr); err != nil {
+			t.Fatalf("open %q error = %v stderr=%s", ref, err, stderr.String())
+		}
+		var opened openEnvelope
+		if err := json.Unmarshal(stdout.Bytes(), &opened); err != nil {
+			t.Fatalf("open %q json = %s err=%v", ref, stdout.String(), err)
+		}
+		if opened.Message.Who != want {
+			t.Fatalf("open %q message who = %q, want %q", ref, opened.Message.Who, want)
+		}
+		if len(opened.Context) == 0 || opened.Context[0].Who != want {
+			t.Fatalf("open %q context = %#v, want first who %q", ref, opened.Context, want)
+		}
+		if strings.Contains(stdout.String(), "IAA=") {
+			t.Fatalf("open %q rendered junk sender name:\n%s", ref, stdout.String())
+		}
+	}
+
+	assertSearchAndOpenWho("contactneedle", "Alice Example")
+	assertSearchAndOpenWho("junkneedle", "+15550102")
+}
+
 func TestWhoCommandResolvesDedupedGenerousCandidates(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
