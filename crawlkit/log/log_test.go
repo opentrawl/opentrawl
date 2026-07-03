@@ -291,6 +291,87 @@ func TestConcurrentRotationKeepsSharedLogWellFormed(t *testing.T) {
 	}
 }
 
+func TestFinishEventIsReservedForRunFinish(t *testing.T) {
+	run := newTestRunWithOptions(t, Options{
+		StateRoot: t.TempDir(),
+		CrawlerID: "crawl",
+		RunID:     "reserved-finish-run",
+		Command:   "status",
+		Version:   "0.4.1",
+		Commit:    "8f3c2d",
+		Platform:  "macos 15",
+		Debug:     true,
+		Now:       func() time.Time { return fixedTime() },
+	})
+	writers := map[string]func() error{
+		"info":  func() error { return run.Info("finish", "outcome=succeeded") },
+		"warn":  func() error { return run.Warn("finish", "outcome=succeeded") },
+		"debug": func() error { return run.Debug("finish", "outcome=succeeded") },
+		"error": func() error { return run.Error("finish", errors.New("boom")) },
+	}
+	for name, write := range writers {
+		t.Run(name, func(t *testing.T) {
+			err := write()
+			if err == nil || !strings.Contains(err.Error(), "reserved") {
+				t.Fatalf("err=%v, want reserved finish event error", err)
+			}
+		})
+	}
+	if err := run.Finish(nil); err != nil {
+		t.Fatal(err)
+	}
+	logText := strings.Join(readLogLines(t, run.Path()), "\n")
+	if strings.Contains(logText, "succeeded") {
+		t.Fatalf("caller-provided finish outcome reached log:\n%s", logText)
+	}
+	summary, ok, err := NewReaderForTest(t, run).LastRun(run.RunID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || summary.Outcome != "success" {
+		t.Fatalf("summary outcome = %q ok=%v, want success", summary.Outcome, ok)
+	}
+}
+
+func TestReaderCanonicalizesFinishOutcome(t *testing.T) {
+	cases := []struct {
+		name    string
+		level   Level
+		outcome string
+		want    string
+	}{
+		{name: "legacy succeeded", level: LevelInfo, outcome: "succeeded", want: "success"},
+		{name: "legacy failed", level: LevelInfo, outcome: "failed", want: "error"},
+		{name: "unknown info finish", level: LevelInfo, outcome: "done", want: "success"},
+		{name: "unknown error finish", level: LevelError, outcome: "done", want: "error"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			run := newTestRunWithOptions(t, Options{
+				StateRoot: t.TempDir(),
+				CrawlerID: "crawl",
+				RunID:     strings.ReplaceAll(tc.name, " ", "-"),
+				Command:   "status",
+				Version:   "0.4.1",
+				Commit:    "8f3c2d",
+				Platform:  "macos 15",
+				Now:       func() time.Time { return fixedTime() },
+			})
+			line := run.formatLine(fixedTime().Add(time.Second), tc.level, run.RunID(), "status", "finish", "outcome="+tc.outcome)
+			if err := run.appendLogLine(line); err != nil {
+				t.Fatal(err)
+			}
+			summary, ok, err := NewReaderForTest(t, run).LastRun(run.RunID())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !ok || summary.Outcome != tc.want {
+				t.Fatalf("summary outcome = %q ok=%v, want %q", summary.Outcome, ok, tc.want)
+			}
+		})
+	}
+}
+
 func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	now := fixedTime()
 	var human bytes.Buffer
