@@ -63,7 +63,9 @@ type EvidenceResult struct {
 type EvidenceReference struct {
 	Ref      string `json:"ref"`
 	Kind     string `json:"kind"`
+	KindID   string `json:"kind_id,omitempty"`
 	Source   string `json:"source,omitempty"`
+	SourceID string `json:"source_id,omitempty"`
 	AssetRef string `json:"asset_ref,omitempty"`
 	Summary  string `json:"summary,omitempty"`
 }
@@ -113,17 +115,35 @@ func openAlbums(rows []map[string]any) []OpenAlbum {
 
 func openResources(rows []map[string]any) []OpenResource {
 	out := []OpenResource{}
+	seen := map[string]bool{}
 	for _, row := range rows {
-		out = append(out, OpenResource{
+		resource := OpenResource{
 			Type:                  rowString(row, "resource_type"),
 			Filename:              rowString(row, "original_filename"),
 			UniformTypeIdentifier: rowString(row, "uti"),
 			Bytes:                 rowInt(row, "file_size"),
 			AvailableLocally:      rowBool(row, "available_locally"),
 			NeedsDownload:         rowBool(row, "needs_download"),
-		})
+		}
+		key := openResourceKey(resource)
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, resource)
 	}
 	return out
+}
+
+func openResourceKey(resource OpenResource) string {
+	return strings.Join([]string{
+		resource.Type,
+		resource.Filename,
+		resource.UniformTypeIdentifier,
+		strconv.FormatInt(resource.Bytes, 10),
+		strconv.FormatBool(resource.AvailableLocally),
+		strconv.FormatBool(resource.NeedsDownload),
+	}, "\x00")
 }
 
 func openObservations(metadataRows, textRows, faceRows, modelRows []map[string]any) []OpenObservation {
@@ -214,32 +234,83 @@ func openEvidenceRefs(rows []map[string]any) []EvidenceReference {
 	out := []EvidenceReference{}
 	for _, row := range rows {
 		ref := photoscrawlRef(rowString(row, "id"))
-		kind := strings.TrimSpace(rowString(row, "evidence_kind"))
-		if ref == "" || kind == "" {
+		kindID := strings.TrimSpace(rowString(row, "evidence_kind"))
+		if ref == "" || kindID == "" {
 			continue
 		}
-		source := strings.TrimSpace(rowString(row, "source"))
+		sourceID := strings.TrimSpace(rowString(row, "source"))
 		out = append(out, EvidenceReference{
 			Ref:      ref,
-			Kind:     kind,
-			Source:   source,
+			Kind:     evidenceKindLabel(kindID),
+			KindID:   kindID,
+			Source:   evidenceSourceLabel(sourceID),
+			SourceID: sourceID,
 			AssetRef: photoscrawlRef(rowString(row, "asset_id")),
-			Summary:  evidenceSummary(kind, source),
+			Summary:  evidenceSummary(kindID, sourceID),
 		})
 	}
 	return out
 }
 
-func evidenceSummary(kind, source string) string {
-	kind = strings.ReplaceAll(strings.TrimSpace(kind), "_", " ")
-	source = strings.TrimSpace(source)
+func evidenceKindLabel(kind string) string {
+	kind = strings.TrimSpace(kind)
 	if kind == "" {
 		return ""
 	}
-	if source == "" {
-		return kind
+	switch kind {
+	case "asset_metadata":
+		return "asset metadata"
+	case "asset_resource":
+		return "asset resource"
+	case "album_membership":
+		return "album membership"
+	case "classification_input":
+		return "classification input"
+	case "content_classification":
+		return "content classification"
+	default:
+		return strings.ReplaceAll(kind, "_", " ")
 	}
-	return kind + " from " + source
+}
+
+func evidenceSourceLabel(source string) string {
+	source = strings.TrimSpace(source)
+	if source == "" {
+		return ""
+	}
+	switch source {
+	case "photos_sqlite_snapshot":
+		return "Photos library database"
+	case metadataClassifierSource:
+		return "Photo metadata"
+	default:
+		return strings.ReplaceAll(source, "_", " ")
+	}
+}
+
+func evidenceSummary(kind, source string) string {
+	switch strings.TrimSpace(kind) {
+	case "asset_metadata":
+		return "details from the Photos library database"
+	case "asset_resource":
+		return "file resource details from the Photos library database"
+	case "album_membership":
+		return "album membership from the Photos library database"
+	case "classification_input":
+		return "derived from photo metadata"
+	case "content_classification":
+		return "derived from model analysis"
+	default:
+		kindLabel := evidenceKindLabel(kind)
+		sourceLabel := evidenceSourceLabel(source)
+		if kindLabel == "" {
+			return ""
+		}
+		if sourceLabel == "" {
+			return kindLabel
+		}
+		return kindLabel + " from " + sourceLabel
+	}
 }
 
 func rowString(row map[string]any, key string) string {
