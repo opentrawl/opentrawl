@@ -8,12 +8,28 @@ struct ClawdexContact: Codable {
     let full_name: String
     let emails: [String]
     let phones: [String]
+    let addresses: [ClawdexAddress]
     let avatar_data: Data?
+}
+
+struct ClawdexAddress: Codable {
+    let value: String
+    let label: String
 }
 
 func fail(_ message: String) -> Never {
     FileHandle.standardError.write(Data((message + "\n").utf8))
     exit(1)
+}
+
+func clawdexLabel(_ label: String?) -> String {
+    if label == CNLabelHome {
+        return "home"
+    }
+    if label == CNLabelWork {
+        return "work"
+    }
+    return "other"
 }
 
 let store = CNContactStore()
@@ -50,6 +66,7 @@ let keys: [CNKeyDescriptor] = [
     CNContactOrganizationNameKey as CNKeyDescriptor,
     CNContactEmailAddressesKey as CNKeyDescriptor,
     CNContactPhoneNumbersKey as CNKeyDescriptor,
+    CNContactPostalAddressesKey as CNKeyDescriptor,
     CNContactThumbnailImageDataKey as CNKeyDescriptor,
 ]
 
@@ -60,7 +77,16 @@ do {
     try store.enumerateContacts(with: request) { contact, _ in
         let emails = contact.emailAddresses.map { String($0.value) }.filter { !$0.isEmpty }
         let phones = contact.phoneNumbers.map { $0.value.stringValue }.filter { !$0.isEmpty }
-        guard !emails.isEmpty || !phones.isEmpty else { return }
+        let formatter = CNPostalAddressFormatter()
+        let addresses = contact.postalAddresses.compactMap { labeled -> ClawdexAddress? in
+            let value = formatter.string(from: labeled.value)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if value.isEmpty {
+                return nil
+            }
+            return ClawdexAddress(value: value, label: clawdexLabel(labeled.label))
+        }
+        guard !emails.isEmpty || !phones.isEmpty || !addresses.isEmpty else { return }
 
         var fullName = CNContactFormatter.string(from: contact, style: .fullName) ?? ""
         if fullName.isEmpty {
@@ -75,6 +101,7 @@ do {
             full_name: fullName,
             emails: emails,
             phones: phones,
+            addresses: addresses,
             avatar_data: contact.thumbnailImageData
         )
         if let data = try? encoder.encode(row),

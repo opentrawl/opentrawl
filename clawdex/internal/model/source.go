@@ -7,6 +7,7 @@ type SourceContact struct {
 	Tags       []string            `json:"tags,omitempty"`
 	Emails     []ContactValue      `json:"emails,omitempty"`
 	Phones     []ContactValue      `json:"phones,omitempty"`
+	Addresses  []ContactValue      `json:"addresses,omitempty"`
 	Avatar     *SourceAvatar       `json:"avatar,omitempty"`
 	Accounts   map[string][]string `json:"accounts,omitempty"`
 	ETag       string              `json:"etag,omitempty"`

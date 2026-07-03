@@ -15,6 +15,7 @@ import (
 type WhoCandidate struct {
 	Who          string
 	Identifiers  []string
+	Addresses    []model.ContactValue
 	Sources      []string
 	LastSeen     string
 	MatchQuality string
@@ -131,6 +132,7 @@ func resolvePersonCandidate(person model.Person, indexed []identifierKey, query 
 	return WhoCandidate{
 		Who:          person.Name,
 		Identifiers:  matchCandidate.Identifiers,
+		Addresses:    append([]model.ContactValue(nil), person.Addresses...),
 		Sources:      resolverSources(person),
 		LastSeen:     lastSeen,
 		MatchQuality: rank.String(),

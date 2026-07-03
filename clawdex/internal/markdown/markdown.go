@@ -222,6 +222,7 @@ type personFront struct {
 	Tags      []string                      `yaml:"tags,omitempty"`
 	Emails    []model.ContactValue          `yaml:"emails,omitempty"`
 	Phones    []model.ContactValue          `yaml:"phones,omitempty"`
+	Addresses []model.ContactValue          `yaml:"addresses,omitempty"`
 	Avatar    *model.AvatarRef              `yaml:"avatar,omitempty"`
 	Accounts  map[string][]string           `yaml:"accounts,omitempty"`
 	Sources   map[string]model.PersonSource `yaml:"sources,omitempty"`
@@ -240,6 +241,7 @@ func personFrontmatter(p model.Person) personFront {
 		Tags:      p.Tags,
 		Emails:    p.Emails,
 		Phones:    p.Phones,
+		Addresses: p.Addresses,
 		Avatar:    nonEmptyAvatar(p.Avatar),
 		Accounts:  nonEmptyAccounts(p.Accounts),
 		Sources:   nonEmptySources(p.Sources),
@@ -259,6 +261,7 @@ func personFromFrontmatter(front personFront) model.Person {
 		Tags:      front.Tags,
 		Emails:    front.Emails,
 		Phones:    front.Phones,
+		Addresses: front.Addresses,
 		Accounts:  front.Accounts,
 		Sources:   front.Sources,
 		CreatedAt: front.CreatedAt,

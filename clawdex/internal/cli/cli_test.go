@@ -221,6 +221,14 @@ func TestExecuteWhoJSONMatchesContractAndTrawlInvocation(t *testing.T) {
 			t.Fatalf("identifiers missing %q: %#v", want, candidate.Identifiers)
 		}
 	}
+	for _, identifier := range candidate.Identifiers {
+		if strings.Contains(strings.ToLower(identifier), "baker") {
+			t.Fatalf("address leaked into identifiers: %#v", candidate.Identifiers)
+		}
+	}
+	if len(candidate.Addresses) != 1 || candidate.Addresses[0].Value != "221B Baker Street\nLondon" || candidate.Addresses[0].Label != "home" {
+		t.Fatalf("addresses = %#v", candidate.Addresses)
+	}
 	if !reflect.DeepEqual(candidate.Sources, []string{"telecrawl", "wacrawl"}) {
 		t.Fatalf("sources = %#v", candidate.Sources)
 	}
@@ -260,6 +268,9 @@ func TestExecuteWhoHumanUsesWidthFittedTable(t *testing.T) {
 			t.Fatalf("who output missing %q:\n%s", want, out.String())
 		}
 	}
+	if strings.Contains(out.String(), "Baker Street") {
+		t.Fatalf("who human output listed address:\n%s", out.String())
+	}
 	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
 		if len([]rune(line)) > 72 {
 			t.Fatalf("line exceeds COLUMNS=72 (%d): %q\n%s", len([]rune(line)), line, out.String())
@@ -295,12 +306,13 @@ type whoEnvelopeForTest struct {
 }
 
 type whoCandidateForTest struct {
-	Who          string   `json:"who"`
-	Identifiers  []string `json:"identifiers"`
-	Sources      []string `json:"sources"`
-	LastSeen     string   `json:"last_seen"`
-	MatchQuality string   `json:"match_quality"`
-	Identity     string   `json:"identity"`
+	Who          string               `json:"who"`
+	Identifiers  []string             `json:"identifiers"`
+	Addresses    []model.ContactValue `json:"addresses"`
+	Sources      []string             `json:"sources"`
+	LastSeen     string               `json:"last_seen"`
+	MatchQuality string               `json:"match_quality"`
+	Identity     string               `json:"identity"`
 }
 
 func decodeWhoEnvelopeForTest(t *testing.T, data []byte) whoEnvelopeForTest {
@@ -330,6 +342,13 @@ emails:
   - value: alice@example.com
 phones:
   - value: "+1 555 0100"
+addresses:
+  - value: |-
+      221B Baker Street
+      London
+    label: home
+    source: apple
+    primary: true
 accounts:
   telegram:
     - alice_handle
@@ -873,6 +892,7 @@ func TestSourceContactsFromExportMapsPhones(t *testing.T) {
 		DisplayName:  "Ada",
 		PhoneNumbers: []string{"123", "456"},
 		Emails:       []string{"ada@example.com"},
+		Addresses:    []string{"1 Main Street\nLondon"},
 		Accounts:     map[string][]string{"telegram": {"ada"}},
 		Handles:      map[string][]string{"github": {"ada-gh"}},
 	}}})
@@ -880,7 +900,7 @@ func TestSourceContactsFromExportMapsPhones(t *testing.T) {
 		t.Fatalf("contacts = %#v", contacts)
 	}
 	got := contacts[0]
-	if got.Source != "telecrawl" || got.Name != "Ada" || len(got.Phones) != 2 || len(got.Emails) != 1 {
+	if got.Source != "telecrawl" || got.Name != "Ada" || len(got.Phones) != 2 || len(got.Emails) != 1 || len(got.Addresses) != 1 {
 		t.Fatalf("mapped contact = %#v", got)
 	}
 	if !got.Phones[0].Primary || got.Phones[1].Primary {
@@ -888,6 +908,9 @@ func TestSourceContactsFromExportMapsPhones(t *testing.T) {
 	}
 	if got.Phones[1].Value != "456" || got.Phones[1].Source != "telecrawl" {
 		t.Fatalf("second phone = %#v", got.Phones[1])
+	}
+	if got.Addresses[0].Value != "1 Main Street\nLondon" || got.Addresses[0].Label != "other" || got.Addresses[0].Source != "telecrawl" || !got.Addresses[0].Primary {
+		t.Fatalf("addresses = %#v", got.Addresses)
 	}
 	if got.Accounts["telegram"][0] != "ada" || got.Accounts["github"][0] != "ada-gh" {
 		t.Fatalf("accounts = %#v", got.Accounts)

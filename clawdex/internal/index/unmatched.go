@@ -172,10 +172,12 @@ func unmatchedContactLine(contact model.SourceContact) string {
 		return ""
 	}
 	accounts := flattenedAccounts(contact.Accounts)
+	addresses := unmatchedAddressValues(contact.Addresses)
 	return "- source=" + strconv.Quote(source) +
 		" name=" + strconv.Quote(name) +
 		" phones=" + quoteList(contactValues(contact.Phones, model.NormalizePhone)) +
 		" emails=" + quoteList(contactValues(contact.Emails, model.NormalizeEmail)) +
+		" addresses=" + quoteList(addresses) +
 		" accounts=" + quoteList(accounts)
 }
 
@@ -285,6 +287,22 @@ func contactValues(values []model.ContactValue, normalize func(string) string) [
 		}
 		seen[key] = true
 		out = append(out, key)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func unmatchedAddressValues(values []model.ContactValue) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]bool{}
+	for _, value := range values {
+		key := model.NormalizeAddress(value.Value)
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		address := strings.Join(strings.Fields(strings.ReplaceAll(value.Value, "\n", " / ")), " ")
+		out = append(out, address)
 	}
 	sort.Strings(out)
 	return out

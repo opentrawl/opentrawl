@@ -49,6 +49,10 @@ func NormalizePhone(phone string) string {
 	return stripCountryCodeTrunkZero(out)
 }
 
+func NormalizeAddress(address string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(address)), " "))
+}
+
 func stripCountryCodeTrunkZero(phone string) string {
 	for _, countryCode := range trunkZeroCountryCodes {
 		prefix := countryCode + "0"

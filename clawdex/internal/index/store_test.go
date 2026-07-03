@@ -421,6 +421,54 @@ func TestImportMatchesEmail(t *testing.T) {
 	}
 }
 
+func TestAppleImportMergesMissingAddressesOnly(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC)
+	p, err := s.AddPerson("Ada Lovelace", []string{"ada@example.com"}, nil, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.Addresses = []model.ContactValue{{Value: "1 Existing Street\nLondon", Label: "home", Source: "manual", Primary: true}}
+	if err := markdown.WritePerson(p.Path, p); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rebuild(); err != nil {
+		t.Fatal(err)
+	}
+
+	changes, err := s.ImportContacts("apple", []model.SourceContact{{
+		Source:     "apple",
+		ExternalID: "a1",
+		Name:       "Ada Lovelace",
+		Emails:     []model.ContactValue{{Value: "ada@example.com"}},
+		Addresses: []model.ContactValue{
+			{Value: "1 Existing Street London", Label: "work"},
+			{Value: "2 Apple Park Way\nCupertino", Label: "work"},
+		},
+	}}, false, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != "update" {
+		t.Fatalf("changes = %#v", changes)
+	}
+
+	got, err := s.FindPerson("ada@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Addresses) != 2 {
+		t.Fatalf("addresses = %#v", got.Addresses)
+	}
+	if got.Addresses[0].Value != "1 Existing Street\nLondon" || got.Addresses[0].Source != "manual" || got.Addresses[0].Label != "home" {
+		t.Fatalf("manual address was clobbered: %#v", got.Addresses)
+	}
+	if got.Addresses[1].Value != "2 Apple Park Way\nCupertino" || got.Addresses[1].Source != "apple" || got.Addresses[1].Label != "work" {
+		t.Fatalf("apple address was not appended with provenance: %#v", got.Addresses)
+	}
+}
+
 func TestCrawlerImportDedupePhonesAndRecordsSources(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)

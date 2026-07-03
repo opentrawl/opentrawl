@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openclaw/clawdex/internal/index"
+	"github.com/openclaw/clawdex/internal/model"
 )
 
 type WhoCmd struct {
@@ -25,12 +26,13 @@ type whoEnvelope struct {
 }
 
 type whoCandidate struct {
-	Who          string   `json:"who"`
-	Identifiers  []string `json:"identifiers"`
-	Sources      []string `json:"sources"`
-	LastSeen     string   `json:"last_seen,omitempty"`
-	MatchQuality string   `json:"match_quality,omitempty"`
-	Identity     string   `json:"identity,omitempty"`
+	Who          string               `json:"who"`
+	Identifiers  []string             `json:"identifiers"`
+	Addresses    []model.ContactValue `json:"addresses,omitempty"`
+	Sources      []string             `json:"sources"`
+	LastSeen     string               `json:"last_seen,omitempty"`
+	MatchQuality string               `json:"match_quality,omitempty"`
+	Identity     string               `json:"identity,omitempty"`
 }
 
 func (c *WhoCmd) Run(r *Runtime) error {
@@ -69,6 +71,7 @@ func whoCandidates(candidates []index.WhoCandidate) []whoCandidate {
 		out = append(out, whoCandidate{
 			Who:          candidate.Who,
 			Identifiers:  append([]string(nil), candidate.Identifiers...),
+			Addresses:    append([]model.ContactValue(nil), candidate.Addresses...),
 			Sources:      append([]string(nil), candidate.Sources...),
 			LastSeen:     candidate.LastSeen,
 			MatchQuality: candidate.MatchQuality,

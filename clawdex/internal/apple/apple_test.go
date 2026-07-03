@@ -31,7 +31,7 @@ func TestDecodeJSONArrayAndNDJSON(t *testing.T) {
 func TestReadFileAndToSourceContacts(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "contacts.ndjson")
 	encoded := base64.StdEncoding.EncodeToString([]byte("avatar"))
-	if err := os.WriteFile(path, []byte("{\"full_name\":\"Ada\",\"emails\":[\"ada@example.com\"],\"avatar_data\":\""+encoded+"\"}\n{\"phones\":[\"+1\"]}\n"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte("{\"full_name\":\"Ada\",\"emails\":[\"ada@example.com\"],\"addresses\":[{\"value\":\"1 Infinite Loop\\nCupertino\",\"label\":\"work\"}],\"avatar_data\":\""+encoded+"\"}\n{\"phones\":[\"+1\"]}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	contacts, err := ReadFile(path)
@@ -44,6 +44,24 @@ func TestReadFileAndToSourceContacts(t *testing.T) {
 	}
 	if sources[0].Avatar == nil || string(sources[0].Avatar.Data) != "avatar" {
 		t.Fatalf("avatar source = %#v", sources[0].Avatar)
+	}
+	if len(sources[0].Addresses) != 1 || sources[0].Addresses[0].Value != "1 Infinite Loop\nCupertino" || sources[0].Addresses[0].Label != "work" || sources[0].Addresses[0].Source != "apple" || !sources[0].Addresses[0].Primary {
+		t.Fatalf("addresses = %#v", sources[0].Addresses)
+	}
+}
+
+func TestPostalAddressAcceptsStringAndNormalizesLabel(t *testing.T) {
+	contacts, err := Decode(strings.NewReader(`[{"identifier":"a1","full_name":"Ada","emails":["ada@example.com"],"addresses":["  221B Baker Street  "]},{"identifier":"a2","full_name":"Grace","phones":["+1"],"addresses":[{"value":"1 Main Street","label":"office"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ada := contacts[0].SourceContact(false)
+	if len(ada.Addresses) != 1 || ada.Addresses[0].Value != "221B Baker Street" || ada.Addresses[0].Label != "other" {
+		t.Fatalf("ada addresses = %#v", ada.Addresses)
+	}
+	grace := contacts[1].SourceContact(false)
+	if len(grace.Addresses) != 1 || grace.Addresses[0].Label != "other" {
+		t.Fatalf("grace addresses = %#v", grace.Addresses)
 	}
 }
 

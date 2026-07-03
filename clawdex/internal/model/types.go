@@ -30,6 +30,7 @@ type PersonSource struct {
 	Names      []string            `json:"names,omitempty" yaml:"names,omitempty"`
 	Emails     []string            `json:"emails,omitempty" yaml:"emails,omitempty"`
 	Phones     []string            `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Addresses  []string            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
 	Accounts   map[string][]string `json:"accounts,omitempty" yaml:"accounts,omitempty"`
 	LastSeenAt time.Time           `json:"last_seen_at,omitzero" yaml:"last_seen_at,omitempty"`
 }
@@ -42,6 +43,7 @@ type Person struct {
 	Tags      []string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
 	Emails    []ContactValue            `json:"emails,omitempty" yaml:"emails,omitempty"`
 	Phones    []ContactValue            `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Addresses []ContactValue            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
 	Avatar    AvatarRef                 `json:"avatar,omitzero" yaml:"avatar,omitempty"`
 	Accounts  map[string][]string       `json:"accounts,omitempty" yaml:"accounts,omitempty"`
 	Sources   map[string]PersonSource   `json:"sources,omitempty" yaml:"sources,omitempty"`

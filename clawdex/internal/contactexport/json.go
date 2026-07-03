@@ -17,6 +17,7 @@ type Contact struct {
 	DisplayName  string              `json:"display_name"`
 	PhoneNumbers []string            `json:"phone_numbers,omitempty"`
 	Emails       []string            `json:"emails,omitempty"`
+	Addresses    []string            `json:"addresses,omitempty"`
 	Accounts     map[string][]string `json:"accounts,omitempty"`
 	Handles      map[string][]string `json:"handles,omitempty"`
 }
@@ -55,6 +56,7 @@ func (e *ContactExport) Normalize() error {
 		name := strings.TrimSpace(c.DisplayName)
 		phones := cleanPhones(c.PhoneNumbers)
 		emails := cleanEmails(c.Emails)
+		addresses := cleanAddresses(c.Addresses)
 		accounts := cleanAccounts(c.Accounts)
 		handles := cleanAccounts(c.Handles)
 		if len(phones) == 0 && len(emails) == 0 && len(accounts) == 0 && len(handles) == 0 {
@@ -67,6 +69,7 @@ func (e *ContactExport) Normalize() error {
 		c.DisplayName = name
 		c.PhoneNumbers = phones
 		c.Emails = emails
+		c.Addresses = addresses
 		c.Accounts = accounts
 		c.Handles = handles
 		contacts = append(contacts, c)
@@ -107,6 +110,38 @@ func cleanEmails(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func cleanAddresses(values []string) []string {
+	out := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		value = cleanAddress(value)
+		key := strings.ToLower(strings.Join(strings.Fields(value), " "))
+		if value == "" || key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func cleanAddress(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	lines := strings.Split(value, "\n")
+	out := lines[:0]
+	for _, line := range lines {
+		line = strings.Join(strings.Fields(line), " ")
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return strings.Join(out, "\n")
 }
 
 func cleanAccounts(accounts map[string][]string) map[string][]string {

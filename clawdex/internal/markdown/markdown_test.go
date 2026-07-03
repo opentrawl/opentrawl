@@ -16,7 +16,8 @@ func TestPersonRoundTrip(t *testing.T) {
 	now := time.Date(2026, 5, 8, 9, 15, 0, 0, time.UTC)
 	p := NewPerson("Ada Lovelace", now)
 	p.Tags = []string{"math"}
-	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada Lovelace"}, Phones: []string{"15550100"}}}
+	p.Addresses = []model.ContactValue{{Value: "12 St James's Square\nLondon", Label: "work", Source: "manual", Primary: true}}
+	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada Lovelace"}, Phones: []string{"15550100"}, Addresses: []string{"12 St James's Square\nLondon"}}}
 	p.Body = "# Ada Lovelace\n\nNotes."
 	if err := WritePerson(path, p); err != nil {
 		t.Fatal(err)
@@ -33,6 +34,12 @@ func TestPersonRoundTrip(t *testing.T) {
 	}
 	if got.Sources["telecrawl"].Phones[0] != "15550100" {
 		t.Fatalf("sources = %#v", got.Sources)
+	}
+	if len(got.Addresses) != 1 || got.Addresses[0].Value != "12 St James's Square\nLondon" || got.Addresses[0].Label != "work" || got.Addresses[0].Source != "manual" || !got.Addresses[0].Primary {
+		t.Fatalf("addresses = %#v", got.Addresses)
+	}
+	if got.Sources["telecrawl"].Addresses[0] != "12 St James's Square\nLondon" {
+		t.Fatalf("source addresses = %#v", got.Sources)
 	}
 }
 

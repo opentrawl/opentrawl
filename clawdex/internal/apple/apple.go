@@ -11,13 +11,34 @@ import (
 )
 
 type Contact struct {
-	Identifier string   `json:"identifier"`
-	FirstName  string   `json:"first_name"`
-	LastName   string   `json:"last_name"`
-	FullName   string   `json:"full_name"`
-	Emails     []string `json:"emails"`
-	Phones     []string `json:"phones"`
-	AvatarData []byte   `json:"avatar_data,omitempty"`
+	Identifier string          `json:"identifier"`
+	FirstName  string          `json:"first_name"`
+	LastName   string          `json:"last_name"`
+	FullName   string          `json:"full_name"`
+	Emails     []string        `json:"emails"`
+	Phones     []string        `json:"phones"`
+	Addresses  []PostalAddress `json:"addresses,omitempty"`
+	AvatarData []byte          `json:"avatar_data,omitempty"`
+}
+
+type PostalAddress struct {
+	Value string `json:"value"`
+	Label string `json:"label,omitempty"`
+}
+
+func (a *PostalAddress) UnmarshalJSON(data []byte) error {
+	var value string
+	if err := json.Unmarshal(data, &value); err == nil {
+		*a = PostalAddress{Value: value}
+		return nil
+	}
+	type postalAddress PostalAddress
+	var parsed postalAddress
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return err
+	}
+	*a = PostalAddress(parsed)
+	return nil
 }
 
 func (c Contact) Name() string {
@@ -39,10 +60,27 @@ func (c Contact) SourceContact(includeAvatar bool) model.SourceContact {
 			out.Phones = append(out.Phones, model.ContactValue{Value: phone, Label: "other", Source: "apple", Primary: i == 0})
 		}
 	}
+	for i, address := range c.Addresses {
+		value := strings.TrimSpace(address.Value)
+		if value != "" {
+			out.Addresses = append(out.Addresses, model.ContactValue{Value: value, Label: addressLabel(address.Label), Source: "apple", Primary: i == 0})
+		}
+	}
 	if includeAvatar && len(c.AvatarData) > 0 {
 		out.Avatar = &model.SourceAvatar{Data: append([]byte(nil), c.AvatarData...)}
 	}
 	return out
+}
+
+func addressLabel(label string) string {
+	switch strings.ToLower(strings.TrimSpace(label)) {
+	case "home":
+		return "home"
+	case "work":
+		return "work"
+	default:
+		return "other"
+	}
 }
 
 func ReadFile(path string) ([]Contact, error) {

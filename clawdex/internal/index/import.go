@@ -62,6 +62,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 			p.Tags = cleanList(contact.Tags)
 			p.Emails = sourceValues(contact.Emails, source, model.NormalizeEmail)
 			p.Phones = sourceValues(contact.Phones, source, model.NormalizePhone)
+			p.Addresses = sourceValues(contact.Addresses, source, model.NormalizeAddress)
 			p.Accounts = cleanAccounts(contact.Accounts)
 			if opts.TrackSources {
 				p.Sources = mergePersonSources(p.Sources, source, contact, now)
@@ -98,6 +99,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		p := people[idx]
 		beforeEmails := len(p.Emails)
 		beforePhones := len(p.Phones)
+		beforeAddresses := len(p.Addresses)
 		beforeTags := append([]string(nil), p.Tags...)
 		beforeAccounts := cloneAccounts(p.Accounts)
 		beforeSources := cloneSources(p.Sources)
@@ -111,6 +113,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		p.Tags = appendMissingStrings(p.Tags, contact.Tags)
 		p.Emails = appendMissingValues(p.Emails, matchedContact.Emails, source, model.NormalizeEmail)
 		p.Phones = appendMissingValues(p.Phones, matchedContact.Phones, source, model.NormalizePhone)
+		p.Addresses = appendMissingValues(p.Addresses, matchedContact.Addresses, source, model.NormalizeAddress)
 		p.Accounts = mergeAccounts(p.Accounts, matchedContact.Accounts)
 		if opts.TrackSources {
 			p.Sources = mergePersonSources(p.Sources, source, matchedContact, now)
@@ -128,7 +131,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		tagsChanged := strings.Join(beforeTags, "\x00") != strings.Join(p.Tags, "\x00")
 		accountsChanged := !accountsEqual(beforeAccounts, p.Accounts)
 		sourcesChanged := !reflect.DeepEqual(beforeSources, p.Sources)
-		if len(p.Emails) == beforeEmails && len(p.Phones) == beforePhones && !tagsChanged && !accountsChanged && !sourcesChanged && !externalChanged && !avatarChanged {
+		if len(p.Emails) == beforeEmails && len(p.Phones) == beforePhones && len(p.Addresses) == beforeAddresses && !tagsChanged && !accountsChanged && !sourcesChanged && !externalChanged && !avatarChanged {
 			continue
 		}
 		change := model.ImportChange{Action: "update", PersonID: p.ID, Name: p.Name, Source: matchedContact, Path: p.Path}
@@ -383,6 +386,7 @@ func cloneSources(sources map[string]model.PersonSource) map[string]model.Person
 			Names:      append([]string(nil), value.Names...),
 			Emails:     append([]string(nil), value.Emails...),
 			Phones:     append([]string(nil), value.Phones...),
+			Addresses:  append([]string(nil), value.Addresses...),
 			Accounts:   cloneAccounts(value.Accounts),
 			LastSeenAt: value.LastSeenAt,
 		}
@@ -490,17 +494,19 @@ func mergePersonSources(existing map[string]model.PersonSource, source string, c
 		Names:      append([]string(nil), current.Names...),
 		Emails:     append([]string(nil), current.Emails...),
 		Phones:     append([]string(nil), current.Phones...),
+		Addresses:  append([]string(nil), current.Addresses...),
 		Accounts:   cloneAccounts(current.Accounts),
 		LastSeenAt: current.LastSeenAt,
 	}
 	current.Names = appendMissingNormalizedStrings(current.Names, []string{contact.Name}, model.NormalizeName)
 	current.Emails = appendMissingContactValues(current.Emails, contact.Emails, model.NormalizeEmail)
 	current.Phones = appendMissingContactValues(current.Phones, contact.Phones, model.NormalizePhone)
+	current.Addresses = appendMissingContactValues(current.Addresses, contact.Addresses, model.NormalizeAddress)
 	current.Accounts = mergeAccounts(current.Accounts, contact.Accounts)
 	if sourceChanged(before, current) || current.LastSeenAt.IsZero() {
 		current.LastSeenAt = now.UTC()
 	}
-	if len(current.Names) == 0 && len(current.Emails) == 0 && len(current.Phones) == 0 && len(current.Accounts) == 0 {
+	if len(current.Names) == 0 && len(current.Emails) == 0 && len(current.Phones) == 0 && len(current.Addresses) == 0 && len(current.Accounts) == 0 {
 		delete(existing, source)
 		return existing
 	}
@@ -512,6 +518,7 @@ func sourceChanged(before, after model.PersonSource) bool {
 	return strings.Join(before.Names, "\x00") != strings.Join(after.Names, "\x00") ||
 		strings.Join(before.Emails, "\x00") != strings.Join(after.Emails, "\x00") ||
 		strings.Join(before.Phones, "\x00") != strings.Join(after.Phones, "\x00") ||
+		strings.Join(before.Addresses, "\x00") != strings.Join(after.Addresses, "\x00") ||
 		!accountsEqual(before.Accounts, after.Accounts)
 }
 

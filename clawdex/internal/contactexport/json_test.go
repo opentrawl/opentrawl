@@ -6,7 +6,7 @@ import (
 )
 
 func TestDecodeNormalizesContacts(t *testing.T) {
-	got, err := Decode(strings.NewReader(`{"contacts":[{"display_name":" Ada Lovelace ","phone_numbers":[" +1 555 0100 ","","+1 555 0100"],"emails":[" ADA@example.com ","ada@example.com"],"accounts":{"telegram":[" ada ",""]},"handles":{"github":["ada"]}}]}`))
+	got, err := Decode(strings.NewReader(`{"contacts":[{"display_name":" Ada Lovelace ","phone_numbers":[" +1 555 0100 ","","+1 555 0100"],"emails":[" ADA@example.com ","ada@example.com"],"addresses":[" 1 Main Street \r\n Apt 2 ","1 Main Street\nApt 2",""],"accounts":{"telegram":[" ada ",""]},"handles":{"github":["ada"]}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -22,20 +22,23 @@ func TestDecodeNormalizesContacts(t *testing.T) {
 	if len(got.Contacts[0].Emails) != 1 || got.Contacts[0].Emails[0] != "ada@example.com" {
 		t.Fatalf("emails = %#v", got.Contacts[0].Emails)
 	}
+	if len(got.Contacts[0].Addresses) != 1 || got.Contacts[0].Addresses[0] != "1 Main Street\nApt 2" {
+		t.Fatalf("addresses = %#v", got.Contacts[0].Addresses)
+	}
 	if got.Contacts[0].Accounts["telegram"][0] != "ada" || got.Contacts[0].Handles["github"][0] != "ada" {
 		t.Fatalf("accounts = %#v handles = %#v", got.Contacts[0].Accounts, got.Contacts[0].Handles)
 	}
 }
 
 func TestDecodeSkipsContactsWithoutIdentifiers(t *testing.T) {
-	got, err := Decode(strings.NewReader(`{"contacts":[{"display_name":"Ada","emails":["ada@example.com"]},{"display_name":"No IDs","phone_numbers":[]},{"display_name":"  ","accounts":{}}]}`))
+	got, err := Decode(strings.NewReader(`{"contacts":[{"display_name":"Ada","emails":["ada@example.com"]},{"display_name":"No IDs","phone_numbers":[]},{"display_name":"Address Only","addresses":["1 Main Street"]},{"display_name":"  ","accounts":{}}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got.Contacts) != 1 {
 		t.Fatalf("contacts = %#v", got.Contacts)
 	}
-	if got.SkippedWithoutIdentifiers != 2 {
+	if got.SkippedWithoutIdentifiers != 3 {
 		t.Fatalf("skipped = %d", got.SkippedWithoutIdentifiers)
 	}
 }

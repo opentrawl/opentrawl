@@ -655,6 +655,9 @@ func sourceContactsFromExport(source string, export contactexport.ContactExport)
 		for i, email := range c.Emails {
 			contact.Emails = append(contact.Emails, model.ContactValue{Value: email, Source: source, Primary: i == 0 && len(contact.Phones) == 0})
 		}
+		for i, address := range c.Addresses {
+			contact.Addresses = append(contact.Addresses, model.ContactValue{Value: address, Label: "other", Source: source, Primary: i == 0})
+		}
 		contact.Accounts = mergeCrawlerExportAccounts(c.Accounts, c.Handles)
 		contacts = append(contacts, contact)
 	}
@@ -1091,6 +1094,11 @@ func (r *Runtime) printPerson(p model.Person) error {
 	}
 	for _, phone := range p.Phones {
 		if _, err := fmt.Fprintf(r.stdout, "phone: %s\n", phone.Value); err != nil {
+			return err
+		}
+	}
+	for _, address := range p.Addresses {
+		if _, err := fmt.Fprintf(r.stdout, "address: %s\n", strings.ReplaceAll(address.Value, "\n", ", ")); err != nil {
 			return err
 		}
 	}

@@ -304,6 +304,9 @@ func personSearchText(p model.Person) string {
 	for _, phone := range p.Phones {
 		parts = append(parts, phone.Value)
 	}
+	for _, address := range p.Addresses {
+		parts = append(parts, address.Value)
+	}
 	for service, values := range p.Accounts {
 		parts = append(parts, service)
 		parts = append(parts, values...)
