@@ -1,5 +1,7 @@
 package archive
 
+import "github.com/openclaw/crawlkit/whomatch"
+
 type SyncResult struct {
 	ArchivePath      string `json:"archive_path"`
 	SourcePath       string `json:"source_path"`
@@ -129,5 +131,5 @@ type WhoCandidate struct {
 	includeFromMe bool
 	handleRowIDs  []int64
 	lastSeenRaw   int64
-	matchRank     int
+	matchRank     whomatch.Rank
 }
