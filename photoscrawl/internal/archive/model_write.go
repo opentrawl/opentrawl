@@ -10,11 +10,13 @@ import (
 	"time"
 )
 
-func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time) (int, error) {
+func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, imagePath, imagePathClass string) (int, error) {
 	if err := clearModelObservations(ctx, tx, input.AssetID, classifier.modelID); err != nil {
 		return 0, err
 	}
-	imagePath, _ := input.contentImagePath()
+	if strings.TrimSpace(imagePathClass) == "" {
+		imagePathClass = input.localPathClass(imagePath)
+	}
 	evidenceID := stableID("evidence", input.AssetID, "content_classification", modelClassifierSource, classifier.modelID, classifier.promptVersion)
 	evidenceJSON, err := jsonText(map[string]any{
 		"classifier":        modelClassifierSource,
@@ -23,12 +25,12 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		"image_bytes":       result.ImageBytes,
 		"image_sha256":      result.ImageSHA256,
 		"image_extension":   strings.ToLower(filepath.Ext(imagePath)),
-		"image_path_class":  input.localPathClass(imagePath),
+		"image_path_class":  imagePathClass,
 		"classified_at":     classifiedAt.Format(time.RFC3339Nano),
 		"raw_response":      result.RawResponse,
 		"parsed_response":   result.Payload,
-		"local_only":        true,
-		"cloud_transmitted": false,
+		"local_only":        !classifier.remote(),
+		"cloud_transmitted": classifier.remote(),
 	})
 	if err != nil {
 		return 0, err
@@ -62,7 +64,7 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)
-`, observationID, input.AssetID, observation.ValueText, strings.Join(nonEmpty(observation.ObservationType, observation.ValueText, modelClassifierSource, classifier.modelID), " ")); err != nil {
+`, observationID, input.AssetID, observation.ValueText, observation.ValueText); err != nil {
 			return written, fmt.Errorf("write model observation fts: %w", err)
 		}
 		for _, term := range observationTerms(observation) {

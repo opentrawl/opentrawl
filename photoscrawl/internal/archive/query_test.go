@@ -108,7 +108,7 @@ values ('fixture-place', ?, 'merchant_or_venue_name_candidate', 'Synthetic Pier'
 	conformance.AssertSearchEnvelope(t, data)
 }
 
-func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
+func TestSearchKeepsEmptyWhoWhereJSONKeys(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -118,7 +118,60 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	}
 	if _, err := Sync(ctx, paths, SyncOptions{
 		LibraryPath: libraryPath,
-		Provider:    fakeProvider{snapshot: fakeSnapshot(false, true)},
+		Provider:    fakeProvider{snapshot: manyAssetsSnapshot(1)},
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 1 {
+		t.Fatalf("results = %#v", result.Results)
+	}
+	if result.Results[0].Who != "" || result.Results[0].Where != "" {
+		t.Fatalf("empty who/where should stay empty: %#v", result.Results[0])
+	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conformance.AssertSearchEnvelope(t, data)
+	var decoded struct {
+		Results []map[string]any `json:"results"`
+	}
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Results) != 1 {
+		t.Fatalf("decoded results = %#v", decoded.Results)
+	}
+	for _, key := range []string{"who", "where"} {
+		value, ok := decoded.Results[0][key]
+		if !ok {
+			t.Fatalf("search JSON omitted %q: %s", key, data)
+		}
+		if value != "" {
+			t.Fatalf("search JSON %q = %#v, want empty string", key, value)
+		}
+	}
+}
+
+func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := fakeSnapshot(false, true)
+	snapshot.Assets[0].Resources = append(snapshot.Assets[0].Resources, snapshot.Assets[0].Resources[0])
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    fakeProvider{snapshot: snapshot},
 		Now:         fixedClock("2026-05-28T10:00:00Z"),
 	}); err != nil {
 		t.Fatal(err)
@@ -160,6 +213,42 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	}
 	if _, ok := evidence["raw"]; ok {
 		t.Fatalf("open leaked raw evidence branch: %s", data)
+	}
+}
+
+func TestEvidenceRefsUsePlainLabelsAndKeepRawSource(t *testing.T) {
+	t.Parallel()
+	refs := openEvidenceRefs([]map[string]any{
+		{
+			"id":            "fixture-classification",
+			"asset_id":      "fixture-asset",
+			"evidence_kind": "classification_input",
+			"source":        "archive_metadata",
+		},
+		{
+			"id":            "fixture-snapshot",
+			"asset_id":      "fixture-asset",
+			"evidence_kind": "asset_metadata",
+			"source":        "photos_sqlite_snapshot",
+		},
+	})
+	if len(refs) != 2 {
+		t.Fatalf("refs = %#v", refs)
+	}
+	if refs[0].Kind != "classification input" || refs[0].KindID != "classification_input" {
+		t.Fatalf("classification kind labels = %#v", refs[0])
+	}
+	if refs[0].Source != "Photo metadata" || refs[0].SourceID != "archive_metadata" {
+		t.Fatalf("classification source labels = %#v", refs[0])
+	}
+	if refs[0].Summary != "derived from photo metadata" {
+		t.Fatalf("classification summary = %q", refs[0].Summary)
+	}
+	if refs[1].Source != "Photos library database" || refs[1].SourceID != "photos_sqlite_snapshot" {
+		t.Fatalf("snapshot source labels = %#v", refs[1])
+	}
+	if refs[1].Summary != "details from the Photos library database" {
+		t.Fatalf("snapshot summary = %q", refs[1].Summary)
 	}
 }
 

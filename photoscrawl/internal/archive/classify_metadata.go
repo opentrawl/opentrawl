@@ -25,7 +25,6 @@ func classifyFromMetadata(input classifyInput) []metadataObservation {
 	}
 
 	add("media_type", input.MediaType)
-	add("content_availability", pickLabel(input.hasLocalContent(), "local_content_available", "local_content_unavailable"))
 	if input.Width > 0 && input.Height > 0 {
 		switch {
 		case input.Width > input.Height:
@@ -110,7 +109,7 @@ values (?, ?, ?, ?, ?, ?, ?)
 		if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)
-`, observationID, input.AssetID, observation.Label, strings.Join(nonEmpty(observation.ObservationType, observation.Label, metadataClassifierSource), " ")); err != nil {
+`, observationID, input.AssetID, observation.Label, observation.Label); err != nil {
 			return written, fmt.Errorf("write observation fts: %w", err)
 		}
 		written++
@@ -231,11 +230,4 @@ func containsAny(value string, needles ...string) bool {
 		}
 	}
 	return false
-}
-
-func pickLabel(condition bool, ifTrue, ifFalse string) string {
-	if condition {
-		return ifTrue
-	}
-	return ifFalse
 }
