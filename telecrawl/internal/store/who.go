@@ -5,7 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 const participantRowsSQL = `
@@ -61,16 +62,13 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 	if err != nil {
 		return nil, err
 	}
-	if exact := exactIdentifierCandidates(candidates, query); len(exact) > 0 {
-		return s.hydrateWhoCandidates(ctx, exact)
-	}
 	var matches []WhoCandidate
 	for _, candidate := range candidates {
-		rank, ok := candidateMatchRank(query, candidate)
+		rank, ok := whoMatchCandidate(candidate).MatchRank(query)
 		if !ok {
 			continue
 		}
-		candidate.matchRank = rank
+		candidate.matchRank = int(rank)
 		matches = append(matches, candidate)
 	}
 	return s.hydrateWhoCandidates(ctx, matches)
@@ -81,20 +79,18 @@ func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]Parti
 	if identity == "" {
 		return nil, nil
 	}
-	candidates, err := s.allWhoCandidates(ctx)
+	candidates, err := s.ResolveWho(ctx, identity)
 	if err != nil {
 		return nil, err
 	}
+	if len(candidates) != 1 || candidates[0].MatchedOnlyByCloseSpelling() {
+		return nil, nil
+	}
 	seen := map[string]ParticipantMatch{}
-	for _, candidate := range candidates {
-		if !candidateHasExactAlias(candidate, identity) {
-			continue
-		}
-		for _, participant := range candidate.Participants {
-			key := participantKey(participant.JID, participant.DisplayName)
-			if _, ok := seen[key]; !ok {
-				seen[key] = participant
-			}
+	for _, participant := range candidates[0].Participants {
+		key := participantKey(participant.JID, participant.DisplayName)
+		if _, ok := seen[key]; !ok {
+			seen[key] = participant
 		}
 	}
 	matches := make([]ParticipantMatch, 0, len(seen))
@@ -148,9 +144,9 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		// Rows for one jid merge in scan order, so an unnamed row can
 		// have claimed Who with a bare identifier while a later row
 		// carried the real name. A human name always wins.
-		if isIdentifierString(candidate.Who, candidate.Identifiers) {
+		if whomatch.IsIdentifierLike(candidate.Who, candidate.Identifiers) {
 			for _, alias := range candidate.aliases {
-				if !isIdentifierString(alias, candidate.Identifiers) {
+				if !whomatch.IsIdentifierLike(alias, candidate.Identifiers) {
 					candidate.Who = alias
 					break
 				}
@@ -159,19 +155,6 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		candidates = append(candidates, *candidate)
 	}
 	return candidates, nil
-}
-
-func isIdentifierString(value string, identifiers []string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return true
-	}
-	for _, id := range identifiers {
-		if strings.EqualFold(value, id) {
-			return true
-		}
-	}
-	return !hasLetter(strings.ToLower(value))
 }
 
 func (s *Store) hydrateWhoCandidates(ctx context.Context, candidates []WhoCandidate) ([]WhoCandidate, error) {
@@ -185,7 +168,7 @@ func (s *Store) hydrateWhoCandidates(ctx context.Context, candidates []WhoCandid
 	}
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].matchRank != candidates[j].matchRank {
-			return candidates[i].matchRank < candidates[j].matchRank
+			return candidates[i].matchRank > candidates[j].matchRank
 		}
 		if !candidates[i].LastSeen.Equal(candidates[j].LastSeen) {
 			return candidates[i].LastSeen.After(candidates[j].LastSeen)
@@ -201,6 +184,20 @@ func (s *Store) hydrateWhoCandidates(ctx context.Context, candidates []WhoCandid
 		return candidates[i].Who < candidates[j].Who
 	})
 	return candidates, nil
+}
+
+func (candidate WhoCandidate) MatchedOnlyByCloseSpelling() bool {
+	return candidate.matchRank == int(whomatch.RankCloseSpelling)
+}
+
+func whoMatchCandidate(candidate WhoCandidate) whomatch.Candidate {
+	return whomatch.Candidate{
+		Who:         candidate.Who,
+		Identifiers: candidate.Identifiers,
+		Aliases:     candidate.aliases,
+		LastSeen:    candidate.LastSeen,
+		Messages:    int64(candidate.Messages),
+	}
 }
 
 func (s *Store) whoCandidateStats(ctx context.Context, candidate WhoCandidate) (int, time.Time, error) {
@@ -346,167 +343,6 @@ func sortParticipantMatches(matches []ParticipantMatch) {
 		}
 		return matches[i].JID < matches[j].JID
 	})
-}
-
-func exactIdentifierCandidates(candidates []WhoCandidate, query string) []WhoCandidate {
-	query = normalizeIdentifier(query)
-	if query == "" {
-		return nil
-	}
-	var matches []WhoCandidate
-	for _, candidate := range candidates {
-		for _, identifier := range candidate.Identifiers {
-			if normalizeIdentifier(identifier) == query {
-				candidate.matchRank = 0
-				matches = append(matches, candidate)
-				break
-			}
-		}
-	}
-	return matches
-}
-
-func candidateHasExactAlias(candidate WhoCandidate, query string) bool {
-	query = normalizeWhoMatch(query)
-	for _, alias := range candidate.aliases {
-		if normalizeWhoMatch(alias) == query {
-			return true
-		}
-	}
-	queryID := normalizeIdentifier(query)
-	for _, identifier := range candidate.Identifiers {
-		if normalizeIdentifier(identifier) == queryID {
-			return true
-		}
-	}
-	return false
-}
-
-func candidateMatchRank(query string, candidate WhoCandidate) (int, bool) {
-	queryText := normalizeWhoMatch(query)
-	queryCompact := compactWhoMatch(query)
-	if queryText == "" || queryCompact == "" {
-		return 0, false
-	}
-	best := 99
-	for _, alias := range candidate.aliases {
-		aliasText := normalizeWhoMatch(alias)
-		aliasCompact := compactWhoMatch(alias)
-		if aliasText == "" || aliasCompact == "" {
-			continue
-		}
-		rank, ok := aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact)
-		if ok && rank < best {
-			best = rank
-		}
-	}
-	return best, best != 99
-}
-
-func aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact string) (int, bool) {
-	switch {
-	case aliasText == queryText || aliasCompact == queryCompact:
-		return 0, true
-	case strings.HasPrefix(aliasText, queryText) || strings.HasPrefix(aliasCompact, queryCompact):
-		return 1, true
-	case strings.Contains(aliasText, queryText) || strings.Contains(aliasCompact, queryCompact):
-		return 2, true
-	case closeSpelling(queryCompact, aliasCompact):
-		return 3, true
-	case closeWordSpelling(queryCompact, aliasText):
-		return 3, true
-	default:
-		return 0, false
-	}
-}
-
-func normalizeWhoMatch(value string) string {
-	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
-}
-
-func compactWhoMatch(value string) string {
-	var out []rune
-	for _, r := range strings.ToLower(value) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			out = append(out, r)
-		}
-	}
-	return string(out)
-}
-
-func normalizeIdentifier(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	return strings.TrimPrefix(value, "@")
-}
-
-func closeWordSpelling(query, value string) bool {
-	for _, word := range strings.Fields(value) {
-		if closeSpelling(query, compactWhoMatch(word)) {
-			return true
-		}
-	}
-	return false
-}
-
-func closeSpelling(query, value string) bool {
-	// 3 letters is enough: "jeff" must suggest "jef".
-	if len([]rune(query)) < 3 || len([]rune(value)) < 3 {
-		return false
-	}
-	if !hasLetter(query) && !hasLetter(value) {
-		return false
-	}
-	distance := levenshteinDistance(query, value)
-	longest := max(len([]rune(query)), len([]rune(value)))
-	switch {
-	case longest <= 5:
-		return distance <= 1
-	case longest <= 12:
-		return distance <= 3
-	default:
-		return distance <= 3
-	}
-}
-
-func hasLetter(value string) bool {
-	for _, r := range value {
-		if unicode.IsLetter(r) {
-			return true
-		}
-	}
-	return false
-}
-
-func levenshteinDistance(a, b string) int {
-	left := []rune(a)
-	right := []rune(b)
-	if len(left) == 0 {
-		return len(right)
-	}
-	if len(right) == 0 {
-		return len(left)
-	}
-	previous := make([]int, len(right)+1)
-	current := make([]int, len(right)+1)
-	for j := range previous {
-		previous[j] = j
-	}
-	for i, leftRune := range left {
-		current[0] = i + 1
-		for j, rightRune := range right {
-			cost := 0
-			if leftRune != rightRune {
-				cost = 1
-			}
-			current[j+1] = min(
-				current[j]+1,
-				previous[j+1]+1,
-				previous[j]+cost,
-			)
-		}
-		previous, current = current, previous
-	}
-	return previous[len(right)]
 }
 
 func appendWhoParticipantFilter(query string, args []any, prefix string, filter MessageFilter) (string, []any) {

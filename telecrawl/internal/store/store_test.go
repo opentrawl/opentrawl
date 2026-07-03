@@ -252,7 +252,7 @@ func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
 	}
 }
 
-func TestResolveWhoOnlyMatchesUnnamedParticipantByIdentifier(t *testing.T) {
+func TestResolveWhoMatchesUnnamedParticipantIdentifiersWithSharedMatcher(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
@@ -285,8 +285,8 @@ func TestResolveWhoOnlyMatchesUnnamedParticipantByIdentifier(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(partialIDMatches) != 0 {
-		t.Fatalf("partial id matches = %#v, want no unnamed participant", partialIDMatches)
+	if len(partialIDMatches) != 1 || partialIDMatches[0].Who != "165355235" || !containsStoreString(partialIDMatches[0].Identifiers, "165355235") {
+		t.Fatalf("partial id matches = %#v, want unnamed numeric participant", partialIDMatches)
 	}
 
 	idMatches, err := st.ResolveWho(ctx, "165355235")

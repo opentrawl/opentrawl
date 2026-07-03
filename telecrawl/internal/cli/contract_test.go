@@ -394,6 +394,33 @@ func TestSearchWhoReportsUnknown(t *testing.T) {
 	}
 }
 
+func TestSearchWhoReportsFuzzyOnlySingleMatchAsUnknownSuggestion(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "needle", "--who", "Alic Exampel", "--json")
+	if err == nil {
+		t.Fatalf("fuzzy-only --who succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if code := ExitCode(err); code != 5 {
+		t.Fatalf("exit code = %d, want 5", code)
+	}
+	var payload struct {
+		Error struct {
+			Code       string             `json:"code"`
+			DidYouMean []testWhoCandidate `json:"did_you_mean"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("fuzzy-only error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "unknown_who" || len(payload.Error.DidYouMean) != 1 || payload.Error.DidYouMean[0].Who != "Alice Example" {
+		t.Fatalf("fuzzy-only error = %#v", payload)
+	}
+	if strings.Contains(stdout, `"results"`) {
+		t.Fatalf("fuzzy-only error ran a search: %s", stdout)
+	}
+}
+
 func TestSearchWhoIsCaseInsensitive(t *testing.T) {
 	db := seedWhoSearchArchive(t)
 
@@ -434,7 +461,7 @@ func TestSearchAllowsFilterOnlyWithWhoAfterOrBefore(t *testing.T) {
 	}
 }
 
-func TestSearchWhoFilterOnlyExcludesChatTitlesAndUnnamedIDs(t *testing.T) {
+func TestSearchWhoFilterOnlyExcludesChatTitlesAndMatchesUnnamedIDs(t *testing.T) {
 	db := seedWhoResolverDefectArchive(t)
 
 	payload := runSearchJSON(t, db, "search", "--who", "jef", "--after", "2026-07-02T12:00:00Z", "--json")
@@ -446,8 +473,8 @@ func TestSearchWhoFilterOnlyExcludesChatTitlesAndUnnamedIDs(t *testing.T) {
 	}
 
 	partialID := runWhoJSON(t, db, "165", "--json")
-	if len(partialID.Candidates) != 0 {
-		t.Fatalf("partial id candidates = %#v, want none", partialID.Candidates)
+	if len(partialID.Candidates) != 1 || partialID.Candidates[0].Who != "165355235" {
+		t.Fatalf("partial id candidates = %#v, want unnamed numeric participant", partialID.Candidates)
 	}
 
 	fullID := runWhoJSON(t, db, "165355235", "--json")
