@@ -87,6 +87,19 @@ written for end users:
   model. Deterministic where the contract demands determinism (archive
   substrate, refs, joins by exact identifiers); model-driven wherever
   meaning is extracted or judged.
+- The deterministic carve-out, codified (strictly read, the rule above
+  would ban search indexes — a full-text index is "ranking"; that is
+  not the intent). Deterministic code MAY make a bounded semantic-ish
+  choice only when all three hold: (1) same input must give the same
+  output every time because agents retry against it (query-time
+  stability is a contract property); (2) it operates on structure
+  (string distance, term frequency, exact identifiers), not on meaning
+  a model could judge better at the same layer; (3) a model call at
+  that point is architecturally wrong (per-query or per-render latency)
+  AND the model-driven alternative is precomputing at sync time — which
+  must be considered and rejected in writing. Every carve-out is
+  documented at its call site with this justification; an undocumented
+  heuristic is a violation by default.
 - Every agent-produced diff gets a principles review by a model against
   this file before it is committed — deterministic-vs-model boundary,
   boring/lean, output rules. Human review is for taste, not for
