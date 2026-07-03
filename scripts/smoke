@@ -140,7 +140,7 @@ unknown_who_token="zzqx-nobody"
 trawl_ambiguous_who=""
 
 run_who_contract_smoke() {
-  local surface command state declares_search found command_succeeded fragment tag json err human count exact_name filter_json filter_err words word search_tag search_json search_err search_ok ambiguous
+  local surface command state declares_search found command_succeeded fragment tag json err human count exact_name filter_json filter_err filter_rc words word search_rc search_tag search_json search_err search_ok ambiguous
   surface="$1"
   command="$2"
   state="$3"
@@ -200,7 +200,11 @@ run_who_contract_smoke() {
 
   filter_json="$rawdir/$(slug "$surface-search-who-filter-only").json"
   filter_err="$rawdir/$(slug "$surface-search-who-filter-only").stderr.txt"
-  if ! capture "$filter_json" "$filter_err" "$command" search --who "$exact_name" --json --limit 1; then
+  capture "$filter_json" "$filter_err" "$command" search --who "$exact_name" --json --limit 1
+  filter_rc=$?
+  # Exit 3 is trawl's documented partial-results code (a source
+  # without the who capability was skipped) — still a success here.
+  if [ "$filter_rc" -ne 0 ] && [ "$filter_rc" -ne 3 ]; then
     bad "$surface search --who failed while discovering a probe word"
     run_unknown_who_smoke "$surface" "$command" "the"
     return
@@ -213,7 +217,9 @@ run_who_contract_smoke() {
     search_tag="$(slug "$surface-search-who-$word")"
     search_json="$rawdir/$search_tag.json"
     search_err="$rawdir/$search_tag.stderr.txt"
-    if capture "$search_json" "$search_err" "$command" search "$word" --who "$exact_name" --json --limit 3; then
+    capture "$search_json" "$search_err" "$command" search "$word" --who "$exact_name" --json --limit 3
+    search_rc=$?
+    if [ "$search_rc" -eq 0 ] || [ "$search_rc" -eq 3 ]; then
       if grep -q '"who_matched"[[:space:]]*:' "$search_json"; then
         bad "$surface search --who JSON still contains who_matched"
         run_unknown_who_smoke "$surface" "$command" "${word:-the}"
