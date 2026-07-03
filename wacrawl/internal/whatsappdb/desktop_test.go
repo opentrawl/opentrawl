@@ -47,8 +47,10 @@ func TestImportDesktopCoreDataShape(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("expected 1 search result, got %d", len(results))
 	}
-	if results[0].SenderJID != "222@lid" || results[0].SenderName != "Alice" {
-		t.Fatalf("group sender not resolved from member row: %+v", results[0])
+	// Canonical-name rule: the contact's full name outranks the
+	// member-row short name.
+	if results[0].SenderJID != "222@lid" || results[0].SenderName != "Alice Contact" {
+		t.Fatalf("group sender not canonical: %+v", results[0])
 	}
 	if results[0].ChatJID != "123@g.us" || results[0].MediaType != "image" {
 		t.Fatalf("group/media fields wrong: %+v", results[0])

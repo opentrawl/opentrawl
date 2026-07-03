@@ -2069,6 +2069,12 @@ func messageWho(message store.Message) string {
 	if name := humanDisplayName(message.SenderName); name != "" {
 		return name
 	}
+	if identifier := senderIdentifier(message.SenderName); identifier != "" {
+		return identifier
+	}
+	if identifier := senderIdentifier(message.SenderJID); identifier != "" {
+		return identifier
+	}
 	return "Unknown sender"
 }
 
@@ -2265,10 +2271,21 @@ func humanDisplayName(name string) string {
 	if strings.EqualFold(name, "me") {
 		return "me"
 	}
-	if name == "" || strings.Contains(name, "@") || looksLikePhone(name) {
+	if !store.HumanWhoName(name) {
 		return ""
 	}
 	return name
+}
+
+func senderIdentifier(value string) string {
+	value = outputField(value)
+	if value == "" {
+		return ""
+	}
+	if looksLikePhone(value) || strings.Contains(value, "@") {
+		return value
+	}
+	return ""
 }
 
 func outputField(value string) string {

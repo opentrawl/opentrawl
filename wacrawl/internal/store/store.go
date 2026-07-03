@@ -763,7 +763,11 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 		}
 		query += " limit ?"
 		args = append(args, filter.Limit)
-		return scanMessages(ctx, s.db, query, args...)
+		messages, err := scanMessages(ctx, s.db, query, args...)
+		if err != nil {
+			return nil, err
+		}
+		return s.withCanonicalSenderNames(ctx, messages)
 	}
 	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
@@ -781,7 +785,7 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 	for i := range messages {
 		messages[i].Snippet = contractSnippet(messageSnippetText(messages[i]), filter.Query)
 	}
-	return messages, nil
+	return s.withCanonicalSenderNames(ctx, messages)
 }
 
 func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, error) {
@@ -1263,6 +1267,11 @@ func humanWhoName(value string) bool {
 	return true
 }
 
+// HumanWhoName reports whether value is safe to display as a person's name.
+func HumanWhoName(value string) bool {
+	return humanWhoName(value)
+}
+
 func looksLikeBase64Name(value string) bool {
 	if strings.Contains(value, " ") || len(value) < 4 {
 		return false
@@ -1357,6 +1366,101 @@ func uniqueStrings(values []string) []string {
 	return out
 }
 
+func (s *Store) withCanonicalSenderNames(ctx context.Context, messages []Message) ([]Message, error) {
+	if len(messages) == 0 {
+		return messages, nil
+	}
+	names, err := s.canonicalSenderNames(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range messages {
+		if messages[i].FromMe {
+			continue
+		}
+		if name := names.lookupMessage(messages[i]); name != "" {
+			messages[i].SenderName = name
+		}
+	}
+	return messages, nil
+}
+
+type canonicalSenderNames map[string]string
+
+func (s *Store) canonicalSenderNames(ctx context.Context) (canonicalSenderNames, error) {
+	records, err := s.whoCandidateRecordsWithoutNameMerge(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := canonicalSenderNames{}
+	for _, record := range records {
+		name := normalizeWhoIdentity(record.Who)
+		if name == "" {
+			continue
+		}
+		for _, key := range record.ParticipantKeys {
+			names.addParticipantKey(key, name)
+		}
+		for _, identifier := range record.Identifiers {
+			names.addIdentifier(identifier, name)
+		}
+	}
+	return names, nil
+}
+
+func (n canonicalSenderNames) addParticipantKey(value, name string) {
+	key := canonicalSenderParticipantKey(value)
+	if key == "" || n[key] != "" {
+		return
+	}
+	n[key] = name
+}
+
+func (n canonicalSenderNames) addIdentifier(value, name string) {
+	key := canonicalSenderIdentifierKey(value)
+	if key == "" || n[key] != "" {
+		return
+	}
+	n[key] = name
+}
+
+func (n canonicalSenderNames) lookupMessage(message Message) string {
+	for _, key := range canonicalSenderLookupKeys(message) {
+		if name := n[key]; name != "" {
+			return name
+		}
+	}
+	return ""
+}
+
+func canonicalSenderLookupKeys(message Message) []string {
+	var keys []string
+	if senderJID := normalizeWhoIdentifier(message.SenderJID); senderJID != "" {
+		keys = append(keys, canonicalSenderIdentifierKey(senderJID))
+		keys = append(keys, canonicalSenderParticipantKey("jid:"+senderJID))
+	}
+	if senderName := normalizeWhoIdentity(message.SenderName); senderName != "" {
+		keys = append(keys, canonicalSenderParticipantKey("sender:"+senderName))
+	}
+	return keys
+}
+
+func canonicalSenderParticipantKey(value string) string {
+	value = normalizeWhoIdentity(value)
+	if value == "" {
+		return ""
+	}
+	return "participant:" + strings.ToLower(value)
+}
+
+func canonicalSenderIdentifierKey(value string) string {
+	value = normalizeWhoIdentifier(value)
+	if value == "" {
+		return ""
+	}
+	return "identifier:" + strings.ToLower(value)
+}
+
 func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
 	messageID = strings.TrimSpace(messageID)
 	if messageID == "" {
@@ -1368,6 +1472,10 @@ func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, err
 	}
 	if len(messages) == 0 {
 		return Message{}, sql.ErrNoRows
+	}
+	messages, err = s.withCanonicalSenderNames(ctx, messages)
+	if err != nil {
+		return Message{}, err
 	}
 	return messages[0], nil
 }
@@ -1388,7 +1496,7 @@ func (s *Store) MessageWindow(ctx context.Context, target Message, eachSide int)
 	out = append(out, before...)
 	out = append(out, target)
 	out = append(out, after...)
-	return out, nil
+	return s.withCanonicalSenderNames(ctx, out)
 }
 
 func (s *Store) messagesBefore(ctx context.Context, target Message, limit int) ([]Message, error) {
