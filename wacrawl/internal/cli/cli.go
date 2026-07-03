@@ -130,6 +130,8 @@ func (a *app) dispatch(ctx context.Context, rest []string) error {
 		return a.runChats(ctx, rest[1:])
 	case "contacts":
 		return a.runContacts(ctx, rest[1:])
+	case "who":
+		return a.runWho(ctx, rest[1:])
 	case "unread":
 		return a.runUnread(ctx, rest[1:])
 	case "messages":
@@ -662,6 +664,36 @@ func exportContacts(contacts []store.Contact) []control.Contact {
 	return out
 }
 
+func (a *app) runWho(ctx context.Context, args []string) error {
+	if commandWantsHelp(args) {
+		printCommandUsage(a.stdout, "who")
+		return nil
+	}
+	fs := flag.NewFlagSet("who", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			printCommandUsage(a.stdout, "who")
+			return nil
+		}
+		return usageErr(err)
+	}
+	if fs.NArg() != 1 {
+		return usageErr(errors.New("who requires exactly one name"))
+	}
+	query := normalizeWhoValue(fs.Arg(0))
+	if query == "" {
+		return usageErr(errors.New("who requires a name"))
+	}
+	return a.withReadStore(ctx, func(st *store.Store) error {
+		resolution, err := st.ResolveWho(ctx, query)
+		if err != nil {
+			return err
+		}
+		return a.print(whoEnvelope{Query: query, Candidates: resolution.Candidates})
+	})
+}
+
 type statusEnvelope struct {
 	AppID     string             `json:"app_id"`
 	State     string             `json:"state"`
@@ -889,10 +921,21 @@ func newMessageListOutput(query string, limit int, messages []store.Message) mes
 
 type searchEnvelope struct {
 	Query        string         `json:"query"`
-	WhoMatched   []string       `json:"who_matched,omitempty"`
+	WhoQuery     string         `json:"-"`
+	WhoResolved  *whoResolved   `json:"who_resolved,omitempty"`
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
+}
+
+type whoResolved struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+}
+
+type whoEnvelope struct {
+	Query      string               `json:"query"`
+	Candidates []store.WhoCandidate `json:"candidates"`
 }
 
 type searchResult struct {
@@ -940,9 +983,12 @@ type errorEnvelope struct {
 }
 
 type contractError struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy"`
+	Code       string                `json:"code"`
+	Message    string                `json:"message"`
+	Remedy     string                `json:"remedy"`
+	Candidates []store.WhoCandidate  `json:"candidates,omitempty"`
+	DidYouMean *[]store.WhoCandidate `json:"did_you_mean,omitempty"`
+	Hint       string                `json:"hint,omitempty"`
 }
 
 type contractFailure struct {
@@ -1114,7 +1160,13 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		}
 		return usageErr(err)
 	}
-	resolved, err := filter.resolve(flagWasProvided(fs, "who"))
+	whoProvided := flagWasProvided(fs, "who")
+	afterProvided := flagWasProvided(fs, "after")
+	beforeProvided := flagWasProvided(fs, "before")
+	if strings.TrimSpace(query) == "" && !whoProvided && !afterProvided && !beforeProvided {
+		return usageErr(errors.New("search requires a query or --who, --after, or --before"))
+	}
+	resolved, err := filter.resolve(whoProvided)
 	if err != nil {
 		return usageErr(err)
 	}
@@ -1124,14 +1176,16 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		withStore = a.withExistingStore
 	}
 	return withStore(ctx, func(st *store.Store) error {
-		var whoMatched []string
+		var whoResolved *whoResolved
+		whoQuery := ""
 		if resolved.Who != "" {
-			resolution, err := st.ResolveWho(ctx, resolved.Who)
+			resolution, err := a.resolveSearchWho(ctx, st, resolved.Who, query)
 			if err != nil {
 				return err
 			}
 			resolved.WhoKeys = resolution.ParticipantKeys
-			whoMatched = resolution.DisplayNames
+			whoQuery = resolved.Who
+			whoResolved = newWhoResolved(resolution.Candidates[0])
 		}
 		total, err := st.SearchCount(ctx, resolved)
 		if err != nil {
@@ -1151,8 +1205,29 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 				return err
 			}
 		}
-		return a.print(newSearchEnvelope(query, total, msgs, whoMatched, aliases))
+		return a.print(newSearchEnvelope(query, whoQuery, total, msgs, whoResolved, aliases))
 	})
+}
+
+func (a *app) resolveSearchWho(ctx context.Context, st *store.Store, value, query string) (store.WhoResolution, error) {
+	resolution, err := st.ResolveWhoIdentifier(ctx, value)
+	if err != nil {
+		return store.WhoResolution{}, err
+	}
+	if len(resolution.Candidates) == 0 {
+		resolution, err = st.ResolveWho(ctx, value)
+		if err != nil {
+			return store.WhoResolution{}, err
+		}
+	}
+	switch len(resolution.Candidates) {
+	case 0:
+		return store.WhoResolution{}, a.failContractWithExit(unknownWhoError(value, nil), 5)
+	case 1:
+		return resolution, nil
+	default:
+		return store.WhoResolution{}, a.failContractWithExit(ambiguousWhoError(value, query, resolution.Candidates), 4)
+	}
 }
 
 func (a *app) runOpen(ctx context.Context, args []string) error {
@@ -1282,8 +1357,11 @@ func splitSearchArgs(args []string) ([]string, string, error) {
 		}
 		positionals = append(positionals, arg)
 	}
-	if len(positionals) != 1 {
-		return nil, "", errors.New("search requires exactly one query")
+	if len(positionals) > 1 {
+		return nil, "", errors.New("search accepts at most one query")
+	}
+	if len(positionals) == 0 {
+		return flags, "", nil
 	}
 	return flags, positionals[0], nil
 }
@@ -1432,6 +1510,8 @@ func (a *app) print(value any) error {
 		return a.printMessages(v, false, 0)
 	case messageListOutput:
 		return a.printMessages(v.Messages, v.Truncated, v.Limit)
+	case whoEnvelope:
+		return a.printWho(v)
 	case searchEnvelope:
 		return a.printSearch(v)
 	case openEnvelope:
@@ -1632,8 +1712,8 @@ func humanLogOutcome(outcome string) string {
 }
 
 func (a *app) printSearch(result searchEnvelope) error {
-	if len(result.WhoMatched) > 1 {
-		if _, err := fmt.Fprintf(a.stdout, "who matched: %s\n\n", strings.Join(result.WhoMatched, ", ")); err != nil {
+	if result.WhoResolved != nil {
+		if _, err := fmt.Fprintf(a.stdout, "%s → %s\n\n", result.WhoQuery, result.WhoResolved.Who); err != nil {
 			return err
 		}
 	}
@@ -1654,6 +1734,154 @@ func (a *app) printSearch(result searchEnvelope) error {
 	}
 	_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches\n", len(result.Results), result.TotalMatches)
 	return err
+}
+
+func (a *app) printWho(result whoEnvelope) error {
+	if len(result.Candidates) == 0 {
+		_, err := fmt.Fprintf(a.stdout, "No people matched %q.\n", result.Query)
+		return err
+	}
+	return writeWhoCandidateTable(a.stdout, result.Candidates, terminalColumns())
+}
+
+func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width int) error {
+	if width < 42 {
+		width = 42
+	}
+	lastHeader := "Last seen"
+	messagesHeader := "Messages"
+	identifiersHeader := "Identifiers"
+	whoWidth := clampInt(width/4, 14, 28)
+	lastWidth := 25
+	messagesWidth := len(messagesHeader)
+	if width < 72 {
+		lastHeader = "Last"
+		messagesHeader = "Msgs"
+		identifiersHeader = "IDs"
+		whoWidth = clampInt(width/4, 8, 18)
+		lastWidth = 16
+		messagesWidth = len(messagesHeader)
+	}
+	gaps := 6
+	identifiersWidth := width - whoWidth - lastWidth - messagesWidth - gaps
+	if identifiersWidth < 10 {
+		identifiersWidth = 10
+		whoWidth = maxInt(6, width-lastWidth-messagesWidth-identifiersWidth-gaps)
+	}
+	if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, "Who", lastWidth, lastHeader, messagesWidth, messagesHeader, identifiersHeader); err != nil {
+		return err
+	}
+	for _, candidate := range candidates {
+		identifiers := wrapTableCell(strings.Join(candidate.Identifiers, ", "), identifiersWidth)
+		if len(identifiers) == 0 {
+			identifiers = []string{"-"}
+		}
+		for i, identifierLine := range identifiers {
+			who := ""
+			lastSeen := ""
+			messages := ""
+			if i == 0 {
+				who = candidate.Who
+				lastSeen = formatTime(candidate.LastSeen)
+				messages = strconv.Itoa(candidate.Messages)
+			}
+			if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, fitTableCell(who, whoWidth), lastWidth, fitTableCell(lastSeen, lastWidth), messagesWidth, messages, identifierLine); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func wrapTableCell(value string, width int) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	var out []string
+	line := ""
+	for _, word := range strings.Fields(value) {
+		word = strings.TrimSuffix(word, ",") + ","
+		if line == "" {
+			out = appendWrappedWord(out, &line, word, width)
+			continue
+		}
+		if runeLen(line)+1+runeLen(word) > width {
+			out = append(out, strings.TrimSuffix(line, ","))
+			line = ""
+		}
+		out = appendWrappedWord(out, &line, word, width)
+	}
+	if line != "" {
+		out = append(out, strings.TrimSuffix(line, ","))
+	}
+	return out
+}
+
+func appendWrappedWord(out []string, line *string, word string, width int) []string {
+	for runeLen(word) > width {
+		if *line != "" {
+			out = append(out, strings.TrimSuffix(*line, ","))
+			*line = ""
+		}
+		chunk, rest := splitRunes(word, width)
+		out = append(out, strings.TrimSuffix(chunk, ","))
+		word = rest
+	}
+	if *line == "" {
+		*line = word
+	} else {
+		*line += " " + word
+	}
+	return out
+}
+
+func splitRunes(value string, width int) (string, string) {
+	runes := []rune(value)
+	if width >= len(runes) {
+		return value, ""
+	}
+	return string(runes[:width]), string(runes[width:])
+}
+
+func fitTableCell(value string, width int) string {
+	value = strings.TrimSpace(value)
+	if runeLen(value) <= width {
+		return value
+	}
+	if width <= 1 {
+		return string([]rune(value)[:width])
+	}
+	runes := []rune(value)
+	return string(runes[:width-1]) + "…"
+}
+
+func terminalColumns() int {
+	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && value > 0 {
+		return value
+	}
+	return 100
+}
+
+func runeLen(value string) int {
+	return len([]rune(value))
+}
+
+func clampInt(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func maxInt(left, right int) int {
+	if left > right {
+		return left
+	}
+	return right
 }
 
 func (a *app) printOpen(result openEnvelope) error {
@@ -1686,7 +1914,11 @@ func (a *app) printMessages(messages []store.Message, truncated bool, limit int)
 	return nil
 }
 
-func newSearchEnvelope(query string, total int, messages []store.Message, whoMatched []string, aliases map[string]string) searchEnvelope {
+func newWhoResolved(candidate store.WhoCandidate) *whoResolved {
+	return &whoResolved{Who: candidate.Who, Identifiers: candidate.Identifiers}
+}
+
+func newSearchEnvelope(query, whoQuery string, total int, messages []store.Message, resolved *whoResolved, aliases map[string]string) searchEnvelope {
 	if messages == nil {
 		messages = []store.Message{}
 	}
@@ -1697,18 +1929,56 @@ func newSearchEnvelope(query string, total int, messages []store.Message, whoMat
 	}
 	return searchEnvelope{
 		Query:        query,
-		WhoMatched:   ambiguousWhoMatches(whoMatched),
+		WhoQuery:     whoQuery,
+		WhoResolved:  resolved,
 		Results:      results,
 		TotalMatches: total,
 		Truncated:    total > len(results),
 	}
 }
 
-func ambiguousWhoMatches(names []string) []string {
-	if len(names) <= 1 {
-		return nil
+func ambiguousWhoError(value, query string, candidates []store.WhoCandidate) contractError {
+	return contractError{
+		Code:       "ambiguous_who",
+		Message:    fmt.Sprintf("more than one person matched %q", value),
+		Remedy:     searchWhoRetryExample(firstCandidateIdentifier(candidates), query),
+		Candidates: candidates,
 	}
-	return names
+}
+
+func unknownWhoError(value string, didYouMean []store.WhoCandidate) contractError {
+	if didYouMean == nil {
+		didYouMean = []store.WhoCandidate{}
+	}
+	err := contractError{
+		Code:       "unknown_who",
+		Message:    fmt.Sprintf("no person matched %q", value),
+		Remedy:     "run wacrawl who NAME or search without --who",
+		DidYouMean: &didYouMean,
+	}
+	if len(didYouMean) == 0 {
+		err.Hint = "search without --who to find messages that mention this text"
+	}
+	return err
+}
+
+func firstCandidateIdentifier(candidates []store.WhoCandidate) string {
+	for _, candidate := range candidates {
+		if len(candidate.Identifiers) > 0 {
+			return candidate.Identifiers[0]
+		}
+		if strings.TrimSpace(candidate.Who) != "" {
+			return candidate.Who
+		}
+	}
+	return "IDENTIFIER"
+}
+
+func searchWhoRetryExample(identifier, query string) string {
+	if strings.TrimSpace(query) == "" {
+		return fmt.Sprintf("retry: wacrawl search --who %q", identifier)
+	}
+	return fmt.Sprintf("retry: wacrawl search --who %q %q", identifier, query)
 }
 
 func newSearchResult(message store.Message, alias string) searchResult {
@@ -2003,15 +2273,54 @@ func outputField(value string) string {
 }
 
 func (a *app) failContract(contractErr contractError) error {
+	return a.failContractWithExit(contractErr, 1)
+}
+
+func (a *app) failContractWithExit(contractErr contractError, exitCode int) error {
 	if a.json {
 		if err := a.print(errorEnvelope{Error: contractErr}); err != nil {
 			return err
 		}
 	} else {
-		_, _ = fmt.Fprintf(a.stderr, "%s. %s.\n", contractErr.Message, contractErr.Remedy)
+		_ = a.printContractError(contractErr)
 	}
 	failure := &contractFailure{contractError: contractErr}
-	return &cliError{code: 1, err: cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy}}
+	return &cliError{code: exitCode, err: cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy}}
+}
+
+func (a *app) printContractError(contractErr contractError) error {
+	if contractErr.Code == "ambiguous_who" {
+		if _, err := fmt.Fprintf(a.stderr, "%s.\n\n", contractErr.Message); err != nil {
+			return err
+		}
+		if err := writeWhoCandidateTable(a.stderr, contractErr.Candidates, terminalColumns()); err != nil {
+			return err
+		}
+		_, err := fmt.Fprintf(a.stderr, "\n%s\n", contractErr.Remedy)
+		return err
+	}
+	if contractErr.Code == "unknown_who" {
+		if _, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Message); err != nil {
+			return err
+		}
+		if contractErr.DidYouMean != nil && len(*contractErr.DidYouMean) > 0 {
+			if _, err := fmt.Fprintln(a.stderr, "\nDid you mean:"); err != nil {
+				return err
+			}
+			if err := writeWhoCandidateTable(a.stderr, *contractErr.DidYouMean, terminalColumns()); err != nil {
+				return err
+			}
+		}
+		if contractErr.Hint != "" {
+			if _, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Hint); err != nil {
+				return err
+			}
+		}
+		_, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Remedy)
+		return err
+	}
+	_, err := fmt.Fprintf(a.stderr, "%s. %s.\n", contractErr.Message, contractErr.Remedy)
+	return err
 }
 
 func printUsage(w io.Writer) {
@@ -2032,6 +2341,7 @@ Commands:
   unread      List chats with unread messages.
   messages    List archived messages.
   search      Search archived messages.
+  who         Resolve a person from archived participants.
   open        Open a message ref from search.
   sql         Run a read-only SQL query.
   web         Browse the local archive in a private web viewer.
@@ -2051,6 +2361,7 @@ Examples:
   wacrawl sync
   wacrawl unread --limit 20
   wacrawl --json contacts export
+  wacrawl who "Alice"
   wacrawl --json search "invoice" --from-them --after 2026-01-01
   wacrawl open wacrawl:msg/MESSAGE_ID
   wacrawl sql "SELECT count(*) FROM messages"
@@ -2133,6 +2444,19 @@ Usage:
 Examples:
   wacrawl --json contacts export
 `)
+	case "who":
+		_, _ = fmt.Fprint(w, `Resolve a person from archived participants.
+
+Usage:
+  wacrawl who <name>
+
+The resolver matches names, aliases and identifiers by case-insensitive prefix,
+substring and close spelling. JSON output is the contract shape used by search.
+
+Examples:
+  wacrawl who "Alice"
+  wacrawl --json who "Alice"
+`)
 	case "unread":
 		_, _ = fmt.Fprint(w, `List chats with unread messages.
 
@@ -2173,13 +2497,13 @@ Examples:
 		_, _ = fmt.Fprint(w, `Search archived messages.
 
 Usage:
-  wacrawl search [flags] <query>
-  wacrawl search <query> [flags]
+  wacrawl search [flags] [query]
+  wacrawl search [query] [flags]
 
 Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
-  --who NAME       Filter to messages where NAME is a sender, recipient, or chat member.
+  --who NAME       Resolve NAME, then filter to that sender, recipient, or chat member.
   --limit N        Maximum messages to print. Default: 20, maximum: 200.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
@@ -2191,6 +2515,7 @@ Flags:
 Examples:
   wacrawl search "invoice"
   wacrawl search "invoice" --who "Alice Example"
+  wacrawl search --who "Alice Example"
   wacrawl search "flight" --after 2026-01-01 --from-them
   wacrawl --json search --chat 1234567890@s.whatsapp.net "release notes"
 `)

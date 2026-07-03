@@ -23,6 +23,7 @@ func controlManifest() control.Manifest {
 		"status":         {Title: "Status", Argv: []string{"wacrawl", "--json", "status"}, JSON: true},
 		"sync":           {Title: "Sync", Argv: []string{"wacrawl", "--json", "sync"}, JSON: true, Mutates: true},
 		"search":         {Title: "Search", Argv: []string{"wacrawl", "--json", "search", "QUERY"}, JSON: true},
+		"who":            {Title: "Resolve who", Argv: []string{"wacrawl", "--json", "who", "NAME"}, JSON: true},
 		"open":           {Title: "Open", Argv: []string{"wacrawl", "--json", "open", "REF"}, JSON: true},
 		"sql":            {Title: "SQL", Argv: []string{"wacrawl", "--json", "sql"}, JSON: true},
 		"web":            {Title: "Web viewer", Argv: []string{"wacrawl", "web"}},

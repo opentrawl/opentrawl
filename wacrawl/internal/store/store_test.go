@@ -80,6 +80,21 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	if total != 2 {
 		t.Fatalf("expected 2 total search results, got %d", total)
 	}
+	filterOnlyAfter := now.Add(-2 * time.Minute)
+	filterOnly, err := st.Search(ctx, MessageFilter{After: &filterOnlyAfter, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filterOnly) != 1 || filterOnly[0].MessageID != "b" {
+		t.Fatalf("expected newest filter-only result, got %+v", filterOnly)
+	}
+	filterOnlyTotal, err := st.SearchCount(ctx, MessageFilter{After: &filterOnlyAfter, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filterOnlyTotal != 2 {
+		t.Fatalf("expected 2 filter-only matches, got %d", filterOnlyTotal)
+	}
 	if _, err := st.Search(ctx, MessageFilter{}); err == nil {
 		t.Fatal("expected empty search query error")
 	}
@@ -499,7 +514,7 @@ func TestSearchWhoFilterMatchesUnicodeCaseFold(t *testing.T) {
 	}
 }
 
-func TestWhoMatchesReturnsDistinctParticipantNames(t *testing.T) {
+func TestResolveWhoPrefersContactFullNameOverPushName(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
 	if err != nil {
@@ -509,8 +524,82 @@ func TestWhoMatchesReturnsDistinctParticipantNames(t *testing.T) {
 
 	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
 	contacts := []Contact{
-		{JID: "casey-one@s.whatsapp.net", FullName: "Casey Example"},
-		{JID: "casey-two@s.whatsapp.net", FullName: "casey example"},
+		{JID: "katja@example.com", FullName: "Katja Example"},
+	}
+	chats := []Chat{
+		{JID: "katja@example.com", Kind: "dm", LastMessageAt: now, MessageCount: 1},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "katja@example.com", MessageID: "katja-contact", SenderJID: "katja@example.com", SenderName: "Katja", Timestamp: now, Text: "needle one", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	resolution, err := st.ResolveWho(ctx, "katja")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolution.Candidates) != 1 || resolution.Candidates[0].Who != "Katja Example" {
+		t.Fatalf("candidate = %#v, want contact full name", resolution.Candidates)
+	}
+}
+
+func TestResolveWhoChoosesCleanPushNameAndNormalizesIdentifiers(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "katja@example.com", LID: "118390991671363@lid"},
+	}
+	chats := []Chat{
+		{JID: "katja@example.com", Kind: "dm", LastMessageAt: now, MessageCount: 3},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "katja@example.com", MessageID: "katja-corrupt", SenderJID: "118390991671363@lid", SenderName: "+EAA=", Timestamp: now, Text: "needle one", RawType: 0},
+		{SourcePK: 2, ChatJID: "katja@example.com", MessageID: "katja-clean-one", SenderJID: "118390991671363@lid", SenderName: "Katja", Timestamp: now.Add(time.Minute), Text: "needle two", RawType: 0},
+		{SourcePK: 3, ChatJID: "katja@example.com", MessageID: "katja-clean-two", SenderJID: "118390991671363@lid", SenderName: "Katja", Timestamp: now.Add(2 * time.Minute), Text: "needle three", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	resolution, err := st.ResolveWho(ctx, "katja")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolution.Candidates) != 1 {
+		t.Fatalf("candidates = %#v, want 1", resolution.Candidates)
+	}
+	candidate := resolution.Candidates[0]
+	if candidate.Who != "Katja" {
+		t.Fatalf("who = %q, want Katja", candidate.Who)
+	}
+	if stringSliceContains(candidate.Identifiers, "118390991671363@lid@lid") {
+		t.Fatalf("identifiers contain double LID suffix: %#v", candidate.Identifiers)
+	}
+	if got := stringSliceCount(candidate.Identifiers, "118390991671363@lid"); got != 1 {
+		t.Fatalf("identifiers = %#v, want one normalized LID identifier, got %d", candidate.Identifiers, got)
+	}
+}
+
+func TestResolveWhoReturnsGenerousDistinctCandidates(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "casey-one@s.whatsapp.net", Phone: "+15550100", FullName: "Casey Example"},
+		{JID: "casey-two@s.whatsapp.net", Phone: "+15550101", FullName: "casey example"},
 	}
 	chats := []Chat{
 		{JID: "casey-one@s.whatsapp.net", Kind: "dm", Name: "Casey Example", LastMessageAt: now, MessageCount: 1},
@@ -524,14 +613,42 @@ func TestWhoMatchesReturnsDistinctParticipantNames(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	matches, err := st.WhoMatches(ctx, "CASEY EXAMPLE")
+	resolution, err := st.ResolveWho(ctx, "casey")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"Casey Example", "casey example"}
-	if !reflect.DeepEqual(matches, want) {
-		t.Fatalf("matches = %#v, want %#v", matches, want)
+	if len(resolution.Candidates) != 2 {
+		t.Fatalf("candidates = %#v, want 2", resolution.Candidates)
 	}
+	if resolution.Candidates[0].Who != "casey example" || resolution.Candidates[0].Messages != 1 || !stringSliceContains(resolution.Candidates[0].Identifiers, "+15550101") {
+		t.Fatalf("first candidate = %#v", resolution.Candidates[0])
+	}
+	closeResolution, err := st.ResolveWho(ctx, "Casy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(closeResolution.Candidates) != 2 {
+		t.Fatalf("close-spelling candidates = %#v, want 2", closeResolution.Candidates)
+	}
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func stringSliceCount(values []string, want string) int {
+	count := 0
+	for _, value := range values {
+		if value == want {
+			count++
+		}
+	}
+	return count
 }
 
 func TestListChatsClampsOutOfRangePersistedTimestamp(t *testing.T) {

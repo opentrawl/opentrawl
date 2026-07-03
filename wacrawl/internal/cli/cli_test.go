@@ -262,6 +262,15 @@ func assertRawMapKeys(t *testing.T, got map[string]json.RawMessage, keys ...stri
 	}
 }
 
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func assertNoRawFields(t *testing.T, data []byte) {
 	t.Helper()
 	var value any
@@ -361,6 +370,18 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	want := []string{"wacrawl", "--json", "contacts", "export"}
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
+	}
+
+	whoCommand, ok := manifest.Commands["who"]
+	if !ok {
+		t.Fatalf("commands = %#v", manifest.Commands)
+	}
+	if whoCommand.Mutates || !whoCommand.JSON {
+		t.Fatalf("who command = %#v", whoCommand)
+	}
+	whoWant := []string{"wacrawl", "--json", "who", "NAME"}
+	if !reflect.DeepEqual(whoCommand.Argv, whoWant) {
+		t.Fatalf("who argv = %#v, want %#v", whoCommand.Argv, whoWant)
 	}
 }
 
@@ -791,9 +812,9 @@ func TestSearchWhoFiltersAndKeepsFilteredTotals(t *testing.T) {
 	}
 	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
 	contacts := []store.Contact{
-		{JID: "bob@s.whatsapp.net", FullName: "Bob Example"},
-		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
-		{JID: "other@s.whatsapp.net", FullName: "Other Person"},
+		{JID: "bob@s.whatsapp.net", Phone: "+15550100", FullName: "Bob Example"},
+		{JID: "alice@s.whatsapp.net", Phone: "+15550101", FullName: "Alice Example"},
+		{JID: "other@s.whatsapp.net", Phone: "+15550102", FullName: "Other Person"},
 	}
 	chats := []store.Chat{
 		{JID: "bob@s.whatsapp.net", Kind: "dm", Name: "Bob Example", LastMessageAt: now, MessageCount: 2},
@@ -820,12 +841,12 @@ func TestSearchWhoFiltersAndKeepsFilteredTotals(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "needle", "--who", "  bob \t example  ", "--limit", "1"}, &stdout, &stderr); err != nil {
 		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
 	}
-	assertRootKeys(t, stdout.Bytes(), "query", "results", "total_matches", "truncated")
+	assertRootKeys(t, stdout.Bytes(), "query", "who_resolved", "results", "total_matches", "truncated")
 	var payload searchEnvelope
 	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout.String(), err)
 	}
-	if payload.TotalMatches != 2 || !payload.Truncated || len(payload.Results) != 1 || payload.WhoMatched != nil {
+	if payload.TotalMatches != 2 || !payload.Truncated || len(payload.Results) != 1 || payload.WhoResolved == nil || payload.WhoResolved.Who != "Bob Example" || !stringSliceContains(payload.WhoResolved.Identifiers, "+15550100") {
 		t.Fatalf("payload = %#v", payload)
 	}
 
@@ -840,9 +861,129 @@ func TestSearchWhoFiltersAndKeepsFilteredTotals(t *testing.T) {
 	if payload.TotalMatches != 1 || len(payload.Results) != 1 || payload.Results[0].Ref != "wacrawl:msg/group" {
 		t.Fatalf("group participant payload = %#v", payload)
 	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "+15550100", "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("identifier search error = %v stderr=%s", err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("identifier search json = %s err=%v", stdout.String(), err)
+	}
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "Bob Example" || payload.TotalMatches != 2 {
+		t.Fatalf("identifier payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "search", "needle", "--who", "bob example", "--limit", "1"}, &stdout, &stderr); err != nil {
+		t.Fatalf("human search error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "bob example → Bob Example") {
+		t.Fatalf("human output missing resolution line:\n%s", stdout.String())
+	}
 }
 
-func TestSearchWhoMatchedReportsAmbiguousParticipants(t *testing.T) {
+func TestSearchWhoResolutionLineUsesCleanCanonicalName(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "katja@example.com", LID: "118390991671363@lid"},
+	}
+	chats := []store.Chat{
+		{JID: "katja@example.com", Kind: "dm", LastMessageAt: now, MessageCount: 3},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "katja@example.com", MessageID: "katja-corrupt", SenderJID: "118390991671363@lid", SenderName: "+EAA=", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle one"},
+		{SourcePK: 2, ChatJID: "katja@example.com", MessageID: "katja-clean-one", SenderJID: "118390991671363@lid", SenderName: "Katja", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "needle two"},
+		{SourcePK: 3, ChatJID: "katja@example.com", MessageID: "katja-clean-two", SenderJID: "118390991671363@lid", SenderName: "Katja", Timestamp: now.Add(2 * time.Minute), RawType: 0, MessageType: "text", Text: "needle three"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "search", "--who", "katja", "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("human search error = %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "katja → Katja") {
+		t.Fatalf("human output missing clean resolution line:\n%s", stdout.String())
+	}
+	if strings.Contains(stdout.String(), "katja → +EAA=") {
+		t.Fatalf("human output used corrupt resolution line:\n%s", stdout.String())
+	}
+}
+
+func TestWhoCommandResolvesDedupedGenerousCandidates(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "alice@s.whatsapp.net", Phone: "+15550100", FullName: "Alice Example", LID: "alice-lid"},
+	}
+	chats := []store.Chat{
+		{JID: "alice@s.whatsapp.net", Kind: "dm", Name: "Alice Example", LastMessageAt: now, MessageCount: 2},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "alice-lid", SenderJID: "alice-lid@lid", SenderName: "Alice Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle one"},
+		{SourcePK: 2, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "alice-jid", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "needle two"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "who", "alce"}, &stdout, &stderr); err != nil {
+		t.Fatalf("who error = %v stderr=%s", err, stderr.String())
+	}
+	assertRootKeys(t, stdout.Bytes(), "query", "candidates")
+	var payload whoEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("who json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Query != "alce" || len(payload.Candidates) != 1 {
+		t.Fatalf("payload = %#v", payload)
+	}
+	candidate := payload.Candidates[0]
+	if candidate.Who != "Alice Example" || candidate.Messages != 2 || !candidate.LastSeen.Equal(now.Add(time.Minute)) {
+		t.Fatalf("candidate = %#v", candidate)
+	}
+	for _, identifier := range []string{"+15550100", "alice-lid", "alice-lid@lid", "alice@s.whatsapp.net"} {
+		if !stringSliceContains(candidate.Identifiers, identifier) {
+			t.Fatalf("identifiers = %#v, missing %s", candidate.Identifiers, identifier)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	t.Setenv("COLUMNS", "72")
+	if err := Run(ctx, []string{"--db", dbPath, "who", "ali"}, &stdout, &stderr); err != nil {
+		t.Fatalf("human who error = %v stderr=%s", err, stderr.String())
+	}
+	conformance.AssertHumanOutput(t, stdout.String())
+	for _, line := range strings.Split(strings.TrimRight(stdout.String(), "\n"), "\n") {
+		if len([]rune(line)) > 72 {
+			t.Fatalf("line exceeds COLUMNS=72: %q\n%s", line, stdout.String())
+		}
+	}
+}
+
+func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
 	st, err := store.Open(ctx, dbPath)
@@ -872,17 +1013,138 @@ func TestSearchWhoMatchedReportsAmbiguousParticipants(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr); err != nil {
-		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 4 {
+		t.Fatalf("expected ambiguous_who exit 4, got err=%v code=%d stderr=%s", err, ExitCode(err), stderr.String())
 	}
-	assertRootKeys(t, stdout.Bytes(), "query", "who_matched", "results", "total_matches", "truncated")
+	assertRootKeys(t, stdout.Bytes(), "error")
+	var payload errorEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("ambiguous json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "ambiguous_who" || len(payload.Error.Candidates) != 2 || !strings.Contains(payload.Error.Remedy, "retry: wacrawl search --who") {
+		t.Fatalf("ambiguous payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(ctx, []string{"--db", dbPath, "search", "--who", "CASEY EXAMPLE", "needle"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 4 {
+		t.Fatalf("expected ambiguous_who human exit 4, got %v", err)
+	}
+	hasRetryExample := strings.Contains(stderr.String(), "retry: wacrawl search --who")
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "more than one person matched") || !hasRetryExample {
+		t.Fatalf("ambiguous human stdout=%q stderr=\n%s", stdout.String(), stderr.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "Nobody", "needle"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 5 {
+		t.Fatalf("expected unknown_who exit 5, got err=%v code=%d", err, ExitCode(err))
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("unknown json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || len(*payload.Error.DidYouMean) != 0 || payload.Error.Hint == "" {
+		t.Fatalf("unknown payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	err = Run(ctx, []string{"--db", dbPath, "search", "--who", "Nobody", "needle"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 5 {
+		t.Fatalf("expected unknown_who human exit 5, got %v", err)
+	}
+	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "search without --who") {
+		t.Fatalf("unknown human stdout=%q stderr=\n%s", stdout.String(), stderr.String())
+	}
+}
+
+func TestSearchAllowsFilterOnlyQueries(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{{JID: "alice@s.whatsapp.net", Phone: "+15550100", FullName: "Alice Example"}}
+	chats := []store.Chat{{JID: "alice@s.whatsapp.net", Kind: "dm", Name: "Alice Example", LastMessageAt: now.Add(2 * time.Hour), MessageCount: 3}}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "old", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "old text"},
+		{SourcePK: 2, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "middle", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now.Add(time.Hour), RawType: 0, MessageType: "text", Text: "middle text"},
+		{SourcePK: 3, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "new", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now.Add(2 * time.Hour), RawType: 0, MessageType: "text", Text: "new text"},
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--after", now.Add(30 * time.Minute).Format(time.RFC3339), "--limit", "1"}, &stdout, &stderr); err != nil {
+		t.Fatalf("after-only search error = %v stderr=%s", err, stderr.String())
+	}
 	var payload searchEnvelope
 	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
-		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+		t.Fatalf("after-only json = %s err=%v", stdout.String(), err)
 	}
-	wantMatched := []string{"Casey Example", "casey example"}
-	if !reflect.DeepEqual(payload.WhoMatched, wantMatched) || payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
-		t.Fatalf("payload = %#v, want who_matched %#v and 2 results", payload, wantMatched)
+	if payload.Query != "" || payload.TotalMatches != 2 || !payload.Truncated || len(payload.Results) != 1 || payload.Results[0].Ref != "wacrawl:msg/new" {
+		t.Fatalf("after-only payload = %#v", payload)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "Alice Example", "--limit", "2"}, &stdout, &stderr); err != nil {
+		t.Fatalf("who-only search error = %v stderr=%s", err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("who-only json = %s err=%v", stdout.String(), err)
+	}
+	if payload.WhoResolved == nil || payload.TotalMatches != 3 || !payload.Truncated || len(payload.Results) != 2 || payload.Results[0].Ref != "wacrawl:msg/new" {
+		t.Fatalf("who-only payload = %#v", payload)
+	}
+}
+
+func TestLegacyWhoBlendFieldIsRemovedFromSearchAndHelp(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, []store.Contact{
+		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
+	}, []store.Chat{
+		{JID: "alice@s.whatsapp.net", Kind: "dm", Name: "Alice Example", LastMessageAt: now, MessageCount: 1},
+	}, nil, nil, []store.Message{
+		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "alice", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now, RawType: 0, MessageType: "text", Text: "needle"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--who", "Alice Example", "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
+	}
+	legacyField := "who" + "_matched"
+	if strings.Contains(stdout.String(), legacyField) {
+		t.Fatalf("search still includes legacy who blend field:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"search", "--help"}, &stdout, &stderr); err != nil {
+		t.Fatalf("help error = %v stderr=%s", err, stderr.String())
+	}
+	if strings.Contains(stdout.String(), legacyField) {
+		t.Fatalf("help still mentions legacy who blend field:\n%s", stdout.String())
 	}
 }
 
@@ -1253,7 +1515,7 @@ func TestRunUsageErrors(t *testing.T) {
 		t.Fatalf("expected message limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "exactly one query") {
+	if err == nil || !strings.Contains(err.Error(), "query or --who") {
 		t.Fatalf("expected query error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"open"}, &stdout, &stderr)
@@ -1331,6 +1593,8 @@ func TestRunHelpMenus(t *testing.T) {
 		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N] [--unread]"},
 		{"contacts topic", []string{"help", "contacts"}, "wacrawl [--json] contacts export"},
 		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] contacts export"},
+		{"who topic", []string{"help", "who"}, "wacrawl who <name>"},
+		{"who flag", []string{"who", "--help"}, "close spelling"},
 		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
 		{"search flag", []string{"search", "--help"}, "--who NAME"},
@@ -1657,6 +1921,13 @@ func TestCLIHelpers(t *testing.T) {
 	}
 	if query != "launch" || strings.Join(args, " ") != "--limit 5 --from-them --who Alice Example" {
 		t.Fatalf("unexpected split args=%v query=%q", args, query)
+	}
+	args, query, err = splitSearchArgs([]string{"--after", "2026-01-01"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if query != "" || strings.Join(args, " ") != "--after 2026-01-01" {
+		t.Fatalf("unexpected filter-only split args=%v query=%q", args, query)
 	}
 	if _, _, err := splitSearchArgs([]string{"one", "two"}); err == nil {
 		t.Fatal("expected multi-query split error")
