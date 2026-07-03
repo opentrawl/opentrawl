@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # Install
 
 `clawdex` ships as a single Go binary. The visible version is injected at
@@ -49,8 +53,8 @@ the latest tag.
 ## Platform notes
 
 - **macOS** is the most exercised target. `clawdex import apple` reads
-  Contacts via `Contacts.framework`, so the binary must be allowed in
-  *Settings → Privacy & Security → Contacts* the first time you run it.
+  the local AddressBook SQLite databases, so the binary must be allowed in
+  *Settings → Privacy & Security → Full Disk Access* before import.
 - **Linux** builds support markdown editing, notes, search, Git, Google
   imports through `gog`, and vCard export. Apple direct import is macOS-only.
 - **Windows** binaries are produced but lightly tested; the Git layer assumes

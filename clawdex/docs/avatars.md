@@ -1,3 +1,7 @@
+---
+written_by: ai
+---
+
 # Avatars
 
 Every person can carry a single avatar image, stored as a real file next to
@@ -66,9 +70,8 @@ clawdex import apple  --avatars
 clawdex import google --account you@gmail.com --avatars
 ```
 
-- **Apple.** Reads the thumbnail bytes that
-  [`Contacts.framework`](https://developer.apple.com/documentation/contacts)
-  hands out. macOS-only.
+- **Apple.** Reads thumbnail bytes from the local AddressBook database.
+  macOS-only, with the same Full Disk Access requirement as `import apple`.
 - **Google.** Calls `gog contacts raw --person-fields photos`, picks the
   selected photo URL, fetches the bytes through
   [`gog`](https://github.com/steipete/gogcli), and stores them locally.

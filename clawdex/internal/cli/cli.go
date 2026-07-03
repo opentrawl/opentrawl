@@ -49,13 +49,14 @@ type CLI struct {
 	Status   StatusCmd   `cmd:"" help:"Show contacts repo status"`
 	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit clawdex config"`
 	Person   PersonCmd   `cmd:"" help:"Manage people"`
+	Contacts ContactsCmd `cmd:"" help:"Export contact JSON"`
 	Who      WhoCmd      `cmd:"" help:"Resolve a person by name, alias, or identifier"`
 	Note     NoteCmd     `cmd:"" help:"Manage notes"`
 	Timeline TimelineCmd `cmd:"" help:"Show person timeline"`
 	Search   SearchCmd   `cmd:"" help:"Search people and notes"`
 	Import   ImportCmd   `cmd:"" help:"Import contacts into local markdown"`
 	Sync     SyncCmd     `cmd:"" help:"Preview sync with address books"`
-	Export   ExportCmd   `cmd:"" help:"Export contacts"`
+	Export   ExportCmd   `cmd:"" help:"Export vCard files"`
 	Git      GitCmd      `cmd:"" help:"Run data repo git helpers"`
 	Doctor   DoctorCmd   `cmd:"" help:"Check repo health"`
 }
@@ -198,6 +199,20 @@ type PersonCmd struct {
 	Show   PersonShowCmd   `cmd:"" help:"Show a person"`
 	Edit   PersonEditCmd   `cmd:"" help:"Edit a person markdown file"`
 	Avatar PersonAvatarCmd `cmd:"" help:"Manage person avatars"`
+}
+
+type ContactsCmd struct {
+	Export ContactsExportCmd `cmd:"" help:"Export contacts as JSON"`
+}
+
+type ContactsExportCmd struct{}
+
+func (c *ContactsExportCmd) Run(r *Runtime) error {
+	people, err := r.store.People()
+	if err != nil {
+		return err
+	}
+	return r.print(contactExportFromPeople(people))
 }
 
 type PersonAddCmd struct {
@@ -664,6 +679,33 @@ func sourceContactsFromExport(source string, export contactexport.ContactExport)
 	return contacts
 }
 
+func contactExportFromPeople(people []model.Person) contactexport.ContactExport {
+	out := contactexport.ContactExport{Contacts: make([]contactexport.Contact, 0, len(people))}
+	for _, person := range people {
+		contact := contactexport.Contact{
+			DisplayName: person.Name,
+			Accounts:    person.Accounts,
+		}
+		for _, phone := range person.Phones {
+			if strings.TrimSpace(phone.Value) != "" {
+				contact.PhoneNumbers = append(contact.PhoneNumbers, phone.Value)
+			}
+		}
+		for _, email := range person.Emails {
+			if strings.TrimSpace(email.Value) != "" {
+				contact.Emails = append(contact.Emails, email.Value)
+			}
+		}
+		for _, address := range person.Addresses {
+			if strings.TrimSpace(address.Value) != "" {
+				contact.Addresses = append(contact.Addresses, address.Value)
+			}
+		}
+		out.Contacts = append(out.Contacts, contact)
+	}
+	return out
+}
+
 func mergeCrawlerExportAccounts(values ...map[string][]string) map[string][]string {
 	out := map[string][]string{}
 	for _, accounts := range values {
@@ -1021,6 +1063,13 @@ func pluralItem(item string) string {
 	return item + "s"
 }
 
+func countNoun(count int, singular, plural string) string {
+	if count == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %s", count, plural)
+}
+
 func (r *Runtime) print(value any) error {
 	if r.root.JSON {
 		enc := json.NewEncoder(r.stdout)
@@ -1042,6 +1091,19 @@ func (r *Runtime) print(value any) error {
 		return nil
 	case control.Status:
 		return printStatusText(r.stdout, v)
+	case contactexport.ContactExport:
+		for _, contact := range v.Contacts {
+			addresses := ""
+			if n := len(contact.Addresses); n > 0 {
+				addresses = "\t" + countNoun(n, "address", "addresses")
+			}
+			identifiers := len(contact.PhoneNumbers) + len(contact.Emails)
+			if _, err := fmt.Fprintf(r.stdout, "%s\t%s%s\n", contact.DisplayName, countNoun(identifiers, "identifier", "identifiers"), addresses); err != nil {
+				return err
+			}
+		}
+		_, err := fmt.Fprintf(r.stdout, "%s\n", countNoun(len(v.Contacts), "contact", "contacts"))
+		return err
 	case model.Note:
 		_, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", v.ID, v.Kind, v.Source, v.Path)
 		return err

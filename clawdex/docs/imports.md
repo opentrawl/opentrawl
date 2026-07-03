@@ -38,8 +38,9 @@ clawdex import apple --avatars
 clawdex import apple --input ~/Desktop/contacts.json
 ```
 
-- Default source is the macOS Contacts database via `Contacts.framework`.
-  The first run prompts for *Contacts* access in System Settings.
+- Default source is the local macOS AddressBook database under
+  `~/Library/Application Support/AddressBook`. It uses Full Disk Access, not
+  the separate Contacts permission.
 - `--input PATH` reads JSON or NDJSON instead — useful on Linux, in CI,
   or when round-tripping a snapshot.
 - `--avatars` imports thumbnail bytes. Without it, only structured fields
