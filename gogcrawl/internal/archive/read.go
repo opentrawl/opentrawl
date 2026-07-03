@@ -36,18 +36,17 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 
 func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
-	if query == "" {
+	whoValue := normalizeWho(opts.Who)
+	hasFilters := opts.After != nil || opts.Before != nil || whoValue != ""
+	if query == "" && !hasFilters {
 		return SearchResult{}, fmt.Errorf("search query is required")
 	}
-	if _, _, err := s.EnsureParticipants(ctx); err != nil {
-		return SearchResult{}, err
-	}
-	whoMatch, err := s.searchWhoMatched(ctx, opts.Who)
+	whoFilter, err := s.resolveSearchWho(ctx, whoValue)
 	if err != nil {
 		return SearchResult{}, err
 	}
-	where, args := searchWhere(opts, ftsQuery(query), whoMatch)
-	total, err := s.countSearch(ctx, where, args)
+	from, where, args, order := searchQueryParts(opts, query, whoFilter)
+	total, err := s.countSearch(ctx, from, where, args)
 	if err != nil {
 		return SearchResult{}, err
 	}
@@ -61,16 +60,15 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	}
 	rows, err := s.store.DB().QueryContext(ctx, `
 select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
-from messages_fts
-join messages m on m.id = messages_fts.id
+`+from+`
 `+where+`
-order by rank, m.time_unix desc
+`+order+`
 limit ?
 `, append(args, limit)...)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search messages: %w", err)
 	}
-	result := SearchResult{Query: query, WhoMatched: ambiguousWhoMatches(whoMatch.displayNames), TotalMatches: total, Truncated: total > int64(limit)}
+	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: total > int64(limit)}
 	refs := make([]string, 0, limit)
 	for rows.Next() {
 		var id, when, fromName, fromAddress, subject, body string
@@ -163,12 +161,11 @@ order by id
 	return out, nil
 }
 
-func (s *Store) countSearch(ctx context.Context, where string, args []any) (int64, error) {
+func (s *Store) countSearch(ctx context.Context, from string, where string, args []any) (int64, error) {
 	var total int64
 	err := s.store.DB().QueryRowContext(ctx, `
 select count(*)
-from messages_fts
-join messages m on m.id = messages_fts.id
+`+from+`
 `+where, args...).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("count search messages: %w", err)
@@ -176,9 +173,17 @@ join messages m on m.id = messages_fts.id
 	return total, nil
 }
 
-func searchWhere(opts SearchOptions, fts string, who searchWhoMatch) (string, []any) {
-	clauses := []string{"where messages_fts match ?"}
-	args := []any{fts}
+func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (string, string, []any, string) {
+	from := "from messages m"
+	order := "order by m.time_unix desc"
+	var clauses []string
+	var args []any
+	if strings.TrimSpace(query) != "" {
+		from = "from messages_fts join messages m on m.id = messages_fts.id"
+		clauses = append(clauses, "messages_fts match ?")
+		args = append(args, ftsQuery(query))
+		order = "order by rank, m.time_unix desc"
+	}
 	if opts.After != nil {
 		clauses = append(clauses, "m.time_unix >= ?")
 		args = append(args, opts.After.Unix())
@@ -202,7 +207,10 @@ func searchWhere(opts SearchOptions, fts string, who searchWhoMatch) (string, []
 			}
 		}
 	}
-	return strings.Join(clauses, " and "), args
+	if len(clauses) == 0 {
+		return from, "", args, order
+	}
+	return from, "where " + strings.Join(clauses, " and "), args, order
 }
 
 func placeholders(count int) string {

@@ -51,6 +51,7 @@ func controlManifest() metadataEnvelope {
 			"status":          {Title: "Status", Argv: []string{"gogcrawl", "status", "--json"}, JSON: true},
 			"sync":            {Title: "Sync", Argv: []string{"gogcrawl", "sync", "--json"}, JSON: true, Mutates: true},
 			"search":          {Title: "Search", Argv: []string{"gogcrawl", "search", "<query>", "--json"}, JSON: true},
+			"who":             {Title: "Resolve who", Argv: []string{"gogcrawl", "who", "<name>", "--json"}, JSON: true},
 			"open":            {Title: "Open", Argv: []string{"gogcrawl", "open", "<ref>", "--json"}, JSON: true},
 			"doctor":          {Title: "Doctor", Argv: []string{"gogcrawl", "doctor", "--json"}, JSON: true},
 			"contacts_export": {Title: "Export contacts", Argv: []string{"gogcrawl", "contacts", "export", "--json"}, JSON: true},

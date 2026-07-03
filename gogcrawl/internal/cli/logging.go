@@ -60,7 +60,7 @@ func commandName(args []string) string {
 		return "help"
 	}
 	switch args[0] {
-	case "metadata", "status", "sync", "search", "open", "doctor", "contacts":
+	case "metadata", "status", "sync", "search", "who", "open", "doctor", "contacts":
 		return args[0]
 	default:
 		return "unknown"

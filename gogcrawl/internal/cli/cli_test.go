@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
@@ -236,6 +237,31 @@ func TestMetadataDeclaresContactsExport(t *testing.T) {
 			t.Fatalf("capabilities = %#v", manifest.Capabilities)
 		}
 	}
+	if _, ok := manifest.Commands["who"]; !ok {
+		t.Fatalf("commands = %#v", manifest.Commands)
+	}
+}
+
+func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
+	installFakeGog(t)
+	top := string(runOutput(t, context.Background(), []string{"--help"}))
+	if !strings.Contains(top, "gogcrawl who NAME [--json]") {
+		t.Fatalf("top help missing who:\n%s", top)
+	}
+	search := string(runOutput(t, context.Background(), []string{"help", "search"}))
+	for _, want := range []string{
+		"gogcrawl search [QUERY]",
+		"QUERY is optional when --who, --after or --before is present.",
+		"Resolve a name, or filter by an exact email, phone or handle.",
+	} {
+		if !strings.Contains(search, want) {
+			t.Fatalf("search help missing %q:\n%s", want, search)
+		}
+	}
+	who := string(runOutput(t, context.Background(), []string{"help", "who"}))
+	if !strings.Contains(who, "Resolve a Gmail participant name or identifier.") {
+		t.Fatalf("who help = %s", who)
+	}
 }
 
 func TestSearchRejectsEmptyWho(t *testing.T) {
@@ -244,6 +270,121 @@ func TestSearchRejectsEmptyWho(t *testing.T) {
 	err := Run(context.Background(), []string{"search", "--who", " \t ", "project", "--archive", filepath.Join(t.TempDir(), "missing.db")}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "search --who requires an identity") {
 		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+}
+
+func TestWhoCommandReturnsContractShapeAndHumanTable(t *testing.T) {
+	installFakeGog(t)
+	dbPath := seedArchive(t, []archive.Message{
+		{ID: "m1", Time: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Project", Body: "Project body."},
+		{ID: "m2", Time: time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC), FromName: "Alice A.", FromAddress: "alice@example.com", Subject: "Project", Body: "Another project body."},
+	})
+	var raw map[string]any
+	runJSON(t, context.Background(), []string{"who", "alce", "--json", "--archive", dbPath}, &raw)
+	if len(raw) != 2 || raw["query"] != "alce" {
+		t.Fatalf("who JSON = %#v", raw)
+	}
+	candidates, ok := raw["candidates"].([]any)
+	if !ok || len(candidates) != 1 {
+		t.Fatalf("candidates = %#v", raw["candidates"])
+	}
+	candidate, ok := candidates[0].(map[string]any)
+	if !ok {
+		t.Fatalf("candidate = %#v", candidates[0])
+	}
+	for _, key := range []string{"who", "identifiers", "last_seen", "messages"} {
+		if _, ok := candidate[key]; !ok {
+			t.Fatalf("candidate missing %q: %#v", key, candidate)
+		}
+	}
+	for key := range candidate {
+		if key != "who" && key != "identifiers" && key != "last_seen" && key != "messages" {
+			t.Fatalf("candidate has extra key %q: %#v", key, candidate)
+		}
+	}
+	human := string(runOutput(t, context.Background(), []string{"who", "ali", "--archive", dbPath}))
+	for _, want := range []string{"who", "identifiers", "last_seen", "messages", "alice@example.com"} {
+		if !strings.Contains(human, want) {
+			t.Fatalf("human who missing %q:\n%s", want, human)
+		}
+	}
+	conformance.AssertHumanOutput(t, human)
+}
+
+func TestSearchWhoResolutionOneManyZeroAndIdentifier(t *testing.T) {
+	installFakeGog(t)
+	dbPath := seedArchive(t, []archive.Message{
+		{ID: "alice-new", Time: time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Project <alpha>", Body: "Needle & body."},
+		{ID: "alice-old", Time: time.Date(2026, 7, 2, 11, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Project", Body: "Older needle body."},
+		{ID: "casey-one", Time: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC), FromName: "Casey One", FromAddress: "casey.one@example.com", Subject: "Needle", Body: "First."},
+		{ID: "casey-two", Time: time.Date(2026, 7, 2, 9, 0, 0, 0, time.UTC), FromName: "Casey Two", FromAddress: "casey.two@example.com", Subject: "Needle", Body: "Second."},
+	})
+	var resolved archive.SearchResult
+	runJSON(t, context.Background(), []string{"search", "needle", "--who", "alice", "--json", "--archive", dbPath}, &resolved)
+	if resolved.WhoResolved == nil || resolved.WhoResolved.Who != "Alice Example" || len(resolved.WhoResolved.Identifiers) != 1 {
+		t.Fatalf("resolved search = %#v", resolved)
+	}
+	human := string(runOutput(t, context.Background(), []string{"search", "needle", "--who", "alice", "--archive", dbPath}))
+	if !strings.Contains(human, "alice → Alice Example") {
+		t.Fatalf("human search = %s", human)
+	}
+
+	var direct archive.SearchResult
+	runJSON(t, context.Background(), []string{"search", "--who", "alice@example.com", "--limit", "1", "--json", "--archive", dbPath}, &direct)
+	if direct.Query != "" || direct.WhoResolved != nil || direct.TotalMatches != 2 || !direct.Truncated || len(direct.Results) != 1 || direct.Results[0].Ref != archive.RefPrefix+"alice-new" {
+		t.Fatalf("direct filter-only search = %#v", direct)
+	}
+	if raw := string(runOutput(t, context.Background(), []string{"search", "alpha", "--who", "alice@example.com", "--json", "--archive", dbPath})); strings.Contains(raw, `\u003c`) || strings.Contains(raw, `\u003e`) || strings.Contains(raw, `\u0026`) {
+		t.Fatalf("search JSON escaped HTML characters:\n%s", raw)
+	}
+
+	stdout, stderr, err := runExpectError(t, []string{"search", "needle", "--who", "casey", "--json", "--archive", dbPath})
+	if code := ExitCode(err); code != 4 {
+		t.Fatalf("ambiguous exit = %d err=%v stdout=%s stderr=%s", code, err, stdout, stderr)
+	}
+	var ambiguous map[string]map[string]any
+	if err := json.Unmarshal([]byte(stdout), &ambiguous); err != nil {
+		t.Fatalf("ambiguous JSON: %v\n%s", err, stdout)
+	}
+	if ambiguous["error"]["code"] != "ambiguous_who" || len(ambiguous["error"]["candidates"].([]any)) != 2 {
+		t.Fatalf("ambiguous envelope = %#v", ambiguous)
+	}
+	if !strings.Contains(err.Error(), "Retry with one identifier: gogcrawl search --who") {
+		t.Fatalf("ambiguous human error = %v", err)
+	}
+
+	stdout, stderr, err = runExpectError(t, []string{"search", "needle", "--who", "nobody", "--json", "--archive", dbPath})
+	if code := ExitCode(err); code != 5 {
+		t.Fatalf("unknown exit = %d err=%v stdout=%s stderr=%s", code, err, stdout, stderr)
+	}
+	var unknown map[string]map[string]any
+	if err := json.Unmarshal([]byte(stdout), &unknown); err != nil {
+		t.Fatalf("unknown JSON: %v\n%s", err, stdout)
+	}
+	if unknown["error"]["code"] != "unknown_who" || len(unknown["error"]["did_you_mean"].([]any)) != 0 || unknown["error"]["hint"] == "" {
+		t.Fatalf("unknown envelope = %#v", unknown)
+	}
+}
+
+func TestSearchRequiresQueryOnlyWithoutFilters(t *testing.T) {
+	installFakeGog(t)
+	stdout, stderr, err := runExpectError(t, []string{"search", "--archive", filepath.Join(t.TempDir(), "missing.db")})
+	if err == nil || !strings.Contains(err.Error(), "search query is required unless --who, --after or --before is present") {
+		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout, stderr)
+	}
+}
+
+func TestStatusJSONUsesFreshnessLastSyncOnly(t *testing.T) {
+	installFakeGog(t)
+	dbPath := seedArchive(t, []archive.Message{
+		{ID: "m1", Time: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Project", Body: "Project body."},
+	})
+	raw := string(runOutput(t, context.Background(), []string{"status", "--json", "--archive", dbPath}))
+	if strings.Contains(raw, "last_sync_at") {
+		t.Fatalf("status JSON kept last_sync_at:\n%s", raw)
+	}
+	if !strings.Contains(raw, `"freshness"`) || !strings.Contains(raw, `"last_sync"`) {
+		t.Fatalf("status JSON missing freshness.last_sync:\n%s", raw)
 	}
 }
 
@@ -328,6 +469,38 @@ func runOutput(t *testing.T, ctx context.Context, args []string) []byte {
 		t.Fatalf("Run(%v) failed: %v\nstdout=%s\nstderr=%s", args, err, stdout.String(), stderr.String())
 	}
 	return append([]byte(nil), stdout.Bytes()...)
+}
+
+func runExpectError(t *testing.T, args []string) (string, string, error) {
+	t.Helper()
+	ensureTestHome(t)
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), args, &stdout, &stderr)
+	if err == nil {
+		t.Fatalf("Run(%v) succeeded; stdout=%s stderr=%s", args, stdout.String(), stderr.String())
+	}
+	return stdout.String(), stderr.String(), err
+}
+
+func seedArchive(t *testing.T, messages []archive.Message) string {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
+	st, err := archive.Open(context.Background(), dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	if _, err := st.InsertMessages(context.Background(), messages); err != nil {
+		t.Fatal(err)
+	}
+	when := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	if err := st.MarkSyncStarted(context.Background(), when); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MarkSyncCompleted(context.Background(), when); err != nil {
+		t.Fatal(err)
+	}
+	return dbPath
 }
 
 type fakeGogInstall struct {

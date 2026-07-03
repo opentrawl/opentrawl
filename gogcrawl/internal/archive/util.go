@@ -100,15 +100,22 @@ func plainSnippet(query, subject, body string) string {
 	}
 	const limit = 180
 	runes := []rune(text)
+	frontTruncated := nonBoundaryCut(runes, start)
+	if frontTruncated {
+		start = nextTokenBoundary(runes, start)
+	}
 	end := len(runes)
 	if len(runes)-start > limit {
 		end = start + limit
+	}
+	if nonBoundaryCut(runes, end) {
+		end = previousTokenBoundary(runes, start, end)
 	}
 	snippet := strings.TrimSpace(string(runes[start:end]))
 	if snippet == "" {
 		return ""
 	}
-	if nonBoundaryCut(runes, start) {
+	if frontTruncated {
 		snippet = "…" + snippet
 	}
 	if end < len(runes) {
@@ -151,4 +158,27 @@ func nonBoundaryCut(runes []rune, cut int) bool {
 		return false
 	}
 	return !unicode.IsSpace(runes[cut-1]) && !unicode.IsSpace(runes[cut])
+}
+
+func nextTokenBoundary(runes []rune, cut int) int {
+	for cut < len(runes) && !unicode.IsSpace(runes[cut]) {
+		cut++
+	}
+	for cut < len(runes) && unicode.IsSpace(runes[cut]) {
+		cut++
+	}
+	return cut
+}
+
+func previousTokenBoundary(runes []rune, start, cut int) int {
+	for cut > start && !unicode.IsSpace(runes[cut-1]) {
+		cut--
+	}
+	for cut > start && unicode.IsSpace(runes[cut-1]) {
+		cut--
+	}
+	if cut <= start {
+		return minInt(len(runes), start)
+	}
+	return cut
 }

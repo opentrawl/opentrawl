@@ -53,11 +53,12 @@ type SearchOptions struct {
 }
 
 type SearchResult struct {
-	Query        string      `json:"query"`
-	WhoMatched   []string    `json:"who_matched,omitempty"`
-	Results      []SearchHit `json:"results"`
-	TotalMatches int64       `json:"total_matches"`
-	Truncated    bool        `json:"truncated"`
+	Query        string       `json:"query"`
+	WhoResolved  *WhoResolved `json:"who_resolved,omitempty"`
+	WhoQuery     string       `json:"-"`
+	Results      []SearchHit  `json:"results"`
+	TotalMatches int64        `json:"total_matches"`
+	Truncated    bool         `json:"truncated"`
 }
 
 type SearchHit struct {
@@ -86,6 +87,27 @@ type MailHeaders struct {
 	ToAddress   string `json:"to_address"`
 	CcAddress   string `json:"cc_address,omitempty"`
 	Subject     string `json:"subject"`
+}
+
+type WhoResult struct {
+	Query      string         `json:"query"`
+	Candidates []WhoCandidate `json:"candidates"`
+}
+
+type WhoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int64    `json:"messages"`
+
+	participantKeys []string
+	matchQuality    int
+	lastSeenUnix    int64
+}
+
+type WhoResolved struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
 }
 
 type BackupShardKind string

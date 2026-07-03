@@ -109,7 +109,7 @@ func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ownerSearch.TotalMatches != 2 || len(ownerSearch.WhoMatched) != 0 {
+	if ownerSearch.TotalMatches != 2 || ownerSearch.WhoResolved == nil || ownerSearch.WhoResolved.Who != "me" {
 		t.Fatalf("owner search = %#v", ownerSearch)
 	}
 	foundMeSender := false
@@ -125,19 +125,19 @@ func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if vendorSearch.TotalMatches != 2 || len(vendorSearch.WhoMatched) != 0 {
+	if vendorSearch.TotalMatches != 2 || vendorSearch.WhoResolved == nil || vendorSearch.WhoResolved.Who != "Vendor Example" {
 		t.Fatalf("vendor search = %#v", vendorSearch)
 	}
 	aliasSearch, err := st.Search(ctx, SearchOptions{Query: "needle", Who: "ALIAS@EXAMPLE.COM"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if aliasSearch.TotalMatches != 1 || aliasSearch.Results[0].Ref != RefPrefix+"m2" {
+	if aliasSearch.TotalMatches != 1 || aliasSearch.Results[0].Ref != RefPrefix+"m2" || aliasSearch.WhoResolved != nil {
 		t.Fatalf("alias search = %#v", aliasSearch)
 	}
 }
 
-func TestSearchWhoMatchedReportsDistinctParticipants(t *testing.T) {
+func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
 	if err != nil {
@@ -146,18 +146,156 @@ func TestSearchWhoMatchedReportsDistinctParticipants(t *testing.T) {
 	defer st.Close()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
-		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Casey Example", FromAddress: "casey.one@example.com", Subject: "Needle", Body: "First."},
-		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "Casey Example", FromAddress: "casey.two@example.com", Subject: "Needle", Body: "Second."},
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Needle", Body: "First."},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "Alice A.", FromAddress: "alice@example.com", Subject: "Needle", Body: "Second."},
+		{ID: "m3", ThreadID: "t3", Time: now.Add(2 * time.Minute), FromName: "Alicia Example", FromAddress: "alicia@example.com", Subject: "Needle", Body: "Third."},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	search, err := st.Search(ctx, SearchOptions{Query: "needle", Who: "casey example"})
+	resolved, err := st.ResolveWho(ctx, "alce")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if search.TotalMatches != 2 || len(search.WhoMatched) != 2 || search.WhoMatched[0] != "Casey Example" || search.WhoMatched[1] != "Casey Example" {
-		t.Fatalf("search = %#v", search)
+	if len(resolved.Candidates) != 1 {
+		t.Fatalf("resolved = %#v", resolved)
+	}
+	candidate := resolved.Candidates[0]
+	if candidate.Who != "Alice A." || len(candidate.Identifiers) != 1 || candidate.Identifiers[0] != "alice@example.com" || candidate.Messages != 2 {
+		t.Fatalf("candidate = %#v", candidate)
+	}
+	prefix, err := st.ResolveWho(ctx, "ali")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prefix.Candidates) != 2 {
+		t.Fatalf("prefix = %#v", prefix)
+	}
+}
+
+func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Morgan Example", FromAddress: "michael.gmail@example.com", Subject: "First", Body: "First."},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "  MORGAN   EXAMPLE  ", FromAddress: "michael.icloud@example.com", Subject: "Second", Body: "Second."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := st.ResolveWho(ctx, "morgan example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Candidates) != 1 {
+		t.Fatalf("resolved = %#v", resolved)
+	}
+	candidate := resolved.Candidates[0]
+	if normalizeMatchValue(candidate.Who) != "morgan example" || candidate.Messages != 2 {
+		t.Fatalf("candidate = %#v", candidate)
+	}
+	if len(candidate.Identifiers) != 2 || candidate.Identifiers[0] != "michael.gmail@example.com" || candidate.Identifiers[1] != "michael.icloud@example.com" {
+		t.Fatalf("identifiers = %#v", candidate.Identifiers)
+	}
+	byIdentifier, err := st.ResolveWho(ctx, "michael.icloud@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byIdentifier.Candidates) != 1 {
+		t.Fatalf("by identifier = %#v", byIdentifier)
+	}
+	identifiers := byIdentifier.Candidates[0].Identifiers
+	if len(identifiers) != 2 || identifiers[0] != "michael.icloud@example.com" || identifiers[1] != "michael.gmail@example.com" {
+		t.Fatalf("matching identifier was not first: %#v", identifiers)
+	}
+}
+
+func TestResolveWhoIgnoresHiddenGroupedNames(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now.Add(-time.Minute), FromName: "Michael Example via network", FromAddress: "messages-noreply@network.example.com", Subject: "Older", Body: "First."},
+		{ID: "m2", ThreadID: "t2", Time: now, FromName: "Network Alerts", FromAddress: "messages-noreply@network.example.com", Subject: "Newer", Body: "Second."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := st.ResolveWho(ctx, "michael")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Candidates) != 0 {
+		t.Fatalf("resolved hidden grouped name = %#v", resolved)
+	}
+	visible, err := st.ResolveWho(ctx, "network")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(visible.Candidates) != 1 || visible.Candidates[0].Who != "Network Alerts" || visible.Candidates[0].Identifiers[0] != "messages-noreply@network.example.com" {
+		t.Fatalf("visible resolution = %#v", visible)
+	}
+}
+
+func TestResolveWhoShowsMatchingIdentifierFirst(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Owner Example", FromAddress: "owner@example.com", Subject: "First", Body: "First.", Labels: []string{"SENT"}},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "Work Example", FromAddress: "work.person@example.com", Subject: "Second", Body: "Second.", Labels: []string{"SENT"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := st.ResolveWho(ctx, "work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved.Candidates) != 1 {
+		t.Fatalf("resolved = %#v", resolved)
+	}
+	candidate := resolved.Candidates[0]
+	if candidate.Who != "me" || len(candidate.Identifiers) < 2 || candidate.Identifiers[0] != "work.person@example.com" {
+		t.Fatalf("candidate = %#v", candidate)
+	}
+}
+
+func TestSearchWhoAmbiguityReportsCandidates(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Casey One", FromAddress: "casey.one@example.com", Subject: "Needle", Body: "First."},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "Casey Two", FromAddress: "casey.two@example.com", Subject: "Needle", Body: "Second."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = st.Search(ctx, SearchOptions{Query: "needle", Who: "casey"})
+	var ambiguous *AmbiguousWhoError
+	if !errors.As(err, &ambiguous) {
+		t.Fatalf("err = %v, want AmbiguousWhoError", err)
+	}
+	if len(ambiguous.Candidates) != 2 || ambiguous.Candidates[0].Who != "Casey Two" || ambiguous.Candidates[1].Who != "Casey One" {
+		t.Fatalf("candidates = %#v", ambiguous.Candidates)
 	}
 }
 
@@ -183,11 +321,36 @@ func TestSearchSnippetMarksMidTokenCuts(t *testing.T) {
 		t.Fatalf("results = %#v", search.Results)
 	}
 	snippet := search.Results[0].Snippet
-	if !strings.HasPrefix(snippet, "…") || !strings.HasSuffix(snippet, "…") {
-		t.Fatalf("snippet should mark mid-token cuts: %q", snippet)
+	if snippet != "…needle…" {
+		t.Fatalf("snippet should snap cuts to token boundaries: %q", snippet)
 	}
 	if !strings.Contains(snippet, "needle") {
 		t.Fatalf("snippet lost match: %q", snippet)
+	}
+}
+
+func TestSearchFilterOnlyUsesNewestMatchingItems(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "old", ThreadID: "t1", Time: now.Add(-2 * time.Hour), FromName: "Alice", FromAddress: "alice@example.com", Subject: "Old", Body: "First."},
+		{ID: "new", ThreadID: "t2", Time: now, FromName: "Alice", FromAddress: "alice@example.com", Subject: "New", Body: "Second."},
+		{ID: "other", ThreadID: "t3", Time: now.Add(time.Hour), FromName: "Bob", FromAddress: "bob@example.com", Subject: "Other", Body: "Third."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	search, err := st.Search(ctx, SearchOptions{Who: "alice@example.com", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.Query != "" || search.TotalMatches != 2 || !search.Truncated || len(search.Results) != 1 || search.Results[0].Ref != RefPrefix+"new" {
+		t.Fatalf("filter-only search = %#v", search)
 	}
 }
 

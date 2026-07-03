@@ -15,8 +15,7 @@ import (
 
 func (r *runtime) print(value any) error {
 	if r.json {
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
+		enc := newJSONEncoder(r.stdout)
 		return enc.Encode(value)
 	}
 	switch typed := value.(type) {
@@ -26,6 +25,8 @@ func (r *runtime) print(value any) error {
 		return printStatusText(r.stdout, typed)
 	case archive.SearchResult:
 		return printSearchText(r.stdout, typed)
+	case archive.WhoResult:
+		return printWhoText(r.stdout, typed)
 	case archive.OpenResult:
 		return printOpenText(r.stdout, typed)
 	case doctorOutput:
@@ -33,8 +34,15 @@ func (r *runtime) print(value any) error {
 	case control.ContactExport:
 		return printContactsText(r.stdout, typed)
 	default:
-		return json.NewEncoder(r.stdout).Encode(value)
+		return newJSONEncoder(r.stdout).Encode(value)
 	}
+}
+
+func newJSONEncoder(w io.Writer) *json.Encoder {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc
 }
 
 func printMetadataText(w io.Writer, value metadataEnvelope) error {
@@ -59,11 +67,15 @@ func renderStatus(value statusEnvelope) render.Status {
 		Log:     renderLogTail(value.LastRun, value.RecentError),
 	}
 	if value.Archive != nil {
+		lastSync := ""
+		if value.Freshness != nil {
+			lastSync = value.Freshness.LastSync
+		}
 		out.Sections = append(out.Sections, render.Section{
 			Title: "Local archive",
 			Fields: []render.Field{
 				{Label: "Database", Value: value.Archive.ArchivePath},
-				{Label: "Last sync", Value: value.Archive.LastSyncAt},
+				{Label: "Last sync", Value: lastSync},
 				{Label: "Messages", Value: fmt.Sprint(value.Archive.Messages)},
 				{Label: "Senders", Value: fmt.Sprint(value.Archive.Senders)},
 				{Label: "Since", Value: fmt.Sprint(value.Archive.Since)},
@@ -81,13 +93,17 @@ func printSearchText(w io.Writer, value archive.SearchResult) error {
 	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, len(value.Results), value.TotalMatches); err != nil {
 		return err
 	}
-	if value.Truncated {
-		if _, err := io.WriteString(w, "More results exist; narrow with --after, --before or a more specific query.\n"); err != nil {
+	if value.WhoResolved != nil {
+		query := value.WhoQuery
+		if query == "" {
+			query = strings.Join(value.WhoResolved.Identifiers, ", ")
+		}
+		if _, err := fmt.Fprintf(w, "%s → %s\n", query, value.WhoResolved.Who); err != nil {
 			return err
 		}
 	}
-	if len(value.WhoMatched) > 0 {
-		if _, err := fmt.Fprintf(w, "Who matched: %s.\n", strings.Join(value.WhoMatched, ", ")); err != nil {
+	if value.Truncated {
+		if _, err := io.WriteString(w, "More results exist; narrow with --after, --before or a more specific query.\n"); err != nil {
 			return err
 		}
 	}
@@ -101,6 +117,10 @@ func printSearchText(w io.Writer, value archive.SearchResult) error {
 		}
 	}
 	return nil
+}
+
+func printWhoText(w io.Writer, value archive.WhoResult) error {
+	return renderWhoTable(w, value.Candidates)
 }
 
 func printOpenText(w io.Writer, value archive.OpenResult) error {

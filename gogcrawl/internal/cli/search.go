@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,16 +37,18 @@ func (r *runtime) runSearch(args []string) error {
 		return usageErr(err)
 	}
 	query := strings.TrimSpace(strings.Join(positionals, " "))
-	if query == "" {
-		return usageErr(errors.New("search query is required"))
-	}
 	if *limit < 1 || *limit > maxSearchLimit {
 		return usageErr(fmt.Errorf("search --limit must be between 1 and %d", maxSearchLimit))
 	}
 	whoProvided := flagPassed(fs, "who")
+	afterProvided := flagPassed(fs, "after")
+	beforeProvided := flagPassed(fs, "before")
 	whoValue := normalizeWhoValue(*who)
 	if whoProvided && whoValue == "" {
 		return usageErr(errors.New("search --who requires an identity"))
+	}
+	if query == "" && !whoProvided && !afterProvided && !beforeProvided {
+		return usageErr(errors.New("search query is required unless --who, --after or --before is present"))
 	}
 	opts := archive.SearchOptions{Query: query, Limit: *limit, Who: whoValue}
 	if strings.TrimSpace(*after) != "" {
@@ -64,10 +68,63 @@ func (r *runtime) runSearch(args []string) error {
 	return r.withArchive(func(st *archive.Store) error {
 		result, err := st.Search(r.ctx, opts)
 		if err != nil {
-			return err
+			return searchError(err, query)
 		}
 		return r.print(result)
 	})
+}
+
+func searchError(err error, query string) error {
+	var ambiguous *archive.AmbiguousWhoError
+	if errors.As(err, &ambiguous) {
+		message := fmt.Sprintf("--who %q matched more than one person", ambiguous.Query)
+		remedy := "retry with one exact identifier from candidates"
+		fields := map[string]any{"candidates": ambiguous.Candidates}
+		human := renderWhoSearchError("ambiguous_who", ambiguous.Query, "matched more than one person", ambiguous.Candidates, query)
+		return commandErrWith("ambiguous_who", message, remedy, 4, fields, human, err)
+	}
+	var unknown *archive.UnknownWhoError
+	if errors.As(err, &unknown) {
+		message := fmt.Sprintf("--who %q did not match a person", unknown.Query)
+		remedy := "search without --who or retry with a suggested identifier"
+		fields := map[string]any{"did_you_mean": unknown.DidYouMean}
+		if len(unknown.DidYouMean) == 0 {
+			fields["hint"] = "search without --who to search message text instead"
+		}
+		human := renderWhoSearchError("unknown_who", unknown.Query, "did not match a person", unknown.DidYouMean, query)
+		return commandErrWith("unknown_who", message, remedy, 5, fields, human, err)
+	}
+	return err
+}
+
+func renderWhoSearchError(code, who, summary string, candidates []archive.WhoCandidate, query string) string {
+	var out bytes.Buffer
+	_, _ = fmt.Fprintf(&out, "%s: %q %s.\n", code, who, summary)
+	if len(candidates) > 0 {
+		_ = renderWhoTable(&out, candidates)
+		identifier := retryIdentifier(candidates[0])
+		if identifier != "" {
+			_, _ = fmt.Fprintf(&out, "Retry with one identifier: %s\n", retrySearchCommand(identifier, query))
+		}
+	} else {
+		_, _ = io.WriteString(&out, "No close people found.\nSearch without --who to search message text instead.")
+	}
+	return strings.TrimRight(out.String(), "\n")
+}
+
+func retryIdentifier(candidate archive.WhoCandidate) string {
+	if len(candidate.Identifiers) > 0 {
+		return candidate.Identifiers[0]
+	}
+	return candidate.Who
+}
+
+func retrySearchCommand(identifier string, query string) string {
+	parts := []string{"gogcrawl", "search", "--who", strconv.Quote(identifier)}
+	if strings.TrimSpace(query) != "" {
+		parts = append(parts, strconv.Quote(strings.TrimSpace(query)))
+	}
+	return strings.Join(parts, " ")
 }
 
 func splitFlagArgs(args []string, valueFlags map[string]bool) (flags, positionals []string) {

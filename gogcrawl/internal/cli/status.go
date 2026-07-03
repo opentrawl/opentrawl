@@ -39,7 +39,6 @@ type authEnvelope struct {
 type archiveStatusBlock struct {
 	ArchivePath  string `json:"archive_path"`
 	ArchiveBytes int64  `json:"archive_bytes,omitempty"`
-	LastSyncAt   string `json:"last_sync_at,omitempty"`
 	Messages     int64  `json:"messages"`
 	Senders      int64  `json:"senders"`
 	Since        int64  `json:"since"`
@@ -80,7 +79,6 @@ func (r *runtime) runStatus(args []string) error {
 	out.Archive = &archiveStatusBlock{
 		ArchivePath:  status.ArchivePath,
 		ArchiveBytes: status.ArchiveBytes,
-		LastSyncAt:   status.LastSyncAt,
 		Messages:     status.Messages,
 		Senders:      status.Senders,
 		Since:        status.Since,

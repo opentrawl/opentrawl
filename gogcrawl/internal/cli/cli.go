@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,10 +17,15 @@ type cliError struct {
 	name    string
 	message string
 	remedy  string
+	fields  map[string]any
+	human   string
 	err     error
 }
 
 func (e *cliError) Error() string {
+	if e.human != "" {
+		return e.human
+	}
 	if e.remedy == "" {
 		return e.message
 	}
@@ -140,6 +144,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runSync(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
+	case "who":
+		return r.runWho(args[1:])
 	case "open":
 		return r.runOpen(args[1:])
 	case "doctor":
@@ -210,8 +216,12 @@ func usageErr(err error) error {
 }
 
 func commandErr(name, message, remedy string, err error) error {
+	return commandErrWith(name, message, remedy, 1, nil, "", err)
+}
+
+func commandErrWith(name, message, remedy string, code int, fields map[string]any, human string, err error) error {
 	err = cklog.WorldMustChange{Err: err, Message: message, Remedy: remedy}
-	return &cliError{code: 1, name: name, message: message, remedy: remedy, err: err}
+	return &cliError{code: code, name: name, message: message, remedy: remedy, fields: fields, human: human, err: err}
 }
 
 func writeJSONErrorIfNeeded(w io.Writer, jsonOut bool, err error) error {
@@ -227,12 +237,16 @@ func writeJSONErrorIfNeeded(w io.Writer, jsonOut bool, err error) error {
 		message = codeErr.message
 		remedy = codeErr.remedy
 	}
-	_ = json.NewEncoder(w).Encode(map[string]any{
-		"error": map[string]string{
-			"code":    name,
-			"message": message,
-			"remedy":  remedy,
-		},
-	})
+	errorBody := map[string]any{
+		"code":    name,
+		"message": message,
+		"remedy":  remedy,
+	}
+	if codeErr != nil {
+		for key, value := range codeErr.fields {
+			errorBody[key] = value
+		}
+	}
+	_ = newJSONEncoder(w).Encode(map[string]any{"error": errorBody})
 	return err
 }

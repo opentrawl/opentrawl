@@ -13,7 +13,8 @@ Usage:
   gogcrawl metadata [--json]
   gogcrawl status [--json]
   gogcrawl sync [--json]
-  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--who NAME] [--json]
+  gogcrawl search [QUERY] [--limit N] [--after DATE] [--before DATE] [--who PERSON] [--json]
+  gogcrawl who NAME [--json]
   gogcrawl open REF [--json]
   gogcrawl doctor [--json]
   gogcrawl contacts export [--json]
@@ -58,15 +59,22 @@ Flags:
 `)
 	case "search":
 		_, _ = fmt.Fprint(w, `Usage:
-  gogcrawl search QUERY [--limit N] [--after DATE] [--before DATE] [--who NAME] [--json]
+  gogcrawl search [QUERY] [--limit N] [--after DATE] [--before DATE] [--who PERSON] [--json]
 
 Search archived Gmail subject and body text.
+QUERY is optional when --who, --after or --before is present.
 
 Flags:
-  --limit N     Maximum results. Default: 20. Maximum: 200.
-  --after DATE  Only messages after RFC3339 or YYYY-MM-DD.
-  --before DATE Only messages before RFC3339 or YYYY-MM-DD.
-  --who NAME    Only messages where this stored participant name appears.
+  --limit N      Maximum results. Default: 20. Maximum: 200.
+  --after DATE   Only messages after RFC3339 or YYYY-MM-DD.
+  --before DATE  Only messages before RFC3339 or YYYY-MM-DD.
+  --who PERSON   Resolve a name, or filter by an exact email, phone or handle.
+`)
+	case "who":
+		_, _ = fmt.Fprint(w, `Usage:
+  gogcrawl who NAME [--json]
+
+Resolve a Gmail participant name or identifier.
 `)
 	case "open":
 		_, _ = fmt.Fprint(w, `Usage:
