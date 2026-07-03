@@ -159,22 +159,40 @@ func aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact string) (Ra
 		return RankSubstring, true
 	case closeSpelling(queryCompact, aliasCompact):
 		return RankCloseSpelling, true
-	case closeWordSpelling(queryCompact, aliasText):
+	case closeWordSpelling(queryText, aliasText):
 		return RankCloseSpelling, true
 	default:
 		return 0, false
 	}
 }
 
+// closeWordSpelling matches word-wise: EVERY query word must closely
+// match some alias word. Comparing the whole query against single
+// alias words let "bob example" reach "Alice Example" through the
+// shared surname.
 func closeWordSpelling(query, value string) bool {
-	for _, word := range strings.FieldsFunc(value, func(r rune) bool {
+	queryWords := strings.Fields(query)
+	if len(queryWords) == 0 {
+		return false
+	}
+	aliasWords := strings.FieldsFunc(value, func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
-		if closeSpelling(query, Compact(word)) {
-			return true
+	})
+	for _, qw := range queryWords {
+		qc := Compact(qw)
+		matched := false
+		for _, aw := range aliasWords {
+			ac := Compact(aw)
+			if qc == ac || closeSpelling(qc, ac) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func closeSpelling(query, value string) bool {
@@ -192,10 +210,14 @@ func closeSpelling(query, value string) bool {
 }
 
 func closeSpellingDistance(longest int) int {
-	if longest <= 5 {
+	switch {
+	case longest <= 5:
 		return 1
+	case longest <= 10:
+		return 2
+	default:
+		return 3
 	}
-	return 3
 }
 
 func mergeCandidate(existing *Candidate, candidate Candidate) {
