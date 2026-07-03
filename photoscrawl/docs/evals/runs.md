@@ -35,7 +35,7 @@ provider must prepare the sample before the model baseline can run.
 Blocked provider probe command:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --limit 2 \
   --models gemma3:27b \
@@ -46,7 +46,7 @@ photoscrawl eval-card \
 Planned Ollama baseline command after the provider fix:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v1.md \
   --limit 15 \
@@ -58,7 +58,7 @@ photoscrawl eval-card \
 Planned Gemini direct command after the provider fix:
 
 ```sh
-OLLAMA_API_KEY="<gemini-api-key>" photoscrawl eval-card \
+OLLAMA_API_KEY="<gemini-api-key>" photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v1.md \
   --limit 15 \
@@ -81,7 +81,8 @@ Run details:
 | blocker | `primary provider failed: Photos access is denied for this process; fallback provider failed: query sqlite albums: SQL logic error: no such table: Z_33ASSETS (1)` |
 
 A later provider-only recheck from the current tree made 0 model calls and still
-prepared sample size 0 because no local original reached `eval-card`.
+prepared sample size 0 because no local original reached the
+`photoscrawl-lab eval-card` harness.
 
 Synthetic vision preflight used one generated blue PNG. This did not use real
 Photos data.
@@ -135,7 +136,7 @@ outside the repo.
 Baseline command shape for Ollama-hosted models:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v1.md \
   --limit 15 \
@@ -148,7 +149,7 @@ photoscrawl eval-card \
 Baseline command shape for the Gemini OpenAI-compatible endpoint:
 
 ```sh
-GEMINI_API_KEY="<from secret>" OLLAMA_API_KEY="$GEMINI_API_KEY" photoscrawl eval-card \
+GEMINI_API_KEY="<from secret>" OLLAMA_API_KEY="$GEMINI_API_KEY" photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v1.md \
   --limit 15 \
@@ -208,7 +209,7 @@ output path is recorded here.
 Original-input command shape:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v1.md \
   --limit 15 \
@@ -261,7 +262,7 @@ variant comparison is still valid for prompt behaviour.
 Variant command shape:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v2.md \
   --limit 15 \
@@ -298,7 +299,7 @@ comparison. It was not restored to the repo.
 Command shape for v3:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt prompts/photo-card-v3.md \
   --limit 15 \
@@ -312,7 +313,7 @@ photoscrawl eval-card \
 Command shape for v2:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --prompt /tmp/photo-card-v2.md \
   --limit 15 \

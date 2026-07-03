@@ -1,6 +1,7 @@
 package place
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,21 +12,82 @@ import (
 )
 
 func loadInput(path string) (Input, error) {
-	reader, closeReader, err := inputReader(path)
+	data, err := readInputData(path)
 	if err != nil {
 		return Input{}, err
+	}
+	return decodeInput(data)
+}
+
+func loadInputOrResult(path string) (Input, *Result, error) {
+	data, err := readInputData(path)
+	if err != nil {
+		return Input{}, nil, err
+	}
+	if looksLikeResult(data) {
+		result, err := decodeResult(data)
+		if err != nil {
+			return Input{}, nil, err
+		}
+		return Input{}, &result, nil
+	}
+	input, err := decodeInput(data)
+	if err != nil {
+		return Input{}, nil, err
+	}
+	return input, nil, nil
+}
+
+func readInputData(path string) ([]byte, error) {
+	reader, closeReader, err := inputReader(path)
+	if err != nil {
+		return nil, err
 	}
 	if closeReader != nil {
 		defer closeReader()
 	}
+	return io.ReadAll(reader)
+}
+
+func decodeInput(data []byte) (Input, error) {
 	var raw map[string]any
-	decoder := json.NewDecoder(reader)
+	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err := decoder.Decode(&raw); err != nil {
 		return Input{}, fmt.Errorf("read place input: %w", err)
 	}
 	input := parseInput(raw)
 	return input, validateInput(input)
+}
+
+func decodeResult(data []byte) (Result, error) {
+	var result Result
+	if err := json.Unmarshal(data, &result); err != nil {
+		return Result{}, err
+	}
+	if result.POITotal == 0 {
+		result.POITotal = len(result.POICandidates)
+	}
+	if err := validatePOIStatus(result.POIStatus); err != nil {
+		return Result{}, err
+	}
+	return result, nil
+}
+
+func looksLikeResult(data []byte) bool {
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false
+	}
+	if _, ok := raw["input"]; !ok {
+		return false
+	}
+	for _, key := range []string{"provider", "source", "address", "map_features", "poi_status", "poi_candidates", "radius_meters"} {
+		if _, ok := raw[key]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 func inputReader(path string) (io.Reader, func(), error) {

@@ -25,7 +25,7 @@ Pick one model and one prompt that produce high-quality photo cards:
 Run the harness against a real Photos library:
 
 ```sh
-photoscrawl eval-card \
+photoscrawl-lab eval-card \
   --library "$HOME/Pictures/Photos Library.photoslibrary" \
   --allow-icloud-downloads \
   --limit 15 \

@@ -34,10 +34,6 @@ go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search "drone beach portugal" --json
 go run ./cmd/photoscrawl open photoscrawl:asset/<uuid> --json
 go run ./cmd/photoscrawl neighbors photoscrawl:asset/<uuid> --json
-go run ./cmd/photoscrawl place-context --input <private-eval-run>/metadata/E001.json --json
-go run ./cmd/photoscrawl place-card --input <crawlkit-cache-dir>/place-context/<key>.json
-go run ./cmd/photoscrawl place-backfill --json
-go run ./cmd/photoscrawl eval-card --library "$HOME/Pictures/Photos Library.photoslibrary" --allow-icloud-downloads --limit 1 --models gemma4:31b-cloud --ollama-url https://ollama.com/api --json
 ```
 
 Default runtime paths come from crawlkit platform dirs. The primary database is
@@ -50,7 +46,8 @@ yet.
 `sync` snapshots `database/Photos.sqlite` with crawlkit's SQLite snapshot helper
 and reads the copy. This is the headless path: it needs Full Disk Access for the
 terminal or app, not a recurring Photos TCC prompt. PhotoKit remains available
-only for explicit original export flows such as `eval-card --allow-icloud-downloads`.
+only for explicit original export flows such as
+`photoscrawl-lab eval-card --allow-icloud-downloads`.
 
 `sync` does not export originals or force iCloud downloads. It records already
 local package media paths for derivatives/renders/originals when they exist, so
@@ -71,25 +68,24 @@ Current reasons are deterministic archive facts:
 same burst id, same album id, same resource hash, nearby creation time, nearby
 raw GPS, and shared local observation labels.
 
+## photoscrawl-lab
+
+`photoscrawl-lab` is a research harness for prompt/model evals and
+place-context probes. It is not part of the `trawl` contract surface.
+
+```sh
+go run ./cmd/photoscrawl-lab place-context --input /tmp/photoscrawl-eval/metadata/E001.json --json
+go run ./cmd/photoscrawl-lab eval-card --library /tmp/Example.photoslibrary --out /tmp/photoscrawl-evals/run-001 --cache-dir /tmp/photoscrawl-cache/originals --limit 1 --json
+```
+
 `place-context` enriches one asset's own latitude/longitude/accuracy/time into
 address hierarchy and candidate nearby POIs. Apple's network-backed
 CoreLocation reverse geocoder is the required step. MapKit POI search is
 optional venue context: no POI found is recorded as `poi_status: "none"`,
 while real provider errors still fail. Text output is a compact deterministic
-place card; `--json` returns provider context. Apple address areas of interest
-are rendered as map context, not as POIs.
-
-`place-card` renders cached provider context into the same deterministic
-Markdown card without re-calling providers. It keeps address detail, normalizes
-map context, caps useful POIs, and omits raw coordinates, warnings, provider
-counts, provenance, and invented confidence. It is for eval harnesses and
-private provider experiments.
-
-`place-backfill` is a private provider-probe command for full-library Apple
-place context. It reads `photos.sqlite`, dedupes exact location/accuracy keys,
-retries provider failures, and writes the manifest, attempts, raw successful
-provider outputs, and final errors under the crawlkit data dir's
-`backfills/place-context-full/apple-ingest` subtree.
+place card; `--json` returns provider context. If `--input` is an existing
+cached provider result, the command renders from that cache without provider
+calls. Apple address areas of interest are rendered as map context, not as POIs.
 
 `eval-card` is an opt-in research harness for prompt/model evaluation. It uses
 the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs
@@ -98,6 +94,10 @@ private images, metadata, and model responses under the crawlkit data dir's
 `evals` subtree. If `--allow-icloud-downloads` is set, PhotoKit may download
 missing originals into the crawlkit cache dir's `originals` subtree; normal
 sync/classify commands do not force iCloud downloads.
+
+There is no standalone place backfill command. Library-scale place caching is
+handled by classify's cache-first resolver, which can read legacy backfill
+artifacts.
 
 ## Current Useful Output
 

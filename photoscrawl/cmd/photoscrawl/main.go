@@ -10,9 +10,7 @@ import (
 
 	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/photoscrawl/internal/archive"
-	"github.com/openclaw/photoscrawl/internal/evalcard"
 	"github.com/openclaw/photoscrawl/internal/photos"
-	"github.com/openclaw/photoscrawl/internal/place"
 )
 
 const (
@@ -198,132 +196,13 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return writeNeighbors(os.Stdout, parsed.Format, result)
-	case "place-context":
-		fs := flag.NewFlagSet("place-context", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		inputPath := fs.String("input", "-", "JSON place input path, or stdin")
-		radius := fs.Float64("radius", 150, "nearby POI search radius in meters")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
-		if err != nil {
-			return err
-		}
-		result, err := place.Run(ctx, place.Options{
-			InputPath:    *inputPath,
-			RadiusMeters: *radius,
-			CacheDir:     paths.PlaceContextCacheDir(),
-		})
-		if err != nil {
-			return err
-		}
-		return output.Write(os.Stdout, format, "place_context", result)
-	case "place-card":
-		fs := flag.NewFlagSet("place-card", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		inputPath := fs.String("input", "-", "JSON place-context result path, or stdin")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		result, err := place.LoadResult(*inputPath)
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(os.Stdout, place.RenderCard(result))
-		return nil
-	case "place-backfill":
-		fs := flag.NewFlagSet("place-backfill", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		outDir := fs.String("out", "", "private place backfill output directory")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		if *outDir == "" {
-			*outDir = paths.PlaceBackfillDir()
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
-		if err != nil {
-			return err
-		}
-		result, err := place.Backfill(ctx, place.BackfillOptions{
-			DatabasePath: paths.Database,
-			OutputDir:    *outDir,
-		})
-		if err != nil {
-			return err
-		}
-		return output.Write(os.Stdout, format, "place_backfill", result)
-	case "eval-card":
-		fs := flag.NewFlagSet("eval-card", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
-		outDir := fs.String("out", "", "private eval output directory")
-		cacheDir := fs.String("cache-dir", "", "private original cache directory")
-		promptPath := fs.String("prompt", "", "photo-card prompt file")
-		models := fs.String("models", "", "comma-separated Ollama models")
-		ollamaURL := fs.String("ollama-url", "", "Ollama generate URL or base URL")
-		allowICloud := fs.Bool("allow-icloud-downloads", false, "allow PhotoKit to download missing originals")
-		limit := fs.Int("limit", 15, "max images to prepare")
-		concurrency := fs.Int("concurrency", 4, "max concurrent model calls")
-		sample := fs.String("sample", "latest", "sample mode: latest or random")
-		seed := fs.Uint64("seed", 1, "random sample seed")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
-		if err != nil {
-			return err
-		}
-		result, err := evalcard.Run(ctx, evalcard.Options{
-			LibraryPath:          *libraryPath,
-			OutputDir:            *outDir,
-			CacheDir:             *cacheDir,
-			DefaultOutputRoot:    paths.EvalRootDir(),
-			DefaultCacheDir:      paths.OriginalsCacheDir(),
-			PromptPath:           *promptPath,
-			Models:               splitList(*models),
-			OllamaGenerateURL:    *ollamaURL,
-			OllamaAPIKeyEnv:      "OLLAMA_API_KEY",
-			Limit:                *limit,
-			Concurrency:          *concurrency,
-			Sample:               *sample,
-			Seed:                 *seed,
-			AllowICloudDownloads: *allowICloud,
-			Provider:             photos.NewProvider(),
-		})
-		if err != nil {
-			return err
-		}
-		return output.Write(os.Stdout, format, "eval_card", result)
 	default:
 		return usage()
 	}
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors|place-context|place-card|place-backfill|eval-card>")}
-}
-
-func splitList(value string) []string {
-	out := []string{}
-	for _, part := range strings.Split(value, ",") {
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
+	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors>")}
 }
 
 func joinedQuery(flagValue string, args []string) string {
