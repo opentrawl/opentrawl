@@ -12,7 +12,7 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
+func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -63,7 +63,7 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 		AuthorizationStatus: "authorized",
 		Assets: []photos.Asset{
 			{
-				LocalIdentifier: "fixture-local-model-asset",
+				LocalIdentifier: "fixture-model-asset",
 				MediaType:       "image",
 				MediaSubtypes:   "0",
 				CreationDate:    "2026-05-27T12:00:00Z",
@@ -101,10 +101,10 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 	}
 
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:           true,
-		LocalModel:    "fixture-vision",
-		LocalModelURL: "http://fixture.test/api/generate",
-		Now:           fixedClock("2026-05-28T10:15:00Z"),
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +132,7 @@ func TestClassifyLocalModelWritesTypedObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(evidence.Evidence) == 0 {
-		t.Fatal("expected local model evidence")
+		t.Fatal("expected model evidence")
 	}
 }
 

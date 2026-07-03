@@ -207,6 +207,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		id := fmt.Sprintf("E%03d", len(inputs)+1)
 		input, row, err := prepareInput(ctx, localMedia, outputDir, cacheDir, id, asset, opts.AllowICloudDownloads)
 		if err != nil {
+			if errors.Is(err, photos.ErrExportAlreadyRunning) {
+				return Result{}, err
+			}
 			result.AssetsSkipped[classifySkip(err)]++
 			continue
 		}
@@ -298,6 +301,9 @@ func resolveOriginal(ctx context.Context, localMedia photos.LocalMediaIndex, cac
 		return "", "", fmt.Errorf("missing_original")
 	}
 	if err := photos.ExportOriginalResource(ctx, asset.LocalIdentifier, cachePath, true); err != nil {
+		if errors.Is(err, photos.ErrExportAlreadyRunning) {
+			return "", "", err
+		}
 		return "", "", fmt.Errorf("export_original")
 	}
 	return cachePath, "photokit_original_export", nil
