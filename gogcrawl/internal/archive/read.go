@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
@@ -36,7 +38,7 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 
 func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
-	whoValue := normalizeWho(opts.Who)
+	whoValue := whomatch.Normalize(opts.Who)
 	hasFilters := opts.After != nil || opts.Before != nil || whoValue != ""
 	if query == "" && !hasFilters {
 		return SearchResult{}, fmt.Errorf("search query is required")

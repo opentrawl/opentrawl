@@ -1,6 +1,10 @@
 package archive
 
-import "time"
+import (
+	"time"
+
+	"github.com/openclaw/crawlkit/whomatch"
+)
 
 type Message struct {
 	ID             string
@@ -101,8 +105,9 @@ type WhoCandidate struct {
 	Messages    int64    `json:"messages"`
 
 	participantKeys []string
-	matchQuality    int
+	matchRank       whomatch.Rank
 	lastSeenUnix    int64
+	messageIDs      []string
 }
 
 type WhoResolved struct {

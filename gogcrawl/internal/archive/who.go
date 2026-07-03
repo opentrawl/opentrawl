@@ -6,14 +6,8 @@ import (
 	"sort"
 	"strings"
 	"time"
-	"unicode"
-)
 
-const (
-	whoMatchExact = iota
-	whoMatchPrefix
-	whoMatchContains
-	whoMatchClose
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 type searchWhoFilter struct {
@@ -58,8 +52,14 @@ type whoAggregate struct {
 	lastSeenUnix    int64
 }
 
+type whoCandidateArchiveData struct {
+	participantKeys map[string]struct{}
+	messageIDs      map[string]struct{}
+	lastSeenUnix    int64
+}
+
 func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResult, error) {
-	query = normalizeWho(query)
+	query = whomatch.Normalize(query)
 	candidates, err := s.allWhoCandidates(ctx)
 	if err != nil {
 		return WhoResult{}, err
@@ -72,7 +72,7 @@ func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResult, error)
 }
 
 func (s *Store) resolveSearchWho(ctx context.Context, who string) (searchWhoFilter, error) {
-	who = normalizeWho(who)
+	who = whomatch.Normalize(who)
 	if who == "" {
 		return searchWhoFilter{}, nil
 	}
@@ -92,13 +92,12 @@ func (s *Store) resolveSearchWho(ctx context.Context, who string) (searchWhoFilt
 	}
 	switch len(resolved.Candidates) {
 	case 0:
-		suggestions, err := s.suggestWho(ctx, who)
-		if err != nil {
-			return searchWhoFilter{}, err
-		}
-		return searchWhoFilter{}, &UnknownWhoError{Query: who, DidYouMean: suggestions}
+		return searchWhoFilter{}, &UnknownWhoError{Query: who, DidYouMean: []WhoCandidate{}}
 	case 1:
 		candidate := resolved.Candidates[0]
+		if candidate.matchRank == whomatch.RankCloseSpelling {
+			return searchWhoFilter{}, &UnknownWhoError{Query: who, DidYouMean: []WhoCandidate{candidate}}
+		}
 		return searchWhoFilter{
 			enabled:         true,
 			participantKeys: candidate.participantKeys,
@@ -153,18 +152,17 @@ order by m.time_unix desc, mp.display_name, mp.address, mp.participant_key
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	displayAggregates := mergeWhoAggregatesByDisplay(aggregates)
-	candidates := make([]WhoCandidate, 0, len(displayAggregates))
-	for _, aggregate := range displayAggregates {
+	baseCandidates := make([]WhoCandidate, 0, len(aggregates))
+	for _, aggregate := range aggregates {
 		candidate := aggregate.candidate()
 		if candidate.Who == "" {
 			continue
 		}
-		candidates = append(candidates, candidate)
+		baseCandidates = append(baseCandidates, candidate)
 	}
-	sort.SliceStable(candidates, func(i, j int) bool {
-		return compareWhoCandidates(candidates[i], candidates[j]) < 0
-	})
+	sortWhoCandidatesForMerge(baseCandidates)
+	candidates := mergeSameNameWhoCandidates(baseCandidates)
+	sortWhoCandidates(candidates)
 	return candidates, nil
 }
 
@@ -197,44 +195,58 @@ order by participant_key
 	return keys, nil
 }
 
-func (s *Store) suggestWho(ctx context.Context, query string) ([]WhoCandidate, error) {
-	candidates, err := s.allWhoCandidates(ctx)
-	if err != nil {
-		return nil, err
+func mergeSameNameWhoCandidates(candidates []WhoCandidate) []WhoCandidate {
+	if len(candidates) == 0 {
+		return nil
 	}
-	suggestions := looseWhoSuggestions(query, candidates)
-	if suggestions == nil {
-		return []WhoCandidate{}, nil
+	archiveData := map[string]*whoCandidateArchiveData{}
+	matcherCandidates := make([]whomatch.Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if key := whomatch.Normalize(candidate.Who); key != "" {
+			data := archiveData[key]
+			if data == nil {
+				data = newWhoCandidateArchiveData()
+				archiveData[key] = data
+			}
+			data.add(candidate)
+		}
+		matcherCandidates = append(matcherCandidates, candidate.matcherCandidate())
 	}
-	return suggestions, nil
-}
-
-func mergeWhoAggregatesByDisplay(aggregates map[string]*whoAggregate) []*whoAggregate {
-	merged := map[string]*whoAggregate{}
-	for _, aggregate := range aggregates {
-		key := normalizeMatchValue(aggregate.who)
-		if key == "" {
+	merged := whomatch.MergeSameName(matcherCandidates)
+	out := make([]WhoCandidate, 0, len(merged))
+	for _, candidate := range merged {
+		if strings.TrimSpace(candidate.Who) == "" {
 			continue
 		}
-		existing := merged[key]
-		if existing == nil {
-			merged[key] = aggregate
-			continue
-		}
-		existing.merge(aggregate)
-	}
-	out := make([]*whoAggregate, 0, len(merged))
-	for _, aggregate := range merged {
-		out = append(out, aggregate)
+		out = append(out, whoCandidateFromMatcher(candidate, archiveData[whomatch.Normalize(candidate.Who)]))
 	}
 	return out
+}
+
+func newWhoCandidateArchiveData() *whoCandidateArchiveData {
+	return &whoCandidateArchiveData{
+		participantKeys: map[string]struct{}{},
+		messageIDs:      map[string]struct{}{},
+	}
+}
+
+func (d *whoCandidateArchiveData) add(candidate WhoCandidate) {
+	for _, key := range candidate.participantKeys {
+		d.participantKeys[key] = struct{}{}
+	}
+	for _, id := range candidate.messageIDs {
+		d.messageIDs[id] = struct{}{}
+	}
+	if candidate.lastSeenUnix > d.lastSeenUnix {
+		d.lastSeenUnix = candidate.lastSeenUnix
+	}
 }
 
 func whoIdentity(row rawWhoParticipant, ownerEmails map[string]struct{}) (string, string) {
 	if isOwnerEmail(row.Address, ownerEmails) {
 		return "owner:me", "me"
 	}
-	display := firstNonEmptyWho(row.DisplayName, row.Name, row.Address)
+	display := firstNonEmptyDisplay(row.DisplayName, row.Name, row.Address)
 	return row.ParticipantKey, display
 }
 
@@ -251,26 +263,8 @@ func (a *whoAggregate) add(row rawWhoParticipant, display string, owner bool) {
 	if address != "" {
 		a.addIdentifier(address)
 	}
-	if shouldReplaceWho(a.who, display) {
+	if shouldUseWhoDisplay(a.who, display, a.identifiers) {
 		a.who = display
-	}
-}
-
-func (a *whoAggregate) merge(other *whoAggregate) {
-	if shouldReplaceMergedWho(a, other) {
-		a.who = normalizeWho(other.who)
-	}
-	for identifier := range other.identifiers {
-		a.identifiers[identifier] = struct{}{}
-	}
-	for key := range other.participantKeys {
-		a.participantKeys[key] = struct{}{}
-	}
-	for messageID := range other.messageIDs {
-		a.messageIDs[messageID] = struct{}{}
-	}
-	if other.lastSeenUnix > a.lastSeenUnix {
-		a.lastSeenUnix = other.lastSeenUnix
 	}
 }
 
@@ -285,18 +279,49 @@ func (a *whoAggregate) addIdentifier(value string) {
 func (a *whoAggregate) candidate() WhoCandidate {
 	identifiers := sortedKeys(a.identifiers)
 	keys := sortedKeys(a.participantKeys)
-	lastSeen := ""
-	if a.lastSeenUnix > 0 {
-		lastSeen = formatArchiveTime(time.Unix(a.lastSeenUnix, 0))
-	}
+	messageIDs := sortedKeys(a.messageIDs)
 	return WhoCandidate{
 		Who:             a.who,
 		Identifiers:     identifiers,
-		LastSeen:        lastSeen,
-		Messages:        int64(len(a.messageIDs)),
+		LastSeen:        formatWhoLastSeen(a.lastSeenUnix),
+		Messages:        int64(len(messageIDs)),
 		participantKeys: keys,
 		lastSeenUnix:    a.lastSeenUnix,
+		messageIDs:      messageIDs,
 	}
+}
+
+func (c WhoCandidate) matcherCandidate() whomatch.Candidate {
+	out := whomatch.Candidate{
+		Who:         c.Who,
+		Identifiers: append([]string(nil), c.Identifiers...),
+		Messages:    c.Messages,
+	}
+	if c.lastSeenUnix > 0 {
+		out.LastSeen = time.Unix(c.lastSeenUnix, 0)
+	}
+	return out
+}
+
+func whoCandidateFromMatcher(candidate whomatch.Candidate, data *whoCandidateArchiveData) WhoCandidate {
+	out := WhoCandidate{
+		Who:         candidate.Who,
+		Identifiers: append([]string(nil), candidate.Identifiers...),
+		LastSeen:    formatMatcherLastSeen(candidate.LastSeen),
+		Messages:    candidate.Messages,
+	}
+	if !candidate.LastSeen.IsZero() {
+		out.lastSeenUnix = candidate.LastSeen.Unix()
+	}
+	if data == nil {
+		return out
+	}
+	out.participantKeys = sortedKeys(data.participantKeys)
+	out.messageIDs = sortedKeys(data.messageIDs)
+	out.lastSeenUnix = data.lastSeenUnix
+	out.LastSeen = formatWhoLastSeen(data.lastSeenUnix)
+	out.Messages = int64(len(out.messageIDs))
+	return out
 }
 
 func (c WhoCandidate) resolved() *WhoResolved {
@@ -305,251 +330,92 @@ func (c WhoCandidate) resolved() *WhoResolved {
 }
 
 func matchWhoCandidates(query string, candidates []WhoCandidate) []WhoCandidate {
-	query = normalizeMatchValue(query)
+	query = whomatch.Normalize(query)
 	if query == "" {
 		return []WhoCandidate{}
 	}
 	var matches []WhoCandidate
 	for _, candidate := range candidates {
-		quality, identifier, ok := bestWhoCandidateMatch(query, candidate)
+		rank, ok := candidate.matcherCandidate().MatchRank(query)
 		if !ok {
 			continue
 		}
-		candidate.matchQuality = quality
-		candidate.Identifiers = matchingIdentifierFirst(candidate.Identifiers, identifier)
+		candidate.matchRank = rank
+		candidate.Identifiers = matchingIdentifiersFirst(query, candidate.Identifiers)
 		matches = append(matches, candidate)
 	}
 	sort.SliceStable(matches, func(i, j int) bool {
-		if matches[i].matchQuality != matches[j].matchQuality {
-			return matches[i].matchQuality < matches[j].matchQuality
+		if matches[i].matchRank != matches[j].matchRank {
+			return matches[i].matchRank.BetterThan(matches[j].matchRank)
 		}
 		return compareWhoCandidates(matches[i], matches[j]) < 0
 	})
 	return matches
 }
 
-func looseWhoSuggestions(query string, candidates []WhoCandidate) []WhoCandidate {
-	query = normalizeMatchValue(query)
-	if query == "" {
-		return []WhoCandidate{}
-	}
-	var suggestions []WhoCandidate
-	for _, candidate := range candidates {
-		distance, identifier, ok := closestWhoCandidateDistance(query, candidate)
-		if !ok || distance > looseSuggestionDistance(query) {
-			continue
-		}
-		candidate.matchQuality = distance
-		candidate.Identifiers = matchingIdentifierFirst(candidate.Identifiers, identifier)
-		suggestions = append(suggestions, candidate)
-	}
-	sort.SliceStable(suggestions, func(i, j int) bool {
-		if suggestions[i].matchQuality != suggestions[j].matchQuality {
-			return suggestions[i].matchQuality < suggestions[j].matchQuality
-		}
-		return compareWhoCandidates(suggestions[i], suggestions[j]) < 0
-	})
-	if len(suggestions) > 5 {
-		suggestions = suggestions[:5]
-	}
-	return suggestions
-}
-
-func bestWhoCandidateMatch(query string, candidate WhoCandidate) (int, string, bool) {
-	best := 0
-	bestIdentifier := ""
-	matched := false
-	if quality, ok := visibleWhoMatchQuality(query, candidate.Who); ok {
-		best = quality
-		matched = true
-	}
-	for _, identifier := range candidate.Identifiers {
-		quality, ok := visibleWhoMatchQuality(query, identifier)
-		if !ok {
-			continue
-		}
-		if !matched || quality < best {
-			best = quality
-			bestIdentifier = identifier
-			matched = true
-			continue
-		}
-		if quality == best && bestIdentifier == "" {
-			bestIdentifier = identifier
-		}
-	}
-	return best, bestIdentifier, matched
-}
-
-func visibleWhoMatchQuality(query, value string) (int, bool) {
-	value = normalizeMatchValue(value)
-	if value == "" {
-		return 0, false
-	}
-	return matchValueQuality(query, value)
-}
-
-func matchValueQuality(query, value string) (int, bool) {
-	if value == query {
-		return whoMatchExact, true
-	}
-	if strings.HasPrefix(value, query) {
-		return whoMatchPrefix, true
-	}
-	if strings.Contains(value, query) {
-		return whoMatchContains, true
-	}
-	if closeSpelling(query, value) {
-		return whoMatchClose, true
-	}
-	return 0, false
-}
-
-func closeSpelling(query, value string) bool {
-	query = canonicalSpelling(query)
-	if len(query) < 4 {
-		return false
-	}
-	for _, candidate := range spellingCandidates(value) {
-		if candidate == "" || len(candidate) < 4 || firstRune(candidate) != firstRune(query) {
-			continue
-		}
-		if levenshteinAtMost(query, candidate, closeSpellingDistance(query)) {
-			return true
-		}
-	}
-	return false
-}
-
-func closestWhoDistance(query string, values []string) (int, bool) {
-	query = canonicalSpelling(query)
-	if len(query) < 3 {
-		return 0, false
-	}
-	best := 0
-	found := false
-	for _, value := range values {
-		for _, candidate := range spellingCandidates(value) {
-			if candidate == "" {
-				continue
-			}
-			distance := levenshteinDistance(query, candidate, looseSuggestionDistance(query))
-			if distance < 0 {
-				continue
-			}
-			if !found || distance < best {
-				best = distance
-				found = true
-			}
-		}
-	}
-	return best, found
-}
-
-func closestWhoCandidateDistance(query string, candidate WhoCandidate) (int, string, bool) {
-	best := 0
-	bestIdentifier := ""
-	found := false
-	if distance, ok := closestWhoDistance(query, []string{candidate.Who}); ok {
-		best = distance
-		found = true
-	}
-	for _, identifier := range candidate.Identifiers {
-		distance, ok := closestWhoDistance(query, []string{identifier})
-		if !ok {
-			continue
-		}
-		if !found || distance < best {
-			best = distance
-			bestIdentifier = identifier
-			found = true
-			continue
-		}
-		if distance == best && bestIdentifier == "" {
-			bestIdentifier = identifier
-		}
-	}
-	return best, bestIdentifier, found
-}
-
-func matchingIdentifierFirst(identifiers []string, match string) []string {
-	if match == "" || len(identifiers) == 0 || identifiers[0] == match {
+func matchingIdentifiersFirst(query string, identifiers []string) []string {
+	if len(identifiers) == 0 {
 		return identifiers
 	}
-	out := []string{match}
-	for _, identifier := range identifiers {
-		if identifier != match {
-			out = append(out, identifier)
+	type rankedIdentifier struct {
+		value   string
+		rank    whomatch.Rank
+		matched bool
+		index   int
+	}
+	ranked := make([]rankedIdentifier, 0, len(identifiers))
+	anyMatched := false
+	for index, identifier := range identifiers {
+		rank, matched := whomatch.MatchRank(query, []string{identifier})
+		if matched {
+			anyMatched = true
 		}
+		ranked = append(ranked, rankedIdentifier{
+			value:   identifier,
+			rank:    rank,
+			matched: matched,
+			index:   index,
+		})
+	}
+	if !anyMatched {
+		return identifiers
+	}
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].matched != ranked[j].matched {
+			return ranked[i].matched
+		}
+		if ranked[i].matched && ranked[i].rank != ranked[j].rank {
+			return ranked[i].rank.BetterThan(ranked[j].rank)
+		}
+		return ranked[i].index < ranked[j].index
+	})
+	out := make([]string, 0, len(ranked))
+	for _, identifier := range ranked {
+		out = append(out, identifier.value)
 	}
 	return out
 }
 
-func spellingCandidates(value string) []string {
-	value = normalizeMatchValue(value)
-	compact := canonicalSpelling(value)
-	out := []string{compact}
-	for _, token := range strings.FieldsFunc(value, func(r rune) bool {
-		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
-	}) {
-		out = append(out, canonicalSpelling(token))
-	}
-	return out
+func sortWhoCandidates(candidates []WhoCandidate) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		return compareWhoCandidates(candidates[i], candidates[j]) < 0
+	})
 }
 
-func closeSpellingDistance(query string) int {
-	if len(query) >= 7 {
-		return 2
-	}
-	return 1
-}
-
-func looseSuggestionDistance(query string) int {
-	if len(query) >= 8 {
-		return 3
-	}
-	if len(query) >= 5 {
-		return 2
-	}
-	return 1
-}
-
-func levenshteinAtMost(left, right string, maxDistance int) bool {
-	return levenshteinDistance(left, right, maxDistance) >= 0
-}
-
-func levenshteinDistance(left, right string, maxDistance int) int {
-	lr, rr := []rune(left), []rune(right)
-	if absInt(len(lr)-len(rr)) > maxDistance {
-		return -1
-	}
-	prev := make([]int, len(rr)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i, l := range lr {
-		cur := make([]int, len(rr)+1)
-		cur[0] = i + 1
-		rowMin := cur[0]
-		for j, r := range rr {
-			cost := 0
-			if l != r {
-				cost = 1
-			}
-			cur[j+1] = minInt(minInt(cur[j]+1, prev[j+1]+1), prev[j]+cost)
-			if cur[j+1] < rowMin {
-				rowMin = cur[j+1]
-			}
+func sortWhoCandidatesForMerge(candidates []WhoCandidate) {
+	sort.SliceStable(candidates, func(i, j int) bool {
+		leftName := whomatch.Normalize(candidates[i].Who)
+		rightName := whomatch.Normalize(candidates[j].Who)
+		if leftName != rightName {
+			return leftName < rightName
 		}
-		if rowMin > maxDistance {
-			return -1
+		leftIdentifiers := strings.Join(candidates[i].Identifiers, "\x00")
+		rightIdentifiers := strings.Join(candidates[j].Identifiers, "\x00")
+		if leftIdentifiers != rightIdentifiers {
+			return leftIdentifiers < rightIdentifiers
 		}
-		prev = cur
-	}
-	if prev[len(rr)] > maxDistance {
-		return -1
-	}
-	return prev[len(rr)]
+		return compareWhoCandidates(candidates[i], candidates[j]) < 0
+	})
 }
 
 func compareWhoCandidates(left, right WhoCandidate) int {
@@ -565,8 +431,8 @@ func compareWhoCandidates(left, right WhoCandidate) int {
 		}
 		return 1
 	}
-	leftWho := strings.ToLower(left.Who)
-	rightWho := strings.ToLower(right.Who)
+	leftWho := whomatch.Normalize(left.Who)
+	rightWho := whomatch.Normalize(right.Who)
 	if leftWho < rightWho {
 		return -1
 	}
@@ -576,46 +442,30 @@ func compareWhoCandidates(left, right WhoCandidate) int {
 	return strings.Compare(strings.Join(left.Identifiers, ","), strings.Join(right.Identifiers, ","))
 }
 
-func shouldReplaceWho(existing, next string) bool {
-	next = normalizeWho(next)
+func firstNonEmptyDisplay(values ...string) string {
+	for _, value := range values {
+		value = cleanWhoDisplay(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func cleanWhoDisplay(value string) string {
+	return strings.Join(strings.Fields(value), " ")
+}
+
+func shouldUseWhoDisplay(existing string, next string, identifiers map[string]struct{}) bool {
+	next = cleanWhoDisplay(next)
 	if next == "" {
 		return false
 	}
 	if existing == "" {
 		return true
 	}
-	return looksLikeAddress(existing) && !looksLikeAddress(next)
-}
-
-func shouldReplaceMergedWho(existing, next *whoAggregate) bool {
-	nextWho := normalizeWho(next.who)
-	if nextWho == "" {
-		return false
-	}
-	existingWho := normalizeWho(existing.who)
-	if existingWho == "" {
-		return true
-	}
-	if looksLikeAddress(existingWho) && !looksLikeAddress(nextWho) {
-		return true
-	}
-	if normalizeMatchValue(existingWho) != normalizeMatchValue(nextWho) {
-		return false
-	}
-	if existing.lastSeenUnix != next.lastSeenUnix {
-		return next.lastSeenUnix > existing.lastSeenUnix
-	}
-	return nextWho < existingWho
-}
-
-func firstNonEmptyWho(values ...string) string {
-	for _, value := range values {
-		value = normalizeWho(value)
-		if value != "" {
-			return value
-		}
-	}
-	return ""
+	values := sortedKeys(identifiers)
+	return whomatch.IsIdentifierLike(existing, values) && !whomatch.IsIdentifierLike(next, values)
 }
 
 func sortedKeys(values map[string]struct{}) []string {
@@ -634,22 +484,18 @@ func sortedKeys(values map[string]struct{}) []string {
 	return out
 }
 
-func normalizeWho(value string) string {
-	return strings.Join(strings.Fields(value), " ")
-}
-
-func normalizeMatchValue(value string) string {
-	return strings.ToLower(normalizeWho(value))
-}
-
-func canonicalSpelling(value string) string {
-	var b strings.Builder
-	for _, r := range strings.ToLower(value) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-		}
+func formatWhoLastSeen(unix int64) string {
+	if unix <= 0 {
+		return ""
 	}
-	return b.String()
+	return formatArchiveTime(time.Unix(unix, 0))
+}
+
+func formatMatcherLastSeen(when time.Time) string {
+	if when.IsZero() {
+		return ""
+	}
+	return formatArchiveTime(when)
 }
 
 func isOwnerIdentity(value string) bool {
@@ -692,29 +538,4 @@ func isEmailIdentifier(value string) bool {
 	}
 	before, after, ok := strings.Cut(value, "@")
 	return ok && strings.TrimSpace(before) != "" && strings.TrimSpace(after) != ""
-}
-
-func looksLikeAddress(value string) bool {
-	return isEmailIdentifier(value) || strings.HasPrefix(strings.TrimSpace(value), "+")
-}
-
-func firstRune(value string) rune {
-	for _, r := range value {
-		return r
-	}
-	return 0
-}
-
-func absInt(value int) int {
-	if value < 0 {
-		return -value
-	}
-	return value
-}
-
-func minInt(left, right int) int {
-	if left < right {
-		return left
-	}
-	return right
 }
