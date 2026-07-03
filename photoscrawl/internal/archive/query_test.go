@@ -86,8 +86,8 @@ values ('fixture-place-evidence', ?, 'content_classification', 'fixture', 'place
 	}
 	if _, err := db.DB().ExecContext(ctx, `
 insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
-values ('fixture-place', ?, 'merchant_or_venue_name_candidate', 'Synthetic Pier', '{"text":"Synthetic Pier"}', 0.8, 'fixture', 'fixture-model', 'fixture-prompt', 'fixture-place-evidence')
-`, assetID); err != nil {
+values ('fixture-place', ?, ?, 'Synthetic Pier', '{"text":"Synthetic Pier"}', null, 'fixture', 'fixture-model', 'fixture-prompt', 'fixture-place-evidence')
+`, assetID, modelObservationCardPlacePhrase); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,11 +184,11 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opened.Ref != search.Results[0].Ref || opened.Time == "" || opened.MediaType == "" || opened.Dimensions == nil {
+	if opened.Ref != search.Results[0].Ref || opened.Time == "" || opened.MediaType == "" {
 		t.Fatalf("open header = %#v", opened)
 	}
-	if len(opened.Resources) != 1 || len(opened.Albums) != 1 || opened.LocationCount != 1 || len(opened.Evidence.Refs) == 0 {
-		t.Fatalf("open shape resources=%d albums=%d locations=%d evidence=%d", len(opened.Resources), len(opened.Albums), opened.LocationCount, len(opened.Evidence.Refs))
+	if opened.Original == nil || opened.Evidence.Count == 0 || opened.Evidence.Ref != opened.Ref {
+		t.Fatalf("open shape original=%#v evidence=%#v", opened.Original, opened.Evidence)
 	}
 	data, err := json.Marshal(opened)
 	if err != nil {
@@ -198,7 +198,7 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	if err := json.Unmarshal(data, &top); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"asset", "locations", "metadata_observations", "visual_observations", "model_observations"} {
+	for _, field := range []string{"asset", "locations", "metadata_observations", "visual_observations", "model_observations", "resources", "observations", "albums"} {
 		if _, ok := top[field]; ok {
 			t.Fatalf("open leaked raw field %q: %s", field, data)
 		}
@@ -207,12 +207,11 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	if !ok {
 		t.Fatalf("open missing evidence object: %s", data)
 	}
-	refs, ok := evidence["refs"].([]any)
-	if !ok || len(refs) == 0 {
-		t.Fatalf("open missing evidence refs: %s", data)
+	if _, ok := evidence["count"].(float64); !ok {
+		t.Fatalf("open missing evidence count: %s", data)
 	}
-	if _, ok := evidence["raw"]; ok {
-		t.Fatalf("open leaked raw evidence branch: %s", data)
+	if _, ok := evidence["ref"].(string); !ok {
+		t.Fatalf("open missing evidence ref: %s", data)
 	}
 }
 

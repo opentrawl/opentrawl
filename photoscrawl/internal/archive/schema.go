@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 2
+const SchemaVersion = 3
 
 const Schema = `
 create table if not exists source_library (

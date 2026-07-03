@@ -136,54 +136,51 @@ func writeOpen(w io.Writer, format output.Format, result archive.OpenResult) err
 }
 
 func printOpenText(w io.Writer, result archive.OpenResult) error {
-	if _, err := fmt.Fprintf(w, "Asset: %s\n", emptyDash(result.Ref)); err != nil {
+	if _, err := fmt.Fprintf(w, "%s\n", emptyDash(result.Ref)); err != nil {
 		return err
 	}
-	if result.MediaType != "" {
-		if _, err := fmt.Fprintf(w, "Type: %s\n", result.MediaType); err != nil {
+	header := strings.Join(nonEmptyText(openTextTime(result.Time), result.MediaType, result.Where), " · ")
+	if header != "" {
+		if _, err := fmt.Fprintf(w, "%s\n", header); err != nil {
 			return err
 		}
 	}
-	if result.Time != "" {
-		if _, err := fmt.Fprintf(w, "Time: %s\n", result.Time); err != nil {
-			return err
-		}
-	}
-	if result.Dimensions != nil {
-		if _, err := fmt.Fprintf(w, "Size: %dx%d\n", result.Dimensions.Width, result.Dimensions.Height); err != nil {
-			return err
-		}
-	}
-	if result.Where != "" {
-		if _, err := fmt.Fprintf(w, "Where: %s\n", result.Where); err != nil {
-			return err
-		}
-	}
-	if len(result.Who) > 0 {
-		if _, err := fmt.Fprintf(w, "Who: %s\n", strings.Join(result.Who, ", ")); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "\nResources: %d\nAlbums: %d\nLocations: %d\nObservations: %d\nEvidence refs: %d\n",
-		len(result.Resources),
-		len(result.Albums),
-		result.LocationCount,
-		len(result.Observations),
-		len(result.Evidence.Refs),
-	); err != nil {
+	if _, err := io.WriteString(w, "\n"); err != nil {
 		return err
 	}
-	for _, album := range result.Albums {
-		if album.Title != "" {
-			if _, err := fmt.Fprintf(w, "  Album: %s\n", album.Title); err != nil {
+	bodyParts := nonEmptyText(result.Summary, result.Description)
+	for i, part := range bodyParts {
+		if i > 0 {
+			if _, err := io.WriteString(w, "\n"); err != nil {
 				return err
 			}
 		}
-	}
-	for _, observation := range result.Observations {
-		if _, err := fmt.Fprintf(w, "  %s: %s\n", displayObservationKind(observation.Kind), observation.Text); err != nil {
+		if _, err := fmt.Fprintf(w, "%s\n", part); err != nil {
 			return err
 		}
+	}
+	if len(result.Uncertainties) > 0 {
+		if len(bodyParts) > 0 {
+			if _, err := io.WriteString(w, "\n"); err != nil {
+				return err
+			}
+		}
+		if _, err := fmt.Fprintf(w, "Uncertain: %s.\n", strings.Join(result.Uncertainties, "; ")); err != nil {
+			return err
+		}
+	}
+	if _, err := io.WriteString(w, "\n"); err != nil {
+		return err
+	}
+	if result.Original != nil {
+		if _, err := fmt.Fprintf(w, "Original: %s (%s, %s)\n", result.Original.Filename, humanBytes(result.Original.Bytes), result.Original.Availability); err != nil {
+			return err
+		}
+	} else if _, err := io.WriteString(w, "Original: unavailable\n"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w, "Evidence: %d records — photoscrawl evidence %s\n", result.Evidence.Count, result.Evidence.Ref); err != nil {
+		return err
 	}
 	return nil
 }
@@ -365,6 +362,34 @@ func displayTime(value string) string {
 		return value
 	}
 	return parsed.Local().Format(time.RFC3339)
+}
+
+func openTextTime(value string) string {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return value
+	}
+	return parsed.Local().Format("2006-01-02 15:04")
+}
+
+func humanBytes(bytes int64) string {
+	const (
+		kb = 1024
+		mb = 1024 * kb
+		gb = 1024 * mb
+	)
+	switch {
+	case bytes >= gb:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(gb))
+	case bytes >= mb:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(mb))
+	case bytes >= kb:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
+	case bytes > 0:
+		return fmt.Sprintf("%d B", bytes)
+	default:
+		return "unknown size"
+	}
 }
 
 func displayObservationKind(value string) string {

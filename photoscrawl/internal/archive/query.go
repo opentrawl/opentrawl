@@ -33,12 +33,11 @@ type SearchHit struct {
 	Where   string `json:"where"`
 	Snippet string `json:"snippet"`
 
-	ID            string `json:"-"`
-	HitType       string `json:"-"`
-	ObservationID string `json:"-"`
-	MediaType     string `json:"-"`
-	CreationDate  string `json:"-"`
-	Title         string `json:"-"`
+	ID           string `json:"-"`
+	HitType      string `json:"-"`
+	MediaType    string `json:"-"`
+	CreationDate string `json:"-"`
+	Title        string `json:"-"`
 }
 
 const searchWhoSQL = `coalesce((
@@ -57,19 +56,34 @@ const searchWhereSQL = `coalesce((
   from model_observation
   where asset_id = asset.id
     and trim(value_text) <> ''
-    and observation_type in ('merchant_or_venue_name_candidate', 'landmark_or_place_name_candidate', 'place_type_candidate')
-  order by case observation_type
-    when 'merchant_or_venue_name_candidate' then 1
-    when 'landmark_or_place_name_candidate' then 2
-    when 'place_type_candidate' then 3
-    else 4
-  end, coalesce(confidence, -1) desc, value_text
+    and observation_type = '` + modelObservationCardPlacePhrase + `'
+  order by id
   limit 1
 ), (
   select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
          case when horizontal_accuracy is not null then ' +/-' || printf('%.0f', horizontal_accuracy) || 'm' else '' end
   from location_observation
   where asset_id = asset.id
+  order by id
+  limit 1
+), '')`
+
+const searchCardSummarySQL = `coalesce((
+  select value_text
+  from model_observation
+  where asset_id = asset.id
+    and observation_type = '` + modelObservationCardSummary + `'
+    and trim(value_text) <> ''
+  order by id
+  limit 1
+), '')`
+
+const searchCardDescriptionSQL = `coalesce((
+  select value_text
+  from model_observation
+  where asset_id = asset.id
+    and observation_type = '` + modelObservationCardDescription + `'
+    and trim(value_text) <> ''
   order by id
   limit 1
 ), '')`
@@ -101,28 +115,51 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	defer db.Close()
 
 	fts := ftsQuery(query)
-	assetMatches, err := ftsCount(ctx, db.DB(), "asset_fts", fts, after, before)
+	totalMatches, err := ftsDistinctAssetCount(ctx, db.DB(), fts, after, before)
 	if err != nil {
-		return SearchResult{}, fmt.Errorf("count asset matches: %w", err)
+		return SearchResult{}, fmt.Errorf("count search matches: %w", err)
 	}
-	observationMatches, err := ftsCount(ctx, db.DB(), "observation_fts", fts, after, before)
-	if err != nil {
-		return SearchResult{}, fmt.Errorf("count observation matches: %w", err)
-	}
-	totalMatches := assetMatches + observationMatches
 	rows, err := db.DB().QueryContext(ctx, `
-select asset.id, asset.media_type, asset.creation_date, asset_fts.title,
+with asset_matches as (
+  select asset.id, asset_fts.rank as hit_rank
+  from asset_fts
+  join asset on asset.id = asset_fts.id
+  where asset_fts match ?
+    and (? = '' or asset.creation_date >= ?)
+    and (? = '' or asset.creation_date <= ?)
+),
+card_matches as (
+  select asset.id, observation_fts.rank as hit_rank
+  from observation_fts
+  join model_observation card_summary on card_summary.id = observation_fts.id
+    and card_summary.asset_id = observation_fts.asset_id
+    and card_summary.observation_type = '`+modelObservationCardSummary+`'
+  join asset on asset.id = observation_fts.asset_id
+  where observation_fts match ?
+    and (? = '' or asset.creation_date >= ?)
+    and (? = '' or asset.creation_date <= ?)
+),
+matched_assets as (
+  select id, min(hit_rank) as hit_rank
+  from (
+    select id, hit_rank from asset_matches
+    union all
+    select id, hit_rank from card_matches
+  )
+  group by id
+)
+select asset.id, asset.media_type, asset.creation_date,
+       coalesce((select title from asset_fts where id = asset.id limit 1), '') as title,
+       coalesce((select body from asset_fts where id = asset.id limit 1), '') as asset_body,
        `+searchWhoSQL+` as who,
        `+searchWhereSQL+` as where_label,
-       snippet(asset_fts, 2, '', '', ' ', 12) as snippet
-from asset_fts
-join asset on asset.id = asset_fts.id
-where asset_fts match ?
-  and (? = '' or asset.creation_date >= ?)
-  and (? = '' or asset.creation_date <= ?)
-order by rank
+       `+searchCardSummarySQL+` as card_summary,
+       `+searchCardDescriptionSQL+` as card_description
+from matched_assets
+join asset on asset.id = matched_assets.id
+order by matched_assets.hit_rank, asset.creation_date desc, asset.id
 limit ?
-`, fts, after, after, before, before, limit)
+`, fts, after, after, before, before, fts, after, after, before, before, limit)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search assets: %w", err)
 	}
@@ -137,68 +174,54 @@ limit ?
 	}
 	for rows.Next() {
 		var hit SearchHit
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Who, &hit.Where, &hit.Snippet); err != nil {
+		var assetBody, cardSummary, cardDescription string
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
 		hit.Ref = assetRef(hit.ID)
 		hit.Time = localRFC3339(hit.CreationDate)
-		hit.Snippet = cleanSnippet(hit.Snippet)
+		if !strings.HasPrefix(hit.Where, "GPS ") {
+			hit.Where = cleanPlacePhrase(hit.Where)
+		}
+		hit.Snippet = searchSnippet(query, cardSummary, cardDescription, hit.Title, assetBody)
 		result.Results = append(result.Results, hit)
 	}
 	if err := rows.Err(); err != nil {
 		return SearchResult{}, err
 	}
-
-	if len(result.Results) < limit {
-		observationLimit := limit - len(result.Results)
-		observationRows, err := db.DB().QueryContext(ctx, `
-select asset.id, observation_fts.id, asset.media_type, asset.creation_date, observation_fts.title,
-       `+searchWhoSQL+` as who,
-       `+searchWhereSQL+` as where_label,
-       snippet(observation_fts, 3, '', '', ' ', 12) as snippet
-from observation_fts
-join asset on asset.id = observation_fts.asset_id
-where observation_fts match ?
-  and (? = '' or asset.creation_date >= ?)
-  and (? = '' or asset.creation_date <= ?)
-order by rank
-limit ?
-`, fts, after, after, before, before, observationLimit)
-		if err != nil {
-			return SearchResult{}, fmt.Errorf("search observations: %w", err)
-		}
-		defer observationRows.Close()
-		for observationRows.Next() {
-			var hit SearchHit
-			if err := observationRows.Scan(&hit.ID, &hit.ObservationID, &hit.MediaType, &hit.CreationDate, &hit.Title, &hit.Who, &hit.Where, &hit.Snippet); err != nil {
-				return SearchResult{}, err
-			}
-			hit.HitType = "observation"
-			hit.Ref = assetRef(hit.ID)
-			hit.Time = localRFC3339(hit.CreationDate)
-			hit.Snippet = cleanSnippet(hit.Snippet)
-			result.Results = append(result.Results, hit)
-		}
-		if err := observationRows.Err(); err != nil {
-			return SearchResult{}, err
-		}
-	}
 	return result, nil
 }
 
-func ftsCount(ctx context.Context, db *sql.DB, table, fts, after, before string) (int, error) {
+func ftsDistinctAssetCount(ctx context.Context, db *sql.DB, fts, after, before string) (int, error) {
 	var count int
-	var query string
-	switch table {
-	case "asset_fts":
-		query = `select count(*) from asset_fts join asset on asset.id = asset_fts.id where asset_fts match ? and (? = '' or asset.creation_date >= ?) and (? = '' or asset.creation_date <= ?)`
-	case "observation_fts":
-		query = `select count(*) from observation_fts join asset on asset.id = observation_fts.asset_id where observation_fts match ? and (? = '' or asset.creation_date >= ?) and (? = '' or asset.creation_date <= ?)`
-	default:
-		return 0, fmt.Errorf("unknown FTS table %q", table)
-	}
-	if err := db.QueryRowContext(ctx, query, fts, after, after, before, before).Scan(&count); err != nil {
+	if err := db.QueryRowContext(ctx, `
+with asset_matches as (
+  select asset.id
+  from asset_fts
+  join asset on asset.id = asset_fts.id
+  where asset_fts match ?
+    and (? = '' or asset.creation_date >= ?)
+    and (? = '' or asset.creation_date <= ?)
+),
+card_matches as (
+  select asset.id
+  from observation_fts
+  join model_observation card_summary on card_summary.id = observation_fts.id
+    and card_summary.asset_id = observation_fts.asset_id
+    and card_summary.observation_type = '`+modelObservationCardSummary+`'
+  join asset on asset.id = observation_fts.asset_id
+  where observation_fts match ?
+    and (? = '' or asset.creation_date >= ?)
+    and (? = '' or asset.creation_date <= ?)
+)
+select count(*)
+from (
+  select id from asset_matches
+  union
+  select id from card_matches
+)
+`, fts, after, after, before, before, fts, after, after, before, before).Scan(&count); err != nil {
 		return 0, err
 	}
 	return count, nil
@@ -235,15 +258,6 @@ order by resource_type, original_filename
 	if err != nil {
 		return OpenResult{}, err
 	}
-	albums, err := rows(ctx, db.DB(), `
-select id, album_id, album_title, album_kind
-from album_membership
-where asset_id = ?
-order by album_title, album_id
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
 	locations, err := rows(ctx, db.DB(), `
 select id, latitude, longitude, altitude, horizontal_accuracy, source, evidence_id
 from location_observation
@@ -252,38 +266,18 @@ where asset_id = ?
 	if err != nil {
 		return OpenResult{}, err
 	}
-	metadataObservations, err := rows(ctx, db.DB(), `
-select observation_type, label, evidence_id
-from metadata_observation
-where asset_id = ?
-order by observation_type, label
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	textObservations, err := rows(ctx, db.DB(), `
-select text, confidence, evidence_id
-from text_observation
-where asset_id = ?
-order by confidence desc, id
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
-	faceObservations, err := rows(ctx, db.DB(), `
-select person_label, confidence, evidence_id
-from face_observation
-where asset_id = ?
-order by confidence desc, id
-`, rowID)
-	if err != nil {
-		return OpenResult{}, err
-	}
 	modelObservations, err := rows(ctx, db.DB(), `
-select observation_type, value_text, confidence, evidence_id
+select observation_type, value_text, value_json, model_id, prompt_version, evidence_id
 from model_observation
 where asset_id = ?
-order by observation_type, coalesce(confidence, -1) desc, value_text
+  and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardPlacePhrase+`', '`+modelObservationCardUncertainty+`')
+order by case observation_type
+  when '`+modelObservationCardSummary+`' then 1
+  when '`+modelObservationCardDescription+`' then 2
+  when '`+modelObservationCardPlacePhrase+`' then 3
+  when '`+modelObservationCardUncertainty+`' then 4
+  else 5
+end, id
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err
@@ -292,7 +286,7 @@ order by observation_type, coalesce(confidence, -1) desc, value_text
 	if err != nil {
 		return OpenResult{}, err
 	}
-	return newOpenResult(asset, resources, albums, locations, metadataObservations, textObservations, faceObservations, modelObservations, evidence), nil
+	return newOpenResult(asset, resources, locations, modelObservations, evidence), nil
 }
 
 func assetRef(id string) string {
@@ -339,6 +333,66 @@ func localRFC3339(value string) string {
 
 func cleanSnippet(value string) string {
 	return strings.Join(strings.Fields(value), " ")
+}
+
+func searchSnippet(query, cardSummary, cardDescription, title, assetBody string) string {
+	cardText := cleanSnippet(strings.Join([]string{cardSummary, cardDescription}, " "))
+	if cardText != "" {
+		return textFragment(query, cardText)
+	}
+	return textFragment(query, cleanSnippet(strings.Join([]string{title, assetBody}, " ")))
+}
+
+func textFragment(query, text string) string {
+	const maxSnippet = 180
+	text = cleanSnippet(text)
+	if text == "" {
+		return ""
+	}
+	lowerText := strings.ToLower(text)
+	start := 0
+	for _, term := range strings.Fields(strings.ToLower(query)) {
+		term = strings.Trim(term, `"':,.;!?()[]{}<>`)
+		if term == "" {
+			continue
+		}
+		if idx := strings.Index(lowerText, term); idx >= 0 {
+			start = idx - 60
+			if start < 0 {
+				start = 0
+			}
+			break
+		}
+	}
+	if start > 0 {
+		if nextSpace := strings.IndexByte(text[start:], ' '); nextSpace >= 0 {
+			start += nextSpace + 1
+		}
+	}
+	if len(text)-start <= maxSnippet {
+		fragment := strings.TrimSpace(text[start:])
+		if start > 0 {
+			return "..." + fragment
+		}
+		return fragment
+	}
+	end := start + maxSnippet
+	if end > len(text) {
+		end = len(text)
+	}
+	if end < len(text) {
+		if previousSpace := strings.LastIndexByte(text[start:end], ' '); previousSpace > 0 {
+			end = start + previousSpace
+		}
+	}
+	fragment := strings.TrimSpace(text[start:end])
+	if start > 0 {
+		fragment = "..." + fragment
+	}
+	if end < len(text) {
+		fragment += "..."
+	}
+	return fragment
 }
 
 func Evidence(ctx context.Context, paths Paths, rowID string) (EvidenceResult, error) {

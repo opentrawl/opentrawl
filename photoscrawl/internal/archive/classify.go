@@ -111,7 +111,11 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	var inputs []classifyInput
 	err = db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		inputs, err = loadClassifyInputs(ctx, tx, limit, classifier != nil)
+		refreshModelID := ""
+		if classifier != nil {
+			refreshModelID = classifier.modelID
+		}
+		inputs, err = loadClassifyInputs(ctx, tx, limit, refreshModelID)
 		if err != nil {
 			return err
 		}

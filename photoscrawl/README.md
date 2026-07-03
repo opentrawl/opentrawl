@@ -61,12 +61,10 @@ state. Every imported asset is queued for `classify`.
 
 `classify` drains that queue into evidence-backed local metadata observations.
 With `--model <ollama-model>`, it also sends already-local image bytes to an
-Ollama-API vision model and stores typed candidate observations:
-scene summaries, visible-text summaries, place-type/name/venue candidates,
-objects/foods, anonymous people presence, privacy hints, cluster terms, and
-uncertainties. These are evidence-backed model observations, not durable
-people/place/trip truth. They carry confidence only when the model actually
-emits one.
+Ollama-API vision model and stores one photo card per asset: a one-line summary,
+visual description, calibrated place phrase, and uncertainty list. Search uses
+hidden terms derived from that card text. It does not store rendered tag rows,
+candidate venue rows, object lists, or cluster terms.
 
 `neighbors` returns source-level adjacent assets only. It does not create trips,
 people, places, or clusters. Current reasons are deterministic archive facts:
@@ -110,12 +108,11 @@ Today the POC sees useful source facts and optional model observations:
 - resource type, UTI, filename, local/remote availability, iCloud download need,
   and resource hash when already local;
 - album membership and raw GPS observations with evidence refs;
-- metadata-only observations for media type, local content availability,
-  geometry, burst membership, resource UTI/type, and weak
-  screenshot/document/receipt candidates from filenames, albums, and metadata;
-- optional model observations from already-local image derivatives or
-  originals, plus normalized terms for search and later clustering;
-- quality observations for model failures such as prompt leakage;
+- metadata-only observations for media type, geometry, burst membership,
+  resource UTI/type, and weak screenshot/document/receipt candidates from
+  filenames, albums, and metadata;
+- optional photo-card observations from already-local image derivatives or
+  originals, plus hidden normalized terms for search;
 - status coverage counts for GPS, observations, local resources, remote
   resources, classification queue state, and observation types;
 - search/open/evidence/neighbors JSON that points every claim back to source

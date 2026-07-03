@@ -6,53 +6,28 @@ import (
 	"strings"
 )
 
-const maxOpenObservations = 20
-
 type OpenResult struct {
-	Ref             string            `json:"ref"`
-	Time            string            `json:"time,omitempty"`
-	MediaType       string            `json:"media_type,omitempty"`
-	Dimensions      *OpenDimensions   `json:"dimensions,omitempty"`
-	DurationSeconds float64           `json:"duration_seconds,omitempty"`
-	Favorite        bool              `json:"favorite,omitempty"`
-	Hidden          bool              `json:"hidden,omitempty"`
-	Where           string            `json:"where,omitempty"`
-	Who             []string          `json:"who,omitempty"`
-	LocationCount   int               `json:"location_count,omitempty"`
-	Albums          []OpenAlbum       `json:"albums,omitempty"`
-	Resources       []OpenResource    `json:"resources,omitempty"`
-	Observations    []OpenObservation `json:"observations,omitempty"`
-	Evidence        OpenEvidence      `json:"evidence"`
+	Ref           string              `json:"ref"`
+	Time          string              `json:"time,omitempty"`
+	MediaType     string              `json:"media_type,omitempty"`
+	Where         string              `json:"where,omitempty"`
+	Summary       string              `json:"summary,omitempty"`
+	Description   string              `json:"description,omitempty"`
+	PlacePhrase   string              `json:"place_phrase,omitempty"`
+	Uncertainties []string            `json:"uncertainties,omitempty"`
+	Original      *OpenOriginal       `json:"original,omitempty"`
+	Evidence      OpenEvidenceSummary `json:"evidence"`
 }
 
-type OpenDimensions struct {
-	Width  int64 `json:"width"`
-	Height int64 `json:"height"`
+type OpenOriginal struct {
+	Filename     string `json:"filename,omitempty"`
+	Bytes        int64  `json:"bytes,omitempty"`
+	Availability string `json:"availability,omitempty"`
 }
 
-type OpenAlbum struct {
-	Title string `json:"title"`
-	Kind  string `json:"kind,omitempty"`
-}
-
-type OpenResource struct {
-	Type                  string `json:"type,omitempty"`
-	Filename              string `json:"filename,omitempty"`
-	UniformTypeIdentifier string `json:"uniform_type_identifier,omitempty"`
-	Bytes                 int64  `json:"bytes,omitempty"`
-	AvailableLocally      bool   `json:"available_locally"`
-	NeedsDownload         bool   `json:"needs_download"`
-}
-
-type OpenObservation struct {
-	Kind        string   `json:"kind"`
-	Text        string   `json:"text"`
-	Confidence  *float64 `json:"confidence,omitempty"`
-	EvidenceRef string   `json:"evidence_ref,omitempty"`
-}
-
-type OpenEvidence struct {
-	Refs []EvidenceReference `json:"refs,omitempty"`
+type OpenEvidenceSummary struct {
+	Count int    `json:"count"`
+	Ref   string `json:"ref"`
 }
 
 type EvidenceResult struct {
@@ -70,131 +45,103 @@ type EvidenceReference struct {
 	Summary  string `json:"summary,omitempty"`
 }
 
-func newOpenResult(asset map[string]any, resources, albums, locations, metadataObservations, textObservations, faceObservations, modelObservations, evidence []map[string]any) OpenResult {
+func newOpenResult(asset map[string]any, resources, locations, modelObservations, evidence []map[string]any) OpenResult {
+	ref := assetRef(rowString(asset, "id"))
+	card := openCard(modelObservations)
 	return OpenResult{
-		Ref:             assetRef(rowString(asset, "id")),
-		Time:            localRFC3339(rowString(asset, "creation_date")),
-		MediaType:       rowString(asset, "media_type"),
-		Dimensions:      openDimensions(asset),
-		DurationSeconds: rowFloat(asset, "duration_seconds"),
-		Favorite:        rowBool(asset, "favorite"),
-		Hidden:          rowBool(asset, "hidden"),
-		Where:           openWhere(modelObservations, locations),
-		Who:             openWho(faceObservations),
-		LocationCount:   len(locations),
-		Albums:          openAlbums(albums),
-		Resources:       openResources(resources),
-		Observations:    openObservations(metadataObservations, textObservations, faceObservations, modelObservations),
-		Evidence:        OpenEvidence{Refs: openEvidenceRefs(evidence)},
+		Ref:           ref,
+		Time:          localRFC3339(rowString(asset, "creation_date")),
+		MediaType:     openMediaType(rowString(asset, "media_type")),
+		Where:         openWhere(card.PlacePhrase, locations),
+		Summary:       card.Summary,
+		Description:   card.Description,
+		PlacePhrase:   card.PlacePhrase,
+		Uncertainties: card.Uncertainties,
+		Original:      openOriginal(resources),
+		Evidence: OpenEvidenceSummary{
+			Count: len(evidence),
+			Ref:   ref,
+		},
 	}
 }
 
-func openDimensions(asset map[string]any) *OpenDimensions {
-	width := rowInt(asset, "width")
-	height := rowInt(asset, "height")
-	if width == 0 && height == 0 {
+func openCard(rows []map[string]any) photoCard {
+	card := photoCard{}
+	for _, row := range rows {
+		text := strings.TrimSpace(rowString(row, "value_text"))
+		if text == "" {
+			continue
+		}
+		switch rowString(row, "observation_type") {
+		case modelObservationCardSummary:
+			if card.Summary == "" {
+				card.Summary = text
+			}
+		case modelObservationCardDescription:
+			if card.Description == "" {
+				card.Description = text
+			}
+		case modelObservationCardPlacePhrase:
+			if card.PlacePhrase == "" {
+				card.PlacePhrase = text
+			}
+		case modelObservationCardUncertainty:
+			card.Uncertainties = append(card.Uncertainties, text)
+		}
+	}
+	card.Uncertainties = uniqueStrings(card.Uncertainties)
+	return card
+}
+
+func openOriginal(rows []map[string]any) *OpenOriginal {
+	if len(rows) == 0 {
 		return nil
 	}
-	return &OpenDimensions{Width: width, Height: height}
+	best := rows[0]
+	bestScore := originalResourceScore(best)
+	for _, row := range rows[1:] {
+		if score := originalResourceScore(row); score > bestScore {
+			best = row
+			bestScore = score
+		}
+	}
+	filename := strings.TrimSpace(rowString(best, "original_filename"))
+	if filename == "" {
+		return nil
+	}
+	availability := "in iCloud"
+	if rowBool(best, "available_locally") && !rowBool(best, "needs_download") {
+		availability = "on this Mac"
+	}
+	return &OpenOriginal{
+		Filename:     filename,
+		Bytes:        rowInt(best, "file_size"),
+		Availability: availability,
+	}
 }
 
-func openAlbums(rows []map[string]any) []OpenAlbum {
-	out := []OpenAlbum{}
-	for _, row := range rows {
-		title := strings.TrimSpace(rowString(row, "album_title"))
-		if title == "" {
-			continue
-		}
-		out = append(out, OpenAlbum{
-			Title: title,
-			Kind:  rowString(row, "album_kind"),
-		})
+func originalResourceScore(row map[string]any) int {
+	text := strings.ToLower(strings.Join([]string{
+		rowString(row, "resource_type"),
+		rowString(row, "original_filename"),
+		rowString(row, "uti"),
+	}, " "))
+	score := 0
+	if strings.Contains(text, "original") {
+		score += 4
 	}
-	return out
+	if strings.Contains(text, "photo") || strings.Contains(text, "image") {
+		score += 2
+	}
+	if strings.TrimSpace(rowString(row, "original_filename")) != "" {
+		score++
+	}
+	return score
 }
 
-func openResources(rows []map[string]any) []OpenResource {
-	out := []OpenResource{}
-	seen := map[string]bool{}
-	for _, row := range rows {
-		resource := OpenResource{
-			Type:                  rowString(row, "resource_type"),
-			Filename:              rowString(row, "original_filename"),
-			UniformTypeIdentifier: rowString(row, "uti"),
-			Bytes:                 rowInt(row, "file_size"),
-			AvailableLocally:      rowBool(row, "available_locally"),
-			NeedsDownload:         rowBool(row, "needs_download"),
-		}
-		key := openResourceKey(resource)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		out = append(out, resource)
-	}
-	return out
-}
-
-func openResourceKey(resource OpenResource) string {
-	return strings.Join([]string{
-		resource.Type,
-		resource.Filename,
-		resource.UniformTypeIdentifier,
-		strconv.FormatInt(resource.Bytes, 10),
-		strconv.FormatBool(resource.AvailableLocally),
-		strconv.FormatBool(resource.NeedsDownload),
-	}, "\x00")
-}
-
-func openObservations(metadataRows, textRows, faceRows, modelRows []map[string]any) []OpenObservation {
-	out := []OpenObservation{}
-	add := func(kind, text string, confidence *float64, evidenceRef string) {
-		kind = strings.TrimSpace(kind)
-		text = strings.TrimSpace(text)
-		if kind == "" || text == "" || len(out) >= maxOpenObservations {
-			return
-		}
-		out = append(out, OpenObservation{
-			Kind:        kind,
-			Text:        text,
-			Confidence:  confidence,
-			EvidenceRef: photoscrawlRef(evidenceRef),
-		})
-	}
-	for _, row := range metadataRows {
-		add(rowString(row, "observation_type"), rowString(row, "label"), nil, rowString(row, "evidence_id"))
-	}
-	for _, row := range textRows {
-		add("text", rowString(row, "text"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
-	}
-	for _, row := range faceRows {
-		add("face", rowString(row, "person_label"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
-	}
-	for _, row := range modelRows {
-		add(rowString(row, "observation_type"), rowString(row, "value_text"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
-	}
-	return out
-}
-
-func openWho(faceRows []map[string]any) []string {
-	seen := map[string]bool{}
-	out := []string{}
-	for _, row := range faceRows {
-		name := strings.TrimSpace(rowString(row, "person_label"))
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		out = append(out, name)
-	}
-	return out
-}
-
-func openWhere(modelRows, locationRows []map[string]any) string {
-	for _, kind := range []string{"merchant_or_venue_name_candidate", "landmark_or_place_name_candidate", "place_type_candidate"} {
-		if value := bestModelObservation(modelRows, kind); value != "" {
-			return value
-		}
+func openWhere(placePhrase string, locationRows []map[string]any) string {
+	if cleaned := cleanPlacePhrase(placePhrase); cleaned != "" {
+		return cleaned
 	}
 	for _, row := range locationRows {
 		lat, lon := rowFloat(row, "latitude"), rowFloat(row, "longitude")
@@ -210,24 +157,13 @@ func openWhere(modelRows, locationRows []map[string]any) string {
 	return ""
 }
 
-func bestModelObservation(rows []map[string]any, kind string) string {
-	bestText := ""
-	bestConfidence := -1.0
-	for _, row := range rows {
-		if rowString(row, "observation_type") != kind {
-			continue
-		}
-		text := strings.TrimSpace(rowString(row, "value_text"))
-		if text == "" {
-			continue
-		}
-		confidence := rowFloat(row, "confidence")
-		if confidence > bestConfidence {
-			bestText = text
-			bestConfidence = confidence
-		}
+func openMediaType(value string) string {
+	switch strings.TrimSpace(value) {
+	case "image":
+		return "photo"
+	default:
+		return strings.TrimSpace(value)
 	}
-	return bestText
 }
 
 func openEvidenceRefs(rows []map[string]any) []EvidenceReference {
@@ -283,6 +219,8 @@ func evidenceSourceLabel(source string) string {
 		return "Photos library database"
 	case metadataClassifierSource:
 		return "Photo metadata"
+	case modelClassifierSource:
+		return "Photo card"
 	default:
 		return strings.ReplaceAll(source, "_", " ")
 	}
@@ -388,9 +326,12 @@ func rowBool(row map[string]any, key string) bool {
 	case float64:
 		return value != 0
 	case string:
-		trimmed := strings.TrimSpace(value)
-		parsed, _ := strconv.ParseBool(trimmed)
-		return parsed || trimmed == "1"
+		switch strings.ToLower(strings.TrimSpace(value)) {
+		case "1", "true", "yes":
+			return true
+		default:
+			return false
+		}
 	default:
 		return false
 	}

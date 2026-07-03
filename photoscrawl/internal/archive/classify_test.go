@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -45,18 +46,13 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 			t.Fatalf("request = %#v", request)
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": `{
-				"scene_summary":"Outdoor street-food meal with satay skewers, prawns, sauces, and a shared table.",
-				"visible_text_summary":"A small receipt-like slip is visible.",
-				"place_candidates":["hawker centre"],
-				"landmark_candidates":[],
-				"merchant_or_venue_candidates":["satay stall candidate"],
-				"food_or_objects":["satay skewers","grilled prawns","peanut sauce"],
-				"people_presence":"hands only, no identity",
-				"privacy_sensitivity":["receipt","hands"],
-				"cluster_terms":["street_food","satay","shared_table"],
-				"uncertainties":["exact venue is not proven"]
-			}`,
+			"response": fixtureCardResponse(
+				"Outdoor street-food meal with satay skewers, prawns, sauces, and a shared table.",
+				"A synthetic outdoor food table holds satay skewers, grilled prawns, peanut sauce, and shared dishes. A small receipt-like slip is visible near the edge of the table. Only hands are visible, with no identifiable people.",
+				"Nearby hawker centre candidate.",
+				"A small receipt-like slip is visible.",
+				"exact venue is not proven",
+			),
 			"done": true,
 		})
 	}))
@@ -123,17 +119,17 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(search.Results) == 0 || search.Results[0].ObservationID == "" {
+	if len(search.Results) != 1 {
 		t.Fatalf("search = %#v", search.Results)
 	}
 	opened, err := Open(ctx, paths, search.Results[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.Observations) == 0 || len(opened.Evidence.Refs) == 0 {
-		t.Fatalf("opened observations=%d evidence=%d", len(opened.Observations), len(opened.Evidence.Refs))
+	if opened.Summary == "" || opened.Description == "" || opened.Evidence.Count == 0 {
+		t.Fatalf("opened card=%#v evidence=%#v", opened, opened.Evidence)
 	}
-	evidence, err := Evidence(ctx, paths, search.Results[0].ObservationID)
+	evidence, err := Evidence(ctx, paths, search.Results[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -163,18 +159,13 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": `{
-				"scene_summary":"A synthetic test photo shows a printed menu on a table.",
-				"visible_text_summary":"The word menu is visible in the synthetic fixture.",
-				"place_candidates":["restaurant table"],
-				"landmark_candidates":[],
-				"merchant_or_venue_candidates":[],
-				"food_or_objects":["menu"],
-				"people_presence":"none visible",
-				"privacy_sensitivity":[],
-				"cluster_terms":["menu_fixture"],
-				"uncertainties":["synthetic image bytes"]
-			}`,
+			"response": fixtureCardResponse(
+				"A synthetic test photo shows a printed menu on a table.",
+				"The image shows a printed menu lying on a table in a synthetic fixture. The word menu is visible and is the main readable text. No people are visible.",
+				"Restaurant table candidate.",
+				"The word menu is visible.",
+				"synthetic image bytes",
+			),
 			"done": true,
 		})
 	}))
@@ -383,8 +374,14 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 			return
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": `{"scene_summary":"A synthetic retry fixture image.","food_or_objects":["retry marker"]}`,
-			"done":     true,
+			"response": fixtureCardResponse(
+				"A synthetic retry fixture image.",
+				"The synthetic image is used to prove retry handling. It contains a retry marker and no identifiable people.",
+				"",
+				"",
+				"synthetic fixture",
+			),
+			"done": true,
 		})
 	}))
 	defer restoreTransport()
@@ -503,7 +500,7 @@ func TestLoadClassifyInputsPriority(t *testing.T) {
 	var inputs []classifyInput
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		inputs, err = loadClassifyInputs(ctx, tx, 0, false)
+		inputs, err = loadClassifyInputs(ctx, tx, 0, "")
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -556,21 +553,56 @@ func useArchiveHandlerTransport(t *testing.T, handler http.Handler) func() {
 	return func() { http.DefaultTransport = oldTransport }
 }
 
-func TestPromptLeakageCreatesQualityIssue(t *testing.T) {
+func TestParsePhotoCardRequiresSections(t *testing.T) {
 	t.Parallel()
-	observations := observationsFromPayload(map[string]any{
-		"scene_summary":        "A retail display.",
-		"visible_text_summary": "Return only valid compact JSON",
-	})
-	var found bool
-	for _, observation := range observations {
-		if observation.ObservationType == "quality_issue" && observation.ValueText == "model_prompt_leakage" {
-			found = true
-		}
+	if _, err := parsePhotoCard("Return only valid compact JSON."); err == nil {
+		t.Fatal("expected malformed card to fail")
 	}
-	if !found {
-		t.Fatalf("observations = %#v", observations)
+}
+
+func TestParsePhotoCardCleansVerboseLocation(t *testing.T) {
+	t.Parallel()
+	card, err := parsePhotoCard(fixtureCardResponse(
+		"A synthetic kitchen cooking scene.",
+		"The image shows food preparation on a kitchen counter.",
+		"The image was taken in an indoor residential kitchen. While the metadata does not provide a specific geographic location, the scene is common in European households.",
+		"None",
+		"exact city",
+	))
+	if err != nil {
+		t.Fatal(err)
 	}
+	if card.PlacePhrase != "indoor residential kitchen" {
+		t.Fatalf("place phrase = %q", card.PlacePhrase)
+	}
+}
+
+func fixtureCardResponse(summary, description, location, ocr, uncertainty string) string {
+	if strings.TrimSpace(location) == "" {
+		location = "None"
+	}
+	if strings.TrimSpace(ocr) == "" {
+		ocr = "None"
+	}
+	if strings.TrimSpace(uncertainty) == "" {
+		uncertainty = "None"
+	}
+	return strings.Join([]string{
+		"## One-line summary",
+		summary,
+		"",
+		"## Detailed description",
+		description,
+		"",
+		"## Location",
+		location,
+		"",
+		"## OCR and machine-readable text",
+		ocr,
+		"",
+		"## Uncertainty",
+		"- " + uncertainty,
+	}, "\n")
 }
 
 func priorityAsset(localIdentifier, creationDate, filename string, horizontalAccuracy *float64) photos.Asset {

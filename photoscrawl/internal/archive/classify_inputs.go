@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -22,6 +23,10 @@ type classifyInput struct {
 	Hidden          bool
 	BurstIdentifier string
 	MetadataJSON    string
+	HasLocation     bool
+	Latitude        float64
+	Longitude       float64
+	AccuracyMeters  float64
 	Resources       []classifyResource
 	Albums          []classifyAlbum
 }
@@ -42,7 +47,8 @@ type classifyAlbum struct {
 	AlbumKind  string
 }
 
-func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, includeMetadataClassified bool) ([]classifyInput, error) {
+func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, refreshModelID string) ([]classifyInput, error) {
+	refreshModelID = strings.TrimSpace(refreshModelID)
 	query := `
 with queued as (
 select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
@@ -56,11 +62,20 @@ select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_downlo
        ) as priority_text
 from classification_queue q
 join asset a on a.id = q.asset_id
-where q.state in (` + classifyQueueStates(includeMetadataClassified) + `)
+where q.state in (` + classifyQueueStates(refreshModelID != "") + `)
+   or (? <> '' and not exists (
+     select 1
+     from model_observation mo
+     where mo.asset_id = a.id
+       and mo.source = ?
+       and mo.model_id = ?
+       and mo.prompt_version = ?
+       and mo.observation_type = ?
+   ))
 )
 select id, asset_id, source_library_id, local_identifier, needs_download,
        media_type, media_subtypes, creation_date, width, height,
-       favorite, hidden, burst_identifier, metadata_json
+       favorite, hidden, burst_identifier, metadata_json, has_location
 from queued
 order by creation_date desc,
   has_location desc,
@@ -74,7 +89,7 @@ order by creation_date desc,
     then 1 else 0 end desc,
   id
 `
-	args := []any{}
+	args := []any{refreshModelID, modelClassifierSource, refreshModelID, modelPromptVersion, modelObservationCardSummary}
 	if limit > 0 {
 		query += "limit ?"
 		args = append(args, limit)
@@ -88,7 +103,7 @@ order by creation_date desc,
 	inputs := []classifyInput{}
 	for rows.Next() {
 		var input classifyInput
-		var needsDownload, favorite, hidden int
+		var needsDownload, favorite, hidden, hasLocation int
 		if err := rows.Scan(
 			&input.QueueID,
 			&input.AssetID,
@@ -104,12 +119,19 @@ order by creation_date desc,
 			&hidden,
 			&input.BurstIdentifier,
 			&input.MetadataJSON,
+			&hasLocation,
 		); err != nil {
 			return nil, err
 		}
 		input.NeedsDownload = needsDownload != 0
 		input.Favorite = favorite != 0
 		input.Hidden = hidden != 0
+		input.HasLocation = hasLocation != 0
+		if input.HasLocation {
+			if err := loadClassifyLocation(ctx, tx, &input); err != nil {
+				return nil, err
+			}
+		}
 		input.Resources, err = loadClassifyResources(ctx, tx, input.AssetID)
 		if err != nil {
 			return nil, err
@@ -197,4 +219,22 @@ func (input classifyInput) keywordText() string {
 		parts = append(parts, album.AlbumTitle, album.AlbumKind)
 	}
 	return strings.ToLower(strings.Join(parts, " "))
+}
+
+func loadClassifyLocation(ctx context.Context, tx *sql.Tx, input *classifyInput) error {
+	row := tx.QueryRowContext(ctx, `
+select latitude, longitude, coalesce(horizontal_accuracy, 0)
+from location_observation
+where asset_id = ?
+order by id
+limit 1
+`, input.AssetID)
+	if err := row.Scan(&input.Latitude, &input.Longitude, &input.AccuracyMeters); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			input.HasLocation = false
+			return nil
+		}
+		return err
+	}
+	return nil
 }

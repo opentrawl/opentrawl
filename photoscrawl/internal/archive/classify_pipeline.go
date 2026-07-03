@@ -182,7 +182,7 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 		}
 		limiter.Acquire()
 		startedAt := time.Now()
-		modelResult, err := classifier.classify(ctx, job.imagePath)
+		modelResult, err := classifier.classify(ctx, job.input, job.imagePath)
 		limiter.Release()
 		write.modelAttempts++
 		write.modelDuration += time.Since(startedAt)
@@ -233,6 +233,14 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	var metadataWritten, contentWritten int
 	classifiedAt := now().UTC()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		switch write.outcome {
+		case contentOutcomeFailedParse, contentOutcomeFailedModel:
+			if err := clearModelObservations(ctx, tx, write.input.AssetID, classifier.modelID); err != nil {
+				return err
+			}
+			state, reason := contentOutcomeQueueStateReason(write)
+			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
+		}
 		observations := classifyFromMetadata(write.input)
 		written, err := writeMetadataClassification(ctx, tx, write.input, observations, classifiedAt, true)
 		if err != nil {
@@ -311,7 +319,8 @@ func isModelParseFailure(err error) bool {
 	}
 	reason := err.Error()
 	return strings.Contains(reason, "parse model JSON") ||
-		strings.Contains(reason, "model did not return a JSON object")
+		strings.Contains(reason, "model did not return a JSON object") ||
+		strings.Contains(reason, "model card")
 }
 
 func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {

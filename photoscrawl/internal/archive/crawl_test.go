@@ -56,8 +56,8 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.Resources) != 1 || len(opened.Albums) != 1 || opened.LocationCount != 1 || len(opened.Evidence.Refs) == 0 {
-		t.Fatalf("open returned resources=%d albums=%d locations=%d evidence=%d", len(opened.Resources), len(opened.Albums), opened.LocationCount, len(opened.Evidence.Refs))
+	if opened.Original == nil || opened.Evidence.Count == 0 {
+		t.Fatalf("open returned original=%#v evidence=%#v", opened.Original, opened.Evidence)
 	}
 	evidence, err := Evidence(ctx, paths, search.Results[0].ID)
 	if err != nil {
@@ -77,33 +77,25 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if classified.Processed != 2 || classified.MetadataClassified != 2 || classified.WaitingForLocalContent != 1 || classified.MetadataObservationsWritten == 0 {
 		t.Fatalf("classify result = processed %d metadata %d waiting %d observations %d", classified.Processed, classified.MetadataClassified, classified.WaitingForLocalContent, classified.MetadataObservationsWritten)
 	}
-	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "screenshot_candidate", Limit: 5})
+	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "screenshot", Limit: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(observationSearch.Results) != 1 || observationSearch.Results[0].HitType != "observation" || observationSearch.Results[0].ObservationID == "" {
+	if len(observationSearch.Results) != 1 {
 		t.Fatalf("observation search = %#v", observationSearch.Results)
 	}
 	opened, err = Open(ctx, paths, observationSearch.Results[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(opened.Observations) == 0 {
-		t.Fatal("expected metadata observations on open")
-	}
-	for _, observation := range opened.Observations {
-		if observation.Confidence != nil {
-			t.Fatalf("metadata observation carried confidence: %#v", observation)
-		}
-	}
 	openedJSON, err := json.Marshal(opened)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(openedJSON), "bounding_box") || strings.Contains(string(openedJSON), "confidence") {
+	if strings.Contains(string(openedJSON), "bounding_box") || strings.Contains(string(openedJSON), "confidence") || strings.Contains(string(openedJSON), "observations") {
 		t.Fatalf("metadata open JSON leaked vision-shaped fields: %s", openedJSON)
 	}
-	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ObservationID)
+	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ID)
 	if err != nil {
 		t.Fatal(err)
 	}

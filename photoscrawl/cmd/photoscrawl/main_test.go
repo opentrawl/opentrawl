@@ -197,42 +197,35 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 func TestOpenHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printOpenText(&out, archive.OpenResult{
-		Ref:       "photoscrawl:asset/fixture",
-		Time:      "2026-05-28T12:00:00+02:00",
-		MediaType: "image",
-		Dimensions: &archive.OpenDimensions{
-			Width:  4032,
-			Height: 3024,
+		Ref:         "photoscrawl:asset/fixture",
+		Time:        "2026-05-28T12:00:00+02:00",
+		MediaType:   "photo",
+		Where:       "Synthetic Pier",
+		Summary:     "Synthetic beach scene.",
+		Description: "A synthetic fixture photo shows a beach scene with a pier in the background.",
+		Uncertainties: []string{
+			"exact venue",
 		},
-		Where:         "Synthetic Pier",
-		Who:           []string{"Synthetic Person"},
-		LocationCount: 1,
-		Albums: []archive.OpenAlbum{{
-			Title: "Synthetic album",
-			Kind:  "user",
-		}},
-		Resources: []archive.OpenResource{{
-			Type:             "photo",
-			Filename:         "IMG_0001.JPG",
-			AvailableLocally: true,
-		}},
-		Observations: []archive.OpenObservation{{
-			Kind: "scene_summary",
-			Text: "Synthetic beach scene",
-		}},
-		Evidence: archive.OpenEvidence{
-			Refs: []archive.EvidenceReference{{Ref: "photoscrawl:fixture-evidence", Kind: "asset metadata"}},
+		Original: &archive.OpenOriginal{
+			Filename:     "IMG_0001.JPG",
+			Bytes:        5_700_000,
+			Availability: "on this Mac",
+		},
+		Evidence: archive.OpenEvidenceSummary{
+			Count: 1,
+			Ref:   "photoscrawl:asset/fixture",
 		},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertHumanProseOutput(t, out.String(),
-		"Asset: photoscrawl:asset/fixture",
-		"Where: Synthetic Pier",
-		"Who: Synthetic Person",
-		"Evidence refs: 1",
-		"scene summary: Synthetic beach scene",
+		"photoscrawl:asset/fixture",
+		"2026-05-28 12:00 · photo · Synthetic Pier",
+		"Synthetic beach scene.",
+		"Uncertain: exact venue.",
+		"Original: IMG_0001.JPG",
+		"Evidence: 1 records",
 	)
 }
 
