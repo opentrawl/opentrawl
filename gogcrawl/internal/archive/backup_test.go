@@ -79,6 +79,77 @@ func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
 	}
 }
 
+func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	declared1252 := strings.Join([]string{
+		"From: Shop <shop@example.com>",
+		"To: Bob Example <bob@example.com>",
+		"Subject: =?windows-1252?Q?Get_a_=A3120_=93Apple=94_Gift_Card?=",
+		"Content-Type: text/plain; charset=windows-1252",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"Get a =A3120 Apple Gift Card in =93July=94.",
+		"",
+	}, "\r\n")
+	undeclared8Bit := []byte("From: Legacy <legacy@example.com>\r\nTo: Bob Example <bob@example.com>\r\nSubject: Legacy ")
+	undeclared8Bit = append(undeclared8Bit, 0x93)
+	undeclared8Bit = append(undeclared8Bit, []byte("quote")...)
+	undeclared8Bit = append(undeclared8Bit, 0x94)
+	undeclared8Bit = append(undeclared8Bit, []byte("\r\nContent-Type: text/plain\r\nContent-Transfer-Encoding: 8bit\r\n\r\nLegacy ")...)
+	undeclared8Bit = append(undeclared8Bit, 0x93)
+	undeclared8Bit = append(undeclared8Bit, []byte("quote")...)
+	undeclared8Bit = append(undeclared8Bit, 0x94)
+	undeclared8Bit = append(undeclared8Bit, []byte(" costs ")...)
+	undeclared8Bit = append(undeclared8Bit, 0xa3)
+	undeclared8Bit = append(undeclared8Bit, []byte("120.\r\n")...)
+	row := backupMessageRowJSON("m1252", "t1252", []byte(declared1252)) +
+		backupMessageRowJSON("m8bit", "t8bit", undeclared8Bit)
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	if _, err := st.IngestBackupShard(ctx, shard, []byte(row)); err != nil {
+		t.Fatal(err)
+	}
+	open1252, err := st.OpenMessage(ctx, RefPrefix+"m1252")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open1252.Headers.Subject != "Get a \u00a3120 \u201cApple\u201d Gift Card" {
+		t.Fatalf("subject = %q", open1252.Headers.Subject)
+	}
+	if open1252.Body != "Get a \u00a3120 Apple Gift Card in \u201cJuly\u201d." {
+		t.Fatalf("body = %q", open1252.Body)
+	}
+	requireNoReplacementChar(t, "declared subject", open1252.Headers.Subject)
+	requireNoReplacementChar(t, "declared body", open1252.Body)
+	search, err := st.Search(ctx, SearchOptions{Query: "Gift", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 {
+		t.Fatalf("search results = %#v", search.Results)
+	}
+	requireNoReplacementChar(t, "search snippet", search.Results[0].Snippet)
+	if !strings.Contains(search.Results[0].Snippet, "\u00a3120") {
+		t.Fatalf("search snippet = %q", search.Results[0].Snippet)
+	}
+	open8Bit, err := st.OpenMessage(ctx, RefPrefix+"m8bit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if open8Bit.Headers.Subject != "Legacy \u201cquote\u201d" {
+		t.Fatalf("undeclared subject = %q", open8Bit.Headers.Subject)
+	}
+	if open8Bit.Body != "Legacy \u201cquote\u201d costs \u00a3120." {
+		t.Fatalf("undeclared body = %q", open8Bit.Body)
+	}
+	requireNoReplacementChar(t, "undeclared subject", open8Bit.Headers.Subject)
+	requireNoReplacementChar(t, "undeclared body", open8Bit.Body)
+}
+
 func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
@@ -103,6 +174,32 @@ func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 	}
 }
 
+func TestPendingBackupShardsReingestsLegacyMessageHashes(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
+	_, err = st.store.DB().ExecContext(ctx, `
+insert into ingested_shards(path, hash, kind, rows, ingested_at)
+values (?, ?, ?, ?, ?)
+`, shard.Path, shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
+		t.Fatalf("legacy hash pending = %#v, %v", pending, err)
+	}
+	if _, err := st.IngestBackupShard(ctx, shard, nil); err != nil {
+		t.Fatal(err)
+	}
+	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 0 {
+		t.Fatalf("versioned hash pending = %#v, %v", pending, err)
+	}
+}
+
 func TestPendingBackupShardsTracksHashes(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
@@ -123,6 +220,18 @@ func TestPendingBackupShardsTracksHashes(t *testing.T) {
 	shard.Hash = "hash2"
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
 		t.Fatalf("changed hash pending = %#v, %v", pending, err)
+	}
+}
+
+func backupMessageRowJSON(id, threadID string, raw []byte) string {
+	return `{"id":"` + id + `","threadId":"` + threadID + `","historyId":"h1","internalDate":1783000000123,"labelIds":["INBOX"],"sizeEstimate":100,"raw":"` +
+		base64.RawURLEncoding.EncodeToString(raw) + "\"}\n"
+}
+
+func requireNoReplacementChar(t *testing.T, label, value string) {
+	t.Helper()
+	if strings.ContainsRune(value, '\uFFFD') {
+		t.Fatalf("%s contains U+FFFD: %q", label, value)
 	}
 }
 
