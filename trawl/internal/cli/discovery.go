@@ -167,7 +167,7 @@ func runCrawlerCommandWithTimeout(ctx context.Context, path string, timeout time
 		if commandCtx.Err() != nil {
 			return nil, fmt.Errorf("%s timed out", strings.Join(args, " "))
 		}
-		return nil, err
+		return data, err
 	}
 	return data, nil
 }
@@ -178,7 +178,23 @@ func runCrawlerCommand(ctx context.Context, path string, args ...string) ([]byte
 	cmd.Stdout = &stdout
 	cmd.Stderr = io.Discard
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("%s failed", strings.Join(args, " "))
+		return stdout.Bytes(), crawlerCommandError{
+			command: strings.Join(args, " "),
+			err:     err,
+		}
 	}
 	return stdout.Bytes(), nil
+}
+
+type crawlerCommandError struct {
+	command string
+	err     error
+}
+
+func (e crawlerCommandError) Error() string {
+	return fmt.Sprintf("%s failed", e.command)
+}
+
+func (e crawlerCommandError) Unwrap() error {
+	return e.err
 }

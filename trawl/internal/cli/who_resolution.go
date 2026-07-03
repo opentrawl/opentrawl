@@ -375,15 +375,6 @@ func whoFilterValue(candidate WhoCandidate) string {
 	return candidate.Who
 }
 
-func sourceWhoFilter(candidate WhoCandidate, source Source) string {
-	if candidate.sourceFilters != nil {
-		if filter := strings.TrimSpace(candidate.sourceFilters[source.ID]); filter != "" {
-			return filter
-		}
-	}
-	return whoFilterValue(candidate)
-}
-
 func skippedWhoSources(sources []Source) []string {
 	var skipped []string
 	for _, source := range sources {
@@ -503,7 +494,7 @@ func searchWhoFilters(candidate WhoCandidate, sources []Source) map[string]strin
 		if !hasCapability(source, "who") {
 			continue
 		}
-		filter := sourceWhoFilter(candidate, source)
+		filter := strings.TrimSpace(candidate.sourceFilters[source.ID])
 		if filter == "" {
 			continue
 		}
