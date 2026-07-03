@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -420,6 +421,53 @@ func TestOpenTruncatesOversizedBodyInTextAndJSON(t *testing.T) {
 	}
 }
 
+func TestOpenRendersQuotedPrintableBodyDecoded(t *testing.T) {
+	installFakeGog(t)
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
+	st, err := archive.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := strings.Join([]string{
+		"From: Alice Example <alice@example.com>",
+		"To: Bob Example <bob@example.com>",
+		"Subject: Quoted printable",
+		"MIME-Version: 1.0",
+		"Content-Type: text/plain; charset=utf-8",
+		"Content-Transfer-Encoding: quoted-printable",
+		"",
+		"Hidden=E2=80=8B mark, M=C3=BCnchen, literal equals =3D yes,",
+		"web-vie=",
+		"w ready.",
+		"",
+	}, "\r\n")
+	row := `{"id":"mqp","threadId":"tqp","historyId":"hqp","internalDate":1783000000123,"labelIds":["INBOX"],"sizeEstimate":100,"raw":"` +
+		base64.RawURLEncoding.EncodeToString([]byte(raw)) + "\"}\n"
+	shard := archive.BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "qp-hash", Kind: archive.BackupShardMessages}
+	if _, err := st.IngestBackupShard(ctx, shard, []byte(row)); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "Hidden\u200b mark, München, literal equals = yes, web-view ready."
+	text := string(runOutput(t, ctx, []string{"open", archive.RefPrefix + "mqp", "--archive", dbPath}))
+	if !strings.Contains(text, want) {
+		t.Fatalf("open text missing decoded body:\n%s", text)
+	}
+	requireNoQuotedPrintableText(t, text)
+
+	var opened archive.OpenResult
+	runJSON(t, ctx, []string{"open", archive.RefPrefix + "mqp", "--json", "--archive", dbPath}, &opened)
+	if opened.Body != want {
+		t.Fatalf("open JSON body = %q, want %q", opened.Body, want)
+	}
+	requireNoQuotedPrintableText(t, opened.Body)
+}
+
 func TestOpenShortRefErrorsUseContractCodes(t *testing.T) {
 	installFakeGog(t)
 	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")
@@ -533,6 +581,15 @@ func seedArchive(t *testing.T, messages []archive.Message) string {
 		t.Fatal(err)
 	}
 	return dbPath
+}
+
+func requireNoQuotedPrintableText(t *testing.T, value string) {
+	t.Helper()
+	for _, raw := range []string{"=E2=80=8B", "=C3=BC", "=3D", "web-vie="} {
+		if strings.Contains(value, raw) {
+			t.Fatalf("output contains quoted-printable text %q:\n%s", raw, value)
+		}
+	}
 }
 
 type fakeGogInstall struct {

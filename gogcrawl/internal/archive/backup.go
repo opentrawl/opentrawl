@@ -18,7 +18,7 @@ import (
 	"time"
 )
 
-const messageIngestHashVersion = "mail-decode-v2"
+const messageIngestHashVersion = "mail-decode-v4"
 
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {
 	var pending []BackupShard
@@ -279,7 +279,7 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 		var texts []string
 		var attachments []Attachment
 		for {
-			part, err := reader.NextPart()
+			part, err := reader.NextRawPart()
 			if errors.Is(err, io.EOF) {
 				return texts, attachments, nil
 			}
@@ -313,6 +313,7 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 		}}, nil
 	}
 	if mediaType == "text/plain" || strings.HasPrefix(mediaType, "text/plain;") {
+		decoded = decodeResidualQuotedPrintable(decoded)
 		return []string{decodeTextPart(decoded, params["charset"])}, nil, nil
 	}
 	return nil, nil, nil
@@ -326,6 +327,58 @@ func decodeTransfer(body io.Reader, encoding string) io.Reader {
 		return quotedprintable.NewReader(body)
 	default:
 		return body
+	}
+}
+
+func decodeResidualQuotedPrintable(data []byte) []byte {
+	hexEscapes, distinctHexEscapes := quotedPrintableHexEscapeStats(data)
+	if !hasQuotedPrintableSoftBreak(data) && distinctHexEscapes < 3 {
+		return data
+	}
+	decoded, err := io.ReadAll(quotedprintable.NewReader(bytes.NewReader(data)))
+	if err != nil {
+		return data
+	}
+	if decodedHexEscapes, _ := quotedPrintableHexEscapeStats(decoded); decodedHexEscapes >= hexEscapes {
+		return data
+	}
+	return decoded
+}
+
+func hasQuotedPrintableSoftBreak(data []byte) bool {
+	return bytes.Contains(data, []byte("=\r\n")) || bytes.Contains(data, []byte("=\n"))
+}
+
+func quotedPrintableHexEscapeStats(data []byte) (int, int) {
+	var seen [256]bool
+	total := 0
+	distinct := 0
+	for i := 0; i+2 < len(data); i++ {
+		if data[i] != '=' || !isHex(data[i+1]) || !isHex(data[i+2]) {
+			continue
+		}
+		total++
+		value := hexValue(data[i+1])<<4 | hexValue(data[i+2])
+		if !seen[value] {
+			seen[value] = true
+			distinct++
+		}
+	}
+	return total, distinct
+}
+
+func isHex(b byte) bool {
+	return (b >= '0' && b <= '9') || (b >= 'A' && b <= 'F') || (b >= 'a' && b <= 'f')
+}
+
+func hexValue(b byte) byte {
+	switch {
+	case b >= '0' && b <= '9':
+		return b - '0'
+	case b >= 'A' && b <= 'F':
+		return b - 'A' + 10
+	default:
+		return b - 'a' + 10
 	}
 }
 
