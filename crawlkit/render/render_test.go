@@ -30,6 +30,60 @@ func TestWriteDoctor(t *testing.T) {
 	}
 }
 
+func TestWriteDoctorFiltersUsageRecentError(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteDoctor(&buf, []Check{
+		{Name: "source_store", State: CheckOK},
+	}, LogTail{
+		MostRecentError: &cklog.Line{
+			Level:   cklog.LevelError,
+			Command: "search",
+			Event:   "usage_error",
+			Message: `error="search --who requires an identity" remedy="run search with --who NAME"`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Doctor checks:",
+		"  source_store: ok",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteDoctor(&buf, []Check{
+		{Name: "auth", State: CheckFail, Message: "calendar permission denied"},
+	}, LogTail{
+		MostRecentError: &cklog.Line{
+			Level:   cklog.LevelError,
+			Command: "sync",
+			Event:   "permission_denied",
+			Message: `error="calendar permission denied" remedy="grant Calendar access"`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Doctor checks:",
+		"  auth: fail - calendar permission denied",
+		"",
+		"Recent log:",
+		"  Most recent error: sync permission_denied: calendar permission denied",
+		"    Remedy: grant Calendar access",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
 func TestWriteStatus(t *testing.T) {
 	when := time.Date(2026, 7, 2, 14, 3, 11, 0, time.FixedZone("CEST", 2*60*60))
 	var buf bytes.Buffer
@@ -81,6 +135,37 @@ func TestWriteStatus(t *testing.T) {
 		"  Last run: sync success at 2026-07-02T14:03:11+02:00",
 		"  Most recent error: sync backup_failed: backup fetch exited early",
 		"    Remedy: try again when the network is available",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("status output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWriteStatusShowsRecentUsageError(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteStatus(&buf, Status{
+		State:   StatusError,
+		Summary: "Command failed.",
+		Log: LogTail{
+			MostRecentError: &cklog.Line{
+				Level:   cklog.LevelError,
+				Command: "search",
+				Event:   "usage_error",
+				Message: `error="search --who requires an identity" remedy="run search with --who NAME"`,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Status: error",
+		"Command failed.",
+		"",
+		"Recent log:",
+		"  Most recent error: search usage_error: search --who requires an identity",
+		"    Remedy: run search with --who NAME",
 		"",
 	}, "\n")
 	if buf.String() != want {

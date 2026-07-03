@@ -358,6 +358,53 @@ func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	}
 }
 
+func TestIsWorldStateError(t *testing.T) {
+	cases := []struct {
+		name string
+		line Line
+		want bool
+	}{
+		{
+			name: "usage event is caller error even with remedy",
+			line: Line{Level: LevelError, Command: "search", Event: "usage_error", Message: `error="search --who requires an identity" remedy="run search with --who NAME"`},
+			want: false,
+		},
+		{
+			name: "run failed usage message is caller error",
+			line: Line{Level: LevelError, Command: "search", Event: "run_failed", Message: `error="search --who requires an identity"`},
+			want: false,
+		},
+		{
+			name: "world change remedy is actionable state",
+			line: Line{Level: LevelError, Command: "sync", Event: "permission_denied", Message: `error="calendar permission denied" remedy="grant Calendar access"`},
+			want: true,
+		},
+		{
+			name: "sync event is operational state",
+			line: Line{Level: LevelError, Command: "sync", Event: "sync_failed", Message: `error="backup fetch exited early"`},
+			want: true,
+		},
+		{
+			name: "source event is operational state",
+			line: Line{Level: LevelError, Command: "doctor", Event: "source_store", Message: `error="Messages database is unavailable"`},
+			want: true,
+		},
+		{
+			name: "ordinary command failure is not enough for doctor",
+			line: Line{Level: LevelError, Command: "open", Event: "open_failed", Message: `error="ref not found"`},
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := IsWorldStateError(tc.line); got != tc.want {
+				t.Fatalf("IsWorldStateError() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func newTestRun(t *testing.T, runID string, now time.Time) *Run {
 	t.Helper()
 	return newTestRunAt(t, t.TempDir(), runID, now)

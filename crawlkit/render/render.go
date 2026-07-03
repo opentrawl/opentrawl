@@ -77,7 +77,7 @@ func WriteDoctor(w io.Writer, checks []Check, tail LogTail) error {
 	if err := WriteChecks(w, checks); err != nil {
 		return err
 	}
-	return WriteLogTail(w, tail)
+	return WriteLogTail(w, doctorLogTail(tail))
 }
 
 func WriteChecks(w io.Writer, checks []Check) error {
@@ -150,6 +150,13 @@ func WriteLogTail(w io.Writer, tail LogTail) error {
 		}
 	}
 	return writeMessages(w, "Log errors", tail.Errors)
+}
+
+func doctorLogTail(tail LogTail) LogTail {
+	if tail.MostRecentError != nil && !cklog.IsWorldStateError(*tail.MostRecentError) {
+		tail.MostRecentError = nil
+	}
+	return tail
 }
 
 func writeSection(w io.Writer, section Section) error {
