@@ -49,7 +49,7 @@ func Status(ctx context.Context, path string) (StatusReport, error) {
 	defer func() { _ = st.Close() }()
 	db := st.DB()
 	report := StatusReport{
-		SchemaVersion: control.SchemaVersion,
+		SchemaVersion: control.StatusSchemaVersion,
 		AppID:         "imsgcrawl",
 		State:         "ok",
 		Summary:       "Messages database is readable.",

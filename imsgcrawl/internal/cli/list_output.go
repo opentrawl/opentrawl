@@ -87,7 +87,7 @@ type openMessageOutput struct {
 
 func newListHeader(command string, returned int, total int64, limit int) listHeader {
 	return listHeader{
-		SchemaVersion: control.SchemaVersion,
+		SchemaVersion: control.StatusSchemaVersion,
 		AppID:         "imsgcrawl",
 		Command:       command,
 		Returned:      returned,

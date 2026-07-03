@@ -118,7 +118,7 @@ func (r *runtime) runStatus(args []string) error {
 		return usageErr(errors.New("status takes no arguments"))
 	}
 	out := statusOutput{
-		SchemaVersion: control.SchemaVersion,
+		SchemaVersion: control.StatusSchemaVersion,
 		AppID:         "imsgcrawl",
 		State:         "ok",
 		Summary:       "Archive is readable.",

@@ -8,8 +8,8 @@ import (
 
 func TestManifestDefaultsSchemaAndBinary(t *testing.T) {
 	manifest := NewManifest("slacrawl", "Slack Crawl", "slacrawl")
-	if manifest.SchemaVersion != SchemaVersion {
-		t.Fatalf("schema = %q", manifest.SchemaVersion)
+	if manifest.SchemaVersion != SchemaVersion || manifest.ContractVersion != ContractVersion {
+		t.Fatalf("manifest versions = %#v", manifest)
 	}
 	if manifest.Binary.Name != "slacrawl" {
 		t.Fatalf("binary = %#v", manifest.Binary)
@@ -21,7 +21,7 @@ func TestManifestDefaultsSchemaAndBinary(t *testing.T) {
 
 func TestStatusAndRemoteDatabaseDefaults(t *testing.T) {
 	status := NewStatus(" gitcrawl ", " ready ")
-	if status.SchemaVersion != SchemaVersion || status.AppID != "gitcrawl" || status.State != "unknown" || status.Summary != "ready" {
+	if status.SchemaVersion != StatusSchemaVersion || status.AppID != "gitcrawl" || status.State != "unknown" || status.Summary != "ready" {
 		t.Fatalf("status = %#v", status)
 	}
 	if status.GeneratedAt == "" {

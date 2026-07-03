@@ -6,19 +6,25 @@ import (
 	"time"
 )
 
-const SchemaVersion = "crawlkit.control.v1"
+const (
+	SchemaVersion       = 1
+	ContractVersion     = 1
+	StatusSchemaVersion = "crawlkit.control.v1"
+)
 
 type Manifest struct {
-	SchemaVersion string             `json:"schema_version"`
-	ID            string             `json:"id"`
-	DisplayName   string             `json:"display_name"`
-	Description   string             `json:"description,omitempty"`
-	Binary        Binary             `json:"binary"`
-	Branding      Branding           `json:"branding"`
-	Paths         Paths              `json:"paths"`
-	Commands      map[string]Command `json:"commands"`
-	Capabilities  []string           `json:"capabilities,omitempty"`
-	Privacy       Privacy            `json:"privacy"`
+	SchemaVersion   int                `json:"schema_version"`
+	ContractVersion int                `json:"contract_version"`
+	ID              string             `json:"id"`
+	DisplayName     string             `json:"display_name"`
+	Version         string             `json:"version"`
+	Description     string             `json:"description,omitempty"`
+	Binary          Binary             `json:"binary"`
+	Branding        Branding           `json:"branding"`
+	Paths           Paths              `json:"paths"`
+	Commands        map[string]Command `json:"commands"`
+	Capabilities    []string           `json:"capabilities,omitempty"`
+	Privacy         Privacy            `json:"privacy"`
 }
 
 type Binary struct {
@@ -124,17 +130,18 @@ type Database struct {
 
 func NewManifest(id, displayName, binaryName string) Manifest {
 	return Manifest{
-		SchemaVersion: SchemaVersion,
-		ID:            strings.TrimSpace(id),
-		DisplayName:   strings.TrimSpace(displayName),
-		Binary:        Binary{Name: strings.TrimSpace(binaryName)},
-		Commands:      map[string]Command{},
+		SchemaVersion:   SchemaVersion,
+		ContractVersion: ContractVersion,
+		ID:              strings.TrimSpace(id),
+		DisplayName:     strings.TrimSpace(displayName),
+		Binary:          Binary{Name: strings.TrimSpace(binaryName)},
+		Commands:        map[string]Command{},
 	}
 }
 
 func NewStatus(appID, summary string) Status {
 	return Status{
-		SchemaVersion: SchemaVersion,
+		SchemaVersion: StatusSchemaVersion,
 		AppID:         strings.TrimSpace(appID),
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339),
 		State:         "unknown",
