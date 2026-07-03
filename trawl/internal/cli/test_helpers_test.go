@@ -10,23 +10,30 @@ import (
 )
 
 type fakeCrawler struct {
-	name         string
-	metadata     string
-	metadataExit int
-	status       string
-	statusExit   int
-	doctor       string
-	doctorExit   int
-	search       string
-	searchExit   int
-	searchLimit  string
-	searchQuery  string
-	searchWho    string
-	open         string
-	openExit     int
-	openRef      string
-	sync         string
-	syncExit     int
+	name          string
+	metadata      string
+	metadataExit  int
+	status        string
+	statusExit    int
+	doctor        string
+	doctorExit    int
+	search        string
+	searchExit    int
+	searchLimit   string
+	searchQuery   string
+	searchNoQuery bool
+	searchWho     string
+	who           string
+	whoExit       int
+	whoQuery      string
+	shortRefs     string
+	shortRefExit  int
+	shortRefAlias string
+	open          string
+	openExit      int
+	openRef       string
+	sync          string
+	syncExit      int
 }
 
 func runCLI(t *testing.T, args ...string) (string, string, int) {
@@ -72,7 +79,10 @@ fi
 expected_open_ref=%s
 expected_search_limit=%s
 expected_search_query=%s
+expected_search_no_query=%s
 expected_search_who=%s
+expected_who_query=%s
+expected_short_ref_alias=%s
 case "$1" in
   "metadata")
     if [ "$#" -ne 2 ] || [ "$2" != "--json" ]; then
@@ -96,27 +106,85 @@ case "$1" in
     exit %d
     ;;
   "search")
-    if [ "$#" -lt 5 ] || [ "$3" != "--json" ] || [ "$4" != "--limit" ]; then
+    shift
+    query=""
+    found_json=""
+    found_limit=""
+    found_who=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        "--json")
+          found_json="1"
+          shift
+          ;;
+        "--limit")
+          if [ "$#" -lt 2 ]; then
+            exit 64
+          fi
+          found_limit="$2"
+          shift 2
+          ;;
+        "--who")
+          if [ "$#" -lt 2 ]; then
+            exit 64
+          fi
+          found_who="$2"
+          shift 2
+          ;;
+        "--after"|"--before")
+          if [ "$#" -lt 2 ]; then
+            exit 64
+          fi
+          shift 2
+          ;;
+        --*)
+          exit 64
+          ;;
+        *)
+          if [ -n "$query" ]; then
+            exit 64
+          fi
+          query="$1"
+          shift
+          ;;
+      esac
+    done
+    if [ "$found_json" != "1" ] || [ -z "$found_limit" ]; then
       exit 64
     fi
-    if [ -n "$expected_search_query" ] && [ "$2" != "$expected_search_query" ]; then
+    if [ -n "$expected_search_query" ] && [ "$query" != "$expected_search_query" ]; then
       exit 64
     fi
-    if [ -n "$expected_search_limit" ] && [ "$5" != "$expected_search_limit" ]; then
+    if [ "$expected_search_no_query" = "1" ] && [ -n "$query" ]; then
+      exit 64
+    fi
+    if [ -n "$expected_search_limit" ] && [ "$found_limit" != "$expected_search_limit" ]; then
       exit 64
     fi
     if [ -n "$expected_search_who" ]; then
-      found_who=""
-      previous_arg=""
-      for arg in "$@"; do
-        if [ "$previous_arg" = "--who" ]; then
-          found_who="$arg"
-        fi
-        previous_arg="$arg"
-      done
       if [ "$found_who" != "$expected_search_who" ]; then
         exit 64
       fi
+    fi
+    printf '%%s\n' %s
+    exit %d
+    ;;
+  "who")
+    if [ "$#" -ne 3 ] || [ "$3" != "--json" ]; then
+      exit 64
+    fi
+    if [ -n "$expected_who_query" ] && [ "$2" != "$expected_who_query" ]; then
+      exit 64
+    fi
+    printf '%%s\n' %s
+    exit %d
+    ;;
+  "short-ref")
+    if [ "$#" -ne 3 ] || [ "$3" != "--json" ]; then
+      exit 64
+    fi
+    if [ -n "$expected_short_ref_alias" ] && [ "$2" != "$expected_short_ref_alias" ]; then
+      exit 64
     fi
     printf '%%s\n' %s
     exit %d
@@ -140,7 +208,7 @@ case "$1" in
     ;;
 esac
 exit 64
-`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellQuote(crawler.searchWho), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.open), crawler.openExit, shellQuote(crawler.sync), crawler.syncExit)
+`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellBool(crawler.searchNoQuery), shellQuote(crawler.searchWho), shellQuote(crawler.whoQuery), shellQuote(crawler.shortRefAlias), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.who), crawler.whoExit, shellQuote(crawler.shortRefs), crawler.shortRefExit, shellQuote(crawler.open), crawler.openExit, shellQuote(crawler.sync), crawler.syncExit)
 	path := filepath.Join(dir, crawler.name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -149,6 +217,13 @@ exit 64
 
 func shellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
+func shellBool(value bool) string {
+	if value {
+		return "1"
+	}
+	return "0"
 }
 
 func metadataJSON(id string) string {

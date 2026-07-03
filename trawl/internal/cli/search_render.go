@@ -21,12 +21,13 @@ func renderSearchTable(w io.Writer, rows []SearchRow, more int) error {
 	}
 	tableRows := make([][]string, 0, len(rows))
 	inlineRefs := true
+	useShortRefs := searchTableUsesShortRefs(rows)
 	for _, row := range rows {
 		tableRows = append(tableRows, []string{
 			row.Source,
 			searchDate(row),
 			truncateCell(searchWho(row), searchWhoLimit),
-			row.Ref,
+			searchDisplayRef(row, useShortRefs),
 			row.Snippet,
 		})
 	}
@@ -47,7 +48,7 @@ func renderSearchTable(w io.Writer, rows []SearchRow, more int) error {
 		if inlineRefs {
 			refs = append(refs, "")
 		} else {
-			refs = append(refs, "open: "+row.Ref)
+			refs = append(refs, "open: "+searchDisplayRef(row, useShortRefs))
 		}
 	}
 	if err := writeSearchRows(w, header, tableRows, refs, inlineRefs); err != nil {
@@ -58,6 +59,22 @@ func renderSearchTable(w io.Writer, rows []SearchRow, more int) error {
 		return err
 	}
 	return nil
+}
+
+func searchTableUsesShortRefs(rows []SearchRow) bool {
+	for _, row := range rows {
+		if !row.SourceShortRefs || strings.TrimSpace(row.ShortRef) == "" {
+			return false
+		}
+	}
+	return len(rows) > 0
+}
+
+func searchDisplayRef(row SearchRow, useShortRefs bool) string {
+	if useShortRefs {
+		return row.ShortRef
+	}
+	return row.Ref
 }
 
 func writeSearchRows(w io.Writer, header []string, rows [][]string, refs []string, inlineRefs bool) error {

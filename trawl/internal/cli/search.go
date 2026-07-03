@@ -21,24 +21,26 @@ const (
 )
 
 type SearchCmd struct {
-	Query  []string `arg:"" help:"Search words; the first may name a source (trawl search imessage dinner)"`
+	Query  []string `arg:"" optional:"" help:"Search words; optional when --who, --after, or --before is present"`
 	Source string   `name:"source" help:"Comma-separated source ids"`
 	Limit  int      `name:"limit" default:"20" help:"Maximum rows"`
 	After  string   `name:"after" help:"Start date"`
 	Before string   `name:"before" help:"End date"`
-	Who    string   `name:"who" placeholder:"identity" help:"Filter by exact identity; example: trawl search invoice --who \"Vendor Support\""`
+	Who    string   `name:"who" placeholder:"person" help:"Resolve a person or sender, then filter by the exact match"`
 }
 
 func (SearchCmd) Help() string {
 	return `Examples:
-  trawl search invoice --who "Vendor Support"`
+  trawl search invoice --who alex
+  trawl search --who "Vendor Support" --after 2026-01-01`
 }
 
 type searchOptions struct {
-	limit  int
-	after  string
-	before string
-	who    string
+	limit       int
+	after       string
+	before      string
+	who         string
+	whoBySource map[string]string
 }
 
 type SearchRow struct {
@@ -49,8 +51,10 @@ type SearchRow struct {
 	Where   string `json:"where"`
 	Snippet string `json:"snippet"`
 
-	parsedTime time.Time
-	timeOK     bool
+	ShortRef        string `json:"-"`
+	SourceShortRefs bool   `json:"-"`
+	parsedTime      time.Time
+	timeOK          bool
 }
 
 type searchSourceResult struct {
@@ -58,18 +62,19 @@ type searchSourceResult struct {
 	Rows       []SearchRow
 	Total      int
 	Truncated  bool
-	WhoMatched []string
 	Skipped    bool
 	SkipReason string
 	Err        error
 }
 
 type crawlerSearchResult struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
+	Ref      string `json:"ref"`
+	ShortRef string `json:"short_ref,omitempty"`
+	Alias    string `json:"alias,omitempty"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where"`
+	Snippet  string `json:"snippet"`
 }
 
 type crawlerSearchEnvelope struct {
@@ -77,17 +82,16 @@ type crawlerSearchEnvelope struct {
 	Results      []crawlerSearchResult `json:"results"`
 	TotalMatches int                   `json:"total_matches"`
 	Truncated    bool                  `json:"truncated"`
-	WhoMatched   []string              `json:"who_matched,omitempty"`
 }
 
 type federatedSearchEnvelope struct {
-	Query          string      `json:"query"`
-	Results        []SearchRow `json:"results"`
-	TotalMatches   int         `json:"total_matches"`
-	Truncated      bool        `json:"truncated"`
-	WhoMatched     []string    `json:"who_matched,omitempty"`
-	FailedSources  []string    `json:"failed_sources,omitempty"`
-	SkippedSources []string    `json:"skipped_sources,omitempty"`
+	Query          string        `json:"query"`
+	WhoResolved    *WhoCandidate `json:"who_resolved,omitempty"`
+	Results        []SearchRow   `json:"results"`
+	TotalMatches   int           `json:"total_matches"`
+	Truncated      bool          `json:"truncated"`
+	FailedSources  []string      `json:"failed_sources,omitempty"`
+	SkippedSources []string      `json:"skipped_sources,omitempty"`
 }
 
 type mergedSearchResult struct {
@@ -95,7 +99,6 @@ type mergedSearchResult struct {
 	TotalMatches int
 	Truncated    bool
 	More         int
-	WhoMatched   []string
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
@@ -103,6 +106,10 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	query, sources, err := r.resolveSearchTarget(c.Query, c.Source)
 	if err != nil {
 		return err
+	}
+	whoInput := strings.TrimSpace(c.Who)
+	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
+		return usageErr{fmt.Errorf("search requires a query or at least one filter (--who, --after, --before)")}
 	}
 	if len(sources) == 0 {
 		if r.root.JSON {
@@ -115,21 +122,44 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return nil
 	}
 
+	var whoResolved *WhoCandidate
+	whoBySource := map[string]string(nil)
+	if whoInput != "" {
+		installed := discoverCrawlers(r.ctx, r.appsDir)
+		skippedWho := skippedWhoSources(sources)
+		resolution := collectFederatedWho(r.ctx, searchResolverSources(installed, sources), whoInput)
+		if len(resolution.FailedSources) > 0 {
+			r.reportWhoFailures(resolution)
+			return exitErr{code: 1}
+		}
+		switch len(resolution.Candidates) {
+		case 0:
+			return r.writeUnknownWho(query, whoInput, resolution, skippedWho)
+		case 1:
+			candidate := resolution.Candidates[0]
+			whoResolved = &candidate
+			whoBySource = searchWhoFilters(candidate, sources)
+		default:
+			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho)
+		}
+	}
+
 	results := collectSearch(r.ctx, sources, query, searchOptions{
-		limit:  limit,
-		after:  c.After,
-		before: c.Before,
-		who:    strings.TrimSpace(c.Who),
+		limit:       limit,
+		after:       c.After,
+		before:      c.Before,
+		who:         whoInput,
+		whoBySource: whoBySource,
 	})
 	merged := mergedSearchRows(results, limit)
 	r.reportSearchFailures(results)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, federatedSearchEnvelope{
 			Query:          query,
+			WhoResolved:    whoResolved,
 			Results:        merged.Rows,
 			TotalMatches:   merged.TotalMatches,
 			Truncated:      merged.Truncated,
-			WhoMatched:     merged.WhoMatched,
 			FailedSources:  failedSearchSources(results),
 			SkippedSources: skippedSearchSources(results),
 		}); err != nil {
@@ -138,8 +168,10 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		return searchExit(results)
 	}
 	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
-		if err := renderWhoMatchedNote(r.stdout, merged.WhoMatched, strings.TrimSpace(c.Who)); err != nil {
-			return err
+		if whoResolved != nil {
+			if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved); err != nil {
+				return err
+			}
 		}
 		if err := renderSearchTable(r.stdout, merged.Rows, merged.More); err != nil {
 			return err
@@ -236,12 +268,16 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		result.Err = source.MetadataErr
 		return result
 	}
+	who := strings.TrimSpace(options.who)
+	if options.whoBySource != nil {
+		who = strings.TrimSpace(options.whoBySource[source.ID])
+	}
 	if options.who != "" && !hasCapability(source, "who") {
 		result.Skipped = true
 		result.SkipReason = "cannot_filter_who"
 		return result
 	}
-	args := searchCommandArgs(query, options)
+	args := searchCommandArgs(query, options, who)
 	data, err := runCrawlerCommandJSON(ctx, source.Path, args...)
 	if err != nil {
 		result.Err = err
@@ -254,34 +290,39 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 	}
 	result.Total = envelope.TotalMatches
 	result.Truncated = envelope.Truncated
-	result.WhoMatched = envelope.WhoMatched
 	result.Rows = make([]SearchRow, 0, len(envelope.Results))
 	for _, item := range envelope.Results {
 		parsed, ok := parseSearchTime(item.Time)
 		result.Rows = append(result.Rows, SearchRow{
-			Source:     source.ID,
-			Ref:        item.Ref,
-			Time:       item.Time,
-			Who:        item.Who,
-			Where:      item.Where,
-			Snippet:    item.Snippet,
-			parsedTime: parsed,
-			timeOK:     ok,
+			Source:          source.ID,
+			Ref:             item.Ref,
+			Time:            item.Time,
+			Who:             item.Who,
+			Where:           item.Where,
+			Snippet:         item.Snippet,
+			ShortRef:        firstNonEmpty(item.ShortRef, item.Alias),
+			SourceShortRefs: hasCapability(source, "short_refs"),
+			parsedTime:      parsed,
+			timeOK:          ok,
 		})
 	}
 	return result
 }
 
-func searchCommandArgs(query string, options searchOptions) []string {
-	args := []string{"search", query, "--json", "--limit", strconv.Itoa(options.limit)}
+func searchCommandArgs(query string, options searchOptions, who string) []string {
+	args := []string{"search"}
+	if strings.TrimSpace(query) != "" {
+		args = append(args, query)
+	}
+	args = append(args, "--json", "--limit", strconv.Itoa(options.limit))
 	if options.after != "" {
 		args = append(args, "--after", options.after)
 	}
 	if options.before != "" {
 		args = append(args, "--before", options.before)
 	}
-	if options.who != "" {
-		args = append(args, "--who", options.who)
+	if who != "" {
+		args = append(args, "--who", who)
 	}
 	return args
 }
@@ -292,7 +333,6 @@ func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
 		Results      json.RawMessage `json:"results"`
 		TotalMatches int             `json:"total_matches"`
 		Truncated    bool            `json:"truncated"`
-		WhoMatched   []string        `json:"who_matched"`
 	}
 	if err := decodeContractJSON(data, &raw); err != nil {
 		return crawlerSearchEnvelope{}, err
@@ -310,7 +350,6 @@ func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
 		Results:      results,
 		TotalMatches: raw.TotalMatches,
 		Truncated:    raw.Truncated,
-		WhoMatched:   raw.WhoMatched,
 	}, nil
 }
 
@@ -318,7 +357,6 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 	var rows []SearchRow
 	total := 0
 	truncated := false
-	whoMatched := whoMatchedSet{}
 	for _, result := range results {
 		if result.Err != nil || result.Skipped {
 			continue
@@ -326,7 +364,6 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 		rows = append(rows, result.Rows...)
 		total += result.Total
 		truncated = truncated || result.Truncated
-		whoMatched.add(result.WhoMatched)
 	}
 	stableSearchSort(rows)
 	if len(rows) > limit {
@@ -345,42 +382,7 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 		TotalMatches: total,
 		Truncated:    truncated,
 		More:         more,
-		WhoMatched:   whoMatched.values(),
 	}
-}
-
-type whoMatchedSet struct {
-	seen       map[string]bool
-	valuesList []string
-}
-
-func (s *whoMatchedSet) add(values []string) {
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		key := strings.ToLower(value)
-		if s.seen == nil {
-			s.seen = map[string]bool{}
-		}
-		if s.seen[key] {
-			continue
-		}
-		s.seen[key] = true
-		s.valuesList = append(s.valuesList, value)
-	}
-}
-
-func (s whoMatchedSet) values() []string {
-	if len(s.valuesList) == 0 {
-		return nil
-	}
-	values := append([]string(nil), s.valuesList...)
-	sort.SliceStable(values, func(i, j int) bool {
-		return strings.ToLower(values[i]) < strings.ToLower(values[j])
-	})
-	return values
 }
 
 func stableSearchSort(rows []SearchRow) {
@@ -488,13 +490,5 @@ func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
 		reason = "skipped or unavailable"
 	}
 	_, err := fmt.Fprintf(w, "note: %d of %d sources %s — results are partial (see stderr)\n", blocked, len(results), reason)
-	return err
-}
-
-func renderWhoMatchedNote(w io.Writer, whoMatched []string, input string) error {
-	if len(whoMatched) <= 1 {
-		return nil
-	}
-	_, err := fmt.Fprintf(w, "%d people matched '%s' — narrow with the exact name\n", len(whoMatched), input)
 	return err
 }

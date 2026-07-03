@@ -45,6 +45,82 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	}
 }
 
+func TestSearchHumanOutputUsesShortRefsWhenEveryDisplayedRowCanResolve(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			search: `{"query":"boat trip","results":[
+				{"ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
+			],"total_matches":1,"truncated":false}`,
+		},
+		fakeCrawler{
+			name:     "telecrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			search: `{"query":"boat trip","results":[
+				{"ref":"telegram:msg/1930","alias":"q8n4c","time":"2026-05-12T10:00:00Z","who":"Bob","snippet":"Older match"}
+			],"total_matches":1,"truncated":false}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"t7k3f", "q8n4c"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("stdout missing short ref %q:\n%s", want, stdout)
+		}
+	}
+	for _, unwanted := range []string{"imessage:msg/8842", "telegram:msg/1930"} {
+		if strings.Contains(stdout, unwanted) {
+			t.Fatalf("stdout leaked full ref %q:\n%s", unwanted, stdout)
+		}
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchHumanOutputKeepsFullRefsForMixedShortRefCapability(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			search: `{"query":"boat trip","results":[
+				{"ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
+			],"total_matches":1,"truncated":false}`,
+		},
+		fakeCrawler{
+			name:     "telecrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			search: `{"query":"boat trip","results":[
+				{"ref":"telegram:msg/1930","time":"2026-05-12T10:00:00Z","who":"Bob","snippet":"Older match"}
+			],"total_matches":1,"truncated":false}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"imessage:msg/8842", "telegram:msg/1930"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("stdout missing full ref %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "t7k3f") {
+		t.Fatalf("stdout used short ref in mixed table:\n%s", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
 func TestSearchJSONIncludesFederatedEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
@@ -117,150 +193,17 @@ func TestSearchJSONEmptyResultsEnvelope(t *testing.T) {
 	}
 }
 
-func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
-	binDir := writeFakeCrawlers(t,
-		fakeCrawler{
-			name:        "imsgcrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-			searchQuery: "boat trip",
-			searchWho:   "Alice Example",
-			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
-		},
-		fakeCrawler{
-			name:        "telecrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
-			searchQuery: "boat trip",
-			searchWho:   "Alice Example",
-			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
-		},
-	)
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "Alice Example")
-	if code != 0 {
-		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if stderr != "" {
-		t.Fatalf("stderr = %s", stderr)
-	}
-}
-
-func TestSearchWhoPassesThroughWithPositionalSource(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-		searchQuery: "boat trip",
-		searchWho:   "Alice Example",
-		search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "search", "imessage", "boat", "trip", "--who", "Alice Example")
-	if code != 0 {
-		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if stderr != "" {
-		t.Fatalf("stderr = %s", stderr)
-	}
-}
-
-func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
-	binDir := writeFakeCrawlers(t,
-		fakeCrawler{
-			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-			search:   `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
-		},
-		fakeCrawler{
-			name:       "telecrawl",
-			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
-			searchExit: 64,
-		},
-	)
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "Alice")
-	if code != 3 {
-		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	for _, want := range []string{
-		"imessage:msg/1",
-		"note: 1 of 2 sources skipped — results are partial (see stderr)",
-	} {
-		if !strings.Contains(stdout, want) {
-			t.Fatalf("stdout missing %q:\n%s", want, stdout)
-		}
-	}
-	if !strings.Contains(stderr, "telegram cannot filter by person yet") {
-		t.Fatalf("stderr missing capability note:\n%s", stderr)
-	}
-	if strings.Contains(stderr, "telegram search failed") {
-		t.Fatalf("stderr reported skipped source as failure:\n%s", stderr)
-	}
-}
-
-func TestSearchJSONAggregatesWhoMatched(t *testing.T) {
-	binDir := writeFakeCrawlers(t,
-		fakeCrawler{
-			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-			search:   `{"query":"specs","results":[],"total_matches":0,"truncated":false,"who_matched":["Alex Jones","Alex Chen"]}`,
-		},
-		fakeCrawler{
-			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
-			search:   `{"query":"specs","results":[],"total_matches":0,"truncated":false,"who_matched":["alex jones"]}`,
-		},
-	)
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "alex")
-	if code != 0 {
-		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	want := `{"query":"specs","results":[],"total_matches":0,"truncated":false,"who_matched":["Alex Chen","Alex Jones"]}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
-	}
-	if stderr != "" {
-		t.Fatalf("stderr = %s", stderr)
-	}
-}
-
-func TestSearchHumanOutputReportsAmbiguousWhoMatched(t *testing.T) {
-	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-		search:   `{"query":"specs","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1,"truncated":false,"who_matched":["Alice Adams","Alice Baker"]}`,
-	})
-	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
-
-	stdout, stderr, code := runCLI(t, "search", "specs", "--who", "alice")
-	if code != 0 {
-		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "2 people matched 'alice' — narrow with the exact name") {
-		t.Fatalf("stdout missing ambiguity note:\n%s", stdout)
-	}
-	if stderr != "" {
-		t.Fatalf("stderr = %s", stderr)
-	}
-}
-
 func TestSearchHelpDocumentsWho(t *testing.T) {
 	stdout, stderr, code := runCLI(t, "search", "--help")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		"--who=identity",
-		"Filter by exact identity",
-		`trawl search invoice --who "Vendor Support"`,
+		"--who=person",
+		"Resolve a person or sender, then filter by the exact",
+		"match",
+		`trawl search invoice --who alex`,
+		`trawl search --who "Vendor Support" --after 2026-01-01`,
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)

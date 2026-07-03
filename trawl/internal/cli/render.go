@@ -61,6 +61,23 @@ func writeTable(w io.Writer, header []string, rows [][]string, remedies []string
 	return nil
 }
 
+func writeFittedTable(w io.Writer, header []string, rows [][]string) error {
+	widths := fittedColumnWidths(header, rows)
+	free := outputWidth() - fixedColumnBudget(widths)
+	if free < 1 {
+		free = 1
+	}
+	if err := writeFittedTableRow(w, header, widths, free); err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if err := writeFittedTableRow(w, row, widths, free); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // lastColumnBudget is the room left for the free-running last column
 // after the fixed columns and their separators.
 func lastColumnBudget(widths []int) int {
@@ -86,6 +103,17 @@ func writeTableRow(w io.Writer, row []string, widths []int, free int) error {
 	return err
 }
 
+func writeFittedTableRow(w io.Writer, row []string, widths []int, free int) error {
+	var line strings.Builder
+	for column, width := range widths {
+		line.WriteString(padCell(truncateCell(row[column], width), width))
+		line.WriteString("  ")
+	}
+	line.WriteString(truncateCell(row[len(row)-1], free))
+	_, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " "))
+	return err
+}
+
 // padCell pads by display width, not bytes or runes, so emoji and wide
 // characters keep the columns aligned.
 func padCell(cell string, width int) string {
@@ -98,8 +126,14 @@ func padCell(cell string, width int) string {
 
 // truncateCell cuts a cell to a display width, marking the cut.
 func truncateCell(cell string, width int) string {
-	if runewidth.StringWidth(cell) <= width || width < 2 {
+	if runewidth.StringWidth(cell) <= width {
 		return cell
+	}
+	if width <= 0 {
+		return ""
+	}
+	if width == 1 {
+		return "…"
 	}
 	return strings.TrimRight(runewidth.Truncate(cell, width-1, ""), " ") + "…"
 }
@@ -116,6 +150,44 @@ func columnWidths(header []string, rows [][]string) []int {
 		}
 	}
 	return widths
+}
+
+func fittedColumnWidths(header []string, rows [][]string) []int {
+	widths := append([]int(nil), columnWidths(header, rows)...)
+	if len(widths) == 0 {
+		return widths
+	}
+	const minLastColumnWidth = 8
+	for fixedColumnBudget(widths)+minLastColumnWidth > outputWidth() {
+		column := widestShrinkableColumn(widths)
+		if column < 0 {
+			break
+		}
+		widths[column]--
+	}
+	return widths
+}
+
+func fixedColumnBudget(widths []int) int {
+	used := 0
+	for _, width := range widths {
+		used += width + 2
+	}
+	return used
+}
+
+func widestShrinkableColumn(widths []int) int {
+	const minFixedColumnWidth = 3
+	column := -1
+	for i, width := range widths {
+		if width <= minFixedColumnWidth {
+			continue
+		}
+		if column == -1 || width > widths[column] {
+			column = i
+		}
+	}
+	return column
 }
 
 func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {

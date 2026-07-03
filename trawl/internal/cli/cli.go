@@ -21,6 +21,7 @@ type CLI struct {
 	Status StatusCmd `cmd:"" help:"Show crawler health"`
 	Sync   SyncCmd   `cmd:"" help:"Run crawls"`
 	Search SearchCmd `cmd:"" help:"Search crawler archives"`
+	Who    WhoCmd    `cmd:"" help:"Resolve a person or sender identity"`
 	Open   OpenCmd   `cmd:"" help:"Open a crawler ref"`
 	Doctor DoctorCmd `cmd:"" help:"Run crawler diagnostics"`
 }
@@ -350,10 +351,10 @@ func unknownCommand(args []string) error {
 			continue
 		}
 		switch arg {
-		case "status", "sync", "search", "open", "doctor", "help":
+		case "status", "sync", "search", "who", "open", "doctor", "help":
 			return nil
 		default:
-			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, open, doctor; run: trawl --help", arg)}
+			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, who, open, doctor; run: trawl --help", arg)}
 		}
 	}
 	return nil
