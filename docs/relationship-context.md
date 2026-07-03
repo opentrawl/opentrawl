@@ -48,8 +48,8 @@ No agent-tweakable knobs: derived layers re-derive from evidence, and
 a knob would let configuration masquerade as knowledge. One open
 question is recorded, not decided: whether specialised queries (an
 organisation mailing from many domains, a person with heavy sender
-aliasing) justify query-time hints an agent can pass — hints, if they
-ever exist, are per-query arguments, never persisted configuration.
+aliasing) justify query-time hints an agent can pass. Any such hints would
+be per-query arguments, never persisted configuration.
 
 ## Why not now
 

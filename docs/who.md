@@ -7,9 +7,9 @@ written_by: ai
 Design for the ship-blocking gap, grounded in mined evidence: a sweep
 of months of real agent sessions (the moments the owner got angry, and
 the questions actually asked) found that agents repeatedly fail on
-people. They run "getting to know you" interviews instead of reading
-archives that already hold the answer; they state stale personal facts
-with confidence; and in several sessions the agent itself names
+people. They run "getting to know you" interviews
+instead of reading archives that already hold the answer. They state stale
+personal facts with confidence. In several sessions the agent itself names
 "resolve handles into people" as the unbuilt gap. Real requests are
 imperative — "check my emails for the specs", "we already discussed
 this, go find it" — and the retrieval verb constantly runs through a
@@ -17,14 +17,14 @@ person or a vendor.
 
 Today no surface serves that. Search shows who said things but cannot
 filter on it, and full-text-matching a person's name finds messages
-that *mention* them, not conversations *with* them — the ones that
+that mention them, not conversations with them — the ones that
 matter almost never contain the name.
 
 ## The shape
 
 Two additions, one dependency, in strict order.
 
-1. **Resolve first.** `trawl who <fuzzy>` turns a human fragment into
+1. Resolve first. `trawl who <fuzzy>` turns a human fragment into
    a person: `trawl who dave` returns every matching candidate with
    the columns that decide between them — display name, how the name
    matched (exact, prefix, contains), the sources they appear in,
@@ -49,13 +49,13 @@ Two additions, one dependency, in strict order.
    v1.1 columns are chosen so those arrive as new evidence columns,
    not as changed semantics.
 
-2. **Then filter.** `search --who <person>` on every crawler that
+2. Then filter. `search --who <person>` on every crawler that
    exports contacts, and federated on `trawl search`. The crawler
    filters at the archive (trawl-level post-filtering would silently
    lose recall behind per-crawler limits). Contract v1.1 addition,
    declared as a capability.
 
-3. **The dependency: identity join lands first.** `--who alice` is
+3. The dependency: identity join lands first. `--who alice` is
    dead on arrival while iMessage rows say `+15550100123`. Order:
    imsgcrawl resolves numbers to names via the Contacts store at sync;
    every crawler's contact export feeds clawdex; clawdex owns the
@@ -78,7 +78,7 @@ hypothesis, not the answer.
 
 Both agents (gpt-5.5, Opus) behaved identically at the decision points:
 read `--help` then `search --help` first, then used `--who` correctly
-on their very first real search — one help line was enough teaching.
+on their very first real search. One help line was enough teaching.
 Neither ever reached for Gmail-style `with:`/`from:` operators, killing
 that option. Neither used the `who` resolver to orient; both ran it
 late, as verification. One agent passed `--who "Vendor Support"` — an
@@ -118,4 +118,4 @@ archives, never inside the crawlers.
 
 No fuzzy matching inside `--who` itself: resolve fuzziness in `who`,
 filter with the exact resolved person. One obvious way; no similarity
-knobs.ye
+knobs.
