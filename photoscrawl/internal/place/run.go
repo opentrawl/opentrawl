@@ -14,13 +14,21 @@ import (
 )
 
 func Run(ctx context.Context, opts Options) (Result, error) {
-	input, err := loadInput(opts.InputPath)
+	input, cached, err := loadInputOrResult(opts.InputPath)
 	if err != nil {
 		return Result{}, err
 	}
 	radius := opts.RadiusMeters
 	if radius <= 0 {
 		radius = defaultRadiusMeters
+	}
+	if cached != nil {
+		if cached.RadiusMeters == 0 {
+			cached.RadiusMeters = radius
+		}
+		cached.Cached = true
+		cached.CacheStatus = "hit"
+		return *cached, nil
 	}
 	cacheDir := strings.TrimSpace(opts.CacheDir)
 	if cacheDir == "" {
@@ -77,25 +85,11 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 }
 
 func LoadResult(path string) (Result, error) {
-	reader, closeReader, err := inputReader(path)
+	data, err := readInputData(path)
 	if err != nil {
 		return Result{}, err
 	}
-	if closeReader != nil {
-		defer closeReader()
-	}
-	var result Result
-	decoder := json.NewDecoder(reader)
-	if err := decoder.Decode(&result); err != nil {
-		return Result{}, err
-	}
-	if result.POITotal == 0 {
-		result.POITotal = len(result.POICandidates)
-	}
-	if err := validatePOIStatus(result.POIStatus); err != nil {
-		return Result{}, err
-	}
-	return result, nil
+	return decodeResult(data)
 }
 
 func rawAppleResult(ctx context.Context, input Input, radius float64) (Result, error) {

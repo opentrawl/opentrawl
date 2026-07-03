@@ -13,13 +13,13 @@ known.
 Before prompting, run one asset at a time through `place-context`:
 
 ```sh
-photoscrawl place-context --input <private-eval-run>/metadata/E001.json --json
+photoscrawl-lab place-context --input <private-eval-run>/metadata/E001.json --json
 ```
 
 To render already-cached evidence without another provider call:
 
 ```sh
-photoscrawl place-card --input <crawlkit-cache-dir>/place-context/<key>.json
+photoscrawl-lab place-context --input <crawlkit-cache-dir>/place-context/<key>.json
 ```
 
 The command reads the eval metadata JSON shape, uses the asset's own
@@ -28,11 +28,9 @@ deterministic Markdown card. Reverse-geocoded address evidence is required. POI
 search is optional evidence: no nearby POI is a normal result, not a provider
 failure.
 
-For provider evaluation, run `place-backfill` instead of wrapping
-`place-context` in a shell loop. It uses the live private archive as input,
-dedupes exact latitude/longitude/accuracy keys, retries Apple failures, and
-writes all manifests, attempts, outputs, and final errors outside the repo under
-the crawlkit data dir's `backfills/place-context-full/apple-ingest` subtree.
+For library-scale cache coverage, use classify's cache-first resolver rather
+than a separate backfill command. It fills missing place keys as classification
+needs them and can read legacy backfill artifacts.
 
 Provider evidence includes:
 

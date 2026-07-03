@@ -131,6 +131,8 @@ Keep crawl-family commands:
 - `open`
 - `neighbors`
 
+Research-only `photoscrawl-lab` verbs are not part of this query surface.
+
 `neighbors` is the "photos taken together" query: source-level adjacent assets,
 not a trip or relationship truth table.
 

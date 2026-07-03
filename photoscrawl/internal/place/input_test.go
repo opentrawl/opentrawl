@@ -1,6 +1,7 @@
 package place
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,6 +62,35 @@ func TestLoadResultRejectsUnknownPOIStatus(t *testing.T) {
 	}
 	if _, err := LoadResult(path); err == nil {
 		t.Fatal("expected invalid poi_status to fail")
+	}
+}
+
+func TestRunAcceptsCachedResultInputWithoutProvider(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "place.json")
+	data := []byte(`{
+	  "input": {"location": {"latitude": 52.379189, "longitude": 4.899431}},
+	  "provider": "apple",
+	  "source": "apple_corelocation_mapkit",
+	  "radius_meters": 150,
+	  "address": {
+	    "formatted": "Example Street, Example City, Example Country",
+	    "locality": "Example City",
+	    "country": "Example Country"
+	  },
+	  "poi_status": "none"
+	}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Run(context.Background(), Options{InputPath: path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Cached || result.CacheStatus != "hit" {
+		t.Fatalf("cache state = cached:%v status:%q", result.Cached, result.CacheStatus)
+	}
+	if result.Address == nil || result.Address.Formatted != "Example Street, Example City, Example Country" {
+		t.Fatalf("address = %#v", result.Address)
 	}
 }
 

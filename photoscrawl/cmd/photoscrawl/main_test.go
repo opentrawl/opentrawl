@@ -57,8 +57,22 @@ func TestParseRefCommandRequiresRefBeforeFlags(t *testing.T) {
 
 func TestExportAlreadyRunningErrorIsStructured(t *testing.T) {
 	got := normaliseError(errors.New("photokit export already running"))
-	if got.Code != "export_already_running" || !strings.Contains(got.Remedy, "wait for the other eval-card run") {
+	if got.Code != "export_already_running" || !strings.Contains(got.Remedy, "wait for the other export run") {
 		t.Fatalf("normaliseError = %#v", got)
+	}
+}
+
+func TestMovedResearchVerbsReturnUsage(t *testing.T) {
+	for _, verb := range []string{"place-context", "place-card", "place-backfill", "eval-card"} {
+		t.Run(verb, func(t *testing.T) {
+			_, _, err := captureRunOutput(t, []string{verb})
+			if err == nil {
+				t.Fatal("expected usage error")
+			}
+			if !strings.Contains(err.Error(), "usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors>") {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
 	}
 }
 
