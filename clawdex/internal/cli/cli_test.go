@@ -248,9 +248,9 @@ func TestExecuteWhoHumanUsesWidthFittedTable(t *testing.T) {
 	}
 	conformance.AssertHumanOutput(t, out.String())
 	for _, want := range []string{
-		"WHO                 MATCH",
+		"WHO               MATCH",
 		"Alice Example",
-		"close",
+		"close_spelling",
 		"telecrawl,",
 		"wacrawl",
 		"15550100",

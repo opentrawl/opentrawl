@@ -223,7 +223,7 @@ func TestResolvePeopleMatchesNamesAliasesIdentifiersAndCloseSpellings(t *testing
 		{query: "alice@example.com", match: "exact"},
 		{query: "+1 555 0100", match: "exact"},
 		{query: "alice_handle", match: "exact"},
-		{query: "Alixe", match: "close"},
+		{query: "Alixe", match: "close_spelling"},
 	} {
 		got, err := s.ResolvePeople(tc.query)
 		if err != nil {
@@ -252,6 +252,32 @@ func TestResolvePeopleMatchesNamesAliasesIdentifiersAndCloseSpellings(t *testing
 	}
 	if candidate.LastSeen != now.Format(time.RFC3339) {
 		t.Fatalf("last seen = %q", candidate.LastSeen)
+	}
+}
+
+func TestResolveWhoCloseSpellingOnlyReturnsUnknownWithSuggestion(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	if _, err := s.AddPerson("Dana Example", []string{"dana@example.com"}, nil, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.ResolveWho("Dana Example"); err != nil || got.Who != "Dana Example" {
+		t.Fatalf("exact resolve got=%#v err=%v", got, err)
+	}
+	got, err := s.ResolveWho("Dena")
+	if err == nil {
+		t.Fatalf("close spelling resolved unexpectedly: %#v", got)
+	}
+	var whoErr *WhoResolutionError
+	if !errors.As(err, &whoErr) {
+		t.Fatalf("error = %#v, want WhoResolutionError", err)
+	}
+	if whoErr.Code != WhoErrorUnknown || len(whoErr.DidYouMean) != 1 {
+		t.Fatalf("resolution error = %#v", whoErr)
+	}
+	suggestion := whoErr.DidYouMean[0]
+	if suggestion.Who != "Dana Example" || suggestion.MatchQuality != "close_spelling" {
+		t.Fatalf("suggestion = %#v", suggestion)
 	}
 }
 

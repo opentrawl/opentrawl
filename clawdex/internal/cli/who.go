@@ -100,15 +100,16 @@ func printWhoTable(w io.Writer, candidates []whoCandidate) error {
 
 func whoTableColumns(width int) []textColumn {
 	whoWidth := 24
+	matchWidth := 14
 	sourceWidth := 20
 	if width < 90 {
-		whoWidth = 18
-		sourceWidth = 14
+		whoWidth = 16
+		sourceWidth = 10
 	}
-	identifierWidth := textColumnWidth(width, whoWidth, 8, 10, sourceWidth)
+	identifierWidth := textColumnWidth(width, whoWidth, matchWidth, 10, sourceWidth)
 	return []textColumn{
 		{header: "WHO", width: whoWidth},
-		{header: "MATCH", width: 8},
+		{header: "MATCH", width: matchWidth},
 		{header: "LAST SEEN", width: 10},
 		{header: "SOURCES", width: sourceWidth, wrap: true},
 		{header: "IDENTIFIERS", width: identifierWidth, wrap: true},
