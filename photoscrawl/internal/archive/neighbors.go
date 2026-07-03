@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"math"
 	"sort"
 	"strings"
 
@@ -319,16 +318,15 @@ limit ?
 func sharedObservationNeighbors(ctx context.Context, db *sql.DB, id string, limit int) ([]neighborCandidate, error) {
 	rows, err := db.QueryContext(ctx, `
 select target.id, target.media_type, target.creation_date, target_observation.observation_type, target_observation.label,
-       min(source_observation.confidence, target_observation.confidence) as shared_confidence,
        coalesce(source_observation.evidence_id, ''), coalesce(target_observation.evidence_id, '')
-from visual_observation source_observation
-join visual_observation target_observation on target_observation.observation_type = source_observation.observation_type
+from metadata_observation source_observation
+join metadata_observation target_observation on target_observation.observation_type = source_observation.observation_type
   and target_observation.label = source_observation.label
   and target_observation.asset_id <> source_observation.asset_id
 join asset target on target.id = target_observation.asset_id
 where source_observation.asset_id = ?
   and source_observation.observation_type = 'document_signal'
-order by shared_confidence desc, target.creation_date, target.id
+order by target.creation_date, target.id
 limit ?
 `, id, limit)
 	if err != nil {
@@ -340,15 +338,14 @@ limit ?
 	for rows.Next() {
 		var candidate neighborCandidate
 		var observationType, label string
-		var confidence float64
 		var sourceEvidenceID, targetEvidenceID string
-		if err := rows.Scan(&candidate.ID, &candidate.MediaType, &candidate.CreationDate, &observationType, &label, &confidence, &sourceEvidenceID, &targetEvidenceID); err != nil {
+		if err := rows.Scan(&candidate.ID, &candidate.MediaType, &candidate.CreationDate, &observationType, &label, &sourceEvidenceID, &targetEvidenceID); err != nil {
 			return nil, err
 		}
 		candidate.Reason = NeighborReason{
 			Type:   "shared_observation",
-			Method: "visual_observation.type_label",
-			Weight: math.Min(0.75, confidence*0.75),
+			Method: "metadata_observation.type_label",
+			Weight: 0.45,
 			Detail: map[string]any{"observation_type": observationType, "label": label},
 		}
 		candidate.EvidenceIDs = nonEmpty(sourceEvidenceID, targetEvidenceID)

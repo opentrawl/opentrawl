@@ -2,8 +2,10 @@ package archive
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,8 +74,8 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if classified.Processed != 2 || classified.MetadataClassified != 2 || classified.WaitingForLocalContent != 1 || classified.VisualObservationsWritten == 0 {
-		t.Fatalf("classify result = processed %d metadata %d waiting %d visual %d", classified.Processed, classified.MetadataClassified, classified.WaitingForLocalContent, classified.VisualObservationsWritten)
+	if classified.Processed != 2 || classified.MetadataClassified != 2 || classified.WaitingForLocalContent != 1 || classified.MetadataObservationsWritten == 0 {
+		t.Fatalf("classify result = processed %d metadata %d waiting %d observations %d", classified.Processed, classified.MetadataClassified, classified.WaitingForLocalContent, classified.MetadataObservationsWritten)
 	}
 	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "screenshot_candidate", Limit: 5})
 	if err != nil {
@@ -87,7 +89,19 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(opened.Observations) == 0 {
-		t.Fatal("expected visual observations on open")
+		t.Fatal("expected metadata observations on open")
+	}
+	for _, observation := range opened.Observations {
+		if observation.Confidence != nil {
+			t.Fatalf("metadata observation carried confidence: %#v", observation)
+		}
+	}
+	openedJSON, err := json.Marshal(opened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(openedJSON), "bounding_box") || strings.Contains(string(openedJSON), "confidence") {
+		t.Fatalf("metadata open JSON leaked vision-shaped fields: %s", openedJSON)
 	}
 	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ObservationID)
 	if err != nil {

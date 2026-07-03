@@ -10,7 +10,7 @@ type contentObservation struct {
 	ObservationType string
 	ValueText       string
 	Value           any
-	Confidence      float64
+	Confidence      *float64
 	TermType        string
 }
 
@@ -20,6 +20,12 @@ type modelResult struct {
 	ImageBytes   int64
 	ImageSHA256  string
 	Observations []contentObservation
+}
+
+type observationValue struct {
+	Text       string
+	Value      any
+	Confidence *float64
 }
 
 func parseModelPayload(raw string) (map[string]any, error) {
@@ -38,27 +44,27 @@ func parseModelPayload(raw string) (map[string]any, error) {
 
 func observationsFromPayload(payload map[string]any) []contentObservation {
 	out := []contentObservation{}
-	add := func(kind string, value any, confidence float64, termType string) {
-		for _, text := range valueTexts(value) {
+	add := func(kind string, value any, termType string) {
+		for _, item := range observationValues(value) {
 			out = append(out, contentObservation{
 				ObservationType: kind,
-				ValueText:       text,
-				Value:           map[string]any{"text": text},
-				Confidence:      confidence,
+				ValueText:       item.Text,
+				Value:           item.Value,
+				Confidence:      item.Confidence,
 				TermType:        termType,
 			})
 		}
 	}
-	add("scene_summary", payload["scene_summary"], 0.65, "scene")
-	add("visible_text_summary", payload["visible_text_summary"], 0.6, "visible_text")
-	add("place_type_candidate", payload["place_candidates"], 0.45, "place_type_candidate")
-	add("landmark_or_place_name_candidate", payload["landmark_candidates"], 0.45, "landmark_or_place_name_candidate")
-	add("merchant_or_venue_name_candidate", payload["merchant_or_venue_candidates"], 0.45, "merchant_or_venue_name_candidate")
-	add("object_or_food", payload["food_or_objects"], 0.55, "object_or_food")
-	add("people_presence", payload["people_presence"], 0.55, "people_presence")
-	add("privacy_sensitivity", payload["privacy_sensitivity"], 0.6, "privacy_sensitivity")
-	add("cluster_feature", payload["cluster_terms"], 0.55, "cluster_feature")
-	add("model_uncertainty", payload["uncertainties"], 0.5, "model_uncertainty")
+	add("scene_summary", payload["scene_summary"], "scene")
+	add("visible_text_summary", payload["visible_text_summary"], "visible_text")
+	add("place_type_candidate", payload["place_candidates"], "place_type_candidate")
+	add("landmark_or_place_name_candidate", payload["landmark_candidates"], "landmark_or_place_name_candidate")
+	add("merchant_or_venue_name_candidate", payload["merchant_or_venue_candidates"], "merchant_or_venue_name_candidate")
+	add("object_or_food", payload["food_or_objects"], "object_or_food")
+	add("people_presence", payload["people_presence"], "people_presence")
+	add("privacy_sensitivity", payload["privacy_sensitivity"], "privacy_sensitivity")
+	add("cluster_feature", payload["cluster_terms"], "cluster_feature")
+	add("model_uncertainty", payload["uncertainties"], "model_uncertainty")
 	for _, leakage := range promptLeakageObservations(payload) {
 		out = append(out, leakage)
 	}
@@ -83,7 +89,6 @@ func promptLeakageObservations(payload map[string]any) []contentObservation {
 				ObservationType: "quality_issue",
 				ValueText:       "model_prompt_leakage",
 				Value:           map[string]any{"text": "model_prompt_leakage", "fragment": fragment},
-				Confidence:      1,
 				TermType:        "quality_issue",
 			}}
 		}
@@ -91,40 +96,75 @@ func promptLeakageObservations(payload map[string]any) []contentObservation {
 	return nil
 }
 
-func valueTexts(value any) []string {
+func observationValues(value any) []observationValue {
 	switch typed := value.(type) {
 	case nil:
 		return nil
 	case string:
-		return nonEmpty(truncateObservationText(typed))
+		return textObservationValues(typed, nil)
 	case []any:
-		out := []string{}
+		out := []observationValue{}
 		for _, item := range typed {
-			out = append(out, valueTexts(item)...)
+			out = append(out, observationValues(item)...)
 		}
 		return out
 	case map[string]any:
+		confidence := mapConfidence(typed)
 		for _, key := range []string{"name", "label", "text", "value", "candidate"} {
 			if text, ok := typed[key].(string); ok {
-				return nonEmpty(truncateObservationText(text))
+				return textObservationValues(text, confidence)
 			}
 		}
 		data, err := json.Marshal(typed)
 		if err != nil {
 			return nil
 		}
-		return nonEmpty(truncateObservationText(string(data)))
+		return textObservationValues(string(data), confidence)
 	case bool:
 		if typed {
-			return []string{"true"}
+			return textObservationValues("true", nil)
 		}
-		return []string{"false"}
+		return textObservationValues("false", nil)
 	case float64:
-		return []string{fmt.Sprintf("%g", typed)}
+		return textObservationValues(fmt.Sprintf("%g", typed), nil)
 	default:
-		text := strings.TrimSpace(fmt.Sprint(typed))
-		return nonEmpty(truncateObservationText(text))
+		return textObservationValues(fmt.Sprint(typed), nil)
 	}
+}
+
+func textObservationValues(value string, confidence *float64) []observationValue {
+	texts := nonEmpty(truncateObservationText(value))
+	out := make([]observationValue, 0, len(texts))
+	for _, text := range texts {
+		payload := map[string]any{"text": text}
+		if confidence != nil {
+			payload["confidence"] = *confidence
+		}
+		out = append(out, observationValue{Text: text, Value: payload, Confidence: confidence})
+	}
+	return out
+}
+
+func mapConfidence(value map[string]any) *float64 {
+	raw, ok := value["confidence"]
+	if !ok {
+		return nil
+	}
+	var parsed float64
+	switch typed := raw.(type) {
+	case float64:
+		parsed = typed
+	case int:
+		parsed = float64(typed)
+	case int64:
+		parsed = float64(typed)
+	default:
+		return nil
+	}
+	if parsed < 0 || parsed > 1 {
+		return nil
+	}
+	return &parsed
 }
 
 func dedupeContentObservations(observations []contentObservation) []contentObservation {

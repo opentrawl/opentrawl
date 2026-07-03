@@ -386,7 +386,7 @@ func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sour
 func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
-		"visual_observation", "text_observation", "face_observation",
+		"metadata_observation", "text_observation", "face_observation",
 		"model_observation", "observation_term",
 		"asset_fts", "observation_fts", "edge", "evidence_ref",
 	}

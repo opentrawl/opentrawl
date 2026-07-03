@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 const Schema = `
 create table if not exists source_library (
@@ -106,15 +106,13 @@ create table if not exists location_observation (
   evidence_id text not null
 );
 
-create table if not exists visual_observation (
+create table if not exists metadata_observation (
   id text primary key,
   asset_id text not null references asset(id),
   observation_type text not null,
   label text not null,
-  confidence real not null,
-  bounding_box_json text not null,
   source text not null,
-  model_id text not null,
+  classifier_id text not null,
   evidence_id text not null
 );
 
@@ -122,7 +120,7 @@ create table if not exists text_observation (
   id text primary key,
   asset_id text not null references asset(id),
   text text not null,
-  confidence real not null,
+  confidence real,
   bounding_box_json text not null,
   language text not null,
   source text not null,
@@ -134,7 +132,7 @@ create table if not exists face_observation (
   asset_id text not null references asset(id),
   face_local_id text not null,
   person_label text not null,
-  confidence real not null,
+  confidence real,
   bounding_box_json text not null,
   source text not null,
   evidence_id text not null
@@ -157,7 +155,7 @@ create table if not exists model_observation (
   observation_type text not null,
   value_text text not null,
   value_json text not null,
-  confidence real not null,
+  confidence real,
   source text not null,
   model_id text not null,
   prompt_version text not null,
@@ -207,7 +205,7 @@ create index if not exists resource_asset_idx on asset_resource(asset_id);
 create index if not exists resource_sha_idx on asset_resource(sha256);
 create index if not exists album_asset_idx on album_membership(asset_id);
 create index if not exists location_asset_idx on location_observation(asset_id);
-create index if not exists visual_asset_idx on visual_observation(asset_id);
+create index if not exists metadata_observation_asset_idx on metadata_observation(asset_id);
 create index if not exists text_asset_idx on text_observation(asset_id);
 create index if not exists face_asset_idx on face_observation(asset_id);
 create index if not exists model_observation_asset_idx on model_observation(asset_id);

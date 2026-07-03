@@ -36,19 +36,19 @@ type OpenAlbum struct {
 }
 
 type OpenResource struct {
-	Type             string `json:"type,omitempty"`
-	Filename         string `json:"filename,omitempty"`
-	UTI              string `json:"uti,omitempty"`
-	Bytes            int64  `json:"bytes,omitempty"`
-	AvailableLocally bool   `json:"available_locally"`
-	NeedsDownload    bool   `json:"needs_download"`
+	Type                  string `json:"type,omitempty"`
+	Filename              string `json:"filename,omitempty"`
+	UniformTypeIdentifier string `json:"uniform_type_identifier,omitempty"`
+	Bytes                 int64  `json:"bytes,omitempty"`
+	AvailableLocally      bool   `json:"available_locally"`
+	NeedsDownload         bool   `json:"needs_download"`
 }
 
 type OpenObservation struct {
-	Kind        string  `json:"kind"`
-	Text        string  `json:"text"`
-	Confidence  float64 `json:"confidence,omitempty"`
-	EvidenceRef string  `json:"evidence_ref,omitempty"`
+	Kind        string   `json:"kind"`
+	Text        string   `json:"text"`
+	Confidence  *float64 `json:"confidence,omitempty"`
+	EvidenceRef string   `json:"evidence_ref,omitempty"`
 }
 
 type OpenEvidence struct {
@@ -68,7 +68,7 @@ type EvidenceReference struct {
 	Summary  string `json:"summary,omitempty"`
 }
 
-func newOpenResult(asset map[string]any, resources, albums, locations, visualObservations, textObservations, faceObservations, modelObservations, evidence []map[string]any) OpenResult {
+func newOpenResult(asset map[string]any, resources, albums, locations, metadataObservations, textObservations, faceObservations, modelObservations, evidence []map[string]any) OpenResult {
 	return OpenResult{
 		Ref:             assetRef(rowString(asset, "id")),
 		Time:            localRFC3339(rowString(asset, "creation_date")),
@@ -82,7 +82,7 @@ func newOpenResult(asset map[string]any, resources, albums, locations, visualObs
 		LocationCount:   len(locations),
 		Albums:          openAlbums(albums),
 		Resources:       openResources(resources),
-		Observations:    openObservations(visualObservations, textObservations, faceObservations, modelObservations),
+		Observations:    openObservations(metadataObservations, textObservations, faceObservations, modelObservations),
 		Evidence:        OpenEvidence{Refs: openEvidenceRefs(evidence)},
 	}
 }
@@ -115,20 +115,20 @@ func openResources(rows []map[string]any) []OpenResource {
 	out := []OpenResource{}
 	for _, row := range rows {
 		out = append(out, OpenResource{
-			Type:             rowString(row, "resource_type"),
-			Filename:         rowString(row, "original_filename"),
-			UTI:              rowString(row, "uti"),
-			Bytes:            rowInt(row, "file_size"),
-			AvailableLocally: rowBool(row, "available_locally"),
-			NeedsDownload:    rowBool(row, "needs_download"),
+			Type:                  rowString(row, "resource_type"),
+			Filename:              rowString(row, "original_filename"),
+			UniformTypeIdentifier: rowString(row, "uti"),
+			Bytes:                 rowInt(row, "file_size"),
+			AvailableLocally:      rowBool(row, "available_locally"),
+			NeedsDownload:         rowBool(row, "needs_download"),
 		})
 	}
 	return out
 }
 
-func openObservations(visualRows, textRows, faceRows, modelRows []map[string]any) []OpenObservation {
+func openObservations(metadataRows, textRows, faceRows, modelRows []map[string]any) []OpenObservation {
 	out := []OpenObservation{}
-	add := func(kind, text string, confidence float64, evidenceRef string) {
+	add := func(kind, text string, confidence *float64, evidenceRef string) {
 		kind = strings.TrimSpace(kind)
 		text = strings.TrimSpace(text)
 		if kind == "" || text == "" || len(out) >= maxOpenObservations {
@@ -141,17 +141,17 @@ func openObservations(visualRows, textRows, faceRows, modelRows []map[string]any
 			EvidenceRef: photoscrawlRef(evidenceRef),
 		})
 	}
-	for _, row := range visualRows {
-		add(rowString(row, "observation_type"), rowString(row, "label"), rowFloat(row, "confidence"), rowString(row, "evidence_id"))
+	for _, row := range metadataRows {
+		add(rowString(row, "observation_type"), rowString(row, "label"), nil, rowString(row, "evidence_id"))
 	}
 	for _, row := range textRows {
-		add("text", rowString(row, "text"), rowFloat(row, "confidence"), rowString(row, "evidence_id"))
+		add("text", rowString(row, "text"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
 	}
 	for _, row := range faceRows {
-		add("face", rowString(row, "person_label"), rowFloat(row, "confidence"), rowString(row, "evidence_id"))
+		add("face", rowString(row, "person_label"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
 	}
 	for _, row := range modelRows {
-		add(rowString(row, "observation_type"), rowString(row, "value_text"), rowFloat(row, "confidence"), rowString(row, "evidence_id"))
+		add(rowString(row, "observation_type"), rowString(row, "value_text"), rowOptionalFloat(row, "confidence"), rowString(row, "evidence_id"))
 	}
 	return out
 }
@@ -275,20 +275,34 @@ func rowInt(row map[string]any, key string) int64 {
 }
 
 func rowFloat(row map[string]any, key string) float64 {
+	value := rowOptionalFloat(row, key)
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func rowOptionalFloat(row map[string]any, key string) *float64 {
 	switch value := row[key].(type) {
 	case float32:
-		return float64(value)
+		parsed := float64(value)
+		return &parsed
 	case float64:
-		return value
+		return &value
 	case int:
-		return float64(value)
+		parsed := float64(value)
+		return &parsed
 	case int64:
-		return float64(value)
+		parsed := float64(value)
+		return &parsed
 	case string:
-		parsed, _ := strconv.ParseFloat(strings.TrimSpace(value), 64)
-		return parsed
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+		if err != nil {
+			return nil
+		}
+		return &parsed
 	default:
-		return 0
+		return nil
 	}
 }
 

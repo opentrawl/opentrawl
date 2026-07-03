@@ -34,7 +34,7 @@ type ClassifyResult struct {
 	Processed                     int    `json:"processed"`
 	MetadataClassified            int    `json:"metadata_classified"`
 	WaitingForLocalContent        int    `json:"waiting_for_local_content"`
-	VisualObservationsWritten     int    `json:"visual_observations_written"`
+	MetadataObservationsWritten   int    `json:"metadata_observations_written"`
 	Model                         string `json:"model,omitempty"`
 	ModelRunID                    string `json:"model_run_id,omitempty"`
 	ContentClassified             int    `json:"content_classified"`
@@ -116,7 +116,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 					}
 					result.Processed++
 					result.MetadataClassified++
-					result.VisualObservationsWritten += written
+					result.MetadataObservationsWritten += written
 					if !input.hasLocalContent() {
 						result.WaitingForLocalContent++
 					}
@@ -150,7 +150,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 			}
 			result.Processed++
 			result.MetadataClassified++
-			result.VisualObservationsWritten += written
+			result.MetadataObservationsWritten += written
 			if !input.hasLocalContent() {
 				result.WaitingForLocalContent++
 			}

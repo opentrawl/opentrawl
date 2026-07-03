@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/photoscrawl/internal/archive"
 )
 
@@ -74,8 +75,8 @@ func TestStatusHumanOutputIsProse(t *testing.T) {
 		"Status: missing",
 		"photos.sqlite has not been initialized",
 		"Counts:",
-		"none",
-		"Paths:",
+		"Archived photos: none",
+		"Archive:",
 		"Database:",
 	)
 }
@@ -125,6 +126,29 @@ func TestSyncHumanOutputIsProse(t *testing.T) {
 		"Assets: 10 seen, 0 new, 0 changed, 10 unchanged, 0 missing",
 		"Evidence: 20 resources, 3 album memberships, 7 locations",
 		"Classification queue: 0 queued, 0 need download",
+	)
+}
+
+func TestSearchHumanOutputIsProse(t *testing.T) {
+	var out strings.Builder
+	err := printSearchText(&out, archive.SearchResult{
+		Query:        "receipt",
+		TotalMatches: 1,
+		Results: []archive.SearchHit{{
+			Ref:     "photoscrawl:asset/fixture",
+			Time:    "2026-05-28T12:00:00+02:00",
+			Where:   "Synthetic Pier",
+			Snippet: "receipt candidate from local metadata",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHumanProseOutput(t, out.String(),
+		"Search: \"receipt\"",
+		"Showing 1 of 1 matches",
+		"photoscrawl:asset/fixture",
+		"receipt candidate from local metadata",
 	)
 }
 
@@ -185,7 +209,7 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 		"Where: Synthetic Pier",
 		"Who: Synthetic Person",
 		"Evidence refs: 1",
-		"scene_summary: Synthetic beach scene",
+		"scene summary: Synthetic beach scene",
 	)
 }
 
@@ -234,6 +258,7 @@ func captureRunOutput(t *testing.T, args []string) (string, string, error) {
 
 func assertHumanProseOutput(t *testing.T, got string, wants ...string) {
 	t.Helper()
+	conformance.AssertHumanOutput(t, got)
 	if strings.HasPrefix(strings.TrimSpace(got), "{") {
 		t.Fatalf("human output starts like JSON or a Go struct: %q", got)
 	}

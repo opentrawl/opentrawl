@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/output"
+	ckrender "github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/photoscrawl/internal/archive"
 )
 
@@ -85,7 +86,7 @@ func writeStatus(w io.Writer, format output.Format, status archive.StatusResult)
 	if format != output.Text && format != "" {
 		return output.Write(w, format, "status", status)
 	}
-	return printStatusText(w, status)
+	return ckrender.WriteStatus(w, renderStatus(status))
 }
 
 func writeSearch(w io.Writer, format output.Format, result archive.SearchResult) error {
@@ -180,7 +181,7 @@ func printOpenText(w io.Writer, result archive.OpenResult) error {
 		}
 	}
 	for _, observation := range result.Observations {
-		if _, err := fmt.Fprintf(w, "  %s: %s\n", observation.Kind, observation.Text); err != nil {
+		if _, err := fmt.Fprintf(w, "  %s: %s\n", displayObservationKind(observation.Kind), observation.Text); err != nil {
 			return err
 		}
 	}
@@ -259,77 +260,68 @@ func printEvidenceText(w io.Writer, result archive.EvidenceResult) error {
 	return nil
 }
 
-func printStatusText(w io.Writer, status archive.StatusResult) error {
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", status.State, status.Summary); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\nCounts:\n"); err != nil {
-		return err
-	}
-	if len(status.Counts) == 0 {
-		if _, err := io.WriteString(w, "  none\n"); err != nil {
-			return err
-		}
-	}
-	for _, count := range status.Counts {
-		if _, err := fmt.Fprintf(w, "  %s: %d\n", count.Label, count.Value); err != nil {
-			return err
-		}
-	}
-	if _, err := io.WriteString(w, "\nPaths:\n"); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "  Database: %s\n", emptyDash(status.DatabasePath)); err != nil {
-		return err
-	}
-	if status.DatabaseBytes > 0 {
-		if _, err := fmt.Fprintf(w, "  Size: %d bytes\n", status.DatabaseBytes); err != nil {
-			return err
-		}
-	}
-	if status.LastImportAt != "" {
-		if _, err := fmt.Fprintf(w, "  Last import: %s\n", status.LastImportAt); err != nil {
-			return err
-		}
-	}
-	if status.Freshness != nil && status.Freshness.LastSync != "" {
-		if _, err := fmt.Fprintf(w, "\nFreshness:\n  Last sync: %s\n", status.Freshness.LastSync); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func writeDoctor(w io.Writer, format output.Format, result archive.DoctorResult) error {
 	if format != output.Text && format != "" {
 		return output.Write(w, format, "doctor", result)
 	}
-	return printDoctorText(w, result)
+	return ckrender.WriteDoctor(w, renderDoctorChecks(result.Checks), ckrender.LogTail{})
 }
 
-func printDoctorText(w io.Writer, result archive.DoctorResult) error {
-	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
-		return err
+func renderStatus(status archive.StatusResult) ckrender.Status {
+	return ckrender.Status{
+		State:     ckrender.StatusState(status.State),
+		Summary:   status.Summary,
+		Sections:  renderStatusSections(status),
+		Freshness: renderFreshness(status.Freshness),
 	}
-	for _, check := range result.Checks {
-		if _, err := fmt.Fprintf(w, "  %s: %s", check.ID, check.State); err != nil {
-			return err
-		}
-		if check.Message != "" {
-			if _, err := fmt.Fprintf(w, " - %s", check.Message); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
-		if check.Remedy != "" {
-			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", check.Remedy); err != nil {
-				return err
-			}
-		}
+}
+
+func renderStatusSections(status archive.StatusResult) []ckrender.Section {
+	sections := []ckrender.Section{
+		{Title: "Counts", Fields: renderCountFields(status)},
 	}
-	return nil
+	archiveFields := []ckrender.Field{
+		{Label: "Database", Value: status.DatabasePath},
+	}
+	if status.DatabaseBytes > 0 {
+		archiveFields = append(archiveFields, ckrender.Field{Label: "Size", Value: fmt.Sprintf("%d bytes", status.DatabaseBytes)})
+	}
+	if status.LastImportAt != "" {
+		archiveFields = append(archiveFields, ckrender.Field{Label: "Last import", Value: status.LastImportAt})
+	}
+	sections = append(sections, ckrender.Section{Title: "Archive", Fields: archiveFields})
+	return sections
+}
+
+func renderCountFields(status archive.StatusResult) []ckrender.Field {
+	if len(status.Counts) == 0 {
+		return []ckrender.Field{{Label: "Archived photos", Value: "none"}}
+	}
+	fields := make([]ckrender.Field, 0, len(status.Counts))
+	for _, count := range status.Counts {
+		fields = append(fields, ckrender.Field{Label: count.Label, Value: fmt.Sprint(count.Value)})
+	}
+	return fields
+}
+
+func renderFreshness(freshness *archive.StatusFreshness) *ckrender.Freshness {
+	if freshness == nil || freshness.LastSync == "" {
+		return nil
+	}
+	return &ckrender.Freshness{LastSync: freshness.LastSync}
+}
+
+func renderDoctorChecks(checks []archive.DoctorCheck) []ckrender.Check {
+	rendered := make([]ckrender.Check, 0, len(checks))
+	for _, check := range checks {
+		rendered = append(rendered, ckrender.Check{
+			Name:    check.ID,
+			State:   ckrender.CheckState(check.State),
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
+	}
+	return rendered
 }
 
 func emptyDash(value string) string {
@@ -373,4 +365,12 @@ func displayTime(value string) string {
 		return value
 	}
 	return parsed.Local().Format(time.RFC3339)
+}
+
+func displayObservationKind(value string) string {
+	value = strings.ReplaceAll(strings.TrimSpace(value), "_", " ")
+	if value == "" {
+		return "observation"
+	}
+	return value
 }
