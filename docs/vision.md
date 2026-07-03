@@ -101,7 +101,13 @@ The layers, bottom to top:
   reserved for fixes that need the world to change (permissions,
   auth, a costly sync). Derived state self-heals at the point of use;
   diagnostics whose remedy is safe, idempotent and local are design
-  bugs.
+  bugs. Scope warning (ratified 2026-07-03): point-of-use self-healing
+  applies to cheap derived state only — caches, indexes, lookups.
+  Model-generated artifacts snapshot their full input at generation
+  time and stay internally coherent; when their inputs change, they
+  propagate through the classification queue as batched, incremental
+  regeneration of the affected subset — never recomputed at read time,
+  never split across two moments.
 
 The bar for every line of code and every surface in this repo:
 
