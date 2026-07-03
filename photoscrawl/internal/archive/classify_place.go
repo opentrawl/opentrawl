@@ -92,7 +92,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	}
 	result := input.Place.Result
 	place.NormalizeResult(&result)
-	candidates := topPOICandidates(applyVenuePlausibility(result.POICandidates, plausibility))
+	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
 	evidenceID := stableID("evidence", input.AssetID, "place_context", result.Provider, input.Place.CacheStatus)
 	evidenceJSON, err := jsonText(map[string]any{
 		"provider":      result.Provider,
@@ -278,42 +278,27 @@ func addressLine(address *place.Address) string {
 }
 
 func applyVenuePlausibility(candidates []place.POICandidate, plausibility venuePlausibility) []venueCandidate {
-	out := make([]venueCandidate, 0, len(candidates))
-	topIndex := topProviderVenueCandidate(candidates, plausibility)
-	for i, candidate := range candidates {
-		row := venueCandidate{POICandidate: candidate}
-		if i == topIndex && plausibility.Verdict != "" {
-			if plausibility.CandidateName == "" {
-				plausibility.CandidateName = candidate.Name
-			}
-			row.Plausibility = plausibility
-			if plausibility.Verdict == venueVerdictCorroborated {
-				row.Tier = place.TierConfirmedVenue
-			}
+	out := topPOICandidates(venueCandidatesFromPOIs(candidates))
+	for i := range out {
+		if plausibility.CandidateID == "" || plausibility.CandidateID != venueCandidateID(i) || plausibility.Verdict == "" {
+			continue
 		}
-		out = append(out, row)
+		row := plausibility
+		row.CandidateID = venueCandidateID(i)
+		out[i].Plausibility = row
+		if row.Verdict == venueVerdictCorroborated {
+			out[i].Tier = place.TierConfirmedVenue
+		}
 	}
 	return out
 }
 
-func topProviderVenueCandidate(candidates []place.POICandidate, plausibility venuePlausibility) int {
-	if plausibility.CandidateName != "" {
-		target := strings.ToLower(strings.TrimSpace(plausibility.CandidateName))
-		for i, candidate := range candidates {
-			if strings.ToLower(strings.TrimSpace(candidate.Name)) == target {
-				return i
-			}
-		}
+func venueCandidatesFromPOIs(candidates []place.POICandidate) []venueCandidate {
+	out := make([]venueCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, venueCandidate{POICandidate: candidate})
 	}
-	for i, candidate := range candidates {
-		if candidate.Tier == place.TierVenueCandidate {
-			return i
-		}
-	}
-	if len(candidates) > 0 {
-		return 0
-	}
-	return -1
+	return out
 }
 
 func venueLineTier(candidate venueCandidate) (string, bool) {

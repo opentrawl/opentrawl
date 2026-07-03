@@ -259,8 +259,8 @@ func (input classifyInput) placeContextForPrompt() map[string]any {
 	result := input.Place.Result
 	candidates := []map[string]any{}
 	if input.KnownPlace == nil {
-		for _, candidate := range topPOICandidates(applyVenuePlausibility(result.POICandidates, venuePlausibility{})) {
-			candidates = append(candidates, promptVenueCandidate(candidate))
+		for i, candidate := range topPOICandidates(venueCandidatesFromPOIs(result.POICandidates)) {
+			candidates = append(candidates, promptVenueCandidateWithID(candidate, venueCandidateID(i)))
 		}
 	}
 	area := []map[string]string{}

@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/photos"
@@ -311,11 +312,13 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: "http://fixture.test/api/generate",
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
+		LogSink:  logs,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -332,6 +335,9 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	if result.ContentClassificationFailures != 1 || result.OriginalDownloadFailures != 2 || result.WaitingForLocalContent != 1 {
 		t.Fatalf("aggregate counters = %#v", result)
 	}
+	assertRecordedLogEvent(t, logs, "failed_parse")
+	assertRecordedLogEvent(t, logs, "not_in_photokit")
+	assertRecordedLogEvent(t, logs, "failed_download")
 
 	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
 	if err != nil {
@@ -492,6 +498,86 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 	assertContentOutcomesSumToProcessed(t, third)
 }
 
+func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	oldExport := exportOriginalResource
+	exportOriginalResource = func(context.Context, photos.OriginalExportQuery, string, bool) error {
+		return errors.New("synthetic original export failed")
+	}
+	defer func() { exportOriginalResource = oldExport }()
+
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets: []photos.Asset{
+			remoteFixtureAsset("crawlkit-log-download-fails", "2026-05-29T12:00:00Z"),
+		},
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	stateRoot := t.TempDir()
+	run, err := cklog.NewRun(cklog.Options{
+		StateRoot: stateRoot,
+		CrawlerID: "photoscrawl",
+		RunID:     "synthetic-log-run",
+		Command:   "classify",
+		Version:   "test",
+		Platform:  "test",
+		Now:       fixedClock("2026-05-28T10:15:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
+		LogSink:  run,
+	})
+	if finishErr := run.Finish(err); err == nil && finishErr != nil {
+		err = finishErr
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ContentFailedDownload != 1 || result.OriginalDownloadFailures != 1 {
+		t.Fatalf("classify result = %#v", result)
+	}
+
+	reader, err := cklog.NewReader(stateRoot, "photoscrawl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, err := reader.RecentLines("synthetic-log-run", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range lines {
+		if line.Event != "failed_download" {
+			continue
+		}
+		t.Logf("log line: %s", line.Raw)
+		if !strings.Contains(line.Message, "asset_ref=photoscrawl:asset/") || !strings.Contains(line.Message, `reason="original export failed"`) {
+			t.Fatalf("failed_download message = %q", line.Message)
+		}
+		return
+	}
+	t.Fatalf("failed_download log line missing: %#v", lines)
+}
+
 func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -550,11 +636,13 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: "http://fixture.test/api/generate",
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
+		LogSink:  logs,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -562,6 +650,7 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	if result.ContentClassified != 1 || result.ModelCallAttempts != 2 || result.ModelRateLimitEvents != 1 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
+	assertRecordedLogEvent(t, logs, "model_retry")
 	assertContentOutcomesSumToProcessed(t, result)
 }
 
@@ -580,6 +669,35 @@ func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
 	if result.ContentOutcomeTotal != result.Processed {
 		t.Fatalf("content_outcome_total = %d, processed = %d, result = %#v", result.ContentOutcomeTotal, result.Processed, result)
 	}
+}
+
+type recordedClassifyLogEvent struct {
+	event   string
+	message string
+}
+
+type recordingClassifyLogSink struct {
+	events []recordedClassifyLogEvent
+}
+
+func (sink *recordingClassifyLogSink) Info(event, message string) error {
+	sink.events = append(sink.events, recordedClassifyLogEvent{event: event, message: message})
+	return nil
+}
+
+func (sink *recordingClassifyLogSink) Warn(event, message string) error {
+	sink.events = append(sink.events, recordedClassifyLogEvent{event: event, message: message})
+	return nil
+}
+
+func assertRecordedLogEvent(t *testing.T, sink *recordingClassifyLogSink, event string) {
+	t.Helper()
+	for _, got := range sink.events {
+		if got.event == event && strings.Contains(got.message, "asset_ref=photoscrawl:asset/") && strings.Contains(got.message, "reason=") {
+			return
+		}
+	}
+	t.Fatalf("missing log event %q in %#v", event, sink.events)
 }
 
 func assertQueueState(t *testing.T, ctx context.Context, paths Paths, localIdentifier, want string) {
@@ -740,36 +858,36 @@ func TestParsePhotoCardRequiresSections(t *testing.T) {
 	}
 }
 
-func TestParsePhotoCardRequiresVenuePlausibilityVerdict(t *testing.T) {
+func TestParsePhotoCardReadsVenueCandidateID(t *testing.T) {
 	t.Parallel()
 	card, err := parsePhotoCard(fixtureCardResponse(
 		"A synthetic kitchen cooking scene.",
 		"The image shows food preparation on a kitchen counter.",
-		"candidate: Synthetic Cafe\nverdict: corroborated\nreason: a visible sign matches the provider candidate.",
+		"candidate_id: venue_candidate_2\nverdict: corroborated\nreason: a visible sign matches the provider candidate.",
 		"None",
 		"exact city",
 	))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.VenuePlausibility.Verdict != venueVerdictCorroborated || card.VenuePlausibility.CandidateName != "Synthetic Cafe" {
+	if card.VenuePlausibility.Verdict != venueVerdictCorroborated || card.VenuePlausibility.CandidateID != "venue_candidate_2" {
 		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
 	}
 }
 
-func TestParsePhotoCardAcceptsVenuePlausibilityAssessment(t *testing.T) {
+func TestParsePhotoCardBadVenueIDDoesNotFailCard(t *testing.T) {
 	t.Parallel()
 	card, err := parsePhotoCard(fixtureCardResponse(
 		"A synthetic private meal scene.",
 		"The image shows a meal in a private indoor setting.",
-		"candidate: Synthetic Consultancy\nplausibility: inconsistent\nreason: the visible scene contradicts the venue type.",
+		"candidate_id: Synthetic Consultancy\nplausibility: inconsistent\nreason: the visible scene contradicts the venue type.",
 		"None",
 		"exact venue",
 	))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.VenuePlausibility.Verdict != venueVerdictInconsistent {
+	if card.VenuePlausibility.CandidateID != "" || card.VenuePlausibility.Verdict != venueVerdictInconsistent {
 		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
 	}
 }
@@ -840,6 +958,7 @@ func TestPhotoCardMetadataJSONIncludesRoundedCameraAndPlaceContext(t *testing.T)
 		`"display": "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64"`,
 		`"aperture": 1.8`,
 		`"distance_meters": 14`,
+		`"candidate_id": "venue_candidate_1"`,
 		`"category": "shop"`,
 	} {
 		if !strings.Contains(text, want) {
@@ -856,32 +975,41 @@ func TestPhotoCardMetadataJSONIncludesRoundedCameraAndPlaceContext(t *testing.T)
 func TestWritePlaceClassificationAppliesVenuePlausibilityAndAddressLine(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
+		id        string
 		verdict   string
 		wantVenue string
 		wantTier  string
 	}{
 		{
 			name:    "inconsistent",
+			id:      "venue_candidate_1",
 			verdict: venueVerdictInconsistent,
 		},
 		{
 			name:      "plausible",
+			id:        "venue_candidate_1",
 			verdict:   venueVerdictPlausible,
 			wantVenue: "Synthetic Consultancy",
 			wantTier:  place.TierVenueCandidate,
 		},
 		{
 			name:      "corroborated",
+			id:        "venue_candidate_1",
 			verdict:   venueVerdictCorroborated,
 			wantVenue: "Synthetic Consultancy",
 			wantTier:  place.TierConfirmedVenue,
 		},
+		{
+			name:    "unknown_id",
+			id:      "venue_candidate_2",
+			verdict: venueVerdictCorroborated,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			opened := openSyntheticPlaceResult(t, venuePlausibility{
-				CandidateName: "Synthetic Consultancy",
-				Verdict:       tc.verdict,
-				Reason:        "synthetic fixture reason",
+				CandidateID: tc.id,
+				Verdict:     tc.verdict,
+				Reason:      "synthetic fixture reason",
 			})
 			if got, want := opened.Mechanical.Address, "Example Street 23, Example District, Example City, Example Country"; got != want {
 				t.Fatalf("address = %q, want %q", got, want)
@@ -975,9 +1103,9 @@ func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
 			},
 		}
 		_, err = writePlaceClassification(ctx, tx, input, venuePlausibility{
-			CandidateName: "Book Casino",
-			Verdict:       venueVerdictPlausible,
-			Reason:        "synthetic fixture reason",
+			CandidateID: "venue_candidate_5",
+			Verdict:     venueVerdictPlausible,
+			Reason:      "synthetic fixture reason",
 		}, fixedClock("2026-05-28T10:15:00Z")())
 		return err
 	}); err != nil {
@@ -1008,11 +1136,11 @@ order by case when distance_meters is null then 1 else 0 end, distance_meters, v
 	shown := openCandidateSnapshots(opened.Mechanical.VenueCandidates)
 
 	want := []candidateSnapshot{
-		{Name: "Nearby Bakery", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 4},
-		{Name: "Corner Market", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 9},
-		{Name: "Canal Pharmacy", Category: "pharmacy", Tier: place.TierNearbyPOI, DistanceMeters: 16},
-		{Name: "Station Salon", Category: "personal care", Tier: place.TierNearbyPOI, DistanceMeters: 21},
-		{Name: "Book Casino", Category: "entertainment", Tier: place.TierVenueCandidate, DistanceMeters: 42},
+		{CandidateID: "venue_candidate_1", Name: "Nearby Bakery", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 4},
+		{CandidateID: "venue_candidate_2", Name: "Corner Market", Category: "shop", Tier: place.TierNearbyPOI, DistanceMeters: 9},
+		{CandidateID: "venue_candidate_3", Name: "Canal Pharmacy", Category: "pharmacy", Tier: place.TierNearbyPOI, DistanceMeters: 16},
+		{CandidateID: "venue_candidate_4", Name: "Station Salon", Category: "personal care", Tier: place.TierNearbyPOI, DistanceMeters: 21},
+		{CandidateID: "venue_candidate_5", Name: "Book Casino", Category: "entertainment", Tier: place.TierVenueCandidate, DistanceMeters: 42},
 	}
 	if !reflect.DeepEqual(sent, want) {
 		t.Fatalf("prompt candidates = %#v, want %#v", sent, want)
@@ -1026,6 +1154,7 @@ order by case when distance_meters is null then 1 else 0 end, distance_meters, v
 }
 
 type candidateSnapshot struct {
+	CandidateID    string
 	Name           string
 	Category       string
 	Tier           string
@@ -1057,6 +1186,7 @@ func promptCandidateSnapshots(t *testing.T, metadata []byte) []candidateSnapshot
 			t.Fatalf("candidate = %#v", item)
 		}
 		out = append(out, candidateSnapshot{
+			CandidateID:    mapText(row, "candidate_id"),
 			Name:           mapText(row, "name"),
 			Category:       mapText(row, "category"),
 			Tier:           mapText(row, "tier"),
@@ -1069,7 +1199,7 @@ func promptCandidateSnapshots(t *testing.T, metadata []byte) []candidateSnapshot
 func storedCandidateSnapshots(t *testing.T, rows []map[string]any) []candidateSnapshot {
 	t.Helper()
 	out := make([]candidateSnapshot, 0, len(rows))
-	for _, row := range rows {
+	for i, row := range rows {
 		var value map[string]any
 		if err := json.Unmarshal([]byte(rowString(row, "value_json")), &value); err != nil {
 			t.Fatal(err)
@@ -1079,6 +1209,7 @@ func storedCandidateSnapshots(t *testing.T, rows []map[string]any) []candidateSn
 			distance = valueDistance
 		}
 		out = append(out, candidateSnapshot{
+			CandidateID:    venueCandidateID(i),
 			Name:           rowString(row, "value_text"),
 			Category:       mapText(value, "category"),
 			Tier:           rowString(row, "tier"),
@@ -1090,8 +1221,9 @@ func storedCandidateSnapshots(t *testing.T, rows []map[string]any) []candidateSn
 
 func openCandidateSnapshots(candidates []OpenVenueCandidate) []candidateSnapshot {
 	out := make([]candidateSnapshot, 0, len(candidates))
-	for _, candidate := range candidates {
+	for i, candidate := range candidates {
 		out = append(out, candidateSnapshot{
+			CandidateID:    venueCandidateID(i),
 			Name:           candidate.Name,
 			Category:       candidate.Category,
 			Tier:           candidate.Tier,
@@ -1109,9 +1241,9 @@ func openCandidateRow(name, tier string, distance float64, category, verdict str
 	}
 	if verdict != "" {
 		value["venue_plausibility"] = map[string]any{
-			"candidate": name,
-			"verdict":   verdict,
-			"reason":    "synthetic fixture reason",
+			"candidate_id": "venue_candidate_1",
+			"verdict":      verdict,
+			"reason":       "synthetic fixture reason",
 		}
 	}
 	data, _ := json.Marshal(value)

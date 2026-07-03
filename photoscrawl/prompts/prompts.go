@@ -3,7 +3,7 @@ package prompts
 import _ "embed"
 
 const (
-	PhotoCardVersion     = "photo-card-v3.1"
+	PhotoCardVersion     = "photo-card-v3.2"
 	DefaultPhotoCardPath = "prompts/photo-card-v3.md"
 )
 

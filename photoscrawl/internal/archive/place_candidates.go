@@ -3,6 +3,7 @@ package archive
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/openclaw/photoscrawl/internal/cardformat"
@@ -139,10 +140,17 @@ func placeCandidateRows(rows []map[string]any) []venueCandidate {
 }
 
 func promptVenueCandidate(candidate venueCandidate) map[string]any {
+	return promptVenueCandidateWithID(candidate, "")
+}
+
+func promptVenueCandidateWithID(candidate venueCandidate, candidateID string) map[string]any {
 	row := map[string]any{
 		"name":            candidate.Name,
 		"distance_meters": cardformat.Meters(candidate.DistanceM),
 		"tier":            candidate.Tier,
+	}
+	if candidateID != "" {
+		row["candidate_id"] = candidateID
 	}
 	if category := placeCategory(candidate.Category); category != "" {
 		row["category"] = category
@@ -164,4 +172,11 @@ func minInt(left, right int) int {
 		return left
 	}
 	return right
+}
+
+func venueCandidateID(index int) string {
+	if index < 0 {
+		return ""
+	}
+	return "venue_candidate_" + strconv.Itoa(index+1)
 }

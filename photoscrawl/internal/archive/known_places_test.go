@@ -172,9 +172,9 @@ func TestKnownPlaceOpenSearchAndPOISuppression(t *testing.T) {
 			},
 		}
 		_, err = writePlaceClassification(ctx, tx, input, venuePlausibility{
-			CandidateName: "Synthetic Consultancy",
-			Verdict:       venueVerdictPlausible,
-			Reason:        "synthetic fixture reason",
+			CandidateID: "venue_candidate_1",
+			Verdict:     venueVerdictPlausible,
+			Reason:      "synthetic fixture reason",
 		}, fixedClock("2026-05-28T10:15:00Z")())
 		return err
 	}); err != nil {

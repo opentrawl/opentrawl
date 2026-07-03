@@ -23,7 +23,13 @@ type ClassifyOptions struct {
 	Model       string
 	ModelURL    string
 	ModelKeyEnv string
+	LogSink     ClassifyLogSink
 	Now         func() time.Time
+}
+
+type ClassifyLogSink interface {
+	Info(event, message string) error
+	Warn(event, message string) error
 }
 
 type ClassifyResult struct {
@@ -166,7 +172,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		}
 		return finishClassifyResult(startedAt, result), nil
 	}
-	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result); err != nil {
+	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result, classifyLogger{sink: opts.LogSink}); err != nil {
 		return ClassifyResult{}, err
 	}
 	if classifier != nil {

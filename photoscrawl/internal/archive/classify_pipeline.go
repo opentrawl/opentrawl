@@ -57,7 +57,7 @@ const (
 	contentOutcomeSkippedUnsupportedMedia contentOutcome = "skipped_unsupported_media"
 )
 
-func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult) error {
+func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	cache, err := newOriginalsCache(paths.OriginalsCacheDir(), result.ModelRunID)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	writes := make(chan classifyWrite, len(inputs))
 	writerDone := make(chan error, 1)
 	go func() {
-		writerDone <- writeClassifyResults(ctx, db, classifier, writes, now, result)
+		writerDone <- writeClassifyResults(ctx, db, classifier, writes, now, result, logger)
 	}()
 
 	limiter := newAdaptiveLimiter(modelConcurrencyStart, modelConcurrencyMax)
@@ -86,7 +86,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			modelWG.Add(1)
 			go func(job modelJob) {
 				defer modelWG.Done()
-				runModelJob(ctx, limiter, classifier, job, writes)
+				runModelJob(ctx, limiter, classifier, job, writes, logger)
 			}(job)
 		}
 		modelWG.Wait()
@@ -162,7 +162,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	return nil
 }
 
-func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier modelClassifier, job modelJob, writes chan<- classifyWrite) {
+func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier modelClassifier, job modelJob, writes chan<- classifyWrite, logger classifyLogger) {
 	write := classifyWrite{
 		input:            job.input,
 		hasContent:       true,
@@ -194,6 +194,7 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 		}
 		lastErr = err
 		retry := retryableModelError(err)
+		limiterBefore := limiter.Current()
 		if retry.rateLimited {
 			write.rateLimitEvents++
 			limiter.RecordThrottle()
@@ -204,6 +205,7 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 		if !retry.retry || attempt == 2 {
 			break
 		}
+		logger.logModelRetry(job.input, attempt, err, retry, limiterBefore, limiter.Current())
 	}
 	if lastErr != nil {
 		write.contentErr = lastErr
@@ -214,13 +216,13 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 	sendClassifyWrite(ctx, writes, write)
 }
 
-func writeClassifyResults(ctx context.Context, db *store.Store, classifier modelClassifier, writes <-chan classifyWrite, now func() time.Time, result *ClassifyResult) error {
+func writeClassifyResults(ctx context.Context, db *store.Store, classifier modelClassifier, writes <-chan classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	for write := range writes {
 		err := func() error {
 			if write.lease != nil {
 				defer write.lease.Close()
 			}
-			return writeClassifyResult(ctx, db, classifier, write, now, result)
+			return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
 		}()
 		if err != nil {
 			return err
@@ -229,7 +231,7 @@ func writeClassifyResults(ctx context.Context, db *store.Store, classifier model
 	return nil
 }
 
-func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelClassifier, write classifyWrite, now func() time.Time, result *ClassifyResult) error {
+func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelClassifier, write classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	var metadataWritten, contentWritten, placeWritten int
 	classifiedAt := now().UTC()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
@@ -290,6 +292,7 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	if write.cacheHighWater > result.CacheHighWaterBytes {
 		result.CacheHighWaterBytes = write.cacheHighWater
 	}
+	logger.logOutcome(write)
 	return nil
 }
 

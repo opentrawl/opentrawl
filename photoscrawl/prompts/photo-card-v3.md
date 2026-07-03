@@ -1,7 +1,7 @@
 ---
 written_by: ai
-prompt_version: photo-card-v3.1
-change_rationale: "Expose rounded camera context and require one-clause uncertainty bullets."
+prompt_version: photo-card-v3.2
+change_rationale: "Require venue corroboration to return a typed provider candidate id."
 ---
 
 # photoscrawl photo card prompt v3
@@ -56,7 +56,7 @@ candidate is inconsistent with the scene, ignore it silently.
 
 Answer for the top provider venue candidate only. Use exactly these fields:
 
-- `candidate`: the provider venue candidate name, or `none`
+- `candidate_id`: one of the `venue_candidates[].candidate_id` values, or `none`
 - `verdict`: `corroborated`, `plausible`, or `inconsistent`
 - `reason`: one short sentence
 

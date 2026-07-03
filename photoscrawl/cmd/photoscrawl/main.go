@@ -178,6 +178,7 @@ func run(ctx context.Context, args []string) (err error) {
 			Model:       *model,
 			ModelURL:    ollamaCloudBaseURL,
 			ModelKeyEnv: ollamaAPIKeyEnv,
+			LogSink:     runLog,
 		})
 		if err != nil {
 			return err

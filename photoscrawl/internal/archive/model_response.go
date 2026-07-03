@@ -3,6 +3,7 @@ package archive
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -44,9 +45,9 @@ type photoCard struct {
 }
 
 type venuePlausibility struct {
-	CandidateName string `json:"candidate,omitempty"`
-	Verdict       string `json:"verdict"`
-	Reason        string `json:"reason,omitempty"`
+	CandidateID string `json:"candidate_id,omitempty"`
+	Verdict     string `json:"verdict,omitempty"`
+	Reason      string `json:"reason,omitempty"`
 }
 
 func parsePhotoCard(raw string) (photoCard, error) {
@@ -66,11 +67,7 @@ func parsePhotoCard(raw string) (photoCard, error) {
 		OCRText:       cleanOptionalField(sections["ocr"]),
 		Uncertainties: parseUncertainties(sections["uncertainty"]),
 	}
-	plausibility, err := parseVenuePlausibility(sections["venue_plausibility"])
-	if err != nil {
-		return photoCard{}, err
-	}
-	card.VenuePlausibility = plausibility
+	card.VenuePlausibility = parseVenuePlausibility(sections["venue_plausibility"])
 	if card.Summary == "" {
 		return photoCard{}, errors.New("model card summary is empty")
 	}
@@ -158,7 +155,7 @@ func cleanOptionalField(value string) string {
 	return value
 }
 
-func parseVenuePlausibility(value string) (venuePlausibility, error) {
+func parseVenuePlausibility(value string) venuePlausibility {
 	lines := []string{}
 	for _, raw := range strings.Split(value, "\n") {
 		line := strings.TrimSpace(stripListMarker(raw))
@@ -171,15 +168,13 @@ func parseVenuePlausibility(value string) (venuePlausibility, error) {
 		key, field, ok := strings.Cut(line, ":")
 		if ok {
 			switch strings.ToLower(strings.Join(strings.Fields(key), " ")) {
-			case "candidate", "venue", "venue candidate":
-				plausibility.CandidateName = cleanVenueCandidateField(field)
+			case "candidate_id", "candidate id", "id":
+				plausibility.CandidateID = cleanVenueCandidateID(field)
 				continue
 			case "verdict", "decision", "answer", "plausibility", "venue plausibility", "assessment":
-				verdict, err := normalizeVenueVerdict(field)
-				if err != nil {
-					return venuePlausibility{}, err
+				if verdict, err := normalizeVenueVerdict(field); err == nil {
+					plausibility.Verdict = verdict
 				}
-				plausibility.Verdict = verdict
 				continue
 			case "reason", "rationale", "why":
 				plausibility.Reason = truncateReason(field)
@@ -206,20 +201,26 @@ func parseVenuePlausibility(value string) (venuePlausibility, error) {
 			plausibility.Verdict = verdict
 		}
 	}
-	if plausibility.Verdict == "" {
-		return venuePlausibility{}, errors.New("model card venue plausibility must include verdict: corroborated, plausible, or inconsistent")
-	}
-	plausibility.CandidateName = cleanVenueCandidateField(plausibility.CandidateName)
 	plausibility.Reason = truncateReason(plausibility.Reason)
-	return plausibility, nil
+	return plausibility
 }
 
-func cleanVenueCandidateField(value string) string {
-	value = strings.Trim(strings.Join(strings.Fields(value), " "), " .")
+func cleanVenueCandidateID(value string) string {
+	value = strings.ToLower(strings.Trim(strings.Join(strings.Fields(value), " "), " .`'\""))
 	if emptyCardField(value) {
 		return ""
 	}
-	return value
+	value = strings.ReplaceAll(value, "-", "_")
+	value = strings.ReplaceAll(value, " ", "_")
+	const prefix = "venue_candidate_"
+	if !strings.HasPrefix(value, prefix) {
+		return ""
+	}
+	number, err := strconv.Atoi(strings.TrimPrefix(value, prefix))
+	if err != nil || number < 1 {
+		return ""
+	}
+	return prefix + strconv.Itoa(number)
 }
 
 func normalizeVenueVerdict(value string) (string, error) {
