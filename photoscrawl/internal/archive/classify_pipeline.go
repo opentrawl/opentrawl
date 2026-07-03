@@ -230,7 +230,7 @@ func writeClassifyResults(ctx context.Context, db *store.Store, classifier model
 }
 
 func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelClassifier, write classifyWrite, now func() time.Time, result *ClassifyResult) error {
-	var metadataWritten, contentWritten int
+	var metadataWritten, contentWritten, placeWritten int
 	classifiedAt := now().UTC()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		switch write.outcome {
@@ -252,7 +252,7 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 			if !write.hasContent || write.contentResult == nil {
 				return updateClassificationQueue(ctx, tx, write.input.QueueID, "content_failed", "classified outcome missing model result", classifiedAt)
 			}
-			written, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, classifiedAt, write.imagePath, write.pathClass)
+			written, placeWritten, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, classifiedAt, write.imagePath, write.pathClass)
 			if err != nil {
 				return err
 			}
@@ -273,6 +273,7 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	result.addContentOutcome(write.outcome)
 	if write.outcome == contentOutcomeClassified {
 		result.ContentObservationsWritten += contentWritten
+		result.PlaceObservationsWritten += placeWritten
 	}
 	if write.downloadErr != nil {
 		result.OriginalDownloadFailures++

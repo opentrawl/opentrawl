@@ -46,9 +46,6 @@ func TestParseRefCommandRequiresRefBeforeFlags(t *testing.T) {
 	if _, err := parseRefCommand("open", []string{"--json", "photoscrawl:asset/fixture"}, false); err == nil {
 		t.Fatal("expected flags-before-ref error")
 	}
-	if _, err := parseRefCommand("evidence", []string{"photoscrawl:asset/fixture", "--limit", "5"}, false); err == nil {
-		t.Fatal("expected unknown --limit error when limit is not allowed")
-	}
 	neighbors, err := parseRefCommand("neighbors", []string{"photoscrawl:asset/fixture", "--limit", "5"}, true)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +86,7 @@ func TestMetadataHumanOutputIsProse(t *testing.T) {
 	assertHumanProseOutput(t, out,
 		"Photos (photoscrawl)",
 		"Contract version: 1",
-		"Capabilities: status, sync, search, open, doctor",
+		"Capabilities: metadata, status, doctor, sync, classify, search, open, neighbors",
 		"sync: photoscrawl sync --library <path> --json",
 		"open: photoscrawl open <ref> --json",
 	)
@@ -124,7 +121,7 @@ func TestSyncHumanOutputIsProse(t *testing.T) {
 		"Sync complete",
 		"Provider: photos_sqlite_snapshot",
 		"Assets: 10 seen, 0 new, 0 changed, 10 unchanged, 0 missing",
-		"Evidence: 20 resources, 3 album memberships, 7 locations",
+		"Imported: 20 resources, 3 album memberships, 7 locations",
 		"Classification queue: 0 queued, 0 need download",
 	)
 }
@@ -188,7 +185,7 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 	}
 	assertHumanProseOutput(t, out,
 		"Doctor checks:",
-		"source_store:",
+		"source store:",
 		"archive:",
 		"Remedy:",
 	)
@@ -197,23 +194,26 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 func TestOpenHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printOpenText(&out, archive.OpenResult{
-		Ref:         "photoscrawl:asset/fixture",
-		Time:        "2026-05-28T12:00:00+02:00",
-		MediaType:   "photo",
-		Where:       "Synthetic Pier",
-		Summary:     "Synthetic beach scene.",
-		Description: "A synthetic fixture photo shows a beach scene with a pier in the background.",
-		Uncertainties: []string{
-			"exact venue",
+		Ref: "photoscrawl:asset/fixture",
+		Mechanical: archive.OpenMechanical{
+			Captured: &archive.OpenCaptured{Local: "2026-05-28T12:00:00+02:00", Timezone: "Europe/Amsterdam", Source: "apple_photos"},
+			Media:    &archive.OpenMedia{Kind: "photo", Width: 100, Height: 80},
+			GPS:      &archive.OpenGPS{Latitude: 52, Longitude: 4, HorizontalAccuracyMeters: 8, Source: "fixture"},
+			Address:  "Synthetic Street, Synthetic City",
+			Venue:    &archive.OpenVenue{Name: "Synthetic Pier", Tier: "venue_candidate", DistanceMeters: 12},
+			Original: &archive.OpenOriginal{
+				Filename:     "IMG_0001.JPG",
+				Bytes:        5_700_000,
+				Availability: "on this Mac",
+			},
+			Flags: []string{"favourite"},
 		},
-		Original: &archive.OpenOriginal{
-			Filename:     "IMG_0001.JPG",
-			Bytes:        5_700_000,
-			Availability: "on this Mac",
-		},
-		Evidence: archive.OpenEvidenceSummary{
-			Count: 1,
-			Ref:   "photoscrawl:asset/fixture",
+		Model: archive.OpenModel{
+			Summary:     "Synthetic beach scene.",
+			Description: "A synthetic fixture photo shows a beach scene with a pier in the background.",
+			Uncertainties: []string{
+				"exact venue",
+			},
 		},
 	})
 	if err != nil {
@@ -221,40 +221,14 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 	}
 	assertHumanProseOutput(t, out.String(),
 		"photoscrawl:asset/fixture",
-		"2026-05-28 12:00 · photo · Synthetic Pier",
-		"Synthetic beach scene.",
-		"Uncertain: exact venue.",
+		"Captured: 2026-05-28 12:00 local (Europe/Amsterdam)",
+		"Media: photo, 100 x 80",
+		"GPS: 52.00000, 4.00000, +/-8m",
+		"Venue: Synthetic Pier, candidate, 12m from GPS",
+		"Summary: Synthetic beach scene.",
+		"Uncertainty: exact venue.",
 		"Original: IMG_0001.JPG",
-		"Evidence: 1 records",
 	)
-}
-
-func TestEvidenceHumanOutputUsesPlainLabels(t *testing.T) {
-	var out strings.Builder
-	err := printEvidenceText(&out, archive.EvidenceResult{
-		Ref: "photoscrawl:asset/fixture",
-		Evidence: []archive.EvidenceReference{{
-			Ref:      "photoscrawl:fixture-evidence",
-			Kind:     "classification input",
-			KindID:   "classification_input",
-			Source:   "Photo metadata",
-			SourceID: "archive_metadata",
-			Summary:  "derived from photo metadata",
-		}},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := out.String()
-	assertHumanProseOutput(t, got,
-		"Photo metadata",
-		"derived from photo metadata",
-	)
-	for _, raw := range []string{"archive_metadata", "classification_input"} {
-		if strings.Contains(got, raw) {
-			t.Fatalf("human evidence output leaked raw provenance %q:\n%s", raw, got)
-		}
-	}
 }
 
 func captureRunOutput(t *testing.T, args []string) (string, string, error) {

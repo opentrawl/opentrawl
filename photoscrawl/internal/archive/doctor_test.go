@@ -4,6 +4,8 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+
+	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
 func TestDoctorReportsArchiveState(t *testing.T) {
@@ -17,10 +19,21 @@ func TestDoctorReportsArchiveState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if check := doctorCheck(result.Checks, "archive"); check.State != "missing" || check.Remedy != archiveRemedy {
-		t.Fatalf("archive check before init = %#v", check)
+		t.Fatalf("archive check before sync = %#v", check)
 	}
 
-	if _, err := Init(ctx, paths); err != nil {
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider: fakeProvider{snapshot: photos.LibrarySnapshot{
+			Provider:      "fake",
+			PhotosVersion: "fixture",
+		}},
+		Now: fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
 		t.Fatal(err)
 	}
 	result, err = Doctor(ctx, paths, DoctorOptions{LibraryPath: filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")})
@@ -28,7 +41,7 @@ func TestDoctorReportsArchiveState(t *testing.T) {
 		t.Fatal(err)
 	}
 	if check := doctorCheck(result.Checks, "archive"); check.State != "ok" || check.Remedy != "" {
-		t.Fatalf("archive check after init = %#v", check)
+		t.Fatalf("archive check after sync = %#v", check)
 	}
 }
 

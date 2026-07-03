@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/openclaw/photoscrawl/internal/place"
 )
 
 func TestClassifyModelWritesTypedObservations(t *testing.T) {
@@ -126,15 +128,8 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opened.Summary == "" || opened.Description == "" || opened.Evidence.Count == 0 {
-		t.Fatalf("opened card=%#v evidence=%#v", opened, opened.Evidence)
-	}
-	evidence, err := Evidence(ctx, paths, search.Results[0].ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(evidence.Evidence) == 0 {
-		t.Fatal("expected model evidence")
+	if opened.Model.Summary == "" || opened.Model.Description == "" {
+		t.Fatalf("opened card=%#v", opened)
 	}
 }
 
@@ -560,26 +555,103 @@ func TestParsePhotoCardRequiresSections(t *testing.T) {
 	}
 }
 
-func TestParsePhotoCardCleansVerboseLocation(t *testing.T) {
+func TestParsePhotoCardRequiresVenuePlausibilityVerdict(t *testing.T) {
 	t.Parallel()
 	card, err := parsePhotoCard(fixtureCardResponse(
 		"A synthetic kitchen cooking scene.",
 		"The image shows food preparation on a kitchen counter.",
-		"The image was taken in an indoor residential kitchen. While the metadata does not provide a specific geographic location, the scene is common in European households.",
+		"candidate: Synthetic Cafe\nverdict: corroborated\nreason: a visible sign matches the provider candidate.",
 		"None",
 		"exact city",
 	))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if card.PlacePhrase != "indoor residential kitchen" {
-		t.Fatalf("place phrase = %q", card.PlacePhrase)
+	if card.VenuePlausibility.Verdict != venueVerdictCorroborated || card.VenuePlausibility.CandidateName != "Synthetic Cafe" {
+		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
 	}
 }
 
-func fixtureCardResponse(summary, description, location, ocr, uncertainty string) string {
-	if strings.TrimSpace(location) == "" {
-		location = "None"
+func TestParsePhotoCardAcceptsVenuePlausibilityAssessment(t *testing.T) {
+	t.Parallel()
+	card, err := parsePhotoCard(fixtureCardResponse(
+		"A synthetic private meal scene.",
+		"The image shows a meal in a private indoor setting.",
+		"candidate: Synthetic Consultancy\nplausibility: inconsistent\nreason: the visible scene contradicts the venue type.",
+		"None",
+		"exact venue",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if card.VenuePlausibility.Verdict != venueVerdictInconsistent {
+		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
+	}
+}
+
+func TestWritePlaceClassificationAppliesVenuePlausibilityAndAddressLine(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		verdict   string
+		wantVenue string
+		wantTier  string
+	}{
+		{
+			name:    "inconsistent",
+			verdict: venueVerdictInconsistent,
+		},
+		{
+			name:      "plausible",
+			verdict:   venueVerdictPlausible,
+			wantVenue: "Synthetic Consultancy",
+			wantTier:  place.TierVenueCandidate,
+		},
+		{
+			name:      "corroborated",
+			verdict:   venueVerdictCorroborated,
+			wantVenue: "Synthetic Consultancy",
+			wantTier:  place.TierConfirmedVenue,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opened := openSyntheticPlaceResult(t, venuePlausibility{
+				CandidateName: "Synthetic Consultancy",
+				Verdict:       tc.verdict,
+				Reason:        "synthetic fixture reason",
+			})
+			if got, want := opened.Mechanical.Address, "Example Street 23, Example District, Example City, Example Country"; got != want {
+				t.Fatalf("address = %q, want %q", got, want)
+			}
+			if tc.wantVenue == "" {
+				if opened.Mechanical.Venue != nil {
+					t.Fatalf("inconsistent venue rendered: %#v", opened.Mechanical.Venue)
+				}
+			} else {
+				if opened.Mechanical.Venue == nil || opened.Mechanical.Venue.Name != tc.wantVenue || opened.Mechanical.Venue.Tier != tc.wantTier {
+					t.Fatalf("venue = %#v, want %q tier %q", opened.Mechanical.Venue, tc.wantVenue, tc.wantTier)
+				}
+			}
+			if len(opened.Mechanical.VenueCandidates) != 1 {
+				t.Fatalf("venue candidates = %#v", opened.Mechanical.VenueCandidates)
+			}
+			plausibility := opened.Mechanical.VenueCandidates[0].VenuePlausibility
+			if plausibility == nil || plausibility.Verdict != tc.verdict {
+				t.Fatalf("venue candidate plausibility = %#v, want %q", plausibility, tc.verdict)
+			}
+		})
+	}
+}
+
+func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertainty string) string {
+	if strings.TrimSpace(venuePlausibility) == "" {
+		venuePlausibility = "verdict: plausible\nreason: no visible contradiction."
+	}
+	lower := strings.ToLower(strings.TrimSpace(venuePlausibility))
+	if !strings.Contains(lower, "verdict:") &&
+		!strings.HasPrefix(lower, venueVerdictCorroborated) &&
+		!strings.HasPrefix(lower, venueVerdictPlausible) &&
+		!strings.HasPrefix(lower, venueVerdictInconsistent) {
+		venuePlausibility = "verdict: plausible\nreason: " + venuePlausibility
 	}
 	if strings.TrimSpace(ocr) == "" {
 		ocr = "None"
@@ -594,8 +666,8 @@ func fixtureCardResponse(summary, description, location, ocr, uncertainty string
 		"## Detailed description",
 		description,
 		"",
-		"## Location",
-		location,
+		"## Venue plausibility",
+		venuePlausibility,
 		"",
 		"## OCR and machine-readable text",
 		ocr,
@@ -603,6 +675,95 @@ func fixtureCardResponse(summary, description, location, ocr, uncertainty string
 		"## Uncertainty",
 		"- " + uncertainty,
 	}, "\n")
+}
+
+func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) OpenResult {
+	t.Helper()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	accuracy := 8.0
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets: []photos.Asset{{
+			LocalIdentifier: "fixture-place-asset",
+			MediaType:       "image",
+			MediaSubtypes:   "0",
+			CreationDate:    "2026-05-27T12:00:00Z",
+			Width:           100,
+			Height:          80,
+			Location: &photos.Location{
+				Latitude:           52.0,
+				Longitude:          4.0,
+				HorizontalAccuracy: &accuracy,
+			},
+		}},
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	assetID := ""
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		inputs, err := loadClassifyInputs(ctx, tx, 0, "")
+		if err != nil {
+			return err
+		}
+		if len(inputs) != 1 {
+			return fmt.Errorf("classify inputs = %d, want 1", len(inputs))
+		}
+		input := inputs[0]
+		assetID = input.AssetID
+		input.Place = &classifyPlaceContext{
+			CacheStatus: "hit",
+			Result: place.Result{
+				Provider:     "apple",
+				Source:       "fixture",
+				RadiusMeters: 150,
+				GeneratedAt:  fixedClock("2026-05-28T10:05:00Z")(),
+				Address: &place.Address{
+					Name:            "Example Street 23",
+					SubThoroughfare: "23",
+					Thoroughfare:    "Example Street",
+					SubLocality:     "Example District",
+					Locality:        "Example City",
+					Country:         "Example Country",
+					Formatted:       "Example Street 23, 23 Example Street, Example District, Example City, Example Country",
+					Source:          "fixture",
+				},
+				POIStatus: place.POIStatusFound,
+				POICandidates: []place.POICandidate{{
+					Name:      "Synthetic Consultancy",
+					Category:  "business",
+					DistanceM: 14,
+					Tier:      place.TierVenueCandidate,
+					Source:    "fixture",
+				}},
+			},
+		}
+		_, err = writePlaceClassification(ctx, tx, input, plausibility, fixedClock("2026-05-28T10:15:00Z")())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := Open(ctx, paths, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return opened
 }
 
 func priorityAsset(localIdentifier, creationDate, filename string, horizontalAccuracy *float64) photos.Asset {

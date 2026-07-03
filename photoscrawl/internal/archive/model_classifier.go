@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/openclaw/photoscrawl/internal/modelclient"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
@@ -49,7 +50,7 @@ func (c modelClassifier) classify(ctx context.Context, input classifyInput, imag
 		return modelResult{}, fmt.Errorf("read image: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV2, input)
+	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV3, input)
 	if err != nil {
 		return modelResult{}, fmt.Errorf("render photo card prompt: %w", err)
 	}
@@ -70,12 +71,13 @@ func (c modelClassifier) classify(ctx context.Context, input classifyInput, imag
 	}
 	payload := photoCardPayload(card)
 	return modelResult{
-		Payload:      payload,
-		RawResponse:  response.Text,
-		ImageBytes:   int64(len(data)),
-		ImageSHA256:  hex.EncodeToString(sum[:]),
-		Observations: observationsFromCard(card, input.HasLocation),
-		SearchTerms:  photoCardSearchTerms(card),
+		Payload:           payload,
+		RawResponse:       response.Text,
+		ImageBytes:        int64(len(data)),
+		ImageSHA256:       hex.EncodeToString(sum[:]),
+		VenuePlausibility: card.VenuePlausibility,
+		Observations:      observationsFromCard(card),
+		SearchTerms:       photoCardSearchTerms(card),
 	}, nil
 }
 
@@ -96,17 +98,6 @@ func renderPhotoCardPrompt(promptText string, input classifyInput) (string, erro
 }
 
 func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
-	resources := make([]map[string]any, 0, len(input.Resources))
-	for _, resource := range input.Resources {
-		resources = append(resources, map[string]any{
-			"type":              resource.ResourceType,
-			"uti":               resource.UTI,
-			"original_filename": resource.OriginalFilename,
-			"file_size":         resource.FileSize,
-			"available_locally": resource.AvailableLocally,
-			"needs_download":    resource.NeedsDownload,
-		})
-	}
 	albums := make([]map[string]any, 0, len(input.Albums))
 	for _, album := range input.Albums {
 		albums = append(albums, map[string]any{
@@ -115,26 +106,134 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 		})
 	}
 	payload := map[string]any{
-		"media_type":       input.MediaType,
-		"media_subtypes":   input.MediaSubtypes,
-		"creation_date":    input.CreationDate,
-		"width":            input.Width,
-		"height":           input.Height,
-		"favorite":         input.Favorite,
-		"hidden":           input.Hidden,
-		"burst_identifier": input.BurstIdentifier,
-		"asset_metadata":   input.MetadataJSON,
-		"resources":        resources,
-		"albums":           albums,
+		"schema_version": 3,
+		"capture": map[string]any{
+			"local_time": localCaptureTime(input.CreationDate, input.timezoneName()),
+			"timezone":   input.timezoneName(),
+			"source":     "apple_photos",
+		},
+		"media": map[string]any{
+			"kind":             openMediaType(input.MediaType),
+			"subtypes":         splitSubtypes(input.MediaSubtypes),
+			"width":            input.Width,
+			"height":           input.Height,
+			"duration_seconds": input.DurationSeconds,
+		},
+		"library_context": map[string]any{
+			"albums":       albums,
+			"favorite":     input.Favorite,
+			"hidden":       input.Hidden,
+			"burst_member": strings.TrimSpace(input.BurstIdentifier) != "",
+			"original":     input.originalContext(),
+			"source_note":  "metadata is context for reasoning, not text to echo",
+		},
 	}
 	if input.HasLocation {
-		payload["location"] = map[string]any{
-			"latitude":                   input.Latitude,
-			"longitude":                  input.Longitude,
-			"horizontal_accuracy_meters": input.AccuracyMeters,
+		location := map[string]any{
+			"gps": map[string]any{
+				"latitude":                   input.Latitude,
+				"longitude":                  input.Longitude,
+				"horizontal_accuracy_meters": input.AccuracyMeters,
+			},
 		}
+		if input.Place != nil {
+			location["place_context"] = input.placeContextForPrompt()
+		}
+		payload["location"] = location
 	}
 	return json.MarshalIndent(payload, "", "  ")
+}
+
+func (input classifyInput) timezoneName() string {
+	if strings.TrimSpace(input.TimezoneName) != "" {
+		return strings.TrimSpace(input.TimezoneName)
+	}
+	return "local"
+}
+
+func localCaptureTime(value, timezoneName string) string {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return strings.TrimSpace(value)
+	}
+	if timezoneName != "" && timezoneName != "local" {
+		if loc, err := time.LoadLocation(timezoneName); err == nil {
+			return parsed.In(loc).Format(time.RFC3339)
+		}
+	}
+	return parsed.Local().Format(time.RFC3339)
+}
+
+func splitSubtypes(value string) []string {
+	out := []string{}
+	for _, part := range strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ';' || r == '|'
+	}) {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func (input classifyInput) originalContext() map[string]any {
+	best := input.Resources
+	if len(best) == 0 {
+		return nil
+	}
+	resource := best[0]
+	for _, candidate := range input.Resources[1:] {
+		if originalResourceScore(map[string]any{
+			"resource_type":     candidate.ResourceType,
+			"original_filename": candidate.OriginalFilename,
+			"uti":               candidate.UTI,
+		}) > originalResourceScore(map[string]any{
+			"resource_type":     resource.ResourceType,
+			"original_filename": resource.OriginalFilename,
+			"uti":               resource.UTI,
+		}) {
+			resource = candidate
+		}
+	}
+	return map[string]any{
+		"uti":               resource.UTI,
+		"availability":      resource.Availability(),
+		"bytes":             resource.FileSize,
+		"available_locally": resource.AvailableLocally,
+		"needs_download":    resource.NeedsDownload,
+	}
+}
+
+func (resource classifyResource) Availability() string {
+	if resource.AvailableLocally && !resource.NeedsDownload {
+		return "local"
+	}
+	if resource.NeedsDownload {
+		return "in_icloud"
+	}
+	return ""
+}
+
+func (input classifyInput) placeContextForPrompt() map[string]any {
+	result := input.Place.Result
+	candidates := []map[string]any{}
+	for _, candidate := range result.POICandidates {
+		candidates = append(candidates, map[string]any{
+			"name":            candidate.Name,
+			"category":        candidate.Category,
+			"distance_meters": candidate.DistanceM,
+			"tier":            candidate.Tier,
+			"source":          candidate.Source,
+		})
+	}
+	return map[string]any{
+		"cache_status":     input.Place.CacheStatus,
+		"address_line":     addressLine(result.Address),
+		"area":             result.Area,
+		"poi_status":       result.POIStatus,
+		"venue_candidates": candidates,
+	}
 }
 
 func (c modelClassifier) remote() bool {

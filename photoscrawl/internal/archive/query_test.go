@@ -80,14 +80,14 @@ values ('fixture-face', ?, 'face-1', 'Synthetic Person', 0.9, '{}', 'fixture', '
 	}
 	if _, err := db.DB().ExecContext(ctx, `
 insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values ('fixture-place-evidence', ?, 'content_classification', 'fixture', 'place:1', '{}')
+values ('fixture-place-evidence', ?, 'place_context', 'place_context', 'place:1', '{}')
 `, assetID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.DB().ExecContext(ctx, `
-insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
-values ('fixture-place', ?, ?, 'Synthetic Pier', '{"text":"Synthetic Pier"}', null, 'fixture', 'fixture-model', 'fixture-prompt', 'fixture-place-evidence')
-`, assetID, modelObservationCardPlacePhrase); err != nil {
+insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
+values ('fixture-place', ?, 'venue', 'Synthetic Pier', '{"name":"Synthetic Pier","category":"pier"}', 'place_context', 'apple', 'hit', 'venue_candidate', 12, 'fixture-place-evidence')
+`, assetID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -184,11 +184,11 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opened.Ref != search.Results[0].Ref || opened.Time == "" || opened.MediaType == "" {
+	if opened.Ref != search.Results[0].Ref || opened.Mechanical.Captured == nil || opened.Mechanical.Media == nil {
 		t.Fatalf("open header = %#v", opened)
 	}
-	if opened.Original == nil || opened.Evidence.Count == 0 || opened.Evidence.Ref != opened.Ref {
-		t.Fatalf("open shape original=%#v evidence=%#v", opened.Original, opened.Evidence)
+	if opened.Mechanical.Original == nil {
+		t.Fatalf("open shape original=%#v", opened.Mechanical.Original)
 	}
 	data, err := json.Marshal(opened)
 	if err != nil {
@@ -203,51 +203,8 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 			t.Fatalf("open leaked raw field %q: %s", field, data)
 		}
 	}
-	evidence, ok := top["evidence"].(map[string]any)
-	if !ok {
-		t.Fatalf("open missing evidence object: %s", data)
-	}
-	if _, ok := evidence["count"].(float64); !ok {
-		t.Fatalf("open missing evidence count: %s", data)
-	}
-	if _, ok := evidence["ref"].(string); !ok {
-		t.Fatalf("open missing evidence ref: %s", data)
-	}
-}
-
-func TestEvidenceRefsUsePlainLabelsAndKeepRawSource(t *testing.T) {
-	t.Parallel()
-	refs := openEvidenceRefs([]map[string]any{
-		{
-			"id":            "fixture-classification",
-			"asset_id":      "fixture-asset",
-			"evidence_kind": "classification_input",
-			"source":        "archive_metadata",
-		},
-		{
-			"id":            "fixture-snapshot",
-			"asset_id":      "fixture-asset",
-			"evidence_kind": "asset_metadata",
-			"source":        "photos_sqlite_snapshot",
-		},
-	})
-	if len(refs) != 2 {
-		t.Fatalf("refs = %#v", refs)
-	}
-	if refs[0].Kind != "classification input" || refs[0].KindID != "classification_input" {
-		t.Fatalf("classification kind labels = %#v", refs[0])
-	}
-	if refs[0].Source != "Photo metadata" || refs[0].SourceID != "archive_metadata" {
-		t.Fatalf("classification source labels = %#v", refs[0])
-	}
-	if refs[0].Summary != "derived from photo metadata" {
-		t.Fatalf("classification summary = %q", refs[0].Summary)
-	}
-	if refs[1].Source != "Photos library database" || refs[1].SourceID != "photos_sqlite_snapshot" {
-		t.Fatalf("snapshot source labels = %#v", refs[1])
-	}
-	if refs[1].Summary != "details from the Photos library database" {
-		t.Fatalf("snapshot summary = %q", refs[1].Summary)
+	if _, ok := top["evidence"]; ok {
+		t.Fatalf("open leaked evidence object: %s", data)
 	}
 }
 

@@ -52,7 +52,7 @@ Default run output is:
 <crawlkit-data-dir>/evals/<run-id>/
   images/E001.jpg
   metadata/E001.json
-  raw/E001__ollama__<model>__photo-card-v2.json
+  raw/E001__ollama__<model>__photo-card-v3.json
   manifest.jsonl
   summary.json
 ```
@@ -82,6 +82,6 @@ Review outputs manually against these questions:
 - Did the card avoid tags, PR-review evidence sections, and generic usefulness
   commentary?
 
-The current baseline prompt is `prompts/photo-card-v2.md`. The product tree
+The current baseline prompt is `prompts/photo-card-v3.md`. The product tree
 ships one photo-card prompt file. Record future prompt trials, hashes, and
 scores in `docs/evals/runs.md`; only promote the winner into `prompts/`.

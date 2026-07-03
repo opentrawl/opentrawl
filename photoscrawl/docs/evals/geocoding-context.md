@@ -43,11 +43,11 @@ Provider evidence includes:
 - `poi_candidates`: ranked candidate venues, landmarks, terminals,
   addresses, or POIs, each with source, relation, distance, and provenance;
 
-A separate place-resolution layer should turn provider evidence plus known
+A separate place-resolution layer should turn provider records plus known
 private context into a tiny prompt shape. That layer can suppress residential
 POI noise near known homes, prefer a time-bounded hotel stay, and correlate work
-or travel context. `place-context` should stay a boring coordinate-to-provider
-evidence command.
+or travel context. Provider responses and evidence refs are internal
+provenance, not a public query surface.
 
 The prompt should use this context to understand the image, not to overwrite
 visual evidence. A nearby boarding pass can make an airport-lounge snack image

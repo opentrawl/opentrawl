@@ -9,8 +9,12 @@ import (
 const (
 	modelObservationCardSummary     = "card_summary"
 	modelObservationCardDescription = "card_description"
-	modelObservationCardPlacePhrase = "card_place_phrase"
 	modelObservationCardUncertainty = "card_uncertainty"
+	modelObservationCardOCR         = "card_ocr"
+
+	venueVerdictCorroborated = "corroborated"
+	venueVerdictPlausible    = "plausible"
+	venueVerdictInconsistent = "inconsistent"
 )
 
 type contentObservation struct {
@@ -22,20 +26,27 @@ type contentObservation struct {
 }
 
 type modelResult struct {
-	Payload      map[string]any
-	RawResponse  string
-	ImageBytes   int64
-	ImageSHA256  string
-	Observations []contentObservation
-	SearchTerms  []string
+	Payload           map[string]any
+	RawResponse       string
+	ImageBytes        int64
+	ImageSHA256       string
+	VenuePlausibility venuePlausibility
+	Observations      []contentObservation
+	SearchTerms       []string
 }
 
 type photoCard struct {
-	Summary       string
-	Description   string
-	PlacePhrase   string
-	OCRText       string
-	Uncertainties []string
+	Summary           string
+	Description       string
+	VenuePlausibility venuePlausibility
+	OCRText           string
+	Uncertainties     []string
+}
+
+type venuePlausibility struct {
+	CandidateName string `json:"candidate,omitempty"`
+	Verdict       string `json:"verdict"`
+	Reason        string `json:"reason,omitempty"`
 }
 
 func parsePhotoCard(raw string) (photoCard, error) {
@@ -43,7 +54,7 @@ func parsePhotoCard(raw string) (photoCard, error) {
 	if err != nil {
 		return photoCard{}, err
 	}
-	required := []string{"summary", "description", "location", "ocr", "uncertainty"}
+	required := []string{"summary", "description", "venue_plausibility", "ocr", "uncertainty"}
 	for _, key := range required {
 		if _, ok := sections[key]; !ok {
 			return photoCard{}, fmt.Errorf("model card missing %s section", key)
@@ -52,10 +63,14 @@ func parsePhotoCard(raw string) (photoCard, error) {
 	card := photoCard{
 		Summary:       cleanSingleLine(sections["summary"]),
 		Description:   cleanMultiline(sections["description"]),
-		PlacePhrase:   cleanPlacePhrase(sections["location"]),
 		OCRText:       cleanOptionalField(sections["ocr"]),
 		Uncertainties: parseUncertainties(sections["uncertainty"]),
 	}
+	plausibility, err := parseVenuePlausibility(sections["venue_plausibility"])
+	if err != nil {
+		return photoCard{}, err
+	}
+	card.VenuePlausibility = plausibility
 	if card.Summary == "" {
 		return photoCard{}, errors.New("model card summary is empty")
 	}
@@ -110,8 +125,8 @@ func photoCardSectionKey(line string) (string, bool) {
 		return "summary", true
 	case "detailed description", "description":
 		return "description", true
-	case "location", "place":
-		return "location", true
+	case "venue plausibility", "venue-plausibility", "venue corroboration", "venue-corroboration":
+		return "venue_plausibility", true
 	case "ocr and machine-readable text", "ocr and machine readable text", "ocr", "machine-readable text", "machine readable text":
 		return "ocr", true
 	case "uncertainty", "uncertainties":
@@ -141,6 +156,118 @@ func cleanOptionalField(value string) string {
 		return ""
 	}
 	return value
+}
+
+func parseVenuePlausibility(value string) (venuePlausibility, error) {
+	lines := []string{}
+	for _, raw := range strings.Split(value, "\n") {
+		line := strings.TrimSpace(stripListMarker(raw))
+		if line != "" {
+			lines = append(lines, line)
+		}
+	}
+	plausibility := venuePlausibility{}
+	for _, line := range lines {
+		key, field, ok := strings.Cut(line, ":")
+		if ok {
+			switch strings.ToLower(strings.Join(strings.Fields(key), " ")) {
+			case "candidate", "venue", "venue candidate":
+				plausibility.CandidateName = cleanVenueCandidateField(field)
+				continue
+			case "verdict", "decision", "answer", "plausibility", "venue plausibility", "assessment":
+				verdict, err := normalizeVenueVerdict(field)
+				if err != nil {
+					return venuePlausibility{}, err
+				}
+				plausibility.Verdict = verdict
+				continue
+			case "reason", "rationale", "why":
+				plausibility.Reason = truncateReason(field)
+				continue
+			}
+		}
+		if plausibility.Verdict == "" {
+			if verdict, reason, ok := inlineVenueVerdict(line); ok {
+				plausibility.Verdict = verdict
+				if plausibility.Reason == "" {
+					plausibility.Reason = reason
+				}
+			}
+		}
+	}
+	if plausibility.Verdict == "" {
+		if verdict, reason, ok := inlineVenueVerdict(cleanMultiline(value)); ok {
+			plausibility.Verdict = verdict
+			plausibility.Reason = reason
+		}
+	}
+	if plausibility.Verdict == "" {
+		if verdict, ok := containedVenueVerdict(value); ok {
+			plausibility.Verdict = verdict
+		}
+	}
+	if plausibility.Verdict == "" {
+		return venuePlausibility{}, errors.New("model card venue plausibility must include verdict: corroborated, plausible, or inconsistent")
+	}
+	plausibility.CandidateName = cleanVenueCandidateField(plausibility.CandidateName)
+	plausibility.Reason = truncateReason(plausibility.Reason)
+	return plausibility, nil
+}
+
+func cleanVenueCandidateField(value string) string {
+	value = strings.Trim(strings.Join(strings.Fields(value), " "), " .")
+	if emptyCardField(value) {
+		return ""
+	}
+	return value
+}
+
+func normalizeVenueVerdict(value string) (string, error) {
+	value = strings.ToLower(strings.Trim(strings.Join(strings.Fields(value), " "), " ."))
+	if verdict, _, ok := inlineVenueVerdict(value); ok {
+		return verdict, nil
+	}
+	if verdict, ok := containedVenueVerdict(value); ok {
+		return verdict, nil
+	}
+	switch value {
+	case venueVerdictCorroborated, venueVerdictPlausible, venueVerdictInconsistent:
+		return value, nil
+	default:
+		return "", fmt.Errorf("model card venue plausibility has unknown verdict %q", value)
+	}
+}
+
+func containedVenueVerdict(value string) (string, bool) {
+	lower := strings.ToLower(cleanMultiline(value))
+	matches := []string{}
+	for _, verdict := range []string{venueVerdictCorroborated, venueVerdictPlausible, venueVerdictInconsistent} {
+		if strings.Contains(lower, verdict) {
+			matches = append(matches, verdict)
+		}
+	}
+	if len(matches) != 1 {
+		return "", false
+	}
+	return matches[0], true
+}
+
+func inlineVenueVerdict(value string) (string, string, bool) {
+	value = strings.TrimSpace(cleanMultiline(value))
+	lower := strings.ToLower(value)
+	for _, verdict := range []string{venueVerdictCorroborated, venueVerdictPlausible, venueVerdictInconsistent} {
+		if lower == verdict {
+			return verdict, "", true
+		}
+		for _, separator := range []string{":", " -", " —", " --", " because "} {
+			prefix := verdict + separator
+			if strings.HasPrefix(lower, prefix) {
+				reason := strings.TrimSpace(value[len(prefix):])
+				return verdict, truncateReason(reason), true
+			}
+		}
+	}
+	return "", "", false
 }
 
 func cleanPlacePhrase(value string) string {
@@ -259,16 +386,13 @@ func emptyCardField(value string) bool {
 	}
 }
 
-// observationsFromCard stores the card. The place phrase is kept only when
-// the asset actually had location data to inform it: without GPS the model's
-// Location section can only say it does not know, which is not a place.
-func observationsFromCard(card photoCard, hasLocation bool) []contentObservation {
+func observationsFromCard(card photoCard) []contentObservation {
 	observations := []contentObservation{
 		cardObservation(modelObservationCardSummary, card.Summary),
 		cardObservation(modelObservationCardDescription, card.Description),
 	}
-	if hasLocation && card.PlacePhrase != "" {
-		observations = append(observations, cardObservation(modelObservationCardPlacePhrase, card.PlacePhrase))
+	if card.OCRText != "" {
+		observations = append(observations, cardObservation(modelObservationCardOCR, card.OCRText))
 	}
 	for _, uncertainty := range card.Uncertainties {
 		observations = append(observations, cardObservation(modelObservationCardUncertainty, uncertainty))
@@ -287,11 +411,11 @@ func cardObservation(kind, text string) contentObservation {
 
 func photoCardPayload(card photoCard) map[string]any {
 	return map[string]any{
-		"summary":       card.Summary,
-		"description":   card.Description,
-		"place_phrase":  card.PlacePhrase,
-		"ocr_text":      card.OCRText,
-		"uncertainties": card.Uncertainties,
+		"summary":            card.Summary,
+		"description":        card.Description,
+		"venue_plausibility": card.VenuePlausibility,
+		"ocr_text":           card.OCRText,
+		"uncertainties":      card.Uncertainties,
 	}
 }
 
@@ -299,7 +423,6 @@ func photoCardSearchTerms(card photoCard) []string {
 	return observationTermsFromText(strings.Join([]string{
 		card.Summary,
 		card.Description,
-		card.PlacePhrase,
 		card.OCRText,
 		strings.Join(card.Uncertainties, " "),
 	}, " "))

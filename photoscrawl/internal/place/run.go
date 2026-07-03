@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 )
@@ -39,7 +38,20 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		if err := json.Unmarshal(data, &cached); err == nil {
 			if err := validateComplete(cached); err == nil {
 				cached.Cached = true
+				cached.CacheStatus = "hit"
 				return cached, nil
+			}
+		}
+	}
+	if legacyPath, err := legacyCachePath(cacheDir, input, radius); err == nil && legacyPath != cachePath {
+		if data, err := os.ReadFile(legacyPath); err == nil {
+			var cached Result
+			if err := json.Unmarshal(data, &cached); err == nil {
+				if err := validateComplete(cached); err == nil {
+					cached.Cached = true
+					cached.CacheStatus = "hit"
+					return cached, nil
+				}
 			}
 		}
 	}
@@ -52,6 +64,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		result.POITotal = len(result.POICandidates)
 	}
 	result.POICandidates = calibrateCandidates(input, radius, result.POICandidates)
+	result.CacheStatus = "miss_filled"
 
 	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
@@ -98,6 +111,7 @@ func rawAppleResult(ctx context.Context, input Input, radius float64) (Result, e
 	result.Area = areaFromAddress(result.Address)
 	result.POITotal = len(result.POICandidates)
 	result.POIStatus = poiStatus(result)
+	result.POICandidates = calibrateCandidates(input, radius, result.POICandidates)
 	if err := validateComplete(result); err != nil {
 		return Result{}, err
 	}
@@ -166,12 +180,7 @@ func areaFromAddress(address *Address) []AreaLevel {
 }
 
 func calibrateCandidates(input Input, radius float64, candidates []POICandidate) []POICandidate {
-	sort.SliceStable(candidates, func(i, j int) bool {
-		if candidates[i].DistanceM != candidates[j].DistanceM {
-			return candidates[i].DistanceM < candidates[j].DistanceM
-		}
-		return candidates[i].Name < candidates[j].Name
-	})
+	candidates = TierCandidates(input, candidates)
 	if len(candidates) > maxCandidates {
 		candidates = candidates[:maxCandidates]
 	}
@@ -179,6 +188,14 @@ func calibrateCandidates(input Input, radius float64, candidates []POICandidate)
 }
 
 func cachePath(dir string, input Input, radius float64) (string, error) {
+	key := roundedCoordinateKey(input, radius)
+	if key == "" {
+		return legacyCachePath(dir, input, radius)
+	}
+	return filepath.Join(dir, key+".json"), nil
+}
+
+func legacyCachePath(dir string, input Input, radius float64) (string, error) {
 	key := struct {
 		Latitude  float64 `json:"latitude"`
 		Longitude float64 `json:"longitude"`
@@ -196,6 +213,16 @@ func cachePath(dir string, input Input, radius float64) (string, error) {
 	}
 	sum := sha256.Sum256(data)
 	return filepath.Join(dir, hex.EncodeToString(sum[:])+".json"), nil
+}
+
+func roundedCoordinateKey(input Input, radius float64) string {
+	lat, lon := input.Location.Latitude, input.Location.Longitude
+	if lat == 0 && lon == 0 {
+		return ""
+	}
+	return strings.NewReplacer("+", "p", "-", "m", ".", "_").Replace(
+		fmt.Sprintf("coord-v2-lat%+.4f-lon%+.4f-r%.0f", lat, lon, radius),
+	)
 }
 
 func compactStrings(values []string) []string {

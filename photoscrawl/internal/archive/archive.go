@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/store"
@@ -27,26 +26,6 @@ type StatusResult struct {
 
 type StatusFreshness struct {
 	LastSync string `json:"last_sync,omitempty"`
-}
-
-type InitResult struct {
-	Database string `json:"database"`
-}
-
-func Init(ctx context.Context, paths Paths) (InitResult, error) {
-	if err := os.MkdirAll(filepath.Dir(paths.Database), 0o700); err != nil {
-		return InitResult{}, err
-	}
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
-	if err != nil {
-		return InitResult{}, err
-	}
-	defer db.Close()
-	return InitResult{Database: paths.Database}, nil
 }
 
 func Status(ctx context.Context, paths Paths) (StatusResult, error) {

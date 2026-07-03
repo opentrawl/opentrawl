@@ -48,6 +48,11 @@ type ClassifyResult struct {
 	ContentSkippedUnsupportedMedia int    `json:"content_skipped_unsupported_media"`
 	ContentOutcomeTotal            int    `json:"content_outcome_total,omitempty"`
 	ContentObservationsWritten     int    `json:"content_observations_written"`
+	PlaceCacheHits                 int    `json:"place_cache_hits,omitempty"`
+	PlaceBackfillHits              int    `json:"place_backfill_hits,omitempty"`
+	PlaceProviderAttempts          int    `json:"place_provider_attempts,omitempty"`
+	PlaceProviderFailures          int    `json:"place_provider_failures,omitempty"`
+	PlaceObservationsWritten       int    `json:"place_observations_written,omitempty"`
 	ContentClassificationFailures  int    `json:"content_classification_failures"`
 	OriginalsDownloaded            int    `json:"originals_downloaded"`
 	OriginalDownloadFailures       int    `json:"original_download_failures"`
@@ -123,6 +128,9 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	})
 	if err != nil {
 		return ClassifyResult{}, err
+	}
+	if classifier != nil {
+		enrichClassifyPlaces(ctx, paths, inputs, &result)
 	}
 	if classifier == nil {
 		for start := 0; start < len(inputs); start += metadataClassificationBatchSize {

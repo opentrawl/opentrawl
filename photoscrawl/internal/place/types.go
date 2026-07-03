@@ -44,6 +44,7 @@ type Result struct {
 	POITotal      int            `json:"poi_total,omitempty"`
 	POICandidates []POICandidate `json:"poi_candidates,omitempty"`
 	Cached        bool           `json:"cached,omitempty"`
+	CacheStatus   string         `json:"cache_status,omitempty"`
 }
 
 type AreaLevel struct {
@@ -83,6 +84,7 @@ type POICandidate struct {
 	DistanceM  float64     `json:"distance_m,omitempty"`
 	Coordinate *Coordinate `json:"coordinate,omitempty"`
 	Address    *Address    `json:"address,omitempty"`
+	Tier       string      `json:"tier,omitempty"`
 	Source     string      `json:"source"`
 	Provenance []string    `json:"provenance,omitempty"`
 }

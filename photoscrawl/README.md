@@ -9,8 +9,7 @@ Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
 `photoscrawl` builds a `photos.sqlite` archive from a user's Photos library. The
 goal is not photo backup. The goal is to help users understand their own library:
 where photos were taken, when they were taken, what is visible, which
-documents/screenshots/receipts exist, which assets belong together, and what
-evidence supports each result.
+documents/screenshots/receipts exist, and which assets belong together.
 
 ## Principles
 
@@ -21,21 +20,20 @@ evidence supports each result.
 - Read-only Photos access. Never write back to Photos.
 - Snapshot before crawling live library state.
 - Metadata for all assets, local classification for high-signal coverage.
-- Store observations and evidence, not final people/trip/place truth.
+- Store observations and internal provenance, not final people/trip/place truth.
 
 ## First Commands
 
 ```sh
 go run ./cmd/photoscrawl metadata --json
-go run ./cmd/photoscrawl init --json
 go run ./cmd/photoscrawl status --json
+go run ./cmd/photoscrawl doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 go run ./cmd/photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
 go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search "drone beach portugal" --json
 go run ./cmd/photoscrawl open photoscrawl:asset/<uuid> --json
 go run ./cmd/photoscrawl neighbors photoscrawl:asset/<uuid> --json
-go run ./cmd/photoscrawl evidence photoscrawl:asset/<uuid> --json
 go run ./cmd/photoscrawl place-context --input <private-eval-run>/metadata/E001.json --json
 go run ./cmd/photoscrawl place-card --input <crawlkit-cache-dir>/place-context/<key>.json
 go run ./cmd/photoscrawl place-backfill --json
@@ -59,36 +57,38 @@ local package media paths for derivatives/renders/originals when they exist, so
 content classification can use local files without changing Photos or iCloud
 state. Every imported asset is queued for `classify`.
 
-`classify` drains that queue into evidence-backed local metadata observations.
-With `--model <ollama-model>`, it also sends already-local image bytes to an
-Ollama-API vision model and stores one photo card per asset: a one-line summary,
-visual description, calibrated place phrase, and uncertainty list. Search uses
-hidden terms derived from that card text. It does not store rendered tag rows,
-candidate venue rows, object lists, or cluster terms.
+`classify` drains that queue into local metadata observations. With
+`--model <ollama-model>`, it also resolves cached place context, sends
+already-local image bytes to an Ollama-API vision model, and stores one photo
+card per asset: a one-line summary, rich visual description, OCR text, and
+uncertainty list. Search uses hidden terms derived from that card text and
+mechanical place observations. It does not store rendered tag rows, object
+lists, or cluster terms.
 
-`neighbors` returns source-level adjacent assets only. It does not create trips,
-people, places, or clusters. Current reasons are deterministic archive facts:
+`neighbors` is the "photos taken together" query. It returns source-level
+adjacent assets only and does not create trips, people, places, or clusters.
+Current reasons are deterministic archive facts:
 same burst id, same album id, same resource hash, nearby creation time, nearby
 raw GPS, and shared local observation labels.
 
 `place-context` enriches one asset's own latitude/longitude/accuracy/time into
 address hierarchy and candidate nearby POIs. Apple's network-backed
 CoreLocation reverse geocoder is the required step. MapKit POI search is
-optional venue evidence: no POI found is recorded as `poi_status: "none"`,
+optional venue context: no POI found is recorded as `poi_status: "none"`,
 while real provider errors still fail. Text output is a compact deterministic
-place card; `--json` returns provider evidence. Apple address areas of interest
+place card; `--json` returns provider context. Apple address areas of interest
 are rendered as map context, not as POIs.
 
-`place-card` renders cached provider evidence into the same deterministic
+`place-card` renders cached provider context into the same deterministic
 Markdown card without re-calling providers. It keeps address detail, normalizes
 map context, caps useful POIs, and omits raw coordinates, warnings, provider
 counts, provenance, and invented confidence. It is for eval harnesses and
 private provider experiments.
 
-`place-backfill` is a private evidence command for full-library Apple provider
-probes. It reads `photos.sqlite`, dedupes exact location/accuracy keys, retries
-provider failures, and writes the manifest, attempts, raw successful provider
-outputs, and final errors under the crawlkit data dir's
+`place-backfill` is a private provider-probe command for full-library Apple
+place context. It reads `photos.sqlite`, dedupes exact location/accuracy keys,
+retries provider failures, and writes the manifest, attempts, raw successful
+provider outputs, and final errors under the crawlkit data dir's
 `backfills/place-context-full/apple-ingest` subtree.
 
 `eval-card` is an opt-in research harness for prompt/model evaluation. It uses
@@ -107,16 +107,19 @@ Today the POC sees useful source facts and optional model observations:
   burst metadata;
 - resource type, UTI, filename, local/remote availability, iCloud download need,
   and resource hash when already local;
-- album membership and raw GPS observations with evidence refs;
+- album membership and raw GPS observations with internal provenance;
 - metadata-only observations for media type, geometry, burst membership,
   resource UTI/type, and weak screenshot/document/receipt candidates from
   filenames, albums, and metadata;
 - optional photo-card observations from already-local image derivatives or
   originals, plus hidden normalized terms for search;
+- mechanical place observations from cache-first provider context, including
+  address lines and tiered venue candidates when provider geometry supports
+  them;
 - status coverage counts for GPS, observations, local resources, remote
   resources, classification queue state, and observation types;
-- search/open/evidence/neighbors JSON that points every claim back to source
-  rows or evidence ids.
+- search/open/neighbors JSON shaped for users and tools. Provenance stays in
+  internal archive tables.
 
 It does not create durable identities, trips, places, relationships, embeddings,
 or global clusters yet.
@@ -148,8 +151,8 @@ Build `photos.sqlite` with:
 - file/resource hashes when originals are available;
 - Vision/Core ML observations: labels, OCR, faces, barcodes, screenshot/document
   markers, quality/similarity signals where useful;
-- evidence refs for every observation;
-- JSON status/search/open/neighbors/evidence commands.
+- internal provenance for every derived observation;
+- JSON metadata/status/doctor/sync/classify/search/open/neighbors commands.
 
 Out of scope for v1:
 

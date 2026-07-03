@@ -7,7 +7,7 @@ written_by: ai
 ## Purpose
 
 `photoscrawl` is a local-first OpenClaw/crawlkit crawler for Apple Photos. It
-builds an evidence-backed `photos.sqlite` archive from a user's Photos library
+builds a provenance-backed `photos.sqlite` archive from a user's Photos library
 without uploading private media by default.
 
 ## Stack
@@ -62,8 +62,8 @@ without uploading private media by default.
 - Never mutate Photos, albums, metadata, faces, or iCloud state.
 - Cloud model calls are opt-in only and must identify exactly which assets or
   derived thumbnails leave the machine.
-- Store observations, evidence, and candidate signals. Do not create durable
-  person, place, trip, relationship, or life-event truth tables in v1.
+- Store observations, internal provenance, and candidate signals. Do not create
+  durable person, place, trip, relationship, or life-event truth tables in v1.
 - CPU is acceptable when it buys signal quality. Disk pressure is not; classify
   originals through a bounded local cache/ringbuffer when downloads are needed.
 
@@ -120,16 +120,20 @@ without uploading private media by default.
 
 ## Query Surface
 
-Keep crawl-family JSON commands:
+Keep crawl-family commands:
 
+- `metadata`
 - `status`
-- `init`
+- `doctor`
 - `sync`
 - `classify`
 - `search`
 - `open`
 - `neighbors`
-- `evidence`
 
-Add higher-level commands only after the underlying tables and evidence explain
-the result.
+`neighbors` is the "photos taken together" query: source-level adjacent assets,
+not a trip or relationship truth table.
+
+Provenance tables, evidence refs, raw provider responses, and model responses
+are machine-internal pipeline storage. Do not expose an `evidence` command or
+evidence refs/counts in `open`.

@@ -64,29 +64,29 @@ Always consider:
 - local photo cards with summaries, visual descriptions, calibrated place
   phrases, uncertainty notes, and hidden search terms.
 
-But store observations only when they have useful evidence. Carry confidence
+But store observations only when they have useful provenance. Carry confidence
 only when the source or model actually emitted a calibrated value. A cat photo
 does not need barcode output; a receipt/screenshot/document probably does need
 OCR; a drone-looking burst probably needs camera/device/resource metadata and
 location precision.
 
-Photo-card output is candidate evidence. It belongs in generic model observation
-rows with the model id, prompt version, evidence ref, and hidden normalized
-terms. Promotion into trips, places, people, relationships, or durable events
-belongs in a later user-reviewed layer.
+Photo-card output is candidate observation data. It belongs in generic model
+observation rows with the model id, prompt version, internal provenance, and
+hidden normalized terms. Promotion into trips, places, people, relationships, or
+durable events belongs in a later user-reviewed layer.
 
 ## Location Policy
 
 Store raw GPS observations first. Reverse geocoding is a separate derived layer.
 
 Reason: GPS can be off by enough to imply the wrong business or home. A raw
-coordinate is evidence; "barber shop" versus "pizza place" is a fallible
-derived claim and must carry method and evidence. It carries confidence only
-when the provider or model actually emits one.
+coordinate is source provenance; "barber shop" versus "pizza place" is a
+fallible derived claim and must carry an internal method and provenance record.
+It carries confidence only when the provider or model actually emits one.
 
 ## Identity Policy
 
-Use Apple's People/faces data if available, but label it as source evidence.
+Use Apple's People/faces data if available, but label it as source provenance.
 Also run local face detection/embedding where useful because user annotations are
 sparse and biased toward important people.
 
@@ -96,18 +96,21 @@ user-reviewed identity layer.
 
 ## Query Model
 
-The first query layer is object/evidence traversal:
+The first query layer is asset traversal:
 
+- `metadata`: crawler contract and capabilities.
 - `status`: archive health and counts.
-- `search`: FTS over asset filenames, albums, and photo-card terms.
-- `open`: card-first asset detail with one original resource and an evidence
-  pointer.
-- `neighbors`: albums, locations, faces, same resource hash, same burst/live
-  photo, similar image, nearby time/place candidates.
-- `evidence`: why a row or edge exists.
+- `doctor`: local readiness checks.
+- `sync`: initialise or refresh the archive.
+- `classify`: write local metadata, place, and model observations.
+- `search`: FTS over asset metadata, albums, place observations, and photo-card
+  terms.
+- `open`: card-first asset detail with mechanical metadata, place context,
+  summary, description, and uncertainty. It does not expose evidence refs.
+- `neighbors`: photos taken together by deterministic archive facts.
 
 Neighbors are source-level adjacency, not truth. Each returned neighbor must
-name the method and evidence ids behind the link. v1 neighbor reasons are
+name the method behind the link. v1 neighbor reasons are
 limited to deterministic archive facts such as same album id, same burst id,
 same resource hash, nearby timestamp, nearby raw GPS, or shared local observation
 labels.

@@ -24,12 +24,12 @@ func TestControlManifest(t *testing.T) {
 	if manifest.Paths.DefaultDatabase != paths.Database || manifest.Paths.DefaultCache != paths.CacheDir {
 		t.Fatalf("paths = %#v", manifest.Paths)
 	}
-	for _, capability := range []string{"status", "sync", "search", "open", "doctor"} {
+	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "search", "open", "neighbors"} {
 		if !slices.Contains(manifest.Capabilities, capability) {
 			t.Fatalf("missing capability %q in %#v", capability, manifest.Capabilities)
 		}
 	}
-	if slices.Contains(manifest.Capabilities, "classify") || slices.Contains(manifest.Capabilities, "eval-card") {
+	if slices.Contains(manifest.Capabilities, "evidence") || slices.Contains(manifest.Capabilities, "eval-card") {
 		t.Fatalf("internal capability advertised in %#v", manifest.Capabilities)
 	}
 	if manifest.Commands["search"].Mutates || !manifest.Commands["doctor"].JSON {

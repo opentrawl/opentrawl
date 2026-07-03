@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/openclaw/photoscrawl/internal/place"
 )
 
 type classifyInput struct {
@@ -17,8 +19,10 @@ type classifyInput struct {
 	MediaType       string
 	MediaSubtypes   string
 	CreationDate    string
+	TimezoneName    string
 	Width           int64
 	Height          int64
+	DurationSeconds float64
 	Favorite        bool
 	Hidden          bool
 	BurstIdentifier string
@@ -27,8 +31,14 @@ type classifyInput struct {
 	Latitude        float64
 	Longitude       float64
 	AccuracyMeters  float64
+	Place           *classifyPlaceContext
 	Resources       []classifyResource
 	Albums          []classifyAlbum
+}
+
+type classifyPlaceContext struct {
+	Result      place.Result
+	CacheStatus string
 }
 
 type classifyResource struct {
@@ -52,7 +62,7 @@ func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, refreshModel
 	query := `
 with queued as (
 select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
-       a.media_type, a.media_subtypes, a.creation_date, a.width, a.height,
+       a.media_type, a.media_subtypes, a.creation_date, a.timezone_name, a.width, a.height, a.duration_seconds,
        a.favorite, a.hidden, a.burst_identifier, a.metadata_json,
        exists(select 1 from location_observation lo where lo.asset_id = a.id) as has_location,
        lower(
@@ -74,7 +84,7 @@ where q.state in (` + classifyQueueStates(refreshModelID != "") + `)
    ))
 )
 select id, asset_id, source_library_id, local_identifier, needs_download,
-       media_type, media_subtypes, creation_date, width, height,
+       media_type, media_subtypes, creation_date, timezone_name, width, height, duration_seconds,
        favorite, hidden, burst_identifier, metadata_json, has_location
 from queued
 order by creation_date desc,
@@ -113,8 +123,10 @@ order by creation_date desc,
 			&input.MediaType,
 			&input.MediaSubtypes,
 			&input.CreationDate,
+			&input.TimezoneName,
 			&input.Width,
 			&input.Height,
+			&input.DurationSeconds,
 			&favorite,
 			&hidden,
 			&input.BurstIdentifier,

@@ -10,9 +10,9 @@ import (
 	"time"
 )
 
-func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, imagePath, imagePathClass string) (int, error) {
+func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, imagePath, imagePathClass string) (int, int, error) {
 	if err := clearModelObservations(ctx, tx, input.AssetID, classifier.modelID); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if strings.TrimSpace(imagePathClass) == "" {
 		imagePathClass = input.localPathClass(imagePath)
@@ -33,7 +33,7 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		"cloud_transmitted": classifier.remote(),
 	})
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	if _, err := tx.ExecContext(ctx, `
 insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
@@ -45,22 +45,26 @@ on conflict(id) do update set
   pointer = excluded.pointer,
   value_json = excluded.value_json
 `, evidenceID, input.AssetID, "content_classification", modelClassifierSource, input.AssetID+"/classification/photo_card", evidenceJSON); err != nil {
-		return 0, fmt.Errorf("write model evidence: %w", err)
+		return 0, 0, fmt.Errorf("write model evidence: %w", err)
 	}
 
+	placeWritten, err := writePlaceClassification(ctx, tx, input, result.VenuePlausibility, classifiedAt)
+	if err != nil {
+		return 0, placeWritten, err
+	}
 	written := 0
 	cardFTSID := ""
 	for _, observation := range result.Observations {
 		valueJSON, err := jsonText(observation.Value)
 		if err != nil {
-			return written, err
+			return written, placeWritten, err
 		}
 		observationID := stableID("model_observation", input.AssetID, modelClassifierSource, classifier.modelID, classifier.promptVersion, observation.ObservationType, observation.ValueText)
 		if _, err := tx.ExecContext(ctx, `
 insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, observationID, input.AssetID, observation.ObservationType, observation.ValueText, valueJSON, observation.Confidence, modelClassifierSource, classifier.modelID, classifier.promptVersion, evidenceID); err != nil {
-			return written, fmt.Errorf("write model observation: %w", err)
+			return written, placeWritten, fmt.Errorf("write model observation: %w", err)
 		}
 		if observation.ObservationType == modelObservationCardSummary {
 			cardFTSID = observationID
@@ -68,14 +72,14 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		written++
 	}
 	if cardFTSID == "" {
-		return written, errors.New("photo card summary observation was not written")
+		return written, placeWritten, errors.New("photo card summary observation was not written")
 	}
 	termBody := strings.Join(result.SearchTerms, " ")
 	if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)
 `, cardFTSID, input.AssetID, "", termBody); err != nil {
-		return written, fmt.Errorf("write model card fts: %w", err)
+		return written, placeWritten, fmt.Errorf("write model card fts: %w", err)
 	}
 	for _, term := range result.SearchTerms {
 		termID := stableID("observation_term", input.AssetID, cardFTSID, term)
@@ -83,13 +87,13 @@ values (?, ?, ?, ?)
 insert into observation_term(id, asset_id, observation_id, term, term_type, source, model_id)
 values (?, ?, ?, ?, ?, ?, ?)
 `, termID, input.AssetID, cardFTSID, term, "photo_card", modelClassifierSource, classifier.modelID); err != nil {
-			return written, fmt.Errorf("write observation term: %w", err)
+			return written, placeWritten, fmt.Errorf("write observation term: %w", err)
 		}
 	}
 	if err := updateClassificationQueue(ctx, tx, input.QueueID, "content_classified", "model_observations", classifiedAt); err != nil {
-		return written, err
+		return written, placeWritten, err
 	}
-	return written, nil
+	return written, placeWritten, nil
 }
 
 func writeModelRun(ctx context.Context, tx *sql.Tx, runID string, classifier modelClassifier, inputCount int, result ClassifyResult, completedAt time.Time) error {
@@ -150,6 +154,9 @@ delete from model_observation
 where asset_id = ? and source in (?, ?) and model_id = ?
 `, assetID, modelClassifierSource, "local_multimodal", modelID); err != nil {
 		return fmt.Errorf("clear model observations: %w", err)
+	}
+	if err := clearPlaceObservations(ctx, tx, assetID); err != nil {
+		return err
 	}
 	if _, err := tx.ExecContext(ctx, `
 delete from evidence_ref

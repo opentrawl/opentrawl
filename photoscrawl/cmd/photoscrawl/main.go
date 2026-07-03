@@ -58,27 +58,6 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return writeMetadata(os.Stdout, format, archive.ControlManifest(paths))
-	case "init":
-		fs := flag.NewFlagSet("init", flag.ContinueOnError)
-		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
-		jsonFlag := fs.Bool("json", false, "write JSON")
-		formatFlag := fs.String("format", "", "output format")
-		if err := fs.Parse(args[1:]); err != nil {
-			return output.UsageError{Err: err}
-		}
-		if *dbPath != "" {
-			paths.Database = *dbPath
-		}
-		format, err := output.Resolve(*formatFlag, *jsonFlag)
-		if err != nil {
-			return err
-		}
-		result, err := archive.Init(ctx, paths)
-		if err != nil {
-			return err
-		}
-		return output.Write(os.Stdout, format, "init", result)
 	case "status":
 		fs := flag.NewFlagSet("status", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -206,19 +185,6 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return writeOpen(os.Stdout, parsed.Format, result)
-	case "evidence":
-		parsed, err := parseRefCommand("evidence", args[1:], false)
-		if err != nil {
-			return err
-		}
-		if parsed.DBPath != "" {
-			paths.Database = parsed.DBPath
-		}
-		result, err := archive.Evidence(ctx, paths, parsed.Ref)
-		if err != nil {
-			return err
-		}
-		return writeEvidence(os.Stdout, parsed.Format, result)
 	case "neighbors":
 		parsed, err := parseRefCommand("neighbors", args[1:], true)
 		if err != nil {
@@ -346,7 +312,7 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|init|status|doctor|sync|classify|search|open|neighbors|evidence|place-context|place-card|place-backfill|eval-card>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors|place-context|place-card|place-backfill|eval-card>")}
 }
 
 func splitList(value string) []string {

@@ -28,7 +28,7 @@ func ControlManifest(paths Paths) Manifest {
 		DefaultLogs:     paths.LogDir,
 		DefaultShare:    paths.ShareDir,
 	}
-	manifest.Capabilities = []string{"status", "sync", "search", "open", "doctor"}
+	manifest.Capabilities = []string{"metadata", "status", "doctor", "sync", "classify", "search", "open", "neighbors"}
 	manifest.Privacy = control.Privacy{
 		ExportsSecrets: false,
 		LocalOnlyScopes: []string{
@@ -40,12 +40,14 @@ func ControlManifest(paths Paths) Manifest {
 		},
 	}
 	manifest.Commands = map[string]control.Command{
-		"metadata": {Title: "Metadata", Argv: []string{"photoscrawl", "metadata", "--json"}, JSON: true},
-		"status":   {Title: "Status", Argv: []string{"photoscrawl", "status", "--json"}, JSON: true},
-		"sync":     {Title: "Sync", Argv: []string{"photoscrawl", "sync", "--library", "<path>", "--json"}, JSON: true, Mutates: true},
-		"search":   {Title: "Search", Argv: []string{"photoscrawl", "search", "<query>", "--json"}, JSON: true},
-		"open":     {Title: "Open", Argv: []string{"photoscrawl", "open", "<ref>", "--json"}, JSON: true},
-		"doctor":   {Title: "Doctor", Argv: []string{"photoscrawl", "doctor", "--json"}, JSON: true},
+		"metadata":  {Title: "Metadata", Argv: []string{"photoscrawl", "metadata", "--json"}, JSON: true},
+		"status":    {Title: "Status", Argv: []string{"photoscrawl", "status", "--json"}, JSON: true},
+		"doctor":    {Title: "Doctor", Argv: []string{"photoscrawl", "doctor", "--json"}, JSON: true},
+		"sync":      {Title: "Sync", Argv: []string{"photoscrawl", "sync", "--library", "<path>", "--json"}, JSON: true, Mutates: true},
+		"classify":  {Title: "Classify", Argv: []string{"photoscrawl", "classify", "--limit", "100", "--json"}, JSON: true, Mutates: true},
+		"search":    {Title: "Search", Argv: []string{"photoscrawl", "search", "<query>", "--json"}, JSON: true},
+		"open":      {Title: "Open", Argv: []string{"photoscrawl", "open", "<ref>", "--json"}, JSON: true},
+		"neighbors": {Title: "Neighbors", Argv: []string{"photoscrawl", "neighbors", "<ref>", "--json"}, JSON: true},
 	}
 	return Manifest{
 		Manifest:        manifest,

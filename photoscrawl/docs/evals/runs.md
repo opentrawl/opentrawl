@@ -285,3 +285,79 @@ sample. It improved neighbourhood and hub context without adding metadata leaks.
 Do not ship `photo-card-v4` as-is; it made uncertainty prose longer but still
 allowed exact-place overclaims. Keep the `photo-card-v3` rural/non-POI idea for a
 future merged prompt, but only after tightening the metadata-echo guard.
+
+## 3 July 2026 photo-card v3 venue plausibility rerun
+
+This run compares the historical `photo-card-v2` prompt with the current
+`photo-card-v3` prompt after adding structured venue plausibility. It uses the
+same 15 latest original-input assets for both prompts.
+
+The v2 prompt was extracted from git history to a temporary path before the
+comparison. It was not restored to the repo.
+
+Command shape for v3:
+
+```sh
+photoscrawl eval-card \
+  --library "$HOME/Pictures/Photos Library.photoslibrary" \
+  --prompt prompts/photo-card-v3.md \
+  --limit 15 \
+  --sample latest \
+  --allow-icloud-downloads \
+  --models gemini-3-flash-preview \
+  --ollama-url https://ollama.com/api \
+  --json
+```
+
+Command shape for v2:
+
+```sh
+photoscrawl eval-card \
+  --library "$HOME/Pictures/Photos Library.photoslibrary" \
+  --prompt /tmp/photo-card-v2.md \
+  --limit 15 \
+  --sample latest \
+  --allow-icloud-downloads \
+  --models gemini-3-flash-preview \
+  --ollama-url https://ollama.com/api \
+  --json
+```
+
+Run details:
+
+| field | value |
+|---|---|
+| date | 3 July 2026 |
+| sample size | 15 |
+| sample mode | `latest` |
+| sample relation | same assets, same order |
+| source kind | PhotoKit-exported originals |
+| iCloud downloads | on |
+| classifier model | `gemini-3-flash-preview` |
+| successful model calls | 30 |
+| failed model calls | 0 |
+| scoring method | model-judge pass over saved private images and JSON |
+| judge model | `gemma4:31b` |
+| scoring caveat | directional model-judge result, not blinded human review |
+
+Scores use the 1 to 5 rubric from `docs/evals/photo-card-protocol.md`.
+
+| prompt | prompt sha256 | summary | visual detail | OCR and text | location | uncertainty | privacy and format | mean | inconsistent venue flags | thin descriptions | verdict |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| `photo-card-v2` | `a8b83b78b77f382a1e86fdf849928b9717e3482391e5ee50fde369e9364a1aef` | 5.00 | 5.00 | 4.93 | 2.47 | 5.00 | 5.00 | 4.57 | 7 | 0 | loses on location |
+| `photo-card-v3` | `9eb8a52d62ff56084028995af83b2b31e5f0dac27246bf12967c0f46aed7d158` | 4.87 | 4.93 | 4.80 | 4.33 | 4.87 | 5.00 | 4.80 | 2 | 0 | wins overall |
+
+Verdict: keep `photo-card-v3` as the product prompt. It wins because the
+location score rises sharply and venue overclaim flags drop from 7 to 2.
+
+v3 still loses some axes. It trails v2 slightly on summary, visual detail, OCR
+and uncertainty. The likely cause is the stricter venue section: it spends model
+attention on place calibration and leaves a little less incidental detail than
+v2. A first v3 scoring pass also showed thin descriptions; adding an explicit
+220 to 420 word target fixed that before the published comparison above.
+
+Venue caveat: the 2 v3 flags are not cleanly equivalent. One came from the
+structured inconsistent-candidate field that JSON keeps by design and the text
+renderer hides. The other should be treated as a remaining prompt risk. The code
+gate is still required: inconsistent structured verdicts must not render a
+human `Venue:` line.

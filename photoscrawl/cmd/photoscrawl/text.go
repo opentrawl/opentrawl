@@ -73,7 +73,7 @@ func printSyncText(w io.Writer, result archive.SyncResult) error {
 	if _, err := fmt.Fprintf(w, "\nAssets: %d seen, %d new, %d changed, %d unchanged, %d missing\n", result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.PreviouslySeenMissing); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Evidence: %d resources, %d album memberships, %d locations\n", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen); err != nil {
+	if _, err := fmt.Fprintf(w, "Imported: %d resources, %d album memberships, %d locations\n", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Classification queue: %d queued, %d need download\n", result.QueuedForClassify, result.QueuedNeedsDownload); err != nil {
@@ -139,50 +139,91 @@ func printOpenText(w io.Writer, result archive.OpenResult) error {
 	if _, err := fmt.Fprintf(w, "%s\n", emptyDash(result.Ref)); err != nil {
 		return err
 	}
-	header := strings.Join(nonEmptyText(openTextTime(result.Time), result.MediaType, result.Where), " · ")
-	if header != "" {
-		if _, err := fmt.Fprintf(w, "%s\n", header); err != nil {
+	for _, line := range openMechanicalLines(result.Mechanical) {
+		if _, err := fmt.Fprintf(w, "%s\n", line); err != nil {
 			return err
 		}
 	}
 	if _, err := io.WriteString(w, "\n"); err != nil {
 		return err
 	}
-	bodyParts := nonEmptyText(result.Summary, result.Description)
-	for i, part := range bodyParts {
-		if i > 0 {
-			if _, err := io.WriteString(w, "\n"); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintf(w, "%s\n", part); err != nil {
+	if result.Model.Summary != "" {
+		if _, err := fmt.Fprintf(w, "Summary: %s\n", result.Model.Summary); err != nil {
 			return err
 		}
 	}
-	if len(result.Uncertainties) > 0 {
-		if len(bodyParts) > 0 {
-			if _, err := io.WriteString(w, "\n"); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintf(w, "Uncertain: %s.\n", strings.Join(result.Uncertainties, "; ")); err != nil {
+	if result.Model.Description != "" {
+		if _, err := fmt.Fprintf(w, "\nDescription: %s\n", result.Model.Description); err != nil {
 			return err
 		}
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
-		return err
-	}
-	if result.Original != nil {
-		if _, err := fmt.Fprintf(w, "Original: %s (%s, %s)\n", result.Original.Filename, humanBytes(result.Original.Bytes), result.Original.Availability); err != nil {
+	if len(result.Model.Uncertainties) > 0 {
+		if _, err := fmt.Fprintf(w, "\nUncertainty: %s.\n", strings.Join(result.Model.Uncertainties, "; ")); err != nil {
 			return err
 		}
-	} else if _, err := io.WriteString(w, "Original: unavailable\n"); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Evidence: %d records — photoscrawl evidence %s\n", result.Evidence.Count, result.Evidence.Ref); err != nil {
-		return err
 	}
 	return nil
+}
+
+func openMechanicalLines(mechanical archive.OpenMechanical) []string {
+	lines := []string{}
+	if captured := mechanical.Captured; captured != nil {
+		value := openTextTime(captured.Local)
+		if captured.Timezone != "" {
+			value += " local (" + captured.Timezone + ")"
+		}
+		lines = append(lines, "Captured: "+value)
+	}
+	if media := mechanical.Media; media != nil {
+		parts := nonEmptyText(media.Kind)
+		if media.Width > 0 && media.Height > 0 {
+			parts = append(parts, fmt.Sprintf("%d x %d", media.Width, media.Height))
+		}
+		if media.DurationSeconds > 0 {
+			parts = append(parts, fmt.Sprintf("%.1fs", media.DurationSeconds))
+		}
+		if len(parts) > 0 {
+			lines = append(lines, "Media: "+strings.Join(parts, ", "))
+		}
+	}
+	if gps := mechanical.GPS; gps != nil {
+		value := fmt.Sprintf("%.5f, %.5f", gps.Latitude, gps.Longitude)
+		if gps.HorizontalAccuracyMeters > 0 {
+			value += fmt.Sprintf(", +/-%.0fm", gps.HorizontalAccuracyMeters)
+		}
+		lines = append(lines, "GPS: "+value)
+	}
+	if mechanical.Address != "" {
+		lines = append(lines, "Address: "+mechanical.Address)
+	}
+	if venue := mechanical.Venue; venue != nil {
+		value := venue.Name
+		if venue.Tier == "venue_candidate" {
+			value += ", candidate"
+		}
+		if venue.DistanceMeters > 0 {
+			value += fmt.Sprintf(", %.0fm from GPS", venue.DistanceMeters)
+		}
+		lines = append(lines, "Venue: "+value)
+	}
+	if len(mechanical.Albums) > 0 {
+		titles := []string{}
+		for i, album := range mechanical.Albums {
+			if i == 3 {
+				titles = append(titles, fmt.Sprintf("and %d more", len(mechanical.Albums)-3))
+				break
+			}
+			titles = append(titles, album.Title)
+		}
+		lines = append(lines, "Albums: "+strings.Join(titles, ", "))
+	}
+	if original := mechanical.Original; original != nil {
+		lines = append(lines, fmt.Sprintf("Original: %s, %s, %s", original.Filename, original.Availability, humanBytes(original.Bytes)))
+	}
+	if len(mechanical.Flags) > 0 {
+		lines = append(lines, "Flags: "+strings.Join(mechanical.Flags, ", "))
+	}
+	return lines
 }
 
 func writeNeighbors(w io.Writer, format output.Format, result archive.NeighborResult) error {
@@ -210,47 +251,6 @@ func printNeighborsText(w io.Writer, result archive.NeighborResult) error {
 		}
 		line := strings.TrimSpace(strings.Join(nonEmptyText(hit.Time, hit.MediaType, strings.Join(reasons, ", "), hit.Ref), " | "))
 		if _, err := fmt.Fprintf(w, "\n%s\n", line); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func writeEvidence(w io.Writer, format output.Format, result archive.EvidenceResult) error {
-	if format != output.Text && format != "" {
-		return output.Write(w, format, "evidence", result)
-	}
-	return printEvidenceText(w, result)
-}
-
-func printEvidenceText(w io.Writer, result archive.EvidenceResult) error {
-	if _, err := fmt.Fprintf(w, "Evidence: %s\n", emptyDash(result.Ref)); err != nil {
-		return err
-	}
-	if len(result.Evidence) == 0 {
-		_, err := io.WriteString(w, "No evidence refs found\n")
-		return err
-	}
-	for _, ref := range result.Evidence {
-		if _, err := fmt.Fprintf(w, "  %s", ref.Ref); err != nil {
-			return err
-		}
-		if ref.Kind != "" {
-			if _, err := fmt.Fprintf(w, " | %s", ref.Kind); err != nil {
-				return err
-			}
-		}
-		if ref.Source != "" {
-			if _, err := fmt.Fprintf(w, " | %s", ref.Source); err != nil {
-				return err
-			}
-		}
-		if ref.Summary != "" {
-			if _, err := fmt.Fprintf(w, " | %s", ref.Summary); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
 			return err
 		}
 	}
@@ -339,31 +339,6 @@ func nonEmptyText(values ...string) []string {
 	return out
 }
 
-func mapString(row map[string]any, key string) string {
-	if row == nil {
-		return ""
-	}
-	switch value := row[key].(type) {
-	case string:
-		return value
-	case fmt.Stringer:
-		return value.String()
-	default:
-		if value == nil {
-			return ""
-		}
-		return fmt.Sprint(value)
-	}
-}
-
-func displayTime(value string) string {
-	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
-	if err != nil {
-		return value
-	}
-	return parsed.Local().Format(time.RFC3339)
-}
-
 func openTextTime(value string) string {
 	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
 	if err != nil {
@@ -390,12 +365,4 @@ func humanBytes(bytes int64) string {
 	default:
 		return "unknown size"
 	}
-}
-
-func displayObservationKind(value string) string {
-	value = strings.ReplaceAll(strings.TrimSpace(value), "_", " ")
-	if value == "" {
-		return "observation"
-	}
-	return value
 }

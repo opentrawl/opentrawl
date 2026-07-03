@@ -56,15 +56,8 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if opened.Original == nil || opened.Evidence.Count == 0 {
-		t.Fatalf("open returned original=%#v evidence=%#v", opened.Original, opened.Evidence)
-	}
-	evidence, err := Evidence(ctx, paths, search.Results[0].ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(evidence.Evidence) == 0 {
-		t.Fatal("expected asset evidence")
+	if opened.Mechanical.Original == nil {
+		t.Fatalf("open returned original=%#v", opened.Mechanical.Original)
 	}
 
 	classified, err := Classify(ctx, paths, ClassifyOptions{
@@ -94,13 +87,6 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	}
 	if strings.Contains(string(openedJSON), "bounding_box") || strings.Contains(string(openedJSON), "confidence") || strings.Contains(string(openedJSON), "observations") {
 		t.Fatalf("metadata open JSON leaked vision-shaped fields: %s", openedJSON)
-	}
-	observationEvidence, err := Evidence(ctx, paths, observationSearch.Results[0].ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(observationEvidence.Evidence) == 0 {
-		t.Fatal("expected observation evidence")
 	}
 	status, err := Status(ctx, paths)
 	if err != nil {

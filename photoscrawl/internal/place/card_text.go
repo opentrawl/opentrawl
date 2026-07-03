@@ -134,29 +134,45 @@ func areaTrail(address *Address, area []AreaLevel) string {
 }
 
 func displayAddress(address *Address) string {
-	value := strings.TrimSpace(address.Formatted)
-	if value == "" {
-		value = formattedAddress(address)
-	}
-	return dedupeCommaParts(value)
+	return FormatAddress(address)
 }
 
-func formattedAddress(address *Address) string {
-	street := streetAddress(address)
-	name := strings.TrimSpace(address.Name)
-	values := []string{}
-	if name != "" && !sameAddressPart(name, street) {
-		values = append(values, name)
+func FormatAddress(address *Address) string {
+	if address == nil {
+		return ""
 	}
-	if street != "" {
-		values = append(values, street)
+	street := preferredStreetAddress(address)
+	if street == "" {
+		return dedupeCommaParts(address.Formatted)
 	}
-	values = append(values, address.SubLocality, address.Locality, address.AdministrativeArea, address.Country)
-	return strings.Join(compactStrings(values), ", ")
+	return strings.Join(dedupeAddressParts([]string{
+		street,
+		address.SubLocality,
+		address.Locality,
+		address.Country,
+	}), ", ")
 }
 
 func streetAddress(address *Address) string {
 	return strings.TrimSpace(strings.Join(compactStrings([]string{address.SubThoroughfare, address.Thoroughfare}), " "))
+}
+
+func preferredStreetAddress(address *Address) string {
+	street := streetAddress(address)
+	if street == "" {
+		return strings.TrimSpace(address.Name)
+	}
+	for _, part := range strings.Split(address.Formatted, ",") {
+		part = strings.TrimSpace(part)
+		if sameAddressPart(part, street) {
+			return part
+		}
+	}
+	name := strings.TrimSpace(address.Name)
+	if sameAddressPart(name, street) {
+		return name
+	}
+	return street
 }
 
 func sameAddressPart(left, right string) bool {
@@ -172,7 +188,10 @@ func sameAddressPart(left, right string) bool {
 }
 
 func dedupeCommaParts(value string) string {
-	parts := strings.Split(value, ",")
+	return strings.Join(dedupeAddressParts(strings.Split(value, ",")), ", ")
+}
+
+func dedupeAddressParts(parts []string) []string {
 	out := []string{}
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -192,7 +211,7 @@ func dedupeCommaParts(value string) string {
 		}
 		out = append(out, part)
 	}
-	return strings.Join(out, ", ")
+	return out
 }
 
 func shortCategory(category string) string {

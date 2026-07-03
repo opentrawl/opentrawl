@@ -149,3 +149,19 @@ func TestRenderCardDedupesAddressAndUsesAreasOfInterestAsMapContext(t *testing.T
 		t.Fatalf("card did not render address area of interest as map context:\n%s", card)
 	}
 }
+
+func TestFormatAddressDedupesReversedStreetNumber(t *testing.T) {
+	address := FormatAddress(&Address{
+		Name:            "Example Street 23",
+		SubThoroughfare: "23",
+		Thoroughfare:    "Example Street",
+		SubLocality:     "Example District",
+		Locality:        "Example City",
+		Country:         "Example Country",
+		Formatted:       "Example Street 23, 23 Example Street, Example District, Example City, Example Country",
+	})
+	want := "Example Street 23, Example District, Example City, Example Country"
+	if address != want {
+		t.Fatalf("address = %q, want %q", address, want)
+	}
+}
