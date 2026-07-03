@@ -115,3 +115,26 @@ any doc, re-read it from disk — pattern-editing against a remembered
 version silently skips his commented lines and can clobber his review.
 Treat comment lines as review to answer, never text to delete; remove
 them only when resolving that comment with him.
+
+## Output review protocol (suite-wide, lifted from photoscrawl per Josh)
+
+The gate for any change that touches what a command emits is a MODEL
+REVIEW, never a script. Deterministic checks own structure; quality
+judgment belongs to a model. Before committing any output-shape
+change:
+
+1. Generate RAW transcripts of every permutation the change touches:
+   every affected verb, JSON and human mode, crawler-direct AND
+   trawl-rendered (trawl renders crawler JSON — that is the surface
+   users and agents actually see). Raw means raw: full, untruncated,
+   uncensored — a review over summarized output reviews nothing.
+2. A model that did not write the change reviews those transcripts
+   adversarially (refute, not approve) against the blind-person
+   test: output must let a blind person understand it perfectly —
+   what, who, where, when, with what certainty. Anything they could
+   not parse (raw enums, machine ids, cache accounting) is slop;
+   anything they would still have to ask about is missing.
+3. crawlkit/conformance checks are tripwires that remember past
+   defects. They are never sufficient and passing them proves
+   nothing new. When the model review finds a defect class, add a
+   tripwire so it cannot regress — but the review itself is the gate.
