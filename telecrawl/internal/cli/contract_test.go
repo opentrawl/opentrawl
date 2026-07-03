@@ -186,7 +186,7 @@ func TestDoctorHumanUsesChecksList(t *testing.T) {
 			t.Fatalf("doctor leaked raw key %q:\n%s", disallowed, stdout)
 		}
 	}
-	for _, want := range []string{"Doctor checks:", "source_store: ok", "archive: ok"} {
+	for _, want := range []string{"Doctor checks:", "source store: ok", "archive: ok"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("doctor missing %q:\n%s", want, stdout)
 		}

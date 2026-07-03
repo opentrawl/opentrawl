@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
 	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/backup"
@@ -664,42 +663,93 @@ func (r *runtime) runContactsExport(args []string) error {
 		if err != nil {
 			return err
 		}
-		export := control.ContactExport{Contacts: exportContacts(contacts)}
-		if err := control.ValidateContactExport(export); err != nil {
-			return err
-		}
+		export := contactExport{Contacts: exportContacts(contacts)}
 		return r.print(export)
 	})
 }
 
-func exportContacts(contacts []store.Contact) []control.Contact {
-	out := make([]control.Contact, 0, len(contacts))
-	byPhone := map[string]store.Contact{}
-	phoneOrder := make([]string, 0, len(contacts))
+type contactExport struct {
+	Contacts []exportContact `json:"contacts"`
+}
+
+type exportContact struct {
+	DisplayName  string              `json:"display_name"`
+	PhoneNumbers []string            `json:"phone_numbers,omitempty"`
+	Accounts     map[string][]string `json:"accounts,omitempty"`
+}
+
+func exportContacts(contacts []store.Contact) []exportContact {
+	out := make([]exportContact, 0, len(contacts))
+	byKey := map[string]store.Contact{}
+	keys := make([]string, 0, len(contacts))
 	for _, contact := range contacts {
-		if isTelegramServiceContact(contact) {
+		if isTelegramServiceContact(contact) || !isExportablePeerContact(contact) {
 			continue
 		}
-		name := contactDisplayName(contact)
+		name := exportContactDisplayName(contact)
 		phone := strings.TrimSpace(contact.Phone)
-		if name == "" || phone == "" {
+		username := cleanTelegramUsername(contact.Username)
+		if name == "" || (phone == "" && username == "") {
 			continue
 		}
-		if current, ok := byPhone[phone]; ok {
+		key := exportContactKey(phone, username)
+		if current, ok := byKey[key]; ok {
 			if preferContactExportName(contact, current) {
-				byPhone[phone] = contact
+				contact = mergeContactExportIdentifiers(contact, current)
+				byKey[key] = contact
+			} else {
+				byKey[key] = mergeContactExportIdentifiers(current, contact)
 			}
 		} else {
-			byPhone[phone] = contact
-			phoneOrder = append(phoneOrder, phone)
+			byKey[key] = contact
+			keys = append(keys, key)
 		}
 	}
-	for _, phone := range phoneOrder {
-		contact := byPhone[phone]
-		name := contactDisplayName(contact)
-		out = append(out, control.Contact{DisplayName: name, PhoneNumbers: []string{phone}})
+	for _, key := range keys {
+		contact := byKey[key]
+		exported := exportContact{DisplayName: exportContactDisplayName(contact)}
+		if phone := strings.TrimSpace(contact.Phone); phone != "" {
+			exported.PhoneNumbers = []string{phone}
+		}
+		if username := cleanTelegramUsername(contact.Username); username != "" {
+			exported.Accounts = map[string][]string{"telegram": {username}}
+		}
+		out = append(out, exported)
 	}
 	return out
+}
+
+func mergeContactExportIdentifiers(base, extra store.Contact) store.Contact {
+	if strings.TrimSpace(base.Phone) == "" {
+		base.Phone = strings.TrimSpace(extra.Phone)
+	}
+	if strings.TrimSpace(base.Username) == "" {
+		base.Username = strings.TrimSpace(extra.Username)
+	}
+	return base
+}
+
+func isExportablePeerContact(contact store.Contact) bool {
+	peerType := strings.TrimSpace(contact.PeerType)
+	return peerType == "" || peerType == "user"
+}
+
+func exportContactKey(phone, username string) string {
+	if phone != "" {
+		return "phone:" + phone
+	}
+	return "telegram:" + strings.ToLower(username)
+}
+
+func exportContactDisplayName(contact store.Contact) string {
+	if name := contactDisplayName(contact); name != "" {
+		return name
+	}
+	return cleanTelegramUsername(contact.Username)
+}
+
+func cleanTelegramUsername(username string) string {
+	return strings.TrimSpace(strings.TrimPrefix(username, "@"))
 }
 
 func preferContactExportName(candidate, current store.Contact) bool {

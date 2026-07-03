@@ -388,6 +388,38 @@ func TestStatusJSONUsesFreshnessLastSyncOnly(t *testing.T) {
 	}
 }
 
+func TestOpenTruncatesOversizedBodyInTextAndJSON(t *testing.T) {
+	installFakeGog(t)
+	body := strings.Repeat("A", maxOpenBodyRunes) + "THIS_IS_ELIDED" + strings.Repeat("B", 6200)
+	dbPath := seedArchive(t, []archive.Message{
+		{ID: "m1", Time: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Terms", Body: body},
+	})
+	marker := "… 6,214 more characters; the full body is in the archive"
+
+	text := string(runOutput(t, context.Background(), []string{"open", archive.RefPrefix + "m1", "--archive", dbPath}))
+	if !strings.Contains(text, marker) {
+		t.Fatalf("open text missing truncation marker:\n%s", text)
+	}
+	if strings.Contains(text, "THIS_IS_ELIDED") {
+		t.Fatalf("open text leaked elided body:\n%s", text)
+	}
+
+	rawJSON := string(runOutput(t, context.Background(), []string{"open", archive.RefPrefix + "m1", "--json", "--archive", dbPath}))
+	if !strings.Contains(rawJSON, `"body_truncated": true`) {
+		t.Fatalf("open JSON missing body_truncated:\n%s", rawJSON)
+	}
+	var opened archive.OpenResult
+	if err := json.Unmarshal([]byte(rawJSON), &opened); err != nil {
+		t.Fatalf("decode open JSON: %v\n%s", err, rawJSON)
+	}
+	if !opened.BodyTruncated || !strings.Contains(opened.Body, marker) {
+		t.Fatalf("open JSON truncation = %#v", opened)
+	}
+	if strings.Contains(opened.Body, "THIS_IS_ELIDED") {
+		t.Fatalf("open JSON leaked elided body:\n%s", opened.Body)
+	}
+}
+
 func TestOpenShortRefErrorsUseContractCodes(t *testing.T) {
 	installFakeGog(t)
 	dbPath := filepath.Join(t.TempDir(), "gogcrawl.db")

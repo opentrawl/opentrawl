@@ -290,6 +290,39 @@ func TestTDataChatFilterMatchesStoredAndRawIDs(t *testing.T) {
 	}
 }
 
+func TestTDataRememberContactKeepsOnlySourceUserFields(t *testing.T) {
+	t.Parallel()
+	importer := &tdataImportSession{}
+
+	importer.rememberContact("100000235", tdataPeerDetails{
+		kind:      "user",
+		name:      "Alex Example",
+		username:  "AlexExample",
+		firstName: "Mif",
+		lastName:  "Example",
+		fullName:  "Alex Example",
+		phone:     "+15550100",
+	})
+	importer.rememberContact("-1001", tdataPeerDetails{
+		kind:     "channel",
+		name:     "Not a person",
+		username: "not_a_person",
+	})
+	importer.rememberContact("999", tdataPeerDetails{
+		kind: "user",
+		name: "999",
+	})
+
+	contacts := importer.sortedContacts()
+	if len(contacts) != 1 {
+		t.Fatalf("contacts = %#v, want one source-backed user contact", contacts)
+	}
+	contact := contacts[0]
+	if contact.JID != "100000235" || contact.PeerType != "user" || contact.Username != "AlexExample" || contact.FirstName != "Mif" || contact.LastName != "Example" || contact.FullName != "Alex Example" || contact.Phone != "+15550100" {
+		t.Fatalf("contact = %#v", contact)
+	}
+}
+
 func TestTDataMediaMapping(t *testing.T) {
 	t.Parallel()
 	documentMessage := &tg.Message{Media: &tg.MessageMediaDocument{Document: &tg.Document{
