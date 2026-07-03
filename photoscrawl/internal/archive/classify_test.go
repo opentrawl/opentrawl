@@ -589,6 +589,85 @@ func TestParsePhotoCardAcceptsVenuePlausibilityAssessment(t *testing.T) {
 	}
 }
 
+func TestParsePhotoCardUncertaintyUsesListItems(t *testing.T) {
+	t.Parallel()
+	card, err := parsePhotoCard(fixtureCardResponse(
+		"A synthetic document scene.",
+		"The image shows a synthetic document on a desk.",
+		"verdict: plausible\nreason: no visible contradiction.",
+		"None",
+		"venue type is only a provider candidate. The description already explains the visible scene.\n- small text is partly unreadable",
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"venue type is only a provider candidate",
+		"small text is partly unreadable",
+	}
+	if !reflect.DeepEqual(card.Uncertainties, want) {
+		t.Fatalf("uncertainties = %#v, want %#v", card.Uncertainties, want)
+	}
+}
+
+func TestPhotoCardMetadataJSONIncludesRoundedCameraAndPlaceContext(t *testing.T) {
+	t.Parallel()
+	metadata, err := photoCardMetadataJSON(classifyInput{
+		CreationDate:    "2026-05-27T10:00:00Z",
+		TimezoneName:    "Europe/Amsterdam",
+		MediaType:       "image",
+		Width:           4032,
+		Height:          3024,
+		HasLocation:     true,
+		Latitude:        52.367612345678,
+		Longitude:       4.904112345678,
+		AccuracyMeters:  8.25,
+		CameraMake:      "Apple",
+		CameraModel:     "iPhone 15 Pro",
+		LensModel:       "back camera",
+		FocalLengthMM:   6.859999999,
+		FocalLength35MM: 24,
+		Aperture:        1.799999952,
+		ShutterSpeed:    0.008333333333333333,
+		ISO:             64,
+		Place: &classifyPlaceContext{
+			CacheStatus: "hit",
+			Result: place.Result{
+				POIStatus: place.POIStatusFound,
+				POICandidates: []place.POICandidate{{
+					Name:      "Synthetic Store",
+					Category:  "MKPOICategoryStore",
+					DistanceM: 14.000099785938678,
+					Tier:      place.TierNearbyPOI,
+					Source:    "apple",
+				}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(metadata)
+	for _, want := range []string{
+		`"latitude": 52.36761`,
+		`"longitude": 4.90411`,
+		`"horizontal_accuracy_meters": 8`,
+		`"display": "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64"`,
+		`"aperture": 1.8`,
+		`"distance_meters": 14`,
+		`"category": "shop"`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("metadata JSON missing %s:\n%s", want, text)
+		}
+	}
+	for _, forbidden := range []string{"MKPOICategory", `"source": "apple"`} {
+		if strings.Contains(text, forbidden) {
+			t.Fatalf("metadata JSON leaked %q:\n%s", forbidden, text)
+		}
+	}
+}
+
 func TestWritePlaceClassificationAppliesVenuePlausibilityAndAddressLine(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -634,11 +713,63 @@ func TestWritePlaceClassificationAppliesVenuePlausibilityAndAddressLine(t *testi
 			if len(opened.Mechanical.VenueCandidates) != 1 {
 				t.Fatalf("venue candidates = %#v", opened.Mechanical.VenueCandidates)
 			}
-			plausibility := opened.Mechanical.VenueCandidates[0].VenuePlausibility
-			if plausibility == nil || plausibility.Verdict != tc.verdict {
-				t.Fatalf("venue candidate plausibility = %#v, want %q", plausibility, tc.verdict)
-			}
 		})
+	}
+}
+
+func TestOpenVenueCandidatesCapsRoundsAndFlattens(t *testing.T) {
+	rows := []map[string]any{
+		openCandidateRow("Nearby 1", "nearby_poi", 1.2, "MKPOICategoryStore", ""),
+		openCandidateRow("Nearby 2", "nearby_poi", 2.6, "MKPOICategoryStore", ""),
+		openCandidateRow("Nearby 3", "nearby_poi", 3.4, "MKPOICategoryStore", ""),
+		openCandidateRow("Nearby 4", "nearby_poi", 4.4, "MKPOICategoryStore", ""),
+		openCandidateRow("Nearby 5", "nearby_poi", 5.4, "MKPOICategoryStore", ""),
+		openCandidateRow("Nearby 6", "nearby_poi", 6.4, "MKPOICategoryStore", ""),
+		openCandidateRow("Synthetic Gym", "venue_candidate", 80.7, "MKPOICategoryFitnessCenter", venueVerdictPlausible),
+	}
+	candidates := openVenueCandidates(rows)
+	if len(candidates) != 5 {
+		t.Fatalf("candidates = %#v, want 5", candidates)
+	}
+	if candidates[0].Name != "Nearby 1" || candidates[0].DistanceMeters != 1 || candidates[0].Category != "shop" {
+		t.Fatalf("first candidate = %#v", candidates[0])
+	}
+	last := candidates[len(candidates)-1]
+	if last.Name != "Synthetic Gym" || last.Tier != place.TierVenueCandidate || last.DistanceMeters != 81 || last.Category != "fitness centre" {
+		t.Fatalf("included venue candidate = %#v", last)
+	}
+	data, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`"source"`, "venue_plausibility", `"candidate"`, "MKPOICategory"} {
+		if strings.Contains(string(data), forbidden) {
+			t.Fatalf("candidate JSON leaked %q: %s", forbidden, data)
+		}
+	}
+}
+
+func openCandidateRow(name, tier string, distance float64, category, verdict string) map[string]any {
+	value := map[string]any{
+		"category":   category,
+		"distance_m": distance,
+		"source":     "apple",
+	}
+	if verdict != "" {
+		value["venue_plausibility"] = map[string]any{
+			"candidate": name,
+			"verdict":   verdict,
+			"reason":    "synthetic fixture reason",
+		}
+	}
+	data, _ := json.Marshal(value)
+	return map[string]any{
+		"observation_type": "poi_candidate",
+		"value_text":       name,
+		"value_json":       string(data),
+		"provider":         "apple",
+		"tier":             tier,
+		"distance_meters":  distance,
 	}
 }
 

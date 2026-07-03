@@ -340,40 +340,56 @@ func parseUncertainties(value string) []string {
 	}
 	items := []string{}
 	for _, line := range strings.Split(value, "\n") {
-		line = stripListMarker(line)
-		line = strings.TrimPrefix(strings.TrimSpace(line), "Uncertain:")
-		line = strings.TrimPrefix(strings.TrimSpace(line), "Uncertainty:")
-		line = strings.TrimSpace(line)
-		if line == "" {
+		line, ok := stripListMarkerOK(line)
+		if !ok {
 			continue
 		}
-		for _, part := range strings.Split(line, ";") {
-			part = strings.Trim(strings.Join(strings.Fields(part), " "), ". ")
-			if part == "" || emptyCardField(part) {
-				continue
-			}
-			items = append(items, part)
+		line = cleanUncertaintyClause(line)
+		if line == "" || emptyCardField(line) {
+			continue
 		}
+		items = append(items, line)
 	}
 	return uniqueStrings(items)
 }
 
 func stripListMarker(value string) string {
+	out, ok := stripListMarkerOK(value)
+	if ok {
+		return out
+	}
+	return strings.TrimSpace(value)
+}
+
+func stripListMarkerOK(value string) (string, bool) {
 	value = strings.TrimSpace(value)
 	for _, marker := range []string{"- ", "* ", "• "} {
 		if strings.HasPrefix(value, marker) {
-			return strings.TrimSpace(strings.TrimPrefix(value, marker))
+			return strings.TrimSpace(strings.TrimPrefix(value, marker)), true
 		}
 	}
 	for i, r := range value {
 		if r < '0' || r > '9' {
 			if i > 0 && (strings.HasPrefix(value[i:], ". ") || strings.HasPrefix(value[i:], ") ")) {
-				return strings.TrimSpace(value[i+2:])
+				return strings.TrimSpace(value[i+2:]), true
 			}
 			break
 		}
 	}
-	return value
+	return value, false
+}
+
+func cleanUncertaintyClause(value string) string {
+	value = strings.TrimPrefix(strings.TrimSpace(value), "Uncertain:")
+	value = strings.TrimPrefix(strings.TrimSpace(value), "Uncertainty:")
+	value = strings.Join(strings.Fields(value), " ")
+	for _, separator := range []string{". ", ";"} {
+		if before, _, ok := strings.Cut(value, separator); ok {
+			value = before
+			break
+		}
+	}
+	return strings.Trim(value, " .")
 }
 
 func emptyCardField(value string) bool {

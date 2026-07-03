@@ -28,8 +28,8 @@ select source_fingerprint from crawl_seen_asset
 where source_library_id = ? and asset_id = ?
 `},
 		{&stmts.asset, `
-insert into asset(id, local_identifier, media_type, media_subtypes, creation_date, modification_date, added_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier, represents_burst, source_library_id, metadata_json)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+insert into asset(id, local_identifier, media_type, media_subtypes, creation_date, modification_date, added_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier, represents_burst, camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso, source_library_id, metadata_json)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(id) do update set
   local_identifier = excluded.local_identifier,
   media_type = excluded.media_type,
@@ -45,6 +45,14 @@ on conflict(id) do update set
   hidden = excluded.hidden,
   burst_identifier = excluded.burst_identifier,
   represents_burst = excluded.represents_burst,
+  camera_make = excluded.camera_make,
+  camera_model = excluded.camera_model,
+  lens_model = excluded.lens_model,
+  focal_length_mm = excluded.focal_length_mm,
+  focal_length_35mm = excluded.focal_length_35mm,
+  aperture = excluded.aperture,
+  shutter_speed = excluded.shutter_speed,
+  iso = excluded.iso,
   source_library_id = excluded.source_library_id,
   metadata_json = excluded.metadata_json
 `},

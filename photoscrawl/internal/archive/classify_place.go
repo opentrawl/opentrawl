@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/place"
 )
 
@@ -62,6 +63,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		return 0, err
 	}
 	result := input.Place.Result
+	place.NormalizeResult(&result)
 	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
 	evidenceID := stableID("evidence", input.AssetID, "place_context", result.Provider, input.Place.CacheStatus)
 	evidenceJSON, err := jsonText(map[string]any{
@@ -240,10 +242,12 @@ func venueLineTier(candidate venueCandidate) (string, bool) {
 func placeCandidateValue(candidate venueCandidate) map[string]any {
 	value := map[string]any{
 		"name":       candidate.Name,
-		"category":   candidate.Category,
 		"distance_m": candidate.DistanceM,
 		"tier":       candidate.Tier,
 		"source":     candidate.Source,
+	}
+	if category := placeCategory(candidate.Category); category != "" {
+		value["category"] = category
 	}
 	if candidate.Coordinate != nil {
 		value["coordinate"] = candidate.Coordinate
@@ -258,4 +262,8 @@ func placeCandidateValue(candidate venueCandidate) map[string]any {
 		value["venue_plausibility"] = candidate.Plausibility
 	}
 	return value
+}
+
+func placeCategory(category string) string {
+	return cardformat.NormalizePOICategory(category)
 }

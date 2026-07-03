@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 )
 
 func unnamedMapKindUseful(kind string) bool {
@@ -215,23 +217,7 @@ func dedupeAddressParts(parts []string) []string {
 }
 
 func shortCategory(category string) string {
-	category = strings.TrimSpace(category)
-	category = strings.TrimPrefix(category, "MKPOICategory")
-	category = splitCamel(category)
-	category = strings.ReplaceAll(category, "_", " ")
-	category = strings.ReplaceAll(category, "-", " ")
-	return strings.ToLower(strings.Join(strings.Fields(category), " "))
-}
-
-func splitCamel(value string) string {
-	var out []rune
-	for i, r := range value {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			out = append(out, ' ')
-		}
-		out = append(out, r)
-	}
-	return string(out)
+	return cardformat.NormalizePOICategory(category)
 }
 
 func distanceLabel(distance float64) string {

@@ -31,6 +31,7 @@ type Asset struct {
 	BurstIdentifier  string            `json:"burst_identifier"`
 	RepresentsBurst  bool              `json:"represents_burst"`
 	Location         *Location         `json:"location,omitempty"`
+	Camera           *Camera           `json:"camera,omitempty"`
 	Resources        []Resource        `json:"resources,omitempty"`
 	Albums           []AlbumMembership `json:"albums,omitempty"`
 	Metadata         map[string]any    `json:"metadata,omitempty"`
@@ -68,4 +69,15 @@ type Location struct {
 	Longitude          float64  `json:"longitude"`
 	Altitude           *float64 `json:"altitude,omitempty"`
 	HorizontalAccuracy *float64 `json:"horizontal_accuracy,omitempty"`
+}
+
+type Camera struct {
+	Make            string   `json:"make,omitempty"`
+	Model           string   `json:"model,omitempty"`
+	LensModel       string   `json:"lens_model,omitempty"`
+	FocalLengthMM   *float64 `json:"focal_length_mm,omitempty"`
+	FocalLength35MM *float64 `json:"focal_length_35mm,omitempty"`
+	Aperture        *float64 `json:"aperture,omitempty"`
+	ShutterSpeed    *float64 `json:"shutter_speed,omitempty"`
+	ISO             *int64   `json:"iso,omitempty"`
 }

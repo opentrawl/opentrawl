@@ -18,6 +18,7 @@ var (
 	keyValueDumpPattern     = regexp.MustCompile(`\b([A-Za-z][A-Za-z0-9_]{0,40})=("[^"]*"|\S+)`)
 	base64RunPattern        = regexp.MustCompile(`\b[A-Za-z0-9+/_-]{41,}={0,2}\b`)
 	enumPattern             = regexp.MustCompile(`\b(type|status)_[0-9]+\b`)
+	appleConstantPattern    = regexp.MustCompile(`\b(?:MK|PH|CL|NS|UI)[A-Z]*(?:[A-Z][a-z0-9]+){2,}\b`)
 	nonLowercaseMePattern   = regexp.MustCompile(`\b(ME|Me|mE)\b`)
 )
 
@@ -69,6 +70,9 @@ func CheckHumanOutput(humanOutput string) []string {
 		}
 		if match := enumPattern.FindString(line); match != "" {
 			failures = append(failures, fmt.Sprintf("line %d contains an unmapped enum value: %s", lineNo, match))
+		}
+		if match := appleConstantPattern.FindString(line); match != "" {
+			failures = append(failures, fmt.Sprintf("line %d contains a raw Apple framework constant: %s", lineNo, match))
 		}
 		if match := nonLowercaseMePattern.FindString(line); match != "" {
 			failures = append(failures, fmt.Sprintf("line %d renders %q; use lowercase me", lineNo, match))
@@ -141,6 +145,9 @@ func checkSearchText(index int, field, value string) []string {
 	}
 	if match := enumPattern.FindString(value); match != "" {
 		failures = append(failures, fmt.Sprintf("search result %d %s contains an unmapped enum value: %s", index, field, match))
+	}
+	if match := appleConstantPattern.FindString(value); match != "" {
+		failures = append(failures, fmt.Sprintf("search result %d %s contains a raw Apple framework constant: %s", index, field, match))
 	}
 	if field == "who" || field == "where" {
 		if match := nonLowercaseMePattern.FindString(value); match != "" {

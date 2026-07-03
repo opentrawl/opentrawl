@@ -52,7 +52,7 @@ Media: photo, 4032 x 3024
 GPS: 10.12345, 20.54321, +/-8m
 Address: 10 Example Street, Example City, Example Region, Example Country
 Venue: Example Taqueria, candidate, 12m from GPS
-Camera: Apple iPhone 15 Pro, back camera, 24mm equiv, f/1.8, 1/120s, ISO 64
+Camera: Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64
 Albums: City trip, Food ideas
 Original: IMG_1042.HEIC, on this Mac, 2.8 MB
 Flags: favourite, visible, single shot
@@ -83,9 +83,9 @@ Fields shown in human mode:
 
 | line | source | display rule |
 |---|---|---|
-| `Captured` | `ZASSET.ZDATECREATED`, `ZADDITIONALASSETATTRIBUTES.ZTIMEZONENAME`, `ZEXTENDEDATTRIBUTES.ZTIMEZONENAME` | precompute local time before prompting; never show raw UTC in the card |
+| `Captured` | `ZASSET.ZDATECREATED`, `ZADDITIONALASSETATTRIBUTES.ZTIMEZONENAME` | precompute local time before prompting; never show raw UTC in the card |
 | `Media` | `ZASSET`, resource rows | show kind, dimensions, and duration for video or live-photo-like assets |
-| `GPS` | `ZASSET.ZLATITUDE`, `ZASSET.ZLONGITUDE`, `ZADDITIONALASSETATTRIBUTES.ZGPSHORIZONTALACCURACY` | show raw fix and accuracy, rounded for display but exact in JSON |
+| `GPS` | `ZASSET.ZLATITUDE`, `ZASSET.ZLONGITUDE`, `ZADDITIONALASSETATTRIBUTES.ZGPSHORIZONTALACCURACY` | show the fix rounded to 5 decimals and accuracy rounded to whole metres in text and JSON |
 | `Address` | cached place-context reverse geocode | show one formatted line when cache has a valid address |
 | `Venue` | cached place-context POI candidate | show only when the candidate passes the venue threshold below |
 | `Camera` | `ZEXTENDEDATTRIBUTES`, ImageIO fallback | show only the essentials listed below |
@@ -115,15 +115,15 @@ EXIF fields that stay JSON-only:
 | camera processing state, HDR, depth, spatial, capture reason | useful for later filters, not default card facts |
 | codec, bitrate, sample rate, frame rate | show only for video when it explains the asset |
 
-The current SQLite provider already extracts time, kind, dimensions, favourite,
-hidden, burst id, raw GPS, GPS accuracy, UTI, filenames, resources, availability,
-and albums. It does not yet extract the camera and lens fields above.
+The SQLite provider extracts time, kind, dimensions, favourite, hidden, burst
+id, raw GPS, GPS accuracy, UTI, filenames, resources, availability, albums, and
+the camera and lens fields above.
 
 Photos.sqlite exposes more candidate tables than the provider currently uses.
 The first useful additions are:
 
 - `ZEXTENDEDATTRIBUTES` for camera make, camera model, lens model, focal length,
-  aperture, shutter speed, ISO, flash, and timezone name
+  aperture, shutter speed, and ISO
 - `ZMEDIAANALYSISASSETATTRIBUTES` for face count and analysis versions
 - `ZDETECTEDFACE` and `ZPERSON` for source face and person evidence
 - `ZKEYWORD` and keyword joins for user-applied keywords
@@ -164,8 +164,7 @@ but it must not reintroduce raw provenance as the main shape.
   "mechanical": {
     "captured": {
       "local": "2024-05-14T19:42:18-07:00",
-      "timezone": "America/Los_Angeles",
-      "source": "apple_photos"
+      "timezone": "America/Los_Angeles"
     },
     "media": {
       "kind": "photo",
@@ -176,22 +175,26 @@ but it must not reintroduce raw provenance as the main shape.
     "gps": {
       "latitude": 10.12345,
       "longitude": 20.54321,
-      "horizontal_accuracy_meters": 8,
-      "source": "apple_photos"
+      "horizontal_accuracy_meters": 8
     },
-    "place": {
-      "address_line": "10 Example Street, Example City, Example Region, Example Country",
-      "venue": {
+    "address": "10 Example Street, Example City, Example Region, Example Country",
+    "venue": {
+      "name": "Example Taqueria",
+      "category": "restaurant",
+      "tier": "venue_candidate",
+      "distance_meters": 12
+    },
+    "venue_candidates": [
+      {
         "name": "Example Taqueria",
         "category": "restaurant",
-        "relation": "candidate",
+        "tier": "venue_candidate",
         "distance_meters": 12,
-        "tier": "venue_candidate"
-      },
-      "cache_status": "hit"
-    },
+        "verdict": "plausible"
+      }
+    ],
     "camera": {
-      "display": "Apple iPhone 15 Pro, back camera, 24mm equiv, f/1.8, 1/120s, ISO 64",
+      "display": "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64",
       "make": "Apple",
       "model": "iPhone 15 Pro",
       "lens_model": "back camera",
@@ -200,7 +203,6 @@ but it must not reintroduce raw provenance as the main shape.
       "aperture": 1.8,
       "shutter_speed": "1/120s",
       "iso": 64,
-      "flash_fired": false,
       "json_only": {
         "metering_mode": "pattern",
         "white_balance": "auto",
@@ -223,7 +225,7 @@ but it must not reintroduce raw provenance as the main shape.
     }
   },
   "model": {
-    "prompt_version": "photo-card-v3",
+    "prompt_version": "photo-card-v3.1",
     "model_id": "gemini-flash-latest",
     "summary": "tacos and salsa on a restaurant table.",
     "description": "The photo shows a tray of tacos, salsa cups, lime wedges, and a paper menu on a small restaurant table.",
@@ -251,7 +253,7 @@ second command anyway.
 Recommendation:
 
 - `open` human mode shows the card only
-- `open --json` mirrors the card and includes source names, not evidence refs
+- `open --json` mirrors the card and omits source and evidence provenance
 - `evidence <ref>` owns provenance, raw source pointers, provider payloads, and
   model request/response refs
 - a future `open --json --depth evidence` may embed evidence refs if agents
@@ -267,10 +269,10 @@ masquerades as fact.
 
 | fact family | source | stored where | card | search | JSON | model role |
 |---|---|---|---|---|---|---|
-| time | Apple mechanical | `asset.creation_date`, timezone fields | show local capture time | filter and result time | exact local and source UTC | context only |
-| GPS | Apple mechanical | `location_observation` | show raw fix and accuracy | fallback `where` only | exact coordinate and accuracy | context only |
+| time | Apple mechanical | `asset.creation_date`, timezone fields | show local capture time | filter and result time | local time and zone name, no source field | context only |
+| GPS | Apple mechanical | `location_observation` | show rounded fix and accuracy | fallback `where` only | rounded coordinate and whole-metre accuracy, no source field | context only |
 | address | provider enrichment | place-context cache and derived `place_observation` | show formatted address if cached | searchable area/address fields | full address components | context only |
-| POI/venue | provider enrichment | place-context cache and `place_observation` candidate rows | show only tiered candidate or confirmed venue | searchable only when tier passes | candidates with tier, distance, source | may mention with calibrated wording |
+| POI/venue | provider enrichment | place-context cache and `place_observation` candidate rows | show only tiered candidate or confirmed venue | searchable only when tier passes | up to 5 candidates with plain category, tier, whole-metre distance, and verdict | may mention with calibrated wording |
 | camera | Apple mechanical and ImageIO fallback | asset metadata JSON plus typed capture fields | show compact camera line | searchable device/lens only | full capture metadata | context only |
 | faces/people | Apple mechanical or local Vision | `face_observation` | not in v3 card by default | `who` and person search when labels exist | face count, labels, boxes if present | must not identify people |
 | albums | Apple mechanical | `album_membership` | show capped title list | searchable | full list | context only |
@@ -414,6 +416,7 @@ The sidecar should include:
     }
   },
   "camera": {
+    "display": "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64",
     "make": "Apple",
     "model": "iPhone 15 Pro",
     "lens_model": "back camera",
@@ -421,8 +424,7 @@ The sidecar should include:
     "focal_length_35mm": 24,
     "aperture": 1.8,
     "shutter_speed": "1/120s",
-    "iso": 64,
-    "flash_fired": false
+    "iso": 64
   },
   "library_context": {
     "albums": ["City trip", "Food ideas"],
@@ -479,8 +481,8 @@ after the sidecar contract exists.
 ```markdown
 ---
 written_by: ai
-prompt_version: photo-card-v3
-change_rationale: "Separate deterministic context from model prose and tighten venue claims."
+prompt_version: photo-card-v3.1
+change_rationale: "Expose rounded camera context and require one-clause uncertainty bullets."
 ---
 
 # photoscrawl photo card prompt v3
@@ -543,6 +545,9 @@ If there is no useful readable text, write `none`.
 
 Write only the uncertainties that affect interpretation. Include uncertain
 venue, document, OCR, object, event, or scene claims. Do not pad this section.
+Use one bullet per uncertainty. Each bullet must be one short clause, not a
+sentence pair. Do not restate conclusions already made in the description.
+If there are no meaningful uncertainties, write `none`.
 
 Do not quote or list local paths, Photos ids, archive ids, raw GPS coordinates,
 raw EXIF blocks, raw metadata JSON, hashes, or filenames.
@@ -569,7 +574,7 @@ Re-derive these rows:
 
 - asset metadata after the SQLite provider adds `ZEXTENDEDATTRIBUTES`
 - place observations after place-context cache/backfill is wired to classify
-- model observations for `photo-card-v3`
+- model observations for `photo-card-v3.1`
 - hidden search terms from the v3 card
 - `open` JSON and text snapshots in tests
 

@@ -74,7 +74,7 @@ func hasCompetingCandidate(input Input, candidates []POICandidate, index int, th
 }
 
 func candidateType(candidate POICandidate) string {
-	category := strings.ToLower(strings.TrimSpace(candidate.Category))
+	category := strings.ToLower(strings.TrimSpace(shortCategory(candidate.Category)))
 	if category != "" {
 		return category
 	}

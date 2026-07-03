@@ -185,6 +185,7 @@ func loadResolvedResult(path string, input Input, radius float64) (Result, bool)
 	if err := json.Unmarshal(data, &result); err != nil {
 		return Result{}, false
 	}
+	NormalizeResult(&result)
 	if result.Input.Location.Latitude == 0 && result.Input.Location.Longitude == 0 {
 		result.Input = input
 	}

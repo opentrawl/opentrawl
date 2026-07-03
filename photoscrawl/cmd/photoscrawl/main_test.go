@@ -210,11 +210,12 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 	err := printOpenText(&out, archive.OpenResult{
 		Ref: "photoscrawl:asset/fixture",
 		Mechanical: archive.OpenMechanical{
-			Captured: &archive.OpenCaptured{Local: "2026-05-28T12:00:00+02:00", Timezone: "Europe/Amsterdam", Source: "apple_photos"},
+			Captured: &archive.OpenCaptured{Local: "2026-05-28T12:00:00+02:00", Timezone: "Europe/Amsterdam"},
 			Media:    &archive.OpenMedia{Kind: "photo", Width: 100, Height: 80},
-			GPS:      &archive.OpenGPS{Latitude: 52, Longitude: 4, HorizontalAccuracyMeters: 8, Source: "fixture"},
+			GPS:      &archive.OpenGPS{Latitude: 52, Longitude: 4, HorizontalAccuracyMeters: 8},
 			Address:  "Synthetic Street, Synthetic City",
 			Venue:    &archive.OpenVenue{Name: "Synthetic Pier", Tier: "venue_candidate", DistanceMeters: 12},
+			Camera:   &archive.OpenCamera{Display: "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64"},
 			Original: &archive.OpenOriginal{
 				Filename:     "IMG_0001.JPG",
 				Bytes:        5_700_000,
@@ -239,6 +240,7 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 		"Media: photo, 100 x 80",
 		"GPS: 52.00000, 4.00000, +/-8m",
 		"Venue: Synthetic Pier, candidate, 12m from GPS",
+		"Camera: Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64",
 		"Summary: Synthetic beach scene.",
 		"Uncertainty: exact venue.",
 		"Original: IMG_0001.JPG",

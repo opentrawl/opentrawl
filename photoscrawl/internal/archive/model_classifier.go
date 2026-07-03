@@ -15,6 +15,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/modelclient"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
 )
@@ -106,11 +107,9 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 		})
 	}
 	payload := map[string]any{
-		"schema_version": 3,
 		"capture": map[string]any{
 			"local_time": localCaptureTime(input.CreationDate, input.timezoneName()),
 			"timezone":   input.timezoneName(),
-			"source":     "apple_photos",
 		},
 		"media": map[string]any{
 			"kind":             openMediaType(input.MediaType),
@@ -125,21 +124,23 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 			"hidden":       input.Hidden,
 			"burst_member": strings.TrimSpace(input.BurstIdentifier) != "",
 			"original":     input.originalContext(),
-			"source_note":  "metadata is context for reasoning, not text to echo",
 		},
 	}
 	if input.HasLocation {
 		location := map[string]any{
 			"gps": map[string]any{
-				"latitude":                   input.Latitude,
-				"longitude":                  input.Longitude,
-				"horizontal_accuracy_meters": input.AccuracyMeters,
+				"latitude":                   cardformat.Coordinate(input.Latitude),
+				"longitude":                  cardformat.Coordinate(input.Longitude),
+				"horizontal_accuracy_meters": cardformat.Meters(input.AccuracyMeters),
 			},
 		}
 		if input.Place != nil {
 			location["place_context"] = input.placeContextForPrompt()
 		}
 		payload["location"] = location
+	}
+	if camera := input.cameraContext(); len(camera) > 0 {
+		payload["camera"] = camera
 	}
 	return json.MarshalIndent(payload, "", "  ")
 }
@@ -219,21 +220,67 @@ func (input classifyInput) placeContextForPrompt() map[string]any {
 	result := input.Place.Result
 	candidates := []map[string]any{}
 	for _, candidate := range result.POICandidates {
-		candidates = append(candidates, map[string]any{
+		if len(candidates) >= 5 {
+			break
+		}
+		row := map[string]any{
 			"name":            candidate.Name,
-			"category":        candidate.Category,
-			"distance_meters": candidate.DistanceM,
+			"distance_meters": cardformat.Meters(candidate.DistanceM),
 			"tier":            candidate.Tier,
-			"source":          candidate.Source,
-		})
+		}
+		if category := cardformat.NormalizePOICategory(candidate.Category); category != "" {
+			row["category"] = category
+		}
+		candidates = append(candidates, row)
 	}
 	return map[string]any{
-		"cache_status":     input.Place.CacheStatus,
 		"address_line":     addressLine(result.Address),
 		"area":             result.Area,
 		"poi_status":       result.POIStatus,
 		"venue_candidates": candidates,
 	}
+}
+
+func (input classifyInput) cameraContext() map[string]any {
+	camera := cardformat.Camera{
+		Make:            input.CameraMake,
+		Model:           input.CameraModel,
+		LensModel:       input.LensModel,
+		FocalLengthMM:   cardformat.FocalLength(input.FocalLengthMM),
+		FocalLength35MM: cardformat.Meters(input.FocalLength35MM),
+		Aperture:        cardformat.Aperture(input.Aperture),
+		ShutterSpeed:    input.ShutterSpeed,
+		ISO:             input.ISO,
+	}
+	out := map[string]any{}
+	if display := cardformat.CameraDisplay(camera); display != "" {
+		out["display"] = display
+	}
+	if value := strings.TrimSpace(camera.Make); value != "" {
+		out["make"] = value
+	}
+	if value := strings.TrimSpace(camera.Model); value != "" {
+		out["model"] = value
+	}
+	if value := strings.TrimSpace(camera.LensModel); value != "" {
+		out["lens_model"] = value
+	}
+	if camera.FocalLengthMM > 0 {
+		out["focal_length_mm"] = camera.FocalLengthMM
+	}
+	if camera.FocalLength35MM > 0 {
+		out["focal_length_35mm"] = camera.FocalLength35MM
+	}
+	if camera.Aperture > 0 {
+		out["aperture"] = camera.Aperture
+	}
+	if shutter := cardformat.ShutterSpeedLabel(camera.ShutterSpeed); shutter != "" {
+		out["shutter_speed"] = shutter
+	}
+	if camera.ISO > 0 {
+		out["iso"] = camera.ISO
+	}
+	return out
 }
 
 func (c modelClassifier) remote() bool {

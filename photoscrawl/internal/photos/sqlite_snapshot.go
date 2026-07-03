@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -111,9 +112,18 @@ select a.Z_PK,
        cast(aa.ZGPSHORIZONTALACCURACY as real),
        coalesce(a.ZUNIFORMTYPEIDENTIFIER, ''),
        coalesce(a.ZFILENAME, ''),
-       coalesce(aa.ZORIGINALFILENAME, '')
+       coalesce(aa.ZORIGINALFILENAME, ''),
+       coalesce(ea.ZCAMERAMAKE, ''),
+       coalesce(ea.ZCAMERAMODEL, ''),
+       coalesce(ea.ZLENSMODEL, ''),
+       cast(ea.ZFOCALLENGTH as real),
+       cast(ea.ZFOCALLENGTHIN35MM as real),
+       cast(ea.ZAPERTURE as real),
+       cast(ea.ZSHUTTERSPEED as real),
+       cast(ea.ZISO as real)
 from ZASSET a
 left join ZADDITIONALASSETATTRIBUTES aa on aa.ZASSET = a.Z_PK
+left join ZEXTENDEDATTRIBUTES ea on ea.ZASSET = a.Z_PK
 where coalesce(a.ZTRASHEDSTATE, 0) = 0
   and coalesce(a.ZUUID, '') <> ''
 order by a.ZDATECREATED, a.ZUUID
@@ -147,6 +157,14 @@ order by a.ZDATECREATED, a.ZUUID
 			&row.uti,
 			&row.filename,
 			&row.originalFilename,
+			&row.cameraMake,
+			&row.cameraModel,
+			&row.lensModel,
+			&row.focalLengthMM,
+			&row.focalLength35MM,
+			&row.aperture,
+			&row.shutterSpeed,
+			&row.iso,
 		); err != nil {
 			return nil, err
 		}
@@ -164,6 +182,7 @@ order by a.ZDATECREATED, a.ZUUID
 			Favorite:         row.favorite != 0,
 			Hidden:           row.hidden != 0,
 			BurstIdentifier:  row.burstIdentifier,
+			Camera:           sqliteCamera(row),
 			Resources:        resources[row.pk],
 			Albums:           albums[row.pk],
 			Metadata: map[string]any{
@@ -173,6 +192,7 @@ order by a.ZDATECREATED, a.ZUUID
 				"original_filename":          row.originalFilename,
 				"schema_source":              "ZASSET",
 				"additional_attributes_join": "ZADDITIONALASSETATTRIBUTES",
+				"extended_attributes_join":   "ZEXTENDEDATTRIBUTES",
 			},
 		}
 		if row.latitude.Valid && row.longitude.Valid && validLocation(row.latitude.Float64, row.longitude.Float64) {
@@ -388,6 +408,49 @@ type sqliteAssetRow struct {
 	uti                string
 	filename           string
 	originalFilename   string
+	cameraMake         string
+	cameraModel        string
+	lensModel          string
+	focalLengthMM      sql.NullFloat64
+	focalLength35MM    sql.NullFloat64
+	aperture           sql.NullFloat64
+	shutterSpeed       sql.NullFloat64
+	iso                sql.NullFloat64
+}
+
+func sqliteCamera(row sqliteAssetRow) *Camera {
+	camera := &Camera{
+		Make:            strings.TrimSpace(row.cameraMake),
+		Model:           strings.TrimSpace(row.cameraModel),
+		LensModel:       strings.TrimSpace(row.lensModel),
+		FocalLengthMM:   nullFloat(row.focalLengthMM),
+		FocalLength35MM: nullFloat(row.focalLength35MM),
+		Aperture:        nullFloat(row.aperture),
+		ShutterSpeed:    nullFloat(row.shutterSpeed),
+		ISO:             nullIntFromFloat(row.iso),
+	}
+	if camera.Make == "" && camera.Model == "" && camera.LensModel == "" &&
+		camera.FocalLengthMM == nil && camera.FocalLength35MM == nil &&
+		camera.Aperture == nil && camera.ShutterSpeed == nil && camera.ISO == nil {
+		return nil
+	}
+	return camera
+}
+
+func nullFloat(value sql.NullFloat64) *float64 {
+	if !value.Valid {
+		return nil
+	}
+	v := value.Float64
+	return &v
+}
+
+func nullIntFromFloat(value sql.NullFloat64) *int64 {
+	if !value.Valid {
+		return nil
+	}
+	v := int64(math.Round(value.Float64))
+	return &v
 }
 
 func sqliteMediaType(kind int64) string {

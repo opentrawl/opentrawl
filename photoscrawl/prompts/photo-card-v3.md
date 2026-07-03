@@ -1,7 +1,7 @@
 ---
 written_by: ai
-prompt_version: photo-card-v3
-change_rationale: "Separate deterministic context from model prose and require structured venue plausibility."
+prompt_version: photo-card-v3.1
+change_rationale: "Expose rounded camera context and require one-clause uncertainty bullets."
 ---
 
 # photoscrawl photo card prompt v3
@@ -80,6 +80,9 @@ If there is no useful readable text, write `none`.
 
 Write only the uncertainties that affect interpretation. Include uncertain
 venue, document, OCR, object, event, or scene claims. Do not pad this section.
+Use one bullet per uncertainty. Each bullet must be one short clause, not a
+sentence pair. Do not restate conclusions already made in the description.
+If there are no meaningful uncertainties, write `none`.
 
 Do not quote or list local paths, Photos ids, archive ids, raw GPS coordinates,
 raw EXIF blocks, raw metadata JSON, hashes, or filenames.

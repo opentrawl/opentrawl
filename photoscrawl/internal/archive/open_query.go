@@ -21,7 +21,8 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 	defer db.Close()
 
 	asset, err := oneRow(ctx, db.DB(), `
-select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier
+select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
+       camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso
 from asset
 where id = ?
 `, rowID)
@@ -41,7 +42,7 @@ order by resource_type, original_filename
 		return OpenResult{}, err
 	}
 	locations, err := rows(ctx, db.DB(), `
-select id, latitude, longitude, altitude, horizontal_accuracy, source, evidence_id
+select id, latitude, longitude, altitude, horizontal_accuracy
 from location_observation
 where asset_id = ?
 `, rowID)
