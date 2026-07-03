@@ -182,3 +182,10 @@ func previousTokenBoundary(runes []rune, start, cut int) int {
 	}
 	return cut
 }
+
+func minInt(left, right int) int {
+	if left < right {
+		return left
+	}
+	return right
+}

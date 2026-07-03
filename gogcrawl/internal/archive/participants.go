@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit/state"
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 const (
@@ -187,7 +188,7 @@ func addressListParticipants(role, value string) []participant {
 }
 
 func participantDisplay(p participant) string {
-	if name := normalizeWho(p.Name); name != "" {
+	if name := cleanWhoDisplay(p.Name); name != "" {
 		return name
 	}
 	return strings.TrimSpace(p.Address)
@@ -197,8 +198,8 @@ func participantKey(p participant) string {
 	if email := normalizeEmail(p.Address); email != "" {
 		return "addr:" + email
 	}
-	if name := normalizeWho(p.Name); name != "" {
-		return "name:" + strings.ToLower(name)
+	if name := whomatch.Normalize(p.Name); name != "" {
+		return "name:" + name
 	}
 	return ""
 }

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 func TestStoreSearchOpenStatus(t *testing.T) {
@@ -153,16 +155,26 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := st.ResolveWho(ctx, "alce")
+	resolved, err := st.ResolveWho(ctx, "alice@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resolved.Candidates) != 1 {
+	if len(resolved.Candidates) != 2 {
 		t.Fatalf("resolved = %#v", resolved)
 	}
 	candidate := resolved.Candidates[0]
 	if candidate.Who != "Alice A." || len(candidate.Identifiers) != 1 || candidate.Identifiers[0] != "alice@example.com" || candidate.Messages != 2 {
 		t.Fatalf("candidate = %#v", candidate)
+	}
+	if resolved.Candidates[1].Who != "Alicia Example" {
+		t.Fatalf("generous candidate = %#v", resolved.Candidates[1])
+	}
+	closeSpelling, err := st.ResolveWho(ctx, "alce")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(closeSpelling.Candidates) != 2 || closeSpelling.Candidates[0].Who != "Alicia Example" || closeSpelling.Candidates[1].Who != "Alice A." {
+		t.Fatalf("close spelling = %#v", closeSpelling)
 	}
 	prefix, err := st.ResolveWho(ctx, "ali")
 	if err != nil {
@@ -196,7 +208,7 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 		t.Fatalf("resolved = %#v", resolved)
 	}
 	candidate := resolved.Candidates[0]
-	if normalizeMatchValue(candidate.Who) != "michael palmer" || candidate.Messages != 2 {
+	if whomatch.Normalize(candidate.Who) != "michael palmer" || candidate.Messages != 2 {
 		t.Fatalf("candidate = %#v", candidate)
 	}
 	if len(candidate.Identifiers) != 2 || candidate.Identifiers[0] != "michael.gmail@example.com" || candidate.Identifiers[1] != "michael.icloud@example.com" {
@@ -296,6 +308,30 @@ func TestSearchWhoAmbiguityReportsCandidates(t *testing.T) {
 	}
 	if len(ambiguous.Candidates) != 2 || ambiguous.Candidates[0].Who != "Casey Two" || ambiguous.Candidates[1].Who != "Casey One" {
 		t.Fatalf("candidates = %#v", ambiguous.Candidates)
+	}
+}
+
+func TestSearchWhoCloseSpellingSingleCandidateSuggests(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Dana Example", FromAddress: "dana@example.com", Subject: "Needle", Body: "First."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = st.Search(ctx, SearchOptions{Query: "needle", Who: "danna"})
+	var unknown *UnknownWhoError
+	if !errors.As(err, &unknown) {
+		t.Fatalf("err = %v, want UnknownWhoError", err)
+	}
+	if len(unknown.DidYouMean) != 1 || unknown.DidYouMean[0].Who != "Dana Example" {
+		t.Fatalf("did_you_mean = %#v", unknown.DidYouMean)
 	}
 }
 
