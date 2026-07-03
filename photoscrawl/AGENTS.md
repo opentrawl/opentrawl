@@ -185,4 +185,10 @@ reads the changes against this file, ../docs/vision.md's engineering
 principles, and the no-ontologies rule, and files defects. Workers
 drift (sandbox reverts, invented heuristics, knob creep) even with
 good prompts; only a recurring pass catches the drift before failures
-compound.
+compound. Review evidence is RAW or it is not review: full unpiped,
+untruncated, unmodified inputs and outputs — no greps, no head/tail,
+no summaries between the artifact and the reviewer. Benchmark truth
+commands are themselves audited the same way: run the check raw, open
+every truth ref raw, confirm it is the real event before the truth is
+frozen. Coordinate diff ranges with the crawlers session so passes
+cover everything once and nothing twice.
