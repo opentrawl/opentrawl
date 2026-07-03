@@ -84,11 +84,18 @@ values (?, ?, ?, ?, ?, ?, ?)
 	return written, nil
 }
 
-func writeModelRun(ctx context.Context, tx *sql.Tx, runID string, classifier modelClassifier, inputCount, contentClassified, failures int, completedAt time.Time) error {
+func writeModelRun(ctx context.Context, tx *sql.Tx, runID string, classifier modelClassifier, inputCount int, result ClassifyResult, completedAt time.Time) error {
 	metadataJSON, err := jsonText(map[string]any{
-		"content_classified": contentClassified,
-		"failures":           failures,
-		"local_only":         true,
+		"content_classified":                result.ContentClassified,
+		"content_failed_parse":              result.ContentFailedParse,
+		"content_failed_model":              result.ContentFailedModel,
+		"content_failed_download":           result.ContentFailedDownload,
+		"content_not_in_photokit":           result.ContentNotInPhotoKit,
+		"content_no_content_available":      result.ContentNoContentAvailable,
+		"content_skipped_unsupported_media": result.ContentSkippedUnsupportedMedia,
+		"content_outcome_total":             result.ContentOutcomeTotal,
+		"local_only":                        !classifier.remote(),
+		"cloud_transmitted":                 classifier.remote(),
 	})
 	if err != nil {
 		return err

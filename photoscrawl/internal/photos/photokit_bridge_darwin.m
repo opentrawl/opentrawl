@@ -255,18 +255,22 @@ static NSString *pcIdentifierUUID(NSString *identifier) {
   return candidate;
 }
 
+static PHFetchOptions *pcAssetFetchOptions(void) {
+  PHFetchOptions *options = [[PHFetchOptions alloc] init];
+  options.includeHiddenAssets = YES;
+  options.wantsIncrementalChangeDetails = NO;
+  if (@available(macOS 10.15, *)) {
+    options.includeAllBurstAssets = YES;
+  }
+  return options;
+}
+
 static NSDictionary *pcAssetIdentifierIndex(void) {
   static NSDictionary *index = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     NSMutableDictionary *out = [NSMutableDictionary dictionary];
-    PHFetchOptions *options = [[PHFetchOptions alloc] init];
-    options.includeHiddenAssets = YES;
-    options.wantsIncrementalChangeDetails = NO;
-    if (@available(macOS 10.15, *)) {
-      options.includeAllBurstAssets = YES;
-    }
-    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];
+    PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:pcAssetFetchOptions()];
     [fetch enumerateObjectsUsingBlock:^(PHAsset *asset, NSUInteger idx, BOOL *stop) {
       NSString *uuid = pcIdentifierUUID(asset.localIdentifier);
       if (uuid.length > 0 && out[uuid] == nil) {
@@ -279,7 +283,8 @@ static NSDictionary *pcAssetIdentifierIndex(void) {
 }
 
 static PHAsset *pcFetchAssetForIdentifier(NSString *identifier) {
-  PHFetchResult<PHAsset *> *direct = [PHAsset fetchAssetsWithLocalIdentifiers:@[identifier] options:nil];
+  PHFetchOptions *options = pcAssetFetchOptions();
+  PHFetchResult<PHAsset *> *direct = [PHAsset fetchAssetsWithLocalIdentifiers:@[identifier] options:options];
   if (direct.firstObject != nil) {
     return direct.firstObject;
   }
@@ -291,7 +296,7 @@ static PHAsset *pcFetchAssetForIdentifier(NSString *identifier) {
   if (fullIdentifier.length == 0) {
     return nil;
   }
-  PHFetchResult<PHAsset *> *resolved = [PHAsset fetchAssetsWithLocalIdentifiers:@[fullIdentifier] options:nil];
+  PHFetchResult<PHAsset *> *resolved = [PHAsset fetchAssetsWithLocalIdentifiers:@[fullIdentifier] options:options];
   return resolved.firstObject;
 }
 
@@ -333,13 +338,7 @@ static PHAsset *pcFetchAssetByMetadata(NSString *creationDate, long long width, 
     return nil;
   }
 
-  PHFetchOptions *options = [[PHFetchOptions alloc] init];
-  options.includeHiddenAssets = YES;
-  options.wantsIncrementalChangeDetails = NO;
-  if (@available(macOS 10.15, *)) {
-    options.includeAllBurstAssets = YES;
-  }
-  PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:options];
+  PHFetchResult<PHAsset *> *fetch = [PHAsset fetchAssetsWithOptions:pcAssetFetchOptions()];
   __block PHAsset *filenameMatch = nil;
   __block PHAsset *uniqueShapeMatch = nil;
   __block NSUInteger shapeMatches = 0;
@@ -477,12 +476,7 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
       return NULL;
     }
 
-    PHFetchOptions *options = [[PHFetchOptions alloc] init];
-    options.includeHiddenAssets = YES;
-    options.wantsIncrementalChangeDetails = NO;
-    if (@available(macOS 10.15, *)) {
-      options.includeAllBurstAssets = YES;
-    }
+    PHFetchOptions *options = pcAssetFetchOptions();
     options.sortDescriptors = @[
       [NSSortDescriptor sortDescriptorWithKey:@"creationDate" ascending:YES]
     ];

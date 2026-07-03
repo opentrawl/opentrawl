@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -116,6 +117,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	if result.ContentClassified != 1 || result.ContentObservationsWritten == 0 || result.ContentClassificationFailures != 0 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
+	assertContentOutcomesSumToProcessed(t, result)
 
 	search, err := Search(ctx, paths, SearchOptions{Query: "satay", Limit: 5})
 	if err != nil {
@@ -218,11 +220,148 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 	if result.ContentClassified != 1 || result.OriginalsDownloaded != 1 || result.OriginalDownloadFailures != 0 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
+	assertContentOutcomesSumToProcessed(t, result)
 	if result.BytesDownloaded != int64(len("downloaded fixture image bytes")) || result.CacheHighWaterBytes == 0 || result.CacheHighWaterBytes > result.CacheMaxBytes {
 		t.Fatalf("cache metrics = bytes %d high-water %d max %d", result.BytesDownloaded, result.CacheHighWaterBytes, result.CacheMaxBytes)
 	}
 	if files := countFiles(t, paths.OriginalsCacheDir()); files != 0 {
 		t.Fatalf("originals cache files after classify = %d", files)
+	}
+}
+
+func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	parseImagePath := filepath.Join(t.TempDir(), "parse.jpeg")
+	if err := os.WriteFile(parseImagePath, []byte("parse fixture image bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	videoPath := filepath.Join(t.TempDir(), "clip.mov")
+	if err := os.WriteFile(videoPath, []byte("video fixture bytes"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	oldExport := exportOriginalResource
+	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destinationPath string, allowNetwork bool) error {
+		switch query.LocalIdentifier {
+		case "not-in-photokit":
+			return photos.ErrPhotoKitAssetNotFound
+		case "download-fails":
+			return errors.New("synthetic download unavailable")
+		default:
+			t.Fatalf("unexpected export query = %#v allowNetwork=%t destination=%q", query, allowNetwork, destinationPath)
+			return nil
+		}
+	}
+	defer func() { exportOriginalResource = oldExport }()
+
+	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"response": `{"scene_summary":}`,
+			"done":     true,
+		})
+	}))
+	defer restoreTransport()
+
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets: []photos.Asset{
+			{
+				LocalIdentifier: "parse-fails",
+				MediaType:       "image",
+				MediaSubtypes:   "0",
+				CreationDate:    "2026-05-31T12:00:00Z",
+				Width:           100,
+				Height:          80,
+				Resources: []photos.Resource{{
+					Type:             "photo",
+					UTI:              "public.jpeg",
+					OriginalFilename: "parse.jpeg",
+					LocalPath:        parseImagePath,
+					Availability:     "local",
+					AvailableLocally: true,
+				}},
+			},
+			remoteFixtureAsset("not-in-photokit", "2026-05-30T12:00:00Z"),
+			remoteFixtureAsset("download-fails", "2026-05-29T12:00:00Z"),
+			{
+				LocalIdentifier: "no-content",
+				MediaType:       "image",
+				MediaSubtypes:   "0",
+				CreationDate:    "2026-05-28T12:00:00Z",
+				Width:           100,
+				Height:          80,
+			},
+			{
+				LocalIdentifier: "video-skipped",
+				MediaType:       "video",
+				MediaSubtypes:   "0",
+				CreationDate:    "2026-05-27T12:00:00Z",
+				Width:           100,
+				Height:          80,
+				Resources: []photos.Resource{{
+					Type:             "video",
+					UTI:              "public.mpeg-4",
+					OriginalFilename: "clip.mov",
+					LocalPath:        videoPath,
+					Availability:     "local",
+					AvailableLocally: true,
+				}},
+			},
+		},
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Processed != 5 ||
+		result.ContentFailedParse != 1 ||
+		result.ContentFailedDownload != 1 ||
+		result.ContentNotInPhotoKit != 1 ||
+		result.ContentNoContentAvailable != 1 ||
+		result.ContentSkippedUnsupportedMedia != 1 {
+		t.Fatalf("classify result = %#v", result)
+	}
+	assertContentOutcomesSumToProcessed(t, result)
+	if result.ContentClassificationFailures != 1 || result.OriginalDownloadFailures != 2 || result.WaitingForLocalContent != 1 {
+		t.Fatalf("aggregate counters = %#v", result)
+	}
+
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var nonTerminal int
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+select count(*)
+from classification_queue
+where state in ('pending', 'metadata_classified')
+`).Scan(&nonTerminal)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if nonTerminal != 0 {
+		t.Fatalf("non-terminal classified rows = %d", nonTerminal)
 	}
 }
 
@@ -289,6 +428,43 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	}
 	if result.ContentClassified != 1 || result.ModelCallAttempts != 2 || result.ModelRateLimitEvents != 1 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
+	}
+	assertContentOutcomesSumToProcessed(t, result)
+}
+
+func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
+	t.Helper()
+	sum := result.ContentClassified +
+		result.ContentFailedParse +
+		result.ContentFailedModel +
+		result.ContentFailedDownload +
+		result.ContentNotInPhotoKit +
+		result.ContentNoContentAvailable +
+		result.ContentSkippedUnsupportedMedia
+	if sum != result.Processed {
+		t.Fatalf("content outcomes sum = %d, processed = %d, result = %#v", sum, result.Processed, result)
+	}
+	if result.ContentOutcomeTotal != result.Processed {
+		t.Fatalf("content_outcome_total = %d, processed = %d, result = %#v", result.ContentOutcomeTotal, result.Processed, result)
+	}
+}
+
+func remoteFixtureAsset(localIdentifier, creationDate string) photos.Asset {
+	return photos.Asset{
+		LocalIdentifier: localIdentifier,
+		MediaType:       "image",
+		MediaSubtypes:   "0",
+		CreationDate:    creationDate,
+		Width:           100,
+		Height:          80,
+		Resources: []photos.Resource{{
+			Type:             "photo",
+			UTI:              "public.jpeg",
+			OriginalFilename: localIdentifier + ".jpeg",
+			Availability:     "remote",
+			FileSize:         30,
+			NeedsDownload:    true,
+		}},
 	}
 }
 
