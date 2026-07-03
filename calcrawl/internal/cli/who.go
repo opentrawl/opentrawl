@@ -36,36 +36,29 @@ func (r *runtime) runWho(args []string) error {
 }
 
 func (r *runtime) resolveSearchWho(st *archive.Store, query, who string) (archive.WhoCandidate, error) {
-	if archive.LooksLikeWhoIdentifier(who) {
-		candidates, err := st.ResolveWhoIdentifier(r.ctx, who)
-		if err != nil {
-			return archive.WhoCandidate{}, err
-		}
-		switch len(candidates) {
-		case 1:
-			return candidates[0], nil
-		case 0:
-			didYouMean, err := st.ResolveWho(r.ctx, who)
-			if err != nil {
-				return archive.WhoCandidate{}, err
-			}
-			return archive.WhoCandidate{}, unknownWhoError(query, who, didYouMean)
-		default:
-			return archive.WhoCandidate{}, ambiguousWhoError(query, who, candidates)
-		}
-	}
 	candidates, err := st.ResolveWho(r.ctx, who)
 	if err != nil {
 		return archive.WhoCandidate{}, err
 	}
-	switch len(candidates) {
+	resolved := resolvableWhoCandidates(who, candidates)
+	switch len(resolved) {
 	case 0:
 		return archive.WhoCandidate{}, unknownWhoError(query, who, candidates)
 	case 1:
-		return candidates[0], nil
+		return resolved[0], nil
 	default:
-		return archive.WhoCandidate{}, ambiguousWhoError(query, who, candidates)
+		return archive.WhoCandidate{}, ambiguousWhoError(query, who, resolved)
 	}
+}
+
+func resolvableWhoCandidates(query string, candidates []archive.WhoCandidate) []archive.WhoCandidate {
+	out := make([]archive.WhoCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate.ResolvesWho(query) {
+			out = append(out, candidate)
+		}
+	}
+	return out
 }
 
 func ambiguousWhoError(query, who string, candidates []archive.WhoCandidate) error {

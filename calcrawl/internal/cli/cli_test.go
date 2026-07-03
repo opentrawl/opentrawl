@@ -261,8 +261,8 @@ func TestWhoResolverDedupesAndMatchesGenerously(t *testing.T) {
 	}
 
 	holiday := runJSON[whoResponse](t, "who", "bot", "--json")
-	if len(holiday.Candidates) != 1 || holiday.Candidates[0].Who != "Holiday Bot" {
-		t.Fatalf("who bot = %#v, want substring match", holiday)
+	if len(holiday.Candidates) != 2 || holiday.Candidates[0].Who != "Holiday Bot" || holiday.Candidates[1].Who != "Bob Example" {
+		t.Fatalf("who bot = %#v, want substring match before close-spelling match", holiday)
 	}
 
 	robin := runJSON[whoResponse](t, "who", "robin", "--json")
@@ -371,6 +371,26 @@ func TestSearchWhoUnknownHasSuggestionsOrHint(t *testing.T) {
 	}
 	if !strings.Contains(unknown.Error.Hint, "Search without --who") {
 		t.Fatalf("unknown hint = %q", unknown.Error.Hint)
+	}
+}
+
+func TestSearchWhoFuzzyOnlySingleMatchSuggests(t *testing.T) {
+	setupCalendarFixture(t)
+	runSync(t)
+
+	stdout, _, err := run(t, "search", "planning", "--who", "alce", "--json")
+	if err == nil || cli.ExitCode(err) != 5 {
+		t.Fatalf("fuzzy-only who err = %v stdout = %s", err, stdout)
+	}
+	var suggested errorResponse
+	if decodeErr := json.Unmarshal([]byte(stdout), &suggested); decodeErr != nil {
+		t.Fatalf("decode fuzzy-only error: %v\n%s", decodeErr, stdout)
+	}
+	if suggested.Error.Code != "unknown_who" || len(suggested.Error.DidYouMean) != 1 || suggested.Error.DidYouMean[0].Who != "Alice Example" {
+		t.Fatalf("fuzzy-only error = %#v", suggested)
+	}
+	if strings.Contains(stdout, "who_resolved") || strings.Contains(stdout, "results") {
+		t.Fatalf("fuzzy-only search returned search fields:\n%s", stdout)
 	}
 }
 

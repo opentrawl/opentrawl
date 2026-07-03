@@ -6,6 +6,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 type whoRecord struct {
@@ -25,7 +27,7 @@ type whoBuilder struct {
 }
 
 func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, error) {
-	query = normalizeWho(query)
+	query = whomatch.Normalize(query)
 	if query == "" {
 		return nil, nil
 	}
@@ -39,16 +41,16 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 	}
 	scored := []scoredCandidate{}
 	for _, candidate := range candidates {
-		score, ok := whoCandidateScore(query, candidate)
+		rank, ok := candidate.MatchRank(query)
 		if ok {
-			scored = append(scored, scoredCandidate{candidate: candidate, score: score})
+			scored = append(scored, scoredCandidate{candidate: candidate, score: int(rank)})
 		}
 	}
 	sort.SliceStable(scored, func(i, j int) bool {
 		left := scored[i]
 		right := scored[j]
 		if left.score != right.score {
-			return left.score < right.score
+			return left.score > right.score
 		}
 		if left.candidate.LastSeen != right.candidate.LastSeen {
 			return lastSeenAfter(left.candidate.LastSeen, right.candidate.LastSeen)
@@ -61,27 +63,6 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 	out := make([]WhoCandidate, 0, len(scored))
 	for _, item := range scored {
 		out = append(out, item.candidate)
-	}
-	return out, nil
-}
-
-func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) ([]WhoCandidate, error) {
-	identifier = normalizeWho(identifier)
-	if identifier == "" {
-		return nil, nil
-	}
-	candidates, err := s.WhoCandidates(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := []WhoCandidate{}
-	for _, candidate := range candidates {
-		for _, value := range candidate.Identifiers {
-			if sameWhoValue(identifier, value) {
-				out = append(out, candidate)
-				break
-			}
-		}
 	}
 	return out, nil
 }
@@ -141,7 +122,7 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 	identifierOwner := map[string]int{}
 	nameOwner := map[string]int{}
 	for index, record := range records {
-		if key := foldWho(record.displayName); key != "" {
+		if key := whomatch.Normalize(record.displayName); key != "" {
 			if owner, ok := nameOwner[key]; ok {
 				union(owner, index)
 			} else {
@@ -173,7 +154,7 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			builder.names[record.displayName]++
 		}
 		for _, identifier := range record.identifiers() {
-			key := foldWho(identifier)
+			key := whomatch.Normalize(identifier)
 			if _, ok := builder.identifiers[key]; !ok {
 				builder.identifiers[key] = identifier
 			}
@@ -229,7 +210,7 @@ func (r whoRecord) identifierKeys() []string {
 	values := r.identifiers()
 	keys := make([]string, 0, len(values))
 	for _, value := range values {
-		keys = append(keys, foldWho(value))
+		keys = append(keys, whomatch.Normalize(value))
 	}
 	return keys
 }
@@ -345,123 +326,6 @@ func identifierRank(value string) int {
 	}
 }
 
-func whoCandidateScore(query string, candidate WhoCandidate) (int, bool) {
-	values := append([]string{candidate.Who}, candidate.Identifiers...)
-	best := 99
-	for _, value := range values {
-		if score, ok := whoValueScore(query, value); ok && score < best {
-			best = score
-		}
-	}
-	return best, best != 99
-}
-
-func whoValueScore(query, value string) (int, bool) {
-	query = foldWho(query)
-	value = foldWho(value)
-	switch {
-	case query == "" || value == "":
-		return 0, false
-	case query == value:
-		return 0, true
-	case strings.HasPrefix(value, query):
-		return 1, true
-	case strings.Contains(value, query):
-		return 2, true
-	case closeWhoSpelling(query, value):
-		return 3, true
-	default:
-		return 0, false
-	}
-}
-
-func closeWhoSpelling(query, value string) bool {
-	if editDistance(query, value) <= maxWhoDistance(query, value) {
-		return true
-	}
-	queryParts := strings.Fields(query)
-	valueParts := strings.Fields(value)
-	if len(queryParts) == 0 || len(valueParts) == 0 {
-		return false
-	}
-	for _, queryPart := range queryParts {
-		matched := false
-		for _, valuePart := range valueParts {
-			if queryPart == valuePart || strings.HasPrefix(valuePart, queryPart) || strings.Contains(valuePart, queryPart) {
-				matched = true
-				break
-			}
-			if editDistance(queryPart, valuePart) <= maxWhoDistance(queryPart, valuePart) {
-				matched = true
-				break
-			}
-		}
-		if !matched {
-			return false
-		}
-	}
-	return true
-}
-
-func maxWhoDistance(left, right string) int {
-	size := len([]rune(left))
-	if other := len([]rune(right)); other < size {
-		size = other
-	}
-	switch {
-	case size <= 3:
-		return 0
-	case size <= 5:
-		return 1
-	case size <= 10:
-		return 2
-	default:
-		return 3
-	}
-}
-
-func editDistance(left, right string) int {
-	a := []rune(left)
-	b := []rune(right)
-	if len(a) == 0 {
-		return len(b)
-	}
-	if len(b) == 0 {
-		return len(a)
-	}
-	prev := make([]int, len(b)+1)
-	for j := range prev {
-		prev[j] = j
-	}
-	for i := 1; i <= len(a); i++ {
-		current := make([]int, len(b)+1)
-		current[0] = i
-		for j := 1; j <= len(b); j++ {
-			cost := 0
-			if a[i-1] != b[j-1] {
-				cost = 1
-			}
-			current[j] = minInt(
-				current[j-1]+1,
-				prev[j]+1,
-				prev[j-1]+cost,
-			)
-		}
-		prev = current
-	}
-	return prev[len(b)]
-}
-
-func minInt(values ...int) int {
-	best := values[0]
-	for _, value := range values[1:] {
-		if value < best {
-			best = value
-		}
-	}
-	return best
-}
-
 func lastSeenAfter(left, right string) bool {
 	if right == "" {
 		return left != ""
@@ -474,34 +338,7 @@ func lastSeenAfter(left, right string) bool {
 	return left > right
 }
 
-func sameWhoValue(left, right string) bool {
-	return strings.EqualFold(normalizeWho(left), normalizeWho(right))
-}
-
-func foldWho(value string) string {
-	return strings.ToLower(normalizeWho(value))
-}
-
 func hasDigit(value string) bool {
-	for _, r := range value {
-		if unicode.IsDigit(r) {
-			return true
-		}
-	}
-	return false
-}
-
-func LooksLikeWhoIdentifier(value string) bool {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return false
-	}
-	if strings.Contains(value, "@") || strings.Contains(value, ":") || strings.HasPrefix(value, "+") {
-		return true
-	}
-	if strings.Contains(value, " ") {
-		return false
-	}
 	for _, r := range value {
 		if unicode.IsDigit(r) {
 			return true
@@ -516,4 +353,16 @@ func (c WhoCandidate) Resolved() WhoResolved {
 
 func (c WhoCandidate) Filter() *WhoFilter {
 	return &WhoFilter{Who: c.Who, Identifiers: append([]string(nil), c.Identifiers...)}
+}
+
+func (c WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {
+	return whomatch.Candidate{
+		Who:         c.Who,
+		Identifiers: c.Identifiers,
+	}.MatchRank(query)
+}
+
+func (c WhoCandidate) ResolvesWho(query string) bool {
+	rank, ok := c.MatchRank(query)
+	return ok && rank != whomatch.RankCloseSpelling
 }

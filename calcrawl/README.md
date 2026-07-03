@@ -179,9 +179,11 @@ keeps `ref` as the full canonical ref.
 }
 ```
 
-Matching is generous over names and identifiers: case-insensitive prefix,
-substring and close spellings. Candidates are deduped by identity, so one person
-with several handles appears once.
+Matching is generous over names and identifiers: case-insensitive exact, prefix,
+substring and close spellings. Search resolves a single exact, prefix or
+substring match. A close-spelling-only match stays `unknown_who` and appears in
+`did_you_mean`. Candidates are deduped by identity, so one person with several
+handles appears once.
 
 ### open
 
