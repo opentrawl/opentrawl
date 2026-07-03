@@ -197,13 +197,14 @@ values (?, ?, ?, ?)
 }
 
 func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string, match KnownPlaceMatch, observedAt time.Time) (int, error) {
-	label := KnownPlaceWhereLabel(match.Kind, match.Name)
+	label := KnownPlaceWhereLabel(match.Kind, match.Name, match.After)
 	if label == "" {
 		return 0, nil
 	}
 	value := map[string]any{
-		"kind": match.Kind,
-		"name": match.Name,
+		"kind":  match.Kind,
+		"name":  match.Name,
+		"after": match.After,
 	}
 	valueJSON, err := jsonText(value)
 	if err != nil {
@@ -238,7 +239,7 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, evidenceID); err != nil {
 		return 0, fmt.Errorf("write known place observation: %w", err)
 	}
-	body := strings.Join(uniqueNonEmpty([]string{label, match.Kind, match.Name, KnownPlaceCardLine(match.Kind, match.Name)}), " ")
+	body := strings.Join(uniqueNonEmpty([]string{label, match.Kind, match.Name, KnownPlaceCardLine(match.Kind, match.Name, match.After)}), " ")
 	if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)

@@ -198,7 +198,7 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 		lines = append(lines, "Address: "+mechanical.Address)
 	}
 	if knownPlace := mechanical.KnownPlace; knownPlace != nil {
-		if line := archive.KnownPlaceCardLine(knownPlace.Kind, knownPlace.Name); line != "" {
+		if line := archive.KnownPlaceCardLine(knownPlace.Kind, knownPlace.Name, knownPlace.After); line != "" {
 			lines = append(lines, line)
 		}
 	} else if venue := mechanical.Venue; venue != nil {

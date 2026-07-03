@@ -58,8 +58,9 @@ type OpenVenue struct {
 }
 
 type OpenKnownPlace struct {
-	Kind string `json:"kind"`
-	Name string `json:"name"`
+	Kind  string `json:"kind"`
+	Name  string `json:"name"`
+	After bool   `json:"after,omitempty"`
 }
 
 type OpenVenueCandidate struct {
@@ -197,6 +198,9 @@ func openKnownPlace(rows []map[string]any) *OpenKnownPlace {
 		knownPlace := &OpenKnownPlace{
 			Kind: mapText(value, "kind"),
 			Name: mapText(value, "name"),
+		}
+		if after, ok := value["after"].(bool); ok {
+			knownPlace.After = after
 		}
 		if knownPlace.Kind != "" && knownPlace.Name != "" {
 			return knownPlace

@@ -112,7 +112,7 @@ func TestPhotoCardMetadataJSONIncludesKnownPlaceAndSuppressesPOIs(t *testing.T) 
 	}
 	location := payload["location"].(map[string]any)
 	knownPlace := location["known_place"].(map[string]any)
-	if knownPlace["kind"] != KnownPlaceKindHome || knownPlace["name"] != "Example Residence" {
+	if knownPlace["relationship"] != "the user's home" || knownPlace["name"] != "Example Residence" {
 		t.Fatalf("known place sidecar = %#v", knownPlace)
 	}
 	placeContext := location["place_context"].(map[string]any)
@@ -223,5 +223,32 @@ select count(*) from place_observation where asset_id = ? and observation_type =
 	}
 	if len(search.Results) != 1 || search.Results[0].Where != "Example Residence (home at the time)" {
 		t.Fatalf("search where = %#v", search.Results)
+	}
+}
+
+func TestKnownPlaceAfterWindowBecomesFormer(t *testing.T) {
+	t.Parallel()
+	places := []KnownPlace{{
+		LabelKind:    KnownPlaceKindWork,
+		DisplayName:  "Example Office",
+		Latitude:     52.0,
+		Longitude:    4.0,
+		RadiusMeters: 75,
+		ValidFrom:    "2016-01-01T00:00:00Z",
+		ValidUntil:   "2019-01-31T00:00:00Z",
+	}}
+	during := matchKnownPlace(places, 52.0, 4.0, "2017-06-01T12:00:00Z")
+	if during == nil || during.After || KnownPlaceCardLine(during.Kind, during.Name, during.After) != "At work (Example Office)" {
+		t.Fatalf("during window = %#v", during)
+	}
+	visit := matchKnownPlace(places, 52.0, 4.0, "2023-06-01T12:00:00Z")
+	if visit == nil || !visit.After || KnownPlaceCardLine(visit.Kind, visit.Name, visit.After) != "At former workplace (Example Office)" {
+		t.Fatalf("after window = %#v", visit)
+	}
+	if before := matchKnownPlace(places, 52.0, 4.0, "2014-06-01T12:00:00Z"); before != nil {
+		t.Fatalf("before window should not match, got %#v", before)
+	}
+	if knownPlaceRelationship(*visit) != "the user's former workplace" {
+		t.Fatalf("relationship = %q", knownPlaceRelationship(*visit))
 	}
 }
