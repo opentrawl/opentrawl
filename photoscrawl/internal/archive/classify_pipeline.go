@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	modelConcurrencyStart = 8
-	modelConcurrencyMax   = 32
+	modelConcurrencyStart = 6
+	modelConcurrencyMax   = 10
 )
 
 type modelJob struct {
@@ -199,7 +199,7 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 			limiter.RecordThrottle()
 		} else if retry.transient {
 			write.transientErrEvents++
-			limiter.RecordThrottle()
+			limiter.RecordTransient()
 		}
 		if !retry.retry || attempt == 2 {
 			break
