@@ -22,7 +22,8 @@ func controlManifest() control.Manifest {
 		"doctor":         {Title: "Doctor", Argv: []string{"telecrawl", "--json", "doctor"}, JSON: true},
 		"status":         {Title: "Status", Argv: []string{"telecrawl", "--json", "status"}, JSON: true},
 		"sync":           {Title: "Import", Argv: []string{"telecrawl", "--json", "import"}, JSON: true, Mutates: true},
-		"search":         {Title: "Search", Argv: []string{"telecrawl", "--json", "search"}, JSON: true},
+		"search":         {Title: "Search", Argv: []string{"telecrawl", "--json", "search", "QUERY"}, JSON: true},
+		"who":            {Title: "Resolve people", Argv: []string{"telecrawl", "--json", "who", "NAME"}, JSON: true},
 		"open":           {Title: "Open", Argv: []string{"telecrawl", "--json", "open", "telecrawl:msg/ID"}, JSON: true},
 		"contact-export": {Title: "Export contacts", Argv: []string{"telecrawl", "--json", "contacts", "export"}, JSON: true},
 	}

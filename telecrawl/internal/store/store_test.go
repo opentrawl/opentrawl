@@ -208,6 +208,143 @@ func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
 	}
 }
 
+func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		[]Contact{
+			{JID: "600", PeerType: "user", FullName: "Samm Person"},
+			{JID: "-1001", PeerType: "group", FullName: "Weekend road trip"},
+			{JID: "-1002", PeerType: "group", FullName: "Gift planning group"},
+		},
+		[]Chat{
+			{JID: "-1001", Kind: "group", Name: "Weekend road trip", LastMessageAt: now, MessageCount: 1},
+			{JID: "-1002", Kind: "group", Name: "Gift planning group", LastMessageAt: now.Add(time.Minute), MessageCount: 1},
+		},
+		nil,
+		nil,
+		nil,
+		[]GroupParticipant{
+			{GroupJID: "-1001", UserJID: "600", ContactName: "Samm Person", FirstName: "Miff", IsActive: true},
+			{GroupJID: "-1002", UserJID: "700", ContactName: "Other Person", FirstName: "Other", IsActive: true},
+		},
+		[]Message{
+			{SourcePK: 1, ChatJID: "-1001", ChatName: "Weekend road trip", MessageID: "1", SenderJID: "600", SenderName: "Samm Person", Timestamp: now, Text: "group needle"},
+			{SourcePK: 2, ChatJID: "-1002", ChatName: "Gift planning group", MessageID: "2", SenderJID: "700", SenderName: "Other Person", Timestamp: now.Add(time.Minute), Text: "other group needle"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := st.ResolveWho(ctx, "miff")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].Who != "Samm Person" {
+		t.Fatalf("candidates = %#v, want only Samm Person", candidates)
+	}
+	for _, candidate := range candidates {
+		for _, disallowed := range []string{"Weekend road trip", "Gift planning group"} {
+			if candidate.Who == disallowed || containsStoreString(candidate.Identifiers, "-1001") || containsStoreString(candidate.Identifiers, "-1002") {
+				t.Fatalf("group chat leaked as who candidate: %#v", candidate)
+			}
+		}
+	}
+}
+
+func TestResolveWhoOnlyMatchesUnnamedParticipantByIdentifier(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		[]Contact{{JID: "200", PeerType: "user", FullName: "Sam Example"}},
+		[]Chat{{JID: "-1009", Kind: "group", Name: "resolver room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		nil,
+		nil,
+		nil,
+		[]GroupParticipant{
+			{GroupJID: "-1009", UserJID: "200", ContactName: "Sam Example", FirstName: "Mif", IsActive: true},
+			{GroupJID: "-1009", UserJID: "100000235", IsActive: true},
+		},
+		[]Message{
+			{SourcePK: 1, ChatJID: "-1009", ChatName: "resolver room", MessageID: "1", SenderJID: "200", SenderName: "Sam Example", Timestamp: now, Text: "mif needle"},
+			{SourcePK: 2, ChatJID: "-1009", ChatName: "resolver room", MessageID: "2", SenderJID: "100000235", SenderName: "100000235", Timestamp: now.Add(time.Minute), Text: "numeric needle"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	nameMatches, err := st.ResolveWho(ctx, "mif")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(nameMatches) != 1 || nameMatches[0].Who != "Sam Example" {
+		t.Fatalf("name matches = %#v, want only Sam Example", nameMatches)
+	}
+
+	partialIDMatches, err := st.ResolveWho(ctx, "165")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(partialIDMatches) != 0 {
+		t.Fatalf("partial id matches = %#v, want no unnamed participant", partialIDMatches)
+	}
+
+	idMatches, err := st.ResolveWho(ctx, "100000235")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idMatches) != 1 || idMatches[0].Who != "100000235" || !containsStoreString(idMatches[0].Identifiers, "100000235") {
+		t.Fatalf("identifier matches = %#v, want unnamed numeric participant", idMatches)
+	}
+}
+
+func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		[]Contact{{JID: "200", Phone: "+1555200200", FullName: "Alice Example", Username: "alice_example"}},
+		[]Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		nil,
+		nil,
+		nil,
+		nil,
+		[]Message{
+			{SourcePK: 1, ChatJID: "100", ChatName: "example chat", MessageID: "1", SenderJID: "200", SenderName: "Alice Example", Timestamp: now, Text: "hello from alice"},
+			{SourcePK: 2, ChatJID: "100", ChatName: "example chat", MessageID: "2", SenderJID: "200", SenderName: "Alice Example", Timestamp: now.Add(time.Minute), Text: "second from alice"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, query := range []string{"ali", "lice", "Alic Exampel", "@alice_example", "+1555200200"} {
+		t.Run(query, func(t *testing.T) {
+			candidates, err := st.ResolveWho(ctx, query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(candidates) != 1 {
+				t.Fatalf("candidates = %#v, want one Alice candidate", candidates)
+			}
+			candidate := candidates[0]
+			if candidate.Who != "Alice Example" || candidate.Messages != 2 || !candidate.LastSeen.Equal(now.Add(time.Minute)) {
+				t.Fatalf("candidate = %#v, want deduped Alice stats", candidate)
+			}
+			if !containsStoreString(candidate.Identifiers, "+1555200200") || !containsStoreString(candidate.Identifiers, "@alice_example") || !containsStoreString(candidate.Identifiers, "200") {
+				t.Fatalf("identifiers = %#v, want phone, handle, and jid", candidate.Identifiers)
+			}
+		})
+	}
+}
+
+func containsStoreString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestOpenMigratesSchema2MessageMetadataColumns(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

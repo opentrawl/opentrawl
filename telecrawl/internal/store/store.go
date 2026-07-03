@@ -119,6 +119,17 @@ type ParticipantMatch struct {
 	DisplayName string
 }
 
+type WhoCandidate struct {
+	Who          string
+	Identifiers  []string
+	LastSeen     time.Time
+	Messages     int
+	Participants []ParticipantMatch
+
+	aliases   []string
+	matchRank int
+}
+
 type Group struct {
 	JID       string    `json:"jid"`
 	Name      string    `json:"name,omitempty"`
@@ -187,6 +198,10 @@ type MessageFilter struct {
 
 	WhoParticipants []ParticipantMatch
 	WhoResolved     bool
+}
+
+func (filter MessageFilter) AllowsFilterOnlySearch() bool {
+	return normalizeDisplayName(filter.Who) != "" || filter.After != nil || filter.Before != nil
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -594,7 +609,10 @@ func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, 
 
 func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, error) {
 	if strings.TrimSpace(filter.Query) == "" {
-		return nil, errors.New("search query required")
+		if !filter.AllowsFilterOnlySearch() {
+			return nil, errors.New("search query required")
+		}
+		return s.messages(ctx, filter, false)
 	}
 	return s.messages(ctx, filter, true)
 }

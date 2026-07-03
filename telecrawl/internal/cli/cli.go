@@ -126,7 +126,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 
 func logCommandName(command string) string {
 	switch command {
-	case "metadata", "import", "sync", "wiretap", "doctor", "status", "chats", "folders", "contacts", "topics", "messages", "search", "open", "backup", "version":
+	case "metadata", "import", "sync", "wiretap", "doctor", "status", "chats", "folders", "contacts", "topics", "messages", "search", "who", "open", "backup", "version":
 		return command
 	default:
 		return "unknown"
@@ -189,6 +189,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runMessages(args[1:])
 	case "search":
 		return r.runSearch(args[1:])
+	case "who":
+		return r.runWho(args[1:])
 	case "open":
 		return r.runOpen(args[1:])
 	case "backup":
@@ -774,7 +776,7 @@ func (r *runtime) runSearch(args []string) error {
 		filter.Limit = maxSearchLimit
 	}
 	return r.withStore(func(st *store.Store) error {
-		whoMatched, err := r.resolveWhoFilter(st, &filter)
+		resolved, err := r.resolveSearchWhoFilter(st, &filter)
 		if err != nil {
 			return err
 		}
@@ -790,7 +792,24 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, messages, total, whoMatched, shortRefs))
+		return r.print(newSearchEnvelope(filter.Query, messages, total, filter.Who, resolved, shortRefs))
+	})
+}
+
+func (r *runtime) runWho(args []string) error {
+	if len(args) == 0 {
+		return usageErr(errors.New("who takes a name"))
+	}
+	query := normalizeCLIWords(strings.Join(args, " "))
+	if query == "" {
+		return usageErr(errors.New("who takes a name"))
+	}
+	return r.withReadOnlyStore(func(st *store.Store) error {
+		candidates, err := st.ResolveWho(r.ctx, query)
+		if err != nil {
+			return err
+		}
+		return r.print(newWhoEnvelope(query, candidates))
 	})
 }
 
@@ -802,24 +821,24 @@ func messageRefs(messages []store.Message) []string {
 	return refs
 }
 
-func (r *runtime) resolveWhoFilter(st *store.Store, filter *store.MessageFilter) ([]string, error) {
+func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageFilter) (*store.WhoCandidate, error) {
 	if strings.TrimSpace(filter.Who) == "" {
 		return nil, nil
 	}
-	matches, err := st.MatchParticipants(r.ctx, filter.Who)
+	candidates, err := st.ResolveWho(r.ctx, filter.Who)
 	if err != nil {
 		return nil, err
 	}
-	filter.WhoParticipants = matches
+	if len(candidates) == 0 {
+		return nil, r.unknownWhoError(filter.Who, candidates)
+	}
+	if len(candidates) > 1 {
+		return nil, r.ambiguousWhoError(filter.Query, filter.Who, candidates)
+	}
+	candidate := candidates[0]
+	filter.WhoParticipants = candidate.Participants
 	filter.WhoResolved = true
-	if len(matches) <= 1 {
-		return nil, nil
-	}
-	names := make([]string, 0, len(matches))
-	for _, match := range matches {
-		names = append(names, match.DisplayName)
-	}
-	return names, nil
+	return &candidate, nil
 }
 
 func (r *runtime) runOpen(args []string) error {
@@ -896,6 +915,99 @@ func (r *runtime) contractError(code, message, remedy string) error {
 		return &cliError{code: 1, err: err, quiet: true, event: code}
 	}
 	return &cliError{code: 1, err: err, event: code}
+}
+
+func (r *runtime) ambiguousWhoError(query, who string, candidates []store.WhoCandidate) error {
+	body := contractErrorBody{
+		Code:       "ambiguous_who",
+		Message:    "--who matched more than one person",
+		Remedy:     "Retry with one identifier from candidates.",
+		Candidates: whoCandidates(candidates),
+	}
+	return r.contractBodyError(4, body, ambiguousWhoText(query, who, candidates))
+}
+
+func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) error {
+	candidates := whoCandidates(didYouMean)
+	body := contractErrorBody{
+		Code:    "unknown_who",
+		Message: "--who did not match a person",
+		Remedy:  "Run telecrawl who <name>, or search without --who to check whether matching messages exist.",
+		Hint:    "Search without --who to check whether matching messages exist.",
+	}
+	body.DidYouMean = &candidates
+	return r.contractBodyError(5, body, unknownWhoText(who, didYouMean))
+}
+
+func (r *runtime) contractBodyError(code int, body contractErrorBody, human string) error {
+	if r.json {
+		if printErr := r.print(errorEnvelope{Error: body}); printErr != nil {
+			return printErr
+		}
+		return &cliError{code: code, err: errors.New(body.Message), quiet: true, event: body.Code}
+	}
+	return &cliError{code: code, err: errors.New(human), event: body.Code}
+}
+
+func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "ambiguous --who %q: %d people match.\n\n", who, len(candidates))
+	writeWhoTable(&out, candidates, terminalWidth())
+	if retry := retrySearchExample(query, candidates); retry != "" {
+		fmt.Fprintf(&out, "\nRetry with: %s", retry)
+	}
+	return strings.TrimRight(out.String(), "\n")
+}
+
+func unknownWhoText(who string, didYouMean []store.WhoCandidate) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "unknown --who %q: no person matched.", who)
+	if len(didYouMean) == 0 {
+		out.WriteString("\nSearch without --who to check whether matching messages exist.")
+		return out.String()
+	}
+	out.WriteString("\n\nDid you mean:\n")
+	writeWhoTable(&out, didYouMean, terminalWidth())
+	if retry := retrySearchExample("", didYouMean); retry != "" {
+		fmt.Fprintf(&out, "\nRetry with: %s", retry)
+	}
+	return strings.TrimRight(out.String(), "\n")
+}
+
+func retrySearchExample(query string, candidates []store.WhoCandidate) string {
+	if len(candidates) == 0 {
+		return ""
+	}
+	who := firstRetryIdentifier(candidates[0])
+	if who == "" {
+		return ""
+	}
+	parts := []string{"telecrawl", "search"}
+	if strings.TrimSpace(query) != "" {
+		parts = append(parts, quoteShellArg(query))
+	}
+	parts = append(parts, "--who", quoteShellArg(who))
+	return strings.Join(parts, " ")
+}
+
+func firstRetryIdentifier(candidate store.WhoCandidate) string {
+	for _, identifier := range candidate.Identifiers {
+		if strings.TrimSpace(identifier) != "" {
+			return identifier
+		}
+	}
+	return candidate.Who
+}
+
+func quoteShellArg(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return `""`
+	}
+	if strings.ContainsAny(value, " \t\n\"'") {
+		return strconv.Quote(value)
+	}
+	return value
 }
 
 type remediedError struct {
@@ -983,15 +1095,20 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 	})
 	if requireQuery {
 		if whoProvided {
-			filter.Who = strings.Join(strings.Fields(filter.Who), " ")
+			filter.Who = normalizeCLIWords(filter.Who)
 			if filter.Who == "" {
 				return filter, usageErr(errors.New("--who requires an identity"))
 			}
 		}
-		if len(positionals) != 1 {
-			return filter, usageErr(errors.New("search takes exactly one query"))
+		filterOnly := whoProvided || strings.TrimSpace(*after) != "" || strings.TrimSpace(*before) != ""
+		switch {
+		case len(positionals) == 0 && !filterOnly:
+			return filter, usageErr(errors.New("search takes a query unless --who, --after, or --before is set\n\n" + commandUsage([]string{"search"})))
+		case len(positionals) > 1:
+			return filter, usageErr(errors.New("search takes at most one query"))
+		case len(positionals) == 1:
+			filter.Query = positionals[0]
 		}
-		filter.Query = positionals[0]
 	} else if len(positionals) != 0 {
 		return filter, usageErr(errors.New("messages takes flags only"))
 	}
@@ -1017,6 +1134,10 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 		filter.FromMe = &v
 	}
 	return filter, nil
+}
+
+func normalizeCLIWords(value string) string {
+	return strings.Join(strings.Fields(value), " ")
 }
 
 func (r *runtime) runBackup(args []string) error {
@@ -1178,6 +1299,8 @@ func (r *runtime) print(v any) error {
 		return nil
 	case searchEnvelope:
 		return r.printSearch(value)
+	case whoEnvelope:
+		return r.printWho(value)
 	case openEnvelope:
 		return r.printOpen(value)
 	default:
@@ -1306,6 +1429,20 @@ func parseRenderTime(value string) time.Time {
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
+	if value.WhoResolved != nil {
+		query := normalizeCLIWords(value.WhoQuery)
+		if query == "" {
+			query = value.WhoResolved.Who
+		}
+		if _, err := fmt.Fprintf(r.stdout, "%s \u2192 %s\n", query, value.WhoResolved.Who); err != nil {
+			return err
+		}
+		if len(value.Results) > 0 {
+			if _, err := io.WriteString(r.stdout, "\n"); err != nil {
+				return err
+			}
+		}
+	}
 	for _, item := range value.Results {
 		line := item.Time
 		if item.Who != "" {
@@ -1328,6 +1465,144 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 	}
 	_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches\n", len(value.Results), value.TotalMatches)
 	return err
+}
+
+func (r *runtime) printWho(value whoEnvelope) error {
+	candidates := make([]store.WhoCandidate, 0, len(value.Candidates))
+	for _, candidate := range value.Candidates {
+		candidates = append(candidates, store.WhoCandidate{
+			Who:         candidate.Who,
+			Identifiers: candidate.Identifiers,
+			LastSeen:    parseRenderTime(candidate.LastSeen),
+			Messages:    candidate.Messages,
+		})
+	}
+	writeWhoTable(r.stdout, candidates, terminalWidth())
+	return nil
+}
+
+func writeWhoTable(w io.Writer, candidates []store.WhoCandidate, width int) {
+	rows := make([][]string, 0, len(candidates)+1)
+	rows = append(rows, []string{"Who", "Last seen", "Messages", "Identifiers"})
+	for _, candidate := range candidates {
+		rows = append(rows, []string{
+			outputField(candidate.Who),
+			formatOptionalTime(candidate.LastSeen),
+			strconv.Itoa(candidate.Messages),
+			strings.Join(candidate.Identifiers, ", "),
+		})
+	}
+	writeFittedTable(w, rows, width)
+}
+
+func writeFittedTable(w io.Writer, rows [][]string, width int) {
+	if width <= 0 {
+		width = 100
+	}
+	if len(rows) == 0 {
+		return
+	}
+	colWidths := whoTableColumnWidths(rows, width)
+	for _, row := range rows {
+		wrapped := wrapTableRow(row, colWidths)
+		lineCount := 0
+		if len(wrapped) > 0 {
+			lineCount = len(wrapped[0])
+		}
+		for line := 0; line < lineCount; line++ {
+			for col := 0; col < len(colWidths); col++ {
+				value := ""
+				if line < len(wrapped[col]) {
+					value = wrapped[col][line]
+				}
+				if col == len(colWidths)-1 {
+					_, _ = io.WriteString(w, value)
+					continue
+				}
+				_, _ = fmt.Fprintf(w, "%-*s  ", colWidths[col], value)
+			}
+			_, _ = io.WriteString(w, "\n")
+		}
+	}
+}
+
+func whoTableColumnWidths(rows [][]string, width int) []int {
+	messagesWidth := max(tableColumnWidth(rows, 2), len("Messages"))
+	lastSeenWidth := max(tableColumnWidth(rows, 1), len("Last seen"))
+	lastSeenWidth = min(max(lastSeenWidth, len(time.RFC3339)), 25)
+	if width < 60 {
+		lastSeenWidth = 10
+	}
+	whoWidth := min(max(tableColumnWidth(rows, 0), len("Who")), 30)
+	identWidth := width - whoWidth - lastSeenWidth - messagesWidth - 6
+	if identWidth < 8 {
+		identWidth = 8
+		whoWidth = max(8, width-lastSeenWidth-messagesWidth-identWidth-6)
+	}
+	return []int{whoWidth, lastSeenWidth, messagesWidth, identWidth}
+}
+
+func tableColumnWidth(rows [][]string, col int) int {
+	width := 0
+	for _, row := range rows {
+		if col >= len(row) {
+			continue
+		}
+		width = max(width, len([]rune(row[col])))
+	}
+	return width
+}
+
+func wrapTableRow(row []string, widths []int) [][]string {
+	wrapped := make([][]string, len(widths))
+	maxLines := 1
+	for i, width := range widths {
+		value := ""
+		if i < len(row) {
+			value = row[i]
+		}
+		wrapped[i] = wrapTableCell(value, width)
+		if len(wrapped[i]) > maxLines {
+			maxLines = len(wrapped[i])
+		}
+	}
+	for i := range wrapped {
+		for len(wrapped[i]) < maxLines {
+			wrapped[i] = append(wrapped[i], "")
+		}
+	}
+	return wrapped
+}
+
+func wrapTableCell(value string, width int) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{""}
+	}
+	if width <= 0 {
+		return []string{value}
+	}
+	var lines []string
+	for _, field := range strings.Fields(value) {
+		for len([]rune(field)) > width {
+			lines = append(lines, string([]rune(field)[:width]))
+			field = string([]rune(field)[width:])
+		}
+		if len(lines) == 0 || len([]rune(lines[len(lines)-1]))+1+len([]rune(field)) > width {
+			lines = append(lines, field)
+			continue
+		}
+		lines[len(lines)-1] += " " + field
+	}
+	return lines
+}
+
+func terminalWidth() int {
+	width, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS")))
+	if err == nil && width >= 40 {
+		return width
+	}
+	return 100
 }
 
 func (r *runtime) printOpen(value openEnvelope) error {
@@ -1424,7 +1699,8 @@ usage:
   telecrawl chats [--limit N] [--unread] [--folder ID] [--json]
   telecrawl topics --chat ID [--limit N] [--json]
   telecrawl messages [--chat ID] [--topic ID] [--limit N] [--after DATE] [--json]
-  telecrawl search "query" [--who IDENTITY] [--chat ID] [--topic ID] [--limit N] [--json]
+  telecrawl search ["query"] [--who PERSON] [--chat ID] [--topic ID] [--limit N] [--json]
+  telecrawl who NAME [--json]
   telecrawl open telecrawl:msg/ID [--json]
   telecrawl backup init|push|pull|status|snapshots [--json]
   telecrawl version
@@ -1467,7 +1743,9 @@ func commandUsage(args []string) string {
 	case "messages":
 		return "usage: telecrawl messages [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--asc] [--json]\n\nLists a bounded set of archived messages.\n"
 	case "search":
-		return "usage: telecrawl search \"query\" [--who IDENTITY] [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearches archived messages and returns refs for telecrawl open.\n"
+		return "usage: telecrawl search [\"query\"] [--who PERSON] [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearches archived messages and returns refs for telecrawl open. Query is optional when --who, --after, or --before is set.\n"
+	case "who":
+		return "usage: telecrawl who NAME [--json]\n\nResolves a name or identifier to archived Telegram participants.\n"
 	case "open":
 		return "usage: telecrawl open telecrawl:msg/ID [--json]\n\nOpens one search ref with a bounded same-chat context window.\n"
 	case "backup":

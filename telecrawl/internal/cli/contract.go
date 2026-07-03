@@ -91,10 +91,28 @@ type logErrorEnvelope struct {
 
 type searchEnvelope struct {
 	Query        string         `json:"query"`
-	WhoMatched   []string       `json:"who_matched,omitempty"`
+	WhoQuery     string         `json:"-"`
+	WhoResolved  *whoResolved   `json:"who_resolved,omitempty"`
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
+}
+
+type whoResolved struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+}
+
+type whoEnvelope struct {
+	Query      string         `json:"query"`
+	Candidates []whoCandidate `json:"candidates"`
+}
+
+type whoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int      `json:"messages"`
 }
 
 type searchResult struct {
@@ -111,9 +129,12 @@ type errorEnvelope struct {
 }
 
 type contractErrorBody struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy"`
+	Code       string          `json:"code"`
+	Message    string          `json:"message"`
+	Remedy     string          `json:"remedy"`
+	Candidates []whoCandidate  `json:"candidates,omitempty"`
+	DidYouMean *[]whoCandidate `json:"did_you_mean,omitempty"`
+	Hint       string          `json:"hint,omitempty"`
 }
 
 type openEnvelope struct {
@@ -332,14 +353,39 @@ func (r *runtime) archiveCheck() doctorCheck {
 	return doctorCheck{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."}
 }
 
-func newSearchEnvelope(query string, messages []store.Message, total int, whoMatched []string, shortRefs map[string]string) searchEnvelope {
+func newSearchEnvelope(query string, messages []store.Message, total int, whoQuery string, resolved *store.WhoCandidate, shortRefs map[string]string) searchEnvelope {
 	return searchEnvelope{
 		Query:        query,
-		WhoMatched:   whoMatched,
+		WhoQuery:     whoQuery,
+		WhoResolved:  newWhoResolved(resolved),
 		Results:      searchResults(messages, shortRefs),
 		TotalMatches: total,
 		Truncated:    total > len(messages),
 	}
+}
+
+func newWhoEnvelope(query string, candidates []store.WhoCandidate) whoEnvelope {
+	return whoEnvelope{Query: query, Candidates: whoCandidates(candidates)}
+}
+
+func newWhoResolved(candidate *store.WhoCandidate) *whoResolved {
+	if candidate == nil {
+		return nil
+	}
+	return &whoResolved{Who: candidate.Who, Identifiers: append([]string(nil), candidate.Identifiers...)}
+}
+
+func whoCandidates(candidates []store.WhoCandidate) []whoCandidate {
+	out := make([]whoCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, whoCandidate{
+			Who:         outputField(candidate.Who),
+			Identifiers: append([]string(nil), candidate.Identifiers...),
+			LastSeen:    formatOptionalTime(candidate.LastSeen),
+			Messages:    candidate.Messages,
+		})
+	}
+	return out
 }
 
 func searchResults(messages []store.Message, shortRefs map[string]string) []searchResult {

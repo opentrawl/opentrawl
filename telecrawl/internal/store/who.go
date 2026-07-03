@@ -4,22 +4,43 @@ import (
 	"context"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 )
 
 const participantRowsSQL = `
 select p.jid, p.stored_name,
        coalesce(c.jid,''),coalesce(c.peer_type,''),coalesce(c.phone,''),coalesce(c.full_name,''),coalesce(c.first_name,''),coalesce(c.last_name,''),coalesce(c.business_name,''),coalesce(c.username,''),coalesce(c.lid,''),coalesce(c.about_text,''),coalesce(c.avatar_path,''),coalesce(c.updated_at,0)
 from (
+	select coalesce(cx.jid,'') as jid, '' as stored_name
+	from contacts cx
+	where coalesce(cx.peer_type,'') not in ('group','channel')
+	  and coalesce(cx.jid,'') <> ''
+	  and not exists (
+		select 1
+		from chats ch
+		where cast(ch.id as text)=cx.jid
+		  and ch.kind in ('group','channel')
+	  )
+	  and (
+		coalesce(cx.phone,'') <> ''
+		or coalesce(cx.full_name,'') <> ''
+		or coalesce(cx.first_name,'') <> ''
+		or coalesce(cx.last_name,'') <> ''
+		or coalesce(cx.business_name,'') <> ''
+		or coalesce(cx.username,'') <> ''
+		or coalesce(cx.lid,'') <> ''
+	  )
+	union
 	select coalesce(sender_jid,'') as jid, coalesce(sender_name,'') as stored_name
-	from messages
-	where coalesce(sender_jid,'') <> '' or coalesce(sender_name,'') <> ''
-	union
-	select coalesce(chat_jid,'') as jid, coalesce(chat_name,'') as stored_name
-	from messages
-	where coalesce(chat_jid,'') <> '' or coalesce(chat_name,'') <> ''
-	union
-	select cast(id as text) as jid, coalesce(name,'') as stored_name
-	from chats
+	from messages m
+	where (coalesce(sender_jid,'') <> '' or coalesce(sender_name,'') <> '')
+	  and not exists (
+		select 1
+		from chats ch
+		where cast(ch.id as text)=m.sender_jid
+		  and ch.kind in ('group','channel')
+	  )
 	union
 	select coalesce(user_jid,'') as jid, coalesce(contact_name,'') as stored_name
 	from group_participants
@@ -31,17 +52,66 @@ from (
 ) p
 left join contacts c on c.jid = p.jid`
 
+func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, error) {
+	query = normalizeDisplayName(query)
+	if query == "" {
+		return nil, nil
+	}
+	candidates, err := s.allWhoCandidates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if exact := exactIdentifierCandidates(candidates, query); len(exact) > 0 {
+		return s.hydrateWhoCandidates(ctx, exact)
+	}
+	var matches []WhoCandidate
+	for _, candidate := range candidates {
+		rank, ok := candidateMatchRank(query, candidate)
+		if !ok {
+			continue
+		}
+		candidate.matchRank = rank
+		matches = append(matches, candidate)
+	}
+	return s.hydrateWhoCandidates(ctx, matches)
+}
+
 func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]ParticipantMatch, error) {
 	identity = normalizeDisplayName(identity)
 	if identity == "" {
 		return nil, nil
 	}
+	candidates, err := s.allWhoCandidates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]ParticipantMatch{}
+	for _, candidate := range candidates {
+		if !candidateHasExactAlias(candidate, identity) {
+			continue
+		}
+		for _, participant := range candidate.Participants {
+			key := participantKey(participant.JID, participant.DisplayName)
+			if _, ok := seen[key]; !ok {
+				seen[key] = participant
+			}
+		}
+	}
+	matches := make([]ParticipantMatch, 0, len(seen))
+	for _, match := range seen {
+		matches = append(matches, match)
+	}
+	sortParticipantMatches(matches)
+	return matches, nil
+}
+
+func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 	rows, err := s.db.QueryContext(ctx, participantRowsSQL)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	seen := map[string]ParticipantMatch{}
+	byKey := map[string]*WhoCandidate{}
 	for rows.Next() {
 		var jid, storedName string
 		var contact Contact
@@ -50,35 +120,104 @@ func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]Parti
 			return nil, err
 		}
 		contact.UpdatedAt = fromUnix(updatedAt)
-		for _, displayName := range participantDisplayNames(storedName, contact, jid) {
-			if !strings.EqualFold(displayName, identity) {
-				continue
-			}
-			key := participantKey(jid, displayName)
-			if _, ok := seen[key]; !ok {
-				seen[key] = ParticipantMatch{JID: strings.TrimSpace(jid), DisplayName: displayName}
-			}
+		names := participantDisplayNames(storedName, contact, jid)
+		identifiers := participantIdentifiers(jid, contact)
+		who := firstNonEmptyString(names...)
+		if who == "" {
+			who = firstNonEmptyString(identifiers...)
 		}
+		if who == "" {
+			continue
+		}
+		key := participantKey(jid, who)
+		candidate := byKey[key]
+		if candidate == nil {
+			candidate = &WhoCandidate{Who: who}
+			byKey[key] = candidate
+		}
+		candidate.Identifiers = appendUniqueStrings(candidate.Identifiers, identifiers...)
+		candidate.aliases = appendUniqueStrings(candidate.aliases, names...)
+		addParticipantMatches(candidate, jid, who, names)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	matches := make([]ParticipantMatch, 0, len(seen))
-	for _, match := range seen {
-		matches = append(matches, match)
+	candidates := make([]WhoCandidate, 0, len(byKey))
+	for _, candidate := range byKey {
+		sortParticipantMatches(candidate.Participants)
+		// Rows for one jid merge in scan order, so an unnamed row can
+		// have claimed Who with a bare identifier while a later row
+		// carried the real name. A human name always wins.
+		if isIdentifierString(candidate.Who, candidate.Identifiers) {
+			for _, alias := range candidate.aliases {
+				if !isIdentifierString(alias, candidate.Identifiers) {
+					candidate.Who = alias
+					break
+				}
+			}
+		}
+		candidates = append(candidates, *candidate)
 	}
-	sort.Slice(matches, func(i, j int) bool {
-		left := strings.ToLower(matches[i].DisplayName)
-		right := strings.ToLower(matches[j].DisplayName)
+	return candidates, nil
+}
+
+func isIdentifierString(value string, identifiers []string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return true
+	}
+	for _, id := range identifiers {
+		if strings.EqualFold(value, id) {
+			return true
+		}
+	}
+	return !hasLetter(strings.ToLower(value))
+}
+
+func (s *Store) hydrateWhoCandidates(ctx context.Context, candidates []WhoCandidate) ([]WhoCandidate, error) {
+	for i := range candidates {
+		messages, lastSeen, err := s.whoCandidateStats(ctx, candidates[i])
+		if err != nil {
+			return nil, err
+		}
+		candidates[i].Messages = messages
+		candidates[i].LastSeen = lastSeen
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].matchRank != candidates[j].matchRank {
+			return candidates[i].matchRank < candidates[j].matchRank
+		}
+		if !candidates[i].LastSeen.Equal(candidates[j].LastSeen) {
+			return candidates[i].LastSeen.After(candidates[j].LastSeen)
+		}
+		if candidates[i].Messages != candidates[j].Messages {
+			return candidates[i].Messages > candidates[j].Messages
+		}
+		left := strings.ToLower(candidates[i].Who)
+		right := strings.ToLower(candidates[j].Who)
 		if left != right {
 			return left < right
 		}
-		if matches[i].DisplayName != matches[j].DisplayName {
-			return matches[i].DisplayName < matches[j].DisplayName
-		}
-		return matches[i].JID < matches[j].JID
+		return candidates[i].Who < candidates[j].Who
 	})
-	return matches, nil
+	return candidates, nil
+}
+
+func (s *Store) whoCandidateStats(ctx context.Context, candidate WhoCandidate) (int, time.Time, error) {
+	filter := MessageFilter{
+		Who:             candidate.Who,
+		WhoParticipants: candidate.Participants,
+		WhoResolved:     true,
+	}
+	query := `select count(*), coalesce(max(ts), 0) from messages where 1=1`
+	args := []any{}
+	query, args = appendWhoParticipantFilter(query, args, "", filter)
+	var messages int
+	var lastSeen int64
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&messages, &lastSeen); err != nil {
+		return 0, time.Time{}, err
+	}
+	return messages, fromUnix(lastSeen), nil
 }
 
 func (s *Store) resolveWhoFilter(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
@@ -95,29 +234,96 @@ func (s *Store) resolveWhoFilter(ctx context.Context, filter MessageFilter) (Mes
 	return filter, nil
 }
 
+func participantIdentifiers(jid string, contact Contact) []string {
+	var identifiers []string
+	identifiers = appendIdentifier(identifiers, contact.Phone)
+	if username := strings.TrimSpace(strings.TrimPrefix(contact.Username, "@")); username != "" {
+		identifiers = appendIdentifier(identifiers, "@"+username)
+	}
+	identifiers = appendIdentifier(identifiers, jid)
+	identifiers = appendIdentifier(identifiers, contact.LID)
+	return identifiers
+}
+
+func appendIdentifier(identifiers []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return identifiers
+	}
+	return appendUniqueStrings(identifiers, value)
+}
+
 func participantDisplayNames(storedName string, contact Contact, jid string) []string {
 	refs := []string{jid, contact.JID, contact.Phone, contact.Username, contact.LID}
 	var out []string
-	seen := map[string]struct{}{}
-	addDisplayName(&out, seen, cleanPeerName(storedName, refs...))
-	addDisplayName(&out, seen, ContactDisplayName(contact))
-	addDisplayName(&out, seen, cleanPeerName(contact.BusinessName, refs...))
-	addDisplayName(&out, seen, cleanPeerUsername(contact.Username))
-	addDisplayName(&out, seen, cleanPeerFirstName(contact.FirstName, contact))
+	addDisplayName(&out, ContactDisplayName(contact))
+	addDisplayName(&out, cleanPeerName(contact.BusinessName, refs...))
+	addDisplayName(&out, cleanPeerName(storedName, refs...))
+	addDisplayName(&out, cleanPeerUsername(contact.Username))
+	addDisplayName(&out, cleanPeerFirstName(contact.FirstName, contact))
 	return out
 }
 
-func addDisplayName(out *[]string, seen map[string]struct{}, value string) {
+func addDisplayName(out *[]string, value string) {
 	value = normalizeDisplayName(value)
 	if value == "" {
 		return
 	}
-	key := strings.ToLower(value)
-	if _, ok := seen[key]; ok {
-		return
+	*out = appendUniqueStrings(*out, value)
+}
+
+func addParticipantMatches(candidate *WhoCandidate, jid, fallback string, names []string) {
+	if len(names) == 0 {
+		names = []string{fallback}
 	}
-	seen[key] = struct{}{}
-	*out = append(*out, value)
+	for _, name := range names {
+		name = normalizeDisplayName(name)
+		if name == "" {
+			continue
+		}
+		match := ParticipantMatch{JID: strings.TrimSpace(jid), DisplayName: name}
+		key := participantKey(match.JID, match.DisplayName)
+		duplicate := false
+		for _, existing := range candidate.Participants {
+			if participantKey(existing.JID, existing.DisplayName) == key {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			candidate.Participants = append(candidate.Participants, match)
+		}
+	}
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func appendUniqueStrings(out []string, values ...string) []string {
+	seen := map[string]struct{}{}
+	for _, value := range out {
+		seen[strings.ToLower(value)] = struct{}{}
+	}
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
 }
 
 func participantKey(jid, displayName string) string {
@@ -126,6 +332,181 @@ func participantKey(jid, displayName string) string {
 		return "jid:" + jid
 	}
 	return "name:" + strings.ToLower(displayName)
+}
+
+func sortParticipantMatches(matches []ParticipantMatch) {
+	sort.Slice(matches, func(i, j int) bool {
+		left := strings.ToLower(matches[i].DisplayName)
+		right := strings.ToLower(matches[j].DisplayName)
+		if left != right {
+			return left < right
+		}
+		if matches[i].DisplayName != matches[j].DisplayName {
+			return matches[i].DisplayName < matches[j].DisplayName
+		}
+		return matches[i].JID < matches[j].JID
+	})
+}
+
+func exactIdentifierCandidates(candidates []WhoCandidate, query string) []WhoCandidate {
+	query = normalizeIdentifier(query)
+	if query == "" {
+		return nil
+	}
+	var matches []WhoCandidate
+	for _, candidate := range candidates {
+		for _, identifier := range candidate.Identifiers {
+			if normalizeIdentifier(identifier) == query {
+				candidate.matchRank = 0
+				matches = append(matches, candidate)
+				break
+			}
+		}
+	}
+	return matches
+}
+
+func candidateHasExactAlias(candidate WhoCandidate, query string) bool {
+	query = normalizeWhoMatch(query)
+	for _, alias := range candidate.aliases {
+		if normalizeWhoMatch(alias) == query {
+			return true
+		}
+	}
+	queryID := normalizeIdentifier(query)
+	for _, identifier := range candidate.Identifiers {
+		if normalizeIdentifier(identifier) == queryID {
+			return true
+		}
+	}
+	return false
+}
+
+func candidateMatchRank(query string, candidate WhoCandidate) (int, bool) {
+	queryText := normalizeWhoMatch(query)
+	queryCompact := compactWhoMatch(query)
+	if queryText == "" || queryCompact == "" {
+		return 0, false
+	}
+	best := 99
+	for _, alias := range candidate.aliases {
+		aliasText := normalizeWhoMatch(alias)
+		aliasCompact := compactWhoMatch(alias)
+		if aliasText == "" || aliasCompact == "" {
+			continue
+		}
+		rank, ok := aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact)
+		if ok && rank < best {
+			best = rank
+		}
+	}
+	return best, best != 99
+}
+
+func aliasMatchRank(queryText, queryCompact, aliasText, aliasCompact string) (int, bool) {
+	switch {
+	case aliasText == queryText || aliasCompact == queryCompact:
+		return 0, true
+	case strings.HasPrefix(aliasText, queryText) || strings.HasPrefix(aliasCompact, queryCompact):
+		return 1, true
+	case strings.Contains(aliasText, queryText) || strings.Contains(aliasCompact, queryCompact):
+		return 2, true
+	case closeSpelling(queryCompact, aliasCompact):
+		return 3, true
+	case closeWordSpelling(queryCompact, aliasText):
+		return 3, true
+	default:
+		return 0, false
+	}
+}
+
+func normalizeWhoMatch(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(value)), " "))
+}
+
+func compactWhoMatch(value string) string {
+	var out []rune
+	for _, r := range strings.ToLower(value) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out = append(out, r)
+		}
+	}
+	return string(out)
+}
+
+func normalizeIdentifier(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	return strings.TrimPrefix(value, "@")
+}
+
+func closeWordSpelling(query, value string) bool {
+	for _, word := range strings.Fields(value) {
+		if closeSpelling(query, compactWhoMatch(word)) {
+			return true
+		}
+	}
+	return false
+}
+
+func closeSpelling(query, value string) bool {
+	// 3 letters is enough: "miff" must suggest "mif".
+	if len([]rune(query)) < 3 || len([]rune(value)) < 3 {
+		return false
+	}
+	if !hasLetter(query) && !hasLetter(value) {
+		return false
+	}
+	distance := levenshteinDistance(query, value)
+	longest := max(len([]rune(query)), len([]rune(value)))
+	switch {
+	case longest <= 5:
+		return distance <= 1
+	case longest <= 12:
+		return distance <= 3
+	default:
+		return distance <= 3
+	}
+}
+
+func hasLetter(value string) bool {
+	for _, r := range value {
+		if unicode.IsLetter(r) {
+			return true
+		}
+	}
+	return false
+}
+
+func levenshteinDistance(a, b string) int {
+	left := []rune(a)
+	right := []rune(b)
+	if len(left) == 0 {
+		return len(right)
+	}
+	if len(right) == 0 {
+		return len(left)
+	}
+	previous := make([]int, len(right)+1)
+	current := make([]int, len(right)+1)
+	for j := range previous {
+		previous[j] = j
+	}
+	for i, leftRune := range left {
+		current[0] = i + 1
+		for j, rightRune := range right {
+			cost := 0
+			if leftRune != rightRune {
+				cost = 1
+			}
+			current[j+1] = min(
+				current[j]+1,
+				previous[j+1]+1,
+				previous[j]+cost,
+			)
+		}
+		previous, current = current, previous
+	}
+	return previous[len(right)]
 }
 
 func appendWhoParticipantFilter(query string, args []any, prefix string, filter MessageFilter) (string, []any) {
@@ -141,7 +522,7 @@ func appendWhoParticipantFilter(query string, args []any, prefix string, filter 
 		placeholders := sqlPlaceholders(len(ids))
 		clauses = append(clauses, prefix+"sender_jid in ("+placeholders+")")
 		args = appendStringArgs(args, ids)
-		clauses = append(clauses, prefix+"chat_jid in ("+placeholders+")")
+		clauses = append(clauses, prefix+"chat_jid in ("+placeholders+") and exists (select 1 from chats c where cast(c.id as text) = "+prefix+"chat_jid and c.kind = 'chat')")
 		args = appendStringArgs(args, ids)
 		clauses = append(clauses, "exists (select 1 from group_participants gp where gp.group_jid = "+prefix+"chat_jid and gp.user_jid in ("+placeholders+"))")
 		args = appendStringArgs(args, ids)
@@ -150,7 +531,7 @@ func appendWhoParticipantFilter(query string, args []any, prefix string, filter 
 		placeholders := sqlPlaceholders(len(names))
 		clauses = append(clauses, "trim("+prefix+"sender_name) in ("+placeholders+")")
 		args = appendStringArgs(args, names)
-		clauses = append(clauses, "trim("+prefix+"chat_name) in ("+placeholders+")")
+		clauses = append(clauses, "trim("+prefix+"chat_name) in ("+placeholders+") and exists (select 1 from chats c where cast(c.id as text) = "+prefix+"chat_jid and c.kind = 'chat')")
 		args = appendStringArgs(args, names)
 		clauses = append(clauses, "exists (select 1 from group_participants gp where gp.group_jid = "+prefix+"chat_jid and trim(gp.contact_name) in ("+placeholders+"))")
 		args = appendStringArgs(args, names)

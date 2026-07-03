@@ -223,19 +223,69 @@ func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
 func TestSearchWhoFiltersParticipants(t *testing.T) {
 	db := seedWhoSearchArchive(t)
 
-	beforeQuery := runSearchJSON(t, db, "search", "--who", "Alice Example", "needle", "--json")
+	beforeQuery := runSearchJSON(t, db, "search", "--who", "Alice", "needle", "--json")
 	if len(beforeQuery.Results) != 1 || beforeQuery.TotalMatches != 1 || beforeQuery.Results[0].Who != "Alice Example" {
 		t.Fatalf("search --who before query = %#v", beforeQuery)
 	}
+	assertWhoResolved(t, beforeQuery.WhoResolved, "Alice Example", "@alice_example")
 
 	afterQuery := runSearchJSON(t, db, "search", "needle", "--who", "Alice Example", "--json")
 	if len(afterQuery.Results) != 1 || afterQuery.TotalMatches != 1 || afterQuery.Results[0].Who != "Alice Example" {
 		t.Fatalf("search --who after query = %#v", afterQuery)
 	}
+	assertWhoResolved(t, afterQuery.WhoResolved, "Alice Example", "+1555200200")
 
 	collapsed := runSearchJSON(t, db, "search", "needle", "--who", " Alice   Example ", "--json")
 	if len(collapsed.Results) != 1 || collapsed.TotalMatches != 1 || collapsed.Results[0].Who != "Alice Example" {
 		t.Fatalf("search --who collapsed whitespace = %#v", collapsed)
+	}
+}
+
+func TestWhoCommandResolvesGenerouslyAndDedupes(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	payload := runWhoJSON(t, db, "Alic Exampel", "--json")
+	if payload.Query != "Alic Exampel" || len(payload.Candidates) != 1 {
+		t.Fatalf("who payload = %#v, want one close-spelling candidate", payload)
+	}
+	candidate := payload.Candidates[0]
+	if candidate.Who != "Alice Example" || candidate.Messages != 1 {
+		t.Fatalf("who candidate = %#v, want Alice with one message", candidate)
+	}
+	if !hasString(candidate.Identifiers, "+1555200200") || !hasString(candidate.Identifiers, "@alice_example") || !hasString(candidate.Identifiers, "200") {
+		t.Fatalf("identifiers = %#v, want phone, handle, and jid", candidate.Identifiers)
+	}
+	if _, err := time.Parse(time.RFC3339, candidate.LastSeen); err != nil {
+		t.Fatalf("last_seen = %q err=%v", candidate.LastSeen, err)
+	}
+
+	substring := runWhoJSON(t, db, "example", "--json")
+	if len(substring.Candidates) != 3 {
+		t.Fatalf("substring candidates = %#v, want Alice and both Jordans", substring.Candidates)
+	}
+}
+
+func TestWhoTextUsesFittedTable(t *testing.T) {
+	t.Setenv("COLUMNS", "72")
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "who", "alice")
+	if err != nil {
+		t.Fatalf("who text: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	conformance.AssertHumanOutput(t, stdout)
+	for _, want := range []string{"Who", "Last seen", "Messages", "Identifiers", "Alice Example", "@alice_example"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("who text missing %q:\n%s", want, stdout)
+		}
+	}
+	if strings.Contains(stdout, "{") || strings.Contains(stdout, "}") {
+		t.Fatalf("who text looks like JSON:\n%s", stdout)
+	}
+	for _, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
+		if len([]rune(line)) > 72 {
+			t.Fatalf("who line exceeds COLUMNS=72: %d %q\n%s", len([]rune(line)), line, stdout)
+		}
 	}
 }
 
@@ -257,13 +307,90 @@ func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
 func TestSearchWhoReportsAmbiguousMatches(t *testing.T) {
 	db := seedWhoSearchArchive(t)
 
-	payload := runSearchJSON(t, db, "search", "needle", "--who", "jordan example", "--json")
-	if len(payload.Results) != 2 || payload.TotalMatches != 2 || payload.Truncated {
-		t.Fatalf("multi-match search payload = %#v", payload)
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "needle", "--who", "jordan", "--json")
+	if err == nil {
+		t.Fatalf("ambiguous --who succeeded: stdout=%s stderr=%s", stdout, stderr)
 	}
-	want := []string{"JORDAN EXAMPLE", "Jordan Example"}
-	if !slices.Equal(payload.WhoMatched, want) {
-		t.Fatalf("who_matched = %#v, want %#v", payload.WhoMatched, want)
+	if code := ExitCode(err); code != 4 {
+		t.Fatalf("exit code = %d, want 4", code)
+	}
+	var payload struct {
+		Error struct {
+			Code       string             `json:"code"`
+			Candidates []testWhoCandidate `json:"candidates"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("ambiguous error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "ambiguous_who" || len(payload.Error.Candidates) != 2 {
+		t.Fatalf("ambiguous error = %#v", payload)
+	}
+	if strings.Contains(stdout, `"results"`) {
+		t.Fatalf("ambiguous error ran a search: %s", stdout)
+	}
+}
+
+func TestSearchWhoHumanAmbiguityShowsRetryTable(t *testing.T) {
+	t.Setenv("COLUMNS", "100")
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "needle", "--who", "jordan")
+	if err == nil {
+		t.Fatalf("ambiguous --who text succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("ambiguous text stdout=%q stderr=%q, want quiet streams", stdout, stderr)
+	}
+	text := err.Error()
+	conformance.AssertHumanOutput(t, text)
+	for _, want := range []string{
+		`ambiguous --who "jordan": 2 people match.`,
+		"Who",
+		"Last seen",
+		"Messages",
+		"Identifiers",
+		"Retry with: telecrawl search needle --who @jordan_upper",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("ambiguous text missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestSearchWhoReportsUnknown(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "needle", "--who", "Nobody", "--json")
+	if err == nil {
+		t.Fatalf("unknown --who succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if code := ExitCode(err); code != 5 {
+		t.Fatalf("exit code = %d, want 5", code)
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+		t.Fatalf("unknown error json = %s err=%v", stdout, err)
+	}
+	var payload struct {
+		Error struct {
+			Code       string             `json:"code"`
+			DidYouMean []testWhoCandidate `json:"did_you_mean"`
+			Hint       string             `json:"hint"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("unknown error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || len(payload.Error.DidYouMean) != 0 || !strings.Contains(payload.Error.Hint, "Search without --who") {
+		t.Fatalf("unknown error = %#v", payload)
+	}
+	var errorBody map[string]json.RawMessage
+	if err := json.Unmarshal(raw["error"], &errorBody); err != nil {
+		t.Fatalf("error body = %s err=%v", raw["error"], err)
+	}
+	if _, ok := errorBody["did_you_mean"]; !ok {
+		t.Fatalf("unknown error omitted did_you_mean: %s", stdout)
 	}
 }
 
@@ -273,6 +400,77 @@ func TestSearchWhoIsCaseInsensitive(t *testing.T) {
 	payload := runSearchJSON(t, db, "search", "needle", "--who", "aLiCe eXaMpLe", "--json")
 	if len(payload.Results) != 1 || payload.TotalMatches != 1 || payload.Results[0].Who != "Alice Example" {
 		t.Fatalf("case-insensitive --who payload = %#v", payload)
+	}
+}
+
+func TestSearchWhoFiltersByExactIdentifier(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	handle := runSearchJSON(t, db, "search", "needle", "--who", "@alice_example", "--json")
+	if len(handle.Results) != 1 || handle.Results[0].Who != "Alice Example" {
+		t.Fatalf("handle --who payload = %#v", handle)
+	}
+	assertWhoResolved(t, handle.WhoResolved, "Alice Example", "@alice_example")
+
+	phone := runSearchJSON(t, db, "search", "needle", "--who", "+1555200200", "--json")
+	if len(phone.Results) != 1 || phone.Results[0].Who != "Alice Example" {
+		t.Fatalf("phone --who payload = %#v", phone)
+	}
+	assertWhoResolved(t, phone.WhoResolved, "Alice Example", "+1555200200")
+}
+
+func TestSearchAllowsFilterOnlyWithWhoAfterOrBefore(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	whoOnly := runSearchJSON(t, db, "search", "--who", "Recipient Person", "--json")
+	if whoOnly.Query != "" || len(whoOnly.Results) != 2 || whoOnly.TotalMatches != 2 || whoOnly.Truncated {
+		t.Fatalf("who-only search = %#v, want two newest recipient messages", whoOnly)
+	}
+	assertWhoResolved(t, whoOnly.WhoResolved, "Recipient Person", "300")
+
+	afterOnly := runSearchJSON(t, db, "search", "--after", "2026-07-02T12:05:00Z", "--json")
+	if afterOnly.Query != "" || len(afterOnly.Results) != 2 || afterOnly.TotalMatches != 2 || afterOnly.Truncated || afterOnly.WhoResolved != nil {
+		t.Fatalf("after-only search = %#v, want two newest messages", afterOnly)
+	}
+}
+
+func TestSearchWhoFilterOnlyExcludesChatTitlesAndUnnamedIDs(t *testing.T) {
+	db := seedWhoResolverDefectArchive(t)
+
+	payload := runSearchJSON(t, db, "search", "--who", "mif", "--after", "2026-07-02T12:00:00Z", "--json")
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "Sam Example" || !hasString(payload.WhoResolved.Identifiers, "200") {
+		t.Fatalf("who resolved = %#v, want Sam Example", payload.WhoResolved)
+	}
+	if payload.Query != "" || len(payload.Results) != 2 || payload.TotalMatches != 2 {
+		t.Fatalf("filter-only --who payload = %#v, want two group messages", payload)
+	}
+
+	partialID := runWhoJSON(t, db, "165", "--json")
+	if len(partialID.Candidates) != 0 {
+		t.Fatalf("partial id candidates = %#v, want none", partialID.Candidates)
+	}
+
+	fullID := runWhoJSON(t, db, "100000235", "--json")
+	if len(fullID.Candidates) != 1 || fullID.Candidates[0].Who != "100000235" {
+		t.Fatalf("full id candidates = %#v, want unnamed numeric participant", fullID.Candidates)
+	}
+}
+
+func TestSearchWithoutQueryOrV12FilterShowsUsage(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "--json")
+	if err == nil {
+		t.Fatalf("blank search succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if code := ExitCode(err); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("blank search stdout=%q stderr=%q, want quiet streams", stdout, stderr)
+	}
+	if !strings.Contains(err.Error(), "usage: telecrawl search") {
+		t.Fatalf("blank search error missing usage: %v", err)
 	}
 }
 
@@ -473,6 +671,7 @@ func TestPerVerbHelpExitsZero(t *testing.T) {
 		{"topics", "--help"},
 		{"messages", "--help"},
 		{"search", "--help"},
+		{"who", "--help"},
 		{"open", "--help"},
 		{"backup", "--help"},
 		{"backup", "init", "--help"},
@@ -524,9 +723,9 @@ type doctorCheckJSON struct {
 }
 
 type searchJSON struct {
-	Query      string   `json:"query"`
-	WhoMatched []string `json:"who_matched"`
-	Results    []struct {
+	Query       string           `json:"query"`
+	WhoResolved *testWhoResolved `json:"who_resolved"`
+	Results     []struct {
 		Ref     string `json:"ref"`
 		Time    string `json:"time"`
 		Who     string `json:"who"`
@@ -535,6 +734,23 @@ type searchJSON struct {
 	} `json:"results"`
 	TotalMatches int  `json:"total_matches"`
 	Truncated    bool `json:"truncated"`
+}
+
+type testWhoResolved struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+}
+
+type whoJSON struct {
+	Query      string             `json:"query"`
+	Candidates []testWhoCandidate `json:"candidates"`
+}
+
+type testWhoCandidate struct {
+	Who         string   `json:"who"`
+	Identifiers []string `json:"identifiers"`
+	LastSeen    string   `json:"last_seen"`
+	Messages    int      `json:"messages"`
 }
 
 type openJSON struct {
@@ -645,11 +861,79 @@ func runSearchJSON(t *testing.T, db string, args ...string) searchJSON {
 		t.Fatalf("search: %v stderr=%s stdout=%s", err, stderr, stdout)
 	}
 	conformance.AssertSearchEnvelope(t, []byte(stdout))
+	if strings.Contains(stdout, "who_matched") {
+		t.Fatalf("search json contains removed who_matched field: %s", stdout)
+	}
 	var payload searchJSON
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout, err)
 	}
 	return payload
+}
+
+func runWhoJSON(t *testing.T, db string, args ...string) whoJSON {
+	t.Helper()
+	stdout, stderr, err := runCLI(t, append([]string{"--db", db, "who"}, args...)...)
+	if err != nil {
+		t.Fatalf("who: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	assertWhoEnvelopeShape(t, stdout)
+	var payload whoJSON
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("who json = %s err=%v", stdout, err)
+	}
+	return payload
+}
+
+func assertWhoEnvelopeShape(t *testing.T, stdout string) {
+	t.Helper()
+	var root map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(stdout), &root); err != nil {
+		t.Fatalf("who json = %s err=%v", stdout, err)
+	}
+	wantRoot := []string{"query", "candidates"}
+	if len(root) != len(wantRoot) {
+		t.Fatalf("who json keys = %#v, want %v", root, wantRoot)
+	}
+	for _, key := range wantRoot {
+		if _, ok := root[key]; !ok {
+			t.Fatalf("who json missing key %q: %#v", key, root)
+		}
+	}
+	var candidates []map[string]json.RawMessage
+	if err := json.Unmarshal(root["candidates"], &candidates); err != nil {
+		t.Fatalf("who candidates json = %s err=%v", root["candidates"], err)
+	}
+	wantCandidate := []string{"who", "identifiers", "last_seen", "messages"}
+	for _, candidate := range candidates {
+		if len(candidate) != len(wantCandidate) {
+			t.Fatalf("who candidate keys = %#v, want %v", candidate, wantCandidate)
+		}
+		for _, key := range wantCandidate {
+			if _, ok := candidate[key]; !ok {
+				t.Fatalf("who candidate missing key %q: %#v", key, candidate)
+			}
+		}
+	}
+}
+
+func assertWhoResolved(t *testing.T, resolved *testWhoResolved, wantWho, wantIdentifier string) {
+	t.Helper()
+	if resolved == nil {
+		t.Fatalf("who_resolved missing, want %q", wantWho)
+	}
+	if resolved.Who != wantWho || !hasString(resolved.Identifiers, wantIdentifier) {
+		t.Fatalf("who_resolved = %#v, want %q with %q", resolved, wantWho, wantIdentifier)
+	}
+}
+
+func hasString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func runOpenJSON(t *testing.T, db string, ref string) openJSON {
@@ -800,10 +1084,10 @@ func seedWhoSearchArchive(t *testing.T) string {
 	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	contacts := []store.Contact{
-		{JID: "200", FullName: "Alice Example"},
+		{JID: "200", Phone: "+1555200200", FullName: "Alice Example", Username: "alice_example"},
 		{JID: "300", FullName: "Recipient Person"},
-		{JID: "400", FullName: "Jordan Example"},
-		{JID: "401", FullName: "JORDAN EXAMPLE"},
+		{JID: "400", FullName: "Jordan Example", Username: "jordan_lower"},
+		{JID: "401", FullName: "JORDAN EXAMPLE", Username: "jordan_upper"},
 	}
 	chats := []store.Chat{
 		{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now.Add(4 * time.Minute), MessageCount: 4},
@@ -818,6 +1102,40 @@ func seedWhoSearchArchive(t *testing.T) string {
 		{SourcePK: 6, ChatJID: "300", ChatName: "Recipient Person", MessageID: "0:6", SenderJID: "300", SenderName: "Recipient Person", Timestamp: now.Add(6 * time.Minute), Text: "needle from recipient"},
 	}
 	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	return db
+}
+
+func seedWhoResolverDefectArchive(t *testing.T) string {
+	t.Helper()
+	db := filepath.Join(t.TempDir(), "telecrawl.db")
+	st, err := store.Open(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "200", PeerType: "user", FullName: "Sam Example"},
+		{JID: "-1001", PeerType: "group", FullName: "Weekend road trip"},
+		{JID: "-1002", PeerType: "group", FullName: "Gift planning group"},
+	}
+	chats := []store.Chat{
+		{JID: "-1001", Kind: "group", Name: "Weekend road trip", LastMessageAt: now.Add(time.Minute), MessageCount: 2},
+		{JID: "-1002", Kind: "group", Name: "Gift planning group", LastMessageAt: now.Add(2 * time.Minute), MessageCount: 1},
+	}
+	participants := []store.GroupParticipant{
+		{GroupJID: "-1001", UserJID: "200", ContactName: "Sam Example", FirstName: "Mif", IsActive: true},
+		{GroupJID: "-1001", UserJID: "100000235", IsActive: true},
+		{GroupJID: "-1002", UserJID: "700", ContactName: "Other Person", FirstName: "Other", IsActive: true},
+	}
+	messages := []store.Message{
+		{SourcePK: 1, ChatJID: "-1001", ChatName: "Weekend road trip", MessageID: "0:1", SenderJID: "200", SenderName: "Sam Example", Timestamp: now, Text: "mif group message"},
+		{SourcePK: 2, ChatJID: "-1001", ChatName: "Weekend road trip", MessageID: "0:2", SenderJID: "100000235", SenderName: "100000235", Timestamp: now.Add(time.Minute), Text: "numeric group message"},
+		{SourcePK: 3, ChatJID: "-1002", ChatName: "Gift planning group", MessageID: "0:3", SenderJID: "700", SenderName: "Other Person", Timestamp: now.Add(2 * time.Minute), Text: "other group message"},
+	}
+	if err := st.ReplaceAll(context.Background(), store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, contacts, chats, nil, nil, nil, participants, messages); err != nil {
 		t.Fatal(err)
 	}
 	return db
