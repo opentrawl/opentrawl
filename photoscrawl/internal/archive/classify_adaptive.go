@@ -64,6 +64,23 @@ func (l *adaptiveLimiter) RecordSuccess() {
 	l.cond.Broadcast()
 }
 
+// RecordTransient eases off one step with a floor: isolated capacity blips
+// (5xx, timeouts) are the provider shedding load, not a rate limit — halving
+// to 1 on each blip collapsed throughput to a tenth of the provider ceiling.
+func (l *adaptiveLimiter) RecordTransient() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.current--
+	if l.current < 4 {
+		l.current = 4
+	}
+	if l.current > l.max {
+		l.current = l.max
+	}
+	l.successes = 0
+	l.cond.Broadcast()
+}
+
 func (l *adaptiveLimiter) RecordThrottle() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
