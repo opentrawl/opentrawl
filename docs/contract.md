@@ -100,16 +100,42 @@ self-declared headline metrics, in display order — the app and
 `--limit` defaults to 20, hard maximum 200. `--after`/`--before`
 narrow by time.
 
-v1.1 adds `--who <identity>` for crawlers that declare the `who`
-capability: filter matches to items where the identity is a
-participant — sender, recipient or chat member — by case-insensitive
-full-name match against stored display names. It matches any sender
-identity, organisations included, and applies no fuzziness: fuzzy
-resolution happens before the filter, in `trawl who`. When the given
-name matches more than one distinct participant, the envelope carries
-`who_matched` listing them, so callers can surface the ambiguity.
-Crawlers that build alias indexes declare `short_refs` (see
-[short-refs.md](short-refs.md)).
+v1.2 defines `--who <person>` for crawlers that declare the `who`
+capability: filter matches to one person's items — sender, recipient
+or chat member. The value may be a name or an exact identifier
+(email, phone, handle). A name resolves against the archive's
+participants before any filtering:
+
+- exactly one person: filter, and include a `who_resolved` object in
+  the envelope (`{"who": ..., "identifiers": [...]}`); human mode
+  prints one resolution line, for example `alex → Alex Jones`.
+- more than one person: no search runs. Error `ambiguous_who`
+  carries a `candidates` array — each with `who`, `identifiers`,
+  `last_seen` and message volume — so one retry with an identifier
+  cannot miss. Exit 4.
+- no person: error `unknown_who` carries `did_you_mean` candidates
+  from generous matching (prefix, substring, close spellings); when
+  nothing is close, a hint to search without `--who`. Exit 5.
+
+Resolution is generous; filtering is exact. An ambiguous name is
+never filtered across all its matches (v1.1's blend-and-report
+`who_matched` behaviour is removed). The same rule as short refs:
+zero, one or many, never pick.
+
+Crawlers with the `who` capability also expose the resolver
+directly: `who <name>` returns the candidates as JSON
+(`{"query": ..., "candidates": [{"who": ..., "identifiers": [...],
+"last_seen": ..., "messages": ...}]}`) and as a plain table in human
+mode. Trawl uses this surface to resolve federated queries — joining
+same-named candidates across sources, upgraded by the person layer
+(clawdex) where it knows the person — instead of duplicating
+identity logic.
+
+The `<query>` argument to `search` is optional when at least one
+filter (`--who`, `--after`, `--before`) is present: a filter-only
+search lists the newest matching items. `search` with no query and
+no filters is an error. Crawlers that build alias indexes declare
+`short_refs` (see [short-refs.md](short-refs.md)).
 
 A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item

@@ -52,8 +52,30 @@ Two additions, one dependency, in strict order.
 2. Then filter. `search --who <person>` on every crawler that
    exports contacts, and federated on `trawl search`. The crawler
    filters at the archive (trawl-level post-filtering would silently
-   lose recall behind per-crawler limits). Contract v1.1 addition,
-   declared as a capability.
+   lose recall behind per-crawler limits). Declared as a capability.
+
+   v1.2 makes the resolver the front door: `--who <name>` is sugar
+   for resolve-then-filter. The resolver answers with zero, one or
+   many people and never picks among many — the identical rule short
+   refs follow for `open`. Fuzziness lives here and only here: the
+   resolver matches generously (prefix, substring, close spellings)
+   and shows its evidence in columns; the filter it feeds takes
+   exactly one person, addressable by name or exact identifier.
+   Ambiguity is a first-class error carrying the candidates, so one
+   retry cannot miss; an unknown name gets did-you-mean candidates
+   instead of empty results. This replaced v1.1's blend-and-report
+   `who_matched` after a 2026-07-03 review found three failures:
+   cross-source silent blending of same-named people, within-source
+   blending with a confession field, and typos indistinguishable
+   from "no matching messages". A rerun of the stub-harness
+   experiment against the new error shapes scored 6/6 agent
+   recovery with no blends and no fabrications.
+
+   Each who-capable crawler exposes the resolver as a `who <name>`
+   command (candidates with identifiers — the exact shapes live in
+   the contract). Trawl resolves federated queries through it,
+   joining candidates across sources by normalised name and
+   upgrading to identifier joins where clawdex knows the person.
 
 3. The dependency: identity join lands first. `--who alice` is
    dead on arrival while iMessage rows say `+15550100123`. Order:
