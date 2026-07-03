@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/openclaw/crawlkit/shortref"
 	ckstore "github.com/openclaw/crawlkit/store"
@@ -161,6 +162,15 @@ type MessageFilter struct {
 type WhoResolution struct {
 	ParticipantKeys []string
 	DisplayNames    []string
+	Candidates      []WhoCandidate
+}
+
+type WhoCandidate struct {
+	Who             string    `json:"who"`
+	Identifiers     []string  `json:"identifiers"`
+	LastSeen        time.Time `json:"last_seen"`
+	Messages        int       `json:"messages"`
+	ParticipantKeys []string  `json:"-"`
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -724,7 +734,8 @@ func filteredMessagesQuery(filter MessageFilter, extraColumns string) (string, [
 }
 
 func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, error) {
-	if strings.TrimSpace(filter.Query) == "" {
+	hasQuery := strings.TrimSpace(filter.Query) != ""
+	if !hasQuery && !filterAllowsEmptyQuery(filter) {
 		return nil, errors.New("search query required")
 	}
 	var err error
@@ -734,6 +745,19 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 	}
 	if filter.Limit <= 0 {
 		filter.Limit = 50
+	}
+	if !hasQuery {
+		query := "select " + messageSelectColumns + " from messages where 1=1"
+		var args []any
+		query, args = applyMessageFilters(query, args, filter, false)
+		if filter.Asc {
+			query += " order by ts asc, source_pk asc"
+		} else {
+			query += " order by ts desc, source_pk desc"
+		}
+		query += " limit ?"
+		args = append(args, filter.Limit)
+		return scanMessages(ctx, s.db, query, args...)
 	}
 	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
@@ -755,13 +779,24 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 }
 
 func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, error) {
-	if strings.TrimSpace(filter.Query) == "" {
+	hasQuery := strings.TrimSpace(filter.Query) != ""
+	if !hasQuery && !filterAllowsEmptyQuery(filter) {
 		return 0, errors.New("search query required")
 	}
 	var err error
 	filter, err = s.resolveMessageFilterWho(ctx, filter)
 	if err != nil {
 		return 0, err
+	}
+	if !hasQuery {
+		query := "select count(*) from messages where 1=1"
+		var args []any
+		query, args = applyMessageFilters(query, args, filter, false)
+		var total int
+		if err := s.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {
+			return 0, err
+		}
+		return total, nil
 	}
 	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
@@ -775,6 +810,10 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 		return 0, err
 	}
 	return total, nil
+}
+
+func filterAllowsEmptyQuery(filter MessageFilter) bool {
+	return filter.WhoKeys != nil || strings.TrimSpace(filter.Who) != "" || filter.After != nil || filter.Before != nil
 }
 
 func (s *Store) resolveMessageFilterWho(ctx context.Context, filter MessageFilter) (MessageFilter, error) {
@@ -799,63 +838,538 @@ func (s *Store) WhoMatches(ctx context.Context, identity string) ([]string, erro
 }
 
 func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution, error) {
-	identity = normalizeWhoIdentity(identity)
-	if identity == "" {
+	query := normalizeWhoIdentity(identity)
+	if query == "" {
 		return WhoResolution{}, nil
 	}
-	rows, err := s.db.QueryContext(ctx, `
-select participant_key, display_name
-from (
-	select distinct participant_key, trim(display_name) as display_name
-	from (`+whoArchiveParticipantNamesQuery()+`)
-)
-where display_name <> ''
-order by display_name, participant_key`)
+	records, err := s.whoCandidateRecords(ctx)
 	if err != nil {
 		return WhoResolution{}, err
 	}
-	defer func() { _ = rows.Close() }()
-	type whoCandidate struct {
-		key  string
-		name string
+	type rankedCandidate struct {
+		record whoCandidateRecord
+		rank   int
 	}
-	var matches []whoCandidate
-	seenKeys := map[string]struct{}{}
-	for rows.Next() {
-		var candidate whoCandidate
-		if err := rows.Scan(&candidate.key, &candidate.name); err != nil {
-			return WhoResolution{}, err
-		}
-		candidate.name = strings.TrimSpace(candidate.name)
-		if _, seen := seenKeys[candidate.key]; seen || !strings.EqualFold(candidate.name, identity) {
+	var matches []rankedCandidate
+	for _, record := range records {
+		rank := whoCandidateMatchRank(query, record.matchValues)
+		if rank < 0 {
 			continue
 		}
-		seenKeys[candidate.key] = struct{}{}
-		matches = append(matches, candidate)
-	}
-	if err := rows.Err(); err != nil {
-		return WhoResolution{}, err
+		matches = append(matches, rankedCandidate{record: record, rank: rank})
 	}
 	sort.SliceStable(matches, func(i, j int) bool {
-		left := strings.ToLower(matches[i].name)
-		right := strings.ToLower(matches[j].name)
-		if left != right {
-			return left < right
+		left := matches[i]
+		right := matches[j]
+		if left.rank != right.rank {
+			return left.rank < right.rank
 		}
-		if matches[i].name != matches[j].name {
-			return matches[i].name < matches[j].name
+		if !left.record.LastSeen.Equal(right.record.LastSeen) {
+			return left.record.LastSeen.After(right.record.LastSeen)
 		}
-		return matches[i].key < matches[j].key
+		if left.record.Messages != right.record.Messages {
+			return left.record.Messages > right.record.Messages
+		}
+		return strings.ToLower(left.record.Who) < strings.ToLower(right.record.Who)
 	})
 	resolution := WhoResolution{
 		ParticipantKeys: make([]string, 0, len(matches)),
 		DisplayNames:    make([]string, 0, len(matches)),
+		Candidates:      make([]WhoCandidate, 0, len(matches)),
 	}
 	for _, match := range matches {
-		resolution.ParticipantKeys = append(resolution.ParticipantKeys, match.key)
-		resolution.DisplayNames = append(resolution.DisplayNames, match.name)
+		candidate := match.record.WhoCandidate
+		resolution.ParticipantKeys = append(resolution.ParticipantKeys, candidate.ParticipantKeys...)
+		resolution.DisplayNames = append(resolution.DisplayNames, candidate.Who)
+		resolution.Candidates = append(resolution.Candidates, candidate)
 	}
 	return resolution, nil
+}
+
+func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (WhoResolution, error) {
+	identifier = normalizeWhoIdentity(identifier)
+	if identifier == "" {
+		return WhoResolution{}, nil
+	}
+	records, err := s.whoCandidateRecords(ctx)
+	if err != nil {
+		return WhoResolution{}, err
+	}
+	var matches []WhoCandidate
+	for _, record := range records {
+		for _, candidateIdentifier := range record.Identifiers {
+			if strings.EqualFold(candidateIdentifier, identifier) {
+				matches = append(matches, record.WhoCandidate)
+				break
+			}
+		}
+	}
+	sort.SliceStable(matches, func(i, j int) bool {
+		if !matches[i].LastSeen.Equal(matches[j].LastSeen) {
+			return matches[i].LastSeen.After(matches[j].LastSeen)
+		}
+		if matches[i].Messages != matches[j].Messages {
+			return matches[i].Messages > matches[j].Messages
+		}
+		return strings.ToLower(matches[i].Who) < strings.ToLower(matches[j].Who)
+	})
+	resolution := WhoResolution{
+		ParticipantKeys: make([]string, 0, len(matches)),
+		DisplayNames:    make([]string, 0, len(matches)),
+		Candidates:      matches,
+	}
+	for _, match := range matches {
+		resolution.ParticipantKeys = append(resolution.ParticipantKeys, match.ParticipantKeys...)
+		resolution.DisplayNames = append(resolution.DisplayNames, match.Who)
+	}
+	return resolution, nil
+}
+
+type whoCandidateRecord struct {
+	WhoCandidate
+	matchValues []string
+}
+
+type whoCandidateBuilder struct {
+	key             string
+	names           map[string]*whoNameEvidence
+	identifiers     map[string]string
+	participantKeys map[string]string
+	lastSeen        time.Time
+	messages        int
+}
+
+type whoNameEvidence struct {
+	value       string
+	contactFull bool
+	pushCount   int
+}
+
+func (s *Store) whoCandidateRecords(ctx context.Context) ([]whoCandidateRecord, error) {
+	builders, err := s.readWhoCandidateAliases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.readWhoCandidateStats(ctx, builders); err != nil {
+		return nil, err
+	}
+	records := make([]whoCandidateRecord, 0, len(builders))
+	for _, builder := range builders {
+		if builder.messages == 0 {
+			continue
+		}
+		identifiers := sortedValues(builder.identifiers)
+		participantKeys := sortedValues(builder.participantKeys)
+		names := builder.nameValues()
+		who := chooseWhoName(builder.names, identifiers)
+		if who == "" || len(participantKeys) == 0 {
+			continue
+		}
+		matchValues := append([]string{who}, names...)
+		matchValues = append(matchValues, identifiers...)
+		records = append(records, whoCandidateRecord{
+			WhoCandidate: WhoCandidate{
+				Who:             who,
+				Identifiers:     identifiers,
+				LastSeen:        builder.lastSeen,
+				Messages:        builder.messages,
+				ParticipantKeys: participantKeys,
+			},
+			matchValues: uniqueStrings(matchValues),
+		})
+	}
+	sort.SliceStable(records, func(i, j int) bool {
+		if !records[i].LastSeen.Equal(records[j].LastSeen) {
+			return records[i].LastSeen.After(records[j].LastSeen)
+		}
+		if records[i].Messages != records[j].Messages {
+			return records[i].Messages > records[j].Messages
+		}
+		return strings.ToLower(records[i].Who) < strings.ToLower(records[j].Who)
+	})
+	return records, nil
+}
+
+func (s *Store) readWhoCandidateAliases(ctx context.Context) (map[string]*whoCandidateBuilder, error) {
+	rows, err := s.db.QueryContext(ctx, whoCandidateAliasesQuery())
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	builders := map[string]*whoCandidateBuilder{}
+	for rows.Next() {
+		var key, participantKey, displayName, identifier, nameKind string
+		if err := rows.Scan(&key, &participantKey, &displayName, &identifier, &nameKind); err != nil {
+			return nil, err
+		}
+		builder := whoBuilder(builders, key)
+		if value := normalizeWhoIdentity(participantKey); value != "" {
+			builder.participantKeys[strings.ToLower(value)] = value
+		}
+		if value := normalizeWhoIdentity(displayName); value != "" {
+			builder.addName(value, nameKind)
+		}
+		if value := normalizeWhoIdentifier(identifier); value != "" {
+			builder.identifiers[strings.ToLower(value)] = value
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return builders, nil
+}
+
+func (s *Store) readWhoCandidateStats(ctx context.Context, builders map[string]*whoCandidateBuilder) error {
+	rows, err := s.db.QueryContext(ctx, whoCandidateStatsQuery())
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var key string
+		var lastSeen int64
+		var messages int
+		if err := rows.Scan(&key, &lastSeen, &messages); err != nil {
+			return err
+		}
+		builder := whoBuilder(builders, key)
+		seen := fromUnix(lastSeen)
+		if builder.lastSeen.IsZero() || seen.After(builder.lastSeen) {
+			builder.lastSeen = seen
+		}
+		builder.messages = messages
+	}
+	return rows.Err()
+}
+
+func whoBuilder(builders map[string]*whoCandidateBuilder, key string) *whoCandidateBuilder {
+	key = strings.TrimSpace(key)
+	if builder, ok := builders[key]; ok {
+		return builder
+	}
+	builder := &whoCandidateBuilder{
+		key:             key,
+		names:           map[string]*whoNameEvidence{},
+		identifiers:     map[string]string{},
+		participantKeys: map[string]string{},
+	}
+	builders[key] = builder
+	return builder
+}
+
+func (b *whoCandidateBuilder) addName(value, kind string) {
+	value = normalizeWhoIdentity(value)
+	if value == "" {
+		return
+	}
+	key := strings.ToLower(value)
+	evidence, ok := b.names[key]
+	if !ok {
+		evidence = &whoNameEvidence{value: value}
+		b.names[key] = evidence
+	}
+	switch kind {
+	case "contact_full":
+		evidence.contactFull = true
+	case "push":
+		evidence.pushCount++
+	}
+}
+
+func (b *whoCandidateBuilder) nameValues() []string {
+	return sortedWhoNameValues(b.names)
+}
+
+func chooseWhoName(names map[string]*whoNameEvidence, identifiers []string) string {
+	if name := firstCleanContactFullName(names); name != "" {
+		return name
+	}
+	if name := mostFrequentCleanPushName(names); name != "" {
+		return name
+	}
+	for _, name := range sortedWhoNameValues(names) {
+		if humanWhoName(name) {
+			return name
+		}
+	}
+	for _, identifier := range identifiers {
+		if strings.HasPrefix(identifier, "@") {
+			return identifier
+		}
+	}
+	for _, identifier := range identifiers {
+		if !strings.Contains(identifier, "@") {
+			return identifier
+		}
+	}
+	if len(identifiers) > 0 {
+		return identifiers[0]
+	}
+	if names := sortedWhoNameValues(names); len(names) > 0 {
+		return names[0]
+	}
+	return ""
+}
+
+func firstCleanContactFullName(names map[string]*whoNameEvidence) string {
+	var choices []string
+	for _, name := range names {
+		if name.contactFull && humanWhoName(name.value) {
+			choices = append(choices, name.value)
+		}
+	}
+	sort.Strings(choices)
+	if len(choices) == 0 {
+		return ""
+	}
+	return choices[0]
+}
+
+func mostFrequentCleanPushName(names map[string]*whoNameEvidence) string {
+	type choice struct {
+		value string
+		count int
+	}
+	var choices []choice
+	for _, name := range names {
+		if name.pushCount > 0 && humanWhoName(name.value) {
+			choices = append(choices, choice{value: name.value, count: name.pushCount})
+		}
+	}
+	sort.SliceStable(choices, func(i, j int) bool {
+		if choices[i].count != choices[j].count {
+			return choices[i].count > choices[j].count
+		}
+		left := strings.ToLower(choices[i].value)
+		right := strings.ToLower(choices[j].value)
+		if left != right {
+			return left < right
+		}
+		return choices[i].value < choices[j].value
+	})
+	if len(choices) == 0 {
+		return ""
+	}
+	return choices[0].value
+}
+
+func humanWhoName(value string) bool {
+	value = normalizeWhoIdentity(value)
+	if value == "" || strings.HasPrefix(value, "@") || strings.Contains(value, "@") || looksLikeIdentifierPhone(value) {
+		return false
+	}
+	if looksLikeBase64Name(value) {
+		return false
+	}
+	hasLetter := false
+	for _, r := range value {
+		if !unicode.IsPrint(r) {
+			return false
+		}
+		if unicode.IsLetter(r) {
+			hasLetter = true
+		}
+	}
+	if !hasLetter {
+		return false
+	}
+	return true
+}
+
+func looksLikeBase64Name(value string) bool {
+	if strings.Contains(value, " ") || len(value) < 4 {
+		return false
+	}
+	hasBase64Punctuation := false
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+		case r == '+', r == '/', r == '=':
+			hasBase64Punctuation = true
+		default:
+			return false
+		}
+	}
+	return hasBase64Punctuation
+}
+
+func looksLikeIdentifierPhone(value string) bool {
+	digits := 0
+	other := 0
+	for _, r := range value {
+		switch {
+		case unicode.IsDigit(r):
+			digits++
+		case strings.ContainsRune(" +()-.", r):
+		default:
+			other++
+		}
+	}
+	return digits >= 5 && other == 0
+}
+
+func sortedWhoNameValues(names map[string]*whoNameEvidence) []string {
+	out := make([]string, 0, len(names))
+	for _, name := range names {
+		out = append(out, name.value)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		left := strings.ToLower(out[i])
+		right := strings.ToLower(out[j])
+		if left != right {
+			return left < right
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
+func sortedValues(values map[string]string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, value)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		left := strings.ToLower(out[i])
+		right := strings.ToLower(out[j])
+		if left != right {
+			return left < right
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
+func uniqueStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		value = normalizeWhoIdentity(value)
+		if value == "" {
+			continue
+		}
+		key := strings.ToLower(value)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, value)
+	}
+	return out
+}
+
+func whoCandidateMatchRank(query string, values []string) int {
+	query = normalizeMatchText(query)
+	if query == "" {
+		return -1
+	}
+	best := -1
+	for _, value := range values {
+		rank := whoValueMatchRank(query, normalizeMatchText(value))
+		if rank < 0 {
+			continue
+		}
+		if best < 0 || rank < best {
+			best = rank
+		}
+	}
+	return best
+}
+
+func whoValueMatchRank(query, value string) int {
+	if query == "" || value == "" {
+		return -1
+	}
+	switch {
+	case query == value:
+		return 0
+	case strings.HasPrefix(value, query):
+		return 1
+	case strings.Contains(value, query):
+		return 2
+	case closeWhoSpelling(query, value):
+		return 3
+	default:
+		return -1
+	}
+}
+
+func closeWhoSpelling(query, value string) bool {
+	if len([]rune(query)) < 3 {
+		return false
+	}
+	candidates := append([]string{value}, strings.Fields(value)...)
+	for _, candidate := range candidates {
+		distance := levenshteinDistance(query, candidate)
+		limit := 1
+		if len([]rune(query)) >= 6 && len([]rune(candidate)) >= 6 {
+			limit = 2
+		}
+		if distance <= limit {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeMatchText(value string) string {
+	value = strings.ToLower(normalizeWhoIdentity(value))
+	var out strings.Builder
+	previousSpace := false
+	for _, r := range value {
+		switch {
+		case unicode.IsLetter(r), unicode.IsDigit(r):
+			out.WriteRune(r)
+			previousSpace = false
+		case unicode.IsSpace(r):
+			if !previousSpace && out.Len() > 0 {
+				out.WriteByte(' ')
+				previousSpace = true
+			}
+		}
+	}
+	return strings.TrimSpace(out.String())
+}
+
+func levenshteinDistance(left, right string) int {
+	a := []rune(left)
+	b := []rune(right)
+	if len(a) == 0 {
+		return len(b)
+	}
+	if len(b) == 0 {
+		return len(a)
+	}
+	prev := make([]int, len(b)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i, ar := range a {
+		curr := make([]int, len(b)+1)
+		curr[0] = i + 1
+		for j, br := range b {
+			cost := 0
+			if ar != br {
+				cost = 1
+			}
+			curr[j+1] = minInt(curr[j]+1, prev[j+1]+1, prev[j]+cost)
+		}
+		prev = curr
+	}
+	return prev[len(b)]
+}
+
+func minInt(values ...int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	out := values[0]
+	for _, value := range values[1:] {
+		if value < out {
+			out = value
+		}
+	}
+	return out
 }
 
 func (s *Store) MessageByID(ctx context.Context, messageID string) (Message, error) {
@@ -979,57 +1493,131 @@ func normalizeWhoIdentity(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func whoArchiveParticipantNamesQuery() string {
+func normalizeWhoIdentifier(value string) string {
+	value = normalizeWhoIdentity(value)
+	for {
+		lower := strings.ToLower(value)
+		if !strings.HasSuffix(lower, "@lid@lid") {
+			return value
+		}
+		value = value[:len(value)-len("@lid")]
+	}
+}
+
+func whoCandidateAliasesQuery() string {
 	senderContact := contactJIDPredicate("c", "m.sender_jid")
 	chatContact := contactJIDPredicate("c", "ch.jid")
 	groupContact := contactJIDPredicate("c", "gp.user_jid")
 	return `
-select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.sender_name as display_name
+select participant_key as identity_key, participant_key, display_name, '' as identifier, name_kind
+from (
+select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.sender_name as display_name, 'push' as name_kind
 from messages m
 left join contacts c on ` + senderContact + `
-where trim(m.sender_name) <> ''
+where m.from_me = 0 and trim(m.sender_name) <> ''
 union all
-select 'jid:' || jid, full_name
+select 'jid:' || jid, full_name, 'contact_full'
 from contacts
-where trim(full_name) <> ''
+where trim(jid) <> '' and trim(full_name) <> ''
 union all
-select 'jid:' || jid, business_name
+select 'jid:' || jid, business_name, 'other'
 from contacts
-where trim(business_name) <> ''
+where trim(jid) <> '' and trim(business_name) <> ''
 union all
-select 'jid:' || jid, trim(first_name || ' ' || last_name)
+select 'jid:' || jid, trim(first_name || ' ' || last_name), 'other'
 from contacts
-where trim(first_name || ' ' || last_name) <> ''
+where trim(jid) <> '' and trim(first_name || ' ' || last_name) <> ''
 union all
-select 'jid:' || coalesce(c.jid, ch.jid), ch.name
+select 'jid:' || coalesce(c.jid, ch.jid), ch.name, 'other'
 from chats ch
 left join contacts c on ` + chatContact + `
-where ch.kind <> 'group' and trim(ch.name) <> ''
+where ch.kind <> 'group' and trim(ch.jid) <> '' and trim(ch.name) <> ''
 union all
-select 'jid:' || coalesce(c.jid, gp.user_jid), gp.contact_name
+select 'jid:' || coalesce(c.jid, gp.user_jid), gp.contact_name, 'other'
 from group_participants gp
 left join contacts c on ` + groupContact + `
-where trim(gp.contact_name) <> ''
+where trim(gp.user_jid) <> '' and trim(gp.contact_name) <> ''
 union all
-select 'jid:' || coalesce(c.jid, gp.user_jid), gp.first_name
+select 'jid:' || coalesce(c.jid, gp.user_jid), gp.first_name, 'other'
 from group_participants gp
 left join contacts c on ` + groupContact + `
-where trim(gp.first_name) <> ''
+where trim(gp.user_jid) <> '' and trim(gp.first_name) <> ''
 union all
-select 'jid:' || c.jid, c.full_name
+select 'jid:' || c.jid, c.full_name, 'contact_full'
 from group_participants gp
 join contacts c on ` + groupContact + `
-where trim(c.full_name) <> ''
+where trim(c.jid) <> '' and trim(c.full_name) <> ''
 union all
-select 'jid:' || c.jid, c.business_name
+select 'jid:' || c.jid, c.business_name, 'other'
 from group_participants gp
 join contacts c on ` + groupContact + `
-where trim(c.business_name) <> ''
+where trim(c.jid) <> '' and trim(c.business_name) <> ''
 union all
-select 'jid:' || c.jid, trim(c.first_name || ' ' || c.last_name)
+select 'jid:' || c.jid, trim(c.first_name || ' ' || c.last_name), 'other'
 from group_participants gp
 join contacts c on ` + groupContact + `
-where trim(c.first_name || ' ' || c.last_name) <> ''`
+where trim(c.jid) <> '' and trim(c.first_name || ' ' || c.last_name) <> ''
+)
+where trim(participant_key) <> '' and trim(display_name) <> ''
+union all
+select participant_key as identity_key, participant_key, '' as display_name, identifier, '' as name_kind
+from (
+select 'jid:' || jid as participant_key, jid as identifier from contacts where trim(jid) <> ''
+union all
+select 'jid:' || jid, phone from contacts where trim(jid) <> '' and trim(phone) <> ''
+union all
+select 'jid:' || jid, username from contacts where trim(jid) <> '' and trim(username) <> ''
+union all
+select 'jid:' || jid, case when substr(username, 1, 1) = '@' then username else '@' || username end from contacts where trim(jid) <> '' and trim(username) <> ''
+union all
+select 'jid:' || jid, lid from contacts where trim(jid) <> '' and trim(lid) <> ''
+union all
+select 'jid:' || jid, lid || '@lid' from contacts where trim(jid) <> '' and trim(lid) <> ''
+union all
+select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end, m.sender_jid
+from messages m
+left join contacts c on ` + senderContact + `
+where trim(m.sender_jid) <> ''
+union all
+select 'jid:' || coalesce(c.jid, ch.jid), ch.jid
+from chats ch
+left join contacts c on ` + chatContact + `
+where ch.kind <> 'group' and trim(ch.jid) <> ''
+union all
+select 'jid:' || coalesce(c.jid, gp.user_jid), gp.user_jid
+from group_participants gp
+left join contacts c on ` + groupContact + `
+where trim(gp.user_jid) <> ''
+)
+where trim(participant_key) <> '' and trim(identifier) <> ''`
+}
+
+func whoCandidateStatsQuery() string {
+	senderContact := contactJIDPredicate("c", "m.sender_jid")
+	chatContact := contactJIDPredicate("c", "ch.jid")
+	groupContact := contactJIDPredicate("c", "gp.user_jid")
+	return `
+select participant_key, max(ts) as last_seen, count(distinct source_pk) as messages
+from (
+select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.source_pk, m.ts
+from messages m
+left join contacts c on ` + senderContact + `
+where trim(m.sender_jid) <> '' or trim(m.sender_name) <> ''
+union all
+select 'jid:' || coalesce(c.jid, ch.jid), m.source_pk, m.ts
+from messages m
+join chats ch on ch.jid = m.chat_jid and ch.kind <> 'group'
+left join contacts c on ` + chatContact + `
+where trim(ch.jid) <> ''
+union all
+select 'jid:' || coalesce(c.jid, gp.user_jid), m.source_pk, m.ts
+from messages m
+join group_participants gp on gp.group_jid = m.chat_jid
+left join contacts c on ` + groupContact + `
+where trim(gp.user_jid) <> ''
+)
+where trim(participant_key) <> ''
+group by participant_key`
 }
 
 func whoMessageParticipantKeysQuery(prefix string) string {
