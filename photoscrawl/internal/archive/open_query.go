@@ -83,9 +83,10 @@ select observation_type, value_text, value_json, provider, cache_status, tier, d
 from place_observation
 where asset_id = ?
 order by case observation_type
-  when 'venue' then 1
-  when 'address' then 2
-  else 3
+  when 'known_place' then 1
+  when 'venue' then 2
+  when 'address' then 3
+  else 4
 end, distance_meters, id
 `, rowID)
 		if err != nil {

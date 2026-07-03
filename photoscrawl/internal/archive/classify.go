@@ -130,7 +130,9 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		return ClassifyResult{}, err
 	}
 	if classifier != nil {
-		enrichClassifyPlaces(ctx, paths, inputs, &result)
+		if err := enrichClassifyPlaces(ctx, paths, inputs, &result); err != nil {
+			return ClassifyResult{}, err
+		}
 	}
 	if classifier == nil {
 		for start := 0; start < len(inputs); start += metadataClassificationBatchSize {

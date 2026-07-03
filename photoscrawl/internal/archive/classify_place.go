@@ -7,13 +7,18 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/place"
 )
 
 const placeObservationSource = "place_context"
 
-func enrichClassifyPlaces(ctx context.Context, paths Paths, inputs []classifyInput, result *ClassifyResult) {
+func enrichClassifyPlaces(ctx context.Context, paths Paths, inputs []classifyInput, result *ClassifyResult) error {
+	knownPlaces, err := loadKnownPlacesForClassify(ctx, paths)
+	if err != nil {
+		return err
+	}
 	resolver := place.NewResolver(place.ResolverOptions{
 		CacheDir:          paths.PlaceContextCacheDir(),
 		LegacyBackfillDir: paths.LegacyPlaceBackfillDir(),
@@ -46,21 +51,44 @@ func enrichClassifyPlaces(ctx context.Context, paths Paths, inputs []classifyInp
 			result.PlaceProviderFailures++
 		}
 		if resolved.Result == nil {
+			inputs[i].KnownPlace = matchKnownPlace(knownPlaces, inputs[i].Latitude, inputs[i].Longitude, inputs[i].CreationDate)
 			continue
 		}
 		inputs[i].Place = &classifyPlaceContext{
 			Result:      *resolved.Result,
 			CacheStatus: resolved.CacheStatus,
 		}
+		inputs[i].KnownPlace = matchKnownPlace(knownPlaces, inputs[i].Latitude, inputs[i].Longitude, inputs[i].CreationDate)
 	}
+	return nil
+}
+
+func loadKnownPlacesForClassify(ctx context.Context, paths Paths) ([]KnownPlace, error) {
+	db, err := store.OpenReadOnly(ctx, paths.Database)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	return loadKnownPlaces(ctx, db.DB())
 }
 
 func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, observedAt time.Time) (int, error) {
-	if input.Place == nil {
+	if input.Place == nil && input.KnownPlace == nil {
 		return 0, clearPlaceObservations(ctx, tx, input.AssetID)
 	}
 	if err := clearPlaceObservations(ctx, tx, input.AssetID); err != nil {
 		return 0, err
+	}
+	written := 0
+	if input.KnownPlace != nil {
+		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, *input.KnownPlace, observedAt)
+		if err != nil {
+			return written, err
+		}
+		written += n
+	}
+	if input.Place == nil {
+		return written, nil
 	}
 	result := input.Place.Result
 	place.NormalizeResult(&result)
@@ -76,7 +104,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		"observed_at":   observedAt.Format(time.RFC3339Nano),
 	})
 	if err != nil {
-		return 0, err
+		return written, err
 	}
 	if _, err := tx.ExecContext(ctx, `
 insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
@@ -88,9 +116,8 @@ on conflict(id) do update set
   pointer = excluded.pointer,
   value_json = excluded.value_json
 `, evidenceID, input.AssetID, "place_context", placeObservationSource, input.AssetID+"/place_context", evidenceJSON); err != nil {
-		return 0, fmt.Errorf("write place evidence: %w", err)
+		return written, fmt.Errorf("write place evidence: %w", err)
 	}
-	written := 0
 	if address := addressLine(result.Address); address != "" {
 		n, err := insertPlaceObservation(ctx, tx, input.AssetID, evidenceID, "address", address, map[string]any{
 			"address": result.Address,
@@ -119,6 +146,12 @@ on conflict(id) do update set
 			return written, err
 		}
 		written += n
+		if input.KnownPlace != nil {
+			if n > 0 && len(seenCandidates) >= 2 {
+				break
+			}
+			continue
+		}
 		tier, ok := venueLineTier(candidate)
 		if !ok {
 			continue
@@ -163,6 +196,58 @@ values (?, ?, ?, ?)
 	return 1, nil
 }
 
+func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string, match KnownPlaceMatch, observedAt time.Time) (int, error) {
+	label := KnownPlaceWhereLabel(match.Kind, match.Name)
+	if label == "" {
+		return 0, nil
+	}
+	value := map[string]any{
+		"kind": match.Kind,
+		"name": match.Name,
+	}
+	valueJSON, err := jsonText(value)
+	if err != nil {
+		return 0, err
+	}
+	evidenceID := stableID("evidence", assetID, knownPlaceObservationType, match.Kind, match.Name)
+	evidenceJSON, err := jsonText(map[string]any{
+		"known_place":    value,
+		"distance_m":     match.DistanceMeters,
+		"matched_at":     observedAt.Format(time.RFC3339Nano),
+		"matching_layer": knownPlaceSource,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
+values (?, ?, ?, ?, ?, ?)
+on conflict(id) do update set
+  asset_id = excluded.asset_id,
+  evidence_kind = excluded.evidence_kind,
+  source = excluded.source,
+  pointer = excluded.pointer,
+  value_json = excluded.value_json
+`, evidenceID, assetID, knownPlaceObservationType, knownPlaceSource, assetID+"/known_place", evidenceJSON); err != nil {
+		return 0, fmt.Errorf("write known place evidence: %w", err)
+	}
+	observationID := stableID("place_observation", assetID, knownPlaceObservationType, match.Kind, match.Name)
+	if _, err := tx.ExecContext(ctx, `
+insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, evidenceID); err != nil {
+		return 0, fmt.Errorf("write known place observation: %w", err)
+	}
+	body := strings.Join(uniqueNonEmpty([]string{label, match.Kind, match.Name, KnownPlaceCardLine(match.Kind, match.Name)}), " ")
+	if _, err := tx.ExecContext(ctx, `
+insert into observation_fts(id, asset_id, title, body)
+values (?, ?, ?, ?)
+`, observationID, assetID, "", body); err != nil {
+		return 0, fmt.Errorf("write known place fts: %w", err)
+	}
+	return 1, nil
+}
+
 func clearPlaceObservations(ctx context.Context, tx *sql.Tx, assetID string) error {
 	if strings.TrimSpace(assetID) == "" {
 		return nil
@@ -180,9 +265,11 @@ where asset_id = ?
 	if _, err := tx.ExecContext(ctx, `
 delete from evidence_ref
 where asset_id = ?
-  and evidence_kind = 'place_context'
-  and source = ?
-`, assetID, placeObservationSource); err != nil {
+  and (
+    (evidence_kind = 'place_context' and source = ?)
+    or (evidence_kind = ? and source = ?)
+  )
+`, assetID, placeObservationSource, knownPlaceObservationType, knownPlaceSource); err != nil {
 		return fmt.Errorf("clear place evidence: %w", err)
 	}
 	return nil

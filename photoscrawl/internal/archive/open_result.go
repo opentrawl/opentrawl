@@ -23,6 +23,7 @@ type OpenMechanical struct {
 	Media           *OpenMedia           `json:"media,omitempty"`
 	GPS             *OpenGPS             `json:"gps,omitempty"`
 	Address         string               `json:"address,omitempty"`
+	KnownPlace      *OpenKnownPlace      `json:"known_place,omitempty"`
 	Venue           *OpenVenue           `json:"venue,omitempty"`
 	VenueCandidates []OpenVenueCandidate `json:"venue_candidates,omitempty"`
 	Camera          *OpenCamera          `json:"camera,omitempty"`
@@ -54,6 +55,11 @@ type OpenVenue struct {
 	Category       string  `json:"category,omitempty"`
 	Tier           string  `json:"tier"`
 	DistanceMeters float64 `json:"distance_meters,omitempty"`
+}
+
+type OpenKnownPlace struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
 }
 
 type OpenVenueCandidate struct {
@@ -96,6 +102,13 @@ type OpenModel struct {
 }
 
 func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations []map[string]any) OpenResult {
+	knownPlace := openKnownPlace(placeObservations)
+	venue := openVenue(placeObservations)
+	venueCandidates := openVenueCandidates(placeObservations)
+	if knownPlace != nil {
+		venue = nil
+		venueCandidates = nil
+	}
 	return OpenResult{
 		SchemaVersion: 3,
 		Ref:           assetRef(rowString(asset, "id")),
@@ -104,8 +117,9 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 			Media:           openMedia(asset),
 			GPS:             openGPS(locations),
 			Address:         openAddress(placeObservations),
-			Venue:           openVenue(placeObservations),
-			VenueCandidates: openVenueCandidates(placeObservations),
+			KnownPlace:      knownPlace,
+			Venue:           venue,
+			VenueCandidates: venueCandidates,
 			Camera:          openCamera(asset),
 			Albums:          openAlbums(albums),
 			Original:        openOriginal(resources),
@@ -169,6 +183,26 @@ func openAddress(rows []map[string]any) string {
 		}
 	}
 	return ""
+}
+
+func openKnownPlace(rows []map[string]any) *OpenKnownPlace {
+	for _, row := range rows {
+		if rowString(row, "observation_type") != knownPlaceObservationType {
+			continue
+		}
+		var value map[string]any
+		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) != nil {
+			continue
+		}
+		knownPlace := &OpenKnownPlace{
+			Kind: mapText(value, "kind"),
+			Name: mapText(value, "name"),
+		}
+		if knownPlace.Kind != "" && knownPlace.Name != "" {
+			return knownPlace
+		}
+	}
+	return nil
 }
 
 func openVenue(rows []map[string]any) *OpenVenue {

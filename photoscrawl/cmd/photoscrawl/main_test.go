@@ -247,6 +247,29 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 	)
 }
 
+func TestOpenHumanOutputUsesKnownPlaceInsteadOfVenue(t *testing.T) {
+	var out strings.Builder
+	err := printOpenText(&out, archive.OpenResult{
+		Ref: "photoscrawl:asset/fixture",
+		Mechanical: archive.OpenMechanical{
+			Address:    "23 Example Street, Example City",
+			KnownPlace: &archive.OpenKnownPlace{Kind: archive.KnownPlaceKindWork, Name: "Example Studio"},
+			Venue:      &archive.OpenVenue{Name: "Synthetic Consultancy", Tier: "venue_candidate", DistanceMeters: 12},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"Address: 23 Example Street, Example City",
+		"At work (Example Studio)",
+	)
+	if strings.Contains(got, "Venue:") || strings.Contains(got, "Synthetic Consultancy") {
+		t.Fatalf("known place output leaked venue:\n%s", got)
+	}
+}
+
 func captureRunOutput(t *testing.T, args []string) (string, string, error) {
 	t.Helper()
 	oldStdout := os.Stdout

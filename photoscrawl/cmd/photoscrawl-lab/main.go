@@ -106,13 +106,92 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "eval_card", result)
+	case "known-places":
+		return runKnownPlaces(ctx, paths, args[1:])
 	default:
 		return usage()
 	}
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-context|eval-card>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-context|eval-card|known-places>")}
+}
+
+func runKnownPlaces(ctx context.Context, paths archive.Paths, args []string) error {
+	if len(args) == 0 {
+		return knownPlacesUsage()
+	}
+	switch args[0] {
+	case "set":
+		fs := flag.NewFlagSet("known-places set", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		inputPath := fs.String("input", "", "JSON array of known places")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if strings.TrimSpace(*inputPath) == "" {
+			return output.UsageError{Err: errors.New("known-places set requires --input <json>")}
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		places, err := readKnownPlacesInput(*inputPath)
+		if err != nil {
+			return err
+		}
+		result, err := archive.SetKnownPlaces(ctx, paths, places)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "known_places", result)
+	case "list":
+		fs := flag.NewFlagSet("known-places list", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		formatFlag := fs.String("format", "", "output format")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		format, err := output.Resolve(*formatFlag, *jsonFlag)
+		if err != nil {
+			return err
+		}
+		result, err := archive.ListKnownPlaces(ctx, paths)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, format, "known_places", result)
+	default:
+		return knownPlacesUsage()
+	}
+}
+
+func knownPlacesUsage() error {
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab known-places <set|list>")}
+}
+
+func readKnownPlacesInput(path string) ([]archive.KnownPlace, error) {
+	var reader io.Reader = os.Stdin
+	var closeFile func() error
+	if strings.TrimSpace(path) != "-" {
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		reader = file
+		closeFile = file.Close
+	}
+	if closeFile != nil {
+		defer func() { _ = closeFile() }()
+	}
+	var places []archive.KnownPlace
+	if err := json.NewDecoder(reader).Decode(&places); err != nil {
+		return nil, fmt.Errorf("read known places input: %w", err)
+	}
+	return places, nil
 }
 
 func splitList(value string) []string {

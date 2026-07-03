@@ -40,6 +40,7 @@ type classifyInput struct {
 	Longitude       float64
 	AccuracyMeters  float64
 	Place           *classifyPlaceContext
+	KnownPlace      *KnownPlaceMatch
 	Resources       []classifyResource
 	Albums          []classifyAlbum
 }

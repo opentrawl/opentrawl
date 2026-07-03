@@ -76,6 +76,8 @@ place-context probes. It is not part of the `trawl` contract surface.
 ```sh
 go run ./cmd/photoscrawl-lab place-context --input /tmp/photoscrawl-eval/metadata/E001.json --json
 go run ./cmd/photoscrawl-lab eval-card --library /tmp/Example.photoslibrary --out /tmp/photoscrawl-evals/run-001 --cache-dir /tmp/photoscrawl-cache/originals --limit 1 --json
+go run ./cmd/photoscrawl-lab known-places set --input /tmp/known-places.json --json
+go run ./cmd/photoscrawl-lab known-places list --json
 ```
 
 `place-context` enriches one asset's own latitude/longitude/accuracy/time into
@@ -86,6 +88,11 @@ while real provider errors still fail. Text output is a compact deterministic
 place card; `--json` returns provider context. If `--input` is an existing
 cached provider result, the command renders from that cache without provider
 calls. Apple address areas of interest are rendered as map context, not as POIs.
+
+`known-places` stores user-supplied home, former home, and work coordinates with
+date windows. Classification uses them to replace nearby business candidates
+with `At home`, `At home at the time`, or `At work` card labels while keeping
+the address line.
 
 `eval-card` is an opt-in research harness for prompt/model evaluation. It uses
 the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs

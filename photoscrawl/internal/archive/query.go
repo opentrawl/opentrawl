@@ -54,6 +54,14 @@ const searchWherePlaceSQL = `coalesce((
   select value_text
   from place_observation
   where asset_id = asset.id
+    and observation_type = 'known_place'
+    and trim(value_text) <> ''
+  order by id
+  limit 1
+), (
+  select value_text
+  from place_observation
+  where asset_id = asset.id
     and observation_type = 'venue'
     and tier in ('confirmed_venue', 'venue_candidate')
     and trim(value_text) <> ''

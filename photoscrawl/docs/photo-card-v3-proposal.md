@@ -87,6 +87,7 @@ Fields shown in human mode:
 | `Media` | `ZASSET`, resource rows | show kind, dimensions, and duration for video or live-photo-like assets |
 | `GPS` | `ZASSET.ZLATITUDE`, `ZASSET.ZLONGITUDE`, `ZADDITIONALASSETATTRIBUTES.ZGPSHORIZONTALACCURACY` | show the fix rounded to 5 decimals and accuracy rounded to whole metres in text and JSON |
 | `Address` | cached place-context reverse geocode | show one formatted line when cache has a valid address |
+| `Known place` | user-seeded `known_place` rows | show `At home`, `At home at the time (<name>)`, or `At work (<name>)`; suppress venue display at that location |
 | `Venue` | cached place-context POI candidate | show only when the candidate passes the venue threshold below |
 | `Camera` | `ZEXTENDEDATTRIBUTES`, ImageIO fallback | show only the essentials listed below |
 | `Albums` | `ZGENERICALBUM` membership | show up to 3 album titles, then `and N more`; JSON keeps all |
@@ -272,6 +273,7 @@ masquerades as fact.
 | time | Apple mechanical | `asset.creation_date`, timezone fields | show local capture time | filter and result time | local time and zone name, no source field | context only |
 | GPS | Apple mechanical | `location_observation` | show rounded fix and accuracy | fallback `where` only | rounded coordinate and whole-metre accuracy, no source field | context only |
 | address | provider enrichment | place-context cache and derived `place_observation` | show formatted address if cached | searchable area/address fields | full address components | context only |
+| known place | user-seeded archive row | `known_place` and derived `place_observation` | show the known-place label and suppress venue display | `home`, `<name> (home at the time)`, or `work — <name>` | `{kind, name}` under `mechanical.known_place` | hint only |
 | POI/venue | provider enrichment | place-context cache and `place_observation` candidate rows | show only tiered candidate or confirmed venue | searchable only when tier passes | up to 5 candidates with plain category, tier, whole-metre distance, and verdict | may mention with calibrated wording |
 | camera | Apple mechanical and ImageIO fallback | asset metadata JSON plus typed capture fields | show compact camera line | searchable device/lens only | full capture metadata | context only |
 | faces/people | Apple mechanical or local Vision | `face_observation` | not in v3 card by default | `who` and person search when labels exist | face count, labels, boxes if present | must not identify people |
@@ -283,10 +285,11 @@ masquerades as fact.
 
 `where` in search should come from this order:
 
-1. confirmed or high-tier provider place
-2. formatted address or area
-3. raw GPS label
-4. empty
+1. known place label
+2. confirmed or high-tier provider place
+3. formatted address or area
+4. raw GPS label
+5. empty
 
 It should not come from model prose.
 
@@ -439,6 +442,10 @@ The sidecar should include:
   }
 }
 ```
+
+When a known place matches, the sidecar adds
+`location.known_place: {"kind": "home", "name": "Example Residence"}`. Provider
+POI candidates are not sent to the model for that asset. The address line stays.
 
 The sidecar should deliberately withhold:
 
