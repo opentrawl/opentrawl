@@ -43,16 +43,21 @@ type tdataImportSession struct {
 	mediaTempDir string
 	existingRefs map[int64]ExistingMediaRef
 	remoteMedia  postboxRemoteMediaStats
+	contacts     map[string]store.Contact
 }
 
 type tdataDialog struct {
-	elem     dialogs.Elem
-	chatID   string
-	chatName string
-	kind     string
-	username string
-	folderID string
-	forum    bool
+	elem      dialogs.Elem
+	chatID    string
+	chatName  string
+	kind      string
+	username  string
+	firstName string
+	lastName  string
+	fullName  string
+	phone     string
+	folderID  string
+	forum     bool
 }
 
 func importTDataGo(ctx context.Context, sourcePath string, opts ImportOptions, dbPath, mediaTempDir string) (ImportResult, error) {
@@ -100,6 +105,7 @@ func importTDataGo(ctx context.Context, sourcePath string, opts ImportOptions, d
 			sourcePath:   sourcePath,
 			mediaTempDir: mediaTempDir,
 			existingRefs: tdataExistingMediaRefs(opts, sourcePath),
+			contacts:     map[string]store.Contact{},
 		}
 		result, err = importer.importAccount(ctx)
 		return err
@@ -152,6 +158,7 @@ func (s *tdataImportSession) importAccount(ctx context.Context) (ImportResult, e
 		result.Chats = append(result.Chats, chat)
 		result.Messages = append(result.Messages, messages...)
 	}
+	result.Contacts = s.sortedContacts()
 	sort.Slice(result.Messages, func(i, j int) bool {
 		if result.Messages[i].Timestamp.Equal(result.Messages[j].Timestamp) {
 			return result.Messages[i].SourcePK < result.Messages[j].SourcePK
@@ -198,14 +205,19 @@ func (s *tdataImportSession) loadDialogs(ctx context.Context) ([]tdataDialog, er
 		if chatFilter != "" && !tdataChatFilterMatches(chatID, chatFilter) {
 			return nil
 		}
+		s.rememberContact(chatID, info)
 		out = append(out, tdataDialog{
-			elem:     elem,
-			chatID:   chatID,
-			chatName: firstNonEmpty(info.name, chatID),
-			kind:     firstNonEmpty(info.kind, "unknown"),
-			username: info.username,
-			folderID: folderID,
-			forum:    info.forum,
+			elem:      elem,
+			chatID:    chatID,
+			chatName:  firstNonEmpty(info.name, chatID),
+			kind:      firstNonEmpty(info.kind, "unknown"),
+			username:  info.username,
+			firstName: info.firstName,
+			lastName:  info.lastName,
+			fullName:  info.fullName,
+			phone:     info.phone,
+			folderID:  folderID,
+			forum:     info.forum,
 		})
 		count++
 		if chatFilter != "" {
@@ -404,6 +416,7 @@ func (s *tdataImportSession) senderInfo(msg tg.NotEmptyMessage, ents peer.Entiti
 	}
 	id := tdataPeerIDString(from, s.selfID)
 	info := tdataPeerInfo(from, ents, s.selfID)
+	s.rememberContact(id, info)
 	return id, info.name
 }
 
@@ -632,10 +645,14 @@ func (s *tdataImportSession) loadTopics(ctx context.Context, row tdataDialog) []
 }
 
 type tdataPeerDetails struct {
-	kind     string
-	name     string
-	username string
-	forum    bool
+	kind      string
+	name      string
+	username  string
+	firstName string
+	lastName  string
+	fullName  string
+	phone     string
+	forum     bool
 }
 
 func tdataPeerInfo(peerID tg.PeerClass, ents peer.Entities, selfID int64) tdataPeerDetails {
@@ -668,14 +685,90 @@ func tdataUserInfo(user *tg.User) tdataPeerDetails {
 	first, _ := user.GetFirstName()
 	last, _ := user.GetLastName()
 	username, _ := user.GetUsername()
-	name := strings.TrimSpace(first + " " + last)
+	phone, _ := user.GetPhone()
+	fullName := strings.TrimSpace(first + " " + last)
+	name := fullName
 	if name == "" {
 		name = username
 	}
 	if name == "" && user.ID != 0 {
 		name = strconv.FormatInt(user.ID, 10)
 	}
-	return tdataPeerDetails{kind: "user", name: name, username: username}
+	return tdataPeerDetails{
+		kind:      "user",
+		name:      name,
+		username:  username,
+		firstName: first,
+		lastName:  last,
+		fullName:  fullName,
+		phone:     phone,
+	}
+}
+
+func (s *tdataImportSession) rememberContact(jid string, info tdataPeerDetails) {
+	if s == nil || info.kind != "user" {
+		return
+	}
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return
+	}
+	contact := store.Contact{
+		JID:       jid,
+		PeerType:  "user",
+		Phone:     strings.TrimSpace(info.phone),
+		FullName:  strings.TrimSpace(info.fullName),
+		FirstName: strings.TrimSpace(info.firstName),
+		LastName:  strings.TrimSpace(info.lastName),
+		Username:  strings.TrimSpace(info.username),
+	}
+	if contact.Phone == "" && contact.FullName == "" && contact.FirstName == "" && contact.LastName == "" && contact.Username == "" {
+		return
+	}
+	if s.contacts == nil {
+		s.contacts = map[string]store.Contact{}
+	}
+	existing := s.contacts[jid]
+	s.contacts[jid] = mergeTDataContact(existing, contact)
+}
+
+func mergeTDataContact(existing, next store.Contact) store.Contact {
+	if strings.TrimSpace(existing.JID) == "" {
+		return next
+	}
+	if existing.PeerType == "" {
+		existing.PeerType = next.PeerType
+	}
+	if existing.Phone == "" {
+		existing.Phone = next.Phone
+	}
+	if existing.FullName == "" {
+		existing.FullName = next.FullName
+	}
+	if existing.FirstName == "" {
+		existing.FirstName = next.FirstName
+	}
+	if existing.LastName == "" {
+		existing.LastName = next.LastName
+	}
+	if existing.Username == "" {
+		existing.Username = next.Username
+	}
+	return existing
+}
+
+func (s *tdataImportSession) sortedContacts() []store.Contact {
+	if len(s.contacts) == 0 {
+		return nil
+	}
+	out := make([]store.Contact, 0, len(s.contacts))
+	for _, contact := range s.contacts {
+		out = append(out, contact)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].JID < out[j].JID
+	})
+	return out
 }
 
 func tdataPeerIDString(peerID tg.PeerClass, selfID int64) string {

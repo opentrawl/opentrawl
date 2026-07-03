@@ -95,6 +95,81 @@ func TestStoreImportResultPersistsGroupParticipants(t *testing.T) {
 	}
 }
 
+func TestStoreImportResultPersistsTelegramUserContactsForExport(t *testing.T) {
+	ctx := context.Background()
+	db := filepath.Join(t.TempDir(), "telecrawl.db")
+	st, err := store.Open(ctx, db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Unix(1_800_000_000, 0).UTC()
+	result := telegramdesktop.ImportResult{
+		Stats: store.ImportStats{SourcePath: "tdata", StartedAt: now, FinishedAt: now},
+		Contacts: []store.Contact{{
+			JID:       "165355235",
+			PeerType:  "user",
+			FullName:  "Jef Hellemans",
+			FirstName: "Jef",
+			LastName:  "Hellemans",
+			Username:  "JefHellemans",
+		}},
+		Chats: []store.Chat{{
+			JID:           "165355235",
+			Kind:          "chat",
+			Name:          "Jef Hellemans",
+			Username:      "JefHellemans",
+			LastMessageAt: now,
+			MessageCount:  1,
+		}},
+		Messages: []store.Message{{
+			SourcePK:   1,
+			ChatJID:    "165355235",
+			ChatName:   "Jef Hellemans",
+			MessageID:  "1",
+			SenderJID:  "165355235",
+			SenderName: "Jef Hellemans",
+			Timestamp:  now,
+			Text:       "telegram contact evidence",
+		}},
+	}
+	if err := storeImportResult(ctx, st, &result, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := st.ExportAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(exported.Contacts) != 1 || exported.Contacts[0].JID != "165355235" || exported.Contacts[0].Username != "JefHellemans" {
+		t.Fatalf("stored contacts = %#v, want Telegram user contact", exported.Contacts)
+	}
+
+	var out, errOut bytes.Buffer
+	err = Run(ctx, []string{"--json", "--db", db, "contacts", "export"}, &out, &errOut)
+	if err != nil {
+		t.Fatalf("contacts export: %v stderr=%s", err, errOut.String())
+	}
+	var payload struct {
+		Contacts []struct {
+			DisplayName  string              `json:"display_name"`
+			PhoneNumbers []string            `json:"phone_numbers"`
+			Accounts     map[string][]string `json:"accounts"`
+		} `json:"contacts"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
+		t.Fatalf("json = %s err=%v", out.String(), err)
+	}
+	if len(payload.Contacts) != 1 {
+		t.Fatalf("contacts = %#v, want one exported Telegram contact", payload.Contacts)
+	}
+	contact := payload.Contacts[0]
+	if contact.DisplayName != "Jef Hellemans" || len(contact.PhoneNumbers) != 0 || len(contact.Accounts["telegram"]) != 1 || contact.Accounts["telegram"][0] != "JefHellemans" {
+		t.Fatalf("exported contact = %#v, want Telegram account without invented phone", contact)
+	}
+}
+
 func TestImportResultForChatFiltersContacts(t *testing.T) {
 	result := accountScopedImportResult("filtered")
 	partial := importResultForChat(result, "111")
@@ -164,20 +239,21 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 	}
 	var payload struct {
 		Contacts []struct {
-			DisplayName  string   `json:"display_name"`
-			PhoneNumbers []string `json:"phone_numbers"`
-			JID          string   `json:"jid"`
-			Username     string   `json:"username"`
+			DisplayName  string              `json:"display_name"`
+			PhoneNumbers []string            `json:"phone_numbers"`
+			Accounts     map[string][]string `json:"accounts"`
+			JID          string              `json:"jid"`
+			Username     string              `json:"username"`
 		} `json:"contacts"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("json = %s err=%v", out.String(), err)
 	}
 	assertContactExportKeys(t, out.Bytes())
-	if len(payload.Contacts) != 105 {
-		t.Fatalf("contacts = %d, want 105", len(payload.Contacts))
+	if len(payload.Contacts) != 107 {
+		t.Fatalf("contacts = %d, want 107", len(payload.Contacts))
 	}
-	var sawFirstLast, sawShortPhonePerson, sawRecent, sawRicherEqual bool
+	var sawFirstLast, sawShortPhonePerson, sawRecent, sawRicherEqual, sawUsernameOnly, sawBareUsernameOnly bool
 	firstLastCount := 0
 	for _, contact := range payload.Contacts {
 		if contact.DisplayName == "First Last" {
@@ -194,6 +270,14 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 		}
 		if contact.DisplayName == "Short Phone Person" && contact.PhoneNumbers[0] == "12345" {
 			sawShortPhonePerson = true
+		}
+		if contact.DisplayName == "handle" && len(contact.Accounts["telegram"]) == 1 && contact.Accounts["telegram"][0] == "handle" {
+			switch contact.PhoneNumbers[0] {
+			case "+15559990002":
+				sawUsernameOnly = true
+			case "+15559990006":
+				sawBareUsernameOnly = true
+			}
 		}
 		if contact.DisplayName == "" || len(contact.PhoneNumbers) != 1 {
 			t.Fatalf("bad contact = %#v", contact)
@@ -229,6 +313,9 @@ func TestContactsExportUsesContractShapeAndSkipsUnsafeNames(t *testing.T) {
 	if !sawRicherEqual {
 		t.Fatalf("missing richer equal-time contact name: %#v", payload.Contacts)
 	}
+	if !sawUsernameOnly || !sawBareUsernameOnly {
+		t.Fatalf("missing username-backed contacts: %#v", payload.Contacts)
+	}
 }
 
 func assertContactExportKeys(t *testing.T, data []byte) {
@@ -249,11 +336,18 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 		if _, ok := contact["display_name"]; !ok {
 			t.Fatalf("contact keys = %#v, missing display_name", contact)
 		}
-		if _, ok := contact["phone_numbers"]; !ok {
-			t.Fatalf("contact keys = %#v, missing phone_numbers", contact)
+		identifiers := 0
+		for key := range contact {
+			switch key {
+			case "display_name":
+			case "phone_numbers", "accounts":
+				identifiers++
+			default:
+				t.Fatalf("contact keys = %#v, unexpected %q", contact, key)
+			}
 		}
-		if len(contact) != 2 {
-			t.Fatalf("contact keys = %#v, want only display_name and phone_numbers", contact)
+		if identifiers == 0 {
+			t.Fatalf("contact keys = %#v, missing identifiers", contact)
 		}
 	}
 }

@@ -134,9 +134,9 @@ func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 	doctor := runOK(t, "--db", dbPath, "--archive", archivePath, "doctor")
 	assertTextContains(t, doctor,
 		"Doctor checks:",
-		"source_store: ok",
+		"source store: ok",
 		"archive: ok",
-		"full_disk_access: ok",
+		"full disk access: ok",
 	)
 	conformance.AssertHumanOutput(t, doctor)
 }

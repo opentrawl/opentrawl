@@ -173,7 +173,9 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(closeSpelling.Candidates) != 2 || closeSpelling.Candidates[0].Who != "Alicia Example" || closeSpelling.Candidates[1].Who != "Alice A." {
+	// Tightened distance thresholds: "alce" is within 1 edit of
+	// "alice" but 3 edits from "alicia", which no longer matches.
+	if len(closeSpelling.Candidates) != 1 || closeSpelling.Candidates[0].Who != "Alice A." {
 		t.Fatalf("close spelling = %#v", closeSpelling)
 	}
 	prefix, err := st.ResolveWho(ctx, "ali")
