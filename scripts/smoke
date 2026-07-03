@@ -72,10 +72,13 @@ valid_who_json() {
 }
 
 valid_search_who_json() {
+  # who_resolved appears when a NAME resolved; an identifier value
+  # filters directly with no resolution step, so it is optional here.
   jq -e '
     (.query | type == "string") and
-    (.who_resolved.who | type == "string" and length > 0) and
-    (.who_resolved.identifiers | type == "array") and
+    ((.who_resolved == null) or
+     ((.who_resolved.who | type == "string" and length > 0) and
+      (.who_resolved.identifiers | type == "array"))) and
     (.results | type == "array" and length > 0)
   ' "$1" >/dev/null 2>&1
 }
@@ -162,7 +165,10 @@ run_who_contract_smoke() {
         capture "$human" "$rawdir/$tag-human.stderr.txt" "$command" who "$fragment"
         ok "$surface who JSON envelope"
         check_human_who_capture "$surface" "$human"
-        exact_name="$(jq -r '.candidates[0].who // empty' "$json")"
+        # An identifier, not the display name: names can be ambiguous
+        # (several "American Express" sender variants); the contract
+        # guarantees identifiers filter directly and cannot miss.
+        exact_name="$(jq -r '.candidates[0].identifiers[0] // .candidates[0].who // empty' "$json")"
         if [ -z "$trawl_ambiguous_who" ] && [ "$command" != "trawl" ] && [ "$count" -ge 2 ]; then
           ambiguous="$(first_repeated_who_token "$json")"
           if [ -z "$ambiguous" ] && [ "${#fragment}" -ge 2 ]; then
