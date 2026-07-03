@@ -677,10 +677,9 @@ func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertain
 	}, "\n")
 }
 
-func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) OpenResult {
+func seedSyntheticPlaceAsset(t *testing.T, paths Paths) {
 	t.Helper()
 	ctx := context.Background()
-	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
 	if err := mkdirLibrary(libraryPath); err != nil {
 		t.Fatal(err)
@@ -711,6 +710,13 @@ func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) Open
 	}); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) OpenResult {
+	t.Helper()
+	ctx := context.Background()
+	paths := testPaths(t)
+	seedSyntheticPlaceAsset(t, paths)
 	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
 	if err != nil {
 		t.Fatal(err)

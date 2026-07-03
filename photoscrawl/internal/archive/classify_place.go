@@ -99,10 +99,18 @@ on conflict(id) do update set
 		}
 		written += n
 	}
+	seenCandidates := map[string]bool{}
 	for _, candidate := range candidates {
 		if strings.TrimSpace(candidate.Name) == "" {
 			continue
 		}
+		// The place cache can list the same business twice; candidates are
+		// nearest-first, so the first occurrence wins.
+		key := strings.ToLower(strings.TrimSpace(candidate.Name)) + "\x00" + candidate.Tier
+		if seenCandidates[key] {
+			continue
+		}
+		seenCandidates[key] = true
 		value := placeCandidateValue(candidate)
 		n, err := insertPlaceObservation(ctx, tx, input.AssetID, evidenceID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
 		if err != nil {
