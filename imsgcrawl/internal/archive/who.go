@@ -5,17 +5,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
 const whoCandidateLimit = 20
-
-const (
-	whoMatchExact = iota
-	whoMatchPrefix
-	whoMatchContains
-	whoMatchClose
-	whoMatchNone
-)
 
 type searchWhoMatch struct {
 	enabled       bool
@@ -35,7 +29,7 @@ type searchWhoMapping struct {
 }
 
 func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResolution, error) {
-	query = normalizeSearchWho(query)
+	query = whomatch.Normalize(query)
 	if query == "" {
 		return WhoResolution{Query: query, Candidates: []WhoCandidate{}}, nil
 	}
@@ -43,10 +37,7 @@ func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResolution, er
 	if err != nil {
 		return WhoResolution{}, err
 	}
-	matched := directWhoMatches(query, candidates)
-	if len(matched) == 0 {
-		matched = closeWhoMatches(query, candidates)
-	}
+	matched := matchWhoCandidates(query, candidates)
 	if err := s.populateWhoStats(ctx, matched); err != nil {
 		return WhoResolution{}, err
 	}
@@ -67,30 +58,55 @@ func (s *Store) ResolveWho(ctx context.Context, query string) (WhoResolution, er
 	}, nil
 }
 
-func directWhoMatches(query string, candidates []WhoCandidate) []WhoCandidate {
-	matched := make([]WhoCandidate, 0, min(len(candidates), whoCandidateLimit))
-	for _, candidate := range candidates {
-		rank, ok := whoCandidateDirectMatchRank(query, candidate)
-		if !ok {
-			continue
-		}
-		candidate.matchRank = rank
-		matched = append(matched, candidate)
+func (resolution WhoResolution) FilterCandidate() (WhoCandidate, bool) {
+	if resolution.TotalMatches != 1 || len(resolution.Candidates) != 1 {
+		return WhoCandidate{}, false
 	}
-	return matched
+	candidate := resolution.Candidates[0]
+	if candidate.matchRank == whomatch.RankCloseSpelling {
+		return WhoCandidate{}, false
+	}
+	return candidate, true
 }
 
-func closeWhoMatches(query string, candidates []WhoCandidate) []WhoCandidate {
-	matched := make([]WhoCandidate, 0, whoCandidateLimit)
+func (resolution WhoResolution) MatchesOnlyByCloseSpelling() bool {
+	if resolution.TotalMatches == 0 || len(resolution.Candidates) == 0 {
+		return false
+	}
+	for _, candidate := range resolution.Candidates {
+		if candidate.matchRank != whomatch.RankCloseSpelling {
+			return false
+		}
+	}
+	return true
+}
+
+func matchWhoCandidates(query string, candidates []WhoCandidate) []WhoCandidate {
+	direct := make([]WhoCandidate, 0, min(len(candidates), whoCandidateLimit))
+	close := make([]WhoCandidate, 0, whoCandidateLimit)
 	for _, candidate := range candidates {
-		rank, ok := whoCandidateCloseMatchRank(query, candidate)
+		rank, ok := candidate.MatchRank(query)
 		if !ok {
 			continue
 		}
 		candidate.matchRank = rank
-		matched = append(matched, candidate)
+		if rank == whomatch.RankCloseSpelling {
+			close = append(close, candidate)
+			continue
+		}
+		direct = append(direct, candidate)
 	}
-	return matched
+	if len(direct) > 0 {
+		return direct
+	}
+	return close
+}
+
+func (candidate WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {
+	return whomatch.Candidate{
+		Who:         candidate.Who,
+		Identifiers: candidate.Identifiers,
+	}.MatchRank(query)
 }
 
 func (s *Store) whoCandidates(ctx context.Context) ([]WhoCandidate, error) {
@@ -132,8 +148,9 @@ func (s *Store) whoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		out[index].Identifiers = append(out[index].Identifiers, owners...)
 	}
 	for i := range out {
-		out[i].Identifiers = sortedUniqueStrings(out[i].Identifiers)
+		out[i] = cleanWhoCandidate(out[i])
 	}
+	out = mergeSameNameWhoCandidates(out)
 	sortWhoCandidates(out)
 	return out, nil
 }
@@ -190,7 +207,7 @@ func (s *Store) ownerIdentifiers(ctx context.Context) ([]string, error) {
 		}
 		out = append(out, identifier)
 	}
-	return sortedUniqueStrings(out), rows.Err()
+	return out, rows.Err()
 }
 
 func (s *Store) populateWhoStats(ctx context.Context, candidates []WhoCandidate) error {
@@ -258,11 +275,11 @@ func candidateSearchWho(candidate *WhoCandidate) searchWhoMatch {
 }
 
 func searchWhoParticipantKey(handle searchWhoHandle, mappings map[string]searchWhoMapping) (string, string) {
-	if normalizeSearchWho(handle.displayName) == ownerDisplayName {
+	if whomatch.Normalize(handle.displayName) == ownerDisplayName {
 		return "owner", ownerDisplayName
 	}
 	if mapping, ok := mappings[normalizedSearchHandleKey(handle.handle)]; ok {
-		name := normalizeSearchWho(mapping.displayName)
+		name := cleanWhoDisplay(mapping.displayName)
 		if name != "" {
 			contactKey := strings.TrimSpace(mapping.contactKey)
 			if contactKey != "" {
@@ -271,9 +288,9 @@ func searchWhoParticipantKey(handle searchWhoHandle, mappings map[string]searchW
 			return "contact-name:" + name, name
 		}
 	}
-	name := normalizeSearchWho(handle.displayName)
+	name := cleanWhoDisplay(handle.displayName)
 	if name == "" {
-		name = normalizeSearchWho(handle.handle)
+		name = cleanWhoDisplay(handle.handle)
 	}
 	if name == "" {
 		return "", ""
@@ -311,28 +328,51 @@ func normalizeSearchPhone(phone string) string {
 	return strings.TrimPrefix(b.String(), "00")
 }
 
-func normalizeSearchWho(value string) string {
+func cleanWhoDisplay(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }
 
-func sortedUniqueStrings(values []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value == "" {
-			continue
-		}
-		key := strings.ToLower(value)
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		out = append(out, value)
+func cleanWhoCandidate(candidate WhoCandidate) WhoCandidate {
+	cleaned := whomatch.MergeSameName([]whomatch.Candidate{{
+		Who:         candidate.Who,
+		Identifiers: candidate.Identifiers,
+	}})
+	if len(cleaned) == 0 {
+		return candidate
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return strings.ToLower(out[i]) < strings.ToLower(out[j])
-	})
+	candidate.Who = cleaned[0].Who
+	candidate.Identifiers = cleaned[0].Identifiers
+	return candidate
+}
+
+func mergeSameNameWhoCandidates(candidates []WhoCandidate) []WhoCandidate {
+	if len(candidates) == 0 {
+		return nil
+	}
+	shared := make([]whomatch.Candidate, 0, len(candidates))
+	metadata := map[string][]WhoCandidate{}
+	for _, candidate := range candidates {
+		shared = append(shared, whomatch.Candidate{
+			Who:         candidate.Who,
+			Identifiers: candidate.Identifiers,
+		})
+		key := whomatch.Normalize(candidate.Who)
+		metadata[key] = append(metadata[key], candidate)
+	}
+	merged := whomatch.MergeSameName(shared)
+	out := make([]WhoCandidate, 0, len(merged))
+	for _, candidate := range merged {
+		key := whomatch.Normalize(candidate.Who)
+		item := WhoCandidate{
+			Who:         candidate.Who,
+			Identifiers: candidate.Identifiers,
+		}
+		for _, source := range metadata[key] {
+			item.includeFromMe = item.includeFromMe || source.includeFromMe
+			item.handleRowIDs = append(item.handleRowIDs, source.handleRowIDs...)
+		}
+		out = append(out, item)
+	}
 	return out
 }
 
@@ -341,7 +381,7 @@ func sortWhoCandidates(candidates []WhoCandidate) {
 		left := candidates[i]
 		right := candidates[j]
 		if left.matchRank != right.matchRank {
-			return left.matchRank < right.matchRank
+			return left.matchRank.BetterThan(right.matchRank)
 		}
 		if left.lastSeenRaw != right.lastSeenRaw {
 			return left.lastSeenRaw > right.lastSeenRaw
@@ -349,8 +389,10 @@ func sortWhoCandidates(candidates []WhoCandidate) {
 		if left.Messages != right.Messages {
 			return left.Messages > right.Messages
 		}
-		if strings.ToLower(left.Who) != strings.ToLower(right.Who) {
-			return strings.ToLower(left.Who) < strings.ToLower(right.Who)
+		leftName := whomatch.Normalize(left.Who)
+		rightName := whomatch.Normalize(right.Who)
+		if leftName != rightName {
+			return leftName < rightName
 		}
 		return strings.Join(left.Identifiers, "\x00") < strings.Join(right.Identifiers, "\x00")
 	})

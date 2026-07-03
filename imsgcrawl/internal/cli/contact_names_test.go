@@ -200,6 +200,41 @@ func TestWhoCommandCloseSpelling(t *testing.T) {
 	}
 }
 
+func TestSearchWhoCloseSpellingOnlySingleMatchSuggests(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	addressBookPath := filepath.Join(dir, "AddressBook-v22.abcddb")
+	createContactlessMessagesFixture(t, dbPath)
+	createAddressBookFixture(t, addressBookPath)
+	if _, err := archive.SyncWithOptions(context.Background(), archive.SyncOptions{
+		ArchivePath:      archivePath,
+		SourcePath:       dbPath,
+		AddressBookPaths: []string{addressBookPath},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "search", "--who", "Katia", "dinner"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 5 {
+		t.Fatalf("close-only search err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	var payload errorJSON
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("close-only error json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMeanTotal != 1 || len(payload.Error.DidYouMean) != 1 {
+		t.Fatalf("close-only error = %#v", payload.Error)
+	}
+	if payload.Error.DidYouMean[0].Who != "Katja Example" {
+		t.Fatalf("close-only suggestion = %#v", payload.Error.DidYouMean)
+	}
+	if strings.Contains(stdout.String(), "results") {
+		t.Fatalf("close-only search ran: %s", stdout.String())
+	}
+}
+
 func TestSearchWhoUnknownReturnsContractError(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "chat.db")
@@ -291,7 +326,7 @@ func TestSearchWhoDedupesMappedHandleVariants(t *testing.T) {
 	}
 }
 
-func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
+func TestSearchWhoMergesSameStoredNames(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "chat.db")
 	archivePath := filepath.Join(dir, "archive.db")
@@ -299,8 +334,31 @@ func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
 	makeSharedParticipantNameFixture(t, dbPath)
 	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
 
+	out := runOK(t, "--archive", archivePath, "--json", "search", "--who", "shared example", "shared")
+	var payload searchListJSON
+	if err := json.Unmarshal([]byte(out), &payload); err != nil {
+		t.Fatalf("merged search json = %s err=%v", out, err)
+	}
+	if payload.TotalMatches != 2 || payload.Truncated || len(payload.Results) != 2 {
+		t.Fatalf("merged search envelope = %#v", payload)
+	}
+	if payload.WhoResolved == nil || payload.WhoResolved.Who != "Shared Example" || !hasString(payload.WhoResolved.Identifiers, "+15550100") || !hasString(payload.WhoResolved.Identifiers, "0015550100") {
+		t.Fatalf("merged who_resolved = %#v", payload.WhoResolved)
+	}
+	if !snippetsContain(payload.Results, "shared marker one") || !snippetsContain(payload.Results, "shared marker two") {
+		t.Fatalf("merged search did not filter across both stored names = %#v", payload.Results)
+	}
+}
+
+func TestSearchWhoRejectsAmbiguousDirectMatches(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
 	var stdout, stderr bytes.Buffer
-	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "search", "--who", "shared example", "shared"}, &stdout, &stderr)
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "search", "--who", "name", "launch"}, &stdout, &stderr)
 	if err == nil || ExitCode(err) != 4 {
 		t.Fatalf("ambiguous search err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 	}
@@ -311,7 +369,7 @@ func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
 	if payload.Error.Code != "ambiguous_who" || len(payload.Error.Candidates) != 2 {
 		t.Fatalf("ambiguous error = %#v", payload)
 	}
-	if payload.Error.Candidates[0].Who != "Shared Example" || len(payload.Error.Candidates[0].Identifiers) == 0 {
+	if payload.Error.CandidateTotal != 2 || payload.Error.Candidates[0].Who == "" || len(payload.Error.Candidates[0].Identifiers) == 0 {
 		t.Fatalf("ambiguous candidates = %#v", payload.Error.Candidates)
 	}
 	if strings.Contains(stdout.String(), "results") {
@@ -320,7 +378,7 @@ func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
 
 	stdout.Reset()
 	stderr.Reset()
-	err = Run(context.Background(), []string{"--archive", archivePath, "search", "--who", "shared example", "shared"}, &stdout, &stderr)
+	err = Run(context.Background(), []string{"--archive", archivePath, "search", "--who", "name", "launch"}, &stdout, &stderr)
 	if err == nil || ExitCode(err) != 4 {
 		t.Fatalf("human ambiguous search err=%v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
 	}
@@ -328,7 +386,7 @@ func TestSearchWhoRejectsAmbiguousStoredNames(t *testing.T) {
 		t.Fatalf("human ambiguous wrote stdout: %s", stdout.String())
 	}
 	for _, want := range []string{
-		`ambiguous_who: "shared example" matches more than one person.`,
+		`ambiguous_who: "name" matches more than one person.`,
 		"who",
 		"identifiers",
 		"Retry: imsgcrawl search --who",

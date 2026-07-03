@@ -66,16 +66,15 @@ func (r *runtime) runSearch(args []string) error {
 			if err != nil {
 				return err
 			}
-			switch {
-			case resolution.TotalMatches == 0:
+			if resolution.TotalMatches == 0 || resolution.MatchesOnlyByCloseSpelling() {
 				return r.unknownWhoError(whoValue, query, resolution)
-			case resolution.TotalMatches == 1 && len(resolution.Candidates) == 1:
-				candidate := resolution.Candidates[0]
-				resolved = &candidate
-				options.Who = resolved
-			default:
+			}
+			candidate, ok := resolution.FilterCandidate()
+			if !ok {
 				return r.ambiguousWhoError(whoValue, query, resolution)
 			}
+			resolved = &candidate
+			options.Who = resolved
 		}
 		page, err := st.SearchPage(r.ctx, query, options)
 		if err != nil {
