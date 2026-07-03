@@ -19,7 +19,7 @@ import (
 
 const (
 	indexDBName        = "index.db"
-	indexSchemaVersion = "2"
+	indexSchemaVersion = "3"
 )
 
 type IndexStatus struct {

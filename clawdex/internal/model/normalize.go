@@ -9,6 +9,12 @@ import (
 
 var slugDash = regexp.MustCompile(`-+`)
 
+// Keep this list small: strip one trunk zero only for country codes where
+// contacts commonly keep the national prefix after an international code.
+var trunkZeroCountryCodes = []string{
+	"31", "44", "49", "33", "39", "34", "46", "47", "45", "32", "43", "41", "48",
+}
+
 func Slug(name string) string {
 	name = strings.TrimSpace(strings.ToLower(name))
 	var b strings.Builder
@@ -40,7 +46,21 @@ func NormalizePhone(phone string) string {
 	}
 	out := b.String()
 	out = strings.TrimPrefix(out, "00")
-	return out
+	return stripCountryCodeTrunkZero(out)
+}
+
+func stripCountryCodeTrunkZero(phone string) string {
+	for _, countryCode := range trunkZeroCountryCodes {
+		prefix := countryCode + "0"
+		if strings.HasPrefix(phone, prefix) && plausibleSubscriberLength(len(phone)-len(prefix)) {
+			return countryCode + phone[len(prefix):]
+		}
+	}
+	return phone
+}
+
+func plausibleSubscriberLength(length int) bool {
+	return length >= 6 && length <= 12
 }
 
 func NormalizeName(name string) string {

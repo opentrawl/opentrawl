@@ -485,6 +485,54 @@ func TestCrawlerImportDedupePhonesAndRecordsSources(t *testing.T) {
 	}
 }
 
+func TestCrawlerImportMatchesStoredCountryCodeTrunkZeroPhone(t *testing.T) {
+	r := testRepo(t)
+	s := New(r)
+	now := time.Date(2026, 7, 3, 10, 0, 0, 0, time.UTC)
+
+	created, err := s.AddPerson("Morgan Example", nil, []string{"310600000000"}, nil, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.FindPerson("+31600000000"); err != nil {
+		t.Fatalf("fixed index did not match canonical query: %v", err)
+	}
+
+	contact := model.SourceContact{
+		Name:   "Morgan iMessage",
+		Phones: []model.ContactValue{{Value: "+31600000000"}},
+	}
+	changes, err := s.ImportCrawlerContacts("imsgcrawl", []model.SourceContact{contact}, false, now.Add(time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 1 || changes[0].Action != "update" || changes[0].PersonID != created.ID {
+		t.Fatalf("changes = %#v", changes)
+	}
+
+	p, err := s.FindPerson("310600000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ID != created.ID {
+		t.Fatalf("matched person ID = %q, want %q", p.ID, created.ID)
+	}
+	if len(p.Phones) != 1 || p.Phones[0].Value != "310600000000" {
+		t.Fatalf("stored phone was unexpectedly rewritten: %#v", p.Phones)
+	}
+	if got := p.Sources["imsgcrawl"]; len(got.Phones) != 1 || got.Phones[0] != "+31600000000" {
+		t.Fatalf("imsgcrawl source = %#v", got)
+	}
+
+	changes, err = s.ImportCrawlerContacts("imsgcrawl", []model.SourceContact{contact}, false, now.Add(2*time.Hour))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changes) != 0 {
+		t.Fatalf("second import changes = %#v", changes)
+	}
+}
+
 func TestCrawlerImportMatchesEmailAndHandleIdentifiers(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
