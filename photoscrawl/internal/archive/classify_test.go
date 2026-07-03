@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
@@ -350,6 +351,145 @@ where state in ('pending', 'metadata_classified')
 	if nonTerminal != 0 {
 		t.Fatalf("non-terminal classified rows = %d", nonTerminal)
 	}
+	states := map[string]string{}
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `
+select a.local_identifier, q.state
+from classification_queue q
+join asset a on a.id = q.asset_id
+`)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var localIdentifier, state string
+			if err := rows.Scan(&localIdentifier, &state); err != nil {
+				return err
+			}
+			states[localIdentifier] = state
+		}
+		return rows.Err()
+	}); err != nil {
+		t.Fatal(err)
+	}
+	wantStates := map[string]string{
+		"parse-fails":     "content_failed",
+		"not-in-photokit": "content_not_in_photokit",
+		"download-fails":  "failed_download",
+		"no-content":      "content_no_content_available",
+		"video-skipped":   "content_skipped",
+	}
+	if !reflect.DeepEqual(states, wantStates) {
+		t.Fatalf("queue states = %#v, want %#v", states, wantStates)
+	}
+
+	second, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:30:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Processed != 0 || second.ContentFailedDownload != 0 || second.OriginalDownloadFailures != 0 {
+		t.Fatalf("terminal outcomes were retried in the same loop: %#v", second)
+	}
+	assertContentOutcomesSumToProcessed(t, second)
+}
+
+func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	var exportCalls atomic.Int32
+	oldExport := exportOriginalResource
+	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destinationPath string, allowNetwork bool) error {
+		exportCalls.Add(1)
+		if query.LocalIdentifier != "permanent-download-failure" || !allowNetwork {
+			t.Fatalf("export args = %#v %t destination=%q", query, allowNetwork, destinationPath)
+		}
+		return errors.New("synthetic permanent download failure")
+	}
+	defer func() { exportOriginalResource = oldExport }()
+
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets: []photos.Asset{
+			remoteFixtureAsset("permanent-download-failure", "2026-05-29T12:00:00Z"),
+		},
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	first, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Processed != 1 || first.ContentFailedDownload != 1 || first.OriginalDownloadFailures != 1 {
+		t.Fatalf("first classify result = %#v", first)
+	}
+	assertContentOutcomesSumToProcessed(t, first)
+	if calls := exportCalls.Load(); calls != 2 {
+		t.Fatalf("first export attempts = %d, want 2", calls)
+	}
+
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:20:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:25:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Processed != 0 || second.ContentFailedDownload != 0 || second.OriginalDownloadFailures != 0 {
+		t.Fatalf("failed download was retried without operator reset: %#v", second)
+	}
+	if calls := exportCalls.Load(); calls != 2 {
+		t.Fatalf("export attempts after terminal state = %d, want 2", calls)
+	}
+	assertQueueState(t, ctx, paths, "permanent-download-failure", "failed_download")
+
+	resetFailedDownloadsForTest(t, ctx, paths)
+	third, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:30:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.Processed != 1 || third.ContentFailedDownload != 1 || third.OriginalDownloadFailures != 1 {
+		t.Fatalf("operator reset classify result = %#v", third)
+	}
+	if calls := exportCalls.Load(); calls != 4 {
+		t.Fatalf("export attempts after operator reset = %d, want 4", calls)
+	}
+	assertContentOutcomesSumToProcessed(t, third)
 }
 
 func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
@@ -439,6 +579,50 @@ func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
 	}
 	if result.ContentOutcomeTotal != result.Processed {
 		t.Fatalf("content_outcome_total = %d, processed = %d, result = %#v", result.ContentOutcomeTotal, result.Processed, result)
+	}
+}
+
+func assertQueueState(t *testing.T, ctx context.Context, paths Paths, localIdentifier, want string) {
+	t.Helper()
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var got string
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		return tx.QueryRowContext(ctx, `
+select q.state
+from classification_queue q
+join asset a on a.id = q.asset_id
+where a.local_identifier = ?
+`, localIdentifier).Scan(&got)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got != want {
+		t.Fatalf("queue state for %s = %q, want %q", localIdentifier, got, want)
+	}
+}
+
+func resetFailedDownloadsForTest(t *testing.T, ctx context.Context, paths Paths) {
+	t.Helper()
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `
+update classification_queue
+set state = 'metadata_classified',
+    reason = 'operator reset failed_download',
+    updated_at = ?
+where state = 'failed_download'
+`, fixedClock("2026-05-28T10:28:00Z")().Format(time.RFC3339Nano))
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -66,6 +66,10 @@ uncertainty list. Search uses hidden terms derived from that card text and
 mechanical place observations. It does not store rendered tag rows, object
 lists, or cluster terms.
 
+If an original download fails, `classify` marks that asset as `failed_download`.
+It will not try that download again until an operator resets it:
+`sqlite3 <crawlkit-data-dir>/photoscrawl/photos.sqlite "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
+
 `neighbors` is the "photos taken together" query. It returns source-level
 adjacent assets only and does not create trips, people, places, or clusters.
 Current reasons are deterministic archive facts:
