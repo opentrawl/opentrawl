@@ -142,6 +142,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			candidate := resolution.Candidates[0]
 			whoResolved = &candidate
 			whoBySource = searchWhoFilters(candidate, sources)
+			sources = searchSourcesForResolvedWho(sources, whoBySource)
 		default:
 			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho)
 		}
@@ -280,9 +281,15 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		result.SkipReason = "cannot_filter_who"
 		return result
 	}
+	if options.who != "" && options.whoBySource != nil && who == "" {
+		return result
+	}
 	args := searchCommandArgs(query, options, who)
 	data, err := runCrawlerCommandJSON(ctx, source.Path, args...)
 	if err != nil {
+		if searchContractErrorCode(data) == "unknown_who" {
+			return result
+		}
 		result.Err = err
 		return result
 	}
@@ -310,6 +317,23 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		})
 	}
 	return result
+}
+
+func searchSourcesForResolvedWho(sources []Source, whoBySource map[string]string) []Source {
+	if whoBySource == nil {
+		return sources
+	}
+	out := make([]Source, 0, len(sources))
+	for _, source := range sources {
+		if source.MetadataErr != nil || !hasCapability(source, "who") {
+			out = append(out, source)
+			continue
+		}
+		if strings.TrimSpace(whoBySource[source.ID]) != "" {
+			out = append(out, source)
+		}
+	}
+	return out
 }
 
 func searchCommandArgs(query string, options searchOptions, who string) []string {
@@ -354,6 +378,17 @@ func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
 		TotalMatches: raw.TotalMatches,
 		Truncated:    raw.Truncated,
 	}, nil
+}
+
+func searchContractErrorCode(data []byte) string {
+	if len(bytes.TrimSpace(data)) == 0 {
+		return ""
+	}
+	var envelope ErrorEnvelope
+	if err := decodeContractJSON(data, &envelope); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(envelope.Error.Code)
 }
 
 func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResult {
