@@ -28,6 +28,12 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if manifest.ID != "clawdex" || manifest.DisplayName != "Contacts" {
 		t.Fatalf("manifest identity = %#v", manifest)
 	}
+	if manifest.SchemaVersion != control.SchemaVersion || manifest.ContractVersion != control.ContractVersion {
+		t.Fatalf("manifest versions = %#v", manifest)
+	}
+	if manifest.Version != Version {
+		t.Fatalf("version = %q, want %q", manifest.Version, Version)
+	}
 	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who"}) {
 		t.Fatalf("capabilities = %#v", manifest.Capabilities)
 	}
