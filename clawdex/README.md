@@ -89,14 +89,16 @@ clawdex import contacts --from imsgcrawl --dry-run
 clawdex import contacts --from-all --dry-run
 ```
 
-Apple direct import uses macOS `Contacts.framework`. Linux builds still support
-markdown, notes, search, Git, Google via `gog`, and vCard export.
+Apple direct import reads the local macOS AddressBook SQLite databases under
+Full Disk Access. Linux builds still support markdown, notes, search, Git,
+Google via `gog`, and vCard export.
 
 Avatar imports are opt-in with `--avatars`. Apple reads thumbnails from
-Contacts.framework. Google uses `gog contacts raw --person-fields photos`,
-fetches the selected photo URL bytes, then stores thumbnails as local files
-under each person directory and records only metadata in `person.md`. Manual
-avatars are not overwritten by Apple/Google imports.
+the same AddressBook databases. Google uses
+`gog contacts raw --person-fields photos`, fetches the selected photo URL
+bytes, then stores thumbnails as local files under each person directory and
+records only metadata in `person.md`. Manual avatars are not overwritten by
+Apple/Google imports.
 
 Birdclaw and Discrawl DM imports read local archives only. They import DM
 conversations with more than `--min-messages` messages, add source-specific

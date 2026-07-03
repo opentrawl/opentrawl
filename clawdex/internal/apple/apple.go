@@ -73,7 +73,10 @@ func (c Contact) SourceContact(includeAvatar bool) model.SourceContact {
 }
 
 func addressLabel(label string) string {
-	switch strings.ToLower(strings.TrimSpace(label)) {
+	normalized := strings.ToLower(strings.TrimSpace(label))
+	normalized = strings.TrimPrefix(normalized, "_$!<")
+	normalized = strings.TrimSuffix(normalized, ">!$_")
+	switch normalized {
 	case "home":
 		return "home"
 	case "work":

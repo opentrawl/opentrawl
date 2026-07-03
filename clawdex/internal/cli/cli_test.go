@@ -530,6 +530,33 @@ func TestExecuteImportAppleFromFileAndGoogleViaFakeGog(t *testing.T) {
 	}
 }
 
+func TestExecuteContactsExportJSONIncludesAddresses(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	input := filepath.Join(t.TempDir(), "apple.ndjson")
+	if err := os.WriteFile(input, []byte("{\"identifier\":\"a1\",\"full_name\":\"Ada Apple\",\"emails\":[\"apple@example.com\"],\"addresses\":[{\"value\":\"1 Main Street\\nApt 2\",\"label\":\"home\"}]}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	if err := Execute([]string{"--config", cfg, "import", "apple", "--input", input}, &out, &errOut); err != nil {
+		t.Fatalf("apple import: %v %s", err, errOut.String())
+	}
+	out.Reset()
+	if err := Execute([]string{"--config", cfg, "--json", "contacts", "export"}, &out, &errOut); err != nil {
+		t.Fatalf("contacts export: %v %s", err, errOut.String())
+	}
+	var export contactexport.ContactExport
+	if err := json.Unmarshal(out.Bytes(), &export); err != nil {
+		t.Fatal(err)
+	}
+	if len(export.Contacts) != 1 || len(export.Contacts[0].Addresses) != 1 || export.Contacts[0].Addresses[0] != "1 Main Street\nApt 2" {
+		t.Fatalf("export = %#v", export)
+	}
+}
+
 func TestExecuteGitStatusAndDryRun(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
