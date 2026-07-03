@@ -1224,6 +1224,9 @@ func (a *app) resolveSearchWho(ctx context.Context, st *store.Store, value, quer
 	case 0:
 		return store.WhoResolution{}, a.failContractWithExit(unknownWhoError(value, nil), 5)
 	case 1:
+		if resolution.OnlyCloseSpellingMatch() {
+			return store.WhoResolution{}, a.failContractWithExit(unknownWhoError(value, resolution.Candidates), 5)
+		}
 		return resolution, nil
 	default:
 		return store.WhoResolution{}, a.failContractWithExit(ambiguousWhoError(value, query, resolution.Candidates), 4)

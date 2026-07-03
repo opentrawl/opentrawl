@@ -588,7 +588,7 @@ func TestResolveWhoChoosesCleanPushNameAndNormalizesIdentifiers(t *testing.T) {
 	}
 }
 
-func TestResolveWhoReturnsGenerousDistinctCandidates(t *testing.T) {
+func TestResolveWhoMergesSameNameCandidates(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
 	if err != nil {
@@ -617,18 +617,19 @@ func TestResolveWhoReturnsGenerousDistinctCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resolution.Candidates) != 2 {
-		t.Fatalf("candidates = %#v, want 2", resolution.Candidates)
+	if len(resolution.Candidates) != 1 {
+		t.Fatalf("candidates = %#v, want 1", resolution.Candidates)
 	}
-	if resolution.Candidates[0].Who != "casey example" || resolution.Candidates[0].Messages != 1 || !stringSliceContains(resolution.Candidates[0].Identifiers, "+15550101") {
-		t.Fatalf("first candidate = %#v", resolution.Candidates[0])
+	candidate := resolution.Candidates[0]
+	if candidate.Who != "Casey Example" || candidate.Messages != 2 || !stringSliceContains(candidate.Identifiers, "+15550100") || !stringSliceContains(candidate.Identifiers, "+15550101") {
+		t.Fatalf("candidate = %#v", candidate)
 	}
 	closeResolution, err := st.ResolveWho(ctx, "Casy")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(closeResolution.Candidates) != 2 {
-		t.Fatalf("close-spelling candidates = %#v, want 2", closeResolution.Candidates)
+	if len(closeResolution.Candidates) != 1 || !closeResolution.OnlyCloseSpellingMatch() {
+		t.Fatalf("close-spelling candidates = %#v, want one close-spelling match", closeResolution.Candidates)
 	}
 }
 
