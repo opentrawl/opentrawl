@@ -63,7 +63,7 @@ const searchWhereSQL = `coalesce((
     when 'landmark_or_place_name_candidate' then 2
     when 'place_type_candidate' then 3
     else 4
-  end, confidence desc, value_text
+  end, coalesce(confidence, -1) desc, value_text
   limit 1
 ), (
   select 'GPS ' || printf('%.4f', latitude) || ', ' || printf('%.4f', longitude) ||
@@ -252,11 +252,11 @@ where asset_id = ?
 	if err != nil {
 		return OpenResult{}, err
 	}
-	visualObservations, err := rows(ctx, db.DB(), `
-select observation_type, label, confidence, evidence_id
-from visual_observation
+	metadataObservations, err := rows(ctx, db.DB(), `
+select observation_type, label, evidence_id
+from metadata_observation
 where asset_id = ?
-order by observation_type, confidence desc, label
+order by observation_type, label
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err
@@ -283,7 +283,7 @@ order by confidence desc, id
 select observation_type, value_text, confidence, evidence_id
 from model_observation
 where asset_id = ?
-order by observation_type, confidence desc, value_text
+order by observation_type, coalesce(confidence, -1) desc, value_text
 `, rowID)
 	if err != nil {
 		return OpenResult{}, err
@@ -292,7 +292,7 @@ order by observation_type, confidence desc, value_text
 	if err != nil {
 		return OpenResult{}, err
 	}
-	return newOpenResult(asset, resources, albums, locations, visualObservations, textObservations, faceObservations, modelObservations, evidence), nil
+	return newOpenResult(asset, resources, albums, locations, metadataObservations, textObservations, faceObservations, modelObservations, evidence), nil
 }
 
 func assetRef(id string) string {
@@ -365,7 +365,7 @@ from evidence_ref
 where asset_id = ? or id = ? or id in (
   select evidence_id from location_observation where id = ?
   union
-  select evidence_id from visual_observation where id = ?
+  select evidence_id from metadata_observation where id = ?
   union
   select evidence_id from text_observation where id = ?
   union

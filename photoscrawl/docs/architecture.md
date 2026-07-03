@@ -64,10 +64,11 @@ Always consider:
 - local multimodal summaries, candidates, privacy hints, uncertainty notes, and
   clustering terms.
 
-But store observations only when they have useful confidence/evidence. A cat
-photo does not need barcode output; a receipt/screenshot/document probably does
-need OCR; a drone-looking burst probably needs camera/device/resource metadata
-and location precision.
+But store observations only when they have useful evidence. Carry confidence
+only when the source or model actually emitted a calibrated value. A cat photo
+does not need barcode output; a receipt/screenshot/document probably does need
+OCR; a drone-looking burst probably needs camera/device/resource metadata and
+location precision.
 
 Local multimodal output is candidate evidence. It belongs in generic model
 observation rows with the model id, prompt version, evidence ref, and normalized
@@ -80,7 +81,8 @@ Store raw GPS observations first. Reverse geocoding is a separate derived layer.
 
 Reason: GPS can be off by enough to imply the wrong business or home. A raw
 coordinate is evidence; "barber shop" versus "pizza place" is a fallible
-derived claim and must carry method, confidence, and evidence.
+derived claim and must carry method and evidence. It carries confidence only
+when the provider or model actually emits one.
 
 ## Identity Policy
 

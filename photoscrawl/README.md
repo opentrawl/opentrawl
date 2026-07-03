@@ -65,7 +65,8 @@ Ollama-API vision model and stores typed candidate observations:
 scene summaries, visible-text summaries, place-type/name/venue candidates,
 objects/foods, anonymous people presence, privacy hints, cluster terms, and
 uncertainties. These are evidence-backed model observations, not durable
-people/place/trip truth.
+people/place/trip truth. They carry confidence only when the model actually
+emits one.
 
 `neighbors` returns source-level adjacent assets only. It does not create trips,
 people, places, or clusters. Current reasons are deterministic archive facts:

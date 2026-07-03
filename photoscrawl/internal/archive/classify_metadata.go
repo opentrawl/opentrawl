@@ -9,56 +9,54 @@ import (
 	"time"
 )
 
-type visualObservation struct {
+type metadataObservation struct {
 	ObservationType string
 	Label           string
-	Confidence      float64
 }
 
-func classifyFromMetadata(input classifyInput) []visualObservation {
-	out := []visualObservation{}
-	add := func(kind, label string, confidence float64) {
+func classifyFromMetadata(input classifyInput) []metadataObservation {
+	out := []metadataObservation{}
+	add := func(kind, label string) {
 		label = strings.TrimSpace(label)
 		if label == "" {
 			return
 		}
-		out = append(out, visualObservation{ObservationType: kind, Label: label, Confidence: confidence})
+		out = append(out, metadataObservation{ObservationType: kind, Label: label})
 	}
 
-	add("media_type", input.MediaType, 1)
-	add("content_availability", pickLabel(input.hasLocalContent(), "local_content_available", "local_content_unavailable"), 1)
+	add("media_type", input.MediaType)
+	add("content_availability", pickLabel(input.hasLocalContent(), "local_content_available", "local_content_unavailable"))
 	if input.Width > 0 && input.Height > 0 {
 		switch {
 		case input.Width > input.Height:
-			add("geometry", "landscape", 1)
+			add("geometry", "landscape")
 		case input.Height > input.Width:
-			add("geometry", "portrait", 1)
+			add("geometry", "portrait")
 		default:
-			add("geometry", "square", 1)
+			add("geometry", "square")
 		}
 	}
 	if strings.TrimSpace(input.BurstIdentifier) != "" {
-		add("capture_mode", "burst_member", 1)
+		add("capture_mode", "burst_member")
 	}
 	for _, resource := range input.Resources {
-		add("resource_type", resource.ResourceType, 1)
-		add("resource_uti", resource.UTI, 1)
+		add("resource_type", resource.ResourceType)
 	}
 
 	keywords := input.keywordText()
 	if strings.Contains(keywords, "screenshot") || strings.Contains(keywords, "screen shot") {
-		add("document_signal", "screenshot_candidate", 0.75)
+		add("document_signal", "screenshot_candidate")
 	}
 	if containsAny(keywords, "receipt", "invoice", "bill", "statement") {
-		add("document_signal", "receipt_candidate", 0.65)
+		add("document_signal", "receipt_candidate")
 	}
 	if containsAny(keywords, "document", "passport", "ticket", "boarding pass", "menu") {
-		add("document_signal", "document_candidate", 0.6)
+		add("document_signal", "document_candidate")
 	}
-	return dedupeVisualObservations(out)
+	return dedupeMetadataObservations(out)
 }
 
-func writeMetadataClassification(ctx context.Context, tx *sql.Tx, input classifyInput, observations []visualObservation, classifiedAt time.Time, clearExisting bool) (int, error) {
+func writeMetadataClassification(ctx context.Context, tx *sql.Tx, input classifyInput, observations []metadataObservation, classifiedAt time.Time, clearExisting bool) (int, error) {
 	if clearExisting {
 		if err := clearMetadataObservations(ctx, tx, input.AssetID); err != nil {
 			return 0, err
@@ -102,12 +100,12 @@ on conflict(id) do update set
 
 	written := 0
 	for _, observation := range observations {
-		observationID := stableID("visual_observation", input.AssetID, metadataClassifierSource, observation.ObservationType, observation.Label)
+		observationID := stableID("metadata_observation", input.AssetID, metadataClassifierSource, observation.ObservationType, observation.Label)
 		if _, err := tx.ExecContext(ctx, `
-insert into visual_observation(id, asset_id, observation_type, label, confidence, bounding_box_json, source, model_id, evidence_id)
-values (?, ?, ?, ?, ?, '{}', ?, ?, ?)
-`, observationID, input.AssetID, observation.ObservationType, observation.Label, observation.Confidence, metadataClassifierSource, metadataClassifierModelID, evidenceID); err != nil {
-			return written, fmt.Errorf("write visual observation: %w", err)
+insert into metadata_observation(id, asset_id, observation_type, label, source, classifier_id, evidence_id)
+values (?, ?, ?, ?, ?, ?, ?)
+`, observationID, input.AssetID, observation.ObservationType, observation.Label, metadataClassifierSource, metadataClassifierModelID, evidenceID); err != nil {
+			return written, fmt.Errorf("write metadata observation: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
@@ -193,8 +191,8 @@ func clearMetadataObservationsForAssetBatch(ctx context.Context, tx *sql.Tx, ass
 	if _, err := tx.ExecContext(ctx, `
 delete from observation_fts
 where id in (
-    select id from visual_observation
-    where source = ? and model_id = ? and asset_id in (`+placeholders+`)
+    select id from metadata_observation
+    where source = ? and classifier_id = ? and asset_id in (`+placeholders+`)
   )
 `, args...); err != nil {
 		return fmt.Errorf("clear metadata observation fts: %w", err)
@@ -204,17 +202,17 @@ where id in (
 		args = append(args, assetID)
 	}
 	if _, err := tx.ExecContext(ctx, `
-delete from visual_observation
-where source = ? and model_id = ? and asset_id in (`+placeholders+`)
+delete from metadata_observation
+where source = ? and classifier_id = ? and asset_id in (`+placeholders+`)
 `, args...); err != nil {
-		return fmt.Errorf("clear metadata visual observations: %w", err)
+		return fmt.Errorf("clear metadata observations: %w", err)
 	}
 	return nil
 }
 
-func dedupeVisualObservations(observations []visualObservation) []visualObservation {
+func dedupeMetadataObservations(observations []metadataObservation) []metadataObservation {
 	seen := map[string]bool{}
-	out := make([]visualObservation, 0, len(observations))
+	out := make([]metadataObservation, 0, len(observations))
 	for _, observation := range observations {
 		key := observation.ObservationType + "\x00" + observation.Label
 		if seen[key] {

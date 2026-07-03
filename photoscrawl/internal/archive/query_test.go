@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
@@ -100,6 +101,11 @@ values ('fixture-place', ?, 'merchant_or_venue_name_candidate', 'Synthetic Pier'
 	if result.Results[0].Who != "Synthetic Person" || result.Results[0].Where != "Synthetic Pier" {
 		t.Fatalf("who/where = %#v", result.Results[0])
 	}
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conformance.AssertSearchEnvelope(t, data)
 }
 
 func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
@@ -139,7 +145,7 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	if err := json.Unmarshal(data, &top); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"asset", "locations", "visual_observations", "model_observations"} {
+	for _, field := range []string{"asset", "locations", "metadata_observations", "visual_observations", "model_observations"} {
 		if _, ok := top[field]; ok {
 			t.Fatalf("open leaked raw field %q: %s", field, data)
 		}
