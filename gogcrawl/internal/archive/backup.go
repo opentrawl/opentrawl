@@ -18,12 +18,14 @@ import (
 	"time"
 )
 
+const messageIngestHashVersion = "mail-decode-v2"
+
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {
 	var pending []BackupShard
 	for _, shard := range shards {
 		var hash string
 		err := s.store.DB().QueryRowContext(ctx, `select hash from ingested_shards where path = ?`, shard.Path).Scan(&hash)
-		if err == sql.ErrNoRows || (err == nil && hash != shard.Hash) {
+		if err == sql.ErrNoRows || (err == nil && hash != expectedIngestHash(shard)) {
 			pending = append(pending, shard)
 			continue
 		}
@@ -57,10 +59,17 @@ on conflict(path) do update set
   kind = excluded.kind,
   rows = excluded.rows,
   ingested_at = excluded.ingested_at
-`, shard.Path, shard.Hash, string(shard.Kind), result.Seen+result.Labels, time.Now().Local().Format(time.RFC3339))
+`, shard.Path, expectedIngestHash(shard), string(shard.Kind), result.Seen+result.Labels, time.Now().Local().Format(time.RFC3339))
 		return err
 	})
 	return result, err
+}
+
+func expectedIngestHash(shard BackupShard) string {
+	if shard.Kind == BackupShardMessages {
+		return messageIngestHashVersion + ":" + shard.Hash
+	}
+	return shard.Hash
 }
 
 func ingestLabels(ctx context.Context, tx *sql.Tx, data []byte) (int, error) {
@@ -304,7 +313,7 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 		}}, nil
 	}
 	if mediaType == "text/plain" || strings.HasPrefix(mediaType, "text/plain;") {
-		return []string{string(decoded)}, nil, nil
+		return []string{decodeTextPart(decoded, params["charset"])}, nil, nil
 	}
 	return nil, nil, nil
 }
@@ -343,14 +352,6 @@ func parseAddressListHeader(value string) string {
 		out = append(out, address.String())
 	}
 	return strings.Join(out, ", ")
-}
-
-func decodeHeader(value string) string {
-	decoded, err := new(mime.WordDecoder).DecodeHeader(value)
-	if err != nil {
-		return strings.TrimSpace(value)
-	}
-	return strings.TrimSpace(decoded)
 }
 
 func manifestString(value any) string {
