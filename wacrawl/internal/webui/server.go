@@ -350,8 +350,8 @@ func parseLimit(w http.ResponseWriter, r *http.Request, fallback int) (int, bool
 		return fallback, true
 	}
 	limit, err := strconv.Atoi(raw)
-	if err != nil || limit < 1 || limit > 500 {
-		http.Error(w, "limit must be between 1 and 500", http.StatusBadRequest)
+	if err != nil || limit < 1 {
+		http.Error(w, "limit must be at least 1", http.StatusBadRequest)
 		return 0, false
 	}
 	return limit, true

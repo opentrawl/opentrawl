@@ -24,6 +24,9 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
+	if *limit < 1 {
+		return usageErr(errors.New("chats --limit must be at least 1"))
+	}
 	return a.withReadStore(ctx, func(st *store.Store) error {
 		var (
 			chats []store.Chat

@@ -783,6 +783,64 @@ func TestMessagesAndSearchReportTruncation(t *testing.T) {
 	}
 }
 
+func TestMessagesHonorsLimitAboveOldCap(t *testing.T) {
+	ctx := context.Background()
+	limit := 205
+	dbPath := writeLimitArchive(t, limit+3)
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "messages", "--limit", fmt.Sprint(limit)}, &stdout, &stderr); err != nil {
+		t.Fatalf("messages json error = %v stderr=%s", err, stderr.String())
+	}
+	var payload messageListOutput
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("messages json = %s err=%v", stdout.String(), err)
+	}
+	if payload.Returned != limit || payload.Limit != limit || len(payload.Messages) != limit {
+		t.Fatalf("messages payload = returned %d limit %d len %d, want %d", payload.Returned, payload.Limit, len(payload.Messages), limit)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "messages", "--limit", fmt.Sprint(limit)}, &stdout, &stderr); err != nil {
+		t.Fatalf("messages text error = %v stderr=%s", err, stderr.String())
+	}
+	if got := strings.Count(stdout.String(), "needle limit message "); got != limit {
+		t.Fatalf("messages text rows = %d, want %d\n%s", got, limit, stdout.String())
+	}
+}
+
+func TestSearchHonorsLimitAboveOldCap(t *testing.T) {
+	ctx := context.Background()
+	limit := 205
+	total := limit + 3
+	dbPath := writeLimitArchive(t, total)
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "--limit", fmt.Sprint(limit), "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search json error = %v stderr=%s", err, stderr.String())
+	}
+	var payload searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
+		t.Fatalf("search json = %s err=%v", stdout.String(), err)
+	}
+	if len(payload.Results) != limit || payload.TotalMatches != total {
+		t.Fatalf("search payload = len %d total %d, want len %d total %d", len(payload.Results), payload.TotalMatches, limit, total)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "search", "--limit", fmt.Sprint(limit), "needle"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search text error = %v stderr=%s", err, stderr.String())
+	}
+	if got := strings.Count(stdout.String(), "wacrawl:msg/limit-"); got != limit {
+		t.Fatalf("search text rows = %d, want %d\n%s", got, limit, stdout.String())
+	}
+	if !strings.Contains(stdout.String(), fmt.Sprintf("showing %d of %d matches", limit, total)) {
+		t.Fatalf("search text missing count:\n%s", stdout.String())
+	}
+}
+
 func TestSearchJSONUsesContractEnvelopeAndStableRefs(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
@@ -1820,9 +1878,17 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "invalid time") {
 		t.Fatalf("expected invalid time error, got %v", err)
 	}
-	err = Run(context.Background(), []string{"messages", "--limit", "201"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
+	err = Run(context.Background(), []string{"messages", "--limit", "0"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("expected message limit error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"chats", "--limit", "0"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "chats --limit must be at least 1") {
+		t.Fatalf("expected chats limit error, got %v", err)
+	}
+	err = Run(context.Background(), []string{"unread", "--limit", "0"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "unread --limit must be at least 1") {
+		t.Fatalf("expected unread limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "query or --who") {
@@ -1833,7 +1899,7 @@ func TestRunUsageErrors(t *testing.T) {
 		t.Fatalf("expected open ref error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search", "--limit", "0", "query"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "--limit must be between") {
+	if err == nil || !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("expected search limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search", "query", "--who", " \t "}, &stdout, &stderr)
@@ -1905,7 +1971,7 @@ func TestJSONErrorsAreSingleRenderedDocuments(t *testing.T) {
 	}{
 		{
 			name: "usage",
-			args: []string{"--db", dbPath, "search", "--limit", "1000", "a", "--json"},
+			args: []string{"--db", dbPath, "search", "--limit", "0", "a", "--json"},
 			code: "usage",
 		},
 		{
@@ -2335,6 +2401,50 @@ func TestCLIHelpers(t *testing.T) {
 }
 
 func timeZero() (out time.Time) { return out }
+
+func writeLimitArchive(t *testing.T, count int) string {
+	t.Helper()
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	chats := make([]store.Chat, 0, count)
+	messages := make([]store.Message, 0, count)
+	for i := 1; i <= count; i++ {
+		chatJID := fmt.Sprintf("155501%05d@g.us", i)
+		chatName := fmt.Sprintf("Limit chat %03d", i)
+		at := now.Add(time.Duration(i) * time.Minute)
+		chats = append(chats, store.Chat{
+			JID:           chatJID,
+			Kind:          "group",
+			Name:          chatName,
+			LastMessageAt: at,
+			UnreadCount:   1,
+			MessageCount:  1,
+		})
+		messages = append(messages, store.Message{
+			SourcePK:    int64(i),
+			ChatJID:     chatJID,
+			ChatName:    chatName,
+			MessageID:   fmt.Sprintf("limit-%03d", i),
+			SenderJID:   "15550100000@s.whatsapp.net",
+			SenderName:  "Alice Example",
+			Timestamp:   at,
+			RawType:     0,
+			MessageType: "text",
+			Text:        fmt.Sprintf("needle limit message %03d", i),
+		})
+	}
+	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	return dbPath
+}
 
 func createDesktopFixture(t *testing.T, dir string) {
 	t.Helper()

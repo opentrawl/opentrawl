@@ -89,8 +89,8 @@ func (f messageFlags) resolve() (store.MessageFilter, error) {
 	if *f.fromMe && *f.fromThem {
 		return store.MessageFilter{}, errors.New("--from-me and --from-them are mutually exclusive")
 	}
-	if *f.limit < 1 || *f.limit > maxMessageLimit {
-		return store.MessageFilter{}, fmt.Errorf("--limit must be between 1 and %d", maxMessageLimit)
+	if *f.limit < 1 {
+		return store.MessageFilter{}, errors.New("--limit must be at least 1")
 	}
 	out := store.MessageFilter{
 		ChatJID:  *f.chat,

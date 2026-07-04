@@ -115,7 +115,7 @@ Usage:
   wacrawl chats [--limit N] [--unread]
 
 Flags:
-  --limit N   Maximum chats to print. Default: 50.
+  --limit N   Chats to return. Default: 50.
   --unread    Show only chats with unread messages.
 
 Examples:
@@ -152,7 +152,7 @@ Usage:
   wacrawl unread [--limit N]
 
 Flags:
-  --limit N   Maximum chats to print. Default: 50.
+  --limit N   Chats to return. Default: 50.
 
 Examples:
   wacrawl unread
@@ -167,7 +167,7 @@ Usage:
 Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
-  --limit N        Maximum messages to print. Default: 20, maximum: 200.
+  --limit N        Messages to return. Default: 20.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.
@@ -192,7 +192,7 @@ Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
   --who NAME       Resolve NAME, then filter to that sender, recipient, or chat member.
-  --limit N        Maximum messages to print. Default: 20, maximum: 200.
+  --limit N        Messages to return. Default: 20.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.
