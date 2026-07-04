@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/place"
@@ -13,7 +12,7 @@ import (
 
 const placeObservationSource = "place_context"
 
-func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, observedAt time.Time) (int, error) {
+func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility) (int, error) {
 	if input.Place == nil && input.KnownPlace == nil {
 		return 0, clearPlaceObservations(ctx, tx, input.AssetID)
 	}
@@ -22,7 +21,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	}
 	written := 0
 	if input.KnownPlace != nil {
-		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, *input.KnownPlace, observedAt)
+		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, *input.KnownPlace)
 		if err != nil {
 			return written, err
 		}
@@ -34,33 +33,8 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	result := input.Place.Result
 	place.NormalizeResult(&result)
 	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
-	evidenceID := stableID("evidence", input.AssetID, "place_context", result.Provider, input.Place.CacheStatus)
-	evidenceJSON, err := jsonText(map[string]any{
-		"provider":      result.Provider,
-		"source":        result.Source,
-		"cache_status":  input.Place.CacheStatus,
-		"radius_meters": result.RadiusMeters,
-		"generated_at":  result.GeneratedAt,
-		"place_context": result,
-		"observed_at":   observedAt.Format(time.RFC3339Nano),
-	})
-	if err != nil {
-		return written, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values (?, ?, ?, ?, ?, ?)
-on conflict(id) do update set
-  asset_id = excluded.asset_id,
-  evidence_kind = excluded.evidence_kind,
-  source = excluded.source,
-  pointer = excluded.pointer,
-  value_json = excluded.value_json
-`, evidenceID, input.AssetID, "place_context", placeObservationSource, input.AssetID+"/place_context", evidenceJSON); err != nil {
-		return written, fmt.Errorf("write place evidence: %w", err)
-	}
 	if address := addressLine(result.Address); address != "" {
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, evidenceID, "address", address, map[string]any{
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, "address", address, map[string]any{
 			"address": result.Address,
 			"area":    result.Area,
 		}, result.Provider, input.Place.CacheStatus, place.TierAreaContext, 0)
@@ -85,7 +59,7 @@ on conflict(id) do update set
 		}
 		seenCandidates[key] = true
 		value := placeCandidateValue(candidate)
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, evidenceID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
@@ -95,7 +69,7 @@ on conflict(id) do update set
 			continue
 		}
 		value["tier"] = tier
-		n, err = insertPlaceObservation(ctx, tx, input.AssetID, evidenceID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
+		n, err = insertPlaceObservation(ctx, tx, input.AssetID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
@@ -105,7 +79,7 @@ on conflict(id) do update set
 	return written, nil
 }
 
-func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, evidenceID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
+func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, nil
@@ -122,7 +96,7 @@ func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, evidenceID
 	if _, err := tx.ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, assetID, kind, text, valueJSON, placeObservationSource, provider, cacheStatus, tier, distanceValue, evidenceID); err != nil {
+`, observationID, assetID, kind, text, valueJSON, placeObservationSource, provider, cacheStatus, tier, distanceValue, ""); err != nil {
 		return 0, fmt.Errorf("write place observation: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
@@ -134,7 +108,7 @@ values (?, ?, ?, ?)
 	return 1, nil
 }
 
-func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string, match KnownPlaceMatch, observedAt time.Time) (int, error) {
+func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string, match KnownPlaceMatch) (int, error) {
 	label := KnownPlaceWhereLabel(match.Kind, match.Name, match.After)
 	if label == "" {
 		return 0, nil
@@ -148,33 +122,11 @@ func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string
 	if err != nil {
 		return 0, err
 	}
-	evidenceID := stableID("evidence", assetID, knownPlaceObservationType, match.Kind, match.Name)
-	evidenceJSON, err := jsonText(map[string]any{
-		"known_place":    value,
-		"distance_m":     match.DistanceMeters,
-		"matched_at":     observedAt.Format(time.RFC3339Nano),
-		"matching_layer": knownPlaceSource,
-	})
-	if err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values (?, ?, ?, ?, ?, ?)
-on conflict(id) do update set
-  asset_id = excluded.asset_id,
-  evidence_kind = excluded.evidence_kind,
-  source = excluded.source,
-  pointer = excluded.pointer,
-  value_json = excluded.value_json
-`, evidenceID, assetID, knownPlaceObservationType, knownPlaceSource, assetID+"/known_place", evidenceJSON); err != nil {
-		return 0, fmt.Errorf("write known place evidence: %w", err)
-	}
 	observationID := stableID("place_observation", assetID, knownPlaceObservationType, match.Kind, match.Name)
 	if _, err := tx.ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, evidenceID); err != nil {
+`, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, ""); err != nil {
 		return 0, fmt.Errorf("write known place observation: %w", err)
 	}
 	body := strings.Join(uniqueNonEmpty([]string{label, match.Kind, match.Name, KnownPlaceCardLine(match.Kind, match.Name, match.After)}), " ")
@@ -200,16 +152,6 @@ where asset_id = ?
 	}
 	if _, err := tx.ExecContext(ctx, `delete from place_observation where asset_id = ?`, assetID); err != nil {
 		return fmt.Errorf("clear place observations: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-delete from evidence_ref
-where asset_id = ?
-  and (
-    (evidence_kind = 'place_context' and source = ?)
-    or (evidence_kind = ? and source = ?)
-  )
-`, assetID, placeObservationSource, knownPlaceObservationType, knownPlaceSource); err != nil {
-		return fmt.Errorf("clear place evidence: %w", err)
 	}
 	return nil
 }

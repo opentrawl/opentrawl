@@ -59,7 +59,7 @@ order by album_title, album_kind
 		return OpenResult{}, err
 	}
 	modelObservations, err := rows(ctx, db.DB(), `
-select observation_type, value_text, value_json, model_id, prompt_version, evidence_id
+select observation_type, value_text, value_json, model_id, prompt_version
 from model_observation
 where asset_id = ?
   and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardOCR+`', '`+modelObservationCardUncertainty+`')

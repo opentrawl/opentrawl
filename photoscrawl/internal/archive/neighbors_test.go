@@ -50,9 +50,6 @@ func TestNeighborsReturnsDeterministicSourceReasons(t *testing.T) {
 	if got.Score != 1 {
 		t.Fatalf("neighbor score = %f, want capped score 1", got.Score)
 	}
-	if len(got.EvidenceRefs) == 0 {
-		t.Fatal("expected evidence ids backing neighbor reasons")
-	}
 	reasonTypes := map[string]bool{}
 	for _, reason := range got.Reasons {
 		reasonTypes[reason.Type] = true

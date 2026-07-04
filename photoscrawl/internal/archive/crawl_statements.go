@@ -10,7 +10,6 @@ type crawlStatements struct {
 	asset               *sql.Stmt
 	resource            *sql.Stmt
 	album               *sql.Stmt
-	evidence            *sql.Stmt
 	location            *sql.Stmt
 	fts                 *sql.Stmt
 	queue               *sql.Stmt
@@ -64,10 +63,6 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 insert into album_membership(id, asset_id, album_id, album_title, album_kind)
 values (?, ?, ?, ?, ?)
 `},
-		{&stmts.evidence, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values (?, ?, ?, ?, ?, ?)
-`},
 		{&stmts.location, `
 insert into location_observation(id, asset_id, latitude, longitude, altitude, horizontal_accuracy, source, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?)
@@ -116,7 +111,7 @@ func (s *crawlStatements) close() {
 	if s == nil {
 		return
 	}
-	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.evidence, s.location, s.fts, s.queue, s.seen} {
+	for _, stmt := range []*sql.Stmt{s.previousFingerprint, s.asset, s.resource, s.album, s.location, s.fts, s.queue, s.seen} {
 		if stmt != nil {
 			_ = stmt.Close()
 		}

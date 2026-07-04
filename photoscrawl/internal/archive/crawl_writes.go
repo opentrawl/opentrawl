@@ -11,42 +11,25 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-func (c *syncImporter) insertResource(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, index int, resource photos.Resource) error {
-	evidenceValue := map[string]any{
-		"availability":      resource.Availability,
-		"available_locally": resource.AvailableLocally,
-		"needs_download":    resource.NeedsDownload,
-		"file_size":         resource.FileSize,
-		"stable_hash":       resource.StableHash,
-		"local_path":        resource.LocalPath,
-		"metadata":          resource.Metadata,
-	}
+func (c *syncImporter) insertResource(ctx context.Context, assetID string, index int, resource photos.Resource) error {
 	resourceID := stableID("asset_resource", assetID, fmt.Sprintf("%06d", index), resource.Type, resource.UTI, resource.OriginalFilename)
 	if _, err := c.stmts.resource.ExecContext(ctx, resourceID, assetID, resource.Type, resource.UTI, resource.OriginalFilename, resource.LocalPath, resource.FileSize, resource.StableHash, boolInt(resource.AvailableLocally), boolInt(resource.NeedsDownload)); err != nil {
 		return fmt.Errorf("insert asset resource: %w", err)
 	}
-	return c.insertEvidence(ctx, tx, assetID, "asset_resource", c.snapshot.Provider, "asset:"+localIdentifier+"/resource:"+resourceID, evidenceValue)
+	return nil
 }
 
-func (c *syncImporter) insertAlbum(ctx context.Context, tx *sql.Tx, assetID string, album photos.AlbumMembership) error {
+func (c *syncImporter) insertAlbum(ctx context.Context, assetID string, album photos.AlbumMembership) error {
 	membershipID := stableID("album_membership", assetID, album.AlbumID)
 	if _, err := c.stmts.album.ExecContext(ctx, membershipID, assetID, album.AlbumID, album.AlbumTitle, album.AlbumKind); err != nil {
 		return fmt.Errorf("insert album membership: %w", err)
 	}
-	return c.insertEvidence(ctx, tx, assetID, "album_membership", c.snapshot.Provider, "album:"+album.AlbumID, album)
+	return nil
 }
 
-func (c *syncImporter) insertLocation(ctx context.Context, tx *sql.Tx, assetID, localIdentifier string, location photos.Location) error {
-	evidenceID := stableID("evidence", assetID, "location", localIdentifier)
-	valueJSON, err := jsonText(location)
-	if err != nil {
-		return err
-	}
-	if _, err := c.stmts.evidence.ExecContext(ctx, evidenceID, assetID, "location", c.snapshot.Provider, "asset:"+localIdentifier+"/location", valueJSON); err != nil {
-		return fmt.Errorf("insert location evidence: %w", err)
-	}
+func (c *syncImporter) insertLocation(ctx context.Context, assetID, localIdentifier string, location photos.Location) error {
 	locationID := stableID("location_observation", assetID, localIdentifier)
-	if _, err := c.stmts.location.ExecContext(ctx, locationID, assetID, location.Latitude, location.Longitude, nullableFloat(location.Altitude), nullableFloat(location.HorizontalAccuracy), c.snapshot.Provider, evidenceID); err != nil {
+	if _, err := c.stmts.location.ExecContext(ctx, locationID, assetID, location.Latitude, location.Longitude, nullableFloat(location.Altitude), nullableFloat(location.HorizontalAccuracy), c.snapshot.Provider, ""); err != nil {
 		return fmt.Errorf("insert location observation: %w", err)
 	}
 	return nil
@@ -85,18 +68,6 @@ func uniqueNonEmpty(values []string) []string {
 	return out
 }
 
-func (c *syncImporter) insertEvidence(ctx context.Context, tx *sql.Tx, assetID, kind, source, pointer string, value any) error {
-	valueJSON, err := jsonText(value)
-	if err != nil {
-		return err
-	}
-	evidenceID := stableID("evidence", assetID, kind, pointer)
-	if _, err := c.stmts.evidence.ExecContext(ctx, evidenceID, assetID, kind, source, pointer, valueJSON); err != nil {
-		return fmt.Errorf("insert evidence ref: %w", err)
-	}
-	return nil
-}
-
 func (c *syncImporter) upsertSeenAsset(ctx context.Context, sourceID, assetID, snapshotID, fingerprint string) error {
 	if _, err := c.stmts.seen.ExecContext(ctx, sourceID, assetID, snapshotID, snapshotID, fingerprint, c.completedAt.Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("upsert seen asset: %w", err)
@@ -132,7 +103,7 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) erro
 		"asset_resource", "album_membership", "location_observation",
 		"metadata_observation", "text_observation", "face_observation",
 		"model_observation", "place_observation", "observation_term",
-		"asset_fts", "observation_fts", "edge", "evidence_ref",
+		"asset_fts", "observation_fts", "edge",
 	}
 	for _, table := range tables {
 		column := "asset_id"

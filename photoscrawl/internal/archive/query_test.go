@@ -67,26 +67,14 @@ func TestSearchAddsWhereAndWho(t *testing.T) {
 	}
 	defer db.Close()
 	if _, err := db.DB().ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values ('fixture-face-evidence', ?, 'face', 'fixture', 'face:1', '{}')
-`, assetID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.DB().ExecContext(ctx, `
 insert into face_observation(id, asset_id, face_local_id, person_label, confidence, bounding_box_json, source, evidence_id)
-values ('fixture-face', ?, 'face-1', 'Synthetic Person', 0.9, '{}', 'fixture', 'fixture-face-evidence')
-`, assetID); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.DB().ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values ('fixture-place-evidence', ?, 'place_context', 'place_context', 'place:1', '{}')
+values ('fixture-face', ?, 'face-1', 'Synthetic Person', 0.9, '{}', 'fixture', '')
 `, assetID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.DB().ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
-values ('fixture-place', ?, 'venue', 'Synthetic Pier', '{"name":"Synthetic Pier","category":"pier"}', 'place_context', 'apple', 'hit', 'venue_candidate', 12, 'fixture-place-evidence')
+values ('fixture-place', ?, 'venue', 'Synthetic Pier', '{"name":"Synthetic Pier","category":"pier"}', 'place_context', 'apple', 'hit', 'venue_candidate', 12, '')
 `, assetID); err != nil {
 		t.Fatal(err)
 	}

@@ -264,7 +264,7 @@ func TestWritePlaceClassificationDedupesIdenticalCandidates(t *testing.T) {
 				POICandidates: []place.POICandidate{duplicate, duplicate},
 			},
 		}
-		_, err = writePlaceClassification(ctx, tx, input, venuePlausibility{}, fixedClock("2026-05-28T10:15:00Z")())
+		_, err = writePlaceClassification(ctx, tx, input, venuePlausibility{})
 		return err
 	}); err != nil {
 		t.Fatalf("duplicate candidates must dedupe, not fail: %v", err)

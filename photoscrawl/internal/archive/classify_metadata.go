@@ -61,41 +61,6 @@ func writeMetadataClassification(ctx context.Context, tx *sql.Tx, input classify
 			return 0, err
 		}
 	}
-	evidenceID := stableID("evidence", input.AssetID, "classification_input", metadataClassifierSource, metadataClassifierInputVersion)
-	evidenceJSON, err := jsonText(map[string]any{
-		"classifier":         metadataClassifierSource,
-		"model_id":           metadataClassifierModelID,
-		"input_version":      metadataClassifierInputVersion,
-		"media_type":         input.MediaType,
-		"media_subtypes":     input.MediaSubtypes,
-		"creation_date":      input.CreationDate,
-		"favorite":           input.Favorite,
-		"hidden":             input.Hidden,
-		"resource_count":     len(input.Resources),
-		"album_count":        len(input.Albums),
-		"width":              input.Width,
-		"height":             input.Height,
-		"has_local_content":  input.hasLocalContent(),
-		"needs_download":     input.NeedsDownload,
-		"classified_at":      classifiedAt.Format(time.RFC3339Nano),
-		"metadata_only":      true,
-		"content_not_opened": true,
-	})
-	if err != nil {
-		return 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values (?, ?, ?, ?, ?, ?)
-on conflict(id) do update set
-  asset_id = excluded.asset_id,
-  evidence_kind = excluded.evidence_kind,
-  source = excluded.source,
-  pointer = excluded.pointer,
-  value_json = excluded.value_json
-`, evidenceID, input.AssetID, "classification_input", metadataClassifierSource, input.AssetID+"/classification/archive_metadata", evidenceJSON); err != nil {
-		return 0, fmt.Errorf("write classification evidence: %w", err)
-	}
 
 	written := 0
 	for _, observation := range observations {
@@ -103,7 +68,7 @@ on conflict(id) do update set
 		if _, err := tx.ExecContext(ctx, `
 insert into metadata_observation(id, asset_id, observation_type, label, source, classifier_id, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?)
-`, observationID, input.AssetID, observation.ObservationType, observation.Label, metadataClassifierSource, metadataClassifierModelID, evidenceID); err != nil {
+`, observationID, input.AssetID, observation.ObservationType, observation.Label, metadataClassifierSource, metadataClassifierModelID, ""); err != nil {
 			return written, fmt.Errorf("write metadata observation: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `

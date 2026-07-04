@@ -175,7 +175,7 @@ func TestKnownPlaceOpenSearchAndPOISuppression(t *testing.T) {
 			CandidateID: "venue_candidate_1",
 			Verdict:     venueVerdictPlausible,
 			Reason:      "synthetic fixture reason",
-		}, fixedClock("2026-05-28T10:15:00Z")())
+		})
 		return err
 	}); err != nil {
 		t.Fatal(err)

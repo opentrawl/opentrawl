@@ -232,30 +232,18 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 			return err
 		}
 	}
-	if err := c.insertEvidence(ctx, tx, assetID, "asset_metadata", c.snapshot.Provider, "asset:"+asset.LocalIdentifier, map[string]any{
-		"media_type":        asset.MediaType,
-		"media_subtypes":    asset.MediaSubtypes,
-		"creation_date":     asset.CreationDate,
-		"modification_date": asset.ModificationDate,
-		"favorite":          asset.Favorite,
-		"hidden":            asset.Hidden,
-		"width":             asset.Width,
-		"height":            asset.Height,
-	}); err != nil {
-		return err
-	}
 	for i, resource := range asset.Resources {
-		if err := c.insertResource(ctx, tx, assetID, asset.LocalIdentifier, i, resource); err != nil {
+		if err := c.insertResource(ctx, assetID, i, resource); err != nil {
 			return err
 		}
 	}
 	for _, album := range asset.Albums {
-		if err := c.insertAlbum(ctx, tx, assetID, album); err != nil {
+		if err := c.insertAlbum(ctx, assetID, album); err != nil {
 			return err
 		}
 	}
 	if asset.Location != nil {
-		if err := c.insertLocation(ctx, tx, assetID, asset.LocalIdentifier, *asset.Location); err != nil {
+		if err := c.insertLocation(ctx, assetID, asset.LocalIdentifier, *asset.Location); err != nil {
 			return err
 		}
 	}
@@ -366,15 +354,4 @@ func assetCameraValues(camera *photos.Camera) assetCamera {
 		shutterSpeed:    camera.ShutterSpeed,
 		iso:             camera.ISO,
 	}
-}
-
-func nonEmpty(values ...string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		value = strings.TrimSpace(value)
-		if value != "" {
-			out = append(out, value)
-		}
-	}
-	return out
 }

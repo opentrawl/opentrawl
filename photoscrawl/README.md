@@ -137,8 +137,8 @@ Today the POC sees useful source facts and optional model observations:
   them;
 - status coverage counts for GPS, observations, local resources, remote
   resources, classification queue state, and observation types;
-- search/open/neighbors JSON shaped for users and tools. Provenance stays in
-  internal archive tables.
+- search/open/neighbors JSON shaped for users and tools. Provenance stays on
+  observation rows through source, model, and prompt version columns.
 
 It does not create durable identities, trips, places, relationships, embeddings,
 or global clusters yet.

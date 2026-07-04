@@ -5,50 +5,16 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 )
 
-func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, imagePath, imagePathClass string) (int, int, error) {
+func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, _, _ string) (int, int, error) {
 	if err := clearModelObservations(ctx, tx, input.AssetID, classifier.modelID); err != nil {
 		return 0, 0, err
 	}
-	if strings.TrimSpace(imagePathClass) == "" {
-		imagePathClass = input.localPathClass(imagePath)
-	}
-	evidenceID := stableID("evidence", input.AssetID, "content_classification", modelClassifierSource, classifier.modelID, classifier.promptVersion)
-	evidenceJSON, err := jsonText(map[string]any{
-		"classifier":        modelClassifierSource,
-		"model_id":          classifier.modelID,
-		"prompt_version":    classifier.promptVersion,
-		"image_bytes":       result.ImageBytes,
-		"image_sha256":      result.ImageSHA256,
-		"image_extension":   strings.ToLower(filepath.Ext(imagePath)),
-		"image_path_class":  imagePathClass,
-		"classified_at":     classifiedAt.Format(time.RFC3339Nano),
-		"raw_response":      result.RawResponse,
-		"parsed_response":   result.Payload,
-		"local_only":        !classifier.remote(),
-		"cloud_transmitted": classifier.remote(),
-	})
-	if err != nil {
-		return 0, 0, err
-	}
-	if _, err := tx.ExecContext(ctx, `
-insert into evidence_ref(id, asset_id, evidence_kind, source, pointer, value_json)
-values (?, ?, ?, ?, ?, ?)
-on conflict(id) do update set
-  asset_id = excluded.asset_id,
-  evidence_kind = excluded.evidence_kind,
-  source = excluded.source,
-  pointer = excluded.pointer,
-  value_json = excluded.value_json
-`, evidenceID, input.AssetID, "content_classification", modelClassifierSource, input.AssetID+"/classification/photo_card", evidenceJSON); err != nil {
-		return 0, 0, fmt.Errorf("write model evidence: %w", err)
-	}
 
-	placeWritten, err := writePlaceClassification(ctx, tx, input, result.VenuePlausibility, classifiedAt)
+	placeWritten, err := writePlaceClassification(ctx, tx, input, result.VenuePlausibility)
 	if err != nil {
 		return 0, placeWritten, err
 	}
@@ -63,7 +29,7 @@ on conflict(id) do update set
 		if _, err := tx.ExecContext(ctx, `
 insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, input.AssetID, observation.ObservationType, observation.ValueText, valueJSON, observation.Confidence, modelClassifierSource, classifier.modelID, classifier.promptVersion, evidenceID); err != nil {
+`, observationID, input.AssetID, observation.ObservationType, observation.ValueText, valueJSON, observation.Confidence, modelClassifierSource, classifier.modelID, classifier.promptVersion, ""); err != nil {
 			return written, placeWritten, fmt.Errorf("write model observation: %w", err)
 		}
 		if observation.ObservationType == modelObservationCardSummary {
@@ -157,14 +123,6 @@ where asset_id = ? and source in (?, ?) and model_id = ?
 	}
 	if err := clearPlaceObservations(ctx, tx, assetID); err != nil {
 		return err
-	}
-	if _, err := tx.ExecContext(ctx, `
-delete from evidence_ref
-where asset_id = ?
-  and evidence_kind = 'content_classification'
-  and source in (?, ?)
-`, assetID, modelClassifierSource, "local_multimodal"); err != nil {
-		return fmt.Errorf("clear model evidence: %w", err)
 	}
 	return nil
 }

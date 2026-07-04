@@ -1117,7 +1117,7 @@ func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
 			CandidateID: "venue_candidate_5",
 			Verdict:     venueVerdictPlausible,
 			Reason:      "synthetic fixture reason",
-		}, fixedClock("2026-05-28T10:15:00Z")())
+		})
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -1390,7 +1390,7 @@ func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) Open
 				}},
 			},
 		}
-		_, err = writePlaceClassification(ctx, tx, input, plausibility, fixedClock("2026-05-28T10:15:00Z")())
+		_, err = writePlaceClassification(ctx, tx, input, plausibility)
 		return err
 	}); err != nil {
 		t.Fatal(err)
