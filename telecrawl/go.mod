@@ -15,6 +15,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/gotd/log v0.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 )
