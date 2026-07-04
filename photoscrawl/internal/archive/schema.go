@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 6
+const SchemaVersion = 7
 
 const Schema = `
 create table if not exists source_library (
@@ -249,6 +249,7 @@ create index if not exists place_observation_asset_idx on place_observation(asse
 create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
 create index if not exists observation_term_asset_idx on observation_term(asset_id);
+create index if not exists evidence_ref_asset_idx on evidence_ref(asset_id);
 create index if not exists observation_term_term_idx on observation_term(term);
 create index if not exists edge_from_idx on edge(from_id);
 create index if not exists edge_to_idx on edge(to_id);
