@@ -69,9 +69,12 @@ type runtime struct {
 	log    *crawlog.Run
 }
 
+const calcrawlLogFileName = "calcrawl.log"
+
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	verbosity, args := pullVerbosity(args)
 	jsonOut, args := pullJSONFlag(args)
-	run, err := newLogRun(args, jsonOut, stderr)
+	run, err := newLogRun(args, jsonOut, stderr, verbosity)
 	if err != nil {
 		return err
 	}
@@ -85,7 +88,14 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			printUsage(stdout)
 			return r.finish(nil)
 		}
-		return r.finish(printCommandUsage(stdout, args[1:]))
+		err := printCommandUsage(stdout, args[1:])
+		if finishErr := r.finish(err); finishErr != nil {
+			if err == nil {
+				return finishErr
+			}
+			err = errors.Join(err, finishErr)
+		}
+		return err
 	}
 	if args[0] == "--version" || args[0] == "version" {
 		_, _ = io.WriteString(stdout, version+"\n")
@@ -107,14 +117,17 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	return printedError{err: err, code: ExitCode(err)}
 }
 
-func newLogRun(args []string, jsonOut bool, stderr io.Writer) (*crawlog.Run, error) {
+func newLogRun(args []string, jsonOut bool, stderr io.Writer, verbosity int) (*crawlog.Run, error) {
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
 	return crawlog.NewRun(crawlog.Options{
-		StateRoot:    defaultBaseDir(),
-		CrawlerID:    archive.AppID,
+		StateRoot:    stateRoot,
+		CrawlerID:    crawlerID,
+		FileName:     calcrawlLogFileName,
 		Command:      logCommand(args),
 		Version:      version,
 		JSONProgress: jsonOut,
 		Stderr:       stderr,
+		Verbosity:    verbosity,
 	})
 }
 
@@ -164,6 +177,22 @@ func pullJSONFlag(args []string) (bool, []string) {
 		out = append(out, arg)
 	}
 	return jsonOut, out
+}
+
+func pullVerbosity(args []string) (int, []string) {
+	out := make([]string, 0, len(args))
+	verbosity := 0
+	for _, arg := range args {
+		switch arg {
+		case "-v", "--verbose":
+			verbosity++
+		case "-vv":
+			verbosity += 2
+		default:
+			out = append(out, arg)
+		}
+	}
+	return verbosity, out
 }
 
 func hasHelpFlag(args []string) bool {

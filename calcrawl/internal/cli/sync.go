@@ -38,16 +38,19 @@ func (r *runtime) runSync(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("sync takes no arguments"))
 	}
+	syncStarted := time.Now()
 	sourceProgress := r.log.Progress(crawlog.ProgressOptions{Event: "source_progress", Unit: "events"})
 	if err := sourceProgress.Report(0, "reading Calendar source"); err != nil {
 		return err
 	}
 	var data calendarstore.Data
+	sourceStarted := time.Now()
 	err = withHeartbeat(r.ctx, sourceProgress, 0, "reading Calendar source", func() error {
 		var readErr error
 		data, readErr = calendarstore.Read(r.ctx, calendarstore.DefaultPath())
 		return readErr
 	})
+	sourceElapsed := time.Since(sourceStarted)
 	if err != nil {
 		return sourceErr(fmt.Errorf("read Calendar source: %w", err))
 	}
@@ -64,18 +67,20 @@ func (r *runtime) runSync(args []string) error {
 		return err
 	}
 	var stats archive.SyncStats
+	archiveStarted := time.Now()
 	err = withHeartbeat(r.ctx, archiveProgress, int64(len(data.Events)), "writing archive", func() error {
 		var applyErr error
 		stats, applyErr = st.ApplySnapshot(r.ctx, archiveCalendars(data.Calendars), archiveEvents(data.Events), archive.NewRunID(), time.Now(), data.SourcePath, data.SourceModifiedAt)
 		return applyErr
 	})
+	archiveElapsed := time.Since(archiveStarted)
 	if err != nil {
 		return err
 	}
 	if err := archiveProgress.Report(int64(len(data.Events)), "wrote archive"); err != nil {
 		return err
 	}
-	_ = r.log.Info("sync_complete", fmt.Sprintf("calendars=%d events=%d new=%d changed=%d deleted=%d", stats.Calendars, stats.Events, stats.NewEvents, stats.ChangedEvents, stats.DeletedEvents))
+	r.logSyncTimings(stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
 	return r.syncComplete(syncCompleteEvent{
 		Event:            "complete",
 		State:            "ok",
@@ -90,6 +95,22 @@ func (r *runtime) runSync(args []string) error {
 		SourceModifiedAt: stats.SourceModifiedAt,
 		Archive:          stats.ArchivePath,
 	})
+}
+
+func (r *runtime) logSyncTimings(stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
+	_ = r.log.Info("sync_done", strings.Join([]string{
+		"calendars=" + strconv.Itoa(stats.Calendars),
+		"events=" + strconv.Itoa(stats.Events),
+		"new=" + strconv.Itoa(stats.NewEvents),
+		"changed=" + strconv.Itoa(stats.ChangedEvents),
+		"deleted=" + strconv.Itoa(stats.DeletedEvents),
+		"elapsed_ms=" + elapsedMS(totalElapsed),
+	}, " "))
+	_ = r.log.Debug("sync_phase", strings.Join([]string{
+		"source=" + logQuote("calendar_store"),
+		"read_ms=" + elapsedMS(sourceElapsed),
+		"write_ms=" + elapsedMS(archiveElapsed),
+	}, " "))
 }
 
 func (r *runtime) syncComplete(event syncCompleteEvent) error {
@@ -222,4 +243,19 @@ func appendIfNotEmpty(values []string, value string) []string {
 		return values
 	}
 	return append(values, strings.TrimSpace(value))
+}
+
+func logQuote(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return strconv.Quote("")
+	}
+	if strings.ContainsAny(value, " \t\r\n\"") {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func elapsedMS(value time.Duration) string {
+	return strconv.FormatInt(value.Milliseconds(), 10)
 }

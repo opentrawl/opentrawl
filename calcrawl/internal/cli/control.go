@@ -40,7 +40,7 @@ func controlManifest() manifestOutput {
 		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
 		DefaultLogs:     filepath.Join(defaultBaseDir(), "logs"),
 	}
-	m.Capabilities = []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "who", "short_refs"}
+	m.Capabilities = []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "who", "short_refs", "verbose_logs"}
 	m.Privacy = control.Privacy{
 		ContainsPrivateMessages: true,
 		ExportsSecrets:          false,
