@@ -342,6 +342,39 @@ func TestWriteLogTailHumanisesFailureOutcome(t *testing.T) {
 	}
 }
 
+// TestRejectedRunRendersRejected is the TRAWL-101 tripwire: a run
+// refused before any work ran (usage error) must read as rejected on
+// every surface that shows run outcomes, never as a success.
+func TestRejectedRunRendersRejected(t *testing.T) {
+	run := cklog.RunSummary{
+		Command:    "search",
+		Outcome:    "rejected",
+		FinishedAt: time.Date(2026, 7, 5, 1, 13, 0, 0, time.Local),
+	}
+
+	var buf bytes.Buffer
+	if err := WriteLogTail(&buf, LogTail{LastRun: &run}); err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"",
+		"Recent log:",
+		"  Last run: search rejected at 2026-07-05 01:13",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("log tail output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+
+	doctor := DoctorLogTailOutput(LogTail{LastRun: &run})
+	if doctor == nil || doctor.LastRun == nil {
+		t.Fatalf("doctor output = %+v, want last run", doctor)
+	}
+	if got := doctor.LastRun.WhatHappened; got != "search ended with rejected" {
+		t.Fatalf("doctor last run = %q, want %q", got, "search ended with rejected")
+	}
+}
+
 func TestWriteStatusDefaultsBlankFields(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteStatus(&buf, Status{
