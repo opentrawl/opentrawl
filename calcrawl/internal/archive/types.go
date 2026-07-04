@@ -13,7 +13,6 @@ const (
 	SchemaVersion = 2
 
 	DefaultSearchLimit = 20
-	MaxSearchLimit     = 200
 )
 
 type Calendar struct {

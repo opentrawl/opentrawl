@@ -38,11 +38,6 @@ func (r *runtime) runSearch(args []string) error {
 	if whoPassed && whoValue == "" {
 		return usageErr(errors.New("search --who requires an identity"))
 	}
-	capped := false
-	if limit > archive.MaxSearchLimit {
-		limit = archive.MaxSearchLimit
-		capped = true
-	}
 	after, err := parseBound(afterValue, false)
 	if err != nil {
 		return usageErr(fmt.Errorf("invalid --after: %w", err))
@@ -81,7 +76,7 @@ func (r *runtime) runSearch(args []string) error {
 		WhoResolved:  whoResolved,
 		Results:      results,
 		TotalMatches: total,
-		Truncated:    int64(len(results)) < total || capped,
+		Truncated:    int64(len(results)) < total,
 	})
 }
 

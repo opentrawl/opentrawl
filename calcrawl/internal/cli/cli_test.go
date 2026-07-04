@@ -580,7 +580,29 @@ func TestShortRefErrorsAreStructured(t *testing.T) {
 	}
 }
 
-func TestSearchLimitBoundsAndFlagsAfterQuery(t *testing.T) {
+func TestSearchLimitAboveOldCapIsHonored(t *testing.T) {
+	db := setupCalendarFixture(t)
+	const limit = 205
+	insertManyEvents(t, db, limit)
+	runSync(t)
+
+	jsonLimit := runJSON[searchResponse](t, "search", "standup", "--limit", "205", "--json")
+	if len(jsonLimit.Results) != limit || jsonLimit.TotalMatches != limit || jsonLimit.Truncated {
+		t.Fatalf("JSON limit = len %d total %d truncated %v", len(jsonLimit.Results), jsonLimit.TotalMatches, jsonLimit.Truncated)
+	}
+	textLimit := runOK(t, "search", "standup", "--limit", "205")
+	if !strings.Contains(textLimit, `Search "standup": showing 205 of 205.`) {
+		t.Fatalf("text limit summary missing exact count:\n%s", textLimit)
+	}
+	if got := strings.Count(textLimit, "Daily standup"); got != limit {
+		t.Fatalf("text limit rendered %d rows, want %d:\n%s", got, limit, textLimit)
+	}
+	if strings.Contains(textLimit, "More:") {
+		t.Fatalf("text limit above old cap reported hidden rows:\n%s", textLimit)
+	}
+}
+
+func TestSearchDefaultLimitAndFlagsAfterQuery(t *testing.T) {
 	db := setupCalendarFixture(t)
 	insertManyEvents(t, db, 205)
 	runSync(t)
@@ -589,13 +611,21 @@ func TestSearchLimitBoundsAndFlagsAfterQuery(t *testing.T) {
 	if len(defaultLimit.Results) != archive.DefaultSearchLimit || defaultLimit.TotalMatches != 205 || !defaultLimit.Truncated {
 		t.Fatalf("default bounded search = len %d total %d truncated %v", len(defaultLimit.Results), defaultLimit.TotalMatches, defaultLimit.Truncated)
 	}
-	maxLimit := runJSON[searchResponse](t, "search", "standup", "--limit", "500", "--json")
-	if len(maxLimit.Results) != archive.MaxSearchLimit || maxLimit.TotalMatches != 205 || !maxLimit.Truncated {
-		t.Fatalf("max bounded search = len %d total %d truncated %v", len(maxLimit.Results), maxLimit.TotalMatches, maxLimit.Truncated)
-	}
 	afterQueryFlag := runJSON[searchResponse](t, "search", "standup", "--limit", "3", "--json")
 	if len(afterQueryFlag.Results) != 3 {
 		t.Fatalf("flags after query returned %d results, want 3", len(afterQueryFlag.Results))
+	}
+}
+
+func TestSearchLimitZeroIsUsageError(t *testing.T) {
+	setupTestHome(t)
+
+	stdout, stderr, err := run(t, "search", "standup", "--limit", "0")
+	if err == nil || cli.ExitCode(err) != 2 {
+		t.Fatalf("limit zero err = %v code=%d stdout=%s stderr=%s", err, cli.ExitCode(err), stdout, stderr)
+	}
+	if !strings.Contains(err.Error(), "search --limit must be positive") {
+		t.Fatalf("limit zero error = %v", err)
 	}
 }
 

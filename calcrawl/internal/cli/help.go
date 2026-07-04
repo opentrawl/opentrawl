@@ -28,7 +28,7 @@ Global flags:
 Output:
   Default output is compact text for humans and agents.
   Use --json for stable machine parsing.
-  Search returns 20 rows by default and never more than 200.
+  Search returns 20 rows by default. Use --limit N to choose a different count.
   Search may omit QUERY when --who, --after or --before is present.
 
 Diagnostics: run with -v, or read ~/.calcrawl/logs/calcrawl.log
@@ -65,7 +65,7 @@ Search archived calendar events.
 
 Flags:
   --who NAME    Resolve a person, then filter to events where they are organizer or attendee.
-  --limit N      Maximum results. Default: 20. Maximum: 200.
+  --limit N      Results to print. Default: 20.
   --after DATE   Include events at or after DATE.
   --before DATE  Include events at or before DATE.
 

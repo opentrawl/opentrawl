@@ -116,7 +116,7 @@ reports how many events were new, changed and unchanged.
 
 ### search
 
-Search returns 20 rows by default and never more than 200:
+Search returns 20 rows by default. Use `--limit N` to choose a different count:
 
 ```json
 {
