@@ -38,6 +38,8 @@ func searchTimeBound(value string) (string, error) {
 	return "", fmt.Errorf("invalid time %q", value)
 }
 
+// localRFC3339 is for machine events only (e.g. sync time) — those genuinely
+// happened in this machine's timezone. Capture times use localCaptureTime.
 func localRFC3339(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {

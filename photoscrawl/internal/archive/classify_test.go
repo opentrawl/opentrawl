@@ -1452,3 +1452,34 @@ func countFiles(t *testing.T, root string) int {
 	}
 	return count
 }
+
+// Tripwire: capture times render in the asset's own timezone, never the
+// machine's. Apple stores fixed offsets as "GMT-0700"-style names; treating
+// them as absent silently shifted hundreds of cards onto the reviewing
+// machine's clock (one crossed a calendar day).
+func TestCaptureTimeUsesAssetTimezone(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		value, timezone, want string
+	}{
+		{"2025-07-08T16:48:00Z", "GMT-0700", "2025-07-08T09:48:00-07:00"},
+		{"2025-07-08T16:48:00Z", "GMT+0530", "2025-07-08T22:18:00+05:30"},
+		{"2025-07-10T00:11:58Z", "", "2025-07-10T00:11:58Z"},
+		{"2025-07-08T16:48:00Z", "not-a-zone", "2025-07-08T16:48:00Z"},
+		{"2025-07-08T16:48:00Z", "GMT", "2025-07-08T16:48:00Z"},
+	}
+	for _, tc := range cases {
+		if got := localCaptureTime(tc.value, tc.timezone); got != tc.want {
+			t.Fatalf("localCaptureTime(%q, %q) = %q, want %q", tc.value, tc.timezone, got, tc.want)
+		}
+	}
+	if loc, err := time.LoadLocation("America/Denver"); err == nil {
+		want := time.Date(2025, 7, 8, 16, 48, 0, 0, time.UTC).In(loc).Format(time.RFC3339)
+		if got := localCaptureTime("2025-07-08T16:48:00Z", "America/Denver"); got != want {
+			t.Fatalf("named zone = %q, want %q", got, want)
+		}
+	}
+	if displayTimezoneName("GMT-0700") != "GMT-0700" || displayTimezoneName("garbage") != "" {
+		t.Fatal("displayTimezoneName should accept GMT offsets and reject garbage")
+	}
+}

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -174,23 +175,64 @@ func captureContext(input classifyInput) map[string]any {
 
 func (input classifyInput) timezoneName() string {
 	name := strings.TrimSpace(input.TimezoneName)
-	if name == "" || strings.HasPrefix(name, "GMT") || strings.HasPrefix(name, "UTC") {
+	if captureLocation(name) == nil {
 		return "local"
 	}
 	return name
 }
 
+// captureLocation resolves the timezone Photos stored for an asset. Apple
+// records fixed offsets as "GMT-0700"-style names, which time.LoadLocation
+// rejects; they are real timezones, not absence. Unknown means nil — the
+// caller must then render UTC, never the reviewing machine's timezone.
+func captureLocation(name string) *time.Location {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil
+	}
+	rest := ""
+	switch {
+	case strings.HasPrefix(name, "GMT"):
+		rest = name[3:]
+	case strings.HasPrefix(name, "UTC"):
+		rest = name[3:]
+	default:
+		if loc, err := time.LoadLocation(name); err == nil {
+			return loc
+		}
+		return nil
+	}
+	if rest == "" {
+		// Bare "GMT"/"UTC" is a real recorded zone at offset zero.
+		return time.FixedZone(name, 0)
+	}
+	if len(rest) != 5 || (rest[0] != '+' && rest[0] != '-') {
+		return nil
+	}
+	hours, errH := strconv.Atoi(rest[1:3])
+	minutes, errM := strconv.Atoi(rest[3:5])
+	if errH != nil || errM != nil || hours > 14 || minutes > 59 {
+		return nil
+	}
+	offset := hours*3600 + minutes*60
+	if rest[0] == '-' {
+		offset = -offset
+	}
+	return time.FixedZone(name, offset)
+}
+
+// localCaptureTime renders a capture instant in the asset's own timezone.
+// When the timezone is unknown it renders UTC: the machine's timezone is a
+// fact about the reviewer, not the photo.
 func localCaptureTime(value, timezoneName string) string {
 	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
 	if err != nil {
 		return strings.TrimSpace(value)
 	}
-	if timezoneName != "" && timezoneName != "local" {
-		if loc, err := time.LoadLocation(timezoneName); err == nil {
-			return parsed.In(loc).Format(time.RFC3339)
-		}
+	if loc := captureLocation(timezoneName); loc != nil {
+		return parsed.In(loc).Format(time.RFC3339)
 	}
-	return parsed.Local().Format(time.RFC3339)
+	return parsed.UTC().Format(time.RFC3339)
 }
 
 // splitSubtypes turns Photos' numeric kind subtypes into words a reader (and

@@ -365,12 +365,14 @@ func searchDisplayRef(hit archive.SearchHit) string {
 	return hit.Ref
 }
 
+// openTextTime formats a capture time that already carries the asset's own
+// zone offset; converting to the machine's zone would fabricate a fact.
 func openTextTime(value string) string {
 	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
 	if err != nil {
 		return value
 	}
-	return parsed.Local().Format("2006-01-02 15:04")
+	return parsed.Format("2006-01-02 15:04")
 }
 
 func humanBytes(bytes int64) string {
