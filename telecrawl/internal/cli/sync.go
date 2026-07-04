@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,8 +17,8 @@ import (
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
 
-func (r *runtime) runImport(args []string) error {
-	fs := flag.NewFlagSet("telecrawl import", flag.ContinueOnError)
+func (r *runtime) runImport(command string, args []string) error {
+	fs := flag.NewFlagSet("telecrawl "+command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	path := fs.String("path", r.source, "")
 	dialogsLimit := fs.Int("dialogs-limit", 200, "")
@@ -42,6 +43,7 @@ func (r *runtime) runImport(args []string) error {
 				return err
 			}
 		}
+		importStarted := time.Now()
 		result, err := telegramdesktop.Import(r.ctx, telegramdesktop.ImportOptions{
 			Path:                    *path,
 			DialogsLimit:            *dialogsLimit,
@@ -52,15 +54,40 @@ func (r *runtime) runImport(args []string) error {
 			ExistingMediaSourcePath: existingMediaSourcePath,
 			ExistingMediaRefs:       existingMediaRefs,
 		}, st.Path())
+		importElapsed := time.Since(importStarted)
 		if err != nil {
 			return err
 		}
+		writeStarted := time.Now()
 		if err := storeImportResult(r.ctx, st, &result, *chat); err != nil {
 			return err
 		}
+		writeElapsed := time.Since(writeStarted)
+		r.logImportTimings(command, result.Stats, importElapsed, writeElapsed, *fetchMedia, *chat)
 		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
 		return r.print(result.Stats)
 	})
+}
+
+func (r *runtime) logImportTimings(command string, stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
+	totalElapsed := stats.FinishedAt.Sub(stats.StartedAt)
+	if totalElapsed <= 0 {
+		totalElapsed = importElapsed + writeElapsed
+	}
+	_ = r.logInfo(command+"_done", strings.Join([]string{
+		"messages=" + strconv.Itoa(stats.Messages),
+		"chats=" + strconv.Itoa(stats.Chats),
+		"media_messages=" + strconv.Itoa(stats.MediaMessages),
+		"media_files=" + strconv.Itoa(stats.MediaFiles),
+		"elapsed_ms=" + elapsedMS(totalElapsed),
+	}, " "))
+	_ = r.logDebug(command+"_phase", strings.Join([]string{
+		"source=" + logQuote("telegram"),
+		"import_ms=" + elapsedMS(importElapsed),
+		"write_ms=" + elapsedMS(writeElapsed),
+		"fetch_media=" + strconv.FormatBool(fetchMedia),
+		"chat_filter=" + strconv.FormatBool(strings.TrimSpace(chatFilter) != ""),
+	}, " "))
 }
 
 type commandProgress struct {

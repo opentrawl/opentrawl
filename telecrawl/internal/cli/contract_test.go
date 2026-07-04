@@ -25,7 +25,7 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &root); err != nil {
 		t.Fatalf("metadata json = %s err=%v", stdout, err)
 	}
-	wantKeys := []string{"schema_version", "contract_version", "id", "display_name", "version", "capabilities"}
+	wantKeys := []string{"schema_version", "contract_version", "id", "display_name", "version", "paths", "capabilities"}
 	if len(root) != len(wantKeys) {
 		t.Fatalf("metadata keys = %#v, want %v", root, wantKeys)
 	}
@@ -35,12 +35,15 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 		}
 	}
 	var payload struct {
-		SchemaVersion   int      `json:"schema_version"`
-		ContractVersion int      `json:"contract_version"`
-		ID              string   `json:"id"`
-		DisplayName     string   `json:"display_name"`
-		Version         string   `json:"version"`
-		Capabilities    []string `json:"capabilities"`
+		SchemaVersion   int    `json:"schema_version"`
+		ContractVersion int    `json:"contract_version"`
+		ID              string `json:"id"`
+		DisplayName     string `json:"display_name"`
+		Version         string `json:"version"`
+		Paths           struct {
+			DefaultLogs string `json:"default_logs"`
+		} `json:"paths"`
+		Capabilities []string `json:"capabilities"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("metadata json = %s err=%v", stdout, err)
@@ -59,6 +62,12 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	}
 	if !slices.Contains(payload.Capabilities, "short_refs") {
 		t.Fatalf("metadata capabilities = %#v, want short_refs", payload.Capabilities)
+	}
+	if !slices.Contains(payload.Capabilities, "verbose_logs") {
+		t.Fatalf("metadata capabilities = %#v, want verbose_logs", payload.Capabilities)
+	}
+	if payload.Paths.DefaultLogs != defaultLogDir() {
+		t.Fatalf("metadata paths.default_logs = %q, want %q", payload.Paths.DefaultLogs, defaultLogDir())
 	}
 }
 
@@ -832,6 +841,12 @@ func TestPerVerbHelpExitsZero(t *testing.T) {
 			}
 			if !strings.Contains(stdout, "usage: telecrawl") {
 				t.Fatalf("%v: help missing usage:\n%s", args, stdout)
+			}
+			if !strings.Contains(stdout, diagnosticsLine) {
+				t.Fatalf("%v: help missing diagnostics line:\n%s", args, stdout)
+			}
+			if !strings.HasSuffix(strings.TrimSpace(stdout), diagnosticsLine) {
+				t.Fatalf("%v: help does not end with diagnostics line:\n%s", args, stdout)
 			}
 		})
 	}

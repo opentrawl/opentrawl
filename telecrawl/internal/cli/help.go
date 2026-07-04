@@ -5,6 +5,8 @@ import (
 	"strings"
 )
 
+const diagnosticsLine = "Diagnostics: run with -v, or read ~/.telecrawl/logs/telecrawl.log"
+
 func hasHelpFlag(args []string) bool {
 	for _, arg := range args {
 		if arg == "--" {
@@ -38,15 +40,27 @@ usage:
   telecrawl backup init|push|pull|status|snapshots [--json]
   telecrawl version
 
+global flags:
+  --json         Print machine-readable JSON output.
+  --db PATH      Archive database path.
+  --source PATH  Telegram source path for doctor/import.
+  -v, --verbose  Stream diagnostics to stderr. Use -vv for debug detail.
+
 notes:
   import auto-detects Telegram Desktop tdata or native macOS Postbox data
   import archives local cached Postbox media by default; --fetch-media also tries Telegram cloud media
   backup writes encrypted age shards to a git repo
+
+Diagnostics: run with -v, or read ~/.telecrawl/logs/telecrawl.log
 `)
 }
 
 func printCommandUsage(w io.Writer, args []string) {
-	_, _ = io.WriteString(w, commandUsage(args))
+	text := commandUsage(args)
+	if !strings.Contains(text, diagnosticsLine) {
+		text = strings.TrimRight(text, "\n") + "\n\n" + diagnosticsLine + "\n"
+	}
+	_, _ = io.WriteString(w, text)
 }
 
 func commandUsage(args []string) string {

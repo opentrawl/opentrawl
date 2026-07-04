@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
@@ -21,12 +22,13 @@ const (
 )
 
 type metadataEnvelope struct {
-	SchemaVersion   int      `json:"schema_version"`
-	ContractVersion int      `json:"contract_version"`
-	ID              string   `json:"id"`
-	DisplayName     string   `json:"display_name"`
-	Version         string   `json:"version"`
-	Capabilities    []string `json:"capabilities"`
+	SchemaVersion   int           `json:"schema_version"`
+	ContractVersion int           `json:"contract_version"`
+	ID              string        `json:"id"`
+	DisplayName     string        `json:"display_name"`
+	Version         string        `json:"version"`
+	Paths           control.Paths `json:"paths"`
+	Capabilities    []string      `json:"capabilities"`
 }
 
 type statusEnvelope struct {
@@ -184,7 +186,8 @@ func contractMetadata() metadataEnvelope {
 		ID:              "telecrawl",
 		DisplayName:     "Telegram",
 		Version:         version,
-		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "contacts_export", "backup"},
+		Paths:           controlManifest().Paths,
+		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "contacts_export", "backup", "verbose_logs"},
 	}
 }
 

@@ -16,7 +16,7 @@ func controlManifest() control.Manifest {
 		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
 		DefaultLogs:     defaultLogDir(),
 	}
-	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "backup"}
+	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "backup", "verbose_logs"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"telegram-desktop", "telegram-macos-postbox", "sqlite", "encrypted-git-backup"}}
 	m.Commands = map[string]control.Command{
 		"doctor":         {Title: "Doctor", Argv: []string{"telecrawl", "--json", "doctor"}, JSON: true},
