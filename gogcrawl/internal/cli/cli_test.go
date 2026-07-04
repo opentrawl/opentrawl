@@ -322,6 +322,34 @@ func TestSearchRejectsEmptyWho(t *testing.T) {
 	}
 }
 
+func TestSearchRejectsLimitBelowOne(t *testing.T) {
+	installFakeGog(t)
+	stdout, stderr, err := runExpectError(t, []string{"search", "needle", "--limit", "0", "--archive", filepath.Join(t.TempDir(), "missing.db")})
+	if !strings.Contains(err.Error(), "search --limit must be at least 1") {
+		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout, stderr)
+	}
+}
+
+func TestSearchLimitAboveOldCapIsHonored(t *testing.T) {
+	installFakeGog(t)
+	const limit = 205
+	dbPath := seedLimitArchive(t, limit)
+
+	var result archive.SearchResult
+	runJSON(t, context.Background(), []string{"search", "needle", "--limit", strconv.Itoa(limit), "--json", "--archive", dbPath}, &result)
+	if len(result.Results) != limit || result.TotalMatches != limit || result.Truncated {
+		t.Fatalf("search JSON limit = len %d total %d truncated %t, want %d/%d/false", len(result.Results), result.TotalMatches, result.Truncated, limit, limit)
+	}
+
+	human := string(runOutput(t, context.Background(), []string{"search", "needle", "--limit", strconv.Itoa(limit), "--archive", dbPath}))
+	if got := strings.Count(human, "needle limit message "); got != limit {
+		t.Fatalf("search human rows = %d, want %d\n%s", got, limit, human)
+	}
+	if strings.Contains(human, "More results exist") {
+		t.Fatalf("search human reported hidden rows:\n%s", human)
+	}
+}
+
 func TestWhoCommandReturnsContractShapeAndHumanTable(t *testing.T) {
 	installFakeGog(t)
 	dbPath := seedArchive(t, []archive.Message{
@@ -578,7 +606,7 @@ values ('22222', ?), ('22222', ?)
 }
 
 func TestJSONUsageErrorIsSingleRenderedDocument(t *testing.T) {
-	stdout, stderr, err := runExpectError(t, []string{"search", "a", "--limit", "1000", "--json"})
+	stdout, stderr, err := runExpectError(t, []string{"search", "a", "--limit", "0", "--json"})
 	if !ckoutput.IsRendered(err) {
 		t.Fatalf("error was not marked rendered: %v", err)
 	}
@@ -665,6 +693,25 @@ func seedArchive(t *testing.T, messages []archive.Message) string {
 		t.Fatal(err)
 	}
 	return dbPath
+}
+
+func seedLimitArchive(t *testing.T, count int) string {
+	t.Helper()
+	messages := make([]archive.Message, 0, count)
+	base := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	for i := 1; i <= count; i++ {
+		id := strconv.Itoa(i)
+		messages = append(messages, archive.Message{
+			ID:          "limit-" + id,
+			ThreadID:    "thread-" + id,
+			Time:        base.Add(time.Duration(i) * time.Minute),
+			FromName:    "Alice Example",
+			FromAddress: "alice@example.com",
+			Subject:     "Needle",
+			Body:        "needle limit message " + id,
+		})
+	}
+	return seedArchive(t, messages)
 }
 
 func requireNoQuotedPrintableText(t *testing.T, value string) {
