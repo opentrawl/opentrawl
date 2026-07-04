@@ -6,7 +6,7 @@ import (
 )
 
 func TestFileBuildsSQLiteURI(t *testing.T) {
-	got := File("/tmp/archive one.db", P("mode", "ro"), P("_pragma", "query_only(1)"))
+	got := File("/tmp/archive one.db", P("mode", "ro"), P("_query_only", "1"))
 	u, err := url.Parse(got)
 	if err != nil {
 		t.Fatal(err)
@@ -15,7 +15,7 @@ func TestFileBuildsSQLiteURI(t *testing.T) {
 		t.Fatalf("uri = %q", got)
 	}
 	query := u.Query()
-	if query.Get("mode") != "ro" || query.Get("_pragma") != "query_only(1)" {
+	if query.Get("mode") != "ro" || query.Get("_query_only") != "1" {
 		t.Fatalf("query = %#v", query)
 	}
 }

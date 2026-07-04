@@ -103,7 +103,7 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 		return nil, err
 	}
 	for i := range messages {
-		messages[i].Snippet = contractSnippet(messageSnippetText(messages[i]), filter.Query)
+		messages[i].Snippet = ckstore.FTS5Snippet(messageSnippetText(messages[i]), filter.Query)
 	}
 	return s.withCanonicalSenderNames(ctx, messages)
 }

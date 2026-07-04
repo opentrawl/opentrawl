@@ -23,7 +23,6 @@ import (
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/store"
-	_ "modernc.org/sqlite"
 )
 
 func TestMain(m *testing.M) {
@@ -2456,7 +2455,7 @@ func writeLimitArchive(t *testing.T, count int) string {
 
 func createDesktopFixture(t *testing.T, dir string) {
 	t.Helper()
-	chat, err := sql.Open("sqlite", filepath.Join(dir, "ChatStorage.sqlite"))
+	chat, err := sql.Open("sqlite3", filepath.Join(dir, "ChatStorage.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2476,7 +2475,7 @@ insert into ZWAMESSAGE values (1, 1, null, null, 'dm-in', 0, 700000000, 'hello',
 insert into ZWAMESSAGE values (2, 1, null, null, 'dm-out', 1, 700000001, 'roger', 0, 0, '', '111@s.whatsapp.net', '');
 insert into ZWAMESSAGE values (3, 2, 1, 1, 'group-image', 0, 700000002, 'launch now', 1, 1, '123@g.us', '', 'Alice');
 `)
-	contacts, err := sql.Open("sqlite", filepath.Join(dir, "ContactsV2.sqlite"))
+	contacts, err := sql.Open("sqlite3", filepath.Join(dir, "ContactsV2.sqlite"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -10,7 +10,8 @@ import (
 
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 
-	_ "modernc.org/sqlite"
+	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const readOnlySelectError = "only read-only select statements are allowed"
@@ -56,11 +57,10 @@ func queryReadOnlySQL(ctx context.Context, dbPath string, query string) (sqlQuer
 	dsn := sqlitedsn.File(
 		dbPath,
 		sqlitedsn.P("mode", "ro"),
-		sqlitedsn.P("_pragma", "query_only(1)"),
-		sqlitedsn.P("_pragma", "busy_timeout(5000)"),
-		sqlitedsn.P("_pragma", "temp_store(MEMORY)"),
+		sqlitedsn.P("_query_only", "1"),
+		sqlitedsn.P("_busy_timeout", "5000"),
 	)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return sqlQueryResult{}, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -69,6 +69,10 @@ func queryReadOnlySQL(ctx context.Context, dbPath string, query string) (sqlQuer
 	db.SetMaxIdleConns(1)
 	if err := db.PingContext(ctx); err != nil {
 		return sqlQueryResult{}, fmt.Errorf("ping sqlite: %w", err)
+	}
+	// temp_store has no DSN form in the cgo driver; the pool holds one conn.
+	if _, err := db.ExecContext(ctx, "pragma temp_store = MEMORY"); err != nil {
+		return sqlQueryResult{}, fmt.Errorf("apply session pragmas: %w", err)
 	}
 	rows, err := db.QueryContext(ctx, query) // #nosec G201 -- sql executes user-provided SELECT text against a local read-only archive DB.
 	if err != nil {
