@@ -17,6 +17,7 @@ const (
 	CheckReadsNeverMutate = "reads never mutate"
 	CheckSearch           = "search"
 	CheckOpen             = "open"
+	CheckHumanReadable    = "human output"
 )
 
 type CheckResult struct {

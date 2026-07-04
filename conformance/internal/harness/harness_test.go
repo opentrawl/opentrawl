@@ -524,6 +524,18 @@ func writeFakeCrawler(t *testing.T, cfg fakeCrawler) string {
 		`if [ "$1" = "open" ] && [ "$2" = ` + shellQuote(cfg.openRef) + ` ] && [ "$3" = "--json" ]; then`,
 		commandScript(cfg.open),
 		"fi",
+		`if [ "$1" = "status" ] && [ "$#" = "1" ]; then`,
+		`printf '%s\n' "Status: ok"`,
+		"exit 0",
+		"fi",
+		`if [ "$1" = "doctor" ] && [ "$#" = "1" ]; then`,
+		`printf '%s\n' "All checks passed."`,
+		"exit 0",
+		"fi",
+		`if [ "$1" = "search" ] && [ "$3" = "--limit" ] && [ "$4" = "1" ]; then`,
+		`printf '%s\n' "No matches for \"$2\"."`,
+		"exit 0",
+		"fi",
 		`printf '%s\n' "unsupported command" >&2`,
 		"exit 64",
 		"",
@@ -573,4 +585,41 @@ func resultByName(report Report, name string) CheckResult {
 		}
 	}
 	return CheckResult{}
+}
+
+func TestCheckHumanReadable(t *testing.T) {
+	writeScript := func(t *testing.T, statusLine string) string {
+		t.Helper()
+		path := filepath.Join(t.TempDir(), "fakecrawl")
+		script := strings.Join([]string{
+			"#!/bin/sh",
+			`if [ "$1" = "status" ]; then`,
+			"printf '%s\\n' " + shellQuote(statusLine),
+			"exit 0",
+			"fi",
+			`if [ "$1" = "doctor" ]; then`,
+			`printf '%s\n' "All checks passed."`,
+			"exit 0",
+			"fi",
+			`if [ "$1" = "search" ]; then`,
+			`printf '%s\n' "No matches."`,
+			"exit 0",
+			"fi",
+			"exit 64",
+			"",
+		}, "\n")
+		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	human := Suite{Runner: NewRunner(writeScript(t, "Status: ok"))}.CheckHumanReadable(context.Background())
+	assertStatus(t, human, StatusPass)
+
+	leak := Suite{Runner: NewRunner(writeScript(t, `{"state":"ok"}`))}.CheckHumanReadable(context.Background())
+	assertStatus(t, leak, StatusFail)
+	if !strings.Contains(leak.Detail, "printed JSON in human mode") {
+		t.Fatalf("detail = %q, want JSON-leak detail", leak.Detail)
+	}
 }

@@ -33,5 +33,6 @@ func (s Suite) Run(ctx context.Context) Report {
 		s.CheckReadsNeverMutate(ctx, status),
 		s.CheckSearch(ctx, metadata, status),
 		s.CheckOpen(ctx, metadata, status),
+		s.CheckHumanReadable(ctx),
 	}
 }
