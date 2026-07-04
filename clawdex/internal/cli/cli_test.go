@@ -22,6 +22,19 @@ import (
 	"github.com/openclaw/crawlkit/render"
 )
 
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "clawdex-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("HOME", home); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
+}
+
 func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	cfg, data := testPaths(t)
 	run := func(args ...string) string {
@@ -126,6 +139,102 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	}
 }
 
+func TestVerboseLogsWriteFileAndStreamOnRequest(t *testing.T) {
+	cfg, _ := testPaths(t)
+	beforeMetadataLines := countClawdexLogLines(t, "metadata start:")
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "metadata"}, &out, &errOut); err != nil {
+		t.Fatalf("metadata: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("metadata without -v wrote stderr:\n%s", errOut.String())
+	}
+	if _, err := os.Stat(clawdexLogPath()); err != nil {
+		t.Fatalf("log file missing at %s: %v", clawdexLogPath(), err)
+	}
+	if got := countClawdexLogLines(t, "metadata start:") - beforeMetadataLines; got != 1 {
+		t.Fatalf("metadata start log lines added = %d, want 1\nlog:\n%s", got, readClawdexLog(t))
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "metadata", "-v"}, &out, &errOut); err != nil {
+		t.Fatalf("metadata -v: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	if !strings.Contains(errOut.String(), "metadata start:") || !strings.Contains(errOut.String(), "metadata finish: outcome=success") {
+		t.Fatalf("-v stderr missing log lines:\n%s", errOut.String())
+	}
+	if strings.Contains(errOut.String(), "DEBUG") {
+		t.Fatalf("-v streamed debug line:\n%s", errOut.String())
+	}
+}
+
+func TestVerboseLogsStatusAndSyncDebugTiming(t *testing.T) {
+	cfg, _ := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "metadata"}, &out, &errOut); err != nil {
+		t.Fatalf("metadata: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "status", "--json"}, &out, &errOut); err != nil {
+		t.Fatalf("status json: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	var status statusOutput
+	if err := json.Unmarshal(out.Bytes(), &status); err != nil {
+		t.Fatalf("status json = %s err=%v", out.String(), err)
+	}
+	if status.LastRun == nil || status.LastRun.Command != "metadata" || status.LastRun.Outcome != "success" {
+		t.Fatalf("status last_run = %#v", status.LastRun)
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"-vv", "--config", cfg, "sync", "apple"}, &out, &errOut); err != nil {
+		t.Fatalf("sync -vv: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	logText := readClawdexLog(t)
+	for _, want := range []string{
+		"sync_done: source=apple",
+		"dry_run=true",
+		"sync_phase: source=apple",
+		"preview_ms=",
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("clawdex log missing %q:\n%s", want, logText)
+		}
+		if !strings.Contains(errOut.String(), want) {
+			t.Fatalf("-vv stderr missing %q:\n%s", want, errOut.String())
+		}
+	}
+}
+
+func TestHelpEndsWithDiagnosticsLine(t *testing.T) {
+	for _, args := range [][]string{
+		{"--help"},
+		{"status", "--help"},
+		{"sync", "apple", "--help"},
+		{"person", "list", "--help"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			var out, errOut bytes.Buffer
+			if err := Execute(args, &out, &errOut); err != nil {
+				t.Fatalf("Execute(%v): %v stderr=%s stdout=%s", args, err, errOut.String(), out.String())
+			}
+			if errOut.Len() != 0 {
+				t.Fatalf("help wrote stderr:\n%s", errOut.String())
+			}
+			diagnostics := diagnosticsLine()
+			if !strings.Contains(out.String(), diagnostics) {
+				t.Fatalf("help missing diagnostics line:\n%s", out.String())
+			}
+			if !strings.HasSuffix(strings.TrimSpace(out.String()), diagnostics) {
+				t.Fatalf("help does not end with diagnostics line:\n%s", out.String())
+			}
+		})
+	}
+}
+
 func TestReadCommandRebuildsStaleIndexAndLogsOnce(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
@@ -160,14 +269,18 @@ updated_at: 2026-05-08T09:00:00Z
 		t.Fatal(err)
 	}
 	before := readPersonFilesForTest(t, filepath.Join(data, "people"))
+	beforeLogLines := countClawdexLogLines(t, "index_rebuilt: people=2")
 
 	out.Reset()
 	errOut.Reset()
 	if err := Execute([]string{"--config", cfg, "person", "list", "--plain"}, &out, &errOut); err != nil {
 		t.Fatalf("person list: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if got := errOut.String(); got != "index rebuilt: 2 people\n" {
+	if got := errOut.String(); got != "" {
 		t.Fatalf("stderr = %q", got)
+	}
+	if got := countClawdexLogLines(t, "index_rebuilt: people=2") - beforeLogLines; got != 1 {
+		t.Fatalf("index_rebuilt log lines added = %d, want 1\nlog:\n%s", got, readClawdexLog(t))
 	}
 	if !strings.Contains(out.String(), "Mohamed Prefix") {
 		t.Fatalf("person list = %s", out.String())
@@ -190,6 +303,9 @@ updated_at: 2026-05-08T09:00:00Z
 	}
 	if errOut.Len() != 0 {
 		t.Fatalf("unexpected second rebuild log: %q", errOut.String())
+	}
+	if got := countClawdexLogLines(t, "index_rebuilt: people=2") - beforeLogLines; got != 1 {
+		t.Fatalf("index_rebuilt log lines added after second read = %d, want 1\nlog:\n%s", got, readClawdexLog(t))
 	}
 	if !strings.Contains(out.String(), "Mohamed Prefix") {
 		t.Fatalf("person show = %s", out.String())
@@ -1391,6 +1507,33 @@ func testPaths(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	return filepath.Join(dir, "config.toml"), filepath.Join(dir, "contacts")
+}
+
+func clawdexLogPath() string {
+	return filepath.Join(os.Getenv("HOME"), ".clawdex", "logs", "clawdex.log")
+}
+
+func readClawdexLog(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(clawdexLogPath())
+	if errors.Is(err, os.ErrNotExist) {
+		return ""
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func countClawdexLogLines(t *testing.T, containsText string) int {
+	t.Helper()
+	count := 0
+	for _, line := range strings.Split(readClawdexLog(t), "\n") {
+		if strings.Contains(line, containsText) {
+			count++
+		}
+	}
+	return count
 }
 
 func writeFakeGog(t *testing.T, output string) string {

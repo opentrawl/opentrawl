@@ -78,6 +78,15 @@ func ResolveConfigPath(flagPath string) string {
 	return path
 }
 
+func DefaultLogDir() string {
+	paths, err := appConfig.DefaultPaths()
+	if err != nil {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, ".clawdex", "logs")
+	}
+	return paths.LogDir
+}
+
 func LoadConfig(path string) (Config, error) {
 	cfg := DefaultConfig()
 	if _, err := os.Stat(crawlconfig.ExpandHome(path)); err != nil {

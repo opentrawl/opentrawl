@@ -40,7 +40,7 @@ type CLI struct {
 	Plain   bool   `name:"plain" help:"Write stable plain text to stdout"`
 	DryRun  bool   `name:"dry-run" short:"n" help:"Preview changes without writing"`
 	NoInput bool   `name:"no-input" help:"Never prompt"`
-	Verbose bool   `name:"verbose" short:"v" help:"Verbose diagnostics"`
+	Verbose bool   `name:"verbose" short:"v" help:"Stream diagnostics to stderr. Use -vv for debug detail."`
 
 	Version kong.VersionFlag `name:"version" help:"Print version and exit"`
 
@@ -66,13 +66,17 @@ type Runtime struct {
 	stdout     io.Writer
 	stderr     io.Writer
 	root       *CLI
+	command    string
+	verbosity  int
 	configPath string
 	cfg        repo.Config
 	repo       repo.Repo
 	store      index.Store
+	runLog     *logRun
 }
 
 func Execute(args []string, stdout, stderr io.Writer) error {
+	verbosity, args := pullVerbosity(args)
 	var root CLI
 	parser, err := kong.New(&root,
 		kong.Name("clawdex"),
@@ -80,14 +84,28 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
 		kong.Vars{"version": Version},
+		kong.Help(helpWithDiagnostics),
+		kong.Exit(func(code int) {
+			panic(kongExit{code: code})
+		}),
 	)
 	if err != nil {
 		return err
 	}
-	kctx, err := parser.Parse(args)
-	if err != nil {
-		return usageErr{err}
+	kctx, exitCode, exited, err := parseKong(parser, args)
+	if exited {
+		command := exitCommand(args)
+		if exitCode != 0 {
+			err = fmt.Errorf("%s exited with status %d", command, exitCode)
+		}
+		return finishStandaloneLog(command, stderr, jsonFlagPresent(args), verbosity, err)
 	}
+	if err != nil {
+		err = usageErr{err}
+		_ = finishStandaloneLog(commandFromArgs(args), stderr, jsonFlagPresent(args), verbosity, err)
+		return err
+	}
+	command := logCommand(kctx.Command())
 	configPath := repo.ResolveConfigPath(root.Config)
 	cfg, err := repo.LoadConfig(configPath)
 	if err != nil {
@@ -102,16 +120,42 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		stdout:     stdout,
 		stderr:     stderr,
 		root:       &root,
+		command:    command,
+		verbosity:  verbosity,
 		configPath: configPath,
 		cfg:        cfg,
 		repo:       repo.Open(repoPath, cfg),
 	}
-	r.store = index.NewWithLog(r.repo, r.stderr)
-	kctx.Bind(r)
-	if err := kctx.Run(r); err != nil {
+	if err := r.startLogRun(command); err != nil {
 		return err
 	}
-	return nil
+	r.store = index.NewWithLog(r.repo, indexLogWriter{r: r})
+	kctx.Bind(r)
+	err = kctx.Run(r)
+	return r.finishLogRun(err)
+}
+
+type kongExit struct {
+	code int
+}
+
+func parseKong(parser *kong.Kong, args []string) (ctx *kong.Context, exitCode int, exited bool, err error) {
+	defer func() {
+		recovered := recover()
+		if recovered == nil {
+			return
+		}
+		if exit, ok := recovered.(kongExit); ok {
+			exitCode = exit.code
+			exited = true
+			err = nil
+			ctx = nil
+			return
+		}
+		panic(recovered)
+	}()
+	ctx, err = parser.Parse(args)
+	return ctx, 0, false, err
 }
 
 func ExitCode(err error) int {
@@ -816,7 +860,13 @@ type SyncCmd struct {
 
 type SyncAppleCmd struct{}
 
-func (c *SyncAppleCmd) Run(r *Runtime) error {
+func (c *SyncAppleCmd) Run(r *Runtime) (err error) {
+	started := time.Now()
+	defer func() {
+		if err == nil {
+			r.logSyncTimings("apple", time.Since(started))
+		}
+	}()
 	return r.print(map[string]any{"dry_run": true, "status": "remote writes not implemented yet; use import apple for local markdown projection"})
 }
 
@@ -824,7 +874,13 @@ type SyncGoogleCmd struct {
 	Account string `name:"account" help:"Google account email"`
 }
 
-func (c *SyncGoogleCmd) Run(r *Runtime) error {
+func (c *SyncGoogleCmd) Run(r *Runtime) (err error) {
+	started := time.Now()
+	defer func() {
+		if err == nil {
+			r.logSyncTimings("google", time.Since(started))
+		}
+	}()
 	return r.print(map[string]any{"dry_run": true, "account": firstNonEmpty(c.Account, r.cfg.Google.DefaultAccount), "status": "remote writes not implemented yet; use import google for local markdown projection"})
 }
 
@@ -1007,7 +1063,7 @@ func (r *Runtime) printDoctorRepairResult(result map[string]any) error {
 			Message: repairMessage("avatar metadata entry", avatarRepaired, dryRun),
 		})
 	}
-	return render.WriteDoctor(r.stdout, checks, render.LogTail{})
+	return render.WriteDoctor(r.stdout, checks, r.renderLogTail())
 }
 
 func intFromResult(result map[string]any, key string) int {
@@ -1090,7 +1146,7 @@ func (r *Runtime) print(value any) error {
 		}
 		return nil
 	case control.Status:
-		return printStatusText(r.stdout, v)
+		return printStatusText(r.stdout, v, r.renderLogTail())
 	case contactexport.ContactExport:
 		return printContactExportText(r.stdout, v)
 	case model.Note:

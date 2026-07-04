@@ -34,8 +34,11 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if manifest.Version != Version {
 		t.Fatalf("version = %q, want %q", manifest.Version, Version)
 	}
-	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who"}) {
+	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who", "verbose_logs"}) {
 		t.Fatalf("capabilities = %#v", manifest.Capabilities)
+	}
+	if manifest.Paths.DefaultLogs != filepath.Join(os.Getenv("HOME"), ".clawdex", "logs") {
+		t.Fatalf("default logs = %q", manifest.Paths.DefaultLogs)
 	}
 	if _, ok := manifest.Commands["contact-export"]; ok {
 		t.Fatalf("unexpected contact-export command = %#v", manifest.Commands)

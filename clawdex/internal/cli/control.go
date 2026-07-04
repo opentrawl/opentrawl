@@ -29,8 +29,9 @@ func controlManifest() control.Manifest {
 	m.Paths = control.Paths{
 		DefaultConfig:   repo.ResolveConfigPath(""),
 		DefaultDatabase: repo.DefaultConfig().RepoPath,
+		DefaultLogs:     repo.DefaultLogDir(),
 	}
-	m.Capabilities = []string{"status", "doctor", "who"}
+	m.Capabilities = []string{"status", "doctor", "who", "verbose_logs"}
 	m.Commands = map[string]control.Command{
 		"metadata": {Title: "Metadata", Argv: []string{"clawdex", "metadata", "--json"}, JSON: true},
 		"status":   {Title: "Status", Argv: []string{"clawdex", "status", "--json"}, JSON: true},
@@ -43,7 +44,22 @@ func controlManifest() control.Manifest {
 type StatusCmd struct{}
 
 func (c *StatusCmd) Run(r *Runtime) error {
-	return r.print(r.controlStatus())
+	status := r.controlStatus()
+	if r.root.JSON {
+		return r.print(r.statusOutput(status))
+	}
+	return printStatusText(r.stdout, status, r.renderLogTail())
+}
+
+type statusOutput struct {
+	control.Status
+	LastRun     *logRunEnvelope   `json:"last_run,omitempty"`
+	RecentError *logErrorEnvelope `json:"recent_error,omitempty"`
+}
+
+func (r *Runtime) statusOutput(status control.Status) statusOutput {
+	lastRun, recentError := r.logTailEnvelope()
+	return statusOutput{Status: status, LastRun: lastRun, RecentError: recentError}
 }
 
 func (r *Runtime) controlStatus() control.Status {
@@ -102,7 +118,9 @@ func (r *Runtime) newControlStatus(summary string) control.Status {
 }
 
 type DoctorReport struct {
-	Checks []DoctorCheck `json:"checks"`
+	Checks      []DoctorCheck     `json:"checks"`
+	LastRun     *logRunEnvelope   `json:"last_run,omitempty"`
+	RecentError *logErrorEnvelope `json:"recent_error,omitempty"`
 }
 
 type DoctorCheck struct {
@@ -116,7 +134,8 @@ func (r *Runtime) doctorReport() DoctorReport {
 	config := r.configDoctorCheck()
 	contacts, people, contactsOK, contactsMissing := r.contactsRepoDoctorCheck()
 	idx := r.indexDoctorCheck(people, contactsOK, contactsMissing)
-	return DoctorReport{Checks: []DoctorCheck{config, contacts, idx}}
+	lastRun, recentError := r.logTailEnvelope()
+	return DoctorReport{Checks: []DoctorCheck{config, contacts, idx}, LastRun: lastRun, RecentError: recentError}
 }
 
 func (r *Runtime) configDoctorCheck() DoctorCheck {
@@ -176,7 +195,7 @@ func (r *Runtime) printDoctorReport(report DoctorReport) error {
 	if r.root.JSON {
 		return r.print(report)
 	}
-	return render.WriteDoctor(r.stdout, renderDoctorChecks(report), render.LogTail{})
+	return render.WriteDoctor(r.stdout, renderDoctorChecks(report), r.renderLogTail())
 }
 
 func (r *Runtime) readOnlyStore() index.Store {
@@ -226,17 +245,18 @@ func statusCounts(people []model.Person) []control.Count {
 	return counts
 }
 
-func printStatusText(w io.Writer, status control.Status) error {
-	return render.WriteStatus(w, renderStatus(status))
+func printStatusText(w io.Writer, status control.Status, tail render.LogTail) error {
+	return render.WriteStatus(w, renderStatus(status, tail))
 }
 
-func renderStatus(status control.Status) render.Status {
+func renderStatus(status control.Status, tail render.LogTail) render.Status {
 	return render.Status{
 		State:    renderStatusState(status.State),
 		Summary:  humanSentence(status.Summary),
 		Sections: statusSections(status),
 		Warnings: cleanMessages(status.Warnings),
 		Errors:   cleanMessages(status.Errors),
+		Log:      tail,
 	}
 }
 
