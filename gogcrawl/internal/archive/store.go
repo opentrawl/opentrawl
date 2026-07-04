@@ -29,24 +29,19 @@ type Store struct {
 	path  string
 }
 
-func DefaultPath() string {
-	paths, err := DefaultPaths()
-	if err != nil {
-		return filepath.Join(".gogcrawl", "gogcrawl.db")
-	}
-	return paths.DBPath
+// DefaultPaths is the one archive path layout, from crawlkit/config. The base
+// dir stays ~/.gogcrawl (the layout shipped before config adoption).
+func DefaultPaths() config.Paths {
+	paths, _ := (config.App{Name: "gogcrawl", BaseDir: "~/.gogcrawl"}).DefaultPaths()
+	return paths
 }
 
-func DefaultPaths() (config.Paths, error) {
-	return (config.App{Name: "gogcrawl", BaseDir: "~/.gogcrawl"}).DefaultPaths()
+func DefaultPath() string {
+	return DefaultPaths().DBPath
 }
 
 func DefaultBackupRepoPath() string {
-	paths, err := DefaultPaths()
-	if err != nil {
-		return filepath.Join(".gogcrawl", "backup")
-	}
-	return filepath.Join(paths.BaseDir, "backup")
+	return filepath.Join(DefaultPaths().BaseDir, "backup")
 }
 
 func Exists(path string) bool {

@@ -37,11 +37,7 @@ type logErrorEnvelope struct {
 func newCommandLog(command string, stderr interface {
 	Write([]byte) (int, error)
 }, jsonProgress bool, verbosity int) (*cklog.Run, error) {
-	paths, err := archive.DefaultPaths()
-	if err != nil {
-		return nil, err
-	}
-	stateRoot, crawlerID := logPathParts(paths.LogDir)
+	stateRoot, crawlerID := logPathParts(archive.DefaultPaths().LogDir)
 	return cklog.NewRun(cklog.Options{
 		StateRoot:    stateRoot,
 		CrawlerID:    crawlerID,
@@ -104,11 +100,7 @@ func (r *runtime) logTail() (*logRunEnvelope, *logErrorEnvelope) {
 }
 
 func newLogReader() (*cklog.Reader, error) {
-	paths, err := archive.DefaultPaths()
-	if err != nil {
-		return nil, err
-	}
-	stateRoot, crawlerID := logPathParts(paths.LogDir)
+	stateRoot, crawlerID := logPathParts(archive.DefaultPaths().LogDir)
 	return cklog.NewReaderWithFileName(stateRoot, crawlerID, gogcrawlLogFileName)
 }
 
