@@ -12,6 +12,7 @@ import (
 	goruntime "runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -39,7 +40,7 @@ func (r *Runtime) startLogRun(command string) error {
 		Version:   Version,
 		Platform:  goruntime.GOOS + "/" + goruntime.GOARCH,
 		Verbosity: r.verbosity(),
-		Stderr:    r.stderr,
+		Stderr:    r.lockedStderr(),
 	})
 	if err != nil {
 		return err
@@ -216,16 +217,91 @@ func (r *Runtime) runSourceCommand(ctx context.Context, source Source, args ...s
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = io.Discard
+	var childStderr *sourceStderrWriter
 	if r.verbosity() > 0 && hasCapability(source, verboseLogsCapability) {
-		cmd.Stderr = r.stderr
+		childStderr = r.sourceStderr(source)
+		cmd.Stderr = childStderr
 	}
-	if err := cmd.Run(); err != nil {
+	err := cmd.Run()
+	if childStderr != nil {
+		if closeErr := childStderr.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if err != nil {
 		return stdout.Bytes(), crawlerCommandError{
 			command: strings.Join(args, " "),
 			err:     err,
 		}
 	}
 	return stdout.Bytes(), nil
+}
+
+func (r *Runtime) lockedStderr() io.Writer {
+	return lockedWriter{dst: r.stderr, mu: &r.stderrMu}
+}
+
+func (r *Runtime) sourceStderr(source Source) *sourceStderrWriter {
+	return &sourceStderrWriter{
+		dst:    r.stderr,
+		mu:     &r.stderrMu,
+		prefix: sourceField(source) + " ",
+	}
+}
+
+type lockedWriter struct {
+	dst io.Writer
+	mu  *sync.Mutex
+}
+
+func (w lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.dst.Write(p)
+}
+
+type sourceStderrWriter struct {
+	dst    io.Writer
+	mu     *sync.Mutex
+	prefix string
+	buf    []byte
+}
+
+func (w *sourceStderrWriter) Write(p []byte) (int, error) {
+	written := 0
+	for len(p) > 0 {
+		i := bytes.IndexByte(p, '\n')
+		if i < 0 {
+			w.buf = append(w.buf, p...)
+			return written + len(p), nil
+		}
+		w.buf = append(w.buf, p[:i+1]...)
+		written += i + 1
+		if err := w.flush(); err != nil {
+			return written, err
+		}
+		p = p[i+1:]
+	}
+	return written, nil
+}
+
+func (w *sourceStderrWriter) Close() error {
+	if len(w.buf) == 0 {
+		return nil
+	}
+	return w.flush()
+}
+
+func (w *sourceStderrWriter) flush() error {
+	line := make([]byte, 0, len(w.prefix)+len(w.buf))
+	line = append(line, w.prefix...)
+	line = append(line, w.buf...)
+	w.buf = w.buf[:0]
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	_, err := w.dst.Write(line)
+	return err
 }
 
 func (r *Runtime) logSourceExec(source Source, args []string) {

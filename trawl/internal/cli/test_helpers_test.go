@@ -19,6 +19,7 @@ type fakeCrawler struct {
 	doctorExit    int
 	search        string
 	searchExit    int
+	searchStderr  string
 	searchLimit   string
 	searchQuery   string
 	searchNoQuery bool
@@ -88,6 +89,7 @@ expected_search_limit=%s
 expected_search_query=%s
 expected_search_no_query=%s
 expected_search_who=%s
+search_stderr=%s
 expected_who_query=%s
 expected_short_ref_alias=%s
 open_human=%s
@@ -178,6 +180,9 @@ case "$1" in
         exit 64
       fi
     fi
+    if [ -n "$search_stderr" ]; then
+      printf '%%s' "$search_stderr" >&2
+    fi
     printf '%%s\n' %s
     exit %d
     ;;
@@ -226,7 +231,7 @@ case "$1" in
     ;;
 esac
 exit 64
-`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellBool(crawler.searchNoQuery), shellQuote(crawler.searchWho), shellQuote(crawler.whoQuery), shellQuote(crawler.shortRefAlias), shellQuote(crawler.openHuman), shellQuote(crawler.openStderr), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.who), crawler.whoExit, shellQuote(crawler.open), crawler.openExit, crawler.openHumanExit, shellQuote(crawler.sync), crawler.syncExit)
+`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellBool(crawler.searchNoQuery), shellQuote(crawler.searchWho), shellQuote(crawler.searchStderr), shellQuote(crawler.whoQuery), shellQuote(crawler.shortRefAlias), shellQuote(crawler.openHuman), shellQuote(crawler.openStderr), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.who), crawler.whoExit, shellQuote(crawler.open), crawler.openExit, crawler.openHumanExit, shellQuote(crawler.sync), crawler.syncExit)
 	path := filepath.Join(dir, crawler.name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
