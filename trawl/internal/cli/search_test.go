@@ -24,6 +24,14 @@ func searchResultsJSON(query string, count int) string {
 	return b.String()
 }
 
+func childStderrLines(source string, count int) string {
+	var b strings.Builder
+	for i := 1; i <= count; i++ {
+		fmt.Fprintf(&b, "%s child-line %03d\n", source, i)
+	}
+	return b.String()
+}
+
 func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
@@ -318,6 +326,102 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	}
 	if !strings.Contains(string(invocationBytes), "search boat trip --json --limit 1 -vv") {
 		t.Fatalf("verbose flag was not propagated:\n%s", string(invocationBytes))
+	}
+}
+
+func TestSearchVerbosePrefixesChildStderrLines(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:         "gogcrawl",
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail"}`,
+		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+		searchStderr: "first child line\nsecond child line\nfinal child line",
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		"source=gogcrawl first child line\n",
+		"source=gogcrawl second child line\n",
+		"source=gogcrawl final child line",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	for _, line := range strings.Split(stderr, "\n") {
+		if strings.Contains(line, "child line") && !strings.HasPrefix(line, "source=gogcrawl ") {
+			t.Fatalf("child stderr line was not prefixed: %q\n%s", line, stderr)
+		}
+	}
+}
+
+func TestSearchDoesNotForwardChildStderrWithoutVerbose(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:         "gogcrawl",
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail"}`,
+		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+		searchStderr: "hidden child line\n",
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchVerbosePrefixesConcurrentChildStderrLines(t *testing.T) {
+	const lineCount = 100
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:         "imsgcrawl",
+			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"imessage","display_name":"Messages"}`,
+			search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+			searchStderr: childStderrLines("imessage", lineCount),
+		},
+		fakeCrawler{
+			name:         "telecrawl",
+			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"telegram","display_name":"Telegram"}`,
+			search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+			searchStderr: childStderrLines("telegram", lineCount),
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "imessage,telegram", "--limit", "1")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	seen := map[string]int{}
+	for _, line := range strings.Split(stderr, "\n") {
+		if !strings.Contains(line, "child-line") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(line, "source=imessage imessage child-line "):
+			seen["imessage"]++
+		case strings.HasPrefix(line, "source=telegram telegram child-line "):
+			seen["telegram"]++
+		default:
+			t.Fatalf("child stderr line was sheared or unattributed: %q\n%s", line, stderr)
+		}
+		if strings.Contains(line, "source=imessage") && strings.Contains(line, "source=telegram") {
+			t.Fatalf("child stderr line contains multiple sources: %q\n%s", line, stderr)
+		}
+	}
+	for _, source := range []string{"imessage", "telegram"} {
+		if seen[source] != lineCount {
+			t.Fatalf("%s child stderr lines = %d, want %d\n%s", source, seen[source], lineCount, stderr)
+		}
 	}
 }
 

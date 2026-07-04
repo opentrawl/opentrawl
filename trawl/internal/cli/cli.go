@@ -8,6 +8,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -31,13 +32,14 @@ type CLI struct {
 }
 
 type Runtime struct {
-	ctx     context.Context
-	stdout  io.Writer
-	stderr  io.Writer
-	root    *CLI
-	appsDir string
-	now     func() time.Time
-	log     *logRun
+	ctx      context.Context
+	stdout   io.Writer
+	stderr   io.Writer
+	stderrMu sync.Mutex
+	root     *CLI
+	appsDir  string
+	now      func() time.Time
+	log      *logRun
 }
 
 type StatusCmd struct {
