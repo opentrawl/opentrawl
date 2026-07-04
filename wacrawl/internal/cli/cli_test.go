@@ -19,7 +19,6 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/conformance"
-	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
@@ -302,6 +301,15 @@ func assertSingleJSONDocument(t *testing.T, data string, out any) {
 	}
 }
 
+func readWacrawlTestLog(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".wacrawl", "logs", wacrawlLogFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
 func assertSearchResultKeys(t *testing.T, data []byte) {
 	t.Helper()
 	var root struct {
@@ -414,6 +422,12 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if !hasCapability(manifest.Capabilities, "short_refs") {
 		t.Fatalf("capabilities = %#v, missing short_refs", manifest.Capabilities)
 	}
+	if !hasCapability(manifest.Capabilities, "verbose_logs") {
+		t.Fatalf("capabilities = %#v, missing verbose_logs", manifest.Capabilities)
+	}
+	if manifest.Paths.DefaultLogs != defaultLogDir() {
+		t.Fatalf("default logs = %q, want %q", manifest.Paths.DefaultLogs, defaultLogDir())
+	}
 	openCommand, ok := manifest.Commands["open"]
 	if !ok {
 		t.Fatalf("commands = %#v", manifest.Commands)
@@ -471,6 +485,74 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	whoWant := []string{"wacrawl", "--json", "who", "NAME"}
 	if !reflect.DeepEqual(whoCommand.Argv, whoWant) {
 		t.Fatalf("who argv = %#v, want %#v", whoCommand.Argv, whoWant)
+	}
+}
+
+func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	logPath := filepath.Join(home, ".wacrawl", "logs", wacrawlLogFileName)
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("metadata without -v wrote stderr:\n%s", stderr.String())
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("log file missing at %s: %v", logPath, err)
+	}
+	logText := readWacrawlTestLog(t)
+	for _, want := range []string{"metadata start:", "metadata finish: outcome=success"} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("log missing %q:\n%s", want, logText)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(context.Background(), []string{"-v", "metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata -v error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "metadata start:") || !strings.Contains(stderr.String(), "metadata finish: outcome=success") {
+		t.Fatalf("-v stderr missing log lines:\n%s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "DEBUG") {
+		t.Fatalf("-v streamed debug line:\n%s", stderr.String())
+	}
+}
+
+func TestSyncVerboseLogsPhaseTimings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	ctx := context.Background()
+	source := t.TempDir()
+	createDesktopFixture(t, source)
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+
+	var stdout, stderr bytes.Buffer
+	err := Run(ctx, []string{"-vv", "--db", dbPath, "--source", source, "--json", "sync"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("sync -vv error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	logText := readWacrawlTestLog(t)
+	for _, want := range []string{
+		"sync_done: messages=3",
+		"chats=2",
+		"participants=1",
+		"sync_phase: source=whatsapp-desktop",
+		"snapshot_ms=",
+		"extract_ms=",
+		"media_ms=",
+		"write_ms=",
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("sync log missing %q:\n%s", want, logText)
+		}
+	}
+	if !strings.Contains(stderr.String(), "sync_done: messages=3") || !strings.Contains(stderr.String(), "sync_phase: source=whatsapp-desktop") {
+		t.Fatalf("-vv stderr missing sync log lines:\n%s", stderr.String())
 	}
 }
 
@@ -600,7 +682,7 @@ func TestStatusAndDoctorHumanOutputUsesCrawlkitRender(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected open to fail")
 	}
-	reader, err := cklog.NewReader(logStateRoot(dbPath), "wacrawl")
+	reader, err := newLogReader()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1917,6 +1999,12 @@ func TestRunHelpMenus(t *testing.T) {
 			}
 			if !strings.Contains(stdout.String(), tc.want) {
 				t.Fatalf("stdout missing %q:\n%s", tc.want, stdout.String())
+			}
+			if !strings.Contains(stdout.String(), diagnosticsLine) {
+				t.Fatalf("stdout missing diagnostics line:\n%s", stdout.String())
+			}
+			if !strings.HasSuffix(strings.TrimSpace(stdout.String()), diagnosticsLine) {
+				t.Fatalf("stdout does not end with diagnostics line:\n%s", stdout.String())
 			}
 		})
 	}

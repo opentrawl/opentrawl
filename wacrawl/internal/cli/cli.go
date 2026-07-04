@@ -62,21 +62,25 @@ func ExitCode(err error) int {
 }
 
 type app struct {
-	stdout io.Writer
-	stderr io.Writer
-	json   bool
-	dbPath string
-	source string
-	runLog *cklog.Run
+	stdout    io.Writer
+	stderr    io.Writer
+	json      bool
+	verbosity int
+	dbPath    string
+	source    string
+	runLog    *cklog.Run
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	verbosity, args := extractVerbosityFlag(args)
 	args, jsonAnywhere := extractJSONFlag(args)
 	global := flag.NewFlagSet("wacrawl", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
 	jsonOut := global.Bool("json", false, "")
 	dbPath := global.String("db", defaultDBPath(), "")
 	source := global.String("source", "", "")
+	helpFlag := global.Bool("help", false, "")
+	helpShortFlag := global.Bool("h", false, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -85,32 +89,21 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonAnywhere, usageErr(err))
 	}
+	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut || jsonAnywhere, verbosity: verbosity, dbPath: *dbPath, source: *source}
+	rest := global.Args()
+	if err := a.startLogRun(rootCommandName(rest, *versionFlag, *helpFlag || *helpShortFlag)); err != nil {
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, a.json, commandErr("log_open_failed", "cannot open command log", "check the local wacrawl log directory", 1, nil, err))
+	}
 	if *versionFlag {
 		_, _ = io.WriteString(stdout, version+"\n")
-		return nil
+		return a.finishLogRun(nil, rest)
 	}
-	a := &app{stdout: stdout, stderr: stderr, json: *jsonOut || jsonAnywhere, dbPath: *dbPath, source: *source}
-	rest := global.Args()
-	if len(rest) == 0 {
+	if *helpFlag || *helpShortFlag || len(rest) == 0 {
 		printUsage(stdout)
-		return nil
+		return a.finishLogRun(nil, rest)
 	}
-	return a.runCommand(ctx, rest)
-}
-
-func (a *app) runCommand(ctx context.Context, rest []string) error {
-	run, err := a.newLogRun(logCommandName(rest))
-	if err != nil {
-		return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, err)
-	}
-	a.runLog = run
-	err = a.dispatch(ctx, rest)
-	if err != nil {
-		_ = run.Error(errorEvent(rest, err), err)
-	}
-	if finishErr := run.Finish(err); err == nil {
-		return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, finishErr)
-	}
+	err := a.dispatch(ctx, rest)
+	err = a.finishLogRun(err, rest)
 	return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, err)
 }
 
@@ -159,6 +152,44 @@ func (a *app) dispatch(ctx context.Context, rest []string) error {
 	}
 }
 
+func (a *app) startLogRun(command string) error {
+	run, err := a.newLogRun(command)
+	if err != nil {
+		return err
+	}
+	a.runLog = run
+	return nil
+}
+
+func (a *app) finishLogRun(err error, rest []string) error {
+	if a.runLog == nil {
+		return err
+	}
+	if err != nil {
+		_ = a.runLog.Error(errorEvent(rest, err), err)
+	}
+	if finishErr := a.runLog.Finish(err); err == nil {
+		return finishErr
+	}
+	return err
+}
+
+func extractVerbosityFlag(args []string) (int, []string) {
+	out := make([]string, 0, len(args))
+	verbosity := 0
+	for _, arg := range args {
+		switch arg {
+		case "-v", "--verbose":
+			verbosity++
+		case "-vv":
+			verbosity += 2
+		default:
+			out = append(out, arg)
+		}
+	}
+	return verbosity, out
+}
+
 func extractJSONFlag(args []string) ([]string, bool) {
 	out := make([]string, 0, len(args))
 	jsonOut := false
@@ -180,6 +211,16 @@ func extractJSONFlag(args []string) ([]string, bool) {
 		out = append(out, arg)
 	}
 	return out, jsonOut
+}
+
+func rootCommandName(rest []string, versionOut, helpOut bool) string {
+	if versionOut {
+		return "version"
+	}
+	if helpOut || len(rest) == 0 || rest[0] == "--help" || rest[0] == "-h" || rest[0] == "help" {
+		return "help"
+	}
+	return logCommandName(rest)
 }
 
 func defaultDBPath() string {

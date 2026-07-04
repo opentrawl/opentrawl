@@ -35,18 +35,23 @@ type Store struct {
 }
 
 type ImportStats struct {
-	SourcePath    string    `json:"source_path"`
-	DBPath        string    `json:"db_path"`
-	Chats         int       `json:"chats"`
-	Contacts      int       `json:"contacts"`
-	Groups        int       `json:"groups"`
-	Participants  int       `json:"participants"`
-	Messages      int       `json:"messages"`
-	MediaMessages int       `json:"media_messages"`
-	MediaCopied   int       `json:"media_copied,omitempty"`
-	MediaMissing  int       `json:"media_missing,omitempty"`
-	StartedAt     time.Time `json:"started_at"`
-	FinishedAt    time.Time `json:"finished_at"`
+	SourcePath      string        `json:"source_path"`
+	DBPath          string        `json:"db_path"`
+	Chats           int           `json:"chats"`
+	Contacts        int           `json:"contacts"`
+	Groups          int           `json:"groups"`
+	Participants    int           `json:"participants"`
+	Messages        int           `json:"messages"`
+	MediaMessages   int           `json:"media_messages"`
+	MediaCopied     int           `json:"media_copied,omitempty"`
+	MediaMissing    int           `json:"media_missing,omitempty"`
+	StartedAt       time.Time     `json:"started_at"`
+	FinishedAt      time.Time     `json:"finished_at"`
+	TotalElapsed    time.Duration `json:"-"`
+	SnapshotElapsed time.Duration `json:"-"`
+	ExtractElapsed  time.Duration `json:"-"`
+	MediaElapsed    time.Duration `json:"-"`
+	WriteElapsed    time.Duration `json:"-"`
 }
 
 type Status struct {
