@@ -9,6 +9,8 @@ written_by: ai
 - Index raw card prose for search instead of deduped term lists so ranking
   reflects real term frequency, version the FTS rebuild, and drop the
   write-only `observation_term` table.
+- Keep unselected POI candidates out of the search index: bm25 favors short
+  documents, so nearby-business names outranked real card matches.
 - Stem and OR-combine search matching (porter tokenizer, bm25 ranking),
   rebuilding older archives in place on the write path.
 - Requeue quota-refused classify items and stop the batch after sustained

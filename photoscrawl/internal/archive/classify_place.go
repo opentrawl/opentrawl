@@ -99,11 +99,16 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `, observationID, assetID, kind, text, valueJSON, placeObservationSource, provider, cacheStatus, tier, distanceValue, ""); err != nil {
 		return 0, fmt.Errorf("write place observation: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `
+	// Unselected POI candidates are selection provenance, not claims about
+	// the photo. They stay out of the search index so a nearby "Meadow
+	// Grill" cannot outrank a card that is actually about grilling.
+	if kind != "poi_candidate" {
+		if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)
 `, observationID, assetID, "", text); err != nil {
-		return 0, fmt.Errorf("write place fts: %w", err)
+			return 0, fmt.Errorf("write place fts: %w", err)
+		}
 	}
 	return 1, nil
 }
