@@ -11,7 +11,12 @@ import (
 	"runtime"
 	"strings"
 
-	_ "modernc.org/sqlite"
+	// C SQLite via cgo. The pure-Go translation (modernc.org/sqlite) ran
+	// hot paths 10-100x slower and caused three production incidents in one
+	// day (unindexed-scan write stalls, 69s searches, pathological reads
+	// against a large WAL). Requires -tags sqlite_fts5; the monorepo devenv
+	// sets it via GOFLAGS.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const DefaultBusyTimeoutMillis = 5000
@@ -43,7 +48,7 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err := ensureDBFile(path); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", writeDSN(path))
+	db, err := sql.Open("sqlite3", writeDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -51,6 +56,10 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite: %w", err)
+	}
+	if err := applySessionPragmas(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply session pragmas: %w", err)
 	}
 	if err := tightenDBFilePerms(path); err != nil {
 		_ = db.Close()
@@ -82,7 +91,7 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 			return nil, fmt.Errorf("stat sqlite db: %w", err)
 		}
 	}
-	db, err := sql.Open("sqlite", readOnlyDSN(path))
+	db, err := sql.Open("sqlite3", readOnlyDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite readonly: %w", err)
 	}
@@ -91,6 +100,10 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("ping sqlite readonly: %w", err)
+	}
+	if err := applySessionPragmas(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply session pragmas: %w", err)
 	}
 	return &Store{db: db, path: path}, nil
 }
@@ -215,11 +228,18 @@ func QuoteIdent(name string) string {
 }
 
 func writeDSN(path string) string {
-	return dsn(path, "_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)&_pragma=busy_timeout(5000)")
+	return dsn(path, "_foreign_keys=1&_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000")
 }
 
 func readOnlyDSN(path string) string {
-	return dsn(path, "mode=ro&_pragma=query_only(1)&_pragma=foreign_keys(1)&_pragma=temp_store(MEMORY)&_pragma=mmap_size(268435456)&_pragma=busy_timeout(5000)")
+	return dsn(path, "mode=ro&_query_only=1&_foreign_keys=1&_busy_timeout=5000")
+}
+
+// temp_store and mmap_size have no DSN form in the cgo driver. Both pools
+// hold exactly one connection, so a post-open exec pins them reliably.
+func applySessionPragmas(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, "pragma temp_store = MEMORY; pragma mmap_size = 268435456;")
+	return err
 }
 
 func dsn(path, pragmas string) string {

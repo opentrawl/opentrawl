@@ -6,12 +6,12 @@ import (
 	"reflect"
 	"testing"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestSQLiteIndexRoundTrip(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+t.TempDir()+"/shortrefs.db")
+	db, err := sql.Open("sqlite3", "file:"+t.TempDir()+"/shortrefs.db")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,6 +7,8 @@ require (
 	modernc.org/sqlite v1.53.0
 )
 
+require github.com/mattn/go-sqlite3 v1.14.47 // indirect
+
 require (
 	filippo.io/hpke v0.4.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect

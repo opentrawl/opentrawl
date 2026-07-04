@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func TestSetGetAndStale(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "state.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestSetGetAndStale(t *testing.T) {
 
 func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "state.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 		t.Fatalf("manifest record ok=%v err=%v", ok, err)
 	}
 
-	scopedDB, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "scoped.db"))
+	scopedDB, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "scoped.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +84,7 @@ func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 		t.Fatalf("scoped record ok=%v err=%v", ok, err)
 	}
 
-	cursorDB, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "cursor.db"))
+	cursorDB, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "cursor.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 
 func TestScopedStoreSetGetAndStale(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "scoped.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "scoped.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestScopedStoreSetGetAndStale(t *testing.T) {
 
 func TestCursorStoreSetGetAndStale(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "cursor.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "cursor.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestCursorStoreSetGetAndStale(t *testing.T) {
 
 func TestStateSchemasCoexistInOneDatabase(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "state.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "state.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestStateSchemasCoexistInOneDatabase(t *testing.T) {
 
 func TestMappedStoresUseExistingSyncStateTables(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(t.TempDir(), "mapped.db"))
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(t.TempDir(), "mapped.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
