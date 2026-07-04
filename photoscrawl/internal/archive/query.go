@@ -181,7 +181,7 @@ matched_assets as (
   )
   group by id
 )
-select asset.id, asset.media_type, asset.creation_date,
+select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
        coalesce((select title from asset_fts where id = asset.id limit 1), '') as title,
        coalesce((select body from asset_fts where id = asset.id limit 1), '') as asset_body,
        `+searchWhoSQL+` as who,
@@ -206,13 +206,13 @@ limit ?
 	}
 	for rows.Next() {
 		var hit SearchHit
-		var assetBody, cardSummary, cardDescription string
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription); err != nil {
+		var assetBody, cardSummary, cardDescription, timezoneName string
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
 		hit.Ref = assetRef(hit.ID)
-		hit.Time = localRFC3339(hit.CreationDate)
+		hit.Time = localCaptureTime(hit.CreationDate, timezoneName)
 		if !strings.HasPrefix(hit.Where, "GPS ") {
 			hit.Where = cleanPlacePhrase(hit.Where)
 		}

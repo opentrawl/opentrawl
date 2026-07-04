@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 )
@@ -144,10 +143,7 @@ func openCaptured(asset map[string]any) *OpenCaptured {
 
 func displayTimezoneName(value string) string {
 	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if _, err := time.LoadLocation(value); err != nil {
+	if captureLocation(value) == nil {
 		return ""
 	}
 	return value

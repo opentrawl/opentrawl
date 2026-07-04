@@ -109,7 +109,9 @@ func Neighbors(ctx context.Context, paths Paths, opts NeighborOptions) (Neighbor
 	}
 	for i := range neighbors {
 		neighbors[i].Ref = photoscrawlRef(neighbors[i].Ref)
-		neighbors[i].Time = localRFC3339(neighbors[i].Time)
+		// Neighbor rows do not carry the asset timezone; UTC is honest,
+		// the reviewing machine's timezone is not.
+		neighbors[i].Time = localCaptureTime(neighbors[i].Time, "")
 	}
 	return NeighborResult{Ref: photoscrawlRef(id), Limit: limit, Neighbors: neighbors}, nil
 }
