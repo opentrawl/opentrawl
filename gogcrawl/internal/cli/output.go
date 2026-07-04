@@ -175,6 +175,11 @@ func printOpenText(w io.Writer, value archive.OpenResult) error {
 	if _, err := fmt.Fprintf(w, "\n%s\n", value.Body); err != nil {
 		return err
 	}
+	if value.BodyTruncated {
+		if _, err := fmt.Fprintf(w, "\n… %s more characters. Open the full message in Gmail.\n", commaInt(value.BodyElidedChars)); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

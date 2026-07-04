@@ -476,29 +476,36 @@ func TestOpenTruncatesOversizedBodyInTextAndJSON(t *testing.T) {
 	dbPath := seedArchive(t, []archive.Message{
 		{ID: "m1", Time: time.Date(2026, 7, 2, 10, 0, 0, 0, time.UTC), FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Terms", Body: body},
 	})
-	marker := "… 6,214 more characters; the full body is in the archive"
+	// The hint sits on its own line, separated from the body by a blank
+	// line, and never crammed into the body data (rules §2.4).
+	hint := "\n\n… 6,214 more characters. Open the full message in Gmail.\n"
 
 	text := string(runOutput(t, context.Background(), []string{"open", archive.RefPrefix + "m1", "--archive", dbPath}))
-	if !strings.Contains(text, marker) {
-		t.Fatalf("open text missing truncation marker:\n%s", text)
+	if !strings.Contains(text, hint) {
+		t.Fatalf("open text missing separated truncation hint:\n%s", text)
 	}
 	if strings.Contains(text, "THIS_IS_ELIDED") {
 		t.Fatalf("open text leaked elided body:\n%s", text)
 	}
 
 	rawJSON := string(runOutput(t, context.Background(), []string{"open", archive.RefPrefix + "m1", "--json", "--archive", dbPath}))
-	if !strings.Contains(rawJSON, `"body_truncated": true`) {
-		t.Fatalf("open JSON missing body_truncated:\n%s", rawJSON)
+	if !strings.Contains(rawJSON, `"body_truncated": true`) || !strings.Contains(rawJSON, `"body_elided_chars": 6214`) {
+		t.Fatalf("open JSON missing explicit truncation fields:\n%s", rawJSON)
 	}
 	var opened archive.OpenResult
 	if err := json.Unmarshal([]byte(rawJSON), &opened); err != nil {
 		t.Fatalf("decode open JSON: %v\n%s", err, rawJSON)
 	}
-	if !opened.BodyTruncated || !strings.Contains(opened.Body, marker) {
+	// The JSON body is only mail content: the kept prefix, no hint text,
+	// no elided remainder.
+	if opened.Body != strings.Repeat("A", maxOpenBodyRunes) {
+		t.Fatalf("open JSON body is not clean truncated content:\n%q", opened.Body)
+	}
+	if !opened.BodyTruncated || opened.BodyElidedChars != 6214 {
 		t.Fatalf("open JSON truncation = %#v", opened)
 	}
-	if strings.Contains(opened.Body, "THIS_IS_ELIDED") {
-		t.Fatalf("open JSON leaked elided body:\n%s", opened.Body)
+	if strings.Contains(opened.Body, "…") || strings.Contains(opened.Body, "Gmail") {
+		t.Fatalf("open JSON leaked hint text into body:\n%q", opened.Body)
 	}
 }
 
