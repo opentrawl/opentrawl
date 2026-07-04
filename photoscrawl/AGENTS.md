@@ -129,12 +129,8 @@ Keep crawl-family commands:
 - `classify`
 - `search`
 - `open`
-- `neighbors`
 
 Research-only `photoscrawl-lab` verbs are not part of this query surface.
-
-`neighbors` is the "photos taken together" query: source-level adjacent assets,
-not a trip or relationship truth table.
 
 Provenance tables, evidence refs, raw provider responses, and model responses
 are machine-internal pipeline storage. Do not expose an `evidence` command or

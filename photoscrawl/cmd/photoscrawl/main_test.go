@@ -46,22 +46,15 @@ func TestParseSearchCommandAllowsLauncherFlagOrder(t *testing.T) {
 }
 
 func TestParseRefCommandRequiresRefBeforeFlags(t *testing.T) {
-	parsed, err := parseRefCommand("open", []string{"photoscrawl:asset/fixture", "--json"}, false)
+	parsed, err := parseRefCommand("open", []string{"photoscrawl:asset/fixture", "--json"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if parsed.Ref != "photoscrawl:asset/fixture" || parsed.Format != "json" {
 		t.Fatalf("parsed open = %#v", parsed)
 	}
-	if _, err := parseRefCommand("open", []string{"--json", "photoscrawl:asset/fixture"}, false); err == nil {
+	if _, err := parseRefCommand("open", []string{"--json", "photoscrawl:asset/fixture"}); err == nil {
 		t.Fatal("expected flags-before-ref error")
-	}
-	neighbors, err := parseRefCommand("neighbors", []string{"photoscrawl:asset/fixture", "--limit", "5"}, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if neighbors.Limit != 5 {
-		t.Fatalf("parsed neighbors = %#v", neighbors)
 	}
 }
 
@@ -79,7 +72,7 @@ func TestMovedResearchVerbsReturnUsage(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected usage error")
 			}
-			if !strings.Contains(err.Error(), "usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors>") {
+			if !strings.Contains(err.Error(), "usage: photoscrawl <metadata|status|doctor|sync|classify|search|open>") {
 				t.Fatalf("unexpected error: %v", err)
 			}
 		})
@@ -110,7 +103,7 @@ func TestMetadataHumanOutputIsProse(t *testing.T) {
 	assertHumanProseOutput(t, out,
 		"Photos (photoscrawl)",
 		"Contract version: 1",
-		"Capabilities: metadata, status, doctor, sync, classify, search, short_refs, open, neighbors",
+		"Capabilities: metadata, status, doctor, sync, classify, search, short_refs, open",
 		"sync: photoscrawl sync --library <path> --json",
 		"open: photoscrawl open <ref> --json",
 	)
@@ -261,7 +254,7 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 	)
 }
 
-func TestOpenAndNeighborsAcceptShortRef(t *testing.T) {
+func TestOpenAcceptsShortRef(t *testing.T) {
 	dbPath, shortRef, fullRef := buildCLIShortRefArchive(t)
 
 	human, errOut, err := captureRunOutput(t, []string{"open", shortRef, "--db", dbPath})
@@ -283,18 +276,6 @@ func TestOpenAndNeighborsAcceptShortRef(t *testing.T) {
 	}
 	if strings.Contains(jsonOut, "short_ref") {
 		t.Fatalf("open JSON leaked short ref as identity:\n%s", jsonOut)
-	}
-
-	neighborsOut, errOut, err := captureRunOutput(t, []string{"neighbors", shortRef, "--db", dbPath, "--json"})
-	if err != nil {
-		t.Fatalf("neighbors short ref json: %v stderr=%s stdout=%s", err, errOut, neighborsOut)
-	}
-	var neighbors archive.NeighborResult
-	if err := json.Unmarshal([]byte(neighborsOut), &neighbors); err != nil {
-		t.Fatal(err)
-	}
-	if neighbors.Ref != fullRef {
-		t.Fatalf("neighbors ref = %q, want %q", neighbors.Ref, fullRef)
 	}
 }
 

@@ -33,11 +33,10 @@ go run ./cmd/photoscrawl classify --limit 100 --json
 go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
 go run ./cmd/photoscrawl search "drone beach portugal" --json
 go run ./cmd/photoscrawl open photoscrawl:asset/<32-hex> --json
-go run ./cmd/photoscrawl neighbors photoscrawl:asset/<32-hex> --json
 ```
 
 Human search output shows a short ref when the archive can resolve it safely.
-Use that alias with `open` or `neighbors` for local terminal work. JSON keeps
+Use that alias with `open` for local terminal work. JSON keeps
 the canonical `photoscrawl:asset/<32-hex>` ref.
 
 Default runtime paths come from crawlkit platform dirs. The primary database is
@@ -73,12 +72,6 @@ parked photos and unpark them once the place cache covers their location.
 If an original download fails, `classify` marks that asset as `failed_download`.
 It will not try that download again until an operator resets it:
 `sqlite3 <crawlkit-data-dir>/photoscrawl/photos.sqlite "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
-
-`neighbors` is the "photos taken together" query. It returns source-level
-adjacent assets only and does not create trips, people, places, or clusters.
-Current reasons are deterministic archive facts:
-same burst id, same album id, same resource hash, nearby creation time, nearby
-raw GPS, and shared local observation labels.
 
 ## photoscrawl-lab
 
@@ -137,7 +130,7 @@ Today the POC sees useful source facts and optional model observations:
   them;
 - status coverage counts for GPS, observations, local resources, remote
   resources, classification queue state, and observation types;
-- search/open/neighbors JSON shaped for users and tools. Provenance stays on
+- search/open JSON shaped for users and tools. Provenance stays on
   observation rows through source, model, and prompt version columns.
 
 It does not create durable identities, trips, places, relationships, embeddings,
@@ -172,7 +165,7 @@ Build `photos.sqlite` with:
 - Vision/Core ML observations: labels, OCR, faces, barcodes, screenshot/document
   markers, quality/similarity signals where useful;
 - internal provenance for every derived observation;
-- JSON metadata/status/doctor/sync/classify/search/open/neighbors commands.
+- JSON metadata/status/doctor/sync/classify/search/open commands.
 
 Out of scope for v1:
 
