@@ -15,13 +15,14 @@ import (
 var linePattern = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}) +(INFO|WARN|ERROR|DEBUG) +([^ ]+) +([^ ]+) +([a-z][a-z0-9_]*): (.*)$`)
 
 type Line struct {
-	Raw       string
-	Timestamp time.Time
-	Level     Level
-	RunID     string
-	Command   string
-	Event     string
-	Message   string
+	Raw        string
+	Timestamp  time.Time
+	Level      Level
+	RunID      string
+	Command    string
+	Event      string
+	Message    string
+	Visibility Visibility
 }
 
 type RunSummary struct {
@@ -73,14 +74,16 @@ func ParseLine(raw string) (Line, bool) {
 	if !ok {
 		return Line{}, false
 	}
+	message := match[6]
 	return Line{
-		Raw:       raw,
-		Timestamp: ts,
-		Level:     level,
-		RunID:     match[3],
-		Command:   match[4],
-		Event:     match[5],
-		Message:   match[6],
+		Raw:        raw,
+		Timestamp:  ts,
+		Level:      level,
+		RunID:      match[3],
+		Command:    match[4],
+		Event:      match[5],
+		Message:    message,
+		Visibility: normalizeVisibility(Visibility(parseFields(message)["visibility"])),
 	}, true
 }
 
@@ -146,104 +149,24 @@ func (r *Reader) MostRecentError(runID string) (Line, bool, error) {
 	return Line{}, false, nil
 }
 
-// IsWorldStateError reports whether an error line describes broken local or
-// source state, rather than a caller usage mistake. It deliberately uses the
-// existing stable log grammar: usage events are caller mistakes, WorldMustChange
-// errors carry remedy=..., and sync/source/auth events are operational failures.
-func IsWorldStateError(line Line) bool {
+func IsUserFacingError(line Line) bool {
 	if line.Level != "" && line.Level != LevelError {
 		return false
 	}
-	if isUsageErrorLine(line) {
-		return false
-	}
-	if strings.TrimSpace(parseFields(line.Message)["remedy"]) != "" {
-		return true
-	}
-	return isOperationalFailureEvent(line.Event)
+	return lineVisibility(line) == VisibilityUserFacing
 }
 
-func isUsageErrorLine(line Line) bool {
-	if isUsageErrorEvent(line.Event) {
-		return true
-	}
-	if strings.ToLower(strings.TrimSpace(line.Event)) != "run_failed" {
-		return false
-	}
-	return looksLikeUsageMessage(logMessageText(line.Message))
+// IsWorldStateError is kept for callers that used the old name. It now reads
+// the explicit log visibility field only.
+func IsWorldStateError(line Line) bool {
+	return IsUserFacingError(line)
 }
 
-func isUsageErrorEvent(event string) bool {
-	event = strings.ToLower(strings.TrimSpace(event))
-	return event == "usage" ||
-		event == "usage_error" ||
-		strings.HasSuffix(event, "_usage") ||
-		strings.HasSuffix(event, "_usage_error")
-}
-
-func isOperationalFailureEvent(event string) bool {
-	event = strings.ToLower(strings.TrimSpace(event))
-	return event == "sync_failed" ||
-		strings.HasPrefix(event, "sync_") ||
-		event == "source_store" ||
-		event == "source_failed" ||
-		strings.HasPrefix(event, "source_") ||
-		event == "auth" ||
-		event == "auth_failed" ||
-		strings.HasPrefix(event, "auth_") ||
-		strings.HasPrefix(event, "oauth_") ||
-		strings.Contains(event, "authorization") ||
-		strings.Contains(event, "unauthorized") ||
-		event == "permission_denied" ||
-		strings.HasPrefix(event, "permission_")
-}
-
-func logMessageText(message string) string {
-	fields := parseFields(message)
-	if value := strings.TrimSpace(fields["error"]); value != "" {
-		return value
+func lineVisibility(line Line) Visibility {
+	if value := strings.TrimSpace(parseFields(line.Message)["visibility"]); value != "" {
+		return normalizeVisibility(Visibility(value))
 	}
-	if value := strings.TrimSpace(fields["message"]); value != "" {
-		return value
-	}
-	return strings.TrimSpace(message)
-}
-
-func looksLikeUsageMessage(message string) bool {
-	message = strings.ToLower(strings.TrimSpace(message))
-	if message == "" {
-		return false
-	}
-	if strings.HasPrefix(message, "usage:") {
-		return true
-	}
-	for _, phrase := range []string{
-		"unknown command",
-		"unknown help topic",
-		"unknown flag",
-		"flag provided but not defined",
-		"invalid flag",
-		"takes flags only",
-		"takes no arguments",
-		"takes no positional arguments",
-		"takes exactly one",
-		"requires exactly one",
-		"requires one argument",
-		"requires a value",
-		"requires an identity",
-		"query is required",
-		"use either",
-		"not both",
-		"accepts at most one",
-		"must be positive",
-		"must be greater than",
-		"must be between",
-	} {
-		if strings.Contains(message, phrase) {
-			return true
-		}
-	}
-	return false
+	return normalizeVisibility(line.Visibility)
 }
 
 func (r *Reader) lines(runID string) ([]Line, error) {

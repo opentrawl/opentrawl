@@ -531,7 +531,10 @@ func TestDoctorChecks(t *testing.T) {
 	assertDoctorCheck(t, success, "archive", "ok", "")
 	assertDoctorCheck(t, success, "full_disk_access", "ok", "")
 
-	failureOut := runOK(t, "--db", filepath.Join(dir, "missing", "chat.db"), "--archive", filepath.Join(dir, "missing-archive.db"), "--json", "doctor")
+	missingDBPath := filepath.Join(dir, "missing", "chat.db")
+	missingArchivePath := filepath.Join(dir, "missing-archive.db")
+	failureOut := runOK(t, "--db", missingDBPath, "--archive", missingArchivePath, "--json", "doctor")
+	assertDoctorJSONNoLogInternals(t, failureOut)
 	var failure doctorOutput
 	if err := json.Unmarshal([]byte(failureOut), &failure); err != nil {
 		t.Fatalf("doctor failure json = %s err=%v", failureOut, err)
@@ -539,6 +542,19 @@ func TestDoctorChecks(t *testing.T) {
 	assertDoctorCheck(t, failure, "source_store", "fail", "")
 	assertDoctorCheck(t, failure, "archive", "fail", "")
 	assertDoctorCheck(t, failure, "full_disk_access", "fail", fullDiskAccessRemedy)
+
+	loggedFailureOut := runOK(t, "--db", missingDBPath, "--archive", missingArchivePath, "--json", "doctor")
+	assertDoctorJSONNoLogInternals(t, loggedFailureOut)
+	var loggedFailure doctorOutput
+	if err := json.Unmarshal([]byte(loggedFailureOut), &loggedFailure); err != nil {
+		t.Fatalf("doctor logged failure json = %s err=%v", loggedFailureOut, err)
+	}
+	if loggedFailure.Log == nil || loggedFailure.Log.MostRecentError == nil {
+		t.Fatalf("doctor log tail missing previous user-facing error: %#v", loggedFailure.Log)
+	}
+	if loggedFailure.Log.MostRecentError.Remedy == "" {
+		t.Fatalf("doctor log tail missing remedy: %#v", loggedFailure.Log.MostRecentError)
+	}
 }
 
 func TestRunUsageErrors(t *testing.T) {
@@ -775,4 +791,13 @@ func assertDoctorCheck(t *testing.T, out doctorOutput, id, state, remedy string)
 		return
 	}
 	t.Fatalf("missing doctor check %q in %#v", id, out.Checks)
+}
+
+func assertDoctorJSONNoLogInternals(t *testing.T, out string) {
+	t.Helper()
+	for _, forbidden := range []string{"run_id", "last_event", "run_failed", "event=", "visibility"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("doctor json leaked %q:\n%s", forbidden, out)
+		}
+	}
 }

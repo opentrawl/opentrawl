@@ -185,7 +185,7 @@ func printDoctorText(w io.Writer, value doctorOutput) error {
 			Remedy:  check.Remedy,
 		})
 	}
-	return render.WriteDoctor(w, checks, renderLogTail(value.Log))
+	return render.WriteDoctor(w, checks, value.logTail)
 }
 
 func printChatsText(w io.Writer, value chatListOutput) error {

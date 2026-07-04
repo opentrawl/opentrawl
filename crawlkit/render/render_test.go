@@ -2,6 +2,7 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -64,7 +65,7 @@ func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
 			Level:   cklog.LevelError,
 			Command: "sync",
 			Event:   "permission_denied",
-			Message: `error="calendar permission denied" remedy="grant Calendar access"`,
+			Message: `error="calendar permission denied" remedy="grant Calendar access" visibility=user`,
 		},
 	})
 	if err != nil {
@@ -81,6 +82,66 @@ func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
 	}, "\n")
 	if buf.String() != want {
 		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
+	when := time.Date(2026, 7, 3, 10, 45, 0, 0, time.UTC)
+	out := DoctorLogTailOutput(LogTail{
+		LastRun: &cklog.RunSummary{
+			RunID:      "internal-run-id",
+			Command:    "sync",
+			Outcome:    "error",
+			LastEvent:  "run_failed",
+			FinishedAt: when,
+		},
+		MostRecentError: &cklog.Line{
+			Level:      cklog.LevelError,
+			RunID:      "internal-run-id",
+			Command:    "sync",
+			Event:      "run_failed",
+			Message:    `error="archive.db has not been synced" remedy="run imsgcrawl sync" visibility=user`,
+			Timestamp:  when,
+			Visibility: cklog.VisibilityUserFacing,
+		},
+	})
+	if out == nil || out.LastRun == nil || out.MostRecentError == nil {
+		t.Fatalf("doctor log output missing fields: %#v", out)
+	}
+	data, err := json.Marshal(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		`"what_happened":"sync ended with error"`,
+		`"what_happened":"archive.db has not been synced"`,
+		`"when":"2026-07-03T10:45:00Z"`,
+		`"remedy":"run imsgcrawl sync"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("doctor log json = %s, missing %s", got, want)
+		}
+	}
+	for _, forbidden := range []string{"run_id", "last_event", "run_failed", "event=", "visibility"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("doctor log json leaked %q: %s", forbidden, got)
+		}
+	}
+}
+
+func TestDoctorLogTailOutputFiltersInternalErrors(t *testing.T) {
+	out := DoctorLogTailOutput(LogTail{
+		MostRecentError: &cklog.Line{
+			Level:      cklog.LevelError,
+			Command:    "search",
+			Event:      "usage_error",
+			Message:    `error="search --who requires an identity" remedy="run search with --who NAME" visibility=internal`,
+			Visibility: cklog.VisibilityInternal,
+		},
+	})
+	if out != nil {
+		t.Fatalf("internal doctor log output = %#v, want nil", out)
 	}
 }
 

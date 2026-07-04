@@ -71,6 +71,18 @@ type LogTail struct {
 	Errors          []string
 }
 
+type DoctorLogTail struct {
+	LastRun         *DoctorLogEvent  `json:"last_run,omitempty"`
+	MostRecentError *DoctorLogEvent  `json:"most_recent_error,omitempty"`
+	LogProblems     []DoctorLogEvent `json:"log_problems,omitempty"`
+}
+
+type DoctorLogEvent struct {
+	WhatHappened string `json:"what_happened"`
+	When         string `json:"when,omitempty"`
+	Remedy       string `json:"remedy,omitempty"`
+}
+
 var logFieldPattern = regexp.MustCompile(`\b([a-z][a-z0-9_]*)=("(?:\\.|[^"])*"|[^ ]+)`)
 
 func WriteDoctor(w io.Writer, checks []Check, tail LogTail) error {
@@ -157,10 +169,60 @@ func WriteLogTail(w io.Writer, tail LogTail) error {
 }
 
 func doctorLogTail(tail LogTail) LogTail {
-	if tail.MostRecentError != nil && !cklog.IsWorldStateError(*tail.MostRecentError) {
+	if tail.MostRecentError != nil && !cklog.IsUserFacingError(*tail.MostRecentError) {
 		tail.MostRecentError = nil
 	}
 	return tail
+}
+
+func DoctorLogTailOutput(tail LogTail) *DoctorLogTail {
+	tail = doctorLogTail(tail)
+	out := &DoctorLogTail{}
+	if tail.LastRun != nil {
+		out.LastRun = doctorLastRunOutput(*tail.LastRun)
+	}
+	if tail.MostRecentError != nil {
+		out.MostRecentError = doctorRecentErrorOutput(*tail.MostRecentError)
+	}
+	for _, err := range tail.Errors {
+		if whatHappened := strings.TrimSpace(err); whatHappened != "" {
+			out.LogProblems = append(out.LogProblems, DoctorLogEvent{WhatHappened: whatHappened})
+		}
+	}
+	if out.LastRun == nil && out.MostRecentError == nil && len(out.LogProblems) == 0 {
+		return nil
+	}
+	return out
+}
+
+func doctorLastRunOutput(run cklog.RunSummary) *DoctorLogEvent {
+	whatHappened := strings.TrimSpace(run.Command)
+	if outcome := strings.TrimSpace(run.Outcome); outcome != "" {
+		if whatHappened == "" {
+			whatHappened = "command ended with " + outcome
+		} else {
+			whatHappened += " ended with " + outcome
+		}
+	}
+	if whatHappened == "" {
+		whatHappened = "command ran"
+	}
+	return &DoctorLogEvent{
+		WhatHappened: whatHappened,
+		When:         formatTime(firstTime(run.FinishedAt, run.StartedAt)),
+	}
+}
+
+func doctorRecentErrorOutput(line cklog.Line) *DoctorLogEvent {
+	message, remedy := logErrorMessage(line.Message)
+	if message == "" {
+		message = "error"
+	}
+	return &DoctorLogEvent{
+		WhatHappened: message,
+		When:         formatTime(line.Timestamp),
+		Remedy:       remedy,
+	}
 }
 
 func writeSection(w io.Writer, section Section) error {
@@ -255,9 +317,24 @@ func logErrorMessage(message string) (string, string) {
 	fields := parseLogFields(message)
 	text := firstNonEmpty(fields["error"], fields["message"])
 	if text == "" {
-		text = strings.TrimSpace(message)
+		text = stripLogFields(message, "event", "last_event", "run_id", "visibility")
 	}
 	return text, fields["remedy"]
+}
+
+func stripLogFields(message string, names ...string) string {
+	remove := make(map[string]bool, len(names))
+	for _, name := range names {
+		remove[name] = true
+	}
+	stripped := logFieldPattern.ReplaceAllStringFunc(message, func(match string) string {
+		parts := logFieldPattern.FindStringSubmatch(match)
+		if len(parts) == 3 && remove[parts[1]] {
+			return ""
+		}
+		return match
+	})
+	return strings.Join(strings.Fields(stripped), " ")
 }
 
 func parseLogFields(message string) map[string]string {

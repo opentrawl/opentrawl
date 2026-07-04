@@ -175,8 +175,8 @@ func TestLogContract(t *testing.T) {
 				}
 				after := strings.Join(readLogLines(t, run.Path()), "\n")
 				want := before + "\n" + strings.Join([]string{
-					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe",
-					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe",
+					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe visibility=internal",
+					"2026-07-02 22:41:03 WARN  redact-run sync log_line_refused: event=unsafe visibility=internal",
 				}, "\n")
 				if after != want {
 					t.Fatalf("unsafe lines produced wrong log:\nwant:\n%s\nafter:\n%s", want, after)
@@ -279,10 +279,10 @@ func TestConcurrentRotationKeepsSharedLogWellFormed(t *testing.T) {
 		if !ok {
 			t.Fatalf("line does not match grammar: %q", raw)
 		}
-		if line.Event == "tail_marker" && line.RunID == "run-a" && line.Message == "writer=a" {
+		if line.Event == "tail_marker" && line.RunID == "run-a" && parseFields(line.Message)["writer"] == "a" {
 			hasA = true
 		}
-		if line.Event == "tail_marker" && line.RunID == "run-b" && line.Message == "writer=b" {
+		if line.Event == "tail_marker" && line.RunID == "run-b" && parseFields(line.Message)["writer"] == "b" {
 			hasB = true
 		}
 	}
@@ -437,48 +437,74 @@ func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	if !ok || !strings.Contains(errorLine.Message, `remedy="grant calendar access"`) {
 		t.Fatalf("remedy missing from world-change error: ok=%v line=%+v", ok, errorLine)
 	}
+	if errorLine.Visibility != VisibilityUserFacing {
+		t.Fatalf("world-change error visibility = %q, want %q", errorLine.Visibility, VisibilityUserFacing)
+	}
 }
 
-func TestIsWorldStateError(t *testing.T) {
+func TestErrorWithVisibilityDeclaresUserFacingLine(t *testing.T) {
+	run := newTestRun(t, "explicit-visibility-run", fixedTime())
+	if err := run.ErrorWithVisibility("open_failed", errors.New("ref not found"), VisibilityUserFacing); err != nil {
+		t.Fatal(err)
+	}
+	line, ok, err := NewReaderForTest(t, run).MostRecentError("explicit-visibility-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("most recent error missing")
+	}
+	if line.Visibility != VisibilityUserFacing {
+		t.Fatalf("visibility = %q, want %q", line.Visibility, VisibilityUserFacing)
+	}
+	if !strings.Contains(line.Message, "visibility=user") {
+		t.Fatalf("visibility field missing from message: %q", line.Message)
+	}
+}
+
+func TestExplicitErrorVisibility(t *testing.T) {
 	cases := []struct {
 		name string
 		line Line
 		want bool
 	}{
 		{
-			name: "usage event is caller error even with remedy",
+			name: "user-facing visibility is shown",
+			line: Line{Level: LevelError, Command: "sync", Event: "source_store_failed", Message: `error="cannot read the source database" visibility=user`, Visibility: VisibilityUserFacing},
+			want: true,
+		},
+		{
+			name: "message visibility field is enough after JSON rehydration",
+			line: Line{Level: LevelError, Command: "sync", Event: "source_store_failed", Message: `error="cannot read the source database" visibility=user`},
+			want: true,
+		},
+		{
+			name: "internal visibility is hidden even with remedy",
 			line: Line{Level: LevelError, Command: "search", Event: "usage_error", Message: `error="search --who requires an identity" remedy="run search with --who NAME"`},
 			want: false,
 		},
 		{
-			name: "run failed usage message is caller error",
-			line: Line{Level: LevelError, Command: "search", Event: "run_failed", Message: `error="search --who requires an identity"`},
+			name: "internal visibility is hidden even with operational event name",
+			line: Line{Level: LevelError, Command: "sync", Event: "sync_failed", Message: `error="backup fetch exited early" visibility=internal`, Visibility: VisibilityInternal},
 			want: false,
 		},
 		{
-			name: "world change remedy is actionable state",
-			line: Line{Level: LevelError, Command: "sync", Event: "permission_denied", Message: `error="calendar permission denied" remedy="grant Calendar access"`},
-			want: true,
+			name: "legacy line with no visibility is internal",
+			line: Line{Level: LevelError, Command: "doctor", Event: "permission_denied", Message: `error="calendar permission denied" remedy="grant Calendar access"`},
+			want: false,
 		},
 		{
-			name: "sync event is operational state",
-			line: Line{Level: LevelError, Command: "sync", Event: "sync_failed", Message: `error="backup fetch exited early"`},
-			want: true,
-		},
-		{
-			name: "source event is operational state",
-			line: Line{Level: LevelError, Command: "doctor", Event: "source_store", Message: `error="Messages database is unavailable"`},
-			want: true,
-		},
-		{
-			name: "ordinary command failure is not enough for doctor",
-			line: Line{Level: LevelError, Command: "open", Event: "open_failed", Message: `error="ref not found"`},
+			name: "non-error line is hidden even when user-facing",
+			line: Line{Level: LevelInfo, Command: "sync", Event: "sync_complete", Message: `visibility=user`, Visibility: VisibilityUserFacing},
 			want: false,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if got := IsUserFacingError(tc.line); got != tc.want {
+				t.Fatalf("IsUserFacingError() = %v, want %v", got, tc.want)
+			}
 			if got := IsWorldStateError(tc.line); got != tc.want {
 				t.Fatalf("IsWorldStateError() = %v, want %v", got, tc.want)
 			}

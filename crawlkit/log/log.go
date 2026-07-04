@@ -38,6 +38,13 @@ const (
 	LevelDebug Level = "debug"
 )
 
+type Visibility string
+
+const (
+	VisibilityInternal   Visibility = "internal"
+	VisibilityUserFacing Visibility = "user"
+)
+
 type Options struct {
 	StateRoot    string
 	CrawlerID    string
@@ -95,7 +102,7 @@ func NewRun(opts Options) (*Run, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := run.write(LevelInfo, "start", run.startMessage()); err != nil {
+	if err := run.write(LevelInfo, "start", run.startMessage(), VisibilityInternal); err != nil {
 		return nil, err
 	}
 	return run, nil
@@ -116,36 +123,56 @@ func (r *Run) Path() string {
 }
 
 func (r *Run) Info(event, message string) error {
+	return r.InfoWithVisibility(event, message, VisibilityInternal)
+}
+
+func (r *Run) InfoWithVisibility(event, message string, visibility Visibility) error {
 	if r == nil {
 		return nil
 	}
 	if err := guardPublicEvent(event); err != nil {
 		return err
 	}
-	return r.write(LevelInfo, event, message)
+	return r.write(LevelInfo, event, message, visibility)
 }
 
 func (r *Run) Warn(event, message string) error {
+	return r.WarnWithVisibility(event, message, VisibilityInternal)
+}
+
+func (r *Run) WarnWithVisibility(event, message string, visibility Visibility) error {
 	if r == nil {
 		return nil
 	}
 	if err := guardPublicEvent(event); err != nil {
 		return err
 	}
-	return r.write(LevelWarn, event, message)
+	return r.write(LevelWarn, event, message, visibility)
 }
 
 func (r *Run) Debug(event, message string) error {
+	return r.DebugWithVisibility(event, message, VisibilityInternal)
+}
+
+func (r *Run) DebugWithVisibility(event, message string, visibility Visibility) error {
 	if r == nil || !r.debug {
 		return nil
 	}
 	if err := guardPublicEvent(event); err != nil {
 		return err
 	}
-	return r.write(LevelDebug, event, message)
+	return r.write(LevelDebug, event, message, visibility)
 }
 
 func (r *Run) Error(event string, err error) error {
+	return r.errorWithVisibility(event, err, VisibilityInternal, false)
+}
+
+func (r *Run) ErrorWithVisibility(event string, err error, visibility Visibility) error {
+	return r.errorWithVisibility(event, err, visibility, true)
+}
+
+func (r *Run) errorWithVisibility(event string, err error, visibility Visibility, explicitVisibility bool) error {
 	if r == nil {
 		return nil
 	}
@@ -155,11 +182,22 @@ func (r *Run) Error(event string, err error) error {
 	if err == nil {
 		err = errors.New("unknown error")
 	}
-	message := "error=" + quoteValue(err.Error())
-	if remedy, ok := worldRemedy(err); ok && remedy != "" {
-		message += " remedy=" + quoteValue(remedy)
+	if _, ok := worldDetails(err); ok && !explicitVisibility {
+		visibility = VisibilityUserFacing
 	}
-	return r.write(LevelError, event, message)
+	message := "error=" + quoteValue(err.Error())
+	if details, ok := worldDetails(err); ok {
+		if details.remedy != "" {
+			message += " remedy=" + quoteValue(details.remedy)
+		}
+		if details.message != "" {
+			message = "error=" + quoteValue(details.message)
+			if details.remedy != "" {
+				message += " remedy=" + quoteValue(details.remedy)
+			}
+		}
+	}
+	return r.write(LevelError, event, message, visibility)
 }
 
 func (r *Run) Finish(err error) error {
@@ -175,12 +213,12 @@ func (r *Run) Finish(err error) error {
 	r.mu.Unlock()
 
 	if err == nil {
-		return r.write(LevelInfo, "finish", "outcome=success")
+		return r.write(LevelInfo, "finish", "outcome=success", VisibilityInternal)
 	}
 	if logErr := r.Error("run_failed", err); logErr != nil {
 		return logErr
 	}
-	return r.write(LevelInfo, "finish", "outcome=error")
+	return r.write(LevelInfo, "finish", "outcome=error", VisibilityInternal)
 }
 
 func guardPublicEvent(event string) error {
@@ -201,11 +239,11 @@ func (r *Run) startMessage() string {
 	return fmt.Sprintf("version=%s commit=%s platform=%s", quoteValue(r.version), quoteValue(r.commit), quoteValue(r.platform))
 }
 
-func (r *Run) write(level Level, event, message string) error {
+func (r *Run) write(level Level, event, message string, visibility Visibility) error {
 	if !validEvent(event) {
 		return fmt.Errorf("invalid log event %q", event)
 	}
-	line := r.formatLine(r.now(), level, r.runID, r.command, event, message)
+	line := r.formatLine(r.now(), level, r.runID, r.command, event, messageWithVisibility(message, visibility))
 	if err := guardLine(line); err != nil {
 		if errors.Is(err, ErrUnsafeLogLine) {
 			if logErr := r.writeRefusedLine(event); logErr != nil {
@@ -218,7 +256,8 @@ func (r *Run) write(level Level, event, message string) error {
 }
 
 func (r *Run) writeRefusedLine(event string) error {
-	line := r.formatLine(r.now(), LevelWarn, r.runID, r.command, "log_line_refused", "event="+quoteValue(event))
+	message := messageWithVisibility("event="+quoteValue(event), VisibilityInternal)
+	line := r.formatLine(r.now(), LevelWarn, r.runID, r.command, "log_line_refused", message)
 	return r.appendLogLine(line)
 }
 
@@ -395,16 +434,45 @@ func singleLine(value string) string {
 	return strings.Join(fields, " ")
 }
 
-func worldRemedy(err error) (string, bool) {
+type worldErrorDetails struct {
+	message string
+	remedy  string
+}
+
+func worldDetails(err error) (worldErrorDetails, bool) {
 	var world WorldMustChange
 	if errors.As(err, &world) {
-		return strings.TrimSpace(world.Remedy), true
+		return worldErrorDetails{
+			message: strings.TrimSpace(world.Message),
+			remedy:  strings.TrimSpace(world.Remedy),
+		}, true
 	}
 	var worldPtr *WorldMustChange
 	if errors.As(err, &worldPtr) && worldPtr != nil {
-		return strings.TrimSpace(worldPtr.Remedy), true
+		return worldErrorDetails{
+			message: strings.TrimSpace(worldPtr.Message),
+			remedy:  strings.TrimSpace(worldPtr.Remedy),
+		}, true
 	}
-	return "", false
+	return worldErrorDetails{}, false
+}
+
+func messageWithVisibility(message string, visibility Visibility) string {
+	message = singleLine(message)
+	field := "visibility=" + string(normalizeVisibility(visibility))
+	if message == "" {
+		return field
+	}
+	return message + " " + field
+}
+
+func normalizeVisibility(visibility Visibility) Visibility {
+	switch visibility {
+	case VisibilityUserFacing:
+		return VisibilityUserFacing
+	default:
+		return VisibilityInternal
+	}
 }
 
 type ProgressOptions struct {

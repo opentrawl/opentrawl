@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
@@ -14,8 +15,9 @@ import (
 const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
 
 type doctorOutput struct {
-	Checks []doctorCheck  `json:"checks"`
-	Log    *logTailOutput `json:"log,omitempty"`
+	Checks  []doctorCheck         `json:"checks"`
+	Log     *render.DoctorLogTail `json:"log,omitempty"`
+	logTail render.LogTail
 }
 
 type doctorCheck struct {
@@ -37,11 +39,13 @@ func (r *runtime) runDoctor(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("doctor takes no arguments"))
 	}
-	return r.print(doctorOutput{Checks: []doctorCheck{
+	checks := []doctorCheck{
 		r.checkSourceStore(),
 		r.checkArchive(),
 		r.checkFullDiskAccess(),
-	}, Log: r.readLogTail()})
+	}
+	rawLog := renderLogTail(r.readLogTail())
+	return r.print(doctorOutput{Checks: checks, Log: render.DoctorLogTailOutput(rawLog), logTail: rawLog})
 }
 
 func (r *runtime) checkSourceStore() doctorCheck {
