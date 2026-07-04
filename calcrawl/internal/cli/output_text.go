@@ -89,16 +89,12 @@ func renderDoctorChecks(checks []doctorCheck) []ckrender.Check {
 }
 
 func printSearchText(w io.Writer, value searchOutput) error {
-	label := "Search"
-	if value.Query != "" {
-		label = fmt.Sprintf("Search %q", value.Query)
-	}
 	if value.WhoResolved != nil && value.WhoQuery != "" {
 		if _, err := fmt.Fprintf(w, "%s → %s\n", value.WhoQuery, value.WhoResolved.Who); err != nil {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(w, "%s: showing %d of %d.\n", label, len(value.Results), value.TotalMatches); err != nil {
+	if err := ckrender.WriteSearchSummary(w, value.Query, len(value.Results), value.TotalMatches); err != nil {
 		return err
 	}
 	if value.Truncated {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -152,16 +153,37 @@ func (a *app) printOpen(result openEnvelope) error {
 	if _, err := fmt.Fprintf(a.stdout, "chat: %s\nref: %s\n\n", result.Chat, result.Ref); err != nil {
 		return err
 	}
+	width := render.OutputWidth(a.stdout)
+	rows := make([]render.TranscriptRow, 0, len(result.Context))
 	for _, item := range result.Context {
-		marker := " "
-		if item.Current {
-			marker = ">"
-		}
-		if _, err := fmt.Fprintf(a.stdout, "%s [%s] %s: %s\n", marker, item.Time, item.Who, item.Text); err != nil {
-			return err
-		}
+		prefix := openTranscriptPrefix(width, item)
+		rows = append(rows, render.TranscriptRow{
+			Time:   parseFormattedTime(item.Time),
+			Prefix: prefix,
+			Text:   item.Text,
+		})
 	}
-	return nil
+	return render.WriteTranscript(a.stdout, rows)
+}
+
+func openTranscriptPrefix(width int, item openMessage) string {
+	marker := " "
+	if item.Current {
+		marker = ">"
+	}
+	when := item.Time
+	if parsed := parseFormattedTime(item.Time); !parsed.IsZero() {
+		when = parsed.Format("2006-01-02 15:04")
+	}
+	fixed := fmt.Sprintf("%s  %s  ", marker, when)
+	whoWidth := width - render.DisplayWidth(fixed) - render.DisplayWidth(": ") - 1
+	if whoWidth < 8 {
+		whoWidth = 8
+	}
+	if whoWidth > 32 {
+		whoWidth = 32
+	}
+	return fixed + render.Truncate(item.Who, whoWidth) + ": "
 }
 
 func newOpenEnvelope(target store.Message, context []store.Message) openEnvelope {

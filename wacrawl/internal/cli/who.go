@@ -6,10 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -62,7 +62,7 @@ func (a *app) printWho(result whoEnvelope) error {
 		_, err := fmt.Fprintf(a.stdout, "No people matched %q.\n", result.Query)
 		return err
 	}
-	return writeWhoCandidateTable(a.stdout, result.Candidates, terminalColumns())
+	return writeWhoCandidateTable(a.stdout, result.Candidates, render.OutputWidth(a.stdout))
 }
 
 func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width int) error {
@@ -93,7 +93,7 @@ func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width 
 		return err
 	}
 	for _, candidate := range candidates {
-		identifiers := wrapTableCell(strings.Join(candidate.Identifiers, ", "), identifiersWidth)
+		identifiers := whoIdentifierLines(candidate.Identifiers, identifiersWidth)
 		if len(identifiers) == 0 {
 			identifiers = []string{"-"}
 		}
@@ -106,7 +106,7 @@ func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width 
 				lastSeen = formatTime(candidate.LastSeen)
 				messages = strconv.Itoa(candidate.Messages)
 			}
-			if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, fitTableCell(who, whoWidth), lastWidth, fitTableCell(lastSeen, lastWidth), messagesWidth, messages, identifierLine); err != nil {
+			if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, render.Truncate(who, whoWidth), lastWidth, render.Truncate(lastSeen, lastWidth), messagesWidth, messages, identifierLine); err != nil {
 				return err
 			}
 		}
@@ -114,78 +114,31 @@ func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width 
 	return nil
 }
 
-func wrapTableCell(value string, width int) []string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return nil
-	}
+func whoIdentifierLines(identifiers []string, width int) []string {
 	var out []string
 	line := ""
-	for _, word := range strings.Fields(value) {
-		word = strings.TrimSuffix(word, ",") + ","
-		if line == "" {
-			out = appendWrappedWord(out, &line, word, width)
+	for _, identifier := range identifiers {
+		identifier = strings.TrimSpace(identifier)
+		if identifier == "" {
 			continue
 		}
-		if runeLen(line)+1+runeLen(word) > width {
-			out = append(out, strings.TrimSuffix(line, ","))
-			line = ""
+		identifier = render.Truncate(identifier, width)
+		if line == "" {
+			line = identifier
+			continue
 		}
-		out = appendWrappedWord(out, &line, word, width)
+		next := line + ", " + identifier
+		if render.DisplayWidth(next) > width {
+			out = append(out, line)
+			line = identifier
+			continue
+		}
+		line = next
 	}
 	if line != "" {
-		out = append(out, strings.TrimSuffix(line, ","))
+		out = append(out, line)
 	}
 	return out
-}
-
-func appendWrappedWord(out []string, line *string, word string, width int) []string {
-	for runeLen(word) > width {
-		if *line != "" {
-			out = append(out, strings.TrimSuffix(*line, ","))
-			*line = ""
-		}
-		chunk, rest := splitRunes(word, width)
-		out = append(out, strings.TrimSuffix(chunk, ","))
-		word = rest
-	}
-	if *line == "" {
-		*line = word
-	} else {
-		*line += " " + word
-	}
-	return out
-}
-
-func splitRunes(value string, width int) (string, string) {
-	runes := []rune(value)
-	if width >= len(runes) {
-		return value, ""
-	}
-	return string(runes[:width]), string(runes[width:])
-}
-
-func fitTableCell(value string, width int) string {
-	value = strings.TrimSpace(value)
-	if runeLen(value) <= width {
-		return value
-	}
-	if width <= 1 {
-		return string([]rune(value)[:width])
-	}
-	runes := []rune(value)
-	return string(runes[:width-1]) + "…"
-}
-
-func terminalColumns() int {
-	if value, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS"))); err == nil && value > 0 {
-		return value
-	}
-	return 100
-}
-
-func runeLen(value string) int {
-	return len([]rune(value))
 }
 
 func clampInt(value, minValue, maxValue int) int {

@@ -9,14 +9,18 @@ import (
 
 // TranscriptRow is one pre-rendered line in an ordered transcript.
 type TranscriptRow struct {
-	Time time.Time
-	Line string
+	Time               time.Time
+	Line               string
+	Prefix             string
+	Text               string
+	ContinuationIndent string
 }
 
 // WriteTranscript writes ordered transcript rows with a day separator whenever
 // the row date changes.
 func WriteTranscript(w io.Writer, rows []TranscriptRow) error {
 	var currentDay time.Time
+	width := OutputWidth(w)
 	for _, row := range rows {
 		day := transcriptDay(row.Time)
 		if !day.IsZero() && (currentDay.IsZero() || !sameTranscriptDay(currentDay, day)) {
@@ -25,15 +29,28 @@ func WriteTranscript(w io.Writer, rows []TranscriptRow) error {
 			}
 			currentDay = day
 		}
+		if row.Prefix != "" || row.Text != "" {
+			for _, line := range WrapWithIndent(row.Prefix, row.Text, width, row.ContinuationIndent) {
+				if _, err := io.WriteString(w, line); err != nil {
+					return err
+				}
+				if _, err := io.WriteString(w, "\n"); err != nil {
+					return err
+				}
+			}
+			continue
+		}
 		line := strings.TrimRight(row.Line, "\n")
 		if line == "" {
 			continue
 		}
-		if _, err := io.WriteString(w, line); err != nil {
-			return err
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
+		for _, wrapped := range Wrap(line, width) {
+			if _, err := io.WriteString(w, wrapped); err != nil {
+				return err
+			}
+			if _, err := io.WriteString(w, "\n"); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

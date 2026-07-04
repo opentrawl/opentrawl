@@ -5,15 +5,13 @@ import (
 	"io"
 	"strconv"
 	"strings"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
 func printSearchText(w io.Writer, value searchListOutput) error {
 	returned := len(value.Results)
-	label := fmt.Sprintf("Search %q", value.Query)
-	if strings.TrimSpace(value.Query) == "" {
-		label = "Search filters"
-	}
-	if _, err := fmt.Fprintf(w, "%s: showing %d of %d.\n", label, returned, value.TotalMatches); err != nil {
+	if err := render.WriteSearchSummary(w, value.Query, returned, value.TotalMatches); err != nil {
 		return err
 	}
 	if value.WhoResolved != nil {
@@ -56,7 +54,7 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 	if _, err := io.WriteString(w, "Open: imsgcrawl open REF\nUse --json when you need refs for follow-up commands.\n\n"); err != nil {
 		return err
 	}
-	width := textOutputWidth(w)
+	width := normalizeTextTableWidth(render.OutputWidth(w))
 	columns := searchTextColumns(width)
 	rows := tableRows(len(value.TextItems))
 	for _, item := range value.TextItems {

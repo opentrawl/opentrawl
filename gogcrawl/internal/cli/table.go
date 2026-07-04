@@ -3,18 +3,15 @@ package cli
 import (
 	"fmt"
 	"io"
-	"os"
-	"strconv"
 	"strings"
-	"unicode"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
 const (
-	defaultTableWidth = 100
-	minTableWidth     = 72
-	tableGap          = "  "
+	minTableWidth = 72
+	tableGap      = "  "
 )
 
 type tableColumn struct {
@@ -24,7 +21,7 @@ type tableColumn struct {
 }
 
 func renderWhoTable(w io.Writer, candidates []archive.WhoCandidate) error {
-	width := tableOutputWidth()
+	width := normalizeTableWidth(render.OutputWidth(w))
 	columns := whoTableColumns(width, candidates)
 	rows := make([][]string, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -43,7 +40,7 @@ func whoTableColumns(width int, candidates []archive.WhoCandidate) []tableColumn
 	messagesWidth := 8
 	whoWidth := 12
 	for _, candidate := range candidates {
-		if length := textWidth(candidate.Who) + 2; length > whoWidth {
+		if length := render.DisplayWidth(candidate.Who) + 2; length > whoWidth {
 			whoWidth = length
 		}
 	}
@@ -67,15 +64,7 @@ func whoTableColumns(width int, candidates []archive.WhoCandidate) []tableColumn
 	}
 }
 
-func tableOutputWidth() int {
-	raw := strings.TrimSpace(os.Getenv("COLUMNS"))
-	if raw == "" {
-		return defaultTableWidth
-	}
-	width, err := strconv.Atoi(raw)
-	if err != nil || width <= 0 {
-		return defaultTableWidth
-	}
+func normalizeTableWidth(width int) int {
 	if width < minTableWidth {
 		return minTableWidth
 	}
@@ -107,9 +96,20 @@ func renderTableRow(w io.Writer, columns []tableColumn, row []string) error {
 			value = row[i]
 		}
 		if column.wrap {
-			cells[i] = wrapTableCell(value, column.width)
+			value = normalizeTableCell(value)
+			if value == "" {
+				cells[i] = []string{"-"}
+			} else {
+				cells[i] = render.Wrap(value, column.width)
+			}
 		} else {
-			cells[i] = []string{truncateTableCell(value, column.width)}
+			value = compactTableCell(value)
+			if value == "" {
+				value = "-"
+			} else {
+				value = render.Truncate(value, column.width)
+			}
+			cells[i] = []string{value}
 		}
 		if len(cells[i]) > height {
 			height = len(cells[i])
@@ -141,85 +141,11 @@ func renderTableRow(w io.Writer, columns []tableColumn, row []string) error {
 	return nil
 }
 
-func wrapTableCell(value string, width int) []string {
-	value = normalizeTableCell(value)
-	if value == "" {
-		return []string{"-"}
-	}
-	var out []string
-	for _, line := range strings.Split(value, "\n") {
-		out = append(out, wrapTableLine(line, width)...)
-	}
-	return out
-}
-
-func wrapTableLine(line string, width int) []string {
-	if line == "" || width <= 0 {
-		return []string{line}
-	}
-	var out []string
-	for textWidth(line) > width {
-		partEnd, nextStart := splitTableLine(line, width)
-		part := strings.TrimRightFunc(line[:partEnd], unicode.IsSpace)
-		if part == "" {
-			part = line[:nextStart]
-		}
-		out = append(out, part)
-		line = strings.TrimLeftFunc(line[nextStart:], unicode.IsSpace)
-		if line == "" {
-			return out
-		}
-	}
-	return append(out, line)
-}
-
-func splitTableLine(line string, width int) (partEnd int, nextStart int) {
-	cellWidth := 0
-	lastSpaceStart := -1
-	lastSpaceEnd := -1
-	for index, r := range line {
-		if unicode.IsSpace(r) {
-			lastSpaceStart = index
-			lastSpaceEnd = index + len(string(r))
-		}
-		if cellWidth+1 > width {
-			if lastSpaceStart > 0 {
-				return lastSpaceStart, lastSpaceEnd
-			}
-			if index == 0 {
-				end := index + len(string(r))
-				return end, end
-			}
-			return index, index
-		}
-		cellWidth++
-	}
-	return len(line), len(line)
-}
-
-func truncateTableCell(value string, width int) string {
-	value = compactTableCell(value)
-	if value == "" {
-		return "-"
-	}
-	if width <= 0 || textWidth(value) <= width {
-		return value
-	}
-	if width <= 3 {
-		return strings.Repeat(".", width)
-	}
-	runes := []rune(value)
-	if len(runes) > width-3 {
-		runes = runes[:width-3]
-	}
-	return strings.TrimRightFunc(string(runes), unicode.IsSpace) + "..."
-}
-
 func padTableCell(value string, width int) string {
-	if textWidth(value) >= width {
+	if render.DisplayWidth(value) >= width {
 		return value
 	}
-	return value + strings.Repeat(" ", width-textWidth(value))
+	return value + strings.Repeat(" ", width-render.DisplayWidth(value))
 }
 
 func normalizeTableCell(value string) string {
@@ -230,8 +156,4 @@ func normalizeTableCell(value string) string {
 
 func compactTableCell(value string) string {
 	return strings.Join(strings.Fields(normalizeTableCell(value)), " ")
-}
-
-func textWidth(value string) int {
-	return len([]rune(value))
 }

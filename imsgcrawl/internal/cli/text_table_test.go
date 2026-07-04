@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
-func TestTextOutputWidthUsesWideColumnsEnv(t *testing.T) {
+func TestTextTableWidthUsesSharedOutputWidth(t *testing.T) {
 	t.Setenv("COLUMNS", "180")
 	var out bytes.Buffer
-	if got := textOutputWidth(&out); got != 180 {
-		t.Fatalf("text output width = %d, want 180", got)
+	if got := normalizeTextTableWidth(render.OutputWidth(&out)); got != 180 {
+		t.Fatalf("text table width = %d, want 180", got)
 	}
 }
 

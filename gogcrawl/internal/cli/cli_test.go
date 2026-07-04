@@ -18,6 +18,7 @@ import (
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	_ "modernc.org/sqlite"
 )
@@ -123,6 +124,32 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--archive", dbPath})))
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"status", "--archive", dbPath})))
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"doctor", "--archive", dbPath})))
+}
+
+func TestSearchTextWrapsLongQueryAndSnippetRows(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	value := archive.SearchResult{
+		Query:        strings.Repeat("q", 200),
+		TotalMatches: 1,
+		Results: []archive.SearchHit{{
+			Time:     "2012-12-30T22:08:54+01:00",
+			Who:      "Twitter",
+			ShortRef: "abc12",
+			Snippet:  "Do you know Томояяош's cнıʟD, RiFF RaFF and PBS on Twitter? " + strings.Repeat("synthetic old body ", 8),
+		}},
+	}
+	var buf bytes.Buffer
+	if err := printSearchText(&buf, value); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	assertLinesWithinDisplayWidth(t, got, 80)
+	if !strings.Contains(got, "…") {
+		t.Fatalf("long query was not display-truncated:\n%s", got)
+	}
+	if !strings.Contains(got, "\n  Do you know") {
+		t.Fatalf("snippet did not move to a wrapped body line:\n%s", got)
+	}
 }
 
 func TestStatusMissingEmptyAndCorrupt(t *testing.T) {
@@ -645,6 +672,15 @@ func requireNoQuotedPrintableText(t *testing.T, value string) {
 	for _, raw := range []string{"=E2=80=8B", "=C3=BC", "=3D", "web-vie="} {
 		if strings.Contains(value, raw) {
 			t.Fatalf("output contains quoted-printable text %q:\n%s", raw, value)
+		}
+	}
+}
+
+func assertLinesWithinDisplayWidth(t *testing.T, got string, width int) {
+	t.Helper()
+	for lineNo, line := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
+		if lineWidth := render.DisplayWidth(line); lineWidth > width {
+			t.Fatalf("line %d width = %d, want <= %d:\n%s", lineNo+1, lineWidth, width, got)
 		}
 	}
 }

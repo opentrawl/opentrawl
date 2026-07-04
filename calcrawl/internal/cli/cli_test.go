@@ -14,6 +14,7 @@ import (
 
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/cli"
 )
@@ -229,6 +230,18 @@ func TestCLIOutputConformance(t *testing.T) {
 	conformance.AssertSearchEnvelope(t, []byte(searchJSON))
 	whoText := runOK(t, "who", "alice")
 	conformance.AssertHumanOutput(t, whoText)
+}
+
+func TestSearchTruncatesLongQueryHeader(t *testing.T) {
+	setupCalendarFixture(t)
+	runSync(t)
+	t.Setenv("COLUMNS", "80")
+	query := strings.Repeat("q", 200)
+	stdout := runOK(t, "search", query, "--limit", "5")
+	assertLinesWithinDisplayWidth(t, stdout, 80)
+	if !strings.Contains(stdout, "…") {
+		t.Fatalf("long query was not display-truncated:\n%s", stdout)
+	}
 }
 
 func TestWhoResolverDedupesAndMatchesGenerously(t *testing.T) {
@@ -689,6 +702,15 @@ func lastTableField(value string) string {
 		return fields[len(fields)-1]
 	}
 	return ""
+}
+
+func assertLinesWithinDisplayWidth(t *testing.T, got string, width int) {
+	t.Helper()
+	for lineNo, line := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
+		if lineWidth := render.DisplayWidth(line); lineWidth > width {
+			t.Fatalf("line %d width = %d, want <= %d:\n%s", lineNo+1, lineWidth, width, got)
+		}
+	}
 }
 
 func setupTestHome(t *testing.T) string {

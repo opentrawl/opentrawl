@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/openclaw/crawlkit/conformance"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -137,6 +138,35 @@ func TestOpenTextShowsTranscriptDateContext(t *testing.T) {
 	}
 }
 
+func TestOpenTextWrapsSelectedMessageSummary(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	longText := "yeah lets see. maybe this all explodes in 3 months anyway, so who knows. " +
+		"but met lots of people, got an interesting story, and this synthetic sentence keeps going"
+	value := openOutput{
+		Ref:  "imsgcrawl:msg/2",
+		Chat: openChatOutput{Name: "Example Chat"},
+		Message: openMessageOutput{
+			Ref:    "imsgcrawl:msg/2",
+			Time:   "2025-06-11T09:00:00Z",
+			Who:    "me",
+			Text:   longText,
+			Target: true,
+		},
+		Context: []openMessageOutput{
+			{Ref: "imsgcrawl:msg/2", Time: "2025-06-11T09:00:00Z", Who: "me", Text: longText, Target: true},
+		},
+	}
+	var buf bytes.Buffer
+	if err := printOpenText(&buf, value); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	assertLinesWithinDisplayWidth(t, got, 80)
+	if !strings.Contains(got, "\n      but met lots") {
+		t.Fatalf("selected Text field did not wrap with label indentation:\n%s", got)
+	}
+}
+
 func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "chat.db")
@@ -215,5 +245,14 @@ func assertNotSecretJSON(t *testing.T, got string) {
 	t.Helper()
 	if strings.Contains(got, `"items"`) || strings.Contains(got, `"schema_version"`) {
 		t.Fatalf("text output looks like JSON:\n%s", got)
+	}
+}
+
+func assertLinesWithinDisplayWidth(t *testing.T, got string, width int) {
+	t.Helper()
+	for lineNo, line := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
+		if lineWidth := render.DisplayWidth(line); lineWidth > width {
+			t.Fatalf("line %d width = %d, want <= %d:\n%s", lineNo+1, lineWidth, width, got)
+		}
 	}
 }

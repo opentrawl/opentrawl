@@ -90,7 +90,7 @@ func renderStatus(value statusEnvelope) render.Status {
 }
 
 func printSearchText(w io.Writer, value archive.SearchResult) error {
-	if _, err := fmt.Fprintf(w, "Search %q: showing %d of %d.\n", value.Query, len(value.Results), value.TotalMatches); err != nil {
+	if err := render.WriteSearchSummary(w, value.Query, len(value.Results), value.TotalMatches); err != nil {
 		return err
 	}
 	if value.WhoResolved != nil {
@@ -108,11 +108,37 @@ func printSearchText(w io.Writer, value archive.SearchResult) error {
 		}
 	}
 	for _, hit := range value.Results {
-		ref := hit.Ref
-		if hit.ShortRef != "" {
-			ref = hit.ShortRef
+		if err := printSearchHitText(w, hit); err != nil {
+			return err
 		}
-		if _, err := fmt.Fprintf(w, "%s  %s  %s  %s\n", hit.Time, hit.Who, ref, hit.Snippet); err != nil {
+	}
+	return nil
+}
+
+func printSearchHitText(w io.Writer, hit archive.SearchHit) error {
+	width := render.OutputWidth(w)
+	ref := hit.Ref
+	if hit.ShortRef != "" {
+		ref = hit.ShortRef
+	}
+	whoWidth := width - render.DisplayWidth(hit.Time) - render.DisplayWidth(ref) - 4
+	if whoWidth < 8 {
+		whoWidth = 8
+	}
+	if whoWidth > 36 {
+		whoWidth = 36
+	}
+	line := fmt.Sprintf("%s  %s  %s", hit.Time, render.Truncate(hit.Who, whoWidth), ref)
+	for _, line := range render.WrapWithIndent("", line, width, "  ") {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	for _, line := range render.WrapWithIndent("  ", hit.Snippet, width, "  ") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -23,7 +24,7 @@ func printWhoText(w io.Writer, value archive.WhoResolution) error {
 }
 
 func renderWhoCandidatesTable(w io.Writer, candidates []archive.WhoCandidate) error {
-	width := textOutputWidth(w)
+	width := normalizeTextTableWidth(render.OutputWidth(w))
 	columns := whoTextColumns(width)
 	rows := make([][]string, 0, len(candidates))
 	for _, candidate := range candidates {

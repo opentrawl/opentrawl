@@ -200,7 +200,7 @@ func printChatsText(w io.Writer, value chatListOutput) error {
 	if _, err := io.WriteString(w, "Open: imsgcrawl messages --chat CHAT_ID\n\n"); err != nil {
 		return err
 	}
-	width := textOutputWidth(w)
+	width := normalizeTextTableWidth(render.OutputWidth(w))
 	columns := chatTextColumns(width)
 	rows := tableRows(len(value.Items))
 	for _, item := range value.Items {
@@ -231,7 +231,7 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	if _, err := io.WriteString(w, "Search: imsgcrawl search QUERY\n\n"); err != nil {
 		return err
 	}
-	width := textOutputWidth(w)
+	width := normalizeTextTableWidth(render.OutputWidth(w))
 	columns := messageTextColumns(width)
 	rows := tableRows(len(value.Items))
 	for _, item := range value.Items {
@@ -246,12 +246,14 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 
 func printOpenText(w io.Writer, value openOutput) error {
 	span := openDateSpan(value.Context)
-	title := fmt.Sprintf("Transcript: %s", value.Chat.Name)
+	title := value.Chat.Name
 	if span != "" {
 		title += ", " + span
 	}
-	if _, err := fmt.Fprintf(w, "%s\n", title); err != nil {
-		return err
+	for _, line := range render.WrapWithIndent("Transcript: ", title, render.OutputWidth(w), "") {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintf(w, "Ref: %s\n", value.Ref); err != nil {
 		return err
@@ -261,13 +263,19 @@ func printOpenText(w io.Writer, value openOutput) error {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\nText: %s\n\n", formatArchiveTime(value.Message.Time), value.Message.Who, displayMessageText(value.Message.Text, value.Message.HasAttachments)); err != nil {
+	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\n", formatArchiveTime(value.Message.Time), value.Message.Who); err != nil {
+		return err
+	}
+	if err := render.WriteWrappedField(w, "Text", displayMessageText(value.Message.Text, value.Message.HasAttachments)); err != nil {
+		return err
+	}
+	if _, err := io.WriteString(w, "\n"); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Context: %d messages around this one.\n\n", len(value.Context)); err != nil {
 		return err
 	}
-	width := textOutputWidth(w)
+	width := normalizeTextTableWidth(render.OutputWidth(w))
 	columns := openTextColumns(width)
 	return printOpenTranscript(w, columns, value.Context)
 }

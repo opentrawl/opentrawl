@@ -21,6 +21,7 @@ import (
 	"github.com/openclaw/crawlkit/conformance"
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -75,6 +76,62 @@ func TestRunEndToEnd(t *testing.T) {
 				t.Fatalf("stdout missing %q:\n%s", tc.want, stdout.String())
 			}
 		})
+	}
+}
+
+func TestOpenTextWrapsTranscriptRows(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	longText := "Signal is nearly the same as WhatsApp, except that this synthetic text is long enough " +
+		"to prove continuation wrapping under the message text instead of overrunning the terminal."
+	var stdout bytes.Buffer
+	a := &app{stdout: &stdout}
+	err := a.printOpen(openEnvelope{
+		Ref:  "wacrawl:msg/synthetic",
+		Chat: "Example group",
+		Context: []openMessage{
+			{
+				Time:    "2025-08-09T10:58:38+02:00",
+				Who:     "15550002281@s.whatsapp.net",
+				Text:    longText,
+				Current: true,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := stdout.String()
+	assertLinesWithinDisplayWidth(t, got, 80)
+	if !strings.Contains(got, "— Sat 9 Aug 2025 —") {
+		t.Fatalf("transcript did not include a day separator:\n%s", got)
+	}
+	if !hasContinuationLine(got, "continuation wrapping") {
+		t.Fatalf("transcript did not wrap text onto an indented continuation line:\n%s", got)
+	}
+}
+
+func TestSearchTextWrapsSnippetRows(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	var stdout bytes.Buffer
+	a := &app{stdout: &stdout}
+	err := a.printSearch(searchEnvelope{
+		Results: []searchResult{{
+			Time:    "2026-07-04T10:00:00+02:00",
+			Who:     "Alice Example",
+			Where:   "Example Group",
+			Snippet: "Hey Tibo, hope your launch went well and the systems recovered. " + strings.Repeat("synthetic launch text ", 5),
+			Ref:     "wacrawl:msg/synthetic",
+			Alias:   "abc12",
+		}},
+		TotalMatches: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := stdout.String()
+	assertLinesWithinDisplayWidth(t, got, 80)
+	if !hasContinuationLine(got, "synthetic launch text") {
+		t.Fatalf("search snippet did not wrap onto an indented continuation line:\n%s", got)
 	}
 }
 
@@ -320,6 +377,24 @@ func assertNoRawFieldValue(t *testing.T, value any, raw map[string]struct{}) {
 			assertNoRawFieldValue(t, nested, raw)
 		}
 	}
+}
+
+func assertLinesWithinDisplayWidth(t *testing.T, got string, width int) {
+	t.Helper()
+	for lineNo, line := range strings.Split(strings.TrimRight(got, "\n"), "\n") {
+		if lineWidth := render.DisplayWidth(line); lineWidth > width {
+			t.Fatalf("line %d width = %d, want <= %d:\n%s", lineNo+1, lineWidth, width, got)
+		}
+	}
+}
+
+func hasContinuationLine(got string, needle string) bool {
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, needle) && strings.HasPrefix(line, " ") && !strings.Contains(line, "2025-") {
+			return true
+		}
+	}
+	return false
 }
 
 func TestMetadataAdvertisesContactExport(t *testing.T) {

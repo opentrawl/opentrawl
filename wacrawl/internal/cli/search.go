@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -210,15 +211,10 @@ func (a *app) printSearch(result searchEnvelope) error {
 			return err
 		}
 	}
+	width := render.OutputWidth(a.stdout)
 	for _, item := range result.Results {
-		if item.Alias != "" {
-			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\nfull ref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Alias, item.Ref); err != nil {
-				return err
-			}
-		} else {
-			if _, err := fmt.Fprintf(a.stdout, "%s  %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
-				return err
-			}
+		if err := a.printSearchResult(width, item); err != nil {
+			return err
 		}
 	}
 	if result.Truncated {
@@ -226,6 +222,31 @@ func (a *app) printSearch(result searchEnvelope) error {
 		return err
 	}
 	_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches\n", len(result.Results), result.TotalMatches)
+	return err
+}
+
+func (a *app) printSearchResult(width int, item searchResult) error {
+	meta := strings.TrimSpace(fmt.Sprintf("%s  %s in %s", item.Time, item.Who, item.Where))
+	for _, line := range render.WrapWithIndent("", meta, width, "  ") {
+		if _, err := fmt.Fprintln(a.stdout, line); err != nil {
+			return err
+		}
+	}
+	for _, line := range render.WrapWithIndent("  ", item.Snippet, width, "  ") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if _, err := fmt.Fprintln(a.stdout, line); err != nil {
+			return err
+		}
+	}
+	if item.Alias != "" {
+		if _, err := fmt.Fprintf(a.stdout, "ref: %s\nfull ref: %s\n\n", item.Alias, item.Ref); err != nil {
+			return err
+		}
+		return nil
+	}
+	_, err := fmt.Fprintf(a.stdout, "ref: %s\n\n", item.Ref)
 	return err
 }
 
