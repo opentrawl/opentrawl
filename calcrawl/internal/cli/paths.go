@@ -1,21 +1,18 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
 func defaultBaseDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ".calcrawl"
-	}
-	return filepath.Join(home, ".calcrawl")
+	return archive.DefaultPaths().BaseDir
 }
 
 func defaultLogDir() string {
-	return filepath.Join(defaultBaseDir(), "logs")
+	return archive.DefaultPaths().LogDir
 }
 
 func logPathParts(logDir string) (string, string) {
