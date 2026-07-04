@@ -19,7 +19,7 @@ import (
 	"unicode/utf8"
 )
 
-const messageIngestHashVersion = "mail-decode-v5"
+const messageIngestHashVersion = "mail-decode-v6"
 
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {
 	var pending []BackupShard
@@ -243,9 +243,13 @@ func parseRawMail(raw []byte) (parsedMail, error) {
 	}
 	fromName, fromAddress := parseAddressHeader(msg.Header.Get("From"))
 	date, _ := msg.Header.Date()
-	body, attachments, err := parseEntity(msg.Header, msg.Body)
+	textParts, attachments, err := parseEntity(msg.Header, msg.Body)
 	if err != nil {
 		return parsedMail{}, err
+	}
+	bodyParts := textParts.Plain
+	if len(bodyParts) == 0 {
+		bodyParts = htmlTextParts(textParts.HTML)
 	}
 	return parsedMail{
 		Date:        date,
@@ -254,16 +258,21 @@ func parseRawMail(raw []byte) (parsedMail, error) {
 		ToAddress:   parseAddressListHeader(msg.Header.Get("To")),
 		CcAddress:   parseAddressListHeader(msg.Header.Get("Cc")),
 		Subject:     decodeHeader(msg.Header.Get("Subject")),
-		Body:        flattenWhitespace(strings.Join(body, "\n\n")),
+		Body:        flattenWhitespace(strings.Join(bodyParts, "\n\n")),
 		Attachments: attachments,
 	}, nil
+}
+
+type mailTextParts struct {
+	Plain []string
+	HTML  []string
 }
 
 type mailHeader interface {
 	Get(string) string
 }
 
-func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, error) {
+func parseEntity(header mailHeader, body io.Reader) (mailTextParts, []Attachment, error) {
 	contentType := header.Get("Content-Type")
 	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil || strings.TrimSpace(mediaType) == "" {
@@ -274,10 +283,10 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 	if strings.HasPrefix(mediaType, "multipart/") {
 		boundary := params["boundary"]
 		if boundary == "" {
-			return nil, nil, fmt.Errorf("multipart message has no boundary")
+			return mailTextParts{}, nil, fmt.Errorf("multipart message has no boundary")
 		}
 		reader := multipart.NewReader(body, boundary)
-		var texts []string
+		var texts mailTextParts
 		var attachments []Attachment
 		for {
 			part, err := reader.NextRawPart()
@@ -285,20 +294,21 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 				return texts, attachments, nil
 			}
 			if err != nil {
-				return nil, nil, err
+				return mailTextParts{}, nil, err
 			}
 			partTexts, partAttachments, err := parseEntity(part.Header, part)
 			_ = part.Close()
 			if err != nil {
-				return nil, nil, err
+				return mailTextParts{}, nil, err
 			}
-			texts = append(texts, partTexts...)
+			texts.Plain = append(texts.Plain, partTexts.Plain...)
+			texts.HTML = append(texts.HTML, partTexts.HTML...)
 			attachments = append(attachments, partAttachments...)
 		}
 	}
 	decoded, err := io.ReadAll(decodeTransfer(body, header.Get("Content-Transfer-Encoding")))
 	if err != nil {
-		return nil, nil, err
+		return mailTextParts{}, nil, err
 	}
 	disposition, dispositionParams, _ := mime.ParseMediaType(header.Get("Content-Disposition"))
 	filename := dispositionParams["filename"]
@@ -307,17 +317,24 @@ func parseEntity(header mailHeader, body io.Reader) ([]string, []Attachment, err
 	}
 	filename = decodeHeader(filename)
 	if strings.EqualFold(disposition, "attachment") || strings.TrimSpace(filename) != "" {
-		return nil, []Attachment{{
+		return mailTextParts{}, []Attachment{{
 			Filename: strings.TrimSpace(filename),
 			MIMEType: mediaType,
 			Size:     int64(len(decoded)),
 		}}, nil
 	}
-	if mediaType == "text/plain" || strings.HasPrefix(mediaType, "text/plain;") {
-		text := decodeTextPart(decoded, params["charset"])
-		return []string{decodeResidualQuotedPrintableText(text)}, nil, nil
+	switch mediaType {
+	case "text/plain":
+		return mailTextParts{Plain: []string{decodeMessageTextPart(decoded, params["charset"])}}, nil, nil
+	case "text/html":
+		return mailTextParts{HTML: []string{decodeMessageTextPart(decoded, params["charset"])}}, nil, nil
 	}
-	return nil, nil, nil
+	return mailTextParts{}, nil, nil
+}
+
+func decodeMessageTextPart(decoded []byte, charset string) string {
+	text := decodeTextPart(decoded, charset)
+	return decodeResidualQuotedPrintableText(text)
 }
 
 func decodeTransfer(body io.Reader, encoding string) io.Reader {

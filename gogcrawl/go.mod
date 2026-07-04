@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/openclaw/crawlkit v0.13.1
+	golang.org/x/net v0.56.0
 	modernc.org/sqlite v1.53.0
 )
 
