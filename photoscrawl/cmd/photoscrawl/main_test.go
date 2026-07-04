@@ -574,3 +574,24 @@ func assertHumanProseOutput(t *testing.T, got string, wants ...string) {
 		}
 	}
 }
+
+// A --help request is help, never a usage error and never a literal query.
+func TestHelpRequestsPrintHelp(t *testing.T) {
+	out, _, err := captureRunOutput(t, []string{"--help"})
+	if err != nil {
+		t.Fatalf("--help errored: %v", err)
+	}
+	if !strings.Contains(out, "Usage: photoscrawl <command>") || !strings.Contains(out, "logs/current.log") {
+		t.Fatalf("help page missing sections:\n%s", out)
+	}
+	out, _, err = captureRunOutput(t, []string{"search", "--help"})
+	if err != nil {
+		t.Fatalf("search --help errored: %v", err)
+	}
+	if !strings.Contains(out, "photoscrawl search <query>") || !strings.Contains(out, "--after") {
+		t.Fatalf("search help wrong:\n%s", out)
+	}
+	if _, _, err := captureRunOutput(t, []string{"nonsense", "--help"}); err == nil {
+		t.Fatal("unknown verb with --help should still be a usage error")
+	}
+}

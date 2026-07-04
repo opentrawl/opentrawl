@@ -40,6 +40,16 @@ func run(ctx context.Context, args []string) (err error) {
 	if err != nil {
 		return err
 	}
+	switch args[0] {
+	case "help", "--help", "-h":
+		printHelp(os.Stdout, paths)
+		return nil
+	}
+	if len(args) > 1 && (args[1] == "--help" || args[1] == "-h") {
+		if printVerbHelp(os.Stdout, paths, args[0]) {
+			return nil
+		}
+	}
 	runLog, err := startLogRun(paths, args[0], wantsJSON(args))
 	if err != nil {
 		return err
