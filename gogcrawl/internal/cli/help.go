@@ -69,7 +69,7 @@ Search archived Gmail subject and body text.
 QUERY is optional when --who, --after or --before is present.
 
 Flags:
-  --limit N      Maximum results. Default: 20. Maximum: 200.
+  --limit N      Results to return. Default: 20.
   --after DATE   Only messages after RFC3339 or YYYY-MM-DD.
   --before DATE  Only messages before RFC3339 or YYYY-MM-DD.
   --who PERSON   Resolve a name, or filter by an exact email, phone or handle.

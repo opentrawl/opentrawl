@@ -15,7 +15,6 @@ import (
 
 const (
 	defaultSearchLimit = 20
-	maxSearchLimit     = 200
 )
 
 var searchValueFlags = map[string]bool{
@@ -37,8 +36,8 @@ func (r *runtime) runSearch(args []string) error {
 		return usageErr(err)
 	}
 	query := strings.TrimSpace(strings.Join(positionals, " "))
-	if *limit < 1 || *limit > maxSearchLimit {
-		return usageErr(fmt.Errorf("search --limit must be between 1 and %d", maxSearchLimit))
+	if *limit < 1 {
+		return usageErr(errors.New("search --limit must be at least 1"))
 	}
 	whoProvided := flagPassed(fs, "who")
 	afterProvided := flagPassed(fs, "after")
