@@ -18,7 +18,7 @@ const (
 	classifyQueueStateContentClassified  = "content_classified"
 	classifyQueueStatePlacePending       = "place_pending"
 
-	classifyPlacePendingReason        = "place_pending: apple geocoder throttled"
+	classifyPlacePendingReason        = "place_pending: apple geocoder unavailable"
 	classifyPlaceUnparkedReason       = "place context cached"
 	classifyPlacePendingKeyLimit      = 200
 	classifyPlaceProviderStartSpacing = 250 * time.Millisecond
@@ -184,7 +184,11 @@ func resolveClassifyPlaceKey(ctx context.Context, state *classifyPlaceKeyState, 
 			result.PlaceProviderAttempts++
 		}
 		if resolved.Result != nil {
-			logger.logPlaceGeocode(state.key, "ok", duration, "")
+			reason := ""
+			if resolved.Result.Address == nil {
+				reason = place.NoPlacemarkReason
+			}
+			logger.logPlaceGeocode(state.key, "ok", duration, reason)
 			return classifyPlaceContextFromResolve(resolved), false, nil
 		}
 		result.PlaceProviderFailures++

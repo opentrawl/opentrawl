@@ -812,9 +812,15 @@ func TestLoadClassifyInputsPriority(t *testing.T) {
 	// Order is date desc, then GPS presence, then queue id. The old
 	// receipt/menu filename boost was deleted: it cost group_concats over
 	// every queued row per batch and only ever broke same-second ties.
-	want := []string{"newest-plain", "middle-gps", "same-date-gps", "same-date-plain", "same-date-menu"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("priority order = %#v, want %#v", got, want)
+	// The final tie-break (queue id) hashes the library path, which is a
+	// temp dir here — so the last two same-second GPS-less fixtures have
+	// no defined relative order and are asserted as a set.
+	if want := []string{"newest-plain", "middle-gps", "same-date-gps"}; !reflect.DeepEqual(got[:3], want) {
+		t.Fatalf("priority order = %#v, want prefix %#v", got, want)
+	}
+	tail := map[string]bool{got[3]: true, got[4]: true}
+	if !tail["same-date-plain"] || !tail["same-date-menu"] {
+		t.Fatalf("priority order tail = %#v", got[3:])
 	}
 }
 
@@ -1178,7 +1184,11 @@ func promptCandidateSnapshots(t *testing.T, metadata []byte) []candidateSnapshot
 	}
 	placeContext, ok := location["place_context"].(map[string]any)
 	if !ok {
-		t.Fatalf("metadata missing place_context: %s", metadata)
+		// Suppressed or empty place context omits the block entirely.
+		return nil
+	}
+	if _, present := placeContext["venue_candidates"]; !present {
+		return nil
 	}
 	candidates, ok := placeContext["venue_candidates"].([]any)
 	if !ok {

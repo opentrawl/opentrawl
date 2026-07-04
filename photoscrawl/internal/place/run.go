@@ -117,7 +117,7 @@ func rawAppleResult(ctx context.Context, input Input, radius float64) (Result, e
 }
 
 func validateComplete(result Result) error {
-	if result.Address == nil {
+	if result.Address == nil && result.POIReason != NoPlacemarkReason {
 		return errors.New("Apple place context incomplete: missing reverse-geocoded address")
 	}
 	if err := validatePOIStatus(result.POIStatus); err != nil {

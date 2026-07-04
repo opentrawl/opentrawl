@@ -116,7 +116,7 @@ func TestPhotoCardMetadataJSONIncludesKnownPlaceAndSuppressesPOIs(t *testing.T) 
 		t.Fatalf("known place sidecar = %#v", knownPlace)
 	}
 	placeContext := location["place_context"].(map[string]any)
-	if candidates := placeContext["venue_candidates"].([]any); len(candidates) != 0 {
+	if candidates, present := placeContext["venue_candidates"]; present {
 		t.Fatalf("known place sidecar kept POIs: %#v", candidates)
 	}
 	if strings.Contains(string(metadata), "Synthetic Consultancy") {

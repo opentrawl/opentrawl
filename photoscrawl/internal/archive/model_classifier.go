@@ -145,8 +145,8 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 				"horizontal_accuracy_meters": cardformat.Meters(input.AccuracyMeters),
 			},
 		}
-		if input.Place != nil {
-			location["place_context"] = input.placeContextForPrompt()
+		if context := input.placeContextForPrompt(); len(context) > 0 {
+			location["place_context"] = context
 		}
 		if input.KnownPlace != nil {
 			location["known_place"] = map[string]any{
@@ -264,24 +264,39 @@ func (input classifyInput) sentVenueCandidates() bool {
 	return len(topPOICandidates(venueCandidatesFromPOIs(input.Place.Result.POICandidates))) > 0
 }
 
+// placeContextForPrompt returns only the fields that carry content; a
+// resolved-to-nothing place (no placemark for the coordinate) yields nil so
+// the sidecar omits the block instead of sending empty strings.
 func (input classifyInput) placeContextForPrompt() map[string]any {
+	if input.Place == nil {
+		return nil
+	}
 	result := input.Place.Result
-	candidates := []map[string]any{}
+	context := map[string]any{}
+	if line := addressLine(result.Address); line != "" {
+		context["address_line"] = line
+	}
+	if len(result.Area) > 0 {
+		area := make([]map[string]string, 0, len(result.Area))
+		for _, level := range result.Area {
+			area = append(area, map[string]string{"level": level.Level, "name": level.Name})
+		}
+		context["area"] = area
+	}
 	if input.KnownPlace == nil {
+		candidates := []map[string]any{}
 		for i, candidate := range topPOICandidates(venueCandidatesFromPOIs(result.POICandidates)) {
 			candidates = append(candidates, promptVenueCandidateWithID(candidate, venueCandidateID(i)))
 		}
+		if len(candidates) > 0 {
+			context["venue_candidates"] = candidates
+		}
 	}
-	area := []map[string]string{}
-	for _, level := range result.Area {
-		area = append(area, map[string]string{"level": level.Level, "name": level.Name})
+	if len(context) == 0 {
+		return nil
 	}
-	return map[string]any{
-		"address_line":     addressLine(result.Address),
-		"area":             area,
-		"poi_status":       result.POIStatus,
-		"venue_candidates": candidates,
-	}
+	context["poi_status"] = result.POIStatus
+	return context
 }
 
 func (input classifyInput) cameraContext() map[string]any {

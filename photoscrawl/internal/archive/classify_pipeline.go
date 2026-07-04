@@ -312,13 +312,7 @@ func modelFailureOutcome(err error) contentOutcome {
 }
 
 func isModelParseFailure(err error) bool {
-	if err == nil {
-		return false
-	}
-	reason := err.Error()
-	return strings.Contains(reason, "parse model JSON") ||
-		strings.Contains(reason, "model did not return a JSON object") ||
-		strings.Contains(reason, "model card")
+	return errors.Is(err, errModelCardParse)
 }
 
 func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {

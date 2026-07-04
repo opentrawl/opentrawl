@@ -3,6 +3,7 @@ package place
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,6 +104,13 @@ func (r *Resolver) ResolveProvider(ctx context.Context, input Input) ResolveResu
 		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error()}
 	}
 	result, err := rawAppleResult(ctx, input, r.radius)
+	if errors.Is(err, ErrProviderNoResult) {
+		// Apple resolved the coordinate to nothing. Cache the empty result
+		// so the coordinate is never re-geocoded and the photo cards with
+		// GPS but no address.
+		result = emptyResult(input, r.radius)
+		err = nil
+	}
 	if err != nil {
 		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error(), ProviderErr: err}
 	}
@@ -239,4 +247,18 @@ func loadResolvedResult(path string, input Input, radius float64) (Result, bool)
 	}
 	result.POICandidates = calibrateCandidates(input, radius, result.POICandidates)
 	return result, validateComplete(result) == nil
+}
+
+func emptyResult(input Input, radius float64) Result {
+	result := Result{
+		Input:        input,
+		Provider:     "apple",
+		Source:       "apple_corelocation_mapkit",
+		RadiusMeters: radius,
+		GeneratedAt:  time.Now().UTC(),
+		POIStatus:    POIStatusNone,
+		POIReason:    NoPlacemarkReason,
+	}
+	NormalizeResult(&result)
+	return result
 }

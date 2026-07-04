@@ -12,6 +12,11 @@ const (
 	POIStatusFound         = "found"
 	POIStatusNone          = "none"
 	POIStatusProviderError = "provider_error"
+
+	// NoPlacemarkReason marks a cached result where Apple completed the
+	// reverse geocode and has no placemark for the coordinate. It is the
+	// mechanical marker that lets cache validation accept a nil address.
+	NoPlacemarkReason = "apple_reverse_geocode_no_placemark"
 )
 
 type Options struct {
@@ -97,4 +102,7 @@ type POICandidate struct {
 var (
 	ErrProviderThrottled = errors.New("place provider throttled")
 	ErrProviderTimeout   = errors.New("place provider timed out")
+	// ErrProviderNoResult: Apple completed the lookup and has no placemark
+	// for the coordinate. A resolution to nothing, not a transient failure.
+	ErrProviderNoResult = errors.New("place provider has no result for coordinate")
 )

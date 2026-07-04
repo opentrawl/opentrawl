@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -459,4 +460,60 @@ func TestClassifyPlacePhaseTimeoutStopsLiveGeocoding(t *testing.T) {
 	}
 	assertQueueState(t, ctx, paths, "located-timeout", classifyQueueStatePlacePending)
 	assertRecordedPlaceGeocode(t, logs, "timeout")
+}
+
+// A place that resolved to nothing must not put an empty place_context
+// block in the model sidecar; a real address must.
+func TestSidecarOmitsEmptyPlaceContext(t *testing.T) {
+	t.Parallel()
+	input := classifyInput{
+		AssetID:      "asset:sidecar-empty-place",
+		CreationDate: "2025-10-06T12:00:00Z",
+		MediaType:    "image",
+		HasLocation:  true,
+		Latitude:     0.00001,
+		Longitude:    -30.00001,
+		Place:        &classifyPlaceContext{Result: place.Result{POIStatus: place.POIStatusNone, POIReason: place.NoPlacemarkReason}},
+	}
+	data, err := photoCardMetadataJSON(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	location, ok := payload["location"].(map[string]any)
+	if !ok {
+		t.Fatalf("location block missing: %s", data)
+	}
+	if _, exists := location["place_context"]; exists {
+		t.Fatalf("empty place_context reached the sidecar: %s", data)
+	}
+	if _, exists := location["gps"]; !exists {
+		t.Fatalf("gps missing from sidecar: %s", data)
+	}
+
+	input.Place = &classifyPlaceContext{Result: place.Result{
+		Address:   &place.Address{Locality: "Innsbruck", Country: "Austria", Formatted: "Innsbruck, Austria"},
+		POIStatus: place.POIStatusNone,
+	}}
+	data, err = photoCardMetadataJSON(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	location = payload["location"].(map[string]any)
+	context, ok := location["place_context"].(map[string]any)
+	if !ok {
+		t.Fatalf("place_context missing for real address: %s", data)
+	}
+	if context["address_line"] == "" {
+		t.Fatalf("address_line empty: %s", data)
+	}
+	if _, exists := context["venue_candidates"]; exists {
+		t.Fatalf("empty venue_candidates key reached the sidecar: %s", data)
+	}
 }

@@ -71,6 +71,8 @@ func classifyBridgeError(message string) error {
 		return fmt.Errorf("%w: %s", ErrProviderThrottled, message)
 	case strings.Contains(message, "timed out"):
 		return fmt.Errorf("%w: %s", ErrProviderTimeout, message)
+	case strings.Contains(message, "no placemarks"), strings.Contains(message, "no map items"):
+		return fmt.Errorf("%w: %s", ErrProviderNoResult, message)
 	}
 	return errors.New(message)
 }
