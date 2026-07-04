@@ -78,7 +78,7 @@ func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 		t.Fatalf("who command = %#v, want documented resolver", manifest.Commands["who"])
 	}
 	help := runOK(t, "help")
-	if !strings.Contains(help, "calcrawl who NAME [--json]") {
+	if !strings.Contains(help, "who") || !strings.Contains(help, "Resolve a person") {
 		t.Fatalf("top-level help does not mention who:\n%s", help)
 	}
 	searchHelp := runOK(t, "help", "search")
@@ -569,12 +569,8 @@ func TestShortRefSearchTextAndOpen(t *testing.T) {
 	if strings.Contains(text, fullRef) {
 		t.Fatalf("search text leaked full ref instead of short ref:\n%s", text)
 	}
-	textAlias := lastTableField(text)
-	if textAlias == "" {
-		t.Fatalf("could not find short ref in search text:\n%s", text)
-	}
-	if textAlias != alias {
-		t.Fatalf("human short ref = %q, JSON short_ref = %q", textAlias, alias)
+	if !strings.Contains(text, alias) {
+		t.Fatalf("human search text missing short ref %q:\n%s", alias, text)
 	}
 	opened := runJSON[archive.EventDetail](t, "open", alias, "--json")
 	if opened.Ref != fullRef {
@@ -855,18 +851,6 @@ func assertNoWhoMatched(t *testing.T, args ...string) {
 	if _, ok := raw["who_matched"]; ok {
 		t.Fatalf("who_matched leaked in %v: %s", args, stdout)
 	}
-}
-
-func lastTableField(value string) string {
-	lines := strings.Split(strings.TrimSpace(value), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		fields := strings.Fields(lines[i])
-		if len(fields) == 0 || fields[0] == "time" {
-			continue
-		}
-		return fields[len(fields)-1]
-	}
-	return ""
 }
 
 func assertLinesWithinDisplayWidth(t *testing.T, got string, width int) {

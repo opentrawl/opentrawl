@@ -18,6 +18,9 @@ type searchOutput struct {
 	TotalMatches int64                  `json:"total_matches"`
 	Truncated    bool                   `json:"truncated"`
 	WhoQuery     string                 `json:"-"`
+	Limit        int                    `json:"-"`
+	After        string                 `json:"-"`
+	Before       string                 `json:"-"`
 }
 
 func (r *runtime) runSearch(args []string) error {
@@ -77,6 +80,9 @@ func (r *runtime) runSearch(args []string) error {
 		Results:      results,
 		TotalMatches: total,
 		Truncated:    int64(len(results)) < total,
+		Limit:        limit,
+		After:        strings.TrimSpace(afterValue),
+		Before:       strings.TrimSpace(beforeValue),
 	})
 }
 

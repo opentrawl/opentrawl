@@ -82,6 +82,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			Who:     row.Who(),
 			Where:   row.Where(),
 			Snippet: row.Snippet(),
+			AllDay:  row.AllDay != 0,
 		})
 	}
 	if err := rows.Close(); err != nil {

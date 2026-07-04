@@ -258,7 +258,7 @@ func (r *runtime) print(value any) error {
 	case control.ContactExport:
 		return printContactsText(r.stdout, typed)
 	default:
-		return enc.Encode(value)
+		return fmt.Errorf("internal: no human renderer for %T", value)
 	}
 }
 

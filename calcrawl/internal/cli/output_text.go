@@ -3,8 +3,9 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
-	"text/tabwriter"
+	"time"
 
 	"github.com/openclaw/crawlkit/control"
 	ckrender "github.com/openclaw/crawlkit/render"
@@ -12,38 +13,21 @@ import (
 )
 
 func printManifestText(w io.Writer, value manifestOutput) error {
-	if _, err := fmt.Fprintf(w, "%s (%s)\n", value.DisplayName, value.ID); err != nil {
-		return err
+	fields := []ckrender.CardField{
+		{Label: "ID", Value: value.ID},
+		{Label: "Version", Value: value.Version},
+		{Label: "Contract", Value: fmt.Sprintf("v%d", value.ContractVersion)},
+		{Label: "Archive schema", Value: strconv.Itoa(value.ArchiveSchemaVersion)},
+		{Label: "Database", Value: value.Paths.DefaultDatabase},
+		{Label: "Logs", Value: value.Paths.DefaultLogs},
+		{Label: "Capabilities", Value: strings.Join(value.Capabilities, ", ")},
 	}
-	if value.Description != "" {
-		if _, err := fmt.Fprintln(w, value.Description); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "\nVersion: %s\nContract: v%d\nArchive schema: %d\n", value.Version, value.ContractVersion, value.ArchiveSchemaVersion); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Capabilities: %s\n", strings.Join(value.Capabilities, ", ")); err != nil {
-		return err
-	}
-	if _, err := io.WriteString(w, "\nAgent-facing commands:\n"); err != nil {
-		return err
-	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, name := range []string{"metadata", "status", "sync", "search", "who", "open", "doctor", "contacts_export"} {
-		command, ok := value.Commands[name]
-		if !ok {
-			continue
-		}
-		if _, err := fmt.Fprintf(tw, "  %s\t%s\n", name, strings.Join(command.Argv, " ")); err != nil {
-			return err
-		}
-	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	_, err := io.WriteString(w, "\nMachine output: add --json.\n")
-	return err
+	return ckrender.WriteCard(w, ckrender.Card{
+		Title:  value.DisplayName + " crawler",
+		Fields: fields,
+		Body:   value.Description,
+		Hints:  []string{"JSON: calcrawl metadata --json"},
+	})
 }
 
 func printStatusText(w io.Writer, value statusText) error {
@@ -62,7 +46,7 @@ func renderStatus(value statusText) ckrender.Status {
 			Title: "Local archive",
 			Fields: []ckrender.Field{
 				{Label: "Database", Value: value.Archive.ArchivePath},
-				{Label: "Last sync", Value: value.LastSyncAt},
+				{Label: "Last sync", Value: shortLocalTime(parseEventTime(value.LastSyncAt))},
 				{Label: "Calendars", Value: fmt.Sprintf("%d", value.Archive.Calendars)},
 				{Label: "Events", Value: fmt.Sprintf("%d", value.Archive.Events)},
 			},
@@ -89,97 +73,232 @@ func renderDoctorChecks(checks []doctorCheck) []ckrender.Check {
 }
 
 func printSearchText(w io.Writer, value searchOutput) error {
-	if value.WhoResolved != nil && value.WhoQuery != "" {
-		if _, err := fmt.Fprintf(w, "%s → %s\n", value.WhoQuery, value.WhoResolved.Who); err != nil {
-			return err
-		}
-	}
-	if err := ckrender.WriteSearchSummary(w, value.Query, len(value.Results), value.TotalMatches); err != nil {
-		return err
-	}
+	hints := []string{"Open: calcrawl open REF"}
 	if value.Truncated {
-		if _, err := io.WriteString(w, "More: narrow with --after, --before or --limit.\n"); err != nil {
-			return err
-		}
+		hints = append(hints, searchMoreHint(value))
 	}
-	if len(value.Results) == 0 {
-		_, err := io.WriteString(w, "No matching events.\n")
-		return err
+	return ckrender.WriteList(w, ckrender.List{
+		Heading:   searchHeading(w, value),
+		Hints:     hints,
+		Items:     searchListItems(value.Results),
+		ClampText: 2,
+		Empty:     searchEmptyText(w, value),
+	})
+}
+
+func searchHeading(w io.Writer, value searchOutput) string {
+	who := ""
+	if value.WhoResolved != nil && strings.TrimSpace(value.WhoResolved.Who) != "" {
+		who = " with " + strings.TrimSpace(value.WhoResolved.Who)
 	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "\ntime\twho\twhere\tsnippet\tref"); err != nil {
-		return err
+	returned := len(value.Results)
+	total := value.TotalMatches
+	query := strings.TrimSpace(value.Query)
+	if query == "" {
+		return fmt.Sprintf("Search filters%s: showing %d of %d.", who, returned, total)
 	}
-	for _, result := range value.Results {
+	prefix := "Search \""
+	suffix := fmt.Sprintf("\"%s: showing %d of %d.", who, returned, total)
+	queryWidth := ckrender.OutputWidth(w) - ckrender.DisplayWidth(prefix) - ckrender.DisplayWidth(suffix)
+	if queryWidth < 1 {
+		queryWidth = 1
+	}
+	return prefix + ckrender.Truncate(query, queryWidth) + suffix
+}
+
+func searchMoreHint(value searchOutput) string {
+	parts := []string{"calcrawl", "search"}
+	if query := strings.TrimSpace(value.Query); query != "" {
+		parts = append(parts, shellQuote(query))
+	}
+	if value.WhoResolved != nil && strings.TrimSpace(value.WhoQuery) != "" {
+		parts = append(parts, "--who", shellQuote(value.WhoQuery))
+	}
+	if value.After != "" {
+		parts = append(parts, "--after", shellQuote(value.After))
+	}
+	if value.Before != "" {
+		parts = append(parts, "--before", shellQuote(value.Before))
+	}
+	parts = append(parts, "--limit", strconv.Itoa(nextSearchLimit(value.Limit)))
+	return "More: " + strings.Join(parts, " ")
+}
+
+func nextSearchLimit(limit int) int {
+	if limit <= 0 {
+		limit = archive.DefaultSearchLimit
+	}
+	return limit * 2
+}
+
+func searchEmptyText(w io.Writer, value searchOutput) string {
+	query := strings.TrimSpace(value.Query)
+	if query == "" {
+		return "No matching events."
+	}
+	prefix := "No matches for \""
+	suffix := "\"."
+	queryWidth := ckrender.OutputWidth(w) - ckrender.DisplayWidth(prefix) - ckrender.DisplayWidth(suffix)
+	if queryWidth < 1 {
+		queryWidth = 1
+	}
+	return prefix + ckrender.Truncate(query, queryWidth) + suffix
+}
+
+func searchListItems(results []archive.SearchResult) []ckrender.ListItem {
+	items := make([]ckrender.ListItem, 0, len(results))
+	for _, result := range results {
 		ref := result.ShortRef
 		if ref == "" {
 			ref = result.Ref
 		}
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", result.Time, result.Who, result.Where, result.Snippet, ref); err != nil {
-			return err
-		}
+		items = append(items, ckrender.ListItem{
+			Time:  listItemTime(result.Time, result.AllDay),
+			Who:   result.Who,
+			Where: result.Where,
+			Ref:   ref,
+			Text:  result.Snippet,
+		})
 	}
-	return tw.Flush()
+	return items
 }
 
 func printOpenText(w io.Writer, event archive.EventDetail) error {
-	if _, err := fmt.Fprintf(w, "%s\n%s to %s\n", event.Title, event.Start, event.End); err != nil {
-		return err
+	fields := []ckrender.CardField{
+		{Label: "When", Value: formatEventWhen(event.Start, event.End, event.AllDay)},
+		{Label: "Location", Value: locationString(event.Location)},
+		{Label: "Calendar", Value: event.Calendar},
+		{Label: "Account", Value: event.Account},
+		{Label: "Status", Value: event.Status},
+		{Label: "Organizer", Value: personName(event.Organizer)},
+		{Label: "Attendees", Value: attendeesLine(event.Attendees)},
+		{Label: "Ref", Value: event.Ref},
 	}
-	if event.Location != nil {
-		location := strings.Join(nonEmpty(event.Location.Title, event.Location.Address), ", ")
-		if _, err := fmt.Fprintf(w, "Location: %s\n", location); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "Calendar: %s\nAccount: %s\nStatus: %s\nRef: %s\n", event.Calendar, event.Account, emptyDash(event.Status), event.Ref); err != nil {
-		return err
-	}
-	if len(event.Attendees) > 0 {
-		if _, err := io.WriteString(w, "\nAttendees:\n"); err != nil {
-			return err
-		}
-		for _, attendee := range event.Attendees {
-			label := attendee.DisplayName
-			if label == "" {
-				label = attendee.Email
-			}
-			if label == "" {
-				label = attendee.PhoneNumber
-			}
-			if attendee.RSVPStatus != "" {
-				label += " (" + attendee.RSVPStatus + ")"
-			}
-			if _, err := fmt.Fprintf(w, "  - %s\n", label); err != nil {
-				return err
-			}
-		}
-	}
-	if event.Description != "" {
-		if _, err := fmt.Fprintf(w, "\nDescription:\n%s\n", event.Description); err != nil {
-			return err
-		}
-	}
-	return nil
+	return ckrender.WriteCard(w, ckrender.Card{
+		Title:  event.Title,
+		Fields: fields,
+		Body:   event.Description,
+		Hints:  []string{"JSON: add --json for the full record."},
+	})
 }
 
 func printContactsText(w io.Writer, value control.ContactExport) error {
-	if _, err := fmt.Fprintf(w, "Contacts export: %d contacts.\n", len(value.Contacts)); err != nil {
+	if len(value.Contacts) == 0 {
+		_, err := io.WriteString(w, "No contacts with phone numbers.\n")
 		return err
 	}
-	for _, contact := range value.Contacts {
-		if _, err := fmt.Fprintf(w, "  - %s: %s\n", contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")); err != nil {
-			return err
-		}
+	if _, err := fmt.Fprintf(w, "Contacts: showing %d with phone numbers.\n\n", len(value.Contacts)); err != nil {
+		return err
 	}
-	return nil
+	rows := make([][]string, 0, len(value.Contacts))
+	for _, contact := range value.Contacts {
+		rows = append(rows, []string{contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")})
+	}
+	return ckrender.WriteTable(w, []ckrender.TableColumn{
+		{Header: "name", Wrap: true},
+		{Header: "phone"},
+	}, rows)
 }
 
-func emptyDash(value string) string {
-	if strings.TrimSpace(value) == "" {
-		return "-"
+// listItemTime prepares an event start for the shared list, whose date column
+// converts to the viewer's zone. An all-day event's date is the same wall-clock
+// day everywhere, so we re-anchor it to local midnight of its own-zone date;
+// otherwise a viewer in a different zone would see the day roll backwards.
+func listItemTime(value string, allDay bool) time.Time {
+	t := parseEventTime(value)
+	if allDay && !t.IsZero() {
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
 	}
-	return value
+	return t
+}
+
+func parseEventTime(value string) time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return time.Time{}
+	}
+	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return t
+	}
+	if t, err := time.ParseInLocation("2006-01-02", value, time.Local); err == nil {
+		return t
+	}
+	return time.Time{}
+}
+
+func shortLocalTime(t time.Time) string {
+	return ckrender.ShortLocalTime(t)
+}
+
+// formatEventWhen renders an event's span for a human. All-day events show the
+// date in their own zone (a date is the same wall-clock day everywhere, so no
+// timezone conversion), while timed events convert to the viewer's local zone
+// the way Calendar.app does.
+func formatEventWhen(startValue, endValue string, allDay bool) string {
+	start := parseEventTime(startValue)
+	if start.IsZero() {
+		return ""
+	}
+	end := parseEventTime(endValue)
+	if allDay {
+		startDate := start.Format("2006-01-02")
+		if !end.IsZero() {
+			// The stored end is the exclusive next-day midnight; the last day
+			// the event covers is the day before it.
+			if last := end.AddDate(0, 0, -1).Format("2006-01-02"); last != startDate {
+				return fmt.Sprintf("%s to %s (all day)", startDate, last)
+			}
+		}
+		return startDate + " (all day)"
+	}
+	startLocal := start.Local()
+	out := startLocal.Format("2006-01-02 15:04")
+	if end.IsZero() {
+		return out
+	}
+	endLocal := end.Local()
+	if endLocal.Equal(startLocal) {
+		return out
+	}
+	if endLocal.Year() == startLocal.Year() && endLocal.YearDay() == startLocal.YearDay() {
+		return out + " to " + endLocal.Format("15:04")
+	}
+	return out + " to " + endLocal.Format("2006-01-02 15:04")
+}
+
+func locationString(location *archive.Location) string {
+	if location == nil {
+		return ""
+	}
+	return strings.Join(nonEmpty(location.Title, location.Address), ", ")
+}
+
+func personName(person archive.Person) string {
+	return firstNonEmptyValue(person.DisplayName, person.Email, person.PhoneNumber)
+}
+
+func attendeesLine(attendees []archive.Attendee) string {
+	parts := make([]string, 0, len(attendees))
+	for _, attendee := range attendees {
+		label := firstNonEmptyValue(attendee.DisplayName, attendee.Email, attendee.PhoneNumber, attendee.Address)
+		if label == "" {
+			continue
+		}
+		if strings.TrimSpace(attendee.RSVPStatus) != "" {
+			label += " (" + strings.TrimSpace(attendee.RSVPStatus) + ")"
+		}
+		parts = append(parts, label)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func firstNonEmptyValue(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func nonEmpty(values ...string) []string {

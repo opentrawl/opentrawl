@@ -134,6 +134,7 @@ type SearchResult struct {
 	Who      string `json:"who"`
 	Where    string `json:"where"`
 	Snippet  string `json:"snippet"`
+	AllDay   bool   `json:"-"`
 }
 
 type EventDetail struct {

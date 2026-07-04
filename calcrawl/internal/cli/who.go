@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
-	"text/tabwriter"
 
+	ckrender "github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
@@ -125,17 +126,21 @@ func renderUnknownWho(query, who string, didYouMean []archive.WhoCandidate) stri
 }
 
 func writeWhoTable(w io.Writer, candidates []archive.WhoCandidate) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	if _, err := fmt.Fprintln(tw, "who\tidentifiers\tlast_seen\tmessages"); err != nil {
-		return err
-	}
+	rows := make([][]string, 0, len(candidates))
 	for _, candidate := range candidates {
-		identifiers := strings.Join(candidate.Identifiers, ", ")
-		if _, err := fmt.Fprintf(tw, "%s\t%s\t%s\t%d\n", candidate.Who, identifiers, candidate.LastSeen, candidate.Messages); err != nil {
-			return err
-		}
+		rows = append(rows, []string{
+			candidate.Who,
+			shortLocalTime(parseEventTime(candidate.LastSeen)),
+			strconv.FormatInt(candidate.Messages, 10),
+			strings.Join(candidate.Identifiers, ", "),
+		})
 	}
-	return tw.Flush()
+	return ckrender.WriteTable(w, []ckrender.TableColumn{
+		{Header: "who", Wrap: true},
+		{Header: "last seen"},
+		{Header: "events", AlignRight: true},
+		{Header: "identifiers", Wrap: true},
+	}, rows)
 }
 
 func retryExample(query string, candidates []archive.WhoCandidate) string {
