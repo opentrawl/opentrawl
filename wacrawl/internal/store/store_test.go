@@ -633,6 +633,50 @@ func TestResolveWhoMergesSameNameCandidates(t *testing.T) {
 	}
 }
 
+func TestResolveWhoMeUsesFromMeRows(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	contacts := []Contact{
+		{JID: "emery@s.whatsapp.net", Phone: "+15550100", FullName: "Emery Example"},
+	}
+	chats := []Chat{
+		{JID: "emery@s.whatsapp.net", Kind: "dm", Name: "Emery Example", LastMessageAt: now, MessageCount: 3},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "emery@s.whatsapp.net", ChatName: "Emery Example", MessageID: "incoming", SenderJID: "emery@s.whatsapp.net", SenderName: "Emery Example", Timestamp: now, Text: "incoming needle", RawType: 0},
+		{SourcePK: 2, ChatJID: "emery@s.whatsapp.net", ChatName: "Emery Example", MessageID: "mine", SenderJID: "emery@s.whatsapp.net", SenderName: "me", Timestamp: now.Add(time.Minute), FromMe: true, Text: "outgoing needle", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, contacts, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	resolution, err := st.ResolveWho(ctx, "me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolution.Candidates) != 1 {
+		t.Fatalf("candidates = %#v, want only owner", resolution.Candidates)
+	}
+	candidate := resolution.Candidates[0]
+	if candidate.Who != "me" || candidate.Messages != 1 || !stringSliceContains(candidate.Identifiers, "me") {
+		t.Fatalf("candidate = %#v, want owner as me", candidate)
+	}
+
+	filtered, err := st.Search(ctx, MessageFilter{Who: "me", Query: "needle", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered) != 1 || filtered[0].MessageID != "mine" {
+		t.Fatalf("filtered owner search = %#v, want only from-me row", filtered)
+	}
+}
+
 func stringSliceContains(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

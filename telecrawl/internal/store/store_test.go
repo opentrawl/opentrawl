@@ -298,6 +298,44 @@ func TestResolveWhoMatchesUnnamedParticipantIdentifiersWithSharedMatcher(t *test
 	}
 }
 
+func TestResolveWhoFoldsOwnerIdentifiersToMe(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+		nil,
+		[]Chat{{JID: "300", Kind: "chat", Name: "Recipient Person", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		nil,
+		nil,
+		nil,
+		nil,
+		[]Message{
+			{SourcePK: 1, ChatJID: "300", ChatName: "Recipient Person", MessageID: "1", SenderJID: "999", SenderName: "999", Timestamp: now, FromMe: true, Text: "owner needle"},
+			{SourcePK: 2, ChatJID: "300", ChatName: "Recipient Person", MessageID: "2", Timestamp: now.Add(time.Minute), FromMe: true, Text: "blank owner needle"},
+			{SourcePK: 3, ChatJID: "300", ChatName: "Recipient Person", MessageID: "3", SenderJID: "300", SenderName: "Recipient Person", Timestamp: now.Add(2 * time.Minute), Text: "reply needle"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, query := range []string{"999", "me"} {
+		candidates, err := st.ResolveWho(ctx, query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(candidates) == 0 || candidates[0].Who != "me" || candidates[0].Messages != 2 || !containsStoreString(candidates[0].Identifiers, "me") || containsStoreString(candidates[0].Identifiers, "999") {
+			t.Fatalf("query %q candidates = %#v, want owner as me", query, candidates)
+		}
+	}
+
+	messages, err := st.Search(ctx, MessageFilter{Query: "owner", Who: "me", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 || !messages[0].FromMe || !messages[1].FromMe {
+		t.Fatalf("search --who me = %#v, want both owner rows", messages)
+	}
+}
+
 func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)

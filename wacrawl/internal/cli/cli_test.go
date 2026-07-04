@@ -1510,6 +1510,31 @@ func TestOwnerIdentityRendersAsMe(t *testing.T) {
 	if opened.Message.Who != "me" || opened.Context[0].Who != "me" {
 		t.Fatalf("open owner rendering = %#v", opened)
 	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "who", "me"}, &stdout, &stderr); err != nil {
+		t.Fatalf("who error = %v stderr=%s", err, stderr.String())
+	}
+	var who whoEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &who); err != nil {
+		t.Fatalf("who json = %s err=%v", stdout.String(), err)
+	}
+	if len(who.Candidates) != 1 || who.Candidates[0].Who != "me" {
+		t.Fatalf("who owner rendering = %#v", who.Candidates)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "owner", "--who", "me"}, &stdout, &stderr); err != nil {
+		t.Fatalf("search --who me error = %v stderr=%s", err, stderr.String())
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
+		t.Fatalf("search --who me json = %s err=%v", stdout.String(), err)
+	}
+	if search.WhoResolved == nil || search.WhoResolved.Who != "me" || len(search.Results) != 1 || search.Results[0].Who != "me" {
+		t.Fatalf("search --who me owner rendering = %#v", search)
+	}
 }
 
 func TestStatusAndDoctorReadLogTail(t *testing.T) {

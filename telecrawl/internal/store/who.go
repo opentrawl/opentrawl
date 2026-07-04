@@ -9,6 +9,11 @@ import (
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
+const (
+	ownerWhoDisplayName = "me"
+	ownerWhoParticipant = "owner:me"
+)
+
 const participantRowsSQL = `
 select p.jid, p.stored_name,
        coalesce(c.jid,''),coalesce(c.peer_type,''),coalesce(c.phone,''),coalesce(c.full_name,''),coalesce(c.first_name,''),coalesce(c.last_name,''),coalesce(c.business_name,''),coalesce(c.username,''),coalesce(c.lid,''),coalesce(c.about_text,''),coalesce(c.avatar_path,''),coalesce(c.updated_at,0)
@@ -62,6 +67,14 @@ func (s *Store) ResolveWho(ctx context.Context, query string) ([]WhoCandidate, e
 	if err != nil {
 		return nil, err
 	}
+	if query == ownerWhoDisplayName {
+		for _, candidate := range candidates {
+			if candidateHasOwnerParticipant(candidate) {
+				candidate.matchRank = int(whomatch.RankExact)
+				return s.hydrateWhoCandidates(ctx, []WhoCandidate{candidate})
+			}
+		}
+	}
 	var matches []WhoCandidate
 	for _, candidate := range candidates {
 		rank, ok := whoMatchCandidate(candidate).MatchRank(query)
@@ -102,6 +115,10 @@ func (s *Store) MatchParticipants(ctx context.Context, identity string) ([]Parti
 }
 
 func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
+	ownerIDs, err := s.ownerIdentifierSet(ctx)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := s.db.QueryContext(ctx, participantRowsSQL)
 	if err != nil {
 		return nil, err
@@ -119,6 +136,18 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		names := participantDisplayNames(storedName, contact, jid)
 		identifiers := participantIdentifiers(jid, contact)
 		who := firstNonEmptyString(names...)
+		var ownerMatchTerms []string
+		owner := ownerIDs.Contains(jid, storedName, contact.JID)
+		if owner {
+			ownerMatchTerms = appendUniqueStrings(ownerMatchTerms, names...)
+			ownerMatchTerms = appendUniqueStrings(ownerMatchTerms, identifiers...)
+			ownerMatchTerms = appendIdentifier(ownerMatchTerms, storedName)
+			ownerMatchTerms = appendIdentifier(ownerMatchTerms, contact.JID)
+			ownerMatchTerms = appendIdentifier(ownerMatchTerms, jid)
+			who = ownerWhoDisplayName
+			names = []string{ownerWhoDisplayName}
+			identifiers = []string{ownerWhoDisplayName}
+		}
 		if who == "" {
 			who = firstNonEmptyString(identifiers...)
 		}
@@ -126,6 +155,9 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 			continue
 		}
 		key := participantKey(jid, who)
+		if owner {
+			key = ownerWhoParticipant
+		}
 		candidate := byKey[key]
 		if candidate == nil {
 			candidate = &WhoCandidate{Who: who}
@@ -133,14 +165,34 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		}
 		candidate.Identifiers = appendUniqueStrings(candidate.Identifiers, identifiers...)
 		candidate.aliases = appendUniqueStrings(candidate.aliases, names...)
-		addParticipantMatches(candidate, jid, who, names)
+		if owner {
+			candidate.aliases = appendUniqueStrings(candidate.aliases, ownerMatchTerms...)
+			addOwnerParticipantMatch(candidate)
+		} else {
+			addParticipantMatches(candidate, jid, who, names)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if ownerIDs.HasMessages() {
+		candidate := byKey[ownerWhoParticipant]
+		if candidate == nil {
+			candidate = &WhoCandidate{Who: ownerWhoDisplayName}
+			byKey[ownerWhoParticipant] = candidate
+		}
+		candidate.Identifiers = appendUniqueStrings(candidate.Identifiers, ownerWhoDisplayName)
+		candidate.aliases = appendUniqueStrings(candidate.aliases, append([]string{ownerWhoDisplayName}, ownerIDs.Values()...)...)
+		addOwnerParticipantMatch(candidate)
+	}
 	candidates := make([]WhoCandidate, 0, len(byKey))
 	for _, candidate := range byKey {
 		sortParticipantMatches(candidate.Participants)
+		if candidateHasOwnerParticipant(*candidate) {
+			candidate.Who = ownerWhoDisplayName
+			candidates = append(candidates, *candidate)
+			continue
+		}
 		// Rows for one jid merge in scan order, so an unnamed row can
 		// have claimed Who with a bare identifier while a later row
 		// carried the real name. A human name always wins.
@@ -155,6 +207,66 @@ func (s *Store) allWhoCandidates(ctx context.Context) ([]WhoCandidate, error) {
 		candidates = append(candidates, *candidate)
 	}
 	return candidates, nil
+}
+
+type ownerIdentifierSet struct {
+	values      map[string]struct{}
+	hasMessages bool
+}
+
+func (s *Store) ownerIdentifierSet(ctx context.Context) (ownerIdentifierSet, error) {
+	ids := ownerIdentifierSet{values: map[string]struct{}{}}
+	var hasMessages int
+	if err := s.db.QueryRowContext(ctx, `select exists(select 1 from messages where from_me = 1)`).Scan(&hasMessages); err != nil {
+		return ids, err
+	}
+	ids.hasMessages = hasMessages != 0
+	rows, err := s.db.QueryContext(ctx, `
+select distinct trim(value)
+from (
+	select coalesce(sender_jid, '') as value from messages where from_me = 1
+	union all
+	select coalesce(sender_name, '') as value from messages where from_me = 1
+)
+where trim(value) <> ''`)
+	if err != nil {
+		return ids, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return ids, err
+		}
+		ids.values[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+	}
+	return ids, rows.Err()
+}
+
+func (ids ownerIdentifierSet) Contains(values ...string) bool {
+	for _, value := range values {
+		value = strings.ToLower(strings.TrimSpace(value))
+		if value == "" {
+			continue
+		}
+		if _, ok := ids.values[value]; ok {
+			return true
+		}
+	}
+	return false
+}
+
+func (ids ownerIdentifierSet) HasMessages() bool {
+	return ids.hasMessages
+}
+
+func (ids ownerIdentifierSet) Values() []string {
+	out := make([]string, 0, len(ids.values))
+	for value := range ids.values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func (s *Store) hydrateWhoCandidates(ctx context.Context, candidates []WhoCandidate) ([]WhoCandidate, error) {
@@ -293,6 +405,19 @@ func addParticipantMatches(candidate *WhoCandidate, jid, fallback string, names 
 	}
 }
 
+func addOwnerParticipantMatch(candidate *WhoCandidate) {
+	addParticipantMatches(candidate, ownerWhoParticipant, ownerWhoDisplayName, []string{ownerWhoDisplayName})
+}
+
+func candidateHasOwnerParticipant(candidate WhoCandidate) bool {
+	for _, participant := range candidate.Participants {
+		if participant.JID == ownerWhoParticipant {
+			return true
+		}
+	}
+	return false
+}
+
 func firstNonEmptyString(values ...string) string {
 	for _, value := range values {
 		value = strings.TrimSpace(value)
@@ -349,11 +474,14 @@ func appendWhoParticipantFilter(query string, args []any, prefix string, filter 
 	if normalizeDisplayName(filter.Who) == "" {
 		return query, args
 	}
-	ids, names := whoParticipantFilterValues(filter.WhoParticipants)
-	if len(ids) == 0 && len(names) == 0 {
+	owner, ids, names := whoParticipantFilterValues(filter.WhoParticipants)
+	if !owner && len(ids) == 0 && len(names) == 0 {
 		return query + " and 0=1", args
 	}
 	var clauses []string
+	if owner {
+		clauses = append(clauses, prefix+"from_me = 1")
+	}
 	if len(ids) > 0 {
 		placeholders := sqlPlaceholders(len(ids))
 		clauses = append(clauses, prefix+"sender_jid in ("+placeholders+")")
@@ -377,13 +505,18 @@ func appendWhoParticipantFilter(query string, args []any, prefix string, filter 
 	return query + " and (" + strings.Join(clauses, " or ") + ")", args
 }
 
-func whoParticipantFilterValues(matches []ParticipantMatch) ([]string, []string) {
+func whoParticipantFilterValues(matches []ParticipantMatch) (bool, []string, []string) {
 	idSeen := map[string]struct{}{}
 	nameSeen := map[string]struct{}{}
+	var owner bool
 	var ids []string
 	var names []string
 	for _, match := range matches {
 		id := strings.TrimSpace(match.JID)
+		if id == ownerWhoParticipant {
+			owner = true
+			continue
+		}
 		if id != "" {
 			if _, ok := idSeen[id]; !ok {
 				idSeen[id] = struct{}{}
@@ -401,7 +534,7 @@ func whoParticipantFilterValues(matches []ParticipantMatch) ([]string, []string)
 	}
 	sort.Strings(ids)
 	sort.Strings(names)
-	return ids, names
+	return owner, ids, names
 }
 
 func sqlPlaceholders(count int) string {

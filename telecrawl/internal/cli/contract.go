@@ -475,6 +475,9 @@ func openChatFromMessage(message store.Message) openChat {
 }
 
 func openSenderFromMessage(message store.Message) openParticipant {
+	if message.FromMe {
+		return openParticipant{DisplayName: messageWho(message)}
+	}
 	return openParticipant{Ref: chatRef(message.SenderJID), DisplayName: messageWho(message)}
 }
 
@@ -498,11 +501,11 @@ func formatLocalTime(t time.Time) string {
 }
 
 func messageWho(message store.Message) string {
-	if value := strings.TrimSpace(message.SenderName); value != "" {
-		return outputField(value)
-	}
 	if message.FromMe {
 		return "me"
+	}
+	if value := strings.TrimSpace(message.SenderName); value != "" {
+		return outputField(value)
 	}
 	if strings.TrimSpace(message.SenderJID) == "" || strings.TrimSpace(message.SenderJID) == strings.TrimSpace(message.ChatJID) {
 		return outputField(messageWhere(message))

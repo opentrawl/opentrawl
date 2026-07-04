@@ -27,6 +27,7 @@ const (
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
 	MessageRefPrefix = "wacrawl:msg/"
+	ownerWhoKey      = "owner:me"
 
 	messageSelectColumns = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, '' as snippet`
 	messageScanColumns   = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, snippet`
@@ -866,6 +867,9 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 	if err != nil {
 		return WhoResolution{}, err
 	}
+	if strings.EqualFold(query, "me") {
+		return ownerWhoResolution(records), nil
+	}
 	type rankedCandidate struct {
 		record whoCandidateRecord
 		rank   whomatch.Rank
@@ -907,6 +911,22 @@ func (s *Store) ResolveWho(ctx context.Context, identity string) (WhoResolution,
 		resolution.Candidates = append(resolution.Candidates, candidate)
 	}
 	return resolution, nil
+}
+
+func ownerWhoResolution(records []whoCandidateRecord) WhoResolution {
+	for _, record := range records {
+		if !record.hasParticipantKey(ownerWhoKey) {
+			continue
+		}
+		candidate := record.WhoCandidate
+		return WhoResolution{
+			ParticipantKeys: append([]string(nil), candidate.ParticipantKeys...),
+			DisplayNames:    []string{candidate.Who},
+			Candidates:      []WhoCandidate{candidate},
+			matchRank:       whomatch.RankExact,
+		}
+	}
+	return WhoResolution{}
 }
 
 func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (WhoResolution, error) {
@@ -955,6 +975,15 @@ func (s *Store) ResolveWhoIdentifier(ctx context.Context, identifier string) (Wh
 type whoCandidateRecord struct {
 	WhoCandidate
 	aliases []string
+}
+
+func (r whoCandidateRecord) hasParticipantKey(value string) bool {
+	for _, key := range r.ParticipantKeys {
+		if key == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (r whoCandidateRecord) matchCandidate() whomatch.Candidate {
@@ -1604,6 +1633,9 @@ func whoCandidateAliasesQuery() string {
 	return `
 select participant_key as identity_key, participant_key, display_name, '' as identifier, name_kind
 from (
+select '` + ownerWhoKey + `' as participant_key, 'me' as display_name, 'owner' as name_kind
+where exists (select 1 from messages where from_me = 1)
+union all
 select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.sender_name as display_name, 'push' as name_kind
 from messages m
 left join contacts c on ` + senderContact + `
@@ -1655,6 +1687,9 @@ where trim(participant_key) <> '' and trim(display_name) <> ''
 union all
 select participant_key as identity_key, participant_key, '' as display_name, identifier, '' as name_kind
 from (
+select '` + ownerWhoKey + `' as participant_key, 'me' as identifier
+where exists (select 1 from messages where from_me = 1)
+union all
 select 'jid:' || jid as participant_key, jid as identifier from contacts where trim(jid) <> ''
 union all
 select 'jid:' || jid, phone from contacts where trim(jid) <> '' and trim(phone) <> ''
@@ -1692,6 +1727,10 @@ func whoCandidateStatsQuery() string {
 	return `
 select participant_key, max(ts) as last_seen, count(distinct source_pk) as messages
 from (
+select '` + ownerWhoKey + `' as participant_key, source_pk, ts
+from messages
+where from_me = 1
+union all
 select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.source_pk, m.ts
 from messages m
 left join contacts c on ` + senderContact + `
@@ -1720,6 +1759,9 @@ func whoMessageParticipantKeysQuery(prefix string) string {
 	return `
 select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
 where trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> ''
+union all
+select '` + ownerWhoKey + `'
+where ` + prefix + `from_me = 1
 union all
 select 'jid:' || coalesce(c.jid, ch.jid)
 from chats ch

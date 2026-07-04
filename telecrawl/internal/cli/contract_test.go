@@ -461,6 +461,31 @@ func TestSearchAllowsFilterOnlyWithWhoAfterOrBefore(t *testing.T) {
 	}
 }
 
+func TestOwnerWhoResolverRendersMe(t *testing.T) {
+	db := seedWhoSearchArchive(t)
+
+	ownerByID := runWhoJSON(t, db, "999", "--json")
+	if len(ownerByID.Candidates) == 0 || ownerByID.Candidates[0].Who != "me" {
+		t.Fatalf("owner id candidates = %#v, want owner as me", ownerByID.Candidates)
+	}
+	if !hasString(ownerByID.Candidates[0].Identifiers, "me") || hasString(ownerByID.Candidates[0].Identifiers, "999") {
+		t.Fatalf("owner id identifiers = %#v, want only rendered owner label", ownerByID.Candidates[0].Identifiers)
+	}
+
+	ownerSearch := runSearchJSON(t, db, "search", "--who", "me", "needle", "--json")
+	if ownerSearch.WhoResolved == nil || ownerSearch.WhoResolved.Who != "me" || len(ownerSearch.Results) != 1 || ownerSearch.Results[0].Who != "me" {
+		t.Fatalf("owner search = %#v, want only owner row as me", ownerSearch)
+	}
+	if !hasString(ownerSearch.WhoResolved.Identifiers, "me") || hasString(ownerSearch.WhoResolved.Identifiers, "999") {
+		t.Fatalf("owner search identifiers = %#v, want only rendered owner label", ownerSearch.WhoResolved.Identifiers)
+	}
+
+	ownerOpen := runOpenJSON(t, db, ownerSearch.Results[0].Ref)
+	if ownerOpen.Message.Sender.DisplayName != "me" || ownerOpen.Message.Sender.Ref != "" {
+		t.Fatalf("owner open sender = %#v, want me without raw sender ref", ownerOpen.Message.Sender)
+	}
+}
+
 func TestSearchWhoFilterOnlyExcludesChatTitlesAndMatchesUnnamedIDs(t *testing.T) {
 	db := seedWhoResolverDefectArchive(t)
 
