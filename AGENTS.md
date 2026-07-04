@@ -31,6 +31,15 @@ OpenTrawl: local-first crawlers for your digital life, one `trawl` CLI,
 one Mac app. Read [docs/vision.md](docs/vision.md) first, then
 [docs/roadmap.md](docs/roadmap.md).
 
+## Engineering rules
+
+The Standards section below is binding in this repo. The full
+distilled ruleset (code bar, output/design bar, process rules, ticket
+quality gates) lives in the private workspace at
+`~/code/crawlers/docs/rules.md` — agents working on Josh's machine
+read it before writing any code or artifact; on any conflict it wins.
+Never copy its text into this public repo.
+
 ## Layout and upstreams
 
 Each crawler directory is a git subtree synced with an upstream repo.
