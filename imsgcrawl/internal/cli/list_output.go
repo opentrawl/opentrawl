@@ -54,11 +54,12 @@ type whoResolvedOutput struct {
 }
 
 type searchResultOutput struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
+	Ref      string `json:"ref"`
+	ShortRef string `json:"short_ref"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where"`
+	Snippet  string `json:"snippet"`
 }
 
 type openOutput struct {

@@ -169,8 +169,6 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		t.Fatalf("short ref opened %q, want %q", shortOpened.Ref, firstRef)
 	}
 	assertShortRefError(t, archivePath, unusedShortAlias(t, archivePath), "unknown_short_ref")
-	makeAmbiguousShortRef(t, archivePath, "22222")
-	assertShortRefError(t, archivePath, "22222", "ambiguous_short_ref")
 
 	if err := os.Remove(dbPath); err != nil {
 		t.Fatal(err)
@@ -278,9 +276,14 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if results.Query != "launch" || results.TotalMatches != 2 || results.Truncated || len(results.Results) != 2 {
 		t.Fatalf("search results = %#v", results)
 	}
+	humanSearchOut := runOK(t, "--archive", archivePath, "search", "launch")
 	for _, result := range results.Results {
 		if !strings.HasPrefix(result.Ref, messageRefPrefix) {
 			t.Fatalf("search result ref = %#v", result)
+		}
+		assertShortRefValue(t, result.ShortRef)
+		if !strings.Contains(humanSearchOut, result.ShortRef) {
+			t.Fatalf("human search output did not display json short_ref %q:\n%s", result.ShortRef, humanSearchOut)
 		}
 		assertRFC3339(t, result.Time)
 		if result.Who == "" || result.Where != "Most Recent Name" || !strings.Contains(result.Snippet, "launch") {
@@ -343,6 +346,9 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 	if emptySearch.TotalMatches != 0 || emptySearch.Truncated || len(emptySearch.Results) != 0 {
 		t.Fatalf("empty search output = %#v", emptySearch)
 	}
+
+	makeAmbiguousShortRef(t, archivePath, "22222")
+	assertShortRefError(t, archivePath, "22222", "ambiguous_short_ref")
 }
 
 func TestLimitFlagsAreExplicit(t *testing.T) {
@@ -889,6 +895,19 @@ func assertSearchEnvelopeKeys(t *testing.T, data []byte) {
 	for key := range root {
 		if !want[key] {
 			t.Fatalf("search root key %q not in contract keys %#v", key, want)
+		}
+	}
+}
+
+func assertShortRefValue(t *testing.T, value string) {
+	t.Helper()
+	const alphabet = "23456789abcdefghjkmnpqrstuvwxyz"
+	if len(value) < 5 {
+		t.Fatalf("short_ref = %q, want at least 5 chars", value)
+	}
+	for _, ch := range value {
+		if !strings.ContainsRune(alphabet, ch) {
+			t.Fatalf("short_ref = %q, contains %q outside shortref alphabet", value, ch)
 		}
 	}
 }

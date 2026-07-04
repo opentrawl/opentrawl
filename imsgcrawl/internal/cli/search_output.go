@@ -38,11 +38,12 @@ func newSearchListOutput(query string, page archive.SearchPage, limit int, filte
 	results := make([]searchResultOutput, 0, len(page.Items))
 	for _, item := range page.Items {
 		results = append(results, searchResultOutput{
-			Ref:     messageRef(item.MessageID),
-			Time:    item.Time,
-			Who:     outputField(senderName(item.FromMe, item.SenderLabel)),
-			Where:   outputField(searchChatDisplayName(item)),
-			Snippet: outputField(searchSnippet(item)),
+			Ref:      messageRef(item.MessageID),
+			ShortRef: item.ShortRef,
+			Time:     item.Time,
+			Who:      outputField(senderName(item.FromMe, item.SenderLabel)),
+			Where:    outputField(searchChatDisplayName(item)),
+			Snippet:  outputField(searchSnippet(item)),
 		})
 	}
 	return searchListOutput{
