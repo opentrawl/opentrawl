@@ -1,30 +1,26 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/openclaw/crawlkit/config"
 )
 
+// defaultPaths is the one path layout, from crawlkit/config. The base dir
+// stays ~/.telecrawl (the layout shipped before config adoption).
+func defaultPaths() config.Paths {
+	paths, _ := config.App{Name: "telecrawl", BaseDir: "~/.telecrawl"}.DefaultPaths()
+	return paths
+}
+
 func defaultDBPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "telecrawl.db"
-	}
-	return filepath.Join(home, ".telecrawl", "telecrawl.db")
+	return defaultPaths().DBPath
 }
 
 func defaultLogDir() string {
-	return filepath.Join(defaultBaseDir(), "logs")
+	return defaultPaths().LogDir
 }
 
 func defaultLogPath() string {
 	return filepath.Join(defaultLogDir(), telecrawlLogFileName)
-}
-
-func defaultBaseDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".telecrawl"
-	}
-	return filepath.Join(home, ".telecrawl")
 }
