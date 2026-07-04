@@ -25,6 +25,7 @@ var builtInBinaries = []string{
 	"photoscrawl",
 	"gogcrawl",
 	"calcrawl",
+	"birdcrawl",
 }
 
 type Source struct {
