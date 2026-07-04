@@ -73,7 +73,10 @@ func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, 
 		c.Forum = forum != 0
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.nameSelfChat(ctx, out)
 }
 
 func (s *Store) CountChats(ctx context.Context, unread bool) (int, error) {
@@ -134,7 +137,10 @@ limit ?`, folderID, limit)
 		c.Forum = forum != 0
 		out = append(out, c)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, s.nameSelfChat(ctx, out)
 }
 
 func (s *Store) CountChatsInFolder(ctx context.Context, folderID string) (int, error) {

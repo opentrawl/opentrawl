@@ -6,7 +6,19 @@ import (
 	"unicode"
 )
 
+// savedMessagesName is what Telegram calls the owner's self-chat. The
+// importer stores that chat under the owner's raw numeric id with no name,
+// so display resolves it here.
+const savedMessagesName = "Saved Messages"
+
 func (s *Store) humanizeMessages(ctx context.Context, messages []Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+	selfJID, err := s.selfChatJID(ctx)
+	if err != nil {
+		return err
+	}
 	contacts := map[string]Contact{}
 	for i := range messages {
 		sender, err := s.contactForDisplay(ctx, contacts, messages[i].SenderJID)
@@ -18,7 +30,55 @@ func (s *Store) humanizeMessages(ctx context.Context, messages []Message) error 
 			return err
 		}
 		messages[i].SenderName = humanPeerName(messages[i].SenderName, sender, messages[i].SenderJID)
+		if selfJID != "" && strings.TrimSpace(messages[i].ChatJID) == selfJID {
+			messages[i].ChatName = savedMessagesName
+			continue
+		}
 		messages[i].ChatName = humanPeerName(messages[i].ChatName, chat, messages[i].ChatJID)
+	}
+	return nil
+}
+
+// selfChatJID identifies the owner's self-chat: the chat whose id equals the
+// owner's own id, which the archive stores as the one distinct sender_jid on
+// from_me messages (exact identifier equality, no name heuristics). Returns
+// "" when the archive has no unambiguous owner.
+func (s *Store) selfChatJID(ctx context.Context) (string, error) {
+	rows, err := s.db.QueryContext(ctx, `select distinct trim(sender_jid) from messages where from_me = 1 and trim(coalesce(sender_jid, '')) <> '' limit 2`)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	var owners []string
+	for rows.Next() {
+		var value string
+		if err := rows.Scan(&value); err != nil {
+			return "", err
+		}
+		owners = append(owners, value)
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+	if len(owners) != 1 {
+		return "", nil
+	}
+	return owners[0], nil
+}
+
+// nameSelfChat renders the owner's self-chat as Saved Messages in chat lists.
+func (s *Store) nameSelfChat(ctx context.Context, chats []Chat) error {
+	if len(chats) == 0 {
+		return nil
+	}
+	selfJID, err := s.selfChatJID(ctx)
+	if err != nil || selfJID == "" {
+		return err
+	}
+	for i := range chats {
+		if strings.TrimSpace(chats[i].JID) == selfJID {
+			chats[i].Name = savedMessagesName
+		}
 	}
 	return nil
 }
