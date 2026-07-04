@@ -12,26 +12,37 @@ import (
 	"github.com/openclaw/crawlkit/render"
 )
 
+const (
+	wacrawlLogFileName = "wacrawl.log"
+	logTailLimit       = 500
+)
+
 func (a *app) newLogRun(command string) (*cklog.Run, error) {
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
 	return cklog.NewRun(cklog.Options{
-		StateRoot:    logStateRoot(a.dbPath),
-		CrawlerID:    "wacrawl",
+		StateRoot:    stateRoot,
+		CrawlerID:    crawlerID,
+		FileName:     wacrawlLogFileName,
 		Command:      command,
 		Version:      version,
 		Stderr:       a.stderr,
+		Verbosity:    a.verbosity,
 		JSONProgress: a.json,
 	})
 }
 
-func logStateRoot(dbPath string) string {
-	if strings.TrimSpace(dbPath) == "" {
-		return filepath.Dir(defaultDBPath())
+func defaultLogDir() string {
+	return filepath.Join(filepath.Dir(defaultDBPath()), "logs")
+}
+
+func logPathParts(logDir string) (string, string) {
+	baseDir := filepath.Dir(logDir)
+	stateRoot := filepath.Dir(baseDir)
+	crawlerID := filepath.Base(baseDir)
+	if strings.TrimSpace(crawlerID) == "" || crawlerID == "." || crawlerID == string(filepath.Separator) {
+		return baseDir, "wacrawl"
 	}
-	dir := filepath.Dir(strings.TrimSpace(dbPath))
-	if dir == "" {
-		return "."
-	}
-	return dir
+	return stateRoot, crawlerID
 }
 
 func logCommandName(rest []string) string {
@@ -100,11 +111,11 @@ func worldMustChange(err error, remedy string) error {
 }
 
 func (a *app) logTail() logTailEnvelope {
-	reader, err := cklog.NewReader(logStateRoot(a.dbPath), "wacrawl")
+	reader, err := newLogReader()
 	if err != nil {
 		return logTailEnvelope{}
 	}
-	lines, err := reader.RecentLines("", 1000)
+	lines, err := reader.RecentLines("", logTailLimit)
 	if err != nil {
 		return logTailEnvelope{}
 	}
@@ -144,6 +155,11 @@ func (a *app) logTail() logTailEnvelope {
 		tail.Error = genericError
 	}
 	return tail
+}
+
+func newLogReader() (*cklog.Reader, error) {
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
+	return cklog.NewReaderWithFileName(stateRoot, crawlerID, wacrawlLogFileName)
 }
 
 func lineBelongsToTail(line cklog.Line, currentRunID string) bool {
@@ -359,4 +375,19 @@ func humanLogOutcome(outcome string) string {
 	default:
 		return outcome
 	}
+}
+
+func logQuote(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return strconv.Quote("")
+	}
+	if strings.ContainsAny(value, " \t\r\n\"") {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func elapsedMS(value time.Duration) string {
+	return strconv.FormatInt(value.Milliseconds(), 10)
 }

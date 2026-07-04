@@ -179,26 +179,33 @@ func Import(ctx context.Context, st *store.Store, path string) (store.ImportStat
 
 func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions) (store.ImportStats, error) {
 	sourcePath := defaultedPath(opts.SourcePath)
+	started := time.Now()
 	stats := store.ImportStats{SourcePath: sourcePath, DBPath: st.Path(), StartedAt: time.Now().UTC()}
 	reportImportProgress(opts.Progress, 0, 5, "starting sync")
 	reportImportProgress(opts.Progress, 1, 5, "snapshotting WhatsApp databases")
+	snapshotStarted := time.Now()
 	snap, err := SnapshotPath(sourcePath)
+	stats.SnapshotElapsed = time.Since(snapshotStarted)
 	if err != nil {
 		return stats, err
 	}
 	defer func() { _ = os.RemoveAll(snap.Root) }()
 	reportImportProgress(opts.Progress, 2, 5, "reading WhatsApp databases")
+	extractStarted := time.Now()
 	data, err := Extract(ctx, snap)
+	stats.ExtractElapsed = time.Since(extractStarted)
 	if err != nil {
 		return stats, err
 	}
 	if opts.CopyMedia {
 		reportImportProgress(opts.Progress, 3, 5, "copying media")
+		mediaStarted := time.Now()
 		mediaRoot := opts.MediaRoot
 		if strings.TrimSpace(mediaRoot) == "" {
 			mediaRoot = filepath.Join(filepath.Dir(st.Path()), "media")
 		}
 		copied, missing, err := copyArchiveMedia(data.Messages, sourcePath, mediaRoot)
+		stats.MediaElapsed = time.Since(mediaStarted)
 		if err != nil {
 			return stats, err
 		}
@@ -213,9 +220,12 @@ func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions)
 	stats.MediaMessages = data.MediaCount
 	stats.FinishedAt = time.Now().UTC()
 	reportImportProgress(opts.Progress, 4, 5, "writing archive indexes")
+	writeStarted := time.Now()
 	if err := st.ReplaceAll(ctx, stats, data.Contacts, data.Chats, data.Groups, data.Participants, data.Messages); err != nil {
 		return stats, err
 	}
+	stats.WriteElapsed = time.Since(writeStarted)
+	stats.TotalElapsed = time.Since(started)
 	reportImportProgress(opts.Progress, 5, 5, "sync complete")
 	return stats, nil
 }

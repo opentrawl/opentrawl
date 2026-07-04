@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const diagnosticsLine = "Diagnostics: run with -v, or read ~/.wacrawl/logs/wacrawl.log"
+
 func printUsage(w io.Writer) {
 	_, _ = fmt.Fprint(w, `wacrawl reads local WhatsApp Desktop data into a readonly archive.
 
@@ -35,6 +37,7 @@ Options:
   --source PATH             WhatsApp Desktop source path.
   --json                    Emit JSON output.
   --version                 Print the CLI version.
+  -v, --verbose             Stream diagnostics to stderr. Use -vv for debug detail.
 
 Import flags:
   --copy-media              Copy referenced media files into the archive media directory.
@@ -50,6 +53,8 @@ Examples:
   wacrawl sql "SELECT count(*) FROM messages"
   wacrawl web
   wacrawl help messages
+
+Diagnostics: run with -v, or read ~/.wacrawl/logs/wacrawl.log
 `)
 }
 
@@ -341,5 +346,10 @@ Flags:
 	default:
 		return false
 	}
+	printDiagnosticsLine(w)
 	return true
+}
+
+func printDiagnosticsLine(w io.Writer) {
+	_, _ = fmt.Fprintln(w, "\n"+diagnosticsLine)
 }

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -85,6 +86,27 @@ func (a *app) runImport(ctx context.Context, command string, args []string) erro
 		if err != nil {
 			return err
 		}
+		a.logImportTimings(command, stats)
 		return a.print(stats)
 	})
+}
+
+func (a *app) logImportTimings(command string, stats store.ImportStats) {
+	if a.runLog == nil {
+		return
+	}
+	_ = a.runLog.Info(logEventName(command+"_done"), strings.Join([]string{
+		"messages=" + strconv.Itoa(stats.Messages),
+		"chats=" + strconv.Itoa(stats.Chats),
+		"participants=" + strconv.Itoa(stats.Participants),
+		"media_messages=" + strconv.Itoa(stats.MediaMessages),
+		"elapsed_ms=" + elapsedMS(stats.TotalElapsed),
+	}, " "))
+	_ = a.runLog.Debug(logEventName(command+"_phase"), strings.Join([]string{
+		"source=" + logQuote("whatsapp-desktop"),
+		"snapshot_ms=" + elapsedMS(stats.SnapshotElapsed),
+		"extract_ms=" + elapsedMS(stats.ExtractElapsed),
+		"media_ms=" + elapsedMS(stats.MediaElapsed),
+		"write_ms=" + elapsedMS(stats.WriteElapsed),
+	}, " "))
 }
