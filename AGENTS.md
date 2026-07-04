@@ -33,12 +33,24 @@ one Mac app. Read [docs/vision.md](docs/vision.md) first, then
 
 ## Engineering rules
 
-The Standards section below is binding in this repo. The full
-distilled ruleset (code bar, output/design bar, process rules, ticket
-quality gates) lives in the private workspace at
-`~/code/crawlers/docs/rules.md` — agents working on Josh's machine
-read it before writing any code or artifact; on any conflict it wins.
-Never copy its text into this public repo.
+Go for crawlers and the CLI, SwiftUI for the Mac app.
+
+The bar in one paragraph: boring code — simple, explicit, local,
+readable; files under about 500 lines; cognition belongs to models
+and shells stay deterministic (code does IO, batching, exact matching
+and mechanical transforms, but any semantic decision — is this a
+receipt, which item, what quality — goes to a model); and every
+agent-produced diff gets a model principles review before commit,
+because human review is for taste, not for catching violations.
+Outputs must read clearly to a human cold, which is what makes them
+safe for agents too.
+
+The full distilled ruleset — code bar, output/design bar,
+architecture, model grounding, process rules, ticket quality gates,
+and the war stories behind them — lives in the private workspace at
+`~/code/crawlers/docs/rules.md`. Agents on Josh's machine read it
+before writing any code or artifact; on any conflict it wins. Never
+copy its text into this public repo.
 
 ## Layout and upstreams
 
@@ -77,74 +89,6 @@ written for end users:
    and docs/style.md before it merges. Reviewers are told to refute,
    not to approve.
 
-## Standards
-
-- Go for crawlers and the CLI, SwiftUI for the Mac app.
-- Code must be self-documenting: no magic constants, one obvious job per
-  function. If a reader needs a comment to follow the code, rewrite the
-  code.
-- Keep files under about 500 lines.
-- Prose (docs, PRs, commits) follows plain-language style: front-loaded,
-  short sentences, sentence case, British English, no filler.
-- Outputs of every crawler command must be readable by a human cold;
-  that is the bar that makes them agent-safe too.
-- Cognition belongs to models, shells stay deterministic. Code may do
-  IO, batching, schema validation, budget caps, exact matching and
-  mechanical transforms. Code must NOT rank, score, route by keyword,
-  infer meaning, or judge quality with local heuristics — any semantic
-  decision (is this a receipt? which item? what quality?) goes to a
-  model. Deterministic where the contract demands determinism (archive
-  substrate, refs, joins by exact identifiers); model-driven wherever
-  meaning is extracted or judged.
-- The deterministic carve-out, codified (strictly read, the rule above
-  would ban search indexes — a full-text index is "ranking"; that is
-  not the intent). Deterministic code MAY make a bounded semantic-ish
-  choice only when all three hold: (1) same input must give the same
-  output every time because agents retry against it (query-time
-  stability is a contract property); (2) it operates on structure
-  (string distance, term frequency, exact identifiers), not on meaning
-  a model could judge better at the same layer; (3) a model call at
-  that point is architecturally wrong (per-query or per-render latency)
-  AND the model-driven alternative is precomputing at sync time — which
-  must be considered and rejected in writing. Every carve-out is
-  documented at its call site with this justification; an undocumented
-  heuristic is a violation by default.
-- Every agent-produced diff gets a principles review by a model against
-  this file before it is committed — deterministic-vs-model boundary,
-  boring/lean, output rules. Human review is for taste, not for
-  catching principle violations.
-- Raw checks cover BOTH sides of every model call. Always read the
-  actual payload sent to the model (the exact bytes after selection,
-  truncation, and formatting) and the actual final artifact, sampled
-  against raw source — not just the pipeline's schema validation.
-  Learned the hard way: an extractor ran 301 model calls over emails
-  whose bodies were empty or cut at 1,500 chars; schema checks and a
-  benchmark score both passed while the output was garbage. Reading
-  one input batch would have caught it before the first commit.
-- Deficient input is an alarm, not a row. When a model receives input
-  with no extractable substance (empty body, truncated past the
-  signal), it must say so and the shell must surface the rate loudly
-  (and abort when it dominates) — never silently emit hollow output
-  that looks like data.
-
-## Upstream tool drift
-
-Upstream tools such as `gogcli` and `crawlkit` move fast. Pin minimum
-versions explicitly, and periodically re-check upstream for new
-primitives before building workarounds. Concrete example: `gogcrawl`
-originally paginated Gmail search because the pinned `gog` 0.11
-predated `gog backup gmail`; the crawler now depends on the backup
-pipeline instead.
-
-## Pre-1.0: breaking changes are free
-
-There is no external release and there are no external consumers.
-Break contracts, schemas and CLIs whenever breaking is simpler than
-compatibility — no shims, no deprecation periods, no migration code
-for data that can be re-derived by one sync. Contract versions exist
-for our own coherence. This ends at the first external release, not
-before.
-
 ## Blockers are surfaced, not sat on
 
 When work is aligned with the roadmap and ready, fire it — do not
@@ -162,26 +106,3 @@ any doc, re-read it from disk — pattern-editing against a remembered
 version silently skips his commented lines and can clobber his review.
 Treat comment lines as review to answer, never text to delete; remove
 them only when resolving that comment with him.
-
-## Output review protocol (suite-wide, lifted from photoscrawl per Josh)
-
-The gate for any change that touches what a command emits is a MODEL
-REVIEW, never a script. Deterministic checks own structure; quality
-judgment belongs to a model. Before committing any output-shape
-change:
-
-1. Generate RAW transcripts of every permutation the change touches:
-   every affected verb, JSON and human mode, crawler-direct AND
-   trawl-rendered (trawl renders crawler JSON — that is the surface
-   users and agents actually see). Raw means raw: full, untruncated,
-   uncensored — a review over summarized output reviews nothing.
-2. A model that did not write the change reviews those transcripts
-   adversarially (refute, not approve) against the blind-person
-   test: output must let a blind person understand it perfectly —
-   what, who, where, when, with what certainty. Anything they could
-   not parse (raw enums, machine ids, cache accounting) is slop;
-   anything they would still have to ask about is missing.
-3. crawlkit/conformance checks are tripwires that remember past
-   defects. They are never sufficient and passing them proves
-   nothing new. When the model review finds a defect class, add a
-   tripwire so it cannot regress — but the review itself is the gate.
