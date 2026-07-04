@@ -6,11 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/config"
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
@@ -223,12 +222,15 @@ func rootCommandName(rest []string, versionOut, helpOut bool) string {
 	return logCommandName(rest)
 }
 
+// wacrawlPaths is the one archive path layout, from crawlkit/config. The
+// base dir stays ~/.wacrawl (the layout shipped before config adoption).
+func wacrawlPaths() config.Paths {
+	paths, _ := config.App{Name: "wacrawl", BaseDir: "~/.wacrawl"}.DefaultPaths()
+	return paths
+}
+
 func defaultDBPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "wacrawl.db"
-	}
-	return filepath.Join(home, ".wacrawl", "wacrawl.db")
+	return wacrawlPaths().DBPath
 }
 
 func usageErr(err error) error {

@@ -10,11 +10,12 @@ func controlManifest() control.Manifest {
 	m := control.NewManifest("wacrawl", "WhatsApp", "wacrawl")
 	m.Description = "Local-first WhatsApp Desktop archive crawler."
 	m.Branding = control.Branding{SymbolName: "message.fill", AccentColor: "#25d366", BundleIdentifier: "net.whatsapp.WhatsApp"}
+	paths := wacrawlPaths()
 	m.Paths = control.Paths{
-		DefaultConfig:   filepath.Join(filepath.Dir(defaultDBPath()), "backup.toml"),
-		DefaultDatabase: defaultDBPath(),
-		DefaultCache:    filepath.Join(filepath.Dir(defaultDBPath()), "cache"),
-		DefaultLogs:     defaultLogDir(),
+		DefaultConfig:   filepath.Join(paths.BaseDir, "backup.toml"),
+		DefaultDatabase: paths.DBPath,
+		DefaultCache:    paths.CacheDir,
+		DefaultLogs:     paths.LogDir,
 	}
 	m.Capabilities = []string{"metadata", "doctor", "status", "sync", "search", "open", "sql", "web", "backup", "contacts_export", "who", "short_refs", "verbose_logs"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"whatsapp-desktop", "sqlite", "encrypted-git-backup"}}

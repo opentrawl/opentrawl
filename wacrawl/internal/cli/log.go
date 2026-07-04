@@ -32,7 +32,7 @@ func (a *app) newLogRun(command string) (*cklog.Run, error) {
 }
 
 func defaultLogDir() string {
-	return filepath.Join(filepath.Dir(defaultDBPath()), "logs")
+	return wacrawlPaths().LogDir
 }
 
 func logPathParts(logDir string) (string, string) {
