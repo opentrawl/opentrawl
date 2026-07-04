@@ -167,7 +167,7 @@ func parseVenuePlausibility(value string) venuePlausibility {
 	for _, line := range lines {
 		key, field, ok := strings.Cut(line, ":")
 		if ok {
-			switch strings.ToLower(strings.Join(strings.Fields(key), " ")) {
+			switch strings.ToLower(strings.Join(strings.Fields(strings.Trim(key, "`*_ ")), " ")) {
 			case "candidate_id", "candidate id", "id":
 				plausibility.CandidateID = cleanVenueCandidateID(field)
 				continue
