@@ -369,7 +369,7 @@ func TestNotesMissingDirAndDuplicateNames(t *testing.T) {
 	if _, err := s.AddPerson("Ada Lovelace", nil, nil, nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	notes, err := s.Notes("Ada Lovelace")
+	_, notes, err := s.Notes("Ada Lovelace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestNotesMissingDirAndDuplicateNames(t *testing.T) {
 	if _, err := s.AddNote("Ada Lovelace", n); err != nil {
 		t.Fatal(err)
 	}
-	notes, err = s.Notes("Ada Lovelace")
+	_, notes, err = s.Notes("Ada Lovelace")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1062,7 +1062,7 @@ func TestPeopleAndNotesForgivingBranches(t *testing.T) {
 	if err := markdown.WriteNote(filepath.Join(notesDir, "2026-note.md"), note); err != nil {
 		t.Fatal(err)
 	}
-	notes, err := s.Notes("Broken Person")
+	_, notes, err := s.Notes("Broken Person")
 	if err != nil {
 		t.Fatal(err)
 	}

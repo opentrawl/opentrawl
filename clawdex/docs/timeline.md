@@ -6,20 +6,25 @@ someone.
 
 ```bash
 clawdex timeline sally
+clawdex timeline sally --limit 50
 clawdex timeline sally --json
-clawdex timeline sally@example.com --plain
 ```
 
-Default output is a TSV:
+Default output is a labelled table, newest first, 20 notes unless
+`--limit` says otherwise:
 
 ```text
-2026-04-12T19:30:00Z   meeting   inperson   Drinks at Bar Centrale
-2026-04-22T08:01:00Z   dm        whatsapp   Sent recipe link
-2026-05-08T09:15:00Z   dm        whatsapp   Follow up about dinner
+Notes for Sally O'Malley: showing 3 of 3, newest first.
+Add one: clawdex note add "sally" --kind note --source manual --text TEXT
+
+date              where    text
+2026-05-08 09:15  dm       Follow up about dinner
+2026-04-22 08:01  dm       Sent recipe link
+2026-04-12 19:30  meeting  Drinks at Bar Centrale
 ```
 
-`--json` returns the full note objects, including bodies, topics, and IDs.
-`--plain` is a simpler TSV intended for `awk`/`cut` pipelines.
+`--json` returns the full note objects, including bodies, topics, and IDs,
+inside a `{person_id, person, notes, total, truncated}` envelope.
 
 ## Resolving the person
 

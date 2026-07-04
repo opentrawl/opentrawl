@@ -32,7 +32,8 @@ Flags:
   or `2026-05-08`. Defaults to *now*.
 - `--topic` — repeatable, becomes the `topics:` frontmatter array.
 
-`--dry-run` shows the resolved note as JSON without writing.
+`--dry-run` previews the add without writing (`--json` for the resolved
+note object).
 
 ## List
 
@@ -41,9 +42,9 @@ clawdex note list sally
 clawdex note list sally --json
 ```
 
-The default output is a TSV of `occurred-at<TAB>kind<TAB>source<TAB>body`.
-Note bodies are flattened to a single line for TSV; use `--json` to get the
-full body.
+The default output is the same labelled table as [`timeline`](timeline.md),
+newest first, bounded by `--limit` (default 20). `--json` returns the full
+note objects in a `{person_id, person, notes, total, truncated}` envelope.
 
 ## Note file format
 

@@ -37,7 +37,6 @@ type CLI struct {
 	Config  string `name:"config" help:"Config path" env:"CLAWDEX_CONFIG"`
 	Repo    string `name:"repo" help:"Contacts data repo path" env:"CLAWDEX_REPO"`
 	JSON    bool   `name:"json" help:"Write JSON to stdout"`
-	Plain   bool   `name:"plain" help:"Write stable plain text to stdout"`
 	DryRun  bool   `name:"dry-run" short:"n" help:"Preview changes without writing"`
 	NoInput bool   `name:"no-input" help:"Never prompt"`
 	Verbose bool   `name:"verbose" short:"v" help:"Stream diagnostics to stderr. Use -vv for debug detail."`
@@ -277,14 +276,18 @@ func (c *PersonAddCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.printPerson(p)
+	return r.print(p)
 }
 
 type PersonListCmd struct {
 	Query string `name:"query" short:"q" help:"Filter query"`
+	Limit int    `name:"limit" default:"50" help:"Number of people to show"`
 }
 
 func (c *PersonListCmd) Run(r *Runtime) error {
+	if err := validateLimit(c.Limit); err != nil {
+		return err
+	}
 	people, err := r.store.People()
 	if err != nil {
 		return err
@@ -299,7 +302,20 @@ func (c *PersonListCmd) Run(r *Runtime) error {
 		}
 		people = filtered
 	}
-	return r.printPeople(people)
+	total := len(people)
+	if len(people) > c.Limit {
+		people = people[:c.Limit]
+	}
+	if people == nil {
+		people = []model.Person{}
+	}
+	return r.print(peopleEnvelope{
+		Query:     c.Query,
+		People:    people,
+		Total:     total,
+		Truncated: total > len(people),
+		limit:     c.Limit,
+	})
 }
 
 type PersonShowCmd struct {
@@ -311,7 +327,7 @@ func (c *PersonShowCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.printPerson(p)
+	return r.print(p)
 }
 
 type PersonEditCmd struct {
@@ -407,7 +423,7 @@ func (c *PersonAvatarClearCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.printPerson(p)
+	return r.print(p)
 }
 
 type NoteCmd struct {
@@ -434,49 +450,104 @@ func (c *NoteAddCmd) Run(r *Runtime) error {
 	}
 	n := markdown.NewNote("", c.Kind, c.Source, c.Text, occurredAt, time.Now(), c.Topic)
 	if r.root.DryRun {
-		return r.print(n)
+		if r.root.JSON {
+			return r.print(n)
+		}
+		_, err := fmt.Fprintf(r.stdout, "Would add a %s note for %s (dry run, nothing written).\n", n.Kind, c.Person)
+		return err
 	}
 	n, err = r.store.AddNote(c.Person, n)
 	if err != nil {
 		return err
 	}
-	return r.print(n)
+	if r.root.JSON {
+		return r.print(n)
+	}
+	_, err = fmt.Fprintf(r.stdout, "Added a %s note for %s. See it: clawdex note list %q\n", n.Kind, c.Person, c.Person)
+	return err
 }
 
 type NoteListCmd struct {
 	Person string `arg:"" help:"Person query"`
+	Limit  int    `name:"limit" default:"20" help:"Number of notes to show"`
 }
 
 func (c *NoteListCmd) Run(r *Runtime) error {
-	notes, err := r.store.Notes(c.Person)
-	if err != nil {
-		return err
-	}
-	return r.print(notes)
+	return runNoteList(r, "note list", c.Person, c.Limit)
 }
 
 type TimelineCmd struct {
 	Person string `arg:"" help:"Person query"`
+	Limit  int    `name:"limit" default:"20" help:"Number of notes to show"`
 }
 
 func (c *TimelineCmd) Run(r *Runtime) error {
-	notes, err := r.store.Notes(c.Person)
+	return runNoteList(r, "timeline", c.Person, c.Limit)
+}
+
+// runNoteList backs note list and timeline: the same notes, newest first.
+func runNoteList(r *Runtime, verb, personQuery string, limit int) error {
+	if err := validateLimit(limit); err != nil {
+		return err
+	}
+	p, notes, err := r.store.Notes(personQuery)
 	if err != nil {
 		return err
 	}
-	return r.printTimeline(notes)
+	slices.Reverse(notes) // store returns oldest first
+	total := len(notes)
+	if len(notes) > limit {
+		notes = notes[:limit]
+	}
+	if notes == nil {
+		notes = []model.Note{}
+	}
+	return r.print(notesEnvelope{
+		PersonID:  p.ID,
+		Person:    p.Name,
+		Notes:     notes,
+		Total:     total,
+		Truncated: total > len(notes),
+		verb:      verb,
+		query:     personQuery,
+		limit:     limit,
+	})
 }
 
 type SearchCmd struct {
 	Query string `arg:"" help:"Search query"`
+	Limit int    `name:"limit" default:"20" help:"Number of results to return"`
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
+	if err := validateLimit(c.Limit); err != nil {
+		return err
+	}
 	hits, err := r.store.Search(c.Query)
 	if err != nil {
 		return err
 	}
-	return r.print(hits)
+	total := len(hits)
+	if len(hits) > c.Limit {
+		hits = hits[:c.Limit]
+	}
+	if hits == nil {
+		hits = []model.SearchHit{}
+	}
+	return r.print(searchEnvelope{
+		Query:        c.Query,
+		Results:      hits,
+		TotalMatches: total,
+		Truncated:    total > len(hits),
+		limit:        c.Limit,
+	})
+}
+
+func validateLimit(limit int) error {
+	if limit < 1 {
+		return usageErr{errors.New("--limit must be at least 1")}
+	}
+	return nil
 }
 
 type ImportCmd struct {
@@ -490,11 +561,6 @@ type ImportCmd struct {
 type ImportContactsCmd struct {
 	From    string `name:"from" help:"Crawler binary to import contacts from"`
 	FromAll bool   `name:"from-all" help:"Import contacts from every installed crawler that declares contacts export"`
-}
-
-type importContactsResult struct {
-	Changes                   []model.ImportChange `json:"changes"`
-	SkippedWithoutIdentifiers int                  `json:"skipped_without_identifiers,omitempty"`
 }
 
 type crawlerImportFailures []error
@@ -517,7 +583,7 @@ func (c *ImportContactsCmd) Run(r *Runtime) error {
 	case c.From == "" && !c.FromAll:
 		return usageErr{errors.New("provide --from CRAWLER or --from-all")}
 	}
-	var result importContactsResult
+	var result importChangesEnvelope
 	var failures crawlerImportFailures
 	if c.From != "" {
 		imported, skipped, err := r.importCrawlerContacts(c.From)
@@ -544,7 +610,7 @@ func (c *ImportContactsCmd) Run(r *Runtime) error {
 			result.SkippedWithoutIdentifiers += skipped
 		}
 	}
-	if err := r.print(result); err != nil {
+	if err := r.print(newImportChangesEnvelope(result.Changes, result.SkippedWithoutIdentifiers)); err != nil {
 		return err
 	}
 	if len(failures) > 0 {
@@ -795,7 +861,7 @@ func (c *ImportAppleCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.print(changes)
+	return r.print(newImportChangesEnvelope(changes, 0))
 }
 
 type ImportGoogleCmd struct {
@@ -816,7 +882,7 @@ func (c *ImportGoogleCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.print(changes)
+	return r.print(newImportChangesEnvelope(changes, 0))
 }
 
 type ImportDiscrawlCmd struct {
@@ -838,7 +904,7 @@ func (c *ImportBirdclawCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.print(changes)
+	return r.print(newImportChangesEnvelope(changes, 0))
 }
 
 func (c *ImportDiscrawlCmd) Run(r *Runtime) error {
@@ -850,7 +916,7 @@ func (c *ImportDiscrawlCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	return r.print(changes)
+	return r.print(newImportChangesEnvelope(changes, 0))
 }
 
 type SyncCmd struct {
@@ -1124,144 +1190,6 @@ func countNoun(count int, singular, plural string) string {
 		return "1 " + singular
 	}
 	return fmt.Sprintf("%d %s", count, plural)
-}
-
-func (r *Runtime) print(value any) error {
-	if r.root.JSON {
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(value)
-	}
-	switch v := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			if _, err := fmt.Fprintf(r.stdout, "%s: %v\n", key, v[key]); err != nil {
-				return err
-			}
-		}
-		return nil
-	case control.Status:
-		return printStatusText(r.stdout, v, r.renderLogTail())
-	case contactexport.ContactExport:
-		return printContactExportText(r.stdout, v)
-	case model.Note:
-		_, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", v.ID, v.Kind, v.Source, v.Path)
-		return err
-	case []model.Note:
-		return r.printTimeline(v)
-	case []model.SearchHit:
-		return r.printHits(v)
-	case []model.ImportChange:
-		return r.printImportChanges(v)
-	case importContactsResult:
-		if err := r.printImportChanges(v.Changes); err != nil {
-			return err
-		}
-		if v.SkippedWithoutIdentifiers > 0 {
-			_, err := fmt.Fprintf(r.stdout, "skipped %d contacts without identifiers\n", v.SkippedWithoutIdentifiers)
-			return err
-		}
-		return nil
-	default:
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(value)
-	}
-}
-
-func (r *Runtime) printImportChanges(changes []model.ImportChange) error {
-	for _, change := range changes {
-		if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", change.Action, change.Name, change.PersonID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) printPerson(p model.Person) error {
-	if r.root.JSON {
-		return r.print(p)
-	}
-	if r.root.Plain {
-		_, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", p.ID, p.Name, p.Path)
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "id: %s\nname: %s\npath: %s\n", p.ID, p.Name, p.Path); err != nil {
-		return err
-	}
-	for _, email := range p.Emails {
-		if _, err := fmt.Fprintf(r.stdout, "email: %s\n", email.Value); err != nil {
-			return err
-		}
-	}
-	for _, phone := range p.Phones {
-		if _, err := fmt.Fprintf(r.stdout, "phone: %s\n", phone.Value); err != nil {
-			return err
-		}
-	}
-	for _, address := range p.Addresses {
-		if _, err := fmt.Fprintf(r.stdout, "address: %s\n", strings.ReplaceAll(address.Value, "\n", ", ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) printPeople(people []model.Person) error {
-	if r.root.JSON {
-		return r.print(people)
-	}
-	for _, p := range people {
-		if r.root.Plain {
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", p.ID, p.Name, p.Path); err != nil {
-				return err
-			}
-		} else {
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\n", p.ID, p.Name, firstEmail(p)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) printTimeline(notes []model.Note) error {
-	if r.root.JSON {
-		return r.print(notes)
-	}
-	for _, n := range notes {
-		if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", n.OccurredAt.Format(time.RFC3339), n.Kind, n.Source, strings.ReplaceAll(n.Body, "\n", " ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) printHits(hits []model.SearchHit) error {
-	for _, hit := range hits {
-		if r.root.Plain {
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", hit.Kind, hit.ID, hit.Name, hit.Path); err != nil {
-				return err
-			}
-		} else {
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", hit.Kind, hit.Name, hit.Snippet, hit.Path); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func firstEmail(p model.Person) string {
-	if len(p.Emails) == 0 {
-		return ""
-	}
-	return p.Emails[0].Value
 }
 
 func parseOptionalTime(value string) (time.Time, error) {

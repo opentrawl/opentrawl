@@ -87,7 +87,6 @@ These apply to every subcommand:
 | `--config PATH`  | `CLAWDEX_CONFIG`   | Override the user-level config path.                    |
 | `--repo DIR`     | `CLAWDEX_REPO`     | Override the contacts data repo for this run.           |
 | `--json`         |                    | Stable JSON envelope on stdout.                         |
-| `--plain`        |                    | TSV on stdout (script-friendly).                        |
 | `--dry-run`, `-n`|                    | Preview without writing.                                |
 | `--no-input`     |                    | Never prompt; useful in CI.                             |
 | `--verbose`, `-v`|                    | Verbose diagnostics on stderr.                          |

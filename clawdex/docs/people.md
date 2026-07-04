@@ -27,11 +27,14 @@ Flags:
 ```bash
 clawdex person list
 clawdex person list --query sally
-clawdex person list --json | jq '.[].name'
+clawdex person list --limit 200
+clawdex person list --json | jq '.people[].name'
 ```
 
 `--query` filters by substring match against name, ID, and tags. The default
-output is a TSV of `id<TAB>name<TAB>first-email`.
+output is a labelled table of name, email and phone (plus tags when any
+person has them), A to Z, 50 people unless `--limit` says otherwise.
+`--json` returns a `{people, total, truncated}` envelope.
 
 ## Show
 

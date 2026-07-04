@@ -21,16 +21,21 @@ clawdex search whatsapp --json
 - Person emails and phone numbers (normalized)
 - Note bodies, kinds, sources, and topics
 
-Hits are printed one per line, with the kind, name, a snippet, and the
-file path:
+Hits are printed as a labelled table, best match first, with the person
+and the matched fragment. 20 results come back unless `--limit` says
+otherwise; zero results print a sentence, never silence:
 
 ```text
-person   Sally O'Malley   sally@example.com                 people/sally-o-malley/person.md
-note     Sally O'Malley   ...follow up about dinner...      people/sally-o-malley/notes/2026-05-08T09-15-00Z-whatsapp.md
+Search "dinner": showing 2 of 2, best match first.
+Show a person: clawdex person show NAME (their notes: clawdex note list NAME)
+
+date              who             text
+                  Sally O'Malley  sally@example.com · +1 555 0100
+2026-05-08 09:15  Sally O'Malley  ...follow up about dinner...
 ```
 
-`--json` returns a list of `SearchHit` objects; `--plain` swaps the
-snippet for the stable ID, which is friendlier to scripts.
+`--json` returns `{query, results, total_matches, truncated}` where
+`results` is a list of `SearchHit` objects (never null).
 
 ## How matching works
 

@@ -14,12 +14,16 @@ If you want to push changes back into Apple Contacts or Google Contacts, see
 
 ## What gets written
 
-Each import returns a list of `ImportChange` rows, printed as TSV:
+Each import reports its changes as a labelled table (`changes` in
+`--json`):
 
 ```text
-create  Sally O'Malley   person_...
-update  Bo Burnham       person_...
-stage   Unknown Sender
+Import: 3 contact changes.
+
+action  who             id
+create  Sally O'Malley  person_...
+update  Bo Burnham      person_...
+stage   Unknown Sender  -
 ```
 
 Combine with `--dry-run` to preview without writing:

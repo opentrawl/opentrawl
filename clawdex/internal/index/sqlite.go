@@ -364,7 +364,7 @@ func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
 			return nil, err
 		}
 		if p, ok := byID[id]; ok {
-			hits = append(hits, model.SearchHit{Kind: "person", ID: id, Name: name, Path: p.Path, Score: 100, Snippet: name})
+			hits = append(hits, model.SearchHit{Kind: "person", ID: id, Name: name, Path: p.Path, Score: 100, Snippet: personSnippet(p, query)})
 		}
 	}
 	return hits, rows.Err()

@@ -24,7 +24,7 @@ func TestMain(m *testing.M) {
 func TestRun(t *testing.T) {
 	var out, errOut bytes.Buffer
 	cfg := filepath.Join(t.TempDir(), "config.toml")
-	code := run([]string{"--config", cfg, "config"}, &out, &errOut)
+	code := run([]string{"--config", cfg, "--json", "config"}, &out, &errOut)
 	var payload struct {
 		Git struct {
 			Remote string `json:"remote"`
@@ -51,7 +51,7 @@ func TestMainEntrypoint(t *testing.T) {
 		code = value
 	}
 	cfg := filepath.Join(t.TempDir(), "config.toml")
-	os.Args = []string{"clawdex", "--config", cfg, "config"}
+	os.Args = []string{"clawdex", "--config", cfg, "--json", "config"}
 	main()
 	if code != 0 {
 		t.Fatalf("exit code = %d", code)

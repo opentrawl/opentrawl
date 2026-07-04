@@ -8,6 +8,7 @@ import (
 
 	"github.com/openclaw/clawdex/internal/index"
 	"github.com/openclaw/clawdex/internal/model"
+	"github.com/openclaw/crawlkit/render"
 )
 
 type WhoCmd struct {
@@ -62,7 +63,7 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	if r.root.JSON {
 		return r.print(envelope)
 	}
-	return printWhoTable(r.stdout, envelope.Candidates)
+	return printWhoTable(r.stdout, envelope)
 }
 
 func whoCandidates(candidates []index.WhoCandidate) []whoCandidate {
@@ -81,52 +82,61 @@ func whoCandidates(candidates []index.WhoCandidate) []whoCandidate {
 	return out
 }
 
-func printWhoTable(w io.Writer, candidates []whoCandidate) error {
-	if len(candidates) == 0 {
-		_, err := fmt.Fprintln(w, "No people found.")
+func printWhoTable(w io.Writer, envelope whoEnvelope) error {
+	if len(envelope.Candidates) == 0 {
+		_, err := fmt.Fprintf(w, "No people match %q. Search instead: clawdex search %q\n", envelope.Query, envelope.Query)
 		return err
 	}
-	width := textOutputWidth(w)
-	columns := whoTableColumns(width)
-	rows := make([][]string, 0, len(candidates))
-	for _, candidate := range candidates {
+	if _, err := fmt.Fprintf(w, "Who is %q: %s, best match first.\n", envelope.Query, countNoun(len(envelope.Candidates), "person", "people")); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Show one: clawdex person show NAME"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	// The contract's who table: who, last seen, sources, identifiers.
+	// Match quality stays in JSON; rows are already best match first.
+	rows := make([][]string, 0, len(envelope.Candidates))
+	for _, candidate := range envelope.Candidates {
 		rows = append(rows, []string{
 			candidate.Who,
-			candidate.MatchQuality,
 			formatWhoLastSeen(candidate.LastSeen),
 			strings.Join(candidate.Sources, ", "),
-			strings.Join(candidate.Identifiers, ", "),
+			strings.Join(humanIdentifiers(candidate.Identifiers), ", "),
 		})
 	}
-	return renderTextTable(w, columns, rows)
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "who"},
+		{Header: "last seen"},
+		{Header: "sources", Wrap: true},
+		{Header: "identifiers", Wrap: true},
+	}, rows)
 }
 
-func whoTableColumns(width int) []textColumn {
-	whoWidth := 24
-	matchWidth := 14
-	sourceWidth := 20
-	if width < 90 {
-		whoWidth = 16
-		sourceWidth = 10
+// humanIdentifiers hides internal sync record refs (apple:UUID:abperson,
+// google:people/…) from the human table: no one can read or retype them.
+// JSON keeps the full list for federation.
+func humanIdentifiers(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.HasPrefix(value, "apple:") || strings.HasPrefix(value, "google:") {
+			continue
+		}
+		out = append(out, value)
 	}
-	identifierWidth := textColumnWidth(width, whoWidth, matchWidth, 10, sourceWidth)
-	return []textColumn{
-		{header: "WHO", width: whoWidth},
-		{header: "MATCH", width: matchWidth},
-		{header: "LAST SEEN", width: 10},
-		{header: "SOURCES", width: sourceWidth, wrap: true},
-		{header: "IDENTIFIERS", width: identifierWidth, wrap: true},
-	}
+	return out
 }
 
 func formatWhoLastSeen(value string) string {
 	if strings.TrimSpace(value) == "" {
-		return "-"
+		return ""
 	}
 	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
 		parsed, err := time.Parse(layout, value)
 		if err == nil {
-			return parsed.UTC().Format("2006-01-02")
+			return render.ShortLocalTime(parsed)
 		}
 	}
 	return value

@@ -251,7 +251,6 @@ func inspectAddressBookSchema(ctx context.Context, db *sql.DB, path string) (add
 	return schema, nil
 }
 
-
 func tableColumns(ctx context.Context, db *sql.DB, table string) (map[string]bool, error) {
 	rows, err := db.QueryContext(ctx, "pragma table_info("+table+")")
 	if err != nil {

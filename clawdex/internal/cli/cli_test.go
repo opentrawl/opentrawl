@@ -54,7 +54,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	if !strings.Contains(out, "Ada Lovelace") {
 		t.Fatalf("add out = %s", out)
 	}
-	out = run("person", "list", "--plain")
+	out = run("person", "list")
 	if !strings.Contains(out, "Ada Lovelace") {
 		t.Fatalf("list out = %s", out)
 	}
@@ -65,7 +65,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	avatarPath := filepath.Join(t.TempDir(), "avatar.png")
 	writeCLITestPNG(t, avatarPath)
 	out = run("person", "avatar", "set", "ada@example.com", avatarPath)
-	if !strings.Contains(out, `"path": "avatars/avatar.png"`) {
+	if !strings.Contains(out, "avatars/avatar.png") {
 		t.Fatalf("avatar set out = %s", out)
 	}
 	out = run("person", "avatar", "show", "ada@example.com", "--path")
@@ -73,7 +73,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 		t.Fatalf("avatar show path = %s", out)
 	}
 	out = run("person", "avatar", "show", "ada@example.com")
-	if !strings.Contains(out, `"mime": "image/png"`) {
+	if !strings.Contains(out, "image/png") {
 		t.Fatalf("avatar show = %s", out)
 	}
 	out = run("--dry-run", "person", "avatar", "set", "ada@example.com", avatarPath)
@@ -81,7 +81,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 		t.Fatalf("avatar dry set out = %s", out)
 	}
 	out = run("note", "add", "ada", "--kind", "dm", "--source", "manual", "--text", "Analytical engine")
-	if !strings.Contains(out, "dm\tmanual") {
+	if !strings.Contains(out, "Added a dm note") {
 		t.Fatalf("note out = %s", out)
 	}
 	out = run("note", "list", "ada")
@@ -92,8 +92,8 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	if !strings.Contains(out, "Analytical engine") {
 		t.Fatalf("timeline out = %s", out)
 	}
-	out = run("search", "engine", "--plain")
-	if !strings.Contains(out, "note") {
+	out = run("search", "engine")
+	if !strings.Contains(out, "Analytical engine") {
 		t.Fatalf("search out = %s", out)
 	}
 	vcardPath := filepath.Join(t.TempDir(), "contacts.vcf")
@@ -273,7 +273,7 @@ updated_at: 2026-05-08T09:00:00Z
 
 	out.Reset()
 	errOut.Reset()
-	if err := Execute([]string{"--config", cfg, "person", "list", "--plain"}, &out, &errOut); err != nil {
+	if err := Execute([]string{"--config", cfg, "person", "list"}, &out, &errOut); err != nil {
 		t.Fatalf("person list: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
 	if got := errOut.String(); got != "" {
@@ -373,10 +373,11 @@ func TestExecuteWhoHumanUsesWidthFittedTable(t *testing.T) {
 	}
 	conformance.AssertHumanOutput(t, out.String())
 	for _, want := range []string{
-		"WHO               MATCH",
+		"who",
+		"last seen",
+		"identifiers",
+		"Show one: clawdex person show NAME",
 		"Alice Example",
-		"close_spelling",
-		"telecrawl,",
 		"wacrawl",
 		"15550100",
 		"telegram:alice",
@@ -658,7 +659,7 @@ func TestExecuteImportAppleFromFileAndGoogleViaFakeGog(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "import", "apple", "--input", input}, &out, &errOut); err != nil {
 		t.Fatalf("apple import: %v %s", err, errOut.String())
 	}
-	if !strings.Contains(out.String(), "create\tAda Apple") {
+	if !strings.Contains(out.String(), "Ada Apple") {
 		t.Fatalf("apple import out = %s", out.String())
 	}
 	fakeGog := writeFakeGog(t, `[{"resourceName":"people/g1","name":"Grace Google","email":"grace@example.com"}]`)
@@ -667,7 +668,7 @@ func TestExecuteImportAppleFromFileAndGoogleViaFakeGog(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "import", "google", "--account", "me@example.com"}, &out, &errOut); err != nil {
 		t.Fatalf("google import: %v %s", err, errOut.String())
 	}
-	if !strings.Contains(out.String(), "create\tGrace Google") {
+	if !strings.Contains(out.String(), "Grace Google") {
 		t.Fatalf("google import out = %s", out.String())
 	}
 	out.Reset()
@@ -683,7 +684,7 @@ func TestExecuteImportAppleFromFileAndGoogleViaFakeGog(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "import", "discrawl", "--db", filepath.Join(t.TempDir(), "discrawl.db"), "--min-messages", "4"}, &out, &errOut); err != nil {
 		t.Fatalf("discrawl import: %v %s", err, errOut.String())
 	}
-	if !strings.Contains(out.String(), "create\tDiscord Friend") {
+	if !strings.Contains(out.String(), "Discord Friend") {
 		t.Fatalf("discrawl import out = %s", out.String())
 	}
 	fakeBirdclaw := writeFakeSQLite(t, `[{"conversation_id":"1-2","profile_id":"2","handle":"bird","display_name":"Bird Person","messages":5}]`)
@@ -692,7 +693,7 @@ func TestExecuteImportAppleFromFileAndGoogleViaFakeGog(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "import", "birdclaw", "--db", filepath.Join(t.TempDir(), "birdclaw.sqlite"), "--min-messages", "4"}, &out, &errOut); err != nil {
 		t.Fatalf("birdclaw import: %v %s", err, errOut.String())
 	}
-	if !strings.Contains(out.String(), "create\tBird Person") {
+	if !strings.Contains(out.String(), "Bird Person") {
 		t.Fatalf("birdclaw import out = %s", out.String())
 	}
 }
@@ -752,7 +753,7 @@ func TestExecuteContactsExportHumanUsesLabelledWidthFittedTable(t *testing.T) {
 		t.Fatalf("contacts export: %v %s", err, errOut.String())
 	}
 	conformance.AssertHumanOutput(t, out.String())
-	for _, want := range []string{"WHO", "IDENTIFIERS", "ADDRESSES", "2 identifiers", "1 address", "0 addresses", "3 contacts", "田中太郎"} {
+	for _, want := range []string{"who", "identifiers", "addresses", "2 identifiers", "1 address", "0 addresses", "3 contacts", "田中太郎"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("contacts export output missing %q:\n%s", want, out.String())
 		}
@@ -827,7 +828,7 @@ func TestExecuteImportContactsFromCrawler(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", "telecrawl"}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Source") {
+	if !strings.Contains(out.String(), "Ada Source") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -844,7 +845,7 @@ func TestExecuteImportContactsFromCrawlerPath(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Path") {
+	if !strings.Contains(out.String(), "Ada Path") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -863,7 +864,7 @@ func TestExecuteImportContactsFromAll(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from-all"}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts --from-all: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tTelegram Source") || !strings.Contains(out.String(), "stage\tWhatsApp Source") {
+	if !strings.Contains(out.String(), "Telegram Source") || !strings.Contains(out.String(), "WhatsApp Source") {
 		t.Fatalf("from-all output = %s", out.String())
 	}
 }
@@ -887,7 +888,7 @@ func TestExecuteImportContactsFromAllReportsSuccessesAndFailures(t *testing.T) {
 	if !strings.Contains(err.Error(), "1 crawler import failed") {
 		t.Fatalf("error = %v", err)
 	}
-	if !strings.Contains(out.String(), "stage\tWhatsApp Source") {
+	if !strings.Contains(out.String(), "WhatsApp Source") {
 		t.Fatalf("from-all stdout = %s", out.String())
 	}
 	if !strings.Contains(errOut.String(), "telecrawl failed") {
@@ -907,7 +908,7 @@ func TestExecuteImportContactsReportsSkippedIdentifierlessContacts(t *testing.T)
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Source") || !strings.Contains(out.String(), "skipped 1 contacts without identifiers") {
+	if !strings.Contains(out.String(), "Ada Source") || !strings.Contains(out.String(), "Skipped 1 contact with no email, phone or handle.") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -929,7 +930,7 @@ func TestExecuteImportContactsNoopJSONHasEmptyChanges(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--json", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("second import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	var result importContactsResult
+	var result importChangesEnvelope
 	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
 		t.Fatalf("noop import output is not an import result: %s", out.String())
 	}
@@ -950,7 +951,7 @@ func TestExecuteImportContactsAcceptsTelecrawlContractMetadata(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Telegram") {
+	if !strings.Contains(out.String(), "Ada Telegram") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -982,7 +983,7 @@ func TestExecuteImportContactsDoesNotShellExpandManifestArgv(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Argv") {
+	if !strings.Contains(out.String(), "Ada Argv") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -1074,7 +1075,7 @@ func TestExecuteImportContactsAcceptsContactsExportCommandKey(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "--dry-run", "import", "contacts", "--from", fake}, &out, &errOut); err != nil {
 		t.Fatalf("import contacts: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
 	}
-	if !strings.Contains(out.String(), "stage\tAda Contacts") {
+	if !strings.Contains(out.String(), "Ada Contacts") {
 		t.Fatalf("import contacts out = %s", out.String())
 	}
 }
@@ -1190,10 +1191,10 @@ func TestExecuteJSONPlainAndStdoutBranches(t *testing.T) {
 	if got := must("--json", "person", "list", "--query", "Ada"); !strings.Contains(got, `"Ada JSON"`) {
 		t.Fatalf("json list = %s", got)
 	}
-	if got := must("--plain", "person", "show", "json@example.com"); !strings.Contains(got, "Ada JSON") {
-		t.Fatalf("plain show = %s", got)
+	if got := must("person", "show", "json@example.com"); !strings.Contains(got, "Ada JSON") {
+		t.Fatalf("human show = %s", got)
 	}
-	if got := must("--plain", "person", "list", "--query", "NoMatch"); got != "" {
+	if got := must("person", "list", "--query", "NoMatch"); !strings.Contains(got, `No people match "NoMatch".`) {
 		t.Fatalf("empty list = %s", got)
 	}
 	if got := must("person", "list", "--query", "Empty"); !strings.Contains(got, "Empty Email") {
@@ -1210,12 +1211,12 @@ func TestExecuteJSONPlainAndStdoutBranches(t *testing.T) {
 	if err := os.WriteFile(input, []byte("{\"identifier\":\"a1\",\"full_name\":\"Dry Apple\",\"emails\":[\"dry@example.com\"]}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if got := must("--dry-run", "import", "apple", "--input", input); !strings.Contains(got, "create\tDry Apple") {
+	if got := must("--dry-run", "import", "apple", "--input", input); !strings.Contains(got, "Dry Apple") {
 		t.Fatalf("dry import = %s", got)
 	}
 }
 
-func TestPrintHelpersCoverPlainJSONAndWriteErrors(t *testing.T) {
+func TestPrintRenderersAndWriteErrors(t *testing.T) {
 	var out bytes.Buffer
 	person := model.Person{
 		ID:     "person_1",
@@ -1231,54 +1232,55 @@ func TestPrintHelpersCoverPlainJSONAndWriteErrors(t *testing.T) {
 		Body:       "line one\nline two",
 	}
 	hit := model.SearchHit{Kind: "note", ID: "note_1", Name: "Print Person", Snippet: "line", Path: "/tmp/note.md"}
+	people := peopleEnvelope{People: []model.Person{person}, Total: 1}
+	notes := notesEnvelope{PersonID: person.ID, Person: person.Name, Notes: []model.Note{note}, Total: 1, verb: "note list", query: "print"}
+	search := searchEnvelope{Query: "line", Results: []model.SearchHit{hit}, TotalMatches: 1}
 
 	r := &Runtime{stdout: &out, root: &CLI{}}
-	if err := r.printPeople([]model.Person{person}); err != nil {
+	if err := r.print(people); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "print@example.com") {
 		t.Fatalf("people out = %s", out.String())
 	}
 	out.Reset()
-	if err := r.printTimeline([]model.Note{note}); err != nil {
+	if err := r.print(notes); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(out.String(), "\nline two") {
-		t.Fatalf("timeline did not flatten body = %s", out.String())
+	if !strings.Contains(out.String(), "line one") || !strings.Contains(out.String(), "Notes for Print Person") {
+		t.Fatalf("notes out = %s", out.String())
 	}
 	out.Reset()
-	if err := r.printHits([]model.SearchHit{hit}); err != nil {
+	if err := r.print(search); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "line") {
-		t.Fatalf("hits out = %s", out.String())
+	if !strings.Contains(out.String(), "line") || !strings.Contains(out.String(), `Search "line"`) {
+		t.Fatalf("search out = %s", out.String())
 	}
 	out.Reset()
-	r.root.Plain = true
-	if err := r.printPeople([]model.Person{{ID: "person_2", Name: "No Email", Path: "/tmp/no.md"}}); err != nil {
+	if err := r.print(person); err != nil {
 		t.Fatal(err)
 	}
-	if err := r.printHits([]model.SearchHit{hit}); err != nil {
-		t.Fatal(err)
+	if !strings.Contains(out.String(), "Print Person") {
+		t.Fatalf("person out = %s", out.String())
 	}
-	r.root.JSON = true
-	if err := r.printTimeline([]model.Note{note}); err != nil {
-		t.Fatal(err)
+
+	if err := r.print(struct{ Unrenderable bool }{}); err == nil || !strings.Contains(err.Error(), "no human renderer") {
+		t.Fatalf("expected no-human-renderer error, got %v", err)
 	}
 
 	r.stdout = errWriter{}
-	r.root.JSON = false
-	if err := r.printPeople([]model.Person{person}); err == nil {
-		t.Fatal("expected printPeople write error")
+	if err := r.print(people); err == nil {
+		t.Fatal("expected people write error")
 	}
-	if err := r.printTimeline([]model.Note{note}); err == nil {
-		t.Fatal("expected printTimeline write error")
+	if err := r.print(notes); err == nil {
+		t.Fatal("expected notes write error")
 	}
-	if err := r.printHits([]model.SearchHit{hit}); err == nil {
-		t.Fatal("expected printHits write error")
+	if err := r.print(search); err == nil {
+		t.Fatal("expected search write error")
 	}
-	if err := r.printPerson(person); err == nil {
-		t.Fatal("expected printPerson write error")
+	if err := r.print(person); err == nil {
+		t.Fatal("expected person write error")
 	}
 }
 
@@ -1632,5 +1634,104 @@ func runShell(t *testing.T, dir string, name string, args ...string) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
+	}
+}
+
+// TRAWL-94 regression: list verbs speak human on zero results, JSON arrays
+// are never null, --limit is honored as given, and metadata renders human
+// text without --json.
+func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
+	cfg, data := testPaths(t)
+	run := func(args ...string) string {
+		t.Helper()
+		var out, errOut bytes.Buffer
+		full := append([]string{"--config", cfg}, args...)
+		if err := Execute(full, &out, &errOut); err != nil {
+			t.Fatalf("Execute(%v): %v stderr=%s stdout=%s", full, err, errOut.String(), out.String())
+		}
+		return out.String()
+	}
+	run("init", data, "--remote", "")
+	run("person", "add", "Ada Lovelace", "--email", "ada@example.com")
+	run("person", "add", "Grace Hopper", "--email", "grace@example.com")
+	run("note", "add", "ada", "--kind", "dm", "--source", "manual", "--text", "Analytical engine")
+
+	// Empty states: a human sentence, never silence.
+	for _, probe := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"search", "zz-no-match"}, `No matches for "zz-no-match".`},
+		{[]string{"person", "list", "--query", "zz-no-match"}, `No people match "zz-no-match".`},
+		{[]string{"note", "list", "grace"}, "No notes for Grace Hopper."},
+		{[]string{"timeline", "grace"}, "No notes for Grace Hopper."},
+	} {
+		out := run(probe.args...)
+		conformance.AssertHumanOutput(t, out)
+		if !strings.Contains(out, probe.want) {
+			t.Fatalf("%v output missing %q:\n%s", probe.args, probe.want, out)
+		}
+	}
+
+	// JSON zero results: arrays present, never null.
+	for _, probe := range []struct {
+		args  []string
+		array string
+	}{
+		{[]string{"--json", "search", "zz-no-match"}, `"results": []`},
+		{[]string{"--json", "person", "list", "--query", "zz-no-match"}, `"people": []`},
+		{[]string{"--json", "note", "list", "grace"}, `"notes": []`},
+		{[]string{"--json", "timeline", "grace"}, `"notes": []`},
+	} {
+		out := run(probe.args...)
+		if !strings.Contains(out, probe.array) {
+			t.Fatalf("%v output missing %q:\n%s", probe.args, probe.array, out)
+		}
+		if strings.Contains(out, ": null") {
+			t.Fatalf("%v output has null array:\n%s", probe.args, out)
+		}
+	}
+
+	// --limit honored as given, truncation declared.
+	var people peopleEnvelope
+	if err := json.Unmarshal([]byte(run("--json", "person", "list", "--limit", "1")), &people); err != nil {
+		t.Fatal(err)
+	}
+	if len(people.People) != 1 || people.Total != 2 || !people.Truncated {
+		t.Fatalf("person list --limit 1 envelope = %#v", people)
+	}
+	out := run("person", "list", "--limit", "1")
+	if !strings.Contains(out, "showing 1 of 2") || !strings.Contains(out, "More: clawdex person list --limit 2") {
+		t.Fatalf("person list --limit 1 human = %s", out)
+	}
+	var search searchEnvelope
+	if err := json.Unmarshal([]byte(run("--json", "search", "example.com", "--limit", "1")), &search); err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 || search.TotalMatches < 2 || !search.Truncated {
+		t.Fatalf("search --limit 1 envelope = %#v", search)
+	}
+
+	// Limit below 1 is a usage error, and a usage error is user feedback:
+	// the log run finishes as rejected, never as a recorded crawler error.
+	rejectedBefore := countClawdexLogLines(t, "outcome=rejected")
+	errorsBefore := countClawdexLogLines(t, "search_failed")
+	var out2, errOut2 bytes.Buffer
+	err := Execute([]string{"--config", cfg, "search", "ada", "--limit", "0"}, &out2, &errOut2)
+	if err == nil || ExitCode(err) != 2 {
+		t.Fatalf("search --limit 0 = %v", err)
+	}
+	if got := countClawdexLogLines(t, "outcome=rejected") - rejectedBefore; got != 1 {
+		t.Fatalf("rejected log lines added = %d, want 1\nlog:\n%s", got, readClawdexLog(t))
+	}
+	if got := countClawdexLogLines(t, "search_failed") - errorsBefore; got != 0 {
+		t.Fatalf("usage error was logged as crawler error:\n%s", readClawdexLog(t))
+	}
+
+	// metadata speaks human without --json.
+	metadata := run("metadata")
+	conformance.AssertHumanOutput(t, metadata)
+	if !strings.Contains(metadata, "capabilities: status, doctor, who, verbose_logs") {
+		t.Fatalf("metadata human = %s", metadata)
 	}
 }

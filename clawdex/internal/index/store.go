@@ -142,12 +142,13 @@ func (s Store) AddNote(personQuery string, note model.Note) (model.Note, error) 
 	return note, nil
 }
 
-func (s Store) Notes(personQuery string) ([]model.Note, error) {
+func (s Store) Notes(personQuery string) (model.Person, []model.Note, error) {
 	p, err := s.FindPerson(personQuery)
 	if err != nil {
-		return nil, err
+		return model.Person{}, nil, err
 	}
-	return s.notesForPerson(p)
+	notes, err := s.notesForPerson(p)
+	return p, notes, err
 }
 
 func (s Store) notesForPerson(p model.Person) ([]model.Note, error) {
@@ -204,7 +205,7 @@ func (s Store) Search(query string) ([]model.SearchHit, error) {
 	for _, p := range people {
 		text := personSearchText(p)
 		if score := scoreText(text, query); score > 0 && !personHitIDs[p.ID] {
-			hits = append(hits, model.SearchHit{Kind: "person", ID: p.ID, Name: p.Name, Path: p.Path, Score: score, Snippet: p.Name})
+			hits = append(hits, model.SearchHit{Kind: "person", ID: p.ID, Name: p.Name, Path: p.Path, Score: score, Snippet: personSnippet(p, query)})
 		}
 		notes, err := s.notesForPerson(p)
 		if err != nil {
@@ -293,6 +294,76 @@ func personHasPhone(p model.Person, phone string) bool {
 		}
 	}
 	return false
+}
+
+// personSnippet is what a person hit shows in search results: the matched
+// fragment of the person's card, so a reader sees why the row is here. The
+// name is deliberately left out — it has its own column — so a name match
+// falls back to the head of the card (identifiers, tags) instead of
+// repeating the name.
+func personSnippet(p model.Person, query string) string {
+	text := personDisplayText(p)
+	if s := snippet(text, query); s != "" {
+		return s
+	}
+	if text != "" {
+		return headOfText(text, 120)
+	}
+	return p.Name
+}
+
+func headOfText(text string, limit int) string {
+	runes := []rune(text)
+	if len(runes) <= limit {
+		return text
+	}
+	return strings.TrimSpace(string(runes[:limit])) + "…"
+}
+
+func personDisplayText(p model.Person) string {
+	parts := []string{}
+	parts = append(parts, p.Tags...)
+	for _, email := range p.Emails {
+		parts = append(parts, email.Value)
+	}
+	for _, phone := range p.Phones {
+		parts = append(parts, phone.Value)
+	}
+	for _, address := range p.Addresses {
+		parts = append(parts, strings.Join(strings.Fields(strings.ReplaceAll(address.Value, "\n", ", ")), " "))
+	}
+	services := make([]string, 0, len(p.Accounts))
+	for service := range p.Accounts {
+		services = append(services, service)
+	}
+	sort.Strings(services)
+	for _, service := range services {
+		for _, value := range p.Accounts[service] {
+			parts = append(parts, service+":"+value)
+		}
+	}
+	parts = append(parts, bodyWithoutHeadings(p.Body))
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if part = strings.TrimSpace(part); part != "" {
+			out = append(out, part)
+		}
+	}
+	return strings.Join(out, " · ")
+}
+
+// bodyWithoutHeadings drops markdown heading lines: every person file body
+// starts with "# Name", which would repeat the name in every snippet.
+func bodyWithoutHeadings(body string) string {
+	lines := strings.Split(body, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "#") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
 }
 
 func personSearchText(p model.Person) string {

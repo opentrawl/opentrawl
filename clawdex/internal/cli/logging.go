@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"path/filepath"
 	goruntime "runtime"
@@ -11,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alecthomas/kong"
 	"github.com/openclaw/clawdex/internal/repo"
 	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/crawlkit/render"
@@ -88,13 +86,7 @@ func (r *Runtime) finishLogRun(err error) error {
 	if r == nil || r.runLog == nil {
 		return err
 	}
-	if err != nil {
-		_ = r.runLog.Error(errorEvent(r.command, err), err)
-	}
-	if logErr := r.runLog.Finish(err); err == nil && logErr != nil {
-		return logErr
-	}
-	return err
+	return finishRunLog(r.runLog, r.command, err)
 }
 
 func finishStandaloneLog(command string, stderr io.Writer, jsonProgress bool, verbosity int, err error) error {
@@ -103,6 +95,19 @@ func finishStandaloneLog(command string, stderr io.Writer, jsonProgress bool, ve
 		return logErr
 	}
 	if run == nil {
+		return err
+	}
+	return finishRunLog(run, command, err)
+}
+
+// finishRunLog closes the run: usage errors are user feedback and finish as
+// rejected (docs/rendering.md guard rails), never as a recorded crawler error.
+func finishRunLog(run *cklog.Run, command string, err error) error {
+	var usage usageErr
+	if errors.As(err, &usage) {
+		if logErr := run.FinishRejected(); err == nil && logErr != nil {
+			return logErr
+		}
 		return err
 	}
 	if err != nil {
@@ -384,12 +389,4 @@ func elapsedMS(value time.Duration) string {
 
 func diagnosticsLine() string {
 	return "Diagnostics: run with -v, or read ~/.clawdex/logs/clawdex.log"
-}
-
-func helpWithDiagnostics(options kong.HelpOptions, ctx *kong.Context) error {
-	if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintf(ctx.Stdout, "\n%s\n", diagnosticsLine())
-	return err
 }
