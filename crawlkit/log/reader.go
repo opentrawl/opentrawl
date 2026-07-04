@@ -256,6 +256,8 @@ func finishOutcome(line Line) string {
 		return "success"
 	case "error", "failed", "failure":
 		return "error"
+	case "rejected":
+		return "rejected"
 	}
 	if line.Level == LevelError {
 		return "error"

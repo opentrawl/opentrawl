@@ -343,6 +343,7 @@ func TestReaderCanonicalizesFinishOutcome(t *testing.T) {
 	}{
 		{name: "legacy succeeded", level: LevelInfo, outcome: "succeeded", want: "success"},
 		{name: "legacy failed", level: LevelInfo, outcome: "failed", want: "error"},
+		{name: "rejected finish", level: LevelInfo, outcome: "rejected", want: "rejected"},
 		{name: "unknown info finish", level: LevelInfo, outcome: "done", want: "success"},
 		{name: "unknown error finish", level: LevelError, outcome: "done", want: "error"},
 	}
