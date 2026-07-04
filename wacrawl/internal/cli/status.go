@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -43,8 +44,7 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 				State:   "missing",
 				Summary: errNoArchive.Error(),
 				Counts:  []statusCount{},
-				LastRun: logTail.LastRun,
-				Error:   logTail.Error,
+				Log:     statusLogOutput(logTail),
 			})
 		}
 		return render.WriteStatus(a.stdout, render.Status{
@@ -57,13 +57,12 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 }
 
 type statusEnvelope struct {
-	AppID     string             `json:"app_id"`
-	State     string             `json:"state"`
-	Summary   string             `json:"summary,omitempty"`
-	Freshness *freshnessEnvelope `json:"freshness,omitempty"`
-	Counts    []statusCount      `json:"counts"`
-	LastRun   *logRunEnvelope    `json:"last_run,omitempty"`
-	Error     *logErrorEnvelope  `json:"recent_error,omitempty"`
+	AppID     string                `json:"app_id"`
+	State     string                `json:"state"`
+	Summary   string                `json:"summary,omitempty"`
+	Freshness *freshnessEnvelope    `json:"freshness,omitempty"`
+	Counts    []statusCount         `json:"counts"`
+	Log       *render.DoctorLogTail `json:"log,omitempty"`
 }
 
 type freshnessEnvelope struct {
@@ -100,14 +99,42 @@ func newStatusEnvelope(status store.Status, logTail logTailEnvelope) statusEnvel
 		State:     state,
 		Summary:   summary,
 		Freshness: freshness,
-		LastRun:   logTail.LastRun,
-		Error:     logTail.Error,
+		Log:       statusLogOutput(logTail),
 		Counts: []statusCount{
 			{ID: "messages", Label: "messages", Value: status.Messages},
 			{ID: "chats", Label: "chats", Value: status.Chats},
 			{ID: "since", Label: "since", Value: since},
 		},
 	}
+}
+
+func statusLogOutput(logTail logTailEnvelope) *render.DoctorLogTail {
+	return render.DoctorLogTailOutput(render.LogTail{
+		LastRun:         statusLogRunOutput(logTail.LastRun),
+		MostRecentError: statusLogErrorOutput(logTail.Error),
+	})
+}
+
+func statusLogRunOutput(run *logRunEnvelope) *cklog.RunSummary {
+	if run == nil {
+		return nil
+	}
+	return &cklog.RunSummary{
+		Command:    run.Command,
+		Outcome:    run.Outcome,
+		StartedAt:  parseFormattedTime(run.StartedAt),
+		FinishedAt: parseFormattedTime(run.FinishedAt),
+	}
+}
+
+func statusLogErrorOutput(logError *logErrorEnvelope) *cklog.Line {
+	line := renderLogError(logError)
+	if line == nil {
+		return nil
+	}
+	line.Level = cklog.LevelError
+	line.Visibility = cklog.VisibilityUserFacing
+	return line
 }
 
 func (a *app) printStatus(status store.Status, logTail logTailEnvelope) error {

@@ -1570,11 +1570,16 @@ func TestStatusAndDoctorReadLogTail(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &status); err != nil {
 		t.Fatalf("status json = %s err=%v", stdout.String(), err)
 	}
-	if status.LastRun == nil || status.LastRun.Command != "open" || status.LastRun.Outcome != "error" {
-		t.Fatalf("status last run = %#v", status.LastRun)
+	if status.Log == nil || status.Log.LastRun == nil || status.Log.LastRun.WhatHappened != "open ended with error" {
+		t.Fatalf("status log last run = %#v", status.Log)
 	}
-	if status.Error == nil || status.Error.Event != "unknown_short_ref" || status.Error.Remedy == "" {
-		t.Fatalf("status recent error = %#v", status.Error)
+	if status.Log.MostRecentError == nil || status.Log.MostRecentError.WhatHappened != "short ref was not found" || status.Log.MostRecentError.Remedy == "" {
+		t.Fatalf("status log recent error = %#v", status.Log)
+	}
+	for _, forbidden := range []string{"run_id", "last_event", "commit", "platform", "event=", `"event"`, "unknown_short_ref"} {
+		if strings.Contains(stdout.String(), forbidden) {
+			t.Fatalf("status json leaked %q:\n%s", forbidden, stdout.String())
+		}
 	}
 
 	stdout.Reset()
