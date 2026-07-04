@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -83,6 +85,14 @@ func (s *Store) ListContacts(ctx context.Context, limit int) ([]Contact, error) 
 	return s.contacts(ctx, limit)
 }
 
+func (s *Store) CountContacts(ctx context.Context) (int, error) {
+	var total int
+	if err := s.db.QueryRowContext(ctx, `select count(*) from contacts`).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
+}
+
 func (s *Store) ExportContacts(ctx context.Context) ([]Contact, error) {
 	query := `select jid,coalesce(peer_type,''),coalesce(phone,''),coalesce(full_name,''),coalesce(first_name,''),coalesce(last_name,''),coalesce(business_name,''),coalesce(username,''),coalesce(lid,''),coalesce(about_text,''),coalesce(avatar_path,''),coalesce(updated_at,0)
 from contacts c
@@ -98,12 +108,36 @@ func (s *Store) allContacts(ctx context.Context) ([]Contact, error) {
 
 func (s *Store) contacts(ctx context.Context, limit int) ([]Contact, error) {
 	query := `select jid,coalesce(peer_type,''),coalesce(phone,''),coalesce(full_name,''),coalesce(first_name,''),coalesce(last_name,''),coalesce(business_name,''),coalesce(username,''),coalesce(lid,''),coalesce(about_text,''),coalesce(avatar_path,''),coalesce(updated_at,0) from contacts order by jid`
-	args := []any{}
-	if limit > 0 {
-		query += " limit ?"
-		args = append(args, limit)
+	contacts, err := s.queryContacts(ctx, query, nil)
+	if err != nil {
+		return nil, err
 	}
-	return s.queryContacts(ctx, query, args)
+	sort.SliceStable(contacts, func(i, j int) bool {
+		left := contactSortKey(contacts[i])
+		right := contactSortKey(contacts[j])
+		if left == right {
+			return contacts[i].JID < contacts[j].JID
+		}
+		return left < right
+	})
+	if limit > 0 && limit < len(contacts) {
+		contacts = contacts[:limit]
+	}
+	return contacts, nil
+}
+
+func contactSortKey(contact Contact) string {
+	for _, value := range []string{
+		ContactDisplayName(contact),
+		cleanPeerUsername(contact.Username),
+		strings.TrimSpace(contact.Phone),
+		strings.TrimSpace(contact.JID),
+	} {
+		if value != "" {
+			return strings.ToLower(value)
+		}
+	}
+	return ""
 }
 
 func (s *Store) queryContacts(ctx context.Context, query string, args []any) ([]Contact, error) {
@@ -112,7 +146,7 @@ func (s *Store) queryContacts(ctx context.Context, query string, args []any) ([]
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []Contact
+	out := make([]Contact, 0)
 	for rows.Next() {
 		var c Contact
 		var updatedAt int64
@@ -131,7 +165,7 @@ func (s *Store) allFolderChats(ctx context.Context) ([]FolderChat, error) {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []FolderChat
+	out := make([]FolderChat, 0)
 	for rows.Next() {
 		var fc FolderChat
 		if err := rows.Scan(&fc.FolderID, &fc.ChatJID, &fc.Position); err != nil {
@@ -148,7 +182,7 @@ func (s *Store) allTopics(ctx context.Context) ([]Topic, error) {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []Topic
+	out := make([]Topic, 0)
 	for rows.Next() {
 		var t Topic
 		var ts int64
@@ -171,7 +205,7 @@ func (s *Store) allGroupParticipants(ctx context.Context) ([]GroupParticipant, e
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var out []GroupParticipant
+	out := make([]GroupParticipant, 0)
 	for rows.Next() {
 		var p GroupParticipant
 		var admin, active int

@@ -23,13 +23,27 @@ func (r *runtime) runChats(args []string) error {
 			if err != nil {
 				return err
 			}
-			return r.print(chats)
+			total, err := st.CountChatsInFolder(r.ctx, *folder)
+			if err != nil {
+				return err
+			}
+			if r.json {
+				return r.print(chatJSONEnvelope(chats, total))
+			}
+			return r.print(chatsEnvelope{Chats: chats, Total: total})
 		}
 		chats, err := st.ListChats(r.ctx, *limit, *unread)
 		if err != nil {
 			return err
 		}
-		return r.print(chats)
+		total, err := st.CountChats(r.ctx, *unread)
+		if err != nil {
+			return err
+		}
+		if r.json {
+			return r.print(chatJSONEnvelope(chats, total))
+		}
+		return r.print(chatsEnvelope{Chats: chats, Total: total})
 	})
 }
 
@@ -47,7 +61,10 @@ func (r *runtime) runFolders(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(folders)
+		if r.json {
+			return r.print(folderJSONRows(folders))
+		}
+		return r.print(foldersEnvelope{Folders: folders})
 	})
 }
 
@@ -62,11 +79,17 @@ func (r *runtime) runTopics(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("topics takes flags only"))
 	}
+	if *chat == "" {
+		return usageErr(errors.New("topics requires --chat ID"))
+	}
 	return r.withStore(func(st *store.Store) error {
 		topics, err := st.ListTopics(r.ctx, *chat, *limit)
 		if err != nil {
 			return err
 		}
-		return r.print(topics)
+		if r.json {
+			return r.print(topicJSONRows(topics))
+		}
+		return r.print(topicsEnvelope{Topics: topics})
 	})
 }

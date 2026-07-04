@@ -59,7 +59,7 @@ func (r *runtime) backupInit(args []string) error {
 	if err != nil {
 		return err
 	}
-	return r.print(map[string]any{"repo": cfg.Repo, "remote": cfg.Remote, "identity": cfg.Identity, "recipient": recipient})
+	return r.print(backupInitOutput{Repo: cfg.Repo, Remote: cfg.Remote, Identity: cfg.Identity, Recipient: recipient})
 }
 
 func (r *runtime) backupPush(args []string) error {
@@ -100,7 +100,7 @@ func (r *runtime) backupStatus(args []string) error {
 	if err != nil {
 		return err
 	}
-	return r.print(map[string]any{"repo": repo, "manifest": manifest})
+	return r.print(backupStatusOutput{Repo: repo, Manifest: manifest})
 }
 
 func (r *runtime) backupSnapshots(args []string) error {
@@ -122,4 +122,16 @@ func (r *runtime) backupSnapshots(args []string) error {
 		return r.print(map[string]any{"repo": repo, "snapshots": snapshots})
 	}
 	return r.print(snapshots)
+}
+
+type backupInitOutput struct {
+	Repo      string `json:"repo"`
+	Remote    string `json:"remote"`
+	Identity  string `json:"identity"`
+	Recipient string `json:"recipient"`
+}
+
+type backupStatusOutput struct {
+	Repo     string          `json:"repo"`
+	Manifest backup.Manifest `json:"manifest"`
 }

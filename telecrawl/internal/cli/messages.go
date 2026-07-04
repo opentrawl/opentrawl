@@ -21,7 +21,18 @@ func (r *runtime) runMessages(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(messages)
+		total, err := st.CountMessages(r.ctx, filter)
+		if err != nil {
+			return err
+		}
+		shortRefs, err := st.ShortRefsFor(r.ctx, messageRefs(messages))
+		if err != nil {
+			return err
+		}
+		if r.json {
+			return r.print(messageJSONEnvelope(messages, total, shortRefs))
+		}
+		return r.print(messagesEnvelope{Messages: messages, Total: total, ShortRefs: shortRefs})
 	})
 }
 

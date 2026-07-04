@@ -7,7 +7,13 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
+)
+
+const (
+	openTranscriptMinWhoWidth = 8
+	openTranscriptMaxWhoWidth = 32
 )
 
 func (r *runtime) runOpen(args []string) error {
@@ -81,7 +87,7 @@ func (r *runtime) printOpen(value openEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "ref: %s\n", value.Ref); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "target: %s %s\n", value.Message.Time, value.Message.Sender.DisplayName); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "target: %s %s\n", shortLocalTime(parseRenderTime(value.Message.Time)), value.Message.Sender.DisplayName); err != nil {
 		return err
 	}
 	if strings.TrimSpace(value.Message.Text) != "" {
@@ -89,31 +95,67 @@ func (r *runtime) printOpen(value openEnvelope) error {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(r.stdout, "context: %d before, %d after", value.ContextWindow.Before, value.ContextWindow.After); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "Showing %s and %s.\n", contextCountPhrase(value.ContextWindow.Before, "earlier message", "earlier messages"), contextCountPhrase(value.ContextWindow.After, "message after", "messages after")); err != nil {
 		return err
 	}
 	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
-		if _, err := io.WriteString(r.stdout, " (bounded; more messages omitted)"); err != nil {
+		chatID := value.Chat.Ref[strings.LastIndex(value.Chat.Ref, "/")+1:]
+		if _, err := fmt.Fprintf(r.stdout, "More: telecrawl messages --chat %s\n", chatID); err != nil {
 			return err
 		}
 	}
 	if _, err := io.WriteString(r.stdout, "\n"); err != nil {
 		return err
 	}
+	rows := make([]render.TranscriptRow, 0, len(value.Context))
 	for _, message := range value.Context {
-		marker := " "
-		if message.IsTarget {
-			marker = ">"
-		}
 		text := strings.TrimSpace(message.Text)
 		if text == "" {
 			text = mediaSummary(message)
 		}
-		if _, err := fmt.Fprintf(r.stdout, "%s %s  %s: %s\n", marker, message.Time, message.Sender.DisplayName, text); err != nil {
-			return err
+		prefix := openTranscriptPrefix(render.OutputWidth(r.stdout), message)
+		rows = append(rows, render.TranscriptRow{
+			Time:   parseRenderTime(message.Time),
+			Prefix: prefix,
+			Text:   text,
+		})
+	}
+	return render.WriteTranscript(r.stdout, rows)
+}
+
+func openTranscriptPrefix(width int, message openMessage) string {
+	marker := " "
+	if message.IsTarget {
+		marker = ">"
+	}
+	when := "--:--"
+	if parsed := parseRenderTime(message.Time); !parsed.IsZero() {
+		when = parsed.Local().Format("15:04")
+	}
+	fixed := fmt.Sprintf("%s %s  ", marker, when)
+	whoWidth := width - render.DisplayWidth(fixed) - render.DisplayWidth(": ") - 1
+	if whoWidth < openTranscriptMinWhoWidth {
+		whoWidth = openTranscriptMinWhoWidth
+	}
+	if whoWidth > openTranscriptMaxWhoWidth {
+		whoWidth = openTranscriptMaxWhoWidth
+	}
+	return fixed + render.Truncate(message.Sender.DisplayName, whoWidth) + ": "
+}
+
+func contextCountPhrase(count int, singular, plural string) string {
+	if count == 0 {
+		switch singular {
+		case "message after":
+			return "none after"
+		default:
+			return "no " + plural
 		}
 	}
-	return nil
+	if count == 1 {
+		return "1 " + singular
+	}
+	return strconv.Itoa(count) + " " + plural
 }
 
 func mediaSummary(message openMessage) string {

@@ -204,7 +204,7 @@ func (r *runtime) dispatch(args []string) error {
 		_, _ = io.WriteString(r.stdout, version+"\n")
 		return nil
 	default:
-		return usageErr(fmt.Errorf("unknown command %q", args[0]))
+		return usageErr(fmt.Errorf("unknown command %q. Run 'telecrawl --help'.", args[0]))
 	}
 }
 

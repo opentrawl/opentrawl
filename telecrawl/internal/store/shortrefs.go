@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
@@ -118,7 +117,7 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 			return nil, err
 		}
 	}
-	aliases, err := s.shortRefsFor(ctx, refs)
+	aliases, err := shortref.NewSQLiteIndex(s.db).Aliases(ctx, refs)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +125,7 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 		if err := s.RebuildShortRefs(ctx); err != nil {
 			return nil, err
 		}
-		aliases, err = s.shortRefsFor(ctx, refs)
+		aliases, err = shortref.NewSQLiteIndex(s.db).Aliases(ctx, refs)
 		if err != nil {
 			return nil, err
 		}
@@ -154,34 +153,6 @@ func (s *Store) shortRefsFresh(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return messages == refs, nil
-}
-
-func (s *Store) shortRefsFor(ctx context.Context, refs []string) (map[string]string, error) {
-	if len(refs) == 0 {
-		return nil, nil
-	}
-	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
-		return nil, err
-	}
-	out := make(map[string]string, len(refs))
-	for _, ref := range refs {
-		var alias string
-		err := s.db.QueryRowContext(ctx, `
-select alias
-from short_refs
-where full_ref = ?
-order by length(alias) desc, alias desc
-limit 1
-`, ref).Scan(&alias)
-		if errors.Is(err, sql.ErrNoRows) {
-			continue
-		}
-		if err != nil {
-			return nil, fmt.Errorf("read short ref for %s: %w", ref, err)
-		}
-		out[ref] = alias
-	}
-	return out, nil
 }
 
 func uniqueRefs(values []string) []string {

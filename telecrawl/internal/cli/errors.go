@@ -56,3 +56,8 @@ func (e remediedError) Error() string {
 func (e remediedError) Unwrap() error {
 	return cklog.WorldMustChange{Err: errors.New(e.message), Message: e.message, Remedy: e.remedy}
 }
+
+func isUsageError(err error) bool {
+	var cli *cliError
+	return errors.As(err, &cli) && cli.event == "usage_error"
+}

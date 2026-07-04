@@ -30,7 +30,14 @@ func (r *runtime) runContacts(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(contacts)
+		if r.json {
+			return r.print(contactJSONRows(contacts))
+		}
+		total, err := st.CountContacts(r.ctx)
+		if err != nil {
+			return err
+		}
+		return r.print(contactsEnvelope{Contacts: contacts, Total: total})
 	})
 }
 

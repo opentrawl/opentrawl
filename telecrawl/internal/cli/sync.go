@@ -21,8 +21,8 @@ func (r *runtime) runImport(command string, args []string) error {
 	fs := flag.NewFlagSet("telecrawl "+command, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	path := fs.String("path", r.source, "")
-	dialogsLimit := fs.Int("dialogs-limit", 200, "")
-	messagesLimit := fs.Int("messages-limit", 500, "")
+	dialogsLimit := fs.Int("dialogs-limit", telegramdesktop.DefaultDialogsLimit, "")
+	messagesLimit := fs.Int("messages-limit", telegramdesktop.DefaultMessagesLimit, "")
 	chat := fs.String("chat", "", "")
 	fetchMedia := fs.Bool("fetch-media", false, "")
 	if err := fs.Parse(args); err != nil {

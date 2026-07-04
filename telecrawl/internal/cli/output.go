@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 )
@@ -18,11 +19,13 @@ func (r *runtime) print(v any) error {
 	switch value := v.(type) {
 	case statusEnvelope:
 		return r.printStatus(value)
+	case control.Manifest:
+		return r.printManifest(value)
 	case doctorOutput:
 		return r.printDoctor(value)
 	case store.ImportStats:
 		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %d\nmessages: %d\nmedia_messages: %d\nmedia_files: %d\nmedia_bytes: %d\nstarted_at: %s\nfinished_at: %s\n",
-			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, formatLocalTime(value.StartedAt), formatLocalTime(value.FinishedAt)); err != nil {
+			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, shortLocalTime(value.StartedAt), shortLocalTime(value.FinishedAt)); err != nil {
 			return err
 		}
 		if hasRemoteMediaStats(value) {
@@ -47,11 +50,27 @@ func (r *runtime) print(v any) error {
 			if len(snapshot.Tags) > 0 {
 				ref = snapshot.Tags[0]
 			}
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%d\t%d\t%s\n", ref, formatLocalTime(snapshot.Exported), snapshot.Counts.Messages, snapshot.Shards, strings.Join(snapshot.Tags, ",")); err != nil {
+			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%d\t%d\t%s\n", ref, shortLocalTime(snapshot.Exported), snapshot.Counts.Messages, snapshot.Shards, strings.Join(snapshot.Tags, ",")); err != nil {
 				return err
 			}
 		}
 		return nil
+	case backup.Result:
+		return r.printBackupResult(value)
+	case backupInitOutput:
+		return r.printBackupInit(value)
+	case backupStatusOutput:
+		return r.printBackupStatus(value)
+	case chatsEnvelope:
+		return r.printChats(value)
+	case topicsEnvelope:
+		return r.printTopics(value)
+	case messagesEnvelope:
+		return r.printMessages(value)
+	case contactsEnvelope:
+		return r.printContacts(value)
+	case foldersEnvelope:
+		return r.printFolders(value)
 	case searchEnvelope:
 		return r.printSearch(value)
 	case whoEnvelope:
@@ -61,8 +80,7 @@ func (r *runtime) print(v any) error {
 	case contactExport:
 		return r.printContactExport(value)
 	default:
-		enc.SetIndent("", "  ")
-		return enc.Encode(v)
+		return fmt.Errorf("internal: no human renderer for %T", v)
 	}
 }
 

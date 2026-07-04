@@ -2,7 +2,7 @@ package cli
 
 import (
 	"os"
-	"strings"
+	"strconv"
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
@@ -32,14 +32,12 @@ type metadataEnvelope struct {
 }
 
 type statusEnvelope struct {
-	AppID     string                `json:"app_id"`
-	State     string                `json:"state"`
-	Summary   string                `json:"summary"`
-	Freshness freshnessEnvelope     `json:"freshness"`
-	Counts    []countEnvelope       `json:"counts"`
-	Auth      authEnvelope          `json:"auth"`
-	Log       *render.DoctorLogTail `json:"log,omitempty"`
-	logTail   render.LogTail        `json:"-"`
+	AppID     string            `json:"app_id"`
+	State     string            `json:"state"`
+	Summary   string            `json:"summary"`
+	Freshness freshnessEnvelope `json:"freshness"`
+	Counts    []countEnvelope   `json:"counts"`
+	Auth      authEnvelope      `json:"auth"`
 }
 
 type freshnessEnvelope struct {
@@ -74,10 +72,35 @@ type doctorCheck struct {
 type searchEnvelope struct {
 	Query        string         `json:"query"`
 	WhoQuery     string         `json:"-"`
+	Limit        int            `json:"-"`
 	WhoResolved  *whoResolved   `json:"who_resolved,omitempty"`
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
+}
+
+type chatsEnvelope struct {
+	Chats []store.Chat
+	Total int
+}
+
+type topicsEnvelope struct {
+	Topics []store.Topic
+}
+
+type messagesEnvelope struct {
+	Messages  []store.Message
+	Total     int
+	ShortRefs map[string]string
+}
+
+type contactsEnvelope struct {
+	Contacts []store.Contact
+	Total    int
+}
+
+type foldersEnvelope struct {
+	Folders []store.Folder
 }
 
 type whoResolved struct {
@@ -213,7 +236,6 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 }
 
 func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
-	logTail := r.logTail()
 	return statusEnvelope{
 		AppID:     "telecrawl",
 		State:     state,
@@ -224,9 +246,7 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) 
 			{ID: "chats", Label: "chats", Value: int64(status.Chats)},
 			{ID: "since", Label: "since", Value: oldestMessageYear(status)},
 		},
-		Auth:    authEnvelope{Authorized: true},
-		Log:     render.DoctorLogTailOutput(logTail),
-		logTail: logTail,
+		Auth: authEnvelope{Authorized: true},
 	}
 }
 
@@ -248,10 +268,34 @@ func statusSummary(status store.Status) string {
 	case "empty":
 		return "archive is empty"
 	case "stale":
-		return "archive sync is stale"
+		if status.LastImportAt.IsZero() {
+			return "archive has never been imported; run telecrawl import to refresh."
+		}
+		return "archive import is " + agePhrase(time.Since(status.LastImportAt)) + " old; run telecrawl import to refresh."
 	default:
 		return "archive is fresh"
 	}
+}
+
+func agePhrase(age time.Duration) string {
+	if age < 0 {
+		age = 0
+	}
+	days := int(age.Hours()) / 24
+	if days > 0 {
+		if days == 1 {
+			return "1 day"
+		}
+		return strconv.Itoa(days) + " days"
+	}
+	hours := int(age.Hours())
+	if hours > 0 {
+		if hours == 1 {
+			return "1 hour"
+		}
+		return strconv.Itoa(hours) + " hours"
+	}
+	return "less than 1 hour"
 }
 
 func statusFreshness(status store.Status) freshnessEnvelope {
@@ -270,8 +314,10 @@ func oldestMessageYear(status store.Status) int64 {
 
 func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
 	logTail := r.logTail()
+	checks := []doctorCheck{sourceStoreCheck(report)}
+	checks = append(checks, r.archiveChecks()...)
 	return doctorOutput{
-		Checks:  []doctorCheck{sourceStoreCheck(report), r.archiveCheck()},
+		Checks:  checks,
 		Log:     render.DoctorLogTailOutput(logTail),
 		logTail: logTail,
 	}
@@ -298,236 +344,65 @@ func sourceStoreCheck(report telegramdesktop.Report) doctorCheck {
 	return check
 }
 
-func (r *runtime) archiveCheck() doctorCheck {
+func (r *runtime) archiveChecks() []doctorCheck {
 	if info, err := os.Stat(r.dbPath); err != nil {
-		return doctorCheck{
+		return []doctorCheck{{
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive has not been created.",
 			Remedy:  "Run telecrawl import to create the archive.",
-		}
+		}}
 	} else if info.IsDir() {
-		return doctorCheck{
+		return []doctorCheck{{
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive path is a directory.",
 			Remedy:  "Pass --db with a sqlite archive path, then run telecrawl import.",
-		}
+		}}
 	}
 	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
 	if err != nil {
-		return doctorCheck{
+		return []doctorCheck{{
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive cannot be read.",
 			Remedy:  "Run telecrawl import to rebuild the archive.",
-		}
+		}}
 	}
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(r.ctx)
 	if err != nil {
-		return doctorCheck{
+		return []doctorCheck{{
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive status cannot be read.",
 			Remedy:  "Run telecrawl import to rebuild the archive.",
-		}
+		}}
 	}
 	if status.Messages == 0 {
-		return doctorCheck{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl import to fill the archive."}
+		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl import to fill the archive."}}
 	}
-	return doctorCheck{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."}
-}
-
-func newSearchEnvelope(query string, messages []store.Message, total int, whoQuery string, resolved *store.WhoCandidate, shortRefs map[string]string) searchEnvelope {
-	return searchEnvelope{
-		Query:        query,
-		WhoQuery:     whoQuery,
-		WhoResolved:  newWhoResolved(resolved),
-		Results:      searchResults(messages, shortRefs),
-		TotalMatches: total,
-		Truncated:    total > len(messages),
+	return []doctorCheck{
+		{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."},
+		syncRecencyCheck(status),
 	}
 }
 
-func newWhoEnvelope(query string, candidates []store.WhoCandidate) whoEnvelope {
-	return whoEnvelope{Query: query, Candidates: whoCandidates(candidates)}
-}
-
-func newWhoResolved(candidate *store.WhoCandidate) *whoResolved {
-	if candidate == nil {
-		return nil
+func syncRecencyCheck(status store.Status) doctorCheck {
+	check := doctorCheck{ID: "sync_recency", Label: "Archive import", State: "ok", Message: "Archive import is fresh."}
+	switch {
+	case status.LastImportAt.IsZero():
+		check.State = "warn"
+		check.Message = "Archive has never been imported."
+		check.Remedy = "run telecrawl import"
+	case time.Since(status.LastImportAt) > statusFreshFor:
+		check.State = "warn"
+		check.Message = "Archive import is " + agePhrase(time.Since(status.LastImportAt)) + " old."
+		check.Remedy = "run telecrawl import"
 	}
-	return &whoResolved{Who: candidate.Who, Identifiers: append([]string(nil), candidate.Identifiers...)}
-}
-
-func whoCandidates(candidates []store.WhoCandidate) []whoCandidate {
-	out := make([]whoCandidate, 0, len(candidates))
-	for _, candidate := range candidates {
-		out = append(out, whoCandidate{
-			Who:         outputField(candidate.Who),
-			Identifiers: append([]string(nil), candidate.Identifiers...),
-			LastSeen:    formatOptionalTime(candidate.LastSeen),
-			Messages:    candidate.Messages,
-		})
-	}
-	return out
-}
-
-func searchResults(messages []store.Message, shortRefs map[string]string) []searchResult {
-	out := make([]searchResult, 0, len(messages))
-	for _, message := range messages {
-		ref := messageRef(message.SourcePK)
-		out = append(out, searchResult{
-			Ref:      ref,
-			ShortRef: shortRefs[ref],
-			Time:     formatLocalTime(message.Timestamp),
-			Who:      outputField(messageWho(message)),
-			Where:    outputField(messageWhere(message)),
-			Snippet:  outputField(messageSnippet(message)),
-		})
-	}
-	return out
-}
-
-func messageRef(sourcePK int64) string {
-	return store.MessageRef(sourcePK)
-}
-
-func newOpenEnvelope(window store.MessageWindow) openEnvelope {
-	targetRef := messageRef(window.Target.SourcePK)
-	context := make([]openMessage, 0, len(window.Messages))
-	targetPosition := -1
-	for i, message := range window.Messages {
-		isTarget := message.SourcePK == window.Target.SourcePK
-		if isTarget {
-			targetPosition = i
-		}
-		context = append(context, openMessageFromStore(message, isTarget))
-	}
-	return openEnvelope{
-		Ref:     targetRef,
-		Chat:    openChatFromMessage(window.Target),
-		Message: openMessageFromStore(window.Target, true),
-		Context: context,
-		ContextWindow: openWindow{
-			Before:          targetPosition,
-			After:           len(context) - targetPosition - 1,
-			BeforeTruncated: window.BeforeTruncated,
-			AfterTruncated:  window.AfterTruncated,
-		},
-		TargetPosition: targetPosition,
-	}
-}
-
-func openMessageFromStore(message store.Message, isTarget bool) openMessage {
-	return openMessage{
-		Ref:           messageRef(message.SourcePK),
-		IsTarget:      isTarget,
-		Time:          formatOptionalTime(message.Timestamp),
-		EditTime:      formatOptionalTime(message.EditTime),
-		Chat:          openChatFromMessage(message),
-		Sender:        openSenderFromMessage(message),
-		FromMe:        message.FromMe,
-		Text:          strings.TrimSpace(message.Text),
-		MessageID:     message.MessageID,
-		MessageType:   message.MessageType,
-		RawType:       message.RawType,
-		MediaType:     message.MediaType,
-		MediaTitle:    message.MediaTitle,
-		MediaPath:     message.MediaPath,
-		MediaURL:      message.MediaURL,
-		MediaSize:     message.MediaSize,
-		MetadataType:  message.MetadataType,
-		MetadataTitle: message.MetadataTitle,
-		MetadataURL:   message.MetadataURL,
-		MetadataJSON:  message.MetadataJSON,
-		Starred:       message.Starred,
-		TopicID:       message.TopicID,
-		ReplyToID:     message.ReplyToID,
-		ReplyToChat:   chatRef(message.ReplyToChat),
-		ThreadID:      message.ThreadID,
-		ForwardJSON:   message.ForwardJSON,
-		ReactionsJSON: message.ReactionsJSON,
-		Views:         message.Views,
-		Forwards:      message.Forwards,
-		RepliesCount:  message.RepliesCount,
-		Pinned:        message.Pinned,
-	}
-}
-
-func openChatFromMessage(message store.Message) openChat {
-	return openChat{Ref: chatRef(message.ChatJID), Name: messageWhere(message)}
-}
-
-func openSenderFromMessage(message store.Message) openParticipant {
-	if message.FromMe {
-		return openParticipant{DisplayName: messageWho(message)}
-	}
-	return openParticipant{Ref: chatRef(message.SenderJID), DisplayName: messageWho(message)}
-}
-
-func chatRef(jid string) string {
-	jid = strings.TrimSpace(jid)
-	if jid == "" {
-		return ""
-	}
-	return "telecrawl:chat/" + jid
-}
-
-func formatOptionalTime(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return formatLocalTime(t)
-}
-
-func formatLocalTime(t time.Time) string {
-	return t.Local().Format(time.RFC3339)
-}
-
-func parseRenderTime(value string) time.Time {
-	if strings.TrimSpace(value) == "" {
-		return time.Time{}
-	}
-	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
-	if err != nil {
-		return time.Time{}
-	}
-	return parsed
-}
-
-func messageWho(message store.Message) string {
-	if message.FromMe {
-		return "me"
-	}
-	if value := strings.TrimSpace(message.SenderName); value != "" {
-		return outputField(value)
-	}
-	if strings.TrimSpace(message.SenderJID) == "" || strings.TrimSpace(message.SenderJID) == strings.TrimSpace(message.ChatJID) {
-		return outputField(messageWhere(message))
-	}
-	return ""
-}
-
-func messageWhere(message store.Message) string {
-	if value := strings.TrimSpace(message.ChatName); value != "" {
-		return outputField(value)
-	}
-	return "Telegram chat"
-}
-
-func messageSnippet(message store.Message) string {
-	if value := strings.TrimSpace(message.Snippet); value != "" {
-		return outputField(value)
-	}
-	return outputField(message.Text)
-}
-
-func outputField(value string) string {
-	return strings.Join(strings.Fields(value), " ")
+	return check
 }

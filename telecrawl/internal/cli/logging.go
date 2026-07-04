@@ -42,6 +42,12 @@ func (r *runtime) finishLogRun(err error) error {
 	if r == nil || r.log == nil {
 		return err
 	}
+	if isUsageError(err) {
+		// A mistyped command is user feedback, not crawler health; logging
+		// it would pin a typo as the archive's most recent error.
+		_ = r.log.FinishRejected()
+		return err
+	}
 	if err != nil {
 		_ = r.log.Error(errorEventCode(err), err)
 	}

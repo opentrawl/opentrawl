@@ -2,9 +2,10 @@ package cli
 
 import (
 	"fmt"
-	"io"
+	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -36,7 +37,7 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, messages, total, filter.Who, resolved, shortRefs))
+		return r.print(newSearchEnvelope(filter.Query, messages, total, filter.Limit, filter.Who, resolved, shortRefs))
 	})
 }
 
@@ -72,40 +73,62 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
-	if value.WhoResolved != nil {
-		query := normalizeCLIWords(value.WhoQuery)
-		if query == "" {
-			query = value.WhoResolved.Who
-		}
-		if _, err := fmt.Fprintf(r.stdout, "%s \u2192 %s\n", query, value.WhoResolved.Who); err != nil {
-			return err
-		}
-		if len(value.Results) > 0 {
-			if _, err := io.WriteString(r.stdout, "\n"); err != nil {
-				return err
-			}
-		}
-	}
-	for _, item := range value.Results {
-		line := item.Time
-		if item.Who != "" {
-			line += " " + item.Who
-		}
-		if item.Where != "" {
-			line += " in " + item.Where
-		}
-		ref := item.Ref
-		if item.ShortRef != "" {
-			ref = item.ShortRef + " (" + item.Ref + ")"
-		}
-		if _, err := fmt.Fprintf(r.stdout, "%s\n%s\nref: %s\n\n", line, item.Snippet, ref); err != nil {
-			return err
-		}
-	}
+	hints := []string{"Open: telecrawl open REF"}
 	if value.Truncated {
-		_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, --chat, or --who\n", len(value.Results), value.TotalMatches)
-		return err
+		hints = append(hints, searchMoreHint(value))
 	}
-	_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches\n", len(value.Results), value.TotalMatches)
-	return err
+	return render.WriteList(r.stdout, render.List{
+		Heading:   searchHeading(value),
+		Hints:     hints,
+		Items:     searchListItems(value.Results),
+		ClampText: 2,
+		Empty:     searchEmptyText(value.Query),
+	})
+}
+
+func searchHeading(value searchEnvelope) string {
+	if strings.TrimSpace(value.Query) == "" {
+		return fmt.Sprintf("Search filters: showing %d of %d.", len(value.Results), value.TotalMatches)
+	}
+	return fmt.Sprintf("Search %q: showing %d of %d.", value.Query, len(value.Results), value.TotalMatches)
+}
+
+func searchMoreHint(value searchEnvelope) string {
+	nextLimit := nextSearchLimit(value.Limit)
+	if strings.TrimSpace(value.Query) == "" {
+		return fmt.Sprintf("More: telecrawl search --limit %d", nextLimit)
+	}
+	return fmt.Sprintf("More: telecrawl search %s --limit %d", strconv.Quote(value.Query), nextLimit)
+}
+
+func nextSearchLimit(limit int) int {
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	next := limit * 2
+	if next > maxSearchLimit {
+		return maxSearchLimit
+	}
+	return next
+}
+
+func searchEmptyText(query string) string {
+	if strings.TrimSpace(query) == "" {
+		return "No matches."
+	}
+	return fmt.Sprintf("No matches for %q.", query)
+}
+
+func searchListItems(results []searchResult) []render.ListItem {
+	items := make([]render.ListItem, 0, len(results))
+	for _, item := range results {
+		items = append(items, render.ListItem{
+			Time:  parseRenderTime(item.Time),
+			Who:   item.Who,
+			Where: item.Where,
+			Ref:   displayRef(item.Ref, item.ShortRef),
+			Text:  item.Snippet,
+		})
+	}
+	return items
 }

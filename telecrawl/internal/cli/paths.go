@@ -17,6 +17,10 @@ func defaultLogDir() string {
 	return filepath.Join(defaultBaseDir(), "logs")
 }
 
+func defaultLogPath() string {
+	return filepath.Join(defaultLogDir(), telecrawlLogFileName)
+}
+
 func defaultBaseDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {

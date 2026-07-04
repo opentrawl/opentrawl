@@ -4,11 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -54,7 +53,7 @@ func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) e
 func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {
 	var out strings.Builder
 	fmt.Fprintf(&out, "ambiguous --who %q: %d people match.\n\n", who, len(candidates))
-	writeWhoTable(&out, candidates, terminalWidth())
+	_ = writeWhoTable(&out, candidates)
 	if retry := retrySearchExample(query, candidates); retry != "" {
 		fmt.Fprintf(&out, "\nRetry with: %s", retry)
 	}
@@ -69,7 +68,7 @@ func unknownWhoText(who string, didYouMean []store.WhoCandidate) string {
 		return out.String()
 	}
 	out.WriteString("\n\nDid you mean:\n")
-	writeWhoTable(&out, didYouMean, terminalWidth())
+	_ = writeWhoTable(&out, didYouMean)
 	if retry := retrySearchExample("", didYouMean); retry != "" {
 		fmt.Fprintf(&out, "\nRetry with: %s", retry)
 	}
@@ -122,130 +121,27 @@ func (r *runtime) printWho(value whoEnvelope) error {
 			Messages:    candidate.Messages,
 		})
 	}
-	writeWhoTable(r.stdout, candidates, terminalWidth())
-	return nil
+	if len(candidates) == 0 {
+		_, err := fmt.Fprintf(r.stdout, "No people matched %q.\n", value.Query)
+		return err
+	}
+	return writeWhoTable(r.stdout, candidates)
 }
 
-func writeWhoTable(w io.Writer, candidates []store.WhoCandidate, width int) {
+func writeWhoTable(w io.Writer, candidates []store.WhoCandidate) error {
 	rows := make([][]string, 0, len(candidates)+1)
-	rows = append(rows, []string{"Who", "Last seen", "Messages", "Identifiers"})
 	for _, candidate := range candidates {
 		rows = append(rows, []string{
 			outputField(candidate.Who),
-			formatOptionalTime(candidate.LastSeen),
+			shortLocalTime(candidate.LastSeen),
 			strconv.Itoa(candidate.Messages),
 			strings.Join(candidate.Identifiers, ", "),
 		})
 	}
-	writeFittedTable(w, rows, width)
-}
-
-func writeFittedTable(w io.Writer, rows [][]string, width int) {
-	if width <= 0 {
-		width = 100
-	}
-	if len(rows) == 0 {
-		return
-	}
-	colWidths := whoTableColumnWidths(rows, width)
-	for _, row := range rows {
-		wrapped := wrapTableRow(row, colWidths)
-		lineCount := 0
-		if len(wrapped) > 0 {
-			lineCount = len(wrapped[0])
-		}
-		for line := 0; line < lineCount; line++ {
-			for col := 0; col < len(colWidths); col++ {
-				value := ""
-				if line < len(wrapped[col]) {
-					value = wrapped[col][line]
-				}
-				if col == len(colWidths)-1 {
-					_, _ = io.WriteString(w, value)
-					continue
-				}
-				_, _ = fmt.Fprintf(w, "%-*s  ", colWidths[col], value)
-			}
-			_, _ = io.WriteString(w, "\n")
-		}
-	}
-}
-
-func whoTableColumnWidths(rows [][]string, width int) []int {
-	messagesWidth := max(tableColumnWidth(rows, 2), len("Messages"))
-	lastSeenWidth := max(tableColumnWidth(rows, 1), len("Last seen"))
-	lastSeenWidth = min(max(lastSeenWidth, len(time.RFC3339)), 25)
-	if width < 60 {
-		lastSeenWidth = 10
-	}
-	whoWidth := min(max(tableColumnWidth(rows, 0), len("Who")), 30)
-	identWidth := width - whoWidth - lastSeenWidth - messagesWidth - 6
-	if identWidth < 8 {
-		identWidth = 8
-		whoWidth = max(8, width-lastSeenWidth-messagesWidth-identWidth-6)
-	}
-	return []int{whoWidth, lastSeenWidth, messagesWidth, identWidth}
-}
-
-func tableColumnWidth(rows [][]string, col int) int {
-	width := 0
-	for _, row := range rows {
-		if col >= len(row) {
-			continue
-		}
-		width = max(width, len([]rune(row[col])))
-	}
-	return width
-}
-
-func wrapTableRow(row []string, widths []int) [][]string {
-	wrapped := make([][]string, len(widths))
-	maxLines := 1
-	for i, width := range widths {
-		value := ""
-		if i < len(row) {
-			value = row[i]
-		}
-		wrapped[i] = wrapTableCell(value, width)
-		if len(wrapped[i]) > maxLines {
-			maxLines = len(wrapped[i])
-		}
-	}
-	for i := range wrapped {
-		for len(wrapped[i]) < maxLines {
-			wrapped[i] = append(wrapped[i], "")
-		}
-	}
-	return wrapped
-}
-
-func wrapTableCell(value string, width int) []string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return []string{""}
-	}
-	if width <= 0 {
-		return []string{value}
-	}
-	var lines []string
-	for _, field := range strings.Fields(value) {
-		for len([]rune(field)) > width {
-			lines = append(lines, string([]rune(field)[:width]))
-			field = string([]rune(field)[width:])
-		}
-		if len(lines) == 0 || len([]rune(lines[len(lines)-1]))+1+len([]rune(field)) > width {
-			lines = append(lines, field)
-			continue
-		}
-		lines[len(lines)-1] += " " + field
-	}
-	return lines
-}
-
-func terminalWidth() int {
-	width, err := strconv.Atoi(strings.TrimSpace(os.Getenv("COLUMNS")))
-	if err == nil && width >= 40 {
-		return width
-	}
-	return 100
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "Who"},
+		{Header: "Last seen"},
+		{Header: "Messages", AlignRight: true},
+		{Header: "Identifiers", Wrap: true, Width: 0},
+	}, rows)
 }
