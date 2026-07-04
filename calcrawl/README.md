@@ -124,6 +124,7 @@ Search returns 20 rows by default. Use `--limit N` to choose a different count:
   "results": [
     {
       "ref": "calcrawl:event/11111111-1111-1111-1111-111111111111",
+      "short_ref": "3qdr5",
       "time": "2026-03-04T10:00:00+01:00",
       "who": "Alice Example",
       "where": "Room 1",
@@ -158,8 +159,8 @@ search without `--who` when nothing is close.
 The query is optional when `--who`, `--after` or `--before` is present. A
 filter-only search lists the newest matching events.
 
-Search text prints short refs when the alias index is available. Search JSON
-keeps `ref` as the full canonical ref.
+Search text and JSON include short refs when the alias index is available.
+Search JSON keeps `ref` as the full canonical ref.
 
 ### who
 

@@ -203,8 +203,8 @@ func TestCoreDataTimesProvenanceSearchAndOpen(t *testing.T) {
 	if !strings.Contains(result.Snippet, "Planning meeting") || !strings.Contains(result.Snippet, "Room 1") {
 		t.Fatalf("snippet = %q", result.Snippet)
 	}
-	if result.ShortRef != "" {
-		t.Fatalf("search JSON exposed short ref: %#v", result)
+	if result.ShortRef == "" {
+		t.Fatalf("search JSON missing short_ref: %#v", result)
 	}
 
 	opened := runJSON[archive.EventDetail](t, "open", result.Ref, "--json")
@@ -549,17 +549,32 @@ func TestShortRefSearchTextAndOpen(t *testing.T) {
 	setupCalendarFixture(t)
 	runSync(t)
 
+	search := runJSON[searchResponse](t, "search", "planning", "--json")
+	if len(search.Results) != 1 {
+		t.Fatalf("search results = %#v, want one planning result", search.Results)
+	}
+	fullRef := "calcrawl:event/11111111-1111-1111-1111-111111111111"
+	if search.Results[0].Ref != fullRef {
+		t.Fatalf("search ref = %q, want %q", search.Results[0].Ref, fullRef)
+	}
+	alias := search.Results[0].ShortRef
+	if !validTestShortRef(alias) {
+		t.Fatalf("short_ref = %q, want lowercase shortref alias", alias)
+	}
+
 	text, _, err := run(t, "search", "planning")
 	if err != nil {
 		t.Fatalf("search text: %v\n%s", err, text)
 	}
-	fullRef := "calcrawl:event/11111111-1111-1111-1111-111111111111"
 	if strings.Contains(text, fullRef) {
 		t.Fatalf("search text leaked full ref instead of short ref:\n%s", text)
 	}
-	alias := lastTableField(text)
-	if alias == "" {
+	textAlias := lastTableField(text)
+	if textAlias == "" {
 		t.Fatalf("could not find short ref in search text:\n%s", text)
+	}
+	if textAlias != alias {
+		t.Fatalf("human short ref = %q, JSON short_ref = %q", textAlias, alias)
 	}
 	opened := runJSON[archive.EventDetail](t, "open", alias, "--json")
 	if opened.Ref != fullRef {
@@ -816,6 +831,18 @@ func hasString(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func validTestShortRef(value string) bool {
+	if len(value) < 5 {
+		return false
+	}
+	for _, r := range value {
+		if !strings.ContainsRune("23456789abcdefghjkmnpqrstuvwxyz", r) {
+			return false
+		}
+	}
+	return true
 }
 
 func assertNoWhoMatched(t *testing.T, args ...string) {

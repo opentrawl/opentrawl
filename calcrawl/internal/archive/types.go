@@ -129,11 +129,11 @@ type Status struct {
 
 type SearchResult struct {
 	Ref      string `json:"ref"`
+	ShortRef string `json:"short_ref"`
 	Time     string `json:"time"`
 	Who      string `json:"who"`
 	Where    string `json:"where"`
 	Snippet  string `json:"snippet"`
-	ShortRef string `json:"-"`
 }
 
 type EventDetail struct {
