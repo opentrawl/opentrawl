@@ -5,19 +5,21 @@ import (
 
 	crawlog "github.com/openclaw/crawlkit/log"
 	ckrender "github.com/openclaw/crawlkit/render"
-	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
 type logTailOutput = ckrender.LogTail
 
+const logTailLimit = 1000
+
 func (r *runtime) logTail() logTailOutput {
 	out := logTailOutput{}
-	reader, err := crawlog.NewReader(defaultBaseDir(), archive.AppID)
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
+	reader, err := crawlog.NewReaderWithFileName(stateRoot, crawlerID, calcrawlLogFileName)
 	if err != nil {
 		out.Errors = []string{err.Error()}
 		return out
 	}
-	lines, err := reader.RecentLines("", 1000)
+	lines, err := reader.RecentLines("", logTailLimit)
 	if err != nil {
 		out.Errors = []string{err.Error()}
 		return out

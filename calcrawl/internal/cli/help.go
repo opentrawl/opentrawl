@@ -22,39 +22,43 @@ Usage:
   calcrawl --version
 
 Global flags:
-  --json       Print machine-readable output.
+  --json          Print machine-readable output.
+  -v, --verbose  Stream diagnostics to stderr. Use -vv for debug detail.
 
 Output:
   Default output is compact text for humans and agents.
   Use --json for stable machine parsing.
   Search returns 20 rows by default and never more than 200.
   Search may omit QUERY when --who, --after or --before is present.
+
+Diagnostics: run with -v, or read ~/.calcrawl/logs/calcrawl.log
 `)
 }
 
 func printCommandUsage(w io.Writer, args []string) error {
 	topic := strings.Join(args, " ")
+	var err error
 	switch topic {
 	case "metadata":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl metadata [--json]
 
 Print crawlkit control metadata.
 `)
 	case "status":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl status [--json]
 
 Report archive freshness and aggregate counts.
 `)
 	case "sync":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl sync [--json]
 
 Refresh the local calendar archive from Calendar.app's SQLite store.
 `)
 	case "search":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl search [QUERY] [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
 
 Search archived calendar events.
@@ -69,25 +73,25 @@ QUERY is optional when --who, --after or --before is present.
 Use calcrawl who NAME to inspect ambiguous people.
 `)
 	case "who":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl who NAME [--json]
 
 Resolve a person against archived organizers and attendees.
 `)
 	case "open":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl open REF [--json]
 
 Open one archived event ref or short alias returned by search text.
 `)
 	case "doctor":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl doctor [--json]
 
 Check source store access, archive presence and schema readiness.
 `)
 	case "contacts", "contacts export":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   calcrawl contacts export [--json]
 
 Export attendee identities that have phone numbers in the crawlkit contact-export shape.
@@ -95,5 +99,9 @@ Export attendee identities that have phone numbers in the crawlkit contact-expor
 	default:
 		return usageErr(fmt.Errorf("unknown help topic %q", topic))
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.calcrawl/logs/calcrawl.log")
+	return err
 }

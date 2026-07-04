@@ -60,15 +60,19 @@ func TestSyncImportsCalendarStore(t *testing.T) {
 func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 	setupCalendarFixture(t)
 	manifest := runJSON[struct {
-		Capabilities []string `json:"capabilities"`
+		Capabilities []string      `json:"capabilities"`
+		Paths        control.Paths `json:"paths"`
 		Commands     map[string]struct {
 			Argv []string `json:"argv"`
 		} `json:"commands"`
 	}](t, "metadata", "--json")
-	for _, want := range []string{"who", "short_refs"} {
+	for _, want := range []string{"who", "short_refs", "verbose_logs"} {
 		if !hasString(manifest.Capabilities, want) {
 			t.Fatalf("capabilities = %#v, want %q", manifest.Capabilities, want)
 		}
+	}
+	if want := filepath.Join(os.Getenv("HOME"), ".calcrawl", "logs"); manifest.Paths.DefaultLogs != want {
+		t.Fatalf("default logs = %q, want %q", manifest.Paths.DefaultLogs, want)
 	}
 	if command, ok := manifest.Commands["who"]; !ok || strings.Join(command.Argv, " ") != "calcrawl who NAME --json" {
 		t.Fatalf("who command = %#v, want documented resolver", manifest.Commands["who"])
@@ -80,6 +84,101 @@ func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 	searchHelp := runOK(t, "help", "search")
 	if !strings.Contains(searchHelp, "Use calcrawl who NAME") {
 		t.Fatalf("search help does not mention resolver:\n%s", searchHelp)
+	}
+}
+
+func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("TZ", "UTC")
+	logPath := filepath.Join(home, ".calcrawl", "logs", "calcrawl.log")
+
+	stdout, stderr, err := run(t, "metadata")
+	if err != nil {
+		t.Fatalf("metadata error = %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if stderr != "" {
+		t.Fatalf("metadata without -v wrote stderr:\n%s", stderr)
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("log file missing at %s: %v", logPath, err)
+	}
+	logText := readTestLog(t)
+	for _, want := range []string{"metadata start:", "metadata finish: outcome=success"} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("log missing %q:\n%s", want, logText)
+		}
+	}
+
+	stdout, stderr, err = run(t, "-v", "metadata")
+	if err != nil {
+		t.Fatalf("metadata -v error = %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "metadata start:") || !strings.Contains(stderr, "metadata finish: outcome=success") {
+		t.Fatalf("-v stderr missing log lines:\n%s", stderr)
+	}
+	if strings.Contains(stderr, "DEBUG") {
+		t.Fatalf("-v streamed debug line:\n%s", stderr)
+	}
+}
+
+func TestSyncVerboseLogsPhaseTimings(t *testing.T) {
+	setupCalendarFixture(t)
+
+	stdout, stderr, err := run(t, "-vv", "sync", "--json")
+	if err != nil {
+		t.Fatalf("sync -vv error = %v\nstdout:\n%s\nstderr:\n%s", err, stdout, stderr)
+	}
+	logText := readTestLog(t)
+	for _, want := range []string{
+		"sync_done: calendars=2",
+		"events=2",
+		"new=2",
+		"sync_phase: source=calendar_store",
+		"read_ms=",
+		"write_ms=",
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("sync log missing %q:\n%s", want, logText)
+		}
+	}
+	if !strings.Contains(stderr, "sync_done: calendars=2") || !strings.Contains(stderr, "sync_phase: source=calendar_store") {
+		t.Fatalf("-vv stderr missing sync log lines:\n%s", stderr)
+	}
+}
+
+func TestHelpDocumentsDiagnosticsLine(t *testing.T) {
+	setupTestHome(t)
+	diagnostics := "Diagnostics: run with -v, or read ~/.calcrawl/logs/calcrawl.log"
+	for _, args := range [][]string{
+		{"help"},
+		{"help", "metadata"},
+		{"help", "status"},
+		{"help", "sync"},
+		{"help", "search"},
+		{"help", "who"},
+		{"help", "open"},
+		{"help", "doctor"},
+		{"help", "contacts", "export"},
+		{"metadata", "--help"},
+		{"status", "--help"},
+		{"sync", "--help"},
+		{"search", "--help"},
+		{"who", "--help"},
+		{"open", "--help"},
+		{"doctor", "--help"},
+		{"contacts", "--help"},
+		{"contacts", "export", "--help"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout := runOK(t, args...)
+			if !strings.Contains(stdout, diagnostics) {
+				t.Fatalf("help missing diagnostics line:\n%s", stdout)
+			}
+			if !strings.HasSuffix(strings.TrimSpace(stdout), diagnostics) {
+				t.Fatalf("help does not end with diagnostics line:\n%s", stdout)
+			}
+		})
 	}
 }
 
@@ -641,6 +740,15 @@ func run(t *testing.T, args ...string) (string, string, error) {
 	var stderr bytes.Buffer
 	err := cli.Run(context.Background(), args, &stdout, &stderr)
 	return stdout.String(), stderr.String(), err
+}
+
+func readTestLog(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".calcrawl", "logs", "calcrawl.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func countValues(value any) map[string]int64 {
