@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/wacrawl/internal/cli"
 )
 
@@ -14,7 +15,9 @@ func main() {
 
 func run(args []string) int {
 	if err := cli.Run(context.Background(), args, os.Stdout, os.Stderr); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		if !output.IsRendered(err) {
+			fmt.Fprintln(os.Stderr, err)
+		}
 		return cli.ExitCode(err)
 	}
 	return 0

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	ckoutput "github.com/openclaw/crawlkit/output"
 )
 
 var Version = "dev"
@@ -51,6 +52,7 @@ type DoctorCmd struct {
 type helpShown struct{}
 
 func Execute(args []string, stdout, stderr io.Writer) (err error) {
+	jsonOut := hasJSONFlag(args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			if _, ok := recovered.(helpShown); ok {
@@ -88,11 +90,11 @@ Examples:
 	}
 	args = rewriteHelp(normalizeGlobalFlags(args))
 	if err := unknownCommand(args); err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 	}
 	kctx, err := parser.Parse(args)
 	if err != nil {
-		return usageErr{err}
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr{err})
 	}
 	runtime := &Runtime{
 		ctx:     context.Background(),
@@ -103,14 +105,18 @@ Examples:
 		now:     time.Now,
 	}
 	if err := runtime.startLogRun(commandName(args)); err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
 	}
 	defer func() {
 		err = runtime.finishLogRun(err)
 	}()
 	kctx.Bind(runtime)
 	if err := kctx.Run(runtime); err != nil {
-		return err
+		var exit exitErr
+		if errors.As(err, &exit) {
+			return err
+		}
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
 	}
 	return nil
 }
@@ -323,11 +329,11 @@ func (r *Runtime) reportDoctorFailures(results []DoctorResult) {
 
 func (r *Runtime) writeError(code, message, remedy string) error {
 	if r.root.JSON {
-		_ = writeJSON(r.stdout, ErrorEnvelope{Error: ErrorBody{
+		_ = ckoutput.WriteError(r.stdout, ckoutput.ErrorBody{
 			Code:    code,
 			Message: message,
 			Remedy:  remedy,
-		}})
+		})
 	} else {
 		_, _ = fmt.Fprintf(r.stderr, "%s Remedy: %s\n", message, remedy)
 	}
@@ -358,6 +364,15 @@ func isGlobalFlag(arg string) bool {
 		arg == "-vv" ||
 		arg == "--verbose" ||
 		strings.HasPrefix(arg, "--verbose=")
+}
+
+func hasJSONFlag(args []string) bool {
+	for _, arg := range args {
+		if arg == "--json" {
+			return true
+		}
+	}
+	return false
 }
 
 // rewriteHelp keeps `trawl` and `trawl help [command]` working the way
@@ -412,7 +427,7 @@ func ExitCode(err error) int {
 
 func ShouldPrintError(err error) bool {
 	var exit exitErr
-	return err != nil && !errors.As(err, &exit)
+	return err != nil && !errors.As(err, &exit) && !ckoutput.IsRendered(err)
 }
 
 type exitErr struct {
@@ -425,4 +440,12 @@ func (e exitErr) Error() string {
 
 type usageErr struct {
 	error
+}
+
+func (e usageErr) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    "usage",
+		Message: e.Error(),
+		Remedy:  "run trawl --help",
+	}
 }

@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -17,21 +18,6 @@ var (
 	errForeignRef = errors.New("ref is not from imsgcrawl")
 	errInvalidRef = errors.New("ref is not an imsgcrawl message ref")
 )
-
-type errorEnvelope struct {
-	Error commandError `json:"error"`
-}
-
-type commandError struct {
-	Code            string                  `json:"code"`
-	Message         string                  `json:"message"`
-	Remedy          string                  `json:"remedy"`
-	Candidates      []archive.WhoCandidate  `json:"candidates,omitempty"`
-	CandidateTotal  int                     `json:"candidate_total,omitempty"`
-	DidYouMean      *[]archive.WhoCandidate `json:"did_you_mean,omitempty"`
-	DidYouMeanTotal int                     `json:"did_you_mean_total,omitempty"`
-	Hint            string                  `json:"hint,omitempty"`
-}
 
 func (r *runtime) runOpen(args []string) error {
 	if hasHelpFlag(args) {
@@ -104,13 +90,14 @@ func (r *runtime) openShortRef(alias string) error {
 
 func (r *runtime) contractError(code, message, remedy string) error {
 	_ = r.logError(code, worldMustChange(nil, message, remedy))
-	envelope := errorEnvelope{Error: commandError{Code: code, Message: message, Remedy: remedy}}
+	err := commandErr(code, message, remedy, 1, nil, errors.New(message))
 	if r.json {
-		_ = r.print(envelope)
-	} else {
-		_, _ = fmt.Fprintf(r.stderr, "%s\nRemedy: %s\n", message, remedy)
+		return err
 	}
-	return &cliError{code: 1, err: errors.New(message)}
+	// Human mode prints here, once; rendered marking stops main's
+	// fallback from printing the message a second time.
+	_, _ = fmt.Fprintf(r.stderr, "%s\nRemedy: %s\n", message, remedy)
+	return ckoutput.Rendered(err)
 }
 
 func messageRef(messageID string) string {

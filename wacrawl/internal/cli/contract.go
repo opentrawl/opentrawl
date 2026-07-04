@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -33,15 +34,32 @@ func (a *app) failContract(contractErr contractError) error {
 }
 
 func (a *app) failContractWithExit(contractErr contractError, exitCode int) error {
-	if a.json {
-		if err := a.print(errorEnvelope{Error: contractErr}); err != nil {
-			return err
-		}
-	} else {
-		_ = a.printContractError(contractErr)
-	}
 	failure := &contractFailure{contractError: contractErr}
-	return &cliError{code: exitCode, err: cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy}}
+	err := commandErr(contractErr.Code, contractErr.Message, contractErr.Remedy, exitCode, contractErr.fields(), cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy})
+	if a.json {
+		return err
+	}
+	// Human mode prints here, once; the error returns marked rendered
+	// so main's fallback does not print it a second time.
+	_ = a.printContractError(contractErr)
+	return ckoutput.Rendered(err)
+}
+
+func (e contractError) fields() map[string]any {
+	fields := map[string]any{}
+	if len(e.Candidates) > 0 {
+		fields["candidates"] = e.Candidates
+	}
+	if e.DidYouMean != nil {
+		fields["did_you_mean"] = *e.DidYouMean
+	}
+	if e.Hint != "" {
+		fields["hint"] = e.Hint
+	}
+	if len(fields) == 0 {
+		return nil
+	}
+	return fields
 }
 
 func (a *app) printContractError(contractErr contractError) error {
@@ -75,6 +93,8 @@ func (a *app) printContractError(contractErr contractError) error {
 		_, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Remedy)
 		return err
 	}
-	_, err := fmt.Fprintf(a.stderr, "%s. %s.\n", contractErr.Message, contractErr.Remedy)
+	// Message and remedy on separate lines: the hint never rides the
+	// data line (design bar), and the message stays the frozen string.
+	_, err := fmt.Fprintf(a.stderr, "%s.\n%s.\n", contractErr.Message, contractErr.Remedy)
 	return err
 }

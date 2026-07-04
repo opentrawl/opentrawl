@@ -251,8 +251,11 @@ func TestSearchWhoUnknownReturnsContractError(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
 		t.Fatalf("unknown error json = %s err=%v", stdout.String(), err)
 	}
-	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || payload.Error.Hint == "" {
+	if payload.Error.Code != "unknown_who" || payload.Error.Hint == "" {
 		t.Fatalf("unknown error = %#v", payload)
+	}
+	if strings.Contains(stdout.String(), `"did_you_mean"`) || strings.Contains(stdout.String(), `"did_you_mean_total"`) {
+		t.Fatalf("unknown error emitted empty suggestion fields: %s", stdout.String())
 	}
 	if strings.Contains(stdout.String(), "results") {
 		t.Fatalf("unknown search ran: %s", stdout.String())

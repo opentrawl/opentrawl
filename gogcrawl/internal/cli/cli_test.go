@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -15,6 +17,7 @@ import (
 
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	_ "modernc.org/sqlite"
 )
@@ -380,8 +383,11 @@ func TestSearchWhoResolutionOneManyZeroAndIdentifier(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &unknown); err != nil {
 		t.Fatalf("unknown JSON: %v\n%s", err, stdout)
 	}
-	if unknown["error"]["code"] != "unknown_who" || len(unknown["error"]["did_you_mean"].([]any)) != 0 || unknown["error"]["hint"] == "" {
+	if unknown["error"]["code"] != "unknown_who" || unknown["error"]["hint"] == "" {
 		t.Fatalf("unknown envelope = %#v", unknown)
+	}
+	if _, ok := unknown["error"]["did_you_mean"]; ok {
+		t.Fatalf("unknown envelope emitted empty did_you_mean = %#v", unknown)
 	}
 }
 
@@ -544,6 +550,27 @@ values ('22222', ?), ('22222', ?)
 	}
 }
 
+func TestJSONUsageErrorIsSingleRenderedDocument(t *testing.T) {
+	stdout, stderr, err := runExpectError(t, []string{"search", "a", "--limit", "1000", "--json"})
+	if !ckoutput.IsRendered(err) {
+		t.Fatalf("error was not marked rendered: %v", err)
+	}
+	if stderr != "" {
+		t.Fatalf("JSON error wrote stderr: %s", stderr)
+	}
+	var payload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+			Remedy  string `json:"remedy"`
+		} `json:"error"`
+	}
+	assertSingleJSONDocument(t, stdout, &payload)
+	if payload.Error.Code != "usage" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("error payload = %#v", payload)
+	}
+}
+
 func runStatus(t *testing.T, ctx context.Context, dbPath string) statusEnvelope {
 	t.Helper()
 	var out statusEnvelope
@@ -578,6 +605,18 @@ func runExpectError(t *testing.T, args []string) (string, string, error) {
 		t.Fatalf("Run(%v) succeeded; stdout=%s stderr=%s", args, stdout.String(), stderr.String())
 	}
 	return stdout.String(), stderr.String(), err
+}
+
+func assertSingleJSONDocument(t *testing.T, data string, out any) {
+	t.Helper()
+	dec := json.NewDecoder(strings.NewReader(data))
+	if err := dec.Decode(out); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, data)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		t.Fatalf("JSON output had trailing data: %v\n%s", err, data)
+	}
 }
 
 func seedArchive(t *testing.T, messages []archive.Message) string {

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -23,13 +24,31 @@ const (
 )
 
 type cliError struct {
-	code int
-	err  error
+	code    int
+	name    string
+	message string
+	remedy  string
+	fields  map[string]any
+	err     error
 }
 
-func (e *cliError) Error() string { return e.err.Error() }
+func (e *cliError) Error() string {
+	if e.err != nil {
+		return e.err.Error()
+	}
+	return e.message
+}
 
 func (e *cliError) Unwrap() error { return e.err }
+
+func (e *cliError) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    e.name,
+		Message: e.message,
+		Remedy:  e.remedy,
+		Fields:  e.fields,
+	}
+}
 
 func ExitCode(err error) int {
 	if err == nil {
@@ -64,7 +83,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			printUsage(stdout)
 			return nil
 		}
-		return usageErr(err)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonAnywhere, usageErr(err))
 	}
 	if *versionFlag {
 		_, _ = io.WriteString(stdout, version+"\n")
@@ -82,7 +101,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 func (a *app) runCommand(ctx context.Context, rest []string) error {
 	run, err := a.newLogRun(logCommandName(rest))
 	if err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, err)
 	}
 	a.runLog = run
 	err = a.dispatch(ctx, rest)
@@ -90,9 +109,9 @@ func (a *app) runCommand(ctx context.Context, rest []string) error {
 		_ = run.Error(errorEvent(rest, err), err)
 	}
 	if finishErr := run.Finish(err); err == nil {
-		return finishErr
+		return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, finishErr)
 	}
-	return err
+	return ckoutput.WriteJSONErrorIfNeeded(a.stdout, a.json, err)
 }
 
 func (a *app) dispatch(ctx context.Context, rest []string) error {
@@ -172,7 +191,11 @@ func defaultDBPath() string {
 }
 
 func usageErr(err error) error {
-	return &cliError{code: 2, err: err}
+	return commandErr("usage", err.Error(), "run wacrawl help", 2, nil, err)
+}
+
+func commandErr(name, message, remedy string, code int, fields map[string]any, err error) error {
+	return &cliError{code: code, name: name, message: message, remedy: remedy, fields: fields, err: err}
 }
 
 func parseTime(value string) (time.Time, error) {

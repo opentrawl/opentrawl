@@ -9,17 +9,37 @@ import (
 	"os"
 	"path/filepath"
 
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
 
 type cliError struct {
-	code int
-	err  error
+	code    int
+	name    string
+	message string
+	remedy  string
+	fields  map[string]any
+	err     error
 }
 
-func (e *cliError) Error() string { return e.err.Error() }
+func (e *cliError) Error() string {
+	if e.err != nil {
+		return e.err.Error()
+	}
+	return e.message
+}
+
 func (e *cliError) Unwrap() error { return e.err }
+
+func (e *cliError) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    e.name,
+		Message: e.message,
+		Remedy:  e.remedy,
+		Fields:  e.fields,
+	}
+}
 
 func ExitCode(err error) int {
 	if err == nil {
@@ -57,7 +77,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 			printUsage(stdout)
 			return nil
 		}
-		return printCommandUsage(stdout, args[1:])
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, printCommandUsage(stdout, args[1:]))
 	}
 	global := flag.NewFlagSet("imsgcrawl", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
@@ -65,7 +85,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	archivePath := global.String("archive", archive.DefaultPath(), "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
-		return usageErr(err)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
 	}
 	if *versionFlag {
 		_, _ = io.WriteString(stdout, version+"\n")
@@ -74,7 +94,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	rest := global.Args()
 	if len(rest) == 0 || rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" {
 		if len(rest) > 1 && rest[0] == "help" {
-			return printCommandUsage(stdout, rest[1:])
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, printCommandUsage(stdout, rest[1:]))
 		}
 		printUsage(stdout)
 		return nil
@@ -85,10 +105,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath, archivePath: *archivePath, command: logCommandName(rest[0])}
 	if err := r.startLogRun(); err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 	}
 	err := r.dispatch(rest)
-	return r.finishLogRun(err)
+	err = r.finishLogRun(err)
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 }
 
 func pullJSONFlag(args []string) (bool, []string) {
@@ -161,7 +182,11 @@ func (r *runtime) runMetadata(args []string) error {
 }
 
 func usageErr(err error) error {
-	return &cliError{code: 2, err: err}
+	return commandErr("usage", err.Error(), "run imsgcrawl help", 2, nil, err)
+}
+
+func commandErr(name, message, remedy string, code int, fields map[string]any, err error) error {
+	return &cliError{code: code, name: name, message: message, remedy: remedy, fields: fields, err: err}
 }
 
 func defaultBaseDir() string {

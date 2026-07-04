@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -571,6 +573,59 @@ func TestRunUsageErrors(t *testing.T) {
 	}
 }
 
+func TestJSONUsageErrorIsSingleRenderedDocument(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"search", "--limit", "1000", "a", "--json"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 2 {
+		t.Fatalf("expected usage exit, got err=%v code=%d", err, ExitCode(err))
+	}
+	if !ckoutput.IsRendered(err) {
+		t.Fatalf("error was not marked rendered: %v", err)
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("JSON error wrote stderr: %s", stderr.String())
+	}
+	var payload errorJSON
+	assertSingleJSONDocument(t, stdout.String(), &payload)
+	if payload.Error.Code != "usage" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("error payload = %#v", payload)
+	}
+}
+
+func TestHumanUsageErrorStrings(t *testing.T) {
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "search limit",
+			args: []string{"search", "--limit", "1000", "a"},
+			want: "search --limit must be 200 or less",
+		},
+		{
+			name: "who blank",
+			args: []string{"who", " "},
+			want: "who requires a name",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			err := Run(context.Background(), tc.args, &stdout, &stderr)
+			if err == nil || ExitCode(err) != 2 {
+				t.Fatalf("expected usage exit, got err=%v code=%d", err, ExitCode(err))
+			}
+			if err.Error() != tc.want {
+				t.Fatalf("error = %q, want %q", err.Error(), tc.want)
+			}
+			if stdout.Len() != 0 || stderr.Len() != 0 {
+				t.Fatalf("usage wrote stdout=%q stderr=%q", stdout.String(), stderr.String())
+			}
+		})
+	}
+}
+
 func assertContactExportKeys(t *testing.T, data []byte) {
 	t.Helper()
 	var root map[string]json.RawMessage
@@ -595,6 +650,18 @@ func assertContactExportKeys(t *testing.T, data []byte) {
 		if len(contact) != 2 {
 			t.Fatalf("contact keys = %#v, want only display_name and phone_numbers", contact)
 		}
+	}
+}
+
+func assertSingleJSONDocument(t *testing.T, data string, out any) {
+	t.Helper()
+	dec := json.NewDecoder(strings.NewReader(data))
+	if err := dec.Decode(out); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, data)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		t.Fatalf("JSON output had trailing data: %v\n%s", err, data)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/openclaw/crawlkit/conformance"
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -228,6 +230,18 @@ func assertRootKeys(t *testing.T, data []byte, keys ...string) {
 	}
 	if len(root) != len(want) {
 		t.Fatalf("root keys = %#v, want %#v", root, keys)
+	}
+}
+
+func assertSingleJSONDocument(t *testing.T, data string, out any) {
+	t.Helper()
+	dec := json.NewDecoder(strings.NewReader(data))
+	if err := dec.Decode(out); err != nil {
+		t.Fatalf("decode JSON: %v\n%s", err, data)
+	}
+	var extra any
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		t.Fatalf("JSON output had trailing data: %v\n%s", err, data)
 	}
 }
 
@@ -1112,10 +1126,11 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	if err == nil || ExitCode(err) != 5 {
 		t.Fatalf("expected unknown_who exit 5, got err=%v code=%d", err, ExitCode(err))
 	}
+	payload = errorEnvelope{}
 	if err := json.Unmarshal(stdout.Bytes(), &payload); err != nil {
 		t.Fatalf("unknown json = %s err=%v", stdout.String(), err)
 	}
-	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || len(*payload.Error.DidYouMean) != 0 || payload.Error.Hint == "" {
+	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean != nil || payload.Error.Hint == "" {
 		t.Fatalf("unknown payload = %#v", payload)
 	}
 
@@ -1712,6 +1727,75 @@ func TestRunUsageErrors(t *testing.T) {
 	err = Run(context.Background(), []string{"--json", "web"}, &stdout, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "does not support --json") {
 		t.Fatalf("expected web json error, got %v", err)
+	}
+}
+
+func TestJSONErrorsAreSingleRenderedDocuments(t *testing.T) {
+	ctx := context.Background()
+	dbPath := filepath.Join(t.TempDir(), "archive.db")
+	st, err := store.Open(ctx, dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name string
+		args []string
+		code string
+	}{
+		{
+			name: "usage",
+			args: []string{"--db", dbPath, "search", "--limit", "1000", "a", "--json"},
+			code: "usage",
+		},
+		{
+			name: "contract",
+			args: []string{"--db", dbPath, "--json", "open", "not-a-valid-ref"},
+			code: "unknown_short_ref",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var stdout, stderr bytes.Buffer
+			err := Run(ctx, tc.args, &stdout, &stderr)
+			if err == nil {
+				t.Fatalf("Run(%v) succeeded", tc.args)
+			}
+			if !ckoutput.IsRendered(err) {
+				t.Fatalf("error was not marked rendered: %v", err)
+			}
+			if stderr.Len() != 0 {
+				t.Fatalf("JSON error wrote stderr: %s", stderr.String())
+			}
+			var payload errorEnvelope
+			assertSingleJSONDocument(t, stdout.String(), &payload)
+			if payload.Error.Code != tc.code || payload.Error.Message == "" || payload.Error.Remedy == "" {
+				t.Fatalf("error payload = %#v", payload)
+			}
+		})
+	}
+}
+
+func TestHumanContractErrorString(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"open", "not-a-valid-ref"}, &stdout, &stderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("expected contract exit, got err=%v code=%d", err, ExitCode(err))
+	}
+	if err.Error() != "short ref was not found" {
+		t.Fatalf("error = %q", err.Error())
+	}
+	if stdout.Len() != 0 {
+		t.Fatalf("human contract error wrote stdout: %s", stdout.String())
+	}
+	if stderr.String() != "short ref was not found.\nuse a full ref from wacrawl search.\n" {
+		t.Fatalf("stderr = %q", stderr.String())
+	}
+	if !ckoutput.IsRendered(err) {
+		t.Fatalf("human contract error must return rendered so main does not print it twice")
 	}
 }
 

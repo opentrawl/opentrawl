@@ -2,6 +2,8 @@ package output
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"testing"
 )
 
@@ -44,5 +46,56 @@ func TestUsageError(t *testing.T) {
 	_, err := Resolve("xml", false)
 	if !IsUsage(err) {
 		t.Fatalf("expected usage error, got %v", err)
+	}
+}
+
+func TestWriteErrorContractEnvelope(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteError(&buf, ErrorBody{
+		Code:    "usage",
+		Message: "search --limit must be between 1 and 200",
+		Remedy:  "run gogcrawl help",
+		Fields: map[string]any{
+			"candidates":      []string{},
+			"candidate_total": 0,
+			"did_you_mean":    []string{"alice@example.com"},
+			"hint":            "",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var payload ErrorEnvelope
+	if err := json.Unmarshal(buf.Bytes(), &payload); err != nil {
+		t.Fatalf("error JSON = %s err=%v", buf.String(), err)
+	}
+	if payload.Error.Code != "usage" || payload.Error.Message == "" || payload.Error.Remedy == "" {
+		t.Fatalf("error envelope = %#v", payload)
+	}
+	var raw map[string]map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["error"]["candidates"]; ok {
+		t.Fatalf("empty candidates should be omitted: %s", buf.String())
+	}
+	if _, ok := raw["error"]["candidate_total"]; ok {
+		t.Fatalf("zero candidate_total should be omitted: %s", buf.String())
+	}
+	if _, ok := raw["error"]["hint"]; ok {
+		t.Fatalf("empty hint should be omitted: %s", buf.String())
+	}
+	if _, ok := raw["error"]["did_you_mean"]; !ok {
+		t.Fatalf("non-empty did_you_mean should be kept: %s", buf.String())
+	}
+}
+
+func TestRenderedErrorKeepsUnderlyingError(t *testing.T) {
+	underlying := UsageError{Err: errors.New("bad flag")}
+	err := Rendered(underlying)
+	if !IsRendered(err) {
+		t.Fatalf("rendered marker missing: %v", err)
+	}
+	if !IsUsage(err) {
+		t.Fatalf("underlying usage error missing: %v", err)
 	}
 }

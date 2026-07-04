@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
 )
@@ -34,6 +35,15 @@ func (e *cliError) Error() string {
 
 func (e *cliError) Unwrap() error { return e.err }
 
+func (e *cliError) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    e.name,
+		Message: e.message,
+		Remedy:  e.remedy,
+		Fields:  e.fields,
+	}
+}
+
 type runtime struct {
 	ctx            context.Context
 	stdout         io.Writer
@@ -49,20 +59,20 @@ type runtime struct {
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	verbosity, args, err := pullVerbosity(args)
 	if err != nil {
-		return writeJSONErrorIfNeeded(stdout, hasFlag(args, "--json"), usageErr(err))
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, hasFlag(args, "--json"), usageErr(err))
 	}
 	jsonOut, args := pullFlag(args, "--json")
 	versionOut, args := pullFlag(args, "--version")
 	archivePath, args, err := pullValueFlag(args, "--archive")
 	if err != nil {
-		return writeJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
 	}
 	if strings.TrimSpace(archivePath) == "" {
 		archivePath = archive.DefaultPath()
 	}
 	backupRepoPath, args, err := pullValueFlag(args, "--backup-repo")
 	if err != nil {
-		return writeJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
 	}
 	if strings.TrimSpace(backupRepoPath) == "" {
 		backupRepoPath = archive.DefaultBackupRepoPath()
@@ -70,7 +80,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if versionOut {
 		run, err := newCommandLog("version", stderr, jsonOut, verbosity)
 		if err != nil {
-			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
 		_, _ = io.WriteString(stdout, version+"\n")
 		return finishCommandLog(run, nil)
@@ -78,7 +88,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		run, err := newCommandLog("help", stderr, jsonOut, verbosity)
 		if err != nil {
-			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
 		printUsage(stdout)
 		return finishCommandLog(run, nil)
@@ -86,7 +96,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if args[0] == "help" {
 		run, err := newCommandLog("help", stderr, jsonOut, verbosity)
 		if err != nil {
-			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
 		if len(args) == 1 {
 			printUsage(stdout)
@@ -99,11 +109,11 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		if logErr := finishCommandLog(run, err); err == nil {
 			err = logErr
 		}
-		return writeJSONErrorIfNeeded(stdout, jsonOut, err)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 	}
 	run, err := newCommandLog(commandName(args), stderr, jsonOut, verbosity)
 	if err != nil {
-		return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 	}
 	r := &runtime{
 		ctx:            ctx,
@@ -123,7 +133,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if logErr := finishCommandLog(run, err); err == nil {
 		err = logErr
 	}
-	return writeJSONErrorIfNeeded(stdout, jsonOut, err)
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 }
 
 func ExitCode(err error) int {
@@ -255,31 +265,4 @@ func commandErr(name, message, remedy string, err error) error {
 func commandErrWith(name, message, remedy string, code int, fields map[string]any, human string, err error) error {
 	err = cklog.WorldMustChange{Err: err, Message: message, Remedy: remedy}
 	return &cliError{code: code, name: name, message: message, remedy: remedy, fields: fields, human: human, err: err}
-}
-
-func writeJSONErrorIfNeeded(w io.Writer, jsonOut bool, err error) error {
-	if err == nil || !jsonOut {
-		return err
-	}
-	var codeErr *cliError
-	name := "command_failed"
-	message := err.Error()
-	remedy := ""
-	if errors.As(err, &codeErr) {
-		name = codeErr.name
-		message = codeErr.message
-		remedy = codeErr.remedy
-	}
-	errorBody := map[string]any{
-		"code":    name,
-		"message": message,
-		"remedy":  remedy,
-	}
-	if codeErr != nil {
-		for key, value := range codeErr.fields {
-			errorBody[key] = value
-		}
-	}
-	_ = newJSONEncoder(w).Encode(map[string]any{"error": errorBody})
-	return err
 }

@@ -51,19 +51,13 @@ func (r *runtime) ambiguousWhoError(query, searchQuery string, resolution archiv
 	message := fmt.Sprintf("ambiguous_who: %q matches more than one person", query)
 	remedy := "retry with one identifier from the table"
 	_ = r.logError("ambiguous_who", worldMustChange(nil, message, remedy))
-	envelope := errorEnvelope{Error: commandError{
-		Code:           "ambiguous_who",
-		Message:        message,
-		Remedy:         remedy,
-		Candidates:     resolution.Candidates,
-		CandidateTotal: resolution.TotalMatches,
-	}}
-	if r.json {
-		_ = r.print(envelope)
-	} else {
+	if !r.json {
 		_ = printAmbiguousWhoText(r.stderr, query, searchQuery, resolution)
 	}
-	return &cliError{code: 4, err: errors.New(message)}
+	return commandErr("ambiguous_who", message, remedy, 4, map[string]any{
+		"candidates":      resolution.Candidates,
+		"candidate_total": resolution.TotalMatches,
+	}, errors.New(message))
 }
 
 func (r *runtime) unknownWhoError(query, searchQuery string, resolution archive.WhoResolution) error {
@@ -72,20 +66,14 @@ func (r *runtime) unknownWhoError(query, searchQuery string, resolution archive.
 	hint := "Search without --who to inspect matching messages."
 	_ = r.logError("unknown_who", worldMustChange(nil, message, remedy))
 	didYouMean := resolution.Candidates
-	envelope := errorEnvelope{Error: commandError{
-		Code:            "unknown_who",
-		Message:         message,
-		Remedy:          remedy,
-		DidYouMean:      &didYouMean,
-		DidYouMeanTotal: resolution.TotalMatches,
-		Hint:            hint,
-	}}
-	if r.json {
-		_ = r.print(envelope)
-	} else {
+	if !r.json {
 		_ = printUnknownWhoText(r.stderr, query, searchQuery, resolution, hint)
 	}
-	return &cliError{code: 5, err: errors.New(message)}
+	return commandErr("unknown_who", message, remedy, 5, map[string]any{
+		"did_you_mean":       didYouMean,
+		"did_you_mean_total": resolution.TotalMatches,
+		"hint":               hint,
+	}, errors.New(message))
 }
 
 func printAmbiguousWhoText(w io.Writer, query, searchQuery string, resolution archive.WhoResolution) error {
