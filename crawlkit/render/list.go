@@ -8,18 +8,25 @@ import (
 )
 
 const (
-	listDateWidth    = 16
-	listWhoWidth     = 24
-	listWhereWidth   = 20
-	listMinTextWidth = 16
+	listDateWidth     = 10 // 2006-01-02
+	listDateTimeWidth = 16 // 2006-01-02 15:04
+	listWhoWidth      = 24
+	listWhereWidth    = 20
+	listMinTextWidth  = 16
 )
 
 type ListItem struct {
-	Time  time.Time
-	Who   string
-	Where string
-	Ref   string
-	Text  string
+	Time time.Time
+	// DateOnly marks Time as a calendar date with no meaningful time of
+	// day (an all-day event): the date column shows the date alone,
+	// without zone conversion — a date is the same wall-clock day
+	// everywhere.
+	DateOnly bool
+	Source   string
+	Who      string
+	Where    string
+	Ref      string
+	Text     string
 }
 
 type List struct {
@@ -51,14 +58,22 @@ func WriteList(w io.Writer, l List) error {
 	if err := writeListIntro(w, l.Heading, l.Hints); err != nil {
 		return err
 	}
-	columns := listRenderColumns(l, OutputWidth(w))
+	columns, shedRefs := listRenderColumns(l, OutputWidth(w))
 	rows := listRows(l.Items, columns)
 	if err := writeRenderHeader(w, columns); err != nil {
 		return err
 	}
-	for _, row := range rows {
+	for i, row := range rows {
 		if err := writeRenderRow(w, columns, row); err != nil {
 			return err
+		}
+		if !shedRefs {
+			continue
+		}
+		if ref := strings.TrimSpace(l.Items[i].Ref); ref != "" {
+			if _, err := fmt.Fprintf(w, "  open: %s\n", ref); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -81,10 +96,16 @@ func writeListIntro(w io.Writer, heading string, hints []string) error {
 	return err
 }
 
-func listRenderColumns(l List, outputWidth int) []renderColumn {
-	columns := make([]renderColumn, 0, 5)
+func listRenderColumns(l List, outputWidth int) ([]renderColumn, bool) {
+	columns := make([]renderColumn, 0, 6)
 	if listHasDate(l.Items) {
-		columns = append(columns, renderColumn{Header: "date", Width: listDateWidth})
+		columns = append(columns, renderColumn{Header: "date", Width: listDateColumnWidth(l.Items)})
+	}
+	if listHasValue(l.Items, func(item ListItem) string { return item.Source }) {
+		columns = append(columns, renderColumn{
+			Header: "source",
+			Width:  naturalListColumnWidth("source", l.Items, func(item ListItem) string { return item.Source }),
+		})
 	}
 	if listHasValue(l.Items, func(item ListItem) string { return item.Who }) {
 		columns = append(columns, renderColumn{
@@ -110,27 +131,45 @@ func listRenderColumns(l List, outputWidth int) []renderColumn {
 		Wrap:   true,
 		Clamp:  l.ClampText,
 	})
-	fitListColumns(columns, outputWidth)
-	return columns
+	return fitListColumns(columns, outputWidth)
 }
 
-func fitListColumns(columns []renderColumn, outputWidth int) {
+// fitListColumns makes room for a readable text column. The who and
+// where columns shrink first; if that is not enough, the ref column
+// sheds to a per-row "open:" line. Date, source and ref cells are
+// never truncated — a clipped timestamp or ref is garbage.
+func fitListColumns(columns []renderColumn, outputWidth int) ([]renderColumn, bool) {
 	text := len(columns) - 1
 	for text > 0 && listFixedBudget(columns)+listMinTextWidth > outputWidth {
-		column := widestListShrinkColumn(columns[:text], true)
-		if column < 0 {
-			column = widestListShrinkColumn(columns[:text], false)
-		}
+		column := widestListShrinkColumn(columns[:text])
 		if column < 0 {
 			break
 		}
 		columns[column].Width--
 	}
+	shedRefs := false
+	if listFixedBudget(columns)+listMinTextWidth > outputWidth {
+		if trimmed := dropListColumn(columns, "ref"); len(trimmed) < len(columns) {
+			columns = trimmed
+			shedRefs = true
+		}
+	}
 	textWidth := outputWidth - listFixedBudget(columns)
 	if textWidth < listMinTextWidth {
 		textWidth = listMinTextWidth
 	}
-	columns[text].Width = textWidth
+	columns[len(columns)-1].Width = textWidth
+	return columns, shedRefs
+}
+
+func dropListColumn(columns []renderColumn, header string) []renderColumn {
+	kept := make([]renderColumn, 0, len(columns))
+	for _, column := range columns {
+		if column.Header != header {
+			kept = append(kept, column)
+		}
+	}
+	return kept
 }
 
 func listFixedBudget(columns []renderColumn) int {
@@ -145,11 +184,10 @@ func listFixedBudget(columns []renderColumn) int {
 	return width
 }
 
-func widestListShrinkColumn(columns []renderColumn, preferredOnly bool) int {
+func widestListShrinkColumn(columns []renderColumn) int {
 	column := -1
 	for i := range columns {
-		preferred := columns[i].Header == "who" || columns[i].Header == "where"
-		if preferredOnly && !preferred {
+		if columns[i].Header != "who" && columns[i].Header != "where" {
 			continue
 		}
 		if columns[i].Width <= minPlainColumnWidth {
@@ -169,7 +207,9 @@ func listRows(items []ListItem, columns []renderColumn) [][]string {
 		for _, column := range columns {
 			switch column.Header {
 			case "date":
-				row = append(row, ShortLocalTime(item.Time))
+				row = append(row, listDate(item))
+			case "source":
+				row = append(row, item.Source)
 			case "who":
 				row = append(row, item.Who)
 			case "where":
@@ -198,6 +238,27 @@ func collapseBlankLines(value string) string {
 		kept = append(kept, line)
 	}
 	return strings.Join(kept, "\n")
+}
+
+func listDate(item ListItem) string {
+	if item.Time.IsZero() {
+		return ""
+	}
+	if item.DateOnly {
+		return item.Time.Format("2006-01-02")
+	}
+	return ShortLocalTime(item.Time)
+}
+
+// listDateColumnWidth sizes the date column for its rows: a list of
+// all-day events never pays for a time-of-day column it does not show.
+func listDateColumnWidth(items []ListItem) int {
+	for _, item := range items {
+		if !item.Time.IsZero() && !item.DateOnly {
+			return listDateTimeWidth
+		}
+	}
+	return listDateWidth
 }
 
 func listHasDate(items []ListItem) bool {

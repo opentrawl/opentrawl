@@ -18,10 +18,15 @@ what each value means, and what to do next.
 - `WriteList` — record lists: search hits, messages, tweets, emails,
   events. Heading first (`Bookmarks: showing 20 of 398, newest
   first.`), then copy-pasteable hint lines (`Open: birdcrawl open
-  REF`, `More: …`), then a labelled table: `date  who  where  ref
-  text`. Columns whose values are all empty are omitted. The text
-  column takes all remaining width and wraps; search snippets clamp
-  at 2 lines, browse views show full text. Zero rows print only the
+  REF`, `More: …`), then a labelled table: `date  source  who  where
+  ref  text`. Columns whose values are all empty are omitted (the
+  source column only appears in the federated trawl view). A row can
+  carry a date-only value (an all-day event): the date column shows
+  the date alone, never a fake `00:00`. The text column takes all
+  remaining width and wraps; search snippets clamp at 2 lines,
+  browse views show full text. At narrow widths who and where
+  shrink first, then refs shed to a per-row `open:` line — date,
+  source and ref cells are never truncated. Zero rows print only the
   empty sentence (`No matches for "boat".`) — never a bare header,
   never silence.
 - `WriteTable` — entity tables: chats, contacts, who candidates.

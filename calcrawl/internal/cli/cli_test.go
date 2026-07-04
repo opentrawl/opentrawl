@@ -239,6 +239,12 @@ func TestCoreDataTimesProvenanceSearchAndOpen(t *testing.T) {
 	if strings.Contains(allDayText, "status_0") || !strings.Contains(allDayText, "Status: confirmed") {
 		t.Fatalf("all-day text leaked status enum:\n%s", allDayText)
 	}
+	// TRAWL-100 tripwire: an all-day event lists as a bare date, never a
+	// fake midnight.
+	allDaySearchText := runOK(t, "search", "holiday")
+	if !strings.Contains(allDaySearchText, "2026-05-05") || strings.Contains(allDaySearchText, "2026-05-05 00:00") {
+		t.Fatalf("all-day search row must show a bare date:\n%s", allDaySearchText)
+	}
 
 	st, err := archive.OpenExistingWritable(context.Background(), archive.DefaultPath())
 	if err != nil {

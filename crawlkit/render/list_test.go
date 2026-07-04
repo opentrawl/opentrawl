@@ -97,6 +97,134 @@ func TestWriteListClampsText(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
+// TestWriteListDateOnlyRows is the TRAWL-100 tripwire: a row carrying
+// a calendar date (an all-day event) renders the date alone — never a
+// fake 00:00 — and a list of only dates does not pay for a time column.
+func TestWriteListDateOnlyRows(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading: "Events: showing 2 of 2.",
+		Items: []ListItem{
+			{
+				Time:     time.Date(2026, 3, 16, 0, 0, 0, 0, time.Local),
+				DateOnly: true,
+				Ref:      "73kbb",
+				Text:     "Birthday Michiel",
+			},
+			{
+				Time: time.Date(2026, 3, 14, 14, 0, 0, 0, time.Local),
+				Ref:  "5aqby",
+				Text: "Birthday party",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Events: showing 2 of 2.",
+		"",
+		"date              ref    text",
+		"2026-03-16        73kbb  Birthday Michiel",
+		"2026-03-14 14:00  5aqby  Birthday party",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+
+	buf.Reset()
+	err = WriteList(&buf, List{
+		Heading: "Events: showing 1 of 1.",
+		Items: []ListItem{{
+			Time:     time.Date(2026, 3, 16, 0, 0, 0, 0, time.Local),
+			DateOnly: true,
+			Ref:      "73kbb",
+			Text:     "Birthday Michiel",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = strings.Join([]string{
+		"Events: showing 1 of 1.",
+		"",
+		"date        ref    text",
+		"2026-03-16  73kbb  Birthday Michiel",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+}
+
+// TestWriteListSourceColumn is the TRAWL-102 tripwire: a row can name
+// its source (the federated trawl view) and the column sits between
+// date and who. Rows without a source stay source-free lists.
+func TestWriteListSourceColumn(t *testing.T) {
+	t.Setenv("COLUMNS", "80")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading: "Search \"boat\": showing 2 of 2, newest first.",
+		Items: []ListItem{
+			{
+				Time:   time.Date(2026, 5, 14, 9, 12, 0, 0, time.Local),
+				Source: "Messages",
+				Who:    "Alice",
+				Ref:    "t7k3f",
+				Text:   "the boat trip is on Saturday",
+			},
+			{
+				Time:   time.Date(2026, 5, 12, 10, 0, 0, 0, time.Local),
+				Source: "Telegram",
+				Who:    "Bob",
+				Ref:    "q8n4c",
+				Text:   "book the boat before June",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Search \"boat\": showing 2 of 2, newest first.",
+		"",
+		"date              source    who    ref    text",
+		"2026-05-14 09:12  Messages  Alice  t7k3f  the boat trip is on Saturday",
+		"2026-05-12 10:00  Telegram  Bob    q8n4c  book the boat before June",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+}
+
+// TestWriteListShedsRefsBeforeSqueezingDate is the TRAWL-102 degrade
+// tripwire: when the terminal cannot fit every column, refs move to a
+// per-row open: line — a truncated ref or timestamp is garbage, so the
+// date and ref cells are never clipped.
+func TestWriteListShedsRefsBeforeSqueezingDate(t *testing.T) {
+	t.Setenv("COLUMNS", "48")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading: "Search \"boat\": showing 1 of 1, newest first.",
+		Items: []ListItem{{
+			Time: time.Date(2026, 5, 14, 9, 12, 0, 0, time.Local),
+			Who:  "Alexandra Livingston",
+			Ref:  "imessage:msg/8842",
+			Text: "the boat trip is on Saturday",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Search \"boat\": showing 1 of 1, newest first.",
+		"",
+		"date              who  text",
+		"2026-05-14 09:12  Al…  the boat trip is on",
+		"                       Saturday",
+		"  open: imessage:msg/8842",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+}
+
 func TestWriteListEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteList(&buf, List{

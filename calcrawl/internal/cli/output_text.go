@@ -153,11 +153,12 @@ func searchListItems(results []archive.SearchResult) []ckrender.ListItem {
 			ref = result.Ref
 		}
 		items = append(items, ckrender.ListItem{
-			Time:  listItemTime(result.Time, result.AllDay),
-			Who:   result.Who,
-			Where: result.Where,
-			Ref:   ref,
-			Text:  result.Snippet,
+			Time:     parseEventTime(result.Time),
+			DateOnly: result.AllDay,
+			Who:      result.Who,
+			Where:    result.Where,
+			Ref:      ref,
+			Text:     result.Snippet,
 		})
 	}
 	return items
@@ -198,18 +199,6 @@ func printContactsText(w io.Writer, value control.ContactExport) error {
 		{Header: "name", Wrap: true},
 		{Header: "phone"},
 	}, rows)
-}
-
-// listItemTime prepares an event start for the shared list, whose date column
-// converts to the viewer's zone. An all-day event's date is the same wall-clock
-// day everywhere, so we re-anchor it to local midnight of its own-zone date;
-// otherwise a viewer in a different zone would see the day roll backwards.
-func listItemTime(value string, allDay bool) time.Time {
-	t := parseEventTime(value)
-	if allDay && !t.IsZero() {
-		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.Local)
-	}
-	return t
 }
 
 func parseEventTime(value string) time.Time {
