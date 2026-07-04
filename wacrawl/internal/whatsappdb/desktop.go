@@ -581,7 +581,7 @@ func mergeParticipantRows(existing, candidate store.GroupParticipant) store.Grou
 func readMessageRows(ctx context.Context, db *sql.DB, sourceRoot string, names map[string]string) ([]store.Message, int, error) {
 	rows, err := db.QueryContext(ctx, `
 select m.Z_PK, coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(m.ZSTANZAID,''), coalesce(m.ZISFROMME,0), cast(m.ZMESSAGEDATE as real),
-       coalesce(m.ZTEXT,''), coalesce(m.ZMESSAGETYPE,0), coalesce(m.ZSTARRED,0), coalesce(m.ZFROMJID,''), coalesce(m.ZTOJID,''), coalesce(m.ZPUSHNAME,''),
+       coalesce(m.ZTEXT,''), coalesce(m.ZMESSAGETYPE,0), coalesce(m.ZSTARRED,0), coalesce(m.ZFROMJID,''), coalesce(m.ZPUSHNAME,''),
        coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''), coalesce(gm.ZFIRSTNAME,''),
        coalesce(mi.ZMEDIALOCALPATH,''), coalesce(mi.ZMEDIAURL,''), coalesce(mi.ZTITLE,''), coalesce(mi.ZVCARDNAME,''), coalesce(mi.ZFILESIZE,0)
 from ZWAMESSAGE m
@@ -599,8 +599,8 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 		var m store.Message
 		var msgDate sql.NullFloat64
 		var fromMe, starred int
-		var fromJID, toJID, pushName, memberJID, memberName, memberFirst, mediaPath, mediaURL, mediaTitle, vcardName string
-		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &fromMe, &msgDate, &m.Text, &m.RawType, &starred, &fromJID, &toJID, &pushName, &memberJID, &memberName, &memberFirst, &mediaPath, &mediaURL, &mediaTitle, &vcardName, &m.MediaSize); err != nil {
+		var fromJID, pushName, memberJID, memberName, memberFirst, mediaPath, mediaURL, mediaTitle, vcardName string
+		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &fromMe, &msgDate, &m.Text, &m.RawType, &starred, &fromJID, &pushName, &memberJID, &memberName, &memberFirst, &mediaPath, &mediaURL, &mediaTitle, &vcardName, &m.MediaSize); err != nil {
 			return nil, 0, err
 		}
 		if m.ChatJID == "" || m.MessageID == "" {
@@ -616,7 +616,7 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 			m.MediaPath = resolveDesktopMediaPath(sourceRoot, mediaPath)
 		}
 		m.MediaURL = mediaURL
-		m.SenderJID, m.SenderName = sender(m.FromMe, m.ChatJID, fromJID, toJID, pushName, memberJID, memberName, memberFirst, names)
+		m.SenderJID, m.SenderName = sender(m.FromMe, m.ChatJID, fromJID, pushName, memberJID, memberName, memberFirst, names)
 		if m.Text == "" && m.MediaTitle != "" {
 			m.Text = m.MediaTitle
 		}
@@ -679,9 +679,13 @@ func firstPathElement(path string) string {
 	return path
 }
 
-func sender(fromMe bool, chatJID, fromJID, toJID, pushName, memberJID, memberName, memberFirst string, names map[string]string) (string, string) {
+func sender(fromMe bool, chatJID, fromJID, pushName, memberJID, memberName, memberFirst string, names map[string]string) (string, string) {
 	if fromMe {
-		return firstNonEmpty(toJID), "me"
+		// WhatsApp Desktop never records the account owner's JID on
+		// outbound rows (ZFROMJID is null, ZTOJID is the destination).
+		// Leave the JID empty rather than storing the recipient's JID
+		// under a field named "sender"; from_me plus "me" carry identity.
+		return "", "me"
 	}
 	jid := firstNonEmpty(memberJID, fromJID, chatJID)
 	name := firstNonEmpty(memberName, resolvedName(jid, names), memberFirst, pushName, jid)

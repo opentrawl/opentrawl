@@ -68,6 +68,12 @@ func TestImportDesktopCoreDataShape(t *testing.T) {
 	if !dms[1].FromMe || dms[1].SenderName != "me" {
 		t.Fatalf("outgoing dm sender wrong: %+v", dms[1])
 	}
+	// Tripwire: outbound rows once stored the recipient's JID (ZTOJID) as
+	// sender_jid, so --sender and JSON output attributed my messages to
+	// the other party. Own messages carry no sender JID.
+	if dms[1].SenderJID != "" {
+		t.Fatalf("outgoing dm must not carry a sender JID, got %q", dms[1].SenderJID)
+	}
 }
 
 func TestImportDesktopDuplicateSourceRows(t *testing.T) {
@@ -228,7 +234,7 @@ insert into ZWAMESSAGE values (5, 2, 2, null, 'profile-name', 0, 700000004, 'pro
 }
 
 func TestSenderSkipsResolvedJIDFallback(t *testing.T) {
-	jid, name := sender(false, "123@g.us", "444@s.whatsapp.net", "", "Readable Push", "", "", "", map[string]string{
+	jid, name := sender(false, "123@g.us", "444@s.whatsapp.net", "Readable Push", "", "", "", map[string]string{
 		"444@s.whatsapp.net": "444@s.whatsapp.net",
 	})
 	if jid != "444@s.whatsapp.net" || name != "Readable Push" {

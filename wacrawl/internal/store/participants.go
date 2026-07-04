@@ -108,7 +108,7 @@ union all
 select case when trim(m.sender_jid) <> '' then 'jid:' || coalesce(c.jid, m.sender_jid) else 'sender:' || trim(m.sender_name) end as participant_key, m.source_pk, m.ts
 from messages m
 left join contacts c on ` + senderContact + `
-where trim(m.sender_jid) <> '' or trim(m.sender_name) <> ''
+where m.from_me = 0 and (trim(m.sender_jid) <> '' or trim(m.sender_name) <> '')
 union all
 select 'jid:' || coalesce(c.jid, ch.jid), m.source_pk, m.ts
 from messages m
@@ -132,7 +132,7 @@ func whoMessageParticipantKeysQuery(prefix string) string {
 	groupContact := contactJIDPredicate("c", "gp.user_jid")
 	return `
 select case when trim(` + prefix + `sender_jid) <> '' then 'jid:' || coalesce((select c.jid from contacts c where ` + senderContact + ` limit 1), ` + prefix + `sender_jid) else 'sender:' || trim(` + prefix + `sender_name) end as participant_key
-where trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> ''
+where ` + prefix + `from_me = 0 and (trim(` + prefix + `sender_jid) <> '' or trim(` + prefix + `sender_name) <> '')
 union all
 select '` + ownerWhoKey + `'
 where ` + prefix + `from_me = 1
