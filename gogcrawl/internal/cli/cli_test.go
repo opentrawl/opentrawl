@@ -128,6 +128,42 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"doctor", "--archive", dbPath})))
 }
 
+func TestVerboseDoesNotLeakDebugToStderr(t *testing.T) {
+	installFakeGog(t)
+	ctx := context.Background()
+
+	verboseDBPath := filepath.Join(t.TempDir(), "gogcrawl.db")
+	verboseRepoPath := filepath.Join(t.TempDir(), "backup")
+	var verboseStderr bytes.Buffer
+	err := Run(ctx, []string{"-v", "sync", "--query", "from:me", "--max", "25", "--archive", verboseDBPath, "--backup-repo", verboseRepoPath}, &bytes.Buffer{}, &verboseStderr)
+	if err != nil {
+		t.Fatalf("sync -v failed: %v\nstderr=%s", err, verboseStderr.String())
+	}
+	verboseText := verboseStderr.String()
+	if !strings.Contains(verboseText, "INFO") || !strings.Contains(verboseText, "shard_done") {
+		t.Fatalf("sync -v did not stream non-debug log lines:\n%s", verboseText)
+	}
+	for _, notWant := range []string{"DEBUG", "subprocess_exec", "shard_phase"} {
+		if strings.Contains(verboseText, notWant) {
+			t.Fatalf("sync -v stderr leaked %q:\n%s", notWant, verboseText)
+		}
+	}
+
+	debugDBPath := filepath.Join(t.TempDir(), "gogcrawl.db")
+	debugRepoPath := filepath.Join(t.TempDir(), "backup")
+	var debugStderr bytes.Buffer
+	err = Run(ctx, []string{"-vv", "sync", "--query", "from:me", "--max", "25", "--archive", debugDBPath, "--backup-repo", debugRepoPath}, &bytes.Buffer{}, &debugStderr)
+	if err != nil {
+		t.Fatalf("sync -vv failed: %v\nstderr=%s", err, debugStderr.String())
+	}
+	debugText := debugStderr.String()
+	for _, want := range []string{"DEBUG", "subprocess_exec: argv=", "shard_phase:"} {
+		if !strings.Contains(debugText, want) {
+			t.Fatalf("sync -vv stderr missing %q:\n%s", want, debugText)
+		}
+	}
+}
+
 func TestSearchTextWrapsLongQueryAndSnippetRows(t *testing.T) {
 	t.Setenv("COLUMNS", "80")
 	value := archive.SearchResult{
