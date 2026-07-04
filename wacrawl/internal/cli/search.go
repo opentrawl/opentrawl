@@ -23,7 +23,7 @@ type searchEnvelope struct {
 
 type searchResult struct {
 	Ref     string `json:"ref"`
-	Alias   string `json:"-"`
+	Alias   string `json:"short_ref"`
 	Time    string `json:"time"`
 	Who     string `json:"who"`
 	Where   string `json:"where"`
@@ -60,11 +60,7 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		return usageErr(err)
 	}
 	resolved.Query = query
-	withStore := a.withReadStore
-	if !a.json {
-		withStore = a.withExistingStore
-	}
-	return withStore(ctx, func(st *store.Store) error {
+	return a.withExistingStore(ctx, func(st *store.Store) error {
 		var whoResolved *whoResolved
 		whoQuery := ""
 		if resolved.Who != "" {
@@ -84,15 +80,9 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		aliases := map[string]string{}
-		if !a.json {
-			if err := st.EnsureShortRefs(ctx); err != nil {
-				return err
-			}
-			aliases, err = st.ShortRefAliases(ctx, messageRefs(msgs))
-			if err != nil {
-				return err
-			}
+		aliases, err := searchAliases(ctx, st, msgs)
+		if err != nil {
+			return err
 		}
 		return a.print(newSearchEnvelope(query, whoQuery, total, msgs, whoResolved, aliases))
 	})
@@ -203,6 +193,16 @@ func flagWasProvided(fs *flag.FlagSet, name string) bool {
 		}
 	})
 	return provided
+}
+
+func searchAliases(ctx context.Context, st *store.Store, messages []store.Message) (map[string]string, error) {
+	if len(messages) == 0 {
+		return nil, nil
+	}
+	if err := st.EnsureShortRefs(ctx); err != nil {
+		return nil, err
+	}
+	return st.ShortRefAliases(ctx, messageRefs(messages))
 }
 
 func (a *app) printSearch(result searchEnvelope) error {
