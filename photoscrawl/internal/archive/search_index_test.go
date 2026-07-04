@@ -294,3 +294,74 @@ func seedTwoAssetLibrary(t *testing.T, paths Paths) {
 		t.Fatal(err)
 	}
 }
+
+// Unselected POI candidates are selection provenance, not searchable claims:
+// neither the write path nor the index rebuild may put them in FTS.
+func TestSearchExcludesUnselectedPOICandidates(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	seedSyntheticPlaceAsset(t, paths)
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var assetID string
+	if err := db.DB().QueryRowContext(ctx, `select id from asset limit 1`).Scan(&assetID); err != nil {
+		t.Fatal(err)
+	}
+	// Stamp the index version so the rebuild-path check below controls when
+	// the rebuild fires.
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write path: candidate gets no FTS row, selected venue and address do.
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, row := range []struct{ kind, text string }{
+			{"poi_candidate", "Meadow Grill Taqueria"},
+			{"venue", "UMI Sushi"},
+			{"address", "Simeonstrasse 1 Trier"},
+		} {
+			if _, err := insertPlaceObservation(ctx, tx, assetID, row.kind, row.text, map[string]any{}, "fixture", "hit", "poi", 10); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var indexed int
+	if err := db.DB().QueryRowContext(ctx,
+		`select count(*) from observation_fts where asset_id = ?`, assetID,
+	).Scan(&indexed); err != nil {
+		t.Fatal(err)
+	}
+	if indexed != 2 {
+		t.Fatalf("write path indexed %d place rows, want 2 (venue+address, no candidate)", indexed)
+	}
+
+	// Rebuild path: force a rebuild and prove the candidate stays out.
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `delete from search_index_state`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if hits, err := Search(ctx, paths, SearchOptions{Query: "taqueria", Limit: 5}); err != nil || len(hits.Results) != 0 {
+		t.Fatalf("candidate is searchable after rebuild: hits=%v err=%v", hits.Results, err)
+	}
+	if hits, err := Search(ctx, paths, SearchOptions{Query: "sushi", Limit: 5}); err != nil || len(hits.Results) != 1 {
+		t.Fatalf("selected venue not searchable: hits=%v err=%v", hits.Results, err)
+	}
+	if hits, err := Search(ctx, paths, SearchOptions{Query: "simeonstrasse", Limit: 5}); err != nil || len(hits.Results) != 1 {
+		t.Fatalf("address not searchable: hits=%v err=%v", hits.Results, err)
+	}
+}

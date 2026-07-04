@@ -16,7 +16,9 @@ import (
 //   1: porter tokenizer (pre-versioning archives read as 0 and rebuild)
 //   2: card FTS bodies are raw card prose, not deduped term lists, so bm25
 //      term frequency ranks unfiltered queries sensibly
-const searchIndexVersion = 2
+//   3: unselected poi_candidate observations leave the index; bm25 favors
+//      short docs, so candidate business names outranked real card matches
+const searchIndexVersion = 3
 
 // Search matching quality lives in the FTS index. FTS content is derived
 // state, so an archive built by an older index version is rebuilt in place
@@ -67,7 +69,8 @@ from asset
 			`insert into observation_fts(id, asset_id, title, body)
 			 select id, asset_id, label, label from metadata_observation`,
 			`insert into observation_fts(id, asset_id, title, body)
-			 select id, asset_id, '', value_text from place_observation where observation_type <> '` + knownPlaceObservationType + `'`,
+			 select id, asset_id, '', value_text from place_observation
+			 where observation_type not in ('` + knownPlaceObservationType + `', 'poi_candidate')`,
 		} {
 			res, err := tx.ExecContext(ctx, stmt)
 			if err != nil {
