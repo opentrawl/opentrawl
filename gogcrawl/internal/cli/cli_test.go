@@ -101,8 +101,8 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	if err := json.NewEncoder(&jsonOut).Encode(search); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(jsonOut.String(), shortRef) {
-		t.Fatalf("search JSON leaked short ref %q:\n%s", shortRef, jsonOut.String())
+	if !strings.Contains(jsonOut.String(), `"short_ref":"`+shortRef+`"`) {
+		t.Fatalf("search JSON missing short ref %q:\n%s", shortRef, jsonOut.String())
 	}
 	clearLog(t, fake.log)
 	err = Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &bytes.Buffer{})
@@ -121,7 +121,9 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	}
 	searchJSON := runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--json", "--archive", dbPath})
 	conformance.AssertSearchEnvelope(t, searchJSON)
-	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--archive", dbPath})))
+	searchHuman := string(runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--archive", dbPath}))
+	assertSearchShortRefParity(t, searchJSON, searchHuman)
+	conformance.AssertHumanOutput(t, searchHuman)
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"status", "--archive", dbPath})))
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"doctor", "--archive", dbPath})))
 }
@@ -672,6 +674,47 @@ func assertSingleJSONDocument(t *testing.T, data string, out any) {
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		t.Fatalf("JSON output had trailing data: %v\n%s", err, data)
 	}
+}
+
+func assertSearchShortRefParity(t *testing.T, jsonOutput []byte, humanOutput string) {
+	t.Helper()
+	var search archive.SearchResult
+	if err := json.Unmarshal(jsonOutput, &search); err != nil {
+		t.Fatalf("decode search JSON: %v\n%s", err, string(jsonOutput))
+	}
+	if len(search.Results) == 0 {
+		t.Fatal("search JSON had no results")
+	}
+	for _, hit := range search.Results {
+		if !validShortRef(hit.ShortRef) {
+			t.Fatalf("short_ref = %q, want lowercase short-ref alphabet and length >= 5\n%s", hit.ShortRef, string(jsonOutput))
+		}
+		if !humanSearchHasAliasForTime(humanOutput, hit.Time, hit.ShortRef) {
+			t.Fatalf("human search did not display short_ref %q for %s:\n%s", hit.ShortRef, hit.Time, humanOutput)
+		}
+	}
+}
+
+func validShortRef(value string) bool {
+	if len(value) < 5 {
+		return false
+	}
+	const alphabet = "23456789abcdefghjkmnpqrstuvwxyz"
+	for _, ch := range value {
+		if !strings.ContainsRune(alphabet, ch) {
+			return false
+		}
+	}
+	return true
+}
+
+func humanSearchHasAliasForTime(humanOutput, when, alias string) bool {
+	for _, line := range strings.Split(humanOutput, "\n") {
+		if strings.Contains(line, when) && strings.Contains(line, alias) {
+			return true
+		}
+	}
+	return false
 }
 
 func seedArchive(t *testing.T, messages []archive.Message) string {

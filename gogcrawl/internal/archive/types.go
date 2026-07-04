@@ -71,7 +71,7 @@ type SearchHit struct {
 	Who      string `json:"who"`
 	Where    string `json:"where,omitempty"`
 	Snippet  string `json:"snippet"`
-	ShortRef string `json:"-"`
+	ShortRef string `json:"short_ref"`
 }
 
 type OpenResult struct {
