@@ -21,12 +21,13 @@ type CLI struct {
 	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Stream diagnostics to stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
-	Status StatusCmd `cmd:"" help:"Show crawler health"`
-	Sync   SyncCmd   `cmd:"" help:"Run crawls"`
-	Search SearchCmd `cmd:"" help:"Search crawler archives"`
-	Who    WhoCmd    `cmd:"" help:"Resolve a person or sender identity"`
-	Open   OpenCmd   `cmd:"" help:"Open a crawler ref"`
-	Doctor DoctorCmd `cmd:"" help:"Run crawler diagnostics"`
+	Status    StatusCmd    `cmd:"" help:"Show crawler health"`
+	Sync      SyncCmd      `cmd:"" help:"Run crawls"`
+	Search    SearchCmd    `cmd:"" help:"Search crawler archives"`
+	Summaries SummariesCmd `cmd:"" help:"List or read precomputed archive summaries"`
+	Who       WhoCmd       `cmd:"" help:"Resolve a person or sender identity"`
+	Open      OpenCmd      `cmd:"" help:"Open a crawler ref"`
+	Doctor    DoctorCmd    `cmd:"" help:"Run crawler diagnostics"`
 }
 
 type Runtime struct {
@@ -73,6 +74,7 @@ Examples:
   trawl status                          # every source: state, freshness, counts
   trawl search "boat trip"              # all sources, newest first
   trawl search imessage falafel         # one source, no quotes needed
+  trawl summaries                       # precomputed answers: subscriptions, possessions, spending
   trawl open imsgcrawl:msg/8842         # expand a ref search returned
   trawl search falafel --json           # structured output; agents, prefer this`),
 		kong.UsageOnError(),
@@ -401,10 +403,10 @@ func unknownCommand(args []string) error {
 			continue
 		}
 		switch arg {
-		case "status", "sync", "search", "who", "open", "doctor", "help":
+		case "status", "sync", "search", "summaries", "who", "open", "doctor", "help":
 			return nil
 		default:
-			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, who, open, doctor; run: trawl --help", arg)}
+			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, summaries, who, open, doctor; run: trawl --help", arg)}
 		}
 	}
 	return nil

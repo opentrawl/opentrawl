@@ -123,7 +123,7 @@ func commandName(args []string) string {
 			continue
 		}
 		switch arg {
-		case "status", "sync", "search", "who", "open", "doctor":
+		case "status", "sync", "search", "summaries", "who", "open", "doctor":
 			return arg
 		}
 	}
