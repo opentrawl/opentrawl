@@ -180,14 +180,14 @@ func (r *Runtime) childVerboseArgs(source Source) []string {
 }
 
 func (r *Runtime) runSourceCommandJSON(source Source, args ...string) ([]byte, error) {
-	return r.runSourceCommandWithTimeout(source, crawlerCommandTimeout, args...)
+	return r.runSourceCommandWithTimeout(source, r.timeout, args...)
 }
 
 func (r *Runtime) runSourceJSONVerb(source Source, verb string, args ...string) ([]byte, error) {
 	commandArgs := append([]string{verb}, args...)
 	commandArgs = append(commandArgs, "--json")
 	commandArgs = append(commandArgs, r.childVerboseArgs(source)...)
-	return r.runSourceCommandWithTimeout(source, crawlerCommandTimeout, commandArgs...)
+	return r.runSourceCommandWithTimeout(source, r.timeout, commandArgs...)
 }
 
 func (r *Runtime) runSourceJSONVerbNoTimeout(source Source, verb string, args ...string) ([]byte, error) {

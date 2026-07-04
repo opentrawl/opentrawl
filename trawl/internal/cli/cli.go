@@ -39,6 +39,7 @@ type Runtime struct {
 	root     *CLI
 	appsDir  string
 	now      func() time.Time
+	timeout  time.Duration
 	log      *logRun
 }
 
@@ -55,6 +56,13 @@ type DoctorCmd struct {
 type helpShown struct{}
 
 func Execute(args []string, stdout, stderr io.Writer) (err error) {
+	return execute(args, stdout, stderr, crawlerCommandTimeout)
+}
+
+// execute carries the per-source subprocess deadline so tests can drive
+// the real timeout path against a slow crawler without a 30s wait. It is
+// the same seam as Runtime.now; production always passes the const.
+func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (err error) {
 	jsonOut := hasJSONFlag(args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -107,6 +115,7 @@ Examples:
 		root:    &root,
 		appsDir: defaultAppsDir(),
 		now:     time.Now,
+		timeout: timeout,
 	}
 	if err := runtime.startLogRun(commandName(args)); err != nil {
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
