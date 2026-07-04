@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
@@ -34,23 +33,23 @@ func (r *runtime) runOpen(args []string) error {
 }
 
 func boundOpenResult(result archive.OpenResult) archive.OpenResult {
-	body, truncated := truncateOpenBody(result.Body)
+	body, elided := truncateOpenBody(result.Body)
 	result.Body = body
-	result.BodyTruncated = truncated
+	result.BodyTruncated = elided > 0
+	result.BodyElidedChars = elided
 	return result
 }
 
-func truncateOpenBody(body string) (string, bool) {
+// truncateOpenBody caps the body at maxOpenBodyRunes and reports how many
+// characters were cut. The body it returns carries only mail content — the
+// truncation hint is a separate line the human renderer adds, never text
+// stuffed into the data.
+func truncateOpenBody(body string) (string, int) {
 	runes := []rune(body)
 	if len(runes) <= maxOpenBodyRunes {
-		return body, false
+		return body, 0
 	}
-	elided := len(runes) - maxOpenBodyRunes
-	return string(runes[:maxOpenBodyRunes]) + "\n\n" + openBodyTruncationMarker(elided), true
-}
-
-func openBodyTruncationMarker(elided int) string {
-	return fmt.Sprintf("… %s more characters; the full body is in the archive", commaInt(elided))
+	return string(runes[:maxOpenBodyRunes]), len(runes) - maxOpenBodyRunes
 }
 
 func commaInt(value int) string {

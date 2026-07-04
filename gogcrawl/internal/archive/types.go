@@ -75,15 +75,16 @@ type SearchHit struct {
 }
 
 type OpenResult struct {
-	Ref           string       `json:"ref"`
-	ID            string       `json:"id"`
-	ThreadID      string       `json:"thread_id"`
-	Time          string       `json:"time"`
-	Headers       MailHeaders  `json:"headers"`
-	Labels        []string     `json:"labels,omitempty"`
-	Attachments   []Attachment `json:"attachments,omitempty"`
-	Body          string       `json:"body"`
-	BodyTruncated bool         `json:"body_truncated"`
+	Ref             string       `json:"ref"`
+	ID              string       `json:"id"`
+	ThreadID        string       `json:"thread_id"`
+	Time            string       `json:"time"`
+	Headers         MailHeaders  `json:"headers"`
+	Labels          []string     `json:"labels,omitempty"`
+	Attachments     []Attachment `json:"attachments,omitempty"`
+	Body            string       `json:"body"`
+	BodyTruncated   bool         `json:"body_truncated"`
+	BodyElidedChars int          `json:"body_elided_chars,omitempty"`
 }
 
 type MailHeaders struct {
