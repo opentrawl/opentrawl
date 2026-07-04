@@ -192,6 +192,13 @@ A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item
 is what `open` is for.
 
+A result whose `time` is a calendar date with no meaningful time of
+day (an all-day calendar event) carries `"all_day": true`. The field
+is optional; absent means false, and it is only meaningful alongside
+`time`. `time` stays RFC 3339 as always — `all_day` tells a reader
+the clock part is padding, so renderers show the bare date instead
+of a fake `00:00`.
+
 ## open
 
 Takes a ref this crawler issued; returns the full item with its

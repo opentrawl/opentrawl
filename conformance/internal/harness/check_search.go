@@ -169,6 +169,11 @@ func validateSearchRows(rows []any, appID string, query string) CheckResult {
 }
 
 func validateOptionalSearchFields(row map[string]any, index int, query string) CheckResult {
+	if value, ok := row["all_day"]; ok {
+		if _, isBool := value.(bool); !isBool {
+			return fail(CheckSearch, fmt.Sprintf("search row %d all_day is not boolean", index+1), "emit all_day as true or false, or omit it")
+		}
+	}
 	var warning CheckResult
 	for _, field := range []string{"who", "where", "snippet"} {
 		value, ok := row[field]

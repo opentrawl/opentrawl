@@ -329,6 +329,19 @@ func TestSearchCheck(t *testing.T) {
 			want:         StatusPass,
 		},
 		{
+			name:         "all_day true passes",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"all_day":true`),
+			want:         StatusPass,
+		},
+		{
+			name:         "non-boolean all_day fails",
+			capabilities: `["search"]`,
+			search:       searchResult(`,"all_day":"yes"`),
+			want:         StatusFail,
+			wantRemedy:   "emit all_day as true or false, or omit it",
+		},
+		{
 			name:               "phone where warns",
 			capabilities:       `["search"]`,
 			search:             searchResult(`,"where":"+15551234567"`),
