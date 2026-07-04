@@ -14,15 +14,13 @@ import (
 )
 
 const (
-	defaultSearchLimit = 20
-	maxSearchLimit     = 200
-	searchWorkerLimit  = 4
+	searchWorkerLimit = 4
 )
 
 type SearchCmd struct {
 	Query  []string `arg:"" optional:"" help:"Search words; optional when --who, --after, or --before is present"`
 	Source string   `name:"source" help:"Comma-separated source ids"`
-	Limit  int      `name:"limit" default:"20" help:"Maximum rows"`
+	Limit  int      `name:"limit" default:"20" help:"Rows to return"`
 	After  string   `name:"after" help:"Start date"`
 	Before string   `name:"before" help:"End date"`
 	Who    string   `name:"who" placeholder:"person" help:"Resolve a person or sender, then filter by the exact match"`
@@ -101,7 +99,10 @@ type mergedSearchResult struct {
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
-	limit := normalizeSearchLimit(c.Limit)
+	limit, err := normalizeSearchLimit(c.Limit)
+	if err != nil {
+		return err
+	}
 	query, sources, err := r.resolveSearchTarget(c.Query, c.Source)
 	if err != nil {
 		return err
@@ -468,14 +469,11 @@ func parseSearchTime(value string) (time.Time, bool) {
 	return parsed, err == nil
 }
 
-func normalizeSearchLimit(limit int) int {
+func normalizeSearchLimit(limit int) (int, error) {
 	if limit <= 0 {
-		return defaultSearchLimit
+		return 0, usageErr{fmt.Errorf("search --limit must be at least 1")}
 	}
-	if limit > maxSearchLimit {
-		return maxSearchLimit
-	}
-	return limit
+	return limit, nil
 }
 
 func searchSuccesses(results []searchSourceResult) int {

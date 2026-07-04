@@ -1,11 +1,28 @@
 package cli
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
+
+func searchResultsJSON(query string, count int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, `{"query":%q,"results":[`, query)
+	for i := 1; i <= count; i++ {
+		if i > 1 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `{"ref":"imessage:msg/%d","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"match %d"}`, i, i)
+	}
+	fmt.Fprintf(&b, `],"total_matches":%d,"truncated":false}`, count)
+	return b.String()
+}
 
 func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
@@ -44,6 +61,90 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchJSONHonorsLimitAboveOldCap(t *testing.T) {
+	limit := 205
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:        "imsgcrawl",
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		searchLimit: strconv.Itoa(limit),
+		search:      searchResultsJSON("boat trip", limit),
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--limit", strconv.Itoa(limit))
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var envelope federatedSearchEnvelope
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout)
+	}
+	if got := len(envelope.Results); got != limit {
+		t.Fatalf("results = %d, want %d", got, limit)
+	}
+	if envelope.TotalMatches != limit {
+		t.Fatalf("total_matches = %d, want %d", envelope.TotalMatches, limit)
+	}
+	if envelope.Truncated {
+		t.Fatalf("truncated = true, want false")
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchHumanHonorsLimitAboveOldCap(t *testing.T) {
+	limit := 205
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:        "imsgcrawl",
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		searchLimit: strconv.Itoa(limit),
+		search:      searchResultsJSON("boat trip", limit),
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip", "--limit", strconv.Itoa(limit))
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if got := strings.Count(stdout, "imessage:msg/"); got != limit {
+		t.Fatalf("rendered rows = %d, want %d\n%s", got, limit, stdout)
+	}
+	if strings.Contains(stdout, "…and ") {
+		t.Fatalf("stdout reported hidden rows:\n%s", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchRejectsNonPositiveLimit(t *testing.T) {
+	for _, args := range [][]string{
+		{"search", "boat trip", "--limit", "0"},
+		{"search", "boat trip", "--limit=-1"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Setenv("PATH", writeFakeCrawlers(t))
+			t.Setenv("HOME", t.TempDir())
+
+			var stdout, stderr strings.Builder
+			err := Execute(args, &stdout, &stderr)
+			if code := ExitCode(err); code != 2 {
+				t.Fatalf("code = %d, want 2 stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+			}
+			var usage usageErr
+			if !errors.As(err, &usage) {
+				t.Fatalf("err = %T %[1]v, want usageErr", err)
+			}
+			if !strings.Contains(err.Error(), "search --limit must be at least 1") {
+				t.Fatalf("missing limit error: %v", err)
+			}
+		})
 	}
 }
 

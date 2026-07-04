@@ -86,6 +86,7 @@ func TestRegistryBinariesIncludesBuiltIns(t *testing.T) {
 		"photoscrawl",
 		"gogcrawl",
 		"calcrawl",
+		"birdcrawl",
 	}
 	if got := registryBinaries(""); !slices.Equal(got, want) {
 		t.Fatalf("registryBinaries() = %#v, want %#v", got, want)
