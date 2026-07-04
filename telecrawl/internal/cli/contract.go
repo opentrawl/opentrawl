@@ -99,7 +99,7 @@ type whoCandidate struct {
 
 type searchResult struct {
 	Ref      string `json:"ref"`
-	ShortRef string `json:"-"`
+	ShortRef string `json:"short_ref"`
 	Time     string `json:"time"`
 	Who      string `json:"who,omitempty"`
 	Where    string `json:"where,omitempty"`

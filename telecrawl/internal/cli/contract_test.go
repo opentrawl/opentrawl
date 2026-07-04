@@ -643,6 +643,26 @@ func TestSearchTextUsesContractRows(t *testing.T) {
 	}
 }
 
+func TestSearchJSONShortRefsMatchHumanAliases(t *testing.T) {
+	db := seedSearchArchive(t, 2)
+	payload := runSearchJSON(t, db, "search", "launch", "--json")
+	if len(payload.Results) == 0 {
+		t.Fatal("search returned no results")
+	}
+	jsonAlias := payload.Results[0].ShortRef
+	assertShortRefAlias(t, jsonAlias)
+
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "launch")
+	if err != nil {
+		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
+	}
+	conformance.AssertHumanOutput(t, stdout)
+	humanAlias := firstSearchAlias(t, stdout)
+	if humanAlias != jsonAlias {
+		t.Fatalf("search aliases differ: json %q human %q", jsonAlias, humanAlias)
+	}
+}
+
 func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 	db := seedSearchArchive(t, 25)
 	search := runSearchJSON(t, db, "search", "launch", "--json")
@@ -884,17 +904,20 @@ type testLogEvent struct {
 }
 
 type searchJSON struct {
-	Query       string           `json:"query"`
-	WhoResolved *testWhoResolved `json:"who_resolved"`
-	Results     []struct {
-		Ref     string `json:"ref"`
-		Time    string `json:"time"`
-		Who     string `json:"who"`
-		Where   string `json:"where"`
-		Snippet string `json:"snippet"`
-	} `json:"results"`
-	TotalMatches int  `json:"total_matches"`
-	Truncated    bool `json:"truncated"`
+	Query        string             `json:"query"`
+	WhoResolved  *testWhoResolved   `json:"who_resolved"`
+	Results      []testSearchResult `json:"results"`
+	TotalMatches int                `json:"total_matches"`
+	Truncated    bool               `json:"truncated"`
+}
+
+type testSearchResult struct {
+	Ref      string `json:"ref"`
+	ShortRef string `json:"short_ref"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where"`
+	Snippet  string `json:"snippet"`
 }
 
 type testWhoResolved struct {
@@ -1061,6 +1084,9 @@ func runSearchJSON(t *testing.T, db string, args ...string) searchJSON {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout, err)
 	}
+	for _, result := range payload.Results {
+		assertShortRefAlias(t, result.ShortRef)
+	}
 	return payload
 }
 
@@ -1142,22 +1168,30 @@ func runOpenJSON(t *testing.T, db string, ref string) openJSON {
 	return payload
 }
 
-func assertSearchResultShape(t *testing.T, result struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
-}) {
+func assertSearchResultShape(t *testing.T, result testSearchResult) {
 	t.Helper()
 	if !strings.HasPrefix(result.Ref, "telecrawl:msg/") || result.Who == "" || result.Where == "" || result.Snippet == "" {
 		t.Fatalf("bad search result = %#v", result)
 	}
+	assertShortRefAlias(t, result.ShortRef)
 	if strings.ContainsAny(result.Who+result.Where+result.Snippet, "\n\t") || strings.ContainsAny(result.Snippet, "[]") || strings.Contains(result.Snippet, "...") {
 		t.Fatalf("search result kept marker or multiline fields = %#v", result)
 	}
 	if _, err := time.Parse(time.RFC3339, result.Time); err != nil {
 		t.Fatalf("search result time = %q err=%v", result.Time, err)
+	}
+}
+
+func assertShortRefAlias(t *testing.T, alias string) {
+	t.Helper()
+	const alphabet = "23456789abcdefghjkmnpqrstuvwxyz"
+	if len(alias) < 5 {
+		t.Fatalf("short_ref = %q, want at least 5 characters", alias)
+	}
+	for _, ch := range alias {
+		if !strings.ContainsRune(alphabet, ch) {
+			t.Fatalf("short_ref = %q, invalid character %q", alias, ch)
+		}
 	}
 }
 
