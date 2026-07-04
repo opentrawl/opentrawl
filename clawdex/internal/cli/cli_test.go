@@ -557,6 +557,51 @@ func TestExecuteContactsExportJSONIncludesAddresses(t *testing.T) {
 	}
 }
 
+func TestExecuteContactsExportHumanUsesLabelledWidthFittedTable(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	input := filepath.Join(t.TempDir(), "apple.ndjson")
+	contacts := strings.Join([]string{
+		`{"identifier":"a1","full_name":"Alexandria Example With A Very Long Display Name For Wrapping","emails":["alexandria@example.com"],"phones":["+1 555 0100"],"addresses":[{"value":"1 Long Address Line With Enough Words To Wrap Around The Table Column\nSuite 200","label":"home"}]}`,
+		`{"identifier":"b1","full_name":"Blake No Address","emails":["blake@example.com"]}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(input, []byte(contacts), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "import", "apple", "--input", input}, &out, &errOut); err != nil {
+		t.Fatalf("apple import: %v %s", err, errOut.String())
+	}
+	t.Setenv("COLUMNS", "80")
+
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "contacts", "export"}, &out, &errOut); err != nil {
+		t.Fatalf("contacts export: %v %s", err, errOut.String())
+	}
+	conformance.AssertHumanOutput(t, out.String())
+	for _, want := range []string{"WHO", "IDENTIFIERS", "ADDRESSES", "2 identifiers", "1 address", "0 addresses", "2 contacts"} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("contacts export output missing %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "\t") {
+		t.Fatalf("contacts export output still uses tab-separated rows:\n%s", out.String())
+	}
+	for _, line := range strings.Split(strings.TrimRight(out.String(), "\n"), "\n") {
+		if len([]rune(line)) > 80 {
+			t.Fatalf("line exceeds COLUMNS=80 (%d): %q\n%s", len([]rune(line)), line, out.String())
+		}
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("stderr = %s", errOut.String())
+	}
+}
+
 func TestExecuteGitStatusAndDryRun(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer

@@ -1092,18 +1092,7 @@ func (r *Runtime) print(value any) error {
 	case control.Status:
 		return printStatusText(r.stdout, v)
 	case contactexport.ContactExport:
-		for _, contact := range v.Contacts {
-			addresses := ""
-			if n := len(contact.Addresses); n > 0 {
-				addresses = "\t" + countNoun(n, "address", "addresses")
-			}
-			identifiers := len(contact.PhoneNumbers) + len(contact.Emails)
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s%s\n", contact.DisplayName, countNoun(identifiers, "identifier", "identifiers"), addresses); err != nil {
-				return err
-			}
-		}
-		_, err := fmt.Fprintf(r.stdout, "%s\n", countNoun(len(v.Contacts), "contact", "contacts"))
-		return err
+		return printContactExportText(r.stdout, v)
 	case model.Note:
 		_, err := fmt.Fprintf(r.stdout, "%s\t%s\t%s\t%s\n", v.ID, v.Kind, v.Source, v.Path)
 		return err
