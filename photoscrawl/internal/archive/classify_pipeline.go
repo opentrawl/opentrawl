@@ -39,6 +39,7 @@ type classifyWrite struct {
 	downloadBytes      int64
 	modelAttempts      int
 	modelDuration      time.Duration
+	writeDuration      time.Duration
 	rateLimitEvents    int
 	transientErrEvents int
 	outcome            contentOutcome
@@ -228,6 +229,7 @@ func writeClassifyResults(ctx context.Context, db *store.Store, classifier model
 func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelClassifier, write classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	var metadataWritten, contentWritten, placeWritten int
 	classifiedAt := now().UTC()
+	writeStartedAt := time.Now()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		switch write.outcome {
 		case contentOutcomeFailedParse, contentOutcomeFailedModel:
@@ -262,6 +264,7 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	if err != nil {
 		return err
 	}
+	write.writeDuration = time.Since(writeStartedAt)
 
 	result.Processed++
 	result.MetadataClassified++

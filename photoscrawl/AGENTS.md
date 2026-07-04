@@ -192,3 +192,14 @@ commands are themselves audited the same way: run the check raw, open
 every truth ref raw, confirm it is the real event before the truth is
 frozen. Coordinate diff ranges with the crawlers session so passes
 cover everything once and nothing twice.
+
+## Observability Rule (ratified 2026-07-04)
+
+Every pipeline phase and every per-item outcome logs one structured line with
+its duration — successes included, not just failures. Silence is a defect: any
+stage that can consume seconds must have its cost readable from the run log,
+so bottlenecks are found by reading logs, never by profilers, CPU samplers, or
+guessing. When a diagnosis needed evidence the log didn't have, fixing the
+logging is part of the same change. This rule exists because a batch-selection
+query silently burned minutes of CPU per batch for a full day (found only via
+`sample`), and success-path carding ran for hours with zero log lines.

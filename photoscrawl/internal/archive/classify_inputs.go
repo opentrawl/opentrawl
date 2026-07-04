@@ -68,9 +68,12 @@ type classifyAlbum struct {
 
 func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, refreshModelID string) ([]classifyInput, error) {
 	refreshModelID = strings.TrimSpace(refreshModelID)
-	query := `
-with queued as (
-select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
+	// Two index-friendly branches instead of one OR: the OR forced a full
+	// queue scan per batch, and the old priority_text ranking computed
+	// group_concats over resources and albums for every queued row before
+	// the limit — minutes of CPU per batch on a full library.
+	selectColumns := `
+select q.id as queue_id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
        a.media_type, a.media_subtypes, a.creation_date, a.timezone_name, a.width, a.height, a.duration_seconds,
        a.favorite, a.hidden, a.burst_identifier, a.metadata_json,
        a.camera_make, a.camera_model, a.lens_model,
@@ -79,44 +82,29 @@ select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_downlo
        coalesce(a.aperture, 0) as aperture,
        coalesce(a.shutter_speed, 0) as shutter_speed,
        coalesce(a.iso, 0) as iso,
-       exists(select 1 from location_observation lo where lo.asset_id = a.id) as has_location,
-       lower(
-         coalesce(a.metadata_json, '') || ' ' ||
-         coalesce((select group_concat(ar.resource_type || ' ' || ar.uti || ' ' || ar.original_filename, ' ') from asset_resource ar where ar.asset_id = a.id), '') || ' ' ||
-         coalesce((select group_concat(am.album_title || ' ' || am.album_kind, ' ') from album_membership am where am.asset_id = a.id), '')
-       ) as priority_text
+       exists(select 1 from location_observation lo where lo.asset_id = a.id) as has_location
 from classification_queue q
 join asset a on a.id = q.asset_id
-where q.state in (` + classifyQueueStates(refreshModelID != "") + `)
-   or (? <> '' and q.state = '` + classifyQueueStateContentClassified + `' and not exists (
-     select 1
-     from model_observation mo
-     where mo.asset_id = a.id
-       and mo.source = ?
-       and mo.model_id = ?
-       and mo.prompt_version = ?
-       and mo.observation_type = ?
-   ))
-)
-select id, asset_id, source_library_id, local_identifier, needs_download,
-       media_type, media_subtypes, creation_date, timezone_name, width, height, duration_seconds,
-       favorite, hidden, burst_identifier, metadata_json,
-       camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,
-       has_location
-from queued
-order by creation_date desc,
-  has_location desc,
-  case when priority_text like '%receipt%'
-    or priority_text like '%invoice%'
-    or priority_text like '%document%'
-    or priority_text like '%passport%'
-    or priority_text like '%ticket%'
-    or priority_text like '%boarding pass%'
-    or priority_text like '%menu%'
-    then 1 else 0 end desc,
-  id
 `
-	args := []any{refreshModelID, modelClassifierSource, refreshModelID, modelPromptVersion, modelObservationCardSummary}
+	query := selectColumns + `where q.state in (` + classifyQueueStates(refreshModelID != "") + `)`
+	args := []any{}
+	if refreshModelID != "" {
+		query += `
+union all
+` + selectColumns + `where q.state = '` + classifyQueueStateContentClassified + `' and not exists (
+  select 1
+  from model_observation mo indexed by model_observation_asset_idx
+  where mo.asset_id = a.id
+    and mo.source = ?
+    and mo.model_id = ?
+    and mo.prompt_version = ?
+    and mo.observation_type = ?
+)`
+		args = append(args, modelClassifierSource, refreshModelID, modelPromptVersion, modelObservationCardSummary)
+	}
+	query += `
+order by creation_date desc, has_location desc, queue_id
+`
 	if limit > 0 {
 		query += "limit ?"
 		args = append(args, limit)
