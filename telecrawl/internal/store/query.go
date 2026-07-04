@@ -270,7 +270,7 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		m.Starred = starred != 0
 		m.Pinned = pinned != 0
 		if search {
-			m.Snippet = contractSnippet(messageSnippetText(m), filter.Query)
+			m.Snippet = ckstore.FTS5Snippet(messageSnippetText(m), filter.Query)
 		}
 		out = append(out, m)
 	}

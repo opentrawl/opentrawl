@@ -12,7 +12,11 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
-	_ "modernc.org/sqlite"
+
+	// C SQLite via cgo, matching crawlkit/store after the modernc→mattn swap
+	// (TRAWL-56): the pure-Go driver ran hot paths 10-100x slower. Requires
+	// -tags sqlite_fts5; the monorepo devenv sets it via GOFLAGS.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const schemaVersion = 5
@@ -211,8 +215,8 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("mkdir db dir: %w", err)
 	}
-	dsn := fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=busy_timeout(5000)", path)
-	db, err := sql.Open("sqlite", dsn)
+	dsn := fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000", path)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}

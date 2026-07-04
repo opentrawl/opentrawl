@@ -6,6 +6,7 @@ replace github.com/openclaw/crawlkit => ../crawlkit
 
 require (
 	filippo.io/age v1.3.1
+	github.com/mattn/go-sqlite3 v1.14.47
 	modernc.org/sqlite v1.53.0
 )
 
@@ -14,7 +15,6 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/gotd/log v0.1.0 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
-	github.com/mattn/go-sqlite3 v1.14.47 // indirect
 	github.com/refraction-networking/utls v1.8.2 // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 )

@@ -33,8 +33,8 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	} else if info.IsDir() {
 		return nil, fmt.Errorf("db path is a directory: %s", path)
 	}
-	dsn := fmt.Sprintf("file:%s?mode=ro&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)", path)
-	db, err := sql.Open("sqlite", dsn)
+	dsn := fmt.Sprintf("file:%s?mode=ro&_query_only=1&_foreign_keys=1&_busy_timeout=5000", path)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
