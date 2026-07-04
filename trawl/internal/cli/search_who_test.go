@@ -302,9 +302,7 @@ func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
 		searchExit: 99,
 		whoQuery:   "alxe",
-		who: `{"query":"alxe","candidates":[],"did_you_mean":[
-			{"who":"Alex Jones","identifiers":["alex.jones@example.com"],"match_quality":"prefix","sources":["imessage"],"last_seen":"2026-06-30T20:30:00Z","messages":9}
-		]}`,
+		who:        `{"query":"alxe","candidates":[]}`,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
@@ -320,7 +318,7 @@ func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 	if payload.Error.Code != "unknown_who" {
 		t.Fatalf("code = %q payload=%+v", payload.Error.Code, payload)
 	}
-	if len(payload.DidYouMean) != 1 || payload.DidYouMean[0].Who != "Alex Jones" {
+	if len(payload.DidYouMean) != 0 {
 		t.Fatalf("did_you_mean = %+v", payload.DidYouMean)
 	}
 	if !strings.Contains(payload.Hint, "without --who") {

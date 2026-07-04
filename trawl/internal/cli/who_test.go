@@ -71,6 +71,25 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 	}
 }
 
+func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:     "imsgcrawl",
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		whoQuery: "alex",
+		who:      `{"query":"alex","results":[{"who":"Alex Example","messages":1}]}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "who", "alex")
+	if code != 1 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "imessage who failed") {
+		t.Fatalf("stderr missing who failure:\n%s", stderr)
+	}
+}
+
 func TestWhoTableFitsTerminalWidthWithManyIdentifiers(t *testing.T) {
 	identifiers := make([]string, 40)
 	for i := range identifiers {

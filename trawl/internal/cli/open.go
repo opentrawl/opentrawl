@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -75,10 +75,7 @@ type shortRefMatch struct {
 	Ref    string
 }
 
-type shortRefObject struct {
-	Ref     string `json:"ref,omitempty"`
-	FullRef string `json:"full_ref,omitempty"`
-}
+var errAmbiguousShortRef = errors.New("ambiguous short ref")
 
 func (r *Runtime) openShortRef(alias string) error {
 	if !validShortRefAlias(alias) {
@@ -92,6 +89,11 @@ func (r *Runtime) openShortRef(alias string) error {
 	for _, source := range sources {
 		refs, err := resolveSourceShortRef(r.ctx, source, alias)
 		if err != nil {
+			if errors.Is(err, errAmbiguousShortRef) {
+				return r.writeError("ambiguous_short_ref",
+					fmt.Sprintf("Short ref %q matched more than one item.", alias),
+					"rerun the search or use the full ref")
+			}
 			return r.writeError("short_ref_resolution_failed",
 				fmt.Sprintf("Could not resolve short ref %q.", alias),
 				fmt.Sprintf("run: trawl doctor %s", source.ID))
@@ -141,55 +143,41 @@ func shortRefSources(sources []Source) []Source {
 }
 
 func resolveSourceShortRef(ctx context.Context, source Source, alias string) ([]string, error) {
-	data, err := runCrawlerJSONWithArgs(ctx, source.Path, "short-ref", alias)
+	data, err := runCrawlerJSONWithArgs(ctx, source.Path, "open", alias)
+	if err != nil {
+		switch shortRefErrorCode(data) {
+		case "unknown_short_ref":
+			return []string{}, nil
+		case "ambiguous_short_ref":
+			return nil, errAmbiguousShortRef
+		}
+		return nil, err
+	}
+	ref, err := decodeShortRefOpenRef(data)
 	if err != nil {
 		return nil, err
 	}
-	return decodeShortRefRefs(data)
+	return []string{ref}, nil
 }
 
-func decodeShortRefRefs(data []byte) ([]string, error) {
-	trimmed := bytes.TrimSpace(data)
-	if bytes.HasPrefix(trimmed, []byte("[")) {
-		var refs []string
-		if err := decodeContractJSON(trimmed, &refs); err != nil {
-			return nil, err
-		}
-		return uniqueRefs(refs), nil
+func shortRefErrorCode(data []byte) string {
+	var envelope ErrorEnvelope
+	if err := decodeContractJSON(data, &envelope); err != nil {
+		return ""
 	}
+	return strings.TrimSpace(envelope.Error.Code)
+}
+
+func decodeShortRefOpenRef(data []byte) (string, error) {
 	var raw struct {
-		Ref      string           `json:"ref,omitempty"`
-		FullRef  string           `json:"full_ref,omitempty"`
-		Refs     []string         `json:"refs,omitempty"`
-		FullRefs []string         `json:"full_refs,omitempty"`
-		Matches  []shortRefObject `json:"matches,omitempty"`
-		Results  []shortRefObject `json:"results,omitempty"`
+		Ref string `json:"ref"`
 	}
 	if err := decodeContractJSON(data, &raw); err != nil {
-		return nil, err
+		return "", err
 	}
-	refs := append([]string(nil), raw.Refs...)
-	refs = append(refs, raw.FullRefs...)
-	refs = append(refs, raw.Ref, raw.FullRef)
-	for _, match := range raw.Matches {
-		refs = append(refs, firstNonEmpty(match.Ref, match.FullRef))
+	ref := strings.TrimSpace(raw.Ref)
+	if ref == "" {
+		return "", errors.New("open ref is missing")
 	}
-	for _, result := range raw.Results {
-		refs = append(refs, firstNonEmpty(result.Ref, result.FullRef))
-	}
-	return uniqueRefs(refs), nil
-}
-
-func uniqueRefs(refs []string) []string {
-	seen := map[string]bool{}
-	out := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		ref = strings.TrimSpace(ref)
-		if ref == "" || seen[ref] {
-			continue
-		}
-		seen[ref] = true
-		out = append(out, ref)
-	}
-	return out
+	return ref, nil
 }

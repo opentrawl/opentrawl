@@ -76,9 +76,8 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 		name:          "imsgcrawl",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
-		shortRefs:     `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
 		openRef:       "imessage:msg/1",
-		open:          `not-json`,
+		open:          `{"ref":"imessage:msg/1"}`,
 		openHuman:     human,
 	})
 	t.Setenv("PATH", binDir)
@@ -101,7 +100,8 @@ func TestOpenShortRefReportsUnknown(t *testing.T) {
 		name:          "imsgcrawl",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
-		shortRefs:     `{"alias":"t7k3f","refs":[]}`,
+		open:          `{"error":{"code":"unknown_short_ref","message":"short ref was not found","remedy":"rerun search or use the full ref"}}`,
+		openExit:      1,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", t.TempDir())
@@ -124,13 +124,13 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 			name:          "imsgcrawl",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
-			shortRefs:     `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
+			open:          `{"ref":"imessage:msg/1"}`,
 		},
 		fakeCrawler{
 			name:          "telecrawl",
 			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
-			shortRefs:     `{"alias":"t7k3f","refs":["telegram:msg/2"]}`,
+			open:          `{"ref":"telegram:msg/2"}`,
 		},
 	)
 	t.Setenv("PATH", binDir)
@@ -146,6 +146,28 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestOpenShortRefRejectsLegacyLookupEnvelope(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:          "imsgcrawl",
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		shortRefAlias: "t7k3f",
+		open:          `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "open", "t7k3f")
+	if code != 1 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if stdout != "" {
+		t.Fatalf("stdout = %s", stdout)
+	}
+	if !strings.Contains(stderr, `Could not resolve short ref "t7k3f".`) {
+		t.Fatalf("stderr missing resolution failure:\n%s", stderr)
 	}
 }
 

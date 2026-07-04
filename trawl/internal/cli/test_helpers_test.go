@@ -26,8 +26,6 @@ type fakeCrawler struct {
 	who           string
 	whoExit       int
 	whoQuery      string
-	shortRefs     string
-	shortRefExit  int
 	shortRefAlias string
 	open          string
 	openExit      int
@@ -187,19 +185,13 @@ case "$1" in
     printf '%%s\n' %s
     exit %d
     ;;
-  "short-ref")
-    if [ "$#" -ne 3 ] || [ "$3" != "--json" ]; then
-      exit 64
-    fi
-    if [ -n "$expected_short_ref_alias" ] && [ "$2" != "$expected_short_ref_alias" ]; then
-      exit 64
-    fi
-    printf '%%s\n' %s
-    exit %d
-    ;;
   "open")
     if [ "$#" -eq 3 ] && [ "$3" = "--json" ]; then
-      if [ -n "$expected_open_ref" ] && [ "$2" != "$expected_open_ref" ]; then
+      expected_ref="$expected_open_ref"
+      if [ -n "$expected_short_ref_alias" ]; then
+        expected_ref="$expected_short_ref_alias"
+      fi
+      if [ -n "$expected_ref" ] && [ "$2" != "$expected_ref" ]; then
         exit 64
       fi
       printf '%%s\n' %s
@@ -228,7 +220,7 @@ case "$1" in
     ;;
 esac
 exit 64
-`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellBool(crawler.searchNoQuery), shellQuote(crawler.searchWho), shellQuote(crawler.whoQuery), shellQuote(crawler.shortRefAlias), shellQuote(crawler.openHuman), shellQuote(crawler.openStderr), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.who), crawler.whoExit, shellQuote(crawler.shortRefs), crawler.shortRefExit, shellQuote(crawler.open), crawler.openExit, crawler.openHumanExit, shellQuote(crawler.sync), crawler.syncExit)
+`, shellQuote(crawler.openRef), shellQuote(crawler.searchLimit), shellQuote(crawler.searchQuery), shellBool(crawler.searchNoQuery), shellQuote(crawler.searchWho), shellQuote(crawler.whoQuery), shellQuote(crawler.shortRefAlias), shellQuote(crawler.openHuman), shellQuote(crawler.openStderr), shellQuote(crawler.metadata), crawler.metadataExit, shellQuote(crawler.status), crawler.statusExit, shellQuote(crawler.doctor), crawler.doctorExit, shellQuote(crawler.search), crawler.searchExit, shellQuote(crawler.who), crawler.whoExit, shellQuote(crawler.open), crawler.openExit, crawler.openHumanExit, shellQuote(crawler.sync), crawler.syncExit)
 	path := filepath.Join(dir, crawler.name)
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)

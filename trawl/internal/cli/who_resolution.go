@@ -195,7 +195,7 @@ func whoSource(ctx context.Context, source Source, query string) whoSourceResult
 		result.Err = err
 		return result
 	}
-	envelope, err := decodeWhoEnvelope(data, query, source.ID)
+	envelope, err := decodeWhoEnvelope(data, source.ID)
 	if err != nil {
 		result.Err = err
 		return result

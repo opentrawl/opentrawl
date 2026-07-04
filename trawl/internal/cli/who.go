@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sort"
@@ -96,36 +97,26 @@ func (c *WhoCmd) Run(r *Runtime) error {
 	return whoExit(resolution)
 }
 
-func decodeWhoEnvelope(data []byte, fallbackQuery, fallbackSource string) (WhoEnvelope, error) {
+func decodeWhoEnvelope(data []byte, fallbackSource string) (WhoEnvelope, error) {
 	var raw struct {
-		Query       string          `json:"query"`
-		Candidates  json.RawMessage `json:"candidates"`
-		Results     json.RawMessage `json:"results"`
-		DidYouMean  json.RawMessage `json:"did_you_mean"`
-		Suggestions json.RawMessage `json:"suggestions"`
+		Query      string          `json:"query"`
+		Candidates json.RawMessage `json:"candidates"`
 	}
 	if err := decodeContractJSON(data, &raw); err != nil {
 		return WhoEnvelope{}, err
 	}
-	candidates, err := decodeWhoCandidateList(firstRaw(raw.Candidates, raw.Results), fallbackSource)
+	query := strings.TrimSpace(raw.Query)
+	if query == "" {
+		return WhoEnvelope{}, errors.New("who query is missing")
+	}
+	if len(raw.Candidates) == 0 {
+		return WhoEnvelope{}, errors.New("who candidates array is missing")
+	}
+	candidates, err := decodeWhoCandidateList(raw.Candidates, fallbackSource)
 	if err != nil {
 		return WhoEnvelope{}, err
 	}
-	didYouMean, err := decodeWhoCandidateList(firstRaw(raw.DidYouMean, raw.Suggestions), fallbackSource)
-	if err != nil {
-		return WhoEnvelope{}, err
-	}
-	query := firstNonEmpty(raw.Query, fallbackQuery)
-	return WhoEnvelope{Query: query, Candidates: candidates, DidYouMean: didYouMean}, nil
-}
-
-func firstRaw(values ...json.RawMessage) json.RawMessage {
-	for _, value := range values {
-		if len(value) != 0 {
-			return value
-		}
-	}
-	return nil
+	return WhoEnvelope{Query: query, Candidates: candidates}, nil
 }
 
 func decodeWhoCandidateList(data json.RawMessage, fallbackSource string) ([]WhoCandidate, error) {
