@@ -50,12 +50,18 @@ type venuePlausibility struct {
 	Reason      string `json:"reason,omitempty"`
 }
 
-func parsePhotoCard(raw string) (photoCard, error) {
+// expectVenue is true when the prompt sidecar carried venue candidates; only
+// then is the venue_plausibility section required. Models routinely omit it
+// when there are no candidates to judge.
+func parsePhotoCard(raw string, expectVenue bool) (photoCard, error) {
 	sections, err := splitPhotoCardSections(raw)
 	if err != nil {
 		return photoCard{}, err
 	}
-	required := []string{"summary", "description", "venue_plausibility", "ocr", "uncertainty"}
+	required := []string{"summary", "description", "ocr", "uncertainty"}
+	if expectVenue {
+		required = append(required, "venue_plausibility")
+	}
 	for _, key := range required {
 		if _, ok := sections[key]; !ok {
 			return photoCard{}, fmt.Errorf("model card missing %s section", key)

@@ -70,8 +70,6 @@ type ClassifyResult struct {
 	ModelConcurrencyFinal          int    `json:"model_concurrency_final,omitempty"`
 	ModelRateLimitEvents           int    `json:"model_rate_limit_events"`
 	ModelTransientErrorEvents      int    `json:"model_transient_error_events"`
-	CacheMaxBytes                  int64  `json:"cache_max_bytes,omitempty"`
-	CacheHighWaterBytes            int64  `json:"cache_high_water_bytes,omitempty"`
 	BytesDownloaded                int64  `json:"bytes_downloaded"`
 }
 
@@ -135,8 +133,10 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	if err != nil {
 		return ClassifyResult{}, err
 	}
+	logger := classifyLogger{sink: opts.LogSink}
 	if classifier != nil {
-		if err := enrichClassifyPlaces(ctx, paths, inputs, &result); err != nil {
+		inputs, err = prepareClassifyPlaces(ctx, db, paths, inputs, now, &result, logger)
+		if err != nil {
 			return ClassifyResult{}, err
 		}
 	}
@@ -172,7 +172,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		}
 		return finishClassifyResult(startedAt, result), nil
 	}
-	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result, classifyLogger{sink: opts.LogSink}); err != nil {
+	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result, logger); err != nil {
 		return ClassifyResult{}, err
 	}
 	if classifier != nil {

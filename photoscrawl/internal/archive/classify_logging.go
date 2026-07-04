@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openclaw/photoscrawl/internal/modelclient"
 	"github.com/openclaw/photoscrawl/internal/photos"
@@ -62,6 +63,42 @@ func (logger classifyLogger) logModelRetry(input classifyInput, attempt int, err
 	)
 }
 
+func (logger classifyLogger) logPlaceGeocode(key, outcome string, duration time.Duration, reason string) {
+	fields := []string{
+		logTokenField("key", key),
+		logTokenField("outcome", outcome),
+		logInt64Field("duration_ms", duration.Milliseconds()),
+		logStringField("reason", reason),
+	}
+	switch outcome {
+	case "ok":
+		logger.info("place_geocode", fields...)
+	default:
+		logger.warn("place_geocode", fields...)
+	}
+}
+
+func (logger classifyLogger) logPlaceParked(input classifyInput, reason string) {
+	logger.warn("place_parked",
+		logTokenField("asset_ref", assetRef(input.AssetID)),
+		logStringField("reason", reason),
+	)
+}
+
+func (logger classifyLogger) logPlaceUnparked(input classifyInput, reason string) {
+	logger.info("place_unparked",
+		logTokenField("asset_ref", assetRef(input.AssetID)),
+		logStringField("reason", reason),
+	)
+}
+
+func (logger classifyLogger) info(event string, fields ...string) {
+	if logger.sink == nil {
+		return
+	}
+	_ = logger.sink.Info(event, strings.Join(nonEmptyLogFields(fields), " "))
+}
+
 func (logger classifyLogger) warn(event string, fields ...string) {
 	if logger.sink == nil {
 		return
@@ -93,6 +130,14 @@ func logIntField(key string, value int) string {
 		return ""
 	}
 	return key + "=" + strconv.Itoa(value)
+}
+
+func logInt64Field(key string, value int64) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return ""
+	}
+	return key + "=" + strconv.FormatInt(value, 10)
 }
 
 func publicClassifyErrorReason(err error, fallback string) string {

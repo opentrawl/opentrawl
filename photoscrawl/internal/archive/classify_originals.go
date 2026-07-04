@@ -13,40 +13,31 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-const (
-	defaultOriginalsCacheMaxBytes int64 = 4 * 1024 * 1024 * 1024
-	downloadConcurrency                 = 1
-)
+const downloadConcurrency = 1
 
 var exportOriginalResource = photos.ExportOriginalResourceMatching
 
+// originalsCache is a per-run scratch directory. Disk usage is bounded by the
+// pipeline shape itself: downloads are serial, every file is deleted as soon
+// as its card is written, and the whole run directory is removed on Close.
 type originalsCache struct {
-	root      string
-	runDir    string
-	maxBytes  int64
-	mu        sync.Mutex
-	reserved  int64
-	used      int64
-	highWater int64
-	closed    bool
+	root   string
+	runDir string
 }
 
 type originalLease struct {
-	cache *originalsCache
-	path  string
-	size  int64
-	once  sync.Once
+	path string
+	once sync.Once
 }
 
 type originalExportResult struct {
-	path          string
-	pathClass     string
-	bytes         int64
-	duration      time.Duration
-	lease         *originalLease
-	attempts      int
-	err           error
-	cacheHighMark int64
+	path      string
+	pathClass string
+	bytes     int64
+	duration  time.Duration
+	lease     *originalLease
+	attempts  int
+	err       error
 }
 
 func newOriginalsCache(root, runID string) (*originalsCache, error) {
@@ -58,23 +49,21 @@ func newOriginalsCache(root, runID string) (*originalsCache, error) {
 	if err := os.MkdirAll(runDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create originals cache: %w", err)
 	}
-	return &originalsCache{
-		root:     root,
-		runDir:   runDir,
-		maxBytes: defaultOriginalsCacheMaxBytes,
-	}, nil
+	return &originalsCache{root: root, runDir: runDir}, nil
 }
 
 func (c *originalsCache) export(ctx context.Context, input classifyInput) originalExportResult {
 	startedAt := time.Now()
-	lease, err := c.reserve(input)
-	if err != nil {
-		return originalExportResult{err: err, duration: time.Since(startedAt)}
+	if strings.TrimSpace(input.LocalIdentifier) == "" {
+		return originalExportResult{err: errors.New("asset local identifier is required for original export"), duration: time.Since(startedAt)}
 	}
-	result := originalExportResult{path: lease.path, pathClass: "downloaded_original", lease: lease}
+	path := filepath.Join(c.runDir, safePathComponent(input.AssetID)+originalExtension(input))
+	lease := &originalLease{path: path}
+	result := originalExportResult{path: path, pathClass: "downloaded_original", lease: lease}
+	var err error
 	for attempt := 1; attempt <= 2; attempt++ {
 		result.attempts = attempt
-		err = exportOriginalResource(ctx, input.originalExportQuery(), lease.path, true)
+		err = exportOriginalResource(ctx, input.originalExportQuery(), path, true)
 		if err == nil {
 			break
 		}
@@ -92,114 +81,27 @@ func (c *originalsCache) export(ctx context.Context, input classifyInput) origin
 		lease.Close()
 		return result
 	}
-	info, err := os.Stat(lease.path)
+	info, err := os.Stat(path)
 	if err != nil {
 		result.err = fmt.Errorf("stat exported original: %w", err)
 		lease.Close()
 		return result
 	}
 	result.bytes = info.Size()
-	if err := c.commit(lease, result.bytes); err != nil {
-		result.err = err
-		lease.Close()
-		return result
-	}
-	result.cacheHighMark = c.HighWater()
 	return result
 }
 
-func (c *originalsCache) reserve(input classifyInput) (*originalLease, error) {
-	if strings.TrimSpace(input.LocalIdentifier) == "" {
-		return nil, errors.New("asset local identifier is required for original export")
-	}
-	expectedBytes := input.expectedOriginalBytes()
-	if expectedBytes <= 0 {
-		return nil, errors.New("original byte size is unknown; refusing download under fixed cache budget")
-	}
-	if expectedBytes > c.maxBytes {
-		return nil, fmt.Errorf("original is larger than cache budget: %d bytes", expectedBytes)
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return nil, errors.New("originals cache is closed")
-	}
-	if c.reserved+expectedBytes > c.maxBytes {
-		return nil, fmt.Errorf("originals cache budget exceeded: %d of %d bytes reserved", c.reserved, c.maxBytes)
-	}
-	c.reserved += expectedBytes
-	path := filepath.Join(c.runDir, safePathComponent(input.AssetID)+originalExtension(input))
-	return &originalLease{cache: c, path: path, size: expectedBytes}, nil
-}
-
-func (c *originalsCache) commit(lease *originalLease, actualBytes int64) error {
-	if lease == nil {
-		return nil
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.reserved -= lease.size
-	if c.reserved < 0 {
-		c.reserved = 0
-	}
-	if actualBytes > c.maxBytes-c.used {
-		return fmt.Errorf("exported original exceeds cache budget: %d bytes with %d of %d bytes used", actualBytes, c.used, c.maxBytes)
-	}
-	c.used += actualBytes
-	lease.size = actualBytes
-	if c.used > c.highWater {
-		c.highWater = c.used
-	}
-	return nil
-}
-
-func (c *originalsCache) release(path string, size int64) {
-	_ = os.Remove(path)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.used -= size
-	if c.used < 0 {
-		c.used = 0
-	}
-}
-
 func (c *originalsCache) Close() {
-	c.mu.Lock()
-	c.closed = true
-	c.mu.Unlock()
 	_ = os.RemoveAll(c.runDir)
 }
 
-func (c *originalsCache) HighWater() int64 {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.highWater
-}
-
-func (c *originalsCache) MaxBytes() int64 {
-	return c.maxBytes
-}
-
 func (l *originalLease) Close() {
-	if l == nil || l.cache == nil {
+	if l == nil {
 		return
 	}
 	l.once.Do(func() {
-		l.cache.release(l.path, l.size)
+		_ = os.Remove(l.path)
 	})
-}
-
-func (input classifyInput) expectedOriginalBytes() int64 {
-	var best int64
-	for _, resource := range input.Resources {
-		if !resource.NeedsDownload || !classifiableResourceText(resource) {
-			continue
-		}
-		if best == 0 || resource.FileSize < best {
-			best = resource.FileSize
-		}
-	}
-	return best
 }
 
 func (input classifyInput) originalExportQuery() photos.OriginalExportQuery {

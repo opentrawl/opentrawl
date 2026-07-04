@@ -59,12 +59,16 @@ content classification can use local files without changing Photos or iCloud
 state. Every imported asset is queued for `classify`.
 
 `classify` drains that queue into local metadata observations. With
-`--model <ollama-model>`, it also resolves cached place context, sends
+`--model <ollama-model>`, it also resolves place context cache-first, sends
 already-local image bytes to an Ollama-API vision model, and stores one photo
 card per asset: a one-line summary, rich visual description, OCR text, and
 uncertainty list. Search uses hidden terms derived from that card text and
 mechanical place observations. It does not store rendered tag rows, object
 lists, or cluster terms.
+
+If Apple place geocoding is throttled, located photos move to `place_pending`
+instead of being carded without place context. Later `classify` runs retry
+parked photos and unpark them once the place cache covers their location.
 
 If an original download fails, `classify` marks that asset as `failed_download`.
 It will not try that download again until an operator resets it:
@@ -160,7 +164,8 @@ without pretending GPS, face labels, or classifier labels are perfect facts.
 Build `photos.sqlite` with:
 
 - assets and resource metadata from Apple Photos;
-- local original-download queue with bounded cache/ringbuffer;
+- local original-download queue; disk use is bounded by serial downloads and
+  delete-after-classify, not a size ledger;
 - GPS observations as raw coordinates only;
 - album membership;
 - file/resource hashes when originals are available;

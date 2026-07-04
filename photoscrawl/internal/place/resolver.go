@@ -64,6 +64,14 @@ func NewResolver(opts ResolverOptions) *Resolver {
 }
 
 func (r *Resolver) Resolve(ctx context.Context, input Input) ResolveResult {
+	resolved := r.ResolveCached(ctx, input)
+	if resolved.Result != nil || resolved.CacheStatus != "miss" {
+		return resolved
+	}
+	return r.ResolveProvider(ctx, input)
+}
+
+func (r *Resolver) ResolveCached(_ context.Context, input Input) ResolveResult {
 	if r == nil || strings.TrimSpace(r.cacheDir) == "" {
 		return ResolveResult{CacheStatus: "disabled"}
 	}
@@ -80,6 +88,16 @@ func (r *Resolver) Resolve(ctx context.Context, input Input) ResolveResult {
 		result.CacheStatus = "backfill_hit"
 		return ResolveResult{Result: result, CacheStatus: "backfill_hit", BackfillHit: true, ResolvedFromPath: path}
 	}
+	return ResolveResult{CacheStatus: "miss"}
+}
+
+func (r *Resolver) ResolveProvider(ctx context.Context, input Input) ResolveResult {
+	if r == nil || strings.TrimSpace(r.cacheDir) == "" {
+		return ResolveResult{CacheStatus: "disabled"}
+	}
+	if err := os.MkdirAll(r.cacheDir, 0o700); err != nil {
+		return ResolveResult{CacheStatus: "error", ProviderError: err.Error()}
+	}
 	if err := r.waitProvider(ctx); err != nil {
 		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error()}
 	}
@@ -94,6 +112,17 @@ func (r *Resolver) Resolve(ctx context.Context, input Input) ResolveResult {
 		}
 	}
 	return ResolveResult{Result: &result, CacheStatus: "miss_filled", ProviderAttempt: true}
+}
+
+func (r *Resolver) Key(input Input) string {
+	if r == nil {
+		return ""
+	}
+	return CacheKey(input, r.radius)
+}
+
+func CacheKey(input Input, radius float64) string {
+	return roundedCoordinateKey(input, radius)
 }
 
 func (r *Resolver) loadCache(input Input) (*Result, string) {

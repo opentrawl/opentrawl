@@ -66,7 +66,7 @@ func (c modelClassifier) classify(ctx context.Context, input classifyInput, imag
 	if err != nil {
 		return modelResult{}, err
 	}
-	card, err := parsePhotoCard(response.Text)
+	card, err := parsePhotoCard(response.Text, input.sentVenueCandidates())
 	if err != nil {
 		return modelResult{}, err
 	}
@@ -253,6 +253,15 @@ func (resource classifyResource) Availability() string {
 		return "in_icloud"
 	}
 	return ""
+}
+
+// sentVenueCandidates mirrors placeContextForPrompt: true only when the
+// sidecar actually carried venue candidates for the model to judge.
+func (input classifyInput) sentVenueCandidates() bool {
+	if input.Place == nil || input.KnownPlace != nil {
+		return false
+	}
+	return len(topPOICandidates(venueCandidatesFromPOIs(input.Place.Result.POICandidates))) > 0
 }
 
 func (input classifyInput) placeContextForPrompt() map[string]any {
