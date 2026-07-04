@@ -253,7 +253,7 @@ func postboxChatKind(rawChatID int64) string {
 	case "channel":
 		return "channel"
 	default:
-		return "chat"
+		return "user"
 	}
 }
 

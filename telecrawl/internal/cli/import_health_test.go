@@ -159,7 +159,7 @@ func TestStoreImportResultPreservesArchivedMediaOnReimport(t *testing.T) {
 	}
 	first := telegramdesktop.ImportResult{
 		Stats: store.ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
-		Chats: []store.Chat{{JID: "100", Kind: "chat", Name: "saved media", LastMessageAt: now, MessageCount: 1}},
+		Chats: []store.Chat{{JID: "100", Kind: "user", Name: "saved media", LastMessageAt: now, MessageCount: 1}},
 		Messages: []store.Message{{
 			SourcePK:  9,
 			ChatJID:   "100",

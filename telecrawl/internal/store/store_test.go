@@ -208,6 +208,69 @@ func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
 	}
 }
 
+// Tripwire: the Telegram Desktop importer leaves sender fields empty on
+// direct-chat rows (both directions carry identity via chat_jid + from_me),
+// so the who filter must reach direct chats through the chat leg. A stale
+// chat-kind vocabulary once left that leg dead and silently dropped entire
+// direct conversations — including the owner's own messages — from --who
+// filters and who stats.
+func TestWhoFilterIncludesDirectChatBothSides(t *testing.T) {
+	ctx := context.Background()
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
+	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "tdata", StartedAt: now, FinishedAt: now},
+		[]Contact{{JID: "200", PeerType: "user", FullName: "Direct Person"}},
+		[]Chat{
+			{JID: "200", Kind: "user", Name: "Direct Person", LastMessageAt: now.Add(2 * time.Minute), MessageCount: 3},
+			{JID: "-500", Kind: "group", Name: "team room", LastMessageAt: now.Add(3 * time.Minute), MessageCount: 1},
+		},
+		nil,
+		nil,
+		nil,
+		nil,
+		[]Message{
+			{SourcePK: 1, ChatJID: "200", ChatName: "Direct Person", MessageID: "1", Timestamp: now, Text: "inbound direct needle"},
+			{SourcePK: 2, ChatJID: "200", ChatName: "Direct Person", MessageID: "2", SenderJID: "999", SenderName: "999", Timestamp: now.Add(time.Minute), FromMe: true, Text: "own direct needle"},
+			{SourcePK: 3, ChatJID: "200", ChatName: "Direct Person", MessageID: "3", Timestamp: now.Add(2 * time.Minute), Text: "second inbound needle"},
+			{SourcePK: 4, ChatJID: "-500", ChatName: "team room", MessageID: "4", SenderJID: "700", SenderName: "Other Sender", Timestamp: now.Add(3 * time.Minute), Text: "unrelated group needle"},
+		}); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates, err := st.ResolveWho(ctx, "Direct Person")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(candidates) != 1 || candidates[0].Messages != 3 || !candidates[0].LastSeen.Equal(now.Add(2*time.Minute)) {
+		t.Fatalf("candidates = %#v, want Direct Person with all 3 direct-chat messages", candidates)
+	}
+
+	filter := MessageFilter{Query: "needle", Who: "Direct Person", Limit: 10}
+	messages, err := st.Search(ctx, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total, err := st.CountSearch(ctx, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 3 || total != 3 {
+		t.Fatalf("search --who Direct Person = %d total %d, want 3/3", len(messages), total)
+	}
+	ownIncluded := false
+	for _, message := range messages {
+		if message.ChatJID != "200" {
+			t.Fatalf("message outside the direct chat leaked in: %#v", message)
+		}
+		if message.FromMe {
+			ownIncluded = true
+		}
+	}
+	if !ownIncluded {
+		t.Fatal("own message missing from --who filter on the direct chat")
+	}
+}
+
 func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
@@ -304,7 +367,7 @@ func TestResolveWhoFoldsOwnerIdentifiersToMe(t *testing.T) {
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
 	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		nil,
-		[]Chat{{JID: "300", Kind: "chat", Name: "Recipient Person", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		[]Chat{{JID: "300", Kind: "user", Name: "Recipient Person", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
 		nil,
 		nil,
@@ -342,7 +405,7 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
 	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", Phone: "+1555200200", FullName: "Alice Example", Username: "alice_example"}},
-		[]Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
+		[]Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
 		nil,
 		nil,
