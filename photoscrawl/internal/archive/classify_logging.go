@@ -42,6 +42,16 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 			logTokenField("asset_ref", assetRef(write.input.AssetID)),
 			logStringField("reason", publicClassifyErrorReason(write.contentErr, "model request failed")),
 		)
+	case contentOutcomeClassified:
+		// Successes log too: stage durations per card are the structural
+		// answer to "where does the time go" — silence hides bottlenecks.
+		logger.info("card_written",
+			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logInt64Field("download_ms", write.downloadDuration.Milliseconds()),
+			logInt64Field("model_ms", write.modelDuration.Milliseconds()),
+			logIntField("model_attempts", write.modelAttempts),
+			logInt64Field("write_ms", write.writeDuration.Milliseconds()),
+		)
 	}
 }
 
@@ -175,4 +185,9 @@ func nonEmptyLogFields(fields []string) []string {
 		}
 	}
 	return out
+}
+
+func (logger classifyLogger) logPhase(phase string, duration time.Duration, fields ...string) {
+	all := append([]string{logInt64Field("duration_ms", duration.Milliseconds())}, fields...)
+	logger.info(phase, all...)
 }

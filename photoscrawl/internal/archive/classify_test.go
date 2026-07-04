@@ -809,7 +809,10 @@ func TestLoadClassifyInputsPriority(t *testing.T) {
 	for _, input := range inputs {
 		got = append(got, input.LocalIdentifier)
 	}
-	want := []string{"newest-plain", "middle-gps", "same-date-gps", "same-date-menu", "same-date-plain"}
+	// Order is date desc, then GPS presence, then queue id. The old
+	// receipt/menu filename boost was deleted: it cost group_concats over
+	// every queued row per batch and only ever broke same-second ties.
+	want := []string{"newest-plain", "middle-gps", "same-date-gps", "same-date-plain", "same-date-menu"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("priority order = %#v, want %#v", got, want)
 	}

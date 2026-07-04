@@ -117,7 +117,9 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		result.ModelRunID = stableID("model_run", modelClassifierSource, modelID, modelPromptVersion, now().UTC().Format(time.RFC3339Nano))
 	}
 
+	logger := classifyLogger{sink: opts.LogSink}
 	var inputs []classifyInput
+	loadStartedAt := time.Now()
 	err = db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
 		refreshModelID := ""
@@ -133,12 +135,20 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	if err != nil {
 		return ClassifyResult{}, err
 	}
-	logger := classifyLogger{sink: opts.LogSink}
+	logger.logPhase("inputs_loaded", time.Since(loadStartedAt), logIntField("rows", len(inputs)))
 	if classifier != nil {
+		placeStartedAt := time.Now()
+		selected := len(inputs)
 		inputs, err = prepareClassifyPlaces(ctx, db, paths, inputs, now, &result, logger)
 		if err != nil {
 			return ClassifyResult{}, err
 		}
+		logger.logPhase("place_phase", time.Since(placeStartedAt),
+			logIntField("selected", selected),
+			logIntField("ready", len(inputs)),
+			logIntField("cache_hits", result.PlaceCacheHits),
+			logIntField("provider_attempts", result.PlaceProviderAttempts),
+		)
 	}
 	if classifier == nil {
 		for start := 0; start < len(inputs); start += metadataClassificationBatchSize {
