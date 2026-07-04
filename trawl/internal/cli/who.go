@@ -41,27 +41,12 @@ type WhoCandidate struct {
 }
 
 type crawlerWhoCandidate struct {
-	Who           string   `json:"who,omitempty"`
-	Identifiers   []string `json:"identifiers,omitempty"`
-	ID            string   `json:"id,omitempty"`
-	PersonID      string   `json:"person_id,omitempty"`
-	Person        string   `json:"person,omitempty"`
-	Identity      string   `json:"identity,omitempty"`
-	Name          string   `json:"name,omitempty"`
-	DisplayName   string   `json:"display_name,omitempty"`
-	Match         string   `json:"match,omitempty"`
-	MatchQuality  string   `json:"match_quality,omitempty"`
-	NameMatch     string   `json:"name_match,omitempty"`
-	Source        string   `json:"source,omitempty"`
-	Sources       []string `json:"sources,omitempty"`
-	LastSeen      string   `json:"last_seen,omitempty"`
-	LastExchanged string   `json:"last_exchanged,omitempty"`
-	Latest        string   `json:"latest,omitempty"`
-	Messages      int      `json:"messages,omitempty"`
-	Volume        int      `json:"volume,omitempty"`
-	MessageVolume int      `json:"message_volume,omitempty"`
-	MessageCount  int      `json:"message_count,omitempty"`
-	TotalMessages int      `json:"total_messages,omitempty"`
+	Who          string   `json:"who"`
+	Identifiers  []string `json:"identifiers"`
+	MatchQuality string   `json:"match_quality"`
+	Sources      []string `json:"sources"`
+	LastSeen     string   `json:"last_seen"`
+	Messages     int      `json:"messages"`
 }
 
 const (
@@ -142,26 +127,18 @@ func decodeWhoCandidateList(data json.RawMessage, fallbackSource string) ([]WhoC
 }
 
 func normalizeWhoCandidate(raw crawlerWhoCandidate, fallbackSource string) WhoCandidate {
-	who := firstNonEmpty(raw.Who, raw.Person, raw.DisplayName, raw.Name, raw.Identity, raw.ID, raw.PersonID)
-	matchQuality := canonicalMatchQuality(firstNonEmpty(raw.MatchQuality, raw.NameMatch, raw.Match))
-	sources := append([]string(nil), raw.Sources...)
-	if len(sources) == 0 && strings.TrimSpace(raw.Source) != "" {
-		sources = []string{raw.Source}
-	}
+	sources := normalisedStringList(raw.Sources)
 	if len(sources) == 0 && strings.TrimSpace(fallbackSource) != "" {
 		sources = []string{fallbackSource}
 	}
-	sources = normalisedStringList(sources)
-	identifiers := normalisedStringList(raw.Identifiers)
-	lastSeen := firstNonEmpty(raw.LastSeen, raw.LastExchanged, raw.Latest)
-	lastSeenParsed, lastSeenOK := parseWhoTime(lastSeen)
+	lastSeenParsed, lastSeenOK := parseWhoTime(raw.LastSeen)
 	return WhoCandidate{
-		Who:            who,
-		Identifiers:    identifiers,
-		MatchQuality:   matchQuality,
+		Who:            raw.Who,
+		Identifiers:    normalisedStringList(raw.Identifiers),
+		MatchQuality:   canonicalMatchQuality(raw.MatchQuality),
 		Sources:        sources,
-		LastSeen:       lastSeen,
-		Messages:       firstNonZero(raw.Messages, raw.Volume, raw.MessageVolume, raw.MessageCount, raw.TotalMessages),
+		LastSeen:       raw.LastSeen,
+		Messages:       raw.Messages,
 		lastSeenParsed: lastSeenParsed,
 		lastSeenOK:     lastSeenOK,
 	}
@@ -186,15 +163,6 @@ func normalisedStringList(values []string) []string {
 		return strings.ToLower(out[i]) < strings.ToLower(out[j])
 	})
 	return out
-}
-
-func firstNonZero(values ...int) int {
-	for _, value := range values {
-		if value != 0 {
-			return value
-		}
-	}
-	return 0
 }
 
 func parseWhoTime(value string) (time.Time, bool) {
