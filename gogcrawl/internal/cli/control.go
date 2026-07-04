@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"path/filepath"
-
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
@@ -23,7 +21,7 @@ type metadataEnvelope struct {
 }
 
 func controlManifest() metadataEnvelope {
-	paths, _ := archive.DefaultPaths()
+	paths := archive.DefaultPaths()
 	return metadataEnvelope{
 		SchemaVersion:   1,
 		ContractVersion: 1,
@@ -35,10 +33,10 @@ func controlManifest() metadataEnvelope {
 		Branding:        control.Branding{SymbolName: "envelope.fill", AccentColor: "#4285f4"},
 		Paths: control.Paths{
 			DefaultConfig:   paths.ConfigPath,
-			DefaultDatabase: archive.DefaultPath(),
-			DefaultCache:    filepath.Join(paths.BaseDir, "cache"),
-			DefaultLogs:     filepath.Join(paths.BaseDir, "logs"),
-			DefaultShare:    filepath.Join(paths.BaseDir, "share"),
+			DefaultDatabase: paths.DBPath,
+			DefaultCache:    paths.CacheDir,
+			DefaultLogs:     paths.LogDir,
+			DefaultShare:    paths.ShareDir,
 		},
 		Capabilities: []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "short_refs", "who", "verbose_logs"},
 		Privacy: control.Privacy{
