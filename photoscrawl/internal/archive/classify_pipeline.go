@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -51,6 +52,7 @@ const (
 	contentOutcomeClassified              contentOutcome = "classified"
 	contentOutcomeFailedParse             contentOutcome = "failed_parse"
 	contentOutcomeFailedModel             contentOutcome = "failed_model"
+	contentOutcomeRateLimited             contentOutcome = "rate_limited"
 	contentOutcomeFailedDownload          contentOutcome = "failed_download"
 	contentOutcomeNotInPhotoKit           contentOutcome = "not_in_photokit"
 	contentOutcomeNoContentAvailable      contentOutcome = "no_content_available"
@@ -65,15 +67,17 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	defer cache.Close()
 	result.ModelConcurrencyStart = modelConcurrencyStart
 
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	// The feed context stops new work when quota is exhausted; the writer
+	// keeps the parent context so queued results still land in the database.
+	feedCtx, stopFeeding := context.WithCancel(ctx)
+	defer stopFeeding()
 
 	modelJobs := make(chan modelJob, len(inputs))
 	downloads := make(chan classifyInput)
 	writes := make(chan classifyWrite, len(inputs))
 	writerDone := make(chan error, 1)
 	go func() {
-		writerDone <- writeClassifyResults(ctx, db, classifier, writes, now, result, logger)
+		writerDone <- writeClassifyResults(ctx, db, classifier, writes, now, result, logger, stopFeeding)
 	}()
 
 	limiter := newAdaptiveLimiter(modelConcurrencyStart, modelConcurrencyMax)
@@ -85,7 +89,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			modelWG.Add(1)
 			go func(job modelJob) {
 				defer modelWG.Done()
-				runModelJob(ctx, limiter, classifier, job, writes, logger)
+				runModelJob(feedCtx, limiter, classifier, job, writes, logger)
 			}(job)
 		}
 		modelWG.Wait()
@@ -98,9 +102,9 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		go func() {
 			defer downloadWG.Done()
 			for input := range downloads {
-				exported := cache.export(ctx, input)
+				exported := cache.export(feedCtx, input)
 				if exported.err != nil {
-					sendClassifyWrite(ctx, writes, classifyWrite{
+					sendClassifyWrite(feedCtx, writes, classifyWrite{
 						input:            input,
 						contentErr:       exported.err,
 						downloadErr:      exported.err,
@@ -109,7 +113,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 					})
 					continue
 				}
-				sendModelJob(ctx, modelJobs, modelJob{
+				sendModelJob(feedCtx, modelJobs, modelJob{
 					input:      input,
 					imagePath:  exported.path,
 					pathClass:  exported.pathClass,
@@ -121,11 +125,11 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	}
 
 	for _, input := range inputs {
-		if ctx.Err() != nil {
+		if feedCtx.Err() != nil {
 			break
 		}
 		if imagePath, ok := input.contentImagePath(); ok {
-			sendModelJob(ctx, modelJobs, modelJob{
+			sendModelJob(feedCtx, modelJobs, modelJob{
 				input:     input,
 				imagePath: imagePath,
 				pathClass: input.localPathClass(imagePath),
@@ -135,11 +139,11 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		if input.NeedsDownload && input.MediaType == "image" {
 			select {
 			case downloads <- input:
-			case <-ctx.Done():
+			case <-feedCtx.Done():
 			}
 			continue
 		}
-		sendClassifyWrite(ctx, writes, classifyWrite{
+		sendClassifyWrite(feedCtx, writes, classifyWrite{
 			input:   input,
 			outcome: missingContentOutcome(input),
 		})
@@ -150,7 +154,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	<-modelsDone
 
 	if err := <-writerDone; err != nil {
-		cancel()
+		stopFeeding()
 		return err
 	}
 	result.ModelConcurrencyPeak = limiter.Peak()
@@ -203,16 +207,43 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 		logger.logModelRetry(job.input, attempt, err, retry, limiterBefore, limiter.Current())
 	}
 	if lastErr != nil {
+		if errors.Is(lastErr, context.Canceled) {
+			// Feeding was stopped mid-run; the item stays queued untouched.
+			return
+		}
 		write.contentErr = lastErr
-		write.outcome = modelFailureOutcome(lastErr)
+		if retryableModelError(lastErr).rateLimited {
+			// Quota refusal is the provider's state, not the photo's.
+			write.outcome = contentOutcomeRateLimited
+		} else {
+			write.outcome = modelFailureOutcome(lastErr)
+		}
 	} else {
 		write.outcome = contentOutcomeClassified
 	}
 	sendClassifyWrite(ctx, writes, write)
 }
 
-func writeClassifyResults(ctx context.Context, db *store.Store, classifier modelClassifier, writes <-chan classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
+// quotaAbortThreshold is how many consecutive quota refusals prove the
+// provider is out of quota rather than briefly shedding load. Concurrency has
+// already collapsed to 1 by then (each 429 halves the limiter).
+const quotaAbortThreshold = 8
+
+func writeClassifyResults(ctx context.Context, db *store.Store, classifier modelClassifier, writes <-chan classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger, stopFeeding context.CancelFunc) error {
+	consecutiveRateLimited := 0
 	for write := range writes {
+		if write.outcome == contentOutcomeRateLimited {
+			consecutiveRateLimited++
+			if consecutiveRateLimited == quotaAbortThreshold && !result.RateLimitAborted {
+				result.RateLimitAborted = true
+				logger.warn("quota_exhausted",
+					fmt.Sprintf("consecutive_429=%d", consecutiveRateLimited),
+					"action=stop_feeding_batch")
+				stopFeeding()
+			}
+		} else {
+			consecutiveRateLimited = 0
+		}
 		err := func() error {
 			if write.lease != nil {
 				defer write.lease.Close()
@@ -321,6 +352,8 @@ func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
 		return "content_failed", "failed_parse: " + classifyFailureReason(write.contentErr)
 	case contentOutcomeFailedModel:
 		return "content_failed", "failed_model: " + classifyFailureReason(write.contentErr)
+	case contentOutcomeRateLimited:
+		return "metadata_classified", "requeued: model rate limited (429)"
 	case contentOutcomeFailedDownload:
 		return "failed_download", "failed_download: " + classifyFailureReason(write.downloadErr)
 	case contentOutcomeNotInPhotoKit:
@@ -348,6 +381,8 @@ func (result *ClassifyResult) addContentOutcome(outcome contentOutcome) {
 	case contentOutcomeFailedModel:
 		result.ContentFailedModel++
 		result.ContentClassificationFailures++
+	case contentOutcomeRateLimited:
+		result.RateLimitRequeued++
 	case contentOutcomeFailedDownload:
 		result.ContentFailedDownload++
 	case contentOutcomeNotInPhotoKit:
