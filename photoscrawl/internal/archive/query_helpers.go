@@ -179,5 +179,8 @@ func ftsQuery(query string) string {
 	if len(quoted) == 0 {
 		return `""`
 	}
-	return strings.Join(quoted, " AND ")
+	// OR, not AND: cards are short, agents search with descriptive phrases,
+	// and bm25 already ranks docs matching more terms higher. AND made
+	// "Castellbell house village street" return nothing.
+	return strings.Join(quoted, " OR ")
 }

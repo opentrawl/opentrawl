@@ -2,6 +2,13 @@ package archive
 
 const SchemaVersion = 8
 
+// Porter stemming so a search for "grill" matches cards that say "grilled".
+// ensureSearchIndex rebuilds archives created before the tokenizer change.
+const (
+	assetFTSSchema       = `create virtual table if not exists asset_fts using fts5(id unindexed, title, body, tokenize='porter unicode61');`
+	observationFTSSchema = `create virtual table if not exists observation_fts using fts5(id unindexed, asset_id unindexed, title, body, tokenize='porter unicode61');`
+)
+
 const Schema = `
 create table if not exists source_library (
   id text primary key,
@@ -221,8 +228,8 @@ create table if not exists edge (
   evidence_id text not null
 );
 
-create virtual table if not exists asset_fts using fts5(id unindexed, title, body);
-create virtual table if not exists observation_fts using fts5(id unindexed, asset_id unindexed, title, body);
+` + assetFTSSchema + `
+` + observationFTSSchema + `
 
 create index if not exists asset_creation_idx on asset(creation_date);
 create index if not exists asset_burst_idx on asset(burst_identifier);

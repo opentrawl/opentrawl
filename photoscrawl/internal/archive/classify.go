@@ -118,6 +118,9 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	}
 
 	logger := classifyLogger{sink: opts.LogSink}
+	if err := ensureSearchIndex(ctx, db, logger); err != nil {
+		return ClassifyResult{}, err
+	}
 	var inputs []classifyInput
 	loadStartedAt := time.Now()
 	err = db.WithTx(ctx, func(tx *sql.Tx) error {
