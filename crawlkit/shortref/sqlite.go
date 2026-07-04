@@ -13,6 +13,7 @@ create table if not exists short_refs (
   primary key (alias, full_ref)
 );
 create index if not exists idx_short_refs_alias on short_refs(alias);
+create index if not exists idx_short_refs_full_ref on short_refs(full_ref);
 `
 
 type SQLiteDB interface {
