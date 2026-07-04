@@ -7,6 +7,7 @@ import (
 )
 
 func TestRenderStatusTable(t *testing.T) {
+	t.Setenv("COLUMNS", "120")
 	now := time.Date(2026, 7, 2, 14, 5, 0, 0, time.UTC)
 	results := []StatusResult{
 		{
@@ -38,7 +39,7 @@ func TestRenderStatusTable(t *testing.T) {
 			Status: StatusEnvelope{
 				AppID:   "gmail",
 				State:   "error",
-				Summary: "auth expired — run: trawl doctor gmail",
+				Summary: "auth expired",
 			},
 		},
 	}
@@ -46,10 +47,10 @@ func TestRenderStatusTable(t *testing.T) {
 	if err := renderStatusTable(&out, results, now); err != nil {
 		t.Fatal(err)
 	}
-	want := "SOURCE    SURFACE   STATE  FRESH   HEADLINE\n" +
+	want := "source    surface   state  fresh   headline\n" +
 		"imessage  iMessage  ok     2m ago  12,345 messages · 87 chats · since 2014\n" +
 		"telegram  Telegram  stale  3d ago  23,456 messages\n" +
-		"gmail     Gmail     error  —       auth expired — run: trawl doctor gmail\n"
+		"gmail     Gmail     error  —       auth expired\n"
 	if out.String() != want {
 		t.Fatalf("status table:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -69,7 +70,11 @@ func TestStatusHeadlineDropsZeroSinceAndYearCounts(t *testing.T) {
 	}
 }
 
+// TestRenderDoctor pins the doctor design: raw check ids never reach a
+// reader, and a remedy sits on its own labelled line below the table
+// instead of riding a data row.
 func TestRenderDoctor(t *testing.T) {
+	t.Setenv("COLUMNS", "120")
 	results := []DoctorResult{{
 		Source: "imessage",
 		Checks: []DoctorCheck{
@@ -86,9 +91,11 @@ func TestRenderDoctor(t *testing.T) {
 	if err := renderDoctor(&out, results); err != nil {
 		t.Fatal(err)
 	}
-	want := "SOURCE    STATE  CHECKS\n" +
-		"imessage  FAIL   tcc_full_disk_access: cannot read the source database\n" +
-		"  remedy: grant Full Disk Access to Trawl in System Settings > Privacy\n"
+	want := "source    state  checks\n" +
+		"imessage  FAIL   tcc full disk access failed · 1 of 2 ok\n" +
+		"\n" +
+		"imessage tcc full disk access failed: cannot read the source database\n" +
+		"  Remedy: grant Full Disk Access to Trawl in System Settings > Privacy\n"
 	if out.String() != want {
 		t.Fatalf("doctor output:\n%s\nwant:\n%s", out.String(), want)
 	}

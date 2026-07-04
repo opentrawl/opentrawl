@@ -8,7 +8,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/openclaw/crawlkit/render"
 )
+
+// shortLocalTestTime renders a contract timestamp exactly the way the
+// human tables do, so expectations hold in any timezone.
+func shortLocalTestTime(t *testing.T, value string) string {
+	t.Helper()
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return render.ShortLocalTime(parsed)
+}
 
 type fakeCrawler struct {
 	name          string

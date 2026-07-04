@@ -20,9 +20,8 @@ import (
 )
 
 const (
-	trawlLogFileName         = "trawl.log"
-	verboseLogsCapability    = "verbose_logs"
-	defaultSourceLogFileName = "current.log"
+	trawlLogFileName      = "trawl.log"
+	verboseLogsCapability = "verbose_logs"
 )
 
 type logRun = cklog.Run
@@ -326,27 +325,6 @@ func (e sourceTimeoutError) Error() string {
 func isTimeoutError(err error) bool {
 	var timeout sourceTimeoutError
 	return errors.As(err, &timeout)
-}
-
-func sourceLogPath(source Source) string {
-	logDir := strings.TrimSpace(source.LogDir)
-	if logDir == "" {
-		home, err := os.UserHomeDir()
-		if err == nil && strings.TrimSpace(home) != "" {
-			name := firstNonEmpty(source.Binary, source.ID)
-			if name != "" {
-				logDir = filepath.Join(home, "."+name, "logs")
-			}
-		}
-	}
-	if logDir == "" {
-		return ""
-	}
-	fileName := defaultSourceLogFileName
-	if hasCapability(source, verboseLogsCapability) {
-		fileName = firstNonEmpty(source.Binary, source.ID) + ".log"
-	}
-	return tildePath(filepath.Join(logDir, fileName))
 }
 
 func tildePath(path string) string {

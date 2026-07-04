@@ -37,17 +37,14 @@ written_by: ai
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		"NAME",
-		"SUMMARY",
-		"PATH",
+		"Read: trawl summaries NAME",
+		"name",
+		"summary",
 		"possessions",
 		"durable goods you own",
-		"purchases/possessions.md",
 		"subscriptions",
 		"what you pay for",
-		"purchases/subscriptions.md",
 		"spending",
-		"purchases/spending.md",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)

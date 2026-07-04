@@ -50,7 +50,7 @@ func TestStatusExitCodes(t *testing.T) {
 			args:       []string{"status"},
 			wantCode:   3,
 			wantStdout: "telegram  Telegram  error",
-			wantStderr: "telegram failed. Remedy: run: trawl doctor telegram",
+			wantStderr: "telegram status failed.\n  Remedy: run: trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -60,8 +60,8 @@ func TestStatusExitCodes(t *testing.T) {
 			}},
 			args:       []string{"status"},
 			wantCode:   1,
-			wantStdout: "telecrawl  —",
-			wantStderr: "telecrawl failed. Remedy: run: trawl doctor telecrawl",
+			wantStdout: "the crawler did not identify itself",
+			wantStderr: "telecrawl status failed.\n  Remedy: run: trawl doctor telecrawl",
 		},
 	}
 
@@ -102,7 +102,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			}},
 			args:       []string{"doctor"},
 			wantCode:   0,
-			wantStdout: "imessage  ok     1 check: source_store",
+			wantStdout: "imessage  ok     1 check: source store",
 		},
 		{
 			name: "failing check",
@@ -113,7 +113,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			}},
 			args:       []string{"doctor"},
 			wantCode:   3,
-			wantStdout: "remedy: grant Full Disk Access to Trawl in System Settings > Privacy",
+			wantStdout: "  Remedy: grant Full Disk Access to Trawl in System Settings > Privacy",
 		},
 		{
 			name:       "requested source missing",

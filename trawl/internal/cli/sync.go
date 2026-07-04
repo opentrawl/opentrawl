@@ -131,9 +131,6 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 
 func syncFailureResult(source Source, message string) SyncResult {
 	remedy := fmt.Sprintf("run: trawl doctor %s", source.ID)
-	if logPath := sourceLogPath(source); logPath != "" {
-		remedy += "; read " + logPath
-	}
 	return SyncResult{
 		Event:   "sync",
 		Source:  source.ID,
@@ -211,5 +208,6 @@ func (r *Runtime) reportSyncFailure(result SyncResult) {
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}
-	_, _ = fmt.Fprintf(r.stderr, "%s sync failed. Remedy: %s\n", result.Source, remedy)
+	_, _ = fmt.Fprintf(r.stderr, "%s sync failed.\n", result.Source)
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 }

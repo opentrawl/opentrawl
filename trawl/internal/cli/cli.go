@@ -201,7 +201,7 @@ func collectStatus(r *Runtime, sources []Source) []StatusResult {
 		if source.MetadataErr != nil {
 			started := r.logSourceStart(source, "status")
 			r.logSourceDone(source, "status", started, source.MetadataErr)
-			status = errorStatus(source, fmt.Sprintf("metadata failed — run: trawl doctor %s", source.ID))
+			status = errorStatus(source, "the crawler did not identify itself")
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
@@ -209,13 +209,13 @@ func collectStatus(r *Runtime, sources []Source) []StatusResult {
 		data, err := r.runSourceJSONVerb(source, "status")
 		if err != nil {
 			r.logSourceDone(source, "status", started, err)
-			status = errorStatus(source, fmt.Sprintf("status failed — run: trawl doctor %s", source.ID))
+			status = errorStatus(source, "the crawler did not report its status")
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
 		if err := decodeContractJSON(data, &status); err != nil {
 			r.logSourceDone(source, "status", started, err)
-			status = errorStatus(source, fmt.Sprintf("status failed — run: trawl doctor %s", source.ID))
+			status = errorStatus(source, "the crawler did not report its status")
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
@@ -317,11 +317,8 @@ func (r *Runtime) reportStatusFailures(results []StatusResult) {
 		if !statusFailed(result.Status) {
 			continue
 		}
-		remedy := fmt.Sprintf("run: trawl doctor %s", result.Source.ID)
-		if logPath := sourceLogPath(result.Source); logPath != "" {
-			remedy += "; read " + logPath
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s failed. Remedy: %s\n", result.Source.ID, remedy)
+		_, _ = fmt.Fprintf(r.stderr, "%s status failed.\n", result.Source.ID)
+		_, _ = fmt.Fprintf(r.stderr, "  Remedy: run: trawl doctor %s\n", result.Source.ID)
 	}
 }
 
@@ -331,11 +328,8 @@ func (r *Runtime) reportDoctorFailures(results []DoctorResult) {
 			if !checkFailed(check) {
 				continue
 			}
-			remedy := firstNonEmpty(check.Remedy, fmt.Sprintf("run: trawl doctor %s", result.Source))
-			if logPath := sourceLogPath(result.sourceInfo); logPath != "" {
-				remedy += "; read " + logPath
-			}
-			_, _ = fmt.Fprintf(r.stderr, "%s %s failed. Remedy: %s\n", result.Source, check.ID, remedy)
+			_, _ = fmt.Fprintf(r.stderr, "%s %s failed.\n", result.Source, humanLabel(check.ID))
+			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(check.Remedy, fmt.Sprintf("run: trawl doctor %s", result.Source)))
 		}
 	}
 }
@@ -348,7 +342,8 @@ func (r *Runtime) writeError(code, message, remedy string) error {
 			Remedy:  remedy,
 		})
 	} else {
-		_, _ = fmt.Fprintf(r.stderr, "%s Remedy: %s\n", message, remedy)
+		_, _ = fmt.Fprintf(r.stderr, "%s\n", message)
+		_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 	}
 	return exitErr{code: 1}
 }

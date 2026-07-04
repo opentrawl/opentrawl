@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mattn/go-runewidth"
+	"github.com/openclaw/crawlkit/render"
 )
 
 type SummariesCmd struct {
@@ -141,50 +141,20 @@ func discoverSummaries(root string) ([]summaryDocument, error) {
 }
 
 func renderSummaries(w io.Writer, docs []summaryDocument) error {
-	rows := make([][]string, 0, len(docs)+1)
-	rows = append(rows, []string{"NAME", "SUMMARY", "PATH"})
+	if _, err := fmt.Fprintln(w, "Read: trawl summaries NAME"); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	rows := make([][]string, 0, len(docs))
 	for _, doc := range docs {
-		rows = append(rows, []string{doc.Name, doc.Summary, doc.Path})
+		rows = append(rows, []string{doc.Name, doc.Summary})
 	}
-	nameWidth := widestSummaryColumn(rows, 0)
-	pathWidth := widestSummaryColumn(rows, 2)
-	const minSummaryWidth = 8
-	width := outputWidth()
-	maxNameWidth := width - minSummaryWidth*2 - 4
-	if nameWidth > maxNameWidth {
-		nameWidth = maxNameWidth
-	}
-	summaryWidth := width - nameWidth - pathWidth - 4
-	if summaryWidth < minSummaryWidth {
-		summaryWidth = minSummaryWidth
-		pathWidth = width - nameWidth - summaryWidth - 4
-		if pathWidth < minSummaryWidth {
-			pathWidth = minSummaryWidth
-		}
-		summaryWidth = width - nameWidth - pathWidth - 4
-		if summaryWidth < minSummaryWidth {
-			summaryWidth = minSummaryWidth
-		}
-	}
-	for _, row := range rows {
-		line := padCell(truncateCell(row[0], nameWidth), nameWidth) + "  " +
-			padCell(truncateCell(row[1], summaryWidth), summaryWidth) + "  " +
-			truncateCell(row[2], pathWidth)
-		if _, err := fmt.Fprintln(w, strings.TrimRight(line, " ")); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func widestSummaryColumn(rows [][]string, column int) int {
-	width := 0
-	for _, row := range rows {
-		if rowWidth := runewidth.StringWidth(row[column]); rowWidth > width {
-			width = rowWidth
-		}
-	}
-	return width
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "name"},
+		{Header: "summary", Wrap: true},
+	}, rows)
 }
 
 func matchingSummaries(docs []summaryDocument, name string) []summaryDocument {

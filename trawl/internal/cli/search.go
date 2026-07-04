@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,15 +40,16 @@ type searchOptions struct {
 }
 
 type SearchRow struct {
-	Source  string `json:"source"`
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
+	Source   string `json:"source"`
+	Ref      string `json:"ref"`
+	ShortRef string `json:"short_ref,omitempty"`
+	Time     string `json:"time"`
+	Who      string `json:"who"`
+	Where    string `json:"where"`
+	Snippet  string `json:"snippet"`
 
-	ShortRef        string `json:"-"`
-	SourceShortRefs bool   `json:"-"`
+	surface         string
+	sourceShortRefs bool
 	parsedTime      time.Time
 	timeOK          bool
 }
@@ -103,7 +103,8 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	query, sources, err := r.resolveSearchTarget(c.Query, c.Source)
+	installed := discoverCrawlers(r.ctx, r.appsDir)
+	query, sources, sourceScope, err := r.resolveSearchTarget(installed, c.Query, c.Source)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,6 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	var whoResolved *WhoCandidate
 	whoBySource := map[string]string(nil)
 	if whoInput != "" {
-		installed := discoverCrawlers(r.ctx, r.appsDir)
 		skippedWho := skippedWhoSources(sources)
 		resolution := collectFederatedWho(r, searchResolverSources(installed, sources), whoInput)
 		if len(resolution.FailedSources) > 0 {
@@ -134,17 +134,17 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 		switch len(resolution.Candidates) {
 		case 0:
-			return r.writeUnknownWho(query, whoInput, resolution, skippedWho)
+			return r.writeUnknownWho(query, whoInput, resolution, skippedWho, surfaceNames(installed))
 		case 1:
 			if closeResolution, ok := closeSpellingOnlyResolution(resolution); ok {
-				return r.writeUnknownWho(query, whoInput, closeResolution, skippedWho)
+				return r.writeUnknownWho(query, whoInput, closeResolution, skippedWho, surfaceNames(installed))
 			}
 			candidate := resolution.Candidates[0]
 			whoResolved = &candidate
 			whoBySource = searchWhoFilters(candidate, sources)
 			sources = searchSourcesForResolvedWho(sources, whoBySource)
 		default:
-			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho)
+			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho, surfaceNames(installed))
 		}
 	}
 
@@ -173,11 +173,14 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
 		if whoResolved != nil {
-			if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved); err != nil {
+			if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved, surfaceNames(installed)); err != nil {
 				return err
 			}
 		}
-		if err := renderSearchTable(r.stdout, merged.Rows, merged.More); err != nil {
+		if err := renderSearchResults(r.stdout, merged, searchListContext{
+			Query:   query,
+			MoreCmd: c.moreCommand(query, sourceScope, merged.Rows),
+		}); err != nil {
 			return err
 		}
 		if err := renderSearchPartialNote(r.stdout, results); err != nil {
@@ -191,22 +194,25 @@ func (c *SearchCmd) Run(r *Runtime) error {
 // when the first word names an installed source and more words follow,
 // it scopes the search — `trawl search imessage dinner` reads the way
 // people type it. --source always wins, and a query that genuinely
-// starts with a source name still works there.
-func (r *Runtime) resolveSearchTarget(words []string, sourceCSV string) (string, []Source, error) {
-	installed := discoverCrawlers(r.ctx, r.appsDir)
+// starts with a source name still works there. The returned scope is
+// the --source value that reproduces the selection ("" for all).
+func (r *Runtime) resolveSearchTarget(installed []Source, words []string, sourceCSV string) (string, []Source, string, error) {
+	sourceCSV = strings.TrimSpace(sourceCSV)
 	if sourceCSV == "" && len(words) >= 2 {
 		if source, ok := findSource(installed, words[0]); ok {
-			return strings.Join(words[1:], " "), []Source{source}, nil
+			// The scope echoes the token the user typed (a surface name
+			// like "imessage" stays a surface name in the More: hint).
+			return strings.Join(words[1:], " "), []Source{source}, words[0], nil
 		}
 	}
 	if sourceCSV == "" {
-		return strings.Join(words, " "), searchable(installed), nil
+		return strings.Join(words, " "), searchable(installed), "", nil
 	}
-	sources, err := r.selectedSourcesCSV(sourceCSV)
+	sources, err := r.selectSources(installed, splitSourceCSV(sourceCSV))
 	if err != nil {
-		return "", nil, err
+		return "", nil, "", err
 	}
-	return strings.Join(words, " "), sources, nil
+	return strings.Join(words, " "), sources, sourceCSV, nil
 }
 
 // searchable keeps sources that declare the search capability; a
@@ -320,7 +326,8 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 			Where:           item.Where,
 			Snippet:         item.Snippet,
 			ShortRef:        firstNonEmpty(item.ShortRef, item.Alias),
-			SourceShortRefs: hasCapability(source, "short_refs"),
+			surface:         firstNonEmpty(source.DisplayName, source.ID),
+			sourceShortRefs: hasCapability(source, "short_refs"),
 			parsedTime:      parsed,
 			timeOK:          ok,
 		})
@@ -474,21 +481,4 @@ func normalizeSearchLimit(limit int) (int, error) {
 		return 0, usageErr{fmt.Errorf("search --limit must be at least 1")}
 	}
 	return limit, nil
-}
-
-func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
-	failures := len(failedSearchSources(results))
-	skipped := len(skippedSearchSources(results))
-	blocked := failures + skipped
-	if blocked == 0 || blocked == len(results) {
-		return nil
-	}
-	reason := "unavailable"
-	if skipped > 0 && failures == 0 {
-		reason = "skipped"
-	} else if skipped > 0 {
-		reason = "skipped or unavailable"
-	}
-	_, err := fmt.Fprintf(w, "note: %d of %d sources %s — results are partial (see stderr)\n", blocked, len(results), reason)
-	return err
 }

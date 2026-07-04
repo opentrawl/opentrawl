@@ -1,6 +1,9 @@
 package cli
 
-import "fmt"
+import (
+	"fmt"
+	"io"
+)
 
 // Federated search fans out to every source and merges the survivors.
 // A source that drops out — a timeout under fan-out, a non-zero exit,
@@ -57,12 +60,16 @@ func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
 		if result.Err == nil {
 			continue
 		}
-		remedy := fmt.Sprintf("run: trawl doctor %s", result.Source.ID)
-		if logPath := sourceLogPath(result.Source); logPath != "" {
-			remedy += "; read " + logPath
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s search failed: %s. Remedy: %s\n", result.Source.ID, r.failureDetail(result.Err), remedy)
+		r.reportSourceFailure(result.Source.ID, "search", r.failureDetail(result.Err))
 	}
+}
+
+// reportSourceFailure is the one stderr shape for a source that
+// dropped out of a verb: what failed on one line, the remedy on its
+// own line below it.
+func (r *Runtime) reportSourceFailure(sourceID, verb, detail string) {
+	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", sourceID, verb, detail)
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: run: trawl doctor %s\n", sourceID)
 }
 
 // failureReason is the stable token JSON and logs share: a source that
@@ -79,7 +86,11 @@ func failureReason(err error) string {
 // a person reads on stderr, never a machine ref or the child argv. It
 // names the real deadline the source was held to.
 func (r *Runtime) failureDetail(err error) string {
-	if isTimeoutError(err) {
+	return r.reasonDetail(failureReason(err))
+}
+
+func (r *Runtime) reasonDetail(reason string) string {
+	if reason == "timeout" {
 		return "timed out after " + r.timeout.String()
 	}
 	return "the crawler returned an error"
@@ -106,4 +117,21 @@ func skippedSearchSources(results []searchSourceResult) []string {
 		}
 	}
 	return skipped
+}
+
+func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
+	failures := len(failedSearchSources(results))
+	skipped := len(skippedSearchSources(results))
+	blocked := failures + skipped
+	if blocked == 0 || blocked == len(results) {
+		return nil
+	}
+	reason := "unavailable"
+	if skipped > 0 && failures == 0 {
+		reason = "skipped"
+	} else if skipped > 0 {
+		reason = "skipped or unavailable"
+	}
+	_, err := fmt.Fprintf(w, "note: %d of %d sources %s — results are partial (see stderr)\n", blocked, len(results), reason)
+	return err
 }

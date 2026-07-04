@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -24,7 +25,7 @@ type WhoEnvelope struct {
 	DidYouMean       []WhoCandidate `json:"did_you_mean,omitempty"`
 	TotalDidYouMean  int            `json:"total_did_you_mean,omitempty"`
 	SourcesConsulted []string       `json:"sources_consulted,omitempty"`
-	FailedSources    []string       `json:"failed_sources,omitempty"`
+	FailedSources    []failedSource `json:"failed_sources,omitempty"`
 }
 
 type WhoCandidate struct {
@@ -62,7 +63,8 @@ func (c *WhoCmd) Run(r *Runtime) error {
 		return usageErr{fmt.Errorf("who requires a name fragment")}
 	}
 
-	resolution := collectFederatedWho(r, resolverSources(discoverCrawlers(r.ctx, r.appsDir)), query)
+	installed := discoverCrawlers(r.ctx, r.appsDir)
+	resolution := collectFederatedWho(r, resolverSources(installed), query)
 	envelope := WhoEnvelope{
 		Query:            query,
 		TotalCandidates:  len(resolution.Candidates),
@@ -73,9 +75,17 @@ func (c *WhoCmd) Run(r *Runtime) error {
 		FailedSources:    resolution.FailedSources,
 	}
 	if r.root.JSON {
-		return writeJSON(r.stdout, envelope)
+		if err := writeJSON(r.stdout, envelope); err != nil {
+			return err
+		}
+		r.reportWhoFailures(resolution)
+		return whoExit(resolution)
 	}
-	if err := renderWhoTable(r.stdout, resolution.Candidates); err != nil {
+	if len(resolution.Candidates) == 0 {
+		if _, err := fmt.Fprintf(r.stdout, "No person matched %q.\n", query); err != nil {
+			return err
+		}
+	} else if err := renderWhoTable(r.stdout, resolution.Candidates, surfaceNames(installed)); err != nil {
 		return err
 	}
 	r.reportWhoFailures(resolution)
@@ -221,24 +231,30 @@ func matchQualityRank(value string) (whomatch.Rank, bool) {
 	}
 }
 
-func renderWhoTable(w io.Writer, candidates []WhoCandidate) error {
+func renderWhoTable(w io.Writer, candidates []WhoCandidate, surfaces map[string]string) error {
 	if len(candidates) == 0 {
-		_, err := fmt.Fprintln(w, "No people found.")
-		return err
+		return nil
 	}
 	displayed := capWhoCandidates(candidates, humanWhoCandidateLimit)
 	rows := make([][]string, 0, len(displayed))
 	for _, candidate := range displayed {
 		rows = append(rows, []string{
 			candidate.Who,
-			candidate.MatchQuality,
-			whoSources(candidate.Sources),
+			humanLabel(candidate.MatchQuality),
+			whoSources(candidate.Sources, surfaces),
 			whoLastSeen(candidate),
 			strconv.FormatInt(int64(candidate.Messages), 10),
 			whoIdentifiers(candidate.Identifiers),
 		})
 	}
-	if err := writeFittedTable(w, []string{"WHO", "MATCH", "SOURCES", "LAST SEEN", "MESSAGES", "IDENTIFIERS"}, rows); err != nil {
+	if err := render.WriteTable(w, []render.TableColumn{
+		{Header: "who"},
+		{Header: "match"},
+		{Header: "sources"},
+		{Header: "last seen"},
+		{Header: "messages", AlignRight: true},
+		{Header: "identifiers"},
+	}, rows); err != nil {
 		return err
 	}
 	if more := len(candidates) - len(displayed); more > 0 {
@@ -250,22 +266,23 @@ func renderWhoTable(w io.Writer, candidates []WhoCandidate) error {
 
 func whoLastSeen(candidate WhoCandidate) string {
 	if candidate.lastSeenOK {
-		return candidate.lastSeenParsed.Format("2006-01-02")
+		return render.ShortLocalTime(candidate.lastSeenParsed)
 	}
-	return firstNonEmpty(candidate.LastSeen, unknownFreshness)
+	return candidate.LastSeen
 }
 
-func whoSources(sources []string) string {
+func whoSources(sources []string, surfaces map[string]string) string {
 	if len(sources) == 0 {
-		return unknownFreshness
+		return ""
 	}
-	return strings.Join(sources, ", ")
+	named := make([]string, 0, len(sources))
+	for _, source := range sources {
+		named = append(named, firstNonEmpty(surfaces[source], source))
+	}
+	return strings.Join(normalisedStringList(named), ", ")
 }
 
 func whoIdentifiers(identifiers []string) string {
-	if len(identifiers) == 0 {
-		return unknownFreshness
-	}
 	displayed := identifiers
 	if len(displayed) > whoIdentifierLimit {
 		displayed = displayed[:whoIdentifierLimit]

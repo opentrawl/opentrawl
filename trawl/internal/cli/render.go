@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-runewidth"
+	"github.com/openclaw/crawlkit/render"
 )
 
 type StatusResult struct {
@@ -31,171 +31,30 @@ func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error
 	for _, result := range results {
 		rows = append(rows, []string{
 			result.Source.ID,
-			firstNonEmpty(result.Source.DisplayName, "—"),
+			result.Source.DisplayName,
 			result.Status.State,
 			freshnessText(result.Status, now),
 			statusHeadline(result.Status),
 		})
 	}
-	return writeTable(w, []string{"SOURCE", "SURFACE", "STATE", "FRESH", "HEADLINE"}, rows, nil)
-}
-
-// writeTable sizes every column but the last to its widest cell; the
-// last column absorbs what remains of the output width and truncates
-// with an ellipsis rather than wrap. remedies, when present, holds one
-// indented follow-up line per row (empty for none).
-func writeTable(w io.Writer, header []string, rows [][]string, remedies []string) error {
-	widths := columnWidths(header, rows)
-	free := lastColumnBudget(widths)
-	if err := writeTableRow(w, header, widths, free); err != nil {
-		return err
-	}
-	for i, row := range rows {
-		if err := writeTableRow(w, row, widths, free); err != nil {
-			return err
-		}
-		if remedies != nil && remedies[i] != "" {
-			if _, err := fmt.Fprintf(w, "  remedy: %s\n", remedies[i]); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func writeFittedTable(w io.Writer, header []string, rows [][]string) error {
-	widths := fittedColumnWidths(header, rows)
-	free := outputWidth() - fixedColumnBudget(widths)
-	if free < 1 {
-		free = 1
-	}
-	if err := writeFittedTableRow(w, header, widths, free); err != nil {
-		return err
-	}
-	for _, row := range rows {
-		if err := writeFittedTableRow(w, row, widths, free); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// lastColumnBudget is the room left for the free-running last column
-// after the fixed columns and their separators.
-func lastColumnBudget(widths []int) int {
-	used := 0
-	for _, width := range widths {
-		used += width + 2
-	}
-	free := outputWidth() - used
-	if free < 24 {
-		free = 24
-	}
-	return free
-}
-
-func writeTableRow(w io.Writer, row []string, widths []int, free int) error {
-	var line strings.Builder
-	for column, width := range widths {
-		line.WriteString(padCell(row[column], width))
-		line.WriteString("  ")
-	}
-	line.WriteString(truncateCell(row[len(row)-1], free))
-	_, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " "))
-	return err
-}
-
-func writeFittedTableRow(w io.Writer, row []string, widths []int, free int) error {
-	var line strings.Builder
-	for column, width := range widths {
-		line.WriteString(padCell(truncateCell(row[column], width), width))
-		line.WriteString("  ")
-	}
-	line.WriteString(truncateCell(row[len(row)-1], free))
-	_, err := fmt.Fprintln(w, strings.TrimRight(line.String(), " "))
-	return err
-}
-
-// padCell pads by display width, not bytes or runes, so emoji and wide
-// characters keep the columns aligned.
-func padCell(cell string, width int) string {
-	gap := width - runewidth.StringWidth(cell)
-	if gap <= 0 {
-		return cell
-	}
-	return cell + strings.Repeat(" ", gap)
-}
-
-// truncateCell cuts a cell to a display width, marking the cut.
-func truncateCell(cell string, width int) string {
-	if runewidth.StringWidth(cell) <= width {
-		return cell
-	}
-	if width <= 0 {
-		return ""
-	}
-	if width == 1 {
-		return "…"
-	}
-	return strings.TrimRight(runewidth.Truncate(cell, width-1, ""), " ") + "…"
-}
-
-// columnWidths sizes every column except the last, which runs free.
-func columnWidths(header []string, rows [][]string) []int {
-	widths := make([]int, len(header)-1)
-	for column := range widths {
-		widths[column] = runewidth.StringWidth(header[column])
-		for _, row := range rows {
-			if cells := runewidth.StringWidth(row[column]); cells > widths[column] {
-				widths[column] = cells
-			}
-		}
-	}
-	return widths
-}
-
-func fittedColumnWidths(header []string, rows [][]string) []int {
-	widths := append([]int(nil), columnWidths(header, rows)...)
-	if len(widths) == 0 {
-		return widths
-	}
-	const minLastColumnWidth = 8
-	for fixedColumnBudget(widths)+minLastColumnWidth > outputWidth() {
-		column := widestShrinkableColumn(widths)
-		if column < 0 {
-			break
-		}
-		widths[column]--
-	}
-	return widths
-}
-
-func fixedColumnBudget(widths []int) int {
-	used := 0
-	for _, width := range widths {
-		used += width + 2
-	}
-	return used
-}
-
-func widestShrinkableColumn(widths []int) int {
-	const minFixedColumnWidth = 3
-	column := -1
-	for i, width := range widths {
-		if width <= minFixedColumnWidth {
-			continue
-		}
-		if column == -1 || width > widths[column] {
-			column = i
-		}
-	}
-	return column
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "source"},
+		{Header: "surface"},
+		{Header: "state"},
+		{Header: "fresh"},
+		{Header: "headline"},
+	}, rows)
 }
 
 func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 	status := result.Status
 	if _, err := fmt.Fprintf(w, "source: %s\n", result.Source.ID); err != nil {
 		return err
+	}
+	if surface := strings.TrimSpace(result.Source.DisplayName); surface != "" {
+		if _, err := fmt.Fprintf(w, "surface: %s\n", surface); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintf(w, "state: %s\n", status.State); err != nil {
 		return err
@@ -220,39 +79,60 @@ func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 	return renderAuth(w, status.Auth)
 }
 
-// renderDoctor is a glance first: healthy sources collapse to one line,
-// and only failing checks expand into message and remedy detail.
+// renderDoctor is a glance first: one row per source, and each failing
+// check expands into its own block below the table so remedies never
+// ride a data line.
 func renderDoctor(w io.Writer, results []DoctorResult) error {
 	if len(results) == 0 {
 		_, err := fmt.Fprintln(w, "No crawlers found.")
 		return err
 	}
+	type failure struct {
+		source string
+		check  DoctorCheck
+	}
 	rows := make([][]string, 0, len(results))
-	remedies := make([]string, 0, len(results))
+	var failures []failure
 	for _, result := range results {
-		var failed []DoctorCheck
+		var failedNames []string
 		names := make([]string, 0, len(result.Checks))
 		for _, check := range result.Checks {
-			names = append(names, check.ID)
+			names = append(names, humanLabel(check.ID))
 			if checkFailed(check) {
-				failed = append(failed, check)
+				failedNames = append(failedNames, humanLabel(check.ID))
+				failures = append(failures, failure{source: result.Source, check: check})
 			}
 		}
-		if len(failed) == 0 {
+		if len(failedNames) == 0 {
 			plural := "checks"
 			if len(result.Checks) == 1 {
 				plural = "check"
 			}
 			rows = append(rows, []string{result.Source, "ok", fmt.Sprintf("%d %s: %s", len(result.Checks), plural, strings.Join(names, ", "))})
-			remedies = append(remedies, "")
 			continue
 		}
-		for _, check := range failed {
-			rows = append(rows, []string{result.Source, "FAIL", check.ID + ": " + firstNonEmpty(check.Message, "check failed")})
-			remedies = append(remedies, check.Remedy)
+		summary := fmt.Sprintf("%s failed · %d of %d ok",
+			strings.Join(failedNames, ", "), len(result.Checks)-len(failedNames), len(result.Checks))
+		rows = append(rows, []string{result.Source, "FAIL", summary})
+	}
+	if err := render.WriteTable(w, []render.TableColumn{
+		{Header: "source"},
+		{Header: "state"},
+		{Header: "checks"},
+	}, rows); err != nil {
+		return err
+	}
+	for _, failed := range failures {
+		if _, err := fmt.Fprintf(w, "\n%s %s failed: %s\n", failed.source, humanLabel(failed.check.ID), firstNonEmpty(failed.check.Message, "check failed")); err != nil {
+			return err
+		}
+		if remedy := strings.TrimSpace(failed.check.Remedy); remedy != "" {
+			if _, err := fmt.Fprintf(w, "  Remedy: %s\n", remedy); err != nil {
+				return err
+			}
 		}
 	}
-	return writeTable(w, []string{"SOURCE", "STATE", "CHECKS"}, rows, remedies)
+	return nil
 }
 
 func renderDatabases(w io.Writer, status StatusEnvelope) error {
@@ -263,7 +143,7 @@ func renderDatabases(w io.Writer, status StatusEnvelope) error {
 		return err
 	}
 	if status.DatabasePath != "" {
-		if _, err := fmt.Fprintf(w, "  archive: %s\n", status.DatabasePath); err != nil {
+		if _, err := fmt.Fprintf(w, "  archive: %s\n", tildePath(status.DatabasePath)); err != nil {
 			return err
 		}
 	}
@@ -273,12 +153,12 @@ func renderDatabases(w io.Writer, status StatusEnvelope) error {
 		if database.IsPrimary {
 			parts = append(parts, "primary")
 		}
-		if _, err := fmt.Fprintf(w, "  %s: %s\n", name, strings.Join(parts, ", ")); err != nil {
+		if _, err := fmt.Fprintf(w, "  %s: %s\n", humanLabel(name), strings.Join(normalisedStringList(parts), ", ")); err != nil {
 			return err
 		}
 		location := firstNonEmpty(database.Path, database.Endpoint, database.Archive)
 		if location != "" {
-			if _, err := fmt.Fprintf(w, "    location: %s\n", location); err != nil {
+			if _, err := fmt.Fprintf(w, "    location: %s\n", tildePath(location)); err != nil {
 				return err
 			}
 		}
@@ -294,7 +174,7 @@ func renderCounts(w io.Writer, counts []Count) error {
 		return err
 	}
 	for _, count := range counts {
-		label := firstNonEmpty(count.Label, count.ID, "count")
+		label := humanLabel(firstNonEmpty(count.Label, count.ID, "count"))
 		if _, err := fmt.Fprintf(w, "  %s: %s\n", label, count.Value.text(count.ID, label)); err != nil {
 			return err
 		}
@@ -315,12 +195,12 @@ func renderLastSync(w io.Writer, status StatusEnvelope) error {
 		return err
 	}
 	if lastSync != "" {
-		if _, err := fmt.Fprintf(w, "  at: %s\n", lastSync); err != nil {
+		if _, err := fmt.Fprintf(w, "  at: %s\n", humanTime(lastSync)); err != nil {
 			return err
 		}
 	}
 	if status.LastImportAt != "" {
-		if _, err := fmt.Fprintf(w, "  last import: %s\n", status.LastImportAt); err != nil {
+		if _, err := fmt.Fprintf(w, "  last import: %s\n", humanTime(status.LastImportAt)); err != nil {
 			return err
 		}
 	}
@@ -332,7 +212,7 @@ func renderLastSync(w io.Writer, status StatusEnvelope) error {
 			}
 		}
 		if status.LastSyncOutcome.FinishedAt != "" {
-			if _, err := fmt.Fprintf(w, "  finished: %s\n", status.LastSyncOutcome.FinishedAt); err != nil {
+			if _, err := fmt.Fprintf(w, "  finished: %s\n", humanTime(status.LastSyncOutcome.FinishedAt)); err != nil {
 				return err
 			}
 		}
@@ -348,20 +228,35 @@ func renderAuth(w io.Writer, auth SafeAuth) error {
 		return err
 	}
 	for _, key := range auth.boolKeys() {
-		if _, err := fmt.Fprintf(w, "  %s: %t\n", key, auth[key]); err != nil {
+		if _, err := fmt.Fprintf(w, "  %s: %t\n", humanLabel(key), auth[key]); err != nil {
 			return err
 		}
 	}
 	if value, ok := auth["expires"]; ok {
 		expires := unknownFreshness
 		if text, ok := value.(string); ok && text != "" {
-			expires = text
+			expires = humanTime(text)
 		}
 		if _, err := fmt.Fprintf(w, "  expires: %s\n", expires); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// humanLabel turns a crawler-supplied snake_case key into the words a
+// person would say: "full_disk_access" reads "full disk access".
+func humanLabel(value string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(value), "_", " ")), " ")
+}
+
+// humanTime renders a contract RFC3339 timestamp as short local time;
+// anything unparseable stays visible as-is rather than vanishing.
+func humanTime(value string) string {
+	if parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value)); err == nil {
+		return render.ShortLocalTime(parsed)
+	}
+	return value
 }
 
 // A headline is a glance, not a report: the first few declared counts

@@ -33,7 +33,7 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Alice Example → Alice Example (imessage, telegram)") {
+	if !strings.Contains(stdout, "Alice Example → Alice Example (Messages, Telegram)") {
 		t.Fatalf("stdout missing resolution line:\n%s", stdout)
 	}
 	if stderr != "" {
@@ -407,7 +407,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "alex → Alex Jones (imessage, whatsapp)") {
+	if !strings.Contains(stdout, "alex → Alex Jones (Messages, WhatsApp)") {
 		t.Fatalf("stdout missing clawdex-upgraded resolution:\n%s", stdout)
 	}
 	if stderr != "" {
@@ -432,7 +432,7 @@ func TestSearchFilterOnlyPassesThroughWithoutQuery(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Alice Example → Alice Example (imessage)") {
+	if !strings.Contains(stdout, "Alice Example → Alice Example (Messages)") {
 		t.Fatalf("stdout missing resolution line:\n%s", stdout)
 	}
 	if stderr != "" {

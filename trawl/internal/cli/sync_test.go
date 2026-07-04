@@ -96,7 +96,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			args:       []string{"sync"},
 			wantCode:   3,
 			wantStdout: "telegram  error  sync did not return a final JSON outcome",
-			wantStderr: "telegram sync failed. Remedy: run: trawl doctor telegram",
+			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -108,7 +108,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			args:       []string{"sync", "telegram"},
 			wantCode:   1,
 			wantStdout: "telegram  error  sync did not return a final JSON outcome",
-			wantStderr: "telegram sync failed. Remedy: run: trawl doctor telegram",
+			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
 		},
 	}
 

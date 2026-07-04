@@ -6,7 +6,6 @@ require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/openclaw/crawlkit v0.0.0
-	golang.org/x/term v0.44.0
 )
 
 require (
