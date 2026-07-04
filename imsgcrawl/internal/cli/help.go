@@ -4,44 +4,57 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/openclaw/crawlkit/usage"
 )
 
+const diagnosticsFooter = "Diagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log"
+
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprint(w, `imsgcrawl reads local iMessage Messages data.
+	_, _ = io.WriteString(w, topHelpDoc().Render())
+}
 
-Usage:
-  imsgcrawl [--db PATH] metadata [--json]
-  imsgcrawl [--db PATH] [--archive PATH] sync [--json]
-  imsgcrawl [--db PATH] [--archive PATH] status [--json]
-  imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
-  imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
-  imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
-  imsgcrawl [--archive PATH] who NAME [--json]
-  imsgcrawl [--archive PATH] search [--limit N] [--after TIME] [--before TIME] [--who NAME] [QUERY] [--json]
-  imsgcrawl [--archive PATH] open REF [--json]
-  imsgcrawl [--db PATH] contacts export [--json]
-  imsgcrawl help COMMAND
-  imsgcrawl --version
-
-Global flags:
-  --json       Print machine-readable JSON output.
-  --db PATH    Messages source database path.
-  --archive PATH
-              Local imsgcrawl archive path.
-  -v, --verbose
-              Stream diagnostics to stderr. Use -vv for debug detail.
-
-Output:
-  Default output is compact text for humans and agents.
-  Use --json for stable machine parsing.
-  Use --all only when you explicitly want complete local output.
-
-Help:
-  imsgcrawl help chats
-  imsgcrawl chats --help
-
-Diagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log
-`)
+func topHelpDoc() usage.Doc {
+	return usage.Doc{
+		Tool:    "imsgcrawl",
+		Tagline: "reads local iMessage Messages data",
+		Groups: []usage.Group{
+			{Title: "Read your archive", Commands: []usage.Command{
+				{Name: "chats", Summary: "Archived chats, newest first."},
+				{Name: "messages", Summary: "Messages in one chat, newest first."},
+				{Name: "who", Summary: "Resolve a name to archived participants."},
+				{Name: "search", Summary: "Search archived message text."},
+				{Name: "open", Summary: "Open one message with nearby context."},
+			}},
+			{Title: "Keep it fresh", Commands: []usage.Command{
+				{Name: "sync", Summary: "Refresh the archive from Messages."},
+			}},
+			{Title: "Health", Commands: []usage.Command{
+				{Name: "status", Summary: "Source and archive readability and counts."},
+				{Name: "doctor", Summary: "Check source, archive and Full Disk Access."},
+				{Name: "metadata", Summary: "Print crawlkit control metadata."},
+			}},
+			{Title: "Export", Commands: []usage.Command{
+				{Name: "contacts export", Summary: "Export phone contacts from Messages."},
+			}},
+		},
+		Flags: []usage.Flag{
+			{Name: "--json", Summary: "Print machine-readable JSON output."},
+			{Name: "--db PATH", Summary: "Messages source database path."},
+			{Name: "--archive PATH", Summary: "Local imsgcrawl archive path."},
+			{Name: "-v, -vv", Summary: "Stream diagnostics to stderr."},
+		},
+		Examples: []string{
+			`imsgcrawl chats --limit 20`,
+			`imsgcrawl search "launch"`,
+			`imsgcrawl open REF`,
+			`imsgcrawl who "alex"`,
+		},
+		Footer: []string{
+			"Run 'imsgcrawl help COMMAND' for flags and details.",
+			diagnosticsFooter,
+		},
+	}
 }
 
 func printCommandUsage(w io.Writer, args []string) error {
@@ -130,6 +143,6 @@ Export phone contacts from the Messages source database.
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log")
+	_, err = fmt.Fprintln(w, "\n"+diagnosticsFooter)
 	return err
 }

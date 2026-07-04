@@ -6,7 +6,6 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
@@ -48,37 +47,21 @@ func (r *runtime) print(v any) error {
 }
 
 func printManifestText(w io.Writer, value control.Manifest) error {
-	if _, err := fmt.Fprintf(w, "%s (%s)\n", value.DisplayName, value.ID); err != nil {
-		return err
-	}
-	if value.Description != "" {
-		if _, err := fmt.Fprintf(w, "%s\n", value.Description); err != nil {
-			return err
-		}
+	fields := []render.CardField{
+		{Label: "ID", Value: value.ID},
+		{Label: "Version", Value: value.Version},
+		{Label: "Database", Value: value.Paths.DefaultDatabase},
+		{Label: "Logs", Value: value.Paths.DefaultLogs},
 	}
 	if len(value.Capabilities) > 0 {
-		if _, err := fmt.Fprintf(w, "\nCapabilities: %s\n", strings.Join(value.Capabilities, ", ")); err != nil {
-			return err
-		}
+		fields = append(fields, render.CardField{Label: "Capabilities", Value: strings.Join(value.Capabilities, ", ")})
 	}
-	if _, err := io.WriteString(w, "\nAgent-facing commands:\n"); err != nil {
-		return err
-	}
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	for _, name := range []string{"metadata", "status", "sync", "doctor", "chats", "messages", "who", "search", "open", "contact-export"} {
-		command, ok := value.Commands[name]
-		if !ok {
-			continue
-		}
-		if _, err := fmt.Fprintf(tw, "  %s\t%s\n", name, strings.Join(command.Argv, " ")); err != nil {
-			return err
-		}
-	}
-	if err := tw.Flush(); err != nil {
-		return err
-	}
-	_, err := io.WriteString(w, "\nMachine output: add --json to print the structured manifest.\n")
-	return err
+	return render.WriteCard(w, render.Card{
+		Title:  value.DisplayName + " (" + value.ID + ")",
+		Fields: fields,
+		Body:   value.Description,
+		Hints:  []string{"JSON: imsgcrawl metadata --json"},
+	})
 }
 
 func printSyncText(w io.Writer, value archive.SyncResult) error {
@@ -200,19 +183,27 @@ func printChatsText(w io.Writer, value chatListOutput) error {
 	if _, err := io.WriteString(w, "Open: imsgcrawl messages --chat CHAT_ID\n\n"); err != nil {
 		return err
 	}
-	width := normalizeTextTableWidth(render.OutputWidth(w))
-	columns := chatTextColumns(width)
-	rows := tableRows(len(value.Items))
+	if len(value.Items) == 0 {
+		_, err := io.WriteString(w, "No chats yet. Run imsgcrawl sync.\n")
+		return err
+	}
+	rows := make([][]string, 0, len(value.Items))
 	for _, item := range value.Items {
 		rows = append(rows, []string{
 			item.ChatID,
 			item.Kind,
 			strconv.FormatInt(item.MessageCount, 10),
-			formatAppleDate(item.LatestMessageDate),
+			shortArchiveTime(archive.FormatAppleDateTime(item.LatestMessageDate)),
 			chatConversation(item),
 		})
 	}
-	return renderTextTable(w, columns, rows)
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "chat"},
+		{Header: "kind"},
+		{Header: "msgs", AlignRight: true},
+		{Header: "latest"},
+		{Header: "conversation", Wrap: true},
+	}, rows)
 }
 
 func printMessagesText(w io.Writer, value messageListOutput) error {
@@ -220,28 +211,29 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	if value.Chat != nil {
 		conversation = chatConversation(*value.Chat)
 	}
-	if _, err := fmt.Fprintf(w, "Messages in %s (chat %s): showing %d of %d, %s.\n", conversation, value.ChatID, value.Returned, value.Total, value.Order); err != nil {
-		return err
-	}
+	heading := fmt.Sprintf("Messages in %s (chat %s): showing %d of %d, %s.", conversation, value.ChatID, value.Returned, value.Total, value.Order)
+	var hints []string
 	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: imsgcrawl messages --chat %s --limit %d\nAll: imsgcrawl messages --chat %s --all\n", value.ChatID, nextLimit(value.Limit, value.Total), value.ChatID); err != nil {
-			return err
-		}
+		hints = append(hints,
+			fmt.Sprintf("More: imsgcrawl messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
+			fmt.Sprintf("All: imsgcrawl messages --chat %s --all", value.ChatID),
+		)
 	}
-	if _, err := io.WriteString(w, "Search: imsgcrawl search QUERY\n\n"); err != nil {
-		return err
-	}
-	width := normalizeTextTableWidth(render.OutputWidth(w))
-	columns := messageTextColumns(width)
-	rows := tableRows(len(value.Items))
+	hints = append(hints, "Search: imsgcrawl search QUERY")
+	items := make([]render.ListItem, 0, len(value.Items))
 	for _, item := range value.Items {
-		rows = append(rows, []string{
-			formatArchiveTime(item.Time),
-			senderName(item.FromMe, item.SenderLabel),
-			displayMessageText(item.Text, item.HasAttachments),
+		items = append(items, render.ListItem{
+			Time: parseArchiveTime(item.Time),
+			Who:  senderName(item.FromMe, item.SenderLabel),
+			Text: displayMessageText(item.Text, item.HasAttachments),
 		})
 	}
-	return renderTextTable(w, columns, rows)
+	return render.WriteList(w, render.List{
+		Heading: heading,
+		Hints:   hints,
+		Items:   items,
+		Empty:   fmt.Sprintf("No messages in chat %s.", value.ChatID),
+	})
 }
 
 func printOpenText(w io.Writer, value openOutput) error {
@@ -275,9 +267,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 	if _, err := fmt.Fprintf(w, "Context: %d messages around this one.\n\n", len(value.Context)); err != nil {
 		return err
 	}
-	width := normalizeTextTableWidth(render.OutputWidth(w))
-	columns := openTextColumns(width)
-	return printOpenTranscript(w, columns, value.Context)
+	return printOpenTranscript(w, value.Context)
 }
 
 func printContactsText(w io.Writer, value control.ContactExport) error {
@@ -301,8 +291,18 @@ func nextLimit(limit int, total int64) int {
 	return next
 }
 
-func formatAppleDate(value int64) string {
-	return formatArchiveTime(archive.FormatAppleDateTime(value))
+func parseArchiveTime(value string) time.Time {
+	t, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// shortArchiveTime formats an archived RFC3339 timestamp as short local time
+// for table cells; empty or unparseable values render as an empty cell.
+func shortArchiveTime(value string) string {
+	return render.ShortLocalTime(parseArchiveTime(value))
 }
 
 func formatArchiveTime(value string) string {

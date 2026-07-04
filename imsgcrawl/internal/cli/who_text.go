@@ -20,43 +20,27 @@ func printWhoText(w io.Writer, value archive.WhoResolution) error {
 			return err
 		}
 	}
-	return renderWhoCandidatesTable(w, value.Candidates)
+	if len(value.Candidates) == 0 {
+		_, err := fmt.Fprintf(w, "No people matched %q.\n", value.Query)
+		return err
+	}
+	return writeWhoTable(w, value.Candidates)
 }
 
-func renderWhoCandidatesTable(w io.Writer, candidates []archive.WhoCandidate) error {
-	width := normalizeTextTableWidth(render.OutputWidth(w))
-	columns := whoTextColumns(width)
+func writeWhoTable(w io.Writer, candidates []archive.WhoCandidate) error {
 	rows := make([][]string, 0, len(candidates))
 	for _, candidate := range candidates {
 		rows = append(rows, []string{
 			candidate.Who,
-			strings.Join(candidate.Identifiers, ", "),
-			formatArchiveTime(candidate.LastSeen),
+			shortArchiveTime(candidate.LastSeen),
 			strconv.FormatInt(candidate.Messages, 10),
+			strings.Join(candidate.Identifiers, ", "),
 		})
 	}
-	return renderTextTable(w, columns, rows)
-}
-
-func whoTextColumns(width int) []textColumn {
-	whoWidth := 24
-	lastSeenWidth := 16
-	messagesWidth := 8
-	gaps := 3 * len(textTableGap)
-	identifiersWidth := width - whoWidth - lastSeenWidth - messagesWidth - gaps
-	if identifiersWidth < 22 {
-		needed := 22 - identifiersWidth
-		whoReduction := minInt(needed, whoWidth-14)
-		whoWidth -= whoReduction
-		identifiersWidth = width - whoWidth - lastSeenWidth - messagesWidth - gaps
-	}
-	if identifiersWidth < 22 {
-		identifiersWidth = 22
-	}
-	return []textColumn{
-		{header: "who", width: whoWidth, wrap: true},
-		{header: "identifiers", width: identifiersWidth, wrap: true},
-		{header: "last seen", width: lastSeenWidth},
-		{header: "messages", width: messagesWidth},
-	}
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "who"},
+		{Header: "last seen"},
+		{Header: "messages", AlignRight: true},
+		{Header: "identifiers", Wrap: true},
+	}, rows)
 }

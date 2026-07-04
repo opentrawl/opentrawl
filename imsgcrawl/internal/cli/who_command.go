@@ -83,7 +83,7 @@ func printAmbiguousWhoText(w io.Writer, query, searchQuery string, resolution ar
 	if err := printWhoMatchCount(w, resolution); err != nil {
 		return err
 	}
-	if err := renderWhoCandidatesTable(w, resolution.Candidates); err != nil {
+	if err := writeWhoTable(w, resolution.Candidates); err != nil {
 		return err
 	}
 	return printWhoRetry(w, searchQuery, resolution.Candidates)
@@ -100,7 +100,7 @@ func printUnknownWhoText(w io.Writer, query, searchQuery string, resolution arch
 		if err := printWhoMatchCount(w, resolution); err != nil {
 			return err
 		}
-		if err := renderWhoCandidatesTable(w, resolution.Candidates); err != nil {
+		if err := writeWhoTable(w, resolution.Candidates); err != nil {
 			return err
 		}
 		return printWhoRetry(w, searchQuery, resolution.Candidates)

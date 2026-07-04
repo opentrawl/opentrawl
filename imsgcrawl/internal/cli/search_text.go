@@ -11,56 +11,50 @@ import (
 
 func printSearchText(w io.Writer, value searchListOutput) error {
 	returned := len(value.Results)
-	if err := render.WriteSearchSummary(w, value.Query, returned, value.TotalMatches); err != nil {
-		return err
-	}
+	var hints []string
 	if value.WhoResolved != nil {
-		if _, err := fmt.Fprintf(w, "%s → %s\n", value.Who, value.WhoResolved.Who); err != nil {
-			return err
-		}
+		hints = append(hints, fmt.Sprintf("%s → %s", value.Who, value.WhoResolved.Who))
 	}
 	if value.Truncated {
-		if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d", nextLimit(value.Limit, value.TotalMatches)); err != nil {
-			return err
-		}
-		if value.After != "" {
-			if _, err := fmt.Fprintf(w, " --after %s", strconv.Quote(value.After)); err != nil {
-				return err
-			}
-		}
-		if value.Before != "" {
-			if _, err := fmt.Fprintf(w, " --before %s", strconv.Quote(value.Before)); err != nil {
-				return err
-			}
-		}
-		if value.Who != "" {
-			if _, err := fmt.Fprintf(w, " --who %s", strconv.Quote(value.Who)); err != nil {
-				return err
-			}
-		}
-		if strings.TrimSpace(value.Query) != "" {
-			if _, err := fmt.Fprintf(w, " %s", strconv.Quote(value.Query)); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
+		hints = append(hints, searchMoreHint(value))
 	}
-	if _, err := io.WriteString(w, "Open: imsgcrawl open REF\nUse --json when you need refs for follow-up commands.\n\n"); err != nil {
-		return err
-	}
-	width := normalizeTextTableWidth(render.OutputWidth(w))
-	columns := searchTextColumns(width)
-	rows := tableRows(len(value.TextItems))
+	hints = append(hints,
+		"Open: imsgcrawl open REF",
+		"Use --json when you need refs for follow-up commands.",
+	)
+	items := make([]render.ListItem, 0, len(value.TextItems))
 	for _, item := range value.TextItems {
-		rows = append(rows, []string{
-			formatArchiveTime(item.Time),
-			senderName(item.FromMe, item.SenderLabel),
-			searchDisplayRef(item),
-			searchConversation(item),
-			outputField(searchSnippet(item)),
+		items = append(items, render.ListItem{
+			Time:  parseArchiveTime(item.Time),
+			Who:   senderName(item.FromMe, item.SenderLabel),
+			Where: searchConversation(item),
+			Ref:   searchDisplayRef(item),
+			Text:  searchSnippet(item),
 		})
 	}
-	return renderTextTable(w, columns, rows)
+	return render.WriteList(w, render.List{
+		Heading:   fmt.Sprintf("Search %q: showing %d of %d.", value.Query, returned, value.TotalMatches),
+		Hints:     hints,
+		Items:     items,
+		ClampText: 2,
+		Empty:     fmt.Sprintf("No matches for %q.", value.Query),
+	})
+}
+
+func searchMoreHint(value searchListOutput) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "More: imsgcrawl search --limit %d", nextLimit(value.Limit, value.TotalMatches))
+	if value.After != "" {
+		fmt.Fprintf(&b, " --after %s", strconv.Quote(value.After))
+	}
+	if value.Before != "" {
+		fmt.Fprintf(&b, " --before %s", strconv.Quote(value.Before))
+	}
+	if value.Who != "" {
+		fmt.Fprintf(&b, " --who %s", strconv.Quote(value.Who))
+	}
+	if strings.TrimSpace(value.Query) != "" {
+		fmt.Fprintf(&b, " %s", strconv.Quote(value.Query))
+	}
+	return b.String()
 }

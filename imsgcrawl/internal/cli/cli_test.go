@@ -30,7 +30,7 @@ func TestRunEndToEnd(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"help", nil, "imsgcrawl reads local iMessage"},
+		{"help", nil, "reads local iMessage Messages data"},
 		{"version", []string{"--version"}, version},
 		{"metadata global json", []string{"--json", "metadata"}, `"id": "imsgcrawl"`},
 		{"metadata trailing json", []string{"metadata", "--json"}, `"contact-export"`},
