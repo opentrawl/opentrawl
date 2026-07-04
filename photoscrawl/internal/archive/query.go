@@ -182,8 +182,15 @@ matched_assets as (
   group by id
 )
 select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
-       coalesce((select title from asset_fts where id = asset.id limit 1), '') as title,
-       coalesce((select body from asset_fts where id = asset.id limit 1), '') as asset_body,
+       coalesce((select original_filename from asset_resource where asset_id = asset.id order by id limit 1), '') as title,
+       coalesce((
+         select group_concat(part, ' ')
+         from (
+           select original_filename as part from asset_resource where asset_id = asset.id
+           union
+           select album_title from album_membership where asset_id = asset.id
+         )
+       ), '') as asset_body,
        `+searchWhoSQL+` as who,
        `+whereSQL+` as where_label,
        `+searchCardSummarySQL+` as card_summary,
