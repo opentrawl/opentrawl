@@ -14,7 +14,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -47,7 +49,7 @@ func applePlaceContext(ctx context.Context, input Input, radius float64) (Result
 	cJSON := C.photoscrawl_place_context_json(cRequest, &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
-		return Result{}, errors.New(C.GoString(cErr))
+		return Result{}, classifyBridgeError(C.GoString(cErr))
 	}
 	if cJSON == nil {
 		return Result{}, errors.New("Apple place context returned no JSON")
@@ -59,4 +61,16 @@ func applePlaceContext(ctx context.Context, input Input, radius float64) (Result
 		return Result{}, err
 	}
 	return result, nil
+}
+
+// classifyBridgeError is the single place where the bridge's message strings
+// become typed errors. Everything above this boundary uses errors.Is.
+func classifyBridgeError(message string) error {
+	switch {
+	case strings.Contains(message, "MKErrorDomain error 3"):
+		return fmt.Errorf("%w: %s", ErrProviderThrottled, message)
+	case strings.Contains(message, "timed out"):
+		return fmt.Errorf("%w: %s", ErrProviderTimeout, message)
+	}
+	return errors.New(message)
 }

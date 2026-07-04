@@ -1,6 +1,9 @@
 package place
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 const (
 	defaultRadiusMeters = 150.0
@@ -88,3 +91,10 @@ type POICandidate struct {
 	Source     string      `json:"source"`
 	Provenance []string    `json:"provenance,omitempty"`
 }
+
+// Provider failure kinds. The cgo bridge maps Apple's message strings to
+// these exactly once; callers use errors.Is, never string matching.
+var (
+	ErrProviderThrottled = errors.New("place provider throttled")
+	ErrProviderTimeout   = errors.New("place provider timed out")
+)

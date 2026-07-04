@@ -79,6 +79,7 @@ func TestClassifyPlacePhaseParksThrottledLocatedAssets(t *testing.T) {
 				CacheStatus:     "miss",
 				ProviderAttempt: true,
 				ProviderError:   "Apple reverse geocode failed: The operation could not be completed. (MKErrorDomain error 3.)",
+				ProviderErr:     place.ErrProviderThrottled,
 			}
 		},
 		sleep: func(_ context.Context, duration time.Duration) error {
@@ -385,4 +386,77 @@ func assertRecordedPlaceGeocode(t *testing.T, sink *recordingClassifyLogSink, ou
 
 func writeFixtureFile(path string) error {
 	return os.WriteFile(path, []byte("fixture image bytes"), 0o644)
+}
+
+func TestClassifyPlacePhaseTimeoutStopsLiveGeocoding(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	accuracy := 8.0
+	imagePath := filepath.Join(t.TempDir(), "fixture.jpeg")
+	if err := writeFixtureFile(imagePath); err != nil {
+		t.Fatal(err)
+	}
+	seedClassifyPlaceAssets(t, paths, []photos.Asset{
+		{
+			LocalIdentifier: "located-timeout",
+			MediaType:       "image",
+			MediaSubtypes:   "0",
+			CreationDate:    "2026-05-28T12:00:00Z",
+			Width:           100,
+			Height:          80,
+			Location: &photos.Location{
+				Latitude:           41.6054,
+				Longitude:          1.8302,
+				HorizontalAccuracy: &accuracy,
+			},
+			Resources: []photos.Resource{{
+				Type:             "photo",
+				UTI:              "public.jpeg",
+				OriginalFilename: "located.jpeg",
+				LocalPath:        imagePath,
+				Availability:     "local",
+				AvailableLocally: true,
+			}},
+		},
+	})
+	db := openTestStore(t, ctx, paths)
+	defer db.Close()
+	inputs := loadTestClassifyInputs(t, ctx, db, "")
+	var providerCalls int
+	var sleeps []time.Duration
+	resolver := classifyPlaceResolver{
+		key: testClassifyPlaceKey,
+		resolveCached: func(context.Context, place.Input) place.ResolveResult {
+			return place.ResolveResult{CacheStatus: "miss"}
+		},
+		resolveProvider: func(context.Context, place.Input) place.ResolveResult {
+			providerCalls++
+			return place.ResolveResult{
+				CacheStatus:     "miss",
+				ProviderAttempt: true,
+				ProviderError:   "Apple reverse geocode timed out",
+				ProviderErr:     place.ErrProviderTimeout,
+			}
+		},
+		sleep: func(_ context.Context, duration time.Duration) error {
+			sleeps = append(sleeps, duration)
+			return nil
+		},
+	}
+	logs := &recordingClassifyLogSink{}
+	var result ClassifyResult
+	ready, err := resolveClassifyPlaces(ctx, db, inputs, nil, nil, resolver, fixedClock("2026-05-28T13:00:00Z"), &result, classifyLogger{sink: logs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ready) != 0 {
+		t.Fatalf("ready inputs = %#v", localIdentifiers(ready))
+	}
+	// One call, no retries, no backoff sleeps: a tarpitted geocoder stops
+	// live geocoding for the whole run instead of burning 20s per key.
+	if providerCalls != 1 || len(sleeps) != 0 {
+		t.Fatalf("provider calls=%d sleeps=%#v", providerCalls, sleeps)
+	}
+	assertQueueState(t, ctx, paths, "located-timeout", classifyQueueStatePlacePending)
+	assertRecordedPlaceGeocode(t, logs, "timeout")
 }

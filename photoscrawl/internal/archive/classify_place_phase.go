@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -191,7 +192,8 @@ func resolveClassifyPlaceKey(ctx context.Context, state *classifyPlaceKeyState, 
 		if reason == "" {
 			reason = "apple geocoder returned no place context"
 		}
-		if isAppleGeocoderThrottle(reason) {
+		switch {
+		case errors.Is(resolved.ProviderErr, place.ErrProviderThrottled):
 			logger.logPlaceGeocode(state.key, "throttled", duration, "apple geocoder throttled")
 			if attempt == 3 {
 				return nil, true, nil
@@ -200,6 +202,12 @@ func resolveClassifyPlaceKey(ctx context.Context, state *classifyPlaceKeyState, 
 				return nil, false, err
 			}
 			continue
+		case errors.Is(resolved.ProviderErr, place.ErrProviderTimeout):
+			// Timeouts are Apple tarpitting rather than fast-rejecting.
+			// Retrying other keys just burns 20s each: stop live geocoding
+			// for this run and park the rest.
+			logger.logPlaceGeocode(state.key, "timeout", duration, reason)
+			return nil, true, nil
 		}
 		logger.logPlaceGeocode(state.key, "error", duration, reason)
 		return nil, false, nil
@@ -341,10 +349,6 @@ func classifyPlaceInput(input classifyInput) place.Input {
 		},
 		AccuracyMeters: input.AccuracyMeters,
 	}
-}
-
-func isAppleGeocoderThrottle(reason string) bool {
-	return strings.Contains(reason, "MKErrorDomain error 3")
 }
 
 func classifyPlaceThrottleBackoff(attempt int) time.Duration {

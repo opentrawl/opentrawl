@@ -36,6 +36,7 @@ type ResolveResult struct {
 	BackfillHit      bool
 	ProviderAttempt  bool
 	ProviderError    string
+	ProviderErr      error
 	ResolvedFromPath string
 }
 
@@ -103,7 +104,7 @@ func (r *Resolver) ResolveProvider(ctx context.Context, input Input) ResolveResu
 	}
 	result, err := rawAppleResult(ctx, input, r.radius)
 	if err != nil {
-		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error()}
+		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error(), ProviderErr: err}
 	}
 	result.CacheStatus = "miss_filled"
 	if path, err := cachePath(r.cacheDir, input, r.radius); err == nil {
