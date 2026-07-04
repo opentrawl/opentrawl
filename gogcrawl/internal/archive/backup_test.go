@@ -263,6 +263,57 @@ func TestIngestBackupMessageShardDecodesResidualQuotedPrintableText(t *testing.T
 	}
 }
 
+func TestParseRawMailChoosesPlainElseHTML(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  []string
+		want string
+	}{
+		{
+			name: "html only",
+			raw: []string{
+				"From: Shop <shop@example.com>", "To: Bob Example <bob@example.com>",
+				"Subject: HTML receipt", "Content-Type: text/html; charset=utf-8", "",
+				"<html><head><title>Drop</title></head><body><style>.drop{}</style><script>drop()</script><h1>Order &amp; confirmation</h1><p>Total&nbsp;&euro;12.50</p><div>Ready <strong>today</strong>.</div></body></html>",
+			},
+			want: "Order & confirmation Total \u20ac12.50 Ready today.",
+		},
+		{
+			name: "multipart alternative uses plain",
+			raw: []string{
+				"From: Shop <shop@example.com>", "To: Bob Example <bob@example.com>",
+				"Subject: Alternative", "MIME-Version: 1.0",
+				`Content-Type: multipart/alternative; boundary="alt"`, "",
+				"--alt", "Content-Type: text/plain; charset=utf-8", "", "Plain body only.",
+				"--alt", "Content-Type: text/html; charset=utf-8", "",
+				"<html><body><p>HTML duplicate.</p></body></html>", "--alt--",
+			},
+			want: "Plain body only.",
+		},
+		{
+			name: "html latin1 quoted printable",
+			raw: []string{
+				"From: Shop <shop@example.com>", "To: Bob Example <bob@example.com>",
+				"Subject: Latin html", "Content-Type: text/html; charset=ISO-8859-1",
+				"Content-Transfer-Encoding: quoted-printable", "",
+				"<html><body><p>Cr=E8me br=FBl=E9e &amp; caf=E9</p></body></html>",
+			},
+			want: "Cr\u00e8me br\u00fbl\u00e9e & caf\u00e9",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := parseRawMail([]byte(strings.Join(test.raw, "\r\n")))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if parsed.Body != test.want {
+				t.Fatalf("body = %q, want %q", parsed.Body, test.want)
+			}
+		})
+	}
+}
+
 func TestIngestBackupMessageShardKeepsLiteralQuotedPrintableText(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
@@ -345,7 +396,7 @@ values (?, ?, ?, ?, ?)
 	}
 }
 
-func TestPendingBackupShardsReingestsV4MessageHashes(t *testing.T) {
+func TestPendingBackupShardsReingestsV5MessageHashes(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
 	if err != nil {
@@ -356,18 +407,18 @@ func TestPendingBackupShardsReingestsV4MessageHashes(t *testing.T) {
 	_, err = st.store.DB().ExecContext(ctx, `
 insert into ingested_shards(path, hash, kind, rows, ingested_at)
 values (?, ?, ?, ?, ?)
-`, shard.Path, "mail-decode-v4:"+shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
+`, shard.Path, "mail-decode-v5:"+shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
-		t.Fatalf("v4 hash pending = %#v, %v", pending, err)
+		t.Fatalf("v5 hash pending = %#v, %v", pending, err)
 	}
 	if _, err := st.IngestBackupShard(ctx, shard, nil); err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 0 {
-		t.Fatalf("v5 hash pending = %#v, %v", pending, err)
+		t.Fatalf("v6 hash pending = %#v, %v", pending, err)
 	}
 }
 
