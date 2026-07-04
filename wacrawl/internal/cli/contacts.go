@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"strings"
 	"unicode"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -39,6 +41,27 @@ func (a *app) runContacts(ctx context.Context, args []string) error {
 		}
 		return a.print(export)
 	})
+}
+
+func (a *app) printContactExport(export control.ContactExport) error {
+	if len(export.Contacts) == 0 {
+		_, err := fmt.Fprintln(a.stdout, "No contacts.")
+		return err
+	}
+	if _, err := fmt.Fprintf(a.stdout, "Contacts: showing %d, A to Z.\n\n", len(export.Contacts)); err != nil {
+		return err
+	}
+	rows := make([][]string, 0, len(export.Contacts))
+	for _, contact := range export.Contacts {
+		rows = append(rows, []string{
+			contact.DisplayName,
+			strings.Join(contact.PhoneNumbers, ", "),
+		})
+	}
+	return render.WriteTable(a.stdout, []render.TableColumn{
+		{Header: "name", Wrap: true},
+		{Header: "phone"},
+	}, rows)
 }
 
 func exportContacts(contacts []store.Contact) []control.Contact {

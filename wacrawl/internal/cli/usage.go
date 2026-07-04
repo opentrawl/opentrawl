@@ -4,58 +4,61 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/openclaw/crawlkit/usage"
 )
 
 const diagnosticsLine = "Diagnostics: run with -v, or read ~/.wacrawl/logs/wacrawl.log"
 
 func printUsage(w io.Writer) {
-	_, _ = fmt.Fprint(w, `wacrawl reads local WhatsApp Desktop data into a readonly archive.
+	_, _ = io.WriteString(w, topHelpDoc().Render())
+}
 
-Usage:
-  wacrawl [--db PATH] [--source PATH] [--json] <command> [args]
-  wacrawl --version
-
-Commands:
-  metadata    Print crawlkit control metadata.
-  doctor      Inspect WhatsApp Desktop source and archive paths.
-  import      Snapshot WhatsApp Desktop SQLite data into the archive.
-  sync        Alias for import.
-  status      Show archive status.
-  chats       List chats.
-  contacts    Export archived contacts.
-  unread      List chats with unread messages.
-  messages    List archived messages.
-  search      Search archived messages.
-  who         Resolve a person from archived participants.
-  open        Open a message ref from search.
-  sql         Run a read-only SQL query.
-  web         Browse the local archive in a private web viewer.
-  backup      Init, push, pull, or inspect encrypted Git backups.
-
-Options:
-  --db PATH                 Archive database path.
-  --source PATH             WhatsApp Desktop source path.
-  --json                    Emit JSON output.
-  --version                 Print the CLI version.
-  -v, --verbose             Stream diagnostics to stderr. Use -vv for debug detail.
-
-Import flags:
-  --copy-media              Copy referenced media files into the archive media directory.
-
-Examples:
-  wacrawl doctor
-  wacrawl sync
-  wacrawl unread --limit 20
-  wacrawl --json contacts export
-  wacrawl who "Alice"
-  wacrawl --json search "invoice" --from-them --after 2026-01-01
-  wacrawl open wacrawl:msg/MESSAGE_ID
-  wacrawl sql "SELECT count(*) FROM messages"
-  wacrawl web
-  wacrawl help messages
-
-Diagnostics: run with -v, or read ~/.wacrawl/logs/wacrawl.log
-`)
+func topHelpDoc() usage.Doc {
+	return usage.Doc{
+		Tool:    "wacrawl",
+		Tagline: "your WhatsApp archive: chats, messages and contacts",
+		Groups: []usage.Group{
+			{Title: "Read your archive", Commands: []usage.Command{
+				{Name: "chats", Summary: "Your chats, newest first."},
+				{Name: "unread", Summary: "Chats with unread messages."},
+				{Name: "messages", Summary: "Archived messages, newest first."},
+				{Name: "contacts", Summary: "Export archived contacts."},
+				{Name: "search", Summary: "Search archived messages."},
+				{Name: "open", Summary: "Open one message with nearby context."},
+				{Name: "who", Summary: "Resolve a person across names and identifiers."},
+				{Name: "sql", Summary: "Run a read-only SQL query."},
+				{Name: "web", Summary: "Browse the archive in a private web viewer."},
+			}},
+			{Title: "Keep it fresh", Commands: []usage.Command{
+				{Name: "import", Summary: "Read WhatsApp Desktop data into the archive."},
+				{Name: "sync", Summary: "Alias for import."},
+				{Name: "backup", Summary: "Manage encrypted Git backups."},
+			}},
+			{Title: "Health", Commands: []usage.Command{
+				{Name: "status", Summary: "Show archive status and counts."},
+				{Name: "doctor", Summary: "Check source access and archive readability."},
+				{Name: "metadata", Summary: "Print crawlkit control metadata."},
+			}},
+		},
+		Flags: []usage.Flag{
+			{Name: "--json", Summary: "Print machine-readable JSON output."},
+			{Name: "--db PATH", Summary: "Archive database path."},
+			{Name: "--source PATH", Summary: "WhatsApp Desktop source path."},
+			{Name: "--version", Summary: "Print the CLI version."},
+			{Name: "-v, -vv", Summary: "Stream diagnostics to stderr."},
+		},
+		Examples: []string{
+			"wacrawl chats --limit 20",
+			`wacrawl search "invoice" --from-them --after 2026-01-01`,
+			"wacrawl open wacrawl:msg/MESSAGE_ID",
+			`wacrawl who "Alice"`,
+		},
+		Footer: []string{
+			"Run 'wacrawl help COMMAND' for flags and details.",
+			diagnosticsLine,
+		},
+	}
 }
 
 func commandWantsHelp(args []string) bool {

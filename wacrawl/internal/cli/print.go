@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/wacrawl/internal/backup"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -23,17 +24,12 @@ func (a *app) print(value any) error {
 		return err
 	case store.Status:
 		return a.printStatus(v, logTailEnvelope{})
-	case []store.Chat:
-		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, "LAST\tKIND\tUNREAD\tMESSAGES\tJID\tNAME")
-		for _, c := range v {
-			_, _ = fmt.Fprintf(tw, "%s\t%s\t%d\t%d\t%s\t%s\n", formatTime(c.LastMessageAt), c.Kind, c.UnreadCount, c.MessageCount, c.JID, c.Name)
-		}
-		return tw.Flush()
-	case []store.Message:
-		return a.printMessages(v, false, 0)
+	case chatsEnvelope:
+		return a.printChats(v)
 	case messageListOutput:
-		return a.printMessages(v.Messages, v.Truncated, v.Limit)
+		return a.printMessages(v)
+	case control.ContactExport:
+		return a.printContactExport(v)
 	case whoEnvelope:
 		return a.printWho(v)
 	case searchEnvelope:

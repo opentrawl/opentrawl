@@ -47,7 +47,7 @@ func TestRunEndToEnd(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"help", []string{"--db", dbPath, "help"}, "wacrawl reads local WhatsApp"},
+		{"help", []string{"--db", dbPath, "help"}, "your WhatsApp archive"},
 		{"version", []string{"--version"}, version},
 		{"metadata", []string{"--json", "metadata"}, `"id": "wacrawl"`},
 		{"doctor", []string{"--db", dbPath, "--source", source, "doctor"}, "source store: ok"},
@@ -55,7 +55,7 @@ func TestRunEndToEnd(t *testing.T) {
 		{"import copy media", []string{"--db", dbPath, "--source", source, "import", "--copy-media"}, "media_copied=1"},
 		{"status", []string{"--db", dbPath, "status"}, "Unread messages: 2"},
 		{"status trailing json", []string{"--db", dbPath, "status", "--json"}, `"app_id": "wacrawl"`},
-		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "UNREAD"},
+		{"chats", []string{"--db", dbPath, "chats", "--limit", "5"}, "unread"},
 		{"contacts export", []string{"--db", dbPath, "--json", "contacts", "export"}, `"display_name": "Alice Contact"`},
 		{"chats unread", []string{"--db", dbPath, "chats", "--unread", "--limit", "5"}, "Launch Group"},
 		{"unread", []string{"--db", dbPath, "unread", "--limit", "5"}, "Launch Group"},
@@ -129,7 +129,9 @@ func TestSearchTextWrapsSnippetRows(t *testing.T) {
 	}
 	got := stdout.String()
 	assertLinesWithinDisplayWidth(t, got, 80)
-	if !hasContinuationLine(got, "synthetic launch text") {
+	// Search snippets clamp to two lines (docs/rendering.md); the second
+	// line is an indented continuation under the text column.
+	if !hasContinuationLine(got, "launch went") {
 		t.Fatalf("search snippet did not wrap onto an indented continuation line:\n%s", got)
 	}
 }
@@ -708,7 +710,7 @@ func TestStatusAndDoctorHumanOutputUsesCrawlkitRender(t *testing.T) {
 	}
 	statusHuman := stdout.String()
 	conformance.AssertHumanOutput(t, statusHuman)
-	for _, want := range []string{"Status: ok", "Unread messages: 0", "Recent log:", "Last run: open failed", "Most recent error: open unknown_short_ref"} {
+	for _, want := range []string{"Status: ok", "Unread messages: 0", "Recent log:", "Last run: open failed", "Most recent error: open unknown short ref"} {
 		if !strings.Contains(statusHuman, want) {
 			t.Fatalf("status human missing %q:\n%s", want, statusHuman)
 		}
@@ -840,7 +842,7 @@ func TestSearchHonorsLimitAboveOldCap(t *testing.T) {
 	if err := Run(ctx, []string{"--db", dbPath, "search", "--limit", fmt.Sprint(limit), "needle"}, &stdout, &stderr); err != nil {
 		t.Fatalf("search text error = %v stderr=%s", err, stderr.String())
 	}
-	if got := strings.Count(stdout.String(), "wacrawl:msg/limit-"); got != limit {
+	if got := strings.Count(stdout.String(), "needle limit message "); got != limit {
 		t.Fatalf("search text rows = %d, want %d\n%s", got, limit, stdout.String())
 	}
 	if !strings.Contains(stdout.String(), fmt.Sprintf("showing %d of %d matches", limit, total)) {
@@ -1617,19 +1619,6 @@ func TestOpenAcceptsShortRefAndSearchJSONCarriesShortRef(t *testing.T) {
 	}
 
 	var stdout, stderr bytes.Buffer
-	if err := Run(ctx, []string{"--db", dbPath, "search", "shortref"}, &stdout, &stderr); err != nil {
-		t.Fatalf("search error = %v stderr=%s", err, stderr.String())
-	}
-	if !strings.Contains(stdout.String(), "full ref: wacrawl:msg/short-target") {
-		t.Fatalf("human search should print canonical full ref:\n%s", stdout.String())
-	}
-	alias := searchOutputRef(stdout.String())
-	if alias == "" || strings.HasPrefix(alias, "wacrawl:") {
-		t.Fatalf("human search ref should be a short alias, got %q in:\n%s", alias, stdout.String())
-	}
-
-	stdout.Reset()
-	stderr.Reset()
 	if err := Run(ctx, []string{"--db", dbPath, "--json", "search", "shortref"}, &stdout, &stderr); err != nil {
 		t.Fatalf("json search error = %v stderr=%s", err, stderr.String())
 	}
@@ -1638,8 +1627,25 @@ func TestOpenAcceptsShortRefAndSearchJSONCarriesShortRef(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout.String(), err)
 	}
-	if len(search.Results) != 1 || search.Results[0].Ref != "wacrawl:msg/short-target" || search.Results[0].Alias != alias {
+	if len(search.Results) != 1 || search.Results[0].Ref != "wacrawl:msg/short-target" {
 		t.Fatalf("search refs = %#v", search.Results)
+	}
+	alias := search.Results[0].Alias
+	if alias == "" || strings.HasPrefix(alias, "wacrawl:") {
+		t.Fatalf("search should carry a short alias, got %q", alias)
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", dbPath, "search", "shortref"}, &stdout, &stderr); err != nil {
+		t.Fatalf("human search error = %v stderr=%s", err, stderr.String())
+	}
+	// Human rows show the short alias; full refs stay in JSON (docs/rendering.md).
+	if !strings.Contains(stdout.String(), alias) {
+		t.Fatalf("human search row should show the short alias %q:\n%s", alias, stdout.String())
+	}
+	if strings.Contains(stdout.String(), "wacrawl:msg/short-target") {
+		t.Fatalf("human search should keep full refs in JSON only:\n%s", stdout.String())
 	}
 
 	stdout.Reset()
@@ -1834,15 +1840,6 @@ func TestStatusAndDoctorReadLogTail(t *testing.T) {
 	if doctor.Error == nil || doctor.Error.Event != "unknown_short_ref" || doctor.Error.Remedy == "" {
 		t.Fatalf("doctor recent error = %#v", doctor.Error)
 	}
-}
-
-func searchOutputRef(output string) string {
-	for _, line := range strings.Split(output, "\n") {
-		if value, ok := strings.CutPrefix(line, "ref: "); ok {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
 }
 
 func TestOpenRejectsForeignRefWithContractError(t *testing.T) {

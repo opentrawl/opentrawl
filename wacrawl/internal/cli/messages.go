@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -17,9 +18,12 @@ type messageListOutput struct {
 	Limit     int             `json:"limit"`
 	Truncated bool            `json:"truncated"`
 	Messages  []store.Message `json:"results"`
+	// aliases maps each full ref to its short alias for human rows; it is
+	// never serialized.
+	aliases map[string]string
 }
 
-func newMessageListOutput(query string, limit int, messages []store.Message) messageListOutput {
+func newMessageListOutput(query string, limit int, messages []store.Message, aliases map[string]string) messageListOutput {
 	if messages == nil {
 		messages = []store.Message{}
 	}
@@ -29,6 +33,7 @@ func newMessageListOutput(query string, limit int, messages []store.Message) mes
 		Limit:     limit,
 		Truncated: limit > 0 && len(messages) == limit,
 		Messages:  messages,
+		aliases:   aliases,
 	}
 }
 
@@ -55,7 +60,11 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return a.print(newMessageListOutput("", resolved.Limit, msgs))
+		aliases, err := searchAliases(ctx, st, msgs)
+		if err != nil {
+			return err
+		}
+		return a.print(newMessageListOutput("", resolved.Limit, msgs, aliases))
 	})
 }
 
@@ -124,16 +133,31 @@ func (f messageFlags) resolve() (store.MessageFilter, error) {
 	return out, nil
 }
 
-func (a *app) printMessages(messages []store.Message, truncated bool, limit int) error {
+func (a *app) printMessages(value messageListOutput) error {
+	hints := []string{"Open: wacrawl open REF"}
+	if value.Truncated {
+		hints = append(hints, "Narrow: wacrawl messages --limit N --after DATE --before DATE --chat JID")
+	}
+	return render.WriteList(a.stdout, render.List{
+		Heading:   fmt.Sprintf("Messages: showing %d, newest first.", value.Returned),
+		Hints:     hints,
+		Items:     messageListItems(value.Messages, value.aliases),
+		ClampText: 0,
+		Empty:     "No messages.",
+	})
+}
+
+func messageListItems(messages []store.Message, aliases map[string]string) []render.ListItem {
+	items := make([]render.ListItem, 0, len(messages))
 	for _, m := range messages {
-		body := firstNonEmpty(messageSnippet(m), messageText(m))
-		if _, err := fmt.Fprintf(a.stdout, "[%s] %s / %s / %s\n%s\n\n", formatTime(m.Timestamp), m.ChatName, firstNonEmpty(m.SenderName, m.SenderJID), m.MessageID, body); err != nil {
-			return err
-		}
+		full := messageRef(m)
+		items = append(items, render.ListItem{
+			Time:  m.Timestamp,
+			Who:   outputField(messageWho(m)),
+			Where: outputField(messageWhere(m)),
+			Ref:   displayRef(full, aliases[full]),
+			Text:  messageText(m),
+		})
 	}
-	if truncated {
-		_, err := fmt.Fprintf(a.stdout, "showing %d of possibly more; narrow with --limit, --after, --before, or --chat\n", limit)
-		return err
-	}
-	return nil
+	return items
 }
