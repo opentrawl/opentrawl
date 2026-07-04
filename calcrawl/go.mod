@@ -17,6 +17,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/mattn/go-sqlite3 v1.14.47 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	modernc.org/libc v1.73.4 // indirect

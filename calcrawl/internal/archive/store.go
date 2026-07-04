@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
+	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/crawlkit/store"
@@ -31,12 +31,15 @@ type Store struct {
 	path  string
 }
 
+// DefaultPaths is the one archive path layout, from crawlkit/config. The base
+// dir stays ~/.calcrawl (the layout shipped before config adoption).
+func DefaultPaths() config.Paths {
+	paths, _ := config.App{Name: "calcrawl", BaseDir: "~/.calcrawl"}.DefaultPaths()
+	return paths
+}
+
 func DefaultPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return filepath.Join(".calcrawl", "calcrawl.db")
-	}
-	return filepath.Join(home, ".calcrawl", "calcrawl.db")
+	return DefaultPaths().DBPath
 }
 
 func Exists(path string) bool {

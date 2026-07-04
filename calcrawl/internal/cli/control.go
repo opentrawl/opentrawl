@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"path/filepath"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
@@ -35,10 +34,11 @@ func controlManifest() manifestOutput {
 	m := control.NewManifest(archive.AppID, archive.DisplayName, "calcrawl")
 	m.Description = "Local-first Apple Calendar archive crawler."
 	m.Branding = control.Branding{SymbolName: "calendar", AccentColor: "#ff9500", BundleIdentifier: "com.apple.iCal"}
+	paths := archive.DefaultPaths()
 	m.Paths = control.Paths{
-		DefaultDatabase: archive.DefaultPath(),
-		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
-		DefaultLogs:     filepath.Join(defaultBaseDir(), "logs"),
+		DefaultDatabase: paths.DBPath,
+		DefaultCache:    paths.CacheDir,
+		DefaultLogs:     paths.LogDir,
 	}
 	m.Capabilities = []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "who", "short_refs", "verbose_logs"}
 	m.Privacy = control.Privacy{
