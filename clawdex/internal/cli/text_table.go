@@ -2,16 +2,14 @@ package cli
 
 import (
 	"io"
-	"os"
-	"strconv"
 	"strings"
-	"unicode"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
 const (
-	defaultTextTableWidth = 100
-	minTextTableWidth     = 72
-	textTableGap          = "  "
+	minTextTableWidth = 72
+	textTableGap      = "  "
 )
 
 type textColumn struct {
@@ -21,14 +19,10 @@ type textColumn struct {
 }
 
 func textOutputWidth(w io.Writer) int {
-	raw := strings.TrimSpace(os.Getenv("COLUMNS"))
-	if raw == "" {
-		return defaultTextTableWidth
-	}
-	width, err := strconv.Atoi(raw)
-	if err != nil {
-		return defaultTextTableWidth
-	}
+	return normalizeTextTableWidth(render.OutputWidth(w))
+}
+
+func normalizeTextTableWidth(width int) int {
 	if width < minTextTableWidth {
 		return minTextTableWidth
 	}
@@ -99,52 +93,7 @@ func wrapCell(value string, width int) []string {
 	if value == "" {
 		return []string{"-"}
 	}
-	return wrapLine(value, width)
-}
-
-func wrapLine(line string, width int) []string {
-	if line == "" || width <= 0 {
-		return []string{line}
-	}
-	var out []string
-	for stringWidth(line) > width {
-		partEnd, nextStart := splitLineAtWidth(line, width)
-		part := strings.TrimRightFunc(line[:partEnd], unicode.IsSpace)
-		if part == "" {
-			part = line[:nextStart]
-		}
-		out = append(out, part)
-		line = strings.TrimLeftFunc(line[nextStart:], unicode.IsSpace)
-		if line == "" {
-			return out
-		}
-	}
-	return append(out, line)
-}
-
-func splitLineAtWidth(line string, width int) (partEnd int, nextStart int) {
-	cellWidth := 0
-	lastSpaceStart := -1
-	lastSpaceEnd := -1
-	for index, r := range line {
-		runeWidth := runeDisplayWidth(r)
-		if unicode.IsSpace(r) {
-			lastSpaceStart = index
-			lastSpaceEnd = index + len(string(r))
-		}
-		if cellWidth+runeWidth > width {
-			if lastSpaceStart > 0 {
-				return lastSpaceStart, lastSpaceEnd
-			}
-			if index == 0 {
-				end := index + len(string(r))
-				return end, end
-			}
-			return index, index
-		}
-		cellWidth += runeWidth
-	}
-	return len(line), len(line)
+	return render.Wrap(value, width)
 }
 
 func truncateCell(value string, width int) string {
@@ -152,29 +101,11 @@ func truncateCell(value string, width int) string {
 	if value == "" {
 		return "-"
 	}
-	if width <= 0 || stringWidth(value) <= width {
-		return value
-	}
-	tail := "..."
-	limit := width - len(tail)
-	if limit <= 0 {
-		return strings.Repeat(".", width)
-	}
-	var b strings.Builder
-	cellWidth := 0
-	for _, r := range value {
-		runeWidth := runeDisplayWidth(r)
-		if cellWidth+runeWidth > limit {
-			break
-		}
-		b.WriteRune(r)
-		cellWidth += runeWidth
-	}
-	return strings.TrimRightFunc(b.String(), unicode.IsSpace) + tail
+	return render.Truncate(value, width)
 }
 
 func padCell(value string, width int) string {
-	cellWidth := stringWidth(value)
+	cellWidth := render.DisplayWidth(value)
 	if cellWidth >= width {
 		return value
 	}
@@ -199,22 +130,4 @@ func textColumnWidth(totalWidth int, fixedColumns ...int) int {
 		return 12
 	}
 	return width
-}
-
-func stringWidth(value string) int {
-	width := 0
-	for _, r := range value {
-		width += runeDisplayWidth(r)
-	}
-	return width
-}
-
-func runeDisplayWidth(r rune) int {
-	if r == '\t' {
-		return 4
-	}
-	if unicode.IsControl(r) {
-		return 0
-	}
-	return 1
 }
