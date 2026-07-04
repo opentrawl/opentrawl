@@ -104,6 +104,19 @@ written for end users:
   this file before it is committed — deterministic-vs-model boundary,
   boring/lean, output rules. Human review is for taste, not for
   catching principle violations.
+- Raw checks cover BOTH sides of every model call. Always read the
+  actual payload sent to the model (the exact bytes after selection,
+  truncation, and formatting) and the actual final artifact, sampled
+  against raw source — not just the pipeline's schema validation.
+  Learned the hard way: an extractor ran 301 model calls over emails
+  whose bodies were empty or cut at 1,500 chars; schema checks and a
+  benchmark score both passed while the output was garbage. Reading
+  one input batch would have caught it before the first commit.
+- Deficient input is an alarm, not a row. When a model receives input
+  with no extractable substance (empty body, truncated past the
+  signal), it must say so and the shell must surface the rate loudly
+  (and abort when it dominates) — never silently emit hollow output
+  that looks like data.
 
 ## Upstream tool drift
 
