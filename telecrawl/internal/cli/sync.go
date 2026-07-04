@@ -63,25 +63,28 @@ func (r *runtime) runImport(command string, args []string) error {
 			return err
 		}
 		writeElapsed := time.Since(writeStarted)
-		r.logImportTimings(command, result.Stats, importElapsed, writeElapsed, *fetchMedia, *chat)
+		r.logImportTimings(result.Stats, importElapsed, writeElapsed, *fetchMedia, *chat)
 		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
 		return r.print(result.Stats)
 	})
 }
 
-func (r *runtime) logImportTimings(command string, stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
+// logImportTimings always logs under the canonical "sync" event, never the
+// alias the user typed (import/sync/wiretap). One operation, one event name, so
+// log analysis and the verbose_logs stream stay stable across aliases.
+func (r *runtime) logImportTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
 	totalElapsed := stats.FinishedAt.Sub(stats.StartedAt)
 	if totalElapsed <= 0 {
 		totalElapsed = importElapsed + writeElapsed
 	}
-	_ = r.logInfo(command+"_done", strings.Join([]string{
+	_ = r.logInfo("sync_done", strings.Join([]string{
 		"messages=" + strconv.Itoa(stats.Messages),
 		"chats=" + strconv.Itoa(stats.Chats),
 		"media_messages=" + strconv.Itoa(stats.MediaMessages),
 		"media_files=" + strconv.Itoa(stats.MediaFiles),
 		"elapsed_ms=" + elapsedMS(totalElapsed),
 	}, " "))
-	_ = r.logDebug(command+"_phase", strings.Join([]string{
+	_ = r.logDebug("sync_phase", strings.Join([]string{
 		"source=" + logQuote("telegram"),
 		"import_ms=" + elapsedMS(importElapsed),
 		"write_ms=" + elapsedMS(writeElapsed),

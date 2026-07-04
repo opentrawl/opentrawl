@@ -99,10 +99,10 @@ func TestImportVerboseLogsPhaseTimings(t *testing.T) {
 	}
 	logText := readTestLog(t)
 	for _, want := range []string{
-		"import_done: messages=1",
+		"sync_done: messages=1",
 		"chats=1",
 		"media_messages=1",
-		"import_phase: source=telegram",
+		"sync_phase: source=telegram",
 		"import_ms=",
 		"write_ms=",
 	} {
@@ -110,8 +110,34 @@ func TestImportVerboseLogsPhaseTimings(t *testing.T) {
 			t.Fatalf("import log missing %q:\n%s", want, logText)
 		}
 	}
-	if !strings.Contains(stderr.String(), "import_done: messages=1") || !strings.Contains(stderr.String(), "import_phase: source=telegram") {
-		t.Fatalf("-vv stderr missing import log lines:\n%s", stderr.String())
+	if !strings.Contains(stderr.String(), "sync_done: messages=1") || !strings.Contains(stderr.String(), "sync_phase: source=telegram") {
+		t.Fatalf("-vv stderr missing sync log lines:\n%s", stderr.String())
+	}
+}
+
+// The import/sync/wiretap aliases are one operation, so the completion event is
+// always sync_done regardless of which alias the user typed.
+func TestImportAliasesLogCanonicalSyncEvent(t *testing.T) {
+	for _, alias := range []string{"import", "sync", "wiretap"} {
+		t.Run(alias, func(t *testing.T) {
+			clearTestLog(t)
+			source := makePostboxFixture(t)
+			db := filepath.Join(t.TempDir(), "telecrawl.db")
+
+			var stdout, stderr bytes.Buffer
+			if err := Run(context.Background(), []string{"--db", db, "--json", alias, "--path", source, "--dialogs-limit", "1", "--messages-limit", "1"}, &stdout, &stderr); err != nil {
+				t.Fatalf("%s error = %v stderr=%s", alias, err, stderr.String())
+			}
+			logText := readTestLog(t)
+			if !strings.Contains(logText, "sync_done: messages=1") {
+				t.Fatalf("%s did not log canonical sync_done:\n%s", alias, logText)
+			}
+			for _, aliased := range []string{"import_done", "wiretap_done"} {
+				if strings.Contains(logText, aliased) {
+					t.Fatalf("%s leaked alias event %q:\n%s", alias, aliased, logText)
+				}
+			}
+		})
 	}
 }
 
