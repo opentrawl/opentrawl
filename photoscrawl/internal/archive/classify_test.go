@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -679,15 +680,20 @@ type recordedClassifyLogEvent struct {
 }
 
 type recordingClassifyLogSink struct {
+	mu     sync.Mutex
 	events []recordedClassifyLogEvent
 }
 
 func (sink *recordingClassifyLogSink) Info(event, message string) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
 	sink.events = append(sink.events, recordedClassifyLogEvent{event: event, message: message})
 	return nil
 }
 
 func (sink *recordingClassifyLogSink) Warn(event, message string) error {
+	sink.mu.Lock()
+	defer sink.mu.Unlock()
 	sink.events = append(sink.events, recordedClassifyLogEvent{event: event, message: message})
 	return nil
 }
@@ -1481,5 +1487,95 @@ func TestCaptureTimeUsesAssetTimezone(t *testing.T) {
 	}
 	if displayTimezoneName("GMT-0700") != "GMT-0700" || displayTimezoneName("garbage") != "" {
 		t.Fatal("displayTimezoneName should accept GMT offsets and reject garbage")
+	}
+}
+
+// Exhausted quota must never convert queue items into failures: every 429'd
+// asset goes back to metadata_classified, and a run of consecutive refusals
+// stops the batch instead of churning through it.
+func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "quota exhausted", http.StatusTooManyRequests)
+	}))
+	defer restoreTransport()
+
+	assets := make([]photos.Asset, 0, 12)
+	for i := 0; i < 12; i++ {
+		imagePath := filepath.Join(t.TempDir(), fmt.Sprintf("fixture-%d.jpeg", i))
+		if err := os.WriteFile(imagePath, []byte("fixture image bytes"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		assets = append(assets, photos.Asset{
+			LocalIdentifier: fmt.Sprintf("quota-asset-%d", i),
+			MediaType:       "image",
+			MediaSubtypes:   "0",
+			CreationDate:    "2026-05-27T12:00:00Z",
+			Width:           100,
+			Height:          80,
+			Resources: []photos.Resource{{
+				Type:             "photo",
+				UTI:              "public.jpeg",
+				OriginalFilename: fmt.Sprintf("fixture-%d.jpeg", i),
+				LocalPath:        imagePath,
+				Availability:     "local",
+				AvailableLocally: true,
+			}},
+		})
+	}
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets:              assets,
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := Classify(ctx, paths, ClassifyOptions{
+		All:      true,
+		Model:    "fixture-vision",
+		ModelURL: "http://fixture.test/api/generate",
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
+		LogSink:  &recordingClassifyLogSink{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.RateLimitAborted {
+		t.Fatalf("expected rate limit abort, result = %+v", result)
+	}
+	if result.RateLimitRequeued < quotaAbortThreshold {
+		t.Fatalf("rate limit requeued = %d, want >= %d", result.RateLimitRequeued, quotaAbortThreshold)
+	}
+	if result.ContentFailedModel != 0 || result.ContentClassificationFailures != 0 {
+		t.Fatalf("quota refusals recorded as failures: %+v", result)
+	}
+
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var failed, queued int
+	if err := db.DB().QueryRowContext(ctx, `select count(*) from classification_queue where state = 'content_failed'`).Scan(&failed); err != nil {
+		t.Fatal(err)
+	}
+	// Items the abort never reached keep their pre-run state; 429'd items
+	// return to metadata_classified. Nothing may land in a failed state.
+	if err := db.DB().QueryRowContext(ctx, `select count(*) from classification_queue where state in ('pending', 'metadata_classified')`).Scan(&queued); err != nil {
+		t.Fatal(err)
+	}
+	if failed != 0 || queued != 12 {
+		t.Fatalf("queue after quota exhaustion: failed=%d retryable=%d, want failed=0 retryable=12", failed, queued)
 	}
 }

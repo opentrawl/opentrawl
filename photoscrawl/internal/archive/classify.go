@@ -69,6 +69,8 @@ type ClassifyResult struct {
 	ModelConcurrencyPeak           int    `json:"model_concurrency_peak,omitempty"`
 	ModelConcurrencyFinal          int    `json:"model_concurrency_final,omitempty"`
 	ModelRateLimitEvents           int    `json:"model_rate_limit_events"`
+	RateLimitRequeued              int    `json:"rate_limit_requeued,omitempty"`
+	RateLimitAborted               bool   `json:"rate_limit_aborted,omitempty"`
 	ModelTransientErrorEvents      int    `json:"model_transient_error_events"`
 	BytesDownloaded                int64  `json:"bytes_downloaded"`
 }
