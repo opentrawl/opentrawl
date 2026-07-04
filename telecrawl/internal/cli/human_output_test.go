@@ -32,7 +32,7 @@ func TestHumanRenderersUseSharedComponents(t *testing.T) {
 				"",
 				"last              kind   unread  messages  chat id  name",
 				"2026-07-02 14:03  group       0      500+  -100200  Project room",
-				"2026-07-02 14:02  chat        1         2  100      Ada Example",
+				"2026-07-02 14:02  user        1         2  100      Ada Example",
 			),
 		},
 		{
@@ -355,7 +355,7 @@ func seedHumanOutputArchive(t *testing.T) (string, map[string]string) {
 		{JID: "300", FullName: "Bob Example"},
 	}
 	chats := []store.Chat{
-		{JID: "100", Kind: "chat", Name: "Ada Example", LastMessageAt: now.Add(2 * time.Minute), UnreadCount: 1, MessageCount: 2, FolderID: "1"},
+		{JID: "100", Kind: "user", Name: "Ada Example", LastMessageAt: now.Add(2 * time.Minute), UnreadCount: 1, MessageCount: 2, FolderID: "1"},
 		{JID: "-100200", Kind: "group", Name: "Project room", LastMessageAt: now.Add(3 * time.Minute), MessageCount: telegramdesktop.DefaultMessagesLimit, FolderID: "1", Forum: true},
 	}
 	folders := []store.Folder{{ID: "1", Title: "Work"}}

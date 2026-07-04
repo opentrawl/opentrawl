@@ -129,7 +129,7 @@ func TestStoreImportResultPersistsTelegramUserContactsForExport(t *testing.T) {
 		}},
 		Chats: []store.Chat{{
 			JID:           "165355235",
-			Kind:          "chat",
+			Kind:          "user",
 			Name:          "Jef Hellemans",
 			Username:      "JefHellemans",
 			LastMessageAt: now,
@@ -237,8 +237,8 @@ func accountScopedImportResult(label string) telegramdesktop.ImportResult {
 			{JID: "999", FullName: "Unrelated"},
 		},
 		Chats: []store.Chat{
-			{JID: "111", Kind: "chat", Name: "account a", LastMessageAt: now, MessageCount: 1},
-			{JID: "222", Kind: "chat", Name: "account b", LastMessageAt: now, MessageCount: 1},
+			{JID: "111", Kind: "user", Name: "account a", LastMessageAt: now, MessageCount: 1},
+			{JID: "222", Kind: "user", Name: "account b", LastMessageAt: now, MessageCount: 1},
 		},
 		Messages: []store.Message{
 			{SourcePK: 1, ChatJID: "111", ChatName: "account a", MessageID: "0:1", SenderJID: "10", Timestamp: now, Text: label + " a"},

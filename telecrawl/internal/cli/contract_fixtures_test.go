@@ -27,7 +27,7 @@ func seedArchiveWithMessageTime(t *testing.T, messages int, finishedAt, messageT
 	var chats []store.Chat
 	var rows []store.Message
 	if messages > 0 {
-		chats = []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: messageTime, MessageCount: messages}}
+		chats = []store.Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: messageTime, MessageCount: messages}}
 		for i := 0; i < messages; i++ {
 			rows = append(rows, store.Message{
 				SourcePK:   int64(i + 1),
@@ -57,7 +57,7 @@ func seedDirectSenderArchive(t *testing.T) string {
 	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	contacts := []store.Contact{{JID: "300", FullName: "Direct Person"}}
-	chats := []store.Chat{{JID: "300", Kind: "chat", Name: "Direct Person", LastMessageAt: now, MessageCount: 1}}
+	chats := []store.Chat{{JID: "300", Kind: "user", Name: "Direct Person", LastMessageAt: now, MessageCount: 1}}
 	messages := []store.Message{{
 		SourcePK:  1,
 		ChatJID:   "300",
@@ -85,7 +85,7 @@ func seedSearchArchive(t *testing.T, count int) string {
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
-	chats := []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now, MessageCount: count}}
+	chats := []store.Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now, MessageCount: count}}
 	messages := make([]store.Message, 0, count)
 	for i := 0; i < count; i++ {
 		messages = append(messages, store.Message{
@@ -121,8 +121,8 @@ func seedWhoSearchArchive(t *testing.T) string {
 		{JID: "401", FullName: "JORDAN EXAMPLE", Username: "jordan_upper"},
 	}
 	chats := []store.Chat{
-		{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now.Add(4 * time.Minute), MessageCount: 4},
-		{JID: "300", Kind: "chat", Name: "Recipient Person", LastMessageAt: now.Add(6 * time.Minute), MessageCount: 2},
+		{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now.Add(4 * time.Minute), MessageCount: 4},
+		{JID: "300", Kind: "user", Name: "Recipient Person", LastMessageAt: now.Add(6 * time.Minute), MessageCount: 2},
 	}
 	messages := []store.Message{
 		{SourcePK: 1, ChatJID: "100", ChatName: "example chat", MessageID: "0:1", SenderJID: "200", SenderName: "Alice Example", Timestamp: now, Text: "needle from alice"},
@@ -186,7 +186,7 @@ func seedSearchWhoArchive(t *testing.T) string {
 		{JID: "87092564", FirstName: "Ada"},
 		{JID: "87092565", FirstName: "+15551234567"},
 	}
-	chats := []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: now, MessageCount: 3}}
+	chats := []store.Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now, MessageCount: 3}}
 	messages := []store.Message{
 		{SourcePK: 1, ChatJID: "100", ChatName: "example chat", MessageID: "0:1", SenderJID: "87092563", SenderName: "87092563", Timestamp: now, Text: "username-fallback needle"},
 		{SourcePK: 2, ChatJID: "100", ChatName: "example chat", MessageID: "0:2", SenderJID: "87092564", SenderName: "", Timestamp: now.Add(time.Minute), Text: "firstname-fallback needle"},

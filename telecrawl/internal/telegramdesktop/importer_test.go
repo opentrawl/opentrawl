@@ -76,7 +76,7 @@ func TestGroupParticipantsFromMessagesUsesKnownGroupAuthors(t *testing.T) {
 	participants := groupParticipantsFromMessages(
 		[]store.Chat{
 			{JID: "100", Kind: "group", Name: "team room"},
-			{JID: "200", Kind: "chat", Name: "direct chat"},
+			{JID: "200", Kind: "user", Name: "direct chat"},
 		},
 		[]store.Contact{{JID: "600", FullName: "Alice Example", FirstName: "Alice"}},
 		[]store.Message{
