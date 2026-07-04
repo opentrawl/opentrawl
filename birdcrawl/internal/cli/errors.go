@@ -41,6 +41,11 @@ func usageErr(err error) error {
 	return &cliError{code: 2, err: err, event: "usage_error"}
 }
 
+func isUsageError(err error) bool {
+	var codeErr *cliError
+	return errors.As(err, &codeErr) && codeErr.code == 2
+}
+
 func (r *runtime) contractError(code, message, remedy string) error {
 	body := contractErrorBody{Code: code, Message: message, Remedy: remedy}
 	err := newRemediedError(message, remedy)

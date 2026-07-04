@@ -276,6 +276,16 @@ func TestStatusReportsSpendAndAuthFields(t *testing.T) {
 	if envelope.Spend.SpentUSD != "1.25" || envelope.Spend.MonthlyBudgetUSD != "10.00" {
 		t.Fatalf("spend = %#v", envelope.Spend)
 	}
+	if envelope.Spend.LiveSyncPaused {
+		t.Fatalf("live_sync_paused = true, want false")
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := raw["log"]; ok {
+		t.Fatalf("status json still has log: %s", stdout.String())
+	}
 }
 
 func TestDoctorRunsNetworkedUserProbe(t *testing.T) {

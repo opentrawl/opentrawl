@@ -2,7 +2,8 @@ package cli
 
 import (
 	"io"
-	"strings"
+
+	"github.com/openclaw/crawlkit/usage"
 )
 
 func hasHelpFlag(args []string) bool {
@@ -19,27 +20,7 @@ func hasHelpFlag(args []string) bool {
 }
 
 func printUsage(w io.Writer) {
-	_, _ = io.WriteString(w, `birdcrawl: local X archive crawler
-
-usage:
-  birdcrawl metadata [--json]
-  birdcrawl status [--json]
-  birdcrawl import archive PATH [--json]
-  birdcrawl sync [--json]
-  birdcrawl search QUERY [--limit N] [--after RFC3339] [--before RFC3339] [--json]
-  birdcrawl open birdcrawl:tweet/ID [--json]
-  birdcrawl stats [--window 30d] [--by likes|retweets|replies] [--limit N] [--json]
-  birdcrawl doctor [--json]
-  birdcrawl version
-
-global flags:
-  --db PATH       use a specific archive database
-  --config PATH   use a specific crawler config
-  --json          write JSON
-  -v, -vv         write log lines to stderr
-
-Diagnostics: run with -v, or read ~/.birdcrawl/birdcrawl/logs/current.log
-`)
+	_, _ = io.WriteString(w, birdUsageDoc().Render())
 }
 
 func printCommandUsage(w io.Writer, args []string) {
@@ -55,6 +36,14 @@ func commandUsage(args []string) string {
 		return "usage: birdcrawl metadata [--json]\n\nPrints the crawler manifest and contract capabilities.\n"
 	case "status":
 		return "usage: birdcrawl status [--json]\n\nReads archive counts and coverage without syncing.\n"
+	case "tweets":
+		return "usage: birdcrawl tweets [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows your tweets and replies, newest first.\n"
+	case "bookmarks":
+		return "usage: birdcrawl bookmarks [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows tweets you bookmarked, ordered by tweet date; X does not record when you bookmarked them.\n"
+	case "likes":
+		return "usage: birdcrawl likes [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows tweets you liked, newest first.\n"
+	case "mentions":
+		return "usage: birdcrawl mentions [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows replies and mentions you received, newest first.\n"
 	case "import":
 		return "usage: birdcrawl import archive PATH [--json]\n\nImports tweets.js and like.js from an extracted or zipped X archive dump.\n"
 	case "sync":
@@ -75,7 +64,49 @@ func commandUsage(args []string) string {
 }
 
 func topUsageText() string {
-	var out strings.Builder
-	printUsage(&out)
-	return out.String()
+	return birdUsageDoc().Render()
+}
+
+func birdUsageDoc() usage.Doc {
+	return usage.Doc{
+		Tool:    "birdcrawl",
+		Tagline: "your X archive: tweets, bookmarks, likes and replies",
+		Groups: []usage.Group{
+			{Title: "Read your archive", Commands: []usage.Command{
+				{Name: "tweets", Summary: "Your tweets and the replies you sent, newest first."},
+				{Name: "bookmarks", Summary: "Tweets you bookmarked."},
+				{Name: "likes", Summary: "Tweets you liked."},
+				{Name: "mentions", Summary: "Replies and mentions you received."},
+				{Name: "search", Summary: "Full-text search across everything archived."},
+				{Name: "open", Summary: "One tweet with its thread context."},
+				{Name: "stats", Summary: "Your top tweets by likes, retweets or replies."},
+			}},
+			{Title: "Keep it fresh", Commands: []usage.Command{
+				{Name: "sync", Summary: "Pull new activity from the X API (paid, budget-capped)."},
+				{Name: "import", Summary: "Load an X data export zip."},
+			}},
+			{Title: "Health", Commands: []usage.Command{
+				{Name: "status", Summary: "Archive counts, coverage and API spend."},
+				{Name: "doctor", Summary: "Diagnose problems; every failure has a remedy."},
+				{Name: "metadata", Summary: "Machine-readable manifest for trawl."},
+				{Name: "version", Summary: "Print the version."},
+			}},
+		},
+		Flags: []usage.Flag{
+			{Name: "--db PATH", Summary: "Archive database path."},
+			{Name: "--config PATH", Summary: "Crawler config path."},
+			{Name: "--json", Summary: "Machine-readable output."},
+			{Name: "-v, -vv", Summary: "Log to stderr."},
+		},
+		Examples: []string{
+			"birdcrawl bookmarks",
+			"birdcrawl tweets --limit 10",
+			"birdcrawl search \"boat trip\" --after 2026-01-01",
+			"birdcrawl open t7k3f",
+		},
+		Footer: []string{
+			"Run 'birdcrawl COMMAND --help' for flags and details.",
+			"Logs: ~/.birdcrawl/birdcrawl/logs/current.log",
+		},
+	}
 }

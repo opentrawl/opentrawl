@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"io"
+	"strings"
 
 	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
@@ -53,7 +54,7 @@ func (r *runtime) runDoctor(args []string) error {
 	checks = append(checks, budgetHeadroomCheck(status, cfg))
 	checks = append(checks, r.xAPIUserProbeCheck(cfg, status))
 	logTail := r.logTail()
-	return r.print(doctorOutput{Checks: checks, Log: render.DoctorLogTailOutput(logTail), logTail: logTail})
+	return r.print(doctorOutput{Checks: punctuateDoctorChecks(checks), Log: render.DoctorLogTailOutput(logTail), logTail: logTail})
 }
 
 func (r *runtime) dbIntegrityCheck(st *store.Store) doctorCheck {
@@ -102,17 +103,17 @@ func credentialsPresentCheck() doctorCheck {
 func budgetHeadroomCheck(status store.Status, cfg birdConfig) doctorCheck {
 	remaining := cfg.MonthlyBudgetMicros - status.SpendMicros
 	if remaining <= 0 {
-		return doctorCheck{ID: "monthly_budget", State: "stale", Message: "monthly X API budget is spent; live sync is paused", Remedy: "Raise monthly_budget_usd in config or wait for next month."}
+		return doctorCheck{ID: "monthly_budget", State: "warn", Message: monthlyBudgetSpentMessage(status.SpendMonth), Remedy: "Raise monthly_budget_usd in config or wait for next month."}
 	}
 	return doctorCheck{ID: "monthly_budget", State: "ok", Message: "monthly X API budget has headroom"}
 }
 
 func (r *runtime) xAPIUserProbeCheck(cfg birdConfig, status store.Status) doctorCheck {
 	if !xapi.CredentialsPresent(xapi.DefaultCredentialsPath()) {
-		return doctorCheck{ID: "x_account_reachable", State: "missing", Message: "skipped: credentials are missing (this is the one networked check)"}
+		return doctorCheck{ID: "x_account_reachable", State: "skipped", Message: "skipped: credentials are missing (this is the one networked check)"}
 	}
 	if cfg.MonthlyBudgetMicros-status.SpendMicros <= xapi.PriceUserMicros {
-		return doctorCheck{ID: "x_account_reachable", State: "missing", Message: "skipped: monthly X API budget is spent", Remedy: "Raise monthly_budget_usd in config or wait for next month."}
+		return doctorCheck{ID: "x_account_reachable", State: "skipped", Message: "skipped: monthly X API budget is spent", Remedy: "Raise monthly_budget_usd in config or wait for next month."}
 	}
 	client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 	if err != nil {
@@ -123,4 +124,22 @@ func (r *runtime) xAPIUserProbeCheck(cfg birdConfig, status store.Status) doctor
 		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "X did not accept the account probe (the one networked check)", Remedy: "Refresh the OAuth credentials and re-run birdcrawl doctor."}
 	}
 	return doctorCheck{ID: "x_account_reachable", State: "ok", Message: "X account is reachable (the one networked check)"}
+}
+
+func punctuateDoctorChecks(checks []doctorCheck) []doctorCheck {
+	for i := range checks {
+		checks[i].Message = withFullStop(checks[i].Message)
+	}
+	return checks
+}
+
+func withFullStop(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	if strings.HasSuffix(value, ".") {
+		return value
+	}
+	return value + "."
 }

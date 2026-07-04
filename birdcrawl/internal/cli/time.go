@@ -42,19 +42,12 @@ func formatDuration(value time.Duration) string {
 	return value.String()
 }
 
-func freshnessSpread(oldest, newest time.Time) string {
-	switch {
-	case oldest.IsZero() && newest.IsZero():
-		return "counts not fetched"
-	case oldest.Equal(newest):
-		return formatLocalTime(oldest)
-	default:
-		return formatLocalTime(oldest) + " to " + formatLocalTime(newest)
-	}
-}
-
-// formatLocalTime renders display timestamps in the machine's local offset,
-// matching the suite convention (telecrawl formatLocalTime); storage stays UTC.
+// formatLocalTime renders JSON timestamps in the machine's local offset;
+// human output uses formatHumanLocalTime or render.ShortLocalTime.
 func formatLocalTime(t time.Time) string {
 	return t.Local().Format(time.RFC3339)
+}
+
+func formatHumanLocalTime(t time.Time) string {
+	return t.Local().Format("2006-01-02 15:04")
 }

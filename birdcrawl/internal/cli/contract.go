@@ -28,20 +28,21 @@ type metadataEnvelope struct {
 }
 
 type statusEnvelope struct {
-	AppID     string                `json:"app_id"`
-	State     string                `json:"state"`
-	Summary   string                `json:"summary"`
-	Freshness freshnessEnvelope     `json:"freshness"`
-	Counts    []countEnvelope       `json:"counts"`
-	Spend     spendEnvelope         `json:"spend"`
-	Auth      authEnvelope          `json:"auth"`
-	Log       *render.DoctorLogTail `json:"log,omitempty"`
-	logTail   render.LogTail        `json:"-"`
+	AppID        string            `json:"app_id"`
+	State        string            `json:"state"`
+	Summary      string            `json:"summary"`
+	Freshness    freshnessEnvelope `json:"freshness"`
+	Counts       []countEnvelope   `json:"counts"`
+	Spend        spendEnvelope     `json:"spend"`
+	Auth         authEnvelope      `json:"auth"`
+	summaryHuman string            `json:"-"`
 }
 
 type freshnessEnvelope struct {
-	LastSync   string `json:"last_sync,omitempty"`
-	LastImport string `json:"last_import,omitempty"`
+	LastSync       string    `json:"last_sync,omitempty"`
+	LastImport     string    `json:"last_import,omitempty"`
+	lastSyncTime   time.Time `json:"-"`
+	lastImportTime time.Time `json:"-"`
 }
 
 type countEnvelope struct {
@@ -61,6 +62,7 @@ type spendEnvelope struct {
 	SpentUSD         string `json:"spent_usd"`
 	MonthlyBudgetUSD string `json:"monthly_budget_usd"`
 	RemainingUSD     string `json:"remaining_usd"`
+	LiveSyncPaused   bool   `json:"live_sync_paused,omitempty"`
 }
 
 type errorEnvelope struct {
@@ -88,18 +90,48 @@ type doctorCheck struct {
 }
 
 type searchEnvelope struct {
-	Query        string         `json:"query"`
-	Results      []searchResult `json:"results"`
-	TotalMatches int            `json:"total_matches"`
-	Truncated    bool           `json:"truncated"`
+	Query         string         `json:"query"`
+	Results       []searchResult `json:"results"`
+	TotalMatches  int            `json:"total_matches"`
+	Truncated     bool           `json:"truncated"`
+	Limit         int            `json:"-"`
+	ownerAuthorID string         `json:"-"`
 }
 
 type searchResult struct {
-	Ref     string `json:"ref"`
-	Time    string `json:"time"`
-	Who     string `json:"who"`
-	Where   string `json:"where"`
-	Snippet string `json:"snippet"`
+	Ref               string    `json:"ref"`
+	ShortRef          string    `json:"short_ref"`
+	Time              string    `json:"time"`
+	Who               string    `json:"who"`
+	Where             string    `json:"where,omitempty"`
+	Snippet           string    `json:"snippet"`
+	timeValue         time.Time `json:"-"`
+	rawWho            string    `json:"-"`
+	authorID          string    `json:"-"`
+	inReplyTo         string    `json:"-"`
+	inReplyToAuthorID string    `json:"-"`
+}
+
+type listEnvelope struct {
+	Kind          string       `json:"kind"`
+	Results       []listResult `json:"results"`
+	Total         int          `json:"total"`
+	Truncated     bool         `json:"truncated"`
+	Limit         int          `json:"-"`
+	ownerAuthorID string       `json:"-"`
+}
+
+type listResult struct {
+	Ref               string    `json:"ref"`
+	ShortRef          string    `json:"short_ref"`
+	Time              string    `json:"time"`
+	Who               string    `json:"who"`
+	InReplyTo         string    `json:"in_reply_to,omitempty"`
+	Text              string    `json:"text"`
+	timeValue         time.Time `json:"-"`
+	rawWho            string    `json:"-"`
+	authorID          string    `json:"-"`
+	inReplyToAuthorID string    `json:"-"`
 }
 
 type openEnvelope struct {
@@ -109,21 +141,29 @@ type openEnvelope struct {
 	Replies            []openTweet `json:"replies"`
 	AncestorsTruncated bool        `json:"ancestors_truncated"`
 	RepliesTruncated   bool        `json:"replies_truncated"`
+	ownerAuthorID      string      `json:"-"`
 }
 
 type openTweet struct {
-	Ref           string `json:"ref"`
-	Time          string `json:"time,omitempty"`
-	Who           string `json:"who,omitempty"`
-	Text          string `json:"text"`
-	InReplyTo     string `json:"in_reply_to,omitempty"`
-	LikeCount     int64  `json:"like_count,omitempty"`
-	RetweetCount  int64  `json:"retweet_count,omitempty"`
-	ReplyCount    int64  `json:"reply_count,omitempty"`
-	CountsAsOf    string `json:"counts_as_of,omitempty"`
-	Unavailable   bool   `json:"unavailable,omitempty"`
-	Conversation  string `json:"conversation_id,omitempty"`
-	QuotedTweetID string `json:"quoted_tweet_id,omitempty"`
+	Ref                string    `json:"ref"`
+	Time               string    `json:"time,omitempty"`
+	Who                string    `json:"who,omitempty"`
+	Text               string    `json:"text"`
+	InReplyTo          string    `json:"in_reply_to,omitempty"`
+	LikeCount          int64     `json:"like_count,omitempty"`
+	RetweetCount       int64     `json:"retweet_count,omitempty"`
+	ReplyCount         int64     `json:"reply_count,omitempty"`
+	CountsAsOf         string    `json:"counts_as_of,omitempty"`
+	Note               string    `json:"note,omitempty"`
+	Unavailable        bool      `json:"unavailable,omitempty"`
+	Conversation       string    `json:"conversation_id,omitempty"`
+	QuotedTweetID      string    `json:"quoted_tweet_id,omitempty"`
+	ShortRef           string    `json:"-"`
+	ReplyingTo         string    `json:"-"`
+	authorID           string    `json:"-"`
+	replyingToAuthorID string    `json:"-"`
+	timeValue          time.Time `json:"-"`
+	countsAsOfTime     time.Time `json:"-"`
 }
 
 type importEnvelope struct {
@@ -141,7 +181,8 @@ type importEnvelope struct {
 type statsEnvelope struct {
 	By                   string     `json:"by"`
 	Window               string     `json:"window"`
-	FreshnessSpread      string     `json:"freshness_spread"`
+	CountsFetchedFrom    string     `json:"counts_fetched_from"`
+	CountsFetchedTo      string     `json:"counts_fetched_to"`
 	Population           int        `json:"population"`
 	PopulationWithCounts int        `json:"population_with_counts"`
 	CountsMissing        int        `json:"counts_missing"`
@@ -149,12 +190,15 @@ type statsEnvelope struct {
 }
 
 type statsRow struct {
-	Ref        string `json:"ref"`
-	Time       string `json:"time"`
-	Who        string `json:"who"`
-	Text       string `json:"text"`
-	Count      int64  `json:"count"`
-	CountsAsOf string `json:"counts_as_of"`
+	Ref            string    `json:"ref"`
+	ShortRef       string    `json:"short_ref"`
+	Time           string    `json:"time"`
+	Who            string    `json:"who"`
+	Text           string    `json:"text"`
+	Count          int64     `json:"count"`
+	CountsAsOf     string    `json:"counts_as_of"`
+	timeValue      time.Time `json:"-"`
+	countsAsOfTime time.Time `json:"-"`
 }
 
 func contractMetadata() metadataEnvelope {
@@ -164,7 +208,7 @@ func contractMetadata() metadataEnvelope {
 		ID:              "birdcrawl",
 		DisplayName:     "X",
 		Version:         version,
-		Capabilities:    []string{"metadata", "status", "sync", "search", "open", "doctor", "stats", "archive_import"},
+		Capabilities:    []string{"metadata", "status", "sync", "search", "open", "doctor", "stats", "archive_import", "short_refs"},
 	}
 }
 
@@ -175,26 +219,25 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	}
 	if info, err := os.Stat(r.dbPath); err != nil {
 		if os.IsNotExist(err) {
-			return r.newStatusEnvelope("missing", "archive database is missing", store.Status{}, cfg)
+			return r.newStatusEnvelope("missing", "archive database is missing", "archive database is missing", store.Status{}, cfg)
 		}
-		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{}, cfg)
+		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 	} else if info.IsDir() {
-		return r.newStatusEnvelope("error", "archive database path is a directory", store.Status{}, cfg)
+		return r.newStatusEnvelope("error", "archive database path is a directory", "archive database path is a directory", store.Status{}, cfg)
 	}
 	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
 	if err != nil {
-		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{}, cfg)
+		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 	}
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(r.ctx)
 	if err != nil {
-		return r.newStatusEnvelope("error", "archive status cannot be read", store.Status{}, cfg)
+		return r.newStatusEnvelope("error", "archive status cannot be read", "archive status cannot be read", store.Status{}, cfg)
 	}
-	return r.newStatusEnvelope(statusState(status), statusSummary(status), status, cfg)
+	return r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), statusSummary(status, formatHumanLocalTime), status, cfg)
 }
 
-func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, cfg birdConfig) statusEnvelope {
-	logTail := r.logTail()
+func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status store.Status, cfg birdConfig) statusEnvelope {
 	credentialsPresent := xapi.CredentialsPresent(xapi.DefaultCredentialsPath())
 	month := status.SpendMonth
 	if month == "" {
@@ -203,13 +246,20 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, 
 	spent := float64(status.SpendMicros) / 1_000_000
 	budget := cfg.MonthlyBudgetUSD()
 	remaining := max(0, budget-spent)
+	liveSyncPaused := cfg.MonthlyBudgetMicros-status.SpendMicros <= 0
+	if liveSyncPaused {
+		summaryHuman = appendSentence(summaryHuman, liveSyncPausedSentence(month))
+	}
 	return statusEnvelope{
-		AppID:   "birdcrawl",
-		State:   state,
-		Summary: summary,
+		AppID:        "birdcrawl",
+		State:        state,
+		Summary:      summary,
+		summaryHuman: summaryHuman,
 		Freshness: freshnessEnvelope{
-			LastSync:   formatOptionalTime(status.LastLiveSync),
-			LastImport: formatOptionalTime(status.LastImportAt),
+			LastSync:       formatOptionalTime(status.LastLiveSync),
+			LastImport:     formatOptionalTime(status.LastImportAt),
+			lastSyncTime:   status.LastLiveSync,
+			lastImportTime: status.LastImportAt,
 		},
 		Counts: []countEnvelope{
 			{ID: "authored", Label: "authored", Value: int64(status.Authored)},
@@ -222,15 +272,21 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status, 
 			SpentUSD:         fmt.Sprintf("%.2f", spent),
 			MonthlyBudgetUSD: fmt.Sprintf("%.2f", budget),
 			RemainingUSD:     fmt.Sprintf("%.2f", remaining),
+			LiveSyncPaused:   liveSyncPaused,
 		},
 		Auth: authEnvelope{
 			Authorized:           credentialsPresent && status.TokenValid,
 			CredentialsPresent:   credentialsPresent,
 			TokenValidAtLastSync: status.TokenValid,
 		},
-		Log:     render.DoctorLogTailOutput(logTail),
-		logTail: logTail,
 	}
+}
+
+func (e statusEnvelope) humanSummary() string {
+	if strings.TrimSpace(e.summaryHuman) != "" {
+		return e.summaryHuman
+	}
+	return e.Summary
 }
 
 func statusState(status store.Status) string {
@@ -244,7 +300,7 @@ func statusState(status store.Status) string {
 	}
 }
 
-func statusSummary(status store.Status) string {
+func statusSummary(status store.Status, formatTime func(time.Time) string) string {
 	if status.Tweets == 0 {
 		return "archive is empty; import an X archive dump"
 	}
@@ -253,75 +309,126 @@ func statusSummary(status store.Status) string {
 	case status.LastLiveSync.IsZero():
 		live = "live sync has not run"
 	case strings.HasPrefix(status.LiveSyncResult, "partial"):
-		live = "last live sync at " + formatLocalTime(status.LastLiveSync) + " was " + status.LiveSyncResult
+		live = "last live sync at " + formatTime(status.LastLiveSync) + " was " + status.LiveSyncResult
 	default:
-		live = "live synced at " + formatLocalTime(status.LastLiveSync)
+		live = "live synced at " + formatTime(status.LastLiveSync)
 	}
 	if !status.CoverageThrough.IsZero() {
-		return "archive dump imported through " + formatLocalTime(status.CoverageThrough) + "; " + live
+		return "archive dump imported through " + formatTime(status.CoverageThrough) + "; " + live
 	}
 	return "archive has local X data; " + live
 }
 
-func newSearchEnvelope(query string, results []store.SearchResult, total int) searchEnvelope {
+func newSearchEnvelope(query string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) searchEnvelope {
 	items := make([]searchResult, 0, len(results))
 	for _, result := range results {
+		ref := store.TweetRef(result.ID)
 		items = append(items, searchResult{
-			Ref:     store.TweetRef(result.ID),
-			Time:    formatOptionalTime(result.CreatedAt),
-			Who:     result.Who,
-			Where:   result.Where,
-			Snippet: result.Snippet,
+			Ref:               ref,
+			ShortRef:          aliases[ref],
+			Time:              formatOptionalTime(result.CreatedAt),
+			Who:               jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
+			Where:             result.Where,
+			Snippet:           result.Snippet,
+			timeValue:         result.CreatedAt,
+			rawWho:            result.Who,
+			authorID:          result.AuthorID,
+			inReplyTo:         result.InReplyTo,
+			inReplyToAuthorID: result.InReplyToAuthorID,
 		})
 	}
-	return searchEnvelope{Query: query, Results: items, TotalMatches: total, Truncated: total > len(items)}
+	return searchEnvelope{Query: query, Results: items, TotalMatches: total, Truncated: total > len(items), Limit: limit, ownerAuthorID: ownerAuthorID}
 }
 
-func newOpenEnvelope(result store.OpenResult) openEnvelope {
+func newListEnvelope(kind string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) listEnvelope {
+	items := make([]listResult, 0, len(results))
+	for _, result := range results {
+		ref := store.TweetRef(result.ID)
+		items = append(items, listResult{
+			Ref:               ref,
+			ShortRef:          aliases[ref],
+			Time:              formatOptionalTime(result.CreatedAt),
+			Who:               jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
+			InReplyTo:         result.InReplyTo,
+			Text:              result.Text,
+			timeValue:         result.CreatedAt,
+			rawWho:            result.Who,
+			authorID:          result.AuthorID,
+			inReplyToAuthorID: result.InReplyToAuthorID,
+		})
+	}
+	return listEnvelope{Kind: kind, Results: items, Total: total, Truncated: total > len(items), Limit: limit, ownerAuthorID: ownerAuthorID}
+}
+
+func newOpenEnvelope(result store.OpenResult, aliases map[string]string, ownerAuthorID string) openEnvelope {
+	replyingTo, replyingToAuthorID := openReplyingTo(result.Tweet, result.Ancestors)
 	return openEnvelope{
 		Ref:                store.TweetRef(result.Tweet.ID),
-		Tweet:              newOpenTweet(result.Tweet),
-		Ancestors:          newAncestorTweets(result.Ancestors),
-		Replies:            newOpenTweets(result.Replies),
+		Tweet:              newOpenTweet(result.Tweet, aliases, replyingTo, replyingToAuthorID),
+		Ancestors:          newAncestorTweets(result.Ancestors, aliases),
+		Replies:            newOpenTweets(result.Replies, aliases),
 		AncestorsTruncated: result.AncestorsTruncated,
 		RepliesTruncated:   result.RepliesTruncated,
+		ownerAuthorID:      ownerAuthorID,
 	}
 }
 
-func newOpenTweets(tweets []store.Tweet) []openTweet {
+func newOpenTweets(tweets []store.Tweet, aliases map[string]string) []openTweet {
 	out := make([]openTweet, 0, len(tweets))
 	for _, tweet := range tweets {
-		out = append(out, newOpenTweet(tweet))
+		out = append(out, newOpenTweet(tweet, aliases, "", ""))
 	}
 	return out
 }
 
-func newAncestorTweets(tweets []store.OpenTweet) []openTweet {
+func newAncestorTweets(tweets []store.OpenTweet, aliases map[string]string) []openTweet {
 	out := make([]openTweet, 0, len(tweets))
 	for _, tweet := range tweets {
 		if !tweet.Available {
 			out = append(out, openTweet{Ref: tweet.Ref, Text: tweet.Text, Unavailable: true})
 			continue
 		}
-		out = append(out, newOpenTweet(tweet.Tweet))
+		out = append(out, newOpenTweet(tweet.Tweet, aliases, "", ""))
 	}
 	return out
 }
 
-func newOpenTweet(tweet store.Tweet) openTweet {
+func newOpenTweet(tweet store.Tweet, aliases map[string]string, replyingTo string, replyingToAuthorID string) openTweet {
+	ref := store.TweetRef(tweet.ID)
 	return openTweet{
-		Ref:           store.TweetRef(tweet.ID),
-		Time:          formatOptionalTime(tweet.CreatedAt),
-		Who:           store.DisplayName(tweet.AuthorName, tweet.AuthorHandle),
-		Text:          tweet.Text,
-		InReplyTo:     tweet.InReplyToID,
-		LikeCount:     tweet.LikeCount,
-		RetweetCount:  tweet.RetweetCount,
-		ReplyCount:    tweet.ReplyCount,
-		CountsAsOf:    formatOptionalTime(tweet.MetricsFetchedAt),
-		Conversation:  tweet.ConversationID,
-		QuotedTweetID: tweet.QuotedTweetID,
+		Ref:          ref,
+		Time:         formatOptionalTime(tweet.CreatedAt),
+		Who:          store.DisplayName(tweet.AuthorName, tweet.AuthorHandle),
+		Text:         tweet.Text,
+		InReplyTo:    tweet.InReplyToID,
+		LikeCount:    tweet.LikeCount,
+		RetweetCount: tweet.RetweetCount,
+		ReplyCount:   tweet.ReplyCount,
+		CountsAsOf:   formatOptionalTime(tweet.MetricsFetchedAt),
+		// X exports retweets as truncated "RT @..." stubs. This is a
+		// mechanical prefix check only; it does not infer tweet meaning.
+		Note:               retweetStubNoteForText(tweet.Text),
+		Conversation:       tweet.ConversationID,
+		QuotedTweetID:      tweet.QuotedTweetID,
+		ShortRef:           aliases[ref],
+		ReplyingTo:         replyingTo,
+		authorID:           tweet.AuthorID,
+		replyingToAuthorID: replyingToAuthorID,
+		timeValue:          tweet.CreatedAt,
+		countsAsOfTime:     tweet.MetricsFetchedAt,
 	}
+}
+
+func openReplyingTo(tweet store.Tweet, ancestors []store.OpenTweet) (string, string) {
+	if tweet.InReplyToID == "" {
+		return "", ""
+	}
+	for _, ancestor := range ancestors {
+		if ancestor.Available && ancestor.Tweet.ID == tweet.InReplyToID {
+			return store.DisplayName(ancestor.Tweet.AuthorName, ancestor.Tweet.AuthorHandle), ancestor.Tweet.AuthorID
+		}
+	}
+	return "unavailable tweet", ""
 }
 
 func newImportEnvelope(stats store.ImportStats) importEnvelope {

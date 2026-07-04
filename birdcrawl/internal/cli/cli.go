@@ -60,6 +60,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	}
 	r.log = run
 	err = r.dispatch(rest)
+	if isUsageError(err) {
+		_ = r.log.FinishRejected()
+		return err
+	}
 	if err != nil {
 		_ = r.log.Error(errorEventCode(err), err)
 	}
@@ -84,6 +88,8 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runStatus(args[1:])
 	case "doctor":
 		return r.runDoctor(args[1:])
+	case "tweets", "bookmarks", "likes", "mentions":
+		return r.runBrowse(browseCommands[args[0]], args[1:])
 	case "search":
 		return r.runSearch(args[1:])
 	case "open":
@@ -98,7 +104,7 @@ func (r *runtime) dispatch(args []string) error {
 		_, _ = io.WriteString(r.stdout, version+"\n")
 		return nil
 	default:
-		return usageErr(fmt.Errorf("unknown command %q", args[0]))
+		return usageErr(fmt.Errorf("unknown command %q. Run 'birdcrawl --help'.", args[0]))
 	}
 }
 
@@ -107,6 +113,7 @@ func (r *runtime) withStore(fn func(*store.Store) error) error {
 	if err != nil {
 		return err
 	}
+	st.SetLog(r.log)
 	defer func() { _ = st.Close() }()
 	return fn(st)
 }
@@ -116,13 +123,14 @@ func (r *runtime) withReadOnlyStore(fn func(*store.Store) error) error {
 	if err != nil {
 		return err
 	}
+	st.SetLog(r.log)
 	defer func() { _ = st.Close() }()
 	return fn(st)
 }
 
 func logCommandName(command string) string {
 	switch command {
-	case "metadata", "status", "doctor", "search", "open", "import", "sync", "stats", "version":
+	case "metadata", "status", "doctor", "tweets", "bookmarks", "likes", "mentions", "search", "open", "import", "sync", "stats", "version":
 		return command
 	default:
 		return "unknown"

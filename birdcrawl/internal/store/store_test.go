@@ -2,10 +2,15 @@ package store
 
 import (
 	"context"
+	"io"
+	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
+
+	cklog "github.com/openclaw/crawlkit/log"
 )
 
 func TestSchemaMigrationSetsUserVersion(t *testing.T) {
@@ -129,6 +134,151 @@ func TestStatsOrdering(t *testing.T) {
 	if result.Rows[0].CountsAsOf.IsZero() {
 		t.Fatal("counts_as_of was not populated")
 	}
+	if result.Population != 3 {
+		t.Fatalf("population = %d, want 3", result.Population)
+	}
+}
+
+func TestListByRoleFiltersOrdersAndCounts(t *testing.T) {
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	tweets := []Tweet{
+		testTweet("tweet-old", now.Add(-5*time.Hour), "owner", "example_owner", "Owner Example", "old authored"),
+		testTweet("tweet-new", now.Add(-time.Hour), "owner", "example_owner", "Owner Example", "new authored"),
+		testTweet("bookmark-old", now.Add(-4*time.Hour), "alice", "example_alice", "Alice Example", "old bookmark"),
+		testTweet("bookmark-new", now.Add(-2*time.Hour), "alice", "example_alice", "Alice Example", "new bookmark"),
+		testTweet("liked", now.Add(-3*time.Hour), "blair", "example_blair", "Blair Example", "liked tweet"),
+		testTweet("mention", now.Add(-30*time.Minute), "casey", "example_casey", "Casey Example", "mention tweet"),
+	}
+	roles := []Role{
+		{TweetID: "tweet-old", Role: "authored", FirstSeenAt: now, LastSeenAt: now},
+		{TweetID: "tweet-new", Role: "authored", FirstSeenAt: now, LastSeenAt: now},
+		{TweetID: "bookmark-old", Role: "bookmark", FirstSeenAt: now, LastSeenAt: now},
+		{TweetID: "bookmark-new", Role: "bookmark", FirstSeenAt: now, LastSeenAt: now},
+		{TweetID: "liked", Role: "like", FirstSeenAt: now, LastSeenAt: now},
+		{TweetID: "mention", Role: "mention", FirstSeenAt: now, LastSeenAt: now},
+	}
+	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: tweets, Roles: roles, ImportedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		role string
+		want string
+	}{
+		{role: "authored", want: "tweet-new"},
+		{role: "bookmark", want: "bookmark-new"},
+		{role: "like", want: "liked"},
+		{role: "mention", want: "mention"},
+	} {
+		results, total, err := st.ListByRole(ctx, tt.role, ListFilter{Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 1 || results[0].ID != tt.want {
+			t.Fatalf("%s first result = %#v, want %s", tt.role, results, tt.want)
+		}
+		if tt.role == "authored" || tt.role == "bookmark" {
+			if total != 2 {
+				t.Fatalf("%s total = %d, want 2", tt.role, total)
+			}
+		}
+	}
+	after := now.Add(-3 * time.Hour)
+	before := now.Add(-time.Hour)
+	results, total, err := st.ListByRole(ctx, "bookmark", ListFilter{Limit: 10, After: &after, Before: &before})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(results) != 1 || results[0].ID != "bookmark-new" {
+		t.Fatalf("windowed bookmarks = total %d rows %#v, want bookmark-new only", total, results)
+	}
+}
+
+func TestShortRefsRebuildLookupAndAliasDisplay(t *testing.T) {
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	tweets := []Tweet{
+		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
+		testTweet("b", now.Add(time.Minute), "owner", "example_owner", "Owner Example", "second"),
+	}
+	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: tweets, ImportedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := st.ShortRefAliases(ctx, []string{TweetRef("a"), TweetRef("b")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, ref := range []string{TweetRef("a"), TweetRef("b")} {
+		alias := aliases[ref]
+		if alias == "" {
+			t.Fatalf("alias for %s is empty", ref)
+		}
+		matches, err := st.ResolveShortRef(ctx, alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matches) != 1 || matches[0] != ref {
+			t.Fatalf("lookup %s = %#v, want %s", alias, matches, ref)
+		}
+	}
+}
+
+func TestEnsureShortRefsLogsReadRefresh(t *testing.T) {
+	ctx := context.Background()
+	st := openTestStore(t)
+	run, err := cklog.NewRun(cklog.Options{
+		StateRoot: filepath.Join(t.TempDir(), "logs"),
+		CrawlerID: "birdcrawl",
+		Command:   "search",
+		Stderr:    io.Discard,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = run.Finish(nil) })
+	st.SetLog(run)
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: []Tweet{
+		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
+	}, ImportedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.ExecContext(ctx, `insert into tweets(id, created_at, text, first_source) values(?, ?, ?, ?)`, "b", formatUTC(now.Add(time.Minute)), "second", "archive"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.ShortRefAliases(ctx, []string{TweetRef("b")}); err != nil {
+		t.Fatal(err)
+	}
+	logData, err := os.ReadFile(run.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logData), "short_refs_refresh: rebuilt derived short ref cache on read") {
+		t.Fatalf("refresh log missing:\n%s", string(logData))
+	}
+}
+
+func TestShortRefsCurrentPropagatesIndexReadError(t *testing.T) {
+	ctx := context.Background()
+	st := openTestStore(t)
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: []Tweet{
+		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
+	}, ImportedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.ExecContext(ctx, `drop table short_refs`); err != nil {
+		t.Fatal(err)
+	}
+	current, err := st.shortRefsCurrent(ctx)
+	if err == nil {
+		t.Fatal("expected short_refs read error")
+	}
+	if current {
+		t.Fatal("current = true, want false")
+	}
 }
 
 func openTestStore(t *testing.T) *Store {
@@ -139,6 +289,18 @@ func openTestStore(t *testing.T) *Store {
 	}
 	t.Cleanup(func() { _ = st.Close() })
 	return st
+}
+
+func testTweet(id string, createdAt time.Time, authorID string, handle string, name string, text string) Tweet {
+	return Tweet{
+		ID:           id,
+		CreatedAt:    createdAt,
+		AuthorID:     authorID,
+		AuthorHandle: handle,
+		AuthorName:   name,
+		Text:         text,
+		FirstSource:  "archive",
+	}
 }
 
 func statsTweet(id string, createdAt time.Time, likes int64, countsAt time.Time) Tweet {

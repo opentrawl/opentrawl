@@ -31,6 +31,7 @@ type StatsRow struct {
 	Ref        string    `json:"ref"`
 	Time       time.Time `json:"time,omitzero"`
 	Who        string    `json:"who"`
+	AuthorID   string    `json:"author_id,omitempty"`
 	Text       string    `json:"text"`
 	Count      int64     `json:"count"`
 	CountsAsOf time.Time `json:"counts_as_of,omitzero"`
@@ -77,6 +78,7 @@ limit ?`, tweetSelectColumns("t"), metric.column, metric.column), since, filter.
 			Ref:        TweetRef(tweet.ID),
 			Time:       tweet.CreatedAt,
 			Who:        DisplayName(tweet.AuthorName, tweet.AuthorHandle),
+			AuthorID:   tweet.AuthorID,
 			Text:       tweet.Text,
 			Count:      count,
 			CountsAsOf: tweet.MetricsFetchedAt,

@@ -8,16 +8,27 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
-func (r *runtime) runSearch(args []string) error {
-	filter, err := parseSearchArgs(args)
+type browseCommand struct {
+	kind  string
+	role  string
+	title string
+	empty string
+}
+
+var browseCommands = map[string]browseCommand{
+	"tweets":    {kind: "tweets", role: "authored", title: "Tweets", empty: "No tweets archived yet. Run 'birdcrawl sync' or 'birdcrawl import archive PATH'."},
+	"bookmarks": {kind: "bookmarks", role: "bookmark", title: "Bookmarks", empty: "No bookmarks archived yet. Run 'birdcrawl sync' or 'birdcrawl import archive PATH'."},
+	"likes":     {kind: "likes", role: "like", title: "Likes", empty: "No likes archived yet. Run 'birdcrawl sync' or 'birdcrawl import archive PATH'."},
+	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'birdcrawl sync' or 'birdcrawl import archive PATH'."},
+}
+
+func (r *runtime) runBrowse(command browseCommand, args []string) error {
+	filter, err := parseListArgs(args)
 	if err != nil {
 		return usageErr(err)
 	}
-	if strings.TrimSpace(filter.Query) == "" {
-		return usageErr(errors.New("search takes a query, e.g. birdcrawl search QUERY"))
-	}
 	return r.withStore(func(st *store.Store) error {
-		results, total, err := st.Search(r.ctx, filter)
+		results, total, err := st.ListByRole(r.ctx, command.role, filter)
 		if err != nil {
 			return err
 		}
@@ -29,13 +40,12 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, results, total, filter.Limit, aliases, ownerAuthorID))
+		return r.print(newListEnvelope(command.kind, results, total, filter.Limit, aliases, ownerAuthorID))
 	})
 }
 
-func parseSearchArgs(args []string) (store.SearchFilter, error) {
-	filter := store.SearchFilter{Limit: defaultSearchLimit}
-	var positionals []string
+func parseListArgs(args []string) (store.ListFilter, error) {
+	filter := store.ListFilter{Limit: defaultSearchLimit}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--limit":
@@ -70,13 +80,10 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 			filter.Before = before
 		default:
 			if strings.HasPrefix(args[i], "-") {
-				return filter, errors.New("unknown search flag " + args[i])
+				return filter, errors.New("unknown browse flag " + args[i])
 			}
-			positionals = append(positionals, args[i])
+			return filter, errors.New("browse commands take no positional arguments")
 		}
-	}
-	if len(positionals) != 1 {
-		return filter, errors.New("search takes exactly one query")
 	}
 	if filter.Limit <= 0 {
 		filter.Limit = defaultSearchLimit
@@ -84,6 +91,5 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 	if filter.Limit > maxSearchLimit {
 		filter.Limit = maxSearchLimit
 	}
-	filter.Query = positionals[0]
 	return filter, nil
 }
