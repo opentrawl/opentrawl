@@ -10,7 +10,6 @@ const (
 	defaultMessageLimit = 20
 	defaultSearchLimit  = 20
 	defaultOpenWindow   = 10
-	maxListLimit        = 200
 )
 
 type listHeader struct {

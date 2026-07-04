@@ -79,7 +79,7 @@ Check source, archive and Full Disk Access readiness.
 List archived chats.
 
 Flags:
-  --limit N   Maximum chats to print. Default: 50.
+  --limit N   Chats to print. Default: 50.
   --all       Print all chats. Use explicitly for complete local output.
 `)
 	case "messages":
@@ -90,7 +90,7 @@ List archived messages for one chat.
 
 Flags:
   --chat ID   Chat ID from imsgcrawl chats.
-  --limit N   Maximum messages to print. Default: 20.
+  --limit N   Messages to print. Default: 20.
   --all       Print all messages for the chat.
   --asc       Show oldest messages first.
 `)
@@ -107,7 +107,7 @@ Resolve a name, alias or identifier fragment to archived participants.
 Search archived message text.
 
 Flags:
-  --limit N     Maximum search results. Default: 20.
+  --limit N     Search results to print. Default: 20.
   --after TIME  Only messages at or after RFC3339 or YYYY-MM-DD.
   --before TIME Only messages at or before RFC3339 or YYYY-MM-DD.
   --who NAME    Resolve a person first, then filter by their exact identifiers.

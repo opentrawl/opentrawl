@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -292,9 +291,6 @@ func (r *runtime) runMessages(args []string) error {
 	}
 	if *limit <= 0 {
 		return usageErr(errors.New("messages --limit must be positive"))
-	}
-	if *limit > maxListLimit {
-		return usageErr(fmt.Errorf("messages --limit must be %d or less", maxListLimit))
 	}
 	if *all && flagPassed(fs, "limit") {
 		return usageErr(errors.New("use either --all or --limit"))

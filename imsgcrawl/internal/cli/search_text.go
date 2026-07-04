@@ -20,34 +20,30 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 		}
 	}
 	if value.Truncated {
-		if value.Limit < maxListLimit {
-			if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d", nextSearchLimit(value.Limit, value.TotalMatches)); err != nil {
+		if _, err := fmt.Fprintf(w, "More: imsgcrawl search --limit %d", nextLimit(value.Limit, value.TotalMatches)); err != nil {
+			return err
+		}
+		if value.After != "" {
+			if _, err := fmt.Fprintf(w, " --after %s", strconv.Quote(value.After)); err != nil {
 				return err
 			}
-			if value.After != "" {
-				if _, err := fmt.Fprintf(w, " --after %s", strconv.Quote(value.After)); err != nil {
-					return err
-				}
-			}
-			if value.Before != "" {
-				if _, err := fmt.Fprintf(w, " --before %s", strconv.Quote(value.Before)); err != nil {
-					return err
-				}
-			}
-			if value.Who != "" {
-				if _, err := fmt.Fprintf(w, " --who %s", strconv.Quote(value.Who)); err != nil {
-					return err
-				}
-			}
-			if strings.TrimSpace(value.Query) != "" {
-				if _, err := fmt.Fprintf(w, " %s", strconv.Quote(value.Query)); err != nil {
-					return err
-				}
-			}
-			if _, err := io.WriteString(w, "\n"); err != nil {
+		}
+		if value.Before != "" {
+			if _, err := fmt.Fprintf(w, " --before %s", strconv.Quote(value.Before)); err != nil {
 				return err
 			}
-		} else if _, err := io.WriteString(w, "Narrow the query to see more matches.\n"); err != nil {
+		}
+		if value.Who != "" {
+			if _, err := fmt.Fprintf(w, " --who %s", strconv.Quote(value.Who)); err != nil {
+				return err
+			}
+		}
+		if strings.TrimSpace(value.Query) != "" {
+			if _, err := fmt.Fprintf(w, " %s", strconv.Quote(value.Query)); err != nil {
+				return err
+			}
+		}
+		if _, err := io.WriteString(w, "\n"); err != nil {
 			return err
 		}
 	}
@@ -67,12 +63,4 @@ func printSearchText(w io.Writer, value searchListOutput) error {
 		})
 	}
 	return renderTextTable(w, columns, rows)
-}
-
-func nextSearchLimit(limit int, total int64) int {
-	next := nextLimit(limit, total)
-	if next > maxListLimit {
-		return maxListLimit
-	}
-	return next
 }

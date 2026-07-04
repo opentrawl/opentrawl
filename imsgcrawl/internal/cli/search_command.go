@@ -3,7 +3,6 @@ package cli
 import (
 	"errors"
 	"flag"
-	"fmt"
 	"io"
 	"strings"
 
@@ -34,9 +33,6 @@ func (r *runtime) runSearch(args []string) error {
 	}
 	if *limit <= 0 {
 		return usageErr(errors.New("search --limit must be positive"))
-	}
-	if *limit > maxListLimit {
-		return usageErr(fmt.Errorf("search --limit must be %d or less", maxListLimit))
 	}
 	whoValue := strings.Join(strings.Fields(*who), " ")
 	if whoPassed && whoValue == "" {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -122,6 +123,77 @@ func createMessagesFixture(t *testing.T, path string) {
 	}
 	if _, err := db.Exec(`update message set text = ? where rowid = 3`, longLaunchNote); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func createLargeMessagesFixture(t *testing.T, path string, count int) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	schema := []string{
+		`create table handle (ROWID integer primary key, id text not null, service text not null, uncanonicalized_id text)`,
+		`create table chat (ROWID integer primary key, guid text not null, display_name text, chat_identifier text, service_name text, room_name text, is_archived integer)`,
+		`create table chat_handle_join (chat_id integer, handle_id integer)`,
+		`create table message (ROWID integer primary key, guid text not null, handle_id integer, date integer, service text, is_from_me integer, text text, attributedBody blob)`,
+		`create table chat_message_join (chat_id integer, message_id integer)`,
+		`create table message_attachment_join (message_id integer, attachment_id integer)`,
+	}
+	for _, stmt := range schema {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.Exec(`insert into handle(rowid, id, service, uncanonicalized_id) values (1, '+1555000000', 'iMessage', '')`); err != nil {
+		t.Fatal(err)
+	}
+	for chatID := 1; chatID <= count; chatID++ {
+		suffix := strconv.Itoa(chatID)
+		if _, err := db.Exec(
+			`insert into chat(rowid, guid, display_name, chat_identifier, service_name, room_name, is_archived) values (?, ?, ?, ?, 'iMessage', '', 0)`,
+			chatID,
+			"limit-chat-"+suffix,
+			"Limit chat "+suffix,
+			"+1555"+strconv.Itoa(1000000+chatID),
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`insert into chat_handle_join(chat_id, handle_id) values (?, 1)`, chatID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for messageID := 1; messageID <= count; messageID++ {
+		suffix := strconv.Itoa(messageID)
+		if _, err := db.Exec(
+			`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (?, ?, 1, ?, 'iMessage', 0, ?, null)`,
+			messageID,
+			"needle-message-"+suffix,
+			messageID,
+			"needle limit row "+suffix,
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`insert into chat_message_join(chat_id, message_id) values (1, ?)`, messageID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for chatID := 2; chatID <= count; chatID++ {
+		messageID := count + chatID - 1
+		suffix := strconv.Itoa(chatID)
+		if _, err := db.Exec(
+			`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (?, ?, 1, ?, 'iMessage', 0, ?, null)`,
+			messageID,
+			"filler-message-"+suffix,
+			messageID,
+			"filler row "+suffix,
+		); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.Exec(`insert into chat_message_join(chat_id, message_id) values (?, ?)`, chatID, messageID); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

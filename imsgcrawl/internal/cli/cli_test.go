@@ -360,8 +360,6 @@ func TestLimitFlagsAreExplicit(t *testing.T) {
 		{"--archive", archivePath, "search", "--all", "launch"},
 		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "0"},
 		{"--archive", archivePath, "search", "--limit", "0", "launch"},
-		{"--archive", archivePath, "messages", "--chat", "1", "--limit", "201"},
-		{"--archive", archivePath, "search", "--limit", "201", "launch"},
 	} {
 		var stdout, stderr bytes.Buffer
 		err := Run(context.Background(), args, &stdout, &stderr)
@@ -377,6 +375,57 @@ func TestLimitFlagsAreExplicit(t *testing.T) {
 	}
 	if allMessages.Returned != 2 || allMessages.Total != 2 || !allMessages.Complete || len(allMessages.Items) != 2 {
 		t.Fatalf("all messages = %#v", allMessages)
+	}
+}
+
+func TestLimitAboveOldCapIsHonored(t *testing.T) {
+	const limit = 205
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createLargeMessagesFixture(t, dbPath, limit)
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	chatsJSON := runOK(t, "--archive", archivePath, "--json", "chats", "--limit", strconv.Itoa(limit))
+	var chats chatListJSON
+	if err := json.Unmarshal([]byte(chatsJSON), &chats); err != nil {
+		t.Fatalf("chats json = %s err=%v", chatsJSON, err)
+	}
+	if chats.Returned != limit || chats.Total != limit || chats.Limit != limit || !chats.Complete || len(chats.Items) != limit {
+		t.Fatalf("chats limit = %#v", chats)
+	}
+	chatsText := runOK(t, "--archive", archivePath, "chats", "--limit", strconv.Itoa(limit))
+	assertTextContains(t, chatsText, "Chats: showing 205 of 205, newest first.")
+	if strings.Contains(chatsText, "More:") {
+		t.Fatalf("complete chats output printed More:\n%s", chatsText)
+	}
+
+	messagesJSON := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "1", "--limit", strconv.Itoa(limit))
+	var messages messageListJSON
+	if err := json.Unmarshal([]byte(messagesJSON), &messages); err != nil {
+		t.Fatalf("messages json = %s err=%v", messagesJSON, err)
+	}
+	if messages.Returned != limit || messages.Total != limit || messages.Limit != limit || !messages.Complete || len(messages.Items) != limit {
+		t.Fatalf("messages limit = %#v", messages)
+	}
+	messagesText := runOK(t, "--archive", archivePath, "messages", "--chat", "1", "--limit", strconv.Itoa(limit))
+	assertTextContains(t, messagesText, "Messages in Limit chat 1 (chat 1): showing 205 of 205, newest-first.")
+	if strings.Contains(messagesText, "More:") {
+		t.Fatalf("complete messages output printed More:\n%s", messagesText)
+	}
+
+	searchJSON := runOK(t, "--archive", archivePath, "--json", "search", "--limit", strconv.Itoa(limit), "needle")
+	var search searchListJSON
+	if err := json.Unmarshal([]byte(searchJSON), &search); err != nil {
+		t.Fatalf("search json = %s err=%v", searchJSON, err)
+	}
+	if len(search.Results) != limit || search.TotalMatches != limit || search.Truncated {
+		t.Fatalf("search limit = %#v", search)
+	}
+	searchText := runOK(t, "--archive", archivePath, "search", "--limit", strconv.Itoa(limit), "needle")
+	assertTextContains(t, searchText, `Search "needle": showing 205 of 205.`)
+	if strings.Contains(searchText, "More:") {
+		t.Fatalf("complete search output printed More:\n%s", searchText)
 	}
 }
 
@@ -649,7 +698,7 @@ func TestRunUsageErrors(t *testing.T) {
 
 func TestJSONUsageErrorIsSingleRenderedDocument(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	err := Run(context.Background(), []string{"search", "--limit", "1000", "a", "--json"}, &stdout, &stderr)
+	err := Run(context.Background(), []string{"search", "--limit", "0", "a", "--json"}, &stdout, &stderr)
 	if err == nil || ExitCode(err) != 2 {
 		t.Fatalf("expected usage exit, got err=%v code=%d", err, ExitCode(err))
 	}
@@ -674,8 +723,8 @@ func TestHumanUsageErrorStrings(t *testing.T) {
 	}{
 		{
 			name: "search limit",
-			args: []string{"search", "--limit", "1000", "a"},
-			want: "search --limit must be 200 or less",
+			args: []string{"search", "--limit", "0", "a"},
+			want: "search --limit must be positive",
 		},
 		{
 			name: "who blank",
