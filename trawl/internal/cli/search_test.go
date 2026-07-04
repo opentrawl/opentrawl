@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func searchResultsJSON(query string, count int) string {
@@ -511,7 +512,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 			},
 			wantCode:   3,
 			wantStdout: "note: 1 of 2 sources unavailable — results are partial (see stderr)",
-			wantStderr: "telegram search failed. Remedy: run: trawl doctor telegram",
+			wantStderr: "telegram search failed: the crawler returned an error. Remedy: run: trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -521,7 +522,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				search:   `not-json`,
 			}},
 			wantCode:   1,
-			wantStderr: "telegram search failed. Remedy: run: trawl doctor telegram",
+			wantStderr: "telegram search failed: the crawler returned an error. Remedy: run: trawl doctor telegram",
 		},
 	}
 
@@ -565,12 +566,109 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false,"failed_sources":["telegram"]}` + "\n"
+	want := `{"query":"boat trip","failed_sources":[{"source":"telegram","reason":"error"}],"results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false}` + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
 	}
-	if !strings.Contains(stderr, "telegram search failed. Remedy: run: trawl doctor telegram") {
+	if !strings.Contains(stderr, "telegram search failed: the crawler returned an error. Remedy: run: trawl doctor telegram") {
 		t.Fatalf("stderr missing failure:\n%s", stderr)
+	}
+}
+
+// TestSearchTimeoutIsLoudAndDistinctFromError is the regression for
+// TRAWL-58: a source that blows the per-source deadline under fan-out
+// (the photoscrawl-timed-out-during-federation case) must surface as a
+// timeout — never a silent drop, and never conflated with a plain
+// crawler error. A live subprocess is held past a short real deadline.
+func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			search:   `{"query":"grill","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
+		},
+		fakeCrawler{
+			name:        "photoscrawl",
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			searchSleep: "3",
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "search", "grill")
+	if code != 3 {
+		t.Fatalf("partial timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "photos search failed: timed out after 100ms. Remedy:") {
+		t.Fatalf("stderr missing loud timeout line:\n%s", stderr)
+	}
+	if !strings.Contains(stdout, "note: 1 of 2 sources unavailable — results are partial (see stderr)") {
+		t.Fatalf("stdout missing partial note:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "imessage:msg/1") {
+		t.Fatalf("surviving source dropped from results:\n%s", stdout)
+	}
+}
+
+func TestSearchTimeoutJSONCarriesReason(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			search:   `{"query":"grill","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
+		},
+		fakeCrawler{
+			name:        "photoscrawl",
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			searchSleep: "3",
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "--json", "search", "grill")
+	if code != 3 {
+		t.Fatalf("timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload federatedSearchEnvelope
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("json = %s err=%v", stdout, err)
+	}
+	if len(payload.FailedSources) != 1 {
+		t.Fatalf("failed_sources = %+v, want one entry", payload.FailedSources)
+	}
+	got := payload.FailedSources[0]
+	if got.Source != "photos" || got.Reason != "timeout" {
+		t.Fatalf("failed_sources[0] = %+v, want {photos timeout}", got)
+	}
+	// failed_sources must sit ahead of results, not buried at the end.
+	if strings.Index(stdout, `"failed_sources"`) > strings.Index(stdout, `"results"`) {
+		t.Fatalf("failed_sources buried after results:\n%s", stdout)
+	}
+	if len(payload.Results) != 1 {
+		t.Fatalf("surviving result dropped: %+v", payload.Results)
+	}
+}
+
+// TestSearchTotalTimeoutExitsOne pins the deterministic exit contract:
+// every source failing (here all time out) is exit 1, a partial failure
+// is exit 3 — the same failure shape always yields the same code.
+func TestSearchTotalTimeoutExitsOne(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:        "photoscrawl",
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+		searchSleep: "3",
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "search", "grill")
+	if code != 1 {
+		t.Fatalf("total timeout exit = %d, want 1 stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "photos search failed: timed out after 100ms") {
+		t.Fatalf("stderr missing timeout line:\n%s", stderr)
 	}
 }
 

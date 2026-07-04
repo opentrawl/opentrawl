@@ -82,13 +82,13 @@ type crawlerSearchEnvelope struct {
 }
 
 type federatedSearchEnvelope struct {
-	Query          string        `json:"query"`
-	WhoResolved    *WhoCandidate `json:"who_resolved,omitempty"`
-	Results        []SearchRow   `json:"results"`
-	TotalMatches   int           `json:"total_matches"`
-	Truncated      bool          `json:"truncated"`
-	FailedSources  []string      `json:"failed_sources,omitempty"`
-	SkippedSources []string      `json:"skipped_sources,omitempty"`
+	Query          string         `json:"query"`
+	WhoResolved    *WhoCandidate  `json:"who_resolved,omitempty"`
+	FailedSources  []failedSource `json:"failed_sources,omitempty"`
+	SkippedSources []string       `json:"skipped_sources,omitempty"`
+	Results        []SearchRow    `json:"results"`
+	TotalMatches   int            `json:"total_matches"`
+	Truncated      bool           `json:"truncated"`
 }
 
 type mergedSearchResult struct {
@@ -474,72 +474,6 @@ func normalizeSearchLimit(limit int) (int, error) {
 		return 0, usageErr{fmt.Errorf("search --limit must be at least 1")}
 	}
 	return limit, nil
-}
-
-func searchSuccesses(results []searchSourceResult) int {
-	successes := 0
-	for _, result := range results {
-		if result.Err == nil && !result.Skipped {
-			successes++
-		}
-	}
-	return successes
-}
-
-func searchExit(results []searchSourceResult) error {
-	failures := 0
-	successes := 0
-	for _, result := range results {
-		if result.Err != nil || result.Skipped {
-			failures++
-			continue
-		}
-		successes++
-	}
-	if failures == 0 {
-		return nil
-	}
-	if successes > 0 {
-		return exitErr{code: 3}
-	}
-	return exitErr{code: 1}
-}
-
-func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
-	for _, result := range results {
-		if result.Skipped {
-			_, _ = fmt.Fprintf(r.stderr, "%s cannot filter by person yet\n", result.Source.ID)
-			continue
-		}
-		if result.Err == nil {
-			continue
-		}
-		remedy := fmt.Sprintf("run: trawl doctor %s", result.Source.ID)
-		if logPath := sourceLogPath(result.Source); logPath != "" {
-			remedy += "; read " + logPath
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s search failed. Remedy: %s\n", result.Source.ID, remedy)
-	}
-}
-
-func failedSearchSources(results []searchSourceResult) []string {
-	var failures []string
-	for _, result := range results {
-		if result.Err != nil {
-			failures = append(failures, result.Source.ID)
-		}
-	}
-	return failures
-}
-
-func skippedSearchSources(results []searchSourceResult) []string {
-	var skipped []string
-	for _, result := range results {
-		if result.Skipped {
-			skipped = append(skipped, result.Source.ID)
-		}
-	}
-	return skipped
 }
 
 func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
