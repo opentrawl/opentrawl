@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 )
 
 const Schema = `
@@ -94,4 +95,43 @@ func (i *SQLiteIndex) Clear(ctx context.Context) error {
 		return fmt.Errorf("clear short refs: %w", err)
 	}
 	return nil
+}
+
+// Aliases returns the display alias for each of fullRefs that has index
+// entries. A ref can hold several rows (a shorter prefix plus collision
+// extensions); the longest stored alias is the unambiguous display form.
+func (i *SQLiteIndex) Aliases(ctx context.Context, fullRefs []string) (map[string]string, error) {
+	if len(fullRefs) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(fullRefs)), ",")
+	args := make([]any, 0, len(fullRefs))
+	for _, ref := range fullRefs {
+		args = append(args, ref)
+	}
+	rows, err := i.db.QueryContext(ctx, `
+select full_ref, alias
+from short_refs
+where full_ref in (`+placeholders+`)
+order by full_ref, length(alias) desc
+`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("read short ref aliases: %w", err)
+	}
+	defer rows.Close()
+
+	aliases := make(map[string]string, len(fullRefs))
+	for rows.Next() {
+		var fullRef, alias string
+		if err := rows.Scan(&fullRef, &alias); err != nil {
+			return nil, fmt.Errorf("scan short ref alias: %w", err)
+		}
+		if aliases[fullRef] == "" {
+			aliases[fullRef] = alias
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read short ref aliases: %w", err)
+	}
+	return aliases, nil
 }

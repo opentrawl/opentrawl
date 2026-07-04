@@ -225,6 +225,24 @@ func (r *Run) Finish(err error) error {
 	return r.write(LevelInfo, "finish", "outcome=error", VisibilityInternal)
 }
 
+// FinishRejected closes a run whose input was rejected before any work ran
+// (usage errors). Rejected input is user feedback, not crawler health, so no
+// error line is written and the run never surfaces as a recent error.
+func (r *Run) FinishRejected() error {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	if r.finished {
+		r.mu.Unlock()
+		return nil
+	}
+	r.finished = true
+	r.mu.Unlock()
+
+	return r.write(LevelInfo, "finish", "outcome=rejected", VisibilityInternal)
+}
+
 func guardPublicEvent(event string) error {
 	if strings.TrimSpace(event) == "finish" {
 		return errors.New("log finish event is reserved; use Run.Finish")

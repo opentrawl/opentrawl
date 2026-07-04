@@ -110,7 +110,7 @@ func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
 		"  auth: fail - calendar permission denied",
 		"",
 		"Recent log:",
-		"  Most recent error: sync permission_denied: calendar permission denied",
+		"  Most recent error: sync permission denied: calendar permission denied",
 		"    Remedy: grant Calendar access",
 		"",
 	}, "\n")
@@ -249,8 +249,8 @@ func TestWriteStatus(t *testing.T) {
 		"  State: fresh",
 		"",
 		"Recent log:",
-		"  Last run: sync success at 2026-07-02T14:03:11+02:00",
-		"  Most recent error: sync backup_failed: backup fetch exited early",
+		"  Last run: sync succeeded at 2026-07-02 14:03",
+		"  Most recent error: sync backup failed: backup fetch exited early",
 		"    Remedy: try again when the network is available",
 		"",
 	}, "\n")
@@ -281,12 +281,64 @@ func TestWriteStatusShowsRecentUsageError(t *testing.T) {
 		"Command failed.",
 		"",
 		"Recent log:",
-		"  Most recent error: search usage_error: search --who requires an identity",
+		"  Most recent error: search usage error: search --who requires an identity",
 		"    Remedy: run search with --who NAME",
 		"",
 	}, "\n")
 	if buf.String() != want {
 		t.Fatalf("status output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWriteLogTailHumanisesRunStatus(t *testing.T) {
+	when := time.Date(2026, 7, 4, 21, 31, 45, 0, time.FixedZone("CEST", 2*60*60))
+	var buf bytes.Buffer
+	err := WriteLogTail(&buf, LogTail{
+		LastRun: &cklog.RunSummary{
+			Command:    "stats",
+			Outcome:    "success",
+			FinishedAt: when,
+		},
+		MostRecentError: &cklog.Line{
+			Command: "search",
+			Event:   "run_failed",
+			Message: `error="search takes exactly one query"`,
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"",
+		"Recent log:",
+		"  Last run: stats succeeded at 2026-07-04 21:31",
+		"  Most recent error: search failed: search takes exactly one query",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("log tail output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
+func TestWriteLogTailHumanisesFailureOutcome(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteLogTail(&buf, LogTail{
+		LastRun: &cklog.RunSummary{
+			Command: "sync",
+			Outcome: "failure",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"",
+		"Recent log:",
+		"  Last run: sync failed",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("log tail output:\n%s\nwant:\n%s", buf.String(), want)
 	}
 }
 

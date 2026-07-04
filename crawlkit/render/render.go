@@ -62,6 +62,7 @@ type Field struct {
 
 type Freshness struct {
 	LastSync string
+	Label    string // defaults to "Last sync"; import-only crawlers say "Last import"
 	State    string
 }
 
@@ -118,7 +119,29 @@ func WriteChecks(w io.Writer, checks []Check) error {
 }
 
 func displayCheckName(name string) string {
-	return strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(name), "_", " ")), " ")
+	return displayCode(name)
+}
+
+func displayRunOutcome(outcome string) string {
+	switch strings.TrimSpace(outcome) {
+	case "success":
+		return "succeeded"
+	case "failure":
+		return "failed"
+	default:
+		return displayCode(outcome)
+	}
+}
+
+func displayLogEvent(event string) string {
+	if strings.TrimSpace(event) == "run_failed" {
+		return "failed"
+	}
+	return displayCode(event)
+}
+
+func displayCode(value string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(strings.TrimSpace(value), "_", " ")), " ")
 }
 
 func WriteStatus(w io.Writer, status Status) error {
@@ -209,7 +232,7 @@ func doctorLastRunOutput(run cklog.RunSummary) *DoctorLogEvent {
 	}
 	return &DoctorLogEvent{
 		WhatHappened: whatHappened,
-		When:         formatTime(firstTime(run.FinishedAt, run.StartedAt)),
+		When:         jsonTime(firstTime(run.FinishedAt, run.StartedAt)),
 	}
 }
 
@@ -220,7 +243,7 @@ func doctorRecentErrorOutput(line cklog.Line) *DoctorLogEvent {
 	}
 	return &DoctorLogEvent{
 		WhatHappened: message,
-		When:         formatTime(line.Timestamp),
+		When:         jsonTime(line.Timestamp),
 		Remedy:       remedy,
 	}
 }
@@ -248,7 +271,11 @@ func writeSection(w io.Writer, section Section) error {
 func writeFreshness(w io.Writer, freshness Freshness) error {
 	var fields []Field
 	if freshness.LastSync != "" {
-		fields = append(fields, Field{Label: "Last sync", Value: freshness.LastSync})
+		label := freshness.Label
+		if label == "" {
+			label = "Last sync"
+		}
+		fields = append(fields, Field{Label: label, Value: freshness.LastSync})
 	}
 	if freshness.State != "" {
 		fields = append(fields, Field{Label: "State", Value: freshness.State})
@@ -258,7 +285,7 @@ func writeFreshness(w io.Writer, freshness Freshness) error {
 
 func writeLastRun(w io.Writer, run cklog.RunSummary) error {
 	command := emptyDash(run.Command)
-	outcome := emptyDash(run.Outcome)
+	outcome := emptyDash(displayRunOutcome(run.Outcome))
 	if _, err := fmt.Fprintf(w, "  Last run: %s %s", command, outcome); err != nil {
 		return err
 	}
@@ -273,7 +300,7 @@ func writeLastRun(w io.Writer, run cklog.RunSummary) error {
 
 func writeRecentError(w io.Writer, line cklog.Line) error {
 	message, remedy := logErrorMessage(line.Message)
-	event := strings.TrimSpace(strings.Join(nonEmpty(line.Command, line.Event), " "))
+	event := strings.TrimSpace(strings.Join(nonEmpty(line.Command, displayLogEvent(line.Event)), " "))
 	if event == "" {
 		event = "error"
 	}
@@ -282,6 +309,11 @@ func writeRecentError(w io.Writer, line cklog.Line) error {
 	}
 	if message != "" {
 		if _, err := fmt.Fprintf(w, ": %s", message); err != nil {
+			return err
+		}
+	}
+	if when := formatTime(line.Timestamp); when != "" {
+		if _, err := fmt.Fprintf(w, " (at %s)", when); err != nil {
 			return err
 		}
 	}
@@ -351,7 +383,13 @@ func parseLogFields(message string) map[string]string {
 	return fields
 }
 
+// formatTime is the human-mode time: short local. JSON keeps full RFC3339
+// via jsonTime — the two surfaces must never share a formatter.
 func formatTime(value time.Time) string {
+	return ShortLocalTime(value)
+}
+
+func jsonTime(value time.Time) string {
 	if value.IsZero() {
 		return ""
 	}
