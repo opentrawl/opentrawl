@@ -67,21 +67,40 @@ else. Tokens never appear in output, errors or logs.
 
 ## Commands
 
+Read your archive:
+
 ```sh
+birdcrawl tweets
+birdcrawl bookmarks
+birdcrawl likes
+birdcrawl mentions
+birdcrawl search "solar kettle" --limit 20
+birdcrawl open t7k3f
+birdcrawl stats --window 30d --by likes --limit 10
+```
+
+Keep it fresh:
+
+```sh
+birdcrawl sync
+birdcrawl import archive /path/to/x-archive
+```
+
+Health:
+
+```sh
+birdcrawl status
+birdcrawl doctor
 birdcrawl metadata --json
-birdcrawl status --json
-birdcrawl import archive /path/to/x-archive --json
-birdcrawl sync --json
-birdcrawl search "solar kettle" --limit 20 --json
-birdcrawl open birdcrawl:tweet/1800000000000000001 --json
-birdcrawl stats --window 30d --by likes --limit 10 --json
-birdcrawl doctor --json
+birdcrawl version
 ```
 
 Human text is the default. Add `--json` for the contract envelope.
 
-Search returns at most 20 results by default and clamps `--limit` to
-200. `open` returns one tweet, up to 3 ancestors and up to 20 replies.
+Browse and search return at most 20 results by default and clamp
+`--limit` to 200. `open` accepts a short ref from human output or a
+full `birdcrawl:tweet/ID` ref, and returns one tweet, up to 3
+ancestors and up to 20 replies.
 
 ## Current status
 
@@ -89,7 +108,7 @@ birdcrawl is pre-1.0. Breaking changes are allowed while the OpenTrawl
 contract settles.
 
 The current build supports archive import, live X API sync with
-budget metering, status, search, open, stats and doctor.
+budget metering, status, browsing, search, open, stats and doctor.
 
 ## Build
 

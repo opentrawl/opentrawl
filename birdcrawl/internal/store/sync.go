@@ -54,7 +54,7 @@ func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	return s.base.WithTx(ctx, func(tx *sql.Tx) error {
+	err := s.base.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := upsertProfiles(ctx, tx, page.Profiles, now); err != nil {
 			return err
 		}
@@ -77,6 +77,13 @@ func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	if len(tweetFullRefs(page.Tweets)) == 0 {
+		return nil
+	}
+	return s.RebuildShortRefs(ctx)
 }
 
 func (s *Store) AddSpend(ctx context.Context, month string, micros int64, at time.Time) error {

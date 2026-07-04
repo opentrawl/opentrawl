@@ -6,6 +6,7 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
@@ -26,6 +27,8 @@ func (r *runtime) print(value any) error {
 		return r.printDoctor(v)
 	case searchEnvelope:
 		return r.printSearch(v)
+	case listEnvelope:
+		return r.printList(v)
 	case openEnvelope:
 		return r.printOpen(v)
 	case importEnvelope:
@@ -33,9 +36,7 @@ func (r *runtime) print(value any) error {
 	case statsEnvelope:
 		return r.printStats(v)
 	default:
-		enc := json.NewEncoder(r.stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(value)
+		return fmt.Errorf("internal: no human renderer for %T", value)
 	}
 }
 
@@ -53,7 +54,7 @@ func (r *runtime) printManifest(value control.Manifest) error {
 func (r *runtime) printStatus(value statusEnvelope) error {
 	return render.WriteStatus(r.stdout, render.Status{
 		State:   render.StatusState(value.State),
-		Summary: value.Summary,
+		Summary: value.humanSummary(),
 		Sections: []render.Section{
 			{Title: "Archive", Fields: statusRenderFields(value.Counts)},
 			{Title: "Spend", Fields: []render.Field{
@@ -68,7 +69,6 @@ func (r *runtime) printStatus(value statusEnvelope) error {
 			}},
 		},
 		Freshness: statusRenderFreshness(value.Freshness),
-		Log:       value.logTail,
 	})
 }
 
@@ -83,12 +83,19 @@ func statusRenderFields(counts []countEnvelope) []render.Field {
 func statusRenderFreshness(value freshnessEnvelope) *render.Freshness {
 	switch {
 	case value.LastSync != "":
-		return &render.Freshness{LastSync: value.LastSync}
+		return &render.Freshness{LastSync: statusHumanTime(value.LastSync, value.lastSyncTime)}
 	case value.LastImport != "":
-		return &render.Freshness{LastSync: value.LastImport, State: "archive import only"}
+		return &render.Freshness{LastSync: statusHumanTime(value.LastImport, value.lastImportTime), State: "archive import only"}
 	default:
 		return nil
 	}
+}
+
+func statusHumanTime(value string, t time.Time) string {
+	if !t.IsZero() {
+		return render.ShortLocalTime(t)
+	}
+	return value
 }
 
 func (r *runtime) printDoctor(value doctorOutput) error {
@@ -109,45 +116,57 @@ func doctorRenderChecks(checks []doctorCheck) []render.Check {
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
+	items := make([]render.ListItem, 0, len(value.Results))
 	for _, item := range value.Results {
-		if _, err := fmt.Fprintf(r.stdout, "%s %s in %s\n%s\nref: %s\n\n", item.Time, item.Who, item.Where, item.Snippet, item.Ref); err != nil {
-			return err
-		}
+		items = append(items, render.ListItem{
+			Time: item.timeValue,
+			Who:  humanWhoCell(item.rawWho, item.authorID, item.inReplyTo, item.inReplyToAuthorID, value.ownerAuthorID),
+			Ref:  displayRef(item.Ref, item.ShortRef),
+			Text: item.Snippet,
+		})
 	}
-	if value.Truncated {
-		_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches; narrow with --limit, --after, or --before\n", len(value.Results), value.TotalMatches)
-		return err
+	return render.WriteList(r.stdout, render.List{
+		Heading:   fmt.Sprintf("Search %q: showing %d of %d.", value.Query, len(value.Results), value.TotalMatches),
+		Hints:     searchHints(value.Query, value.Limit, value.Truncated),
+		Items:     items,
+		ClampText: 2,
+		Empty:     fmt.Sprintf("No matches for %q.", value.Query),
+	})
+}
+
+func (r *runtime) printList(value listEnvelope) error {
+	command := browseCommands[value.Kind]
+	items := make([]render.ListItem, 0, len(value.Results))
+	for _, item := range value.Results {
+		items = append(items, render.ListItem{
+			Time: item.timeValue,
+			Who:  browseWho(item, value.ownerAuthorID),
+			Ref:  displayRef(item.Ref, item.ShortRef),
+			Text: item.Text,
+		})
 	}
-	_, err := fmt.Fprintf(r.stdout, "showing %d of %d matches\n", len(value.Results), value.TotalMatches)
-	return err
+	return render.WriteList(r.stdout, render.List{
+		Heading:   fmt.Sprintf("%s: showing %d of %d, newest first.", command.title, len(value.Results), value.Total),
+		Hints:     browseHints(value.Kind, value.Limit, value.Truncated),
+		Items:     items,
+		ClampText: 0,
+		Empty:     command.empty,
+	})
 }
 
 func (r *runtime) printOpen(value openEnvelope) error {
-	if _, err := fmt.Fprintf(r.stdout, "ref: %s\n", value.Ref); err != nil {
+	if err := render.WriteCard(r.stdout, render.Card{
+		Title:  humanName(value.Tweet.Who, value.Tweet.authorID, value.ownerAuthorID) + " at " + render.ShortLocalTime(value.Tweet.timeValue),
+		Fields: openCardFields(value),
+		Body:   value.Tweet.Text,
+	}); err != nil {
 		return err
 	}
-	if err := printOpenTweet(r.stdout, "tweet", value.Tweet); err != nil {
+	if err := r.printOpenContext("Earlier in thread", value.Ancestors, value.ownerAuthorID); err != nil {
 		return err
 	}
-	if len(value.Ancestors) > 0 {
-		if _, err := io.WriteString(r.stdout, "\nAncestors:\n"); err != nil {
-			return err
-		}
-		for _, tweet := range value.Ancestors {
-			if err := printOpenTweet(r.stdout, "-", tweet); err != nil {
-				return err
-			}
-		}
-	}
-	if len(value.Replies) > 0 {
-		if _, err := io.WriteString(r.stdout, "\nReplies:\n"); err != nil {
-			return err
-		}
-		for _, tweet := range value.Replies {
-			if err := printOpenTweet(r.stdout, "-", tweet); err != nil {
-				return err
-			}
-		}
+	if err := r.printOpenContext("Replies", value.Replies, value.ownerAuthorID); err != nil {
+		return err
 	}
 	if value.AncestorsTruncated || value.RepliesTruncated {
 		_, err := io.WriteString(r.stdout, "\ncontext is bounded; more tweets omitted\n")
@@ -156,13 +175,238 @@ func (r *runtime) printOpen(value openEnvelope) error {
 	return nil
 }
 
-func printOpenTweet(w io.Writer, label string, tweet openTweet) error {
-	if tweet.Unavailable {
-		_, err := fmt.Fprintf(w, "%s %s: %s\n", label, tweet.Ref, tweet.Text)
+func openCardFields(value openEnvelope) []render.CardField {
+	fields := []render.CardField{
+		{Label: "counts", Value: countsLine(value.Tweet)},
+		{Label: "counts as of", Value: render.ShortLocalTime(value.Tweet.countsAsOfTime)},
+		{Label: "ref", Value: value.Ref},
+	}
+	if value.Tweet.ReplyingTo != "" {
+		fields = append([]render.CardField{{
+			Label: "replying to",
+			Value: humanName(value.Tweet.ReplyingTo, value.Tweet.replyingToAuthorID, value.ownerAuthorID),
+		}}, fields...)
+	}
+	if value.Tweet.Note != "" {
+		fields = append(fields, render.CardField{Label: "note", Value: value.Tweet.Note})
+	}
+	return fields
+}
+
+func (r *runtime) printOpenContext(title string, tweets []openTweet, ownerAuthorID string) error {
+	if len(tweets) == 0 {
+		return nil
+	}
+	if _, err := fmt.Fprintf(r.stdout, "\n%s:\n", title); err != nil {
 		return err
 	}
-	_, err := fmt.Fprintf(w, "%s %s %s\n%s\n", label, tweet.Time, tweet.Who, tweet.Text)
-	return err
+	width := render.OutputWidth(r.stdout)
+	for _, tweet := range tweets {
+		ref := displayRef(tweet.Ref, tweet.ShortRef)
+		who := humanName(tweet.Who, tweet.authorID, ownerAuthorID)
+		if tweet.Unavailable {
+			who = "unavailable"
+		}
+		header := strings.Join(nonEmpty(ref, render.ShortLocalTime(tweet.timeValue), who), "  ")
+		for _, line := range render.WrapWithIndent("  ", header, width, "  ") {
+			if _, err := fmt.Fprintln(r.stdout, line); err != nil {
+				return err
+			}
+		}
+		for _, line := range render.WrapWithIndent("    ", tweet.Text, width, "    ") {
+			if _, err := fmt.Fprintln(r.stdout, line); err != nil {
+				return err
+			}
+		}
+		if tweet.Note != "" {
+			for _, line := range render.WrapWithIndent("    ", "note: "+tweet.Note, width, "    ") {
+				if _, err := fmt.Fprintln(r.stdout, line); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func (r *runtime) printStats(value statsEnvelope) error {
+	if _, err := fmt.Fprintf(r.stdout, "Your top tweets by %s, last %s.\n", value.By, humanWindow(value.Window)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(r.stdout, "Showing %d of %d.\n", len(value.Results), value.Population); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(r.stdout, statsFreshnessHint(value.Results)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(r.stdout, "Open: birdcrawl open REF"); err != nil {
+		return err
+	}
+	if value.Population > len(value.Results) {
+		if _, err := fmt.Fprintf(r.stdout, "More: birdcrawl stats --by %s --limit %d\n", value.By, nextLimit(len(value.Results))); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
+		return err
+	}
+	rows := make([][]string, 0, len(value.Results))
+	for _, row := range value.Results {
+		rows = append(rows, []string{
+			render.ShortLocalTime(row.timeValue),
+			groupDigits64(row.Count),
+			displayRef(row.Ref, row.ShortRef),
+			row.Text,
+		})
+	}
+	return render.WriteTable(r.stdout, []render.TableColumn{
+		{Header: "date", Width: 16},
+		{Header: value.By, AlignRight: true},
+		{Header: "ref"},
+		{Header: "text", Wrap: true},
+	}, rows)
+}
+
+func searchHints(query string, limit int, truncated bool) []string {
+	hints := []string{"Open: birdcrawl open REF"}
+	if truncated {
+		hints = append(hints, "More: birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)))
+	}
+	return hints
+}
+
+func browseHints(kind string, limit int, truncated bool) []string {
+	hints := []string{"Open: birdcrawl open REF"}
+	if truncated {
+		hints = append(hints, "More: birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)))
+	}
+	return hints
+}
+
+func quoteSearchQuery(query string) string {
+	return `"` + strings.ReplaceAll(strings.ReplaceAll(query, `\`, `\\`), `"`, `\"`) + `"`
+}
+
+func nextLimit(limit int) int {
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	next := limit * 2
+	if next > maxSearchLimit {
+		return maxSearchLimit
+	}
+	return next
+}
+
+func browseWho(item listResult, ownerAuthorID string) string {
+	return humanWhoCell(item.rawWho, item.authorID, item.InReplyTo, item.inReplyToAuthorID, ownerAuthorID)
+}
+
+func humanName(value, authorID, ownerAuthorID string) string {
+	if ownerAuthorID != "" && authorID == ownerAuthorID {
+		return "me"
+	}
+	return value
+}
+
+// jsonWho is the sender only; the reply target lives in where/in_reply_to.
+// Composing the arrow here would duplicate that field (telecrawl keeps who
+// bare, and trawl federates both).
+func jsonWho(value, authorID, replyTo, replyToAuthorID, ownerAuthorID string) string {
+	return humanName(value, authorID, ownerAuthorID)
+}
+
+func humanWhoCell(value, authorID, replyTo, replyToAuthorID, ownerAuthorID string) string {
+	who := humanWhoPerson(value, authorID, ownerAuthorID, 24)
+	if strings.TrimSpace(replyTo) == "" {
+		return who
+	}
+	suffixPerson := humanWhoPerson(replyTo, replyToAuthorID, ownerAuthorID, 24)
+	suffix := " → " + suffixPerson
+	remaining := 24 - render.DisplayWidth(suffix)
+	if remaining < 1 {
+		remaining = 1
+	}
+	return humanWhoPerson(value, authorID, ownerAuthorID, remaining) + suffix
+}
+
+func humanWhoPerson(value, authorID, ownerAuthorID string, budget int) string {
+	value = humanName(value, authorID, ownerAuthorID)
+	if render.DisplayWidth(value) <= budget {
+		return value
+	}
+	if handle := displayHandle(value); handle != "" {
+		return handle
+	}
+	return value
+}
+
+func displayHandle(value string) string {
+	value = strings.TrimSpace(value)
+	if strings.HasPrefix(value, "@") {
+		return strings.Fields(value)[0]
+	}
+	start := strings.LastIndex(value, "(@")
+	if start < 0 || !strings.HasSuffix(value, ")") {
+		return ""
+	}
+	return strings.TrimSuffix(value[start+1:], ")")
+}
+
+func displayRef(fullRef, shortRef string) string {
+	if shortRef != "" {
+		return shortRef
+	}
+	return fullRef
+}
+
+func countsLine(tweet openTweet) string {
+	return groupDigits64(tweet.LikeCount) + " likes · " + groupDigits64(tweet.RetweetCount) + " retweets · " + groupDigits64(tweet.ReplyCount) + " replies"
+}
+
+func statsFreshnessHint(rows []statsRow) string {
+	var oldest, newest string
+	for _, row := range rows {
+		if row.countsAsOfTime.IsZero() {
+			continue
+		}
+		value := render.ShortLocalTime(row.countsAsOfTime)
+		if oldest == "" || value < oldest {
+			oldest = value
+		}
+		if newest == "" || value > newest {
+			newest = value
+		}
+	}
+	switch {
+	case oldest == "":
+		return "Engagement counts have not been fetched."
+	case oldest == newest:
+		return "Engagement counts fetched as of " + oldest + "."
+	default:
+		return "Engagement counts fetched between " + oldest + " and " + newest + "."
+	}
+}
+
+func humanWindow(value string) string {
+	if strings.HasSuffix(value, "d") {
+		days := strings.TrimSuffix(value, "d")
+		if days == "1" {
+			return "1 day"
+		}
+		return days + " days"
+	}
+	return value
+}
+
+func nonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			out = append(out, value)
+		}
+	}
+	return out
 }
 
 func humanLabel(value string) string {

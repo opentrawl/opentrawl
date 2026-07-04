@@ -18,11 +18,19 @@ type SearchFilter struct {
 	Before *time.Time
 }
 
+type ListFilter struct {
+	Limit  int
+	After  *time.Time
+	Before *time.Time
+}
+
 type SearchResult struct {
 	Tweet
-	Snippet string
-	Who     string
-	Where   string
+	Snippet           string
+	Who               string
+	Where             string
+	InReplyTo         string
+	InReplyToAuthorID string
 }
 
 func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult, int, error) {
@@ -44,7 +52,7 @@ func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult
 		return nil, 0, err
 	}
 	selectQuery := `select ` + tweetSelectColumns("t") + `,
-coalesce(p.author_name,''), coalesce(p.author_handle,'')
+coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,'')
 from tweets_fts f
 join tweets t on t.rowid = f.rowid
 left join tweets p on p.id = t.in_reply_to_id
@@ -58,15 +66,64 @@ order by t.created_at desc, t.id desc limit ?`
 	defer rows.Close()
 	var out []SearchResult
 	for rows.Next() {
-		tweet, parentName, parentHandle, err := scanTweetWithParent(rows)
+		tweet, parentID, parentName, parentHandle, err := scanTweetWithParent(rows)
 		if err != nil {
 			return nil, 0, err
 		}
 		out = append(out, SearchResult{
-			Tweet:   tweet,
-			Snippet: ckstore.FTS5Snippet(tweet.Text, filter.Query),
-			Who:     DisplayName(tweet.AuthorName, tweet.AuthorHandle),
-			Where:   replyWhere(tweet.InReplyToID, parentName, parentHandle),
+			Tweet:             tweet,
+			Snippet:           ckstore.FTS5Snippet(tweet.Text, filter.Query),
+			Who:               DisplayName(tweet.AuthorName, tweet.AuthorHandle),
+			Where:             replyWhere(tweet.InReplyToID, parentName, parentHandle),
+			InReplyTo:         replyDisplay(tweet.InReplyToID, parentName, parentHandle),
+			InReplyToAuthorID: parentID,
+		})
+	}
+	return out, total, rows.Err()
+}
+
+func (s *Store) ListByRole(ctx context.Context, role string, filter ListFilter) ([]SearchResult, int, error) {
+	role = strings.TrimSpace(role)
+	if role == "" {
+		return nil, 0, errors.New("role required")
+	}
+	if filter.Limit <= 0 {
+		filter.Limit = 20
+	}
+	where, whereArgs := searchWhere(SearchFilter{After: filter.After, Before: filter.Before}, "t.")
+	countArgs := append([]any{role}, whereArgs...)
+	var total int
+	if err := s.db.QueryRowContext(ctx, `select count(*)
+from tweets t
+join tweet_roles r on r.tweet_id = t.id
+where r.role = ?`+where, countArgs...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	args := append(countArgs, filter.Limit)
+	rows, err := s.db.QueryContext(ctx, `select `+tweetSelectColumns("t")+`,
+coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,'')
+from tweets t
+join tweet_roles r on r.tweet_id = t.id
+left join tweets p on p.id = t.in_reply_to_id
+where r.role = ?`+where+`
+order by t.created_at desc, t.id desc
+limit ?`, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var out []SearchResult
+	for rows.Next() {
+		tweet, parentID, parentName, parentHandle, err := scanTweetWithParent(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		out = append(out, SearchResult{
+			Tweet:             tweet,
+			Who:               DisplayName(tweet.AuthorName, tweet.AuthorHandle),
+			Where:             replyWhere(tweet.InReplyToID, parentName, parentHandle),
+			InReplyTo:         replyDisplay(tweet.InReplyToID, parentName, parentHandle),
+			InReplyToAuthorID: parentID,
 		})
 	}
 	return out, total, rows.Err()
@@ -91,13 +148,26 @@ func searchWhere(filter SearchFilter, prefix string) (string, []any) {
 
 func replyWhere(replyID, parentName, parentHandle string) string {
 	if strings.TrimSpace(replyID) == "" {
-		return "X"
+		return ""
 	}
-	name := DisplayName(parentName, parentHandle)
+	name := replyDisplay(replyID, parentName, parentHandle)
 	if name == "" {
-		return "X"
+		return "reply"
 	}
 	return "reply to " + name
+}
+
+func replyDisplay(replyID, parentName, parentHandle string) string {
+	if strings.TrimSpace(replyID) == "" {
+		return ""
+	}
+	if strings.TrimSpace(parentName) == "" && strings.TrimSpace(parentHandle) == "" {
+		// The parent row exists but the export carries no author for it
+		// (authorless liked rows); an arrow to a nameless target reads as
+		// a defect, so render the author alone.
+		return ""
+	}
+	return DisplayName(parentName, parentHandle)
 }
 
 func DisplayName(name, handle string) string {
@@ -149,21 +219,21 @@ func scanTweet(scanner tweetScanner) (Tweet, error) {
 	return t, nil
 }
 
-func scanTweetWithParent(scanner tweetScanner) (Tweet, string, string, error) {
+func scanTweetWithParent(scanner tweetScanner) (Tweet, string, string, string, error) {
 	var t Tweet
-	var createdAt, metricsAt, parentName, parentHandle string
+	var createdAt, metricsAt, parentID, parentName, parentHandle string
 	var hasMedia int
 	err := scanner.Scan(&t.ID, &createdAt, &t.AuthorID, &t.AuthorHandle, &t.AuthorName, &t.Text,
 		&t.InReplyToID, &t.ConversationID, &t.QuotedTweetID, &t.LikeCount, &t.RetweetCount,
 		&t.ReplyCount, &t.ViewCount, &t.QuoteCount, &t.BookmarkCount, &hasMedia, &t.RawJSON,
-		&t.FirstSource, &metricsAt, &parentName, &parentHandle)
+		&t.FirstSource, &metricsAt, &parentID, &parentName, &parentHandle)
 	if err != nil {
-		return Tweet{}, "", "", err
+		return Tweet{}, "", "", "", err
 	}
 	t.CreatedAt = parseStoredTime(createdAt)
 	t.MetricsFetchedAt = parseStoredTime(metricsAt)
 	t.HasMedia = hasMedia != 0
-	return t, parentName, parentHandle, nil
+	return t, parentID, parentName, parentHandle, nil
 }
 
 func (s *Store) tweetByID(ctx context.Context, id string) (Tweet, error) {

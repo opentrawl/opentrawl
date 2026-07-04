@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	cklog "github.com/openclaw/crawlkit/log"
 	ckstore "github.com/openclaw/crawlkit/store"
 )
 
@@ -17,6 +18,7 @@ type Store struct {
 	base *ckstore.Store
 	db   *sql.DB
 	path string
+	log  *cklog.Run
 }
 
 type Tweet struct {
@@ -98,6 +100,9 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.base.Close() }
 func (s *Store) Path() string { return s.path }
+func (s *Store) SetLog(run *cklog.Run) {
+	s.log = run
+}
 
 func (s *Store) migrate(ctx context.Context) error {
 	current, err := userVersion(ctx, s.db)
@@ -163,6 +168,9 @@ on conflict(kind) do update set cursor=excluded.cursor,last_sync_at=excluded.las
 		return err
 	})
 	if err != nil {
+		return ImportStats{}, err
+	}
+	if err := s.RebuildShortRefs(ctx); err != nil {
 		return ImportStats{}, err
 	}
 	stats.Tweets = len(batch.Tweets)

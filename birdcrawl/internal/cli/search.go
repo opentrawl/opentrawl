@@ -16,12 +16,20 @@ func (r *runtime) runSearch(args []string) error {
 	if strings.TrimSpace(filter.Query) == "" {
 		return usageErr(errors.New("search takes a query, e.g. birdcrawl search QUERY"))
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
+	return r.withStore(func(st *store.Store) error {
 		results, total, err := st.Search(r.ctx, filter)
 		if err != nil {
 			return err
 		}
-		return r.print(newSearchEnvelope(filter.Query, results, total))
+		aliases, err := aliasesForSearch(r.ctx, st, results)
+		if err != nil {
+			return err
+		}
+		ownerAuthorID, err := st.OwnerAuthorID(r.ctx)
+		if err != nil {
+			return err
+		}
+		return r.print(newSearchEnvelope(filter.Query, results, total, filter.Limit, aliases, ownerAuthorID))
 	})
 }
 
