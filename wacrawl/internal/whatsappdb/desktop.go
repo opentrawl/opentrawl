@@ -17,7 +17,9 @@ import (
 	"github.com/openclaw/crawlkit/cache"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store"
-	_ "modernc.org/sqlite"
+
+	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -328,7 +330,7 @@ func readContacts(ctx context.Context, path string) ([]store.Contact, map[string
 		return nil, nil, err
 	}
 	defer closeFn()
-	rows, err := db.QueryContext(ctx, `select coalesce(ZWHATSAPPID,''), coalesce(ZPHONENUMBER,''), coalesce(ZFULLNAME,''), coalesce(ZGIVENNAME,''), coalesce(ZLASTNAME,''), coalesce(ZBUSINESSNAME,''), coalesce(ZUSERNAME,''), coalesce(ZLID,''), coalesce(ZABOUTTEXT,''), ZLASTUPDATED from ZWAADDRESSBOOKCONTACT`)
+	rows, err := db.QueryContext(ctx, `select coalesce(ZWHATSAPPID,''), coalesce(ZPHONENUMBER,''), coalesce(ZFULLNAME,''), coalesce(ZGIVENNAME,''), coalesce(ZLASTNAME,''), coalesce(ZBUSINESSNAME,''), coalesce(ZUSERNAME,''), coalesce(ZLID,''), coalesce(ZABOUTTEXT,''), cast(ZLASTUPDATED as real) from ZWAADDRESSBOOKCONTACT`)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -418,7 +420,7 @@ func mergeMissingNames(dst, src map[string]string) {
 }
 
 func readChatRows(ctx context.Context, db *sql.DB) ([]store.Chat, error) {
-	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), c.ZLASTMESSAGEDATE, coalesce(c.ZUNREADCOUNT,0), coalesce(c.ZARCHIVED,0), coalesce(c.ZREMOVED,0), coalesce(c.ZHIDDEN,0), coalesce(c.ZSESSIONTYPE,0), count(m.Z_PK) from ZWACHATSESSION c left join ZWAMESSAGE m on m.ZCHATSESSION=c.Z_PK group by c.Z_PK`)
+	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), cast(c.ZLASTMESSAGEDATE as real), coalesce(c.ZUNREADCOUNT,0), coalesce(c.ZARCHIVED,0), coalesce(c.ZREMOVED,0), coalesce(c.ZHIDDEN,0), coalesce(c.ZSESSIONTYPE,0), count(m.Z_PK) from ZWACHATSESSION c left join ZWAMESSAGE m on m.ZCHATSESSION=c.Z_PK group by c.Z_PK`)
 	if err != nil {
 		return nil, err
 	}
@@ -475,7 +477,7 @@ func mergeChatRows(existing, candidate store.Chat) store.Chat {
 }
 
 func readGroupRows(ctx context.Context, db *sql.DB) ([]store.Group, error) {
-	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(g.ZOWNERJID,''), g.ZCREATIONDATE from ZWAGROUPINFO g join ZWACHATSESSION c on c.Z_PK=g.ZCHATSESSION`)
+	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(g.ZOWNERJID,''), cast(g.ZCREATIONDATE as real) from ZWAGROUPINFO g join ZWACHATSESSION c on c.Z_PK=g.ZCHATSESSION`)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +580,7 @@ func mergeParticipantRows(existing, candidate store.GroupParticipant) store.Grou
 
 func readMessageRows(ctx context.Context, db *sql.DB, sourceRoot string, names map[string]string) ([]store.Message, int, error) {
 	rows, err := db.QueryContext(ctx, `
-select m.Z_PK, coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(m.ZSTANZAID,''), coalesce(m.ZISFROMME,0), m.ZMESSAGEDATE,
+select m.Z_PK, coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(m.ZSTANZAID,''), coalesce(m.ZISFROMME,0), cast(m.ZMESSAGEDATE as real),
        coalesce(m.ZTEXT,''), coalesce(m.ZMESSAGETYPE,0), coalesce(m.ZSTARRED,0), coalesce(m.ZFROMJID,''), coalesce(m.ZTOJID,''), coalesce(m.ZPUSHNAME,''),
        coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''), coalesce(gm.ZFIRSTNAME,''),
        coalesce(mi.ZMEDIALOCALPATH,''), coalesce(mi.ZMEDIAURL,''), coalesce(mi.ZTITLE,''), coalesce(mi.ZVCARDNAME,''), coalesce(mi.ZFILESIZE,0)
@@ -780,17 +782,21 @@ func openReadOnly(path string) (*sql.DB, func(), error) {
 	dsn := sqlitedsn.File(
 		path,
 		sqlitedsn.P("mode", "ro"),
-		sqlitedsn.P("_pragma", "query_only(1)"),
-		sqlitedsn.P("_pragma", "busy_timeout(5000)"),
-		sqlitedsn.P("_pragma", "temp_store(MEMORY)"),
+		sqlitedsn.P("_query_only", "1"),
+		sqlitedsn.P("_busy_timeout", "5000"),
 	)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, nil, err
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
 	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, nil, err
+	}
+	// temp_store has no DSN form in the cgo driver; the pool holds one conn.
+	if _, err := db.ExecContext(context.Background(), "pragma temp_store = MEMORY"); err != nil {
 		_ = db.Close()
 		return nil, nil, err
 	}

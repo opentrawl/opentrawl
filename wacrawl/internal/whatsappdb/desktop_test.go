@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/openclaw/wacrawl/internal/store"
-	_ "modernc.org/sqlite"
 )
 
 func TestImportDesktopCoreDataShape(t *testing.T) {
@@ -76,7 +75,7 @@ func TestImportDesktopDuplicateSourceRows(t *testing.T) {
 	source := t.TempDir()
 	createFixtureDBs(t, source)
 
-	chatDB, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	chatDB, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +131,7 @@ func TestImportDesktopReadsMediaLinkedByMessage(t *testing.T) {
 	source := t.TempDir()
 	createFixtureDBs(t, source)
 
-	chatDB, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	chatDB, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +179,7 @@ func TestImportDesktopUsesProfilePushNames(t *testing.T) {
 	source := t.TempDir()
 	createFixtureDBs(t, source)
 
-	chatDB, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	chatDB, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +269,7 @@ func TestImportDesktopCopyMedia(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chatDB, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	chatDB, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +487,7 @@ func TestExtractWithoutContactsDB(t *testing.T) {
 func TestExtractReportsBrokenChatSchema(t *testing.T) {
 	ctx := context.Background()
 	source := t.TempDir()
-	db, err := sql.Open("sqlite", filepath.Join(source, chatDBName))
+	db, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -510,7 +509,7 @@ func TestExtractReportsBrokenChatSchema(t *testing.T) {
 
 func TestReadProfilePushNamesReportsBrokenOptionalSchema(t *testing.T) {
 	ctx := context.Background()
-	db, err := sql.Open("sqlite", filepath.Join(t.TempDir(), chatDBName))
+	db, err := sql.Open("sqlite3", filepath.Join(t.TempDir(), chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +557,7 @@ func TestClassifiers(t *testing.T) {
 
 func createFixtureDBs(t *testing.T, dir string) {
 	t.Helper()
-	chat, err := sql.Open("sqlite", filepath.Join(dir, chatDBName))
+	chat, err := sql.Open("sqlite3", filepath.Join(dir, chatDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +579,7 @@ insert into ZWAMESSAGE values (3, 2, 1, 1, 'group-image', 0, 700000002, 'launch 
 insert into ZWAMESSAGE values (4, 1, null, null, 'dm-in', 0, 700000003, 'duplicate stanza id', 0, 0, '111@s.whatsapp.net', '', 'Bob');
 `)
 
-	contacts, err := sql.Open("sqlite", filepath.Join(dir, contactsDBName))
+	contacts, err := sql.Open("sqlite3", filepath.Join(dir, contactsDBName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -601,7 +600,7 @@ func mustExec(t *testing.T, db *sql.DB, query string) {
 
 func mustExecFile(t *testing.T, path string) {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}

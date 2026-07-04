@@ -14,7 +14,10 @@ import (
 	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
-	_ "modernc.org/sqlite"
+
+	// C SQLite via cgo, matching crawlkit/store after the modernc production
+	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -182,12 +185,12 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	}
 	dsn := sqlitedsn.File(
 		path,
-		sqlitedsn.P("_pragma", "foreign_keys(1)"),
-		sqlitedsn.P("_pragma", "journal_mode(WAL)"),
-		sqlitedsn.P("_pragma", "synchronous(NORMAL)"),
-		sqlitedsn.P("_pragma", "busy_timeout(5000)"),
+		sqlitedsn.P("_foreign_keys", "1"),
+		sqlitedsn.P("_journal_mode", "WAL"),
+		sqlitedsn.P("_synchronous", "NORMAL"),
+		sqlitedsn.P("_busy_timeout", "5000"),
 	)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
@@ -219,10 +222,10 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	dsn := sqlitedsn.File(
 		path,
 		sqlitedsn.P("mode", "ro"),
-		sqlitedsn.P("_pragma", "query_only(1)"),
-		sqlitedsn.P("_pragma", "busy_timeout(5000)"),
+		sqlitedsn.P("_query_only", "1"),
+		sqlitedsn.P("_busy_timeout", "5000"),
 	)
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite read-only: %w", err)
 	}
