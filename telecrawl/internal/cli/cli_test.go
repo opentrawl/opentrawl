@@ -168,6 +168,25 @@ func TestStoreImportResultPersistsTelegramUserContactsForExport(t *testing.T) {
 	if contact.DisplayName != "Jef Hellemans" || len(contact.PhoneNumbers) != 0 || len(contact.Accounts["telegram"]) != 1 || contact.Accounts["telegram"][0] != "JefHellemans" {
 		t.Fatalf("exported contact = %#v, want Telegram account without invented phone", contact)
 	}
+
+	out.Reset()
+	errOut.Reset()
+	err = Run(ctx, []string{"--db", db, "contacts", "export"}, &out, &errOut)
+	if err != nil {
+		t.Fatalf("contacts export text: %v stderr=%s", err, errOut.String())
+	}
+	text := out.String()
+	if strings.Contains(text, "{") || strings.Contains(text, `"contacts"`) {
+		t.Fatalf("contacts export text looked like JSON:\n%s", text)
+	}
+	for _, want := range []string{"Jef Hellemans\t@JefHellemans", "1 contact"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("contacts export text missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "identifier") {
+		t.Fatalf("contacts export text must show identifiers, not counts:\n%s", text)
+	}
 }
 
 func TestImportResultForChatFiltersContacts(t *testing.T) {

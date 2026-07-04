@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
@@ -29,13 +30,14 @@ type metadataEnvelope struct {
 }
 
 type statusEnvelope struct {
-	AppID     string            `json:"app_id"`
-	State     string            `json:"state"`
-	Summary   string            `json:"summary"`
-	Freshness freshnessEnvelope `json:"freshness"`
-	Counts    []countEnvelope   `json:"counts"`
-	Auth      authEnvelope      `json:"auth"`
-	Log       logTailEnvelope   `json:"log,omitempty"`
+	AppID     string                `json:"app_id"`
+	State     string                `json:"state"`
+	Summary   string                `json:"summary"`
+	Freshness freshnessEnvelope     `json:"freshness"`
+	Counts    []countEnvelope       `json:"counts"`
+	Auth      authEnvelope          `json:"auth"`
+	Log       *render.DoctorLogTail `json:"log,omitempty"`
+	logTail   render.LogTail        `json:"-"`
 }
 
 type freshnessEnvelope struct {
@@ -54,8 +56,9 @@ type authEnvelope struct {
 }
 
 type doctorOutput struct {
-	Checks []doctorCheck   `json:"checks"`
-	Log    logTailEnvelope `json:"log,omitempty"`
+	Checks  []doctorCheck         `json:"checks"`
+	Log     *render.DoctorLogTail `json:"log,omitempty"`
+	logTail render.LogTail        `json:"-"`
 }
 
 type doctorCheck struct {
@@ -64,29 +67,6 @@ type doctorCheck struct {
 	State   string `json:"state"`
 	Message string `json:"message,omitempty"`
 	Remedy  string `json:"remedy,omitempty"`
-}
-
-type logTailEnvelope struct {
-	LastRun         *logRunEnvelope   `json:"last_run,omitempty"`
-	MostRecentError *logErrorEnvelope `json:"most_recent_error,omitempty"`
-}
-
-type logRunEnvelope struct {
-	RunID      string `json:"run_id"`
-	Command    string `json:"command"`
-	Outcome    string `json:"outcome"`
-	StartedAt  string `json:"started_at,omitempty"`
-	FinishedAt string `json:"finished_at,omitempty"`
-	LastEvent  string `json:"last_event,omitempty"`
-	Version    string `json:"version,omitempty"`
-}
-
-type logErrorEnvelope struct {
-	RunID   string `json:"run_id"`
-	Command string `json:"command"`
-	Event   string `json:"event"`
-	Time    string `json:"time"`
-	Message string `json:"message"`
 }
 
 type searchEnvelope struct {
@@ -230,6 +210,7 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 }
 
 func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
+	logTail := r.logTail()
 	return statusEnvelope{
 		AppID:     "telecrawl",
 		State:     state,
@@ -240,8 +221,9 @@ func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) 
 			{ID: "chats", Label: "chats", Value: int64(status.Chats)},
 			{ID: "since", Label: "since", Value: oldestMessageYear(status)},
 		},
-		Auth: authEnvelope{Authorized: true},
-		Log:  r.logTail(),
+		Auth:    authEnvelope{Authorized: true},
+		Log:     render.DoctorLogTailOutput(logTail),
+		logTail: logTail,
 	}
 }
 
@@ -280,11 +262,16 @@ func oldestMessageYear(status store.Status) int64 {
 	if status.OldestMessage.IsZero() {
 		return 0
 	}
-	return int64(status.OldestMessage.Year())
+	return int64(status.OldestMessage.In(time.Local).Year())
 }
 
 func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
-	return doctorOutput{Checks: []doctorCheck{sourceStoreCheck(report), r.archiveCheck()}, Log: r.logTail()}
+	logTail := r.logTail()
+	return doctorOutput{
+		Checks:  []doctorCheck{sourceStoreCheck(report), r.archiveCheck()},
+		Log:     render.DoctorLogTailOutput(logTail),
+		logTail: logTail,
+	}
 }
 
 func sourceStoreCheck(report telegramdesktop.Report) doctorCheck {
@@ -498,6 +485,17 @@ func formatOptionalTime(t time.Time) string {
 
 func formatLocalTime(t time.Time) string {
 	return t.Local().Format(time.RFC3339)
+}
+
+func parseRenderTime(value string) time.Time {
+	if strings.TrimSpace(value) == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func messageWho(message store.Message) string {

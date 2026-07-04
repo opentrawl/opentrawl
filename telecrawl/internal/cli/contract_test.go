@@ -117,6 +117,37 @@ func TestStatusJSONUsesContractShapeAndStates(t *testing.T) {
 	})
 }
 
+func TestStatusJSONSerializesHumanLogTail(t *testing.T) {
+	db := seedSearchArchive(t, 1)
+	if _, _, err := runCLI(t, "--db", db, "open", "not-a-ref"); err == nil {
+		t.Fatal("open not-a-ref succeeded, want logged error")
+	}
+	stdout, stderr, err := runCLI(t, "--db", db, "status", "--json")
+	if err != nil {
+		t.Fatalf("status: %v stderr=%s", err, stderr)
+	}
+	for _, forbidden := range []string{`"run_id"`, `"last_event"`, `"event"`, "event=", "visibility="} {
+		if strings.Contains(stdout, forbidden) {
+			t.Fatalf("status log leaked %q:\n%s", forbidden, stdout)
+		}
+	}
+	var payload struct {
+		Log *struct {
+			LastRun         *testLogEvent `json:"last_run"`
+			MostRecentError *testLogEvent `json:"most_recent_error"`
+		} `json:"log"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("status json = %s err=%v", stdout, err)
+	}
+	if payload.Log == nil || payload.Log.LastRun == nil || payload.Log.LastRun.WhatHappened == "" || payload.Log.LastRun.When == "" {
+		t.Fatalf("last run log = %#v", payload.Log)
+	}
+	if payload.Log.MostRecentError == nil || payload.Log.MostRecentError.WhatHappened == "" || payload.Log.MostRecentError.When == "" || payload.Log.MostRecentError.Remedy == "" {
+		t.Fatalf("recent error log = %#v", payload.Log)
+	}
+}
+
 func TestDoctorJSONUsesChecksShape(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
 		source := readableTelegramSource(t)
@@ -748,6 +779,22 @@ func TestContractTimestampsUseLocalOffset(t *testing.T) {
 		t.Fatalf("open text: %v stderr=%s", err, stderr)
 	}
 	assertContainsLocalTime(t, openText, wantMessageTime, messageTime)
+
+	whoText, stderr, err := runCLI(t, "--db", db, "who", "Example Sender")
+	if err != nil {
+		t.Fatalf("who text: %v stderr=%s", err, stderr)
+	}
+	assertContainsLocalTime(t, whoText, wantMessageTime, messageTime)
+}
+
+func TestStatusSinceYearUsesLocalOffset(t *testing.T) {
+	loc := useFixedLocalZone(t)
+	messageTime := time.Date(2020, 12, 31, 23, 30, 0, 0, time.UTC)
+	db := seedArchiveWithMessageTime(t, 1, time.Now(), messageTime)
+	status := runStatusJSON(t, db)
+	if got := statusCountValue(t, status, "since"); got != int64(messageTime.In(loc).Year()) {
+		t.Fatalf("since count = %d, want local year %d", got, messageTime.In(loc).Year())
+	}
 }
 
 func TestPerVerbHelpExitsZero(t *testing.T) {
@@ -813,6 +860,12 @@ type doctorCheckJSON struct {
 	State   string `json:"state"`
 	Message string `json:"message"`
 	Remedy  string `json:"remedy"`
+}
+
+type testLogEvent struct {
+	WhatHappened string `json:"what_happened"`
+	When         string `json:"when"`
+	Remedy       string `json:"remedy"`
 }
 
 type searchJSON struct {
@@ -945,6 +998,17 @@ func assertStatusState(t *testing.T, status statusJSON, state string) {
 			t.Fatalf("counts = %#v, want ids %v", status.Counts, want)
 		}
 	}
+}
+
+func statusCountValue(t *testing.T, status statusJSON, id string) int64 {
+	t.Helper()
+	for _, count := range status.Counts {
+		if count.ID == id {
+			return count.Value
+		}
+	}
+	t.Fatalf("counts = %#v, missing %q", status.Counts, id)
+	return 0
 }
 
 func decodeDoctorChecks(t *testing.T, stdout string) []doctorCheckJSON {
@@ -1101,6 +1165,11 @@ func firstSearchAlias(t *testing.T, stdout string) string {
 
 func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 	t.Helper()
+	return seedArchiveWithMessageTime(t, messages, finishedAt, time.Date(2020, 1, 2, 12, 0, 0, 0, time.UTC))
+}
+
+func seedArchiveWithMessageTime(t *testing.T, messages int, finishedAt, messageTime time.Time) string {
+	t.Helper()
 	db := filepath.Join(t.TempDir(), "telecrawl.db")
 	st, err := store.Open(context.Background(), db)
 	if err != nil {
@@ -1110,7 +1179,7 @@ func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 	var chats []store.Chat
 	var rows []store.Message
 	if messages > 0 {
-		chats = []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: time.Date(2020, 1, 2, 12, 0, 0, 0, time.UTC), MessageCount: messages}}
+		chats = []store.Chat{{JID: "100", Kind: "chat", Name: "example chat", LastMessageAt: messageTime, MessageCount: messages}}
 		for i := 0; i < messages; i++ {
 			rows = append(rows, store.Message{
 				SourcePK:   int64(i + 1),
@@ -1119,7 +1188,7 @@ func seedArchive(t *testing.T, messages int, finishedAt time.Time) string {
 				MessageID:  fmt.Sprintf("0:%d", i+1),
 				SenderJID:  "200",
 				SenderName: "Example Sender",
-				Timestamp:  time.Date(2020, 1, 2, 12, i, 0, 0, time.UTC),
+				Timestamp:  messageTime.Add(time.Duration(i) * time.Minute),
 				Text:       "synthetic launch note",
 			})
 		}
