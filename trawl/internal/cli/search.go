@@ -44,6 +44,7 @@ type SearchRow struct {
 	Ref      string `json:"ref"`
 	ShortRef string `json:"short_ref,omitempty"`
 	Time     string `json:"time"`
+	AllDay   bool   `json:"all_day,omitempty"`
 	Who      string `json:"who"`
 	Where    string `json:"where"`
 	Snippet  string `json:"snippet"`
@@ -69,6 +70,7 @@ type crawlerSearchResult struct {
 	ShortRef string `json:"short_ref,omitempty"`
 	Alias    string `json:"alias,omitempty"`
 	Time     string `json:"time"`
+	AllDay   bool   `json:"all_day"`
 	Who      string `json:"who"`
 	Where    string `json:"where"`
 	Snippet  string `json:"snippet"`
@@ -322,6 +324,7 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 			Source:          source.ID,
 			Ref:             item.Ref,
 			Time:            item.Time,
+			AllDay:          item.AllDay,
 			Who:             item.Who,
 			Where:           item.Where,
 			Snippet:         item.Snippet,

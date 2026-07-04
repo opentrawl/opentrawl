@@ -32,12 +32,13 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 	items := make([]render.ListItem, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, render.ListItem{
-			Time:   row.parsedTime,
-			Source: row.surface,
-			Who:    normalizeSelf(row.Who),
-			Where:  normalizeSelf(row.Where),
-			Ref:    searchDisplayRef(row),
-			Text:   row.Snippet,
+			Time:     row.parsedTime,
+			DateOnly: row.AllDay,
+			Source:   row.surface,
+			Who:      normalizeSelf(row.Who),
+			Where:    normalizeSelf(row.Where),
+			Ref:      searchDisplayRef(row),
+			Text:     row.Snippet,
 		})
 	}
 	return items

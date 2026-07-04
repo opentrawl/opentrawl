@@ -225,6 +225,14 @@ func TestCoreDataTimesProvenanceSearchAndOpen(t *testing.T) {
 	if allDay.Results[0].Time != "2026-05-05T00:00:00+02:00" || allDay.Results[0].Who == "" {
 		t.Fatalf("all-day search result = %#v", allDay.Results[0])
 	}
+	// TRAWL-104 tripwire: search JSON carries all_day so the federated
+	// view can render the bare date too.
+	if !allDay.Results[0].AllDay {
+		t.Fatalf("all-day search result missing all_day: %#v", allDay.Results[0])
+	}
+	if search.Results[0].AllDay {
+		t.Fatalf("timed search result must not be all_day: %#v", search.Results[0])
+	}
 	allDayOpen := runJSON[archive.EventDetail](t, "open", allDay.Results[0].Ref, "--json")
 	if allDayOpen.Start != "2026-05-05T00:00:00+02:00" || allDayOpen.End != "2026-05-06T00:00:00+02:00" || !allDayOpen.AllDay {
 		t.Fatalf("all-day event = %#v", allDayOpen)

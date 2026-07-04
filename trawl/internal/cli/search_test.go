@@ -76,6 +76,67 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	}
 }
 
+// TestSearchAllDayRowsRenderDateOnly is the TRAWL-104 tripwire: a
+// source that marks a result all_day gets a bare date in the federated
+// table, never a fake midnight, and the federated JSON carries the bit.
+func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "calcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calcrawl","display_name":"Calendar"}`,
+			search: `{"query":"fair","results":[
+				{"ref":"calcrawl:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","snippet":"Art fair"},
+				{"ref":"calcrawl:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","snippet":"fair prep call"}
+			],"total_matches":2,"truncated":false}`,
+		},
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			search: `{"query":"fair","results":[
+				{"ref":"imessage:msg/1","time":"2026-03-25T09:12:00+01:00","who":"Alice","where":"Family","snippet":"see you at the fair"}
+			],"total_matches":1,"truncated":false}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("COLUMNS", "200")
+
+	stdout, stderr, code := runCLI(t, "search", "fair")
+	if code != 0 {
+		t.Fatalf("search code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	if !strings.Contains(stdout, "2026-03-27  ") || strings.Contains(stdout, "2026-03-27 00:00") {
+		t.Fatalf("all-day row must show a bare date, never 00:00:\n%s", stdout)
+	}
+	for _, want := range []string{
+		shortLocalTestTime(t, "2026-03-26T20:00:00+01:00"),
+		shortLocalTestTime(t, "2026-03-25T09:12:00+01:00"),
+	} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("timed row missing %q:\n%s", want, stdout)
+		}
+	}
+
+	stdout, stderr, code = runCLI(t, "--json", "search", "fair")
+	if code != 0 {
+		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	var envelope federatedSearchEnvelope
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("federated JSON: %v\n%s", err, stdout)
+	}
+	byRef := map[string]bool{}
+	for _, row := range envelope.Results {
+		byRef[row.Ref] = row.AllDay
+	}
+	if !byRef["calcrawl:event/aaa"] || byRef["calcrawl:event/bbb"] || byRef["imessage:msg/1"] {
+		t.Fatalf("federated all_day bits wrong: %#v\n%s", byRef, stdout)
+	}
+	if strings.Count(stdout, "all_day") != 1 {
+		t.Fatalf("all_day must appear only on the all-day row:\n%s", stdout)
+	}
+}
+
 func TestSearchJSONHonorsLimitAboveOldCap(t *testing.T) {
 	limit := 205
 	binDir := writeFakeCrawlers(t, fakeCrawler{
