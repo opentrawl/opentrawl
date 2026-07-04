@@ -13,6 +13,7 @@ import (
 
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -256,6 +257,21 @@ func formatTime(t time.Time) string {
 		return "-"
 	}
 	return t.In(time.Local).Format(time.RFC3339)
+}
+
+// shortLocalTime is the human-mode time: short local. JSON keeps full
+// RFC3339 via formatTime; the two surfaces never share a formatter.
+func shortLocalTime(t time.Time) string {
+	return render.ShortLocalTime(t)
+}
+
+// displayRef is the ref shown in human rows: the short alias when known,
+// the full ref otherwise. Full refs live in JSON (docs/short-refs.md).
+func displayRef(fullRef, shortRef string) string {
+	if strings.TrimSpace(shortRef) != "" {
+		return shortRef
+	}
+	return fullRef
 }
 
 func firstNonEmpty(values ...string) string {

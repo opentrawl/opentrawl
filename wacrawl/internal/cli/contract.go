@@ -5,7 +5,6 @@ import (
 
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -68,7 +67,7 @@ func (a *app) printContractError(contractErr contractError) error {
 		if _, err := fmt.Fprintf(a.stderr, "%s.\n\n", contractErr.Message); err != nil {
 			return err
 		}
-		if err := writeWhoCandidateTable(a.stderr, contractErr.Candidates, render.OutputWidth(a.stderr)); err != nil {
+		if err := writeWhoTable(a.stderr, contractErr.Candidates); err != nil {
 			return err
 		}
 		_, err := fmt.Fprintf(a.stderr, "\n%s\n", contractErr.Remedy)
@@ -82,7 +81,7 @@ func (a *app) printContractError(contractErr contractError) error {
 			if _, err := fmt.Fprintln(a.stderr, "\nDid you mean:"); err != nil {
 				return err
 			}
-			if err := writeWhoCandidateTable(a.stderr, *contractErr.DidYouMean, render.OutputWidth(a.stderr)); err != nil {
+			if err := writeWhoTable(a.stderr, *contractErr.DidYouMean); err != nil {
 				return err
 			}
 		}

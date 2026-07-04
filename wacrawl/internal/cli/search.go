@@ -19,6 +19,9 @@ type searchEnvelope struct {
 	Results      []searchResult `json:"results"`
 	TotalMatches int            `json:"total_matches"`
 	Truncated    bool           `json:"truncated"`
+	// limit is the requested page size; it drives the More hint and is
+	// never serialized.
+	limit int
 }
 
 type searchResult struct {
@@ -84,7 +87,7 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return a.print(newSearchEnvelope(query, whoQuery, total, msgs, whoResolved, aliases))
+		return a.print(newSearchEnvelope(query, whoQuery, total, msgs, whoResolved, aliases, resolved.Limit))
 	})
 }
 
@@ -211,46 +214,60 @@ func (a *app) printSearch(result searchEnvelope) error {
 			return err
 		}
 	}
-	width := render.OutputWidth(a.stdout)
-	for _, item := range result.Results {
-		if err := a.printSearchResult(width, item); err != nil {
-			return err
-		}
-	}
+	hints := []string{"Open: wacrawl open REF"}
 	if result.Truncated {
-		_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches; narrow with --limit, --after, --before, or --chat\n", len(result.Results), result.TotalMatches)
-		return err
+		hints = append(hints, searchMoreHint(result))
 	}
-	_, err := fmt.Fprintf(a.stdout, "showing %d of %d matches\n", len(result.Results), result.TotalMatches)
-	return err
+	return render.WriteList(a.stdout, render.List{
+		Heading:   searchHeading(result),
+		Hints:     hints,
+		Items:     searchListItems(result.Results),
+		ClampText: 2,
+		Empty:     searchEmptyText(result.Query),
+	})
 }
 
-func (a *app) printSearchResult(width int, item searchResult) error {
-	meta := strings.TrimSpace(fmt.Sprintf("%s  %s in %s", item.Time, item.Who, item.Where))
-	for _, line := range render.WrapWithIndent("", meta, width, "  ") {
-		if _, err := fmt.Fprintln(a.stdout, line); err != nil {
-			return err
-		}
+func searchHeading(result searchEnvelope) string {
+	if strings.TrimSpace(result.Query) == "" {
+		return fmt.Sprintf("Search filters: showing %d of %d matches.", len(result.Results), result.TotalMatches)
 	}
-	for _, line := range render.WrapWithIndent("  ", item.Snippet, width, "  ") {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		if _, err := fmt.Fprintln(a.stdout, line); err != nil {
-			return err
-		}
-	}
-	if item.Alias != "" {
-		if _, err := fmt.Fprintf(a.stdout, "ref: %s\nfull ref: %s\n\n", item.Alias, item.Ref); err != nil {
-			return err
-		}
-		return nil
-	}
-	_, err := fmt.Fprintf(a.stdout, "ref: %s\n\n", item.Ref)
-	return err
+	return fmt.Sprintf("Search %q: showing %d of %d matches.", result.Query, len(result.Results), result.TotalMatches)
 }
 
-func newSearchEnvelope(query, whoQuery string, total int, messages []store.Message, resolved *whoResolved, aliases map[string]string) searchEnvelope {
+func searchEmptyText(query string) string {
+	if strings.TrimSpace(query) == "" {
+		return "No matches for these filters."
+	}
+	return fmt.Sprintf("No matches for %q.", query)
+}
+
+func searchMoreHint(result searchEnvelope) string {
+	limit := result.limit
+	if limit < 1 {
+		limit = defaultMessageLimit
+	}
+	next := limit * 2
+	if strings.TrimSpace(result.Query) == "" {
+		return fmt.Sprintf("More: wacrawl search --limit %d", next)
+	}
+	return fmt.Sprintf("More: wacrawl search %q --limit %d", result.Query, next)
+}
+
+func searchListItems(results []searchResult) []render.ListItem {
+	items := make([]render.ListItem, 0, len(results))
+	for _, item := range results {
+		items = append(items, render.ListItem{
+			Time:  parseFormattedTime(item.Time),
+			Who:   item.Who,
+			Where: item.Where,
+			Ref:   displayRef(item.Ref, item.Alias),
+			Text:  item.Snippet,
+		})
+	}
+	return items
+}
+
+func newSearchEnvelope(query, whoQuery string, total int, messages []store.Message, resolved *whoResolved, aliases map[string]string, limit int) searchEnvelope {
 	if messages == nil {
 		messages = []store.Message{}
 	}
@@ -266,6 +283,7 @@ func newSearchEnvelope(query, whoQuery string, total int, messages []store.Messa
 		Results:      results,
 		TotalMatches: total,
 		Truncated:    total > len(results),
+		limit:        limit,
 	}
 }
 

@@ -62,100 +62,25 @@ func (a *app) printWho(result whoEnvelope) error {
 		_, err := fmt.Fprintf(a.stdout, "No people matched %q.\n", result.Query)
 		return err
 	}
-	return writeWhoCandidateTable(a.stdout, result.Candidates, render.OutputWidth(a.stdout))
+	return writeWhoTable(a.stdout, result.Candidates)
 }
 
-func writeWhoCandidateTable(w io.Writer, candidates []store.WhoCandidate, width int) error {
-	if width < 42 {
-		width = 42
-	}
-	lastHeader := "Last seen"
-	messagesHeader := "Messages"
-	identifiersHeader := "Identifiers"
-	whoWidth := clampInt(width/4, 14, 28)
-	lastWidth := 25
-	messagesWidth := len(messagesHeader)
-	if width < 72 {
-		lastHeader = "Last"
-		messagesHeader = "Msgs"
-		identifiersHeader = "IDs"
-		whoWidth = clampInt(width/4, 8, 18)
-		lastWidth = 16
-		messagesWidth = len(messagesHeader)
-	}
-	gaps := 6
-	identifiersWidth := width - whoWidth - lastWidth - messagesWidth - gaps
-	if identifiersWidth < 10 {
-		identifiersWidth = 10
-		whoWidth = maxInt(6, width-lastWidth-messagesWidth-identifiersWidth-gaps)
-	}
-	if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, "Who", lastWidth, lastHeader, messagesWidth, messagesHeader, identifiersHeader); err != nil {
-		return err
-	}
+func writeWhoTable(w io.Writer, candidates []store.WhoCandidate) error {
+	rows := make([][]string, 0, len(candidates))
 	for _, candidate := range candidates {
-		identifiers := whoIdentifierLines(candidate.Identifiers, identifiersWidth)
-		if len(identifiers) == 0 {
-			identifiers = []string{"-"}
-		}
-		for i, identifierLine := range identifiers {
-			who := ""
-			lastSeen := ""
-			messages := ""
-			if i == 0 {
-				who = candidate.Who
-				lastSeen = formatTime(candidate.LastSeen)
-				messages = strconv.Itoa(candidate.Messages)
-			}
-			if _, err := fmt.Fprintf(w, "%-*s  %-*s  %*s  %s\n", whoWidth, render.Truncate(who, whoWidth), lastWidth, render.Truncate(lastSeen, lastWidth), messagesWidth, messages, identifierLine); err != nil {
-				return err
-			}
-		}
+		rows = append(rows, []string{
+			outputField(candidate.Who),
+			shortLocalTime(candidate.LastSeen),
+			strconv.Itoa(candidate.Messages),
+			strings.Join(candidate.Identifiers, ", "),
+		})
 	}
-	return nil
-}
-
-func whoIdentifierLines(identifiers []string, width int) []string {
-	var out []string
-	line := ""
-	for _, identifier := range identifiers {
-		identifier = strings.TrimSpace(identifier)
-		if identifier == "" {
-			continue
-		}
-		identifier = render.Truncate(identifier, width)
-		if line == "" {
-			line = identifier
-			continue
-		}
-		next := line + ", " + identifier
-		if render.DisplayWidth(next) > width {
-			out = append(out, line)
-			line = identifier
-			continue
-		}
-		line = next
-	}
-	if line != "" {
-		out = append(out, line)
-	}
-	return out
-}
-
-func clampInt(value, minValue, maxValue int) int {
-	if value < minValue {
-		return minValue
-	}
-	if value > maxValue {
-		return maxValue
-	}
-	return value
-}
-
-func maxInt(left, right int) int {
-	if left > right {
-		return left
-	}
-	return right
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "who"},
+		{Header: "last seen"},
+		{Header: "messages", AlignRight: true},
+		{Header: "identifiers", Wrap: true},
+	}, rows)
 }
 
 func newWhoResolved(candidate store.WhoCandidate) *whoResolved {

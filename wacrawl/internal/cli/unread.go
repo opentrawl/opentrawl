@@ -31,6 +31,6 @@ func (a *app) runUnread(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return a.print(chats)
+		return a.print(newChatsEnvelope(chats, true))
 	})
 }
