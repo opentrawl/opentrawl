@@ -14,7 +14,10 @@ import (
 	"unicode"
 
 	"github.com/openclaw/clawdex/internal/model"
-	_ "modernc.org/sqlite"
+
+	// C SQLite via cgo, matching crawlkit/store after the modernc production
+	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const (
@@ -73,7 +76,7 @@ func (s Store) indexPath() string {
 }
 
 func (s Store) indexMatches(fp markdownFingerprint) (bool, error) {
-	db, err := sql.Open("sqlite", s.indexPath())
+	db, err := sql.Open("sqlite3", s.indexPath())
 	if err != nil {
 		return false, nil
 	}
@@ -114,7 +117,7 @@ func (s Store) rebuildIndex(people []model.Person, fp markdownFingerprint) (int,
 		return 0, err
 	}
 	defer func() { _ = os.Remove(tmpPath) }()
-	db, err := sql.Open("sqlite", tmpPath)
+	db, err := sql.Open("sqlite3", tmpPath)
 	if err != nil {
 		return 0, err
 	}
@@ -212,7 +215,7 @@ func (s Store) personIDsForQuery(query string) ([]string, error) {
 	if _, _, err := s.ensureIndex(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", s.indexPath())
+	db, err := sql.Open("sqlite3", s.indexPath())
 	if err != nil {
 		return nil, err
 	}
@@ -333,7 +336,7 @@ func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
 	if match == "" {
 		return nil, nil
 	}
-	db, err := sql.Open("sqlite", s.indexPath())
+	db, err := sql.Open("sqlite3", s.indexPath())
 	if err != nil {
 		return nil, err
 	}
@@ -371,7 +374,7 @@ func (s Store) indexedIdentifiers() (map[identifierKey][]string, error) {
 	if _, _, err := s.ensureIndex(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", s.indexPath())
+	db, err := sql.Open("sqlite3", s.indexPath())
 	if err != nil {
 		return nil, err
 	}

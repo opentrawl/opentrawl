@@ -101,7 +101,7 @@ func (s Store) ResolveWho(query string) (WhoCandidate, error) {
 }
 
 func (s Store) indexedIdentifiersByPerson() (map[string][]identifierKey, error) {
-	db, err := sql.Open("sqlite", s.indexPath())
+	db, err := sql.Open("sqlite3", s.indexPath())
 	if err != nil {
 		return nil, err
 	}

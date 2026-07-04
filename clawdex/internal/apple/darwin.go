@@ -12,7 +12,8 @@ import (
 	"sort"
 	"strings"
 
-	_ "modernc.org/sqlite"
+	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const addressBookDBName = "AddressBook-v22.abcddb"
@@ -130,7 +131,7 @@ func addressBookDatabasePaths(dir string) ([]string, error) {
 }
 
 func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error) {
-	db, err := sql.Open("sqlite", readOnlySQLiteURI(path))
+	db, err := sql.Open("sqlite3", readOnlySQLiteURI(path))
 	if err != nil {
 		return nil, addressBookAccessError{Path: path, Err: err}
 	}

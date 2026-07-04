@@ -84,7 +84,7 @@ func TestReadAddressBookDirReadsRootAndSourceDatabases(t *testing.T) {
 
 func TestReadAddressBookDatabaseReportsMissingTable(t *testing.T) {
 	path := filepath.Join(t.TempDir(), addressBookDBName)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func createAddressBookFixture(t *testing.T, path string, contacts []fixtureConta
 	if err := ensureParentDir(path); err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatal(err)
 	}
