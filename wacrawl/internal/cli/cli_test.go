@@ -21,6 +21,7 @@ import (
 	"github.com/openclaw/crawlkit/conformance"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
+	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/store"
 	_ "modernc.org/sqlite"
 )
@@ -321,9 +322,16 @@ func assertSearchResultKeys(t *testing.T, data []byte) {
 	if len(root.Results) == 0 {
 		t.Fatal("search results are empty")
 	}
-	want := []string{"ref", "time", "who", "where", "snippet"}
+	want := []string{"ref", "short_ref", "time", "who", "where", "snippet"}
 	for _, result := range root.Results {
 		assertRawMapKeys(t, result, want...)
+		var alias string
+		if err := json.Unmarshal(result["short_ref"], &alias); err != nil {
+			t.Fatalf("short_ref = %s err=%v", string(result["short_ref"]), err)
+		}
+		if !shortref.ValidAlias(alias) {
+			t.Fatalf("short_ref = %q, want a valid crawlkit short ref", alias)
+		}
 	}
 }
 
@@ -1590,7 +1598,7 @@ func TestOpenJSONRoundTripsSearchRef(t *testing.T) {
 	}
 }
 
-func TestOpenAcceptsShortRefAndSearchJSONKeepsFullRef(t *testing.T) {
+func TestOpenAcceptsShortRefAndSearchJSONCarriesShortRef(t *testing.T) {
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "archive.db")
 	st, err := store.Open(ctx, dbPath)
@@ -1631,7 +1639,7 @@ func TestOpenAcceptsShortRefAndSearchJSONKeepsFullRef(t *testing.T) {
 	if err := json.Unmarshal(stdout.Bytes(), &search); err != nil {
 		t.Fatalf("search json = %s err=%v", stdout.String(), err)
 	}
-	if len(search.Results) != 1 || search.Results[0].Ref != "wacrawl:msg/short-target" || search.Results[0].Alias != "" {
+	if len(search.Results) != 1 || search.Results[0].Ref != "wacrawl:msg/short-target" || search.Results[0].Alias != alias {
 		t.Fatalf("search refs = %#v", search.Results)
 	}
 
