@@ -131,8 +131,10 @@ type BackupShard struct {
 }
 
 type IngestResult struct {
-	Shard    BackupShard
-	Seen     int
-	Inserted int
-	Labels   int
+	Shard        BackupShard
+	Seen         int
+	Inserted     int
+	Labels       int
+	ParseElapsed time.Duration
+	IndexElapsed time.Duration
 }

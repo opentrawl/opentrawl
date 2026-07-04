@@ -33,6 +33,7 @@ type Source struct {
 	Path         string
 	DisplayName  string
 	Capabilities []string
+	LogDir       string
 	MetadataErr  error
 }
 
@@ -62,6 +63,7 @@ func discoverCrawlers(ctx context.Context, appsDir string) []Source {
 		source.ID = metadata.ID
 		source.DisplayName = metadata.DisplayName
 		source.Capabilities = metadata.Capabilities
+		source.LogDir = metadata.Paths.DefaultLogs
 		sources = append(sources, source)
 	}
 	return sources

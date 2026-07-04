@@ -2,7 +2,6 @@ package cli
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -127,7 +126,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if whoInput != "" {
 		installed := discoverCrawlers(r.ctx, r.appsDir)
 		skippedWho := skippedWhoSources(sources)
-		resolution := collectFederatedWho(r.ctx, searchResolverSources(installed, sources), whoInput)
+		resolution := collectFederatedWho(r, searchResolverSources(installed, sources), whoInput)
 		if len(resolution.FailedSources) > 0 {
 			r.reportWhoFailures(resolution)
 			return exitErr{code: 1}
@@ -148,7 +147,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 	}
 
-	results := collectSearch(r.ctx, sources, query, searchOptions{
+	results := collectSearch(r, sources, query, searchOptions{
 		limit:       limit,
 		after:       c.After,
 		before:      c.Before,
@@ -240,7 +239,7 @@ func emptySearchEnvelope(query string) federatedSearchEnvelope {
 	}
 }
 
-func collectSearch(ctx context.Context, sources []Source, query string, options searchOptions) []searchSourceResult {
+func collectSearch(r *Runtime, sources []Source, query string, options searchOptions) []searchSourceResult {
 	results := make([]searchSourceResult, len(sources))
 	workers := searchWorkerLimit
 	if len(sources) < workers {
@@ -254,7 +253,7 @@ func collectSearch(ctx context.Context, sources []Source, query string, options 
 		go func() {
 			defer wg.Done()
 			for index := range jobs {
-				results[index] = searchSource(ctx, sources[index], query, options)
+				results[index] = r.searchSource(sources[index], query, options)
 			}
 		}()
 	}
@@ -266,8 +265,16 @@ func collectSearch(ctx context.Context, sources []Source, query string, options 
 	return results
 }
 
-func searchSource(ctx context.Context, source Source, query string, options searchOptions) searchSourceResult {
+func (r *Runtime) searchSource(source Source, query string, options searchOptions) searchSourceResult {
 	result := searchSourceResult{Source: source}
+	started := r.now()
+	r.logInfo("source_start", strings.Join([]string{
+		sourceField(source),
+		"verb=search",
+	}, " "))
+	defer func() {
+		r.logSearchOutcome(source, result, started)
+	}()
 	if source.MetadataErr != nil {
 		result.Err = source.MetadataErr
 		return result
@@ -285,7 +292,8 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		return result
 	}
 	args := searchCommandArgs(query, options, who)
-	data, err := runCrawlerCommandJSON(ctx, source.Path, args...)
+	args = append(args, r.childVerboseArgs(source)...)
+	data, err := r.runSourceCommandJSON(source, args...)
 	if err != nil {
 		if searchContractErrorCode(data) == "unknown_who" {
 			return result
@@ -317,6 +325,24 @@ func searchSource(ctx context.Context, source Source, query string, options sear
 		})
 	}
 	return result
+}
+
+func (r *Runtime) logSearchOutcome(source Source, result searchSourceResult, started time.Time) {
+	fields := []string{sourceField(source), "verb=search", elapsedField(started, r.now())}
+	switch {
+	case result.Skipped:
+		fields = append(fields, "outcome=skipped", "reason="+logQuote(result.SkipReason))
+	case result.Err != nil:
+		if isTimeoutError(result.Err) {
+			fields = append(fields, "outcome=timeout")
+		} else {
+			fields = append(fields, "outcome=error")
+		}
+		fields = append(fields, "error="+logQuote(result.Err.Error()))
+	default:
+		fields = append(fields, "outcome=ok", "results="+strconv.Itoa(len(result.Rows)), "total="+strconv.Itoa(result.Total))
+	}
+	r.logInfo("source_done", strings.Join(fields, " "))
 }
 
 func searchSourcesForResolvedWho(sources []Source, whoBySource map[string]string) []Source {
@@ -490,7 +516,11 @@ func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
 		if result.Err == nil {
 			continue
 		}
-		_, _ = fmt.Fprintf(r.stderr, "%s search failed. Remedy: run: trawl doctor %s\n", result.Source.ID, result.Source.ID)
+		remedy := fmt.Sprintf("run: trawl doctor %s", result.Source.ID)
+		if logPath := sourceLogPath(result.Source); logPath != "" {
+			remedy += "; read " + logPath
+		}
+		_, _ = fmt.Fprintf(r.stderr, "%s search failed. Remedy: %s\n", result.Source.ID, remedy)
 	}
 }
 

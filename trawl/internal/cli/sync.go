@@ -65,17 +65,22 @@ func (c *SyncCmd) Run(r *Runtime) error {
 }
 
 func syncSource(r *Runtime, source Source) SyncResult {
+	started := r.logSourceStart(source, "sync")
 	if source.MetadataErr != nil {
+		r.logSourceDone(source, "sync", started, source.MetadataErr)
 		return syncFailureResult(source, "metadata failed")
 	}
-	data, err := runCrawlerJSONNoTimeout(r.ctx, source.Path, "sync")
+	data, err := r.runSourceJSONVerbNoTimeout(source, "sync")
 	if err != nil {
+		r.logSourceDone(source, "sync", started, err)
 		return syncFailureResult(source, "sync failed")
 	}
 	outcome, ok := lastSyncOutcome(data)
 	if !ok {
+		r.logSourceDone(source, "sync", started, fmt.Errorf("sync did not return a final JSON outcome"))
 		return syncFailureResult(source, "sync did not return a final JSON outcome")
 	}
+	r.logSourceDone(source, "sync", started, nil)
 	return normalizeSyncOutcome(source, outcome)
 }
 
@@ -125,6 +130,10 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 }
 
 func syncFailureResult(source Source, message string) SyncResult {
+	remedy := fmt.Sprintf("run: trawl doctor %s", source.ID)
+	if logPath := sourceLogPath(source); logPath != "" {
+		remedy += "; read " + logPath
+	}
 	return SyncResult{
 		Event:   "sync",
 		Source:  source.ID,
@@ -133,7 +142,7 @@ func syncFailureResult(source Source, message string) SyncResult {
 		Error: &ErrorBody{
 			Code:    "sync_failed",
 			Message: message,
-			Remedy:  fmt.Sprintf("run: trawl doctor %s", source.ID),
+			Remedy:  remedy,
 		},
 	}
 }

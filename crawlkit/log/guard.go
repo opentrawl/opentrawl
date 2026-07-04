@@ -72,6 +72,13 @@ func validPathSegment(value string) bool {
 	return validToken(value)
 }
 
+func validLogFileName(value string) bool {
+	if !strings.HasSuffix(value, ".log") {
+		return false
+	}
+	return validPathSegment(value)
+}
+
 func validField(value string) bool {
 	return value != "" && validToken(value)
 }

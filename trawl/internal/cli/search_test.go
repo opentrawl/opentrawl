@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -171,6 +173,53 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 	}
 }
 
+func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
+	invocations := filepath.Join(t.TempDir(), "fake.log")
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:     "gogcrawl",
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail","paths":{"default_logs":"~/.gogcrawl/logs"}}`,
+		search: `{"query":"boat trip","results":[
+			{"ref":"gogcrawl:mail/m1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
+		],"total_matches":1,"truncated":false}`,
+	})
+	home := t.TempDir()
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", home)
+	t.Setenv("TRAWL_FAKE_LOG", invocations)
+
+	stdout, stderr, code := runCLI(t, "-vv", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		"source_start: source=gogcrawl verb=search",
+		"source_exec: source=gogcrawl",
+		"source_done: source=gogcrawl verb=search",
+		"outcome=ok",
+		"results=1",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("stderr missing %q:\n%s", want, stderr)
+		}
+	}
+	logPath := filepath.Join(home, ".trawl", "logs", "trawl.log")
+	logTextBytes, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText := string(logTextBytes)
+	if !strings.Contains(logText, "source_done: source=gogcrawl verb=search") || !strings.Contains(logText, "outcome=ok") {
+		t.Fatalf("log missing source outcome:\n%s", logText)
+	}
+	invocationBytes, err := os.ReadFile(invocations)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(invocationBytes), "search boat trip --json --limit 1 -vv") {
+		t.Fatalf("verbose flag was not propagated:\n%s", string(invocationBytes))
+	}
+}
+
 func TestSearchJSONEmptyResultsEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
@@ -204,6 +253,7 @@ func TestSearchHelpDocumentsWho(t *testing.T) {
 		"match",
 		`trawl search invoice --who alex`,
 		`trawl search --who "Vendor Support" --after 2026-01-01`,
+		"Diagnostics: run with -v, or read ~/.trawl/logs/trawl.log",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)

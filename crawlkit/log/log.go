@@ -48,12 +48,14 @@ const (
 type Options struct {
 	StateRoot    string
 	CrawlerID    string
+	FileName     string
 	RunID        string
 	Command      string
 	Version      string
 	Commit       string
 	Platform     string
 	Debug        bool
+	Verbosity    int
 	JSONProgress bool
 	Stderr       io.Writer
 	Now          func() time.Time
@@ -62,12 +64,14 @@ type Options struct {
 type Run struct {
 	stateRoot    string
 	crawlerID    string
+	fileName     string
 	runID        string
 	command      string
 	version      string
 	commit       string
 	platform     string
 	debug        bool
+	verbosity    int
 	jsonProgress bool
 	stderr       io.Writer
 	now          func() time.Time
@@ -318,6 +322,11 @@ func (r *Run) appendLogLine(line string) error {
 			return err
 		}
 	}
+	if r.verbosity > 0 {
+		if _, err := fmt.Fprintln(r.stderr, line); err != nil {
+			return fmt.Errorf("write verbose log line: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -349,9 +358,20 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if !validField(runID) || runID == "-" {
 		return nil, fmt.Errorf("invalid run id %q", opts.RunID)
 	}
+	fileName := strings.TrimSpace(opts.FileName)
+	if fileName == "" {
+		fileName = currentLogName
+	}
+	if !validLogFileName(fileName) {
+		return nil, fmt.Errorf("invalid log file name %q", opts.FileName)
+	}
 	version := defaultString(opts.Version, "unknown")
 	commit := defaultString(opts.Commit, "unknown")
 	platform := defaultString(opts.Platform, runtime.GOOS+"/"+runtime.GOARCH)
+	verbosity := opts.Verbosity
+	if verbosity < 0 {
+		verbosity = 0
+	}
 	now := opts.Now
 	if now == nil {
 		now = time.Now
@@ -360,16 +380,18 @@ func normalizeOptions(opts Options) (*Run, error) {
 	if stderr == nil {
 		stderr = os.Stderr
 	}
-	logPath := filepath.Join(stateRoot, crawlerID, "logs", currentLogName)
+	logPath := filepath.Join(stateRoot, crawlerID, "logs", fileName)
 	return &Run{
 		stateRoot:    stateRoot,
 		crawlerID:    crawlerID,
+		fileName:     fileName,
 		runID:        runID,
 		command:      command,
 		version:      version,
 		commit:       commit,
 		platform:     platform,
-		debug:        opts.Debug,
+		debug:        opts.Debug || verbosity >= 2,
+		verbosity:    verbosity,
 		jsonProgress: opts.JSONProgress,
 		stderr:       stderr,
 		now:          now,

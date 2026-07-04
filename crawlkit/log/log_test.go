@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -439,6 +440,73 @@ func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	}
 	if errorLine.Visibility != VisibilityUserFacing {
 		t.Fatalf("world-change error visibility = %q, want %q", errorLine.Visibility, VisibilityUserFacing)
+	}
+}
+
+func TestNamedLogFileAndVerboseMirroring(t *testing.T) {
+	now := fixedTime()
+	var verbose bytes.Buffer
+	run := newTestRunWithOptions(t, Options{
+		StateRoot: t.TempDir(),
+		CrawlerID: "crawl",
+		FileName:  "crawl.log",
+		RunID:     "verbose-run",
+		Command:   "search",
+		Version:   "0.4.1",
+		Commit:    "8f3c2d",
+		Platform:  "macos 15",
+		Verbosity: 1,
+		Stderr:    &verbose,
+		Now:       func() time.Time { return now },
+	})
+	if err := run.Info("source_start", "source=mail verb=search"); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Debug("source_exec", `argv="mail search dinner --json"`); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Finish(nil); err != nil {
+		t.Fatal(err)
+	}
+
+	if filepath.Base(run.Path()) != "crawl.log" {
+		t.Fatalf("log path = %q, want named log", run.Path())
+	}
+	streamed := verbose.String()
+	if !strings.Contains(streamed, "source_start: source=mail verb=search") {
+		t.Fatalf("verbose stream missing info line:\n%s", streamed)
+	}
+	if strings.Contains(streamed, "source_exec") {
+		t.Fatalf("-v streamed debug line:\n%s", streamed)
+	}
+	reader, err := NewReaderWithFileName(filepath.Dir(filepath.Dir(filepath.Dir(run.Path()))), "crawl", "crawl.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines, err := reader.RecentLines("verbose-run", 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(lines) == 0 {
+		t.Fatal("named reader returned no lines")
+	}
+
+	var debugStream bytes.Buffer
+	debugRun := newTestRunWithOptions(t, Options{
+		StateRoot: t.TempDir(),
+		CrawlerID: "crawl",
+		FileName:  "crawl.log",
+		RunID:     "debug-stream-run",
+		Command:   "search",
+		Verbosity: 2,
+		Stderr:    &debugStream,
+		Now:       func() time.Time { return now },
+	})
+	if err := debugRun.Debug("source_exec", `argv="mail search dinner --json"`); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(debugStream.String(), "source_exec") {
+		t.Fatalf("-vv did not stream debug line:\n%s", debugStream.String())
 	}
 }
 

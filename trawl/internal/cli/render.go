@@ -18,6 +18,8 @@ type StatusResult struct {
 type DoctorResult struct {
 	Source string        `json:"source"`
 	Checks []DoctorCheck `json:"checks"`
+
+	sourceInfo Source
 }
 
 func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error {

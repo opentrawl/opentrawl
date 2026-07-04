@@ -167,6 +167,16 @@ func recordTime(rec state.Record) time.Time {
 }
 
 func insertMessage(ctx context.Context, tx *sql.Tx, msg Message) (bool, error) {
+	result, err := insertMessageWithTiming(ctx, tx, msg)
+	return result.Inserted, err
+}
+
+type insertMessageResult struct {
+	Inserted     bool
+	IndexElapsed time.Duration
+}
+
+func insertMessageWithTiming(ctx context.Context, tx *sql.Tx, msg Message) (insertMessageResult, error) {
 	timeText, timeUnix := "", int64(0)
 	if when := msg.Time; !when.IsZero() {
 		timeText = formatArchiveTime(when)
@@ -174,16 +184,16 @@ func insertMessage(ctx context.Context, tx *sql.Tx, msg Message) (bool, error) {
 	}
 	var existed int
 	if err := tx.QueryRowContext(ctx, `select count(*) from messages where id = ?`, msg.ID).Scan(&existed); err != nil {
-		return false, err
+		return insertMessageResult{}, err
 	}
 	if _, err := tx.ExecContext(ctx, `delete from messages_fts where id = ?`, msg.ID); err != nil {
-		return false, fmt.Errorf("delete message fts: %w", err)
+		return insertMessageResult{}, fmt.Errorf("delete message fts: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `delete from attachments where message_id = ?`, msg.ID); err != nil {
-		return false, fmt.Errorf("delete attachments: %w", err)
+		return insertMessageResult{}, fmt.Errorf("delete attachments: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `delete from message_participants where message_id = ?`, msg.ID); err != nil {
-		return false, fmt.Errorf("delete message participants: %w", err)
+		return insertMessageResult{}, fmt.Errorf("delete message participants: %w", err)
 	}
 	_, err := tx.ExecContext(ctx, `
 insert into messages(
@@ -204,21 +214,23 @@ on conflict(id) do update set
   labels_json = excluded.labels_json
 `, msg.ID, msg.ThreadID, msg.HistoryID, msg.InternalDateMS, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.CcAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels))
 	if err != nil {
-		return false, fmt.Errorf("insert message: %w", err)
+		return insertMessageResult{}, fmt.Errorf("insert message: %w", err)
 	}
+	indexStarted := time.Now()
 	if _, err := tx.ExecContext(ctx, `insert into messages_fts(id, subject, body) values (?, ?, ?)`, msg.ID, msg.Subject, msg.Body); err != nil {
-		return false, fmt.Errorf("insert message fts: %w", err)
+		return insertMessageResult{}, fmt.Errorf("insert message fts: %w", err)
 	}
+	indexElapsed := time.Since(indexStarted)
 	for _, attachment := range msg.Attachments {
 		if _, err := tx.ExecContext(ctx, `
 insert into attachments(message_id, filename, mime_type, size_bytes)
 values (?, ?, ?, ?)
 `, msg.ID, attachment.Filename, attachment.MIMEType, attachment.Size); err != nil {
-			return false, fmt.Errorf("insert attachment: %w", err)
+			return insertMessageResult{}, fmt.Errorf("insert attachment: %w", err)
 		}
 	}
 	if err := insertMessageParticipants(ctx, tx, msg); err != nil {
-		return false, err
+		return insertMessageResult{}, err
 	}
-	return existed == 0, nil
+	return insertMessageResult{Inserted: existed == 0, IndexElapsed: indexElapsed}, nil
 }

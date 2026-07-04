@@ -46,6 +46,10 @@ type Reader struct {
 }
 
 func NewReader(stateRoot, crawlerID string) (*Reader, error) {
+	return NewReaderWithFileName(stateRoot, crawlerID, currentLogName)
+}
+
+func NewReaderWithFileName(stateRoot, crawlerID, fileName string) (*Reader, error) {
 	stateRoot = strings.TrimSpace(stateRoot)
 	if stateRoot == "" {
 		return nil, errors.New("state root is required")
@@ -54,10 +58,17 @@ func NewReader(stateRoot, crawlerID string) (*Reader, error) {
 	if !validPathSegment(crawlerID) {
 		return nil, fmt.Errorf("invalid crawler id %q", crawlerID)
 	}
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = currentLogName
+	}
+	if !validLogFileName(fileName) {
+		return nil, fmt.Errorf("invalid log file name %q", fileName)
+	}
 	return &Reader{
 		stateRoot: stateRoot,
 		crawlerID: crawlerID,
-		logPath:   filepath.Join(stateRoot, crawlerID, "logs", currentLogName),
+		logPath:   filepath.Join(stateRoot, crawlerID, "logs", fileName),
 	}, nil
 }
 

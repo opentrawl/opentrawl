@@ -25,30 +25,34 @@ Global flags:
   --archive PATH     Local gogcrawl archive database path.
   --backup-repo PATH Local gog backup repository path.
   --json             Print machine-readable output.
+  -v, --verbose      Stream diagnostics to stderr. Use -vv for debug detail.
 
 Output:
   Default output is compact text for humans and agents.
   Use --json for the frozen control contract.
+
+Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log
 `)
 }
 
 func printCommandUsage(w io.Writer, args []string) error {
 	topic := strings.Join(args, " ")
+	var err error
 	switch topic {
 	case "metadata":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl metadata [--json]
 
 Print control metadata.
 `)
 	case "status":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl status [--json]
 
 Report archive state, freshness, counts and safe auth state.
 `)
 	case "sync":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl sync [--query QUERY] [--max N] [--json]
 
 Refresh the local Gmail archive from gog.
@@ -58,7 +62,7 @@ Flags:
   --max N        Maximum messages to back up. Default: 0, meaning all.
 `)
 	case "search":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl search [QUERY] [--limit N] [--after DATE] [--before DATE] [--who PERSON] [--json]
 
 Search archived Gmail subject and body text.
@@ -71,25 +75,25 @@ Flags:
   --who PERSON   Resolve a name, or filter by an exact email, phone or handle.
 `)
 	case "who":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl who NAME [--json]
 
 Resolve a Gmail participant name or identifier.
 `)
 	case "open":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl open REF [--json]
 
 Open one archived Gmail message by full ref or short ref.
 `)
 	case "doctor":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl doctor [--json]
 
 Check gog, auth and archive readiness.
 `)
 	case "contacts", "contacts export":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   gogcrawl contacts export [--json]
 
 Export Google contacts with display names and phone numbers.
@@ -97,5 +101,9 @@ Export Google contacts with display names and phone numbers.
 	default:
 		return usageErr(fmt.Errorf("unknown help topic %q", topic))
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log")
+	return err
 }

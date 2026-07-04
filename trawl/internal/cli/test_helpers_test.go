@@ -77,6 +77,9 @@ func writeFakeCrawler(t *testing.T, dir string, crawler fakeCrawler) {
 		crawler.sync = `{"state":"ok","message":"0 new items"}`
 	}
 	script := fmt.Sprintf(`#!/bin/sh
+if [ -n "$TRAWL_FAKE_LOG" ]; then
+  printf '%%s\n' "$0 $*" >> "$TRAWL_FAKE_LOG"
+fi
 if [ "$#" -lt 2 ]; then
   exit 64
 fi
@@ -136,6 +139,9 @@ case "$1" in
           fi
           found_who="$2"
           shift 2
+          ;;
+        "-v"|"-vv"|"--verbose")
+          shift
           ;;
         "--after"|"--before")
           if [ "$#" -lt 2 ]; then

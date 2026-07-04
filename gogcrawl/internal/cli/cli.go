@@ -39,6 +39,7 @@ type runtime struct {
 	stdout         io.Writer
 	stderr         io.Writer
 	json           bool
+	verbosity      int
 	archivePath    string
 	backupRepoPath string
 	gog            gog.Client
@@ -46,6 +47,10 @@ type runtime struct {
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	verbosity, args, err := pullVerbosity(args)
+	if err != nil {
+		return writeJSONErrorIfNeeded(stdout, hasFlag(args, "--json"), usageErr(err))
+	}
 	jsonOut, args := pullFlag(args, "--json")
 	versionOut, args := pullFlag(args, "--version")
 	archivePath, args, err := pullValueFlag(args, "--archive")
@@ -63,7 +68,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		backupRepoPath = archive.DefaultBackupRepoPath()
 	}
 	if versionOut {
-		run, err := newCommandLog("version", stderr, jsonOut)
+		run, err := newCommandLog("version", stderr, jsonOut, verbosity)
 		if err != nil {
 			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
@@ -71,7 +76,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return finishCommandLog(run, nil)
 	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		run, err := newCommandLog("help", stderr, jsonOut)
+		run, err := newCommandLog("help", stderr, jsonOut, verbosity)
 		if err != nil {
 			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
@@ -79,7 +84,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return finishCommandLog(run, nil)
 	}
 	if args[0] == "help" {
-		run, err := newCommandLog("help", stderr, jsonOut)
+		run, err := newCommandLog("help", stderr, jsonOut, verbosity)
 		if err != nil {
 			return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 		}
@@ -96,7 +101,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		}
 		return writeJSONErrorIfNeeded(stdout, jsonOut, err)
 	}
-	run, err := newCommandLog(commandName(args), stderr, jsonOut)
+	run, err := newCommandLog(commandName(args), stderr, jsonOut, verbosity)
 	if err != nil {
 		return writeJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local gogcrawl log directory", err))
 	}
@@ -105,6 +110,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		stdout:         stdout,
 		stderr:         stderr,
 		json:           jsonOut,
+		verbosity:      verbosity,
 		archivePath:    archivePath,
 		backupRepoPath: backupRepoPath,
 		gog:            gog.New(gog.DefaultBinary),
@@ -178,6 +184,33 @@ func pullFlag(args []string, name string) (bool, []string) {
 		out = append(out, arg)
 	}
 	return found, out
+}
+
+func pullVerbosity(args []string) (int, []string, error) {
+	out := make([]string, 0, len(args))
+	verbosity := 0
+	for _, arg := range args {
+		switch {
+		case arg == "-v" || arg == "--verbose":
+			verbosity++
+			continue
+		case arg == "-vv":
+			verbosity += 2
+			continue
+		default:
+			out = append(out, arg)
+		}
+	}
+	return verbosity, out, nil
+}
+
+func hasFlag(args []string, name string) bool {
+	for _, arg := range args {
+		if arg == name {
+			return true
+		}
+	}
+	return false
 }
 
 func pullValueFlag(args []string, name string) (string, []string, error) {

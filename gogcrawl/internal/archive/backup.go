@@ -43,9 +43,11 @@ func (s *Store) IngestBackupShard(ctx context.Context, shard BackupShard, plaint
 		var err error
 		switch shard.Kind {
 		case BackupShardLabels:
+			started := time.Now()
 			result.Labels, err = ingestLabels(ctx, tx, plaintext)
+			result.ParseElapsed = time.Since(started)
 		case BackupShardMessages:
-			result.Seen, result.Inserted, err = ingestMessages(ctx, tx, plaintext)
+			result.Seen, result.Inserted, result.ParseElapsed, result.IndexElapsed, err = ingestMessages(ctx, tx, plaintext)
 		default:
 			err = fmt.Errorf("unsupported backup shard kind %q", shard.Kind)
 		}
@@ -107,28 +109,33 @@ on conflict(id) do update set
 	}
 }
 
-func ingestMessages(ctx context.Context, tx *sql.Tx, data []byte) (int, int, error) {
+func ingestMessages(ctx context.Context, tx *sql.Tx, data []byte) (int, int, time.Duration, time.Duration, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	seen := 0
 	inserted := 0
+	var parseElapsed time.Duration
+	var indexElapsed time.Duration
 	for {
 		var row backupMessageRow
 		if err := dec.Decode(&row); errors.Is(err, io.EOF) {
-			return seen, inserted, nil
+			return seen, inserted, parseElapsed, indexElapsed, nil
 		} else if err != nil {
-			return seen, inserted, fmt.Errorf("decode message row: %w", err)
+			return seen, inserted, parseElapsed, indexElapsed, fmt.Errorf("decode message row: %w", err)
 		}
+		parseStarted := time.Now()
 		msg, err := row.message()
+		parseElapsed += time.Since(parseStarted)
 		if err != nil {
-			return seen, inserted, err
+			return seen, inserted, parseElapsed, indexElapsed, err
 		}
-		wasInserted, err := insertMessage(ctx, tx, msg)
+		insertedResult, err := insertMessageWithTiming(ctx, tx, msg)
 		if err != nil {
-			return seen, inserted, err
+			return seen, inserted, parseElapsed, indexElapsed, err
 		}
+		indexElapsed += insertedResult.IndexElapsed
 		seen++
-		if wasInserted {
+		if insertedResult.Inserted {
 			inserted++
 		}
 	}

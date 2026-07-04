@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strconv"
@@ -103,8 +102,8 @@ func isClawdex(source Source) bool {
 	return strings.EqualFold(source.ID, "clawdex") || strings.EqualFold(source.Binary, "clawdex")
 }
 
-func collectFederatedWho(ctx context.Context, sources []Source, query string) federatedWhoResolution {
-	results := collectWho(ctx, sources, query)
+func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWhoResolution {
+	results := collectWho(r, sources, query)
 	records := make([]whoRecord, 0)
 	suggestionRecords := make([]whoRecord, 0)
 	var consulted []string
@@ -163,7 +162,7 @@ func didYouMeanWithCandidate(candidate WhoCandidate, suggestions []WhoCandidate)
 	return mergeWhoRecords(records)
 }
 
-func collectWho(ctx context.Context, sources []Source, query string) []whoSourceResult {
+func collectWho(r *Runtime, sources []Source, query string) []whoSourceResult {
 	results := make([]whoSourceResult, len(sources))
 	workers := whoWorkerLimit
 	if len(sources) < workers {
@@ -176,7 +175,7 @@ func collectWho(ctx context.Context, sources []Source, query string) []whoSource
 		go func() {
 			defer wg.Done()
 			for index := range jobs {
-				results[index] = whoSource(ctx, sources[index], query)
+				results[index] = r.whoSource(sources[index], query)
 			}
 		}()
 	}
@@ -188,9 +187,17 @@ func collectWho(ctx context.Context, sources []Source, query string) []whoSource
 	return results
 }
 
-func whoSource(ctx context.Context, source Source, query string) whoSourceResult {
+func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 	result := whoSourceResult{Source: source}
-	data, err := runCrawlerJSONWithArgs(ctx, source.Path, "who", query)
+	started := r.logSourceStart(source, "who")
+	defer func() {
+		if result.Err != nil {
+			r.logSourceDone(source, "who", started, result.Err)
+			return
+		}
+		r.logSourceDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)), "suggestions="+strconv.Itoa(len(result.DidYouMean)))
+	}()
+	data, err := r.runSourceJSONVerb(source, "who", query)
 	if err != nil {
 		result.Err = err
 		return result

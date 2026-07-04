@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ var Version = "dev"
 
 type CLI struct {
 	JSON        bool             `name:"json" help:"Write JSON to stdout"`
+	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Stream diagnostics to stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
 	Status StatusCmd `cmd:"" help:"Show crawler health"`
@@ -33,6 +35,7 @@ type Runtime struct {
 	root    *CLI
 	appsDir string
 	now     func() time.Time
+	log     *logRun
 }
 
 type StatusCmd struct {
@@ -72,6 +75,7 @@ Examples:
   trawl search falafel --json           # structured output; agents, prefer this`),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
+		kong.Help(trawlHelpPrinter),
 		kong.Exit(func(int) { panic(helpShown{}) }),
 		kong.Vars{"version": Version},
 	)
@@ -98,6 +102,12 @@ Examples:
 		appsDir: defaultAppsDir(),
 		now:     time.Now,
 	}
+	if err := runtime.startLogRun(commandName(args)); err != nil {
+		return err
+	}
+	defer func() {
+		err = runtime.finishLogRun(err)
+	}()
 	kctx.Bind(runtime)
 	if err := kctx.Run(runtime); err != nil {
 		return err
@@ -110,7 +120,7 @@ func (c *StatusCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	results := collectStatus(r.ctx, sources)
+	results := collectStatus(r, sources)
 	if r.root.JSON {
 		statuses := make([]StatusEnvelope, 0, len(results))
 		for _, result := range results {
@@ -139,7 +149,7 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	results := collectDoctor(r.ctx, sources)
+	results := collectDoctor(r, sources)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, results); err != nil {
 			return err
@@ -165,32 +175,38 @@ func (r *Runtime) selectedSources(source string) ([]Source, error) {
 	return nil, r.writeSourceNotFound(source)
 }
 
-func collectStatus(ctx context.Context, sources []Source) []StatusResult {
+func collectStatus(r *Runtime, sources []Source) []StatusResult {
 	results := make([]StatusResult, 0, len(sources))
 	for _, source := range sources {
 		status := StatusEnvelope{}
 		if source.MetadataErr != nil {
+			started := r.logSourceStart(source, "status")
+			r.logSourceDone(source, "status", started, source.MetadataErr)
 			status = errorStatus(source, fmt.Sprintf("metadata failed — run: trawl doctor %s", source.ID))
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
-		data, err := runCrawlerJSON(ctx, source.Path, "status")
+		started := r.logSourceStart(source, "status")
+		data, err := r.runSourceJSONVerb(source, "status")
 		if err != nil {
+			r.logSourceDone(source, "status", started, err)
 			status = errorStatus(source, fmt.Sprintf("status failed — run: trawl doctor %s", source.ID))
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
 		if err := decodeContractJSON(data, &status); err != nil {
+			r.logSourceDone(source, "status", started, err)
 			status = errorStatus(source, fmt.Sprintf("status failed — run: trawl doctor %s", source.ID))
 			results = append(results, StatusResult{Source: source, Status: status})
 			continue
 		}
+		r.logSourceDone(source, "status", started, nil)
 		results = append(results, StatusResult{Source: source, Status: normalizeStatus(source, status)})
 	}
 	return results
 }
 
-func collectDoctor(ctx context.Context, sources []Source) []DoctorResult {
+func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 	results := make([]DoctorResult, 0, len(sources))
 	for _, source := range sources {
 		checks := []DoctorCheck{}
@@ -202,20 +218,24 @@ func collectDoctor(ctx context.Context, sources []Source) []DoctorResult {
 				Remedy:  "fix the crawler so metadata --json returns a non-empty id",
 			})
 		}
-		data, err := runCrawlerJSON(ctx, source.Path, "doctor")
+		started := r.logSourceStart(source, "doctor")
+		data, err := r.runSourceJSONVerb(source, "doctor")
 		if err != nil {
+			r.logSourceDone(source, "doctor", started, err)
 			checks = append(checks, doctorCommandFailed(source))
-			results = append(results, DoctorResult{Source: source.ID, Checks: checks})
+			results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 			continue
 		}
 		var envelope DoctorEnvelope
 		if err := decodeContractJSON(data, &envelope); err != nil {
+			r.logSourceDone(source, "doctor", started, err)
 			checks = append(checks, doctorCommandFailed(source))
-			results = append(results, DoctorResult{Source: source.ID, Checks: checks})
+			results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 			continue
 		}
+		r.logSourceDone(source, "doctor", started, nil, "checks="+strconv.Itoa(len(envelope.Checks)))
 		checks = append(checks, normalizeChecks(envelope.Checks)...)
-		results = append(results, DoctorResult{Source: source.ID, Checks: checks})
+		results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 	}
 	return results
 }
@@ -278,7 +298,11 @@ func (r *Runtime) reportStatusFailures(results []StatusResult) {
 		if !statusFailed(result.Status) {
 			continue
 		}
-		_, _ = fmt.Fprintf(r.stderr, "%s failed. Remedy: run: trawl doctor %s\n", result.Source.ID, result.Source.ID)
+		remedy := fmt.Sprintf("run: trawl doctor %s", result.Source.ID)
+		if logPath := sourceLogPath(result.Source); logPath != "" {
+			remedy += "; read " + logPath
+		}
+		_, _ = fmt.Fprintf(r.stderr, "%s failed. Remedy: %s\n", result.Source.ID, remedy)
 	}
 }
 
@@ -289,6 +313,9 @@ func (r *Runtime) reportDoctorFailures(results []DoctorResult) {
 				continue
 			}
 			remedy := firstNonEmpty(check.Remedy, fmt.Sprintf("run: trawl doctor %s", result.Source))
+			if logPath := sourceLogPath(result.sourceInfo); logPath != "" {
+				remedy += "; read " + logPath
+			}
 			_, _ = fmt.Fprintf(r.stderr, "%s %s failed. Remedy: %s\n", result.Source, check.ID, remedy)
 		}
 	}
@@ -316,13 +343,21 @@ func normalizeGlobalFlags(args []string) []string {
 	var globals []string
 	var rest []string
 	for _, arg := range args {
-		if arg == "--json" {
+		if isGlobalFlag(arg) {
 			globals = append(globals, arg)
 			continue
 		}
 		rest = append(rest, arg)
 	}
 	return append(globals, rest...)
+}
+
+func isGlobalFlag(arg string) bool {
+	return arg == "--json" ||
+		arg == "-v" ||
+		arg == "-vv" ||
+		arg == "--verbose" ||
+		strings.HasPrefix(arg, "--verbose=")
 }
 
 // rewriteHelp keeps `trawl` and `trawl help [command]` working the way

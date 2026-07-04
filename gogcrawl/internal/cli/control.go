@@ -40,7 +40,7 @@ func controlManifest() metadataEnvelope {
 			DefaultLogs:     filepath.Join(paths.BaseDir, "logs"),
 			DefaultShare:    filepath.Join(paths.BaseDir, "share"),
 		},
-		Capabilities: []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "short_refs", "who"},
+		Capabilities: []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "short_refs", "who", "verbose_logs"},
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

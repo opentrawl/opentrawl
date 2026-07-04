@@ -25,6 +25,36 @@ today's drift where some crawlers use `--json metadata` and others
 `metadata --json`.) Human text is the default output; it is a
 first-class surface held to the same rules as JSON.
 
+## Logging
+
+Logging is part of the tool contract. Every crawler writes an
+always-on plain text log in its state root, under `logs/`, using the
+shared crawlkit log grammar. Normal stdout and stderr stay clean:
+commands do not print log lines unless the user asks for them.
+
+Every verb accepts `-v` and `--verbose`. `-v` streams the same log
+lines to stderr while still writing the log file. `-vv` also writes
+debug detail, such as subprocess argv, per-source elapsed times and
+per-shard phase timings.
+
+Federation discovers this per crawler, not by assumption: a crawler
+that implements the contract declares the `verbose_logs` capability
+and a `paths.default_logs` directory in `metadata --json`. `trawl`
+propagates `-v` to a source and names its log file in remedies only
+when the source declares them. Adoption status lives with each
+crawler; gogcrawl is the reference implementation. A crawler without
+the capability still works — trawl just cannot stream its logs.
+
+Every help page ends with a diagnostics line naming the flag and log
+file, for example:
+
+```text
+Diagnostics: run with -v, or read ~/.examplecrawl/logs/examplecrawl.log
+```
+
+The CLI QA gate checks that help text exposes this line and that
+normal command output stays free of logs.
+
 ## Required commands
 
 | command | purpose |

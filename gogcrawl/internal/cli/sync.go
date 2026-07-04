@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -76,6 +77,7 @@ func (r *runtime) runSync(args []string) error {
 	}
 	var done atomic.Int64
 	if err := r.withHeartbeat(progress, &done, "backing up Gmail", func() error {
+		r.logGogCommand(backupGmailPushArgs(r.backupRepoPath, *query, *max)...)
 		return r.gog.BackupGmailPush(r.ctx, gog.BackupPushRequest{Repo: r.backupRepoPath, Query: *query, Max: *max})
 	}); err != nil {
 		return commandErr("gog_backup_failed", "Gmail backup failed", "run gogcrawl doctor", err)
@@ -197,18 +199,24 @@ func (r *runtime) ingestPendingShards(st *archive.Store, shards []archive.Backup
 	event := syncCompleteEvent{Shards: len(shards)}
 	for _, shard := range shards {
 		var plaintext []byte
+		decryptStarted := time.Now()
 		err := r.withHeartbeat(progress, done, "decrypting backup shard", func() error {
 			var err error
+			r.logGogCommand("backup", "cat", "--no-pull", "--repo", r.backupRepoPath, shard.Path)
 			plaintext, err = r.gog.BackupCat(r.ctx, r.backupRepoPath, shard.Path)
 			return err
 		})
+		decryptElapsed := time.Since(decryptStarted)
 		if err != nil {
 			return event, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), "run gogcrawl doctor", err)
 		}
+		ingestStarted := time.Now()
 		result, err := st.IngestBackupShard(r.ctx, shard, plaintext)
+		ingestElapsed := time.Since(ingestStarted)
 		if err != nil {
 			return event, err
 		}
+		r.logShardTimings(result, decryptElapsed, ingestElapsed)
 		event.Done += result.Seen
 		done.Store(int64(event.Done))
 		event.Inserted += result.Inserted
@@ -218,6 +226,41 @@ func (r *runtime) ingestPendingShards(st *archive.Store, shards []archive.Backup
 		}
 	}
 	return event, nil
+}
+
+func (r *runtime) logGogCommand(args ...string) {
+	argv := append([]string{r.gog.Binary}, args...)
+	r.logDebug("subprocess_exec", "argv="+logQuote(strings.Join(argv, " ")))
+}
+
+func backupGmailPushArgs(repo, query string, max int) []string {
+	args := []string{"backup", "gmail", "push", "--no-push", "--gmail-cache", "--repo", repo}
+	if query := strings.TrimSpace(query); query != "" {
+		args = append(args, "--query", query)
+	}
+	if max > 0 {
+		args = append(args, "--max", strconv.Itoa(max))
+	}
+	return args
+}
+
+func (r *runtime) logShardTimings(result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
+	shard := result.Shard
+	rows := result.Seen + result.Labels
+	r.logInfo("shard_done", strings.Join([]string{
+		"shard=" + logQuote(shard.Path),
+		"kind=" + logQuote(string(shard.Kind)),
+		"rows=" + strconv.Itoa(rows),
+		"inserted=" + strconv.Itoa(result.Inserted),
+		"labels=" + strconv.Itoa(result.Labels),
+		"elapsed_ms=" + elapsedMS(decryptElapsed+ingestElapsed),
+	}, " "))
+	r.logDebug("shard_phase", strings.Join([]string{
+		"shard=" + logQuote(shard.Path),
+		"decrypt_ms=" + elapsedMS(decryptElapsed),
+		"parse_ms=" + elapsedMS(result.ParseElapsed),
+		"index_ms=" + elapsedMS(result.IndexElapsed),
+	}, " "))
 }
 
 func (r *runtime) withHeartbeat(progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {

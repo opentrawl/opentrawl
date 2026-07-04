@@ -32,12 +32,26 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	dbPath := filepath.Join(workDir, "gogcrawl.db")
 	repoPath := filepath.Join(workDir, "backup")
 	var firstStderr bytes.Buffer
-	err := Run(context.Background(), []string{"sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &firstStderr)
+	err := Run(context.Background(), []string{"-vv", "sync", "--query", "from:me", "--max", "25", "--json", "--archive", dbPath, "--backup-repo", repoPath}, &bytes.Buffer{}, &firstStderr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(firstStderr.String(), `"type":"progress"`) {
 		t.Fatalf("sync did not emit crawlkit progress to stderr:\n%s", firstStderr.String())
+	}
+	logText := readTestLog(t, "gogcrawl.log")
+	for _, want := range []string{
+		"shard_done: shard=",
+		"kind=messages",
+		"shard_phase: shard=",
+		"decrypt_ms=",
+		"parse_ms=",
+		"index_ms=",
+		"subprocess_exec: argv=",
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("gogcrawl log missing %q:\n%s", want, logText)
+		}
 	}
 	if got := countLogLines(t, fake.log, "backup gmail push"); got != 1 {
 		t.Fatalf("backup push calls = %d, want 1", got)
@@ -233,7 +247,7 @@ func TestMetadataDeclaresContactsExport(t *testing.T) {
 	if manifest.ContractVersion != 1 || manifest.ID != "gogcrawl" {
 		t.Fatalf("manifest = %#v", manifest)
 	}
-	for _, capability := range []string{"contacts_export", "short_refs", "who"} {
+	for _, capability := range []string{"contacts_export", "short_refs", "who", "verbose_logs"} {
 		if !contains(manifest.Capabilities, capability) {
 			t.Fatalf("capabilities = %#v", manifest.Capabilities)
 		}
@@ -249,11 +263,15 @@ func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
 	if !strings.Contains(top, "gogcrawl who NAME [--json]") {
 		t.Fatalf("top help missing who:\n%s", top)
 	}
+	if !strings.Contains(top, "Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log") {
+		t.Fatalf("top help missing diagnostics:\n%s", top)
+	}
 	search := string(runOutput(t, context.Background(), []string{"help", "search"}))
 	for _, want := range []string{
 		"gogcrawl search [QUERY]",
 		"QUERY is optional when --who, --after or --before is present.",
 		"Resolve a name, or filter by an exact email, phone or handle.",
+		"Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log",
 	} {
 		if !strings.Contains(search, want) {
 			t.Fatalf("search help missing %q:\n%s", want, search)
@@ -626,6 +644,15 @@ func clearLog(t *testing.T, path string) {
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func readTestLog(t *testing.T, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gogcrawl", "logs", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func countLogLines(t *testing.T, path, containsText string) int {

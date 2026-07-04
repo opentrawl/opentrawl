@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -11,7 +12,10 @@ import (
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
-const logTailLimit = 500
+const (
+	gogcrawlLogFileName = "gogcrawl.log"
+	logTailLimit        = 500
+)
 
 type logRunEnvelope struct {
 	RunID      string `json:"run_id"`
@@ -32,7 +36,7 @@ type logErrorEnvelope struct {
 
 func newCommandLog(command string, stderr interface {
 	Write([]byte) (int, error)
-}, jsonProgress bool) (*cklog.Run, error) {
+}, jsonProgress bool, verbosity int) (*cklog.Run, error) {
 	paths, err := archive.DefaultPaths()
 	if err != nil {
 		return nil, err
@@ -41,18 +45,23 @@ func newCommandLog(command string, stderr interface {
 	return cklog.NewRun(cklog.Options{
 		StateRoot:    stateRoot,
 		CrawlerID:    crawlerID,
+		FileName:     gogcrawlLogFileName,
 		Command:      command,
 		Version:      version,
 		JSONProgress: jsonProgress,
 		Stderr:       stderr,
+		Verbosity:    verbosity,
 	})
 }
 
 func finishCommandLog(run *cklog.Run, err error) error {
-	if err == nil {
-		return run.Finish(nil)
+	if run == nil {
+		return err
 	}
-	return run.Info("finish", "outcome=error")
+	if logErr := run.Finish(err); err == nil && logErr != nil {
+		return logErr
+	}
+	return err
 }
 
 func commandName(args []string) string {
@@ -100,7 +109,7 @@ func newLogReader() (*cklog.Reader, error) {
 		return nil, err
 	}
 	stateRoot, crawlerID := logPathParts(paths.LogDir)
-	return cklog.NewReader(stateRoot, crawlerID)
+	return cklog.NewReaderWithFileName(stateRoot, crawlerID, gogcrawlLogFileName)
 }
 
 func logPathParts(logDir string) (string, string) {
@@ -175,4 +184,33 @@ func formatLogTime(value time.Time) string {
 		return ""
 	}
 	return value.Local().Format(time.RFC3339)
+}
+
+func (r *runtime) logInfo(event, message string) {
+	if r == nil || r.log == nil {
+		return
+	}
+	_ = r.log.Info(event, message)
+}
+
+func (r *runtime) logDebug(event, message string) {
+	if r == nil || r.log == nil {
+		return
+	}
+	_ = r.log.Debug(event, message)
+}
+
+func logQuote(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return strconv.Quote("")
+	}
+	if strings.ContainsAny(value, " \t\r\n\"") {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func elapsedMS(value time.Duration) string {
+	return strconv.FormatInt(value.Milliseconds(), 10)
 }
