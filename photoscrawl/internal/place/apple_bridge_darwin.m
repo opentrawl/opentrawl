@@ -168,7 +168,10 @@ static BOOL pcPlaceWait(BOOL *done, NSTimeInterval timeoutSeconds) {
   NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeoutSeconds];
   NSRunLoop *runLoop = [NSRunLoop currentRunLoop];
   while (!*done && [deadline timeIntervalSinceNow] > 0) {
-    [runLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    BOOL processed = [runLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    if (!processed && !*done) {
+      [NSThread sleepForTimeInterval:0.02];
+    }
   }
   return *done;
 }

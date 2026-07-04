@@ -37,7 +37,6 @@ type classifyWrite struct {
 	downloadErr        error
 	downloadDuration   time.Duration
 	downloadBytes      int64
-	cacheHighWater     int64
 	modelAttempts      int
 	modelDuration      time.Duration
 	rateLimitEvents    int
@@ -63,7 +62,6 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		return err
 	}
 	defer cache.Close()
-	result.CacheMaxBytes = cache.MaxBytes()
 	result.ModelConcurrencyStart = modelConcurrencyStart
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -156,9 +154,6 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	}
 	result.ModelConcurrencyPeak = limiter.Peak()
 	result.ModelConcurrencyFinal = limiter.Current()
-	if highWater := cache.HighWater(); highWater > result.CacheHighWaterBytes {
-		result.CacheHighWaterBytes = highWater
-	}
 	return nil
 }
 
@@ -172,7 +167,6 @@ func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier model
 		downloaded:       job.downloaded.err == nil && job.downloaded.path != "",
 		downloadDuration: job.downloaded.duration,
 		downloadBytes:    job.downloaded.bytes,
-		cacheHighWater:   job.downloaded.cacheHighMark,
 	}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -289,9 +283,6 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	result.ModelCallMillis += write.modelDuration.Milliseconds()
 	result.ModelRateLimitEvents += write.rateLimitEvents
 	result.ModelTransientErrorEvents += write.transientErrEvents
-	if write.cacheHighWater > result.CacheHighWaterBytes {
-		result.CacheHighWaterBytes = write.cacheHighWater
-	}
 	logger.logOutcome(write)
 	return nil
 }

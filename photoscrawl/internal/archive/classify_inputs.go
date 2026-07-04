@@ -88,7 +88,7 @@ select q.id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_downlo
 from classification_queue q
 join asset a on a.id = q.asset_id
 where q.state in (` + classifyQueueStates(refreshModelID != "") + `)
-   or (? <> '' and q.state = 'content_classified' and not exists (
+   or (? <> '' and q.state = '` + classifyQueueStateContentClassified + `' and not exists (
      select 1
      from model_observation mo
      where mo.asset_id = a.id
@@ -184,9 +184,9 @@ order by creation_date desc,
 
 func classifyQueueStates(includeMetadataClassified bool) string {
 	if includeMetadataClassified {
-		return "'pending', 'metadata_classified'"
+		return "'" + classifyQueueStatePending + "', '" + classifyQueueStateMetadataClassified + "'"
 	}
-	return "'pending'"
+	return "'" + classifyQueueStatePending + "'"
 }
 
 func loadClassifyResources(ctx context.Context, tx *sql.Tx, assetID string) ([]classifyResource, error) {

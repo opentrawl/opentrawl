@@ -90,7 +90,7 @@ values (?, ?, ?, ?, ?, ?, ?)
 			return written, placeWritten, fmt.Errorf("write observation term: %w", err)
 		}
 	}
-	if err := updateClassificationQueue(ctx, tx, input.QueueID, "content_classified", "model_observations", classifiedAt); err != nil {
+	if err := updateClassificationQueue(ctx, tx, input.QueueID, classifyQueueStateContentClassified, "model_observations", classifiedAt); err != nil {
 		return written, placeWritten, err
 	}
 	return written, placeWritten, nil

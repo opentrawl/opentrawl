@@ -185,8 +185,10 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 				UTI:              "public.jpeg",
 				OriginalFilename: "synthetic-menu.jpeg",
 				Availability:     "remote",
-				FileSize:         30,
-				NeedsDownload:    true,
+				// iCloud-only assets report no byte size; downloads must not
+				// depend on knowing the size up front.
+				FileSize:      0,
+				NeedsDownload: true,
 			}},
 		}},
 	}}
@@ -210,8 +212,8 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.BytesDownloaded != int64(len("downloaded fixture image bytes")) || result.CacheHighWaterBytes == 0 || result.CacheHighWaterBytes > result.CacheMaxBytes {
-		t.Fatalf("cache metrics = bytes %d high-water %d max %d", result.BytesDownloaded, result.CacheHighWaterBytes, result.CacheMaxBytes)
+	if result.BytesDownloaded != int64(len("downloaded fixture image bytes")) {
+		t.Fatalf("bytes downloaded = %d", result.BytesDownloaded)
 	}
 	if files := countFiles(t, paths.OriginalsCacheDir()); files != 0 {
 		t.Fatalf("originals cache files after classify = %d", files)
@@ -853,7 +855,7 @@ func useArchiveHandlerTransport(t *testing.T, handler http.Handler) func() {
 
 func TestParsePhotoCardRequiresSections(t *testing.T) {
 	t.Parallel()
-	if _, err := parsePhotoCard("Return only valid compact JSON."); err == nil {
+	if _, err := parsePhotoCard("Return only valid compact JSON.", true); err == nil {
 		t.Fatal("expected malformed card to fail")
 	}
 }
@@ -866,7 +868,7 @@ func TestParsePhotoCardReadsVenueCandidateID(t *testing.T) {
 		"candidate_id: venue_candidate_2\nverdict: corroborated\nreason: a visible sign matches the provider candidate.",
 		"None",
 		"exact city",
-	))
+	), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -883,7 +885,7 @@ func TestParsePhotoCardBadVenueIDDoesNotFailCard(t *testing.T) {
 		"candidate_id: Synthetic Consultancy\nplausibility: inconsistent\nreason: the visible scene contradicts the venue type.",
 		"None",
 		"exact venue",
-	))
+	), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -900,7 +902,7 @@ func TestParsePhotoCardUncertaintyUsesListItems(t *testing.T) {
 		"verdict: plausible\nreason: no visible contradiction.",
 		"None",
 		"venue type is only a provider candidate. The description already explains the visible scene.\n- small text is partly unreadable",
-	))
+	), true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,70 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/place"
 )
 
 const placeObservationSource = "place_context"
-
-func enrichClassifyPlaces(ctx context.Context, paths Paths, inputs []classifyInput, result *ClassifyResult) error {
-	knownPlaces, err := loadKnownPlacesForClassify(ctx, paths)
-	if err != nil {
-		return err
-	}
-	resolver := place.NewResolver(place.ResolverOptions{
-		CacheDir:          paths.PlaceContextCacheDir(),
-		LegacyBackfillDir: paths.LegacyPlaceBackfillDir(),
-		RadiusMeters:      150,
-	})
-	for i := range inputs {
-		if !inputs[i].HasLocation {
-			continue
-		}
-		resolved := resolver.Resolve(ctx, place.Input{
-			AssetID: inputs[i].AssetID,
-			TakenAt: inputs[i].CreationDate,
-			Location: place.Coordinate{
-				Latitude:  inputs[i].Latitude,
-				Longitude: inputs[i].Longitude,
-			},
-			AccuracyMeters: inputs[i].AccuracyMeters,
-		})
-		switch resolved.CacheStatus {
-		case "hit":
-			result.PlaceCacheHits++
-		case "backfill_hit":
-			result.PlaceCacheHits++
-			result.PlaceBackfillHits++
-		}
-		if resolved.ProviderAttempt {
-			result.PlaceProviderAttempts++
-		}
-		if strings.TrimSpace(resolved.ProviderError) != "" {
-			result.PlaceProviderFailures++
-		}
-		if resolved.Result == nil {
-			inputs[i].KnownPlace = matchKnownPlace(knownPlaces, inputs[i].Latitude, inputs[i].Longitude, inputs[i].CreationDate)
-			continue
-		}
-		inputs[i].Place = &classifyPlaceContext{
-			Result:      *resolved.Result,
-			CacheStatus: resolved.CacheStatus,
-		}
-		inputs[i].KnownPlace = matchKnownPlace(knownPlaces, inputs[i].Latitude, inputs[i].Longitude, inputs[i].CreationDate)
-	}
-	return nil
-}
-
-func loadKnownPlacesForClassify(ctx context.Context, paths Paths) ([]KnownPlace, error) {
-	db, err := store.OpenReadOnly(ctx, paths.Database)
-	if err != nil {
-		return nil, err
-	}
-	defer db.Close()
-	return loadKnownPlaces(ctx, db.DB())
-}
 
 func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, observedAt time.Time) (int, error) {
 	if input.Place == nil && input.KnownPlace == nil {

@@ -115,7 +115,7 @@ values (?, ?, ?, ?)
 		written++
 	}
 
-	state := "metadata_classified"
+	state := classifyQueueStateMetadataClassified
 	reason := "local_metadata_observations"
 	if !input.hasLocalContent() {
 		reason = "local_metadata_observations_waiting_for_content"
