@@ -107,17 +107,11 @@ The first query layer is asset traversal:
   terms.
 - `open`: card-first asset detail with mechanical metadata, place context,
   summary, description, and uncertainty. It does not expose evidence refs.
-- `neighbors`: photos taken together by deterministic archive facts.
 
 Human search output may show a derived short ref for local copy and paste.
-JSON keeps the canonical `photoscrawl:asset/<32-hex>` ref. `open` and `neighbors`
-accept either form when the alias resolves to exactly one asset.
-
-Neighbors are source-level adjacency, not truth. Each returned neighbor must
-name the method behind the link. v1 neighbor reasons are
-limited to deterministic archive facts such as same album id, same burst id,
-same resource hash, nearby timestamp, nearby raw GPS, or shared local observation
-labels.
+JSON keeps the canonical `photoscrawl:asset/<32-hex>` ref. `open` accepts
+either form when the alias resolves to exactly one asset.
 
 Higher concepts like trips, recurring places, drone flights, or named places are
-later hypotheses built from these facts.
+later hypotheses built from archive facts such as album ids, burst ids,
+timestamps, and GPS.

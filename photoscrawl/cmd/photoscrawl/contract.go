@@ -148,12 +148,11 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 type refCommand struct {
 	DBPath string
 	Ref    string
-	Limit  int
 	Format output.Format
 }
 
-func parseRefCommand(verb string, args []string, withLimit bool) (refCommand, error) {
-	parsed := refCommand{Limit: 20}
+func parseRefCommand(verb string, args []string) (refCommand, error) {
+	parsed := refCommand{}
 	var jsonFlag bool
 	var formatFlag string
 	flagsStarted := false
@@ -168,20 +167,6 @@ func parseRefCommand(verb string, args []string, withLimit bool) (refCommand, er
 					return parsed, commandError{Code: "usage", Message: "--json does not take a value", Remedy: "pass --json after the ref"}
 				}
 				jsonFlag = true
-			case "--limit":
-				if !withLimit {
-					return parsed, commandError{Code: "usage", Message: fmt.Sprintf("unknown %s flag --limit", verb), Remedy: fmt.Sprintf("use %s <ref> --json", verb)}
-				}
-				var err error
-				value, i, err = flagValue(args, i, value, hasValue, "--limit")
-				if err != nil {
-					return parsed, err
-				}
-				limit, err := strconv.Atoi(value)
-				if err != nil {
-					return parsed, commandError{Code: "usage", Message: "--limit must be an integer", Remedy: "use --limit with a number from 1 to 100"}
-				}
-				parsed.Limit = limit
 			case "--db":
 				var err error
 				parsed.DBPath, i, err = flagValue(args, i, value, hasValue, "--db")

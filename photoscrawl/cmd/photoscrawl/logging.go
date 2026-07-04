@@ -251,8 +251,6 @@ func errorEvent(command string, err error) string {
 		return "search_failed"
 	case "open":
 		return "open_failed"
-	case "neighbors":
-		return "neighbors_failed"
 	default:
 		return "command_failed"
 	}

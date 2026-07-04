@@ -51,7 +51,7 @@ func run(ctx context.Context, args []string) (err error) {
 	// pinning the WAL snapshot and growing the log to 29 GB; no read command
 	// may ever hold the database that long again.
 	switch args[0] {
-	case "metadata", "status", "doctor", "search", "open", "neighbors":
+	case "metadata", "status", "doctor", "search", "open":
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
@@ -219,7 +219,7 @@ func run(ctx context.Context, args []string) (err error) {
 		logInfo(runLog, "search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(result.Results), result.TotalMatches, result.Truncated))
 		return nil
 	case "open":
-		parsed, err := parseRefCommand("open", args[1:], false)
+		parsed, err := parseRefCommand("open", args[1:])
 		if err != nil {
 			return err
 		}
@@ -239,34 +239,13 @@ func run(ctx context.Context, args []string) (err error) {
 		}
 		logInfo(runLog, "open_written", "ref_kind=asset")
 		return nil
-	case "neighbors":
-		parsed, err := parseRefCommand("neighbors", args[1:], true)
-		if err != nil {
-			return err
-		}
-		if parsed.DBPath != "" {
-			paths.Database = parsed.DBPath
-		}
-		ref, err := resolveInputRef(ctx, paths, parsed.Ref, "neighbors", runLog)
-		if err != nil {
-			return err
-		}
-		result, err := archive.Neighbors(ctx, paths, archive.NeighborOptions{ID: ref, Limit: parsed.Limit})
-		if err != nil {
-			return err
-		}
-		if err := writeNeighbors(os.Stdout, parsed.Format, result); err != nil {
-			return err
-		}
-		logInfo(runLog, "neighbors_written", fmt.Sprintf("returned=%d limit=%d", len(result.Neighbors), result.Limit))
-		return nil
 	default:
 		return usage()
 	}
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|status|doctor|sync|classify|search|open|neighbors>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl <metadata|status|doctor|sync|classify|search|open>")}
 }
 
 func joinedQuery(flagValue string, args []string) string {

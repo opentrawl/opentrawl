@@ -244,37 +244,6 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 	return lines
 }
 
-func writeNeighbors(w io.Writer, format output.Format, result archive.NeighborResult) error {
-	if format != output.Text && format != "" {
-		return output.Write(w, format, "neighbors", result)
-	}
-	return printNeighborsText(w, result)
-}
-
-func printNeighborsText(w io.Writer, result archive.NeighborResult) error {
-	if _, err := fmt.Fprintf(w, "Neighbors of %s\n", result.Ref); err != nil {
-		return err
-	}
-	if len(result.Neighbors) == 0 {
-		_, err := io.WriteString(w, "No neighbors found\n")
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Showing %d (limit %d)\n", len(result.Neighbors), result.Limit); err != nil {
-		return err
-	}
-	for _, hit := range result.Neighbors {
-		reasons := make([]string, 0, len(hit.Reasons))
-		for _, reason := range hit.Reasons {
-			reasons = append(reasons, reason.Type)
-		}
-		line := strings.TrimSpace(strings.Join(nonEmptyText(hit.Time, hit.MediaType, strings.Join(reasons, ", "), hit.Ref), " | "))
-		if _, err := fmt.Fprintf(w, "\n%s\n", line); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func writeDoctor(w io.Writer, format output.Format, result archive.DoctorResult, tail *logTailOutput) error {
 	if format != output.Text && format != "" {
 		return output.Write(w, format, "doctor", doctorOutput{DoctorResult: result, Log: tail})
