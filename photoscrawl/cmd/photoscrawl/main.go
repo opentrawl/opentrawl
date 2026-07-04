@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/photoscrawl/internal/archive"
@@ -46,6 +47,15 @@ func run(ctx context.Context, args []string) (err error) {
 	defer func() {
 		err = finishLogRun(runLog, args[0], err)
 	}()
+	// The contract says read verbs are bounded. A search once ran 21 hours,
+	// pinning the WAL snapshot and growing the log to 29 GB; no read command
+	// may ever hold the database that long again.
+	switch args[0] {
+	case "metadata", "status", "doctor", "search", "open", "neighbors":
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 2*time.Minute)
+		defer cancel()
+	}
 	switch args[0] {
 	case "metadata":
 		fs := flag.NewFlagSet("metadata", flag.ContinueOnError)
