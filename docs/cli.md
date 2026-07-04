@@ -62,7 +62,8 @@ imessage  2026-05-14  Alice → Family      …the boat trip is on Saturday…  
 telegram  2026-05-12  Bob                 …book the boat before June…      telegram:msg/1930
 ```
 
-Default limit is 20 rows, maximum 200. Truncation is always explicit
+Default limit is 20 rows; `--limit` is honored as given, with no
+hidden maximum. Truncation is always explicit
 (`…and 312 more; narrow with --after or --source`).
 
 ## open

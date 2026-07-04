@@ -127,8 +127,18 @@ self-declared headline metrics, in display order — the app and
 }
 ```
 
-`--limit` defaults to 20, hard maximum 200. `--after`/`--before`
-narrow by time.
+`--limit N` is honored as given, on every verb that accepts it and
+in both output modes: N results come back if the archive has them.
+No hard maximum, no silent clamping — an agent that asks for 1000
+rows must never discover a different number arrived. `--limit`
+defaults to 20 on search; list verbs may choose their own default,
+but the default is the only thing a verb may choose. When a real
+constraint outside the crawler's control caps the answer (a remote
+API page limit, say), the crawler returns what it can and says so:
+human mode prints one line — `limit: returned 800 of 1000 requested
+(reason)` — and JSON carries `"limit_capped": {"requested": 1000,
+"returned": 800, "reason": "..."}`. Values below 1 are usage
+errors. `--after`/`--before` narrow by time.
 
 v1.2 defines `--who <person>` for crawlers that declare the `who`
 capability: filter matches to one person's items — sender, recipient
