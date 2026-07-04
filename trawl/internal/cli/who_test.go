@@ -90,6 +90,31 @@ func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
 	}
 }
 
+func TestWhoIgnoresLegacyCandidateFieldAliases(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:     "imsgcrawl",
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		whoQuery: "dave",
+		who: `{"query":"dave","candidates":[
+			{"person":"Legacy Person","volume":50,"latest":"2026-06-30T20:30:00Z"},
+			{"who":"Real Dave","identifiers":["dave@example.com"],"match_quality":"exact","sources":["imessage"],"messages":5,"last_seen":"2026-06-30T20:30:00Z"}
+		]}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "who", "dave")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Real Dave") {
+		t.Fatalf("stdout missing canonical candidate:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "Legacy Person") {
+		t.Fatalf("stdout resolved a legacy-aliased candidate:\n%s", stdout)
+	}
+}
+
 func TestWhoTableFitsTerminalWidthWithManyIdentifiers(t *testing.T) {
 	identifiers := make([]string, 40)
 	for i := range identifiers {
