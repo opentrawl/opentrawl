@@ -61,9 +61,9 @@ state. Every imported asset is queued for `classify`.
 `--model <ollama-model>`, it also resolves place context cache-first, sends
 already-local image bytes to an Ollama-API vision model, and stores one photo
 card per asset: a one-line summary, rich visual description, OCR text, and
-uncertainty list. Search uses hidden terms derived from that card text and
-mechanical place observations. It does not store rendered tag rows, object
-lists, or cluster terms.
+uncertainty list. Search indexes that card text and mechanical place
+observations directly. It does not store rendered tag rows, object lists, or
+derived term lists.
 
 If Apple place geocoding is throttled, located photos move to `place_pending`
 instead of being carded without place context. Later `classify` runs retry
@@ -124,7 +124,7 @@ Today the POC sees useful source facts and optional model observations:
   resource UTI/type, and weak screenshot/document/receipt candidates from
   filenames, albums, and metadata;
 - optional photo-card observations from already-local image derivatives or
-  originals, plus hidden normalized terms for search;
+  originals, full-text searchable;
 - mechanical place observations from cache-first provider context, including
   address lines and tiered venue candidates when provider geometry supports
   them;

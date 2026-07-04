@@ -102,7 +102,7 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) erro
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
 		"metadata_observation", "text_observation", "face_observation",
-		"model_observation", "place_observation", "observation_term",
+		"model_observation", "place_observation",
 		"asset_fts", "observation_fts", "edge",
 	}
 	for _, table := range tables {

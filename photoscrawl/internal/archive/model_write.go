@@ -20,6 +20,7 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	}
 	written := 0
 	cardFTSID := ""
+	cardTexts := []string{}
 	for _, observation := range result.Observations {
 		valueJSON, err := jsonText(observation.Value)
 		if err != nil {
@@ -35,26 +36,20 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		if observation.ObservationType == modelObservationCardSummary {
 			cardFTSID = observationID
 		}
+		cardTexts = append(cardTexts, observation.ValueText)
 		written++
 	}
 	if cardFTSID == "" {
 		return written, placeWritten, errors.New("photo card summary observation was not written")
 	}
-	termBody := strings.Join(result.SearchTerms, " ")
+	// Raw card prose, not a deduped term list: bm25 needs real term
+	// frequency to rank an asset that is about grilling above one that
+	// mentions a grill once.
 	if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values (?, ?, ?, ?)
-`, cardFTSID, input.AssetID, "", termBody); err != nil {
+`, cardFTSID, input.AssetID, "", strings.Join(cardTexts, "\n")); err != nil {
 		return written, placeWritten, fmt.Errorf("write model card fts: %w", err)
-	}
-	for _, term := range result.SearchTerms {
-		termID := stableID("observation_term", input.AssetID, cardFTSID, term)
-		if _, err := tx.ExecContext(ctx, `
-insert into observation_term(id, asset_id, observation_id, term, term_type, source, model_id)
-values (?, ?, ?, ?, ?, ?, ?)
-`, termID, input.AssetID, cardFTSID, term, "photo_card", modelClassifierSource, classifier.modelID); err != nil {
-			return written, placeWritten, fmt.Errorf("write observation term: %w", err)
-		}
 	}
 	if err := updateClassificationQueue(ctx, tx, input.QueueID, classifyQueueStateContentClassified, "model_observations", classifiedAt); err != nil {
 		return written, placeWritten, err
@@ -104,16 +99,6 @@ where asset_id = ?
   )
 `, assetID, assetID, modelClassifierSource, "local_multimodal", modelID); err != nil {
 		return fmt.Errorf("clear model observation fts: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `
-delete from observation_term
-where asset_id = ?
-  and observation_id in (
-    select id from model_observation
-    where asset_id = ? and source in (?, ?) and model_id = ?
-  )
-`, assetID, assetID, modelClassifierSource, "local_multimodal", modelID); err != nil {
-		return fmt.Errorf("clear observation terms: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 delete from model_observation

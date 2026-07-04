@@ -204,15 +204,9 @@ create table if not exists known_place (
   unique(label_kind, display_name)
 );
 
-create table if not exists observation_term (
-  id text primary key,
-  asset_id text not null references asset(id),
-  observation_id text not null,
-  term text not null,
-  term_type text not null,
-  source text not null,
-  model_id text not null
-);
+drop index if exists observation_term_asset_idx;
+drop index if exists observation_term_term_idx;
+drop table if exists observation_term;
 
 drop index if exists evidence_ref_asset_idx;
 drop table if exists evidence_ref;
@@ -249,8 +243,6 @@ create index if not exists model_observation_type_idx on model_observation(obser
 create index if not exists place_observation_asset_idx on place_observation(asset_id);
 create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
-create index if not exists observation_term_asset_idx on observation_term(asset_id);
-create index if not exists observation_term_term_idx on observation_term(term);
 create index if not exists edge_from_idx on edge(from_id);
 create index if not exists edge_to_idx on edge(to_id);
 `

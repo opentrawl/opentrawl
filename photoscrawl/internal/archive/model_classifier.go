@@ -79,7 +79,6 @@ func (c modelClassifier) classify(ctx context.Context, input classifyInput, imag
 		ImageSHA256:       hex.EncodeToString(sum[:]),
 		VenuePlausibility: card.VenuePlausibility,
 		Observations:      observationsFromCard(card),
-		SearchTerms:       photoCardSearchTerms(card),
 	}, nil
 }
 

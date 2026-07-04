@@ -62,7 +62,7 @@ Always consider:
 - screenshot/document/receipt markers;
 - image quality and visual similarity.
 - local photo cards with summaries, visual descriptions, calibrated place
-  phrases, uncertainty notes, and hidden search terms.
+  phrases, and uncertainty notes.
 
 But store observations only when they have useful provenance. Carry confidence
 only when the source or model actually emitted a calibrated value. A cat photo
@@ -71,9 +71,10 @@ OCR; a drone-looking burst probably needs camera/device/resource metadata and
 location precision.
 
 Photo-card output is candidate observation data. It belongs in generic model
-observation rows with the model id, prompt version, internal provenance, and
-hidden normalized terms. Promotion into trips, places, people, relationships, or
-durable events belongs in a later user-reviewed layer.
+observation rows with the model id, prompt version, and internal provenance;
+search indexes the raw card text directly. Promotion into trips, places,
+people, relationships, or durable events belongs in a later user-reviewed
+layer.
 
 ## Location Policy
 

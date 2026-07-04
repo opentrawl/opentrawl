@@ -32,7 +32,6 @@ type modelResult struct {
 	ImageSHA256       string
 	VenuePlausibility venuePlausibility
 	Observations      []contentObservation
-	SearchTerms       []string
 }
 
 type photoCard struct {
@@ -329,28 +328,6 @@ func photoCardPayload(card photoCard) map[string]any {
 	}
 }
 
-func photoCardSearchTerms(card photoCard) []string {
-	return observationTermsFromText(strings.Join([]string{
-		card.Summary,
-		card.Description,
-		card.OCRText,
-		strings.Join(card.Uncertainties, " "),
-	}, " "))
-}
-
-func observationTermsFromText(value string) []string {
-	terms := []string{}
-	for _, part := range strings.Fields(value) {
-		if term := normalizeTerm(part); term != "" {
-			terms = append(terms, term)
-		}
-	}
-	if term := normalizeTerm(value); term != "" {
-		terms = append(terms, term)
-	}
-	return uniqueStrings(terms)
-}
-
 func uniqueStrings(values []string) []string {
 	seen := map[string]bool{}
 	out := []string{}
@@ -365,28 +342,3 @@ func uniqueStrings(values []string) []string {
 	return out
 }
 
-func normalizeTerm(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	var builder strings.Builder
-	lastUnderscore := false
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z':
-			builder.WriteRune(r)
-			lastUnderscore = false
-		case r >= '0' && r <= '9':
-			builder.WriteRune(r)
-			lastUnderscore = false
-		default:
-			if !lastUnderscore && builder.Len() > 0 {
-				builder.WriteByte('_')
-				lastUnderscore = true
-			}
-		}
-	}
-	out := strings.Trim(builder.String(), "_")
-	if len(out) < 2 || len(out) > 80 {
-		return ""
-	}
-	return out
-}

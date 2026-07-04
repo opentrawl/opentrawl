@@ -6,6 +6,17 @@ written_by: ai
 
 ## Unreleased
 
+- Index raw card prose for search instead of deduped term lists so ranking
+  reflects real term frequency, version the FTS rebuild, and drop the
+  write-only `observation_term` table.
+- Stem and OR-combine search matching (porter tokenizer, bm25 ranking),
+  rebuilding older archives in place on the write path.
+- Requeue quota-refused classify items and stop the batch after sustained
+  model 429s instead of recording them as permanent failures.
+- Bound read commands (metadata/status/doctor/search/open) with a two-minute
+  deadline and switch crawlkit's SQLite to the C driver.
+- Add real `--help` output for the CLI and every verb; delete the `neighbors`
+  verb.
 - Align the module path with `openclaw/photoscrawl`, add CrawlKit control metadata for launcher discovery, use current dependencies, and prefer MapKit reverse geocoding on macOS 26.
 - Rename the archive import command from `crawl` to `sync` to match the shared control contract.
 - Rename classify `--local-model` to `--model` and JSON `local_model` to `model`.

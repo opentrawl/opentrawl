@@ -11,18 +11,29 @@ import (
 	"github.com/openclaw/crawlkit/store"
 )
 
-// Search matching quality lives in the FTS tokenizer. Archives built before
-// the porter change cannot match "grill" against "grilled". FTS content is
-// derived state, so an old-tokenizer archive is rebuilt in place from the
-// source tables, once, on the write path.
+// Bump when the FTS build changes in a way that requires re-deriving the
+// index from source tables. History:
+//   1: porter tokenizer (pre-versioning archives read as 0 and rebuild)
+//   2: card FTS bodies are raw card prose, not deduped term lists, so bm25
+//      term frequency ranks unfiltered queries sensibly
+const searchIndexVersion = 2
+
+// Search matching quality lives in the FTS index. FTS content is derived
+// state, so an archive built by an older index version is rebuilt in place
+// from the source tables, once, on the write path.
 func ensureSearchIndex(ctx context.Context, db *store.Store, logger classifyLogger) error {
-	var ddl string
-	if err := db.DB().QueryRowContext(ctx,
-		`select coalesce((select sql from sqlite_master where name = 'asset_fts'), '')`,
-	).Scan(&ddl); err != nil {
-		return fmt.Errorf("read asset_fts schema: %w", err)
+	if _, err := db.DB().ExecContext(ctx,
+		`create table if not exists search_index_state(version integer not null)`,
+	); err != nil {
+		return fmt.Errorf("ensure search_index_state: %w", err)
 	}
-	if strings.Contains(ddl, "porter") {
+	var current int
+	if err := db.DB().QueryRowContext(ctx,
+		`select coalesce(max(version), 0) from search_index_state`,
+	).Scan(&current); err != nil {
+		return fmt.Errorf("read search index version: %w", err)
+	}
+	if current >= searchIndexVersion {
 		return nil
 	}
 	start := time.Now()
@@ -70,11 +81,17 @@ from asset
 		if err != nil {
 			return err
 		}
-		cardRows, err := rebuildCardTermFTS(ctx, tx)
+		cardRows, err := rebuildCardFTS(ctx, tx)
 		if err != nil {
 			return err
 		}
 		observationRows += knownRows + cardRows
+		if _, err := tx.ExecContext(ctx, `delete from search_index_state`); err != nil {
+			return fmt.Errorf("clear search index version: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `insert into search_index_state(version) values (?)`, searchIndexVersion); err != nil {
+			return fmt.Errorf("write search index version: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
@@ -83,7 +100,7 @@ from asset
 	logger.logPhase("search_index_rebuilt", time.Since(start),
 		fmt.Sprintf("asset_rows=%d", assetRows),
 		fmt.Sprintf("observation_rows=%d", observationRows),
-		"reason=tokenizer_upgrade_porter")
+		fmt.Sprintf("reason=version_%d_to_%d", current, searchIndexVersion))
 	return nil
 }
 
@@ -135,15 +152,16 @@ insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`,
 	return int64(len(pending)), nil
 }
 
-// Mirrors writeModelClassification's card-terms FTS row: one row per carded
-// asset, keyed by the card_summary observation id, body = normalized terms
-// over the card's text fields.
-func rebuildCardTermFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
+// Mirrors writeModelClassification's card FTS row: one row per carded asset,
+// keyed by the card_summary observation id, body = the card's raw text fields.
+func rebuildCardFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `
 select asset_id, id, observation_type, value_text
 from model_observation
-where observation_type in (?, ?, ?, ?)
-order by asset_id, id`,
+where observation_type in (?1, ?2, ?3, ?4)
+order by asset_id,
+         case observation_type when ?1 then 0 when ?2 then 1 when ?3 then 2 else 3 end,
+         id`,
 		modelObservationCardSummary, modelObservationCardDescription,
 		modelObservationCardOCR, modelObservationCardUncertainty)
 	if err != nil {
@@ -185,11 +203,10 @@ order by asset_id, id`,
 		if accum.summaryID == "" {
 			continue
 		}
-		terms := observationTermsFromText(strings.Join(accum.texts, " "))
 		if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`,
-			accum.summaryID, assetID, strings.Join(terms, " ")); err != nil {
-			return 0, fmt.Errorf("rebuild card term fts: %w", err)
+			accum.summaryID, assetID, strings.Join(accum.texts, "\n")); err != nil {
+			return 0, fmt.Errorf("rebuild card fts: %w", err)
 		}
 		written++
 	}
