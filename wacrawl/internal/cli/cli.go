@@ -18,7 +18,6 @@ import (
 
 const (
 	defaultMessageLimit = 20
-	maxMessageLimit     = 200
 	messageRefPrefix    = store.MessageRefPrefix
 	openWindowEachSide  = 10
 )

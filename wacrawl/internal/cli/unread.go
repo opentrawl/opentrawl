@@ -23,6 +23,9 @@ func (a *app) runUnread(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("unread takes flags only"))
 	}
+	if *limit < 1 {
+		return usageErr(errors.New("unread --limit must be at least 1"))
+	}
 	return a.withReadStore(ctx, func(st *store.Store) error {
 		chats, err := st.ListUnreadChats(ctx, *limit)
 		if err != nil {

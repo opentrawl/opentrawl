@@ -153,7 +153,12 @@ func TestHandlerRejectsHostMethodsAndInvalidQueries(t *testing.T) {
 		t.Fatalf("post status=%d allow=%q", response.Code, response.Header().Get("Allow"))
 	}
 
-	invalidLimit := request(t, handler, "/api/chats?limit=501", testToken)
+	largeLimit := request(t, handler, "/api/chats?limit=501", testToken)
+	if largeLimit.Code != http.StatusOK {
+		t.Fatalf("large limit status = %d", largeLimit.Code)
+	}
+
+	invalidLimit := request(t, handler, "/api/chats?limit=0", testToken)
 	if invalidLimit.Code != http.StatusBadRequest {
 		t.Fatalf("invalid limit status = %d", invalidLimit.Code)
 	}
