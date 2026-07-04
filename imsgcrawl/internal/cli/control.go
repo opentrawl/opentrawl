@@ -14,9 +14,9 @@ func controlManifest() control.Manifest {
 	m.Paths = control.Paths{
 		DefaultDatabase: archive.DefaultPath(),
 		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
-		DefaultLogs:     filepath.Join(defaultBaseDir(), "imsgcrawl", "logs"),
+		DefaultLogs:     filepath.Join(defaultBaseDir(), "logs"),
 	}
-	m.Capabilities = []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "who", "short_refs", "open", "contact-export"}
+	m.Capabilities = []string{"metadata", "status", "sync", "doctor", "chats", "messages", "search", "who", "short_refs", "open", "contact-export", "verbose_logs"}
 	m.Privacy = control.Privacy{ContainsPrivateMessages: true, ExportsSecrets: false, LocalOnlyScopes: []string{"apple-messages", "sqlite", "contact-handles", "message-archive", "message-text-search"}}
 	m.Commands = map[string]control.Command{
 		"status":         {Title: "Status", Argv: []string{"imsgcrawl", "status", "--json"}, JSON: true},

@@ -4,11 +4,25 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"os"
 	"strings"
 	"testing"
 
 	_ "modernc.org/sqlite"
 )
+
+func TestMain(m *testing.M) {
+	home, err := os.MkdirTemp("", "imsgcrawl-test-home-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("HOME", home); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(home)
+	os.Exit(code)
+}
 
 func runOK(t *testing.T, args ...string) string {
 	t.Helper()

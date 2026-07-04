@@ -133,25 +133,34 @@ func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, erro
 }
 
 func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, error) {
+	totalStarted := time.Now()
+	extractStarted := time.Now()
 	data, err := messages.ExtractArchive(ctx, options.SourcePath)
+	extractElapsed := time.Since(extractStarted)
 	if err != nil {
 		return SyncResult{}, err
 	}
+	contactsStarted := time.Now()
 	contactNames, err := syncContactNames(ctx, options)
+	contactsElapsed := time.Since(contactsStarted)
 	if err != nil {
 		return SyncResult{}, err
 	}
+	mapStarted := time.Now()
 	contactMappings := applyContactNames(&data, contactNames)
 	ownerHandles := applyOwnerHandles(&data, contactNames, contactMappings)
+	mapElapsed := time.Since(mapStarted)
 	st, err := Open(ctx, options.ArchivePath)
 	if err != nil {
 		return SyncResult{}, err
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Now().UTC()
+	writeStarted := time.Now()
 	if err := st.ReplaceAll(ctx, data, contactMappings, ownerHandles, now); err != nil {
 		return SyncResult{}, err
 	}
+	writeElapsed := time.Since(writeStarted)
 	return SyncResult{
 		ArchivePath:      st.path,
 		SourcePath:       data.SourcePath,
@@ -164,6 +173,11 @@ func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, erro
 		Participants:     len(data.Participants),
 		ChatMessages:     len(data.ChatMessages),
 		Messages:         len(data.Messages),
+		ExtractElapsed:   extractElapsed,
+		ContactsElapsed:  contactsElapsed,
+		MapElapsed:       mapElapsed,
+		WriteElapsed:     writeElapsed,
+		TotalElapsed:     time.Since(totalStarted),
 	}, nil
 }
 

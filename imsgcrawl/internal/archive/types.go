@@ -1,19 +1,28 @@
 package archive
 
-import "github.com/openclaw/crawlkit/whomatch"
+import (
+	"time"
+
+	"github.com/openclaw/crawlkit/whomatch"
+)
 
 type SyncResult struct {
-	ArchivePath      string `json:"archive_path"`
-	SourcePath       string `json:"source_path"`
-	SourceBytes      int64  `json:"source_bytes"`
-	SourceModifiedAt string `json:"source_modified_at,omitempty"`
-	SyncedAt         string `json:"synced_at"`
-	Handles          int    `json:"handles"`
-	NamedContacts    int    `json:"named_contacts"`
-	Chats            int    `json:"chats"`
-	Participants     int    `json:"participants"`
-	ChatMessages     int    `json:"chat_messages"`
-	Messages         int    `json:"messages"`
+	ArchivePath      string        `json:"archive_path"`
+	SourcePath       string        `json:"source_path"`
+	SourceBytes      int64         `json:"source_bytes"`
+	SourceModifiedAt string        `json:"source_modified_at,omitempty"`
+	SyncedAt         string        `json:"synced_at"`
+	Handles          int           `json:"handles"`
+	NamedContacts    int           `json:"named_contacts"`
+	Chats            int           `json:"chats"`
+	Participants     int           `json:"participants"`
+	ChatMessages     int           `json:"chat_messages"`
+	Messages         int           `json:"messages"`
+	ExtractElapsed   time.Duration `json:"-"`
+	ContactsElapsed  time.Duration `json:"-"`
+	MapElapsed       time.Duration `json:"-"`
+	WriteElapsed     time.Duration `json:"-"`
+	TotalElapsed     time.Duration `json:"-"`
 }
 
 type Status struct {

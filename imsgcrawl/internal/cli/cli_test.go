@@ -515,6 +515,80 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 	if !hasString(manifest.Capabilities, "short_refs") {
 		t.Fatalf("capabilities = %#v, missing short_refs", manifest.Capabilities)
 	}
+	if !hasString(manifest.Capabilities, "verbose_logs") {
+		t.Fatalf("capabilities = %#v, missing verbose_logs", manifest.Capabilities)
+	}
+	if manifest.Paths.DefaultLogs != filepath.Join(defaultBaseDir(), "logs") {
+		t.Fatalf("default logs = %q, want %q", manifest.Paths.DefaultLogs, filepath.Join(defaultBaseDir(), "logs"))
+	}
+}
+
+func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	logPath := filepath.Join(home, ".imsgcrawl", "logs", "imsgcrawl.log")
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("metadata without -v wrote stderr:\n%s", stderr.String())
+	}
+	if _, err := os.Stat(logPath); err != nil {
+		t.Fatalf("log file missing at %s: %v", logPath, err)
+	}
+	logText := readTestLog(t)
+	for _, want := range []string{"metadata start:", "metadata finish: outcome=success"} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("log missing %q:\n%s", want, logText)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(context.Background(), []string{"-v", "metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata -v error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "metadata start:") || !strings.Contains(stderr.String(), "metadata finish: outcome=success") {
+		t.Fatalf("-v stderr missing log lines:\n%s", stderr.String())
+	}
+	if strings.Contains(stderr.String(), "DEBUG") {
+		t.Fatalf("-v streamed debug line:\n%s", stderr.String())
+	}
+}
+
+func TestSyncVerboseLogsPhaseTimings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	archivePath := filepath.Join(dir, "archive.db")
+	createMessagesFixture(t, dbPath)
+
+	var stdout, stderr bytes.Buffer
+	err := Run(context.Background(), []string{"-vv", "--db", dbPath, "--archive", archivePath, "--json", "sync"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("sync -vv error = %v stdout=%s stderr=%s", err, stdout.String(), stderr.String())
+	}
+	logText := readTestLog(t)
+	for _, want := range []string{
+		"sync_done: messages=5",
+		"chats=4",
+		"participants=6",
+		"sync_phase: source=messages",
+		"extract_ms=",
+		"contacts_ms=",
+		"map_ms=",
+		"write_ms=",
+	} {
+		if !strings.Contains(logText, want) {
+			t.Fatalf("sync log missing %q:\n%s", want, logText)
+		}
+	}
+	if !strings.Contains(stderr.String(), "sync_done: messages=5") || !strings.Contains(stderr.String(), "sync_phase: source=messages") {
+		t.Fatalf("-vv stderr missing sync log lines:\n%s", stderr.String())
+	}
 }
 
 func TestDoctorChecks(t *testing.T) {
@@ -832,6 +906,15 @@ func assertRFC3339(t *testing.T, value string) {
 	if _, err := time.Parse(time.RFC3339, value); err != nil {
 		t.Fatalf("time %q is not RFC 3339: %v", value, err)
 	}
+}
+
+func readTestLog(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".imsgcrawl", "logs", "imsgcrawl.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }
 
 func assertDoctorCheck(t *testing.T, out doctorOutput, id, state, remedy string) {

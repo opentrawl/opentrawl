@@ -5,11 +5,17 @@ import (
 	"errors"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	cklog "github.com/openclaw/crawlkit/log"
+)
+
+const (
+	imsgcrawlLogFileName = "imsgcrawl.log"
+	logTailLimit         = 500
 )
 
 type logRun = cklog.Run
@@ -39,12 +45,15 @@ type logErrorOutput struct {
 }
 
 func (r *runtime) startLogRun() error {
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
 	run, err := cklog.NewRun(cklog.Options{
-		StateRoot:    r.logStateRoot(),
-		CrawlerID:    "imsgcrawl",
+		StateRoot:    stateRoot,
+		CrawlerID:    crawlerID,
+		FileName:     imsgcrawlLogFileName,
 		Command:      r.command,
 		Version:      version,
 		Platform:     goruntime.GOOS + "/" + goruntime.GOARCH,
+		Verbosity:    r.verbosity,
 		JSONProgress: r.json,
 		Stderr:       r.stderr,
 	})
@@ -56,6 +65,9 @@ func (r *runtime) startLogRun() error {
 }
 
 func (r *runtime) finishLogRun(err error) error {
+	if r == nil || r.runLog == nil {
+		return err
+	}
 	if err != nil {
 		_ = r.logError(errorEvent(r.command, err), err)
 	}
@@ -70,6 +82,13 @@ func (r *runtime) logInfo(event, message string) error {
 		return nil
 	}
 	return r.runLog.Info(event, message)
+}
+
+func (r *runtime) logDebug(event, message string) error {
+	if r == nil || r.runLog == nil {
+		return nil
+	}
+	return r.runLog.Debug(event, message)
 }
 
 func (r *runtime) logError(event string, err error) error {
@@ -116,11 +135,12 @@ func (r *runtime) startHeartbeat(progress *cklog.Progress, message string) func(
 }
 
 func (r *runtime) readLogTail() *logTailOutput {
-	reader, err := cklog.NewReader(r.logStateRoot(), "imsgcrawl")
+	stateRoot, crawlerID := logPathParts(defaultLogDir())
+	reader, err := cklog.NewReaderWithFileName(stateRoot, crawlerID, imsgcrawlLogFileName)
 	if err != nil {
 		return nil
 	}
-	lines, err := reader.RecentLines("", 200)
+	lines, err := reader.RecentLines("", logTailLimit)
 	if err != nil {
 		return nil
 	}
@@ -128,7 +148,7 @@ func (r *runtime) readLogTail() *logTailOutput {
 	if r.runLog != nil {
 		currentRunID = r.runLog.RunID()
 	}
-	out := &logTailOutput{Path: filepath.Join(r.logStateRoot(), "imsgcrawl", "logs", "current.log")}
+	out := &logTailOutput{Path: filepath.Join(stateRoot, crawlerID, "logs", imsgcrawlLogFileName)}
 	if runID := previousRunID(lines, currentRunID); runID != "" {
 		if summary, ok, err := reader.LastRun(runID); err == nil && ok {
 			out.LastRun = newLogRunOutput(summary)
@@ -193,41 +213,18 @@ func newLogErrorOutput(line cklog.Line) *logErrorOutput {
 	}
 }
 
-func (r *runtime) logStateRoot() string {
-	path := strings.TrimSpace(r.archivePath)
-	if path == "" {
-		return defaultBaseDir()
-	}
-	dir := filepath.Dir(path)
-	if dir == "" || dir == "." {
-		return defaultBaseDir()
-	}
-	return dir
+func defaultLogDir() string {
+	return filepath.Join(defaultBaseDir(), "logs")
 }
 
-func logCommandName(command string) string {
-	command = strings.TrimSpace(command)
-	if command == "" {
-		return "command"
+func logPathParts(logDir string) (string, string) {
+	baseDir := filepath.Dir(logDir)
+	stateRoot := filepath.Dir(baseDir)
+	crawlerID := filepath.Base(baseDir)
+	if strings.TrimSpace(crawlerID) == "" || crawlerID == "." || crawlerID == string(filepath.Separator) {
+		return baseDir, "imsgcrawl"
 	}
-	var b strings.Builder
-	for i, char := range command {
-		switch {
-		case char >= 'a' && char <= 'z', char >= '0' && char <= '9' && i > 0:
-			b.WriteRune(char)
-		case char >= 'A' && char <= 'Z':
-			b.WriteRune(char + ('a' - 'A'))
-		case char == '_' || char == '-' || char == '.':
-			b.WriteRune(char)
-		default:
-			b.WriteRune('_')
-		}
-	}
-	out := strings.Trim(b.String(), "_-.")
-	if out == "" {
-		return "command"
-	}
-	return out
+	return stateRoot, crawlerID
 }
 
 func errorEvent(command string, err error) string {
@@ -266,4 +263,19 @@ func errorEvent(command string, err error) string {
 
 func worldMustChange(err error, message, remedy string) error {
 	return cklog.WorldMustChange{Err: err, Message: message, Remedy: remedy}
+}
+
+func logQuote(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return strconv.Quote("")
+	}
+	if strings.ContainsAny(value, " \t\r\n\"") {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func elapsedMS(value time.Duration) string {
+	return strconv.FormatInt(value.Milliseconds(), 10)
 }

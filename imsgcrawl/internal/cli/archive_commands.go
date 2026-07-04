@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +77,7 @@ func (r *runtime) runSync(args []string) error {
 	if err != nil {
 		return err
 	}
+	r.logSyncTimings(result)
 	if err := progress.Report(int64(result.Messages), "sync complete"); err != nil {
 		return err
 	}
@@ -83,6 +85,22 @@ func (r *runtime) runSync(args []string) error {
 		return printSyncJSONL(enc, result)
 	}
 	return r.print(result)
+}
+
+func (r *runtime) logSyncTimings(result archive.SyncResult) {
+	_ = r.logInfo("sync_done", strings.Join([]string{
+		"messages=" + strconv.Itoa(result.Messages),
+		"chats=" + strconv.Itoa(result.Chats),
+		"participants=" + strconv.Itoa(result.Participants),
+		"elapsed_ms=" + elapsedMS(result.TotalElapsed),
+	}, " "))
+	_ = r.logDebug("sync_phase", strings.Join([]string{
+		"source=" + logQuote("messages"),
+		"extract_ms=" + elapsedMS(result.ExtractElapsed),
+		"contacts_ms=" + elapsedMS(result.ContactsElapsed),
+		"map_ms=" + elapsedMS(result.MapElapsed),
+		"write_ms=" + elapsedMS(result.WriteElapsed),
+	}, " "))
 }
 
 func printSyncJSONL(enc *json.Encoder, result archive.SyncResult) error {

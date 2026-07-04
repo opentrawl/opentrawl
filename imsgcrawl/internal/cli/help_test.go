@@ -39,6 +39,13 @@ func TestHelpIsCligDevShaped(t *testing.T) {
 			if !strings.Contains(stdout.String(), tc.want) {
 				t.Fatalf("stdout missing %q:\n%s", tc.want, stdout.String())
 			}
+			diagnostics := "Diagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log"
+			if !strings.Contains(stdout.String(), diagnostics) {
+				t.Fatalf("stdout missing diagnostics line:\n%s", stdout.String())
+			}
+			if !strings.HasSuffix(strings.TrimSpace(stdout.String()), diagnostics) {
+				t.Fatalf("stdout does not end with diagnostics line:\n%s", stdout.String())
+			}
 		})
 	}
 }

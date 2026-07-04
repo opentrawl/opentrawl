@@ -28,6 +28,8 @@ Global flags:
   --db PATH    Messages source database path.
   --archive PATH
               Local imsgcrawl archive path.
+  -v, --verbose
+              Stream diagnostics to stderr. Use -vv for debug detail.
 
 Output:
   Default output is compact text for humans and agents.
@@ -37,38 +39,41 @@ Output:
 Help:
   imsgcrawl help chats
   imsgcrawl chats --help
+
+Diagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log
 `)
 }
 
 func printCommandUsage(w io.Writer, args []string) error {
 	topic := strings.Join(args, " ")
+	var err error
 	switch topic {
 	case "metadata":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--db PATH] metadata [--json]
 
 Print crawlkit control metadata.
 `)
 	case "sync":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--db PATH] [--archive PATH] sync [--json]
 
 Refresh the local imsgcrawl archive from the Messages database.
 `)
 	case "status":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--db PATH] [--archive PATH] status [--json]
 
 Report source/archive readability and aggregate counts.
 `)
 	case "doctor":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--db PATH] [--archive PATH] doctor [--json]
 
 Check source, archive and Full Disk Access readiness.
 `)
 	case "chats":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--archive PATH] chats [--limit N|--all] [--json]
 
 List archived chats.
@@ -78,7 +83,7 @@ Flags:
   --all       Print all chats. Use explicitly for complete local output.
 `)
 	case "messages":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--archive PATH] messages --chat ID [--limit N|--all] [--asc] [--json]
 
 List archived messages for one chat.
@@ -90,13 +95,13 @@ Flags:
   --asc       Show oldest messages first.
 `)
 	case "who":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--archive PATH] who NAME [--json]
 
 Resolve a name, alias or identifier fragment to archived participants.
 `)
 	case "search":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--archive PATH] search [--limit N] [--after TIME] [--before TIME] [--who NAME] [QUERY] [--json]
 
 Search archived message text.
@@ -108,13 +113,13 @@ Flags:
   --who NAME    Resolve a person first, then filter by their exact identifiers.
 `)
 	case "open":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--archive PATH] open REF [--json]
 
 Open one message ref from imsgcrawl search --json with a bounded chat context.
 `)
 	case "contacts", "contacts export":
-		_, _ = fmt.Fprint(w, `Usage:
+		_, err = fmt.Fprint(w, `Usage:
   imsgcrawl [--db PATH] contacts export [--json]
 
 Export phone contacts from the Messages source database.
@@ -122,5 +127,9 @@ Export phone contacts from the Messages source database.
 	default:
 		return usageErr(fmt.Errorf("unknown help topic %q", topic))
 	}
-	return nil
+	if err != nil {
+		return err
+	}
+	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log")
+	return err
 }

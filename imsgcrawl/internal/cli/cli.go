@@ -60,6 +60,7 @@ type runtime struct {
 	stdout      io.Writer
 	stderr      io.Writer
 	json        bool
+	verbosity   int
 	dbPath      string
 	archivePath string
 	command     string
@@ -67,49 +68,69 @@ type runtime struct {
 }
 
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
+	verbosity, args := pullVerbosity(args)
 	jsonOut, args := pullJSONFlag(args)
-	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
-		printUsage(stdout)
-		return nil
-	}
-	if args[0] == "help" {
-		if len(args) == 1 {
-			printUsage(stdout)
-			return nil
-		}
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, printCommandUsage(stdout, args[1:]))
-	}
 	global := flag.NewFlagSet("imsgcrawl", flag.ContinueOnError)
 	global.SetOutput(io.Discard)
 	dbPath := global.String("db", messages.DefaultChatDBPath(), "")
 	archivePath := global.String("archive", archive.DefaultPath(), "")
+	helpFlag := global.Bool("help", false, "")
+	helpShortFlag := global.Bool("h", false, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr(err))
 	}
+	rest := global.Args()
+	command := commandName(rest, *versionFlag, *helpFlag || *helpShortFlag)
+	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, verbosity: verbosity, dbPath: *dbPath, archivePath: *archivePath, command: command}
+	if err := r.startLogRun(); err != nil {
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr("log_open_failed", "cannot open command log", "check the local imsgcrawl log directory", 1, nil, err))
+	}
 	if *versionFlag {
 		_, _ = io.WriteString(stdout, version+"\n")
-		return nil
+		return r.finishLogRun(nil)
 	}
-	rest := global.Args()
-	if len(rest) == 0 || rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" {
-		if len(rest) > 1 && rest[0] == "help" {
-			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, printCommandUsage(stdout, rest[1:]))
-		}
+	if *helpFlag || *helpShortFlag || len(rest) == 0 || rest[0] == "--help" || rest[0] == "-h" {
 		printUsage(stdout)
-		return nil
+		return r.finishLogRun(nil)
+	}
+	if rest[0] == "help" {
+		if len(rest) == 1 {
+			printUsage(stdout)
+			return r.finishLogRun(nil)
+		}
+		err := printCommandUsage(stdout, rest[1:])
+		if err != nil {
+			_ = r.logError(errorEvent(r.command, err), err)
+		}
+		if logErr := r.finishLogRun(err); err == nil {
+			err = logErr
+		}
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
 	}
 	if rest[0] == "version" {
 		_, _ = io.WriteString(stdout, version+"\n")
-		return nil
-	}
-	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, dbPath: *dbPath, archivePath: *archivePath, command: logCommandName(rest[0])}
-	if err := r.startLogRun(); err != nil {
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
+		return r.finishLogRun(nil)
 	}
 	err := r.dispatch(rest)
 	err = r.finishLogRun(err)
 	return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
+}
+
+func pullVerbosity(args []string) (int, []string) {
+	out := make([]string, 0, len(args))
+	verbosity := 0
+	for _, arg := range args {
+		switch arg {
+		case "-v", "--verbose":
+			verbosity++
+		case "-vv":
+			verbosity += 2
+		default:
+			out = append(out, arg)
+		}
+	}
+	return verbosity, out
 }
 
 func pullJSONFlag(args []string) (bool, []string) {
@@ -123,6 +144,21 @@ func pullJSONFlag(args []string) (bool, []string) {
 		out = append(out, arg)
 	}
 	return jsonOut, out
+}
+
+func commandName(args []string, versionOut, helpOut bool) string {
+	if versionOut {
+		return "version"
+	}
+	if helpOut || len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
+		return "help"
+	}
+	switch args[0] {
+	case "metadata", "sync", "status", "doctor", "chats", "messages", "who", "search", "open", "contacts", "version":
+		return args[0]
+	default:
+		return "unknown"
+	}
 }
 
 func flagPassed(fs *flag.FlagSet, name string) bool {
