@@ -2,11 +2,6 @@
 
 ## [0.3.1] - Unreleased
 
-### Added
-
-- Add a private loopback-only web viewer for archive status, chats, messages, and search, with per-run access keys and no media/configuration/write surface (#10, thanks @greenido).
-- Redesign the web viewer as a WhatsApp-style two-pane reader with dark/light/auto themes, deterministic contact avatars, message bubbles with day separators, WhatsApp text formatting and markdown rendering, media and starred indicators, chat filters, highlighted search results, and older-message pagination.
-
 ### Changed
 
 - Breaking: stop auto-syncing before archive reads; `sync` and `import` are now the only commands that populate or refresh the archive.
@@ -15,7 +10,6 @@
 
 - Harden archive reads and restores for URI-sensitive paths, no-media backups, and alternate WhatsApp media relationships (thanks @vincentkoc).
 - Save backup configuration atomically with owner-only permissions to protect existing settings from interrupted writes (#25, thanks @TurboTheTurtle).
-- Prevent stale web viewer responses from replacing active content, and preserve the current view when refresh metadata is temporarily unavailable.
 
 ## [0.3.0] - 2026-06-19
 
