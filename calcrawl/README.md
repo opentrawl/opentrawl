@@ -39,7 +39,7 @@ The archive lives at:
 Logs live under:
 
 ```text
-~/.opentrawl/calcrawl/calcrawl/logs/current.log
+~/.opentrawl/calcrawl/logs/calcrawl.log
 ```
 
 The archive stores calendars, account/store provenance, events, start and end
