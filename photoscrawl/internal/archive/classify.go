@@ -80,14 +80,15 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
+	// The --limit contract (crawlkit/flags): --all classifies every queued
+	// asset, an explicit --limit is honored exactly (no hidden ceiling), and
+	// the visible default of 100 bounds a bare `classify` so a stray run does
+	// not spend the whole queue.
 	limit := opts.Limit
 	if opts.All {
 		limit = 0
 	} else if limit <= 0 {
 		limit = 100
-	}
-	if limit > 1000 {
-		limit = 1000
 	}
 
 	db, err := store.Open(ctx, store.Options{

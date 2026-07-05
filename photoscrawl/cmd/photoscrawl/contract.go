@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/output"
 )
 
@@ -21,9 +20,10 @@ func (e commandError) Error() string {
 	return e.Message
 }
 
-func writeError(w io.Writer, err error) error {
-	contractErr := normaliseError(err)
-	return json.NewEncoder(w).Encode(map[string]commandError{"error": contractErr})
+// ErrorBody lets the crawlkit output envelope render this error's code,
+// message and remedy without photoscrawl hand-rolling the {"error":...} shape.
+func (e commandError) ErrorBody() output.ErrorBody {
+	return output.ErrorBody{Code: e.Code, Message: e.Message, Remedy: e.Remedy}
 }
 
 func humanError(err error) string {
@@ -80,6 +80,7 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 	parsed := searchCommand{Limit: 20}
 	var jsonFlag bool
 	var formatFlag string
+	var limitSet, all bool
 	query := []string{}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
@@ -91,6 +92,11 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 					return parsed, commandError{Code: "usage", Message: "--json does not take a value", Remedy: "pass --json as a flag"}
 				}
 				jsonFlag = true
+			case "--all":
+				if hasValue {
+					return parsed, commandError{Code: "usage", Message: "--all does not take a value", Remedy: "pass --all as a flag"}
+				}
+				all = true
 			case "--limit":
 				var err error
 				value, i, err = flagValue(args, i, value, hasValue, "--limit")
@@ -99,9 +105,10 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 				}
 				limit, err := strconv.Atoi(value)
 				if err != nil {
-					return parsed, commandError{Code: "usage", Message: "--limit must be an integer", Remedy: "use --limit with a number from 1 to 200"}
+					return parsed, commandError{Code: "usage", Message: "--limit must be an integer", Remedy: "use --limit with a positive number, or --all for every match"}
 				}
 				parsed.Limit = limit
+				limitSet = true
 			case "--after":
 				var err error
 				parsed.After, i, err = flagValue(args, i, value, hasValue, "--after")
@@ -137,6 +144,11 @@ func parseSearchCommand(args []string) (searchCommand, error) {
 	if parsed.Query == "" {
 		return parsed, commandError{Code: "missing_query", Message: "search query is required", Remedy: "use search <query> [flags]"}
 	}
+	resolvedLimit, err := flags.Limit(parsed.Limit, limitSet, all)
+	if err != nil {
+		return parsed, commandError{Code: "usage", Message: err.Error(), Remedy: "use --limit with a positive number, or --all for every match"}
+	}
+	parsed.Limit = resolvedLimit
 	format, err := output.Resolve(formatFlag, jsonFlag)
 	if err != nil {
 		return parsed, err

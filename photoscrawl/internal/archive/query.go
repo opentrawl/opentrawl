@@ -35,7 +35,7 @@ type SearchHit struct {
 	Snippet string `json:"snippet"`
 
 	ID           string `json:"-"`
-	ShortRef     string `json:"-"`
+	ShortRef     string `json:"short_ref,omitempty"`
 	HitType      string `json:"-"`
 	MediaType    string `json:"-"`
 	CreationDate string `json:"-"`
@@ -121,12 +121,15 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if query == "" {
 		return SearchResult{}, errors.New("query is required")
 	}
+	// The --limit contract (crawlkit/flags): a positive limit is honored
+	// exactly with no hidden cap; limit 0 (from --all) returns every match.
 	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	if limit < 0 {
+		limit = 0
 	}
-	if limit > 200 {
-		limit = 200
+	sqlLimit := limit
+	if sqlLimit == 0 {
+		sqlLimit = -1 // SQLite: a negative LIMIT is unbounded.
 	}
 	after, err := searchTimeBound(opts.After)
 	if err != nil {
@@ -199,7 +202,7 @@ from matched_assets
 join asset on asset.id = matched_assets.id
 order by matched_assets.hit_rank, asset.creation_date desc, asset.id
 limit ?
-`, fts, after, after, before, before, fts, after, after, before, before, limit)
+`, fts, after, after, before, before, fts, after, after, before, before, sqlLimit)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search assets: %w", err)
 	}
@@ -209,7 +212,7 @@ limit ?
 		Limit:        limit,
 		Results:      []SearchHit{},
 		TotalMatches: totalMatches,
-		Truncated:    totalMatches > limit,
+		Truncated:    limit > 0 && totalMatches > limit,
 	}
 	for rows.Next() {
 		var hit SearchHit

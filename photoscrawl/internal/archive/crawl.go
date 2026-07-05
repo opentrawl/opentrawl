@@ -196,17 +196,7 @@ where source_library_id = ? and last_seen_snapshot_id <> ?
 	}
 	c.result.PreviouslySeenMissing = missing
 
-	cursor, err := state.NewCursorMapped(tx, state.CursorMapping{
-		Table:      "sync_state",
-		Source:     "source",
-		EntityType: "entity_type",
-		EntityID:   "entity_id",
-		Cursor:     "cursor",
-		SyncedAt:   "synced_at",
-	})
-	if err != nil {
-		return err
-	}
+	cursor := state.NewCursor(tx)
 	if err := cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID); err != nil {
 		return err
 	}
