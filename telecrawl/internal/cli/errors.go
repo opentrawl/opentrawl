@@ -2,62 +2,56 @@ package cli
 
 import (
 	"errors"
-	"strings"
 
 	cklog "github.com/openclaw/crawlkit/log"
 )
 
+// usageRemedy is the one next-step hint for every caller mistake. It rides the
+// error body's remedy field, kept out of the message (rules §2.4).
+const usageRemedy = "Run 'telecrawl --help'."
+
+// usageErr marks a caller mistake: exit 2, and rejected (not logged as crawler
+// health) via isUsageError.
 func usageErr(err error) error {
-	return &cliError{code: 2, err: err, event: "usage_error"}
+	return &cliError{code: 2, name: "usage", message: err.Error(), remedy: usageRemedy, err: err}
 }
 
+// usageErrHelp is a usage error whose text-mode output also shows full command
+// usage; the JSON body and the log keep the short message.
+func usageErrHelp(message, help string) error {
+	return &cliError{
+		code:    2,
+		name:    "usage",
+		message: message,
+		remedy:  usageRemedy,
+		human:   message + "\n\n" + help,
+		err:     errors.New(message),
+	}
+}
+
+// contractError is a command failure with a machine code, human message and
+// remedy. WriteJSONErrorIfNeeded renders it as the {"error": {...}} envelope.
 func (r *runtime) contractError(code, message, remedy string) error {
-	body := contractErrorBody{Code: code, Message: message, Remedy: remedy}
-	err := newRemediedError(message, remedy)
-	if r.json {
-		if printErr := r.print(errorEnvelope{Error: body}); printErr != nil {
-			return printErr
-		}
-		return &cliError{code: 1, err: err, quiet: true, event: code}
+	return &cliError{
+		code:    1,
+		name:    code,
+		message: message,
+		remedy:  remedy,
+		err:     cklog.WorldMustChange{Err: errors.New(message), Message: message, Remedy: remedy},
 	}
-	return &cliError{code: 1, err: err, event: code}
-}
-
-func (r *runtime) contractBodyError(code int, body contractErrorBody, human string) error {
-	if r.json {
-		if printErr := r.print(errorEnvelope{Error: body}); printErr != nil {
-			return printErr
-		}
-		return &cliError{code: code, err: errors.New(body.Message), quiet: true, event: body.Code}
-	}
-	return &cliError{code: code, err: errors.New(human), event: body.Code}
-}
-
-type remediedError struct {
-	message string
-	remedy  string
-}
-
-func newRemediedError(message, remedy string) error {
-	return remediedError{message: strings.TrimSpace(message), remedy: strings.TrimSpace(remedy)}
-}
-
-func (e remediedError) Error() string {
-	switch {
-	case e.message != "" && e.remedy != "":
-		return e.message + ". " + e.remedy
-	case e.message != "":
-		return e.message
-	default:
-		return e.remedy
-	}
-}
-
-func (e remediedError) Unwrap() error {
-	return cklog.WorldMustChange{Err: errors.New(e.message), Message: e.message, Remedy: e.remedy}
 }
 
 func isUsageError(err error) bool {
 	var cli *cliError
-	return errors.As(err, &cli) && cli.event == "usage_error"
+	return errors.As(err, &cli) && cli.name == "usage"
+}
+
+// loggableError keeps the health log clean: it records a command failure's
+// short machine message, never the rendered human table a who error carries.
+func loggableError(err error) error {
+	var codeErr *cliError
+	if errors.As(err, &codeErr) && codeErr.message != "" {
+		return errors.New(codeErr.message)
+	}
+	return err
 }

@@ -115,8 +115,24 @@ func TestSearchWhoRejectsBlankIdentity(t *testing.T) {
 	if !strings.Contains(err.Error(), "--who requires an identity") {
 		t.Fatalf("blank --who error = %v, want identity error", err)
 	}
-	if stdout != "" {
-		t.Fatalf("blank --who stdout = %q, want empty", stdout)
+	// One shape (crawlkit/output): a usage error in --json mode is the
+	// structured {"error": {...}} envelope on stdout, code "usage".
+	assertUsageErrorEnvelope(t, stdout, "--who requires an identity")
+}
+
+func assertUsageErrorEnvelope(t *testing.T, stdout, wantMessage string) {
+	t.Helper()
+	var payload struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("usage error json = %s err=%v", stdout, err)
+	}
+	if payload.Error.Code != "usage" || !strings.Contains(payload.Error.Message, wantMessage) {
+		t.Fatalf("usage error = %#v, want code usage with %q", payload.Error, wantMessage)
 	}
 }
 
@@ -198,15 +214,17 @@ func TestSearchWhoReportsUnknown(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("unknown error json = %s err=%v", stdout, err)
 	}
-	if payload.Error.Code != "unknown_who" || payload.Error.DidYouMean == nil || len(payload.Error.DidYouMean) != 0 || !strings.Contains(payload.Error.Hint, "Search without --who") {
+	if payload.Error.Code != "unknown_who" || len(payload.Error.DidYouMean) != 0 || !strings.Contains(payload.Error.Hint, "Search without --who") {
 		t.Fatalf("unknown error = %#v", payload)
 	}
+	// One shape (crawlkit/output): empty fields are omitted. With no
+	// suggestions there is no did_you_mean; the hint carries the guidance.
 	var errorBody map[string]json.RawMessage
 	if err := json.Unmarshal(raw["error"], &errorBody); err != nil {
 		t.Fatalf("error body = %s err=%v", raw["error"], err)
 	}
-	if _, ok := errorBody["did_you_mean"]; !ok {
-		t.Fatalf("unknown error omitted did_you_mean: %s", stdout)
+	if _, ok := errorBody["did_you_mean"]; ok {
+		t.Fatalf("empty did_you_mean should be omitted: %s", stdout)
 	}
 }
 
@@ -334,9 +352,12 @@ func TestSearchWithoutQueryOrV12FilterShowsUsage(t *testing.T) {
 	if code := ExitCode(err); code != 2 {
 		t.Fatalf("exit code = %d, want 2", code)
 	}
-	if stdout != "" || stderr != "" {
-		t.Fatalf("blank search stdout=%q stderr=%q, want quiet streams", stdout, stderr)
+	if stderr != "" {
+		t.Fatalf("blank search stderr=%q, want quiet stderr", stderr)
 	}
+	// One shape (crawlkit/output): the structured error envelope on stdout
+	// keeps a short message; the full usage text stays on err for stderr.
+	assertUsageErrorEnvelope(t, stdout, "search takes a query")
 	if !strings.Contains(err.Error(), "usage: telecrawl search") {
 		t.Fatalf("blank search error missing usage: %v", err)
 	}

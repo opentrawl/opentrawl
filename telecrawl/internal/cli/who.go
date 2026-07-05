@@ -29,25 +29,30 @@ func (r *runtime) runWho(args []string) error {
 }
 
 func (r *runtime) ambiguousWhoError(query, who string, candidates []store.WhoCandidate) error {
-	body := contractErrorBody{
-		Code:       "ambiguous_who",
-		Message:    "--who matched more than one person",
-		Remedy:     "Retry with one identifier from candidates.",
-		Candidates: whoCandidates(candidates),
+	return &cliError{
+		code:    4,
+		name:    "ambiguous_who",
+		message: "--who matched more than one person",
+		remedy:  "Retry with one identifier from candidates.",
+		fields:  map[string]any{"candidates": whoCandidates(candidates)},
+		human:   ambiguousWhoText(query, who, candidates),
 	}
-	return r.contractBodyError(4, body, ambiguousWhoText(query, who, candidates))
 }
 
 func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) error {
-	candidates := whoCandidates(didYouMean)
-	body := contractErrorBody{
-		Code:    "unknown_who",
-		Message: "--who did not match a person",
-		Remedy:  "Run telecrawl who <name>, or search without --who to check whether matching messages exist.",
-		Hint:    "Search without --who to check whether matching messages exist.",
+	hint := "Search without --who to check whether matching messages exist."
+	fields := map[string]any{"hint": hint}
+	if len(didYouMean) > 0 {
+		fields["did_you_mean"] = whoCandidates(didYouMean)
 	}
-	body.DidYouMean = &candidates
-	return r.contractBodyError(5, body, unknownWhoText(who, didYouMean))
+	return &cliError{
+		code:    5,
+		name:    "unknown_who",
+		message: "--who did not match a person",
+		remedy:  "Run telecrawl who <name>, or search without --who to check whether matching messages exist.",
+		fields:  fields,
+		human:   unknownWhoText(who, didYouMean),
+	}
 }
 
 func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {

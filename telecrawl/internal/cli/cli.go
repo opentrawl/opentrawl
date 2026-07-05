@@ -8,22 +8,44 @@ import (
 	"io"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
+// cliError carries a command failure's exit code and the crawlkit error body
+// (crawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as
+// {"error": {...}} in JSON mode; in text mode main prints Error().
 type cliError struct {
-	code  int
-	err   error
-	quiet bool
-	event string
+	code    int
+	name    string
+	message string
+	remedy  string
+	fields  map[string]any
+	human   string
+	err     error
 }
 
 func (e *cliError) Error() string {
-	return e.err.Error()
+	if e.human != "" {
+		return e.human
+	}
+	if e.remedy == "" {
+		return e.message
+	}
+	return e.message + ". " + e.remedy
 }
 
 func (e *cliError) Unwrap() error {
 	return e.err
+}
+
+func (e *cliError) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    e.name,
+		Message: e.message,
+		Remedy:  e.remedy,
+		Fields:  e.fields,
+	}
 }
 
 func ExitCode(err error) int {
@@ -34,18 +56,10 @@ func ExitCode(err error) int {
 		return 1
 	}
 	var codeErr *cliError
-	if errors.As(err, &codeErr) {
+	if errors.As(err, &codeErr) && codeErr.code != 0 {
 		return codeErr.code
 	}
 	return 1
-}
-
-func ShouldPrintError(err error) bool {
-	var codeErr *cliError
-	if errors.As(err, &codeErr) {
-		return !codeErr.quiet
-	}
-	return err != nil
 }
 
 type runtime struct {
@@ -71,7 +85,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	helpShortFlag := global.Bool("h", false, "")
 	versionFlag := global.Bool("version", false, "")
 	if err := global.Parse(args); err != nil {
-		return usageErr(err)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonFlag, usageErr(err))
 	}
 	rest := global.Args()
 	r := &runtime{
@@ -84,7 +98,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		source:    *source,
 	}
 	if err := r.startLogRun(commandName(rest, *versionFlag, *helpFlag || *helpShortFlag)); err != nil {
-		return r.contractError("log_open_failed", "cannot open command log: "+err.Error(), "check the local telecrawl log directory")
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, r.json, r.contractError("log_open_failed", "cannot open command log: "+err.Error(), "check the local telecrawl log directory"))
 	}
 	if *versionFlag {
 		_, _ = io.WriteString(stdout, version+"\n")
@@ -94,7 +108,7 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		printUsage(stdout)
 		return r.finishLogRun(nil)
 	}
-	return r.finishLogRun(r.dispatch(rest))
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, r.json, r.finishLogRun(r.dispatch(rest)))
 }
 
 func commandName(args []string, versionOut, helpOut bool) string {
@@ -120,8 +134,8 @@ func errorEventCode(err error) string {
 		return "command_canceled"
 	}
 	var codeErr *cliError
-	if errors.As(err, &codeErr) && codeErr.event != "" {
-		return codeErr.event
+	if errors.As(err, &codeErr) && codeErr.name != "" {
+		return codeErr.name
 	}
 	return "command_failed"
 }
@@ -204,7 +218,7 @@ func (r *runtime) dispatch(args []string) error {
 		_, _ = io.WriteString(r.stdout, version+"\n")
 		return nil
 	default:
-		return usageErr(fmt.Errorf("unknown command %q. Run 'telecrawl --help'.", args[0]))
+		return usageErr(fmt.Errorf("unknown command %q", args[0]))
 	}
 }
 

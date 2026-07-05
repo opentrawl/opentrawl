@@ -129,19 +129,6 @@ type searchResult struct {
 	Snippet  string `json:"snippet"`
 }
 
-type errorEnvelope struct {
-	Error contractErrorBody `json:"error"`
-}
-
-type contractErrorBody struct {
-	Code       string          `json:"code"`
-	Message    string          `json:"message"`
-	Remedy     string          `json:"remedy"`
-	Candidates []whoCandidate  `json:"candidates,omitempty"`
-	DidYouMean *[]whoCandidate `json:"did_you_mean,omitempty"`
-	Hint       string          `json:"hint,omitempty"`
-}
-
 type openEnvelope struct {
 	Ref            string        `json:"ref"`
 	Chat           openChat      `json:"chat"`

@@ -100,7 +100,7 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 		filterOnly := whoProvided || strings.TrimSpace(*after) != "" || strings.TrimSpace(*before) != ""
 		switch {
 		case len(positionals) == 0 && !filterOnly:
-			return filter, usageErr(errors.New("search takes a query unless --who, --after, or --before is set\n\n" + commandUsage([]string{"search"})))
+			return filter, usageErrHelp("search takes a query unless --who, --after, or --before is set", commandUsage([]string{"search"}))
 		case len(positionals) > 1:
 			return filter, usageErr(errors.New("search takes at most one query"))
 		case len(positionals) == 1:
