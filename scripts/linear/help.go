@@ -14,6 +14,7 @@ const rootHelp = `linear posts to Linear as an OAuth app actor.
 Usage:
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
+  linear issue state <ISSUE> --state <name> --as <actor>
   linear issue <ISSUE>
   linear issues --team <KEY> [--state <name>]
   linear mcp
@@ -27,6 +28,7 @@ Write commands require --as. The value becomes Linear's createAsUser display nam
 Examples:
   linear comment TRAWL-99 --as coordinator "Ready for review."
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
+  linear issue state TRAWL-99 --state Done --as coordinator
   linear issue TRAWL-99
   linear issues --team TRAWL
   linear mcp
@@ -53,6 +55,7 @@ const issueHelp = `Show one Linear issue and its comments.
 Usage:
   linear issue <ISSUE>
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
+  linear issue state <ISSUE> --state <name> --as <actor>
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
@@ -60,6 +63,7 @@ Arguments:
 Examples:
   linear issue TRAWL-99
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer
+  linear issue state TRAWL-99 --state Done --as coordinator
 ` + commonHelp
 
 const issueNewHelp = `Create a Linear issue as an app actor display name.
@@ -76,6 +80,24 @@ Flags:
 
 Example:
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
+` + commonHelp
+
+const issueStateHelp = `Move a Linear issue to a workflow state.
+
+Usage:
+  linear issue state <ISSUE> --state <name> --as <actor>
+
+Arguments:
+  ISSUE  Linear issue identifier, for example TRAWL-99
+
+Flags:
+  --state <name>  Required. Workflow state name, for example "In Progress".
+                  An unknown name is refused with the team's valid states.
+  --as <actor>    Required. Linear state changes carry no display name, so
+                  the actor is recorded in the request log.
+
+Example:
+  linear issue state TRAWL-99 --state Done --as coordinator
 ` + commonHelp
 
 const issuesHelp = `List Linear issues for a team.

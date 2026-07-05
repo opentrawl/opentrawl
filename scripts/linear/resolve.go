@@ -63,15 +63,19 @@ func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []st
 	return ids, nil
 }
 
-func (api *LinearAPI) ResolveStateName(ctx context.Context, team, state string) (string, error) {
+func (api *LinearAPI) ResolveState(ctx context.Context, team, state string) (IssueState, error) {
 	state = strings.TrimSpace(state)
 	if state == "" {
-		return "", fmt.Errorf("--state needs a value")
+		return IssueState{}, fmt.Errorf("--state needs a value")
 	}
 	states, err := api.TeamStates(ctx, team)
 	if err != nil {
-		return "", err
+		return IssueState{}, err
 	}
+	return matchState(states, team, state)
+}
+
+func matchState(states []IssueState, team, state string) (IssueState, error) {
 	var matches []IssueState
 	for _, candidate := range states {
 		if strings.EqualFold(candidate.Name, state) {
@@ -79,16 +83,16 @@ func (api *LinearAPI) ResolveStateName(ctx context.Context, team, state string) 
 		}
 	}
 	if len(matches) == 1 {
-		return matches[0].Name, nil
+		return matches[0], nil
 	}
 	valid := stateNames(states)
 	if len(matches) > 1 {
-		return "", fmt.Errorf("state %q is ambiguous for team %s. Valid states: %s", state, team, strings.Join(valid, ", "))
+		return IssueState{}, fmt.Errorf("state %q is ambiguous for team %s. Valid states: %s", state, team, strings.Join(valid, ", "))
 	}
 	if len(valid) == 0 {
-		return "", fmt.Errorf("team %s has no Linear states", team)
+		return IssueState{}, fmt.Errorf("team %s has no Linear states", team)
 	}
-	return "", fmt.Errorf("state %q was not found for team %s. Valid states: %s", state, team, strings.Join(valid, ", "))
+	return IssueState{}, fmt.Errorf("state %q was not found for team %s. Valid states: %s", state, team, strings.Join(valid, ", "))
 }
 
 func (api *LinearAPI) TeamStates(ctx context.Context, team string) ([]IssueState, error) {

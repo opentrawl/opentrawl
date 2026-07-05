@@ -61,7 +61,7 @@ query ListIssues($filter: IssueFilter!) {
 const teamStatesQuery = `
 query TeamStates($team: String!) {
   workflowStates(first: 100, filter: {team: {key: {eq: $team}}}) {
-    nodes { name type }
+    nodes { id name type }
     pageInfo { hasNextPage }
   }
 }`
@@ -91,6 +91,15 @@ mutation CreateComment($input: CommentCreateInput!) {
   commentCreate(input: $input) {
     success
     comment {` + commentFields + `
+    }
+  }
+}`
+
+const updateIssueStateMutation = `
+mutation UpdateIssueState($id: String!, $input: IssueUpdateInput!) {
+  issueUpdate(id: $id, input: $input) {
+    success
+    issue {` + issueCoreFields + `
     }
   }
 }`

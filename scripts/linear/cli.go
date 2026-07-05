@@ -118,6 +118,9 @@ func runIssue(args []string, stdout io.Writer, opts commandOptions) error {
 	if args[0] == "new" {
 		return runIssueNew(args[1:], stdout, opts)
 	}
+	if args[0] == "state" {
+		return runIssueState(args[1:], stdout, opts)
+	}
 	if strings.HasPrefix(args[0], "-") {
 		return usageError{message: "linear issue needs an issue identifier\n\nRun `linear issue --help`."}
 	}
@@ -176,6 +179,40 @@ func runIssueNew(args []string, stdout io.Writer, opts commandOptions) error {
 	return RenderCreatedIssue(stdout, created)
 }
 
+func runIssueState(args []string, stdout io.Writer, opts commandOptions) error {
+	fs := newFlagSet("linear issue state")
+	state := fs.String("state", "", "Workflow state name")
+	actor := fs.String("as", "", "Display name to use in Linear")
+	positionals, err := parseFlags(args, fs)
+	if err != nil {
+		return helpOrUsage(err, stdout, issueStateHelp)
+	}
+	if len(positionals) < 1 {
+		return usageError{message: "linear issue state needs an issue identifier\n\nRun `linear issue state --help`."}
+	}
+	if len(positionals) > 1 {
+		return usageError{message: "linear issue state takes one issue identifier\n\nRun `linear issue state --help`."}
+	}
+	if strings.TrimSpace(*state) == "" {
+		return usageError{message: "--state is required"}
+	}
+	if strings.TrimSpace(*actor) == "" {
+		return usageError{message: "--as is required for write commands"}
+	}
+	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = api.Close()
+	}()
+	updated, err := api.UpdateIssueState(context.Background(), positionals[0], *state, *actor)
+	if err != nil {
+		return err
+	}
+	return RenderUpdatedIssue(stdout, updated)
+}
+
 func runIssues(args []string, stdout io.Writer, opts commandOptions) error {
 	fs := newFlagSet("linear issues")
 	team := fs.String("team", "", "Linear team key")
@@ -207,11 +244,12 @@ func showHelp(args []string, stdout io.Writer) error {
 		return err
 	}
 	text := map[string]string{
-		"comment":   commentHelp,
-		"issue":     issueHelp,
-		"issue new": issueNewHelp,
-		"issues":    issuesHelp,
-		"mcp":       mcpHelp,
+		"comment":     commentHelp,
+		"issue":       issueHelp,
+		"issue new":   issueNewHelp,
+		"issue state": issueStateHelp,
+		"issues":      issuesHelp,
+		"mcp":         mcpHelp,
 	}
 	key := strings.Join(args, " ")
 	if help, ok := text[key]; ok {

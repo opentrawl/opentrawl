@@ -6,7 +6,9 @@ written_by: ai
 
 `linear` posts to Linear as an OAuth app actor. Write commands require
 `--as`, so every agent-created issue or comment carries an explicit
-display name instead of posting as the human OAuth user.
+display name instead of posting as the human OAuth user. Linear state
+changes carry no display name, so `issue state` records the actor in
+the request log instead.
 
 ## Build
 
@@ -36,6 +38,7 @@ file mode `0600`.
 ```sh
 linear comment TRAWL-99 --as coordinator "Ready for review."
 linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
+linear issue state TRAWL-99 --state Done --as coordinator
 linear issue TRAWL-99
 linear issues --team TRAWL
 linear mcp

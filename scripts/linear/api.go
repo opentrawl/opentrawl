@@ -33,6 +33,7 @@ type BotActor struct {
 }
 
 type IssueState struct {
+	ID   string `json:"id"`
 	Name string `json:"name"`
 	Type string `json:"type"`
 }
@@ -89,6 +90,11 @@ type CreatedComment struct {
 	Issue   string
 	Comment Comment
 	Actor   string
+}
+
+type UpdatedIssue struct {
+	Issue Issue
+	Actor string
 }
 
 func NewLinearAPI(stderr io.Writer, verbosity int) (*LinearAPI, error) {
@@ -173,11 +179,11 @@ func (api *LinearAPI) ListIssues(ctx context.Context, team, state string) (ListI
 	}
 	filter := openIssueFilter(team)
 	if strings.TrimSpace(state) != "" {
-		stateName, err := api.ResolveStateName(ctx, team, state)
+		resolved, err := api.ResolveState(ctx, team, state)
 		if err != nil {
 			return ListIssuesResult{}, err
 		}
-		filter = stateIssueFilter(team, stateName)
+		filter = stateIssueFilter(team, resolved.Name)
 	}
 	var out struct {
 		Issues struct {
@@ -257,6 +263,41 @@ func (api *LinearAPI) CreateIssue(ctx context.Context, teamKey, title, actor, de
 		return CreatedIssue{}, fmt.Errorf("Linear did not create the issue")
 	}
 	return CreatedIssue{Issue: out.IssueCreate.Issue, Actor: actor}, nil
+}
+
+func (api *LinearAPI) UpdateIssueState(ctx context.Context, rawIssue, state, actor string) (UpdatedIssue, error) {
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return UpdatedIssue{}, fmt.Errorf("--as is required for write commands")
+	}
+	id, err := ParseIssueIdentifier(rawIssue)
+	if err != nil {
+		return UpdatedIssue{}, err
+	}
+	resolved, err := api.ResolveState(ctx, id.TeamKey, state)
+	if err != nil {
+		return UpdatedIssue{}, err
+	}
+	issue, err := api.ResolveIssue(ctx, rawIssue)
+	if err != nil {
+		return UpdatedIssue{}, err
+	}
+	// issueUpdate has no createAsUser attribution, so the actor is recorded here.
+	api.logger.LogDiagnostic("info", fmt.Sprintf("issueUpdate requested: %s -> %q by %s", issue.Identifier, resolved.Name, actor))
+	var out struct {
+		IssueUpdate struct {
+			Success bool  `json:"success"`
+			Issue   Issue `json:"issue"`
+		} `json:"issueUpdate"`
+	}
+	input := map[string]any{"stateId": resolved.ID}
+	if err := api.graph.Do(ctx, updateIssueStateMutation, map[string]any{"id": issue.ID, "input": input}, &out); err != nil {
+		return UpdatedIssue{}, err
+	}
+	if !out.IssueUpdate.Success {
+		return UpdatedIssue{}, fmt.Errorf("Linear did not update the issue")
+	}
+	return UpdatedIssue{Issue: out.IssueUpdate.Issue, Actor: actor}, nil
 }
 
 func openIssueFilter(team string) map[string]any {

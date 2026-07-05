@@ -80,6 +80,62 @@ func TestParseFlagsInterspersed(t *testing.T) {
 	}
 }
 
+func TestMatchStateRefusesUnknownWithCandidates(t *testing.T) {
+	states := []IssueState{
+		{ID: "id-todo", Name: "Todo"},
+		{ID: "id-done", Name: "Done"},
+		{ID: "id-progress", Name: "In Progress"},
+	}
+	_, err := matchState(states, "TRAWL", "Finished")
+	if err == nil {
+		t.Fatal("expected error for unknown state")
+	}
+	want := `state "Finished" was not found for team TRAWL. Valid states: Done, In Progress, Todo`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
+}
+
+func TestMatchStateMatchesCaseInsensitively(t *testing.T) {
+	states := []IssueState{
+		{ID: "id-progress", Name: "In Progress"},
+		{ID: "id-done", Name: "Done"},
+	}
+	match, err := matchState(states, "TRAWL", "in progress")
+	if err != nil {
+		t.Fatalf("matchState returned error: %v", err)
+	}
+	if match.ID != "id-progress" || match.Name != "In Progress" {
+		t.Fatalf("match = %+v, want In Progress", match)
+	}
+}
+
+func TestMatchStateRefusesAmbiguousName(t *testing.T) {
+	states := []IssueState{
+		{ID: "id-1", Name: "Done"},
+		{ID: "id-2", Name: "done"},
+	}
+	_, err := matchState(states, "TRAWL", "Done")
+	if err == nil {
+		t.Fatal("expected error for ambiguous state")
+	}
+	if !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("error = %q, want ambiguous", err.Error())
+	}
+}
+
+func TestIssueStateRequiresActorAndState(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	err := execute([]string{"issue", "state", "TRAWL-1", "--state", "Done"}, strings.NewReader(""), &stdout, &stderr)
+	if err == nil || err.Error() != "--as is required for write commands" {
+		t.Fatalf("err = %v, want --as is required for write commands", err)
+	}
+	err = execute([]string{"issue", "state", "TRAWL-1", "--as", "coordinator"}, strings.NewReader(""), &stdout, &stderr)
+	if err == nil || err.Error() != "--state is required" {
+		t.Fatalf("err = %v, want --state is required", err)
+	}
+}
+
 func testRequestLogger(t *testing.T) (*requestLogger, *bytes.Buffer) {
 	t.Helper()
 	file, err := os.CreateTemp(t.TempDir(), "linear.log")

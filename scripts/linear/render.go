@@ -88,6 +88,17 @@ func RenderCreatedIssue(w io.Writer, created CreatedIssue) error {
 	})
 }
 
+func RenderUpdatedIssue(w io.Writer, updated UpdatedIssue) error {
+	return crender.WriteCard(w, crender.Card{
+		Title: "Updated " + updated.Issue.Identifier,
+		Fields: []crender.CardField{
+			{Label: "actor", Value: updated.Actor},
+			{Label: "state", Value: updated.Issue.State.Name},
+			{Label: "url", Value: updated.Issue.URL},
+		},
+	})
+}
+
 func RenderCreatedComment(w io.Writer, created CreatedComment) error {
 	return crender.WriteCard(w, crender.Card{
 		Title: "Created comment on " + created.Issue,
