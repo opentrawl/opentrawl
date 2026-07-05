@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add the `model` package: a switchable model-classification client (transport
+  chosen by base-URL shape) and a `Run` orchestrator that owns the loop
+  guardrails callers must not reimplement — bounded retries with a
+  429/transient taxonomy, adaptive concurrency, quota abort, and
+  one-outcome-per-item accounting.
+
 ## v0.13.2 - 2026-07-02
 
 - Add explicit monotonic snapshot merge planning and import-impact reporting so cache consumers can apply changed shards without silently replacing local rows, while exact mirrors retain replacement semantics.
