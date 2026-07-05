@@ -15,13 +15,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/modelclient"
+	ckmodel "github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
 )
 
 const (
-	DefaultOllamaGenerateURL = modelclient.DefaultGenerateURL
+	DefaultOllamaGenerateURL = ckmodel.DefaultGenerateURL
 )
 
 const PromptVersion = repoPrompts.PhotoCardVersion

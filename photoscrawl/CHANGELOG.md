@@ -6,6 +6,9 @@ written_by: ai
 
 ## Unreleased
 
+- Move the model client and classify batch loop (retries, adaptive
+  concurrency, quota abort, outcome accounting) into `crawlkit/model`;
+  behavior unchanged.
 - Index raw card prose for search instead of deduped term lists so ranking
   reflects real term frequency, version the FTS rebuild, and drop the
   write-only `observation_term` table.

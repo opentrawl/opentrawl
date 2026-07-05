@@ -653,7 +653,18 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	if result.ContentClassified != 1 || result.ModelCallAttempts != 2 || result.ModelRateLimitEvents != 1 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
-	assertRecordedLogEvent(t, logs, "model_retry")
+	// Retry lines are crawlkit model.Run's phase now: they identify the item
+	// by batch index; asset refs stay on the outcome lines.
+	foundRetry := false
+	for _, got := range logs.events {
+		if got.event == "model_retry" && strings.Contains(got.message, "rate_limited=true") {
+			foundRetry = true
+			break
+		}
+	}
+	if !foundRetry {
+		t.Fatalf("missing model_retry log event in %#v", logs.events)
+	}
 	assertContentOutcomesSumToProcessed(t, result)
 }
 
@@ -1554,8 +1565,9 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	if !result.RateLimitAborted {
 		t.Fatalf("expected rate limit abort, result = %+v", result)
 	}
-	if result.RateLimitRequeued < quotaAbortThreshold {
-		t.Fatalf("rate limit requeued = %d, want >= %d", result.RateLimitRequeued, quotaAbortThreshold)
+	// crawlkit model.Run aborts after 8 consecutive quota refusals.
+	if result.RateLimitRequeued < 8 {
+		t.Fatalf("rate limit requeued = %d, want >= 8", result.RateLimitRequeued)
 	}
 	if result.ContentFailedModel != 0 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("quota refusals recorded as failures: %+v", result)

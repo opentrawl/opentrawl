@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/modelclient"
+	ckmodel "github.com/openclaw/crawlkit/model"
 )
 
 func normalizeOllamaGenerateURL(raw string) string {
-	return modelclient.GenerateEndpoint(raw)
+	return ckmodel.GenerateEndpoint(raw)
 }
 
 func defaultedOutputDir(value string, defaultRoot string, now func() time.Time) (string, error) {

@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/modelclient"
+	ckmodel "github.com/openclaw/crawlkit/model"
 )
 
 type storedModelOutput struct {
@@ -97,21 +97,21 @@ func runOneModelCall(ctx context.Context, outputDir, promptText string, input pr
 		out.Error = err.Error()
 		return err
 	}
-	client := modelclient.New(modelclient.Config{
+	client := ckmodel.New(ckmodel.Config{
 		BaseURL:      baseURL,
 		Model:        model,
 		BearerKeyEnv: apiKeyEnv,
 	})
-	response, err := client.Generate(ctx, modelclient.Request{
+	response, err := client.Generate(ctx, ckmodel.Request{
 		Prompt: renderedPrompt,
-		Images: []modelclient.Image{{
+		Images: []ckmodel.Image{{
 			Data:     imageBytes,
 			MIMEType: "image/jpeg",
 		}},
 		Temperature: 0.1,
 	})
 	if err != nil {
-		var httpErr *modelclient.HTTPError
+		var httpErr *ckmodel.HTTPError
 		if errors.As(err, &httpErr) {
 			out.Error = fmt.Sprintf("ollama returned %s: %s", httpErr.Status, strings.TrimSpace(httpErr.Body))
 			return errors.New(out.Error)

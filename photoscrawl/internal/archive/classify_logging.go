@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/modelclient"
+	"github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
@@ -53,24 +53,6 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 			logInt64Field("write_ms", write.writeDuration.Milliseconds()),
 		)
 	}
-}
-
-func (logger classifyLogger) logModelRetry(input classifyInput, attempt int, err error, retry retryDecision, limiterBefore, limiterAfter int) {
-	retryKind := "retryable"
-	if retry.rateLimited {
-		retryKind = "rate_limited"
-	} else if retry.transient {
-		retryKind = "transient"
-	}
-	logger.warn("model_retry",
-		logTokenField("asset_ref", assetRef(input.AssetID)),
-		logIntField("attempt", attempt),
-		logIntField("next_attempt", attempt+1),
-		logStringField("reason", publicClassifyErrorReason(err, "model request failed")),
-		logTokenField("retry_kind", retryKind),
-		logIntField("limiter_before", limiterBefore),
-		logIntField("limiter_after", limiterAfter),
-	)
 }
 
 func (logger classifyLogger) logPlaceGeocode(key, outcome string, duration time.Duration, reason string) {
@@ -163,7 +145,7 @@ func publicClassifyErrorReason(err error, fallback string) string {
 	case errors.Is(err, context.DeadlineExceeded):
 		return "deadline exceeded"
 	}
-	var httpErr *modelclient.HTTPError
+	var httpErr *model.HTTPError
 	if errors.As(err, &httpErr) {
 		return "model returned " + httpErr.Status
 	}

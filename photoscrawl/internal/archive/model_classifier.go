@@ -2,7 +2,6 @@ package archive
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -16,8 +15,8 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
-	"github.com/openclaw/photoscrawl/internal/modelclient"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
 )
 
@@ -30,15 +29,15 @@ type modelClassifier struct {
 	modelID       string
 	promptVersion string
 	baseURL       string
-	client        *modelclient.Client
+	client        *model.Client
 }
 
 func newModelClassifier(modelID, baseURL, bearerKeyEnv string) modelClassifier {
 	return modelClassifier{
 		modelID:       strings.TrimSpace(modelID),
 		promptVersion: modelPromptVersion,
-		baseURL:       modelclient.NormalizeBaseURL(baseURL),
-		client: modelclient.New(modelclient.Config{
+		baseURL:       model.NormalizeBaseURL(baseURL),
+		client: model.New(model.Config{
 			BaseURL:      baseURL,
 			Model:        modelID,
 			BearerKeyEnv: bearerKeyEnv,
@@ -46,37 +45,46 @@ func newModelClassifier(modelID, baseURL, bearerKeyEnv string) modelClassifier {
 	}
 }
 
-func (c modelClassifier) classify(ctx context.Context, input classifyInput, imagePath string) (modelResult, error) {
+// imageMeta is what buildRequest learns about the image on the prepare side;
+// parseResult folds it into the stored modelResult on the commit side.
+type imageMeta struct {
+	Bytes  int64
+	SHA256 string
+}
+
+func (c modelClassifier) buildRequest(input classifyInput, imagePath string) (model.Request, imageMeta, error) {
 	data, err := os.ReadFile(imagePath)
 	if err != nil {
-		return modelResult{}, fmt.Errorf("read image: %w", err)
+		return model.Request{}, imageMeta{}, fmt.Errorf("read image: %w", err)
 	}
 	sum := sha256.Sum256(data)
 	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV3, input)
 	if err != nil {
-		return modelResult{}, fmt.Errorf("render photo card prompt: %w", err)
+		return model.Request{}, imageMeta{}, fmt.Errorf("render photo card prompt: %w", err)
 	}
-	response, err := c.client.Generate(ctx, modelclient.Request{
-		Prompt: prompt,
-		Images: []modelclient.Image{{
-			Data:     data,
-			MIMEType: mimeTypeForPath(imagePath),
-		}},
-		Temperature: 0.1,
-	})
+	return model.Request{
+			Prompt: prompt,
+			Images: []model.Image{{
+				Data:     data,
+				MIMEType: mimeTypeForPath(imagePath),
+			}},
+			Temperature: 0.1,
+		}, imageMeta{
+			Bytes:  int64(len(data)),
+			SHA256: hex.EncodeToString(sum[:]),
+		}, nil
+}
+
+func (c modelClassifier) parseResult(responseText string, input classifyInput, meta imageMeta) (modelResult, error) {
+	card, err := parsePhotoCard(responseText, input.sentVenueCandidates())
 	if err != nil {
 		return modelResult{}, err
 	}
-	card, err := parsePhotoCard(response.Text, input.sentVenueCandidates())
-	if err != nil {
-		return modelResult{}, err
-	}
-	payload := photoCardPayload(card)
 	return modelResult{
-		Payload:           payload,
-		RawResponse:       response.Text,
-		ImageBytes:        int64(len(data)),
-		ImageSHA256:       hex.EncodeToString(sum[:]),
+		Payload:           photoCardPayload(card),
+		RawResponse:       responseText,
+		ImageBytes:        meta.Bytes,
+		ImageSHA256:       meta.SHA256,
 		VenuePlausibility: card.VenuePlausibility,
 		Observations:      observationsFromCard(card),
 	}, nil

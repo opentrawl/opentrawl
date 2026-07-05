@@ -6,25 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
-
-const (
-	modelConcurrencyStart = 6
-	modelConcurrencyMax   = 10
-)
-
-type modelJob struct {
-	input      classifyInput
-	imagePath  string
-	pathClass  string
-	lease      *originalLease
-	downloaded originalExportResult
-}
 
 type classifyWrite struct {
 	input              classifyInput
@@ -33,7 +20,6 @@ type classifyWrite struct {
 	contentErr         error
 	imagePath          string
 	pathClass          string
-	lease              *originalLease
 	downloaded         bool
 	downloadErr        error
 	downloadDuration   time.Duration
@@ -59,202 +45,155 @@ const (
 	contentOutcomeSkippedUnsupportedMedia contentOutcome = "skipped_unsupported_media"
 )
 
+// contentItem is one asset headed for the model, plus everything prepare
+// learns about it on the way that commit needs afterwards.
+type contentItem struct {
+	input         classifyInput
+	imagePath     string
+	pathClass     string
+	needsDownload bool
+
+	meta             imageMeta
+	downloaded       bool
+	downloadErr      error
+	downloadDuration time.Duration
+	downloadBytes    int64
+}
+
+// classifyContentInputs drives model classification through crawlkit's
+// model.Run, which owns the loop guardrails: bounded retries, adaptive
+// concurrency, 429-requeue-never-fail, and the rule-1.15 quota abort.
+// photoscrawl keeps what is photoscrawl's: originals export inside prepare,
+// card parsing and SQL writes inside commit, and the outcome-to-queue-state
+// mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	cache, err := newOriginalsCache(paths.OriginalsCacheDir(), result.ModelRunID)
 	if err != nil {
 		return err
 	}
 	defer cache.Close()
-	result.ModelConcurrencyStart = modelConcurrencyStart
 
-	// The feed context stops new work when quota is exhausted; the writer
-	// keeps the parent context so queued results still land in the database.
-	feedCtx, stopFeeding := context.WithCancel(ctx)
-	defer stopFeeding()
-
-	modelJobs := make(chan modelJob, len(inputs))
-	downloads := make(chan classifyInput)
-	writes := make(chan classifyWrite, len(inputs))
-	writerDone := make(chan error, 1)
-	go func() {
-		writerDone <- writeClassifyResults(ctx, db, classifier, writes, now, result, logger, stopFeeding)
-	}()
-
-	limiter := newAdaptiveLimiter(modelConcurrencyStart, modelConcurrencyMax)
-	var modelWG sync.WaitGroup
-	modelsDone := make(chan struct{})
-	go func() {
-		defer close(modelsDone)
-		for job := range modelJobs {
-			modelWG.Add(1)
-			go func(job modelJob) {
-				defer modelWG.Done()
-				runModelJob(feedCtx, limiter, classifier, job, writes, logger)
-			}(job)
-		}
-		modelWG.Wait()
-		close(writes)
-	}()
-
-	var downloadWG sync.WaitGroup
-	for i := 0; i < downloadConcurrency; i++ {
-		downloadWG.Add(1)
-		go func() {
-			defer downloadWG.Done()
-			for input := range downloads {
-				exported := cache.export(feedCtx, input)
-				if exported.err != nil {
-					sendClassifyWrite(feedCtx, writes, classifyWrite{
-						input:            input,
-						contentErr:       exported.err,
-						downloadErr:      exported.err,
-						downloadDuration: exported.duration,
-						outcome:          downloadFailureOutcome(exported.err),
-					})
-					continue
-				}
-				sendModelJob(feedCtx, modelJobs, modelJob{
-					input:      input,
-					imagePath:  exported.path,
-					pathClass:  exported.pathClass,
-					lease:      exported.lease,
-					downloaded: exported,
-				})
-			}
-		}()
-	}
-
+	// Pre-pass: items that never reach the model resolve immediately.
+	items := make([]*contentItem, 0, len(inputs))
 	for _, input := range inputs {
-		if feedCtx.Err() != nil {
-			break
-		}
 		if imagePath, ok := input.contentImagePath(); ok {
-			sendModelJob(feedCtx, modelJobs, modelJob{
-				input:     input,
-				imagePath: imagePath,
-				pathClass: input.localPathClass(imagePath),
-			})
+			items = append(items, &contentItem{input: input, imagePath: imagePath, pathClass: input.localPathClass(imagePath)})
 			continue
 		}
 		if input.NeedsDownload && input.MediaType == "image" {
-			select {
-			case downloads <- input:
-			case <-feedCtx.Done():
-			}
+			items = append(items, &contentItem{input: input, needsDownload: true})
 			continue
 		}
-		sendClassifyWrite(feedCtx, writes, classifyWrite{
-			input:   input,
-			outcome: missingContentOutcome(input),
-		})
-	}
-	close(downloads)
-	downloadWG.Wait()
-	close(modelJobs)
-	<-modelsDone
-
-	if err := <-writerDone; err != nil {
-		stopFeeding()
-		return err
-	}
-	result.ModelConcurrencyPeak = limiter.Peak()
-	result.ModelConcurrencyFinal = limiter.Current()
-	return nil
-}
-
-func runModelJob(ctx context.Context, limiter *adaptiveLimiter, classifier modelClassifier, job modelJob, writes chan<- classifyWrite, logger classifyLogger) {
-	write := classifyWrite{
-		input:            job.input,
-		hasContent:       true,
-		imagePath:        job.imagePath,
-		pathClass:        job.pathClass,
-		lease:            job.lease,
-		downloaded:       job.downloaded.err == nil && job.downloaded.path != "",
-		downloadDuration: job.downloaded.duration,
-		downloadBytes:    job.downloaded.bytes,
-	}
-	var lastErr error
-	for attempt := 1; attempt <= 2; attempt++ {
-		if err := ctx.Err(); err != nil {
-			lastErr = err
-			break
-		}
-		limiter.Acquire()
-		startedAt := time.Now()
-		modelResult, err := classifier.classify(ctx, job.input, job.imagePath)
-		limiter.Release()
-		write.modelAttempts++
-		write.modelDuration += time.Since(startedAt)
-		if err == nil {
-			limiter.RecordSuccess()
-			write.contentResult = &modelResult
-			lastErr = nil
-			break
-		}
-		lastErr = err
-		retry := retryableModelError(err)
-		limiterBefore := limiter.Current()
-		if retry.rateLimited {
-			write.rateLimitEvents++
-			limiter.RecordThrottle()
-		} else if retry.transient {
-			write.transientErrEvents++
-			limiter.RecordTransient()
-		}
-		if !retry.retry || attempt == 2 {
-			break
-		}
-		logger.logModelRetry(job.input, attempt, err, retry, limiterBefore, limiter.Current())
-	}
-	if lastErr != nil {
-		if errors.Is(lastErr, context.Canceled) {
-			// Feeding was stopped mid-run; the item stays queued untouched.
-			return
-		}
-		write.contentErr = lastErr
-		if retryableModelError(lastErr).rateLimited {
-			// Quota refusal is the provider's state, not the photo's.
-			write.outcome = contentOutcomeRateLimited
-		} else {
-			write.outcome = modelFailureOutcome(lastErr)
-		}
-	} else {
-		write.outcome = contentOutcomeClassified
-	}
-	sendClassifyWrite(ctx, writes, write)
-}
-
-// quotaAbortThreshold is how many consecutive quota refusals prove the
-// provider is out of quota rather than briefly shedding load. Concurrency has
-// already collapsed to 1 by then (each 429 halves the limiter).
-const quotaAbortThreshold = 8
-
-func writeClassifyResults(ctx context.Context, db *store.Store, classifier modelClassifier, writes <-chan classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger, stopFeeding context.CancelFunc) error {
-	consecutiveRateLimited := 0
-	for write := range writes {
-		if write.outcome == contentOutcomeRateLimited {
-			consecutiveRateLimited++
-			if consecutiveRateLimited == quotaAbortThreshold && !result.RateLimitAborted {
-				result.RateLimitAborted = true
-				logger.warn("quota_exhausted",
-					fmt.Sprintf("consecutive_429=%d", consecutiveRateLimited),
-					"action=stop_feeding_batch")
-				stopFeeding()
-			}
-		} else {
-			consecutiveRateLimited = 0
-		}
-		err := func() error {
-			if write.lease != nil {
-				defer write.lease.Close()
-			}
-			return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
-		}()
-		if err != nil {
+		write := classifyWrite{input: input, outcome: missingContentOutcome(input)}
+		if err := writeClassifyResult(ctx, db, classifier, write, now, result, logger); err != nil {
 			return err
 		}
 	}
+	if len(items) == 0 {
+		return nil
+	}
+
+	prepare := func(ctx context.Context, index int) (model.Request, error) {
+		item := items[index]
+		if item.needsDownload {
+			exported := cache.export(ctx, item.input)
+			item.downloadDuration = exported.duration
+			item.downloadBytes = exported.bytes
+			if exported.err != nil {
+				item.downloadErr = exported.err
+				return model.Request{}, exported.err
+			}
+			item.downloaded = true
+			item.imagePath = exported.path
+			item.pathClass = exported.pathClass
+			// The image bytes land in the request below; the exported file
+			// is not needed after that, so the lease closes here and disk
+			// use stays bounded by one export at a time.
+			defer func() {
+				if exported.lease != nil {
+					exported.lease.Close()
+				}
+			}()
+		}
+		request, meta, err := classifier.buildRequest(item.input, item.imagePath)
+		if err != nil {
+			return model.Request{}, err
+		}
+		item.meta = meta
+		return request, nil
+	}
+
+	commit := func(res model.Result) error {
+		item := items[res.Index]
+		write := classifyWrite{
+			input:              item.input,
+			hasContent:         true,
+			imagePath:          item.imagePath,
+			pathClass:          item.pathClass,
+			downloaded:         item.downloaded,
+			downloadErr:        item.downloadErr,
+			downloadDuration:   item.downloadDuration,
+			downloadBytes:      item.downloadBytes,
+			modelAttempts:      res.Attempts,
+			modelDuration:      res.Duration,
+			rateLimitEvents:    res.RateLimitEvents,
+			transientErrEvents: res.TransientEvents,
+		}
+		switch res.Outcome {
+		case model.OutcomeOK:
+			parsed, err := classifier.parseResult(res.Response.Text, item.input, item.meta)
+			if err != nil {
+				write.contentErr = err
+				write.outcome = modelFailureOutcome(err)
+			} else {
+				write.contentResult = &parsed
+				write.outcome = contentOutcomeClassified
+			}
+		case model.OutcomeRateLimited:
+			// Quota refusal is the provider's state, not the photo's.
+			write.contentErr = res.Err
+			write.outcome = contentOutcomeRateLimited
+		case model.OutcomeFailed:
+			write.contentErr = res.Err
+			if item.downloadErr != nil {
+				write.hasContent = false
+				write.outcome = downloadFailureOutcome(item.downloadErr)
+			} else {
+				write.outcome = modelFailureOutcome(res.Err)
+			}
+		}
+		return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
+	}
+
+	stats, err := model.Run(ctx, classifier.client, len(items), prepare, commit, runLogger{logger})
+	result.RateLimitAborted = stats.Aborted
+	result.ModelConcurrencyPeak = stats.ConcurrencyPeak
+	result.ModelConcurrencyFinal = stats.ConcurrencyEnd
+	return err
+}
+
+// runLogger hands crawlkit's model.Run events to the classify log.
+type runLogger struct{ logger classifyLogger }
+
+func (l runLogger) Info(event, message string) error {
+	l.logger.info(event, message)
 	return nil
+}
+
+func (l runLogger) Warn(event, message string) error {
+	l.logger.warn(event, message)
+	return nil
+}
+
+func classifyFailureReason(err error) string {
+	if err == nil {
+		return ""
+	}
+	var httpErr *model.HTTPError
+	if errors.As(err, &httpErr) {
+		return fmt.Sprintf("model returned %s", httpErr.Status)
+	}
+	return truncateReason(err.Error())
 }
 
 func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelClassifier, write classifyWrite, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
@@ -396,24 +335,4 @@ func (result *ClassifyResult) addContentOutcome(outcome contentOutcome) {
 		return
 	}
 	result.ContentOutcomeTotal++
-}
-
-func sendModelJob(ctx context.Context, jobs chan<- modelJob, job modelJob) {
-	select {
-	case jobs <- job:
-	case <-ctx.Done():
-		if job.lease != nil {
-			job.lease.Close()
-		}
-	}
-}
-
-func sendClassifyWrite(ctx context.Context, writes chan<- classifyWrite, write classifyWrite) {
-	select {
-	case writes <- write:
-	case <-ctx.Done():
-		if write.lease != nil {
-			write.lease.Close()
-		}
-	}
 }

@@ -65,7 +65,6 @@ type ClassifyResult struct {
 	OriginalDownloadMillis         int64  `json:"original_download_millis"`
 	ModelCallAttempts              int    `json:"model_call_attempts"`
 	ModelCallMillis                int64  `json:"model_call_millis"`
-	ModelConcurrencyStart          int    `json:"model_concurrency_start,omitempty"`
 	ModelConcurrencyPeak           int    `json:"model_concurrency_peak,omitempty"`
 	ModelConcurrencyFinal          int    `json:"model_concurrency_final,omitempty"`
 	ModelRateLimitEvents           int    `json:"model_rate_limit_events"`
