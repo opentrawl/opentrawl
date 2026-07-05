@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -124,6 +125,7 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	searchHuman := string(runOutput(t, context.Background(), []string{"search", "project", "--limit", "2", "--archive", dbPath}))
 	assertSearchShortRefParity(t, searchJSON, searchHuman)
 	conformance.AssertHumanOutput(t, searchHuman)
+	assertNoMachineTimestamps(t, searchHuman)
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"status", "--archive", dbPath})))
 	conformance.AssertHumanOutput(t, string(runOutput(t, context.Background(), []string{"doctor", "--archive", dbPath})))
 }
@@ -166,7 +168,7 @@ func TestVerboseDoesNotLeakDebugToStderr(t *testing.T) {
 
 func TestSearchTextWrapsLongQueryAndSnippetRows(t *testing.T) {
 	t.Setenv("COLUMNS", "80")
-	value := archive.SearchResult{
+	value := searchOutput{SearchResult: archive.SearchResult{
 		Query:        strings.Repeat("q", 200),
 		TotalMatches: 1,
 		Results: []archive.SearchHit{{
@@ -175,7 +177,7 @@ func TestSearchTextWrapsLongQueryAndSnippetRows(t *testing.T) {
 			ShortRef: "abc12",
 			Snippet:  "Do you know Томояяош's cнıʟD, RiFF RaFF and PBS on Twitter? " + strings.Repeat("synthetic old body ", 8),
 		}},
-	}
+	}}
 	var buf bytes.Buffer
 	if err := printSearchText(&buf, value); err != nil {
 		t.Fatal(err)
@@ -185,8 +187,53 @@ func TestSearchTextWrapsLongQueryAndSnippetRows(t *testing.T) {
 	if !strings.Contains(got, "…") {
 		t.Fatalf("long query was not display-truncated:\n%s", got)
 	}
-	if !strings.Contains(got, "\n  Do you know") {
-		t.Fatalf("snippet did not move to a wrapped body line:\n%s", got)
+	// Tripwire (TRAWL-91): search rows render through WriteList with a
+	// labelled ref column, so short-ref codes never appear unexplained.
+	if !searchHeaderPattern.MatchString(got) {
+		t.Fatalf("search output missing labelled date/who/ref/text header:\n%s", got)
+	}
+	if !strings.Contains(got, "abc12") {
+		t.Fatalf("search output missing short ref:\n%s", got)
+	}
+	if !strings.Contains(got, "Open: gogcrawl open REF") {
+		t.Fatalf("search output missing Open hint:\n%s", got)
+	}
+	assertNoMachineTimestamps(t, got)
+}
+
+// Tripwires for the TRAWL-91 defect classes: unlabelled search columns and
+// raw RFC3339 timestamps in human output.
+var (
+	searchHeaderPattern     = regexp.MustCompile(`(?m)^date\s+who\s+ref\s+text$`)
+	machineTimestampPattern = regexp.MustCompile(`\d{2}T\d{2}:\d{2}:\d{2}`)
+)
+
+func assertNoMachineTimestamps(t *testing.T, humanOutput string) {
+	t.Helper()
+	if match := machineTimestampPattern.FindString(humanOutput); match != "" {
+		t.Fatalf("human output leaked an RFC3339 timestamp %q:\n%s", match, humanOutput)
+	}
+}
+
+func TestSearchTextEmptyPrintsOnlyEmptySentence(t *testing.T) {
+	var buf bytes.Buffer
+	if err := printSearchText(&buf, searchOutput{SearchResult: archive.SearchResult{Query: "boat"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); got != "No matches for \"boat\".\n" {
+		t.Fatalf("empty search output = %q", got)
+	}
+}
+
+func TestHumanModeErrorsOnEnvelopeWithoutRenderer(t *testing.T) {
+	var buf bytes.Buffer
+	r := &runtime{stdout: &buf}
+	err := r.print(struct{ Unrendered bool }{})
+	if err == nil || !strings.Contains(err.Error(), "no human renderer") {
+		t.Fatalf("err = %v", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("human mode wrote output for an unrendered envelope: %q", buf.String())
 	}
 }
 
@@ -328,11 +375,17 @@ func TestMetadataDeclaresContactsExport(t *testing.T) {
 func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
 	installFakeGog(t)
 	top := string(runOutput(t, context.Background(), []string{"--help"}))
-	if !strings.Contains(top, "gogcrawl who NAME [--json]") {
-		t.Fatalf("top help missing who:\n%s", top)
-	}
-	if !strings.Contains(top, "Diagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log") {
-		t.Fatalf("top help missing diagnostics:\n%s", top)
+	for _, want := range []string{
+		"Read your archive:",
+		"Keep it fresh:",
+		"Health:",
+		"Resolve a person across names and addresses.",
+		"Run 'gogcrawl COMMAND --help' for flags and details.",
+		"Diagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log",
+	} {
+		if !strings.Contains(top, want) {
+			t.Fatalf("top help missing %q:\n%s", want, top)
+		}
 	}
 	search := string(runOutput(t, context.Background(), []string{"help", "search"}))
 	for _, want := range []string{
@@ -383,7 +436,7 @@ func TestSearchLimitAboveOldCapIsHonored(t *testing.T) {
 	if got := strings.Count(human, "needle limit message "); got != limit {
 		t.Fatalf("search human rows = %d, want %d\n%s", got, limit, human)
 	}
-	if strings.Contains(human, "More results exist") {
+	if strings.Contains(human, "More: ") {
 		t.Fatalf("search human reported hidden rows:\n%s", human)
 	}
 }
@@ -418,12 +471,13 @@ func TestWhoCommandReturnsContractShapeAndHumanTable(t *testing.T) {
 		}
 	}
 	human := string(runOutput(t, context.Background(), []string{"who", "ali", "--archive", dbPath}))
-	for _, want := range []string{"who", "identifiers", "last_seen", "messages", "alice@example.com"} {
+	for _, want := range []string{"who", "identifiers", "last seen", "messages", "alice@example.com"} {
 		if !strings.Contains(human, want) {
 			t.Fatalf("human who missing %q:\n%s", want, human)
 		}
 	}
 	conformance.AssertHumanOutput(t, human)
+	assertNoMachineTimestamps(t, human)
 }
 
 func TestSearchWhoResolutionOneManyZeroAndIdentifier(t *testing.T) {
@@ -522,6 +576,11 @@ func TestOpenTruncatesOversizedBodyInTextAndJSON(t *testing.T) {
 	}
 	if strings.Contains(text, "THIS_IS_ELIDED") {
 		t.Fatalf("open text leaked elided body:\n%s", text)
+	}
+	// Tripwire (TRAWL-91): human open shows the short alias, never the
+	// full machine ref — full refs stay in JSON (docs/rendering.md).
+	if strings.Contains(text, archive.RefPrefix) {
+		t.Fatalf("open human output leaked a full machine ref:\n%s", text)
 	}
 
 	rawJSON := string(runOutput(t, context.Background(), []string{"open", archive.RefPrefix + "m1", "--json", "--archive", dbPath}))
@@ -752,8 +811,9 @@ func validShortRef(value string) bool {
 }
 
 func humanSearchHasAliasForTime(humanOutput, when, alias string) bool {
+	localTime := render.ShortLocalTime(parseRFC3339(when))
 	for _, line := range strings.Split(humanOutput, "\n") {
-		if strings.Contains(line, when) && strings.Contains(line, alias) {
+		if strings.Contains(line, localTime) && strings.Contains(line, alias) {
 			return true
 		}
 	}

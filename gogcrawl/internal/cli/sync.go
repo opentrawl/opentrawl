@@ -14,6 +14,7 @@ import (
 	"time"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
 )
@@ -289,7 +290,16 @@ func (r *runtime) withHeartbeat(progress *cklog.Progress, done *atomic.Int64, me
 }
 
 func printSyncText(w io.Writer, event syncCompleteEvent) error {
-	_, err := fmt.Fprintf(w, "Sync complete\n\nLocal archive:\n  Database: %s\n  Backup repo: %s\n  Synced: %s\n\nMessages:\n  Seen: %d\n  New: %d\n\nShards:\n  Ingested: %d\n  Labels: %d\n",
-		event.ArchivePath, event.BackupRepo, event.SyncedAt, event.Done, event.Inserted, event.Shards, event.Labels)
-	return err
+	return render.WriteCard(w, render.Card{
+		Title: "Sync complete",
+		Fields: []render.CardField{
+			{Label: "Database", Value: event.ArchivePath},
+			{Label: "Backup repo", Value: event.BackupRepo},
+			{Label: "Synced", Value: render.ShortLocalTime(parseRFC3339(event.SyncedAt))},
+			{Label: "Messages seen", Value: strconv.Itoa(event.Done)},
+			{Label: "New messages", Value: strconv.Itoa(event.Inserted)},
+			{Label: "Backup shards", Value: strconv.Itoa(event.Shards)},
+		},
+		Hints: []string{"Search it: gogcrawl search QUERY"},
+	})
 }
