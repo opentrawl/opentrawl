@@ -15,11 +15,13 @@ import (
 // manifest, and `trawl <source> <verb>` spawns the child binary — the
 // child stays internal plumbing (TRAWL-61, one door).
 //
-// The top-level built-in commands (status, sync, search, …) are the
-// legacy cross-source dispatch. They coexist for now.
-// TODO(TRAWL-86 wave): once every crawler ships a namespace-complete
-// manifest, the adoption wave folds the per-source built-ins into this
-// namespace and deletes the duplication.
+// The top-level commands (status, sync, search, who, open, doctor) are a
+// separate, permanent surface: they fan a single request out across every
+// discovered source and render one typed, uniform result (a status table,
+// a merged search, a who resolution). `trawl <source> <verb>` instead
+// streams one crawler's own raw output untouched. Both read the same
+// registry (discoverCrawlers -> registry.Discover); there is no second,
+// hardcoded crawler list anywhere in trawl.
 
 // namespaceCandidate reports the first non-flag token when it is not a
 // built-in command — a token that can only be a source or a typo. The
