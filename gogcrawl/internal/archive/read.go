@@ -52,26 +52,32 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	if err != nil {
 		return SearchResult{}, err
 	}
+	// limit 0 means everything (crawlkit/flags contract, via --all); a
+	// positive limit caps the rows and marks the result truncated.
 	limit := opts.Limit
-	if limit <= 0 {
-		limit = 20
+	if limit < 0 {
+		limit = 0
 	}
 	ownerEmails, err := s.OwnerEmails(ctx)
 	if err != nil {
 		return SearchResult{}, err
 	}
-	rows, err := s.store.DB().QueryContext(ctx, `
+	querySQL := `
 select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
-`+from+`
-`+where+`
-`+order+`
-limit ?
-`, append(args, limit)...)
+` + from + `
+` + where + `
+` + order
+	queryArgs := args
+	if limit > 0 {
+		querySQL += "\nlimit ?"
+		queryArgs = append(queryArgs, limit)
+	}
+	rows, err := s.store.DB().QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("search messages: %w", err)
 	}
-	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: total > int64(limit)}
-	refs := make([]string, 0, limit)
+	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: limit > 0 && total > int64(limit)}
+	var refs []string
 	for rows.Next() {
 		var id, when, fromName, fromAddress, subject, body string
 		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body); err != nil {

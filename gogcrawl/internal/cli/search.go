@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
@@ -28,6 +29,7 @@ func (r *runtime) runSearch(args []string) error {
 	fs := flag.NewFlagSet("gogcrawl search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", defaultSearchLimit, "")
+	all := fs.Bool("all", false, "")
 	after := fs.String("after", "", "")
 	before := fs.String("before", "", "")
 	who := fs.String("who", "", "")
@@ -36,8 +38,9 @@ func (r *runtime) runSearch(args []string) error {
 		return usageErr(err)
 	}
 	query := strings.TrimSpace(strings.Join(positionals, " "))
-	if *limit < 1 {
-		return usageErr(errors.New("search --limit must be at least 1"))
+	resolvedLimit, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
 	}
 	whoProvided := flagPassed(fs, "who")
 	afterProvided := flagPassed(fs, "after")
@@ -49,7 +52,7 @@ func (r *runtime) runSearch(args []string) error {
 	if query == "" && !whoProvided && !afterProvided && !beforeProvided {
 		return usageErr(errors.New("search query is required unless --who, --after or --before is present"))
 	}
-	opts := archive.SearchOptions{Query: query, Limit: *limit, Who: whoValue}
+	opts := archive.SearchOptions{Query: query, Limit: resolvedLimit, Who: whoValue}
 	if strings.TrimSpace(*after) != "" {
 		t, err := parseTime(*after)
 		if err != nil {
@@ -71,7 +74,7 @@ func (r *runtime) runSearch(args []string) error {
 		}
 		return r.print(searchOutput{
 			SearchResult: result,
-			limit:        *limit,
+			limit:        resolvedLimit,
 			who:          whoValue,
 			after:        strings.TrimSpace(*after),
 			before:       strings.TrimSpace(*before),

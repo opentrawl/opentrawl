@@ -357,7 +357,7 @@ func TestContactsExportFiltersEmptyPhones(t *testing.T) {
 }
 
 func TestMetadataDeclaresContactsExport(t *testing.T) {
-	var manifest metadataEnvelope
+	var manifest control.Manifest
 	runJSON(t, context.Background(), []string{"metadata", "--json"}, &manifest)
 	if manifest.ContractVersion != 1 || manifest.ID != "gogcrawl" {
 		t.Fatalf("manifest = %#v", manifest)
@@ -416,8 +416,35 @@ func TestSearchRejectsEmptyWho(t *testing.T) {
 func TestSearchRejectsLimitBelowOne(t *testing.T) {
 	installFakeGog(t)
 	stdout, stderr, err := runExpectError(t, []string{"search", "needle", "--limit", "0", "--archive", filepath.Join(t.TempDir(), "missing.db")})
-	if !strings.Contains(err.Error(), "search --limit must be at least 1") {
+	if !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout, stderr)
+	}
+}
+
+func TestSearchRejectsAllWithLimit(t *testing.T) {
+	installFakeGog(t)
+	stdout, stderr, err := runExpectError(t, []string{"search", "needle", "--all", "--limit", "5", "--archive", filepath.Join(t.TempDir(), "missing.db")})
+	if !strings.Contains(err.Error(), "use either --all or --limit") {
+		t.Fatalf("err = %v stdout=%s stderr=%s", err, stdout, stderr)
+	}
+}
+
+func TestSearchAllReturnsEverythingUntruncated(t *testing.T) {
+	installFakeGog(t)
+	// Above the ShortRefs chunk size so --all exercises the batched
+	// short-ref lookup instead of one over-long SQL IN clause.
+	const count = 1000
+	dbPath := seedLimitArchive(t, count)
+
+	var result archive.SearchResult
+	runJSON(t, context.Background(), []string{"search", "needle", "--all", "--json", "--archive", dbPath}, &result)
+	if len(result.Results) != count || result.TotalMatches != count || result.Truncated {
+		t.Fatalf("search --all = len %d total %d truncated %t, want %d/%d/false", len(result.Results), result.TotalMatches, result.Truncated, count, count)
+	}
+
+	human := string(runOutput(t, context.Background(), []string{"search", "needle", "--all", "--archive", dbPath}))
+	if strings.Contains(human, "More: ") {
+		t.Fatalf("search --all reported hidden rows:\n%s", human)
 	}
 }
 

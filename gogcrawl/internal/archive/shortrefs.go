@@ -103,34 +103,25 @@ func (s *Store) ShortRefs(ctx context.Context, fullRefs []string) (map[string]st
 	if _, _, err := s.EnsureShortRefs(ctx); err != nil {
 		return nil, err
 	}
-	placeholders := make([]string, len(fullRefs))
-	args := make([]any, len(fullRefs))
-	for i, ref := range fullRefs {
-		placeholders[i] = "?"
-		args[i] = ref
-	}
-	rows, err := s.store.DB().QueryContext(ctx, `
-select full_ref, alias
-from short_refs
-where full_ref in (`+strings.Join(placeholders, ",")+`)
-order by full_ref, length(alias) desc, alias
-`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("read short refs: %w", err)
-	}
-	defer rows.Close()
+	index := shortref.NewSQLiteIndex(s.store.DB())
 	out := map[string]string{}
-	for rows.Next() {
-		var fullRef, alias string
-		if err := rows.Scan(&fullRef, &alias); err != nil {
+	// crawlkit's Aliases issues one IN clause, and SQLite caps host
+	// parameters per statement, so chunk it here: --all can resolve tens
+	// of thousands of refs in one search. Each ref is unique and lands in
+	// exactly one chunk, so merging the per-chunk alias maps is exact.
+	const chunkSize = 900
+	for start := 0; start < len(fullRefs); start += chunkSize {
+		end := start + chunkSize
+		if end > len(fullRefs) {
+			end = len(fullRefs)
+		}
+		aliases, err := index.Aliases(ctx, fullRefs[start:end])
+		if err != nil {
 			return nil, err
 		}
-		if _, exists := out[fullRef]; !exists {
-			out[fullRef] = alias
+		for ref, alias := range aliases {
+			out[ref] = alias
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	return out, nil
 }

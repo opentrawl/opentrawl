@@ -20,7 +20,7 @@ func (r *runtime) print(value any) error {
 		return enc.Encode(value)
 	}
 	switch typed := value.(type) {
-	case metadataEnvelope:
+	case control.Manifest:
 		return printMetadataText(r.stdout, typed)
 	case statusEnvelope:
 		return printStatusText(r.stdout, typed)
@@ -48,7 +48,7 @@ func newJSONEncoder(w io.Writer) *json.Encoder {
 	return enc
 }
 
-func printMetadataText(w io.Writer, value metadataEnvelope) error {
+func printMetadataText(w io.Writer, value control.Manifest) error {
 	return render.WriteCard(w, render.Card{
 		Title: value.DisplayName + " crawler",
 		Fields: []render.CardField{

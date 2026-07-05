@@ -82,13 +82,14 @@ Flags:
 `)
 	case "search":
 		_, err = fmt.Fprint(w, `Usage:
-  gogcrawl search [QUERY] [--limit N] [--after DATE] [--before DATE] [--who PERSON] [--json]
+  gogcrawl search [QUERY] [--limit N] [--all] [--after DATE] [--before DATE] [--who PERSON] [--json]
 
 Search archived Gmail subject and body text.
 QUERY is optional when --who, --after or --before is present.
 
 Flags:
   --limit N      Results to return. Default: 20.
+  --all          Return every match, no limit.
   --after DATE   Only messages after RFC3339 or YYYY-MM-DD.
   --before DATE  Only messages before RFC3339 or YYYY-MM-DD.
   --who PERSON   Resolve a name, or filter by an exact email, phone or handle.

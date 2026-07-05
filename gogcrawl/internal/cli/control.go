@@ -5,54 +5,34 @@ import (
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
 
-type metadataEnvelope struct {
-	SchemaVersion   int                        `json:"schema_version"`
-	ContractVersion int                        `json:"contract_version"`
-	ID              string                     `json:"id"`
-	DisplayName     string                     `json:"display_name"`
-	Version         string                     `json:"version"`
-	Description     string                     `json:"description,omitempty"`
-	Binary          control.Binary             `json:"binary"`
-	Branding        control.Branding           `json:"branding"`
-	Paths           control.Paths              `json:"paths"`
-	Commands        map[string]control.Command `json:"commands"`
-	Capabilities    []string                   `json:"capabilities"`
-	Privacy         control.Privacy            `json:"privacy"`
-}
-
-func controlManifest() metadataEnvelope {
+func controlManifest() control.Manifest {
 	paths := archive.DefaultPaths()
-	return metadataEnvelope{
-		SchemaVersion:   1,
-		ContractVersion: 1,
-		ID:              "gogcrawl",
-		DisplayName:     "Gmail",
-		Version:         version,
-		Description:     "Local-first Gmail archive crawler backed by the gog CLI.",
-		Binary:          control.Binary{Name: "gogcrawl"},
-		Branding:        control.Branding{SymbolName: "envelope.fill", AccentColor: "#4285f4"},
-		Paths: control.Paths{
-			DefaultConfig:   paths.ConfigPath,
-			DefaultDatabase: paths.DBPath,
-			DefaultCache:    paths.CacheDir,
-			DefaultLogs:     paths.LogDir,
-			DefaultShare:    paths.ShareDir,
-		},
-		Capabilities: []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "short_refs", "who", "verbose_logs"},
-		Privacy: control.Privacy{
-			ContainsPrivateMessages: true,
-			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"gmail", "google-contacts", "sqlite", "message-archive", "message-text-search"},
-		},
-		Commands: map[string]control.Command{
-			"metadata":        {Title: "Metadata", Argv: []string{"gogcrawl", "metadata", "--json"}, JSON: true},
-			"status":          {Title: "Status", Argv: []string{"gogcrawl", "status", "--json"}, JSON: true},
-			"sync":            {Title: "Sync", Argv: []string{"gogcrawl", "sync", "--json"}, JSON: true, Mutates: true},
-			"search":          {Title: "Search", Argv: []string{"gogcrawl", "search", "<query>", "--json"}, JSON: true},
-			"who":             {Title: "Resolve who", Argv: []string{"gogcrawl", "who", "<name>", "--json"}, JSON: true},
-			"open":            {Title: "Open", Argv: []string{"gogcrawl", "open", "<ref>", "--json"}, JSON: true},
-			"doctor":          {Title: "Doctor", Argv: []string{"gogcrawl", "doctor", "--json"}, JSON: true},
-			"contacts_export": {Title: "Export contacts", Argv: []string{"gogcrawl", "contacts", "export", "--json"}, JSON: true},
-		},
+	m := control.NewManifest("gogcrawl", "Gmail", "gogcrawl")
+	m.Version = version
+	m.Description = "Local-first Gmail archive crawler backed by the gog CLI."
+	m.Branding = control.Branding{SymbolName: "envelope.fill", AccentColor: "#4285f4"}
+	m.Paths = control.Paths{
+		DefaultConfig:   paths.ConfigPath,
+		DefaultDatabase: paths.DBPath,
+		DefaultCache:    paths.CacheDir,
+		DefaultLogs:     paths.LogDir,
+		DefaultShare:    paths.ShareDir,
 	}
+	m.Capabilities = []string{"metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "short_refs", "who", "verbose_logs"}
+	m.Privacy = control.Privacy{
+		ContainsPrivateMessages: true,
+		ExportsSecrets:          false,
+		LocalOnlyScopes:         []string{"gmail", "google-contacts", "sqlite", "message-archive", "message-text-search"},
+	}
+	m.Commands = map[string]control.Command{
+		"metadata":        {Title: "Metadata", Argv: []string{"gogcrawl", "metadata", "--json"}, JSON: true},
+		"status":          {Title: "Status", Argv: []string{"gogcrawl", "status", "--json"}, JSON: true},
+		"sync":            {Title: "Sync", Argv: []string{"gogcrawl", "sync", "--json"}, JSON: true, Mutates: true},
+		"search":          {Title: "Search", Argv: []string{"gogcrawl", "search", "QUERY", "--json"}, JSON: true},
+		"who":             {Title: "Resolve who", Argv: []string{"gogcrawl", "who", "NAME", "--json"}, JSON: true},
+		"open":            {Title: "Open", Argv: []string{"gogcrawl", "open", "REF", "--json"}, JSON: true},
+		"doctor":          {Title: "Doctor", Argv: []string{"gogcrawl", "doctor", "--json"}, JSON: true},
+		"contacts_export": {Title: "Export contacts", Argv: []string{"gogcrawl", "contacts", "export", "--json"}, JSON: true},
+	}
+	return m
 }
