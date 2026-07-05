@@ -72,7 +72,7 @@ Messages source:
   Messages: 12
 
 Local archive:
-  Database: /Users/example/.imsgcrawl/archive.db
+  Database: /Users/example/.opentrawl/imsgcrawl/imsgcrawl.db
   Last sync: 2026-06-07T09:15:02Z
   Handles: 6
   Chats: 4
