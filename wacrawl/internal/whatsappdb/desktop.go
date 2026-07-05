@@ -525,7 +525,7 @@ func mergeGroupRows(existing, candidate store.Group) store.Group {
 }
 
 func readParticipantRows(ctx context.Context, db *sql.DB) ([]store.GroupParticipant, error) {
-	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''), coalesce(gm.ZFIRSTNAME,''), coalesce(gm.ZISADMIN,0), coalesce(gm.ZISACTIVE,0) from ZWAGROUPMEMBER gm join ZWACHATSESSION c on c.Z_PK=gm.ZCHATSESSION`)
+	rows, err := db.QueryContext(ctx, `select coalesce(c.ZCONTACTJID,''), coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''), coalesce(gm.ZISADMIN,0), coalesce(gm.ZISACTIVE,0) from ZWAGROUPMEMBER gm join ZWACHATSESSION c on c.Z_PK=gm.ZCHATSESSION`)
 	if err != nil {
 		return nil, err
 	}
@@ -534,7 +534,7 @@ func readParticipantRows(ctx context.Context, db *sql.DB) ([]store.GroupParticip
 	for rows.Next() {
 		var p store.GroupParticipant
 		var admin, active int
-		if err := rows.Scan(&p.GroupJID, &p.UserJID, &p.ContactName, &p.FirstName, &admin, &active); err != nil {
+		if err := rows.Scan(&p.GroupJID, &p.UserJID, &p.ContactName, &admin, &active); err != nil {
 			return nil, err
 		}
 		if p.GroupJID == "" || p.UserJID == "" {
@@ -570,19 +570,22 @@ func mergeParticipantRows(existing, candidate store.GroupParticipant) store.Grou
 	if merged.ContactName == "" {
 		merged.ContactName = candidate.ContactName
 	}
-	if merged.FirstName == "" {
-		merged.FirstName = candidate.FirstName
-	}
 	merged.IsAdmin = merged.IsAdmin || candidate.IsAdmin
 	merged.IsActive = merged.IsActive || candidate.IsActive
 	return merged
 }
 
 func readMessageRows(ctx context.Context, db *sql.DB, sourceRoot string, names map[string]string) ([]store.Message, int, error) {
+	// ZWAMESSAGE.ZPUSHNAME and ZWAGROUPMEMBER.ZFIRSTNAME are deliberately
+	// not read. In the current WhatsApp Desktop schema both columns carry
+	// base64-encoded protobuf message metadata, never names (checked against
+	// a live ChatStorage.sqlite, 2026-07-05: all 11,134 non-empty ZPUSHNAME
+	// values and all 20 non-empty ZFIRSTNAME values were protobuf blobs).
+	// Push names live in ZWAPROFILEPUSHNAME, already merged into names.
 	rows, err := db.QueryContext(ctx, `
 select m.Z_PK, coalesce(c.ZCONTACTJID,''), coalesce(c.ZPARTNERNAME,''), coalesce(m.ZSTANZAID,''), coalesce(m.ZISFROMME,0), cast(m.ZMESSAGEDATE as real),
-       coalesce(m.ZTEXT,''), coalesce(m.ZMESSAGETYPE,0), coalesce(m.ZSTARRED,0), coalesce(m.ZFROMJID,''), coalesce(m.ZPUSHNAME,''),
-       coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''), coalesce(gm.ZFIRSTNAME,''),
+       coalesce(m.ZTEXT,''), coalesce(m.ZMESSAGETYPE,0), coalesce(m.ZSTARRED,0), coalesce(m.ZFROMJID,''),
+       coalesce(gm.ZMEMBERJID,''), coalesce(gm.ZCONTACTNAME,''),
        coalesce(mi.ZMEDIALOCALPATH,''), coalesce(mi.ZMEDIAURL,''), coalesce(mi.ZTITLE,''), coalesce(mi.ZVCARDNAME,''), coalesce(mi.ZFILESIZE,0)
 from ZWAMESSAGE m
 left join ZWACHATSESSION c on c.Z_PK=m.ZCHATSESSION
@@ -599,8 +602,8 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 		var m store.Message
 		var msgDate sql.NullFloat64
 		var fromMe, starred int
-		var fromJID, pushName, memberJID, memberName, memberFirst, mediaPath, mediaURL, mediaTitle, vcardName string
-		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &fromMe, &msgDate, &m.Text, &m.RawType, &starred, &fromJID, &pushName, &memberJID, &memberName, &memberFirst, &mediaPath, &mediaURL, &mediaTitle, &vcardName, &m.MediaSize); err != nil {
+		var fromJID, memberJID, memberName, mediaPath, mediaURL, mediaTitle, vcardName string
+		if err := rows.Scan(&m.SourcePK, &m.ChatJID, &m.ChatName, &m.MessageID, &fromMe, &msgDate, &m.Text, &m.RawType, &starred, &fromJID, &memberJID, &memberName, &mediaPath, &mediaURL, &mediaTitle, &vcardName, &m.MediaSize); err != nil {
 			return nil, 0, err
 		}
 		if m.ChatJID == "" || m.MessageID == "" {
@@ -616,7 +619,7 @@ order by m.ZMESSAGEDATE asc, m.Z_PK asc`)
 			m.MediaPath = resolveDesktopMediaPath(sourceRoot, mediaPath)
 		}
 		m.MediaURL = mediaURL
-		m.SenderJID, m.SenderName = sender(m.FromMe, m.ChatJID, fromJID, pushName, memberJID, memberName, memberFirst, names)
+		m.SenderJID, m.SenderName = sender(m.FromMe, m.ChatJID, fromJID, memberJID, memberName, names)
 		if m.Text == "" && m.MediaTitle != "" {
 			m.Text = m.MediaTitle
 		}
@@ -679,7 +682,7 @@ func firstPathElement(path string) string {
 	return path
 }
 
-func sender(fromMe bool, chatJID, fromJID, pushName, memberJID, memberName, memberFirst string, names map[string]string) (string, string) {
+func sender(fromMe bool, chatJID, fromJID, memberJID, memberName string, names map[string]string) (string, string) {
 	if fromMe {
 		// WhatsApp Desktop never records the account owner's JID on
 		// outbound rows (ZFROMJID is null, ZTOJID is the destination).
@@ -688,7 +691,7 @@ func sender(fromMe bool, chatJID, fromJID, pushName, memberJID, memberName, memb
 		return "", "me"
 	}
 	jid := firstNonEmpty(memberJID, fromJID, chatJID)
-	name := firstNonEmpty(memberName, resolvedName(jid, names), memberFirst, pushName, jid)
+	name := firstNonEmpty(memberName, resolvedName(jid, names), jid)
 	return jid, name
 }
 

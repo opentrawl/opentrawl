@@ -334,7 +334,6 @@ select
 	group_jid,
 	user_jid,
 	coalesce(contact_name, '') as contact_name,
-	coalesce(first_name, '') as first_name,
 	is_admin,
 	is_active
 from group_participants
@@ -345,7 +344,6 @@ type ExportParticipantsRow struct {
 	GroupJid    string
 	UserJid     string
 	ContactName string
-	FirstName   string
 	IsAdmin     int64
 	IsActive    int64
 }
@@ -363,7 +361,6 @@ func (q *Queries) ExportParticipants(ctx context.Context) ([]ExportParticipantsR
 			&i.GroupJid,
 			&i.UserJid,
 			&i.ContactName,
-			&i.FirstName,
 			&i.IsAdmin,
 			&i.IsActive,
 		); err != nil {
@@ -571,15 +568,14 @@ func (q *Queries) InsertMessageFTS(ctx context.Context, arg InsertMessageFTSPara
 }
 
 const insertParticipant = `-- name: InsertParticipant :exec
-insert into group_participants(group_jid, user_jid, contact_name, first_name, is_admin, is_active)
-values(?1, ?2, ?3, ?4, ?5, ?6)
+insert into group_participants(group_jid, user_jid, contact_name, is_admin, is_active)
+values(?1, ?2, ?3, ?4, ?5)
 `
 
 type InsertParticipantParams struct {
 	GroupJid    string
 	UserJid     string
 	ContactName sql.NullString
-	FirstName   sql.NullString
 	IsAdmin     int64
 	IsActive    int64
 }
@@ -589,7 +585,6 @@ func (q *Queries) InsertParticipant(ctx context.Context, arg InsertParticipantPa
 		arg.GroupJid,
 		arg.UserJid,
 		arg.ContactName,
-		arg.FirstName,
 		arg.IsAdmin,
 		arg.IsActive,
 	)

@@ -80,7 +80,6 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 			GroupJid:    p.GroupJID,
 			UserJid:     p.UserJID,
 			ContactName: nullString(p.ContactName),
-			FirstName:   nullString(p.FirstName),
 			IsAdmin:     int64(boolInt(p.IsAdmin)),
 			IsActive:    int64(boolInt(p.IsActive)),
 		})

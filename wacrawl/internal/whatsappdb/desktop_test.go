@@ -234,11 +234,64 @@ insert into ZWAMESSAGE values (5, 2, 2, null, 'profile-name', 0, 700000004, 'pro
 }
 
 func TestSenderSkipsResolvedJIDFallback(t *testing.T) {
-	jid, name := sender(false, "123@g.us", "444@s.whatsapp.net", "Readable Push", "", "", "", map[string]string{
+	jid, name := sender(false, "123@g.us", "444@s.whatsapp.net", "", "", map[string]string{
 		"444@s.whatsapp.net": "444@s.whatsapp.net",
 	})
-	if jid != "444@s.whatsapp.net" || name != "Readable Push" {
-		t.Fatalf("sender used JID fallback before readable push name: jid=%q name=%q", jid, name)
+	if jid != "444@s.whatsapp.net" || name != "444@s.whatsapp.net" {
+		t.Fatalf("sender with only an identity name mapping must fall back to the JID: jid=%q name=%q", jid, name)
+	}
+}
+
+func TestImportNeverStoresProtobufBlobsAsSenderName(t *testing.T) {
+	// Regression for TRAWL-110: the current WhatsApp Desktop schema stores
+	// base64 protobuf metadata in ZWAMESSAGE.ZPUSHNAME and
+	// ZWAGROUPMEMBER.ZFIRSTNAME. Those bytes must never land in sender_name.
+	const pushBlob = "CLrg8M8GIABIAZABAPABAtgC8sy5t8WmlAM="
+	const firstBlob = "+EAA="
+	ctx := context.Background()
+	source := t.TempDir()
+	createFixtureDBs(t, source)
+
+	chatDB, err := sql.Open("sqlite3", filepath.Join(source, chatDBName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustExec(t, chatDB, `
+insert into ZWACHATSESSION values (3, '100000000000003@lid', '', 700000040, 0, 0, 0, 0, 0);
+insert into ZWAGROUPMEMBER values (3, 2, '555@lid', '', '`+firstBlob+`', 0, 1);
+insert into ZWAMESSAGE values (6, 3, null, null, 'blob-dm', 0, 700000040, 'bot message', 0, 0, '100000000000003@lid', '', '`+pushBlob+`');
+insert into ZWAMESSAGE values (7, 2, 3, null, 'blob-group', 0, 700000041, 'group message', 0, 0, '123@g.us', '', '`+pushBlob+`');
+`)
+	if err := chatDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	archive, err := store.Open(ctx, filepath.Join(t.TempDir(), "wacrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = archive.Close() }()
+
+	if _, err := Import(ctx, archive, source); err != nil {
+		t.Fatal(err)
+	}
+
+	exported, err := archive.ExportAll(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]store.Message{}
+	for _, msg := range exported.Messages {
+		if msg.SenderName == pushBlob || msg.SenderName == firstBlob {
+			t.Fatalf("protobuf blob stored as sender_name: %+v", msg)
+		}
+		byID[msg.MessageID] = msg
+	}
+	if got := byID["blob-dm"].SenderName; got != "100000000000003@lid" {
+		t.Fatalf("unnamed LID sender must fall back to its JID, got %q", got)
+	}
+	if got := byID["blob-group"].SenderName; got != "555@lid" {
+		t.Fatalf("unnamed group member must fall back to its JID, got %q", got)
 	}
 }
 

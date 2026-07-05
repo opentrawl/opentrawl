@@ -44,7 +44,6 @@ type GroupParticipant struct {
 	GroupJid    string
 	UserJid     string
 	ContactName sql.NullString
-	FirstName   sql.NullString
 	IsAdmin     int64
 	IsActive    int64
 }

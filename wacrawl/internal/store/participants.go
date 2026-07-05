@@ -37,11 +37,6 @@ from group_participants gp
 left join contacts c on ` + groupContact + `
 where trim(gp.user_jid) <> '' and trim(gp.contact_name) <> ''
 union all
-select 'jid:' || coalesce(c.jid, gp.user_jid), gp.first_name, 'other'
-from group_participants gp
-left join contacts c on ` + groupContact + `
-where trim(gp.user_jid) <> '' and trim(gp.first_name) <> ''
-union all
 select 'jid:' || c.jid, c.full_name, 'contact_full'
 from group_participants gp
 join contacts c on ` + groupContact + `

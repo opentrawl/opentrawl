@@ -39,7 +39,6 @@ create table if not exists group_participants (
 	group_jid text not null,
 	user_jid text not null,
 	contact_name text,
-	first_name text,
 	is_admin integer not null default 0,
 	is_active integer not null default 0,
 	primary key (group_jid, user_jid)

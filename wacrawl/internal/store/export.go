@@ -177,7 +177,6 @@ func participantFromRow(row storedb.ExportParticipantsRow) GroupParticipant {
 		GroupJID:    row.GroupJid,
 		UserJID:     row.UserJid,
 		ContactName: row.ContactName,
-		FirstName:   row.FirstName,
 		IsAdmin:     row.IsAdmin != 0,
 		IsActive:    row.IsActive != 0,
 	}

@@ -1176,9 +1176,12 @@ func TestSearchAndOpenRenderCanonicalSenderWho(t *testing.T) {
 		{JID: "alice@s.whatsapp.net", Kind: "dm", LastMessageAt: now, MessageCount: 1},
 		{JID: "junk@s.whatsapp.net", Kind: "dm", LastMessageAt: now.Add(time.Minute), MessageCount: 1},
 	}
+	// Ingest stores the sender JID as sender_name when no real name exists
+	// (TRAWL-110 removed the protobuf-blob columns from the parse), so the
+	// JID-as-name row is what an unnamed sender actually looks like on disk.
 	messages := []store.Message{
-		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", MessageID: "contact-clean", SenderJID: "alice-lid@lid", SenderName: "IAA=", Timestamp: now, RawType: 0, MessageType: "text", Text: "contactneedle"},
-		{SourcePK: 2, ChatJID: "junk@s.whatsapp.net", MessageID: "junk-phone", SenderJID: "junk@s.whatsapp.net", SenderName: "IAA=", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "junkneedle"},
+		{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", MessageID: "contact-clean", SenderJID: "alice-lid@lid", SenderName: "alice-lid@lid", Timestamp: now, RawType: 0, MessageType: "text", Text: "contactneedle"},
+		{SourcePK: 2, ChatJID: "junk@s.whatsapp.net", MessageID: "junk-phone", SenderJID: "junk@s.whatsapp.net", SenderName: "junk@s.whatsapp.net", Timestamp: now.Add(time.Minute), RawType: 0, MessageType: "text", Text: "junkneedle"},
 	}
 	if err := st.ReplaceAll(ctx, store.ImportStats{}, contacts, chats, nil, nil, messages); err != nil {
 		t.Fatal(err)
@@ -1200,9 +1203,6 @@ func TestSearchAndOpenRenderCanonicalSenderWho(t *testing.T) {
 		if len(search.Results) != 1 || search.Results[0].Who != want {
 			t.Fatalf("search %q results = %#v, want who %q", query, search.Results, want)
 		}
-		if strings.Contains(stdout.String(), "IAA=") {
-			t.Fatalf("search %q rendered junk sender name:\n%s", query, stdout.String())
-		}
 
 		ref := search.Results[0].Ref
 		stdout.Reset()
@@ -1219,9 +1219,6 @@ func TestSearchAndOpenRenderCanonicalSenderWho(t *testing.T) {
 		}
 		if len(opened.Context) == 0 || opened.Context[0].Who != want {
 			t.Fatalf("open %q context = %#v, want first who %q", ref, opened.Context, want)
-		}
-		if strings.Contains(stdout.String(), "IAA=") {
-			t.Fatalf("open %q rendered junk sender name:\n%s", ref, stdout.String())
 		}
 	}
 
@@ -2203,7 +2200,7 @@ func archiveSourceContentChecksum(t *testing.T, path string) [32]byte {
 		{name: "chats", query: `select jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type from chats order by jid`},
 		{name: "contacts", query: `select jid, phone, full_name, first_name, last_name, business_name, username, lid, about_text, updated_at from contacts order by jid`},
 		{name: "groups", query: `select jid, name, owner_jid, created_at from groups order by jid`},
-		{name: "group_participants", query: `select group_jid, user_jid, contact_name, first_name, is_admin, is_active from group_participants order by group_jid, user_jid`},
+		{name: "group_participants", query: `select group_jid, user_jid, contact_name, is_admin, is_active from group_participants order by group_jid, user_jid`},
 		{name: "messages", query: `select rowid, source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred from messages order by rowid`},
 	} {
 		fmt.Fprintf(hasher, "table:%s\n", table.name)

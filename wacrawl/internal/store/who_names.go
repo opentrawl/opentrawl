@@ -59,9 +59,6 @@ func humanWhoName(value string) bool {
 	if value == "" || strings.HasPrefix(value, "@") || strings.Contains(value, "@") || looksLikeIdentifierPhone(value) {
 		return false
 	}
-	if looksLikeBase64Name(value) {
-		return false
-	}
 	hasLetter := false
 	for _, r := range value {
 		if !unicode.IsPrint(r) {
@@ -80,23 +77,6 @@ func humanWhoName(value string) bool {
 // HumanWhoName reports whether value is safe to display as a person's name.
 func HumanWhoName(value string) bool {
 	return humanWhoName(value)
-}
-
-func looksLikeBase64Name(value string) bool {
-	if strings.Contains(value, " ") || len(value) < 4 {
-		return false
-	}
-	hasBase64Punctuation := false
-	for _, r := range value {
-		switch {
-		case unicode.IsLetter(r), unicode.IsDigit(r):
-		case r == '+', r == '/', r == '=':
-			hasBase64Punctuation = true
-		default:
-			return false
-		}
-	}
-	return hasBase64Punctuation
 }
 
 func looksLikeIdentifierPhone(value string) bool {

@@ -111,7 +111,6 @@ select
 	group_jid,
 	user_jid,
 	coalesce(contact_name, '') as contact_name,
-	coalesce(first_name, '') as first_name,
 	is_admin,
 	is_active
 from group_participants
@@ -151,8 +150,8 @@ insert into groups(jid, name, owner_jid, created_at)
 values(sqlc.arg(jid), sqlc.arg(name), sqlc.arg(owner_jid), sqlc.arg(created_at));
 
 -- name: InsertParticipant :exec
-insert into group_participants(group_jid, user_jid, contact_name, first_name, is_admin, is_active)
-values(sqlc.arg(group_jid), sqlc.arg(user_jid), sqlc.arg(contact_name), sqlc.arg(first_name), sqlc.arg(is_admin), sqlc.arg(is_active));
+insert into group_participants(group_jid, user_jid, contact_name, is_admin, is_active)
+values(sqlc.arg(group_jid), sqlc.arg(user_jid), sqlc.arg(contact_name), sqlc.arg(is_admin), sqlc.arg(is_active));
 
 -- name: InsertMessage :exec
 insert into messages(source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred)

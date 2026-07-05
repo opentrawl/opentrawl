@@ -115,7 +115,6 @@ type GroupParticipant struct {
 	GroupJID    string
 	UserJID     string
 	ContactName string
-	FirstName   string
 	IsAdmin     bool
 	IsActive    bool
 }
