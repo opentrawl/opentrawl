@@ -761,8 +761,37 @@ func TestSearchLimitZeroIsUsageError(t *testing.T) {
 	if err == nil || cli.ExitCode(err) != 2 {
 		t.Fatalf("limit zero err = %v code=%d stdout=%s stderr=%s", err, cli.ExitCode(err), stdout, stderr)
 	}
-	if !strings.Contains(err.Error(), "search --limit must be positive") {
+	if !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("limit zero error = %v", err)
+	}
+}
+
+func TestSearchAllReturnsEverything(t *testing.T) {
+	db := setupCalendarFixture(t)
+	const total = 205
+	insertManyEvents(t, db, total)
+	runSync(t)
+
+	all := runJSON[searchResponse](t, "search", "standup", "--all", "--json")
+	if len(all.Results) != total || all.TotalMatches != total || all.Truncated {
+		t.Fatalf("search --all = len %d total %d truncated %v", len(all.Results), all.TotalMatches, all.Truncated)
+	}
+
+	text := runOK(t, "search", "standup", "--all")
+	if strings.Contains(text, "More:") || strings.Contains(text, "All:") {
+		t.Fatalf("search --all still advertises truncation hints:\n%s", text)
+	}
+}
+
+func TestSearchAllWithLimitRefused(t *testing.T) {
+	setupTestHome(t)
+
+	_, _, err := run(t, "search", "standup", "--all", "--limit", "5")
+	if err == nil || cli.ExitCode(err) != 2 {
+		t.Fatalf("all+limit err = %v code=%d", err, cli.ExitCode(err))
+	}
+	if !strings.Contains(err.Error(), "use either --all or --limit") {
+		t.Fatalf("all+limit error = %v", err)
 	}
 }
 

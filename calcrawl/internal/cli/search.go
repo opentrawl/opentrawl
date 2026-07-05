@@ -7,9 +7,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
+
+// searchRequest is the parsed search command line, before the archive opens.
+type searchRequest struct {
+	query     string
+	limit     int
+	limitSet  bool
+	all       bool
+	after     string
+	before    string
+	who       string
+	whoPassed bool
+}
 
 type searchOutput struct {
 	Query        string                 `json:"query"`
@@ -27,25 +40,26 @@ func (r *runtime) runSearch(args []string) error {
 	if hasHelpFlag(args) {
 		return printCommandUsage(r.stdout, []string{"search"})
 	}
-	query, limit, afterValue, beforeValue, whoValue, whoPassed, err := parseSearchArgs(args)
+	req, err := parseSearchArgs(args)
 	if err != nil {
 		return err
 	}
-	if query == "" && !whoPassed && strings.TrimSpace(afterValue) == "" && strings.TrimSpace(beforeValue) == "" {
+	if req.query == "" && !req.whoPassed && strings.TrimSpace(req.after) == "" && strings.TrimSpace(req.before) == "" {
 		return usageErr(errors.New("search query is required"))
 	}
-	if limit <= 0 {
-		return usageErr(errors.New("search --limit must be positive"))
+	limit, err := flags.Limit(req.limit, req.limitSet, req.all)
+	if err != nil {
+		return usageErr(err)
 	}
-	whoValue = normalizeIdentity(whoValue)
-	if whoPassed && whoValue == "" {
+	whoValue := normalizeIdentity(req.who)
+	if req.whoPassed && whoValue == "" {
 		return usageErr(errors.New("search --who requires an identity"))
 	}
-	after, err := parseBound(afterValue, false)
+	after, err := parseBound(req.after, false)
 	if err != nil {
 		return usageErr(fmt.Errorf("invalid --after: %w", err))
 	}
-	before, err := parseBound(beforeValue, true)
+	before, err := parseBound(req.before, true)
 	if err != nil {
 		return usageErr(fmt.Errorf("invalid --before: %w", err))
 	}
@@ -59,8 +73,8 @@ func (r *runtime) runSearch(args []string) error {
 	}
 	var whoResolved *archive.WhoResolved
 	var whoFilter *archive.WhoFilter
-	if whoPassed {
-		candidate, err := r.resolveSearchWho(st, query, whoValue)
+	if req.whoPassed {
+		candidate, err := r.resolveSearchWho(st, req.query, whoValue)
 		if err != nil {
 			return err
 		}
@@ -68,21 +82,21 @@ func (r *runtime) runSearch(args []string) error {
 		whoResolved = &resolved
 		whoFilter = candidate.Filter()
 	}
-	results, total, err := st.Search(r.ctx, query, archive.SearchOptions{Limit: limit, After: after, Before: before, Who: whoFilter})
+	results, total, err := st.Search(r.ctx, req.query, archive.SearchOptions{Limit: limit, After: after, Before: before, Who: whoFilter})
 	if err != nil {
 		return err
 	}
 	_ = r.log.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(results), total))
 	return r.print(searchOutput{
-		Query:        query,
+		Query:        req.query,
 		WhoQuery:     whoValue,
 		WhoResolved:  whoResolved,
 		Results:      results,
 		TotalMatches: total,
-		Truncated:    int64(len(results)) < total,
+		Truncated:    limit > 0 && int64(len(results)) < total,
 		Limit:        limit,
-		After:        strings.TrimSpace(afterValue),
-		Before:       strings.TrimSpace(beforeValue),
+		After:        strings.TrimSpace(req.after),
+		Before:       strings.TrimSpace(req.before),
 	})
 }
 
@@ -114,63 +128,64 @@ func (r *runtime) runOpen(args []string) error {
 	return r.print(event)
 }
 
-func parseSearchArgs(args []string) (string, int, string, string, string, bool, error) {
-	limit := archive.DefaultSearchLimit
+func parseSearchArgs(args []string) (searchRequest, error) {
+	req := searchRequest{limit: archive.DefaultSearchLimit}
 	queryParts := []string{}
-	after := ""
-	before := ""
-	who := ""
-	whoPassed := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
+		case arg == "--all":
+			req.all = true
 		case arg == "--limit":
 			i++
 			if i >= len(args) {
-				return "", 0, "", "", "", false, usageErr(errors.New("search --limit requires a value"))
+				return searchRequest{}, usageErr(errors.New("search --limit requires a value"))
 			}
 			value, err := strconv.Atoi(args[i])
 			if err != nil {
-				return "", 0, "", "", "", false, usageErr(fmt.Errorf("search --limit must be a number: %w", err))
+				return searchRequest{}, usageErr(fmt.Errorf("search --limit must be a number: %w", err))
 			}
-			limit = value
+			req.limit = value
+			req.limitSet = true
 		case strings.HasPrefix(arg, "--limit="):
 			value, err := strconv.Atoi(strings.TrimPrefix(arg, "--limit="))
 			if err != nil {
-				return "", 0, "", "", "", false, usageErr(fmt.Errorf("search --limit must be a number: %w", err))
+				return searchRequest{}, usageErr(fmt.Errorf("search --limit must be a number: %w", err))
 			}
-			limit = value
+			req.limit = value
+			req.limitSet = true
 		case arg == "--after":
 			i++
 			if i >= len(args) {
-				return "", 0, "", "", "", false, usageErr(errors.New("search --after requires a value"))
+				return searchRequest{}, usageErr(errors.New("search --after requires a value"))
 			}
-			after = args[i]
+			req.after = args[i]
 		case strings.HasPrefix(arg, "--after="):
-			after = strings.TrimPrefix(arg, "--after=")
+			req.after = strings.TrimPrefix(arg, "--after=")
 		case arg == "--before":
 			i++
 			if i >= len(args) {
-				return "", 0, "", "", "", false, usageErr(errors.New("search --before requires a value"))
+				return searchRequest{}, usageErr(errors.New("search --before requires a value"))
 			}
-			before = args[i]
+			req.before = args[i]
 		case strings.HasPrefix(arg, "--before="):
-			before = strings.TrimPrefix(arg, "--before=")
+			req.before = strings.TrimPrefix(arg, "--before=")
 		case arg == "--who":
 			i++
-			whoPassed = true
+			req.whoPassed = true
 			if i >= len(args) {
-				return "", 0, "", "", "", false, usageErr(errors.New("search --who requires an identity"))
+				return searchRequest{}, usageErr(errors.New("search --who requires an identity"))
 			}
-			who = args[i]
+			req.who = args[i]
 		case strings.HasPrefix(arg, "--who="):
-			whoPassed = true
-			who = strings.TrimPrefix(arg, "--who=")
+			req.whoPassed = true
+			req.who = strings.TrimPrefix(arg, "--who=")
 		default:
 			queryParts = append(queryParts, arg)
 		}
 	}
-	return strings.TrimSpace(strings.Join(queryParts, " ")), limit, after, before, who, whoPassed, nil
+	req.query = strings.TrimSpace(strings.Join(queryParts, " "))
+	return req, nil
 }
 
 func parseBound(value string, endOfDay bool) (int64, error) {
