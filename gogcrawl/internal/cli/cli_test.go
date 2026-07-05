@@ -331,7 +331,7 @@ func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
 	if !strings.Contains(top, "gogcrawl who NAME [--json]") {
 		t.Fatalf("top help missing who:\n%s", top)
 	}
-	if !strings.Contains(top, "Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log") {
+	if !strings.Contains(top, "Diagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log") {
 		t.Fatalf("top help missing diagnostics:\n%s", top)
 	}
 	search := string(runOutput(t, context.Background(), []string{"help", "search"}))
@@ -339,7 +339,7 @@ func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
 		"gogcrawl search [QUERY]",
 		"QUERY is optional when --who, --after or --before is present.",
 		"Resolve a name, or filter by an exact email, phone or handle.",
-		"Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log",
+		"Diagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log",
 	} {
 		if !strings.Contains(search, want) {
 			t.Fatalf("search help missing %q:\n%s", want, search)
@@ -856,7 +856,7 @@ func clearLog(t *testing.T, path string) {
 
 func readTestLog(t *testing.T, name string) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".gogcrawl", "logs", name))
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".opentrawl", "gogcrawl", "logs", name))
 	if err != nil {
 		t.Fatal(err)
 	}

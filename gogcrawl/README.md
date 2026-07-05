@@ -18,13 +18,13 @@ Requirements:
 gog --version
 ```
 
-The archive lives at `~/.gogcrawl/gogcrawl.db` by default. `gogcrawl`
-also owns a local encrypted backup repo at `~/.gogcrawl/backup`.
+The archive lives at `~/.opentrawl/gogcrawl/gogcrawl.db` by default. `gogcrawl`
+also owns a local encrypted backup repo at `~/.opentrawl/gogcrawl/backup`.
 
 Sync runs:
 
 ```sh
-gog backup gmail push --no-push --repo ~/.gogcrawl/backup
+gog backup gmail push --no-push --repo ~/.opentrawl/gogcrawl/backup
 ```
 
 `gog` owns Gmail fetch, cache resume and checkpointing. `gogcrawl`

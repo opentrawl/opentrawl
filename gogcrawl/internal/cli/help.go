@@ -31,7 +31,7 @@ Output:
   Default output is compact text for humans and agents.
   Use --json for the frozen control contract.
 
-Diagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log
+Diagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log
 `)
 }
 
@@ -104,6 +104,6 @@ Export Google contacts with display names and phone numbers.
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.gogcrawl/logs/gogcrawl.log")
+	_, err = fmt.Fprintln(w, "\nDiagnostics: run with -v, or read ~/.opentrawl/gogcrawl/logs/gogcrawl.log")
 	return err
 }

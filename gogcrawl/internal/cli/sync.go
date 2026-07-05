@@ -141,7 +141,7 @@ func (r *runtime) ensureBackupRepo() error {
 	if hasRemote, err := backupRepoHasRemote(r.backupRepoPath); err != nil {
 		return commandErr("backup_repo_failed", "backup repo config cannot be read", "check --backup-repo", err)
 	} else if hasRemote {
-		return commandErr("backup_repo_remote", "backup repo must not have a git remote", "use a gogcrawl-owned backup repo such as ~/.gogcrawl/backup", nil)
+		return commandErr("backup_repo_remote", "backup repo must not have a git remote", "use a gogcrawl-owned backup repo such as ~/.opentrawl/gogcrawl/backup", nil)
 	}
 	return nil
 }
