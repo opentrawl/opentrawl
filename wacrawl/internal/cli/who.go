@@ -87,29 +87,25 @@ func newWhoResolved(candidate store.WhoCandidate) *whoResolved {
 	return &whoResolved{Who: candidate.Who, Identifiers: candidate.Identifiers}
 }
 
-func ambiguousWhoError(value, query string, candidates []store.WhoCandidate) contractError {
-	return contractError{
-		Code:       "ambiguous_who",
-		Message:    fmt.Sprintf("more than one person matched %q", value),
-		Remedy:     searchWhoRetryExample(firstCandidateIdentifier(candidates), query),
-		Candidates: candidates,
-	}
+func ambiguousWhoError(value, query string, candidates []store.WhoCandidate) error {
+	message := fmt.Sprintf("more than one person matched %q", value)
+	remedy := searchWhoRetryExample(firstCandidateIdentifier(candidates), query)
+	fields := map[string]any{"candidates": candidates}
+	return newContractError("ambiguous_who", message, remedy, 4, fields, ambiguousWhoText(message, remedy, candidates))
 }
 
-func unknownWhoError(value string, didYouMean []store.WhoCandidate) contractError {
-	if didYouMean == nil {
-		didYouMean = []store.WhoCandidate{}
+func unknownWhoError(value string, didYouMean []store.WhoCandidate) error {
+	message := fmt.Sprintf("no person matched %q", value)
+	remedy := "run wacrawl who NAME or search without --who"
+	hint := ""
+	fields := map[string]any{}
+	if len(didYouMean) > 0 {
+		fields["did_you_mean"] = didYouMean
+	} else {
+		hint = "search without --who to find messages that mention this text"
+		fields["hint"] = hint
 	}
-	err := contractError{
-		Code:       "unknown_who",
-		Message:    fmt.Sprintf("no person matched %q", value),
-		Remedy:     "run wacrawl who NAME or search without --who",
-		DidYouMean: &didYouMean,
-	}
-	if len(didYouMean) == 0 {
-		err.Hint = "search without --who to find messages that mention this text"
-	}
-	return err
+	return newContractError("unknown_who", message, remedy, 5, fields, unknownWhoText(message, remedy, hint, didYouMean))
 }
 
 func firstCandidateIdentifier(candidates []store.WhoCandidate) string {

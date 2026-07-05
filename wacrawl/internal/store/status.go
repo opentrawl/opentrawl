@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
 )
 
@@ -40,11 +41,17 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	out.OldestMessage = fromUnix(bounds.OldestTs)
 	out.NewestMessage = fromUnix(bounds.NewestTs)
-	lastImport, _ := s.q.GetSyncState(ctx, "last_import_at")
-	if t, err := time.Parse(time.RFC3339Nano, lastImport); err == nil {
-		out.LastImportAt = t
+	// A pre-migration archive (legacy key/value sync_state) errors here; treat
+	// it as absent so status still renders, and one sync re-derives it.
+	syncState := state.New(s.db)
+	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateLastImportAt); err == nil && ok {
+		if t, terr := time.Parse(time.RFC3339Nano, rec.Value); terr == nil {
+			out.LastImportAt = t
+		}
 	}
-	out.LastSource, _ = s.q.GetSyncState(ctx, "source_path")
+	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateSourcePath); err == nil && ok {
+		out.LastSource = rec.Value
+	}
 	return out, nil
 }
 
@@ -56,9 +63,22 @@ func (s *Store) ListUnreadChats(ctx context.Context, limit int) ([]Chat, error) 
 	return s.listChats(ctx, ChatFilter{Limit: limit, OnlyUnread: true})
 }
 
+// CountChats and CountUnreadChats give the list verbs a real total so the
+// human output reads "showing X of Y" and truncation is exact, not guessed
+// from a full page.
+func (s *Store) CountChats(ctx context.Context) (int, error) {
+	return countInt(ctx, s.q.CountChats)
+}
+
+func (s *Store) CountUnreadChats(ctx context.Context) (int, error) {
+	return countInt(ctx, s.q.CountUnreadChats)
+}
+
 func (s *Store) listChats(ctx context.Context, filter ChatFilter) ([]Chat, error) {
+	// limit <= 0 means everything (the --all contract): SQLite reads LIMIT -1
+	// as no limit.
 	if filter.Limit <= 0 {
-		filter.Limit = 50
+		filter.Limit = -1
 	}
 	if filter.OnlyUnread {
 		rows, err := s.q.ListUnreadChats(ctx, int64(filter.Limit))

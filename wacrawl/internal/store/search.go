@@ -10,8 +10,10 @@ import (
 )
 
 func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {
+	// limit <= 0 means everything (the --all contract): SQLite reads LIMIT -1
+	// as no limit.
 	if filter.Limit <= 0 {
-		filter.Limit = 50
+		filter.Limit = -1
 	}
 	query, args := messageListQuery(filter)
 	return scanMessages(ctx, s.db, query, args...)
@@ -70,7 +72,7 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 		return nil, err
 	}
 	if filter.Limit <= 0 {
-		filter.Limit = 50
+		filter.Limit = -1
 	}
 	if !hasQuery {
 		query := "select " + messageSelectColumns + " from messages where 1=1"

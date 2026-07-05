@@ -152,15 +152,6 @@ func (q *Queries) DeleteMessagesFTS(ctx context.Context) error {
 	return err
 }
 
-const deleteSyncState = `-- name: DeleteSyncState :exec
-delete from sync_state
-`
-
-func (q *Queries) DeleteSyncState(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, deleteSyncState)
-	return err
-}
-
 const exportChats = `-- name: ExportChats :many
 select
 	jid,
@@ -396,17 +387,6 @@ func (q *Queries) GetMessageTimeBounds(ctx context.Context) (GetMessageTimeBound
 	return i, err
 }
 
-const getSyncState = `-- name: GetSyncState :one
-select value from sync_state where key = ?1
-`
-
-func (q *Queries) GetSyncState(ctx context.Context, key string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getSyncState, key)
-	var value string
-	err := row.Scan(&value)
-	return value, err
-}
-
 const insertChat = `-- name: InsertChat :exec
 insert into chats(jid, kind, name, last_message_at, unread_count, archived, removed, hidden, raw_session_type)
 values(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
@@ -588,22 +568,6 @@ func (q *Queries) InsertParticipant(ctx context.Context, arg InsertParticipantPa
 		arg.IsAdmin,
 		arg.IsActive,
 	)
-	return err
-}
-
-const insertSyncState = `-- name: InsertSyncState :exec
-insert into sync_state(key, value, updated_at)
-values(?1, ?2, ?3)
-`
-
-type InsertSyncStateParams struct {
-	Key       string
-	Value     string
-	UpdatedAt int64
-}
-
-func (q *Queries) InsertSyncState(ctx context.Context, arg InsertSyncStateParams) error {
-	_, err := q.db.ExecContext(ctx, insertSyncState, arg.Key, arg.Value, arg.UpdatedAt)
 	return err
 }
 

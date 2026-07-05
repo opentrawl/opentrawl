@@ -64,16 +64,16 @@ func (a *app) runOpen(ctx context.Context, args []string) error {
 	}
 	ref := strings.TrimSpace(fs.Arg(0))
 	if strings.Contains(ref, ":") {
-		messageID, contractErr := parseMessageRef(ref)
-		if contractErr != nil {
-			return a.failContract(*contractErr)
+		messageID, cerr := parseMessageRef(ref)
+		if cerr != nil {
+			return cerr
 		}
 		return a.withReadStore(ctx, func(st *store.Store) error {
 			return a.openMessageID(ctx, st, messageID)
 		})
 	}
 	if !shortref.ValidAlias(ref) {
-		return a.failContract(unknownShortRefError())
+		return unknownShortRefError()
 	}
 	return a.withExistingStore(ctx, func(st *store.Store) error {
 		if err := st.EnsureShortRefs(ctx); err != nil {
@@ -85,19 +85,15 @@ func (a *app) runOpen(ctx context.Context, args []string) error {
 		}
 		switch len(fullRefs) {
 		case 0:
-			return a.failContract(unknownShortRefError())
+			return unknownShortRefError()
 		case 1:
-			messageID, contractErr := parseMessageRef(fullRefs[0])
-			if contractErr != nil {
-				return a.failContract(*contractErr)
+			messageID, cerr := parseMessageRef(fullRefs[0])
+			if cerr != nil {
+				return cerr
 			}
 			return a.openMessageID(ctx, st, messageID)
 		default:
-			return a.failContract(contractError{
-				Code:    "ambiguous_short_ref",
-				Message: "short ref matches more than one message",
-				Remedy:  "rerun wacrawl search or use the full ref",
-			})
+			return contractError("ambiguous_short_ref", "short ref matches more than one message", "rerun wacrawl search or use the full ref")
 		}
 	})
 }
@@ -106,11 +102,7 @@ func (a *app) openMessageID(ctx context.Context, st *store.Store, messageID stri
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return a.failContract(contractError{
-				Code:    "not_found",
-				Message: "message was not found",
-				Remedy:  "run wacrawl search again and pass one of its refs",
-			})
+			return contractError("not_found", "message was not found", "run wacrawl search again and pass one of its refs")
 		}
 		return err
 	}
@@ -121,30 +113,18 @@ func (a *app) openMessageID(ctx context.Context, st *store.Store, messageID stri
 	return a.print(newOpenEnvelope(target, window))
 }
 
-func unknownShortRefError() contractError {
-	return contractError{
-		Code:    "unknown_short_ref",
-		Message: "short ref was not found",
-		Remedy:  "use a full ref from wacrawl search",
-	}
+func unknownShortRefError() error {
+	return contractError("unknown_short_ref", "short ref was not found", "use a full ref from wacrawl search")
 }
 
-func parseMessageRef(ref string) (string, *contractError) {
+func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", &contractError{
-			Code:    "foreign_ref",
-			Message: "ref does not belong to wacrawl",
-			Remedy:  "pass a ref returned by wacrawl search",
-		}
+		return "", contractError("foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by wacrawl search")
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", &contractError{
-			Code:    "invalid_ref",
-			Message: "wacrawl message ref is missing its message id",
-			Remedy:  "pass a complete ref returned by wacrawl search",
-		}
+		return "", contractError("invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by wacrawl search")
 	}
 	return messageID, nil
 }

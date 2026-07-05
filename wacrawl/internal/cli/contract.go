@@ -1,100 +1,63 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
+	"strings"
 
 	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
-type errorEnvelope struct {
-	Error contractError `json:"error"`
+// newContractError builds a command failure that renders as the one
+// {"error": {...}} envelope (crawlkit/output) in JSON mode via cliError's
+// ErrorBody, and as human (a plain message and remedy, or a who table) in text
+// mode. fields carries structured extras (candidates, did_you_mean, hint); the
+// wrapped WorldMustChange keeps the log line the short machine message, never
+// the rendered table (rules §2.6).
+func newContractError(code, message, remedy string, exitCode int, fields map[string]any, human string) error {
+	return &cliError{
+		code:    exitCode,
+		name:    code,
+		message: message,
+		remedy:  remedy,
+		fields:  fields,
+		human:   human,
+		err:     cklog.WorldMustChange{Err: errors.New(message), Message: message, Remedy: remedy},
+	}
 }
 
-type contractError struct {
-	Code       string                `json:"code"`
-	Message    string                `json:"message"`
-	Remedy     string                `json:"remedy"`
-	Candidates []store.WhoCandidate  `json:"candidates,omitempty"`
-	DidYouMean *[]store.WhoCandidate `json:"did_you_mean,omitempty"`
-	Hint       string                `json:"hint,omitempty"`
+// contractError is the common exit-1 contract failure: no structured fields,
+// a plain message-and-remedy text rendering.
+func contractError(code, message, remedy string) error {
+	return newContractError(code, message, remedy, 1, nil, genericContractText(message, remedy))
 }
 
-type contractFailure struct {
-	contractError
+// genericContractText is the text-mode rendering for a contract error with no
+// table: the message and remedy on their own lines (rules §2.4). main adds the
+// trailing newline.
+func genericContractText(message, remedy string) string {
+	return fmt.Sprintf("%s.\n%s.", message, remedy)
 }
 
-func (e *contractFailure) Error() string {
-	return e.Message
+func ambiguousWhoText(message, remedy string, candidates []store.WhoCandidate) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "%s.\n\n", message)
+	_ = writeWhoTable(&out, candidates)
+	fmt.Fprintf(&out, "\n%s", remedy)
+	return out.String()
 }
 
-func (a *app) failContract(contractErr contractError) error {
-	return a.failContractWithExit(contractErr, 1)
-}
-
-func (a *app) failContractWithExit(contractErr contractError, exitCode int) error {
-	failure := &contractFailure{contractError: contractErr}
-	err := commandErr(contractErr.Code, contractErr.Message, contractErr.Remedy, exitCode, contractErr.fields(), cklog.WorldMustChange{Err: failure, Message: contractErr.Message, Remedy: contractErr.Remedy})
-	if a.json {
-		return err
+func unknownWhoText(message, remedy, hint string, didYouMean []store.WhoCandidate) string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "%s.\n", message)
+	if len(didYouMean) > 0 {
+		out.WriteString("\nDid you mean:\n")
+		_ = writeWhoTable(&out, didYouMean)
 	}
-	// Human mode prints here, once; the error returns marked rendered
-	// so main's fallback does not print it a second time.
-	_ = a.printContractError(contractErr)
-	return ckoutput.Rendered(err)
-}
-
-func (e contractError) fields() map[string]any {
-	fields := map[string]any{}
-	if len(e.Candidates) > 0 {
-		fields["candidates"] = e.Candidates
+	if hint != "" {
+		fmt.Fprintf(&out, "%s.\n", hint)
 	}
-	if e.DidYouMean != nil {
-		fields["did_you_mean"] = *e.DidYouMean
-	}
-	if e.Hint != "" {
-		fields["hint"] = e.Hint
-	}
-	if len(fields) == 0 {
-		return nil
-	}
-	return fields
-}
-
-func (a *app) printContractError(contractErr contractError) error {
-	if contractErr.Code == "ambiguous_who" {
-		if _, err := fmt.Fprintf(a.stderr, "%s.\n\n", contractErr.Message); err != nil {
-			return err
-		}
-		if err := writeWhoTable(a.stderr, contractErr.Candidates); err != nil {
-			return err
-		}
-		_, err := fmt.Fprintf(a.stderr, "\n%s\n", contractErr.Remedy)
-		return err
-	}
-	if contractErr.Code == "unknown_who" {
-		if _, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Message); err != nil {
-			return err
-		}
-		if contractErr.DidYouMean != nil && len(*contractErr.DidYouMean) > 0 {
-			if _, err := fmt.Fprintln(a.stderr, "\nDid you mean:"); err != nil {
-				return err
-			}
-			if err := writeWhoTable(a.stderr, *contractErr.DidYouMean); err != nil {
-				return err
-			}
-		}
-		if contractErr.Hint != "" {
-			if _, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Hint); err != nil {
-				return err
-			}
-		}
-		_, err := fmt.Fprintf(a.stderr, "%s.\n", contractErr.Remedy)
-		return err
-	}
-	// Message and remedy on separate lines: the hint never rides the
-	// data line (design bar), and the message stays the frozen string.
-	_, err := fmt.Fprintf(a.stderr, "%s.\n%s.\n", contractErr.Message, contractErr.Remedy)
-	return err
+	fmt.Fprintf(&out, "%s.", remedy)
+	return out.String()
 }
