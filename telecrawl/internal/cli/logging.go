@@ -48,10 +48,11 @@ func (r *runtime) finishLogRun(err error) error {
 		_ = r.log.FinishRejected()
 		return err
 	}
+	logErr := loggableError(err)
 	if err != nil {
-		_ = r.log.Error(errorEventCode(err), err)
+		_ = r.log.Error(errorEventCode(err), logErr)
 	}
-	if finishErr := r.log.Finish(err); err == nil {
+	if finishErr := r.log.Finish(logErr); err == nil {
 		return finishErr
 	}
 	return err
