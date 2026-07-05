@@ -184,9 +184,6 @@ func (r *runtime) dispatch(args []string) error {
 	}
 	switch args[0] {
 	case "metadata":
-		if r.json {
-			return r.print(contractMetadata())
-		}
 		return r.print(controlManifest())
 	case "import", "sync":
 		return r.runImport(args[0], args[1:])
@@ -218,6 +215,18 @@ func (r *runtime) dispatch(args []string) error {
 	default:
 		return usageErr(fmt.Errorf("unknown command %q", args[0]))
 	}
+}
+
+// flagPassed reports whether the named flag was given explicitly, so the one
+// --limit contract can tell a real --limit from its default (crawlkit/flags).
+func flagPassed(fs *flag.FlagSet, name string) bool {
+	passed := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			passed = true
+		}
+	})
+	return passed
 }
 
 func (r *runtime) withStore(fn func(*store.Store) error) error {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 )
@@ -111,9 +112,14 @@ func (r *runtime) backupSnapshots(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("backup snapshots takes flags only"))
 	}
-	if opts.Limit < 1 {
-		return usageErr(errors.New("backup snapshots --limit must be greater than zero"))
+	// Snapshots list from git history, which crawlkit bounds with a positive
+	// -n; there is no unlimited walk, so this verb takes --limit (one contract)
+	// but not --all.
+	n, err := flags.Limit(opts.Limit, flagPassed(fs, "limit"), false)
+	if err != nil {
+		return usageErr(err)
 	}
+	opts.Limit = n
 	snapshots, repo, err := backup.Snapshots(r.ctx, *opts)
 	if err != nil {
 		return err

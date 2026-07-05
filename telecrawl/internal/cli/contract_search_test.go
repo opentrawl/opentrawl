@@ -27,11 +27,35 @@ func TestSearchJSONIsBoundedAndReportsTruncation(t *testing.T) {
 		}
 	})
 
-	t.Run("clamped limit", func(t *testing.T) {
+	t.Run("no hidden cap", func(t *testing.T) {
 		db := seedSearchArchive(t, 205)
 		payload := runSearchJSON(t, db, "search", "--limit", "500", "launch", "--json")
-		if len(payload.Results) != 200 || payload.TotalMatches != 205 || !payload.Truncated {
+		if len(payload.Results) != 205 || payload.TotalMatches != 205 || payload.Truncated {
 			t.Fatalf("search payload = %#v", payload)
+		}
+	})
+	t.Run("all returns everything", func(t *testing.T) {
+		db := seedSearchArchive(t, 205)
+		payload := runSearchJSON(t, db, "search", "--all", "launch", "--json")
+		if len(payload.Results) != 205 || payload.TotalMatches != 205 || payload.Truncated {
+			t.Fatalf("search payload = %#v", payload)
+		}
+	})
+	t.Run("all with limit is refused", func(t *testing.T) {
+		db := seedSearchArchive(t, 5)
+		_, stderr, err := runCLI(t, "--db", db, "search", "--all", "--limit", "3", "launch", "--json")
+		if err == nil || ExitCode(err) != 2 {
+			t.Fatalf("search --all --limit err = %v exit = %d stderr=%s", err, ExitCode(err), stderr)
+		}
+	})
+	t.Run("all resolves short refs across the chunk boundary", func(t *testing.T) {
+		// Above the 900 short-ref chunk size, so --all exercises the batched
+		// alias lookup (SQLite host-parameter limit). runSearchJSON asserts
+		// every result carries a valid short_ref.
+		db := seedSearchArchive(t, 1000)
+		payload := runSearchJSON(t, db, "search", "--all", "launch", "--json")
+		if len(payload.Results) != 1000 || payload.Truncated {
+			t.Fatalf("search --all = %d results trunc=%v, want 1000 and not truncated", len(payload.Results), payload.Truncated)
 		}
 	})
 }
@@ -411,17 +435,21 @@ func TestSearchHumanRefFallsBackToFullRef(t *testing.T) {
 	}
 }
 
-func TestSearchMoreHintCapsAtMaxLimit(t *testing.T) {
+func TestSearchTruncationHintsUncapped(t *testing.T) {
 	db := seedSearchArchive(t, 205)
-	stdout, stderr, err := runCLI(t, "--db", db, "search", "--limit", "500", "launch")
+	stdout, stderr, err := runCLI(t, "--db", db, "search", "--limit", "100", "launch")
 	if err != nil {
 		t.Fatalf("search text: %v stderr=%s stdout=%s", err, stderr, stdout)
 	}
+	// The More hint doubles the shown limit with no hidden cap, and the All
+	// hint offers the whole result set (TRAWL-84).
 	if !strings.Contains(stdout, `More: telecrawl search "launch" --limit 200`) {
-		t.Fatalf("search more hint not capped:\n%s", stdout)
+		t.Fatalf("search more hint (uncapped double) missing:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "--limit 400") || strings.Contains(stdout, "--limit 500") {
-		t.Fatalf("search suggested ignored limit:\n%s", stdout)
+	// The All hint carries the query so it is runnable verbatim (bare search
+	// without a query is a usage error).
+	if !strings.Contains(stdout, `All: telecrawl search "launch" --all`) {
+		t.Fatalf("search all hint missing or dropped the query:\n%s", stdout)
 	}
 }
 

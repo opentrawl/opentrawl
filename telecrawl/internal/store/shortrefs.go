@@ -117,7 +117,7 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 			return nil, err
 		}
 	}
-	aliases, err := shortref.NewSQLiteIndex(s.db).Aliases(ctx, refs)
+	aliases, err := s.aliasesFor(ctx, refs)
 	if err != nil {
 		return nil, err
 	}
@@ -125,12 +125,36 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 		if err := s.RebuildShortRefs(ctx); err != nil {
 			return nil, err
 		}
-		aliases, err = shortref.NewSQLiteIndex(s.db).Aliases(ctx, refs)
+		aliases, err = s.aliasesFor(ctx, refs)
 		if err != nil {
 			return nil, err
 		}
 	}
 	return aliases, nil
+}
+
+// aliasesFor resolves short-ref aliases in chunks. crawlkit's Aliases issues
+// one IN clause and SQLite caps host parameters per statement, so a --all
+// result of tens of thousands of refs must be batched. Each ref is unique and
+// lands in exactly one chunk, so merging the per-chunk maps is exact.
+func (s *Store) aliasesFor(ctx context.Context, refs []string) (map[string]string, error) {
+	const chunkSize = 900
+	index := shortref.NewSQLiteIndex(s.db)
+	out := make(map[string]string, len(refs))
+	for start := 0; start < len(refs); start += chunkSize {
+		end := start + chunkSize
+		if end > len(refs) {
+			end = len(refs)
+		}
+		aliases, err := index.Aliases(ctx, refs[start:end])
+		if err != nil {
+			return nil, err
+		}
+		for ref, alias := range aliases {
+			out[ref] = alias
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) lookupShortRef(ctx context.Context, alias string) ([]string, error) {

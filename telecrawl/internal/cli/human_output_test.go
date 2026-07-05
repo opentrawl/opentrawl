@@ -39,7 +39,7 @@ func TestHumanRenderersUseSharedComponents(t *testing.T) {
 			name: "topics",
 			args: []string{"--db", db, "topics", "--chat", "-100200"},
 			want: lines(
-				"Topics: showing 1.",
+				"Topics: showing 1 of 1.",
 				"",
 				"last              unread  topic  title",
 				"2026-07-02 14:03       2  10     Release planning",

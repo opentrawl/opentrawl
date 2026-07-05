@@ -79,6 +79,11 @@ func (r *runtime) printChats(value chatsEnvelope) error {
 	if _, err := fmt.Fprintln(r.stdout, "Messages: telecrawl messages --chat ID"); err != nil {
 		return err
 	}
+	if value.Total > len(value.Chats) {
+		if _, err := fmt.Fprintln(r.stdout, "All: telecrawl chats --all"); err != nil {
+			return err
+		}
+	}
 	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
@@ -112,7 +117,15 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 		_, err := fmt.Fprintln(r.stdout, "No topics: this chat has no forum topics.")
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "Topics: showing %d.\n\n", len(value.Topics)); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "Topics: showing %s of %s.\n", groupDigits(len(value.Topics)), groupDigits(value.Total)); err != nil {
+		return err
+	}
+	if value.Total > len(value.Topics) {
+		if _, err := fmt.Fprintf(r.stdout, "All: telecrawl topics --chat %s --all\n", value.ChatID); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
 	rows := make([][]string, 0, len(value.Topics))
@@ -135,7 +148,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 func (r *runtime) printMessages(value messagesEnvelope) error {
 	hints := []string{"Open: telecrawl open REF"}
 	if value.Total > len(value.Messages) {
-		hints = append(hints, "Narrow: telecrawl messages --chat ID --after DATE --before DATE")
+		hints = append(hints, "Narrow: telecrawl messages --chat ID --after DATE --before DATE", "All: telecrawl messages --all")
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Messages: showing %s of %s, newest first.", groupDigits(len(value.Messages)), groupDigits(value.Total)),
@@ -151,7 +164,15 @@ func (r *runtime) printContacts(value contactsEnvelope) error {
 		_, err := fmt.Fprintln(r.stdout, "No contacts.")
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "Contacts: showing %s of %s, A to Z.\n\n", groupDigits(len(value.Contacts)), groupDigits(value.Total)); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "Contacts: showing %s of %s, A to Z.\n", groupDigits(len(value.Contacts)), groupDigits(value.Total)); err != nil {
+		return err
+	}
+	if value.Total > len(value.Contacts) {
+		if _, err := fmt.Fprintln(r.stdout, "All: telecrawl contacts --all"); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
 	rows := make([][]string, 0, len(value.Contacts))

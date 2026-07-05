@@ -112,12 +112,6 @@ create table if not exists messages (
 	replies_count integer not null default 0,
 	pinned integer not null default 0
 );
-
-create table if not exists sync_state (
-	key text primary key,
-	value text not null,
-	updated_at integer not null
-);
 `
 
 const indexSQL = `
