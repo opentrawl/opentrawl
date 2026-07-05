@@ -3,13 +3,34 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/backup"
 	"github.com/openclaw/wacrawl/internal/store"
 )
+
+// printManifestText renders `wacrawl metadata`'s human card. It used to
+// fall through print's default case and dump the raw JSON manifest even
+// in human mode — the only crawler in the fleet without a real card
+// (TRAWL-125). The shape matches the other crawlers' cards.
+func printManifestText(w io.Writer, value control.Manifest) error {
+	return render.WriteCard(w, render.Card{
+		Title: value.DisplayName + " crawler",
+		Fields: []render.CardField{
+			{Label: "ID", Value: value.ID},
+			{Label: "Version", Value: value.Version},
+			{Label: "Contract", Value: fmt.Sprintf("v%d", value.ContractVersion)},
+			{Label: "Database", Value: value.Paths.DefaultDatabase},
+			{Label: "Logs", Value: value.Paths.DefaultLogs},
+		},
+		Body:  value.Description,
+		Hints: []string{"JSON: wacrawl metadata --json"},
+	})
+}
 
 func (a *app) print(value any) error {
 	if a.json {
@@ -18,6 +39,8 @@ func (a *app) print(value any) error {
 		return enc.Encode(value)
 	}
 	switch v := value.(type) {
+	case control.Manifest:
+		return printManifestText(a.stdout, v)
 	case store.ImportStats:
 		_, err := fmt.Fprintf(a.stdout, "source=%s\ndb=%s\nchats=%d\ncontacts=%d\ngroups=%d\nparticipants=%d\nmessages=%d\nmedia_messages=%d\nmedia_copied=%d\nmedia_missing=%d\n",
 			v.SourcePath, v.DBPath, v.Chats, v.Contacts, v.Groups, v.Participants, v.Messages, v.MediaMessages, v.MediaCopied, v.MediaMissing)

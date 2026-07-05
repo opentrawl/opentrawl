@@ -33,9 +33,6 @@ func printMetadataText(w io.Writer, manifest archive.Manifest) error {
 	if _, err := fmt.Fprintf(w, "\nVersion: %s\nContract version: %d\n", manifest.Version, manifest.ContractVersion); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Capabilities: %s\n", strings.Join(manifest.Capabilities, ", ")); err != nil {
-		return err
-	}
 	if _, err := io.WriteString(w, "\nCommands:\n"); err != nil {
 		return err
 	}

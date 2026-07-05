@@ -372,6 +372,18 @@ func TestMetadataDeclaresContactsExport(t *testing.T) {
 	}
 }
 
+// TestMetadataHumanOutputHasNoCapabilityTokens pins TRAWL-125: the
+// capability list exists for trawl's machine discovery, not for a human
+// reader (rules.md §2.3). --json keeps it; the human card must not.
+func TestMetadataHumanOutputHasNoCapabilityTokens(t *testing.T) {
+	human := string(runOutput(t, context.Background(), []string{"metadata"}))
+	for _, token := range []string{"Capabilities", "capabilities", "short_refs", "verbose_logs", "contacts_export"} {
+		if strings.Contains(human, token) {
+			t.Fatalf("metadata human output still contains %q:\n%s", token, human)
+		}
+	}
+}
+
 func TestHelpDocumentsWhoAndSearchResolution(t *testing.T) {
 	installFakeGog(t)
 	top := string(runOutput(t, context.Background(), []string{"--help"}))

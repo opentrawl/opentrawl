@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/conformance"
+	"github.com/openclaw/crawlkit/control"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/shortref"
@@ -432,6 +433,48 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	whoWant := []string{"wacrawl", "who", "NAME", "--json"}
 	if !reflect.DeepEqual(whoCommand.Argv, whoWant) {
 		t.Fatalf("who argv = %#v, want %#v", whoCommand.Argv, whoWant)
+	}
+}
+
+// TestMetadataHumanOutputIsACard pins TRAWL-125: `wacrawl metadata` used
+// to fall through print's default case and dump the raw JSON manifest
+// even without --json — the only crawler in the fleet without a real
+// human card. It must now render a card like the rest of the fleet, and
+// that card must not carry capability tokens (rules.md §2.3): they exist
+// for trawl's machine discovery, not for a human reader. --json keeps
+// the capabilities field untouched.
+func TestMetadataHumanOutputIsACard(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if err := Run(context.Background(), []string{"metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata error: %v stderr=%s", err, stderr.String())
+	}
+	human := stdout.String()
+	if strings.HasPrefix(strings.TrimSpace(human), "{") {
+		t.Fatalf("metadata human output is still raw JSON:\n%s", human)
+	}
+	if !strings.Contains(human, "WhatsApp crawler") {
+		t.Fatalf("metadata human output missing the card title:\n%s", human)
+	}
+	if !strings.Contains(human, "JSON: wacrawl metadata --json") {
+		t.Fatalf("metadata human output missing the JSON hint:\n%s", human)
+	}
+	for _, token := range []string{"Capabilities", "capabilities", "short_refs", "verbose_logs", "contacts_export"} {
+		if strings.Contains(human, token) {
+			t.Fatalf("metadata human output still contains %q:\n%s", token, human)
+		}
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(context.Background(), []string{"--json", "metadata"}, &stdout, &stderr); err != nil {
+		t.Fatalf("metadata --json error: %v stderr=%s", err, stderr.String())
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal(stdout.Bytes(), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	if !hasCapability(manifest.Capabilities, "who") {
+		t.Fatalf("metadata --json dropped capabilities: %#v", manifest.Capabilities)
 	}
 }
 

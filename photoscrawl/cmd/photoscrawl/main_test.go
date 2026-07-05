@@ -104,10 +104,15 @@ func TestMetadataHumanOutputIsProse(t *testing.T) {
 	assertHumanProseOutput(t, out,
 		"Photos (photoscrawl)",
 		"Contract version: 1",
-		"Capabilities: metadata, status, doctor, sync, classify, search, short_refs, open",
 		"sync: photoscrawl sync --library PATH --json",
 		"open: photoscrawl open REF --json",
 	)
+	// The capability list is machine vocabulary for trawl's discovery
+	// probe, not something a human reader can use (rules.md §2.3,
+	// TRAWL-125) -- it must not reach the human card at all.
+	if strings.Contains(out, "Capabilities") || strings.Contains(out, "short_refs") {
+		t.Fatalf("metadata human output still prints the capability list:\n%s", out)
+	}
 	if strings.Contains(out, "photoscrawl crawl") {
 		t.Fatalf("metadata still advertises crawl:\n%s", out)
 	}

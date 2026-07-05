@@ -98,7 +98,6 @@ func printManifest(r *Runtime, m control.Manifest) error {
 		{Label: "contacts repo", Value: m.Paths.DefaultDatabase},
 		{Label: "config", Value: m.Paths.DefaultConfig},
 		{Label: "logs", Value: m.Paths.DefaultLogs},
-		{Label: "capabilities", Value: strings.Join(m.Capabilities, ", ")},
 	}
 	return render.WriteCard(r.stdout, render.Card{Fields: fields})
 }

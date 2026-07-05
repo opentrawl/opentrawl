@@ -213,3 +213,19 @@ func TestManifestDeclaresMetadataCommand(t *testing.T) {
 		t.Fatalf("metadata argv = %v", command.Argv)
 	}
 }
+
+// TestMetadataHumanOutputHasNoCapabilityTokens pins TRAWL-125: the
+// capability list exists for trawl's machine discovery, not for a human
+// reader (rules.md §2.3). --json keeps it; the human card must not.
+func TestMetadataHumanOutputHasNoCapabilityTokens(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing.db")
+	stdout, stderr, err := runArgs(t, dbPath, "metadata")
+	if err != nil {
+		t.Fatalf("metadata error: %v stderr=%s", err, stderr)
+	}
+	for _, token := range []string{"capabilities", "short_refs", "verbose_logs", "contacts_export"} {
+		if strings.Contains(stdout, token) {
+			t.Fatalf("metadata human output still contains %q:\n%s", token, stdout)
+		}
+	}
+}

@@ -57,7 +57,6 @@ func printMetadataText(w io.Writer, value control.Manifest) error {
 			{Label: "Contract", Value: fmt.Sprintf("v%d", value.ContractVersion)},
 			{Label: "Database", Value: value.Paths.DefaultDatabase},
 			{Label: "Logs", Value: value.Paths.DefaultLogs},
-			{Label: "Capabilities", Value: strings.Join(value.Capabilities, ", ")},
 		},
 		Body:  value.Description,
 		Hints: []string{"JSON: gogcrawl metadata --json"},

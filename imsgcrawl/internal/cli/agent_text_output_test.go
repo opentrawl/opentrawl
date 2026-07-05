@@ -176,10 +176,13 @@ func TestMetadataAndSyncTextOutputIsAgentReadable(t *testing.T) {
 	metadata := runOK(t, "--db", dbPath, "metadata")
 	assertTextContains(t, metadata,
 		"iMessage (imsgcrawl)",
-		"Capabilities:",
-		"status",
 		"JSON: imsgcrawl metadata --json",
 	)
+	// Capabilities are machine vocabulary for trawl's discovery probe,
+	// not something a human reader can use (rules.md §2.3, TRAWL-125).
+	if strings.Contains(metadata, "Capabilities") {
+		t.Fatalf("metadata human output still prints the capability list:\n%s", metadata)
+	}
 	assertNotSecretJSON(t, metadata)
 
 	syncOut := runOK(t, "--db", dbPath, "--archive", archivePath, "sync")

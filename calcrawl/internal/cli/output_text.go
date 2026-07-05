@@ -20,7 +20,6 @@ func printManifestText(w io.Writer, value manifestOutput) error {
 		{Label: "Archive schema", Value: strconv.Itoa(value.ArchiveSchemaVersion)},
 		{Label: "Database", Value: value.Paths.DefaultDatabase},
 		{Label: "Logs", Value: value.Paths.DefaultLogs},
-		{Label: "Capabilities", Value: strings.Join(value.Capabilities, ", ")},
 	}
 	return ckrender.WriteCard(w, ckrender.Card{
 		Title:  value.DisplayName + " crawler",

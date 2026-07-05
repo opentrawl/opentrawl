@@ -44,10 +44,7 @@ func (r *runtime) printManifest(value control.Manifest) error {
 	if _, err := fmt.Fprintf(r.stdout, "%s: %s\nversion: %s\n", value.ID, value.Description, value.Version); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "database: %s\nlogs: %s\n", value.Paths.DefaultDatabase, value.Paths.DefaultLogs); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintf(r.stdout, "capabilities: %s\n", strings.Join(value.Capabilities, ", "))
+	_, err := fmt.Fprintf(r.stdout, "database: %s\nlogs: %s\n", value.Paths.DefaultDatabase, value.Paths.DefaultLogs)
 	return err
 }
 

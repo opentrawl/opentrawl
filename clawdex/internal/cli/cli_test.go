@@ -1750,7 +1750,9 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 	// metadata speaks human without --json.
 	metadata := run("metadata")
 	conformance.AssertHumanOutput(t, metadata)
-	if !strings.Contains(metadata, "capabilities: status, doctor, who, verbose_logs") {
-		t.Fatalf("metadata human = %s", metadata)
+	// Capabilities are machine vocabulary for trawl's discovery probe,
+	// not something a human reader can use (rules.md §2.3, TRAWL-125).
+	if strings.Contains(metadata, "capabilities") {
+		t.Fatalf("metadata human output still prints the capability list:\n%s", metadata)
 	}
 }

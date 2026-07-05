@@ -53,9 +53,6 @@ func printManifestText(w io.Writer, value control.Manifest) error {
 		{Label: "Database", Value: value.Paths.DefaultDatabase},
 		{Label: "Logs", Value: value.Paths.DefaultLogs},
 	}
-	if len(value.Capabilities) > 0 {
-		fields = append(fields, render.CardField{Label: "Capabilities", Value: strings.Join(value.Capabilities, ", ")})
-	}
 	return render.WriteCard(w, render.Card{
 		Title:  value.DisplayName + " (" + value.ID + ")",
 		Fields: fields,

@@ -87,6 +87,26 @@ func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 	}
 }
 
+// TestMetadataHumanOutputHasNoCapabilityTokens pins TRAWL-125: the
+// capability list exists for trawl's machine discovery, not for a human
+// reader (rules.md §2.3). --json keeps it; the human card must not.
+func TestMetadataHumanOutputHasNoCapabilityTokens(t *testing.T) {
+	setupCalendarFixture(t)
+	human := runOK(t, "metadata")
+	for _, token := range []string{"Capabilities", "capabilities", "short_refs", "verbose_logs", "contacts_export"} {
+		if strings.Contains(human, token) {
+			t.Fatalf("metadata human output still contains %q:\n%s", token, human)
+		}
+	}
+
+	manifest := runJSON[struct {
+		Capabilities []string `json:"capabilities"`
+	}](t, "metadata", "--json")
+	if !hasString(manifest.Capabilities, "who") {
+		t.Fatalf("metadata --json dropped capabilities: %#v", manifest.Capabilities)
+	}
+}
+
 func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
