@@ -596,13 +596,13 @@ func TestConfigRoundTrip(t *testing.T) {
 		ConfigPath: overridePath,
 		Repo:       "~/Projects/backup",
 		Remote:     "https://example.invalid/repo.git",
-		Identity:   "~/.wacrawl/test.key",
+		Identity:   "~/.opentrawl/wacrawl/test.key",
 		Recipients: []string{" age1two ", "age1one"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(resolved.Repo, filepath.Join("Projects", "backup")) || resolved.Remote != "https://example.invalid/repo.git" || !strings.Contains(resolved.Identity, filepath.Join(".wacrawl", "test.key")) {
+	if !strings.Contains(resolved.Repo, filepath.Join("Projects", "backup")) || resolved.Remote != "https://example.invalid/repo.git" || !strings.Contains(resolved.Identity, filepath.Join(".opentrawl", "wacrawl", "test.key")) {
 		t.Fatalf("options did not resolve overrides: %+v", resolved)
 	}
 	if strings.Join(resolved.Recipients, ",") != " age1two ,age1one" {

@@ -305,7 +305,7 @@ func assertSingleJSONDocument(t *testing.T, data string, out any) {
 
 func readWacrawlTestLog(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".wacrawl", "logs", wacrawlLogFileName))
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".opentrawl", "wacrawl", "logs", wacrawlLogFileName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -500,7 +500,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	logPath := filepath.Join(home, ".wacrawl", "logs", wacrawlLogFileName)
+	logPath := filepath.Join(home, ".opentrawl", "wacrawl", "logs", wacrawlLogFileName)
 
 	var stdout, stderr bytes.Buffer
 	if err := Run(context.Background(), []string{"metadata"}, &stdout, &stderr); err != nil {

@@ -529,7 +529,7 @@ encrypted ` + "`*.jsonl.gz.age`" + ` shards.
 
 Shard contents are JSONL, gzip-compressed with a fixed gzip timestamp, and
 encrypted with age for every configured public recipient. The local
-` + "`~/.wacrawl/age.key`" + ` identity is required to decrypt.
+` + "`~/.opentrawl/wacrawl/age.key`" + ` identity is required to decrypt.
 
 Git can still see manifest metadata: export time, public recipients, table
 names, row counts, shard paths, encrypted byte sizes, plaintext shard hashes,
@@ -572,7 +572,7 @@ directly from Git objects without changing this checkout's current branch.
 
 ## Recovery
 
-Install wacrawl, clone this repo to the path in ` + "`~/.wacrawl/backup.json`" + `,
+Install wacrawl, clone this repo to the path in ` + "`~/.opentrawl/wacrawl/backup.json`" + `,
 restore the local age identity file, then run:
 
 ` + "```bash" + `

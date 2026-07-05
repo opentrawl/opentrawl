@@ -9,7 +9,7 @@ Use this for WhatsApp Desktop archive questions. `wacrawl` is read-only against 
 
 ## Sources
 
-- DB: `~/.wacrawl/wacrawl.db`
+- DB: `~/.opentrawl/wacrawl/wacrawl.db`
 - Source: `~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared`
 - Repo: `~/Projects/wacrawl`
 - CLI: `wacrawl`

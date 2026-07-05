@@ -8,7 +8,7 @@ import (
 	"github.com/openclaw/crawlkit/usage"
 )
 
-const diagnosticsLine = "Diagnostics: run with -v, or read ~/.wacrawl/logs/wacrawl.log"
+const diagnosticsLine = "Diagnostics: run with -v, or read ~/.opentrawl/wacrawl/logs/wacrawl.log"
 
 func printUsage(w io.Writer) {
 	_, _ = io.WriteString(w, topHelpDoc().Render())

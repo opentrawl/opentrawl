@@ -223,9 +223,9 @@ func rootCommandName(rest []string, versionOut, helpOut bool) string {
 }
 
 // wacrawlPaths is the one archive path layout, from crawlkit/config. The
-// base dir stays ~/.wacrawl (the layout shipped before config adoption).
+// base dir is the fleet-wide state root, ~/.opentrawl/wacrawl (TRAWL-99).
 func wacrawlPaths() config.Paths {
-	paths, _ := config.App{Name: "wacrawl", BaseDir: "~/.wacrawl"}.DefaultPaths()
+	paths, _ := config.App{Name: "wacrawl", BaseDir: "~/.opentrawl/wacrawl"}.DefaultPaths()
 	return paths
 }
 

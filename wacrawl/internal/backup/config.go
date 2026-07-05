@@ -39,7 +39,7 @@ func DefaultConfig() Config {
 	return Config{
 		Repo:     "~/Projects/backup-wacrawl",
 		Remote:   defaultRemote,
-		Identity: "~/.wacrawl/age.key",
+		Identity: "~/.opentrawl/wacrawl/age.key",
 	}
 }
 
@@ -48,7 +48,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		return "backup.json"
 	}
-	return filepath.Join(home, ".wacrawl", "backup.json")
+	return filepath.Join(home, ".opentrawl", "wacrawl", "backup.json")
 }
 
 func LoadConfig(path string) (Config, error) {

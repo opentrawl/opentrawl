@@ -104,7 +104,7 @@ Message/Media/
 It writes its own archive to:
 
 ```text
-~/.wacrawl/wacrawl.db
+~/.opentrawl/wacrawl/wacrawl.db
 ```
 
 Override either path when needed:
@@ -126,7 +126,7 @@ wacrawl --db /tmp/wacrawl.db import
 - Does not upload data during normal archive/search commands. `backup push`
   uploads only age-encrypted backup shards when you explicitly run it.
 
-The archive can contain private message data. Keep `~/.wacrawl/wacrawl.db`
+The archive can contain private message data. Keep `~/.opentrawl/wacrawl/wacrawl.db`
 local and out of commits, backups, and shared logs unless that is intentional.
 
 ## Commands
@@ -417,12 +417,12 @@ Backups use the Go `filippo.io/age` library with X25519 age identities. There
 is no backup password. Each machine has an age identity file, usually:
 
 ```text
-~/.wacrawl/age.key
+~/.opentrawl/wacrawl/age.key
 ```
 
 That file contains an `AGE-SECRET-KEY-...` private identity and is written with
 0600 permissions. Its matching public recipient starts with `age1...` and is
-safe to place in `~/.wacrawl/backup.json`, `manifest.json`, or docs.
+safe to place in `~/.opentrawl/wacrawl/backup.json`, `manifest.json`, or docs.
 
 For each shard, `wacrawl backup push`:
 
@@ -463,7 +463,7 @@ Important limits:
 - This is not end-to-end provenance. Someone who can push to the backup repo can
   replace the backup with different data encrypted to your public recipient.
   Use normal GitHub access control and review unexpected backup commits.
-- If `~/.wacrawl/age.key` is lost and no other configured recipient exists, the
+- If `~/.opentrawl/wacrawl/age.key` is lost and no other configured recipient exists, the
   encrypted backup cannot be restored.
 - If an age identity is compromised, remove its public recipient, run
   `wacrawl backup push` to re-encrypt current shards, and consider rewriting or
@@ -471,7 +471,7 @@ Important limits:
   the compromised key.
 - X25519 age recipients are not post-quantum. They are a practical modern
   default, but not a post-quantum archival guarantee.
-- The local archive database `~/.wacrawl/wacrawl.db` and the WhatsApp Desktop
+- The local archive database `~/.opentrawl/wacrawl/wacrawl.db` and the WhatsApp Desktop
   source data remain plaintext on the machine. Protect the machine and local
   backups accordingly.
 
@@ -485,7 +485,7 @@ wacrawl backup init \
   --remote https://github.com/steipete/backup-wacrawl.git
 ```
 
-This writes `~/.wacrawl/backup.json`, creates `~/.wacrawl/age.key` if needed,
+This writes `~/.opentrawl/wacrawl/backup.json`, creates `~/.opentrawl/wacrawl/age.key` if needed,
 clones or initializes the local backup checkout, and prints the public age
 recipient.
 
@@ -495,12 +495,12 @@ The generated config looks like this:
 {
   "repo": "~/Projects/backup-wacrawl",
   "remote": "https://github.com/steipete/backup-wacrawl.git",
-  "identity": "~/.wacrawl/age.key",
+  "identity": "~/.opentrawl/wacrawl/age.key",
   "recipients": ["age1..."]
 }
 ```
 
-Keep `~/.wacrawl/age.key` private. The public `age1...` recipient can be stored
+Keep `~/.opentrawl/wacrawl/age.key` private. The public `age1...` recipient can be stored
 in `backup.json`; the `AGE-SECRET-KEY-...` identity must stay local or in a
 password manager.
 
@@ -594,7 +594,7 @@ wacrawl backup init \
 ```
 
 Copy the printed public recipient (`age1...`) into the `recipients` list in
-`~/.wacrawl/backup.json` on a machine that can already decrypt the backup, then
+`~/.opentrawl/wacrawl/backup.json` on a machine that can already decrypt the backup, then
 run:
 
 ```bash
@@ -606,7 +606,7 @@ recipients. If you added a recipient after data already existed, run a normal
 `wacrawl backup push`; unchanged plaintext shards are re-encrypted when the
 manifest/config changes.
 
-For personal setup, storing a copy of `~/.wacrawl/age.key` in 1Password is a
+For personal setup, storing a copy of `~/.opentrawl/wacrawl/age.key` in 1Password is a
 good recovery path. Do not commit the identity file. Do not paste the
 `AGE-SECRET-KEY-...` value into issues, logs, docs, or chat.
 
@@ -615,10 +615,10 @@ good recovery path. Do not commit the identity file. Do not paste the
 Useful flags:
 
 ```text
---config PATH        Backup config path. Default: ~/.wacrawl/backup.json
+--config PATH        Backup config path. Default: ~/.opentrawl/wacrawl/backup.json
 --repo PATH          Local backup Git checkout.
 --remote URL         Backup Git remote.
---identity PATH      Local age identity. Default: ~/.wacrawl/age.key
+--identity PATH      Local age identity. Default: ~/.opentrawl/wacrawl/age.key
 --recipient AGE      Public age recipient. Repeat for multiple machines.
 --no-push            Commit locally but do not push.
 ```
@@ -630,17 +630,17 @@ On a new Mac:
 ```bash
 brew install openclaw/tap/wacrawl
 git clone https://github.com/steipete/backup-wacrawl.git ~/Projects/backup-wacrawl
-mkdir -p ~/.wacrawl
+mkdir -p ~/.opentrawl/wacrawl
 ```
 
-Then restore `~/.wacrawl/age.key` from your password manager and create
-`~/.wacrawl/backup.json` pointing at the clone:
+Then restore `~/.opentrawl/wacrawl/age.key` from your password manager and create
+`~/.opentrawl/wacrawl/backup.json` pointing at the clone:
 
 ```json
 {
   "repo": "~/Projects/backup-wacrawl",
   "remote": "https://github.com/steipete/backup-wacrawl.git",
-  "identity": "~/.wacrawl/age.key",
+  "identity": "~/.opentrawl/wacrawl/age.key",
   "recipients": ["age1..."]
 }
 ```
@@ -659,7 +659,7 @@ backup repository; the archive data is already encrypted before the push.
 ## Global Flags
 
 ```text
---db PATH               Archive database path. Default: ~/.wacrawl/wacrawl.db
+--db PATH               Archive database path. Default: ~/.opentrawl/wacrawl/wacrawl.db
 --source PATH           WhatsApp Desktop source path.
 --sync MODE             Read-time sync policy: auto, always, or never. Default: auto.
 --sync-max-age DURATION Staleness window for --sync auto. Default: 15m.
