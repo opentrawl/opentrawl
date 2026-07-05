@@ -75,21 +75,7 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 	var root CLI
 	parser, err := kong.New(&root,
 		kong.Name("trawl"),
-		kong.Description(`Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them.
-
-Sources go by id or surface name: imsgcrawl/imessage, telecrawl/telegram, wacrawl/whatsapp, gogcrawl/gmail, calcrawl/calendar — trawl status lists yours.
-
-The commands below run across every source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
-
-Examples:
-  trawl status                          # every source: state, freshness, counts
-  trawl search "boat trip"              # all sources, newest first
-  trawl search imessage falafel         # one source, no quotes needed
-  trawl imessage                        # list what the iMessage crawler can do
-  trawl imessage chats                  # run one source's own verb
-  trawl summaries                       # precomputed answers: subscriptions, possessions, spending
-  trawl open imsgcrawl:msg/8842         # expand a ref search returned
-  trawl search falafel --json           # structured output; agents, prefer this`),
+		kong.Description(trawlDescription(args)),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
 		kong.Help(trawlHelpPrinter),
@@ -421,6 +407,55 @@ func rewriteHelp(args []string) []string {
 		return append(rest[1:], "--help")
 	}
 	return args
+}
+
+const trawlIntro = `Search your own life: every installed crawler archives one source (iMessage, Telegram, WhatsApp, Gmail, Calendar, …) and trawl is the one door to all of them.`
+
+const trawlOutro = `The commands below run across every source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
+
+Examples:
+  trawl status                          # every source: state, freshness, counts
+  trawl search "boat trip"              # all sources, newest first
+  trawl search imessage falafel         # one source, no quotes needed
+  trawl imessage                        # list what the iMessage crawler can do
+  trawl imessage chats                  # run one source's own verb
+  trawl summaries                       # precomputed answers: subscriptions, possessions, spending
+  trawl open imsgcrawl:msg/8842         # expand a ref search returned
+  trawl search falafel --json           # structured output; agents, prefer this`
+
+// trawlDescription builds the root --help text. The source list in the
+// middle paragraph comes from the registry, not a literal, so every
+// installed crawler shows up (birdcrawl, photoscrawl and clawdex were
+// invisible before this — TRAWL-86). Discovery spawns a `metadata --json`
+// probe per installed binary, so it only runs when this invocation is
+// actually going to render root help; every other command (including a
+// subcommand's own --help) already pays a discovery cost once inside its
+// own Run and must not pay a second one here.
+func trawlDescription(args []string) string {
+	if !wantsRootHelp(args) {
+		return trawlIntro + "\n\n" + trawlOutro
+	}
+	return trawlIntro + "\n\n" + sourcesLine(context.Background()) + "\n\n" + trawlOutro
+}
+
+// wantsRootHelp reports whether these raw args resolve to kong rendering
+// the root help page (the only page carrying this Description): bare
+// invocation, `trawl help`, or --help/-h with no command (global flags
+// such as --json or -v may sit alongside it in either order — they don't
+// change which help page kong renders). kong's default help flag
+// registers short 'h', so `-h` counts too. A subcommand help request
+// (`trawl search --help`) leaves a non-flag command token behind and
+// never gets the root's Description, so it must return false here.
+func wantsRootHelp(args []string) bool {
+	rewritten := rewriteHelp(normalizeGlobalFlags(args))
+	var nonGlobal []string
+	for _, arg := range rewritten {
+		if isGlobalFlag(arg) {
+			continue
+		}
+		nonGlobal = append(nonGlobal, arg)
+	}
+	return len(nonGlobal) == 1 && (nonGlobal[0] == "--help" || nonGlobal[0] == "-h")
 }
 
 // unknownCommandErr names both token spaces a first argument can be — a

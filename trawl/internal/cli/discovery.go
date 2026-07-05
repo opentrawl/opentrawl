@@ -64,6 +64,27 @@ func discoverCrawlers(ctx context.Context) []Source {
 	return sources
 }
 
+// sourcesLine renders the registry's installed crawlers as id/surface-name
+// pairs for the root --help intro. A binary missing from PATH is simply
+// absent from registry.Discover's result — the honest degrade is that it
+// never appears, not a placeholder or an error.
+func sourcesLine(ctx context.Context) string {
+	sources := discoverCrawlers(ctx)
+	if len(sources) == 0 {
+		return "No crawlers are installed on PATH yet."
+	}
+	pairs := make([]string, 0, len(sources))
+	for _, source := range sources {
+		alias := sourceAlias(source.DisplayName)
+		if alias != "" && alias != source.ID {
+			pairs = append(pairs, source.ID+"/"+alias)
+			continue
+		}
+		pairs = append(pairs, source.ID)
+	}
+	return "Sources go by id or surface name: " + strings.Join(pairs, ", ") + " — trawl status lists yours."
+}
+
 func runCrawlerJSONWithArgs(ctx context.Context, path, verb string, args ...string) ([]byte, error) {
 	commandArgs := append([]string{verb}, args...)
 	commandArgs = append(commandArgs, "--json")
