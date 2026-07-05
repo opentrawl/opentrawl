@@ -130,7 +130,9 @@ func printSearch(r *Runtime, v searchEnvelope) error {
 	}
 	hints := []string{"Show a person: clawdex person show NAME (their notes: clawdex note list NAME)"}
 	if v.Truncated {
-		hints = append(hints, fmt.Sprintf("More: clawdex search %q --limit %d", v.Query, nextLimit(v.limit)))
+		hints = append(hints,
+			fmt.Sprintf("More: clawdex search %q --limit %d", v.Query, nextLimit(v.limit)),
+			fmt.Sprintf("All: clawdex search %q --all", v.Query))
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Search %q: showing %d of %d, best match first.", v.Query, len(v.Results), v.TotalMatches),
@@ -162,10 +164,15 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 	}
 	if v.Truncated {
 		more := fmt.Sprintf("More: clawdex person list --limit %d", nextLimit(v.limit))
+		all := "All: clawdex person list --all"
 		if v.Query != "" {
 			more = fmt.Sprintf("More: clawdex person list --query %q --limit %d", v.Query, nextLimit(v.limit))
+			all = fmt.Sprintf("All: clawdex person list --query %q --all", v.Query)
 		}
 		if _, err := fmt.Fprintln(r.stdout, more); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(r.stdout, all); err != nil {
 			return err
 		}
 	}
@@ -209,7 +216,9 @@ func printNotes(r *Runtime, v notesEnvelope) error {
 	}
 	hints := []string{fmt.Sprintf("Add one: clawdex note add %q --kind note --source manual --text TEXT", v.query)}
 	if v.Truncated {
-		hints = append(hints, fmt.Sprintf("More: clawdex %s %q --limit %d", v.verb, v.query, nextLimit(v.limit)))
+		hints = append(hints,
+			fmt.Sprintf("More: clawdex %s %q --limit %d", v.verb, v.query, nextLimit(v.limit)),
+			fmt.Sprintf("All: clawdex %s %q --all", v.verb, v.query))
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Notes for %s: showing %d of %d, newest first.", v.Person, len(v.Notes), v.Total),
