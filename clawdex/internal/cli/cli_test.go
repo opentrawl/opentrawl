@@ -82,7 +82,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	}
 	out = run("doctor")
 	conformance.AssertHumanOutput(t, out)
-	if !strings.Contains(out, "Doctor checks:") || !strings.Contains(out, "Contacts repo: ok") {
+	if !strings.Contains(out, "Doctor checks:") || !strings.Contains(out, "contacts repo: ok") {
 		t.Fatalf("doctor out = %s", out)
 	}
 	out = run("git", "commit", "-m", "test: contacts")
@@ -1329,6 +1329,69 @@ func TestExecuteUsageGuards(t *testing.T) {
 	}
 }
 
+// Runtime errors route through the one crawlkit output envelope in --json
+// mode (TRAWL-83): the machine error doc lands on stdout, nothing on stderr,
+// and the exit code is preserved.
+func TestExecuteJSONErrorEnvelope(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+
+	decode := func(t *testing.T, b []byte) struct {
+		Error struct{ Code, Message, Remedy string } `json:"error"`
+	} {
+		t.Helper()
+		var env struct {
+			Error struct{ Code, Message, Remedy string } `json:"error"`
+		}
+		if err := json.Unmarshal(b, &env); err != nil {
+			t.Fatalf("decode envelope: %v (%s)", err, b)
+		}
+		return env
+	}
+
+	// Runtime usage error: code "usage", remedy carries the next step, exit 2.
+	out.Reset()
+	errOut.Reset()
+	err := Execute([]string{"--config", cfg, "--json", "who", ""}, &out, &errOut)
+	if ExitCode(err) != 2 {
+		t.Fatalf("who empty exit = %d (%v)", ExitCode(err), err)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("rendered error should not touch stderr: %s", errOut.String())
+	}
+	env := decode(t, out.Bytes())
+	if env.Error.Code != "usage" || env.Error.Remedy != "Run 'clawdex --help'." || env.Error.Message == "" {
+		t.Fatalf("usage envelope = %#v", env.Error)
+	}
+
+	// Generic runtime error: default "command_failed", human-clear message, exit 1.
+	out.Reset()
+	errOut.Reset()
+	err = Execute([]string{"--config", cfg, "--json", "person", "show", "nobody"}, &out, &errOut)
+	if ExitCode(err) != 1 {
+		t.Fatalf("person show missing exit = %d (%v)", ExitCode(err), err)
+	}
+	env = decode(t, out.Bytes())
+	if env.Error.Code != "command_failed" || !strings.Contains(env.Error.Message, "no person matched") {
+		t.Fatalf("command_failed envelope = %#v", env.Error)
+	}
+
+	// Kong parse errors print before Run with no framework seam, so they stay
+	// plain text on stderr even under --json (documented limitation): no JSON
+	// envelope on stdout.
+	out.Reset()
+	errOut.Reset()
+	if err := Execute([]string{"--config", cfg, "--json", "bogus"}, &out, &errOut); ExitCode(err) != 2 {
+		t.Fatalf("bogus exit = %d (%v)", ExitCode(err), err)
+	}
+	if out.Len() != 0 {
+		t.Fatalf("kong parse error must not emit a JSON envelope: %s", out.String())
+	}
+}
+
 // The manual contact-management verbs were deleted under TRAWL-118 (Q4).
 // They must fail as standard unknown commands (usage error, exit 2).
 func TestDeletedManualVerbsAreUnknown(t *testing.T) {
@@ -1393,7 +1456,7 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 		t.Fatalf("doctor should diagnose a missing repo: %v stdout=%s stderr=%s", err, out.String(), errOut.String())
 	}
 	conformance.AssertHumanOutput(t, out.String())
-	if !strings.Contains(out.String(), "Contacts repo: missing") || !strings.Contains(out.String(), "run clawdex init") {
+	if !strings.Contains(out.String(), "contacts repo: missing") || !strings.Contains(out.String(), "run clawdex init") {
 		t.Fatalf("doctor missing repo out = %s", out.String())
 	}
 	out.Reset()

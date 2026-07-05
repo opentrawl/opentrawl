@@ -43,16 +43,38 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if _, ok := manifest.Commands["contact-export"]; ok {
 		t.Fatalf("unexpected contact-export command = %#v", manifest.Commands)
 	}
+	// Every surviving user-facing verb is namespace-covered (TRAWL-86). The
+	// JSON reads carry the trailing --json; import and export vcard take
+	// required arguments and are not JSON reads, so they do not.
 	for name, argv := range map[string][]string{
-		"metadata": {"clawdex", "metadata", "--json"},
-		"status":   {"clawdex", "status", "--json"},
-		"doctor":   {"clawdex", "doctor", "--json"},
-		"who":      {"clawdex", "who", "QUERY", "--json"},
+		"metadata":    {"clawdex", "metadata", "--json"},
+		"status":      {"clawdex", "status", "--json"},
+		"doctor":      {"clawdex", "doctor", "--json"},
+		"who":         {"clawdex", "who", "QUERY", "--json"},
+		"person-list": {"clawdex", "person", "list", "--json"},
+		"person-show": {"clawdex", "person", "show", "QUERY", "--json"},
+		"search":      {"clawdex", "search", "QUERY", "--json"},
 	} {
 		got := manifest.Commands[name]
 		if !reflect.DeepEqual(got.Argv, argv) || !got.JSON {
 			t.Fatalf("%s command = %#v", name, got)
 		}
+	}
+	for name, argv := range map[string][]string{
+		"import":       {"clawdex", "import"},
+		"export-vcard": {"clawdex", "export", "vcard"},
+	} {
+		got := manifest.Commands[name]
+		if !reflect.DeepEqual(got.Argv, argv) || got.JSON {
+			t.Fatalf("%s command = %#v", name, got)
+		}
+	}
+	// import writes the contacts repo, so the manifest declares it mutating.
+	if !manifest.Commands["import"].Mutates || manifest.Commands["export-vcard"].Mutates {
+		t.Fatalf("mutates flags = import:%v export-vcard:%v", manifest.Commands["import"].Mutates, manifest.Commands["export-vcard"].Mutates)
+	}
+	if len(manifest.Commands) != 9 {
+		t.Fatalf("commands = %#v", manifest.Commands)
 	}
 
 	var payload struct {
@@ -149,9 +171,9 @@ func TestExecuteDoctorHumanOutputUsesRenderer(t *testing.T) {
 	}
 	assertHumanProseOutput(t, out.String(),
 		"Doctor checks:",
-		"Config: ok",
-		"Contacts repo: missing",
-		"Index: missing",
+		"config: ok",
+		"contacts repo: missing",
+		"index: missing",
 		"Remedy: run clawdex init",
 	)
 }

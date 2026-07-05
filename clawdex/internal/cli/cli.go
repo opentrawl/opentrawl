@@ -29,6 +29,7 @@ import (
 	"github.com/openclaw/clawdex/internal/vcard"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/flags"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
 )
 
@@ -104,6 +105,15 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	command := logCommand(kctx.Command())
+	// Runtime errors (config, command Run) route through the one crawlkit
+	// envelope in --json mode. Kong parse errors are handled above and stay
+	// plain text regardless of --json — kong prints them before Run and there
+	// is no framework seam to intercept them, so that surface is unchanged.
+	runErr := executeParsed(kctx, &root, stdout, stderr, verbosity, command)
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, runErr)
+}
+
+func executeParsed(kctx *kong.Context, root *CLI, stdout, stderr io.Writer, verbosity int, command string) error {
 	configPath := repo.ResolveConfigPath(root.Config)
 	cfg, err := repo.LoadConfig(configPath)
 	if err != nil {
@@ -117,7 +127,7 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 		ctx:        context.Background(),
 		stdout:     stdout,
 		stderr:     stderr,
-		root:       &root,
+		root:       root,
 		command:    command,
 		verbosity:  verbosity,
 		configPath: configPath,
@@ -129,8 +139,7 @@ func Execute(args []string, stdout, stderr io.Writer) error {
 	}
 	r.store = index.NewWithLog(r.repo, indexLogWriter{r: r})
 	kctx.Bind(r)
-	err = kctx.Run(r)
-	return r.finishLogRun(err)
+	return r.finishLogRun(kctx.Run(r))
 }
 
 type kongExit struct {
@@ -168,6 +177,13 @@ func ExitCode(err error) int {
 }
 
 type usageErr struct{ error }
+
+// ErrorBody routes a usage error into the one crawlkit output envelope
+// (rules §2.3/§2.4): the message stays machine-clean and the next step lives
+// in remedy, never glued onto the message.
+func (e usageErr) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{Code: "usage", Message: e.Error(), Remedy: "Run 'clawdex --help'."}
+}
 
 type InitCmd struct {
 	Dir      string `arg:"" optional:"" help:"Contacts data repo directory"`

@@ -32,11 +32,20 @@ func controlManifest() control.Manifest {
 		DefaultLogs:     repo.DefaultLogDir(),
 	}
 	m.Capabilities = []string{"status", "doctor", "who", "verbose_logs"}
+	// Every surviving user-facing verb, as the trawl namespace dispatches it:
+	// the verb the user types is Argv minus the binary and a trailing --json,
+	// with UPPERCASE placeholders for arguments. import and export vcard take
+	// required arguments/flags and are not JSON reads, so they carry no --json.
 	m.Commands = map[string]control.Command{
-		"metadata": {Title: "Metadata", Argv: []string{"clawdex", "metadata", "--json"}, JSON: true},
-		"status":   {Title: "Status", Argv: []string{"clawdex", "status", "--json"}, JSON: true},
-		"doctor":   {Title: "Doctor", Argv: []string{"clawdex", "doctor", "--json"}, JSON: true},
-		"who":      {Title: "Who", Argv: []string{"clawdex", "who", "QUERY", "--json"}, JSON: true},
+		"metadata":     {Title: "Metadata", Argv: []string{"clawdex", "metadata", "--json"}, JSON: true},
+		"status":       {Title: "Status", Argv: []string{"clawdex", "status", "--json"}, JSON: true},
+		"doctor":       {Title: "Doctor", Argv: []string{"clawdex", "doctor", "--json"}, JSON: true},
+		"who":          {Title: "Who", Argv: []string{"clawdex", "who", "QUERY", "--json"}, JSON: true},
+		"person-list":  {Title: "People", Argv: []string{"clawdex", "person", "list", "--json"}, JSON: true},
+		"person-show":  {Title: "Show person", Argv: []string{"clawdex", "person", "show", "QUERY", "--json"}, JSON: true},
+		"search":       {Title: "Search", Argv: []string{"clawdex", "search", "QUERY", "--json"}, JSON: true},
+		"import":       {Title: "Import contacts", Argv: []string{"clawdex", "import"}, Mutates: true},
+		"export-vcard": {Title: "Export vCard", Argv: []string{"clawdex", "export", "vcard"}},
 	}
 	return m
 }
@@ -296,26 +305,13 @@ func renderDoctorChecks(report DoctorReport) []render.Check {
 	checks := make([]render.Check, 0, len(report.Checks))
 	for _, check := range report.Checks {
 		checks = append(checks, render.Check{
-			Name:    doctorCheckName(check.ID),
+			Name:    check.ID,
 			State:   doctorCheckState(check),
 			Message: humanDoctorMessage(check),
 			Remedy:  humanDoctorRemedy(check),
 		})
 	}
 	return checks
-}
-
-func doctorCheckName(id string) string {
-	switch strings.TrimSpace(id) {
-	case "config":
-		return "Config"
-	case "contacts_repo":
-		return "Contacts repo"
-	case "index":
-		return "Index"
-	default:
-		return humanLabel(id)
-	}
 }
 
 func doctorCheckState(check DoctorCheck) render.CheckState {
