@@ -25,6 +25,20 @@ import (
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
+// errorEnvelope decodes the crawlkit {"error": {...}} envelope back into typed
+// who-error fields for assertions. Production writes the one crawlkit shape
+// (cliError.ErrorBody); this test-only struct just reads the extras back.
+type errorEnvelope struct {
+	Error struct {
+		Code       string                `json:"code"`
+		Message    string                `json:"message"`
+		Remedy     string                `json:"remedy"`
+		Candidates []store.WhoCandidate  `json:"candidates,omitempty"`
+		DidYouMean *[]store.WhoCandidate `json:"did_you_mean,omitempty"`
+		Hint       string                `json:"hint,omitempty"`
+	} `json:"error"`
+}
+
 func TestMain(m *testing.M) {
 	home, err := os.MkdirTemp("", "wacrawl-home-*")
 	if err != nil {
@@ -388,7 +402,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if openCommand.Mutates || !openCommand.JSON {
 		t.Fatalf("open command = %#v", openCommand)
 	}
-	openWant := []string{"wacrawl", "--json", "open", "REF"}
+	openWant := []string{"wacrawl", "open", "REF", "--json"}
 	if !reflect.DeepEqual(openCommand.Argv, openWant) {
 		t.Fatalf("open argv = %#v, want %#v", openCommand.Argv, openWant)
 	}
@@ -403,7 +417,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if command.Mutates || !command.JSON {
 		t.Fatalf("contact-export command = %#v", command)
 	}
-	want := []string{"wacrawl", "--json", "contacts", "export"}
+	want := []string{"wacrawl", "contacts", "export", "--json"}
 	if !reflect.DeepEqual(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}
@@ -415,7 +429,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if whoCommand.Mutates || !whoCommand.JSON {
 		t.Fatalf("who command = %#v", whoCommand)
 	}
-	whoWant := []string{"wacrawl", "--json", "who", "NAME"}
+	whoWant := []string{"wacrawl", "who", "NAME", "--json"}
 	if !reflect.DeepEqual(whoCommand.Argv, whoWant) {
 		t.Fatalf("who argv = %#v, want %#v", whoCommand.Argv, whoWant)
 	}
@@ -1260,9 +1274,12 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	if err == nil || ExitCode(err) != 4 {
 		t.Fatalf("expected ambiguous_who human exit 4, got %v", err)
 	}
-	hasRetryExample := strings.Contains(stderr.String(), "retry: wacrawl search --who")
-	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "more than one person matched") || !hasRetryExample {
-		t.Fatalf("ambiguous human stdout=%q stderr=\n%s", stdout.String(), stderr.String())
+	// Text mode: the human rendering (table and all) is the returned error's
+	// message, which main prints to stderr; Run itself no longer prints it.
+	humanText := err.Error()
+	hasRetryExample := strings.Contains(humanText, "retry: wacrawl search --who")
+	if stdout.Len() != 0 || !strings.Contains(humanText, "more than one person matched") || !hasRetryExample {
+		t.Fatalf("ambiguous human stdout=%q err=\n%s", stdout.String(), humanText)
 	}
 
 	stdout.Reset()
@@ -1285,8 +1302,8 @@ func TestSearchWhoAmbiguousAndUnknownErrors(t *testing.T) {
 	if err == nil || ExitCode(err) != 5 {
 		t.Fatalf("expected unknown_who human exit 5, got %v", err)
 	}
-	if stdout.Len() != 0 || !strings.Contains(stderr.String(), "search without --who") {
-		t.Fatalf("unknown human stdout=%q stderr=\n%s", stdout.String(), stderr.String())
+	if stdout.Len() != 0 || !strings.Contains(err.Error(), "search without --who") {
+		t.Fatalf("unknown human stdout=%q err=\n%s", stdout.String(), err.Error())
 	}
 }
 
@@ -1808,11 +1825,11 @@ func TestRunUsageErrors(t *testing.T) {
 		t.Fatalf("expected message limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"chats", "--limit", "0"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "chats --limit must be at least 1") {
+	if err == nil || !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("expected chats limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"unread", "--limit", "0"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "unread --limit must be at least 1") {
+	if err == nil || !strings.Contains(err.Error(), "--limit must be at least 1") {
 		t.Fatalf("expected unread limit error, got %v", err)
 	}
 	err = Run(context.Background(), []string{"search"}, &stdout, &stderr)
@@ -1932,17 +1949,17 @@ func TestHumanContractErrorString(t *testing.T) {
 	if err == nil || ExitCode(err) != 1 {
 		t.Fatalf("expected contract exit, got err=%v code=%d", err, ExitCode(err))
 	}
-	if err.Error() != "short ref was not found" {
+	// Text mode: the error carries its own human rendering (message and remedy
+	// on separate lines) that main prints; Run writes nothing itself and does
+	// not pre-render, so main is the one printer.
+	if err.Error() != "short ref was not found.\nuse a full ref from wacrawl search." {
 		t.Fatalf("error = %q", err.Error())
 	}
-	if stdout.Len() != 0 {
-		t.Fatalf("human contract error wrote stdout: %s", stdout.String())
+	if stdout.Len() != 0 || stderr.Len() != 0 {
+		t.Fatalf("contract error wrote output: stdout=%q stderr=%q", stdout.String(), stderr.String())
 	}
-	if stderr.String() != "short ref was not found.\nuse a full ref from wacrawl search.\n" {
-		t.Fatalf("stderr = %q", stderr.String())
-	}
-	if !ckoutput.IsRendered(err) {
-		t.Fatalf("human contract error must return rendered so main does not print it twice")
+	if ckoutput.IsRendered(err) {
+		t.Fatalf("text-mode contract error must not be pre-rendered; main prints it")
 	}
 }
 
@@ -1959,12 +1976,12 @@ func TestRunHelpMenus(t *testing.T) {
 		{"command help topic", []string{"help", "messages"}, "wacrawl messages [flags]"},
 		{"doctor flag", []string{"doctor", "--help"}, "wacrawl doctor [--source PATH]"},
 		{"status flag", []string{"status", "--help"}, "unread counts"},
-		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N] [--unread]"},
+		{"chats flag", []string{"chats", "--help"}, "wacrawl chats [--limit N | --all] [--unread]"},
 		{"contacts topic", []string{"help", "contacts"}, "wacrawl [--json] contacts export"},
 		{"contacts export flag", []string{"contacts", "export", "--help"}, "wacrawl [--json] contacts export"},
 		{"who topic", []string{"help", "who"}, "wacrawl who <name>"},
 		{"who flag", []string{"who", "--help"}, "close spelling"},
-		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N]"},
+		{"unread flag", []string{"unread", "--help"}, "wacrawl unread [--limit N | --all]"},
 		{"command flag", []string{"messages", "--help"}, "--has-media"},
 		{"search flag", []string{"search", "--help"}, "--who NAME"},
 		{"open topic", []string{"help", "open"}, "wacrawl open <ref>"},
@@ -2311,7 +2328,7 @@ func TestCLIHelpers(t *testing.T) {
 	if err := fs.Parse([]string{"--from-them", "--after", "2026-04-25", "--before", "2026-04-26"}); err != nil {
 		t.Fatal(err)
 	}
-	filter, err := flags.resolve()
+	filter, err := flags.resolve(flagWasProvided(fs, "limit"))
 	if err != nil {
 		t.Fatal(err)
 	}

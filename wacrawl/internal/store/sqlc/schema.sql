@@ -78,8 +78,3 @@ create table messages_fts (
 	media text
 );
 
-create table sync_state (
-	key text primary key,
-	value text not null,
-	updated_at integer not null
-);

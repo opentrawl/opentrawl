@@ -58,7 +58,7 @@ func (a *app) runSearch(ctx context.Context, args []string) error {
 	if strings.TrimSpace(query) == "" && !whoProvided && !afterProvided && !beforeProvided {
 		return usageErr(errors.New("search requires a query or --who, --after, or --before"))
 	}
-	resolved, err := filter.resolve(whoProvided)
+	resolved, err := filter.resolve(whoProvided, flagWasProvided(fs, "limit"))
 	if err != nil {
 		return usageErr(err)
 	}
@@ -104,14 +104,14 @@ func (a *app) resolveSearchWho(ctx context.Context, st *store.Store, value, quer
 	}
 	switch len(resolution.Candidates) {
 	case 0:
-		return store.WhoResolution{}, a.failContractWithExit(unknownWhoError(value, nil), 5)
+		return store.WhoResolution{}, unknownWhoError(value, nil)
 	case 1:
 		if resolution.OnlyCloseSpellingMatch() {
-			return store.WhoResolution{}, a.failContractWithExit(unknownWhoError(value, resolution.Candidates), 5)
+			return store.WhoResolution{}, unknownWhoError(value, resolution.Candidates)
 		}
 		return resolution, nil
 	default:
-		return store.WhoResolution{}, a.failContractWithExit(ambiguousWhoError(value, query, resolution.Candidates), 4)
+		return store.WhoResolution{}, ambiguousWhoError(value, query, resolution.Candidates)
 	}
 }
 
@@ -173,8 +173,8 @@ func bindSearchFlags(fs *flag.FlagSet) searchFlags {
 	}
 }
 
-func (f searchFlags) resolve(whoProvided bool) (store.MessageFilter, error) {
-	out, err := f.messageFlags.resolve()
+func (f searchFlags) resolve(whoProvided, limitSet bool) (store.MessageFilter, error) {
+	out, err := f.messageFlags.resolve(limitSet)
 	if err != nil {
 		return store.MessageFilter{}, err
 	}
@@ -202,8 +202,13 @@ func searchAliases(ctx context.Context, st *store.Store, messages []store.Messag
 	if len(messages) == 0 {
 		return nil, nil
 	}
+	// The short-ref index is a display convenience. On a read-only handle it
+	// cannot be (re)built — e.g. a pre-migration archive that has not been
+	// re-synced yet — so degrade to full refs (still openable) rather than
+	// fail the read. The next sync rebuilds the index. (Errors should never
+	// pass silently, unless explicitly silenced — this is that silencing.)
 	if err := st.EnsureShortRefs(ctx); err != nil {
-		return nil, err
+		return nil, nil
 	}
 	return st.ShortRefAliases(ctx, messageRefs(messages))
 }

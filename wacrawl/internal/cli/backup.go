@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/wacrawl/internal/backup"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -127,9 +128,13 @@ func (a *app) runBackupSnapshots(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("backup snapshots takes flags only"))
 	}
-	if opts.Limit < 1 {
-		return usageErr(errors.New("backup snapshots --limit must be greater than zero"))
+	// No --all: crawlkit/backup.History has no unlimited mode, so snapshots stays
+	// a paged history browser. flags.Limit still gives the one below-1 contract.
+	n, err := flags.Limit(opts.Limit, flagWasProvided(fs, "limit"), false)
+	if err != nil {
+		return usageErr(err)
 	}
+	opts.Limit = n
 	snapshots, repo, err := backup.Snapshots(ctx, *opts)
 	if err != nil {
 		return err

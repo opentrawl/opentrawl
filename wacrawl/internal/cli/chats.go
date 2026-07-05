@@ -8,14 +8,19 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
 type chatsEnvelope struct {
-	Chats []chatRow `json:"chats"`
-	// unread selects the heading and empty sentence; it is never serialized.
-	unread bool
+	Chats     []chatRow `json:"chats"`
+	Total     int       `json:"total"`
+	Truncated bool      `json:"truncated"`
+	// unread selects the heading and empty sentence; allCommand carries the
+	// "see everything" hint. Neither is serialized.
+	unread     bool
+	allCommand string
 }
 
 type chatRow struct {
@@ -27,7 +32,7 @@ type chatRow struct {
 	MessageCount  int    `json:"message_count"`
 }
 
-func newChatsEnvelope(chats []store.Chat, unread bool) chatsEnvelope {
+func newChatsEnvelope(chats []store.Chat, total int, unread bool, allCommand string) chatsEnvelope {
 	rows := make([]chatRow, 0, len(chats))
 	for _, chat := range chats {
 		rows = append(rows, chatRow{
@@ -39,7 +44,13 @@ func newChatsEnvelope(chats []store.Chat, unread bool) chatsEnvelope {
 			MessageCount:  chat.MessageCount,
 		})
 	}
-	return chatsEnvelope{Chats: rows, unread: unread}
+	return chatsEnvelope{
+		Chats:      rows,
+		Total:      total,
+		Truncated:  total > len(rows),
+		unread:     unread,
+		allCommand: allCommand,
+	}
 }
 
 // chatDisplayName is the human-table label; JSON keeps the raw name so
@@ -55,6 +66,7 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("chats", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 50, "")
+	all := fs.Bool("all", false, "")
 	unread := fs.Bool("unread", false, "")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -66,23 +78,34 @@ func (a *app) runChats(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	if *limit < 1 {
-		return usageErr(errors.New("chats --limit must be at least 1"))
+	n, err := flags.Limit(*limit, flagWasProvided(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
+	}
+	allCommand := "wacrawl chats --all"
+	if *unread {
+		allCommand = "wacrawl chats --unread --all"
 	}
 	return a.withReadStore(ctx, func(st *store.Store) error {
 		var (
 			chats []store.Chat
-			err   error
+			total int
 		)
 		if *unread {
-			chats, err = st.ListUnreadChats(ctx, *limit)
+			chats, err = st.ListUnreadChats(ctx, n)
+			if err == nil {
+				total, err = st.CountUnreadChats(ctx)
+			}
 		} else {
-			chats, err = st.ListChats(ctx, *limit)
+			chats, err = st.ListChats(ctx, n)
+			if err == nil {
+				total, err = st.CountChats(ctx)
+			}
 		}
 		if err != nil {
 			return err
 		}
-		return a.print(newChatsEnvelope(chats, *unread))
+		return a.print(newChatsEnvelope(chats, total, *unread, allCommand))
 	})
 }
 
@@ -98,7 +121,15 @@ func (a *app) printChats(value chatsEnvelope) error {
 		_, err := fmt.Fprintln(a.stdout, empty)
 		return err
 	}
-	if _, err := fmt.Fprintf(a.stdout, "%s: showing %d.\n%s\n\n", heading, len(value.Chats), hint); err != nil {
+	if _, err := fmt.Fprintf(a.stdout, "%s: showing %d of %d.\n%s\n", heading, len(value.Chats), value.Total, hint); err != nil {
+		return err
+	}
+	if value.Truncated && value.allCommand != "" {
+		if _, err := fmt.Fprintf(a.stdout, "All: %s\n", value.allCommand); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(a.stdout); err != nil {
 		return err
 	}
 	rows := make([][]string, 0, len(value.Chats))

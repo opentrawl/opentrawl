@@ -28,9 +28,6 @@ select
 	cast(coalesce(max(case when ts > 0 and ts <= 253402300799 then ts end), 0) as integer) as newest_ts
 from messages;
 
--- name: GetSyncState :one
-select value from sync_state where key = sqlc.arg(key);
-
 -- name: ListChats :many
 select
 	c.jid,
@@ -134,9 +131,6 @@ delete from chats;
 -- name: DeleteContacts :exec
 delete from contacts;
 
--- name: DeleteSyncState :exec
-delete from sync_state;
-
 -- name: InsertContact :exec
 insert into contacts(jid, phone, full_name, first_name, last_name, business_name, username, lid, about_text, updated_at)
 values(sqlc.arg(jid), sqlc.arg(phone), sqlc.arg(full_name), sqlc.arg(first_name), sqlc.arg(last_name), sqlc.arg(business_name), sqlc.arg(username), sqlc.arg(lid), sqlc.arg(about_text), sqlc.arg(updated_at));
@@ -160,7 +154,3 @@ values(sqlc.arg(source_pk), sqlc.arg(chat_jid), sqlc.arg(chat_name), sqlc.arg(ms
 -- name: InsertMessageFTS :exec
 insert into messages_fts(rowid, text, chat, sender, media)
 values((select rowid from messages where source_pk = sqlc.arg(source_pk)), sqlc.arg(text), sqlc.arg(chat), sqlc.arg(sender), sqlc.arg(media));
-
--- name: InsertSyncState :exec
-insert into sync_state(key, value, updated_at)
-values(sqlc.arg(key), sqlc.arg(value), sqlc.arg(updated_at));

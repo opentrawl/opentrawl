@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
@@ -26,6 +27,15 @@ const (
 
 	MessageRefPrefix = "wacrawl:msg/"
 	ownerWhoKey      = "owner:me"
+
+	// Sync-state lives in the one crawlkit state.Store (TRAWL-82). Scalar sync
+	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
+	// derived from the archive, sits under "derived".
+	syncSource        = "wacrawl"
+	syncEntityType    = "sync"
+	derivedEntityType = "derived"
+	stateLastImportAt = "last_import_at"
+	stateSourcePath   = "source_path"
 
 	messageSelectColumns = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, '' as snippet`
 	messageScanColumns   = `source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred, snippet`
@@ -256,6 +266,9 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
+	if err := s.migrateSyncState(ctx); err != nil {
+		return err
+	}
 	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
 		return err
 	}
@@ -263,4 +276,43 @@ func (s *Store) migrate(ctx context.Context) error {
 		return fmt.Errorf("set schema version: %w", err)
 	}
 	return nil
+}
+
+// migrateSyncState tombstones the pre-state.Store key/value sync_state table
+// (TRAWL-82). Its columns collide with crawlkit/state and everything it held —
+// the last-import marker, source path and short-ref fingerprint — is re-derived
+// by one sync, so we drop, never map (rules §1.17). The drop only fires on a
+// pre-migration archive (no source_name column), so a canonical archive keeps
+// its live state across the writable opens that read and rebuild short refs.
+func (s *Store) migrateSyncState(ctx context.Context) error {
+	canonical, err := tableHasColumn(ctx, s.db, "sync_state", "source_name")
+	if err != nil {
+		return err
+	}
+	if !canonical {
+		if _, err := s.db.ExecContext(ctx, `drop table if exists sync_state`); err != nil {
+			return fmt.Errorf("tombstone legacy sync_state: %w", err)
+		}
+	}
+	return state.EnsureSchema(ctx, s.db)
+}
+
+func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.QueryContext(ctx, `pragma table_info(`+table+`)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, columnType string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }

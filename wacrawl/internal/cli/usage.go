@@ -113,15 +113,17 @@ Examples:
 		_, _ = fmt.Fprint(w, `List archived chats.
 
 Usage:
-  wacrawl chats [--limit N] [--unread]
+  wacrawl chats [--limit N | --all] [--unread]
 
 Flags:
   --limit N   Chats to return. Default: 50.
+  --all       Return every chat, no limit.
   --unread    Show only chats with unread messages.
 
 Examples:
   wacrawl chats --limit 20
   wacrawl chats --unread
+  wacrawl chats --all
   wacrawl --json chats --limit 100
 `)
 	case "contacts", "contacts export":
@@ -150,14 +152,16 @@ Examples:
 		_, _ = fmt.Fprint(w, `List chats with unread messages.
 
 Usage:
-  wacrawl unread [--limit N]
+  wacrawl unread [--limit N | --all]
 
 Flags:
   --limit N   Chats to return. Default: 50.
+  --all       Return every unread chat, no limit.
 
 Examples:
   wacrawl unread
   wacrawl unread --limit 20
+  wacrawl unread --all
 `)
 	case "messages":
 		_, _ = fmt.Fprint(w, `List archived messages.
@@ -169,6 +173,7 @@ Flags:
   --chat JID       Filter by chat JID.
   --sender JID     Filter by sender JID.
   --limit N        Messages to return. Default: 20.
+  --all            Return every matching message, no limit.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.
@@ -194,6 +199,7 @@ Flags:
   --sender JID     Filter by sender JID.
   --who NAME       Resolve NAME, then filter to that sender, recipient, or chat member.
   --limit N        Messages to return. Default: 20.
+  --all            Return every match, no limit.
   --after TIME     Only messages after RFC3339 or YYYY-MM-DD.
   --before TIME    Only messages before RFC3339 or YYYY-MM-DD.
   --from-me        Only messages sent by me.

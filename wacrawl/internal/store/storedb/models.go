@@ -76,9 +76,3 @@ type MessagesFt struct {
 	Sender sql.NullString
 	Media  sql.NullString
 }
-
-type SyncState struct {
-	Key       string
-	Value     string
-	UpdatedAt int64
-}

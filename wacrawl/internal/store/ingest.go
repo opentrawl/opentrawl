@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
 )
 
@@ -25,7 +26,6 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		q.DeleteGroups,
 		q.DeleteChats,
 		q.DeleteContacts,
-		q.DeleteSyncState,
 	} {
 		if err := deleteQuery(ctx); err != nil {
 			return err
@@ -128,19 +128,15 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	for key, value := range map[string]string{
-		"last_import_at":       now.Format(time.RFC3339Nano),
-		"source_path":          stats.SourcePath,
-		shortRefFingerprintKey: shortRefsFingerprint(messageFullRefs(messages)),
-	} {
-		err := q.InsertSyncState(ctx, storedb.InsertSyncStateParams{
-			Key:       key,
-			Value:     value,
-			UpdatedAt: unix(now),
-		})
-		if err != nil {
-			return err
-		}
+	syncState := state.New(tx)
+	if err := syncState.Set(ctx, syncSource, syncEntityType, stateLastImportAt, now.Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	if err := syncState.Set(ctx, syncSource, syncEntityType, stateSourcePath, stats.SourcePath); err != nil {
+		return err
+	}
+	if err := syncState.Set(ctx, syncSource, derivedEntityType, shortRefFingerprintKey, shortRefsFingerprint(messageFullRefs(messages))); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

@@ -22,16 +22,24 @@ const (
 	openWindowEachSide  = 10
 )
 
+// cliError carries a command failure's exit code and the crawlkit error body
+// (crawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as the
+// {"error": {...}} envelope in JSON mode; in text mode main prints Error(),
+// which returns the human rendering (who tables and all) when one is set.
 type cliError struct {
 	code    int
 	name    string
 	message string
 	remedy  string
 	fields  map[string]any
+	human   string
 	err     error
 }
 
 func (e *cliError) Error() string {
+	if e.human != "" {
+		return e.human
+	}
 	if e.err != nil {
 		return e.err.Error()
 	}

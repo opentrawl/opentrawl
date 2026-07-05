@@ -68,13 +68,14 @@ func logCommandName(rest []string) string {
 }
 
 func errorEvent(rest []string, err error) string {
-	var contract *contractFailure
-	if errors.As(err, &contract) && contract.Code != "" {
-		return logEventName(contract.Code)
-	}
 	var ce *cliError
-	if errors.As(err, &ce) && ce.code == 2 {
-		return "usage_error"
+	if errors.As(err, &ce) {
+		if ce.code == 2 {
+			return "usage_error"
+		}
+		if ce.name != "" {
+			return logEventName(ce.name)
+		}
 	}
 	if errors.Is(err, errNoArchive) {
 		return "archive_missing"
@@ -324,7 +325,7 @@ func renderLogRun(run *logRunEnvelope) *cklog.RunSummary {
 		Command:    run.Command,
 		StartedAt:  parseFormattedTime(run.StartedAt),
 		FinishedAt: parseFormattedTime(run.FinishedAt),
-		Outcome:    humanLogOutcome(run.Outcome),
+		Outcome:    run.Outcome,
 		LastEvent:  run.LastEvent,
 		Version:    run.Version,
 		Commit:     run.Commit,
@@ -364,17 +365,6 @@ func parseFormattedTime(value string) time.Time {
 		return time.Time{}
 	}
 	return parsed
-}
-
-func humanLogOutcome(outcome string) string {
-	switch outcome {
-	case "success":
-		return "succeeded"
-	case "error":
-		return "failed"
-	default:
-		return outcome
-	}
 }
 
 func logQuote(value string) string {

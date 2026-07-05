@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 )
 
 const shortRefFingerprintKey = "short_refs_fingerprint"
@@ -52,12 +52,7 @@ func (s *Store) RebuildShortRefs(ctx context.Context) error {
 	if err := index.UpsertEntries(ctx, shortref.LookupEntries(entries)); err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	if _, err := tx.ExecContext(ctx, `
-insert into sync_state(key, value, updated_at)
-values(?, ?, ?)
-on conflict(key) do update set value = excluded.value, updated_at = excluded.updated_at
-`, shortRefFingerprintKey, shortRefsFingerprint(refs), unix(now)); err != nil {
+	if err := state.New(tx).Set(ctx, syncSource, derivedEntityType, shortRefFingerprintKey, shortRefsFingerprint(refs)); err != nil {
 		return fmt.Errorf("record short ref fingerprint: %w", err)
 	}
 	return tx.Commit()
@@ -120,10 +115,11 @@ order by full_ref, length(alias) desc
 }
 
 func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
-	stored, err := s.q.GetSyncState(ctx, shortRefFingerprintKey)
-	if err != nil {
+	rec, ok, err := state.New(s.db).Get(ctx, syncSource, derivedEntityType, shortRefFingerprintKey)
+	if err != nil || !ok {
 		return false, nil
 	}
+	stored := rec.Value
 	refs, err := s.allMessageFullRefs(ctx)
 	if err != nil {
 		return false, err

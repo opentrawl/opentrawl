@@ -71,10 +71,4 @@ create index if not exists idx_messages_ts on messages(ts);
 create index if not exists idx_messages_sender on messages(sender_jid);
 
 create virtual table if not exists messages_fts using fts5(text, chat, sender, media);
-
-create table if not exists sync_state (
-	key text primary key,
-	value text not null,
-	updated_at integer not null
-);
 `

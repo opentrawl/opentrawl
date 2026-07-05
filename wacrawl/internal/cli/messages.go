@@ -8,6 +8,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -51,7 +52,7 @@ func (a *app) runMessages(ctx context.Context, args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("messages takes flags only"))
 	}
-	resolved, err := filter.resolve()
+	resolved, err := filter.resolve(flagWasProvided(fs, "limit"))
 	if err != nil {
 		return usageErr(err)
 	}
@@ -72,6 +73,7 @@ type messageFlags struct {
 	chat     *string
 	sender   *string
 	limit    *int
+	all      *bool
 	after    *string
 	before   *string
 	fromMe   *bool
@@ -85,6 +87,7 @@ func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 		chat:     fs.String("chat", "", ""),
 		sender:   fs.String("sender", "", ""),
 		limit:    fs.Int("limit", defaultMessageLimit, ""),
+		all:      fs.Bool("all", false, ""),
 		after:    fs.String("after", "", ""),
 		before:   fs.String("before", "", ""),
 		fromMe:   fs.Bool("from-me", false, ""),
@@ -94,17 +97,18 @@ func bindMessageFlags(fs *flag.FlagSet) messageFlags {
 	}
 }
 
-func (f messageFlags) resolve() (store.MessageFilter, error) {
+func (f messageFlags) resolve(limitSet bool) (store.MessageFilter, error) {
 	if *f.fromMe && *f.fromThem {
 		return store.MessageFilter{}, errors.New("--from-me and --from-them are mutually exclusive")
 	}
-	if *f.limit < 1 {
-		return store.MessageFilter{}, errors.New("--limit must be at least 1")
+	limit, err := flags.Limit(*f.limit, limitSet, *f.all)
+	if err != nil {
+		return store.MessageFilter{}, err
 	}
 	out := store.MessageFilter{
 		ChatJID:  *f.chat,
 		Sender:   *f.sender,
-		Limit:    *f.limit,
+		Limit:    limit,
 		HasMedia: *f.hasMedia,
 		Asc:      *f.asc,
 	}

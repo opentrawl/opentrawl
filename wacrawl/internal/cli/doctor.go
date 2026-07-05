@@ -201,22 +201,11 @@ func (a *app) printDoctor(envelope doctorEnvelope) error {
 	checks := make([]render.Check, 0, len(envelope.Checks))
 	for _, check := range envelope.Checks {
 		checks = append(checks, render.Check{
-			Name:    doctorCheckLabel(check.ID),
+			Name:    check.ID,
 			State:   render.CheckState(check.State),
 			Message: check.Message,
 			Remedy:  check.Remedy,
 		})
 	}
 	return render.WriteDoctor(a.stdout, checks, renderLogTail(logTailEnvelope{LastRun: envelope.LastRun, Error: envelope.Error}))
-}
-
-func doctorCheckLabel(id string) string {
-	switch id {
-	case "source_store":
-		return "source store"
-	case "full_disk_access":
-		return "full disk access"
-	default:
-		return strings.ReplaceAll(id, "_", " ")
-	}
 }
