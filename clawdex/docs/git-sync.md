@@ -82,8 +82,8 @@ The flow on a second machine is the same as on the first:
 
 ```bash
 brew install steipete/tap/clawdex
-git clone https://github.com/<you>/backup-clawdex.git ~/.clawdex/contacts
-clawdex config set repo_path ~/.clawdex/contacts
+git clone https://github.com/<you>/backup-clawdex.git ~/.opentrawl/clawdex/contacts
+clawdex config set repo_path ~/.opentrawl/clawdex/contacts
 clawdex config set git.remote https://github.com/<you>/backup-clawdex.git
 clawdex git pull
 clawdex doctor

@@ -55,7 +55,7 @@ clawdex timeline sally | column -t -s $'\t' | less -S
   [Search](search.md) with a date-ish term, or grep notes directly:
 
   ```bash
-  rg -n "occurred_at: 2026-05" ~/.clawdex/contacts/people
+  rg -n "occurred_at: 2026-05" ~/.opentrawl/clawdex/contacts/people
   ```
 
 ## Related pages

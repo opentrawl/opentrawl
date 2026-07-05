@@ -14,8 +14,8 @@ clawdex doctor --repair
 ## What it reports
 
 ```text
-config_path: /Users/you/.clawdex/config.toml
-repo_path: /Users/you/.clawdex/contacts
+config_path: /Users/you/.opentrawl/clawdex/config.toml
+repo_path: /Users/you/.opentrawl/clawdex/contacts
 remote: https://github.com/you/backup-clawdex.git
 people: 412
 git_dirty: true

@@ -34,15 +34,15 @@ go install github.com/openclaw/clawdex/cmd/clawdex@latest
 ```
 
 ```bash
-clawdex init ~/.clawdex/contacts
-clawdex config set repo_path ~/.clawdex/contacts
+clawdex init ~/.opentrawl/clawdex/contacts
+clawdex config set repo_path ~/.opentrawl/clawdex/contacts
 clawdex config set git.remote https://github.com/<you>/backup-clawdex.git
 ```
 
 Or set the backup remote during initialisation:
 
 ```bash
-clawdex init ~/.clawdex/contacts --remote https://github.com/<you>/backup-clawdex.git
+clawdex init ~/.opentrawl/clawdex/contacts --remote https://github.com/<you>/backup-clawdex.git
 ```
 
 `init` creates a data repo:
@@ -54,7 +54,7 @@ index/
 .clawdex/repairs/
 ```
 
-Config is stored at `~/.clawdex/config.toml` by default. `--repo DIR` or
+Config is stored at `~/.opentrawl/clawdex/config.toml` by default. `--repo DIR` or
 `CLAWDEX_REPO=DIR` overrides the configured contacts repo for one run.
 
 ## Examples

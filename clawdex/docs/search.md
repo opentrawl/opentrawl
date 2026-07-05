@@ -65,7 +65,7 @@ free-form regex on the data repo:
 ```bash
 clawdex search "ankara"
 clawdex timeline mehmet
-rg -n "ankara" ~/.clawdex/contacts/people
+rg -n "ankara" ~/.opentrawl/clawdex/contacts/people
 ```
 
 ## Indexes

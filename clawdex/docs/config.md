@@ -4,7 +4,7 @@ Clawdex has two config files, on purpose:
 
 | File                          | Scope         | What lives here                              |
 |-------------------------------|---------------|----------------------------------------------|
-| `~/.clawdex/config.toml`      | User-level    | Default repo path, default Google account.   |
+| `~/.opentrawl/clawdex/config.toml`      | User-level    | Default repo path, default Google account.   |
 | `<repo>/clawdex.toml`         | Repo-local    | Git remote, branch, repair behavior.         |
 
 The user-level file follows you across data repos. The repo-local file
@@ -13,11 +13,11 @@ machine.
 
 ## User-level config
 
-Default location: `~/.clawdex/config.toml`. Override with `--config PATH`
+Default location: `~/.opentrawl/clawdex/config.toml`. Override with `--config PATH`
 or `CLAWDEX_CONFIG=PATH`.
 
 ```toml
-repo_path = "/Users/you/.clawdex/contacts"
+repo_path = "/Users/you/.opentrawl/clawdex/contacts"
 
 [google]
 default_account = "you@gmail.com"
@@ -43,7 +43,7 @@ auto_repair = false
 clawdex config              # default subcommand: show
 clawdex config show
 clawdex config show --json
-clawdex config set repo_path ~/.clawdex/contacts
+clawdex config set repo_path ~/.opentrawl/clawdex/contacts
 clawdex config set git.remote https://github.com/you/backup-clawdex.git
 clawdex config set git.branch main
 clawdex config set google.default_account you@gmail.com

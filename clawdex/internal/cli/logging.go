@@ -388,5 +388,5 @@ func elapsedMS(value time.Duration) string {
 }
 
 func diagnosticsLine() string {
-	return "Diagnostics: run with -v, or read ~/.clawdex/logs/clawdex.log"
+	return "Diagnostics: run with -v, or read ~/.opentrawl/clawdex/logs/clawdex.log"
 }

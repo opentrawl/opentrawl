@@ -1512,7 +1512,7 @@ func testPaths(t *testing.T) (string, string) {
 }
 
 func clawdexLogPath() string {
-	return filepath.Join(os.Getenv("HOME"), ".clawdex", "logs", "clawdex.log")
+	return filepath.Join(os.Getenv("HOME"), ".opentrawl", "clawdex", "logs", "clawdex.log")
 }
 
 func readClawdexLog(t *testing.T) string {

@@ -28,15 +28,15 @@ your data will back up to.
 ## 3. Initialize a contacts data repo
 
 ```bash
-clawdex init ~/.clawdex/contacts
-clawdex config set repo_path ~/.clawdex/contacts
+clawdex init ~/.opentrawl/clawdex/contacts
+clawdex config set repo_path ~/.opentrawl/clawdex/contacts
 clawdex config set git.remote https://github.com/<you>/backup-clawdex.git
 ```
 
 You can also set the backup remote during initialization:
 
 ```bash
-clawdex init ~/.clawdex/contacts --remote https://github.com/<you>/backup-clawdex.git
+clawdex init ~/.opentrawl/clawdex/contacts --remote https://github.com/<you>/backup-clawdex.git
 ```
 
 `init` writes:
@@ -48,7 +48,7 @@ index/
 .clawdex/repairs/
 ```
 
-The app config lives at `~/.clawdex/config.toml` by default. `--repo DIR` or
+The app config lives at `~/.opentrawl/clawdex/config.toml` by default. `--repo DIR` or
 `CLAWDEX_REPO=DIR` overrides the configured repo for one run. See
 [Config](config.md) for the full key list.
 

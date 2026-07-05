@@ -45,13 +45,13 @@ type Apple struct {
 	Enabled bool `toml:"enabled" json:"enabled"`
 }
 
-var appConfig = crawlconfig.App{Name: "clawdex", ConfigEnv: DefaultConfigEnv, BaseDir: "~/.clawdex"}
+var appConfig = crawlconfig.App{Name: "clawdex", ConfigEnv: DefaultConfigEnv, BaseDir: "~/.opentrawl/clawdex"}
 
 func DefaultConfig() Config {
 	paths, err := appConfig.DefaultPaths()
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		paths.ShareDir = filepath.Join(home, ".clawdex", "contacts")
+		paths.ShareDir = filepath.Join(home, ".opentrawl", "clawdex", "contacts")
 	}
 	return Config{
 		Version:  1,
@@ -73,7 +73,7 @@ func ResolveConfigPath(flagPath string) string {
 	path, err := appConfig.ResolveConfigPath(flagPath)
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".clawdex", "config.toml")
+		return filepath.Join(home, ".opentrawl", "clawdex", "config.toml")
 	}
 	return path
 }
@@ -82,7 +82,7 @@ func DefaultLogDir() string {
 	paths, err := appConfig.DefaultPaths()
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".clawdex", "logs")
+		return filepath.Join(home, ".opentrawl", "clawdex", "logs")
 	}
 	return paths.LogDir
 }

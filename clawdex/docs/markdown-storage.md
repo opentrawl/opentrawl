@@ -125,7 +125,7 @@ backup_before_repair = true
 auto_repair = false
 ```
 
-This is *separate* from the user-level config at `~/.clawdex/config.toml`,
+This is *separate* from the user-level config at `~/.opentrawl/clawdex/config.toml`,
 which holds your default repo path, default Google account, and editor
 preferences. See [Config](config.md).
 
