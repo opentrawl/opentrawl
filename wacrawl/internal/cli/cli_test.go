@@ -63,7 +63,6 @@ func TestRunEndToEnd(t *testing.T) {
 		{"search", []string{"--db", dbPath, "search", "--limit", "5", "launch"}, "launch now"},
 		{"search flags after query", []string{"--db", dbPath, "search", "launch", "--limit", "5"}, "launch now"},
 		{"open", []string{"--db", dbPath, "open", "wacrawl:msg/group-image"}, "launch now"},
-		{"sql", []string{"--db", dbPath, "sql", "SELECT count(*) AS messages FROM messages"}, "messages"},
 		{"json", []string{"--db", dbPath, "--json", "search", "launch"}, `"ref": "wacrawl:msg/group-image"`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -133,61 +132,6 @@ func TestSearchTextWrapsSnippetRows(t *testing.T) {
 	// line is an indented continuation under the text column.
 	if !hasContinuationLine(got, "launch went") {
 		t.Fatalf("search snippet did not wrap onto an indented continuation line:\n%s", got)
-	}
-}
-
-func TestRunSQLJSONAndReadOnlyValidation(t *testing.T) {
-	ctx := context.Background()
-	dbPath := filepath.Join(t.TempDir(), "archive.db")
-	st, err := store.Open(ctx, dbPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := st.ReplaceAll(ctx, store.ImportStats{}, nil, []store.Chat{
-		{JID: "123@g.us", Kind: "group", Name: "Launch Group", MessageCount: 2},
-	}, nil, nil, []store.Message{
-		{SourcePK: 1, ChatJID: "123@g.us", ChatName: "Launch Group", MessageID: "m1", Text: "launch now"},
-		{SourcePK: 2, ChatJID: "123@g.us", ChatName: "Launch Group", MessageID: "m2", Text: "ship later"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if err := st.Close(); err != nil {
-		t.Fatal(err)
-	}
-
-	var stdout, stderr bytes.Buffer
-	if err := Run(ctx, []string{"--db", dbPath, "--json", "sql", "SELECT chat_jid, count(*) AS messages FROM messages GROUP BY chat_jid"}, &stdout, &stderr); err != nil {
-		t.Fatalf("sql json: %v stderr=%s", err, stderr.String())
-	}
-	var rows []map[string]any
-	if err := json.Unmarshal(stdout.Bytes(), &rows); err != nil {
-		t.Fatalf("json = %s err=%v", stdout.String(), err)
-	}
-	if len(rows) != 1 || rows[0]["chat_jid"] != "123@g.us" || rows[0]["messages"] != float64(2) {
-		t.Fatalf("rows = %#v", rows)
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	err = Run(ctx, []string{"--db", dbPath, "sql", "DELETE FROM messages"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), readOnlySelectError) {
-		t.Fatalf("expected read-only select error, got %v", err)
-	}
-
-	stdout.Reset()
-	stderr.Reset()
-	err = Run(ctx, []string{"--db", dbPath, "sql", "SELECT count(*) FROM messages; SELECT count(*) FROM chats"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "only a single read-only select statement is allowed") {
-		t.Fatalf("expected single statement error, got %v", err)
-	}
-
-	invalidDBPath := filepath.Join(t.TempDir(), "archive.db")
-	err = Run(ctx, []string{"--db", invalidDBPath, "sql", "DELETE FROM messages"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), readOnlySelectError) {
-		t.Fatalf("expected read-only select error, got %v", err)
-	}
-	if _, statErr := os.Stat(invalidDBPath); !errors.Is(statErr, os.ErrNotExist) {
-		t.Fatalf("invalid SQL created archive: %v", statErr)
 	}
 }
 
@@ -448,16 +392,8 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if !reflect.DeepEqual(openCommand.Argv, openWant) {
 		t.Fatalf("open argv = %#v, want %#v", openCommand.Argv, openWant)
 	}
-	sqlCommand, ok := manifest.Commands["sql"]
-	if !ok {
-		t.Fatalf("commands = %#v", manifest.Commands)
-	}
-	if sqlCommand.Mutates || !sqlCommand.JSON {
-		t.Fatalf("sql command = %#v", sqlCommand)
-	}
-	sqlWant := []string{"wacrawl", "--json", "sql"}
-	if !reflect.DeepEqual(sqlCommand.Argv, sqlWant) {
-		t.Fatalf("sql argv = %#v, want %#v", sqlCommand.Argv, sqlWant)
+	if _, ok := manifest.Commands["sql"]; ok {
+		t.Fatalf("sql command should be gone, commands = %#v", manifest.Commands)
 	}
 
 	command, ok := manifest.Commands["contact-export"]
@@ -1935,6 +1871,10 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `unknown command "web"`) {
 		t.Fatalf("expected unknown command error for web, got %v", err)
 	}
+	err = Run(context.Background(), []string{"sql", "SELECT 1"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `unknown command "sql"`) {
+		t.Fatalf("expected unknown command error for sql, got %v", err)
+	}
 }
 
 func TestJSONErrorsAreSingleRenderedDocuments(t *testing.T) {
@@ -2029,8 +1969,6 @@ func TestRunHelpMenus(t *testing.T) {
 		{"search flag", []string{"search", "--help"}, "--who NAME"},
 		{"open topic", []string{"help", "open"}, "wacrawl open <ref>"},
 		{"open flag", []string{"open", "--help"}, "wacrawl:msg/MESSAGE_ID"},
-		{"sql topic", []string{"help", "sql"}, "wacrawl sql <select query>"},
-		{"sql flag", []string{"sql", "--help"}, "read-only SQL query"},
 		{"import flag", []string{"import", "--help"}, "--copy-media"},
 		{"sync topic", []string{"help", "sync"}, "wacrawl sync [--source PATH]"},
 		{"backup flag", []string{"backup", "--help"}, "wacrawl backup <init|push|pull|status|snapshots>"},

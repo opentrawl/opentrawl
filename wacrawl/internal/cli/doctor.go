@@ -2,14 +2,20 @@ package cli
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/openclaw/crawlkit/render"
+	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/whatsappdb"
+
+	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func (a *app) runDoctor(ctx context.Context, args []string) error {
@@ -102,8 +108,29 @@ func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) do
 }
 
 func sourceCanary(ctx context.Context, source whatsappdb.Source) error {
-	_, err := queryReadOnlySQL(ctx, source.ChatDB, "SELECT count(*) AS tables FROM sqlite_master")
-	return err
+	return probeSQLite(ctx, source.ChatDB)
+}
+
+// probeSQLite proves a SQLite file opens read-only and answers a trivial
+// query. It is the doctor's readability canary for the source and archive
+// databases.
+func probeSQLite(ctx context.Context, dbPath string) error {
+	if strings.TrimSpace(dbPath) == "" {
+		return errors.New("db path is required")
+	}
+	dsn := sqlitedsn.File(
+		dbPath,
+		sqlitedsn.P("mode", "ro"),
+		sqlitedsn.P("_query_only", "1"),
+		sqlitedsn.P("_busy_timeout", "5000"),
+	)
+	db, err := sql.Open("sqlite3", dsn)
+	if err != nil {
+		return fmt.Errorf("open sqlite: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	var tables int
+	return db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&tables)
 }
 
 func (a *app) archiveCheck(ctx context.Context) doctorCheck {
@@ -127,7 +154,7 @@ func (a *app) archiveCheck(ctx context.Context) doctorCheck {
 		check.Message = "archive path is a directory"
 		check.Remedy = "pass --db PATH pointing at a SQLite database, then run wacrawl sync"
 	default:
-		if _, err := queryReadOnlySQL(ctx, a.dbPath, "SELECT count(*) AS tables FROM sqlite_master"); err != nil {
+		if err := probeSQLite(ctx, a.dbPath); err != nil {
 			check.State = "error"
 			check.Message = err.Error()
 			check.Remedy = "move the corrupt archive aside, then run wacrawl sync"
