@@ -268,13 +268,14 @@ func printOpenText(w io.Writer, value openOutput) error {
 }
 
 func printContactsText(w io.Writer, value control.ContactExport) error {
+	rows := make([][]string, 0, len(value.Contacts))
 	for _, contact := range value.Contacts {
-		_, err := fmt.Fprintf(w, "%s\t%s\n", contact.DisplayName, strings.Join(contact.PhoneNumbers, ","))
-		if err != nil {
-			return err
-		}
+		rows = append(rows, []string{contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")})
 	}
-	return nil
+	return render.WriteTable(w, []render.TableColumn{
+		{Header: "name", Wrap: true},
+		{Header: "phone"},
+	}, rows)
 }
 
 func nextLimit(limit int, total int64) int {

@@ -853,6 +853,21 @@ func TestSearchLimitZeroIsUsageError(t *testing.T) {
 	}
 }
 
+func TestSearchRejectsUnknownFlags(t *testing.T) {
+	setupTestHome(t)
+
+	stdout, stderr, err := run(t, "search", "--bogus", "foo")
+	if err == nil || cli.ExitCode(err) != 2 {
+		t.Fatalf("unknown flag err = %v code=%d stdout=%s stderr=%s", err, cli.ExitCode(err), stdout, stderr)
+	}
+	if !strings.Contains(err.Error(), `unknown search flag "--bogus"`) {
+		t.Fatalf("unknown flag error = %v", err)
+	}
+	if stdout != "" || stderr != "" {
+		t.Fatalf("usage wrote stdout=%q stderr=%q", stdout, stderr)
+	}
+}
+
 func TestSearchAllReturnsEverything(t *testing.T) {
 	db := setupCalendarFixture(t)
 	const total = 205

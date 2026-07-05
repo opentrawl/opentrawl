@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"strconv"
 	"strings"
@@ -297,6 +298,9 @@ func (r *runtime) runMessages(args []string) error {
 			return err
 		}
 		chat, err := st.Chat(r.ctx, *chatID)
+		if errors.Is(err, archive.ErrChatNotFound) {
+			return r.contractError("not_found", fmt.Sprintf("chat %s was not found", *chatID), "run imsgcrawl chats and use a current chat id")
+		}
 		if err != nil {
 			return err
 		}

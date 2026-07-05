@@ -10,7 +10,10 @@ import (
 	"github.com/openclaw/crawlkit/state"
 )
 
-var ErrMessageNotFound = errors.New("message not found")
+var (
+	ErrChatNotFound    = errors.New("chat not found")
+	ErrMessageNotFound = errors.New("message not found")
+)
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	status := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}

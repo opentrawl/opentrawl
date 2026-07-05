@@ -18,6 +18,7 @@ import (
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/control"
 	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -85,6 +86,29 @@ func TestContactsExportShapeAndDedupe(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("contacts = %#v, want %#v", got, want)
+	}
+}
+
+func TestContactsExportTextUsesRenderTable(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "chat.db")
+	createMessagesFixture(t, dbPath)
+
+	got := runOK(t, "--db", dbPath, "contacts", "export")
+	var want bytes.Buffer
+	if err := render.WriteTable(&want, []render.TableColumn{
+		{Header: "name", Wrap: true},
+		{Header: "phone"},
+	}, [][]string{
+		{"Fixture Person", "+15550103"},
+		{"Most Recent Name", "0015550100"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if got != want.String() {
+		t.Fatalf("contacts text =\n%s\nwant:\n%s", got, want.String())
+	}
+	if strings.Contains(got, "\t") {
+		t.Fatalf("contacts text kept tab-separated output:\n%s", got)
 	}
 }
 
@@ -257,13 +281,17 @@ func TestArchiveCommandsSyncReadAndSearch(t *testing.T) {
 		t.Fatalf("group sender labels = %#v", groupRows.Items)
 	}
 
-	emptyMessagesOut := runOK(t, "--archive", archivePath, "--json", "messages", "--chat", "999")
-	var emptyMessages messageListJSON
-	if err := json.Unmarshal([]byte(emptyMessagesOut), &emptyMessages); err != nil {
-		t.Fatalf("empty messages json = %s err=%v", emptyMessagesOut, err)
+	var missingChatStdout, missingChatStderr bytes.Buffer
+	err := Run(context.Background(), []string{"--archive", archivePath, "--json", "messages", "--chat", "999"}, &missingChatStdout, &missingChatStderr)
+	if err == nil || ExitCode(err) != 1 {
+		t.Fatalf("missing chat error = %v stdout=%s stderr=%s", err, missingChatStdout.String(), missingChatStderr.String())
 	}
-	if emptyMessages.Returned != 0 || emptyMessages.Total != 0 || !emptyMessages.Complete || len(emptyMessages.Items) != 0 {
-		t.Fatalf("empty messages output = %#v", emptyMessages)
+	var missingChat errorJSON
+	if err := json.Unmarshal(missingChatStdout.Bytes(), &missingChat); err != nil {
+		t.Fatalf("missing chat json = %s err=%v", missingChatStdout.String(), err)
+	}
+	if missingChat.Error.Code != "not_found" || missingChat.Error.Message == "" || missingChat.Error.Remedy == "" {
+		t.Fatalf("missing chat error = %#v", missingChat)
 	}
 
 	searchOut := runOK(t, "--archive", archivePath, "--json", "search", "launch")

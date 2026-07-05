@@ -181,6 +181,9 @@ func parseSearchArgs(args []string) (searchRequest, error) {
 			req.whoPassed = true
 			req.who = strings.TrimPrefix(arg, "--who=")
 		default:
+			if strings.HasPrefix(arg, "-") {
+				return searchRequest{}, usageErr(fmt.Errorf("unknown search flag %q", arg))
+			}
 			queryParts = append(queryParts, arg)
 		}
 	}

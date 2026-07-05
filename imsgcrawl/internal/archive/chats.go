@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"strconv"
 )
 
@@ -51,7 +52,7 @@ func (s *Store) Chat(ctx context.Context, chatID string) (ChatSummary, error) {
 		return ChatSummary{}, err
 	}
 	if len(out) == 0 {
-		return ChatSummary{ChatID: chatID, Title: "chat " + chatID, Kind: "unknown"}, nil
+		return ChatSummary{}, fmt.Errorf("%w: %s", ErrChatNotFound, chatID)
 	}
 	if err := populateParticipantHandles(ctx, db, out); err != nil {
 		return ChatSummary{}, err
