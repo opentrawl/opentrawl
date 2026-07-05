@@ -35,18 +35,6 @@ type peopleEnvelope struct {
 	limit int
 }
 
-type notesEnvelope struct {
-	PersonID  string       `json:"person_id"`
-	Person    string       `json:"person"`
-	Notes     []model.Note `json:"notes"`
-	Total     int          `json:"total"`
-	Truncated bool         `json:"truncated"`
-
-	verb  string
-	query string
-	limit int
-}
-
 type importChangesEnvelope struct {
 	Changes                   []model.ImportChange `json:"changes"`
 	SkippedWithoutIdentifiers int                  `json:"skipped_without_identifiers,omitempty"`
@@ -81,14 +69,10 @@ func (r *Runtime) print(value any) error {
 		return printContactExport(r, v)
 	case model.Person:
 		return printPersonCard(r, v)
-	case model.AvatarRef:
-		return printAvatar(r, v)
 	case searchEnvelope:
 		return printSearch(r, v)
 	case peopleEnvelope:
 		return printPeople(r, v)
-	case notesEnvelope:
-		return printNotes(r, v)
 	case importChangesEnvelope:
 		return printImportChanges(r, v)
 	default:
@@ -128,7 +112,7 @@ func printSearch(r *Runtime, v searchEnvelope) error {
 			Text: hit.Snippet,
 		})
 	}
-	hints := []string{"Show a person: clawdex person show NAME (their notes: clawdex note list NAME)"}
+	hints := []string{"Show a person: clawdex person show NAME"}
 	if v.Truncated {
 		hints = append(hints,
 			fmt.Sprintf("More: clawdex search %q --limit %d", v.Query, nextLimit(v.limit)),
@@ -149,7 +133,7 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 			_, err := fmt.Fprintf(r.stdout, "No people match %q.\n", v.Query)
 			return err
 		}
-		_, err := fmt.Fprintln(r.stdout, "No people yet. Add one: clawdex person add NAME")
+		_, err := fmt.Fprintln(r.stdout, "No people yet. Import some: clawdex import --help")
 		return err
 	}
 	heading := fmt.Sprintf("People: showing %d of %d, A to Z.", len(v.People), v.Total)
@@ -205,30 +189,6 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 	return render.WriteTable(r.stdout, columns, rows)
 }
 
-func printNotes(r *Runtime, v notesEnvelope) error {
-	items := make([]render.ListItem, 0, len(v.Notes))
-	for _, n := range v.Notes {
-		items = append(items, render.ListItem{
-			Time:  n.OccurredAt,
-			Where: n.Kind,
-			Text:  n.Body,
-		})
-	}
-	hints := []string{fmt.Sprintf("Add one: clawdex note add %q --kind note --source manual --text TEXT", v.query)}
-	if v.Truncated {
-		hints = append(hints,
-			fmt.Sprintf("More: clawdex %s %q --limit %d", v.verb, v.query, nextLimit(v.limit)),
-			fmt.Sprintf("All: clawdex %s %q --all", v.verb, v.query))
-	}
-	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("Notes for %s: showing %d of %d, newest first.", v.Person, len(v.Notes), v.Total),
-		Hints:     hints,
-		Items:     items,
-		ClampText: 0,
-		Empty:     fmt.Sprintf("No notes for %s. Add one: clawdex note add %q --kind note --source manual --text TEXT", v.Person, v.query),
-	})
-}
-
 func printPersonCard(r *Runtime, p model.Person) error {
 	fields := []render.CardField{
 		{Label: "id", Value: p.ID},
@@ -243,23 +203,7 @@ func printPersonCard(r *Runtime, p model.Person) error {
 	return render.WriteCard(r.stdout, render.Card{
 		Title:  p.Name,
 		Fields: fields,
-		Hints:  []string{fmt.Sprintf("Notes: clawdex note list %q", p.Name)},
 	})
-}
-
-func printAvatar(r *Runtime, a model.AvatarRef) error {
-	fields := []render.CardField{
-		{Label: "file", Value: a.Path},
-		{Label: "type", Value: a.MIME},
-		{Label: "source", Value: a.Source},
-	}
-	if a.Width > 0 && a.Height > 0 {
-		fields = append(fields, render.CardField{Label: "size", Value: fmt.Sprintf("%dx%d", a.Width, a.Height)})
-	}
-	if !a.UpdatedAt.IsZero() {
-		fields = append(fields, render.CardField{Label: "updated", Value: render.ShortLocalTime(a.UpdatedAt)})
-	}
-	return render.WriteCard(r.stdout, render.Card{Title: "Avatar", Fields: fields})
 }
 
 func printContactExport(r *Runtime, export contactexport.ContactExport) error {

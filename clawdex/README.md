@@ -4,8 +4,6 @@ written_by: ai
 
 # 🧩 clawdex
 
-![clawdex banner](docs/assets/readme-banner.jpg)
-
 Local-first contact crawler and markdown archive CLI.
 
 `clawdex` is a local-first contact crawler and markdown archive CLI. The app
@@ -60,13 +58,9 @@ Config is stored at `~/.opentrawl/clawdex/config.toml` by default. `--repo DIR` 
 ## Examples
 
 ```bash
-clawdex person add "Sally O'Malley" --email sally@example.com --tag friend
-clawdex note add sally --kind dm --source whatsapp --text "Follow up about dinner"
 clawdex person list
 clawdex person show sally
-clawdex person avatar set sally ~/Pictures/sally.jpg
-clawdex person avatar show sally --path
-clawdex timeline sally
+clawdex who sally
 clawdex search dinner
 clawdex export vcard --all --include-avatars -o contacts.vcf
 clawdex git status

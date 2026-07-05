@@ -33,15 +33,9 @@ func clawdexUsageDoc() usage.Doc {
 				{Name: "person show", Summary: "One person in full, by name, email or phone."},
 				{Name: "who", Summary: "Resolve a name fragment to candidate people."},
 				{Name: "search", Summary: "Search people and notes."},
-				{Name: "note list", Summary: "Notes about one person, newest first."},
-				{Name: "timeline", Summary: "Same notes as note list, newest first."},
 				{Name: "contacts export", Summary: "Contact rows for other crawlers."},
 			}},
 			{Title: "Change your contacts", Commands: []usage.Command{
-				{Name: "person add", Summary: "Add a person."},
-				{Name: "person edit", Summary: "Open a person's markdown file in your editor."},
-				{Name: "person avatar", Summary: "Set, show or clear a person's avatar."},
-				{Name: "note add", Summary: "Record a note about a person."},
 				{Name: "import", Summary: "Pull contacts in from Apple, Google or a crawler."},
 				{Name: "export vcard", Summary: "Write people out as vCards."},
 			}},
@@ -65,7 +59,6 @@ func clawdexUsageDoc() usage.Doc {
 			"clawdex who alice",
 			"clawdex person show \"Ada Lovelace\"",
 			"clawdex search \"boat trip\" --limit 5",
-			"clawdex note add ada --kind call --source manual --text \"Spoke about the engine\"",
 		},
 		Footer: []string{
 			"Run 'clawdex COMMAND --help' for flags and details.",

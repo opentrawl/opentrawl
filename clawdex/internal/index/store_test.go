@@ -38,7 +38,7 @@ func TestAddNoteAndSearch(t *testing.T) {
 	}
 }
 
-func TestAvatarSetAndImportBackfill(t *testing.T) {
+func TestAvatarImportBackfill(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
 	img := filepath.Join(t.TempDir(), "avatar.png")
@@ -47,26 +47,15 @@ func TestAvatarSetAndImportBackfill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = s.AddPerson("Ada Avatar", []string{"avatar@example.com"}, nil, nil, time.Now())
+	created, err := s.AddPerson("Ada Avatar", []string{"avatar@example.com"}, nil, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, err := s.SetAvatar("avatar@example.com", img, time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.Avatar.Source != "manual" {
-		t.Fatalf("avatar = %#v", p.Avatar)
-	}
-	p, err = s.ClearAvatar("avatar@example.com", time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if p.Avatar.Path != "" {
-		t.Fatalf("clear avatar = %#v", p.Avatar)
-	}
-	_, err = s.SetAvatar("avatar@example.com", img, time.Now())
-	if err != nil {
+	// Seed a legacy manual avatar directly in the person markdown: the manual
+	// avatar verbs are gone (TRAWL-118), but existing manual avatars must
+	// survive imports.
+	created.Avatar = model.AvatarRef{Path: "avatars/avatar.png", Source: "manual", SHA256: "manual-sha"}
+	if err := markdown.WritePerson(created.Path, created); err != nil {
 		t.Fatal(err)
 	}
 	changes, err := s.ImportContacts("apple", []model.SourceContact{{
@@ -81,7 +70,7 @@ func TestAvatarSetAndImportBackfill(t *testing.T) {
 	if len(changes) != 1 {
 		t.Fatalf("expected external update without manual avatar overwrite, changes = %#v", changes)
 	}
-	p, err = s.FindPerson("avatar@example.com")
+	p, err := s.FindPerson("avatar@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}

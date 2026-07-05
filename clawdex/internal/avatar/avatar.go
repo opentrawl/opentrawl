@@ -58,23 +58,6 @@ func InspectFile(path string) (model.AvatarRef, error) {
 	}, nil
 }
 
-func SetManual(person model.Person, srcPath string, now time.Time) (model.Person, error) {
-	data, err := os.ReadFile(srcPath)
-	if err != nil {
-		return model.Person{}, err
-	}
-	source, err := InspectBytes(data)
-	if err != nil {
-		return model.Person{}, err
-	}
-	ref, err := write(person, source, "manual", now)
-	if err != nil {
-		return model.Person{}, err
-	}
-	person.Avatar = ref
-	return person, nil
-}
-
 func SetImported(person model.Person, source model.SourceAvatar, sourceName string, now time.Time) (model.Person, bool, error) {
 	if len(source.Data) == 0 {
 		return person, false, nil
@@ -149,10 +132,6 @@ func RepairMetadata(person model.Person, now time.Time) (model.Person, bool, err
 	changed := ref.MIME != person.Avatar.MIME || ref.SHA256 != person.Avatar.SHA256 || ref.Width != person.Avatar.Width || ref.Height != person.Avatar.Height || ref.UpdatedAt != person.Avatar.UpdatedAt
 	person.Avatar = ref
 	return person, changed, nil
-}
-
-func AbsolutePath(person model.Person) (string, error) {
-	return absolutePath(person, person.Avatar.Path)
 }
 
 func write(person model.Person, source model.SourceAvatar, sourceName string, now time.Time) (model.AvatarRef, error) {

@@ -13,15 +13,23 @@ import (
 	"github.com/openclaw/clawdex/internal/model"
 )
 
-func TestSetManualValidateAndRepair(t *testing.T) {
+func TestValidateAndRepairImportedAvatar(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "src.png")
 	writePNG(t, src)
-	person := model.Person{ID: "person_1", Name: "Ada", Path: filepath.Join(dir, "people", "ada", "person.md")}
-
-	person, err := SetManual(person, src, time.Date(2026, 5, 8, 9, 0, 0, 0, time.UTC))
+	data, err := os.ReadFile(src)
 	if err != nil {
 		t.Fatal(err)
+	}
+	source, err := InspectBytes(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	person := model.Person{ID: "person_1", Name: "Ada", Path: filepath.Join(dir, "people", "ada", "person.md")}
+
+	person, changed, err := SetImported(person, source, "apple", time.Date(2026, 5, 8, 9, 0, 0, 0, time.UTC))
+	if err != nil || !changed {
+		t.Fatalf("set imported: changed=%v err=%v", changed, err)
 	}
 	if person.Avatar.Path != "avatars/avatar.png" || person.Avatar.MIME != "image/png" || person.Avatar.Width != 2 || person.Avatar.Height != 1 {
 		t.Fatalf("avatar = %#v", person.Avatar)
@@ -89,9 +97,6 @@ func TestImportedAvatarGuardClauses(t *testing.T) {
 	if cleared := Clear(got); cleared.Avatar.Path != "" {
 		t.Fatalf("clear failed: %#v", cleared.Avatar)
 	}
-	if path, err := AbsolutePath(got); err != nil || filepath.Base(path) != "avatar.png" {
-		t.Fatalf("absolute path = %q err=%v", path, err)
-	}
 	if got, changed, err := SetImported(person, model.SourceAvatar{}, "apple", time.Now()); err != nil || changed || got.ID != person.ID {
 		t.Fatalf("empty avatar changed: got=%#v changed=%v err=%v", got, changed, err)
 	}
@@ -106,9 +111,6 @@ func TestImportedAvatarGuardClauses(t *testing.T) {
 	}
 	if _, err := InspectFile(filepath.Join(dir, "missing.png")); err == nil {
 		t.Fatal("expected missing inspect error")
-	}
-	if _, err := SetManual(person, filepath.Join(dir, "missing.png"), time.Now()); err == nil {
-		t.Fatal("expected missing manual file error")
 	}
 	fake := model.SourceAvatar{Data: []byte("not really jpeg"), MIME: "image/jpeg", SHA256: "fake-sha"}
 	jpegPerson, changed, err := SetImported(model.Person{ID: "person_2", Path: filepath.Join(dir, "jpeg", "person.md")}, fake, "google", time.Now())

@@ -4,9 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"image"
-	"image/color"
-	"image/png"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +14,10 @@ import (
 	"time"
 
 	"github.com/openclaw/clawdex/internal/contactexport"
+	"github.com/openclaw/clawdex/internal/index"
+	"github.com/openclaw/clawdex/internal/markdown"
 	"github.com/openclaw/clawdex/internal/model"
+	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/crawlkit/conformance"
 	"github.com/openclaw/crawlkit/render"
 )
@@ -50,10 +50,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	if !strings.Contains(out, "repo_path:") {
 		t.Fatalf("init out = %s", out)
 	}
-	out = run("person", "add", "Ada Lovelace", "--email", "ada@example.com", "--phone", "+1 555 0100", "--tag", "math")
-	if !strings.Contains(out, "Ada Lovelace") {
-		t.Fatalf("add out = %s", out)
-	}
+	seedTestPerson(t, cfg, "Ada Lovelace", []string{"ada@example.com"}, []string{"+1 555 0100"}, []string{"math"})
 	out = run("person", "list")
 	if !strings.Contains(out, "Ada Lovelace") {
 		t.Fatalf("list out = %s", out)
@@ -62,36 +59,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	if !strings.Contains(out, "email: ada@example.com") {
 		t.Fatalf("show out = %s", out)
 	}
-	avatarPath := filepath.Join(t.TempDir(), "avatar.png")
-	writeCLITestPNG(t, avatarPath)
-	out = run("person", "avatar", "set", "ada@example.com", avatarPath)
-	if !strings.Contains(out, "avatars/avatar.png") {
-		t.Fatalf("avatar set out = %s", out)
-	}
-	out = run("person", "avatar", "show", "ada@example.com", "--path")
-	if !strings.Contains(out, "avatars/avatar.png") {
-		t.Fatalf("avatar show path = %s", out)
-	}
-	out = run("person", "avatar", "show", "ada@example.com")
-	if !strings.Contains(out, "image/png") {
-		t.Fatalf("avatar show = %s", out)
-	}
-	out = run("--dry-run", "person", "avatar", "set", "ada@example.com", avatarPath)
-	if !strings.Contains(out, "would_set_avatar") {
-		t.Fatalf("avatar dry set out = %s", out)
-	}
-	out = run("note", "add", "ada", "--kind", "dm", "--source", "manual", "--text", "Analytical engine")
-	if !strings.Contains(out, "Added a dm note") {
-		t.Fatalf("note out = %s", out)
-	}
-	out = run("note", "list", "ada")
-	if !strings.Contains(out, "Analytical engine") {
-		t.Fatalf("notes out = %s", out)
-	}
-	out = run("timeline", "ada")
-	if !strings.Contains(out, "Analytical engine") {
-		t.Fatalf("timeline out = %s", out)
-	}
+	seedTestNote(t, cfg, "ada", "dm", "Analytical engine")
 	out = run("search", "engine")
 	if !strings.Contains(out, "Analytical engine") {
 		t.Fatalf("search out = %s", out)
@@ -103,18 +71,6 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 	}
 	if data, err := os.ReadFile(vcardPath); err != nil || !strings.Contains(string(data), "BEGIN:VCARD") {
 		t.Fatalf("vcard data=%q err=%v", data, err)
-	}
-	out = run("person", "avatar", "clear", "ada@example.com")
-	if !strings.Contains(out, "Ada Lovelace") {
-		t.Fatalf("avatar clear out = %s", out)
-	}
-	out = run("--dry-run", "person", "avatar", "clear", "ada@example.com")
-	if !strings.Contains(out, "would_clear_avatar") {
-		t.Fatalf("avatar dry clear out = %s", out)
-	}
-	var noAvatarOut, noAvatarErr bytes.Buffer
-	if err := Execute([]string{"--config", cfg, "person", "avatar", "show", "ada@example.com"}, &noAvatarOut, &noAvatarErr); err == nil {
-		t.Fatal("expected no avatar error")
 	}
 	out = run("sync", "apple")
 	if !strings.Contains(out, "remote writes not implemented") {
@@ -241,11 +197,7 @@ func TestReadCommandRebuildsStaleIndexAndLogsOnce(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	out.Reset()
-	errOut.Reset()
-	if err := Execute([]string{"--config", cfg, "person", "add", "Ada Indexed", "--email", "ada@example.com"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
+	seedTestPerson(t, cfg, "Ada Indexed", []string{"ada@example.com"}, nil, nil)
 
 	personPath := filepath.Join(data, "people", "mohamed-prefix", "person.md")
 	personMarkdown := `---
@@ -555,23 +507,6 @@ func stringIn(values []string, want string) bool {
 	return false
 }
 
-func writeCLITestPNG(t *testing.T, path string) {
-	t.Helper()
-	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
-	img.Set(0, 0, color.RGBA{R: 255, A: 255})
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	f, err := os.Create(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = f.Close() }()
-	if err := png.Encode(f, img); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func readPersonFilesForTest(t *testing.T, peopleDir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
@@ -772,13 +707,6 @@ func TestExecuteGitStatusAndDryRun(t *testing.T) {
 	var out, errOut bytes.Buffer
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
-	}
-	out.Reset()
-	if err := Execute([]string{"--config", cfg, "--dry-run", "person", "add", "Dry Run"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "would_create: Dry Run") {
-		t.Fatalf("dry run = %s", out.String())
 	}
 	out.Reset()
 	if err := Execute([]string{"--config", cfg, "git"}, &out, &errOut); err != nil {
@@ -1183,8 +1111,8 @@ func TestExecuteJSONPlainAndStdoutBranches(t *testing.T) {
 		return out.String()
 	}
 	must("init", data, "--remote", "")
-	must("person", "add", "Ada JSON", "--email", "json@example.com")
-	must("person", "add", "Empty Email")
+	seedTestPerson(t, cfg, "Ada JSON", []string{"json@example.com"}, nil, nil)
+	seedTestPerson(t, cfg, "Empty Email", nil, nil, nil)
 	if got := must("--json", "person", "show", "json@example.com"); !strings.Contains(got, `"name": "Ada JSON"`) {
 		t.Fatalf("json show = %s", got)
 	}
@@ -1199,10 +1127,6 @@ func TestExecuteJSONPlainAndStdoutBranches(t *testing.T) {
 	}
 	if got := must("person", "list", "--query", "Empty"); !strings.Contains(got, "Empty Email") {
 		t.Fatalf("no-email list = %s", got)
-	}
-	must("note", "add", "json@example.com", "--kind", "call", "--source", "manual", "--text", "Call body", "--occurred-at", "2026-05-08 10:00")
-	if got := must("--json", "note", "list", "json@example.com"); !strings.Contains(got, `"kind": "call"`) {
-		t.Fatalf("json notes = %s", got)
 	}
 	if got := must("export", "vcard", "--person", "json@example.com", "-o", "-"); !strings.Contains(got, "BEGIN:VCARD") {
 		t.Fatalf("stdout vcard = %s", got)
@@ -1224,16 +1148,8 @@ func TestPrintRenderersAndWriteErrors(t *testing.T) {
 		Path:   "/tmp/person.md",
 		Emails: []model.ContactValue{{Value: "print@example.com"}},
 	}
-	note := model.Note{
-		ID:         "note_1",
-		Kind:       "note",
-		Source:     "manual",
-		OccurredAt: time.Date(2026, 5, 8, 10, 0, 0, 0, time.UTC),
-		Body:       "line one\nline two",
-	}
 	hit := model.SearchHit{Kind: "note", ID: "note_1", Name: "Print Person", Snippet: "line", Path: "/tmp/note.md"}
 	people := peopleEnvelope{People: []model.Person{person}, Total: 1}
-	notes := notesEnvelope{PersonID: person.ID, Person: person.Name, Notes: []model.Note{note}, Total: 1, verb: "note list", query: "print"}
 	search := searchEnvelope{Query: "line", Results: []model.SearchHit{hit}, TotalMatches: 1}
 
 	r := &Runtime{stdout: &out, root: &CLI{}}
@@ -1242,13 +1158,6 @@ func TestPrintRenderersAndWriteErrors(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "print@example.com") {
 		t.Fatalf("people out = %s", out.String())
-	}
-	out.Reset()
-	if err := r.print(notes); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out.String(), "line one") || !strings.Contains(out.String(), "Notes for Print Person") {
-		t.Fatalf("notes out = %s", out.String())
 	}
 	out.Reset()
 	if err := r.print(search); err != nil {
@@ -1272,9 +1181,6 @@ func TestPrintRenderersAndWriteErrors(t *testing.T) {
 	r.stdout = errWriter{}
 	if err := r.print(people); err == nil {
 		t.Fatal("expected people write error")
-	}
-	if err := r.print(notes); err == nil {
-		t.Fatal("expected notes write error")
 	}
 	if err := r.print(search); err == nil {
 		t.Fatal("expected search write error")
@@ -1300,9 +1206,11 @@ func TestExecuteGitPushPullWithLocalRemote(t *testing.T) {
 	}
 	runShell(t, remote, "git", "init", "--bare")
 	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", remote}, &out, &errOut); err != nil {
+		t.Fatalf("init: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	seedTestPerson(t, cfg, "Ada Remote", nil, nil, nil)
 	for _, args := range [][]string{
-		{"--config", cfg, "init", data, "--remote", remote},
-		{"--config", cfg, "person", "add", "Ada Remote"},
 		{"--config", cfg, "git", "commit", "-m", "test: remote"},
 		{"--config", cfg, "git", "push"},
 		{"--config", cfg, "git", "pull"},
@@ -1325,9 +1233,11 @@ func TestExecuteGitPushPullWithExistingOrigin(t *testing.T) {
 	}
 	runShell(t, remote, "git", "init", "--bare")
 	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatalf("init: %v stderr=%s stdout=%s", err, errOut.String(), out.String())
+	}
+	seedTestPerson(t, cfg, "Ada Origin", nil, nil, nil)
 	for _, args := range [][]string{
-		{"--config", cfg, "init", data, "--remote", ""},
-		{"--config", cfg, "person", "add", "Ada Origin"},
 		{"--config", cfg, "git", "commit", "-m", "test: origin"},
 	} {
 		out.Reset()
@@ -1349,23 +1259,13 @@ func TestExecuteGitPushPullWithExistingOrigin(t *testing.T) {
 	}
 }
 
-func TestExecuteEditorExportPersonAndRepair(t *testing.T) {
+func TestExecuteExportPersonAndRepair(t *testing.T) {
 	cfg, data := testPaths(t)
 	var out, errOut bytes.Buffer
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if err := Execute([]string{"--config", cfg, "person", "add", "Ada Edit", "--email", "edit@example.com"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
-	editor := filepath.Join(t.TempDir(), "editor")
-	if err := os.WriteFile(editor, []byte("#!/bin/sh\nprintf '%s' \"$1\" > \""+filepath.Join(t.TempDir(), "edited")+"\"\n"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("EDITOR", editor)
-	if err := Execute([]string{"--config", cfg, "person", "edit", "edit@example.com"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
+	seedTestPerson(t, cfg, "Ada Edit", []string{"edit@example.com"}, nil, nil)
 	vcardPath := filepath.Join(t.TempDir(), "one.vcf")
 	if err := Execute([]string{"--config", cfg, "export", "vcard", "--person", "edit@example.com", "-o", vcardPath}, &out, &errOut); err != nil {
 		t.Fatal(err)
@@ -1418,17 +1318,41 @@ func TestExecuteUsageGuards(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"--config", cfg, "note", "add", "nobody", "--kind", "note", "--source", "manual"},
-		{"--config", cfg, "note", "add", "nobody", "--kind", "note", "--source", "manual", "--text", "x", "--occurred-at", "bad"},
 		{"--config", cfg, "export", "vcard", "-o", filepath.Join(t.TempDir(), "x.vcf")},
 		{"--config", cfg, "person", "show", "missing"},
-		{"--config", cfg, "person", "avatar", "clear", "missing"},
-		{"--config", cfg, "--dry-run", "person", "avatar", "set", "nobody", filepath.Join(t.TempDir(), "missing.png")},
 	} {
 		out.Reset()
 		errOut.Reset()
 		if err := Execute(args, &out, &errOut); err == nil {
 			t.Fatalf("expected error for %v", args)
+		}
+	}
+}
+
+// The manual contact-management verbs were deleted under TRAWL-118 (Q4).
+// They must fail as standard unknown commands (usage error, exit 2).
+func TestDeletedManualVerbsAreUnknown(t *testing.T) {
+	cfg, data := testPaths(t)
+	var out, errOut bytes.Buffer
+	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"person", "add", "Ada"},
+		{"person", "edit", "ada"},
+		{"person", "avatar", "show", "ada"},
+		{"note", "add", "ada", "--kind", "dm", "--source", "manual", "--text", "x"},
+		{"note", "list", "ada"},
+		{"timeline", "ada"},
+	} {
+		out.Reset()
+		errOut.Reset()
+		err := Execute(append([]string{"--config", cfg}, args...), &out, &errOut)
+		if err == nil {
+			t.Fatalf("deleted verb %v succeeded: stdout=%s", args, out.String())
+		}
+		if ExitCode(err) != 2 {
+			t.Fatalf("deleted verb %v exit = %d (err=%v), want 2", args, ExitCode(err), err)
 		}
 	}
 }
@@ -1454,7 +1378,6 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 		t.Fatalf("config unexpectedly exists: %v", err)
 	}
 	for _, args := range [][]string{
-		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "person", "add", "No Repo"},
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "person", "list"},
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "export", "vcard", "--all", "-o", "-"},
 	} {
@@ -1485,8 +1408,6 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{
-		{"--config", cfg, "note", "list", "missing"},
-		{"--config", cfg, "timeline", "missing"},
 		{"--config", cfg, "search", ""},
 		{"--config", cfg, "export", "vcard", "--person", "missing", "-o", "-"},
 		{"--config", cfg, "export", "vcard", "--all", "-o", filepath.Join(dir, "nope", "x.vcf")},
@@ -1509,6 +1430,34 @@ func testPaths(t *testing.T) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	return filepath.Join(dir, "config.toml"), filepath.Join(dir, "contacts")
+}
+
+// The manual person/note verbs are gone (TRAWL-118); tests seed contact data
+// through the store, the same layer imports write through.
+func seedTestPerson(t *testing.T, cfgPath, name string, emails, phones, tags []string) model.Person {
+	t.Helper()
+	p, err := testStore(t, cfgPath).AddPerson(name, emails, phones, tags, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func seedTestNote(t *testing.T, cfgPath, personQuery, kind, text string) {
+	t.Helper()
+	note := markdown.NewNote("", kind, "manual", text, time.Time{}, time.Now(), nil)
+	if _, err := testStore(t, cfgPath).AddNote(personQuery, note); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testStore(t *testing.T, cfgPath string) index.Store {
+	t.Helper()
+	cfg, err := repo.LoadConfig(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return index.New(repo.Open(cfg.RepoPath, cfg))
 }
 
 func clawdexLogPath() string {
@@ -1652,9 +1601,9 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 		return out.String()
 	}
 	run("init", data, "--remote", "")
-	run("person", "add", "Ada Lovelace", "--email", "ada@example.com")
-	run("person", "add", "Grace Hopper", "--email", "grace@example.com")
-	run("note", "add", "ada", "--kind", "dm", "--source", "manual", "--text", "Analytical engine")
+	seedTestPerson(t, cfg, "Ada Lovelace", []string{"ada@example.com"}, nil, nil)
+	seedTestPerson(t, cfg, "Grace Hopper", []string{"grace@example.com"}, nil, nil)
+	seedTestNote(t, cfg, "ada", "dm", "Analytical engine")
 
 	// Empty states: a human sentence, never silence.
 	for _, probe := range []struct {
@@ -1663,8 +1612,6 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 	}{
 		{[]string{"search", "zz-no-match"}, `No matches for "zz-no-match".`},
 		{[]string{"person", "list", "--query", "zz-no-match"}, `No people match "zz-no-match".`},
-		{[]string{"note", "list", "grace"}, "No notes for Grace Hopper."},
-		{[]string{"timeline", "grace"}, "No notes for Grace Hopper."},
 	} {
 		out := run(probe.args...)
 		conformance.AssertHumanOutput(t, out)
@@ -1680,8 +1627,6 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 	}{
 		{[]string{"--json", "search", "zz-no-match"}, `"results": []`},
 		{[]string{"--json", "person", "list", "--query", "zz-no-match"}, `"people": []`},
-		{[]string{"--json", "note", "list", "grace"}, `"notes": []`},
-		{[]string{"--json", "timeline", "grace"}, `"notes": []`},
 	} {
 		out := run(probe.args...)
 		if !strings.Contains(out, probe.array) {

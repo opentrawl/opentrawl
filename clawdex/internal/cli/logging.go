@@ -276,7 +276,7 @@ func logCommand(command string) string {
 		return "help"
 	}
 	switch fields[0] {
-	case "metadata", "init", "status", "config", "person", "contacts", "who", "note", "timeline", "search", "import", "sync", "export", "git", "doctor", "version", "help":
+	case "metadata", "init", "status", "config", "person", "contacts", "who", "search", "import", "sync", "export", "git", "doctor", "version", "help":
 		return fields[0]
 	default:
 		return "unknown"
@@ -351,10 +351,6 @@ func errorEvent(command string, err error) string {
 		return "contacts_failed"
 	case "who":
 		return "who_failed"
-	case "note":
-		return "note_failed"
-	case "timeline":
-		return "timeline_failed"
 	case "search":
 		return "search_failed"
 	case "import":

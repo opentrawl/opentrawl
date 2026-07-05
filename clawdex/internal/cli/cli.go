@@ -48,11 +48,9 @@ type CLI struct {
 	Init     InitCmd     `cmd:"" help:"Initialize a contacts data repo"`
 	Status   StatusCmd   `cmd:"" help:"Show contacts repo status"`
 	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit clawdex config"`
-	Person   PersonCmd   `cmd:"" help:"Manage people"`
+	Person   PersonCmd   `cmd:"" help:"Read people"`
 	Contacts ContactsCmd `cmd:"" help:"Export contact JSON"`
 	Who      WhoCmd      `cmd:"" help:"Resolve a person by name, alias, or identifier"`
-	Note     NoteCmd     `cmd:"" help:"Manage notes"`
-	Timeline TimelineCmd `cmd:"" help:"Show person timeline"`
 	Search   SearchCmd   `cmd:"" help:"Search people and notes"`
 	Import   ImportCmd   `cmd:"" help:"Import contacts into local markdown"`
 	Sync     SyncCmd     `cmd:"" help:"Preview sync with address books"`
@@ -238,11 +236,8 @@ func (c *ConfigSetCmd) Run(r *Runtime) error {
 }
 
 type PersonCmd struct {
-	Add    PersonAddCmd    `cmd:"" help:"Add a person"`
-	List   PersonListCmd   `cmd:"" help:"List people"`
-	Show   PersonShowCmd   `cmd:"" help:"Show a person"`
-	Edit   PersonEditCmd   `cmd:"" help:"Edit a person markdown file"`
-	Avatar PersonAvatarCmd `cmd:"" help:"Manage person avatars"`
+	List PersonListCmd `cmd:"" help:"List people"`
+	Show PersonShowCmd `cmd:"" help:"Show a person"`
 }
 
 type ContactsCmd struct {
@@ -257,27 +252,6 @@ func (c *ContactsExportCmd) Run(r *Runtime) error {
 		return err
 	}
 	return r.print(contactExportFromPeople(people))
-}
-
-type PersonAddCmd struct {
-	Name  string   `arg:"" help:"Person name"`
-	Email []string `name:"email" short:"e" help:"Email address"`
-	Phone []string `name:"phone" short:"p" help:"Phone number"`
-	Tag   []string `name:"tag" short:"t" help:"Tag"`
-}
-
-func (c *PersonAddCmd) Run(r *Runtime) error {
-	if err := r.repo.Require(); err != nil {
-		return err
-	}
-	if r.root.DryRun {
-		return r.print(map[string]any{"would_create": c.Name})
-	}
-	p, err := r.store.AddPerson(c.Name, c.Email, c.Phone, c.Tag, time.Now())
-	if err != nil {
-		return err
-	}
-	return r.print(p)
 }
 
 type PersonListCmd struct {
@@ -331,193 +305,6 @@ func (c *PersonShowCmd) Run(r *Runtime) error {
 		return err
 	}
 	return r.print(p)
-}
-
-type PersonEditCmd struct {
-	Query string `arg:"" help:"ID, name, email, or phone"`
-}
-
-func (c *PersonEditCmd) Run(r *Runtime) error {
-	p, err := r.store.FindPerson(c.Query)
-	if err != nil {
-		return err
-	}
-	editor := strings.TrimSpace(os.Getenv("EDITOR"))
-	if editor == "" {
-		editor = "code"
-	}
-	// #nosec G204,G702 -- EDITOR is a deliberate user-controlled executable; no shell is involved.
-	cmd := exec.CommandContext(r.ctx, editor, p.Path)
-	cmd.Stdout = r.stdout
-	cmd.Stderr = r.stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
-}
-
-type PersonAvatarCmd struct {
-	Set   PersonAvatarSetCmd   `cmd:"" help:"Set a local avatar image"`
-	Show  PersonAvatarShowCmd  `cmd:"" help:"Show avatar metadata"`
-	Clear PersonAvatarClearCmd `cmd:"" help:"Clear avatar metadata"`
-}
-
-type PersonAvatarSetCmd struct {
-	Person string `arg:"" help:"Person query"`
-	File   string `arg:"" help:"Image file"`
-}
-
-func (c *PersonAvatarSetCmd) Run(r *Runtime) error {
-	p, err := r.store.FindPerson(c.Person)
-	if err != nil {
-		return err
-	}
-	if r.root.DryRun {
-		ref, err := avatar.InspectFile(c.File)
-		if err != nil {
-			return err
-		}
-		ref.Path = "avatars/avatar"
-		ref.Source = "manual"
-		return r.print(map[string]any{"would_set_avatar": p.ID, "mime": ref.MIME, "sha256": ref.SHA256})
-	}
-	p, err = r.store.SetAvatar(c.Person, c.File, time.Now())
-	if err != nil {
-		return err
-	}
-	return r.print(p.Avatar)
-}
-
-type PersonAvatarShowCmd struct {
-	Person string `arg:"" help:"Person query"`
-	Path   bool   `name:"path" help:"Print absolute avatar path only"`
-}
-
-func (c *PersonAvatarShowCmd) Run(r *Runtime) error {
-	p, err := r.store.FindPerson(c.Person)
-	if err != nil {
-		return err
-	}
-	if p.Avatar.Path == "" {
-		return fmt.Errorf("%s has no avatar", p.Name)
-	}
-	if c.Path {
-		path, err := avatar.AbsolutePath(p)
-		if err != nil {
-			return err
-		}
-		_, err = fmt.Fprintln(r.stdout, path)
-		return err
-	}
-	return r.print(p.Avatar)
-}
-
-type PersonAvatarClearCmd struct {
-	Person string `arg:"" help:"Person query"`
-}
-
-func (c *PersonAvatarClearCmd) Run(r *Runtime) error {
-	p, err := r.store.FindPerson(c.Person)
-	if err != nil {
-		return err
-	}
-	if r.root.DryRun {
-		return r.print(map[string]any{"would_clear_avatar": p.ID})
-	}
-	p, err = r.store.ClearAvatar(c.Person, time.Now())
-	if err != nil {
-		return err
-	}
-	return r.print(p)
-}
-
-type NoteCmd struct {
-	Add  NoteAddCmd  `cmd:"" help:"Add a note"`
-	List NoteListCmd `cmd:"" help:"List notes"`
-}
-
-type NoteAddCmd struct {
-	Person     string   `arg:"" help:"Person query"`
-	Kind       string   `name:"kind" required:"" help:"Note kind"`
-	Source     string   `name:"source" required:"" help:"Note source"`
-	Text       string   `name:"text" help:"Note body"`
-	OccurredAt string   `name:"occurred-at" help:"Occurrence time"`
-	Topic      []string `name:"topic" help:"Topic"`
-}
-
-func (c *NoteAddCmd) Run(r *Runtime) error {
-	if c.Text == "" {
-		return usageErr{errors.New("--text is required")}
-	}
-	occurredAt, err := parseOptionalTime(c.OccurredAt)
-	if err != nil {
-		return err
-	}
-	n := markdown.NewNote("", c.Kind, c.Source, c.Text, occurredAt, time.Now(), c.Topic)
-	if r.root.DryRun {
-		if r.root.JSON {
-			return r.print(n)
-		}
-		_, err := fmt.Fprintf(r.stdout, "Would add a %s note for %s (dry run, nothing written).\n", n.Kind, c.Person)
-		return err
-	}
-	n, err = r.store.AddNote(c.Person, n)
-	if err != nil {
-		return err
-	}
-	if r.root.JSON {
-		return r.print(n)
-	}
-	_, err = fmt.Fprintf(r.stdout, "Added a %s note for %s. See it: clawdex note list %q\n", n.Kind, c.Person, c.Person)
-	return err
-}
-
-type NoteListCmd struct {
-	Person string `arg:"" help:"Person query"`
-	Limit  *int   `name:"limit" help:"Number of notes to show (default 20)"`
-	All    bool   `name:"all" help:"Show every note, no limit"`
-}
-
-func (c *NoteListCmd) Run(r *Runtime) error {
-	return runNoteList(r, "note list", c.Person, c.Limit, c.All)
-}
-
-type TimelineCmd struct {
-	Person string `arg:"" help:"Person query"`
-	Limit  *int   `name:"limit" help:"Number of notes to show (default 20)"`
-	All    bool   `name:"all" help:"Show every note, no limit"`
-}
-
-func (c *TimelineCmd) Run(r *Runtime) error {
-	return runNoteList(r, "timeline", c.Person, c.Limit, c.All)
-}
-
-// runNoteList backs note list and timeline: the same notes, newest first.
-func runNoteList(r *Runtime, verb, personQuery string, limitFlag *int, all bool) error {
-	limit, err := flags.Limit(limitOr(limitFlag, 20), limitFlag != nil, all)
-	if err != nil {
-		return usageErr{err}
-	}
-	p, notes, err := r.store.Notes(personQuery)
-	if err != nil {
-		return err
-	}
-	slices.Reverse(notes) // store returns oldest first
-	total := len(notes)
-	if limit > 0 && len(notes) > limit {
-		notes = notes[:limit]
-	}
-	if notes == nil {
-		notes = []model.Note{}
-	}
-	return r.print(notesEnvelope{
-		PersonID:  p.ID,
-		Person:    p.Name,
-		Notes:     notes,
-		Total:     total,
-		Truncated: total > len(notes),
-		verb:      verb,
-		query:     personQuery,
-		limit:     limit,
-	})
 }
 
 type SearchCmd struct {
@@ -1201,19 +988,6 @@ func countNoun(count int, singular, plural string) string {
 		return "1 " + singular
 	}
 	return fmt.Sprintf("%d %s", count, plural)
-}
-
-func parseOptionalTime(value string) (time.Time, error) {
-	if strings.TrimSpace(value) == "" {
-		return time.Time{}, nil
-	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02 15:04", "2006-01-02"} {
-		t, err := time.Parse(layout, value)
-		if err == nil {
-			return t, nil
-		}
-	}
-	return time.Time{}, usageErr{fmt.Errorf("invalid time %q", value)}
 }
 
 func firstNonEmpty(values ...string) string {

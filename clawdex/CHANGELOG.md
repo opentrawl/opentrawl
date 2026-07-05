@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Removed
+
+- Breaking: remove the manual contact-management commands — `person add`, `person edit`, `person avatar`, `note add`, `note list`, and `timeline`. People come from imports; `person list`, `person show`, `who`, and `search` read them. Existing notes stay searchable.
+- Remove the GitHub Pages site (index.html, docs/, llms.txt) from the repo.
+
 ## 0.1.0 - 2026-05-08
 
 - Initial `clawdex` CLI with markdown-backed people, timestamped notes, search, timeline, Git helpers, vCard export, and repair for damaged frontmatter.

@@ -179,11 +179,7 @@ func TestExecuteDoctorJSONMissingHealthyAndCorrupt(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	out.Reset()
-	errOut.Reset()
-	if err := Execute([]string{"--config", cfg, "person", "add", "Morgan Healthy", "--email", "morgan@example.com"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
+	seedTestPerson(t, cfg, "Morgan Healthy", []string{"morgan@example.com"}, nil, nil)
 	out.Reset()
 	errOut.Reset()
 	if err := Execute([]string{"--config", cfg, "doctor", "--json"}, &out, &errOut); err != nil {
@@ -217,9 +213,7 @@ func TestExecuteDoctorRepairKeepsLegacyReport(t *testing.T) {
 	if err := Execute([]string{"--config", cfg, "init", data, "--remote", ""}, &out, &errOut); err != nil {
 		t.Fatal(err)
 	}
-	if err := Execute([]string{"--config", cfg, "person", "add", "Taylor Repair", "--email", "taylor@example.com"}, &out, &errOut); err != nil {
-		t.Fatal(err)
-	}
+	seedTestPerson(t, cfg, "Taylor Repair", []string{"taylor@example.com"}, nil, nil)
 	personPath := filepath.Join(data, "people", "taylor-repair", "person.md")
 	if err := os.WriteFile(personPath, []byte("---\nid: person_x\nname: Taylor Repair\ntags: [broken\n---\n# Taylor Repair\n"), 0o600); err != nil {
 		t.Fatal(err)
