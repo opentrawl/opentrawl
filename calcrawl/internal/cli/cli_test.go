@@ -406,6 +406,29 @@ func TestWhoResolverDedupesAndMatchesGenerously(t *testing.T) {
 	}
 }
 
+func TestWhoTiedCountsNeverDisplayEmailCruft(t *testing.T) {
+	// TRAWL-109 regression: with tied spelling counts, the old picker's
+	// length-desc tie-break displayed "Avery Example <avery@example.com>".
+	db := setupCalendarFixture(t)
+	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
+		(505, 'Avery Example', 'avery@example.com', 'Avery', 'example'),
+		(506, 'Avery Example <avery@example.com>', 'avery@example.com', 'Avery', 'example')`)
+	mustExec(t, db, `insert into Participant(
+		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
+	) values
+		(1005, 2, 1, 2, 1, 505, 100, 'avery@example.com', '', 0, ''),
+		(1006, 2, 1, 2, 1, 506, 101, 'avery@example.com', '', 0, '')`)
+	runSync(t)
+
+	who := runJSON[whoResponse](t, "who", "avery@example.com", "--json")
+	if len(who.Candidates) != 1 {
+		t.Fatalf("who avery@example.com = %#v, want one candidate", who)
+	}
+	if who.Candidates[0].Who != "Avery Example" {
+		t.Fatalf("who = %q, want the clean spelling on tied counts", who.Candidates[0].Who)
+	}
+}
+
 func TestSearchWhoResolvesOnePersonAndFiltersParticipants(t *testing.T) {
 	setupCalendarFixture(t)
 	runSync(t)

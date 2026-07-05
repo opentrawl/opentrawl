@@ -4,17 +4,34 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"github.com/openclaw/crawlkit/whomatch"
 )
 
+// chooseWhoName keeps wacrawl's source-precedence ladder — contact full name
+// beats push name beats any other observed name — because that ordering is
+// crawler input knowledge. Which spelling wins inside each tier is
+// centralized in crawlkit; the structural rules and the rules.md §1.5
+// carve-out are documented on whomatch.BestDisplayName.
 func chooseWhoName(names map[string]*whoNameEvidence, identifiers []string) string {
-	if name := firstCleanContactFullName(names); name != "" {
-		return name
+	contact := map[string]int{}
+	push := map[string]int{}
+	other := map[string]int{}
+	for _, name := range names {
+		if !humanWhoName(name.value) {
+			continue
+		}
+		switch {
+		case name.contactFull:
+			contact[name.value]++
+		case name.pushCount > 0:
+			push[name.value] = name.pushCount
+		default:
+			other[name.value]++
+		}
 	}
-	if name := mostFrequentCleanPushName(names); name != "" {
-		return name
-	}
-	for _, name := range sortedWhoNameValues(names) {
-		if humanWhoName(name) {
+	for _, tier := range []map[string]int{contact, push, other} {
+		if name := whomatch.BestDisplayName(tier, identifiers); name != "" {
 			return name
 		}
 	}
@@ -35,48 +52,6 @@ func chooseWhoName(names map[string]*whoNameEvidence, identifiers []string) stri
 		return names[0]
 	}
 	return ""
-}
-
-func firstCleanContactFullName(names map[string]*whoNameEvidence) string {
-	var choices []string
-	for _, name := range names {
-		if name.contactFull && humanWhoName(name.value) {
-			choices = append(choices, name.value)
-		}
-	}
-	sort.Strings(choices)
-	if len(choices) == 0 {
-		return ""
-	}
-	return choices[0]
-}
-
-func mostFrequentCleanPushName(names map[string]*whoNameEvidence) string {
-	type choice struct {
-		value string
-		count int
-	}
-	var choices []choice
-	for _, name := range names {
-		if name.pushCount > 0 && humanWhoName(name.value) {
-			choices = append(choices, choice{value: name.value, count: name.pushCount})
-		}
-	}
-	sort.SliceStable(choices, func(i, j int) bool {
-		if choices[i].count != choices[j].count {
-			return choices[i].count > choices[j].count
-		}
-		left := strings.ToLower(choices[i].value)
-		right := strings.ToLower(choices[j].value)
-		if left != right {
-			return left < right
-		}
-		return choices[i].value < choices[j].value
-	})
-	if len(choices) == 0 {
-		return ""
-	}
-	return choices[0].value
 }
 
 func humanWhoName(value string) bool {

@@ -588,6 +588,42 @@ func TestResolveWhoChoosesCleanPushNameAndNormalizesIdentifiers(t *testing.T) {
 	}
 }
 
+func TestResolveWhoTiedPushNamesPickStructurally(t *testing.T) {
+	// TRAWL-109: within the push-name tier, tied counts route through the
+	// crawlkit picker — mixed case beats all-lowercase, not alpha order.
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
+	chats := []Chat{
+		{JID: "robin@example.com", Kind: "dm", LastMessageAt: now, MessageCount: 4},
+	}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "robin@example.com", MessageID: "m1", SenderJID: "robin@example.com", SenderName: "robin", Timestamp: now, Text: "one", RawType: 0},
+		{SourcePK: 2, ChatJID: "robin@example.com", MessageID: "m2", SenderJID: "robin@example.com", SenderName: "robin", Timestamp: now.Add(time.Minute), Text: "two", RawType: 0},
+		{SourcePK: 3, ChatJID: "robin@example.com", MessageID: "m3", SenderJID: "robin@example.com", SenderName: "Robin B", Timestamp: now.Add(2 * time.Minute), Text: "three", RawType: 0},
+		{SourcePK: 4, ChatJID: "robin@example.com", MessageID: "m4", SenderJID: "robin@example.com", SenderName: "Robin B", Timestamp: now.Add(3 * time.Minute), Text: "four", RawType: 0},
+	}
+	if err := st.ReplaceAll(ctx, ImportStats{FinishedAt: now}, nil, chats, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+
+	resolution, err := st.ResolveWho(ctx, "robin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolution.Candidates) != 1 {
+		t.Fatalf("candidates = %#v, want 1", resolution.Candidates)
+	}
+	if got := resolution.Candidates[0].Who; got != "Robin B" {
+		t.Fatalf("who = %q, want mixed-case spelling on tied push counts", got)
+	}
+}
+
 func TestResolveWhoMergesSameNameCandidates(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))

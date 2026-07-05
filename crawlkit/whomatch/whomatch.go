@@ -10,6 +10,9 @@
 // compact, folded strings. Both sides must be at least 3 runes. The maximum
 // distance is 1 when the longer side is 3 to 5 runes, and 3 when it is 6 runes
 // or longer. That keeps "miff" close to "mif" while rejecting 2-rune guesses.
+//
+// The rules.md §1.5 structural carve-out for this package — the match ladder
+// above and display-name picking — is documented once, on BestDisplayName.
 package whomatch
 
 import (

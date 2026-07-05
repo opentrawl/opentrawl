@@ -215,90 +215,16 @@ func (r whoRecord) identifierKeys() []string {
 	return keys
 }
 
+// Display-name picking is centralized in crawlkit; the structural rules and
+// the rules.md §1.5 carve-out are documented on whomatch.BestDisplayName.
 func bestWhoName(names map[string]int, identifiers []string) string {
-	type nameCandidate struct {
-		value string
-		count int
-	}
-	values := []nameCandidate{}
-	for value, count := range names {
-		if strings.TrimSpace(value) != "" {
-			values = append(values, nameCandidate{value: value, count: count})
-		}
-	}
-	sort.SliceStable(values, func(i, j int) bool {
-		left := values[i]
-		right := values[j]
-		if left.count != right.count {
-			return left.count > right.count
-		}
-		if nameQuality(left.value) != nameQuality(right.value) {
-			return nameQuality(left.value) > nameQuality(right.value)
-		}
-		if nameCaseQuality(left.value) != nameCaseQuality(right.value) {
-			return nameCaseQuality(left.value) > nameCaseQuality(right.value)
-		}
-		if len([]rune(left.value)) != len([]rune(right.value)) {
-			return len([]rune(left.value)) > len([]rune(right.value))
-		}
-		if strings.ToLower(left.value) != strings.ToLower(right.value) {
-			return strings.ToLower(left.value) < strings.ToLower(right.value)
-		}
-		return left.value < right.value
-	})
-	if len(values) > 0 {
-		return values[0].value
+	if who := whomatch.BestDisplayName(names, identifiers); who != "" {
+		return who
 	}
 	if len(identifiers) > 0 {
 		return identifiers[0]
 	}
 	return "unknown"
-}
-
-func nameQuality(value string) int {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return 0
-	}
-	score := 1
-	hasLetter := false
-	hasLower := false
-	for _, r := range value {
-		if unicode.IsLetter(r) {
-			hasLetter = true
-			if unicode.IsLower(r) {
-				hasLower = true
-			}
-		}
-	}
-	if !hasLetter || hasLower {
-		score += 2
-	}
-	if strings.Contains(value, " ") {
-		score++
-	}
-	return score
-}
-
-func nameCaseQuality(value string) int {
-	hasUpper := false
-	hasLower := false
-	for _, r := range value {
-		if unicode.IsUpper(r) {
-			hasUpper = true
-		}
-		if unicode.IsLower(r) {
-			hasLower = true
-		}
-	}
-	switch {
-	case hasUpper && hasLower:
-		return 2
-	case hasLower:
-		return 1
-	default:
-		return 0
-	}
 }
 
 func sortedIdentifiers(values map[string]string) []string {
