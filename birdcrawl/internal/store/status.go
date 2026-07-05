@@ -53,45 +53,36 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if newest.Valid {
 		out.NewestTweet = parseStoredTime(newest.String)
 	}
-	var bookmarkPass sql.NullString
-	if err := s.db.QueryRowContext(ctx, `select cursor from sync_state where kind = 'bookmark_pass'`).Scan(&bookmarkPass); err != nil && err != sql.ErrNoRows {
+	bookmarkPass, err := s.SyncState(ctx, "bookmark_pass")
+	if err != nil {
 		return out, err
 	}
-	if bookmarkPass.Valid && bookmarkPass.String != "" {
-		if err := s.db.QueryRowContext(ctx, `select count(*) from tweet_roles where role = 'bookmark' and last_seen_at = ?`, bookmarkPass.String).Scan(&out.Bookmarks); err != nil {
+	if bookmarkPass.Cursor != "" {
+		if err := s.db.QueryRowContext(ctx, `select count(*) from tweet_roles where role = 'bookmark' and last_seen_at = ?`, bookmarkPass.Cursor).Scan(&out.Bookmarks); err != nil {
 			return out, err
 		}
 	} else if err := s.db.QueryRowContext(ctx, `select count(*) from tweet_roles where role = 'bookmark'`).Scan(&out.Bookmarks); err != nil {
 		return out, err
 	}
-	var importAt, importCoverage, liveAt, liveResult, tokenValid sql.NullString
-	for _, q := range []struct {
-		sql  string
-		dsts []any
-	}{
-		{`select last_sync_at, cursor from sync_state where kind = 'archive_import'`, []any{&importAt, &importCoverage}},
-		{`select last_sync_at, last_result from sync_state where kind = 'live_sync'`, []any{&liveAt, &liveResult}},
-		{`select cursor from sync_state where kind = 'auth:token_valid'`, []any{&tokenValid}},
-	} {
-		if err := s.db.QueryRowContext(ctx, q.sql).Scan(q.dsts...); err != nil && err != sql.ErrNoRows {
-			return out, err
-		}
+	archiveImport, err := s.SyncState(ctx, "archive_import")
+	if err != nil {
+		return out, err
 	}
-	if importAt.Valid {
-		out.LastImportAt = parseStoredTime(importAt.String)
+	out.LastImportAt = archiveImport.LastSyncAt
+	if archiveImport.Cursor != "" {
+		out.CoverageThrough = parseStoredTime(archiveImport.Cursor)
 	}
-	if importCoverage.Valid {
-		out.CoverageThrough = parseStoredTime(importCoverage.String)
+	liveSync, err := s.SyncState(ctx, "live_sync")
+	if err != nil {
+		return out, err
 	}
-	if liveAt.Valid {
-		out.LastLiveSync = parseStoredTime(liveAt.String)
+	out.LastLiveSync = liveSync.LastSyncAt
+	out.LiveSyncResult = liveSync.LastResult
+	tokenState, err := s.SyncState(ctx, "auth:token_valid")
+	if err != nil {
+		return out, err
 	}
-	if liveResult.Valid {
-		out.LiveSyncResult = liveResult.String
-	}
-	if tokenValid.Valid && tokenValid.String == "true" {
-		out.TokenValid = true
-	}
+	out.TokenValid = tokenState.Cursor == "true"
 	out.SpendMonth = time.Now().UTC().Format("2006-01")
 	out.SpendMicros, _ = s.SpendMicros(ctx, out.SpendMonth)
 	out.IntegrityText, _ = s.Integrity(ctx)

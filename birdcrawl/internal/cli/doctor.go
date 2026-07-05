@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"flag"
 	"io"
 	"strings"
@@ -35,17 +36,21 @@ func (r *runtime) runDoctor(args []string) error {
 		return nil
 	})
 	if err != nil {
+		integrityMessage, indexMessage, remedy := "archive database cannot be opened", "search index cannot be checked", "Run birdcrawl import archive PATH."
+		if errors.Is(err, store.ErrSchemaOutdated) {
+			integrityMessage, indexMessage, remedy = "archive schema needs one sync to finish upgrading", "search index cannot be checked until the archive upgrades", "Run birdcrawl sync."
+		}
 		checks = append(checks, doctorCheck{
 			ID:      "database_integrity",
 			State:   "missing",
-			Message: "archive database cannot be opened",
-			Remedy:  "Run birdcrawl import archive PATH.",
+			Message: integrityMessage,
+			Remedy:  remedy,
 		})
 		checks = append(checks, doctorCheck{
 			ID:      "search_index",
 			State:   "missing",
-			Message: "search index cannot be checked",
-			Remedy:  "Run birdcrawl import archive PATH.",
+			Message: indexMessage,
+			Remedy:  remedy,
 		})
 		checks = append(checks, dumpImportedCheck(store.Status{}))
 		checks = append(checks, stalenessCheck(store.Status{}))

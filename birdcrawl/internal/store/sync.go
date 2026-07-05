@@ -6,7 +6,32 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	ckstate "github.com/openclaw/crawlkit/state"
 )
+
+// Sync state lives in the one crawlkit state.Store (TRAWL-82), keyed by
+// birdcrawl's old five-column sync_state "kind": each kind becomes three
+// canonical rows (cursor, last_result, coverage_note) sharing that kind as
+// entity_id, so the exact shape SyncState/SyncStateUpdate already expose
+// survives the move untouched. See migrateLegacySyncState in store.go for
+// the one-time copy off the old table.
+const (
+	stateSourceName         = "birdcrawl"
+	stateEntityCursor       = "sync"
+	stateEntityLastResult   = "sync_last_result"
+	stateEntityCoverageNote = "sync_coverage_note"
+)
+
+// queryExecer is the read/write surface crawlkit/state.Store needs. Both
+// *sql.DB and *sql.Tx satisfy it, so the same sync-state helpers work for a
+// plain read and for a write inside an existing transaction (addSpend must
+// read the running total with the write's own tx, not a second connection,
+// or it would deadlock against ckstore's single-connection pool).
+type queryExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
 
 type SyncState struct {
 	Kind         string
@@ -35,18 +60,33 @@ type LivePage struct {
 }
 
 func (s *Store) SyncState(ctx context.Context, kind string) (SyncState, error) {
-	var state SyncState
-	var lastSyncAt string
-	err := s.db.QueryRowContext(ctx, `select kind,cursor,last_sync_at,last_result,coverage_note
-from sync_state where kind = ?`, kind).Scan(&state.Kind, &state.Cursor, &lastSyncAt, &state.LastResult, &state.CoverageNote)
-	if err == sql.ErrNoRows {
-		return SyncState{Kind: kind}, nil
-	}
+	return syncStateWithin(ctx, s.db, kind)
+}
+
+func syncStateWithin(ctx context.Context, q queryExecer, kind string) (SyncState, error) {
+	st := ckstate.New(q)
+	cursor, ok, err := st.Get(ctx, stateSourceName, stateEntityCursor, kind)
 	if err != nil {
 		return SyncState{}, err
 	}
-	state.LastSyncAt = parseStoredTime(lastSyncAt)
-	return state, nil
+	if !ok {
+		return SyncState{Kind: kind}, nil
+	}
+	result, _, err := st.Get(ctx, stateSourceName, stateEntityLastResult, kind)
+	if err != nil {
+		return SyncState{}, err
+	}
+	note, _, err := st.Get(ctx, stateSourceName, stateEntityCoverageNote, kind)
+	if err != nil {
+		return SyncState{}, err
+	}
+	return SyncState{
+		Kind:         kind,
+		Cursor:       cursor.Value,
+		LastSyncAt:   cursor.UpdatedAt,
+		LastResult:   result.Value,
+		CoverageNote: note.Value,
+	}, nil
 }
 
 func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
@@ -175,15 +215,15 @@ func upsertSyncState(ctx context.Context, tx *sql.Tx, state SyncStateUpdate) err
 	if strings.TrimSpace(state.Kind) == "" {
 		return nil
 	}
-	_, err := tx.ExecContext(ctx, `insert into sync_state(kind,cursor,last_sync_at,last_result,coverage_note)
-values(?,?,?,?,?)
-on conflict(kind) do update set
-cursor=excluded.cursor,
-last_sync_at=excluded.last_sync_at,
-last_result=excluded.last_result,
-coverage_note=excluded.coverage_note`,
-		state.Kind, state.Cursor, formatUTC(state.LastSyncAt), state.LastResult, state.CoverageNote)
-	return err
+	when := state.LastSyncAt
+	st := ckstate.NewWithClock(tx, func() time.Time { return when })
+	if err := st.Set(ctx, stateSourceName, stateEntityCursor, state.Kind, state.Cursor); err != nil {
+		return err
+	}
+	if err := st.Set(ctx, stateSourceName, stateEntityLastResult, state.Kind, state.LastResult); err != nil {
+		return err
+	}
+	return st.Set(ctx, stateSourceName, stateEntityCoverageNote, state.Kind, state.CoverageNote)
 }
 
 func addSpend(ctx context.Context, tx *sql.Tx, month string, micros int64, at time.Time) error {
@@ -191,13 +231,12 @@ func addSpend(ctx context.Context, tx *sql.Tx, month string, micros int64, at ti
 	if kind == "spend:" {
 		return nil
 	}
-	var current int64
-	var raw string
-	err := tx.QueryRowContext(ctx, `select cursor from sync_state where kind = ?`, kind).Scan(&raw)
-	if err != nil && err != sql.ErrNoRows {
+	existing, err := syncStateWithin(ctx, tx, kind)
+	if err != nil {
 		return err
 	}
-	if raw != "" {
+	var current int64
+	if raw := strings.TrimSpace(existing.Cursor); raw != "" {
 		current, err = strconv.ParseInt(raw, 10, 64)
 		if err != nil {
 			return err
