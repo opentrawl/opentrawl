@@ -7,9 +7,9 @@ import (
 )
 
 // defaultPaths is the one path layout, from crawlkit/config. The base dir
-// stays ~/.telecrawl (the layout shipped before config adoption).
+// is the fleet-wide state root, ~/.opentrawl/telecrawl (TRAWL-99).
 func defaultPaths() config.Paths {
-	paths, _ := config.App{Name: "telecrawl", BaseDir: "~/.telecrawl"}.DefaultPaths()
+	paths, _ := config.App{Name: "telecrawl", BaseDir: "~/.opentrawl/telecrawl"}.DefaultPaths()
 	return paths
 }
 

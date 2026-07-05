@@ -6,7 +6,7 @@ Telegram archive CLI.
 
 `telecrawl` reads local Telegram Desktop `tdata` archives and native Telegram
 for macOS Postbox databases, stores a searchable SQLite archive in
-`~/.telecrawl/telecrawl.db`, and can back it up to GitHub as encrypted age
+`~/.opentrawl/telecrawl/telecrawl.db`, and can back it up to GitHub as encrypted age
 shards.
 
 It is local-first:
@@ -132,11 +132,11 @@ Defaults:
 - Telegram Desktop source: `~/Library/Application Support/Telegram Desktop/tdata`
 - native macOS Postbox source:
   `~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram`
-- archive DB: `~/.telecrawl/telecrawl.db`
+- archive DB: `~/.opentrawl/telecrawl/telecrawl.db`
 - archived media copied from local Telegram caches, plus Telegram cloud media
-  when `--fetch-media` is used: `~/.telecrawl/media/`
-- backup config: `~/.telecrawl/backup.json`
-- age identity: `~/.telecrawl/age.key`
+  when `--fetch-media` is used: `~/.opentrawl/telecrawl/media/`
+- backup config: `~/.opentrawl/telecrawl/backup.json`
+- age identity: `~/.opentrawl/telecrawl/age.key`
 - backup checkout: `~/Projects/backup-telecrawl`
 
 Override the archive DB:
@@ -168,7 +168,7 @@ The default backup config points at:
 {
   "repo": "~/Projects/backup-telecrawl",
   "remote": "https://github.com/steipete/backup-telecrawl.git",
-  "identity": "~/.telecrawl/age.key"
+  "identity": "~/.opentrawl/telecrawl/age.key"
 }
 ```
 
@@ -176,7 +176,7 @@ Use a different repository or config path:
 
 ```bash
 telecrawl backup init \
-  --config ~/.telecrawl/backup.json \
+  --config ~/.opentrawl/telecrawl/backup.json \
   --repo ~/Projects/backup-telecrawl \
   --remote https://github.com/steipete/backup-telecrawl.git
 ```
@@ -233,9 +233,9 @@ Git can still see cleartext metadata:
 Git cannot read message text, chat names, sender names, contact phone numbers,
 contact usernames, avatar path metadata, or media metadata without an age
 identity. Binary media files and cached avatar files archived in
-`~/.telecrawl/media/` are local only and are not included in backup shards.
+`~/.opentrawl/telecrawl/media/` are local only and are not included in backup shards.
 
-Keep `~/.telecrawl/age.key` private. If you lose it and no other recipient can
+Keep `~/.opentrawl/telecrawl/age.key` private. If you lose it and no other recipient can
 decrypt the backup, the encrypted backup cannot be restored.
 
 ## Multi-Machine Backups
@@ -244,11 +244,11 @@ On another machine:
 
 ```bash
 telecrawl backup init --no-push
-cat ~/.telecrawl/backup.json
+cat ~/.opentrawl/telecrawl/backup.json
 ```
 
 Copy that machine's public `recipient` into the first machine's
-`~/.telecrawl/backup.json`, then re-encrypt current shards:
+`~/.opentrawl/telecrawl/backup.json`, then re-encrypt current shards:
 
 ```bash
 telecrawl backup push
@@ -261,14 +261,14 @@ The private `AGE-SECRET-KEY-...` identity must not be committed or shared.
 Remove local state:
 
 ```bash
-rm -rf ~/.telecrawl
+rm -rf ~/.opentrawl/telecrawl
 ```
 
 Remove only the archive:
 
 ```bash
-rm -f ~/.telecrawl/telecrawl.db ~/.telecrawl/telecrawl.db-*
+rm -f ~/.opentrawl/telecrawl/telecrawl.db ~/.opentrawl/telecrawl/telecrawl.db-*
 ```
 
-Do not delete `~/.telecrawl/age.key` unless you have another working backup
+Do not delete `~/.opentrawl/telecrawl/age.key` unless you have another working backup
 recipient or you no longer need to restore existing encrypted backups.
