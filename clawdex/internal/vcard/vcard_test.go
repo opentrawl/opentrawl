@@ -24,9 +24,16 @@ func TestWriteVCard(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := buf.String()
-	for _, want := range []string{"BEGIN:VCARD", "UID:person_1", "FN:Ada Lovelace", "EMAIL;TYPE=home:ada@example.com", "TEL;TYPE=mobile:+1 555 0100", "NOTE:clawdex:person_1"} {
+	for _, want := range []string{"BEGIN:VCARD", "UID:person_1", "FN:Ada Lovelace", "EMAIL;TYPE=home:ada@example.com", "TEL;TYPE=mobile:+1 555 0100"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("missing %q in %s", want, out)
+		}
+	}
+	// Tripwire: the person ID is machine identity and belongs only in UID.
+	// It used to leak into NOTE, which contact apps show as the person's note.
+	for _, line := range strings.Split(out, "\r\n") {
+		if strings.Contains(line, "person_1") && !strings.HasPrefix(line, "UID:") {
+			t.Fatalf("person ID leaked outside UID: %q", line)
 		}
 	}
 }

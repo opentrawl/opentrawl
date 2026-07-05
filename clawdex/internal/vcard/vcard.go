@@ -61,7 +61,6 @@ func writeOne(w io.Writer, p model.Person, opts Options) error {
 			lines = append(lines, photo)
 		}
 	}
-	lines = append(lines, "NOTE:"+escape("clawdex:"+p.ID))
 	lines = append(lines, "END:VCARD")
 	for _, line := range lines {
 		if err := folded(w, line); err != nil {

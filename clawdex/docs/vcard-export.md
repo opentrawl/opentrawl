@@ -48,7 +48,6 @@ Each vCard includes:
 - `EMAIL` per email entry, with the original `kind` as a `TYPE` parameter
   when present
 - `TEL` per phone entry, with the original `kind` as a `TYPE` parameter
-- `NOTE` — short summary from the person body, when present
 - `PHOTO;ENCODING=b` — only when `--include-avatars` is set
 - `UID` — the person's stable ID slug, so re-imports update existing
   cards instead of duplicating
