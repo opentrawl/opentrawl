@@ -112,28 +112,6 @@ jobs:
       - name: Run govulncheck
         run: '"$(go env GOPATH)/bin/govulncheck" ./...'
 
-  release-check:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7.0.0
-        with:
-          fetch-depth: 0
-
-      - name: Setup Go
-        uses: actions/setup-go@v6.5.0
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Snapshot release build
-        uses: goreleaser/goreleaser-action@v7.2.3
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --snapshot --clean --skip=publish --parallelism=2
-
   secrets:
     runs-on: ubuntu-latest
     timeout-minutes: 15

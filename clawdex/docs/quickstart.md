@@ -9,7 +9,7 @@ brew install steipete/tap/clawdex
 clawdex --version
 ```
 
-Other paths (Go install, source build, release archives) are documented on
+Other paths (Go install, source build) are documented on
 [Install](install.md).
 
 ## 2. Pick a place for your contacts
