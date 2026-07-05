@@ -12,18 +12,6 @@ import (
 
 const unknownFreshness = "—"
 
-type Metadata struct {
-	ID           string   `json:"id"`
-	DisplayName  string   `json:"display_name,omitempty"`
-	Version      string   `json:"version,omitempty"`
-	Capabilities []string `json:"capabilities,omitempty"`
-	Paths        Paths    `json:"paths,omitempty"`
-}
-
-type Paths struct {
-	DefaultLogs string `json:"default_logs,omitempty"`
-}
-
 type StatusEnvelope struct {
 	AppID           string       `json:"app_id"`
 	State           string       `json:"state"`

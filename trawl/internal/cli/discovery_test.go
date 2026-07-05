@@ -2,99 +2,52 @@ package cli
 
 import (
 	"context"
-	"os"
-	"path/filepath"
-	"slices"
 	"testing"
 )
 
-func TestDiscoverCrawlers(t *testing.T) {
+// discoverCrawlers projects each registry manifest into a Source. The
+// registry itself is tested in crawlkit/registry; here we assert the
+// projection: a valid manifest maps to id and binary, and a crawler
+// whose metadata does not parse keeps its binary name and an error.
+func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	tests := []struct {
-		name    string
-		scripts []fakeCrawler
-		apps    map[string]string
-		want    []discoveredSource
+		name       string
+		crawler    fakeCrawler
+		wantID     string
+		wantBinary string
+		wantErr    bool
 	}{
 		{
-			name: "binary present and valid",
-			scripts: []fakeCrawler{{
-				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"Messages"}`,
-			}},
-			want: []discoveredSource{{id: "imessage", binary: "imsgcrawl"}},
+			name:       "valid manifest maps id and binary",
+			crawler:    fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage","binary":{"name":"imsgcrawl"}}`},
+			wantID:     "imsgcrawl",
+			wantBinary: "imsgcrawl",
 		},
 		{
-			name: "binary present but metadata invalid",
-			scripts: []fakeCrawler{{
-				name:     "telecrawl",
-				metadata: `not-json`,
-			}},
-			want: []discoveredSource{{id: "telecrawl", binary: "telecrawl", metadataErr: true}},
-		},
-		{
-			name: "binary absent is skipped",
-			want: nil,
-		},
-		{
-			name: "drop-in manifest is picked up",
-			scripts: []fakeCrawler{{
-				name:     "examplecrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"id":"examplecrawl","display_name":"Example"}`,
-			}},
-			apps: map[string]string{
-				"example.json": `{"id":"example","binary":"examplecrawl"}`,
-			},
-			want: []discoveredSource{{id: "examplecrawl", binary: "examplecrawl"}},
+			name:       "invalid metadata keeps binary name and errors",
+			crawler:    fakeCrawler{name: "telecrawl", metadata: `not-json`},
+			wantID:     "telecrawl",
+			wantBinary: "telecrawl",
+			wantErr:    true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			binDir := writeFakeCrawlers(t, tt.scripts...)
+			binDir := writeFakeCrawlers(t, tt.crawler)
 			t.Setenv("PATH", binDir)
-			appsDir := filepath.Join(t.TempDir(), "apps")
-			if err := os.MkdirAll(appsDir, 0o755); err != nil {
-				t.Fatal(err)
+
+			got := discoverCrawlers(context.Background())
+			if len(got) != 1 {
+				t.Fatalf("discovered %d sources, want 1: %#v", len(got), got)
 			}
-			for name, data := range tt.apps {
-				if err := os.WriteFile(filepath.Join(appsDir, name), []byte(data), 0o600); err != nil {
-					t.Fatal(err)
-				}
+			source := got[0]
+			if source.ID != tt.wantID || source.Binary != tt.wantBinary {
+				t.Fatalf("source = (%q, %q), want (%q, %q)", source.ID, source.Binary, tt.wantID, tt.wantBinary)
 			}
-			got := discoverCrawlers(context.Background(), appsDir)
-			if len(got) != len(tt.want) {
-				t.Fatalf("discovered %d sources, want %d: %#v", len(got), len(tt.want), got)
-			}
-			for i, want := range tt.want {
-				if got[i].ID != want.id || got[i].Binary != want.binary {
-					t.Fatalf("source[%d] = (%q, %q), want (%q, %q)", i, got[i].ID, got[i].Binary, want.id, want.binary)
-				}
-				if (got[i].MetadataErr != nil) != want.metadataErr {
-					t.Fatalf("source[%d] metadataErr = %v, want %v", i, got[i].MetadataErr, want.metadataErr)
-				}
+			if (source.MetadataErr != nil) != tt.wantErr {
+				t.Fatalf("MetadataErr = %v, want error %v", source.MetadataErr, tt.wantErr)
 			}
 		})
 	}
-}
-
-func TestRegistryBinariesIncludesBuiltIns(t *testing.T) {
-	want := []string{
-		"imsgcrawl",
-		"telecrawl",
-		"wacrawl",
-		"clawdex",
-		"photoscrawl",
-		"gogcrawl",
-		"calcrawl",
-		"birdcrawl",
-	}
-	if got := registryBinaries(""); !slices.Equal(got, want) {
-		t.Fatalf("registryBinaries() = %#v, want %#v", got, want)
-	}
-}
-
-type discoveredSource struct {
-	id          string
-	binary      string
-	metadataErr bool
 }

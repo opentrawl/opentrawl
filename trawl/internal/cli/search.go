@@ -105,7 +105,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if err != nil {
 		return err
 	}
-	installed := discoverCrawlers(r.ctx, r.appsDir)
+	installed := discoverCrawlers(r.ctx)
 	query, sources, sourceScope, err := r.resolveSearchTarget(installed, c.Query, c.Source)
 	if err != nil {
 		return err

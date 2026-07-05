@@ -63,7 +63,7 @@ func (c *WhoCmd) Run(r *Runtime) error {
 		return usageErr{fmt.Errorf("who requires a name fragment")}
 	}
 
-	installed := discoverCrawlers(r.ctx, r.appsDir)
+	installed := discoverCrawlers(r.ctx)
 	resolution := collectFederatedWho(r, resolverSources(installed), query)
 	envelope := WhoEnvelope{
 		Query:            query,

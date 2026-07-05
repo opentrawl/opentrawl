@@ -6,7 +6,7 @@ import (
 )
 
 func (r *Runtime) selectedSourceArgs(names []string) ([]Source, error) {
-	return r.selectSources(discoverCrawlers(r.ctx, r.appsDir), names)
+	return r.selectSources(discoverCrawlers(r.ctx), names)
 }
 
 func (r *Runtime) selectSources(installed []Source, names []string) ([]Source, error) {
@@ -35,7 +35,7 @@ func (r *Runtime) selectedSource(source string) (Source, error) {
 func (r *Runtime) writeSourceNotFound(source string) error {
 	return r.writeError("source_not_found",
 		fmt.Sprintf("Source %q was not found.", source),
-		"install the crawler on PATH or add a drop-in manifest in ~/.trawl/apps")
+		"install the crawler on PATH")
 }
 
 func splitSourceCSV(sourceCSV string) []string {

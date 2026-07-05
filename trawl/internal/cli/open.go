@@ -83,7 +83,7 @@ func (r *Runtime) openShortRef(alias string) error {
 			fmt.Sprintf("Short ref %q is not valid.", alias),
 			"short refs use 5 or more lowercase characters from 2-9 and abcdefghjkmnpqrstuvwxyz")
 	}
-	sources := shortRefSources(discoverCrawlers(r.ctx, r.appsDir))
+	sources := shortRefSources(discoverCrawlers(r.ctx))
 	matches := make([]shortRefMatch, 0)
 	seenRefs := map[string]bool{}
 	for _, source := range sources {

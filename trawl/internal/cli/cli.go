@@ -37,7 +37,6 @@ type Runtime struct {
 	stderr   io.Writer
 	stderrMu sync.Mutex
 	root     *CLI
-	appsDir  string
 	now      func() time.Time
 	timeout  time.Duration
 	log      *logRun
@@ -80,10 +79,14 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 
 Sources go by id or surface name: imsgcrawl/imessage, telecrawl/telegram, wacrawl/whatsapp, gogcrawl/gmail, calcrawl/calendar — trawl status lists yours.
 
+The commands below run across every source. Each source is also its own namespace: 'trawl <source>' lists that crawler's verbs, and 'trawl <source> <verb>' runs one.
+
 Examples:
   trawl status                          # every source: state, freshness, counts
   trawl search "boat trip"              # all sources, newest first
   trawl search imessage falafel         # one source, no quotes needed
+  trawl imessage                        # list what the iMessage crawler can do
+  trawl imessage chats                  # run one source's own verb
   trawl summaries                       # precomputed answers: subscriptions, possessions, spending
   trawl open imsgcrawl:msg/8842         # expand a ref search returned
   trawl search falafel --json           # structured output; agents, prefer this`),
@@ -100,10 +103,28 @@ Examples:
 		_, err := fmt.Fprintln(stdout, Version)
 		return err
 	}
-	args = rewriteHelp(normalizeGlobalFlags(args))
-	if err := unknownCommand(args); err != nil {
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
+	// Progressive discovery: a first token that is not a built-in command
+	// opens a crawler namespace (trawl <source> <verb>). This runs on the
+	// raw args, before kong and flag normalization, so a source's own
+	// flags reach the child untouched.
+	if token, ok := namespaceCandidate(args); ok {
+		runtime := &Runtime{
+			ctx:     context.Background(),
+			stdout:  stdout,
+			stderr:  stderr,
+			root:    namespaceRoot(args),
+			now:     time.Now,
+			timeout: timeout,
+		}
+		if err := runtime.startLogRun("namespace"); err != nil {
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
+		}
+		defer func() {
+			err = runtime.finishLogRun(err)
+		}()
+		return runtime.dispatchNamespace(args, token)
 	}
+	args = rewriteHelp(normalizeGlobalFlags(args))
 	kctx, err := parser.Parse(args)
 	if err != nil {
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr{err})
@@ -113,7 +134,6 @@ Examples:
 		stdout:  stdout,
 		stderr:  stderr,
 		root:    &root,
-		appsDir: defaultAppsDir(),
 		now:     time.Now,
 		timeout: timeout,
 	}
@@ -183,7 +203,7 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 }
 
 func (r *Runtime) selectedSources(source string) ([]Source, error) {
-	sources := discoverCrawlers(r.ctx, r.appsDir)
+	sources := discoverCrawlers(r.ctx)
 	if source == "" {
 		return sources, nil
 	}
@@ -403,19 +423,16 @@ func rewriteHelp(args []string) []string {
 	return args
 }
 
-func unknownCommand(args []string) error {
-	for _, arg := range args {
-		if strings.HasPrefix(arg, "-") {
-			continue
-		}
-		switch arg {
-		case "status", "sync", "search", "summaries", "who", "open", "doctor", "help":
-			return nil
-		default:
-			return usageErr{fmt.Errorf("unknown command %q — commands are status, sync, search, summaries, who, open, doctor; run: trawl --help", arg)}
-		}
+// unknownCommandErr names both token spaces a first argument can be — a
+// built-in command or an installed source — and lists the sources found,
+// so a mistyped source name reveals the namespace instead of hiding it.
+func unknownCommandErr(name string, sources []string) error {
+	message := fmt.Sprintf("unknown command %q — commands are status, sync, search, summaries, who, open, doctor", name)
+	if len(sources) > 0 {
+		message += "; sources are " + strings.Join(sources, ", ")
 	}
-	return nil
+	message += "; run: trawl --help"
+	return usageErr{errors.New(message)}
 }
 
 func ExitCode(err error) int {

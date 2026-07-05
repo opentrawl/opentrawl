@@ -4,9 +4,15 @@ written_by: ai
 
 # The trawl CLI
 
-The single entry point. Five verbs, no more. Follows
-[clig.dev](https://clig.dev); adding a verb or flag is a design
-decision recorded in this file, not a response to a feature request.
+The single entry point. Follows [clig.dev](https://clig.dev); adding a
+cross-source verb or flag is a design decision recorded in this file, not
+a response to a feature request.
+
+There are two kinds of command. The cross-source verbs below run over
+every installed crawler at once — the one door. Each source is also its
+own namespace: `trawl <source>` lists that crawler's verbs and
+`trawl <source> <verb>` runs one, served from the source's manifest so
+the crawler binary is never named to the reader (see Namespaces).
 
 All examples use synthetic data.
 
@@ -18,6 +24,7 @@ trawl sync [source ...]
 trawl search <query> [--source a,b] [--limit n] [--after date] [--before date]
 trawl open <ref>
 trawl doctor [source]
+trawl <source> [verb ...]
 ```
 
 Global flags: `--json`, `--help`, `--version`. Nothing else.
@@ -83,6 +90,34 @@ Diagnoses one crawler or all of them: binary found, contract version,
 auth state, source store reachable, permissions (TCC), archive
 integrity. Every failing check comes with the exact remedy command.
 
+## Namespaces
+
+`trawl <source>` opens one crawler's own verbs. The list is served from
+the source's manifest, so it teaches itself without naming the binary:
+
+```
+$ trawl imessage
+iMessage — Local-first iMessage archive crawler.
+
+Verbs:
+  chats            Chats
+  contacts export  Export contacts
+  messages         Messages
+  open REF         Open
+  search QUERY     Search
+  status           Status
+  sync             Sync
+  who NAME         Who
+
+Run a verb: trawl imessage <verb>
+```
+
+`trawl <source> <verb> [args]` runs that verb by spawning the child
+crawler and streaming its output; `--json` on a source that emits JSON
+flows through. `trawl <source> --json` returns the verb list as JSON for
+agents. An unknown or incomplete verb gets a trawl-owned error, never the
+child's — the child stays internal plumbing.
+
 ## Behaviour rules
 
 - `--json` on any verb emits the structured equivalent; `sync --json`
@@ -99,8 +134,8 @@ integrity. Every failing check comes with the exact remedy command.
 
 ## Discovery
 
-Crawlers are found by probing a built-in registry of known binary
-names on PATH (which includes `.dev/bin` inside the dev shell), plus
-drop-in manifests in `~/.trawl/apps/*.json` for third-party crawlers.
-A binary is a crawler if `<binary> metadata --json` returns a valid
-manifest. No configuration, no registration step.
+Crawlers are found by the crawlkit registry: one list of known binary
+names (`crawlkit/registry`), probed on PATH (which includes `.dev/bin`
+inside the dev shell). A binary is a crawler if `<binary> metadata --json`
+returns a valid manifest. Registration is that list — no config files, no
+drop-in manifests, no registration step.
