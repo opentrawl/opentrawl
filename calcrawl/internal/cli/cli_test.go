@@ -491,6 +491,95 @@ func TestSearchWhoAmbiguousDoesNotSearch(t *testing.T) {
 	}
 }
 
+// TRAWL-111: a shared service mailbox (calendar-invite@lu.ma) fronts several
+// distinct organizers. They must stay separate candidates, and --who on the
+// shared mailbox must surface them instead of silently picking one.
+func TestSearchWhoSharedMailboxSurfacesEachName(t *testing.T) {
+	db := setupCalendarFixture(t)
+	insertEvent(t, db, eventFixture{
+		rowID:       110,
+		uuid:        "55555555-5555-5555-5555-555555555555",
+		uniqueID:    "event-frontier",
+		summary:     "SF Show & Tell",
+		start:       time.Date(2026, 2, 5, 2, 0, 0, 0, time.UTC),
+		end:         time.Date(2026, 2, 5, 4, 0, 0, 0, time.UTC),
+		calendarID:  10,
+		organizerID: 1010,
+		status:      1,
+	})
+	insertEvent(t, db, eventFixture{
+		rowID:       111,
+		uuid:        "66666666-6666-6666-6666-666666666666",
+		uniqueID:    "event-clawcon",
+		summary:     "ClawCon Singapore",
+		start:       time.Date(2026, 5, 14, 10, 0, 0, 0, time.UTC),
+		end:         time.Date(2026, 5, 14, 18, 0, 0, 0, time.UTC),
+		calendarID:  10,
+		organizerID: 1011,
+		status:      1,
+	})
+	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
+		(510, 'Frontier Tower SF', 'MAILTO:calendar-invite@lu.ma', '', ''),
+		(511, 'ClawCon', 'MAILTO:calendar-invite@lu.ma', '', '')`)
+	mustExec(t, db, `insert into Participant(
+		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
+	) values
+		(1010, 2, 1, 2, 3, 510, 110, 'calendar-invite@lu.ma', '', 0, ''),
+		(1011, 2, 1, 2, 3, 511, 111, 'calendar-invite@lu.ma', '', 0, '')`)
+	runSync(t)
+
+	who := runJSON[whoResponse](t, "who", "calendar-invite@lu.ma", "--json")
+	if len(who.Candidates) != 2 || who.Candidates[0].Who != "ClawCon" || who.Candidates[1].Who != "Frontier Tower SF" {
+		t.Fatalf("who shared mailbox = %#v, want ClawCon and Frontier Tower SF separate", who)
+	}
+	for _, candidate := range who.Candidates {
+		if candidate.Messages != 1 || !hasString(candidate.Identifiers, "calendar-invite@lu.ma") {
+			t.Fatalf("shared-mailbox candidate = %#v, want one event and the mailbox listed", candidate)
+		}
+	}
+
+	stdout, _, err := run(t, "search", "--who", "calendar-invite@lu.ma", "--json")
+	if err == nil || cli.ExitCode(err) != 4 {
+		t.Fatalf("shared-mailbox --who err = %v stdout = %s", err, stdout)
+	}
+	var out errorResponse
+	if decodeErr := json.Unmarshal([]byte(stdout), &out); decodeErr != nil {
+		t.Fatalf("decode shared-mailbox error: %v\n%s", decodeErr, stdout)
+	}
+	if out.Error.Code != "ambiguous_who" || len(out.Error.Candidates) != 2 {
+		t.Fatalf("shared-mailbox error = %#v, want ambiguous_who with both candidates", out)
+	}
+
+	_, _, err = run(t, "search", "--who", "calendar-invite@lu.ma")
+	if err == nil {
+		t.Fatal("shared-mailbox --who text succeeded")
+	}
+	text := err.Error()
+	for _, want := range []string{"matched more than one person", "ClawCon", "Frontier Tower SF", "Retry with a name: calcrawl search --who ClawCon"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("shared-mailbox text missing %q:\n%s", want, text)
+		}
+	}
+
+	// The hinted retry must return only that entity's events: the shared
+	// mailbox stays out of the event filter, so who and search agree.
+	for _, tc := range []struct {
+		who     string
+		summary string
+	}{
+		{"ClawCon", "ClawCon Singapore"},
+		{"Frontier Tower SF", "SF Show & Tell"},
+	} {
+		search := runJSON[searchResponse](t, "search", "--who", tc.who, "--json")
+		if len(search.Results) != 1 || search.TotalMatches != 1 {
+			t.Fatalf("search --who %q = %#v, want exactly its own event", tc.who, search)
+		}
+		if search.Results[0].Who != tc.who || !strings.Contains(search.Results[0].Snippet, tc.summary) {
+			t.Fatalf("search --who %q result = %#v, want %q", tc.who, search.Results[0], tc.summary)
+		}
+	}
+}
+
 func TestSearchWhoUnknownHasSuggestionsOrHint(t *testing.T) {
 	setupCalendarFixture(t)
 	runSync(t)

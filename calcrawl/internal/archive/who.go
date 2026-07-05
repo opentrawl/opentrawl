@@ -119,9 +119,40 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			parent[rightRoot] = leftRoot
 		}
 	}
+	// A shared mailbox is not an identity key (rules.md §1.6): an identifier
+	// seen alongside more than one distinct display name fronts multiple
+	// entities, so it must not union them — the named entities stay separate
+	// and a query for the shared identifier surfaces all of them as
+	// candidates, never one silently-picked winner. Records with no name
+	// evidence of their own still cluster with each other on the shared
+	// identifier: they cannot be attributed to any of the names, so they
+	// surface under the mailbox itself. "Distinct name" is a structural
+	// proxy for "distinct identity", counted on word-set keys so its failure
+	// direction is conservative: spellings built from the same words
+	// ("Moore, Matthew" / "Matthew Moore") never split, and a genuinely
+	// shared mailbox fronts names with different words. Pure string
+	// counting in a pre-pass — same input, same output, no judgment of
+	// what the strings mean.
+	identifierNames := map[string]map[string]struct{}{}
+	for _, record := range records {
+		key, ok := record.nameEvidenceKey()
+		if !ok {
+			continue
+		}
+		for _, identifierKey := range record.identifierKeys() {
+			names := identifierNames[identifierKey]
+			if names == nil {
+				names = map[string]struct{}{}
+				identifierNames[identifierKey] = names
+			}
+			names[key] = struct{}{}
+		}
+	}
+
 	identifierOwner := map[string]int{}
 	nameOwner := map[string]int{}
 	for index, record := range records {
+		_, hasNameEvidence := record.nameEvidenceKey()
 		if key := whomatch.Normalize(record.displayName); key != "" {
 			if owner, ok := nameOwner[key]; ok {
 				union(owner, index)
@@ -130,6 +161,9 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			}
 		}
 		for _, key := range record.identifierKeys() {
+			if len(identifierNames[key]) > 1 && hasNameEvidence {
+				continue
+			}
 			if owner, ok := identifierOwner[key]; ok {
 				union(owner, index)
 			} else {
@@ -170,11 +204,18 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 	candidates := make([]WhoCandidate, 0, len(builders))
 	for _, builder := range builders {
 		identifiers := sortedIdentifiers(builder.identifiers)
+		owned := map[string]string{}
+		for key, value := range builder.identifiers {
+			if len(identifierNames[key]) <= 1 {
+				owned[key] = value
+			}
+		}
 		candidates = append(candidates, WhoCandidate{
-			Who:         bestWhoName(builder.names, identifiers),
-			Identifiers: identifiers,
-			LastSeen:    canonicalEventTime(builder.lastSeen),
-			Messages:    int64(len(builder.events)),
+			Who:               bestWhoName(builder.names, identifiers),
+			Identifiers:       identifiers,
+			LastSeen:          canonicalEventTime(builder.lastSeen),
+			Messages:          int64(len(builder.events)),
+			filterIdentifiers: sortedIdentifiers(owned),
 		})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -204,6 +245,35 @@ func cleanWhoRecord(record whoRecord) whoRecord {
 
 func (r whoRecord) identifiers() []string {
 	return uniqueStrings([]string{r.email, r.phone, r.address})
+}
+
+// nameEvidenceKey returns a canonical key for the display name when it
+// counts as evidence of an identity in its own right. A name that is one of
+// the record's own identifiers ("joshpalmer123@gmail.com") or carries one
+// inside it ("Ebba Krusenstierna <ebbak@spotify.com>") is identifier cruft,
+// not a second identity. The key is the sorted set of the name's words with
+// punctuation dropped, so "Moore, Matthew" and "Matthew Moore" are one name.
+func (r whoRecord) nameEvidenceKey() (string, bool) {
+	normalized := whomatch.Normalize(r.displayName)
+	if normalized == "" || whomatch.IsIdentifierLike(r.displayName, r.identifiers()) {
+		return "", false
+	}
+	for _, identifierKey := range r.identifierKeys() {
+		if strings.Contains(normalized, identifierKey) {
+			return "", false
+		}
+	}
+	words := []string{}
+	for _, word := range strings.Fields(normalized) {
+		if word = whomatch.Compact(word); word != "" {
+			words = append(words, word)
+		}
+	}
+	if len(words) == 0 {
+		return "", false
+	}
+	sort.Strings(words)
+	return strings.Join(words, " "), true
 }
 
 func (r whoRecord) identifierKeys() []string {
@@ -278,7 +348,7 @@ func (c WhoCandidate) Resolved() WhoResolved {
 }
 
 func (c WhoCandidate) Filter() *WhoFilter {
-	return &WhoFilter{Who: c.Who, Identifiers: append([]string(nil), c.Identifiers...)}
+	return &WhoFilter{Who: c.Who, Identifiers: append([]string(nil), c.filterIdentifiers...)}
 }
 
 func (c WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {
