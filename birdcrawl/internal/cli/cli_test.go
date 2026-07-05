@@ -15,7 +15,34 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
-func TestSearchEnvelopeBounds(t *testing.T) {
+// TestSearchLimitAboveOldCapIsHonored guards the one --limit contract
+// (crawlkit/flags): a large --limit is honored exactly, with no hidden cap at
+// the old maxSearchLimit=200.
+func TestSearchLimitAboveOldCapIsHonored(t *testing.T) {
+	ctx := context.Background()
+	dbPath := seedManyTweets(t, 205)
+	var stdout, stderr bytes.Buffer
+	err := Run(ctx, []string{"--db", dbPath, "--json", "search", "needle", "--limit", "500"}, &stdout, &stderr)
+	if err != nil {
+		t.Fatalf("run error: %v stderr=%s", err, stderr.String())
+	}
+	var envelope searchEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if len(envelope.Results) != 205 || envelope.TotalMatches != 205 || envelope.Truncated {
+		t.Fatalf("results/total/truncated = %d/%d/%v, want 205/205/false", len(envelope.Results), envelope.TotalMatches, envelope.Truncated)
+	}
+	if envelope.Results[0].Where != "" {
+		t.Fatalf("where = %q, want empty", envelope.Results[0].Where)
+	}
+	if envelope.Results[0].ShortRef == "" {
+		t.Fatal("short_ref is empty")
+	}
+}
+
+func seedManyTweets(t *testing.T, count int) string {
+	t.Helper()
 	ctx := context.Background()
 	dbPath := filepath.Join(t.TempDir(), "birdcrawl.db")
 	st, err := store.Open(ctx, dbPath)
@@ -24,7 +51,7 @@ func TestSearchEnvelopeBounds(t *testing.T) {
 	}
 	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
 	var tweets []store.Tweet
-	for i := 0; i < 205; i++ {
+	for i := 0; i < count; i++ {
 		tweets = append(tweets, store.Tweet{
 			ID:           "tweet-" + itoa(i),
 			CreatedAt:    now.Add(-time.Duration(i) * time.Minute),
@@ -38,27 +65,7 @@ func TestSearchEnvelopeBounds(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = st.Close()
-	var stdout, stderr bytes.Buffer
-	err = Run(ctx, []string{"--db", dbPath, "--json", "search", "needle", "--limit", "500"}, &stdout, &stderr)
-	if err != nil {
-		t.Fatalf("run error: %v stderr=%s", err, stderr.String())
-	}
-	var envelope searchEnvelope
-	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
-		t.Fatal(err)
-	}
-	if len(envelope.Results) != maxSearchLimit {
-		t.Fatalf("results = %d, want %d", len(envelope.Results), maxSearchLimit)
-	}
-	if envelope.TotalMatches != 205 || !envelope.Truncated {
-		t.Fatalf("total/truncated = %d/%v", envelope.TotalMatches, envelope.Truncated)
-	}
-	if envelope.Results[0].Where != "" {
-		t.Fatalf("where = %q, want empty", envelope.Results[0].Where)
-	}
-	if envelope.Results[0].ShortRef == "" {
-		t.Fatal("short_ref is empty")
-	}
+	return dbPath
 }
 
 func TestTopLevelHelpGolden(t *testing.T) {

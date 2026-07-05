@@ -270,7 +270,9 @@ func (r *runtime) printStats(value statsEnvelope) error {
 func searchHints(query string, limit int, truncated bool) []string {
 	hints := []string{"Open: birdcrawl open REF"}
 	if truncated {
-		hints = append(hints, "More: birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)))
+		hints = append(hints,
+			"More: birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
+			"All: birdcrawl search "+quoteSearchQuery(query)+" --all")
 	}
 	return hints
 }
@@ -278,7 +280,9 @@ func searchHints(query string, limit int, truncated bool) []string {
 func browseHints(kind string, limit int, truncated bool) []string {
 	hints := []string{"Open: birdcrawl open REF"}
 	if truncated {
-		hints = append(hints, "More: birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)))
+		hints = append(hints,
+			"More: birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)),
+			"All: birdcrawl "+kind+" --all")
 	}
 	return hints
 }
@@ -287,10 +291,7 @@ func quoteSearchQuery(query string) string {
 	return `"` + strings.ReplaceAll(strings.ReplaceAll(query, `\`, `\\`), `"`, `\"`) + `"`
 }
 
-// statsNextLimit doubles the shown count for the stats "More" hint. Stats has
-// no --limit cap (crawlkit/flags honors --limit exactly), so — unlike search
-// and browse — the next step must not clamp to maxSearchLimit, or the hint
-// could suggest fewer rows than are already on screen.
+// statsNextLimit doubles the shown count for the stats "More" hint.
 func statsNextLimit(shown int) int {
 	if shown < 1 {
 		return defaultStatsLimit
@@ -302,11 +303,7 @@ func nextLimit(limit int) int {
 	if limit <= 0 {
 		limit = defaultSearchLimit
 	}
-	next := limit * 2
-	if next > maxSearchLimit {
-		return maxSearchLimit
-	}
-	return next
+	return limit * 2
 }
 
 func browseWho(item listResult, ownerAuthorID string) string {

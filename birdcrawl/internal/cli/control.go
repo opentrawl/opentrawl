@@ -23,6 +23,7 @@ func controlManifest() control.Manifest {
 		LocalOnlyScopes:         []string{"x-archive-dump", "sqlite"},
 	}
 	m.Commands = map[string]control.Command{
+		"metadata":  {Title: "Metadata", Argv: []string{"birdcrawl", "metadata", "--json"}, JSON: true},
 		"doctor":    {Title: "Doctor", Argv: []string{"birdcrawl", "doctor", "--json"}, JSON: true},
 		"status":    {Title: "Status", Argv: []string{"birdcrawl", "status", "--json"}, JSON: true},
 		"sync":      {Title: "Sync", Argv: []string{"birdcrawl", "sync", "--json"}, JSON: true, Mutates: true},
