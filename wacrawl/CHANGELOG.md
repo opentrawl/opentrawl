@@ -2,6 +2,10 @@
 
 ## [0.3.1] - Unreleased
 
+### Removed
+
+- Breaking: remove the `sql` command. Use `search`, `messages`, and the other read verbs instead.
+
 ### Changed
 
 - Breaking: stop auto-syncing before archive reads; `sync` and `import` are now the only commands that populate or refresh the archive.

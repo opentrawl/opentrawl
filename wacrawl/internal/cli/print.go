@@ -38,17 +38,6 @@ func (a *app) print(value any) error {
 		return a.printOpen(v)
 	case doctorEnvelope:
 		return a.printDoctor(v)
-	case sqlQueryResult:
-		tw := tabwriter.NewWriter(a.stdout, 2, 4, 2, ' ', 0)
-		_, _ = fmt.Fprintln(tw, strings.Join(v.columns, "\t"))
-		for _, row := range v.rows {
-			values := make([]string, 0, len(v.columns))
-			for _, col := range v.columns {
-				values = append(values, formatSQLValue(row[col]))
-			}
-			_, _ = fmt.Fprintln(tw, strings.Join(values, "\t"))
-		}
-		return tw.Flush()
 	case backup.Result:
 		_, err := fmt.Fprintf(a.stdout, "repo=%s\nchanged=%t\nencrypted=%t\nshards=%d\nmessages=%d\nmedia_files=%d\n", v.Repo, v.Changed, v.Encrypted, v.Shards, v.Messages, v.MediaFiles)
 		if err == nil && v.Ref != "" {

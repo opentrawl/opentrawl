@@ -27,7 +27,6 @@ func topHelpDoc() usage.Doc {
 				{Name: "search", Summary: "Search archived messages."},
 				{Name: "open", Summary: "Open one message with nearby context."},
 				{Name: "who", Summary: "Resolve a person across names and identifiers."},
-				{Name: "sql", Summary: "Run a read-only SQL query."},
 			}},
 			{Title: "Keep it fresh", Commands: []usage.Command{
 				{Name: "import", Summary: "Read WhatsApp Desktop data into the archive."},
@@ -222,16 +221,6 @@ Examples:
   wacrawl open abc23
   wacrawl open wacrawl:msg/MESSAGE_ID
   wacrawl --json open wacrawl:msg/MESSAGE_ID
-`)
-	case "sql":
-		_, _ = fmt.Fprint(w, `Run a read-only SQL query against the archive database.
-
-Usage:
-  wacrawl sql <select query>
-
-Examples:
-  wacrawl sql "SELECT count(*) FROM messages"
-  wacrawl --json sql "SELECT chat_jid, count(*) FROM messages GROUP BY chat_jid"
 `)
 	case "backup":
 		_, _ = fmt.Fprint(w, `Manage encrypted Git backups of the wacrawl archive.

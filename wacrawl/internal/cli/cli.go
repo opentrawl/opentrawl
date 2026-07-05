@@ -140,8 +140,6 @@ func (a *app) dispatch(ctx context.Context, rest []string) error {
 		return a.runSearch(ctx, rest[1:])
 	case "open":
 		return a.runOpen(ctx, rest[1:])
-	case "sql":
-		return a.runSQL(ctx, rest[1:])
 	case "backup":
 		return a.runBackup(ctx, rest[1:])
 	default:
