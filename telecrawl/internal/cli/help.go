@@ -55,15 +55,15 @@ func commandUsage(args []string) string {
 		if len(args) > 1 && args[1] == "export" {
 			return "usage: telecrawl contacts export [--json]\n\nExport safe contact records from archived conversation evidence.\n"
 		}
-		return "usage: telecrawl contacts [--limit N] [--json]\n\nList people from the local archive.\n"
+		return "usage: telecrawl contacts [--limit N] [--all] [--json]\n\nList people from the local archive. --all lists every contact.\n"
 	case "chats":
-		return fmt.Sprintf("usage: telecrawl chats [--limit N] [--unread] [--folder ID] [--json]\n\nList your chats, newest first. Imports keep at most %d messages per chat by default; capped counts display as %d+.\n", telegramdesktop.DefaultMessagesLimit, telegramdesktop.DefaultMessagesLimit)
+		return fmt.Sprintf("usage: telecrawl chats [--limit N] [--all] [--unread] [--folder ID] [--json]\n\nList your chats, newest first. --all lists every chat. Imports keep at most %d messages per chat by default; capped counts display as %d+.\n", telegramdesktop.DefaultMessagesLimit, telegramdesktop.DefaultMessagesLimit)
 	case "topics":
-		return "usage: telecrawl topics --chat ID [--limit N] [--json]\n\nList forum topics for one archived chat.\n"
+		return "usage: telecrawl topics --chat ID [--limit N] [--all] [--json]\n\nList forum topics for one archived chat. --all lists every topic.\n"
 	case "messages":
-		return "usage: telecrawl messages [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--asc] [--json]\n\nList a bounded set of archived messages.\n"
+		return "usage: telecrawl messages [--chat ID] [--topic ID] [--sender ID] [--limit N] [--all] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--asc] [--json]\n\nList a bounded set of archived messages. --all returns every match.\n"
 	case "search":
-		return "usage: telecrawl search [\"query\"] [--who PERSON] [--chat ID] [--topic ID] [--sender ID] [--limit N] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearch archived messages and return refs for telecrawl open. Query is optional with --who, --after, or --before.\n"
+		return "usage: telecrawl search [\"query\"] [--who PERSON] [--chat ID] [--topic ID] [--sender ID] [--limit N] [--all] [--after DATE] [--before DATE] [--from-me|--from-them] [--media] [--pinned] [--json]\n\nSearch archived messages and return refs for telecrawl open. --all returns every match. Query is optional with --who, --after, or --before.\n"
 	case "who":
 		return "usage: telecrawl who NAME [--json]\n\nResolve a person across handles and phones.\n"
 	case "open":

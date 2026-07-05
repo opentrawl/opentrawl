@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 
 	// C SQLite via cgo, matching crawlkit/store after the modernc→mattn swap
 	// (TRAWL-56): the pure-Go driver ran hot paths 10-100x slower. Requires
@@ -19,7 +20,16 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 5
+const schemaVersion = 6
+
+// Sync markers live in the canonical crawlkit state.Store (table sync_state)
+// under one source name and entity type; each marker is a keyed scalar value.
+const (
+	syncSource       = "telecrawl"
+	syncEntityType   = "sync"
+	syncLastImportAt = "last_import_at"
+	syncSourcePath   = "source_path"
+)
 
 type Store struct {
 	db   *sql.DB
@@ -234,6 +244,46 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	// Tombstone the pre-canonical key/value sync_state before creating the
+	// canonical crawlkit state table — the names collide. The two markers
+	// are read out of the legacy table and carried into the canonical one
+	// before the drop: status.LastSource must survive the migration, since
+	// sync.go reads it to decide whether to preserve existing media refs on
+	// the next import — losing it silently would drop that media metadata,
+	// not just make the marker re-derive on a later run.
+	legacy, err := legacySyncState(ctx, db)
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	var legacyMarkers map[string]string
+	if legacy {
+		if legacyMarkers, err = legacySyncStateValues(ctx, db); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+		if _, err := db.ExecContext(ctx, `drop table if exists sync_state`); err != nil {
+			_ = db.Close()
+			return nil, err
+		}
+	}
+	if err := state.EnsureSchema(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	if len(legacyMarkers) > 0 {
+		markers := state.New(db)
+		for _, key := range []string{syncLastImportAt, syncSourcePath} {
+			value, ok := legacyMarkers[key]
+			if !ok {
+				continue
+			}
+			if err := markers.Set(ctx, syncSource, syncEntityType, key, value); err != nil {
+				_ = db.Close()
+				return nil, err
+			}
+		}
+	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -327,12 +377,20 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	for key, value := range map[string]string{"last_import_at": now.Format(time.RFC3339Nano), "source_path": stats.SourcePath} {
-		if _, err := tx.ExecContext(ctx, `insert into sync_state(key,value,updated_at) values(?,?,?) on conflict(key) do update set value=excluded.value, updated_at=excluded.updated_at`, key, value, unix(now)); err != nil {
-			return err
-		}
+	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
+		return err
 	}
 	return tx.Commit()
+}
+
+// writeSyncMarkers records the import watermark and source path as scalar
+// values in the canonical crawlkit state table.
+func writeSyncMarkers(ctx context.Context, tx *sql.Tx, now time.Time, sourcePath string) error {
+	markers := state.New(tx)
+	if err := markers.Set(ctx, syncSource, syncEntityType, syncLastImportAt, now.Format(time.RFC3339Nano)); err != nil {
+		return err
+	}
+	return markers.Set(ctx, syncSource, syncEntityType, syncSourcePath, sourcePath)
 }
 
 func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
@@ -341,7 +399,7 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 		return err
 	}
 	defer rollback(tx)
-	for _, q := range []string{"delete from messages_fts", "delete from messages", "delete from topics", "delete from folder_chats", "delete from folders", "delete from chats", "delete from contacts", "delete from groups", "delete from group_participants", "delete from sync_state"} {
+	for _, q := range []string{"delete from messages_fts", "delete from messages", "delete from topics", "delete from folder_chats", "delete from folders", "delete from chats", "delete from contacts", "delete from groups", "delete from group_participants"} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
 			return err
 		}
@@ -383,10 +441,8 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
-	for key, value := range map[string]string{"last_import_at": now.Format(time.RFC3339Nano), "source_path": stats.SourcePath} {
-		if _, err := tx.ExecContext(ctx, `insert into sync_state(key,value,updated_at) values(?,?,?)`, key, value, unix(now)); err != nil {
-			return err
-		}
+	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
+		return err
 	}
 	return tx.Commit()
 }

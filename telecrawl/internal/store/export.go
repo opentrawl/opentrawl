@@ -80,7 +80,7 @@ func (s *Store) ImportSnapshot(ctx context.Context, data SnapshotData, sourcePat
 
 func (s *Store) ListContacts(ctx context.Context, limit int) ([]Contact, error) {
 	if limit <= 0 {
-		limit = 100
+		limit = -1 // --all: no row cap (SQLite LIMIT -1)
 	}
 	return s.contacts(ctx, limit)
 }

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"io"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -12,14 +13,19 @@ func (r *runtime) runChats(args []string) error {
 	fs := flag.NewFlagSet("telecrawl chats", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 50, "")
+	all := fs.Bool("all", false, "")
 	unread := fs.Bool("unread", false, "")
 	folder := fs.String("folder", "", "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
+	n, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
+	}
 	return r.withStore(func(st *store.Store) error {
 		if *folder != "" {
-			chats, err := st.ChatsInFolder(r.ctx, *folder, *limit)
+			chats, err := st.ChatsInFolder(r.ctx, *folder, n)
 			if err != nil {
 				return err
 			}
@@ -32,7 +38,7 @@ func (r *runtime) runChats(args []string) error {
 			}
 			return r.print(chatsEnvelope{Chats: chats, Total: total})
 		}
-		chats, err := st.ListChats(r.ctx, *limit, *unread)
+		chats, err := st.ListChats(r.ctx, n, *unread)
 		if err != nil {
 			return err
 		}
@@ -73,6 +79,7 @@ func (r *runtime) runTopics(args []string) error {
 	fs.SetOutput(io.Discard)
 	chat := fs.String("chat", "", "")
 	limit := fs.Int("limit", 100, "")
+	all := fs.Bool("all", false, "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
@@ -82,14 +89,22 @@ func (r *runtime) runTopics(args []string) error {
 	if *chat == "" {
 		return usageErr(errors.New("topics requires --chat ID"))
 	}
+	n, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
+	}
 	return r.withStore(func(st *store.Store) error {
-		topics, err := st.ListTopics(r.ctx, *chat, *limit)
+		topics, err := st.ListTopics(r.ctx, *chat, n)
 		if err != nil {
 			return err
 		}
 		if r.json {
 			return r.print(topicJSONRows(topics))
 		}
-		return r.print(topicsEnvelope{Topics: topics})
+		total, err := st.CountTopics(r.ctx, *chat)
+		if err != nil {
+			return err
+		}
+		return r.print(topicsEnvelope{Topics: topics, Total: total, ChatID: *chat})
 	})
 }

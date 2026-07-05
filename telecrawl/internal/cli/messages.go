@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -73,6 +74,7 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 		fs.StringVar(&filter.Who, "who", "", "")
 	}
 	fs.IntVar(&filter.Limit, "limit", defaultLimit, "")
+	all := fs.Bool("all", false, "")
 	after := fs.String("after", "", "")
 	before := fs.String("before", "", "")
 	fromMe := fs.Bool("from-me", false, "")
@@ -84,6 +86,11 @@ func (r *runtime) messageFilter(name string, args []string, requireQuery bool, d
 	if err := fs.Parse(flagTokens); err != nil {
 		return filter, usageErr(err)
 	}
+	n, err := flags.Limit(filter.Limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return filter, usageErr(err)
+	}
+	filter.Limit = n
 	whoProvided := false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "who" {

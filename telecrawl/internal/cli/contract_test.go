@@ -14,7 +14,7 @@ import (
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
-func TestMetadataJSONUsesContractShape(t *testing.T) {
+func TestMetadataJSONEmitsManifest(t *testing.T) {
 	stdout, stderr, err := runCLI(t, "metadata", "--json")
 	if err != nil {
 		t.Fatalf("metadata: %v stderr=%s", err, stderr)
@@ -23,11 +23,9 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &root); err != nil {
 		t.Fatalf("metadata json = %s err=%v", stdout, err)
 	}
-	wantKeys := []string{"schema_version", "contract_version", "id", "display_name", "version", "paths", "capabilities"}
-	if len(root) != len(wantKeys) {
-		t.Fatalf("metadata keys = %#v, want %v", root, wantKeys)
-	}
-	for _, key := range wantKeys {
+	// The registry probes `metadata --json` into a control.Manifest; the
+	// commands map is what makes `trawl telegram` list every verb (TRAWL-86).
+	for _, key := range []string{"schema_version", "contract_version", "id", "display_name", "version", "paths", "capabilities", "commands"} {
 		if _, ok := root[key]; !ok {
 			t.Fatalf("metadata missing key %q: %#v", key, root)
 		}
@@ -42,12 +40,25 @@ func TestMetadataJSONUsesContractShape(t *testing.T) {
 			DefaultLogs string `json:"default_logs"`
 		} `json:"paths"`
 		Capabilities []string `json:"capabilities"`
+		Commands     map[string]struct {
+			Argv []string `json:"argv"`
+			JSON bool     `json:"json"`
+		} `json:"commands"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("metadata json = %s err=%v", stdout, err)
 	}
 	if payload.SchemaVersion != 1 || payload.ContractVersion != 1 || payload.ID != "telecrawl" || payload.DisplayName != "Telegram" || payload.Version == "" {
 		t.Fatalf("metadata = %#v", payload)
+	}
+	for _, verb := range []string{"chats", "messages", "search", "open", "who", "contact-export", "status"} {
+		cmd, ok := payload.Commands[verb]
+		if !ok || len(cmd.Argv) < 2 || cmd.Argv[0] != "telecrawl" {
+			t.Fatalf("metadata commands[%q] = %#v", verb, cmd)
+		}
+		if last := cmd.Argv[len(cmd.Argv)-1]; last != "--json" {
+			t.Fatalf("metadata commands[%q] argv must end in --json: %#v", verb, cmd.Argv)
+		}
 	}
 	if !slices.Contains(payload.Capabilities, "contacts_export") {
 		t.Fatalf("metadata capabilities = %#v, want contacts_export", payload.Capabilities)

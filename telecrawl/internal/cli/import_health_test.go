@@ -28,7 +28,7 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if command.Mutates || !command.JSON {
 		t.Fatalf("contact-export command = %#v", command)
 	}
-	want := []string{"telecrawl", "--json", "contacts", "export"}
+	want := []string{"telecrawl", "contacts", "export", "--json"}
 	if !slices.Equal(command.Argv, want) {
 		t.Fatalf("argv = %#v, want %#v", command.Argv, want)
 	}

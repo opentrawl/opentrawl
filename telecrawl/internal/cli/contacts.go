@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -19,14 +20,19 @@ func (r *runtime) runContacts(args []string) error {
 	fs := flag.NewFlagSet("telecrawl contacts", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 100, "")
+	all := fs.Bool("all", false, "")
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("contacts takes flags only"))
 	}
+	n, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
+	}
 	return r.withStore(func(st *store.Store) error {
-		contacts, err := st.ListContacts(r.ctx, *limit)
+		contacts, err := st.ListContacts(r.ctx, n)
 		if err != nil {
 			return err
 		}

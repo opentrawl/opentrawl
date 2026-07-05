@@ -5,7 +5,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
@@ -14,22 +13,11 @@ import (
 const (
 	defaultMessageLimit = 50
 	defaultSearchLimit  = 20
-	maxSearchLimit      = 200
 	openContextRadius   = 10
 
 	// Telegram archives older than a day are stale for status surfaces that imply source parity.
 	statusFreshFor = 24 * time.Hour
 )
-
-type metadataEnvelope struct {
-	SchemaVersion   int           `json:"schema_version"`
-	ContractVersion int           `json:"contract_version"`
-	ID              string        `json:"id"`
-	DisplayName     string        `json:"display_name"`
-	Version         string        `json:"version"`
-	Paths           control.Paths `json:"paths"`
-	Capabilities    []string      `json:"capabilities"`
-}
 
 type statusEnvelope struct {
 	AppID     string            `json:"app_id"`
@@ -86,6 +74,8 @@ type chatsEnvelope struct {
 
 type topicsEnvelope struct {
 	Topics []store.Topic
+	Total  int
+	ChatID string
 }
 
 type messagesEnvelope struct {
@@ -187,18 +177,6 @@ type openMessage struct {
 	Forwards      int             `json:"forwards,omitempty"`
 	RepliesCount  int             `json:"replies_count,omitempty"`
 	Pinned        bool            `json:"pinned,omitempty"`
-}
-
-func contractMetadata() metadataEnvelope {
-	return metadataEnvelope{
-		SchemaVersion:   1,
-		ContractVersion: 1,
-		ID:              "telecrawl",
-		DisplayName:     "Telegram",
-		Version:         version,
-		Paths:           controlManifest().Paths,
-		Capabilities:    []string{"metadata", "doctor", "status", "sync", "search", "open", "who", "short_refs", "contacts_export", "backup", "verbose_logs"},
-	}
 }
 
 func (r *runtime) statusEnvelope() statusEnvelope {

@@ -6,7 +6,88 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/openclaw/crawlkit/state"
 )
+
+// TestLegacySyncStateTombstonedOnce covers the TRAWL-82 migration: a writable
+// open drops the pre-canonical key/value sync_state and creates the canonical
+// crawlkit shape, and a later open never re-drops the canonical table (so an
+// already-migrated archive keeps its markers).
+func TestLegacySyncStateTombstonedOnce(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "telecrawl.db")
+
+	// Seed the legacy key/value sync_state directly with a marker.
+	raw, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.ExecContext(ctx, `create table sync_state(key text primary key, value text not null, updated_at integer not null);
+insert into sync_state(key,value,updated_at) values('last_import_at','legacy',1),('source_path','/legacy/export',1);`); err != nil {
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	st, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("open legacy archive: %v", err)
+	}
+	cols, err := columns(ctx, st.db, "sync_state")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cols["source_name"] {
+		t.Fatalf("sync_state not migrated to canonical shape: %v", cols)
+	}
+	// The canonical table reuses the sync_state name, so row count alone
+	// can't tell legacy junk from carried-forward markers; the two legacy
+	// values must have been carried into the canonical table before the
+	// drop — status.LastSource must survive the migration so the next
+	// import still preserves existing media refs (TRAWL-82 review fix).
+	var rows int
+	if err := st.db.QueryRowContext(ctx, `select count(*) from sync_state`).Scan(&rows); err != nil {
+		t.Fatal(err)
+	}
+	if rows != 2 {
+		t.Fatalf("carried-forward markers missing: %d rows, want 2", rows)
+	}
+	markers := state.New(st.db)
+	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncLastImportAt); err != nil {
+		t.Fatal(err)
+	} else if !ok || rec.Value != "legacy" {
+		t.Fatalf("last_import_at not carried forward: ok=%v value=%q", ok, rec.Value)
+	}
+	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncSourcePath); err != nil {
+		t.Fatal(err)
+	} else if !ok || rec.Value != "/legacy/export" {
+		t.Fatalf("source_path not carried forward: ok=%v value=%q", ok, rec.Value)
+	}
+
+	// A canonical marker must survive a reopen — the tombstone fires only for
+	// the legacy shape, never the canonical one.
+	if err := state.New(st.db).Set(ctx, syncSource, syncEntityType, syncLastImportAt, "kept"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	st2, err := Open(ctx, path)
+	if err != nil {
+		t.Fatalf("reopen migrated archive: %v", err)
+	}
+	defer func() { _ = st2.Close() }()
+	rec, ok, err := state.New(st2.db).Get(ctx, syncSource, syncEntityType, syncLastImportAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || rec.Value != "kept" {
+		t.Fatalf("canonical marker lost on reopen: ok=%v value=%q", ok, rec.Value)
+	}
+}
 
 func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
 	t.Parallel()
@@ -782,11 +863,11 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 		t.Fatalf("FTS 'hello a' in chat A = %d, want 0 (old FTS removed)", len(searchOld))
 	}
 
-	var sourcePath string
-	if err := st.db.QueryRowContext(ctx, `select value from sync_state where key='source_path'`).Scan(&sourcePath); err != nil {
+	rec, ok, err := state.New(st.db).Get(ctx, syncSource, syncEntityType, syncSourcePath)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if sourcePath != "tdata" {
-		t.Fatalf("source_path = %q, want %q", sourcePath, "tdata")
+	if !ok || rec.Value != "tdata" {
+		t.Fatalf("source_path = %q ok=%v, want %q", rec.Value, ok, "tdata")
 	}
 }

@@ -14,12 +14,6 @@ func (r *runtime) runSearch(args []string) error {
 	if err != nil {
 		return err
 	}
-	if filter.Limit <= 0 {
-		filter.Limit = defaultSearchLimit
-	}
-	if filter.Limit > maxSearchLimit {
-		filter.Limit = maxSearchLimit
-	}
 	return r.withStore(func(st *store.Store) error {
 		resolved, err := r.resolveSearchWhoFilter(st, &filter)
 		if err != nil {
@@ -75,7 +69,7 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 func (r *runtime) printSearch(value searchEnvelope) error {
 	hints := []string{"Open: telecrawl open REF"}
 	if value.Truncated {
-		hints = append(hints, searchMoreHint(value))
+		hints = append(hints, searchMoreHint(value), searchAllHint(value))
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   searchHeading(value),
@@ -101,15 +95,21 @@ func searchMoreHint(value searchEnvelope) string {
 	return fmt.Sprintf("More: telecrawl search %s --limit %d", strconv.Quote(value.Query), nextLimit)
 }
 
+// searchAllHint mirrors searchMoreHint so the offered command is runnable:
+// it carries the query when there is one, since bare `search` without a query
+// or filter is a usage error.
+func searchAllHint(value searchEnvelope) string {
+	if strings.TrimSpace(value.Query) == "" {
+		return "All: telecrawl search --all"
+	}
+	return fmt.Sprintf("All: telecrawl search %s --all", strconv.Quote(value.Query))
+}
+
 func nextSearchLimit(limit int) int {
 	if limit <= 0 {
 		limit = defaultSearchLimit
 	}
-	next := limit * 2
-	if next > maxSearchLimit {
-		return maxSearchLimit
-	}
-	return next
+	return limit * 2
 }
 
 func searchEmptyText(query string) string {
