@@ -36,7 +36,7 @@ func DefaultConfig() Config {
 	return Config{
 		Repo:     "~/Projects/backup-telecrawl",
 		Remote:   defaultRemote,
-		Identity: "~/.telecrawl/age.key",
+		Identity: "~/.opentrawl/telecrawl/age.key",
 	}
 }
 
@@ -45,7 +45,7 @@ func DefaultConfigPath() string {
 	if err != nil {
 		return "backup.json"
 	}
-	return filepath.Join(home, ".telecrawl", "backup.json")
+	return filepath.Join(home, ".opentrawl", "telecrawl", "backup.json")
 }
 
 func LoadConfig(path string) (Config, error) {

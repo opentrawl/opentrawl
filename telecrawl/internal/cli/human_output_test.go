@@ -334,7 +334,7 @@ func TestTopLevelHelpUsesGroupedUsageDoc(t *testing.T) {
 		"  telecrawl who \"alex\"",
 		"",
 		"Run 'telecrawl COMMAND --help' for flags and details.",
-		"Logs: ~/.telecrawl/logs/telecrawl.log",
+		"Logs: ~/.opentrawl/telecrawl/logs/telecrawl.log",
 	)
 	if stdout != want {
 		t.Fatalf("help stdout:\n%s\nwant:\n%s", stdout, want)

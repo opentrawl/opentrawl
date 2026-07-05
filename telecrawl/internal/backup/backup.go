@@ -398,7 +398,7 @@ names, participant IDs, and media metadata stay inside encrypted ` + "`*.jsonl.g
 
 Shard contents are JSONL, gzip-compressed with a fixed gzip timestamp, and
 encrypted with age for every configured public recipient. The local
-` + "`~/.telecrawl/age.key`" + ` identity is required to decrypt.
+` + "`~/.opentrawl/telecrawl/age.key`" + ` identity is required to decrypt.
 
 Git can still see manifest metadata: export time, public recipients, table
 names, row counts, shard paths, encrypted byte sizes, plaintext shard hashes,
@@ -441,7 +441,7 @@ without changing this checkout's current branch.
 
 ## Recovery
 
-Install telecrawl, clone this repo to the path in ` + "`~/.telecrawl/backup.json`" + `,
+Install telecrawl, clone this repo to the path in ` + "`~/.opentrawl/telecrawl/backup.json`" + `,
 restore the local age identity file, then run:
 
 ` + "```bash" + `

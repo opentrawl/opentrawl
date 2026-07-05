@@ -9,7 +9,7 @@ import (
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
 
-const diagnosticsLine = "Logs: ~/.telecrawl/logs/telecrawl.log"
+const diagnosticsLine = "Logs: ~/.opentrawl/telecrawl/logs/telecrawl.log"
 
 func hasHelpFlag(args []string) bool {
 	for _, arg := range args {
