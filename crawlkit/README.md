@@ -1,7 +1,5 @@
 # 🧱 crawlkit
 
-![crawlkit banner](docs/assets/readme-banner.jpg)
-
 Shared Go infrastructure for local-first crawler archives.
 
 `crawlkit` is not a universal Slack, Discord, Notion, or GitHub crawler. It is
@@ -9,15 +7,9 @@ the reusable foundation beneath those tools: SQLite hygiene, TOML config
 defaults, sync state, CLI output helpers, control/status metadata, and
 safe desktop-cache snapshot utilities.
 
-## Install
-
-```bash
-go get github.com/openclaw/crawlkit@latest
-```
-
-Go packages are published by tagging this repository. There is no separate
-package registry step. See `docs/publishing.md` for the release commands.
-See `docs/boundary.md` for the crawlkit-versus-app ownership boundary.
+The crawlers in this monorepo consume it through the Go workspace; there is
+no separate install or release step. See `AGENTS.md` for the ownership
+boundary.
 
 ## Packages
 
