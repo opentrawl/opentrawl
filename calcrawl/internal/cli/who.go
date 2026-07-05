@@ -104,8 +104,8 @@ func renderAmbiguousWho(query, who string, candidates []archive.WhoCandidate) st
 	var b strings.Builder
 	_, _ = fmt.Fprintf(&b, "--who %q matched more than one person.\n\n", who)
 	_ = writeWhoTable(&b, candidates)
-	if example := retryExample(query, candidates); example != "" {
-		_, _ = fmt.Fprintf(&b, "\nRetry with an identifier: %s\n", example)
+	if hint := retryHint(query, candidates); hint != "" {
+		_, _ = fmt.Fprintf(&b, "\n%s\n", hint)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
@@ -116,8 +116,8 @@ func renderUnknownWho(query, who string, didYouMean []archive.WhoCandidate) stri
 	if len(didYouMean) > 0 {
 		_, _ = io.WriteString(&b, "\nDid you mean:\n")
 		_ = writeWhoTable(&b, didYouMean)
-		if example := retryExample(query, didYouMean); example != "" {
-			_, _ = fmt.Fprintf(&b, "\nRetry with an identifier: %s\n", example)
+		if hint := retryHint(query, didYouMean); hint != "" {
+			_, _ = fmt.Fprintf(&b, "\n%s\n", hint)
 		}
 		return strings.TrimRight(b.String(), "\n")
 	}
@@ -143,12 +143,28 @@ func writeWhoTable(w io.Writer, candidates []archive.WhoCandidate) error {
 	}, rows)
 }
 
-func retryExample(query string, candidates []archive.WhoCandidate) string {
+// retryHint suggests one concrete retry. An identifier qualifies only when
+// exactly one listed candidate carries it: a shared mailbox fronts several
+// of them, so retrying it comes straight back to this list. When every
+// identifier is shared, the name is the only thing that tells them apart.
+func retryHint(query string, candidates []archive.WhoCandidate) string {
+	carriers := map[string]int{}
 	for _, candidate := range candidates {
-		if len(candidate.Identifiers) == 0 {
-			continue
+		for _, identifier := range candidate.Identifiers {
+			carriers[strings.ToLower(normalizeIdentity(identifier))]++
 		}
-		return searchWithWhoExample(query, candidate.Identifiers[0])
+	}
+	for _, candidate := range candidates {
+		for _, identifier := range candidate.Identifiers {
+			if carriers[strings.ToLower(normalizeIdentity(identifier))] == 1 {
+				return "Retry with an identifier: " + searchWithWhoExample(query, identifier)
+			}
+		}
+	}
+	for _, candidate := range candidates {
+		if candidate.Who != "" {
+			return "Retry with a name: " + searchWithWhoExample(query, candidate.Who)
+		}
 	}
 	return ""
 }

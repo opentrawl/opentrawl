@@ -49,6 +49,12 @@ type WhoCandidate struct {
 	Identifiers []string `json:"identifiers"`
 	LastSeen    string   `json:"last_seen"`
 	Messages    int64    `json:"messages"`
+	// filterIdentifiers are the identifiers that belong to exactly this
+	// entity. A shared mailbox stays in Identifiers for display and query
+	// matching, but filtering events by it would pull in the other entities
+	// it fronts, so Filter() matches on these only; when none survive, it
+	// falls back to name equality.
+	filterIdentifiers []string
 }
 
 type WhoResolved struct {
