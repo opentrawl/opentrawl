@@ -75,6 +75,18 @@ type shortRefMatch struct {
 	Ref    string
 }
 
+// shortRefFailure is a source that errored for a reason unrelated to
+// the short-refs.md contract (not unknown_short_ref, not
+// ambiguous_short_ref) — a crawler crash, a bad short_refs
+// implementation, a timeout. It never aborts the fan-out on its own;
+// the other sources still get asked. It only surfaces if every source
+// in the fan-out fails this way, so the caller learns exactly what
+// broke instead of a misattributed "trawl doctor <first source>".
+type shortRefFailure struct {
+	SourceID string
+	Err      error
+}
+
 var errAmbiguousShortRef = errors.New("ambiguous short ref")
 
 func (r *Runtime) openShortRef(alias string) error {
@@ -86,6 +98,7 @@ func (r *Runtime) openShortRef(alias string) error {
 	sources := shortRefSources(discoverCrawlers(r.ctx))
 	matches := make([]shortRefMatch, 0)
 	seenRefs := map[string]bool{}
+	var failures []shortRefFailure
 	for _, source := range sources {
 		refs, err := resolveSourceShortRef(r.ctx, source, alias)
 		if err != nil {
@@ -94,9 +107,16 @@ func (r *Runtime) openShortRef(alias string) error {
 					fmt.Sprintf("Short ref %q matched more than one item.", alias),
 					"rerun the search or use the full ref")
 			}
-			return r.writeError("short_ref_resolution_failed",
-				fmt.Sprintf("Could not resolve short ref %q.", alias),
-				fmt.Sprintf("run: trawl doctor %s", source.ID))
+			// Unrelated failure: note it and keep asking the remaining
+			// sources. A source erroring must never be mistaken for
+			// that source saying "not found".
+			r.logInfo("short_ref_source_failed", strings.Join([]string{
+				sourceField(source),
+				"alias=" + logQuote(alias),
+				"error=" + logQuote(err.Error()),
+			}, " "))
+			failures = append(failures, shortRefFailure{SourceID: source.ID, Err: err})
+			continue
 		}
 		for _, ref := range refs {
 			if seenRefs[ref] {
@@ -106,18 +126,33 @@ func (r *Runtime) openShortRef(alias string) error {
 			matches = append(matches, shortRefMatch{Source: source, Ref: ref})
 		}
 	}
-	switch len(matches) {
-	case 0:
-		return r.writeError("unknown_short_ref",
-			fmt.Sprintf("Short ref %q was not found.", alias),
-			"use a full ref from trawl search --json")
-	case 1:
+	switch {
+	case len(matches) == 1:
 		return r.openWithSource(matches[0].Source, matches[0].Ref)
-	default:
+	case len(matches) > 1:
 		return r.writeError("ambiguous_short_ref",
 			fmt.Sprintf("Short ref %q matched more than one item.", alias),
 			"rerun the search or use the full ref")
+	case len(sources) > 0 && len(failures) == len(sources):
+		// Every source failed for an unrelated reason: no source ever
+		// actually answered resolved/unknown/ambiguous, so "not found"
+		// would be dishonest. Report exactly what broke.
+		return r.shortRefResolutionFailed(alias, failures)
+	default:
+		return r.writeError("unknown_short_ref",
+			fmt.Sprintf("Short ref %q was not found.", alias),
+			"use a full ref from trawl search --json")
 	}
+}
+
+func (r *Runtime) shortRefResolutionFailed(alias string, failures []shortRefFailure) error {
+	reasons := make([]string, 0, len(failures))
+	for _, failure := range failures {
+		reasons = append(reasons, fmt.Sprintf("%s (%s)", failure.SourceID, failure.Err))
+	}
+	return r.writeError("short_ref_resolution_failed",
+		fmt.Sprintf("Could not resolve short ref %q. Every source failed: %s.", alias, strings.Join(reasons, ", ")),
+		"run: trawl doctor")
 }
 
 func validShortRefAlias(alias string) bool {
@@ -143,15 +178,21 @@ func shortRefSources(sources []Source) []Source {
 }
 
 func resolveSourceShortRef(ctx context.Context, source Source, alias string) ([]string, error) {
-	data, err := runCrawlerJSONWithArgs(ctx, source.Path, "open", alias)
-	if err != nil {
-		switch shortRefErrorCode(data) {
+	data, runErr := runCrawlerJSONWithArgs(ctx, source.Path, "open", alias)
+	// Classify from the error envelope, not the exit code: live
+	// crawlers have emitted contract error envelopes at exit 0, and
+	// an exit-0 unknown_short_ref is still the contract "no match".
+	if envelope, ok := shortRefErrorEnvelope(data); ok {
+		switch envelope.Error.Code {
 		case "unknown_short_ref":
-			return []string{}, nil
+			return nil, nil
 		case "ambiguous_short_ref":
 			return nil, errAmbiguousShortRef
 		}
-		return nil, err
+		return nil, fmt.Errorf("%s: %s", envelope.Error.Code, envelope.Error.Message)
+	}
+	if runErr != nil {
+		return nil, runErr
 	}
 	ref, err := decodeShortRefOpenRef(data)
 	if err != nil {
@@ -160,12 +201,16 @@ func resolveSourceShortRef(ctx context.Context, source Source, alias string) ([]
 	return []string{ref}, nil
 }
 
-func shortRefErrorCode(data []byte) string {
+func shortRefErrorEnvelope(data []byte) (ErrorEnvelope, bool) {
 	var envelope ErrorEnvelope
 	if err := decodeContractJSON(data, &envelope); err != nil {
-		return ""
+		return ErrorEnvelope{}, false
 	}
-	return strings.TrimSpace(envelope.Error.Code)
+	envelope.Error.Code = strings.TrimSpace(envelope.Error.Code)
+	if envelope.Error.Code == "" {
+		return ErrorEnvelope{}, false
+	}
+	return envelope, true
 }
 
 func decodeShortRefOpenRef(data []byte) (string, error) {
