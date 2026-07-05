@@ -5,4 +5,3 @@ coverage.out
 *.db-shm
 *.db-wal
 .DS_Store
-.crabbox/

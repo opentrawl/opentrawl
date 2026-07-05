@@ -702,24 +702,15 @@ Important details:
 Requires Go 1.26 or newer.
 
 ```bash
-make check
-```
-
-Runs:
-
-```bash
-golangci-lint run ./...
-./scripts/coverage.sh 85.0
+go test ./...
 go build -o bin/wacrawl ./cmd/wacrawl
 ```
 
-Extra checks:
+Regenerate sqlc wrappers after changing `internal/store/sqlc/`:
 
 ```bash
-go test -count=1 -race ./...
+go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
 ```
-
-Coverage must stay at or above 85%.
 
 ## License
 
