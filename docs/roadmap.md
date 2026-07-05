@@ -137,8 +137,7 @@ search <query> --source a,b`, `trawl open <ref>`, `trawl sync
 on every row.
 
 - search federates across per-source FTS; the contract is the only
-  coupling to crawlers. Reuse crawlkit's `crawlctl` mechanics
-  (discovery, run locking, history) where they fit.
+  coupling to crawlers.
 - every surface stays clig.dev compliant and curated; adding a flag is
   a design decision, not a default response to a feature request.
 - design hook for v2 deltas: sync cursors already exist in crawlkit, so

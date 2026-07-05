@@ -6,67 +6,30 @@ Shared Go infrastructure for local-first crawler archives.
 
 `crawlkit` is not a universal Slack, Discord, Notion, or GitHub crawler. It is
 the reusable foundation beneath those tools: SQLite hygiene, TOML config
-defaults, portable JSONL/Gzip packing, git-backed snapshot sharing, sync state,
-CLI output helpers, control/status metadata, a shared terminal explorer, and
+defaults, sync state, CLI output helpers, control/status metadata, and
 safe desktop-cache snapshot utilities.
 
 ## Install
 
 ```bash
 go get github.com/openclaw/crawlkit@latest
-go install github.com/openclaw/crawlkit/cmd/crawlctl@latest
 ```
 
 Go packages are published by tagging this repository. There is no separate
 package registry step. See `docs/publishing.md` for the release commands.
-See `docs/boundary.md` for the crawlkit-versus-app ownership boundary and
-`docs/remote-contract.md` for the Worker/client split.
+See `docs/boundary.md` for the crawlkit-versus-app ownership boundary.
 
 ## Packages
 
 - `config`: standard TOML config paths, opt-in platform-native runtime dirs,
   migration-safe legacy path fallback, and token diagnostics.
 - `store`: SQLite open/read-only/transaction/query helpers plus safe FTS5 term and optimization helpers.
-- `snapshot`: `manifest.json` plus JSONL/Gzip table snapshot export, file fingerprints, exact or monotonic-merge import planning, impact classification, and managed sidecar trees.
 - `backup`: age-encrypted JSONL/Gzip shards, backup manifests, recipient/identity helpers, history listing, and historical-ref restore verification.
 - `mirror`: clone/init/pull/commit/push helpers plus non-mutating fetch, immutable tags, Git-object reads, and history inspection for private snapshot repos.
 - `state`: generic crawler cursor and freshness records, including mapped adapters for existing app table layouts.
-- `embed`: reusable OpenAI-compatible, Ollama, and llama.cpp embedding providers plus local probe diagnostics.
-- `vector`: float32 vector encoding, dimension validation, exact cosine search, optional turbovec-backed search for dimensions divisible by 8 up to 8,192, top-k helpers, and reciprocal-rank fusion.
-- `releasecheck`: GitHub release checks, 24-hour cache handling, scripted-output
-  suppression, and stderr update notice formatting for crawl app CLIs.
-- `remote`: provider-neutral HTTP client, config, query, ingest, auth, status,
-  and protocol contract metadata for Worker-fronted remote archives such as
-  Cloudflare D1.
 - `output`: text/json/log output helpers.
 - `control`: crawl app metadata, command manifests, status payloads, contact-export contracts, and database inventory for launchers and automation.
-- `scheduler`: crawl app discovery, job config, single-process run locking,
-  JSONL run history, log paths, and launchd/systemd/Windows/cron schedule
-  rendering for controller CLIs.
-- `tui`: shared terminal archive explorer with gitcrawl-style responsive panes, entity/member/detail lanes, compact sortable headers, mouse selection, floating right-click actions, sorting/filtering, and local/remote source status.
 - `cache`: safe read-only local cache and SQLite DB/WAL/SHM snapshot helpers.
-
-## crawlctl
-
-`crawlctl` is the shared controller for keeping local crawl archives warm.
-It discovers installed crawl apps through `metadata --json`, falls back to
-temporary legacy adapters for older apps, runs configured jobs with a lock, and
-records one JSONL run record per command.
-
-```bash
-crawlctl init --repo openclaw/openclaw
-crawlctl run
-crawlctl status
-crawlctl logs gitcrawl --tail 80
-crawlctl install --dry-run
-```
-
-Native install backends:
-
-- macOS: `launchd`
-- Linux: `systemd --user`
-- Windows: Task Scheduler
-- portable fallback: cron line rendering
 
 ## Downstream apps
 
