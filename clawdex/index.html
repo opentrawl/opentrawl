@@ -467,9 +467,6 @@
         <a class="tab" data-slug="markdown-storage" href="#/markdown-storage"><span class="num">11</span><span>Markdown Storage</span></a>
         <a class="tab" data-slug="doctor"       href="#/doctor"><span class="num">12</span><span>Doctor</span></a>
         <a class="tab" data-slug="config"       href="#/config"><span class="num">13</span><span>Config</span></a>
-
-        <h2>Project</h2>
-        <a class="tab" data-slug="RELEASING"    href="#/RELEASING"><span class="num">14</span><span>Releasing</span></a>
       </div>
     </aside>
 
@@ -504,8 +501,7 @@
         "index", "install", "quickstart",
         "people", "notes", "timeline", "search", "avatars",
         "imports", "vcard-export", "git-sync",
-        "markdown-storage", "doctor", "config",
-        "RELEASING"
+        "markdown-storage", "doctor", "config"
       ]);
       const TAB_LABEL = {
         "index": "overview",
@@ -521,8 +517,7 @@
         "git-sync": "git sync",
         "markdown-storage": "storage",
         "doctor": "doctor",
-        "config": "config",
-        "RELEASING": "releasing"
+        "config": "config"
       };
 
       const article = document.getElementById("article");
@@ -579,7 +574,7 @@
           a.classList.toggle("active", a.dataset.slug === slug);
         });
         card.dataset.tab = TAB_LABEL[slug] || slug;
-        const file = (slug === "RELEASING") ? "RELEASING.md" : (slug + ".md");
+        const file = slug + ".md";
         metaSlug.textContent = "docs/" + file;
         metaLink.href = `https://github.com/openclaw/clawdex/blob/main/docs/${file}`;
       }
@@ -590,8 +585,7 @@
         let md = cache.get(slug);
         if (!md) {
           try {
-            const file = (slug === "RELEASING") ? "RELEASING.md" : (slug + ".md");
-            const res = await fetch("docs/" + file, { headers: { "Accept": "text/plain" } });
+            const res = await fetch("docs/" + slug + ".md", { headers: { "Accept": "text/plain" } });
             if (!res.ok) throw new Error(res.status + " " + res.statusText);
             md = await res.text();
             cache.set(slug, md);
