@@ -5,7 +5,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 bin_dir="$repo_root/.dev/bin"
 
 # One build incantation everywhere: C SQLite (mattn/go-sqlite3) with FTS5.
-# Same flags the devenv shell exports; see devenv.nix.
+# Matches the devenv shell (devenv.nix exports the same GOFLAGS); CGO is set
+# explicitly here so builds also work outside that shell.
 export CGO_ENABLED=1
 export GOFLAGS="-tags=sqlite_fts5"
 
