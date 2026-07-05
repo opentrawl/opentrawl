@@ -71,7 +71,7 @@ func TestMetadataDeclaresShortRefsAndWho(t *testing.T) {
 			t.Fatalf("capabilities = %#v, want %q", manifest.Capabilities, want)
 		}
 	}
-	if want := filepath.Join(os.Getenv("HOME"), ".calcrawl", "logs"); manifest.Paths.DefaultLogs != want {
+	if want := filepath.Join(os.Getenv("HOME"), ".opentrawl", "calcrawl", "logs"); manifest.Paths.DefaultLogs != want {
 		t.Fatalf("default logs = %q, want %q", manifest.Paths.DefaultLogs, want)
 	}
 	if command, ok := manifest.Commands["who"]; !ok || strings.Join(command.Argv, " ") != "calcrawl who NAME --json" {
@@ -91,7 +91,7 @@ func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("TZ", "UTC")
-	logPath := filepath.Join(home, ".calcrawl", "logs", "calcrawl.log")
+	logPath := filepath.Join(home, ".opentrawl", "calcrawl", "logs", "calcrawl.log")
 
 	stdout, stderr, err := run(t, "metadata")
 	if err != nil {
@@ -149,7 +149,7 @@ func TestSyncVerboseLogsPhaseTimings(t *testing.T) {
 
 func TestHelpDocumentsDiagnosticsLine(t *testing.T) {
 	setupTestHome(t)
-	diagnostics := "Diagnostics: run with -v, or read ~/.calcrawl/logs/calcrawl.log"
+	diagnostics := "Diagnostics: run with -v, or read ~/.opentrawl/calcrawl/logs/calcrawl.log"
 	for _, args := range [][]string{
 		{"help"},
 		{"help", "metadata"},
@@ -799,7 +799,7 @@ func run(t *testing.T, args ...string) (string, string, error) {
 
 func readTestLog(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".calcrawl", "logs", "calcrawl.log"))
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".opentrawl", "calcrawl", "logs", "calcrawl.log"))
 	if err != nil {
 		t.Fatal(err)
 	}

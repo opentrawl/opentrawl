@@ -33,13 +33,13 @@ the Reminders store. There is no include or exclude configuration.
 The archive lives at:
 
 ```text
-~/.calcrawl/calcrawl.db
+~/.opentrawl/calcrawl/calcrawl.db
 ```
 
 Logs live under:
 
 ```text
-~/.calcrawl/calcrawl/logs/current.log
+~/.opentrawl/calcrawl/calcrawl/logs/current.log
 ```
 
 The archive stores calendars, account/store provenance, events, start and end

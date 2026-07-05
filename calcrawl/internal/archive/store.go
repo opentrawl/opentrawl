@@ -32,9 +32,9 @@ type Store struct {
 }
 
 // DefaultPaths is the one archive path layout, from crawlkit/config. The base
-// dir stays ~/.calcrawl (the layout shipped before config adoption).
+// dir is the fleet-wide state root, ~/.opentrawl/calcrawl (TRAWL-99).
 func DefaultPaths() config.Paths {
-	paths, _ := config.App{Name: "calcrawl", BaseDir: "~/.calcrawl"}.DefaultPaths()
+	paths, _ := config.App{Name: "calcrawl", BaseDir: "~/.opentrawl/calcrawl"}.DefaultPaths()
 	return paths
 }
 
