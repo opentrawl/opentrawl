@@ -402,13 +402,13 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		return r.contractError("deficient_input", err.Error(), "check the X API response shape before storing more rows")
 	case errors.As(err, &authErr):
 		_ = st.SetAuthTokenValid(r.ctx, false, time.Now().UTC())
-		return r.contractError("auth_failed", "X API credentials were rejected", "refresh the OAuth credentials in ~/.birdcrawl/credentials.toml")
+		return r.contractError("auth_failed", "X API credentials were rejected", "refresh the OAuth credentials in ~/.opentrawl/birdcrawl/credentials.toml")
 	case errors.Is(err, xapi.ErrCredentialsMissing):
-		return r.contractError("credentials_missing", "X API credentials are missing", "create ~/.birdcrawl/credentials.toml with OAuth user tokens")
+		return r.contractError("credentials_missing", "X API credentials are missing", "create ~/.opentrawl/birdcrawl/credentials.toml with OAuth user tokens")
 	case errors.Is(err, xapi.ErrCredentialsIncomplete):
-		return r.contractError("credentials_missing", "X API credentials are incomplete", "add client_id, client_secret, access_token, and refresh_token to ~/.birdcrawl/credentials.toml")
+		return r.contractError("credentials_missing", "X API credentials are incomplete", "add client_id, client_secret, access_token, and refresh_token to ~/.opentrawl/birdcrawl/credentials.toml")
 	case errors.Is(err, xapi.ErrCredentialsPermissions):
-		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions", "set ~/.birdcrawl/credentials.toml permissions to 0600")
+		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions", "set ~/.opentrawl/birdcrawl/credentials.toml permissions to 0600")
 	case errors.As(err, &payment):
 		if fetched {
 			r.recordPartialSync(st, "partial: X credits exhausted")

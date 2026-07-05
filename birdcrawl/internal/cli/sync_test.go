@@ -329,7 +329,7 @@ func newSyncTestEnv(t *testing.T) syncTestEnv {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	base := filepath.Join(home, ".birdcrawl")
+	base := filepath.Join(home, ".opentrawl", "birdcrawl")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		t.Fatal(err)
 	}

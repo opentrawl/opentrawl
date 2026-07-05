@@ -29,9 +29,9 @@ type Credentials struct {
 func DefaultCredentialsPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join(".birdcrawl", "credentials.toml")
+		return filepath.Join(".opentrawl", "birdcrawl", "credentials.toml")
 	}
-	return filepath.Join(home, ".birdcrawl", "credentials.toml")
+	return filepath.Join(home, ".opentrawl", "birdcrawl", "credentials.toml")
 }
 
 func CredentialsPresent(path string) bool {

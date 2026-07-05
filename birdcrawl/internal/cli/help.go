@@ -106,7 +106,7 @@ func birdUsageDoc() usage.Doc {
 		},
 		Footer: []string{
 			"Run 'birdcrawl COMMAND --help' for flags and details.",
-			"Logs: ~/.birdcrawl/birdcrawl/logs/current.log",
+			"Logs: ~/.opentrawl/birdcrawl/logs/current.log",
 		},
 	}
 }

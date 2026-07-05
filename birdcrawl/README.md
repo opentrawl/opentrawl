@@ -27,7 +27,7 @@ From an extracted or zipped X archive dump:
 - `like.js` for liked tweets
 
 From the X API (with your own OAuth credentials in
-`~/.birdcrawl/credentials.toml`, permissions 0600): your own
+`~/.opentrawl/birdcrawl/credentials.toml`, permissions 0600): your own
 timelines and bookmarks. Replies to you come from the mentions
 timeline, which X caps at roughly the 800 most recent — older
 incoming replies are not obtainable from any X source.
@@ -40,7 +40,7 @@ go build ./cmd/birdcrawl
 ```
 
 Use `--db PATH` to choose a database path. The default is
-`~/.birdcrawl/birdcrawl.db`.
+`~/.opentrawl/birdcrawl/birdcrawl.db`.
 
 ## What it stores
 

@@ -97,7 +97,7 @@ func credentialsPresentCheck() doctorCheck {
 	if xapi.CredentialsPresent(xapi.DefaultCredentialsPath()) {
 		return doctorCheck{ID: "credentials_present", State: "ok", Message: "OAuth credentials file is present"}
 	}
-	return doctorCheck{ID: "credentials_present", State: "missing", Message: "OAuth credentials file is missing or incomplete", Remedy: "Create ~/.birdcrawl/credentials.toml with OAuth user tokens and 0600 permissions."}
+	return doctorCheck{ID: "credentials_present", State: "missing", Message: "OAuth credentials file is missing or incomplete", Remedy: "Create ~/.opentrawl/birdcrawl/credentials.toml with OAuth user tokens and 0600 permissions."}
 }
 
 func budgetHeadroomCheck(status store.Status, cfg birdConfig) doctorCheck {
@@ -117,7 +117,7 @@ func (r *runtime) xAPIUserProbeCheck(cfg birdConfig, status store.Status) doctor
 	}
 	client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 	if err != nil {
-		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "could not load OAuth credentials for the networked check", Remedy: "Check ~/.birdcrawl/credentials.toml."}
+		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "could not load OAuth credentials for the networked check", Remedy: "Check ~/.opentrawl/birdcrawl/credentials.toml."}
 	}
 	_, _, err = client.Me(r.ctx)
 	if err != nil {

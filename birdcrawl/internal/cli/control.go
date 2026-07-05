@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"path/filepath"
-
 	"github.com/openclaw/crawlkit/control"
 )
 
@@ -16,7 +14,7 @@ func controlManifest() control.Manifest {
 		ConfigEnv:       configEnv,
 		DefaultDatabase: defaultDBPath(),
 		DefaultLogs:     defaultLogDir(),
-		DefaultCache:    filepath.Join(defaultBaseDir(), "cache"),
+		DefaultCache:    birdcrawlPaths().CacheDir,
 	}
 	m.Capabilities = []string{"metadata", "status", "sync", "search", "open", "doctor", "stats", "archive_import", "short_refs"}
 	m.Privacy = control.Privacy{

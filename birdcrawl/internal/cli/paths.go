@@ -1,39 +1,42 @@
 package cli
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/openclaw/crawlkit/config"
 )
 
+// birdcrawlPaths is the one path layout, from crawlkit/config. The base dir
+// is the fleet-wide state root, ~/.opentrawl/birdcrawl (TRAWL-99).
+func birdcrawlPaths() config.Paths {
+	paths, _ := config.App{Name: "birdcrawl", BaseDir: "~/.opentrawl/birdcrawl"}.DefaultPaths()
+	return paths
+}
+
 func defaultDBPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "birdcrawl.db"
-	}
-	return filepath.Join(home, ".birdcrawl", "birdcrawl.db")
+	return birdcrawlPaths().DBPath
 }
 
 func defaultBaseDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ".birdcrawl"
-	}
-	return filepath.Join(home, ".birdcrawl")
+	return birdcrawlPaths().BaseDir
 }
 
+// logStateRoot is where cklog puts its <root>/birdcrawl/logs tree: next to a
+// caller-supplied database, or at the fleet root for the default layout so
+// logs land in ~/.opentrawl/birdcrawl/logs.
 func logStateRoot(dbPath string) string {
 	dbPath = strings.TrimSpace(dbPath)
-	if dbPath == "" {
-		return defaultBaseDir()
+	if dbPath == "" || dbPath == defaultDBPath() {
+		return filepath.Dir(defaultBaseDir())
 	}
 	dir := filepath.Dir(dbPath)
 	if dir == "." || dir == "" {
-		return defaultBaseDir()
+		return filepath.Dir(defaultBaseDir())
 	}
 	return dir
 }
 
 func defaultLogDir() string {
-	return filepath.Join(logStateRoot(defaultDBPath()), "birdcrawl", "logs")
+	return birdcrawlPaths().LogDir
 }
