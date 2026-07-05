@@ -37,19 +37,19 @@ func commandUsage(args []string) string {
 	case "status":
 		return "usage: birdcrawl status [--json]\n\nReads archive counts and coverage without syncing.\n"
 	case "tweets":
-		return "usage: birdcrawl tweets [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows your tweets and replies, newest first.\n"
+		return "usage: birdcrawl tweets [--limit N | --all] [--after DATE] [--before DATE] [--json]\n\nShows your tweets and replies, newest first. DATE is RFC3339 or YYYY-MM-DD.\n"
 	case "bookmarks":
-		return "usage: birdcrawl bookmarks [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows tweets you bookmarked, ordered by tweet date; X does not record when you bookmarked them.\n"
+		return "usage: birdcrawl bookmarks [--limit N | --all] [--after DATE] [--before DATE] [--json]\n\nShows tweets you bookmarked, ordered by tweet date; X does not record when you bookmarked them. DATE is RFC3339 or YYYY-MM-DD.\n"
 	case "likes":
-		return "usage: birdcrawl likes [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows tweets you liked, newest first.\n"
+		return "usage: birdcrawl likes [--limit N | --all] [--after DATE] [--before DATE] [--json]\n\nShows tweets you liked, newest first. DATE is RFC3339 or YYYY-MM-DD.\n"
 	case "mentions":
-		return "usage: birdcrawl mentions [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nShows replies and mentions you received, newest first.\n"
+		return "usage: birdcrawl mentions [--limit N | --all] [--after DATE] [--before DATE] [--json]\n\nShows replies and mentions you received, newest first. DATE is RFC3339 or YYYY-MM-DD.\n"
 	case "import":
 		return "usage: birdcrawl import archive PATH [--json]\n\nImports tweets.js and like.js from an extracted or zipped X archive dump.\n"
 	case "sync":
 		return "usage: birdcrawl sync [--json]\n\nSyncs live X API data into the local archive.\n"
 	case "search":
-		return "usage: birdcrawl search QUERY [--limit N] [--after RFC3339] [--before RFC3339] [--json]\n\nSearches archived tweets and returns refs for birdcrawl open.\n"
+		return "usage: birdcrawl search QUERY [--limit N | --all] [--after DATE] [--before DATE] [--json]\n\nSearches archived tweets and returns refs for birdcrawl open. DATE is RFC3339 or YYYY-MM-DD.\n"
 	case "open":
 		return "usage: birdcrawl open birdcrawl:tweet/ID [--json]\n\nOpens one tweet with up to 3 ancestors and up to 20 replies.\n"
 	case "stats":

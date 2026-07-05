@@ -34,6 +34,10 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return nil
 	}
 	if rest[0] == "--version" || rest[0] == "version" {
+		if hasHelpFlag(rest[1:]) {
+			printCommandUsage(stdout, rest)
+			return nil
+		}
 		_, _ = io.WriteString(stdout, version+"\n")
 		return nil
 	}

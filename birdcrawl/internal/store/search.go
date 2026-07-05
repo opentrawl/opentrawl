@@ -37,9 +37,6 @@ func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult
 	if strings.TrimSpace(filter.Query) == "" {
 		return nil, 0, errors.New("search query required")
 	}
-	if filter.Limit <= 0 {
-		filter.Limit = 20
-	}
 	queryText, err := ckstore.FTS5Terms(filter.Query, "")
 	if err != nil {
 		return nil, 0, err
@@ -58,7 +55,7 @@ join tweets t on t.rowid = f.rowid
 left join tweets p on p.id = t.in_reply_to_id
 where tweets_fts match ?` + where + `
 order by t.created_at desc, t.id desc limit ?`
-	args = append(countArgs, filter.Limit)
+	args = append(countArgs, limitArg(filter.Limit))
 	rows, err := s.db.QueryContext(ctx, selectQuery, args...)
 	if err != nil {
 		return nil, 0, err
@@ -87,9 +84,6 @@ func (s *Store) ListByRole(ctx context.Context, role string, filter ListFilter) 
 	if role == "" {
 		return nil, 0, errors.New("role required")
 	}
-	if filter.Limit <= 0 {
-		filter.Limit = 20
-	}
 	where, whereArgs := searchWhere(SearchFilter{After: filter.After, Before: filter.Before}, "t.")
 	countArgs := append([]any{role}, whereArgs...)
 	var total int
@@ -99,7 +93,7 @@ join tweet_roles r on r.tweet_id = t.id
 where r.role = ?`+where, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	args := append(countArgs, filter.Limit)
+	args := append(countArgs, limitArg(filter.Limit))
 	rows, err := s.db.QueryContext(ctx, `select `+tweetSelectColumns("t")+`,
 coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,'')
 from tweets t
@@ -127,6 +121,15 @@ limit ?`, args...)
 		})
 	}
 	return out, total, rows.Err()
+}
+
+// limitArg maps a resolved limit to SQLite's LIMIT argument: 0 means return
+// everything — the --all path (crawlkit/flags.Limit) — which SQLite spells -1.
+func limitArg(limit int) int {
+	if limit <= 0 {
+		return -1
+	}
+	return limit
 }
 
 func searchWhere(filter SearchFilter, prefix string) (string, []any) {

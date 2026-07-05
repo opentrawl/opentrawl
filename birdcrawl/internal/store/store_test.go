@@ -193,6 +193,14 @@ func TestListByRoleFiltersOrdersAndCounts(t *testing.T) {
 	if total != 1 || len(results) != 1 || results[0].ID != "bookmark-new" {
 		t.Fatalf("windowed bookmarks = total %d rows %#v, want bookmark-new only", total, results)
 	}
+	// Limit 0 is the --all path (crawlkit/flags.Limit): every row, no default.
+	all, total, err := st.ListByRole(ctx, "bookmark", ListFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(all) != 2 {
+		t.Fatalf("bookmark limit 0 = total %d rows %d, want all 2", total, len(all))
+	}
 }
 
 func TestShortRefsRebuildLookupAndAliasDisplay(t *testing.T) {

@@ -97,10 +97,11 @@ birdcrawl version
 
 Human text is the default. Add `--json` for the contract envelope.
 
-Browse and search return at most 20 results by default and clamp
-`--limit` to 200. `open` accepts a short ref from human output or a
-full `birdcrawl:tweet/ID` ref, and returns one tweet, up to 3
-ancestors and up to 20 replies.
+Browse and search return 20 results by default; `--limit N` is
+honored exactly and `--all` returns everything. `--after`/`--before`
+take RFC3339 or YYYY-MM-DD. `open` accepts a short ref from human
+output or a full `birdcrawl:tweet/ID` ref, and returns one tweet, up
+to 3 ancestors and up to 20 replies.
 
 ## Current status
 

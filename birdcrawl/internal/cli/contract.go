@@ -13,7 +13,6 @@ import (
 
 const (
 	defaultSearchLimit = 20
-	maxSearchLimit     = 200
 	defaultStatsLimit  = 10
 )
 

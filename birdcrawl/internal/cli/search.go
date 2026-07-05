@@ -2,9 +2,11 @@ package cli
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 
+	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -34,7 +36,10 @@ func (r *runtime) runSearch(args []string) error {
 }
 
 func parseSearchArgs(args []string) (store.SearchFilter, error) {
-	filter := store.SearchFilter{Limit: defaultSearchLimit}
+	var filter store.SearchFilter
+	limit := defaultSearchLimit
+	limitSet := false
+	all := false
 	var positionals []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -43,17 +48,20 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 				return filter, errors.New("--limit takes a value")
 			}
 			i++
-			limit, err := strconv.Atoi(args[i])
+			value, err := strconv.Atoi(args[i])
 			if err != nil {
-				return filter, err
+				return filter, fmt.Errorf("--limit must be a number: %s", args[i])
 			}
-			filter.Limit = limit
+			limit = value
+			limitSet = true
+		case "--all":
+			all = true
 		case "--after":
 			if i+1 >= len(args) {
 				return filter, errors.New("--after takes a value")
 			}
 			i++
-			after, err := parseRFC3339Flag(args[i])
+			after, err := parseTimeFlag("--after", args[i])
 			if err != nil {
 				return filter, err
 			}
@@ -63,7 +71,7 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 				return filter, errors.New("--before takes a value")
 			}
 			i++
-			before, err := parseRFC3339Flag(args[i])
+			before, err := parseTimeFlag("--before", args[i])
 			if err != nil {
 				return filter, err
 			}
@@ -78,12 +86,13 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 	if len(positionals) != 1 {
 		return filter, errors.New("search takes exactly one query")
 	}
-	if filter.Limit <= 0 {
-		filter.Limit = defaultSearchLimit
+	// The one --limit contract (crawlkit/flags): honored exactly as given,
+	// below 1 is a usage error, --all returns everything (Limit 0).
+	resolved, err := ckflags.Limit(limit, limitSet, all)
+	if err != nil {
+		return filter, err
 	}
-	if filter.Limit > maxSearchLimit {
-		filter.Limit = maxSearchLimit
-	}
+	filter.Limit = resolved
 	filter.Query = positionals[0]
 	return filter, nil
 }
