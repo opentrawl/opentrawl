@@ -28,7 +28,6 @@ func topHelpDoc() usage.Doc {
 				{Name: "open", Summary: "Open one message with nearby context."},
 				{Name: "who", Summary: "Resolve a person across names and identifiers."},
 				{Name: "sql", Summary: "Run a read-only SQL query."},
-				{Name: "web", Summary: "Browse the archive in a private web viewer."},
 			}},
 			{Title: "Keep it fresh", Commands: []usage.Command{
 				{Name: "import", Summary: "Read WhatsApp Desktop data into the archive."},
@@ -233,23 +232,6 @@ Usage:
 Examples:
   wacrawl sql "SELECT count(*) FROM messages"
   wacrawl --json sql "SELECT chat_jid, count(*) FROM messages GROUP BY chat_jid"
-`)
-	case "web":
-		_, _ = fmt.Fprint(w, `Browse the local archive in a private web viewer.
-
-The viewer binds only to 127.0.0.1 and requires a random key printed in its URL.
-It reads archive status, chats, messages, and search results without serving media
-files or exposing configuration and write controls.
-
-Usage:
-  wacrawl web [--port N]
-
-Flags:
-  --port N   Loopback port. Default: choose a free random port.
-
-Examples:
-  wacrawl web
-  wacrawl web --port 8787
 `)
 	case "backup":
 		_, _ = fmt.Fprint(w, `Manage encrypted Git backups of the wacrawl archive.

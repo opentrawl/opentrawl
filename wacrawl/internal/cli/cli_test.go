@@ -448,18 +448,6 @@ func TestMetadataAdvertisesContactExport(t *testing.T) {
 	if !reflect.DeepEqual(openCommand.Argv, openWant) {
 		t.Fatalf("open argv = %#v, want %#v", openCommand.Argv, openWant)
 	}
-	webCommand, ok := manifest.Commands["web"]
-	if !ok {
-		t.Fatalf("commands = %#v", manifest.Commands)
-	}
-	if webCommand.Mutates || webCommand.JSON {
-		t.Fatalf("web command = %#v", webCommand)
-	}
-	webWant := []string{"wacrawl", "web"}
-	if !reflect.DeepEqual(webCommand.Argv, webWant) {
-		t.Fatalf("web argv = %#v, want %#v", webCommand.Argv, webWant)
-	}
-
 	sqlCommand, ok := manifest.Commands["sql"]
 	if !ok {
 		t.Fatalf("commands = %#v", manifest.Commands)
@@ -1917,7 +1905,6 @@ func TestRunUsageErrors(t *testing.T) {
 		{"chats", "extra"},
 		{"messages", "extra"},
 		{"unread", "extra"},
-		{"web", "extra"},
 	} {
 		err = Run(context.Background(), args, &stdout, &stderr)
 		if err == nil || !strings.Contains(err.Error(), "flags only") {
@@ -1944,13 +1931,9 @@ func TestRunUsageErrors(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "contacts export takes no arguments") {
 		t.Fatalf("expected contacts export args error, got %v", err)
 	}
-	err = Run(context.Background(), []string{"web", "--port", "-1"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "--port must be between") {
-		t.Fatalf("expected web port error, got %v", err)
-	}
-	err = Run(context.Background(), []string{"--json", "web"}, &stdout, &stderr)
-	if err == nil || !strings.Contains(err.Error(), "does not support --json") {
-		t.Fatalf("expected web json error, got %v", err)
+	err = Run(context.Background(), []string{"web"}, &stdout, &stderr)
+	if err == nil || !strings.Contains(err.Error(), `unknown command "web"`) {
+		t.Fatalf("expected unknown command error for web, got %v", err)
 	}
 }
 
@@ -2048,8 +2031,6 @@ func TestRunHelpMenus(t *testing.T) {
 		{"open flag", []string{"open", "--help"}, "wacrawl:msg/MESSAGE_ID"},
 		{"sql topic", []string{"help", "sql"}, "wacrawl sql <select query>"},
 		{"sql flag", []string{"sql", "--help"}, "read-only SQL query"},
-		{"web topic", []string{"help", "web"}, "wacrawl web [--port N]"},
-		{"web flag", []string{"web", "--help"}, "private web viewer"},
 		{"import flag", []string{"import", "--help"}, "--copy-media"},
 		{"sync topic", []string{"help", "sync"}, "wacrawl sync [--source PATH]"},
 		{"backup flag", []string{"backup", "--help"}, "wacrawl backup <init|push|pull|status|snapshots>"},
