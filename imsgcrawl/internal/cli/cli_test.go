@@ -581,7 +581,7 @@ func TestMetadataAdvertisesCrawlerCommands(t *testing.T) {
 func TestVerboseLogsWriteFileAndStreamToStderr(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	logPath := filepath.Join(home, ".imsgcrawl", "logs", "imsgcrawl.log")
+	logPath := filepath.Join(home, ".opentrawl", "imsgcrawl", "logs", "imsgcrawl.log")
 
 	var stdout, stderr bytes.Buffer
 	if err := Run(context.Background(), []string{"metadata"}, &stdout, &stderr); err != nil {
@@ -978,7 +978,7 @@ func assertRFC3339(t *testing.T, value string) {
 
 func readTestLog(t *testing.T) string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".imsgcrawl", "logs", "imsgcrawl.log"))
+	data, err := os.ReadFile(filepath.Join(os.Getenv("HOME"), ".opentrawl", "imsgcrawl", "logs", "imsgcrawl.log"))
 	if err != nil {
 		t.Fatal(err)
 	}

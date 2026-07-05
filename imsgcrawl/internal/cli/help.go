@@ -8,7 +8,7 @@ import (
 	"github.com/openclaw/crawlkit/usage"
 )
 
-const diagnosticsFooter = "Diagnostics: run with -v, or read ~/.imsgcrawl/logs/imsgcrawl.log"
+const diagnosticsFooter = "Diagnostics: run with -v, or read ~/.opentrawl/imsgcrawl/logs/imsgcrawl.log"
 
 func printUsage(w io.Writer) {
 	_, _ = io.WriteString(w, topHelpDoc().Render())

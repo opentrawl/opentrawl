@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/imsgcrawl/internal/addressbook"
@@ -31,12 +32,15 @@ type SyncOptions struct {
 	UseDefaultAddressBook bool
 }
 
+// DefaultPaths is the one archive path layout, from crawlkit/config. The base
+// dir is the fleet-wide state root, ~/.opentrawl/imsgcrawl (TRAWL-99).
+func DefaultPaths() config.Paths {
+	paths, _ := config.App{Name: "imsgcrawl", BaseDir: "~/.opentrawl/imsgcrawl"}.DefaultPaths()
+	return paths
+}
+
 func DefaultPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return filepath.Join(".imsgcrawl", "archive.db")
-	}
-	return filepath.Join(home, ".imsgcrawl", "archive.db")
+	return DefaultPaths().DBPath
 }
 
 func Exists(path string) bool {

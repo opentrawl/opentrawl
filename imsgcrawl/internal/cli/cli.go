@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/imsgcrawl/internal/archive"
@@ -226,8 +224,5 @@ func commandErr(name, message, remedy string, code int, fields map[string]any, e
 }
 
 func defaultBaseDir() string {
-	if home, err := os.UserHomeDir(); err == nil && home != "" {
-		return filepath.Join(home, ".imsgcrawl")
-	}
-	return ".imsgcrawl"
+	return archive.DefaultPaths().BaseDir
 }

@@ -63,11 +63,11 @@ func (r *runtime) checkSourceStore() doctorCheck {
 
 func (r *runtime) checkArchive() doctorCheck {
 	if !archive.Exists(r.archivePath) {
-		_ = r.logError("archive_missing", worldMustChange(nil, "archive.db has not been synced", "run imsgcrawl sync"))
+		_ = r.logError("archive_missing", worldMustChange(nil, "the archive database has not been synced", "run imsgcrawl sync"))
 		return doctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "archive.db has not been synced",
+			Message: "the archive database has not been synced",
 			Remedy:  "run imsgcrawl sync",
 		}
 	}
