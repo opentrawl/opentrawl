@@ -160,14 +160,6 @@ func trawlLogParts() (string, string, error) {
 	return home, ".trawl", nil
 }
 
-func trawlLogPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || strings.TrimSpace(home) == "" {
-		return filepath.Join(".trawl", "logs", trawlLogFileName)
-	}
-	return filepath.Join(home, ".trawl", "logs", trawlLogFileName)
-}
-
 func (r *Runtime) childVerboseArgs(source Source) []string {
 	if r.verbosity() <= 0 || !hasCapability(source, verboseLogsCapability) {
 		return nil

@@ -99,7 +99,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	if err != nil {
 		return ClassifyResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	result := ClassifyResult{
 		Database:     paths.Database,

@@ -67,7 +67,7 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 			Remedy:  archiveRemedy,
 		}
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var photos int64
 	if err := db.DB().QueryRowContext(ctx, `select count(*) from asset`).Scan(&photos); err != nil {

@@ -442,7 +442,7 @@ func readStatus(t *testing.T, dbPath string) store.Status {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	status, err := st.Status(context.Background())
 	if err != nil {
 		t.Fatal(err)

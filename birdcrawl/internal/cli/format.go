@@ -9,17 +9,6 @@ func itoa(value int) string {
 	return strconv.Itoa(value)
 }
 
-func itoa64(value int64) string {
-	return strconv.FormatInt(value, 10)
-}
-
-func emptyDash(value string) string {
-	if value == "" {
-		return "-"
-	}
-	return value
-}
-
 // groupDigits renders 41303 as "41,303" so counts are readable aloud.
 func groupDigits(value int) string {
 	return groupDigits64(int64(value))

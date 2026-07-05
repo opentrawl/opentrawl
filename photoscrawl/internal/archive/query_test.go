@@ -86,7 +86,7 @@ func TestSearchAddsWhereAndWho(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.DB().ExecContext(ctx, `
 insert into face_observation(id, asset_id, face_local_id, person_label, confidence, bounding_box_json, source, evidence_id)
 values ('fixture-face', ?, 'face-1', 'Synthetic Person', 0.9, '{}', 'fixture', '')

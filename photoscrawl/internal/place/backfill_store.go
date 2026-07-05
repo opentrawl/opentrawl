@@ -52,7 +52,7 @@ func countAttempts(path string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	count := 0
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
@@ -108,7 +108,7 @@ func loadBackfillKeys(ctx context.Context, dbPath string) ([]backfillKey, int, e
 	if err != nil {
 		return nil, 0, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	rows, err := db.QueryContext(ctx, `
 select a.id, a.creation_date, l.latitude, l.longitude, coalesce(l.horizontal_accuracy, 0)
 from location_observation l
@@ -119,7 +119,7 @@ order by l.latitude, l.longitude, coalesce(l.horizontal_accuracy, 0), a.creation
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	byKey := map[string]*backfillKey{}
 	locatedAssets := 0
 	for rows.Next() {
@@ -226,7 +226,7 @@ func appendAttempt(path string, attempt backfillAttempt) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	_, err = file.Write(append(data, '\n'))
 	return err
 }
@@ -249,7 +249,7 @@ func appendProgress(path string, startedAt time.Time, result BackfillResult) err
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	_, err = file.WriteString(line)
 	return err
 }

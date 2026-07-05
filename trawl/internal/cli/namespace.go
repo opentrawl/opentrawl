@@ -58,10 +58,10 @@ func namespaceRoot(args []string) *CLI {
 func verboseLevel(args []string) int {
 	level := 0
 	for _, arg := range args {
-		switch {
-		case arg == "-vv":
+		switch arg {
+		case "-vv":
 			level = 2
-		case arg == "-v" || arg == "--verbose":
+		case "-v", "--verbose":
 			if level < 1 {
 				level = 1
 			}

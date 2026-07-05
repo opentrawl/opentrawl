@@ -72,7 +72,7 @@ func TestEnsureSearchIndexRebuildsOldTokenizer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Regress the archive to the pre-porter shape, with legacy rows.
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
@@ -132,7 +132,7 @@ func TestEnsureSearchIndexRebuildsCardBodiesToRawProse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var assetID string
 	if err := db.DB().QueryRowContext(ctx, `select id from asset limit 1`).Scan(&assetID); err != nil {
@@ -221,7 +221,7 @@ func TestSearchRanksByTermFrequency(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var id string
 			if err := rows.Scan(&id); err != nil {

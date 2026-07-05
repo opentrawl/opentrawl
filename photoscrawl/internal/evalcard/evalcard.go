@@ -195,9 +195,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	defer manifest.Close()
+	defer func() { _ = manifest.Close() }()
 	writer := bufio.NewWriter(manifest)
-	defer writer.Flush()
+	defer func() { _ = writer.Flush() }()
 
 	inputs := []preparedInput{}
 	for _, asset := range assets {

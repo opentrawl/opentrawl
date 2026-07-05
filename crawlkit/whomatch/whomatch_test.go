@@ -23,7 +23,7 @@ func TestUnicodeFoldNormalizesCaseWhitespaceAndCompactText(t *testing.T) {
 }
 
 func TestRankLadderOrdering(t *testing.T) {
-	if !(RankExact > RankPrefix && RankPrefix > RankSubstring && RankSubstring > RankCloseSpelling) {
+	if RankExact <= RankPrefix || RankPrefix <= RankSubstring || RankSubstring <= RankCloseSpelling {
 		t.Fatalf("rank ladder order changed")
 	}
 	tests := []struct {

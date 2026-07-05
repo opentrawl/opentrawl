@@ -383,10 +383,10 @@ func statsFreshnessHint(rows []statsRow) string {
 			newest = value
 		}
 	}
-	switch {
-	case oldest == "":
+	switch oldest {
+	case "":
 		return "Engagement counts have not been fetched."
-	case oldest == newest:
+	case newest:
 		return "Engagement counts fetched as of " + oldest + "."
 	default:
 		return "Engagement counts fetched between " + oldest + " and " + newest + "."

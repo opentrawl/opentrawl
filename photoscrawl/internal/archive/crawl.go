@@ -81,7 +81,7 @@ func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error
 	if err != nil {
 		return SyncResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	importer := syncImporter{
 		ctx:         ctx,

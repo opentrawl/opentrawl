@@ -108,7 +108,7 @@ func readDumpZip(path string) (dumpFiles, error) {
 	if err != nil {
 		return dumpFiles{}, err
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	var files dumpFiles
 	targets := dumpFileTargets(&files)
 	for _, file := range reader.File {
@@ -130,7 +130,7 @@ func readZipFile(file *zip.File) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 	return io.ReadAll(rc)
 }
 

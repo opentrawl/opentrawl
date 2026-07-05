@@ -189,7 +189,7 @@ func (s *TokenStore) mint(ctx context.Context) (tokenCache, error) {
 		})
 		return tokenCache{}, fmt.Errorf("request Linear token: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
 		s.logger.LogAPICall(apiLogEntry{
@@ -216,7 +216,7 @@ func (s *TokenStore) mint(ctx context.Context) (tokenCache, error) {
 		ResponseBody: redactTokenBody(body),
 	})
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
-		return tokenCache{}, fmt.Errorf("Linear rejected the token request (HTTP %d): %s", resp.StatusCode, summary)
+		return tokenCache{}, fmt.Errorf("linear rejected the token request (HTTP %d): %s", resp.StatusCode, summary)
 	}
 	var decoded tokenResponse
 	if err := json.NewDecoder(bytes.NewReader(body)).Decode(&decoded); err != nil {

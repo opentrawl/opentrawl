@@ -62,7 +62,7 @@ func (c *GraphQLClient) Do(ctx context.Context, query string, variables map[stri
 		}
 	}
 	if status < 200 || status > 299 {
-		return fmt.Errorf("Linear GraphQL request failed (HTTP %d): %s", status, graphHTTPErrorMessage(body))
+		return fmt.Errorf("linear GraphQL request failed (HTTP %d): %s", status, graphHTTPErrorMessage(body))
 	}
 	return decodeGraphResponse(body, out, c.logger)
 }
@@ -90,7 +90,7 @@ func (c *GraphQLClient) post(ctx context.Context, token, query string, variables
 		})
 		return 0, nil, fmt.Errorf("request Linear GraphQL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 512*1024))
 	if err != nil {
 		c.logger.LogAPICall(apiLogEntry{
@@ -128,7 +128,7 @@ func decodeGraphResponse(body []byte, out any, logger *requestLogger) error {
 	if len(response.Errors) > 0 && !hasData {
 		summary := graphErrorText(response.Errors)
 		logger.LogDiagnostic("error", "Linear GraphQL returned errors without data: "+summary)
-		return fmt.Errorf("Linear GraphQL: %s", summary)
+		return fmt.Errorf("linear GraphQL: %s", summary)
 	}
 	if len(response.Errors) > 0 {
 		logger.Warn("Linear GraphQL returned data with errors: " + graphErrorText(response.Errors))
@@ -137,7 +137,7 @@ func decodeGraphResponse(body []byte, out any, logger *requestLogger) error {
 		return nil
 	}
 	if !hasData {
-		return fmt.Errorf("Linear GraphQL response did not include data")
+		return fmt.Errorf("linear GraphQL response did not include data")
 	}
 	if err := json.Unmarshal(response.Data, out); err != nil {
 		logger.LogDiagnostic("error", "Linear GraphQL returned data that could not be decoded: "+err.Error())

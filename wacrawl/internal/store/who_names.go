@@ -68,10 +68,7 @@ func humanWhoName(value string) bool {
 			hasLetter = true
 		}
 	}
-	if !hasLetter {
-		return false
-	}
-	return true
+	return hasLetter
 }
 
 // HumanWhoName reports whether value is safe to display as a person's name.

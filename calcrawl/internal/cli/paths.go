@@ -7,10 +7,6 @@ import (
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
-func defaultBaseDir() string {
-	return archive.DefaultPaths().BaseDir
-}
-
 func defaultLogDir() string {
 	return archive.DefaultPaths().LogDir
 }

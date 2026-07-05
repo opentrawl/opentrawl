@@ -18,7 +18,7 @@ func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	internalDateMS := int64(1783000000123)
 	raw := strings.Join([]string{
 		"From: Alice Example <alice@example.com>",
@@ -87,7 +87,7 @@ func TestIngestBackupMessageShardSplitsRecipientListParticipants(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	raw := strings.Join([]string{
 		"From: Sender Example <sender@example.com>",
 		"To: \"'first@example.com'\" <first@example.com>, \"Second, Example\" <second@example.com>, 'third@example.com' <third@example.com>",
@@ -111,7 +111,7 @@ order by address
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	type gotParticipant struct {
 		name    string
 		address string
@@ -156,7 +156,7 @@ func TestIngestBackupMessageShardDecodesLegacyCharsetsWithoutReplacement(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	declared1252 := strings.Join([]string{
 		"From: Shop <shop@example.com>",
 		"To: Bob Example <bob@example.com>",
@@ -227,7 +227,7 @@ func TestIngestBackupMessageShardDecodesResidualQuotedPrintableText(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	raw := strings.Join([]string{
 		"From: Shop <shop@example.com>",
 		"To: Bob Example <bob@example.com>",
@@ -322,7 +322,7 @@ func TestIngestBackupMessageShardKeepsLiteralQuotedPrintableText(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	raw := strings.Join([]string{
 		"From: Shop <shop@example.com>",
 		"To: Bob Example <bob@example.com>",
@@ -354,7 +354,7 @@ func TestIngestBackupLabelShardStoresLabels(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	shard := BackupShard{Path: "data/gmail/account/labels.jsonl.gz.age", Hash: "hash1", Kind: BackupShardLabels}
 	result, err := st.IngestBackupShard(ctx, shard, []byte("{\"id\":\"INBOX\",\"name\":\"Inbox\",\"type\":\"system\"}\n"))
 	if err != nil {
@@ -378,7 +378,7 @@ func TestPendingBackupShardsReingestsLegacyMessageHashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
 	if err := state.New(st.store.DB()).Set(ctx, sourceName, backupEntityType, shard.Path, shard.Hash); err != nil {
 		t.Fatal(err)
@@ -400,7 +400,7 @@ func TestPendingBackupShardsReingestsV5MessageHashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
 	if err := state.New(st.store.DB()).Set(ctx, sourceName, backupEntityType, shard.Path, "mail-decode-v5:"+shard.Hash); err != nil {
 		t.Fatal(err)
@@ -422,7 +422,7 @@ func TestPendingBackupShardsTracksHashes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
 		t.Fatalf("initial pending = %#v, %v", pending, err)

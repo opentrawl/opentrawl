@@ -122,7 +122,7 @@ func TestMetadataHumanOutputIsProse(t *testing.T) {
 }
 
 func TestCommandWritesCrawlkitLog(t *testing.T) {
-	_, _, err, root := captureRunOutputWithRuntime(t, []string{"metadata"})
+	_, _, root, err := captureRunOutputWithRuntime(t, []string{"metadata"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,11 +404,11 @@ func TestOpenHumanOutputUsesKnownPlaceInsteadOfVenue(t *testing.T) {
 
 func captureRunOutput(t *testing.T, args []string) (string, string, error) {
 	t.Helper()
-	stdout, stderr, err, _ := captureRunOutputWithRuntime(t, args)
+	stdout, stderr, _, err := captureRunOutputWithRuntime(t, args)
 	return stdout, stderr, err
 }
 
-func captureRunOutputWithRuntime(t *testing.T, args []string) (string, string, error, string) {
+func captureRunOutputWithRuntime(t *testing.T, args []string) (string, string, string, error) {
 	t.Helper()
 	root := setTestRuntimeEnv(t)
 	oldStdout := os.Stdout
@@ -449,7 +449,7 @@ func captureRunOutputWithRuntime(t *testing.T, args []string) (string, string, e
 	if err := stderrR.Close(); err != nil {
 		t.Fatal(err)
 	}
-	return string(stdout), string(stderr), runErr, root
+	return string(stdout), string(stderr), root, runErr
 }
 
 func setTestRuntimeEnv(t *testing.T) string {
@@ -543,7 +543,7 @@ func unusedShortAlias(t *testing.T, dbPath string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	for _, alias := range []string{"22222", "33333", "44444", "55555", "66666"} {
 		var count int
 		if err := db.DB().QueryRow(`select count(*) from short_refs where alias = ?`, alias).Scan(&count); err != nil {
@@ -563,7 +563,7 @@ func makeAmbiguousShortRef(t *testing.T, dbPath, alias string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.DB().Exec(`delete from short_refs`); err != nil {
 		t.Fatal(err)
 	}

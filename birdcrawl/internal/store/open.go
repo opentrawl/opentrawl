@@ -49,7 +49,6 @@ func (s *Store) ancestors(ctx context.Context, tweet Tweet) ([]OpenTweet, bool, 
 		parent, err := s.tweetByID(ctx, nextID)
 		if errors.Is(err, ErrTweetNotFound) {
 			reversed = append(reversed, OpenTweet{Available: false, Ref: TweetRef(nextID), Text: "unavailable (not in archive)"})
-			nextID = ""
 			break
 		}
 		if err != nil {
@@ -75,7 +74,7 @@ limit ?`, id, openReplyLimit+1)
 	if err != nil {
 		return nil, false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []Tweet
 	for rows.Next() {
 		tweet, err := scanTweet(rows)

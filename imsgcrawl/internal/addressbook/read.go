@@ -169,7 +169,7 @@ func requireColumns(ctx context.Context, db *sql.DB, table string, columns []str
 	var name string
 	if err := db.QueryRowContext(ctx, tableExistsSQL, table).Scan(&name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("Contacts database is missing table %s", table)
+			return fmt.Errorf("contacts database is missing table %s", table)
 		}
 		return err
 	}
@@ -194,7 +194,7 @@ func requireColumns(ctx context.Context, db *sql.DB, table string, columns []str
 	}
 	for _, column := range columns {
 		if _, ok := found[column]; !ok {
-			return fmt.Errorf("Contacts table %s is missing column %s", table, column)
+			return fmt.Errorf("contacts table %s is missing column %s", table, column)
 		}
 	}
 	return nil

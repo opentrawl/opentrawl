@@ -113,7 +113,7 @@ order by creation_date desc, has_location desc, queue_id
 	if err != nil {
 		return nil, fmt.Errorf("load classification queue: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	inputs := []classifyInput{}
 	for rows.Next() {
@@ -187,7 +187,7 @@ order by resource_type, original_filename
 	if err != nil {
 		return nil, fmt.Errorf("load classification resources: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	resources := []classifyResource{}
 	for rows.Next() {
@@ -213,7 +213,7 @@ order by album_title, album_kind
 	if err != nil {
 		return nil, fmt.Errorf("load classification albums: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	albums := []classifyAlbum{}
 	for rows.Next() {

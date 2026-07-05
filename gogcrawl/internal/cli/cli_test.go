@@ -68,7 +68,7 @@ func TestSyncBackupIngestAndShardIdempotence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	status, err := st.Status(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -712,7 +712,7 @@ func TestOpenShortRefErrorsUseContractCodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.ExecContext(context.Background(), `
 insert into short_refs(alias, full_ref)
 values ('22222', ?), ('22222', ?)
@@ -866,7 +866,7 @@ func seedArchive(t *testing.T, messages []archive.Message) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	if _, err := st.InsertMessages(context.Background(), messages); err != nil {
 		t.Fatal(err)
 	}

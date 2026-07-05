@@ -52,7 +52,7 @@ func applePlaceContext(ctx context.Context, input Input, radius float64) (Result
 		return Result{}, classifyBridgeError(C.GoString(cErr))
 	}
 	if cJSON == nil {
-		return Result{}, errors.New("Apple place context returned no JSON")
+		return Result{}, errors.New("apple place context returned no JSON")
 	}
 	defer C.free(unsafe.Pointer(cJSON))
 

@@ -43,11 +43,13 @@ func run(ctx context.Context, args []string) (err error) {
 	}
 	switch args[0] {
 	case "help", "--help", "-h":
-		printHelp(os.Stdout, paths)
-		return nil
+		return printHelp(os.Stdout, paths)
 	}
 	if len(args) > 1 && (args[1] == "--help" || args[1] == "-h") {
-		if printVerbHelp(os.Stdout, paths, args[0]) {
+		if ok, err := printVerbHelp(os.Stdout, paths, args[0]); ok || err != nil {
+			if err != nil {
+				return err
+			}
 			return nil
 		}
 	}

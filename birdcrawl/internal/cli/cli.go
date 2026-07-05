@@ -117,11 +117,10 @@ func (r *runtime) dispatch(args []string) error {
 }
 
 func (r *runtime) withStore(fn func(*store.Store) error) error {
-	st, err := store.Open(r.ctx, r.dbPath)
+	st, err := store.OpenWithLog(r.ctx, r.dbPath, r.log)
 	if err != nil {
 		return err
 	}
-	st.SetLog(r.log)
 	defer func() { _ = st.Close() }()
 	return fn(st)
 }

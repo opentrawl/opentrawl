@@ -89,7 +89,7 @@ func copyOptionalFile(source, target string, maxBytes int64) (int64, bool, error
 		}
 		return 0, false, fmt.Errorf("open sqlite snapshot source: %w", err)
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	info, err := in.Stat()
 	if err != nil {
 		return 0, false, fmt.Errorf("stat sqlite snapshot source: %w", err)

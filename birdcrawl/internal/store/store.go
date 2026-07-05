@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -88,11 +87,19 @@ type ImportStats struct {
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
+	return open(ctx, path, nil)
+}
+
+func OpenWithLog(ctx context.Context, path string, run *cklog.Run) (*Store, error) {
+	return open(ctx, path, run)
+}
+
+func open(ctx context.Context, path string, run *cklog.Run) (*Store, error) {
 	base, err := ckstore.Open(ctx, ckstore.Options{Path: path, MaxOpenConns: 1, MaxIdleConns: 1})
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{base: base, db: base.DB(), path: base.Path()}
+	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run}
 	if err := s.migrate(ctx); err != nil {
 		_ = base.Close()
 		return nil, err
@@ -170,7 +177,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	// either both durable or both rolled back, so this line is never
 	// printed for a migration that did not actually happen.
 	if migrated > 0 {
-		fmt.Fprintf(os.Stderr, "birdcrawl: migrated %d legacy sync_state row(s) to the canonical state store\n", migrated)
+		_ = s.log.Info("sync_state_migrated", fmt.Sprintf("rows=%d", migrated))
 	}
 	return nil
 }
@@ -215,7 +222,7 @@ func migrateLegacySyncState(ctx context.Context, tx *sql.Tx, currentVersion int)
 			cursor, lastSyncAt, lastResult, coverageNote sql.NullString
 		)
 		if err := rows.Scan(&kind, &cursor, &lastSyncAt, &lastResult, &coverageNote); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, err
 		}
 		legacy = append(legacy, legacyRow{

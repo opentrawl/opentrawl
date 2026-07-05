@@ -141,6 +141,7 @@ func (s *syncRunner) resolveIdentity() error {
 		return err
 	}
 	if s.cfg.UserID == "" {
+		//nolint:staticcheck // X API is the product name; lowercasing it would make the error less clear.
 		return errors.New("X API /2/users/me did not return a user id")
 	}
 	return s.print(syncEvent{Type: "sync_progress", Phase: "identity", StoredProfiles: 1, Message: "resolved X user identity"})

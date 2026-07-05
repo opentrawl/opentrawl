@@ -207,7 +207,7 @@ func opaqueMediaToken(value string) bool {
 	allBase64 := true
 	hasBase64Mark := false
 	for _, r := range value {
-		if !((r >= '0' && r <= '9') || (r >= 'a' && r <= 'f') || (r >= 'A' && r <= 'F')) {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
 			allHex = false
 		}
 		switch {

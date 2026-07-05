@@ -65,7 +65,7 @@ func TestClassifyPlacePhaseParksThrottledLocatedAssets(t *testing.T) {
 		},
 	})
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	inputs := loadTestClassifyInputs(t, ctx, db, "")
 	var providerCalls int
 	var sleeps []time.Duration
@@ -130,7 +130,7 @@ func TestClassifyPlacePhaseUnparksCachedPendingAssets(t *testing.T) {
 	}})
 	setQueueStateForLocalIdentifier(t, ctx, paths, "pending-cached", classifyQueueStatePlacePending, classifyPlacePendingReason)
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resolver := classifyPlaceResolver{
 		key: testClassifyPlaceKey,
 		resolveCached: func(context.Context, place.Input) place.ResolveResult {
@@ -183,7 +183,7 @@ func TestLoadClassifyInputsExcludesPlacePending(t *testing.T) {
 	}})
 	setQueueStateForLocalIdentifier(t, ctx, paths, "pending-place", classifyQueueStatePlacePending, classifyPlacePendingReason)
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if inputs := loadTestClassifyInputs(t, ctx, db, "fixture-vision"); len(inputs) != 0 {
 		t.Fatalf("place_pending was selected for model refresh: %#v", localIdentifiers(inputs))
 	}
@@ -212,7 +212,7 @@ func TestLoadPlacePendingInputsCapsDistinctKeys(t *testing.T) {
 	seedClassifyPlaceAssets(t, paths, assets)
 	setAllQueueStatesForTest(t, ctx, paths, classifyQueueStatePlacePending, classifyPlacePendingReason)
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	resolver := classifyPlaceResolver{key: testClassifyPlaceKey}
 	pending, err := loadPlacePendingInputs(ctx, db, resolver, classifyPlacePendingKeyLimit)
 	if err != nil {
@@ -239,7 +239,7 @@ func TestWritePlaceClassificationDedupesIdenticalCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		inputs, err := loadClassifyInputs(ctx, tx, 0, "")
@@ -316,7 +316,7 @@ func loadTestClassifyInputs(t *testing.T, ctx context.Context, db *store.Store, 
 func setQueueStateForLocalIdentifier(t *testing.T, ctx context.Context, paths Paths, localIdentifier, state, reason string) {
 	t.Helper()
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 update classification_queue
@@ -336,7 +336,7 @@ where asset_id = (
 func setAllQueueStatesForTest(t *testing.T, ctx context.Context, paths Paths, state, reason string) {
 	t.Helper()
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 update classification_queue
@@ -421,7 +421,7 @@ func TestClassifyPlacePhaseTimeoutStopsLiveGeocoding(t *testing.T) {
 		},
 	})
 	db := openTestStore(t, ctx, paths)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	inputs := loadTestClassifyInputs(t, ctx, db, "")
 	var providerCalls int
 	var sleeps []time.Duration

@@ -481,15 +481,6 @@ func contactName(name, email, phone string) string {
 	return ""
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
-		}
-	}
-	return ""
-}
-
 func canonicalEventTime(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
@@ -512,10 +503,6 @@ func joinNonEmpty(values ...string) string {
 		}
 	}
 	return strings.Join(parts, ", ")
-}
-
-func normalizeWho(value string) string {
-	return strings.Join(strings.Fields(value), " ")
 }
 
 func YearFromUnix(value int64) int64 {

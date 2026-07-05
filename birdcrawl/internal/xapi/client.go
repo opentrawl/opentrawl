@@ -281,9 +281,10 @@ func (c *Client) doJSON(req *http.Request, dst any) error {
 		}
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			_ = resp.Body.Close()
+			//nolint:staticcheck // X API is the product name; lowercasing it would make the error less clear.
 			return fmt.Errorf("X API request failed with HTTP %d", resp.StatusCode)
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		dec := json.NewDecoder(resp.Body)
 		if err := dec.Decode(dst); err != nil {
 			return err
@@ -293,6 +294,7 @@ func (c *Client) doJSON(req *http.Request, dst any) error {
 	if lastRateLimit != nil {
 		return lastRateLimit
 	}
+	//nolint:staticcheck // X API is the product name; lowercasing it would make the error less clear.
 	return errors.New("X API request retry limit reached")
 }
 
@@ -308,9 +310,9 @@ func (c *Client) refresh(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return &AuthError{message: "X API token refresh failed"}
 	}
 	var body struct {

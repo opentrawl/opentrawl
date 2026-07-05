@@ -74,7 +74,7 @@ order by full_ref
 	if err != nil {
 		return nil, fmt.Errorf("lookup short ref: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	fullRefs := make([]string, 0)
 	for rows.Next() {
@@ -118,7 +118,7 @@ order by full_ref, length(alias) desc
 	if err != nil {
 		return nil, fmt.Errorf("read short ref aliases: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	aliases := make(map[string]string, len(fullRefs))
 	for rows.Next() {

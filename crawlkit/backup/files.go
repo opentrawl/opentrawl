@@ -402,7 +402,7 @@ func decryptFilePayload(identity *age.X25519Identity, ciphertext io.Reader) ([]b
 	if err != nil {
 		return nil, err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	return io.ReadAll(gz)
 }
 
@@ -419,13 +419,13 @@ func restoreFile(ctx context.Context, identity *age.X25519Identity, ciphertext i
 	if err != nil {
 		return err
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tmp, err := os.CreateTemp(filepath.Dir(target), "."+filepath.Base(target)+".tmp-")
 	if err != nil {
 		return err
 	}
 	tmpPath := tmp.Name()
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 	if err := tmp.Chmod(0o600); err != nil {
 		_ = tmp.Close()
 		return err
@@ -472,7 +472,7 @@ func encryptFileTemp(ctx context.Context, source File, expected os.FileInfo, rep
 	if err != nil {
 		return "", "", 0, 0, err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	tmp, err := os.CreateTemp(tmpDir, ".file.tmp-")
 	if err != nil {
 		return "", "", 0, 0, err
@@ -532,7 +532,7 @@ func hashFile(ctx context.Context, source File) (string, int64, os.FileInfo, err
 	if err != nil {
 		return "", 0, nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	hasher := sha256.New()
 	size, err := copyContext(ctx, hasher, file)
 	if err != nil {

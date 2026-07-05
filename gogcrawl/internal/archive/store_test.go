@@ -17,7 +17,7 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	result, err := st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", ToAddress: "bob@example.com", CcAddress: "carol@example.com", Subject: "Project sync", Body: "The project sync is Friday.", Labels: []string{"INBOX"}},
@@ -73,7 +73,7 @@ func TestInsertMessagesIgnoresExistingIDs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	msg := Message{ID: "m1", ThreadID: "t1", Time: time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC), FromAddress: "alice@example.com", Subject: "Hello", Body: "Hello"}
 	first, err := st.InsertMessages(ctx, []Message{msg})
 	if err != nil {
@@ -94,7 +94,7 @@ func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	if err := st.SetOwnerAccount(ctx, "owner@example.com"); err != nil {
 		t.Fatal(err)
@@ -145,7 +145,7 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice Example", FromAddress: "alice@example.com", Subject: "Needle", Body: "First."},
@@ -193,7 +193,7 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Morgan Example", FromAddress: "michael.gmail@example.com", Subject: "First", Body: "First."},
@@ -235,7 +235,7 @@ func TestResolveWhoIgnoresHiddenGroupedNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now.Add(-time.Minute), FromName: "Michael Example via network", FromAddress: "messages-noreply@network.example.com", Subject: "Older", Body: "First."},
@@ -266,7 +266,7 @@ func TestResolveWhoShowsMatchingIdentifierFirst(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Owner Example", FromAddress: "owner@example.com", Subject: "First", Body: "First.", Labels: []string{"SENT"}},
@@ -294,7 +294,7 @@ func TestSearchWhoAmbiguityReportsCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Casey One", FromAddress: "casey.one@example.com", Subject: "Needle", Body: "First."},
@@ -319,7 +319,7 @@ func TestSearchWhoCloseSpellingSingleCandidateSuggests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Dana Example", FromAddress: "dana@example.com", Subject: "Needle", Body: "First."},
@@ -343,7 +343,7 @@ func TestSearchSnippetMarksMidTokenCuts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	body := strings.Repeat("a", 70) + " needle " + strings.Repeat("b", 220)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", Time: time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC), FromName: "Alice", FromAddress: "alice@example.com", Subject: "Receipt", Body: body},
@@ -373,7 +373,7 @@ func TestSearchFilterOnlyUsesNewestMatchingItems(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "old", ThreadID: "t1", Time: now.Add(-2 * time.Hour), FromName: "Alice", FromAddress: "alice@example.com", Subject: "Old", Body: "First."},
@@ -398,7 +398,7 @@ func TestShortRefsResolveAndFailSafely(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
 		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", Subject: "Project needle", Body: "First."},

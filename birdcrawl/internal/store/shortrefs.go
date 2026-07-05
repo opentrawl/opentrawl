@@ -113,7 +113,7 @@ func (s *Store) allTweetFullRefs(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read tweet refs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var refs []string
 	for rows.Next() {
 		var id string
@@ -133,7 +133,7 @@ func (s *Store) shortRefFullRefs(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var refs []string
 	for rows.Next() {
 		var ref string

@@ -23,7 +23,7 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := createSyntheticPhotosDB(db.DB()); err != nil {
 		t.Fatal(err)
 	}

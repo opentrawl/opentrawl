@@ -127,7 +127,7 @@ order by m.time_unix desc, mp.display_name, mp.address, mp.participant_key
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	aggregates := map[string]*whoAggregate{}
 	for rows.Next() {
 		var row rawWhoParticipant
@@ -180,7 +180,7 @@ order by participant_key
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var keys []string
 	for rows.Next() {
 		var key string

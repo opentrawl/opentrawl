@@ -117,7 +117,7 @@ where observation_type = ?`, knownPlaceObservationType)
 	if err != nil {
 		return 0, fmt.Errorf("read known place observations: %w", err)
 	}
-	type knownRow struct{ id, assetID, label, body string }
+	type knownRow struct{ id, assetID, body string }
 	var pending []knownRow
 	for rows.Next() {
 		var id, assetID, label, valueJSON string

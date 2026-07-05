@@ -38,8 +38,5 @@ func shouldPrintError(err error) bool {
 		return false
 	}
 	var help helpShown
-	if errors.As(err, &help) {
-		return false
-	}
-	return true
+	return !errors.As(err, &help)
 }

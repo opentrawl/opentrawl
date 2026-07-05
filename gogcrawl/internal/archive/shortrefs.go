@@ -135,7 +135,7 @@ order by id
 	if err != nil {
 		return nil, fmt.Errorf("read message refs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var refs []string
 	for rows.Next() {
 		var id string

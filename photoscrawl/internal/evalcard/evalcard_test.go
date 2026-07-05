@@ -47,7 +47,7 @@ func TestRejectRepoPath(t *testing.T) {
 	if err := os.Chdir(root); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(old)
+	defer func() { _ = os.Chdir(old) }()
 
 	if err := rejectRepoPath(filepath.Join(root, "evals")); err == nil {
 		t.Fatal("rejectRepoPath accepted a repo-local output dir")

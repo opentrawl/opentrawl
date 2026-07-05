@@ -68,7 +68,7 @@ limit ?`, tweetSelectColumns("t"), metric.column, metric.column), since, filter.
 	if err != nil {
 		return StatsResult{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		tweet, count, err := scanStatsRow(rows)
 		if err != nil {

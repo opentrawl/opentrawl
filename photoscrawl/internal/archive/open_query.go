@@ -18,7 +18,7 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 	if err != nil {
 		return OpenResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	asset, err := oneRow(ctx, db.DB(), `
 select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,

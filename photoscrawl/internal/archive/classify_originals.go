@@ -13,8 +13,6 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-const downloadConcurrency = 1
-
 var exportOriginalResource = photos.ExportOriginalResourceMatching
 
 // originalsCache is a per-run scratch directory. Disk usage is bounded by the

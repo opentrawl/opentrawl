@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+if ! command -v golangci-lint >/dev/null 2>&1; then
+  echo "golangci-lint is required. Enter the devenv shell or install it first." >&2
+  exit 1
+fi
+
+golangci-lint config verify --config "$root/.golangci.yml"
+
+modules=()
+while IFS= read -r module; do
+  modules+=("$module")
+done < <(git ls-files 'go.mod' '*/go.mod' | sort | sed 's#/go.mod$##; s#^go.mod$#.#')
+
+if [ "${#modules[@]}" -eq 0 ]; then
+  echo "check-lint: no Go modules found"
+  exit 0
+fi
+
+for module in "${modules[@]}"; do
+  echo "lint: $module"
+  (
+    cd "$root/$module"
+    golangci-lint run --config "$root/.golangci.yml" --build-tags sqlite_fts5 --allow-serial-runners --path-prefix "$module" ./...
+  )
+done
+
+echo "check-lint: ok"

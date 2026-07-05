@@ -190,7 +190,7 @@ func (s *Store) Query(ctx context.Context, query string, args ...any) (QueryResu
 	if err != nil {
 		return QueryResult{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	cols, err := rows.Columns()
 	if err != nil {
 		return QueryResult{}, err

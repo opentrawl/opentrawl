@@ -259,7 +259,7 @@ order by q.updated_at, a.creation_date desc, q.id
 		if err != nil {
 			return fmt.Errorf("load place pending queue: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		seenKeys := map[string]bool{}
 		for rows.Next() {
 			var input classifyInput

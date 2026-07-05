@@ -29,7 +29,7 @@ func (s *Store) RebuildShortRefs(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("list message refs for short refs: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var refs []string
 	for rows.Next() {

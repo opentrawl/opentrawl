@@ -47,7 +47,7 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 
 	tempDestination := destinationPath + ".exporting"
 	_ = os.Remove(tempDestination)
-	defer os.Remove(tempDestination)
+	defer func() { _ = os.Remove(tempDestination) }()
 
 	cIdentifier := C.CString(query.LocalIdentifier)
 	defer C.free(unsafe.Pointer(cIdentifier))

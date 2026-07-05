@@ -193,11 +193,11 @@ func emptyErrorField(value any) bool {
 	switch rv.Kind() {
 	case reflect.String:
 		return strings.TrimSpace(rv.String()) == ""
-	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
 		if rv.IsNil() {
 			return true
 		}
-		if rv.Kind() == reflect.Interface || rv.Kind() == reflect.Ptr {
+		if rv.Kind() == reflect.Interface || rv.Kind() == reflect.Pointer {
 			return emptyErrorField(rv.Elem().Interface())
 		}
 		return rv.Len() == 0

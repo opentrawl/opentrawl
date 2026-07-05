@@ -2182,7 +2182,9 @@ func archiveSourceContentChecksum(t *testing.T, path string) [32]byte {
 		{name: "group_participants", query: `select group_jid, user_jid, contact_name, is_admin, is_active from group_participants order by group_jid, user_jid`},
 		{name: "messages", query: `select rowid, source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred from messages order by rowid`},
 	} {
-		fmt.Fprintf(hasher, "table:%s\n", table.name)
+		if _, err := fmt.Fprintf(hasher, "table:%s\n", table.name); err != nil {
+			t.Fatal(err)
+		}
 		rows, err := st.DB().QueryContext(ctx, table.query)
 		if err != nil {
 			t.Fatal(err)
@@ -2216,7 +2218,10 @@ func archiveSourceContentChecksum(t *testing.T, path string) [32]byte {
 					_ = rows.Close()
 					t.Fatal(err)
 				}
-				fmt.Fprintf(hasher, "%T:", value)
+				if _, err := fmt.Fprintf(hasher, "%T:", value); err != nil {
+					_ = rows.Close()
+					t.Fatal(err)
+				}
 				hasher.Write(valueBytes)
 				hasher.Write([]byte{'\n'})
 			}

@@ -124,7 +124,7 @@ func TestExportLockHelperProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	if _, err := fmt.Fprintln(file, owner); err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestExportLockHelperProcess(t *testing.T) {
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX); err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+	defer func() { _ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN) }()
 	if err := os.WriteFile(readyPath, []byte("ready"), 0o600); err != nil {
 		t.Fatal(err)
 	}

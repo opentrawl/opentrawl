@@ -47,7 +47,7 @@ func (s Store) importContacts(source string, contacts []model.SourceContact, opt
 		if strings.TrimSpace(contact.Name) == "" {
 			continue
 		}
-		idx := -1
+		var idx int
 		if opts.UseIndexMatch {
 			idx = matchContactByIndexedIdentifier(people, identifiers, contact)
 		} else {

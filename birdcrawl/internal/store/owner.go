@@ -16,7 +16,7 @@ limit 2`)
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var ids []string
 	for rows.Next() {
 		var id string

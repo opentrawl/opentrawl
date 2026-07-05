@@ -133,7 +133,7 @@ func rows(ctx context.Context, db *sql.DB, query string, args ...any) ([]map[str
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, err

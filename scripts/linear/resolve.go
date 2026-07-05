@@ -44,7 +44,7 @@ func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []st
 		return nil, err
 	}
 	if out.IssueLabels.PageInfo.HasNextPage {
-		return nil, fmt.Errorf("Linear returned more than 100 matching labels. Narrow the label names and try again")
+		return nil, fmt.Errorf("linear returned more than 100 matching labels. Narrow the label names and try again")
 	}
 	ids := make([]string, 0, len(names))
 	for _, name := range names {
@@ -110,7 +110,7 @@ func (api *LinearAPI) TeamStates(ctx context.Context, team string) ([]IssueState
 		return nil, err
 	}
 	if out.WorkflowStates.PageInfo.HasNextPage {
-		return nil, fmt.Errorf("Linear returned more than 100 states for team %s. Narrow the state name and try again", team)
+		return nil, fmt.Errorf("linear returned more than 100 states for team %s. Narrow the state name and try again", team)
 	}
 	return out.WorkflowStates.Nodes, nil
 }

@@ -188,7 +188,7 @@ func (r *Reader) lines(runID string) ([]Line, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open log reader: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	var lines []Line
 	scanner := bufio.NewScanner(file)

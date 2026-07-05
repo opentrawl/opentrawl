@@ -64,7 +64,7 @@ func SetKnownPlaces(ctx context.Context, paths Paths, places []KnownPlace) (Know
 	if err != nil {
 		return KnownPlaceSetResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	normalized := make([]KnownPlace, 0, len(places))
 	for i, place := range places {
@@ -112,7 +112,7 @@ func ListKnownPlaces(ctx context.Context, paths Paths) (KnownPlaceListResult, er
 	if err != nil {
 		return KnownPlaceListResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	places, err := loadKnownPlaces(ctx, db.DB())
 	if err != nil {
 		return KnownPlaceListResult{}, err
@@ -199,7 +199,7 @@ order by label_kind, display_name
 	if err != nil {
 		return nil, fmt.Errorf("load known places: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	places := []KnownPlace{}
 	for rows.Next() {
 		var place KnownPlace

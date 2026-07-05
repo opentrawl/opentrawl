@@ -139,10 +139,6 @@ func placeCandidateRows(rows []map[string]any) []venueCandidate {
 	return candidates
 }
 
-func promptVenueCandidate(candidate venueCandidate) map[string]any {
-	return promptVenueCandidateWithID(candidate, "")
-}
-
 func promptVenueCandidateWithID(candidate venueCandidate, candidateID string) map[string]any {
 	row := map[string]any{
 		"name":            candidate.Name,

@@ -34,7 +34,7 @@ func ResolveShortRef(ctx context.Context, paths Paths, alias string) (ShortRefRe
 	if err != nil {
 		return ShortRefResolution{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	current, err := shortRefsCurrent(ctx, db.DB())
 	if err != nil {
 		return ShortRefResolution{}, err
@@ -70,7 +70,7 @@ limit 1
 	if err != nil {
 		return "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
 		return "", rows.Err()
 	}

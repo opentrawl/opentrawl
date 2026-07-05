@@ -346,7 +346,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var nonTerminal int
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		return tx.QueryRowContext(ctx, `
@@ -370,7 +370,7 @@ join asset a on a.id = q.asset_id
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var localIdentifier, state string
 			if err := rows.Scan(&localIdentifier, &state); err != nil {
@@ -725,7 +725,7 @@ func assertQueueState(t *testing.T, ctx context.Context, paths Paths, localIdent
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var got string
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		return tx.QueryRowContext(ctx, `
@@ -748,7 +748,7 @@ func resetFailedDownloadsForTest(t *testing.T, ctx context.Context, paths Paths)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `
 update classification_queue
@@ -813,7 +813,7 @@ func TestLoadClassifyInputsPriority(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var inputs []classifyInput
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
@@ -1099,7 +1099,7 @@ func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	var input classifyInput
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
@@ -1368,7 +1368,7 @@ func openSyntheticPlaceResult(t *testing.T, plausibility venuePlausibility) Open
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := ""
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		inputs, err := loadClassifyInputs(ctx, tx, 0, "")
@@ -1577,7 +1577,7 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var failed, queued int
 	if err := db.DB().QueryRowContext(ctx, `select count(*) from classification_queue where state = 'content_failed'`).Scan(&failed); err != nil {
 		t.Fatal(err)

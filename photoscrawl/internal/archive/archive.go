@@ -84,7 +84,7 @@ func readStatusMetrics(ctx context.Context, dbPath string) (statusMetrics, error
 	if err != nil {
 		return statusMetrics{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	var metrics statusMetrics
 	var since sql.NullInt64
 	if err := db.DB().QueryRowContext(ctx, `

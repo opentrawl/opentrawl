@@ -222,7 +222,7 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 	sort.SliceStable(candidates, func(i, j int) bool {
 		left := candidates[i]
 		right := candidates[j]
-		if strings.ToLower(left.Who) != strings.ToLower(right.Who) {
+		if !strings.EqualFold(left.Who, right.Who) {
 			return strings.ToLower(left.Who) < strings.ToLower(right.Who)
 		}
 		if left.LastSeen != right.LastSeen {

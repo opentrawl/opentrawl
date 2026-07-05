@@ -221,7 +221,7 @@ func (api *LinearAPI) CreateComment(ctx context.Context, rawIssue, actor, body s
 		return CreatedComment{}, err
 	}
 	if !out.CommentCreate.Success {
-		return CreatedComment{}, fmt.Errorf("Linear did not create the comment")
+		return CreatedComment{}, fmt.Errorf("linear did not create the comment")
 	}
 	return CreatedComment{Issue: issue.Identifier, Comment: out.CommentCreate.Comment, Actor: actor}, nil
 }
@@ -260,7 +260,7 @@ func (api *LinearAPI) CreateIssue(ctx context.Context, teamKey, title, actor, de
 		return CreatedIssue{}, err
 	}
 	if !out.IssueCreate.Success {
-		return CreatedIssue{}, fmt.Errorf("Linear did not create the issue")
+		return CreatedIssue{}, fmt.Errorf("linear did not create the issue")
 	}
 	return CreatedIssue{Issue: out.IssueCreate.Issue, Actor: actor}, nil
 }
@@ -295,7 +295,7 @@ func (api *LinearAPI) UpdateIssueState(ctx context.Context, rawIssue, state, act
 		return UpdatedIssue{}, err
 	}
 	if !out.IssueUpdate.Success {
-		return UpdatedIssue{}, fmt.Errorf("Linear did not update the issue")
+		return UpdatedIssue{}, fmt.Errorf("linear did not update the issue")
 	}
 	return UpdatedIssue{Issue: out.IssueUpdate.Issue, Actor: actor}, nil
 }

@@ -49,7 +49,7 @@ where labels_json like '%"SENT"%'
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var email string
 		if err := rows.Scan(&email); err != nil {

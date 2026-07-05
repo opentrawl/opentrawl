@@ -200,11 +200,11 @@ func pullVerbosity(args []string) (int, []string, error) {
 	out := make([]string, 0, len(args))
 	verbosity := 0
 	for _, arg := range args {
-		switch {
-		case arg == "-v" || arg == "--verbose":
+		switch arg {
+		case "-v", "--verbose":
 			verbosity++
 			continue
-		case arg == "-vv":
+		case "-vv":
 			verbosity += 2
 			continue
 		default:

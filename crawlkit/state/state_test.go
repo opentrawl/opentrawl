@@ -16,7 +16,7 @@ func TestSetGetAndStale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestDefaultConstructorsAndManifestKey(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer cursorDB.Close()
+	defer func() { _ = cursorDB.Close() }()
 	if err := EnsureCursorSchema(ctx, cursorDB); err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestCursorStoreSetGetAndStale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := EnsureCursorSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestStateSchemasCoexistInOneDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestMappedStoresUseExistingSyncStateTables(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.ExecContext(ctx, `
 create table notcrawl_state(source text not null, kind text not null, entity text not null, cursor text not null, synced_at text not null, primary key(source, kind, entity));
 `); err != nil {

@@ -15,7 +15,7 @@ func TestSQLiteIndexRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	if err := EnsureSchema(ctx, db); err != nil {
 		t.Fatal(err)

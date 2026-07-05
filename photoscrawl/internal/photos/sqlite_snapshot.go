@@ -35,7 +35,7 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 	if err != nil {
 		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	resources, err := sqliteResources(ctx, db.DB())
 	if err != nil {
@@ -131,7 +131,7 @@ order by a.ZDATECREATED, a.ZUUID
 	if err != nil {
 		return nil, fmt.Errorf("query sqlite assets: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	assets := []Asset{}
 	for rows.Next() {
@@ -234,7 +234,7 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 	if err != nil {
 		return nil, fmt.Errorf("query sqlite resources: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := map[int64][]Resource{}
 	for rows.Next() {
@@ -293,7 +293,7 @@ order by m.%s, g.ZTITLE
 	if err != nil {
 		return nil, "", fmt.Errorf("query sqlite albums: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := map[int64][]AlbumMembership{}
 	for rows.Next() {
@@ -369,7 +369,7 @@ func sqliteColumnNames(ctx context.Context, db *sql.DB, table string) ([]string,
 	if err != nil {
 		return nil, fmt.Errorf("inspect sqlite table %s: %w", table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	columns := []string{}
 	for rows.Next() {

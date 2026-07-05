@@ -41,7 +41,7 @@ Accepts the canonical photoscrawl:asset/<32-hex> ref or a short alias
 from search output.`,
 }
 
-func printHelp(w io.Writer, paths archive.Paths) {
+func printHelp(w io.Writer, paths archive.Paths) error {
 	doc := ckusage.Doc{
 		Tool:    "photoscrawl",
 		Tagline: "your Apple Photos archive: search, open and classify your photos",
@@ -70,17 +70,22 @@ func printHelp(w io.Writer, paths archive.Paths) {
 			"Logs: " + filepath.Join(paths.LogDir, "current.log"),
 		},
 	}
-	fmt.Fprint(w, doc.Render())
+	_, err := fmt.Fprint(w, doc.Render())
+	return err
 }
 
 // printVerbHelp reports whether it knew the verb; unknown verbs fall through
 // to normal dispatch so their usage errors stay intact.
-func printVerbHelp(w io.Writer, paths archive.Paths, verb string) bool {
+func printVerbHelp(w io.Writer, paths archive.Paths, verb string) (bool, error) {
 	text, ok := verbHelp[verb]
 	if !ok {
-		return false
+		return false, nil
 	}
-	fmt.Fprintln(w, text)
-	fmt.Fprintf(w, "\nLogs: %s\n", filepath.Join(paths.LogDir, "current.log"))
-	return true
+	if _, err := fmt.Fprintln(w, text); err != nil {
+		return true, err
+	}
+	if _, err := fmt.Fprintf(w, "\nLogs: %s\n", filepath.Join(paths.LogDir, "current.log")); err != nil {
+		return true, err
+	}
+	return true, nil
 }

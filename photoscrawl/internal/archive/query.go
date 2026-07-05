@@ -143,7 +143,7 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if err != nil {
 		return SearchResult{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	whereSQL := searchWhereGPSOnlySQL
 	if ok, err := tableExists(ctx, db.DB(), "place_observation"); err == nil && ok {
 		whereSQL = searchWherePlaceSQL

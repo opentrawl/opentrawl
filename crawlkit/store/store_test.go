@@ -21,7 +21,7 @@ func TestOpenAppliesSchemaPragmasAndPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	if st.Path() != path {
 		t.Fatalf("path = %q, want %q", st.Path(), path)
 	}
@@ -59,7 +59,7 @@ func TestWithTxAndQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 
 	if err := st.WithTx(ctx, func(tx *sql.Tx) error {
 		_, err := tx.ExecContext(ctx, `insert into things(id, value) values('a', 'one')`)
@@ -94,7 +94,7 @@ func TestReadOnlyRejectsWrites(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ro.Close()
+	defer func() { _ = ro.Close() }()
 	if _, err := ro.DB().ExecContext(ctx, `insert into things(id) values('x')`); err == nil {
 		t.Fatal("expected readonly write to fail")
 	}
@@ -132,7 +132,7 @@ func TestOpenEscapesURIReservedPathCharacters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer ro.Close()
+	defer func() { _ = ro.Close() }()
 	var value string
 	if err := ro.DB().QueryRowContext(ctx, `select value from things where id = 'a'`).Scan(&value); err != nil {
 		t.Fatal(err)
@@ -210,7 +210,7 @@ func TestFTS5Helpers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer st.Close()
+	defer func() { _ = st.Close() }()
 	docs := []struct {
 		id   string
 		body string

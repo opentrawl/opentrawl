@@ -60,7 +60,7 @@ order by t.created_at desc, t.id desc limit ?`
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []SearchResult
 	for rows.Next() {
 		tweet, parentID, parentName, parentHandle, err := scanTweetWithParent(rows)
@@ -105,7 +105,7 @@ limit ?`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out []SearchResult
 	for rows.Next() {
 		tweet, parentID, parentName, parentHandle, err := scanTweetWithParent(rows)

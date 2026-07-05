@@ -58,7 +58,7 @@ func SnapshotFile(opts SnapshotOptions) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("open source: %w", err)
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 	tmp, err := os.CreateTemp(opts.CacheDir, "."+filepath.Base(target)+".tmp-")
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("create snapshot: %w", err)

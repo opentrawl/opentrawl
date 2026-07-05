@@ -1,0 +1,34 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - forbidigo
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    forbidigo:
+      forbid:
+        - pattern: '^fmt\.Print(f|ln)?$'
+          msg: "write human output through a renderer or diagnostics through crawlkit/log"
+        - pattern: '^print(ln)?$'
+          msg: "write human output through a renderer or diagnostics through crawlkit/log"
+        - pattern: '^os\.(Stdout|Stderr)$'
+          msg: "pass output writers in from the CLI boundary instead of reaching for process stdio"
+        - pattern: '^log\.(Print|Printf|Println|Fatal|Fatalf|Fatalln|Panic|Panicf|Panicln)$'
+          msg: "route diagnostics through crawlkit/log instead of the standard logger"
+        - pattern: '^slog\.(Debug|DebugContext|Info|InfoContext|Warn|WarnContext|Error|ErrorContext)$'
+          msg: "route diagnostics through crawlkit/log instead of the default slog logger"
+
+  exclusions:
+    rules:
+    - path: '(^|/)(cmd/[^/]+/.*\.go|internal/cli/.*\.go|crawlkit/(log|output|render)/.*\.go|scripts/linear/(main|cli|render|logging)\.go)$'
+      linters:
+        - forbidigo
