@@ -69,8 +69,25 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return searchError(err, query)
 		}
-		return r.print(result)
+		return r.print(searchOutput{
+			SearchResult: result,
+			limit:        *limit,
+			who:          whoValue,
+			after:        strings.TrimSpace(*after),
+			before:       strings.TrimSpace(*before),
+		})
 	})
+}
+
+// searchOutput carries the caller's flags next to the frozen search
+// envelope so the human More: hint can be a copy-pasteable rerun. The
+// extra fields are unexported: JSON output stays the bare SearchResult.
+type searchOutput struct {
+	archive.SearchResult
+	limit  int
+	who    string
+	after  string
+	before string
 }
 
 func searchError(err error, query string) error {
@@ -79,7 +96,7 @@ func searchError(err error, query string) error {
 		message := fmt.Sprintf("--who %q matched more than one person", ambiguous.Query)
 		remedy := "retry with one exact identifier from candidates"
 		fields := map[string]any{"candidates": ambiguous.Candidates}
-		human := renderWhoSearchError("ambiguous_who", ambiguous.Query, "matched more than one person", ambiguous.Candidates, query)
+		human := renderWhoSearchError(fmt.Sprintf("--who %q matched more than one person.", ambiguous.Query), ambiguous.Candidates, query)
 		return commandErrWith("ambiguous_who", message, remedy, 4, fields, human, err)
 	}
 	var unknown *archive.UnknownWhoError
@@ -90,20 +107,21 @@ func searchError(err error, query string) error {
 		if len(unknown.DidYouMean) == 0 {
 			fields["hint"] = "search without --who to search message text instead"
 		}
-		human := renderWhoSearchError("unknown_who", unknown.Query, "did not match a person", unknown.DidYouMean, query)
+		human := renderWhoSearchError(fmt.Sprintf("--who %q did not match a person.", unknown.Query), unknown.DidYouMean, query)
 		return commandErrWith("unknown_who", message, remedy, 5, fields, human, err)
 	}
 	return err
 }
 
-func renderWhoSearchError(code, who, summary string, candidates []archive.WhoCandidate, query string) string {
+func renderWhoSearchError(summary string, candidates []archive.WhoCandidate, query string) string {
 	var out bytes.Buffer
-	_, _ = fmt.Fprintf(&out, "%s: %q %s.\n", code, who, summary)
+	_, _ = fmt.Fprintln(&out, summary)
 	if len(candidates) > 0 {
-		_ = renderWhoTable(&out, candidates)
+		_, _ = fmt.Fprintln(&out)
+		_ = writeWhoTable(&out, candidates)
 		identifier := retryIdentifier(candidates[0])
 		if identifier != "" {
-			_, _ = fmt.Fprintf(&out, "Retry with one identifier: %s\n", retrySearchCommand(identifier, query))
+			_, _ = fmt.Fprintf(&out, "\nRetry with one identifier: %s\n", retrySearchCommand(identifier, query))
 		}
 	} else {
 		_, _ = io.WriteString(&out, "No close people found.\nSearch without --who to search message text instead.")

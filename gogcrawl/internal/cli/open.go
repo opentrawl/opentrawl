@@ -28,8 +28,25 @@ func (r *runtime) runOpen(args []string) error {
 			return commandErr("message_not_found", "message could not be opened", "search again and pass a gogcrawl:msg ref", err)
 		}
 		result = boundOpenResult(result)
-		return r.print(result)
+		return r.print(openOutput{OpenResult: result, shortRef: openShortRef(r, st, result.Ref)})
 	})
+}
+
+// openOutput pairs the frozen open envelope with the message's short
+// alias for the human card; full machine refs stay in JSON
+// (docs/rendering.md). The alias is unexported so JSON output stays the
+// bare OpenResult.
+type openOutput struct {
+	archive.OpenResult
+	shortRef string
+}
+
+func openShortRef(r *runtime, st *archive.Store, ref string) string {
+	aliases, err := st.ShortRefs(r.ctx, []string{ref})
+	if err != nil {
+		return ""
+	}
+	return aliases[ref]
 }
 
 func boundOpenResult(result archive.OpenResult) archive.OpenResult {
