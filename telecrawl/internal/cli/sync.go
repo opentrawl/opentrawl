@@ -70,7 +70,7 @@ func (r *runtime) runImport(command string, args []string) error {
 }
 
 // logImportTimings always logs under the canonical "sync" event, never the
-// alias the user typed (import/sync/wiretap). One operation, one event name, so
+// alias the user typed (import/sync). One operation, one event name, so
 // log analysis and the verbose_logs stream stay stable across aliases.
 func (r *runtime) logImportTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
 	totalElapsed := stats.FinishedAt.Sub(stats.StartedAt)

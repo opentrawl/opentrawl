@@ -115,10 +115,10 @@ func TestImportVerboseLogsPhaseTimings(t *testing.T) {
 	}
 }
 
-// The import/sync/wiretap aliases are one operation, so the completion event is
+// The import/sync aliases are one operation, so the completion event is
 // always sync_done regardless of which alias the user typed.
 func TestImportAliasesLogCanonicalSyncEvent(t *testing.T) {
-	for _, alias := range []string{"import", "sync", "wiretap"} {
+	for _, alias := range []string{"import", "sync"} {
 		t.Run(alias, func(t *testing.T) {
 			clearTestLog(t)
 			source := makePostboxFixture(t)
@@ -132,12 +132,22 @@ func TestImportAliasesLogCanonicalSyncEvent(t *testing.T) {
 			if !strings.Contains(logText, "sync_done: messages=1") {
 				t.Fatalf("%s did not log canonical sync_done:\n%s", alias, logText)
 			}
-			for _, aliased := range []string{"import_done", "wiretap_done"} {
-				if strings.Contains(logText, aliased) {
-					t.Fatalf("%s leaked alias event %q:\n%s", alias, aliased, logText)
-				}
+			if strings.Contains(logText, "import_done") {
+				t.Fatalf("%s leaked alias event \"import_done\":\n%s", alias, logText)
 			}
 		})
+	}
+}
+
+// wiretap was an alias for import; deleted under TRAWL-118 (Q6). It must fail
+// like any other unknown command.
+func TestWiretapAliasIsGone(t *testing.T) {
+	stdout, stderr, err := runCLI(t, "wiretap")
+	if err == nil {
+		t.Fatalf("wiretap succeeded: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if got, want := err.Error(), "unknown command \"wiretap\". Run 'telecrawl --help'."; got != want {
+		t.Fatalf("error = %q, want %q", got, want)
 	}
 }
 
