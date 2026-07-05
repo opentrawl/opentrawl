@@ -28,6 +28,7 @@ import (
 	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/clawdex/internal/vcard"
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/render"
 )
 
@@ -281,12 +282,14 @@ func (c *PersonAddCmd) Run(r *Runtime) error {
 
 type PersonListCmd struct {
 	Query string `name:"query" short:"q" help:"Filter query"`
-	Limit int    `name:"limit" default:"50" help:"Number of people to show"`
+	Limit *int   `name:"limit" help:"Number of people to show (default 50)"`
+	All   bool   `name:"all" help:"Show every person, no limit"`
 }
 
 func (c *PersonListCmd) Run(r *Runtime) error {
-	if err := validateLimit(c.Limit); err != nil {
-		return err
+	limit, err := flags.Limit(limitOr(c.Limit, 50), c.Limit != nil, c.All)
+	if err != nil {
+		return usageErr{err}
 	}
 	people, err := r.store.People()
 	if err != nil {
@@ -303,8 +306,8 @@ func (c *PersonListCmd) Run(r *Runtime) error {
 		people = filtered
 	}
 	total := len(people)
-	if len(people) > c.Limit {
-		people = people[:c.Limit]
+	if limit > 0 && len(people) > limit {
+		people = people[:limit]
 	}
 	if people == nil {
 		people = []model.Person{}
@@ -314,7 +317,7 @@ func (c *PersonListCmd) Run(r *Runtime) error {
 		People:    people,
 		Total:     total,
 		Truncated: total > len(people),
-		limit:     c.Limit,
+		limit:     limit,
 	})
 }
 
@@ -469,26 +472,29 @@ func (c *NoteAddCmd) Run(r *Runtime) error {
 
 type NoteListCmd struct {
 	Person string `arg:"" help:"Person query"`
-	Limit  int    `name:"limit" default:"20" help:"Number of notes to show"`
+	Limit  *int   `name:"limit" help:"Number of notes to show (default 20)"`
+	All    bool   `name:"all" help:"Show every note, no limit"`
 }
 
 func (c *NoteListCmd) Run(r *Runtime) error {
-	return runNoteList(r, "note list", c.Person, c.Limit)
+	return runNoteList(r, "note list", c.Person, c.Limit, c.All)
 }
 
 type TimelineCmd struct {
 	Person string `arg:"" help:"Person query"`
-	Limit  int    `name:"limit" default:"20" help:"Number of notes to show"`
+	Limit  *int   `name:"limit" help:"Number of notes to show (default 20)"`
+	All    bool   `name:"all" help:"Show every note, no limit"`
 }
 
 func (c *TimelineCmd) Run(r *Runtime) error {
-	return runNoteList(r, "timeline", c.Person, c.Limit)
+	return runNoteList(r, "timeline", c.Person, c.Limit, c.All)
 }
 
 // runNoteList backs note list and timeline: the same notes, newest first.
-func runNoteList(r *Runtime, verb, personQuery string, limit int) error {
-	if err := validateLimit(limit); err != nil {
-		return err
+func runNoteList(r *Runtime, verb, personQuery string, limitFlag *int, all bool) error {
+	limit, err := flags.Limit(limitOr(limitFlag, 20), limitFlag != nil, all)
+	if err != nil {
+		return usageErr{err}
 	}
 	p, notes, err := r.store.Notes(personQuery)
 	if err != nil {
@@ -496,7 +502,7 @@ func runNoteList(r *Runtime, verb, personQuery string, limit int) error {
 	}
 	slices.Reverse(notes) // store returns oldest first
 	total := len(notes)
-	if len(notes) > limit {
+	if limit > 0 && len(notes) > limit {
 		notes = notes[:limit]
 	}
 	if notes == nil {
@@ -516,20 +522,22 @@ func runNoteList(r *Runtime, verb, personQuery string, limit int) error {
 
 type SearchCmd struct {
 	Query string `arg:"" help:"Search query"`
-	Limit int    `name:"limit" default:"20" help:"Number of results to return"`
+	Limit *int   `name:"limit" help:"Number of results to return (default 20)"`
+	All   bool   `name:"all" help:"Show every match, no limit"`
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
-	if err := validateLimit(c.Limit); err != nil {
-		return err
+	limit, err := flags.Limit(limitOr(c.Limit, 20), c.Limit != nil, c.All)
+	if err != nil {
+		return usageErr{err}
 	}
 	hits, err := r.store.Search(c.Query)
 	if err != nil {
 		return err
 	}
 	total := len(hits)
-	if len(hits) > c.Limit {
-		hits = hits[:c.Limit]
+	if limit > 0 && len(hits) > limit {
+		hits = hits[:limit]
 	}
 	if hits == nil {
 		hits = []model.SearchHit{}
@@ -539,15 +547,18 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		Results:      hits,
 		TotalMatches: total,
 		Truncated:    total > len(hits),
-		limit:        c.Limit,
+		limit:        limit,
 	})
 }
 
-func validateLimit(limit int) error {
-	if limit < 1 {
-		return usageErr{errors.New("--limit must be at least 1")}
+// limitOr returns the --limit value, or def when the flag was omitted. A nil
+// pointer is kong's signal that the user did not pass --limit, which lets
+// flags.Limit refuse --all combined with an explicit --limit.
+func limitOr(limit *int, def int) int {
+	if limit == nil {
+		return def
 	}
-	return nil
+	return *limit
 }
 
 type ImportCmd struct {

@@ -1701,8 +1701,19 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 		t.Fatalf("person list --limit 1 envelope = %#v", people)
 	}
 	out := run("person", "list", "--limit", "1")
-	if !strings.Contains(out, "showing 1 of 2") || !strings.Contains(out, "More: clawdex person list --limit 2") {
+	if !strings.Contains(out, "showing 1 of 2") ||
+		!strings.Contains(out, "More: clawdex person list --limit 2") ||
+		!strings.Contains(out, "All: clawdex person list --all") {
 		t.Fatalf("person list --limit 1 human = %s", out)
+	}
+
+	// --all returns everything, no hidden cap and nothing truncated.
+	var everyone peopleEnvelope
+	if err := json.Unmarshal([]byte(run("--json", "person", "list", "--all")), &everyone); err != nil {
+		t.Fatal(err)
+	}
+	if len(everyone.People) != 2 || everyone.Total != 2 || everyone.Truncated {
+		t.Fatalf("person list --all envelope = %#v", everyone)
 	}
 	var search searchEnvelope
 	if err := json.Unmarshal([]byte(run("--json", "search", "example.com", "--limit", "1")), &search); err != nil {
