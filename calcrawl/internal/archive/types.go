@@ -52,9 +52,15 @@ type WhoCandidate struct {
 	// filterIdentifiers are the identifiers that belong to exactly this
 	// entity. A shared mailbox stays in Identifiers for display and query
 	// matching, but filtering events by it would pull in the other entities
-	// it fronts, so Filter() matches on these only; when none survive, it
-	// falls back to name equality.
+	// it fronts, so Filter() matches on these only.
 	filterIdentifiers []string
+	// names are the entity's own raw display spellings, used by Filter()
+	// alongside filterIdentifiers so an event reachable only by name (a
+	// name-joined row, or a shared-mailbox event whose identifier is
+	// filter-excluded) still matches. Raw spellings, not the cleaned Who
+	// label: a stored name clusters into exactly one entity, so the set is
+	// disjoint and cannot pull in another entity's events.
+	names []string
 }
 
 type WhoResolved struct {
@@ -65,6 +71,7 @@ type WhoResolved struct {
 type WhoFilter struct {
 	Who         string
 	Identifiers []string
+	Names       []string
 }
 
 type Location struct {

@@ -248,8 +248,7 @@ func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFi
 func whoWhere(who *WhoFilter) (string, []any) {
 	clauses := []string{}
 	args := []any{}
-	values := uniqueStrings(who.Identifiers)
-	if len(values) > 0 {
+	if values := uniqueStrings(who.Identifiers); len(values) > 0 {
 		clauses = append(clauses, "e.organizer_email in ("+valuePlaceholders(len(values))+")")
 		args = appendValues(args, values)
 		clauses = append(clauses, "e.organizer_phone in ("+valuePlaceholders(len(values))+")")
@@ -263,12 +262,36 @@ func whoWhere(who *WhoFilter) (string, []any) {
 		args = appendValues(args, values)
 		args = appendValues(args, values)
 		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and ("+strings.Join(participantClauses, " or ")+"))")
-	} else if strings.TrimSpace(who.Who) != "" {
-		name := strings.TrimSpace(who.Who)
-		clauses = append(clauses, "e.organizer_name = ?")
-		args = append(args, name)
-		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name = ?)")
-		args = append(args, name)
+	}
+	// The name clause is OR'd in alongside any identifiers, not mutually
+	// exclusive with them: an entity that owns an identifier on one event and
+	// reaches another only by name (a name-joined row, or a shared mailbox
+	// that stays out of the filter after TRAWL-111) needs both to reach every
+	// one of its events, so who and search counts agree. It matches the raw
+	// display spellings, never its cleaned label (who.Who): the label strips
+	// "Name <email>" cruft, so two distinct entities can share one label while
+	// their stored names differ, and matching the label would pull the other
+	// entity's events in. Raw spellings are safe because a given stored name
+	// clusters into exactly one entity (buildWhoCandidates unions every record
+	// sharing a normalized name), so this set is disjoint across entities.
+	if names := uniqueStrings(who.Names); len(names) > 0 {
+		clauses = append(clauses, "e.organizer_name in ("+valuePlaceholders(len(names))+")")
+		args = appendValues(args, names)
+		clauses = append(clauses, "exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name in ("+valuePlaceholders(len(names))+"))")
+		args = appendValues(args, names)
+	}
+	if len(clauses) == 0 {
+		// The entity owns no identifier and no display name of its own — a
+		// nameless shared-mailbox cluster, which --who refuses as ambiguous
+		// before search reaches here. Fall back to its label (an identifier
+		// string in this case, so no cross-entity collision) rather than let
+		// the filter silently become match-all.
+		if name := strings.TrimSpace(who.Who); name != "" {
+			clauses = append(clauses,
+				"e.organizer_name = ?",
+				"exists (select 1 from participants p where p.event_uid = e.event_uid and p.display_name = ?)")
+			args = append(args, name, name)
+		}
 	}
 	if len(clauses) == 0 {
 		return "", nil
