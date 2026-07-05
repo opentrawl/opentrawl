@@ -14,8 +14,7 @@ brew install steipete/tap/clawdex
 clawdex --version
 ```
 
-The Homebrew formula lives in `steipete/homebrew-tap` and is updated by the
-clawdex release workflow after each tagged release.
+The Homebrew formula lives in `steipete/homebrew-tap`.
 
 ## Go install
 
@@ -36,20 +35,6 @@ go build -o ./bin/clawdex ./cmd/clawdex
 ./bin/clawdex --version
 ```
 
-## GitHub release archives
-
-Release assets are published by GoReleaser:
-
-- `clawdex_<version>_darwin_amd64.tar.gz`
-- `clawdex_<version>_darwin_arm64.tar.gz`
-- `clawdex_<version>_linux_amd64.tar.gz`
-- `clawdex_<version>_linux_arm64.tar.gz`
-- `clawdex_<version>_windows_amd64.zip`
-- `checksums.txt`
-
-Browse the [releases page](https://github.com/openclaw/clawdex/releases) for
-the latest tag.
-
 ## Platform notes
 
 - **macOS** is the most exercised target. `clawdex import apple` reads
@@ -57,8 +42,8 @@ the latest tag.
   *Settings → Privacy & Security → Full Disk Access* before import.
 - **Linux** builds support markdown editing, notes, search, Git, Google
   imports through `gog`, and vCard export. Apple direct import is macOS-only.
-- **Windows** binaries are produced but lightly tested; the Git layer assumes
-  a working `git` on `PATH`.
+- **Windows** builds are lightly tested; the Git layer assumes a working
+  `git` on `PATH`.
 
 ## Verify the install
 
@@ -76,7 +61,6 @@ count, and any avatar problems.
 
 - **Homebrew:** `brew upgrade clawdex`.
 - **Go install:** rerun `go install github.com/openclaw/clawdex/cmd/clawdex@latest`.
-- **Release archives:** download the new tarball and replace the binary.
 - **Source:** `git pull && go build -o ./bin/clawdex ./cmd/clawdex`.
 
 The on-disk markdown layout is forward-compatible across point releases. A

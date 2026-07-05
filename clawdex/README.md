@@ -156,10 +156,3 @@ index/
 `index/index.db` is derived and rebuildable. Clawdex refreshes it on reads when
 person markdown changes. Markdown is canonical.
 
-## Releases
-
-Tagged releases are built by GoReleaser for macOS, Linux, and Windows. The
-release workflow also dispatches `steipete/homebrew-tap` to update
-`Formula/clawdex.rb` after the GitHub release assets are published.
-
-Release checklist: [`docs/RELEASING.md`](docs/RELEASING.md).

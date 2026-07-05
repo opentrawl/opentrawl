@@ -713,40 +713,13 @@ golangci-lint run ./...
 go build -o bin/wacrawl ./cmd/wacrawl
 ```
 
-Extra release-parity checks:
+Extra checks:
 
 ```bash
 go test -count=1 -race ./...
-goreleaser release --snapshot --clean --skip=publish
 ```
 
 Coverage must stay at or above 85%.
-
-## Release
-
-Releases are tag-driven through GoReleaser.
-
-```bash
-git tag -a v0.2.0 -m "Release 0.2.0"
-git push origin main --tags
-```
-
-CI publishes GitHub release artifacts for:
-
-```text
-darwin/amd64
-darwin/arm64
-linux/amd64
-linux/arm64
-windows/amd64
-windows/arm64
-```
-
-The Homebrew formula lives in:
-
-```text
-~/Projects/openclaw-homebrew-tap/Formula/wacrawl.rb
-```
 
 ## License
 
