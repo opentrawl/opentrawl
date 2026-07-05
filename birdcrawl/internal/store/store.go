@@ -5,14 +5,24 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckstate "github.com/openclaw/crawlkit/state"
 	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 var ErrTweetNotFound = errors.New("tweet not found")
+
+// ErrSchemaOutdated means this archive predates schemaVersion 2 (the
+// sync_state migration) and was opened read-only, so migrate() never ran.
+// Migration writes DDL and only runs on a writable Open — status/doctor
+// deliberately use OpenReadOnly so they never contend for the write lock
+// with a running sync. The remedy is the same one sync/import already
+// does on every writable open: nothing to run by hand.
+var ErrSchemaOutdated = errors.New("archive schema predates this version; run: birdcrawl sync")
 
 type Store struct {
 	base *ckstore.Store
@@ -95,7 +105,25 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	outdated, err := hasLegacySyncState(ctx, base.DB())
+	if err != nil {
+		_ = base.Close()
+		return nil, err
+	}
+	if outdated {
+		_ = base.Close()
+		return nil, ErrSchemaOutdated
+	}
 	return &Store{base: base, db: base.DB(), path: base.Path()}, nil
+}
+
+// hasLegacySyncState is a cheap, read-only structural check — no write, no
+// lock contention with a concurrent sync — that tells a not-yet-migrated
+// archive apart from a current one.
+func hasLegacySyncState(ctx context.Context, db *sql.DB) (bool, error) {
+	var legacyColumn int
+	err := db.QueryRowContext(ctx, `select count(*) from pragma_table_info('sync_state') where name = 'kind'`).Scan(&legacyColumn)
+	return legacyColumn > 0, err
 }
 
 func (s *Store) Close() error { return s.base.Close() }
@@ -125,10 +153,126 @@ func (s *Store) migrate(ctx context.Context) error {
 			return err
 		}
 	}
+	migrated := 0
+	if current < 2 {
+		migrated, err = migrateLegacySyncState(ctx, tx, current)
+		if err != nil {
+			return err
+		}
+	}
 	if _, err := tx.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	// Logged only after commit: the version bump and the copied rows are
+	// either both durable or both rolled back, so this line is never
+	// printed for a migration that did not actually happen.
+	if migrated > 0 {
+		fmt.Fprintf(os.Stderr, "birdcrawl: migrated %d legacy sync_state row(s) to the canonical state store\n", migrated)
+	}
+	return nil
+}
+
+// migrateLegacySyncState is the one-time, value-preserving move off
+// birdcrawl's old sync_state(kind, cursor, last_sync_at, last_result,
+// coverage_note) table onto crawlkit's canonical state.Schema. It runs
+// inside the same transaction as the version bump, so a crash never
+// leaves the archive between shapes.
+//
+// This cannot be a blind drop-and-recreate tombstone like the other
+// crawlers' sync-state adoptions: birdcrawl's sync_state holds a real
+// financial ledger (the spend:<month> cursor, a monotonic count of X API
+// dollars already spent, enforced by the per-request budget guard) and
+// pagination cursors whose only re-derivation path is a paid, from-zero
+// re-crawl. Neither is data "one sync re-derives" (rules.md §1.17 only
+// permits dropping migration code for that kind of data), so every row
+// is read and rewritten before the old table is dropped. Coordinator
+// ruling on TRAWL-82 (2026-07-05) is the record of this decision.
+//
+// currentVersion is the schema version this archive is upgrading FROM. A
+// database already at version 0 (brand new) never had the legacy table,
+// so there is nothing to read; it goes straight to the canonical schema.
+func migrateLegacySyncState(ctx context.Context, tx *sql.Tx, currentVersion int) (int, error) {
+	if currentVersion < 1 {
+		if _, err := tx.ExecContext(ctx, ckstate.Schema); err != nil {
+			return 0, err
+		}
+		return 0, nil
+	}
+	rows, err := tx.QueryContext(ctx, `select kind, cursor, last_sync_at, last_result, coverage_note from sync_state`)
+	if err != nil {
+		return 0, err
+	}
+	type legacyRow struct {
+		kind, cursor, lastSyncAt, lastResult, coverageNote string
+	}
+	var legacy []legacyRow
+	for rows.Next() {
+		var (
+			kind                                         string
+			cursor, lastSyncAt, lastResult, coverageNote sql.NullString
+		)
+		if err := rows.Scan(&kind, &cursor, &lastSyncAt, &lastResult, &coverageNote); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		legacy = append(legacy, legacyRow{
+			kind:         kind,
+			cursor:       cursor.String,
+			lastSyncAt:   lastSyncAt.String,
+			lastResult:   lastResult.String,
+			coverageNote: coverageNote.String,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	if err := rows.Close(); err != nil {
+		return 0, err
+	}
+
+	if _, err := tx.ExecContext(ctx, `drop table sync_state`); err != nil {
+		return 0, err
+	}
+	if _, err := tx.ExecContext(ctx, ckstate.Schema); err != nil {
+		return 0, err
+	}
+
+	for _, row := range legacy {
+		// Canonical state.Store.Get parses updated_at as RFC3339Nano and
+		// errors on a blank or malformed string, unlike the old
+		// parseStoredTime, which silently treated ANY parse failure
+		// (blank or otherwise corrupt) as zero time. A legacy row must
+		// still migrate to something parseable, or every future read of
+		// that kind would error where it used to succeed with a zero
+		// time. UnknownTimeRFC3339 is exactly that: birdcrawl's own
+		// existing spelling of "no timestamp" (formatUTC(time.Time{})),
+		// and it parses back to the same zero time any unparseable value
+		// always decoded to, so no reader observes a behavior change —
+		// see TestMigrateLegacySyncStateBlankLastSyncAt.
+		updatedAt := row.lastSyncAt
+		if _, err := time.Parse(time.RFC3339Nano, updatedAt); err != nil {
+			updatedAt = UnknownTimeRFC3339
+		}
+		for _, cell := range []struct{ entityType, value string }{
+			{stateEntityCursor, row.cursor},
+			{stateEntityLastResult, row.lastResult},
+			{stateEntityCoverageNote, row.coverageNote},
+		} {
+			if _, err := tx.ExecContext(ctx, `
+insert into sync_state(source_name, entity_type, entity_id, value, updated_at)
+values (?, ?, ?, ?, ?)
+on conflict(source_name, entity_type, entity_id) do update set
+  value = excluded.value,
+  updated_at = excluded.updated_at`,
+				stateSourceName, cell.entityType, row.kind, cell.value, updatedAt); err != nil {
+				return 0, err
+			}
+		}
+	}
+	return len(legacy), nil
 }
 
 func userVersion(ctx context.Context, db *sql.DB) (int, error) {
@@ -161,11 +305,22 @@ func (s *Store) ImportArchive(ctx context.Context, batch ImportBatch) (ImportSta
 		if !batch.CoverageThrough.IsZero() {
 			coverage = formatUTC(batch.CoverageThrough)
 		}
-		_, err := tx.ExecContext(ctx, `insert into sync_state(kind,cursor,last_sync_at,last_result,coverage_note)
-values('archive_import',?,?,'ok','')
-on conflict(kind) do update set cursor=excluded.cursor,last_sync_at=excluded.last_sync_at,last_result=excluded.last_result`,
-			coverage, formatUTC(now))
-		return err
+		// The old hand-rolled SQL's ON CONFLICT clause never touched
+		// coverage_note after the first insert for this kind, so a real
+		// historical value can be sitting there; upsertSyncState writes
+		// all three canonical rows unconditionally, so it must be told
+		// the existing value explicitly or a later import would erase it.
+		existing, err := syncStateWithin(ctx, tx, "archive_import")
+		if err != nil {
+			return err
+		}
+		return upsertSyncState(ctx, tx, SyncStateUpdate{
+			Kind:         "archive_import",
+			Cursor:       coverage,
+			LastSyncAt:   now,
+			LastResult:   "ok",
+			CoverageNote: existing.CoverageNote,
+		})
 	})
 	if err != nil {
 		return ImportStats{}, err

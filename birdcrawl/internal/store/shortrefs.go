@@ -80,13 +80,13 @@ func (s *Store) ShortRefAliases(ctx context.Context, fullRefs []string) (map[str
 }
 
 func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
-	var stored string
-	err := s.db.QueryRowContext(ctx, `select cursor from sync_state where kind = ?`, shortRefFingerprintKind).Scan(&stored)
-	if err == sql.ErrNoRows {
-		return false, nil
-	}
+	fingerprint, err := s.SyncState(ctx, shortRefFingerprintKind)
 	if err != nil {
 		return false, err
+	}
+	stored := fingerprint.Cursor
+	if stored == "" {
+		return false, nil
 	}
 	refs, err := s.allTweetFullRefs(ctx)
 	if err != nil {

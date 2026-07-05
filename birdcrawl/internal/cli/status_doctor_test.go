@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -118,5 +119,99 @@ func TestDoctorReportsSpentBudgetWarnAndSkippedProbe(t *testing.T) {
 	}
 	if got := byID["x_account_reachable"]; got.State != "skipped" || got.Message != "skipped: monthly X API budget is spent." {
 		t.Fatalf("x account check = %#v", got)
+	}
+}
+
+// TestStatusAndDoctorReportOutdatedSchemaHonestly pins the fix for a real
+// regression the TRAWL-82 sync_state migration introduced: status and
+// doctor open the archive read-only, and migrate() (which writes DDL)
+// only runs on a writable open, so a not-yet-migrated archive used to
+// fail with a generic "cannot be read" error instead of naming the
+// actual, actionable cause — and doctor duplicated its integrity checks
+// while doing so.
+func TestStatusAndDoctorReportOutdatedSchemaHonestly(t *testing.T) {
+	env := newSyncTestEnv(t)
+	ctx := context.Background()
+
+	// Create the current (canonical) schema, then rewrite sync_state back
+	// into the pre-migration shape, so this archive looks exactly like a
+	// real one that predates the TRAWL-82 migration.
+	seed, err := store.Open(ctx, env.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Close(); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", env.dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`drop table sync_state`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`create table sync_state (
+		kind text primary key,
+		cursor text,
+		last_sync_at text,
+		last_result text,
+		coverage_note text
+	)`); err != nil {
+		t.Fatal(err)
+	}
+	month := time.Now().UTC().Format("2006-01")
+	if _, err := db.Exec(`insert into sync_state(kind,cursor,last_sync_at,last_result,coverage_note) values (?,?,?,?,?)`,
+		"spend:"+month, "1250000", time.Now().UTC().Format(time.RFC3339), "ok", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`pragma user_version = 1`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	if err := Run(ctx, []string{"--db", env.dbPath, "--config", env.configPath, "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status error: %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "archive schema needs one sync to finish upgrading") {
+		t.Fatalf("status output missing the honest outdated-schema message:\n%s", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "run: birdcrawl sync") {
+		t.Fatalf("status output missing the remedy:\n%s", stdout.String())
+	}
+
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", env.dbPath, "--config", env.configPath, "doctor"}, &stdout, &stderr); err != nil {
+		t.Fatalf("doctor error: %v stderr=%s", err, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "archive schema needs one sync to finish upgrading") {
+		t.Fatalf("doctor output missing the honest outdated-schema message:\n%s", stdout.String())
+	}
+	if strings.Count(stdout.String(), "database integrity:") != 1 {
+		t.Fatalf("doctor output repeated the database_integrity check instead of reporting it once:\n%s", stdout.String())
+	}
+
+	// A writable open (any command using withStore) migrates the archive;
+	// status must then read it normally, with no trace of the old message.
+	if err := Run(ctx, []string{"--db", env.dbPath, "--config", env.configPath, "tweets", "--limit", "1"}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
+		t.Fatalf("tweets (writable open, triggers migration): %v", err)
+	}
+	stdout.Reset()
+	stderr.Reset()
+	if err := Run(ctx, []string{"--db", env.dbPath, "--config", env.configPath, "--json", "status"}, &stdout, &stderr); err != nil {
+		t.Fatalf("status after migration: %v stderr=%s", err, stderr.String())
+	}
+	if strings.Contains(stdout.String(), "needs one sync") {
+		t.Fatalf("status still reports outdated schema after a writable open migrated it:\n%s", stdout.String())
+	}
+	var envelope statusEnvelope
+	if err := json.Unmarshal(stdout.Bytes(), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Spend.SpentUSD != "1.25" {
+		t.Fatalf("spent_usd after migration = %q, want %q — the migrated spend ledger value must reach status", envelope.Spend.SpentUSD, "1.25")
 	}
 }

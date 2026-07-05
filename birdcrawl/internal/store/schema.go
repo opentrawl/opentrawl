@@ -1,6 +1,10 @@
 package store
 
-const schemaVersion = 1
+// schemaVersion 2 replaced the hand-rolled sync_state(kind, cursor,
+// last_sync_at, last_result, coverage_note) table with crawlkit's
+// canonical state.Schema. migrateLegacySyncState copies every legacy row
+// into the canonical shape before dropping the old table — see store.go.
+const schemaVersion = 2
 
 const schemaSQL = `
 create table if not exists tweets (
@@ -38,14 +42,6 @@ create table if not exists profiles (
 	handle text,
 	display_name text,
 	last_seen_at text not null
-);
-
-create table if not exists sync_state (
-	kind text primary key,
-	cursor text,
-	last_sync_at text,
-	last_result text,
-	coverage_note text
 );
 
 create index if not exists idx_tweets_created_at on tweets(created_at);
