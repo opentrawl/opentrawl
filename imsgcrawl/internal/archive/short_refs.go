@@ -8,14 +8,11 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
 
-const (
-	MessageRefPrefix = "imsgcrawl:msg/"
-
-	shortRefsBuiltForSyncKey = "short_refs_built_for_last_sync_at"
-)
+const MessageRefPrefix = "imsgcrawl:msg/"
 
 type ShortRefResolution struct {
 	FullRefs []string
@@ -100,11 +97,16 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 	if err != nil || !exists {
 		return false, err
 	}
-	state, err := s.syncState(ctx)
+	syncState := state.New(s.store.DB())
+	lastSync, hasLastSync, err := syncState.Get(ctx, syncSource, syncEntityType, stateLastSyncAt)
 	if err != nil {
 		return false, err
 	}
-	if state["last_sync_at"] == "" || state[shortRefsBuiltForSyncKey] != state["last_sync_at"] {
+	builtFor, hasBuiltFor, err := syncState.Get(ctx, syncSource, derivedEntityType, stateShortRefsBuiltFor)
+	if err != nil {
+		return false, err
+	}
+	if !hasLastSync || lastSync.Value == "" || !hasBuiltFor || builtFor.Value != lastSync.Value {
 		return false, nil
 	}
 	messageCount, err := countTable(ctx, s.store.DB(), "messages")
@@ -136,11 +138,14 @@ func (s *Store) rebuildShortRefs(ctx context.Context) error {
 	if err := rows.Err(); err != nil {
 		return err
 	}
-	state, err := s.syncState(ctx)
+	rec, ok, err := state.New(s.store.DB()).Get(ctx, syncSource, syncEntityType, stateLastSyncAt)
 	if err != nil {
 		return err
 	}
-	lastSync := strings.TrimSpace(state["last_sync_at"])
+	lastSync := ""
+	if ok {
+		lastSync = strings.TrimSpace(rec.Value)
+	}
 	if lastSync == "" {
 		lastSync = time.Now().UTC().Format(time.RFC3339)
 	}
@@ -176,6 +181,5 @@ func rebuildShortRefsForIDsInTx(ctx context.Context, tx *sql.Tx, ids []int64, sy
 	if err := index.UpsertEntries(ctx, shortref.LookupEntries(displayEntries)); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, upsertSyncStateSQL, shortRefsBuiltForSyncKey, syncStamp)
-	return err
+	return state.New(tx).Set(ctx, syncSource, derivedEntityType, stateShortRefsBuiltFor, syncStamp)
 }

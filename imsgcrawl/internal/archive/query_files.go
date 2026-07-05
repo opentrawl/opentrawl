@@ -47,9 +47,6 @@ var latestMessageDateSQL string
 //go:embed queries/status/earliest_message_date.sql
 var earliestMessageDateSQL string
 
-//go:embed queries/status/sync_state.sql
-var syncStateSQL string
-
 //go:embed queries/sync/insert_handles.sql
 var insertHandlesSQL string
 
@@ -70,9 +67,6 @@ var insertMessagesSQL string
 
 //go:embed queries/sync/insert_messages_fts.sql
 var insertMessagesFTSSQL string
-
-//go:embed queries/sync/upsert_sync_state.sql
-var upsertSyncStateSQL string
 
 func chatSummaryQuery(where string) string {
 	return strings.Replace(chatSummarySQL, "{{WHERE}}", where, 1)

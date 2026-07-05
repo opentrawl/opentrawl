@@ -14,9 +14,25 @@ import (
 
 	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/imsgcrawl/internal/addressbook"
 	"github.com/openclaw/imsgcrawl/internal/messages"
+)
+
+// Sync-state lives in the one crawlkit state.Store (TRAWL-82). Scalar sync
+// markers are keyed under the "sync" entity type; derived-state bookkeeping
+// under "derived".
+const (
+	syncSource            = "imsgcrawl"
+	syncEntityType        = "sync"
+	stateLastSyncAt       = "last_sync_at"
+	stateSourcePath       = "source_path"
+	stateSourceBytes      = "source_bytes"
+	stateSourceModifiedAt = "source_modified_at"
+
+	derivedEntityType      = "derived"
+	stateShortRefsBuiltFor = "short_refs_built_for_last_sync_at"
 )
 
 type Store struct {
@@ -55,7 +71,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema, SchemaVersion: schemaVersion})
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema, SchemaVersion: schemaVersion})
 	if err != nil {
 		return nil, err
 	}
@@ -83,17 +99,12 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	hasDisplayName, err := tableHasColumn(ctx, st.DB(), "handles", "display_name")
+	outdated, err := detectSchemaOutdated(ctx, st.DB())
 	if err != nil {
 		_ = st.Close()
 		return nil, err
 	}
-	hasContactKey, err := tableHasColumn(ctx, st.DB(), "contact_mappings", "contact_key")
-	if err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName || !hasContactKey}, nil
+	return &Store{store: st, path: path, schemaOutdated: outdated}, nil
 }
 
 func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
@@ -108,17 +119,32 @@ func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, err
 	}
-	hasDisplayName, err := tableHasColumn(ctx, st.DB(), "handles", "display_name")
+	outdated, err := detectSchemaOutdated(ctx, st.DB())
 	if err != nil {
 		_ = st.Close()
 		return nil, err
 	}
-	hasContactKey, err := tableHasColumn(ctx, st.DB(), "contact_mappings", "contact_key")
+	return &Store{store: st, path: path, schemaOutdated: outdated}, nil
+}
+
+// detectSchemaOutdated reports whether the archive predates a schema change
+// this binary's reads need. A missing display_name/contact_key column or a
+// pre-migration key/value sync_state (no source_name column) all mean the
+// remedy is one sync (rules §1.16/§1.17).
+func detectSchemaOutdated(ctx context.Context, db *sql.DB) (bool, error) {
+	hasDisplayName, err := tableHasColumn(ctx, db, "handles", "display_name")
 	if err != nil {
-		_ = st.Close()
-		return nil, err
+		return false, err
 	}
-	return &Store{store: st, path: path, schemaOutdated: !hasDisplayName || !hasContactKey}, nil
+	hasContactKey, err := tableHasColumn(ctx, db, "contact_mappings", "contact_key")
+	if err != nil {
+		return false, err
+	}
+	hasCanonicalState, err := tableHasColumn(ctx, db, "sync_state", "source_name")
+	if err != nil {
+		return false, err
+	}
+	return !hasDisplayName || !hasContactKey || !hasCanonicalState, nil
 }
 
 func (s *Store) Close() error {
@@ -291,15 +317,15 @@ func applyContactNames(data *messages.ArchiveData, names []addressbook.ContactNa
 }
 
 func replaceSyncState(ctx context.Context, tx *sql.Tx, data messages.ArchiveData, syncedAt time.Time) error {
-	state := map[string]string{
-		"last_sync_at":        syncedAt.UTC().Format(time.RFC3339),
-		"source_path":         data.SourcePath,
-		"source_bytes":        strconv.FormatInt(data.SourceBytes, 10),
-		"source_modified_at":  data.SourceModifiedAt.UTC().Format(time.RFC3339),
-		"source_extracted_at": data.ExtractedAt.UTC().Format(time.RFC3339),
+	syncState := state.New(tx)
+	entries := []struct{ id, value string }{
+		{stateLastSyncAt, syncedAt.UTC().Format(time.RFC3339)},
+		{stateSourcePath, data.SourcePath},
+		{stateSourceBytes, strconv.FormatInt(data.SourceBytes, 10)},
+		{stateSourceModifiedAt, data.SourceModifiedAt.UTC().Format(time.RFC3339)},
 	}
-	for key, value := range state {
-		if _, err := tx.ExecContext(ctx, upsertSyncStateSQL, key, value); err != nil {
+	for _, entry := range entries {
+		if err := syncState.Set(ctx, syncSource, syncEntityType, entry.id, entry.value); err != nil {
 			return err
 		}
 	}

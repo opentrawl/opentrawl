@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -31,9 +32,11 @@ func (r *runtime) runSearch(args []string) error {
 		_ = printCommandUsage(r.stderr, []string{"search"})
 		return usageErr(errors.New("search query or filter is required"))
 	}
-	if *limit <= 0 {
-		return usageErr(errors.New("search --limit must be positive"))
+	rows, err := flags.Limit(*limit, flagPassed(fs, "limit"), false)
+	if err != nil {
+		return usageErr(err)
 	}
+	*limit = rows
 	whoValue := strings.Join(strings.Fields(*who), " ")
 	if whoPassed && whoValue == "" {
 		return usageErr(errors.New("search --who requires an identity"))

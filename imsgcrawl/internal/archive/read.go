@@ -6,23 +6,28 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+
+	"github.com/openclaw/crawlkit/state"
 )
 
 var ErrMessageNotFound = errors.New("message not found")
 
 func (s *Store) Status(ctx context.Context) (Status, error) {
 	status := Status{ArchivePath: s.path, ArchiveBytes: fileSize(s.path)}
-	state, err := s.syncState(ctx)
-	if err != nil {
-		return Status{}, err
-	}
-	status.LastSyncAt = state["last_sync_at"]
-	status.SourcePath = state["source_path"]
-	status.SourceModifiedAt = state["source_modified_at"]
-	if sourceBytes := state["source_bytes"]; sourceBytes != "" {
-		status.SourceBytes, _ = strconv.ParseInt(sourceBytes, 10, 64)
+	if !s.schemaOutdated {
+		marker, err := s.syncMarkers(ctx)
+		if err != nil {
+			return Status{}, err
+		}
+		status.LastSyncAt = marker[stateLastSyncAt]
+		status.SourcePath = marker[stateSourcePath]
+		status.SourceModifiedAt = marker[stateSourceModifiedAt]
+		if sourceBytes := marker[stateSourceBytes]; sourceBytes != "" {
+			status.SourceBytes, _ = strconv.ParseInt(sourceBytes, 10, 64)
+		}
 	}
 	db := s.store.DB()
+	var err error
 	if status.Handles, err = countTable(ctx, db, "handles"); err != nil {
 		return Status{}, err
 	}
@@ -339,19 +344,18 @@ func senderLabel(fromMe bool, displayName, handle, chatDisplayName string, parti
 	return "them"
 }
 
-func (s *Store) syncState(ctx context.Context) (map[string]string, error) {
-	rows, err := s.store.DB().QueryContext(ctx, syncStateSQL)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
+// syncMarkers reads the scalar sync markers from the one crawlkit state.Store.
+func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
+	syncState := state.New(s.store.DB())
 	out := map[string]string{}
-	for rows.Next() {
-		var key, value string
-		if err := rows.Scan(&key, &value); err != nil {
+	for _, id := range []string{stateLastSyncAt, stateSourcePath, stateSourceBytes, stateSourceModifiedAt} {
+		rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, id)
+		if err != nil {
 			return nil, err
 		}
-		out[key] = value
+		if ok {
+			out[id] = rec.Value
+		}
 	}
-	return out, rows.Err()
+	return out, nil
 }

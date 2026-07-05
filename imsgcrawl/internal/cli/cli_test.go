@@ -509,7 +509,7 @@ func TestStatusArchiveStates(t *testing.T) {
 		t.Fatal(err)
 	}
 	staleSync := time.Now().Add(-statusStaleAfter - time.Hour).UTC().Format(time.RFC3339)
-	if _, err := db.Exec(`insert into sync_state(key, value) values('last_sync_at', ?) on conflict(key) do update set value = excluded.value`, staleSync); err != nil {
+	if _, err := db.Exec(`update sync_state set value = ? where source_name = 'imsgcrawl' and entity_type = 'sync' and entity_id = 'last_sync_at'`, staleSync); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.Close(); err != nil {
@@ -522,6 +522,54 @@ func TestStatusArchiveStates(t *testing.T) {
 	}
 	if stale.State != "stale" || stale.Freshness == nil {
 		t.Fatalf("stale status = %#v", stale)
+	}
+}
+
+// TestPreMigrationSyncStateRefusesReadsCleanly guards the TRAWL-82 migration
+// boundary: an archive still carrying the old key/value sync_state (no
+// source_name column) must be treated as schema-outdated — status degrades
+// cleanly (exit 0, no last sync) and read verbs refuse with "run sync" rather
+// than leaking a raw SQL error from state.Store against the wrong shape.
+func TestPreMigrationSyncStateRefusesReadsCleanly(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "chat.db")
+	createMessagesFixture(t, dbPath)
+	archivePath := filepath.Join(dir, "archive.db")
+	_ = runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "sync")
+
+	db, err := sql.Open("sqlite", archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, stmt := range []string{
+		`drop table sync_state`,
+		`create table sync_state (key text primary key, value text not null)`,
+		`insert into sync_state(key, value) values('last_sync_at', '2026-01-01T00:00:00Z')`,
+	} {
+		if _, err := db.Exec(stmt); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	statusOut := runOK(t, "--db", dbPath, "--archive", archivePath, "--json", "status")
+	var status statusOutput
+	if err := json.Unmarshal([]byte(statusOut), &status); err != nil {
+		t.Fatalf("status json = %s err=%v", statusOut, err)
+	}
+	if status.Archive == nil || status.Archive.LastSyncAt != "" {
+		t.Fatalf("outdated archive should report no last sync, got %#v", status.Archive)
+	}
+
+	var stdout, stderr bytes.Buffer
+	err = Run(context.Background(), []string{"--db", dbPath, "--archive", archivePath, "chats"}, &stdout, &stderr)
+	if err == nil {
+		t.Fatal("chats on a pre-migration archive should refuse, got nil error")
+	}
+	if !strings.Contains(err.Error(), "imsgcrawl sync") {
+		t.Fatalf("refusal should point at sync, got %q", err.Error())
 	}
 }
 
@@ -730,7 +778,7 @@ func TestHumanUsageErrorStrings(t *testing.T) {
 		{
 			name: "search limit",
 			args: []string{"search", "--limit", "0", "a"},
-			want: "search --limit must be positive",
+			want: "--limit must be at least 1",
 		},
 		{
 			name: "who blank",

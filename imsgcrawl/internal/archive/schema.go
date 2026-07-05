@@ -1,8 +1,15 @@
 package archive
 
-const schemaVersion = 5
+const schemaVersion = 6
 
+// The leading drop tombstones the old key/value sync_state table so the
+// canonical crawlkit state.Schema (appended at Open) can create sync_state in
+// its own shape. Only the writable sync path applies this schema, and sync
+// fully rewrites sync_state, so dropping on open never loses live state; a
+// pre-migration archive re-derives its state in one sync (rules §1.17).
 const schema = `
+drop table if exists sync_state;
+
 create table if not exists handles (
   source_rowid integer primary key,
   handle text not null,
@@ -59,11 +66,6 @@ create table if not exists owner_handles (
   kind text not null,
   normalized_handle text not null,
   primary key (kind, normalized_handle)
-);
-
-create table if not exists sync_state (
-  key text primary key,
-  value text not null
 );
 
 create index if not exists idx_chat_messages_chat on chat_messages(chat_rowid, message_rowid);

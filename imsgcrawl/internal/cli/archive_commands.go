@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
@@ -245,15 +246,11 @@ func (r *runtime) runChats(args []string) error {
 	if fs.NArg() != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	if *limit <= 0 {
-		return usageErr(errors.New("chats --limit must be positive"))
+	rows, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
 	}
-	if *all && flagPassed(fs, "limit") {
-		return usageErr(errors.New("use either --all or --limit"))
-	}
-	if *all {
-		*limit = 0
-	}
+	*limit = rows
 	return r.withArchive(func(st *archive.Store) error {
 		chats, err := st.Chats(r.ctx, *limit)
 		if err != nil {
@@ -289,15 +286,11 @@ func (r *runtime) runMessages(args []string) error {
 	if strings.TrimSpace(*chatID) == "" {
 		return usageErr(errors.New("messages requires --chat"))
 	}
-	if *limit <= 0 {
-		return usageErr(errors.New("messages --limit must be positive"))
+	rows, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	if err != nil {
+		return usageErr(err)
 	}
-	if *all && flagPassed(fs, "limit") {
-		return usageErr(errors.New("use either --all or --limit"))
-	}
-	if *all {
-		*limit = 0
-	}
+	*limit = rows
 	return r.withArchive(func(st *archive.Store) error {
 		rows, err := st.Messages(r.ctx, *chatID, *limit, *asc)
 		if err != nil {
