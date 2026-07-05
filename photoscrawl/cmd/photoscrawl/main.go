@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/photoscrawl/internal/archive"
 	"github.com/openclaw/photoscrawl/internal/photos"
@@ -22,7 +23,7 @@ const (
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
 		if wantsJSON(os.Args[1:]) {
-			if writeErr := writeError(os.Stdout, err); writeErr != nil {
+			if writeErr := output.WriteError(os.Stdout, normaliseError(err).ErrorBody()); writeErr != nil {
 				fmt.Fprintln(os.Stderr, writeErr)
 			}
 		} else {
@@ -188,13 +189,25 @@ func run(ctx context.Context, args []string) (err error) {
 		if *dbPath != "" {
 			paths.Database = *dbPath
 		}
+		// The one --limit contract (crawlkit/flags): --limit below 1 and
+		// --all combined with --limit are usage errors, same as search.
+		limitSet := false
+		fs.Visit(func(f *flag.Flag) {
+			if f.Name == "limit" {
+				limitSet = true
+			}
+		})
+		resolvedLimit, err := flags.Limit(*limit, limitSet, *all)
+		if err != nil {
+			return output.UsageError{Err: err}
+		}
 		format, err := output.Resolve(*formatFlag, *jsonFlag)
 		if err != nil {
 			return err
 		}
 		result, err := archive.Classify(ctx, paths, archive.ClassifyOptions{
 			All:         *all,
-			Limit:       *limit,
+			Limit:       resolvedLimit,
 			Model:       *model,
 			ModelURL:    ollamaCloudBaseURL,
 			ModelKeyEnv: ollamaAPIKeyEnv,

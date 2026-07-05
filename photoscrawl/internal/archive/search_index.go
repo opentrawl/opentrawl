@@ -13,11 +13,12 @@ import (
 
 // Bump when the FTS build changes in a way that requires re-deriving the
 // index from source tables. History:
-//   1: porter tokenizer (pre-versioning archives read as 0 and rebuild)
-//   2: card FTS bodies are raw card prose, not deduped term lists, so bm25
-//      term frequency ranks unfiltered queries sensibly
-//   3: unselected poi_candidate observations leave the index; bm25 favors
-//      short docs, so candidate business names outranked real card matches
+//
+//	1: porter tokenizer (pre-versioning archives read as 0 and rebuild)
+//	2: card FTS bodies are raw card prose, not deduped term lists, so bm25
+//	   term frequency ranks unfiltered queries sensibly
+//	3: unselected poi_candidate observations leave the index; bm25 favors
+//	   short docs, so candidate business names outranked real card matches
 const searchIndexVersion = 3
 
 // Search matching quality lives in the FTS index. FTS content is derived

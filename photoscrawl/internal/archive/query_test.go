@@ -12,7 +12,11 @@ import (
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
-func TestSearchCapsLimitAndReportsTruncation(t *testing.T) {
+// TestSearchHonorsLimitContract pins the one --limit contract (crawlkit/flags):
+// a positive limit is honored exactly with no hidden cap, a limit above the
+// match count returns every match without truncation, and limit 0 (from --all)
+// returns everything.
+func TestSearchHonorsLimitContract(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -29,18 +33,35 @@ func TestSearchCapsLimitAndReportsTruncation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 500})
+	// A positive limit is honored exactly and truncates the rest.
+	result, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 25})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.Limit != 200 {
-		t.Fatalf("limit = %d, want 200", result.Limit)
-	}
-	if len(result.Results) != 200 {
-		t.Fatalf("results = %d, want 200", len(result.Results))
+	if result.Limit != 25 || len(result.Results) != 25 {
+		t.Fatalf("limit 25: limit=%d results=%d, want 25/25", result.Limit, len(result.Results))
 	}
 	if result.TotalMatches != 250 || !result.Truncated {
-		t.Fatalf("search metadata = total %d truncated %t", result.TotalMatches, result.Truncated)
+		t.Fatalf("limit 25: total=%d truncated=%t, want 250/true", result.TotalMatches, result.Truncated)
+	}
+
+	// A limit above the match count returns every match, not truncated,
+	// with no hidden 200 cap.
+	result, err = Search(ctx, paths, SearchOptions{Query: "image", Limit: 500})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 250 || result.Truncated {
+		t.Fatalf("limit 500: results=%d truncated=%t, want 250/false", len(result.Results), result.Truncated)
+	}
+
+	// Limit 0 (--all) returns everything.
+	result, err = Search(ctx, paths, SearchOptions{Query: "image", Limit: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 250 || result.Truncated {
+		t.Fatalf("limit 0: results=%d truncated=%t, want 250/false", len(result.Results), result.Truncated)
 	}
 }
 

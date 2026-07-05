@@ -5,6 +5,7 @@ import (
 	"io"
 	"path/filepath"
 
+	ckusage "github.com/openclaw/crawlkit/usage"
 	"github.com/openclaw/photoscrawl/internal/archive"
 )
 
@@ -25,12 +26,14 @@ only new and changed assets are written.`,
 	"classify": `Usage: photoscrawl classify [--model <id>] [--limit <n>] [--all] [--json] [--db <path>]
 
 Write metadata, place, and model-card observations for queued assets.
-Without --model only mechanical metadata is classified.`,
-	"search": `Usage: photoscrawl search <query> [--after <date>] [--before <date>] [--limit <n>] [--json] [--db <path>]
+Without --model only mechanical metadata is classified.
+--limit bounds a run (default 100); --all classifies every queued asset.`,
+	"search": `Usage: photoscrawl search <query> [--after <date>] [--before <date>] [--limit <n>] [--all] [--json] [--db <path>]
 
 Full-text search over photo cards, filenames, albums, and places.
 Terms are stemmed and OR-combined; results are ranked, best first.
-Dates take 2006-01-02 or RFC 3339 forms.`,
+Dates take 2006-01-02 or RFC 3339 forms.
+--limit is honored exactly (default 20); --all returns every match.`,
 	"open": `Usage: photoscrawl open <ref> [--json] [--db <path>]
 
 Full card for one asset: capture facts, place, summary, description.
@@ -39,25 +42,35 @@ from search output.`,
 }
 
 func printHelp(w io.Writer, paths archive.Paths) {
-	fmt.Fprintf(w, `photoscrawl — Apple Photos crawler for the trawl suite
-
-Usage: photoscrawl <command> [flags]
-
-Commands:
-  metadata   control manifest for trawl discovery
-  status     archive freshness and counts
-  doctor     source access and archive health checks
-  sync       import the Photos library into the archive
-  classify   write metadata, place, and model-card observations
-  search     ranked full-text search over cards, albums, and places
-  open       full card for one asset by ref or short alias
-
-All commands take --json and --format. Read commands time out after
-two minutes. Every run logs to:
-  %s
-
-Run 'photoscrawl <command> --help' for that command's flags.
-`, filepath.Join(paths.LogDir, "current.log"))
+	doc := ckusage.Doc{
+		Tool:    "photoscrawl",
+		Tagline: "your Apple Photos archive: search, open and classify your photos",
+		Groups: []ckusage.Group{
+			{Title: "Read your archive", Commands: []ckusage.Command{
+				{Name: "search", Summary: "Ranked full-text search over cards, albums and places."},
+				{Name: "open", Summary: "Full card for one asset by ref or short alias."},
+			}},
+			{Title: "Keep it fresh", Commands: []ckusage.Command{
+				{Name: "sync", Summary: "Import the Apple Photos library into the archive."},
+				{Name: "classify", Summary: "Write metadata, place and model-card observations."},
+			}},
+			{Title: "Health", Commands: []ckusage.Command{
+				{Name: "status", Summary: "Archive freshness and asset counts."},
+				{Name: "doctor", Summary: "Source access and archive health checks."},
+				{Name: "metadata", Summary: "Control manifest for trawl discovery."},
+			}},
+		},
+		Flags: []ckusage.Flag{
+			{Name: "--json", Summary: "Machine-readable output (--format json is the same)."},
+			{Name: "--db PATH", Summary: "Archive database path."},
+		},
+		Footer: []string{
+			"Read commands time out after two minutes.",
+			"Run 'photoscrawl <command> --help' for that command's flags.",
+			"Logs: " + filepath.Join(paths.LogDir, "current.log"),
+		},
+	}
+	fmt.Fprint(w, doc.Render())
 }
 
 // printVerbHelp reports whether it knew the verb; unknown verbs fall through

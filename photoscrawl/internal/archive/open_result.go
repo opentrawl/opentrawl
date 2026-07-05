@@ -15,6 +15,9 @@ type OpenResult struct {
 	Ref           string         `json:"ref"`
 	Mechanical    OpenMechanical `json:"mechanical"`
 	Model         OpenModel      `json:"model,omitempty"`
+	// ShortRef is a human-display alias only; the canonical Ref is the JSON
+	// identity (open JSON never carries the ephemeral short alias).
+	ShortRef string `json:"-"`
 }
 
 type OpenMechanical struct {

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/crawlkit/store"
 )
 
@@ -23,32 +24,6 @@ type ShortRefResolution struct {
 
 func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))
-}
-
-func EnsureShortRefs(ctx context.Context, paths Paths) (bool, error) {
-	if _, err := os.Stat(paths.Database); err != nil {
-		return false, err
-	}
-	readDB, err := store.OpenReadOnly(ctx, paths.Database)
-	if err == nil {
-		current, currentErr := shortRefsCurrent(ctx, readDB.DB())
-		closeErr := readDB.Close()
-		if currentErr != nil {
-			return false, currentErr
-		}
-		if closeErr != nil {
-			return false, closeErr
-		}
-		if current {
-			return false, nil
-		}
-	}
-	db, err := store.Open(ctx, store.Options{Path: paths.Database})
-	if err != nil {
-		return false, err
-	}
-	defer db.Close()
-	return ensureShortRefs(ctx, db.DB())
 }
 
 func ResolveShortRef(ctx context.Context, paths Paths, alias string) (ShortRefResolution, error) {
@@ -106,20 +81,6 @@ limit 1
 	return alias, rows.Err()
 }
 
-func ensureShortRefs(ctx context.Context, db *sql.DB) (bool, error) {
-	current, err := shortRefsCurrent(ctx, db)
-	if err != nil {
-		return false, err
-	}
-	if current {
-		return false, nil
-	}
-	if err := rebuildShortRefs(ctx, db); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
 func shortRefsCurrent(ctx context.Context, db *sql.DB) (bool, error) {
 	exists, err := tableExists(ctx, db, "short_refs")
 	if err != nil || !exists {
@@ -148,21 +109,6 @@ func shortRefsCurrent(ctx context.Context, db *sql.DB) (bool, error) {
 		return false, err
 	}
 	return assetCount == refCount, nil
-}
-
-func rebuildShortRefs(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	if err := rebuildShortRefsInTx(ctx, tx); err != nil {
-		_ = tx.Rollback()
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return nil
 }
 
 func rebuildShortRefsInTx(ctx context.Context, tx *sql.Tx) error {
@@ -204,33 +150,27 @@ func rebuildShortRefsInTx(ctx context.Context, tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `
-insert into sync_state(source, entity_type, entity_id, cursor, synced_at)
-values (?, ?, ?, ?, ?)
-on conflict(source, entity_type, entity_id) do update set
-  cursor = excluded.cursor,
-  synced_at = excluded.synced_at
-`, shortRefsSyncSource, shortRefsEntityType, shortRefsEntityID, lastSync, lastSync)
-	return err
+	// The cursor records the snapshot this alias index was built for, so a
+	// later sync knows whether the index is current (shortRefsBuiltFor).
+	return state.NewCursor(tx).Set(ctx, shortRefsSyncSource, shortRefsEntityType, shortRefsEntityID, lastSync)
 }
 
 func shortRefsBuiltFor(ctx context.Context, db *sql.DB) (string, error) {
-	var value sql.NullString
-	err := db.QueryRowContext(ctx, `
-select cursor
-from sync_state
-where source = ? and entity_type = ? and entity_id = ?
-`, shortRefsSyncSource, shortRefsEntityType, shortRefsEntityID).Scan(&value)
-	if err == sql.ErrNoRows {
-		return "", nil
+	// A read-only open of an archive synced before this table existed has no
+	// sync_cursor_state; treat that as "not built" so reads degrade to long
+	// refs and self-heal on the next sync, rather than erroring.
+	exists, err := tableExists(ctx, db, "sync_cursor_state")
+	if err != nil || !exists {
+		return "", err
 	}
+	rec, ok, err := state.NewCursor(db).Get(ctx, shortRefsSyncSource, shortRefsEntityType, shortRefsEntityID)
 	if err != nil {
 		return "", err
 	}
-	if value.Valid {
-		return value.String, nil
+	if !ok {
+		return "", nil
 	}
-	return "", nil
+	return rec.Cursor, nil
 }
 
 func latestSnapshotCompletedAt(ctx context.Context, db *sql.DB) (string, error) {

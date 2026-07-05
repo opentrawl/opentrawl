@@ -13,6 +13,7 @@ import (
 
 	"github.com/openclaw/crawlkit/conformance"
 	cklog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/archive"
 	"github.com/openclaw/photoscrawl/internal/photos"
@@ -104,8 +105,8 @@ func TestMetadataHumanOutputIsProse(t *testing.T) {
 		"Photos (photoscrawl)",
 		"Contract version: 1",
 		"Capabilities: metadata, status, doctor, sync, classify, search, short_refs, open",
-		"sync: photoscrawl sync --library <path> --json",
-		"open: photoscrawl open <ref> --json",
+		"sync: photoscrawl sync --library PATH --json",
+		"open: photoscrawl open REF --json",
 	)
 	if strings.Contains(out, "photoscrawl crawl") {
 		t.Fatalf("metadata still advertises crawl:\n%s", out)
@@ -180,12 +181,16 @@ func TestSearchHumanOutputIsProse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertHumanProseOutput(t, out.String(),
-		"Search: \"receipt\"",
-		"Showing 1 of 1 matches",
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"Search \"receipt\": showing 1 of 1 matches.",
 		"photoscrawl:asset/fixture",
 		"receipt candidate from local metadata",
+		"2026-05-28",
 	)
+	if strings.Contains(got, "2026-05-28T12:00:00+02:00") {
+		t.Fatalf("human search output leaked a raw RFC3339 timestamp:\n%s", got)
+	}
 }
 
 func TestSearchHumanOutputUsesShortRefWhenAvailable(t *testing.T) {
@@ -205,10 +210,14 @@ func TestSearchHumanOutputUsesShortRefWhenAvailable(t *testing.T) {
 	}
 	got := out.String()
 	assertHumanProseOutput(t, got,
-		"2026-05-28T12:00:00+02:00 | 7abc9",
+		"7abc9",
+		"2026-05-28",
 	)
 	if strings.Contains(got, "photoscrawl:asset/fixture") {
 		t.Fatalf("human search output used full ref despite short ref:\n%s", got)
+	}
+	if strings.Contains(got, "2026-05-28T12:00:00+02:00") {
+		t.Fatalf("human search output leaked a raw RFC3339 timestamp:\n%s", got)
 	}
 }
 
@@ -228,10 +237,12 @@ func TestSearchHumanOutputOmitsEmptyWhoWhere(t *testing.T) {
 	}
 	got := out.String()
 	assertHumanProseOutput(t, got,
-		"2026-05-28T12:00:00+02:00 | photoscrawl:asset/fixture",
+		"photoscrawl:asset/fixture",
+		"image",
+		"2026-05-28",
 	)
-	if strings.Contains(got, " |  | ") {
-		t.Fatalf("human search output kept empty who/where fields:\n%s", got)
+	if strings.Contains(got, "where") || strings.Contains(got, "who") {
+		t.Fatalf("human search output kept empty who/where columns:\n%s", got)
 	}
 }
 
@@ -261,7 +272,10 @@ func TestOpenAcceptsShortRef(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open short ref text: %v stderr=%s stdout=%s", err, errOut, human)
 	}
-	assertHumanProseOutput(t, human, fullRef, "Captured:", "Media:")
+	assertHumanProseOutput(t, human, "Captured:", "Media:", "Ref: "+shortRef)
+	if strings.Contains(human, fullRef) {
+		t.Fatalf("human open output leaked the full machine ref %q:\n%s", fullRef, human)
+	}
 
 	jsonOut, errOut, err := captureRunOutput(t, []string{"open", shortRef, "--db", dbPath, "--json"})
 	if err != nil {
@@ -297,6 +311,23 @@ func TestShortRefErrorsAreStructured(t *testing.T) {
 	assertWrittenErrorCode(t, err, out, "ambiguous_short_ref")
 }
 
+// TestClassifyLimitContractIsUsageError pins that classify enforces the one
+// --limit contract like search does: a limit below 1 and --all combined with
+// --limit are usage errors, refused before any archive or model work.
+func TestClassifyLimitContractIsUsageError(t *testing.T) {
+	db := filepath.Join(t.TempDir(), "photos.sqlite")
+	for _, args := range [][]string{
+		{"classify", "--limit", "0", "--db", db, "--json"},
+		{"classify", "--all", "--limit", "5", "--db", db, "--json"},
+	} {
+		out, _, err := captureRunOutput(t, args)
+		if err == nil {
+			t.Fatalf("expected usage error for %v", args)
+		}
+		assertWrittenErrorCode(t, err, out, "usage")
+	}
+}
+
 func TestOpenHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printOpenText(&out, archive.OpenResult{
@@ -326,17 +357,21 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertHumanProseOutput(t, out.String(),
-		"photoscrawl:asset/fixture",
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"Synthetic beach scene.",
 		"Captured: 2026-05-28 12:00 local (Europe/Amsterdam)",
 		"Media: photo, 100 x 80",
 		"GPS: 52.00000, 4.00000, +/-8m",
 		"Venue: Synthetic Pier, candidate, 12m from GPS",
 		"Camera: Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64",
-		"Summary: Synthetic beach scene.",
 		"Uncertainty: exact venue.",
 		"Original: IMG_0001.JPG",
+		"A synthetic fixture photo shows a beach scene",
 	)
+	if strings.Contains(got, "photoscrawl:asset/fixture") {
+		t.Fatalf("human open output leaked the full machine ref:\n%s", got)
+	}
 }
 
 func TestOpenHumanOutputUsesKnownPlaceInsteadOfVenue(t *testing.T) {
@@ -547,16 +582,16 @@ func assertErrorCode(t *testing.T, output, code string) {
 	}
 }
 
-func assertWrittenErrorCode(t *testing.T, err error, output, code string) {
+func assertWrittenErrorCode(t *testing.T, err error, rendered, code string) {
 	t.Helper()
-	if strings.TrimSpace(output) == "" {
+	if strings.TrimSpace(rendered) == "" {
 		var written strings.Builder
-		if writeErr := writeError(&written, err); writeErr != nil {
+		if writeErr := output.WriteError(&written, normaliseError(err).ErrorBody()); writeErr != nil {
 			t.Fatal(writeErr)
 		}
-		output = written.String()
+		rendered = written.String()
 	}
-	assertErrorCode(t, output, code)
+	assertErrorCode(t, rendered, code)
 }
 
 func assertHumanProseOutput(t *testing.T, got string, wants ...string) {
@@ -581,8 +616,10 @@ func TestHelpRequestsPrintHelp(t *testing.T) {
 	if err != nil {
 		t.Fatalf("--help errored: %v", err)
 	}
-	if !strings.Contains(out, "Usage: photoscrawl <command>") || !strings.Contains(out, "logs/current.log") {
-		t.Fatalf("help page missing sections:\n%s", out)
+	for _, want := range []string{"your Apple Photos archive", "Read your archive:", "search", "logs/current.log"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("help page missing %q:\n%s", want, out)
+		}
 	}
 	out, _, err = captureRunOutput(t, []string{"search", "--help"})
 	if err != nil {

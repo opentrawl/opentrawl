@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 func ensureBackfillDirs(outDir string) error {
@@ -104,7 +104,7 @@ func loadBackfillKeys(ctx context.Context, dbPath string) ([]backfillKey, int, e
 	if _, err := os.Stat(dbPath); err != nil {
 		return nil, 0, err
 	}
-	db, err := sql.Open("sqlite", readOnlySQLiteDSN(dbPath))
+	db, err := sql.Open("sqlite3", readOnlySQLiteDSN(dbPath))
 	if err != nil {
 		return nil, 0, err
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -108,35 +109,71 @@ func writeSearch(w io.Writer, format output.Format, result archive.SearchResult)
 }
 
 func printSearchText(w io.Writer, result archive.SearchResult) error {
-	if _, err := fmt.Fprintf(w, "Search: %q\n", result.Query); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(w, "Showing %d of %d matches", len(result.Results), result.TotalMatches); err != nil {
-		return err
-	}
+	hints := []string{"Open: photoscrawl open REF"}
 	if result.Truncated {
-		if _, err := io.WriteString(w, " (truncated; narrow the query or time range)"); err != nil {
-			return err
-		}
+		hints = append(hints, searchMoreHint(result))
 	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
-		return err
+	return ckrender.WriteList(w, ckrender.List{
+		Heading:   searchHeading(w, result),
+		Hints:     hints,
+		Items:     searchListItems(result.Results),
+		ClampText: 2,
+		Empty:     searchEmptyText(w, result.Query),
+	})
+}
+
+func searchHeading(w io.Writer, result archive.SearchResult) string {
+	prefix := "Search \""
+	suffix := fmt.Sprintf("\": showing %d of %d matches.", len(result.Results), result.TotalMatches)
+	return prefix + fitToLine(w, result.Query, prefix, suffix) + suffix
+}
+
+func searchEmptyText(w io.Writer, query string) string {
+	prefix := "No matches for \""
+	suffix := "\"."
+	return prefix + fitToLine(w, query, prefix, suffix) + suffix
+}
+
+// fitToLine truncates a user-supplied query so a heading never wraps.
+func fitToLine(w io.Writer, value, prefix, suffix string) string {
+	width := ckrender.OutputWidth(w) - ckrender.DisplayWidth(prefix) - ckrender.DisplayWidth(suffix)
+	if width < 1 {
+		width = 1
 	}
-	for _, hit := range result.Results {
-		line := strings.TrimSpace(strings.Join(nonEmptyText(hit.Time, hit.Who, hit.Where, searchDisplayRef(hit)), " | "))
-		if line == "" {
-			line = searchDisplayRef(hit)
-		}
-		if _, err := fmt.Fprintf(w, "\n%s\n", line); err != nil {
-			return err
-		}
-		if hit.Snippet != "" {
-			if _, err := fmt.Fprintf(w, "  %s\n", hit.Snippet); err != nil {
-				return err
-			}
-		}
+	return ckrender.Truncate(strings.TrimSpace(value), width)
+}
+
+// searchMoreHint is only reached when the result truncated, so result.Limit is
+// a positive cap; doubling it is a valid wider rerun.
+func searchMoreHint(result archive.SearchResult) string {
+	return fmt.Sprintf("More: photoscrawl search %s --limit %d", strconv.Quote(result.Query), result.Limit*2)
+}
+
+// searchListItems renders capture dates in each asset's own zone (DateOnly, no
+// zone conversion): a photo taken abroad keeps its true calendar date instead
+// of being shifted into this machine's timezone. The precise wall-clock time
+// and zone live in the open card.
+func searchListItems(hits []archive.SearchHit) []ckrender.ListItem {
+	items := make([]ckrender.ListItem, 0, len(hits))
+	for _, hit := range hits {
+		items = append(items, ckrender.ListItem{
+			Time:     parseCaptureTime(hit.Time),
+			DateOnly: true,
+			Who:      hit.Who,
+			Where:    hit.Where,
+			Ref:      searchDisplayRef(hit),
+			Text:     hit.Snippet,
+		})
 	}
-	return nil
+	return items
+}
+
+func parseCaptureTime(value string) time.Time {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return time.Time{}
+	}
+	return parsed
 }
 
 func writeOpen(w io.Writer, format output.Format, result archive.OpenResult) error {
@@ -146,44 +183,47 @@ func writeOpen(w io.Writer, format output.Format, result archive.OpenResult) err
 	return printOpenText(w, result)
 }
 
+// printOpenText renders one asset as a card: the model summary titles it, the
+// mechanical facts are labelled fields, the description is the body. The full
+// 32-hex canonical ref is deliberately absent — it is machine slop in human
+// output (rules §2.3) and stays in the JSON record.
 func printOpenText(w io.Writer, result archive.OpenResult) error {
-	if _, err := fmt.Fprintf(w, "%s\n", emptyDash(result.Ref)); err != nil {
-		return err
+	title := strings.TrimSpace(result.Model.Summary)
+	if title == "" {
+		title = openFallbackTitle(result)
 	}
-	for _, line := range openMechanicalLines(result.Mechanical) {
-		if _, err := fmt.Fprintf(w, "%s\n", line); err != nil {
-			return err
-		}
-	}
-	if _, err := io.WriteString(w, "\n"); err != nil {
-		return err
-	}
-	if result.Model.Summary != "" {
-		if _, err := fmt.Fprintf(w, "Summary: %s\n", result.Model.Summary); err != nil {
-			return err
-		}
-	}
-	if result.Model.Description != "" {
-		if _, err := fmt.Fprintf(w, "\nDescription: %s\n", result.Model.Description); err != nil {
-			return err
-		}
-	}
+	fields := openMechanicalFields(result.Mechanical)
 	if len(result.Model.Uncertainties) > 0 {
-		if _, err := fmt.Fprintf(w, "\nUncertainty: %s.\n", strings.Join(result.Model.Uncertainties, "; ")); err != nil {
-			return err
-		}
+		fields = append(fields, ckrender.CardField{Label: "Uncertainty", Value: strings.Join(result.Model.Uncertainties, "; ") + "."})
 	}
-	return nil
+	// The short alias, never the full 32-hex ref (rules §2.3): the machine ref
+	// stays in JSON. A blank alias (index not yet built) just drops the field.
+	if ref := strings.TrimSpace(result.ShortRef); ref != "" {
+		fields = append(fields, ckrender.CardField{Label: "Ref", Value: ref})
+	}
+	return ckrender.WriteCard(w, ckrender.Card{
+		Title:  title,
+		Fields: fields,
+		Body:   strings.TrimSpace(result.Model.Description),
+		Hints:  []string{"JSON: add --json for the full record."},
+	})
 }
 
-func openMechanicalLines(mechanical archive.OpenMechanical) []string {
-	lines := []string{}
+func openFallbackTitle(result archive.OpenResult) string {
+	if original := result.Mechanical.Original; original != nil && strings.TrimSpace(original.Filename) != "" {
+		return original.Filename
+	}
+	return "Photo"
+}
+
+func openMechanicalFields(mechanical archive.OpenMechanical) []ckrender.CardField {
+	fields := []ckrender.CardField{}
 	if captured := mechanical.Captured; captured != nil {
 		value := openTextTime(captured.Local)
 		if captured.Timezone != "" {
 			value += " local (" + captured.Timezone + ")"
 		}
-		lines = append(lines, "Captured: "+value)
+		fields = append(fields, ckrender.CardField{Label: "Captured", Value: value})
 	}
 	if media := mechanical.Media; media != nil {
 		parts := nonEmptyText(media.Kind)
@@ -194,7 +234,7 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 			parts = append(parts, fmt.Sprintf("%.1fs", media.DurationSeconds))
 		}
 		if len(parts) > 0 {
-			lines = append(lines, "Media: "+strings.Join(parts, ", "))
+			fields = append(fields, ckrender.CardField{Label: "Media", Value: strings.Join(parts, ", ")})
 		}
 	}
 	if gps := mechanical.GPS; gps != nil {
@@ -202,14 +242,14 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 		if gps.HorizontalAccuracyMeters > 0 {
 			value += ", +/-" + cardformat.FormatMeters(gps.HorizontalAccuracyMeters) + "m"
 		}
-		lines = append(lines, "GPS: "+value)
+		fields = append(fields, ckrender.CardField{Label: "GPS", Value: value})
 	}
 	if mechanical.Address != "" {
-		lines = append(lines, "Address: "+mechanical.Address)
+		fields = append(fields, ckrender.CardField{Label: "Address", Value: mechanical.Address})
 	}
 	if knownPlace := mechanical.KnownPlace; knownPlace != nil {
 		if line := archive.KnownPlaceCardLine(knownPlace.Kind, knownPlace.Name, knownPlace.After); line != "" {
-			lines = append(lines, line)
+			fields = append(fields, ckrender.CardField{Label: "Place", Value: line})
 		}
 	} else if venue := mechanical.Venue; venue != nil {
 		value := venue.Name
@@ -219,10 +259,10 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 		if venue.DistanceMeters > 0 {
 			value += ", " + cardformat.FormatMeters(venue.DistanceMeters) + "m from GPS"
 		}
-		lines = append(lines, "Venue: "+value)
+		fields = append(fields, ckrender.CardField{Label: "Venue", Value: value})
 	}
 	if camera := mechanical.Camera; camera != nil && camera.Display != "" {
-		lines = append(lines, "Camera: "+camera.Display)
+		fields = append(fields, ckrender.CardField{Label: "Camera", Value: camera.Display})
 	}
 	if len(mechanical.Albums) > 0 {
 		titles := []string{}
@@ -233,15 +273,15 @@ func openMechanicalLines(mechanical archive.OpenMechanical) []string {
 			}
 			titles = append(titles, album.Title)
 		}
-		lines = append(lines, "Albums: "+strings.Join(titles, ", "))
+		fields = append(fields, ckrender.CardField{Label: "Albums", Value: strings.Join(titles, ", ")})
 	}
 	if original := mechanical.Original; original != nil {
-		lines = append(lines, fmt.Sprintf("Original: %s, %s, %s", original.Filename, original.Availability, humanBytes(original.Bytes)))
+		fields = append(fields, ckrender.CardField{Label: "Original", Value: fmt.Sprintf("%s, %s, %s", original.Filename, original.Availability, humanBytes(original.Bytes))})
 	}
 	if len(mechanical.Flags) > 0 {
-		lines = append(lines, "Flags: "+strings.Join(mechanical.Flags, ", "))
+		fields = append(fields, ckrender.CardField{Label: "Flags", Value: strings.Join(mechanical.Flags, ", ")})
 	}
-	return lines
+	return fields
 }
 
 func writeDoctor(w io.Writer, format output.Format, result archive.DoctorResult, tail *logTailOutput) error {
