@@ -19,17 +19,8 @@ https://github.com/<you>/backup-clawdex.git
 
 ## Setup
 
-Install from Homebrew after the first tagged release:
-
-```bash
-brew install steipete/tap/clawdex
-```
-
-Or build locally:
-
-```bash
-go install github.com/openclaw/clawdex/cmd/clawdex@latest
-```
+Build from the monorepo root (`scripts/dev-bin`) or just this crawler
+(`go build ./cmd/clawdex` from the `clawdex/` directory), then:
 
 ```bash
 clawdex init ~/.opentrawl/clawdex/contacts

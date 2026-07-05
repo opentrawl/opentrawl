@@ -1,3 +1,9 @@
+// Package telegramdesktop enforces one client-level flood-wait policy for
+// all Telegram API clients. Honor server-requested delays only within
+// explicit retry and per-wait bounds; report each wait to the user; make
+// waits context-cancellable; and return a clear error when a bound is
+// exceeded. Retry the individual RPC, never an entire logical scan or
+// paginated import.
 package telegramdesktop
 
 import (

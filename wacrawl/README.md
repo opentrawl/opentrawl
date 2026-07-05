@@ -1,7 +1,5 @@
 # 🧾 wacrawl
 
-![wacrawl banner](docs/assets/readme-banner.jpg)
-
 WhatsApp archaeology with encrypted receipts.
 
 Read-only local archive and search for the macOS WhatsApp Desktop app.
@@ -16,26 +14,20 @@ WhatsApp Web, or write back into WhatsApp's app container.
 
 ## Install
 
-Homebrew is the easiest path. Install directly from the OpenClaw tap:
+Build from the monorepo root; the binary lands in the repo-local bin
+directory that `trawl` discovers:
 
 ```bash
-brew install openclaw/tap/wacrawl
+scripts/dev-bin
 ```
 
-After that, upgrades stay simple:
+Or build just this crawler, from this directory:
 
 ```bash
-brew update
-brew upgrade openclaw/tap/wacrawl
+go build ./cmd/wacrawl
 ```
 
-Or from source:
-
-```bash
-go install github.com/openclaw/wacrawl/cmd/wacrawl@latest
-```
-
-Check the installed binary:
+Check the built binary:
 
 ```bash
 wacrawl --version
@@ -578,7 +570,7 @@ Useful flags:
 On a new Mac:
 
 ```bash
-brew install openclaw/tap/wacrawl
+scripts/dev-bin   # from the monorepo checkout
 git clone https://github.com/steipete/backup-wacrawl.git ~/Projects/backup-wacrawl
 mkdir -p ~/.opentrawl/wacrawl
 ```

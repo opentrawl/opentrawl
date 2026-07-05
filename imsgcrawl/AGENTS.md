@@ -41,27 +41,9 @@ redacted examples.
 
 ## CLI Shape
 
-Stable CLI output is JSON-first and should follow crawl-family commands:
-`metadata`, `status`, `contacts export`, and later `sync`, `chats`,
-`messages`, `search`, and `tui`.
-
-Agent-facing default text output is product surface, not incidental logging.
-When command names, flags, defaults, output fields, or default text formatting
-change, update the README command examples and the agent smoke/test coverage in
-the same slice. README examples must be fake/private-safe and must never be
-copied from live Messages data.
-
-The first contact-export contract is intentionally narrow:
-
-- root object key: `contacts`
-- each contact has only `display_name` and `phone_numbers`
-- one row per normalized phone value
-- v0 allows phone fallback display names when Messages has no human name, but
-  this is a compatibility choice to revisit before clawdex treats imported
-  crawler names as canonical human names
-
-Do not add `email_addresses` or source backrefs to the v0 export until clawdex,
-telecrawl, wacrawl, and imsgcrawl are changed together.
+Follow `docs/contract.md`. The v0 contact export stays `display_name` +
+`phone_numbers` only; do not extend it until clawdex, telecrawl, wacrawl,
+and imsgcrawl change together.
 
 ## Engineering
 
@@ -69,7 +51,7 @@ Prefer simple, source-native code over framework-shaped abstractions. Do not
 add flags, modes, daemons, background services, graph terminology, or generic
 crawler-to-crawler interfaces before repeated crawler evidence requires them.
 
-Keep files under 400 lines of code. If a file grows past that, do the smallest
+Keep files under about 500 lines of code. If a file grows past that, do the smallest
 sensible refactor into human-named files unless Josh explicitly says a larger
 file is acceptable.
 

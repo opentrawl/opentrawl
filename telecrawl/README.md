@@ -1,7 +1,5 @@
 # ✈️ telecrawl
 
-![telecrawl banner](docs/assets/readme-banner.jpg)
-
 Telegram archive CLI.
 
 `telecrawl` reads local Telegram Desktop `tdata` archives and native Telegram
@@ -19,15 +17,17 @@ It is local-first:
 
 ## Install
 
+Build from the monorepo root; the binary lands in the repo-local bin
+directory that `trawl` discovers:
+
 ```bash
-brew tap steipete/tap
-brew install telecrawl
+scripts/dev-bin
 ```
 
-Or install with Go:
+Or build just this crawler, from this directory:
 
 ```bash
-go install github.com/openclaw/telecrawl/cmd/telecrawl@latest
+go build ./cmd/telecrawl
 ```
 
 ## Setup
