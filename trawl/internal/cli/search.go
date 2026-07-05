@@ -40,9 +40,13 @@ type searchOptions struct {
 }
 
 type SearchRow struct {
-	Source   string `json:"source"`
-	Ref      string `json:"ref"`
-	ShortRef string `json:"short_ref,omitempty"`
+	Source string `json:"source"`
+	Ref    string `json:"ref"`
+	// ShortRef is human display sugar only. short-refs.md keeps trawl's
+	// federated --json on the canonical ref so agents never pick up the
+	// weaker, expiring alias; the crawler-level search --json contract
+	// (crawlerSearchResult below) is untouched and still carries it.
+	ShortRef string `json:"-"`
 	Time     string `json:"time"`
 	AllDay   bool   `json:"all_day,omitempty"`
 	Who      string `json:"who"`

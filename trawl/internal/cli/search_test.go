@@ -303,10 +303,13 @@ func TestSearchHumanOutputDegradesRefsPerRow(t *testing.T) {
 	}
 }
 
-// TestSearchJSONCarriesShortRefs pins short_ref emission in the
-// federated envelope (TRAWL-2): agents must see the same alias humans
-// copy into trawl open.
-func TestSearchJSONCarriesShortRefs(t *testing.T) {
+// TestSearchJSONOmitsShortRef pins short-refs.md's JSON-mode rule
+// (TRAWL-132): trawl's federated --json is the machine contract, so
+// rows carry only the canonical ref, never the human-copy alias. The
+// crawler-level search --json contract is untouched — it still gets
+// short_ref straight from the crawler, which is why the fake here
+// still emits it upstream.
+func TestSearchJSONOmitsShortRef(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
@@ -321,9 +324,12 @@ func TestSearchJSONCarriesShortRefs(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false}` + "\n"
+	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/8842","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false}` + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	}
+	if strings.Contains(stdout, "short_ref") {
+		t.Fatalf("stdout leaked short_ref into the federated JSON contract:\n%s", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
