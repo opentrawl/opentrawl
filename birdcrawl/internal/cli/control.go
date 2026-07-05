@@ -23,17 +23,17 @@ func controlManifest() control.Manifest {
 		LocalOnlyScopes:         []string{"x-archive-dump", "sqlite"},
 	}
 	m.Commands = map[string]control.Command{
-		"doctor":    {Title: "Doctor", Argv: []string{"birdcrawl", "--json", "doctor"}, JSON: true},
-		"status":    {Title: "Status", Argv: []string{"birdcrawl", "--json", "status"}, JSON: true},
-		"sync":      {Title: "Sync", Argv: []string{"birdcrawl", "--json", "sync"}, JSON: true, Mutates: true},
-		"tweets":    {Title: "Tweets", Argv: []string{"birdcrawl", "--json", "tweets"}, JSON: true},
-		"bookmarks": {Title: "Bookmarks", Argv: []string{"birdcrawl", "--json", "bookmarks"}, JSON: true},
-		"likes":     {Title: "Likes", Argv: []string{"birdcrawl", "--json", "likes"}, JSON: true},
-		"mentions":  {Title: "Mentions", Argv: []string{"birdcrawl", "--json", "mentions"}, JSON: true},
-		"search":    {Title: "Search", Argv: []string{"birdcrawl", "--json", "search", "QUERY"}, JSON: true},
-		"open":      {Title: "Open", Argv: []string{"birdcrawl", "--json", "open", "birdcrawl:tweet/ID"}, JSON: true},
-		"stats":     {Title: "Stats", Argv: []string{"birdcrawl", "--json", "stats"}, JSON: true},
-		"import":    {Title: "Import archive", Argv: []string{"birdcrawl", "--json", "import", "archive", "PATH"}, JSON: true, Mutates: true},
+		"doctor":    {Title: "Doctor", Argv: []string{"birdcrawl", "doctor", "--json"}, JSON: true},
+		"status":    {Title: "Status", Argv: []string{"birdcrawl", "status", "--json"}, JSON: true},
+		"sync":      {Title: "Sync", Argv: []string{"birdcrawl", "sync", "--json"}, JSON: true, Mutates: true},
+		"tweets":    {Title: "Tweets", Argv: []string{"birdcrawl", "tweets", "--json"}, JSON: true},
+		"bookmarks": {Title: "Bookmarks", Argv: []string{"birdcrawl", "bookmarks", "--json"}, JSON: true},
+		"likes":     {Title: "Likes", Argv: []string{"birdcrawl", "likes", "--json"}, JSON: true},
+		"mentions":  {Title: "Mentions", Argv: []string{"birdcrawl", "mentions", "--json"}, JSON: true},
+		"search":    {Title: "Search", Argv: []string{"birdcrawl", "search", "QUERY", "--json"}, JSON: true},
+		"open":      {Title: "Open", Argv: []string{"birdcrawl", "open", "REF", "--json"}, JSON: true},
+		"stats":     {Title: "Stats", Argv: []string{"birdcrawl", "stats", "--json"}, JSON: true},
+		"import":    {Title: "Import archive", Argv: []string{"birdcrawl", "import", "archive", "PATH", "--json"}, JSON: true, Mutates: true},
 		"version":   {Title: "Version", Argv: []string{"birdcrawl", "version"}},
 	}
 	return m

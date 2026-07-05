@@ -15,17 +15,7 @@ const (
 	defaultSearchLimit = 20
 	maxSearchLimit     = 200
 	defaultStatsLimit  = 10
-	maxStatsLimit      = 200
 )
-
-type metadataEnvelope struct {
-	SchemaVersion   int      `json:"schema_version"`
-	ContractVersion int      `json:"contract_version"`
-	ID              string   `json:"id"`
-	DisplayName     string   `json:"display_name"`
-	Version         string   `json:"version"`
-	Capabilities    []string `json:"capabilities"`
-}
 
 type statusEnvelope struct {
 	AppID        string            `json:"app_id"`
@@ -63,16 +53,6 @@ type spendEnvelope struct {
 	MonthlyBudgetUSD string `json:"monthly_budget_usd"`
 	RemainingUSD     string `json:"remaining_usd"`
 	LiveSyncPaused   bool   `json:"live_sync_paused,omitempty"`
-}
-
-type errorEnvelope struct {
-	Error contractErrorBody `json:"error"`
-}
-
-type contractErrorBody struct {
-	Code    string `json:"code"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy"`
 }
 
 type doctorOutput struct {
@@ -199,17 +179,6 @@ type statsRow struct {
 	CountsAsOf     string    `json:"counts_as_of"`
 	timeValue      time.Time `json:"-"`
 	countsAsOfTime time.Time `json:"-"`
-}
-
-func contractMetadata() metadataEnvelope {
-	return metadataEnvelope{
-		SchemaVersion:   1,
-		ContractVersion: 1,
-		ID:              "birdcrawl",
-		DisplayName:     "X",
-		Version:         version,
-		Capabilities:    []string{"metadata", "status", "sync", "search", "open", "doctor", "stats", "archive_import", "short_refs"},
-	}
 }
 
 func (r *runtime) statusEnvelope() statusEnvelope {

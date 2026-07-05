@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/cli"
 )
 
@@ -15,7 +16,7 @@ func main() {
 	err := cli.Run(ctx, os.Args[1:], os.Stdout, os.Stderr)
 	stop()
 	if err != nil {
-		if cli.ShouldPrintError(err) {
+		if !output.IsRendered(err) {
 			fmt.Fprintln(os.Stderr, err.Error())
 		}
 		os.Exit(cli.ExitCode(err))

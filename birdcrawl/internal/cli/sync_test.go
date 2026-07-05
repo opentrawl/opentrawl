@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -428,7 +429,7 @@ func runSyncErrorCode(t *testing.T, env syncTestEnv) string {
 	if len(lines) == 0 {
 		t.Fatalf("missing error envelope: %v stderr=%s", err, stderr.String())
 	}
-	var envelope errorEnvelope
+	var envelope ckoutput.ErrorEnvelope
 	if jsonErr := json.Unmarshal(lines[len(lines)-1], &envelope); jsonErr != nil {
 		t.Fatalf("decode error envelope: %v\nstdout=%s", jsonErr, stdout.String())
 	}

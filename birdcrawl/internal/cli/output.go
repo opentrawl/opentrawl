@@ -243,7 +243,7 @@ func (r *runtime) printStats(value statsEnvelope) error {
 		return err
 	}
 	if value.Population > len(value.Results) {
-		if _, err := fmt.Fprintf(r.stdout, "More: birdcrawl stats --by %s --limit %d\n", value.By, nextLimit(len(value.Results))); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: birdcrawl stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
 			return err
 		}
 	}
@@ -285,6 +285,17 @@ func browseHints(kind string, limit int, truncated bool) []string {
 
 func quoteSearchQuery(query string) string {
 	return `"` + strings.ReplaceAll(strings.ReplaceAll(query, `\`, `\\`), `"`, `\"`) + `"`
+}
+
+// statsNextLimit doubles the shown count for the stats "More" hint. Stats has
+// no --limit cap (crawlkit/flags honors --limit exactly), so — unlike search
+// and browse — the next step must not clamp to maxSearchLimit, or the hint
+// could suggest fewer rows than are already on screen.
+func statsNextLimit(shown int) int {
+	if shown < 1 {
+		return defaultStatsLimit
+	}
+	return shown * 2
 }
 
 func nextLimit(limit int) int {

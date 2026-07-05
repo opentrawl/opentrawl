@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	cklog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -26,7 +27,7 @@ type runtime struct {
 func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	opts, rest, err := parseGlobalOptions(args)
 	if err != nil {
-		return usageErr(err)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, opts.json, usageErr(err))
 	}
 	if len(rest) == 0 || rest[0] == "help" || rest[0] == "--help" || rest[0] == "-h" {
 		printUsage(stdout)
@@ -56,19 +57,25 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		Stderr:    stderr,
 	})
 	if err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, r.json, r.contractError("log_open_failed", "cannot open command log: "+err.Error(), "check the local birdcrawl log directory"))
 	}
 	r.log = run
-	err = r.dispatch(rest)
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, r.json, r.finishLog(r.dispatch(rest)))
+}
+
+func (r *runtime) finishLog(err error) error {
 	if isUsageError(err) {
+		// A mistyped command is user feedback, not crawler health; logging it
+		// would pin a typo as the archive's most recent error.
 		_ = r.log.FinishRejected()
 		return err
 	}
+	logErr := loggableError(err)
 	if err != nil {
-		_ = r.log.Error(errorEventCode(err), err)
+		_ = r.log.Error(errorEventCode(err), logErr)
 	}
-	if finishErr := r.log.Finish(err); finishErr != nil {
-		return errors.Join(err, finishErr)
+	if finishErr := r.log.Finish(logErr); err == nil {
+		return finishErr
 	}
 	return err
 }
@@ -80,9 +87,6 @@ func (r *runtime) dispatch(args []string) error {
 	}
 	switch args[0] {
 	case "metadata":
-		if r.json {
-			return r.print(contractMetadata())
-		}
 		return r.print(controlManifest())
 	case "status":
 		return r.runStatus(args[1:])
@@ -104,7 +108,7 @@ func (r *runtime) dispatch(args []string) error {
 		_, _ = io.WriteString(r.stdout, version+"\n")
 		return nil
 	default:
-		return usageErr(fmt.Errorf("unknown command %q. Run 'birdcrawl --help'.", args[0]))
+		return usageErr(fmt.Errorf("unknown command %q", args[0]))
 	}
 }
 
@@ -142,8 +146,8 @@ func errorEventCode(err error) string {
 		return ""
 	}
 	var codeErr *cliError
-	if errors.As(err, &codeErr) && codeErr.event != "" {
-		return codeErr.event
+	if errors.As(err, &codeErr) && codeErr.name != "" {
+		return codeErr.name
 	}
 	return "command_failed"
 }

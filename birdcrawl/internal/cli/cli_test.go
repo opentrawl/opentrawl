@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -295,7 +296,7 @@ func TestOpenResolvesShortRefsAndErrors(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected error")
 			}
-			var envelope errorEnvelope
+			var envelope ckoutput.ErrorEnvelope
 			if jsonErr := json.Unmarshal(out.Bytes(), &envelope); jsonErr != nil {
 				t.Fatalf("decode error: %v output=%s", jsonErr, out.String())
 			}
@@ -466,7 +467,7 @@ func TestSyncReturnsCredentialsMissingEnvelope(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected sync error")
 	}
-	var envelope errorEnvelope
+	var envelope ckoutput.ErrorEnvelope
 	if jsonErr := json.Unmarshal(stdout.Bytes(), &envelope); jsonErr != nil {
 		t.Fatal(jsonErr)
 	}
@@ -475,5 +476,27 @@ func TestSyncReturnsCredentialsMissingEnvelope(t *testing.T) {
 	}
 	if envelope.Error.Remedy == "" {
 		t.Fatal("remedy is empty")
+	}
+}
+
+// TestStatsMoreHintNeverGoesBackwards guards the regression where the stats
+// "More" hint routed through the search cap (maxSearchLimit=200): once stats
+// honors --limit uncapped, a large limit could otherwise print a smaller
+// next limit than what is already on screen.
+func TestStatsMoreHintNeverGoesBackwards(t *testing.T) {
+	cases := []struct{ shown, want int }{
+		{0, defaultStatsLimit},
+		{1, 2},
+		{10, 20},
+		{250, 500},
+	}
+	for _, c := range cases {
+		got := statsNextLimit(c.shown)
+		if got != c.want {
+			t.Fatalf("statsNextLimit(%d) = %d, want %d", c.shown, got, c.want)
+		}
+		if c.shown >= 1 && got <= c.shown {
+			t.Fatalf("statsNextLimit(%d) = %d must exceed the shown count", c.shown, got)
+		}
 	}
 }

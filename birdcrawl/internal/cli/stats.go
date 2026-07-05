@@ -4,6 +4,7 @@ import (
 	"flag"
 	"io"
 
+	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -16,17 +17,18 @@ func (r *runtime) runStats(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
-	if *limit <= 0 {
-		*limit = defaultStatsLimit
-	}
-	if *limit > maxStatsLimit {
-		*limit = maxStatsLimit
+	// The one --limit contract (crawlkit/flags): --limit N is honored exactly,
+	// a limit below 1 is a usage error, no hidden cap. stats is a bounded
+	// top-N ranking, so it offers no --all.
+	limitN, err := ckflags.Limit(*limit, flagPassed(fs, "limit"), false)
+	if err != nil {
+		return usageErr(err)
 	}
 	parsedWindow, err := parseWindow(*window)
 	if err != nil {
 		return usageErr(err)
 	}
-	filter := store.StatsFilter{Window: parsedWindow, By: *by, Limit: *limit}
+	filter := store.StatsFilter{Window: parsedWindow, By: *by, Limit: limitN}
 	return r.withStore(func(st *store.Store) error {
 		result, err := st.Stats(r.ctx, filter)
 		if err != nil {
@@ -42,6 +44,19 @@ func (r *runtime) runStats(args []string) error {
 		}
 		return r.print(newStatsEnvelope(result, aliases, ownerAuthorID))
 	})
+}
+
+// flagPassed reports whether a flag was set explicitly on the command line
+// rather than left at its default, so flags.Limit can tell a real --limit from
+// the fallback.
+func flagPassed(fs *flag.FlagSet, name string) bool {
+	found := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			found = true
+		}
+	})
+	return found
 }
 
 func newStatsEnvelope(result store.StatsResult, aliases map[string]string, ownerAuthorID string) statsEnvelope {
