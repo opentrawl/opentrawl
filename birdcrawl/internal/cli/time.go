@@ -5,23 +5,23 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/flags"
 )
 
-// parseTimeFlag parses an --after/--before value using the fleet date grammar
-// (gogcrawl, calcrawl, imsgcrawl): an RFC3339 timestamp or a bare YYYY-MM-DD
+// parseTimeFlag parses an --after/--before value using the one fleet date
+// grammar (crawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD
 // date, dates read in local time.
 func parseTimeFlag(flagName, value string) (*time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return nil, fmt.Errorf("%s requires a time", flagName)
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if t, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			utc := t.UTC()
-			return &utc, nil
-		}
+	t, err := flags.Date(value)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD: %s", flagName, value)
 	}
-	return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD: %s", flagName, value)
+	return &t, nil
 }
 
 func parseWindow(value string) (time.Duration, error) {

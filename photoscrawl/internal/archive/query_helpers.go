@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/flags"
 )
 
 func assetRef(id string) string {
@@ -30,12 +32,11 @@ func searchTimeBound(value string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed.UTC().Format(time.RFC3339), nil
-		}
+	parsed, err := flags.Date(value)
+	if err != nil {
+		return "", fmt.Errorf("invalid time %q", value)
 	}
-	return "", fmt.Errorf("invalid time %q", value)
+	return parsed.Format(time.RFC3339), nil
 }
 
 // localRFC3339 is for machine events only (e.g. sync time) — those genuinely

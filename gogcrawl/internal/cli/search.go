@@ -172,13 +172,11 @@ func splitFlagArgs(args []string, valueFlags map[string]bool) (flags, positional
 }
 
 func parseTime(value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			return parsed, nil
-		}
+	t, err := flags.Date(value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("time must be RFC3339 or YYYY-MM-DD: %s", strings.TrimSpace(value))
 	}
-	return time.Time{}, fmt.Errorf("time must be RFC3339 or YYYY-MM-DD: %s", value)
+	return t, nil
 }
 
 func (r *runtime) withArchive(fn func(*archive.Store) error) error {

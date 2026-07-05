@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/crawlkit/store"
 )
 
@@ -177,12 +178,11 @@ func normalizeKnownPlaceTime(value string) (string, time.Time, bool, error) {
 	if value == "" {
 		return "", time.Time{}, false, nil
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed.UTC().Format(time.RFC3339), parsed, true, nil
-		}
+	parsed, err := flags.Date(value)
+	if err != nil {
+		return "", time.Time{}, false, fmt.Errorf("must be a date (2006-01-02) or RFC 3339 timestamp: %q", value)
 	}
-	return "", time.Time{}, false, fmt.Errorf("must be a date (2006-01-02) or RFC 3339 timestamp: %q", value)
+	return parsed.Format(time.RFC3339), parsed, true, nil
 }
 
 func loadKnownPlaces(ctx context.Context, db *sql.DB) ([]KnownPlace, error) {

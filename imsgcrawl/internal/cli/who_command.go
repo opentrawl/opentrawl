@@ -7,8 +7,8 @@ import (
 	"io"
 	"strconv"
 	"strings"
-	"time"
 
+	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/imsgcrawl/internal/archive"
 )
 
@@ -39,12 +39,11 @@ func parseSearchTimeBound(value, flagName string) (int64, error) {
 	if value == "" {
 		return 0, fmt.Errorf("search %s requires a time", flagName)
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if parsed, err := time.ParseInLocation(layout, value, time.Local); err == nil {
-			return archive.AppleDateFromTime(parsed), nil
-		}
+	parsed, err := flags.Date(value)
+	if err != nil {
+		return 0, fmt.Errorf("search %s must be RFC3339 or YYYY-MM-DD", flagName)
 	}
-	return 0, fmt.Errorf("search %s must be RFC3339 or YYYY-MM-DD", flagName)
+	return archive.AppleDateFromTime(parsed), nil
 }
 
 func (r *runtime) ambiguousWhoError(query, searchQuery string, resolution archive.WhoResolution) error {

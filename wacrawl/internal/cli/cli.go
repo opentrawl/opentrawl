@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/config"
+	"github.com/openclaw/crawlkit/flags"
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
@@ -246,16 +247,14 @@ func commandErr(name, message, remedy string, code int, fields map[string]any, e
 }
 
 func parseTime(value string) (time.Time, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
+	if strings.TrimSpace(value) == "" {
 		return time.Time{}, errors.New("empty time")
 	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339, "2006-01-02"} {
-		if t, err := time.Parse(layout, value); err == nil {
-			return t.UTC(), nil
-		}
+	t, err := flags.Date(value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid time %q", value)
 	}
-	return time.Time{}, fmt.Errorf("invalid time %q", value)
+	return t, nil
 }
 
 func formatTime(t time.Time) string {

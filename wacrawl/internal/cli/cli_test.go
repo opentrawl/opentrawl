@@ -2333,6 +2333,29 @@ func TestBackupCommands(t *testing.T) {
 	}
 }
 
+// TestParseTimeDateOnlyUsesLocalMidnight pins a deliberate behavior change
+// from the TRAWL-131 date-parser lift: parseTime used to read a bare
+// YYYY-MM-DD date as UTC midnight (time.Parse); it now goes through
+// crawlkit/flags.Date, which reads it as midnight in the machine's local
+// timezone, matching every other crawler's --after/--before grammar. The
+// zone is fixed here so the test does not depend on the machine it runs
+// on.
+func TestParseTimeDateOnlyUsesLocalMidnight(t *testing.T) {
+	fixed := time.FixedZone("UTC+2", 2*60*60)
+	previous := time.Local
+	time.Local = fixed
+	t.Cleanup(func() { time.Local = previous })
+
+	got, err := parseTime("2026-07-04")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 3, 22, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("parseTime(\"2026-07-04\") = %v, want %v (local midnight in UTC+2, not UTC midnight)", got, want)
+	}
+}
+
 func TestCLIHelpers(t *testing.T) {
 	if _, err := parseTime("2026-04-25"); err != nil {
 		t.Fatal(err)
