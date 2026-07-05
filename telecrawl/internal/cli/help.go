@@ -45,7 +45,7 @@ func commandUsage(args []string) string {
 		return "usage: telecrawl doctor [--path PATH] [--json]\n\nCheck Telegram source access and archive readability.\n"
 	case "metadata":
 		return "usage: telecrawl metadata [--json]\n\nPrint the crawler manifest and contract capabilities.\n"
-	case "import", "sync", "wiretap":
+	case "import", "sync":
 		return "usage: telecrawl import [--path PATH] [--chat ID] [--dialogs-limit N] [--messages-limit N] [--fetch-media] [--json]\n\nRead Telegram Desktop data into the local archive. This mutates the archive.\n"
 	case "status":
 		return "usage: telecrawl status [--json]\n\nShow archive health and counts without importing.\n"

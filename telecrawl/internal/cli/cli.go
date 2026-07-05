@@ -119,7 +119,7 @@ func commandName(args []string, versionOut, helpOut bool) string {
 		return "help"
 	}
 	switch args[0] {
-	case "metadata", "import", "sync", "wiretap", "doctor", "status", "chats", "folders", "contacts", "topics", "messages", "search", "who", "open", "backup", "version":
+	case "metadata", "import", "sync", "doctor", "status", "chats", "folders", "contacts", "topics", "messages", "search", "who", "open", "backup", "version":
 		return args[0]
 	default:
 		return "unknown"
@@ -212,8 +212,6 @@ func (r *runtime) dispatch(args []string) error {
 		return r.runOpen(args[1:])
 	case "backup":
 		return r.runBackup(args[1:])
-	case "wiretap":
-		return r.runImport(args[0], args[1:])
 	case "version":
 		_, _ = io.WriteString(r.stdout, version+"\n")
 		return nil
