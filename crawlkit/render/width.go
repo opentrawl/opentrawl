@@ -59,6 +59,29 @@ func Truncate(value string, width int) string {
 	return strings.TrimRightFunc(out.String(), unicode.IsSpace) + ellipsis
 }
 
+// clipToWidth returns the longest prefix of value that fits in width display
+// cells, trimming a trailing space so a clip never ends mid-gap. It adds no
+// marker: callers that want an ellipsis append their own.
+func clipToWidth(value string, width int) string {
+	if width <= 0 {
+		return ""
+	}
+	if DisplayWidth(value) <= width {
+		return value
+	}
+	var out strings.Builder
+	cellWidth := 0
+	for _, r := range value {
+		runeWidth := DisplayWidth(string(r))
+		if cellWidth+runeWidth > width {
+			break
+		}
+		out.WriteRune(r)
+		cellWidth += runeWidth
+	}
+	return strings.TrimRightFunc(out.String(), unicode.IsSpace)
+}
+
 func Wrap(value string, width int) []string {
 	value = normalizeText(value)
 	if width <= 0 {

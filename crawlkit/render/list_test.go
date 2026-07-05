@@ -97,6 +97,65 @@ func TestWriteListClampsText(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
+// TestWriteListClampMarksFullWidthCut is the TRAWL-119 tripwire: when the
+// last shown line of a clamped cell exactly fills the text column, the cut
+// still ends in the ellipsis marker — a full-width line must never read as a
+// complete, un-truncated cell. The text column here is 23 wide, so each
+// eleven-char pair fills a line exactly and the second line is clamped at the
+// boundary.
+func TestWriteListClampMarksFullWidthCut(t *testing.T) {
+	t.Setenv("COLUMNS", "28")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading:   "Search: showing 1.",
+		ClampText: 2,
+		Items: []ListItem{{
+			Ref:  "r1",
+			Text: "aaaaaaaaaaa bbbbbbbbbbb ccccccccccc ddddddddddd eeeeeeeeeee",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Search: showing 1.",
+		"",
+		"ref  text",
+		"r1   aaaaaaaaaaa bbbbbbbbbbb",
+		"     ccccccccccc dddddddddd…",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+	assertNoTrailingSpaces(t, buf.String())
+}
+
+// TestWriteListClampWideRuneTokenSingleMarker: an elided wide-rune (CJK)
+// token can already end in the ellipsis and still sit under the column
+// budget, because two-cell runes pack unevenly. When that line is also the
+// clamp cut, exactly one marker must show — never "……".
+func TestWriteListClampWideRuneTokenSingleMarker(t *testing.T) {
+	t.Setenv("COLUMNS", "16")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading:   "Search: showing 1.",
+		ClampText: 1,
+		Items: []ListItem{{
+			Text: "字字字字字字字字字字 tail",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Search: showing 1.",
+		"",
+		"text",
+		"字字字字字字字…",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+}
+
 // TestWriteListDateOnlyRows is the TRAWL-100 tripwire: a row carrying
 // a calendar date (an all-day event) renders the date alone — never a
 // fake 00:00 — and a list of only dates does not pay for a time column.

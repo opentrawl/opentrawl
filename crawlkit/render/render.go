@@ -126,7 +126,9 @@ func displayRunOutcome(outcome string) string {
 	switch strings.TrimSpace(outcome) {
 	case "success":
 		return "succeeded"
-	case "failure":
+	case "failure", "error":
+		// The log reader canonicalizes every failed run to "error"
+		// (reader.go finishOutcome); "failure" stays for older lines.
 		return "failed"
 	default:
 		return displayCode(outcome)

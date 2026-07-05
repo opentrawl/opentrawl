@@ -342,6 +342,32 @@ func TestWriteLogTailHumanisesFailureOutcome(t *testing.T) {
 	}
 }
 
+// TestWriteLogTailHumanisesErrorOutcome is the TRAWL-17 tripwire: the log
+// reader canonicalizes a failed run to the "error" outcome, and the human
+// run line must read "failed", never the raw enum "error" — otherwise a
+// failed sync prints "sync error" next to another run's "sync succeeded".
+func TestWriteLogTailHumanisesErrorOutcome(t *testing.T) {
+	var buf bytes.Buffer
+	err := WriteLogTail(&buf, LogTail{
+		LastRun: &cklog.RunSummary{
+			Command: "sync",
+			Outcome: "error",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"",
+		"Recent log:",
+		"  Last run: sync failed",
+		"",
+	}, "\n")
+	if buf.String() != want {
+		t.Fatalf("log tail output:\n%s\nwant:\n%s", buf.String(), want)
+	}
+}
+
 // TestRejectedRunRendersRejected is the TRAWL-101 tripwire: a run
 // refused before any work ran (usage error) must read as rejected on
 // every surface that shows run outcomes, never as a success.

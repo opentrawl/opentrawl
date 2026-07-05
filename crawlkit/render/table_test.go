@@ -59,6 +59,36 @@ func TestWriteTableFitsNarrowTerminal(t *testing.T) {
 	}
 }
 
+// TestWriteTableElidesLongTokens is the TRAWL-120 tripwire: a wrapped
+// column too narrow for a long unbreakable token (an email, a URL) elides
+// the token on one line instead of hard-splitting it mid-word across
+// several. A reader sees one cut identifier, not scattered fragments.
+func TestWriteTableElidesLongTokens(t *testing.T) {
+	t.Setenv("COLUMNS", "20")
+	var buf bytes.Buffer
+	err := WriteTable(&buf, []TableColumn{
+		{Header: "who"},
+		{Header: "identifiers", Wrap: true},
+	}, [][]string{
+		{"Ada", "verylongusername@example-domain.com"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"who  identifiers",
+		"Ada  verylonguserna…",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+	assertNoTrailingSpaces(t, buf.String())
+	for lineNo, line := range strings.Split(strings.TrimRight(buf.String(), "\n"), "\n") {
+		if width := DisplayWidth(line); width > 20 {
+			t.Fatalf("line %d width = %d, want <= 20:\n%s", lineNo+1, width, buf.String())
+		}
+	}
+}
+
 func TestWriteTableZeroRowsWritesNothing(t *testing.T) {
 	var buf bytes.Buffer
 	if err := WriteTable(&buf, []TableColumn{{Header: "Name"}}, nil); err != nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 )
 
 const (
@@ -187,7 +188,7 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 		if strings.TrimSpace(value) == "" {
 			lines = []string{emptyWrapCell}
 		} else {
-			lines = Wrap(value, column.Width)
+			lines = Wrap(elideWideTokens(value, column.Width), column.Width)
 		}
 		return clampLines(lines, column.Clamp, column.Width)
 	}
@@ -200,6 +201,36 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 	return []string{value}
 }
 
+// elideWideTokens clips any whitespace-delimited token wider than the column
+// to fit, so a wrapped table cell never hard-splits an unbreakable token — an
+// email or a URL — into mid-word fragments across lines. A clipped token keeps
+// its leading text and ends in the ellipsis marker: a reader sees one cut
+// token, not scattered pieces. Spacing and line breaks are preserved.
+func elideWideTokens(value string, width int) string {
+	if width <= 0 {
+		return value
+	}
+	var out strings.Builder
+	var token strings.Builder
+	flush := func() {
+		if token.Len() == 0 {
+			return
+		}
+		out.WriteString(Truncate(token.String(), width))
+		token.Reset()
+	}
+	for _, r := range value {
+		if unicode.IsSpace(r) {
+			flush()
+			out.WriteRune(r)
+			continue
+		}
+		token.WriteRune(r)
+	}
+	flush()
+	return out.String()
+}
+
 func clampLines(lines []string, limit int, width int) []string {
 	if limit <= 0 || len(lines) <= limit {
 		return lines
@@ -210,13 +241,25 @@ func clampLines(lines []string, limit int, width int) []string {
 }
 
 func withTrailingEllipsis(value string, width int) string {
+	marker := "…"
+	markerWidth := DisplayWidth(marker)
 	if width <= 0 {
 		return ""
 	}
-	if DisplayWidth(value)+DisplayWidth("…") <= width {
-		return value + "…"
+	if width <= markerWidth {
+		return marker
 	}
-	return Truncate(value, width)
+	// The clamp hid at least one more line, so the last shown line always
+	// ends in the marker — even when it exactly fills the column, where a
+	// bare fit would read as a complete, un-truncated cell.
+	clipped := clipToWidth(value, width-markerWidth)
+	if strings.HasSuffix(clipped, marker) {
+		// An elided wide-rune token can already carry the marker and
+		// still fit under the budget (wide cells pack unevenly);
+		// appending another would print "……".
+		return clipped
+	}
+	return clipped + marker
 }
 
 func formatRenderCell(value string, column renderColumn, last bool) string {
