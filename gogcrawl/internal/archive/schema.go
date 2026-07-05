@@ -44,13 +44,7 @@ create table if not exists gmail_labels (
   raw_json text not null default '{}'
 );
 
-create table if not exists ingested_shards (
-  path text primary key,
-  hash text not null,
-  kind text not null,
-  rows integer not null default 0,
-  ingested_at text not null
-);
+drop table if exists ingested_shards;
 
 create virtual table if not exists messages_fts using fts5(
   id unindexed,

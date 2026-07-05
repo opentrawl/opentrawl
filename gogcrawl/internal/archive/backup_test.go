@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/openclaw/crawlkit/state"
 )
 
 func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {
@@ -378,11 +380,7 @@ func TestPendingBackupShardsReingestsLegacyMessageHashes(t *testing.T) {
 	}
 	defer st.Close()
 	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
-	_, err = st.store.DB().ExecContext(ctx, `
-insert into ingested_shards(path, hash, kind, rows, ingested_at)
-values (?, ?, ?, ?, ?)
-`, shard.Path, shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
-	if err != nil {
+	if err := state.New(st.store.DB()).Set(ctx, sourceName, backupEntityType, shard.Path, shard.Hash); err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
@@ -404,11 +402,7 @@ func TestPendingBackupShardsReingestsV5MessageHashes(t *testing.T) {
 	}
 	defer st.Close()
 	shard := BackupShard{Path: "data/gmail/account/messages/part-000001.jsonl.gz.age", Hash: "hash1", Kind: BackupShardMessages}
-	_, err = st.store.DB().ExecContext(ctx, `
-insert into ingested_shards(path, hash, kind, rows, ingested_at)
-values (?, ?, ?, ?, ?)
-`, shard.Path, "mail-decode-v5:"+shard.Hash, string(shard.Kind), 1, time.Now().Format(time.RFC3339))
-	if err != nil {
+	if err := state.New(st.store.DB()).Set(ctx, sourceName, backupEntityType, shard.Path, "mail-decode-v5:"+shard.Hash); err != nil {
 		t.Fatal(err)
 	}
 	if pending, err := st.PendingBackupShards(ctx, []BackupShard{shard}); err != nil || len(pending) != 1 {
