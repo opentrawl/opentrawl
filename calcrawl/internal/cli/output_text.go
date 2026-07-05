@@ -75,7 +75,7 @@ func renderDoctorChecks(checks []doctorCheck) []ckrender.Check {
 func printSearchText(w io.Writer, value searchOutput) error {
 	hints := []string{"Open: calcrawl open REF"}
 	if value.Truncated {
-		hints = append(hints, searchMoreHint(value))
+		hints = append(hints, searchMoreHint(value), searchAllHint(value))
 	}
 	return ckrender.WriteList(w, ckrender.List{
 		Heading:   searchHeading(w, value),
@@ -106,7 +106,7 @@ func searchHeading(w io.Writer, value searchOutput) string {
 	return prefix + ckrender.Truncate(query, queryWidth) + suffix
 }
 
-func searchMoreHint(value searchOutput) string {
+func searchHintBase(value searchOutput) []string {
 	parts := []string{"calcrawl", "search"}
 	if query := strings.TrimSpace(value.Query); query != "" {
 		parts = append(parts, shellQuote(query))
@@ -120,8 +120,17 @@ func searchMoreHint(value searchOutput) string {
 	if value.Before != "" {
 		parts = append(parts, "--before", shellQuote(value.Before))
 	}
-	parts = append(parts, "--limit", strconv.Itoa(nextSearchLimit(value.Limit)))
+	return parts
+}
+
+func searchMoreHint(value searchOutput) string {
+	parts := append(searchHintBase(value), "--limit", strconv.Itoa(nextSearchLimit(value.Limit)))
 	return "More: " + strings.Join(parts, " ")
+}
+
+func searchAllHint(value searchOutput) string {
+	parts := append(searchHintBase(value), "--all")
+	return "All: " + strings.Join(parts, " ")
 }
 
 func nextSearchLimit(limit int) int {

@@ -11,48 +11,47 @@ import (
 
 	"github.com/openclaw/crawlkit/control"
 	crawlog "github.com/openclaw/crawlkit/log"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
+// cliError carries a command failure's exit code and the crawlkit error body
+// (crawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as
+// {"error": {...}} in JSON mode; in text mode main prints Error().
 type cliError struct {
-	code       int
-	err        error
-	kind       string
-	remedy     string
-	human      string
-	candidates *[]archive.WhoCandidate
-	didYouMean *[]archive.WhoCandidate
-	hint       string
+	code    int
+	name    string
+	message string
+	remedy  string
+	fields  map[string]any
+	human   string
+	err     error
 }
 
 func (e *cliError) Error() string {
 	if strings.TrimSpace(e.human) != "" {
 		return e.human
 	}
-	return e.err.Error()
+	if e.remedy == "" {
+		return e.message
+	}
+	return e.message + ". " + e.remedy
 }
+
 func (e *cliError) Unwrap() error { return e.err }
 
-type printedError struct {
-	err  error
-	code int
-}
-
-func (e printedError) Error() string { return e.err.Error() }
-func (e printedError) Unwrap() error { return e.err }
-
-func ErrorPrinted(err error) bool {
-	var printed printedError
-	return errors.As(err, &printed)
+func (e *cliError) ErrorBody() ckoutput.ErrorBody {
+	return ckoutput.ErrorBody{
+		Code:    e.name,
+		Message: e.message,
+		Remedy:  e.remedy,
+		Fields:  e.fields,
+	}
 }
 
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
-	}
-	var printed printedError
-	if errors.As(err, &printed) {
-		return printed.code
 	}
 	var codeErr *cliError
 	if errors.As(err, &codeErr) {
@@ -76,45 +75,25 @@ func Run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	jsonOut, args := pullJSONFlag(args)
 	run, err := newLogRun(args, jsonOut, stderr, verbosity)
 	if err != nil {
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, commandErr(1, "log_open_failed", fmt.Errorf("cannot open command log: %w", err), "check the local calcrawl log directory"))
 	}
 	r := &runtime{ctx: ctx, stdout: stdout, stderr: stderr, json: jsonOut, log: run}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" {
 		printUsage(stdout)
-		return r.finish(nil)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, r.finish(nil))
 	}
 	if args[0] == "help" {
 		if len(args) == 1 {
 			printUsage(stdout)
-			return r.finish(nil)
+			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, r.finish(nil))
 		}
-		err := printCommandUsage(stdout, args[1:])
-		if finishErr := r.finish(err); finishErr != nil {
-			if err == nil {
-				return finishErr
-			}
-			err = errors.Join(err, finishErr)
-		}
-		return err
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, r.finish(printCommandUsage(stdout, args[1:])))
 	}
 	if args[0] == "--version" || args[0] == "version" {
 		_, _ = io.WriteString(stdout, version+"\n")
-		return r.finish(nil)
+		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, r.finish(nil))
 	}
-	err = r.dispatch(args)
-	if finishErr := r.finish(err); finishErr != nil {
-		if err == nil {
-			return finishErr
-		}
-		err = errors.Join(err, finishErr)
-	}
-	if err == nil || !jsonOut {
-		return err
-	}
-	if writeErr := r.printJSONError(err); writeErr != nil {
-		return writeErr
-	}
-	return printedError{err: err, code: ExitCode(err)}
+	return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, r.finish(r.dispatch(args)))
 }
 
 func newLogRun(args []string, jsonOut bool, stderr io.Writer, verbosity int) (*crawlog.Run, error) {
@@ -156,14 +135,14 @@ func logCommand(args []string) string {
 
 func (r *runtime) finish(err error) error {
 	if err != nil {
-		if logErr := r.log.Error(errorEvent(err), err); logErr != nil {
+		if logErr := r.log.Error(errorEvent(err), loggableError(err)); logErr != nil {
 			err = errors.Join(err, logErr)
 		}
 	}
-	if logErr := r.log.Finish(err); logErr != nil {
-		return logErr
+	if finishErr := r.log.Finish(loggableError(err)); err == nil {
+		return finishErr
 	}
-	return nil
+	return err
 }
 
 func pullJSONFlag(args []string) (bool, []string) {
@@ -267,31 +246,12 @@ func (r *runtime) printJSONLine(value any) error {
 	return enc.Encode(value)
 }
 
-func (r *runtime) printJSONError(err error) error {
-	var codeErr *cliError
-	out := errorOutput{}
-	if errors.As(err, &codeErr) {
-		out.Error.Code = codeErr.kind
-		out.Error.Message = codeErr.err.Error()
-		out.Error.Remedy = codeErr.remedy
-		out.Error.Candidates = codeErr.candidates
-		out.Error.DidYouMean = codeErr.didYouMean
-		out.Error.Hint = codeErr.hint
-		if out.Error.Remedy == "" {
-			out.Error.Remedy = worldRemedy(codeErr.err)
-		}
-	} else {
-		out.Error.Code = "command_failed"
-		out.Error.Message = err.Error()
-	}
-	if out.Error.Code == "" {
-		out.Error.Code = "command_failed"
-	}
-	return json.NewEncoder(r.stdout).Encode(out)
-}
+// usageRemedy is the one next-step hint for every caller mistake. It rides the
+// error body's remedy field, kept out of the message (rules §2.4).
+const usageRemedy = "Run 'calcrawl --help'."
 
 func usageErr(err error) error {
-	return &cliError{code: 2, err: err, kind: "usage"}
+	return &cliError{code: 2, name: "usage", message: err.Error(), remedy: usageRemedy, err: err}
 }
 
 func archiveErr(err error) error {
@@ -303,41 +263,30 @@ func sourceErr(err error) error {
 }
 
 func commandErr(code int, kind string, err error, remedy string) error {
+	message := err.Error()
+	wrapped := err
 	if strings.TrimSpace(remedy) != "" {
-		err = crawlog.WorldMustChange{Err: err, Message: err.Error(), Remedy: remedy}
+		wrapped = crawlog.WorldMustChange{Err: err, Message: message, Remedy: remedy}
 	}
-	return &cliError{code: code, err: err, kind: kind, remedy: remedy}
-}
-
-func worldRemedy(err error) string {
-	var world crawlog.WorldMustChange
-	if errors.As(err, &world) {
-		return strings.TrimSpace(world.Remedy)
-	}
-	var worldPtr *crawlog.WorldMustChange
-	if errors.As(err, &worldPtr) && worldPtr != nil {
-		return strings.TrimSpace(worldPtr.Remedy)
-	}
-	return ""
+	return &cliError{code: code, name: kind, message: message, remedy: remedy, err: wrapped}
 }
 
 func errorEvent(err error) string {
 	var codeErr *cliError
-	if errors.As(err, &codeErr) && strings.TrimSpace(codeErr.kind) != "" {
-		return codeErr.kind
+	if errors.As(err, &codeErr) && strings.TrimSpace(codeErr.name) != "" {
+		return codeErr.name
 	}
 	return "command_failed"
 }
 
-type errorOutput struct {
-	Error struct {
-		Code       string                  `json:"code"`
-		Message    string                  `json:"message"`
-		Remedy     string                  `json:"remedy,omitempty"`
-		Candidates *[]archive.WhoCandidate `json:"candidates,omitempty"`
-		DidYouMean *[]archive.WhoCandidate `json:"did_you_mean,omitempty"`
-		Hint       string                  `json:"hint,omitempty"`
-	} `json:"error"`
+// loggableError keeps the health log clean: it records a command failure's
+// short machine message, never the rendered human table a who error carries.
+func loggableError(err error) error {
+	var codeErr *cliError
+	if errors.As(err, &codeErr) && codeErr.message != "" {
+		return errors.New(codeErr.message)
+	}
+	return err
 }
 
 func oneArg(args []string, name string) (string, error) {

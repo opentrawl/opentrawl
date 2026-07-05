@@ -77,13 +77,14 @@ Refresh the local calendar archive from Calendar.app's SQLite store.
 `)
 	case "search":
 		_, err = fmt.Fprint(w, `Usage:
-  calcrawl search [QUERY] [--who NAME] [--limit N] [--after DATE] [--before DATE] [--json]
+  calcrawl search [QUERY] [--who NAME] [--limit N | --all] [--after DATE] [--before DATE] [--json]
 
 Search archived calendar events.
 
 Flags:
-  --who NAME    Resolve a person, then filter to events where they are organizer or attendee.
+  --who NAME     Resolve a person, then filter to events where they are organizer or attendee.
   --limit N      Results to print. Default: 20.
+  --all          Print every match, no limit.
   --after DATE   Include events at or after DATE.
   --before DATE  Include events at or before DATE.
 

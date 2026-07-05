@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -63,32 +62,33 @@ func resolvableWhoCandidates(query string, candidates []archive.WhoCandidate) []
 }
 
 func ambiguousWhoError(query, who string, candidates []archive.WhoCandidate) error {
-	err := errors.New("ambiguous --who " + quote(who))
 	copied := append([]archive.WhoCandidate(nil), candidates...)
 	return &cliError{
-		code:       4,
-		err:        err,
-		kind:       "ambiguous_who",
-		human:      renderAmbiguousWho(query, who, candidates),
-		candidates: &copied,
+		code:    4,
+		name:    "ambiguous_who",
+		message: "ambiguous --who " + quote(who),
+		human:   renderAmbiguousWho(query, who, candidates),
+		fields:  map[string]any{"candidates": copied},
 	}
 }
 
 func unknownWhoError(query, who string, didYouMean []archive.WhoCandidate) error {
-	err := errors.New("unknown --who " + quote(who))
 	copied := append([]archive.WhoCandidate(nil), didYouMean...)
+	fields := map[string]any{}
 	hint := ""
 	if len(copied) == 0 {
 		hint = "Search without --who to check whether the text exists."
+		fields["hint"] = hint
+	} else {
+		fields["did_you_mean"] = copied
 	}
 	return &cliError{
-		code:       5,
-		err:        err,
-		kind:       "unknown_who",
-		remedy:     hint,
-		human:      renderUnknownWho(query, who, didYouMean),
-		didYouMean: &copied,
-		hint:       hint,
+		code:    5,
+		name:    "unknown_who",
+		message: "unknown --who " + quote(who),
+		remedy:  hint,
+		human:   renderUnknownWho(query, who, didYouMean),
+		fields:  fields,
 	}
 }
 
