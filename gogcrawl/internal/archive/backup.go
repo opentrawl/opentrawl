@@ -17,21 +17,28 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/openclaw/crawlkit/state"
 )
 
 const messageIngestHashVersion = "mail-decode-v6"
 
+// backupEntityType keys each ingested backup shard in the shared sync_state
+// store: entity_id is the shard path, value its ingest hash. A shard whose
+// stored hash differs (or is absent) is re-ingested; the ingest itself upserts
+// by message id, so a dropped or reset store re-derives in one sync.
+const backupEntityType = "backup"
+
 func (s *Store) PendingBackupShards(ctx context.Context, shards []BackupShard) ([]BackupShard, error) {
+	st := state.New(s.store.DB())
 	var pending []BackupShard
 	for _, shard := range shards {
-		var hash string
-		err := s.store.DB().QueryRowContext(ctx, `select hash from ingested_shards where path = ?`, shard.Path).Scan(&hash)
-		if err == sql.ErrNoRows || (err == nil && hash != expectedIngestHash(shard)) {
-			pending = append(pending, shard)
-			continue
-		}
+		rec, ok, err := st.Get(ctx, sourceName, backupEntityType, shard.Path)
 		if err != nil {
 			return nil, err
+		}
+		if !ok || rec.Value != expectedIngestHash(shard) {
+			pending = append(pending, shard)
 		}
 	}
 	return pending, nil
@@ -54,16 +61,7 @@ func (s *Store) IngestBackupShard(ctx context.Context, shard BackupShard, plaint
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `
-insert into ingested_shards(path, hash, kind, rows, ingested_at)
-values (?, ?, ?, ?, ?)
-on conflict(path) do update set
-  hash = excluded.hash,
-  kind = excluded.kind,
-  rows = excluded.rows,
-  ingested_at = excluded.ingested_at
-`, shard.Path, expectedIngestHash(shard), string(shard.Kind), result.Seen+result.Labels, time.Now().Local().Format(time.RFC3339))
-		return err
+		return state.New(tx).Set(ctx, sourceName, backupEntityType, shard.Path, expectedIngestHash(shard))
 	})
 	return result, err
 }
