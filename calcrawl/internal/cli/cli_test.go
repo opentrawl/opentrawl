@@ -580,6 +580,73 @@ func TestSearchWhoSharedMailboxSurfacesEachName(t *testing.T) {
 	}
 }
 
+// TRAWL-122: a mixed entity owns an identifier on one event and reaches
+// another only by name (a name-joined row with no identifier of its own).
+// The event filter must OR the name clause in alongside the identifier, so
+// who and search counts agree — before the fix the identifier clause alone
+// dropped the name-only event and search undercounted.
+func TestSearchWhoMixedEntityCountsAgree(t *testing.T) {
+	db := setupCalendarFixture(t)
+	insertEvent(t, db, eventFixture{
+		rowID:       120,
+		uuid:        "77777777-7777-7777-7777-777777777777",
+		uniqueID:    "event-ada-identified",
+		summary:     "Ada design sync",
+		start:       time.Date(2026, 4, 1, 10, 0, 0, 0, time.UTC),
+		end:         time.Date(2026, 4, 1, 11, 0, 0, 0, time.UTC),
+		calendarID:  10,
+		organizerID: 1020,
+		status:      1,
+	})
+	insertEvent(t, db, eventFixture{
+		rowID:       121,
+		uuid:        "88888888-8888-8888-8888-888888888888",
+		uniqueID:    "event-ada-named",
+		summary:     "Ada review",
+		start:       time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC),
+		end:         time.Date(2026, 4, 8, 11, 0, 0, 0, time.UTC),
+		calendarID:  10,
+		organizerID: 1021,
+		status:      1,
+	})
+	// One identity owns ada@example.com; the other is name-only ("Ada" with
+	// no address). Same normalized name unions them into one entity, so the
+	// second event is reachable only through the name clause.
+	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
+		(520, 'Ada', 'ada@example.com', '', ''),
+		(521, 'Ada', '', '', '')`)
+	mustExec(t, db, `insert into Participant(
+		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
+	) values
+		(1020, 2, 1, 2, 3, 520, 120, 'ada@example.com', '', 0, ''),
+		(1021, 2, 1, 2, 3, 521, 121, '', '', 0, '')`)
+	runSync(t)
+
+	who := runJSON[whoResponse](t, "who", "ada@example.com", "--json")
+	var ada *archive.WhoCandidate
+	for i := range who.Candidates {
+		if who.Candidates[i].Who == "Ada" {
+			ada = &who.Candidates[i]
+			break
+		}
+	}
+	if ada == nil {
+		t.Fatalf("who ada@example.com = %#v, want an Ada candidate", who)
+	}
+	if ada.Messages != 2 || !hasString(ada.Identifiers, "ada@example.com") {
+		t.Fatalf("Ada candidate = %#v, want 2 events and the owned email", *ada)
+	}
+
+	// Both the owned identifier and the name resolve to Ada; each must return
+	// every one of Ada's events, matching the who count.
+	for _, whoArg := range []string{"ada@example.com", "Ada"} {
+		search := runJSON[searchResponse](t, "search", "--who", whoArg, "--json")
+		if search.TotalMatches != ada.Messages || len(search.Results) != int(ada.Messages) {
+			t.Fatalf("search --who %q = %d matches, want who count %d", whoArg, search.TotalMatches, ada.Messages)
+		}
+	}
+}
+
 func TestSearchWhoUnknownHasSuggestionsOrHint(t *testing.T) {
 	setupCalendarFixture(t)
 	runSync(t)

@@ -216,6 +216,7 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			LastSeen:          canonicalEventTime(builder.lastSeen),
 			Messages:          int64(len(builder.events)),
 			filterIdentifiers: sortedIdentifiers(owned),
+			names:             sortedNames(builder.names),
 		})
 	}
 	sort.SliceStable(candidates, func(i, j int) bool {
@@ -297,6 +298,17 @@ func bestWhoName(names map[string]int, identifiers []string) string {
 	return "unknown"
 }
 
+// sortedNames returns the entity's raw display spellings, deduplicated and
+// ordered so the filter is stable across runs (rules.md §1.5).
+func sortedNames(names map[string]int) []string {
+	out := make([]string, 0, len(names))
+	for value := range names {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
+}
+
 func sortedIdentifiers(values map[string]string) []string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
@@ -348,7 +360,11 @@ func (c WhoCandidate) Resolved() WhoResolved {
 }
 
 func (c WhoCandidate) Filter() *WhoFilter {
-	return &WhoFilter{Who: c.Who, Identifiers: append([]string(nil), c.filterIdentifiers...)}
+	return &WhoFilter{
+		Who:         c.Who,
+		Identifiers: append([]string(nil), c.filterIdentifiers...),
+		Names:       append([]string(nil), c.names...),
+	}
 }
 
 func (c WhoCandidate) MatchRank(query string) (whomatch.Rank, bool) {
