@@ -37,6 +37,24 @@ func TestRun(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code=%d", code)
 	}
+
+	// A rendered (JSON envelope) error writes to stdout only — run() must not
+	// also echo it to stderr.
+	out.Reset()
+	errOut.Reset()
+	code = run([]string{"--config", cfg, "--json", "who", ""}, &out, &errOut)
+	if code != 2 {
+		t.Fatalf("rendered error code=%d", code)
+	}
+	if errOut.Len() != 0 {
+		t.Fatalf("rendered error leaked to stderr: %s", errOut.String())
+	}
+	var env struct {
+		Error struct{ Code string } `json:"error"`
+	}
+	if json.Unmarshal(out.Bytes(), &env) != nil || env.Error.Code != "usage" {
+		t.Fatalf("envelope on stdout = %s", out.String())
+	}
 }
 
 func TestMainEntrypoint(t *testing.T) {
