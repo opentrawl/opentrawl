@@ -210,12 +210,13 @@ func newLogErrorEnvelope(line cklog.Line) *logErrorEnvelope {
 		message = fields["error"]
 	}
 	return &logErrorEnvelope{
-		RunID:   line.RunID,
-		Command: line.Command,
-		Event:   line.Event,
-		Time:    formatTime(line.Timestamp),
-		Message: message,
-		Remedy:  fields["remedy"],
+		RunID:      line.RunID,
+		Command:    line.Command,
+		Event:      line.Event,
+		Time:       formatTime(line.Timestamp),
+		Message:    message,
+		Remedy:     fields["remedy"],
+		visibility: line.Visibility,
 	}
 }
 
@@ -302,12 +303,13 @@ type logRunEnvelope struct {
 }
 
 type logErrorEnvelope struct {
-	RunID   string `json:"run_id"`
-	Command string `json:"command"`
-	Event   string `json:"event"`
-	Time    string `json:"time,omitempty"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy,omitempty"`
+	RunID      string `json:"run_id"`
+	Command    string `json:"command"`
+	Event      string `json:"event"`
+	Time       string `json:"time,omitempty"`
+	Message    string `json:"message"`
+	Remedy     string `json:"remedy,omitempty"`
+	visibility cklog.Visibility
 }
 
 func renderLogTail(tail logTailEnvelope) render.LogTail {

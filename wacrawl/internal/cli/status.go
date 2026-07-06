@@ -50,7 +50,7 @@ func (a *app) runStatus(ctx context.Context, args []string) error {
 		return render.WriteStatus(a.stdout, render.Status{
 			State:   render.StatusMissing,
 			Summary: errNoArchive.Error(),
-			Log:     renderLogTail(logTail),
+			Log:     statusLogTailOutput(logTail),
 		})
 	}
 	return err
@@ -109,10 +109,14 @@ func newStatusEnvelope(status store.Status, logTail logTailEnvelope) statusEnvel
 }
 
 func statusLogOutput(logTail logTailEnvelope) *render.DoctorLogTail {
-	return render.DoctorLogTailOutput(render.LogTail{
+	return render.DoctorLogTailOutput(statusLogTailOutput(logTail))
+}
+
+func statusLogTailOutput(logTail logTailEnvelope) render.LogTail {
+	return render.LogTail{
 		LastRun:         statusLogRunOutput(logTail.LastRun),
 		MostRecentError: statusLogErrorOutput(logTail.Error),
-	})
+	}
 }
 
 func statusLogRunOutput(run *logRunEnvelope) *cklog.RunSummary {
@@ -133,7 +137,10 @@ func statusLogErrorOutput(logError *logErrorEnvelope) *cklog.Line {
 		return nil
 	}
 	line.Level = cklog.LevelError
-	line.Visibility = cklog.VisibilityUserFacing
+	line.Visibility = logError.visibility
+	if !cklog.IsUserFacingError(*line) {
+		return nil
+	}
 	return line
 }
 
@@ -174,7 +181,7 @@ func renderStatus(status store.Status, logTail logTailEnvelope) render.Status {
 		Summary:   envelope.Summary,
 		Sections:  sections,
 		Freshness: freshness,
-		Log:       renderLogTail(logTail),
+		Log:       statusLogTailOutput(logTail),
 	}
 }
 
