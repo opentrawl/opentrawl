@@ -284,12 +284,14 @@ func openCamera(asset map[string]any) *OpenCamera {
 }
 
 func openAlbums(rows []map[string]any) []OpenAlbum {
+	seen := map[string]bool{}
 	out := []OpenAlbum{}
 	for _, row := range rows {
 		title := strings.TrimSpace(rowString(row, "album_title"))
-		if title == "" {
+		if title == "" || seen[title] {
 			continue
 		}
+		seen[title] = true
 		out = append(out, OpenAlbum{Title: title, Kind: rowString(row, "album_kind")})
 	}
 	return out

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/openclaw/crawlkit/conformance"
@@ -214,6 +215,44 @@ func TestOpenUsesSlimShapeWithoutRawEvidence(t *testing.T) {
 	}
 	if _, ok := top["evidence"]; ok {
 		t.Fatalf("open leaked evidence object: %s", data)
+	}
+}
+
+func TestOpenDedupesAlbumTitles(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := fakeSnapshot(false, false)
+	snapshot.Assets[0].Albums = append(snapshot.Assets[0].Albums,
+		photos.AlbumMembership{AlbumID: "fixture-album-duplicate", AlbumTitle: "Beach", AlbumKind: "album:1:2"},
+		photos.AlbumMembership{AlbumID: "fixture-album-spaced", AlbumTitle: "  Beach  ", AlbumKind: "album:1:2"},
+		photos.AlbumMembership{AlbumID: "fixture-album-other", AlbumTitle: "Beach ideas", AlbumKind: "album:1:2"},
+	)
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    fakeProvider{snapshot: snapshot},
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sourceID := stableID("source_library", libraryPath)
+	assetID := stableID("asset", sourceID, "fixture-asset-1")
+	opened, err := Open(ctx, paths, assetRef(assetID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := []string{}
+	for _, album := range opened.Mechanical.Albums {
+		titles = append(titles, album.Title)
+	}
+	want := []string{"Beach", "Beach ideas"}
+	if !reflect.DeepEqual(titles, want) {
+		t.Fatalf("album titles = %#v, want %#v", titles, want)
 	}
 }
 
