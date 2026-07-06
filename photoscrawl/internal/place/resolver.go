@@ -14,7 +14,7 @@ import (
 
 type ResolverOptions struct {
 	CacheDir           string
-	LegacyBackfillDir  string
+	BackfillDir        string
 	RadiusMeters       float64
 	ProviderStartEvery time.Duration
 }
@@ -59,7 +59,7 @@ func NewResolver(opts ResolverOptions) *Resolver {
 	}
 	return &Resolver{
 		cacheDir:    strings.TrimSpace(opts.CacheDir),
-		backfillDir: strings.TrimSpace(opts.LegacyBackfillDir),
+		backfillDir: strings.TrimSpace(opts.BackfillDir),
 		radius:      radius,
 		startEvery:  startEvery,
 	}

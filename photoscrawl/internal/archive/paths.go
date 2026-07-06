@@ -1,7 +1,6 @@
 package archive
 
 import (
-	"os"
 	"path/filepath"
 
 	crawlconfig "github.com/openclaw/crawlkit/config"
@@ -9,7 +8,7 @@ import (
 
 const databaseFilename = "photos.sqlite"
 
-var runtimeApp = crawlconfig.App{Name: "photoscrawl", PlatformDirs: true}
+var runtimeApp = crawlconfig.App{Name: "photoscrawl", BaseDir: "~/.opentrawl/photoscrawl"}
 
 type Paths struct {
 	ConfigPath string
@@ -49,12 +48,4 @@ func (p Paths) PlaceContextCacheDir() string {
 
 func (p Paths) PlaceBackfillDir() string {
 	return filepath.Join(p.DataDir, "backfills", "place-context-full", "apple-ingest")
-}
-
-func (p Paths) LegacyPlaceBackfillDir() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		return ""
-	}
-	return filepath.Join(home, ".photoscrawl", "backfills", "place-context-full", "apple-ingest")
 }

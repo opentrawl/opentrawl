@@ -164,6 +164,37 @@ func TestClassifyPlacePhaseUnparksCachedPendingAssets(t *testing.T) {
 	assertRecordedLogEvent(t, logs, "place_unparked")
 }
 
+func TestClassifyPlaceResolverUsesCurrentBackfillDir(t *testing.T) {
+	root := t.TempDir()
+	paths := Paths{
+		DataDir:  filepath.Join(root, ".opentrawl", "photoscrawl"),
+		CacheDir: filepath.Join(root, ".opentrawl", "photoscrawl", "cache"),
+	}
+	legacyBackfillDir := filepath.Join(root, ".photoscrawl", "backfills", "place-context-full", "apple-ingest")
+	if err := os.MkdirAll(legacyBackfillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	input := place.Input{
+		AssetID:        "asset:current-backfill",
+		TakenAt:        "2026-05-28T12:00:00Z",
+		Location:       place.Coordinate{Latitude: 52.3676, Longitude: 4.9041},
+		AccuracyMeters: 8,
+	}
+	backfillPath := writePlaceBackfillFixture(t, paths.PlaceBackfillDir(), input)
+
+	resolver := newClassifyPlaceResolver(paths)
+	resolved := resolver.resolveCached(context.Background(), input)
+	if resolved.Result == nil || resolved.CacheStatus != "backfill_hit" {
+		t.Fatalf("backfill was not served from current root: %+v", resolved)
+	}
+	if resolved.ResolvedFromPath != backfillPath {
+		t.Fatalf("resolved path = %q, want %q", resolved.ResolvedFromPath, backfillPath)
+	}
+	if strings.Contains(resolved.ResolvedFromPath, ".photoscrawl") {
+		t.Fatalf("resolved from legacy dotdir: %s", resolved.ResolvedFromPath)
+	}
+}
+
 func TestLoadClassifyInputsExcludesPlacePending(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -365,6 +396,38 @@ func fixturePlaceResult() *place.Result {
 		},
 		POIStatus: place.POIStatusNone,
 	}
+}
+
+func writePlaceBackfillFixture(t *testing.T, dir string, input place.Input) string {
+	t.Helper()
+	outputDir := filepath.Join(dir, "outputs")
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	manifest := []map[string]any{{
+		"index":           1,
+		"latitude":        input.Location.Latitude,
+		"longitude":       input.Location.Longitude,
+		"accuracy_meters": input.AccuracyMeters,
+	}}
+	manifestData, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), append(manifestData, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	result := fixturePlaceResult()
+	result.Input = input
+	outputData, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	outputPath := filepath.Join(outputDir, "000001.json")
+	if err := os.WriteFile(outputPath, append(outputData, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return outputPath
 }
 
 func localIdentifiers(inputs []classifyInput) []string {
