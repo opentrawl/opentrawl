@@ -41,6 +41,51 @@ func TestMetadataCheck(t *testing.T) {
 			want:     StatusPass,
 		},
 		{
+			name:     "schema v2 command flags pass",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"json":true,"mutates":false,"flags":[{"name":"limit","usage":"maximum results","default":"20"}]}}}`,
+			want:     StatusPass,
+		},
+		{
+			name:     "schema v2 non json command passes",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["version"],"commands":{"version":{"argv":["fakecrawl","version"],"json":false,"mutates":false}}}`,
+			want:     StatusPass,
+		},
+		{
+			name:     "schema v2 missing commands fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"]}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 duplicate flag fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"json":true,"mutates":false,"flags":[{"name":"limit"},{"name":"limit"}]}}}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 verbose logs capability fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search","verbose_logs"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"json":true,"mutates":false,"flags":[{"name":"limit"}]}}}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 search without flags fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"json":true,"mutates":false}}}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 missing json fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"mutates":false}}}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 empty argv fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":[],"json":true,"mutates":false}}}`,
+			want:     StatusFail,
+		},
+		{
+			name:     "schema v2 missing mutates fails",
+			metadata: `{"schema_version":2,"id":"fakecrawl","capabilities":["search"],"commands":{"search":{"argv":["fakecrawl","search","QUERY","--json"],"json":true}}}`,
+			want:     StatusFail,
+		},
+		{
 			name:     "missing version warns",
 			metadata: `{"id":"fakecrawl","capabilities":["search"]}`,
 			want:     StatusWarn,

@@ -7,9 +7,10 @@ import (
 )
 
 const (
-	SchemaVersion       = 1
-	ContractVersion     = 1
-	StatusSchemaVersion = "crawlkit.control.v1"
+	SchemaVersion         = 1
+	RunnerManifestVersion = 2
+	ContractVersion       = 1
+	StatusSchemaVersion   = "crawlkit.control.v1"
 )
 
 type Manifest struct {
@@ -50,10 +51,17 @@ type Paths struct {
 type Command struct {
 	Title      string   `json:"title,omitempty"`
 	Argv       []string `json:"argv"`
-	JSON       bool     `json:"json,omitempty"`
-	Mutates    bool     `json:"mutates,omitempty"`
+	JSON       bool     `json:"json"`
+	Mutates    bool     `json:"mutates"`
 	Legacy     bool     `json:"legacy,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
+	Flags      []Flag   `json:"flags,omitempty"`
+}
+
+type Flag struct {
+	Name    string `json:"name"`
+	Usage   string `json:"usage,omitempty"`
+	Default string `json:"default,omitempty"`
 }
 
 type Privacy struct {

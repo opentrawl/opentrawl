@@ -569,8 +569,8 @@ func readCrawlerManifest(ctx context.Context, binary string) (control.Manifest, 
 	if err := json.Unmarshal(data, &manifest); err != nil {
 		return control.Manifest{}, fmt.Errorf("%s metadata decode failed: %w", binary, err)
 	}
-	if manifest.SchemaVersion != control.SchemaVersion {
-		return control.Manifest{}, fmt.Errorf("%s metadata schema_version = %d, want %d", binary, manifest.SchemaVersion, control.SchemaVersion)
+	if manifest.SchemaVersion < control.SchemaVersion || manifest.SchemaVersion > control.RunnerManifestVersion {
+		return control.Manifest{}, fmt.Errorf("%s metadata schema_version = %d, want %d through %d", binary, manifest.SchemaVersion, control.SchemaVersion, control.RunnerManifestVersion)
 	}
 	if manifest.ContractVersion != control.ContractVersion {
 		return control.Manifest{}, fmt.Errorf("%s metadata contract_version = %d, want %d", binary, manifest.ContractVersion, control.ContractVersion)
@@ -578,10 +578,65 @@ func readCrawlerManifest(ctx context.Context, binary string) (control.Manifest, 
 	if !slices.Contains(manifest.Capabilities, "contacts_export") {
 		return control.Manifest{}, fmt.Errorf("%s metadata does not declare contacts_export capability", binary)
 	}
+	if err := validateSchemaV2CommandFields(binary, data); err != nil {
+		return control.Manifest{}, err
+	}
 	if err := validateContactsExportCommand(binary, manifest); err != nil {
 		return control.Manifest{}, err
 	}
 	return manifest, nil
+}
+
+func validateSchemaV2CommandFields(binary string, data []byte) error {
+	var raw struct {
+		SchemaVersion int                                   `json:"schema_version"`
+		Commands      map[string]map[string]json.RawMessage `json:"commands"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	if raw.SchemaVersion < 2 {
+		return nil
+	}
+	if len(raw.Commands) == 0 {
+		return fmt.Errorf("%s metadata schema v2 commands are missing", binary)
+	}
+	for name, command := range raw.Commands {
+		if err := validateSchemaV2Command(binary, name, command); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSchemaV2Command(binary, name string, command map[string]json.RawMessage) error {
+	var argv []string
+	if raw, ok := command["argv"]; !ok {
+		return fmt.Errorf("%s command %q argv is missing", binary, name)
+	} else if err := json.Unmarshal(raw, &argv); err != nil || len(argv) == 0 {
+		return fmt.Errorf("%s command %q argv is missing or empty", binary, name)
+	}
+	for i, arg := range argv {
+		if strings.TrimSpace(arg) == "" {
+			return fmt.Errorf("%s command %q argv %d is empty", binary, name, i)
+		}
+	}
+	if raw, ok := command["json"]; !ok {
+		return fmt.Errorf("%s command %q json is missing", binary, name)
+	} else if !isJSONBool(raw) {
+		return fmt.Errorf("%s command %q json is not a boolean", binary, name)
+	}
+	if raw, ok := command["mutates"]; !ok {
+		return fmt.Errorf("%s command %q mutates is missing", binary, name)
+	} else if !isJSONBool(raw) {
+		return fmt.Errorf("%s command %q mutates is not a boolean", binary, name)
+	}
+	return nil
+}
+
+func isJSONBool(raw json.RawMessage) bool {
+	raw = bytes.TrimSpace(raw)
+	return bytes.Equal(raw, []byte("true")) || bytes.Equal(raw, []byte("false"))
 }
 
 func sourceContactsFromExport(source string, export contactexport.ContactExport) []model.SourceContact {

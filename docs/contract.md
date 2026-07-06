@@ -37,13 +37,13 @@ lines to stderr while still writing the log file. `-vv` also writes
 debug detail, such as subprocess argv, per-source elapsed times and
 per-shard phase timings.
 
-Federation discovers this per crawler, not by assumption: a crawler
-that implements the contract declares the `verbose_logs` capability
-and a `paths.default_logs` directory in `metadata --json`. `trawl`
-propagates `-v` to a source and names its log file in remedies only
-when the source declares them. Adoption status lives with each
-crawler; gogcrawl is the reference implementation. A crawler without
-the capability still works — trawl just cannot stream its logs.
+The runner owns this for crawlers registered through `crawlkit.Run`.
+Those crawlers stream typed log lines to the parent over the runner
+wire, and the parent renders them only when the user asks with `-v` or
+`-vv`. Schema-v2 manifests do not declare a `verbose_logs` capability.
+Logs are a runner contract property, not a per-crawler feature flag.
+Schema-v1 crawlers that have not adopted `crawlkit.Run` still declare
+`verbose_logs` when `trawl` should forward verbose flags and stderr.
 
 Every help page ends with a diagnostics line naming the flag and log
 file, for example:
@@ -76,12 +76,20 @@ The manifest from crawlkit `control.Manifest`, plus:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "contract_version": 1,
   "id": "examplecrawl",
   "display_name": "Example",
   "version": "0.3.0",
-  "capabilities": ["status", "sync", "search", "open", "doctor", "contacts_export"]
+  "capabilities": ["status", "sync", "search", "open", "doctor", "contacts_export"],
+  "commands": {
+    "search": {
+      "argv": ["examplecrawl", "search", "QUERY", "--json"],
+      "json": true,
+      "mutates": false,
+      "flags": [{"name": "limit", "usage": "maximum results", "default": "20"}]
+    }
+  }
 }
 ```
 

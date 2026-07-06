@@ -374,6 +374,61 @@ func TestReaderCanonicalizesFinishOutcome(t *testing.T) {
 	}
 }
 
+func TestAttachRunSharesParentLifecycle(t *testing.T) {
+	stateRoot := t.TempDir()
+	now := fixedTime()
+	parent := newTestRunWithOptions(t, Options{
+		StateRoot: stateRoot,
+		CrawlerID: "crawl",
+		RunID:     "shared-run",
+		Command:   "sync",
+		Version:   "0.4.1",
+		Commit:    "8f3c2d",
+		Platform:  "macos 15",
+		Now:       func() time.Time { return now },
+	})
+	child, err := AttachRun(Options{
+		StateRoot: stateRoot,
+		CrawlerID: "crawl",
+		RunID:     parent.RunID(),
+		Command:   "sync",
+		Version:   "0.4.1",
+		Commit:    "8f3c2d",
+		Platform:  "macos 15",
+		Now:       func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := child.Info("sync_progress", "done=1 total=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := parent.Finish(nil); err != nil {
+		t.Fatal(err)
+	}
+	lines := readLogLines(t, parent.Path())
+	starts := 0
+	for _, raw := range lines {
+		line, ok := ParseLine(raw)
+		if !ok || line.RunID != parent.RunID() {
+			continue
+		}
+		if line.Event == "start" {
+			starts++
+		}
+	}
+	if starts != 1 {
+		t.Fatalf("start lines = %d, want 1:\n%s", starts, strings.Join(lines, "\n"))
+	}
+	summary, ok, err := NewReaderForTest(t, parent).LastRun(parent.RunID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok || summary.Outcome != "success" || summary.LastEvent != "finish" {
+		t.Fatalf("summary = %#v ok=%v", summary, ok)
+	}
+}
+
 func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	now := fixedTime()
 	var human bytes.Buffer

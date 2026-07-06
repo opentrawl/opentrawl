@@ -1,10 +1,13 @@
 package output
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"reflect"
 	"strings"
 
@@ -18,6 +21,10 @@ const (
 	JSON Format = "json"
 	Log  Format = "log"
 )
+
+func StandardWriters() (stdout io.Writer, stderr io.Writer) {
+	return os.Stdout, os.Stderr
+}
 
 type UsageError struct {
 	Err error
@@ -54,6 +61,48 @@ func (e ErrorBody) MarshalJSON() ([]byte, error) {
 		body[key] = value
 	}
 	return json.Marshal(body)
+}
+
+func (e *ErrorBody) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(&raw); err != nil {
+		return err
+	}
+	body := ErrorBody{}
+	for key, value := range raw {
+		switch key {
+		case "code":
+			if err := json.Unmarshal(value, &body.Code); err != nil {
+				return err
+			}
+		case "message":
+			if err := json.Unmarshal(value, &body.Message); err != nil {
+				return err
+			}
+		case "remedy":
+			if err := json.Unmarshal(value, &body.Remedy); err != nil {
+				return err
+			}
+		default:
+			var field any
+			fieldDec := json.NewDecoder(bytes.NewReader(value))
+			fieldDec.UseNumber()
+			if err := fieldDec.Decode(&field); err != nil {
+				return err
+			}
+			if emptyErrorField(field) {
+				continue
+			}
+			if body.Fields == nil {
+				body.Fields = map[string]any{}
+			}
+			body.Fields[key] = field
+		}
+	}
+	*e = body
+	return nil
 }
 
 type ErrorEnvelope struct {
@@ -100,24 +149,41 @@ func WriteJSONErrorIfNeeded(w io.Writer, jsonOut bool, err error) error {
 	if err == nil || !jsonOut || IsRendered(err) {
 		return err
 	}
+	_ = WriteError(w, ErrorBodyFor(err))
+	return Rendered(err)
+}
+
+func ErrorBodyFor(err error) ErrorBody {
 	body := ErrorBody{
 		Code:    "command_failed",
-		Message: err.Error(),
+		Message: "command failed",
+	}
+	if err == nil {
+		return body
 	}
 	var bodyErr ErrorBodyProvider
 	if errors.As(err, &bodyErr) {
 		body = bodyErr.ErrorBody()
 	} else {
+		body.Message = err.Error()
 		var world cklog.WorldMustChange
 		if errors.As(err, &world) {
 			body.Message = world.Error()
 			body.Remedy = world.Remedy
 		}
+		if IsUsage(err) {
+			body.Code = "usage"
+			body.Remedy = "run help for the command"
+		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			body.Code = "deadline_exceeded"
+			body.Message = "command timed out"
+			body.Remedy = "try again after checking the archive and source app"
+		}
 	}
 	body.Code = firstNonEmpty(body.Code, "command_failed")
 	body.Message = firstNonEmpty(body.Message, err.Error(), "command failed")
-	_ = WriteError(w, body)
-	return Rendered(err)
+	return body
 }
 
 func Resolve(format string, jsonFlag bool) (Format, error) {

@@ -102,14 +102,7 @@ func (e WorldMustChange) Unwrap() error {
 }
 
 func NewRun(opts Options) (*Run, error) {
-	run, err := normalizeOptions(opts)
-	if err != nil {
-		return nil, err
-	}
-	if err := run.write(LevelInfo, "start", run.startMessage(), VisibilityInternal); err != nil {
-		return nil, err
-	}
-	return run, nil
+	return newRun(opts, true)
 }
 
 func (r *Run) RunID() string {

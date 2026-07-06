@@ -71,6 +71,12 @@ func TestWriteErrorContractEnvelope(t *testing.T) {
 	if payload.Error.Code != "usage" || payload.Error.Message == "" || payload.Error.Remedy == "" {
 		t.Fatalf("error envelope = %#v", payload)
 	}
+	if _, ok := payload.Error.Fields["did_you_mean"].([]any); !ok {
+		t.Fatalf("dynamic error field was not decoded: %#v", payload.Error.Fields)
+	}
+	if _, ok := payload.Error.Fields["candidates"]; ok {
+		t.Fatalf("empty dynamic error field should stay omitted after decode: %#v", payload.Error.Fields)
+	}
 	var raw map[string]map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
 		t.Fatal(err)
