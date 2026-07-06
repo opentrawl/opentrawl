@@ -35,7 +35,7 @@ func controlManifest() control.Manifest {
 		"messages":         {Title: "Messages", Argv: []string{"telecrawl", "messages", "--json"}, JSON: true},
 		"contacts":         {Title: "Contacts", Argv: []string{"telecrawl", "contacts", "--json"}, JSON: true},
 		"folders":          {Title: "Folders", Argv: []string{"telecrawl", "folders", "--json"}, JSON: true},
-		"search":           {Title: "Search", Argv: []string{"telecrawl", "search", "QUERY", "--json"}, JSON: true},
+		"search":           {Title: "Search", Argv: []string{"telecrawl", "search", "QUERY", "--json"}, JSON: true, Flags: searchManifestFlags()},
 		"who":              {Title: "Resolve people", Argv: []string{"telecrawl", "who", "NAME", "--json"}, JSON: true},
 		"open":             {Title: "Open", Argv: []string{"telecrawl", "open", "REF", "--json"}, JSON: true},
 		"contact-export":   {Title: "Export contacts", Argv: []string{"telecrawl", "contacts", "export", "--json"}, JSON: true},
@@ -47,4 +47,22 @@ func controlManifest() control.Manifest {
 		"version":          {Title: "Version", Argv: []string{"telecrawl", "version"}},
 	}
 	return m
+}
+
+func searchManifestFlags() []control.Flag {
+	return []control.Flag{
+		{Name: "asc", Usage: "oldest results first", Default: "false"},
+		{Name: "after", Usage: "only results at or after this date"},
+		{Name: "all", Usage: "show every match, no limit", Default: "false"},
+		{Name: "before", Usage: "only results before this date"},
+		{Name: "chat", Usage: "only results in this chat"},
+		{Name: "from-me", Usage: "only outgoing messages", Default: "false"},
+		{Name: "from-them", Usage: "only incoming messages", Default: "false"},
+		{Name: "limit", Usage: "maximum results", Default: "20"},
+		{Name: "media", Usage: "only media messages", Default: "false"},
+		{Name: "pinned", Usage: "only pinned messages", Default: "false"},
+		{Name: "sender", Usage: "only results from this sender"},
+		{Name: "topic", Usage: "only results in this topic"},
+		{Name: "who", Usage: "only results involving this person"},
+	}
 }

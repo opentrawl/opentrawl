@@ -34,7 +34,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if manifest.Version != Version {
 		t.Fatalf("version = %q, want %q", manifest.Version, Version)
 	}
-	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who", "verbose_logs"}) {
+	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who", "search", "verbose_logs"}) {
 		t.Fatalf("capabilities = %#v", manifest.Capabilities)
 	}
 	if manifest.Paths.DefaultLogs != filepath.Join(os.Getenv("HOME"), ".opentrawl", "clawdex", "logs") {
@@ -75,6 +75,15 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	}
 	if len(manifest.Commands) != 9 {
 		t.Fatalf("commands = %#v", manifest.Commands)
+	}
+	searchFlags := map[string]bool{}
+	for _, flag := range manifest.Commands["search"].Flags {
+		searchFlags[flag.Name] = true
+	}
+	for _, name := range []string{"limit", "all"} {
+		if !searchFlags[name] {
+			t.Fatalf("search flags = %#v, want %q", manifest.Commands["search"].Flags, name)
+		}
 	}
 
 	var payload struct {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/conformance"
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -41,14 +42,15 @@ func TestMetadataJSONEmitsManifest(t *testing.T) {
 		} `json:"paths"`
 		Capabilities []string `json:"capabilities"`
 		Commands     map[string]struct {
-			Argv []string `json:"argv"`
-			JSON bool     `json:"json"`
+			Argv  []string       `json:"argv"`
+			JSON  bool           `json:"json"`
+			Flags []control.Flag `json:"flags,omitempty"`
 		} `json:"commands"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("metadata json = %s err=%v", stdout, err)
 	}
-	if payload.SchemaVersion != 1 || payload.ContractVersion != 1 || payload.ID != "telecrawl" || payload.DisplayName != "Telegram" || payload.Version == "" {
+	if payload.SchemaVersion != control.SchemaVersion || payload.ContractVersion != control.ContractVersion || payload.ID != "telecrawl" || payload.DisplayName != "Telegram" || payload.Version == "" {
 		t.Fatalf("metadata = %#v", payload)
 	}
 	for _, verb := range []string{"chats", "messages", "search", "open", "who", "contact-export", "status"} {
@@ -74,6 +76,15 @@ func TestMetadataJSONEmitsManifest(t *testing.T) {
 	}
 	if !slices.Contains(payload.Capabilities, "verbose_logs") {
 		t.Fatalf("metadata capabilities = %#v, want verbose_logs", payload.Capabilities)
+	}
+	searchFlags := map[string]bool{}
+	for _, flag := range payload.Commands["search"].Flags {
+		searchFlags[flag.Name] = true
+	}
+	for _, name := range []string{"limit", "who", "after", "before"} {
+		if !searchFlags[name] {
+			t.Fatalf("search flags = %#v, want %q", payload.Commands["search"].Flags, name)
+		}
 	}
 	if payload.Paths.DefaultLogs != defaultLogDir() {
 		t.Fatalf("metadata paths.default_logs = %q, want %q", payload.Paths.DefaultLogs, defaultLogDir())

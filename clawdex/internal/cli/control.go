@@ -31,7 +31,7 @@ func controlManifest() control.Manifest {
 		DefaultDatabase: repo.DefaultConfig().RepoPath,
 		DefaultLogs:     repo.DefaultLogDir(),
 	}
-	m.Capabilities = []string{"status", "doctor", "who", "verbose_logs"}
+	m.Capabilities = []string{"status", "doctor", "who", "search", "verbose_logs"}
 	// Every surviving user-facing verb, as the trawl namespace dispatches it:
 	// the verb the user types is Argv minus the binary and a trailing --json,
 	// with UPPERCASE placeholders for arguments. import and export vcard take
@@ -43,11 +43,18 @@ func controlManifest() control.Manifest {
 		"who":          {Title: "Who", Argv: []string{"clawdex", "who", "QUERY", "--json"}, JSON: true},
 		"person-list":  {Title: "People", Argv: []string{"clawdex", "person", "list", "--json"}, JSON: true},
 		"person-show":  {Title: "Show person", Argv: []string{"clawdex", "person", "show", "QUERY", "--json"}, JSON: true},
-		"search":       {Title: "Search", Argv: []string{"clawdex", "search", "QUERY", "--json"}, JSON: true},
+		"search":       {Title: "Search", Argv: []string{"clawdex", "search", "QUERY", "--json"}, JSON: true, Flags: clawdexSearchManifestFlags()},
 		"import":       {Title: "Import contacts", Argv: []string{"clawdex", "import"}, Mutates: true},
 		"export-vcard": {Title: "Export vCard", Argv: []string{"clawdex", "export", "vcard"}},
 	}
 	return m
+}
+
+func clawdexSearchManifestFlags() []control.Flag {
+	return []control.Flag{
+		{Name: "all", Usage: "show every match, no limit", Default: "false"},
+		{Name: "limit", Usage: "maximum results", Default: "20"},
+	}
 }
 
 type StatusCmd struct{}
