@@ -54,7 +54,7 @@ func prepareClassifyPlaces(ctx context.Context, db *store.Store, paths Paths, in
 func newClassifyPlaceResolver(paths Paths) classifyPlaceResolver {
 	resolver := place.NewResolver(place.ResolverOptions{
 		CacheDir:           paths.PlaceContextCacheDir(),
-		LegacyBackfillDir:  paths.LegacyPlaceBackfillDir(),
+		BackfillDir:        paths.PlaceBackfillDir(),
 		RadiusMeters:       150,
 		ProviderStartEvery: classifyPlaceProviderStartSpacing,
 	})

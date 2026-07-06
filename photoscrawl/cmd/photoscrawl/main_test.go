@@ -126,7 +126,7 @@ func TestCommandWritesCrawlkitLog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	logPath := filepath.Join(root, "state", "photoscrawl", "logs", "current.log")
+	logPath := filepath.Join(root, "home", ".opentrawl", "photoscrawl", "logs", "current.log")
 	data, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)

@@ -6,37 +6,37 @@ import (
 	"testing"
 )
 
-func TestDefaultPathsUseCrawlkitPlatformDirs(t *testing.T) {
+func TestDefaultPathsUseOpenTrawlStateRoot(t *testing.T) {
 	root := t.TempDir()
-	configHome := filepath.Join(root, "config")
-	dataHome := filepath.Join(root, "data")
-	cacheHome := filepath.Join(root, "cache")
-	stateHome := filepath.Join(root, "state")
-	t.Setenv("XDG_CONFIG_HOME", configHome)
-	t.Setenv("XDG_DATA_HOME", dataHome)
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	t.Setenv("XDG_STATE_HOME", stateHome)
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(root, "data"))
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(root, "cache"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(root, "state"))
+
+	base := filepath.Join(home, ".opentrawl", "photoscrawl")
 
 	paths, err := DefaultPaths()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if paths.ConfigPath != filepath.Join(configHome, "photoscrawl", "config.toml") {
+	if paths.ConfigPath != filepath.Join(base, "config.toml") {
 		t.Fatalf("ConfigPath = %q", paths.ConfigPath)
 	}
-	if paths.DataDir != filepath.Join(dataHome, "photoscrawl") {
+	if paths.DataDir != base {
 		t.Fatalf("DataDir = %q", paths.DataDir)
 	}
-	if paths.Database != filepath.Join(dataHome, "photoscrawl", "photos.sqlite") {
+	if paths.Database != filepath.Join(base, "photos.sqlite") {
 		t.Fatalf("Database = %q", paths.Database)
 	}
-	if paths.CacheDir != filepath.Join(cacheHome, "photoscrawl") {
+	if paths.CacheDir != filepath.Join(base, "cache") {
 		t.Fatalf("CacheDir = %q", paths.CacheDir)
 	}
-	if paths.LogDir != filepath.Join(stateHome, "photoscrawl", "logs") {
+	if paths.LogDir != filepath.Join(base, "logs") {
 		t.Fatalf("LogDir = %q", paths.LogDir)
 	}
-	if paths.ShareDir != filepath.Join(dataHome, "photoscrawl", "share") {
+	if paths.ShareDir != filepath.Join(base, "share") {
 		t.Fatalf("ShareDir = %q", paths.ShareDir)
 	}
 }
@@ -44,10 +44,6 @@ func TestDefaultPathsUseCrawlkitPlatformDirs(t *testing.T) {
 func TestDefaultPathsIgnoreLegacyDotdir(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
-	dataHome := filepath.Join(root, "data")
-	cacheHome := filepath.Join(root, "cache")
-	stateHome := filepath.Join(root, "state")
-	configHome := filepath.Join(root, "config")
 	legacy := filepath.Join(home, "."+"photoscrawl")
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
@@ -56,10 +52,6 @@ func TestDefaultPathsIgnoreLegacyDotdir(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", configHome)
-	t.Setenv("XDG_DATA_HOME", dataHome)
-	t.Setenv("XDG_CACHE_HOME", cacheHome)
-	t.Setenv("XDG_STATE_HOME", stateHome)
 
 	paths, err := DefaultPaths()
 	if err != nil {
@@ -68,7 +60,7 @@ func TestDefaultPathsIgnoreLegacyDotdir(t *testing.T) {
 	if paths.DataDir == legacy || paths.Database == filepath.Join(legacy, "photos.sqlite") {
 		t.Fatalf("DefaultPaths used legacy dotdir: %+v", paths)
 	}
-	if paths.Database != filepath.Join(dataHome, "photoscrawl", "photos.sqlite") {
+	if paths.Database != filepath.Join(home, ".opentrawl", "photoscrawl", "photos.sqlite") {
 		t.Fatalf("Database = %q", paths.Database)
 	}
 }

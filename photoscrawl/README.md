@@ -39,9 +39,9 @@ Human search output shows a short ref when the archive can resolve it safely.
 Use that alias with `open` for local terminal work. JSON keeps
 the canonical `photoscrawl:asset/<32-hex>` ref.
 
-Default runtime paths come from crawlkit platform dirs. The primary database is
-`photos.sqlite` under the crawlkit data dir; provider caches and exported
-originals use the crawlkit cache dir.
+Default runtime paths live under `~/.opentrawl/photoscrawl/`. The primary
+database is `~/.opentrawl/photoscrawl/photos.sqlite`; provider caches, exported
+originals, logs, config and eval artifacts stay under the same crawler root.
 
 A lifecrawler-format `export` command is planned but does not exist
 yet.
@@ -71,7 +71,7 @@ parked photos and unpark them once the place cache covers their location.
 
 If an original download fails, `classify` marks that asset as `failed_download`.
 It will not try that download again until an operator resets it:
-`sqlite3 <crawlkit-data-dir>/photoscrawl/photos.sqlite "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
+`sqlite3 ~/.opentrawl/photoscrawl/photos.sqlite "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
 
 ## photoscrawl-lab
 
@@ -102,10 +102,10 @@ the address line.
 `eval-card` is an opt-in research harness for prompt/model evaluation. It uses
 the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs
 from originals, passes full metadata as a sidecar prompt input, and writes all
-private images, metadata, and model responses under the crawlkit data dir's
-`evals` subtree. If `--allow-icloud-downloads` is set, PhotoKit may download
-missing originals into the crawlkit cache dir's `originals` subtree; normal
-sync/classify commands do not force iCloud downloads.
+private images, metadata, and model responses under
+`~/.opentrawl/photoscrawl/evals`. If `--allow-icloud-downloads` is set, PhotoKit
+may download missing originals into `~/.opentrawl/photoscrawl/cache/originals`;
+normal sync/classify commands do not force iCloud downloads.
 
 There is no standalone place backfill command. Library-scale place caching is
 handled by classify's cache-first resolver, which can read legacy backfill
