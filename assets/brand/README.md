@@ -22,7 +22,7 @@ No gold, no other colours in the mark.
 - `build/` — python scripts that regenerate `exports/` from `src/` (headless
   Chrome for rendering, `iconutil` for the icns). Run from inside `build/`.
 - `exports/` — committed build outputs: legacy `OpenTrawl.icns` (light tile,
-  full ladder), compiled `Assets.car` for macOS 26+, menu bar template PNGs
+  full ladder), (compile `Assets.car` for macOS 26+ from `OpenTrawl.icon` — see below; it is not committed because it is a >1MB reproducible binary), menu bar template PNGs
   (16/18pt + @2x, black + alpha only), and the web set (favicons, touch icon,
   mark, lockups).
 
