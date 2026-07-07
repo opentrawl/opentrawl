@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -26,6 +27,7 @@ import (
 type testCrawler struct {
 	id       string
 	surface  string
+	shortRef bool
 	cfg      *testConfig
 	verbs    []Verb
 	statusFn func(context.Context, *Request) (*control.Status, error)
@@ -60,6 +62,7 @@ func (c *testCrawler) Info() Info {
 		Surface:     firstText(c.surface, "test"),
 		DisplayName: "Test",
 		Description: "Synthetic test crawler.",
+		ShortRefs:   c.shortRef,
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -160,6 +163,9 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	if searchFlags["limit"] != "20" {
 		t.Fatalf("search limit default = %q", searchFlags["limit"])
 	}
+	if slices.Contains(manifest.Capabilities, "short_refs") {
+		t.Fatalf("capabilities unexpectedly include short_refs: %#v", manifest.Capabilities)
+	}
 	if got, want := strings.Join(cmd.Argv[1:], " "), "archive import PATH --json --state-root "+stateRoot; got != want {
 		t.Fatalf("archive_import argv suffix = %q, want %q", got, want)
 	}
@@ -167,6 +173,22 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 		if !argvHasStateRoot(command.Argv, stateRoot) {
 			t.Fatalf("command %q argv does not pin state root: %#v", name, command.Argv)
 		}
+	}
+}
+
+func TestRunMetadataAdvertisesDeclaredShortRefs(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{shortRef: true}
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	if !slices.Contains(manifest.Capabilities, "short_refs") {
+		t.Fatalf("capabilities missing short_refs: %#v", manifest.Capabilities)
 	}
 }
 
@@ -286,12 +308,41 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("flagged query = %#v", got)
 	}
 
+	func() {
+		previousLocal := time.Local
+		fixedLocal := time.FixedZone("UTC+2", 2*60*60)
+		time.Local = fixedLocal
+		defer func() { time.Local = previousLocal }()
+
+		code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--before", "2026-01-31", "--state-root", stateRoot}, source, runOptions{})
+		if code != 0 {
+			t.Fatalf("date-only before search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+		}
+		wantBefore := time.Date(2026, 1, 31, 23, 59, 59, 0, fixedLocal).UTC().Format(time.RFC3339)
+		if got.Before.Format(time.RFC3339) != wantBefore {
+			t.Fatalf("date-only before = %s, want %s", got.Before.Format(time.RFC3339), wantBefore)
+		}
+	}()
+
+	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--all", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("all search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if got.Text != "needle" || got.Limit != 0 {
+		t.Fatalf("all query = %#v", got)
+	}
+
 	code, stdout, stderr = runForTest([]string{"search", "--json", "--who", "Ada", "--state-root", stateRoot}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("filter-only search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if got.Text != "" || got.Who != "Ada" {
 		t.Fatalf("filter-only query = %#v", got)
+	}
+
+	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--who", "", "--state-root", stateRoot}, source, runOptions{})
+	if code != 2 || !strings.Contains(stdout, "search --who requires an identity") || stderr != "" {
+		t.Fatalf("empty who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
 	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--limit", "0", "--state-root", stateRoot}, source, runOptions{})
@@ -329,12 +380,84 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 	}
 	for _, want := range []string{
 		`Search "hello": showing 1 of 3.`,
+		"Open: testcrawl open REF",
 		"Narrow results with --who, --after, or --before.",
-		"Search results:",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("search text missing %q:\n%s", want, stdout)
 		}
+	}
+}
+
+func TestRunSyncJSONIncludesZeroCounts(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	opts := childTestOptions(t, "zero_sync")
+	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	if code != 0 {
+		t.Fatalf("zero sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{`"added": 0`, `"updated": 0`, `"removed": 0`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("zero sync JSON missing %s:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestRunStatusTextRendersEveryDeclaredCount(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{statusFn: func(ctx context.Context, req *Request) (*control.Status, error) {
+		status := control.NewStatus("testcrawl", "ready")
+		status.State = "ok"
+		status.Counts = []control.Count{
+			control.NewCount("events", "events", 12),
+			control.NewCount("calendars", "calendars", 2),
+			control.NewCount("since", "since", 2018),
+		}
+		return &status, nil
+	}}
+	code, stdout, stderr := runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{"Events: 12", "Calendars: 2", "Since: 2018"} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("status text missing %q:\n%s", want, stdout)
+		}
+	}
+}
+
+func TestRunWhoTextUsesNeutralCountHeader(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testCrawler{whoFn: func(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
+		return []whomatch.Candidate{{
+			Who:         "Ada Example",
+			Identifiers: []string{"ada@example.com"},
+			LastSeen:    time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
+			Messages:    3,
+		}}, nil
+	}}
+	code, stdout, stderr := runForTest([]string{"who", "Ada", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("who code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "items") || strings.Contains(stdout, "events") {
+		t.Fatalf("who text count header is not neutral:\n%s", stdout)
+	}
+}
+
+func TestWriteContactsTextUsesGenericHeading(t *testing.T) {
+	var buf bytes.Buffer
+	contacts := &control.ContactExport{Contacts: []control.Contact{{
+		DisplayName:  "Ada Example",
+		PhoneNumbers: []string{"+15550100"},
+	}}}
+	if err := writeResult(&buf, ckoutput.Text, "contacts", contacts); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "Contacts: showing 1 of 1.") || strings.Contains(buf.String(), "with phone numbers") {
+		t.Fatalf("contacts text is not generic:\n%s", buf.String())
 	}
 }
 
@@ -425,6 +548,34 @@ func TestRunSearchWhoResolutionJSONContract(t *testing.T) {
 	}
 }
 
+func TestRunSearchWhoTextHeadingShowsResolvedPerson(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testCrawler{
+		whoFn: func(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
+			return []whomatch.Candidate{{
+				Who:         "Ada Example",
+				Identifiers: []string{"ada@example.com"},
+				LastSeen:    time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
+				Messages:    3,
+			}}, nil
+		},
+		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+			return SearchResult{
+				Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Who: "Ada Example", Snippet: q.Text}},
+				TotalMatches: 1,
+			}, nil
+		},
+	}
+	code, stdout, stderr := runForTest([]string{"search", "needle", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("search --who code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, `Search "needle" with Ada Example: showing 1 of 1.`) {
+		t.Fatalf("search heading missing resolved person:\n%s", stdout)
+	}
+}
+
 func TestRunWhoJSONContract(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -489,6 +640,36 @@ func TestRunSearchWhoResolutionErrorsUseContractExitCodes(t *testing.T) {
 	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
 	if code != 5 || stderr != "" || !strings.Contains(stdout, `"code":"unknown_who"`) {
 		t.Fatalf("unknown who code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunSearchWhoAmbiguousTextListsCandidatesAndRetry(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testCrawler{
+		whoFn: func(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
+			return []whomatch.Candidate{
+				{Who: "Ada Example", Identifiers: []string{"ada@example.com"}},
+				{Who: "Ada Other", Identifiers: []string{"ada.other@example.com"}},
+			}, nil
+		},
+		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+			t.Fatal("search ran after ambiguous --who")
+			return SearchResult{}, nil
+		},
+	}
+	code, stdout, stderr := runForTest([]string{"search", "needle", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	if code != 4 || stdout != "" {
+		t.Fatalf("ambiguous who code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	for _, want := range []string{
+		"Ada Example",
+		"Ada Other",
+		"Retry with one listed identifier: search needle --who ada@example.com",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Fatalf("ambiguous who text missing %q:\n%s", want, stderr)
+		}
 	}
 }
 
@@ -644,7 +825,7 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 
 	createArchive(t, stateRoot)
 	code, stdout, _ := runForTest([]string{"search", "--state-root", stateRoot, "hello"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, "Search results:") || strings.Contains(stdout, "&{") {
+	if code != 0 || !strings.Contains(stdout, `Search "hello": showing 1 of 1.`) || strings.Contains(stdout, "&{") {
 		t.Fatalf("search text code=%d stdout=%s", code, stdout)
 	}
 
@@ -1111,6 +1292,8 @@ func TestRunnerChildHelper(t *testing.T) {
 		}},
 		syncFn: func(ctx context.Context, req *Request) (*SyncReport, error) {
 			switch os.Getenv("CRAWLKIT_CHILD_MODE") {
+			case "zero_sync":
+				return &SyncReport{}, nil
 			case "progress":
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced one item"})
 				return &SyncReport{Added: 1}, nil

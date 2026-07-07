@@ -252,7 +252,7 @@ func renderWhoTable(w io.Writer, candidates []WhoCandidate, surfaces map[string]
 		{Header: "match"},
 		{Header: "sources"},
 		{Header: "last seen"},
-		{Header: "messages", AlignRight: true},
+		{Header: "items", AlignRight: true},
 		{Header: "identifiers"},
 	}, rows); err != nil {
 		return err

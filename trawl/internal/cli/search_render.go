@@ -15,7 +15,7 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 		hints = append(hints, "More: "+list.MoreCmd)
 	}
 	return render.WriteList(w, render.List{
-		Heading:   searchHeading(list.Query, len(merged.Rows), merged.TotalMatches),
+		Heading:   searchHeading(list.Query, list.Who, len(merged.Rows), merged.TotalMatches),
 		Hints:     hints,
 		Items:     searchListItems(merged.Rows),
 		ClampText: 2,
@@ -25,6 +25,7 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 
 type searchListContext struct {
 	Query   string
+	Who     string
 	MoreCmd string
 }
 
@@ -51,11 +52,26 @@ func searchEmptySentence(query string) string {
 	return fmt.Sprintf("No matches for %q.", query)
 }
 
-func searchHeading(query string, shown, total int) string {
-	if strings.TrimSpace(query) == "" {
+func searchHeading(query, who string, shown, total int) string {
+	query = strings.TrimSpace(query)
+	who = strings.TrimSpace(who)
+	switch {
+	case query != "" && who != "":
+		return fmt.Sprintf("Search %q with %s: showing %d of %d, newest first.", query, who, shown, total)
+	case query != "":
+		return fmt.Sprintf("Search %q: showing %d of %d, newest first.", query, shown, total)
+	case who != "":
+		return fmt.Sprintf("Search with %s: showing %d of %d, newest first.", who, shown, total)
+	default:
 		return fmt.Sprintf("Search filters: showing %d of %d, newest first.", shown, total)
 	}
-	return fmt.Sprintf("Search %q: showing %d of %d, newest first.", query, shown, total)
+}
+
+func resolvedWhoName(candidate *WhoCandidate) string {
+	if candidate == nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(candidate.Who), " ")
 }
 
 // searchDisplayRef degrades per row: the short alias when this row's

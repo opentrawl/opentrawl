@@ -329,6 +329,7 @@ func parseQuery(args []string) (Query, error) {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	limit := fs.Int("limit", 20, "maximum results")
+	all := fs.Bool("all", false, "return every result")
 	after := fs.String("after", "", "only results at or after this date")
 	before := fs.String("before", "", "only results before this date")
 	who := fs.String("who", "", "only results involving this person")
@@ -339,22 +340,26 @@ func parseQuery(args []string) (Query, error) {
 	if err := fs.Parse(flagArgs); err != nil {
 		return Query{}, output.UsageError{Err: err}
 	}
-	if len(positional) > 1 {
-		return Query{}, usageError{err: errors.New("search takes at most one query")}
-	}
 	limitSet := false
+	whoSet := false
 	fs.Visit(func(f *flag.Flag) {
 		if f.Name == "limit" {
 			limitSet = true
 		}
+		if f.Name == "who" {
+			whoSet = true
+		}
 	})
-	resolvedLimit, err := ckflags.Limit(*limit, limitSet, false)
+	resolvedLimit, err := ckflags.Limit(*limit, limitSet, *all)
 	if err != nil {
 		return Query{}, output.UsageError{Err: err}
 	}
+	if whoSet && strings.TrimSpace(*who) == "" {
+		return Query{}, output.UsageError{Err: errors.New("search --who requires an identity")}
+	}
 	query := Query{Limit: resolvedLimit, Who: *who}
-	if len(positional) == 1 {
-		query.Text = positional[0]
+	if len(positional) > 0 {
+		query.Text = strings.Join(positional, " ")
 	}
 	if query.After, err = parseDateFlag("--after", *after); err != nil {
 		return Query{}, err
@@ -386,6 +391,14 @@ func searchFlagArgs(args []string) ([]string, []string, error) {
 			}
 			continue
 		}
+		if name == "--all" {
+			if inline {
+				flags = append(flags, name+"="+value)
+			} else {
+				flags = append(flags, name)
+			}
+			continue
+		}
 		flags = append(flags, name)
 		if inline {
 			flags = append(flags, value)
@@ -407,7 +420,7 @@ func splitFlagValue(arg string) (name, value string, inline bool) {
 
 func knownSearchFlag(name string) bool {
 	switch name {
-	case "--limit", "--after", "--before", "--who":
+	case "--limit", "--after", "--before", "--who", "--all":
 		return true
 	default:
 		return false
@@ -422,6 +435,11 @@ func parseDateFlag(name, raw string) (time.Time, error) {
 	ts, err := ckflags.Date(raw)
 	if err != nil {
 		return time.Time{}, output.UsageError{Err: fmt.Errorf("%s: %w", name, err)}
+	}
+	if name == "--before" {
+		if day, err := time.ParseInLocation("2006-01-02", raw, time.Local); err == nil {
+			return day.Add(24*time.Hour - time.Second).UTC(), nil
+		}
 	}
 	return ts, nil
 }

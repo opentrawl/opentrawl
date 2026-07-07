@@ -237,7 +237,7 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if result.TotalMatches < len(result.Results) {
 			return fmt.Errorf("search total_matches is less than results length")
 		}
-		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SearchResult: result})
+		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: source.Info().ID, SearchResult: result})
 	case "open":
 		if len(verb.args) != 1 {
 			return usageError{err: errors.New("open needs one ref")}

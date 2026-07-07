@@ -37,7 +37,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	for _, want := range []string{"who", "match", "sources", "last seen", "messages", "identifiers"} {
+	for _, want := range []string{"who", "match", "sources", "last seen", "items", "identifiers"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}
