@@ -39,6 +39,7 @@ type Store struct {
 	store          *store.Store
 	path           string
 	schemaOutdated bool
+	owned          bool
 }
 
 type SyncOptions struct {
@@ -80,13 +81,41 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, err
 	}
+	out.owned = true
 	return out, nil
 }
+
+// ErrArchiveSync marks failures after source extraction and contact reads,
+// when sync is opening or writing the archive.
+var ErrArchiveSync = errors.New("archive sync failed")
 
 // ErrSchemaOutdated means the archive predates a schema addition this
 // binary's read queries need. Reads never migrate source-derived content, so
 // the remedy is one sync, which upgrades the schema.
 var ErrSchemaOutdated = errors.New("archive schema predates this version; run: imsgcrawl sync")
+
+type archiveSyncError struct {
+	err error
+}
+
+func (e archiveSyncError) Error() string {
+	return e.err.Error()
+}
+
+func (e archiveSyncError) Unwrap() error {
+	return e.err
+}
+
+func (e archiveSyncError) Is(target error) bool {
+	return target == ErrArchiveSync
+}
+
+func archiveSyncErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	return archiveSyncError{err: err}
+}
 
 func OpenExisting(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
@@ -104,7 +133,7 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, err
 	}
-	return &Store{store: st, path: path, schemaOutdated: outdated}, nil
+	return &Store{store: st, path: path, schemaOutdated: outdated, owned: true}, nil
 }
 
 func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
@@ -122,6 +151,39 @@ func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
 	outdated, err := detectSchemaOutdated(ctx, st.DB())
 	if err != nil {
 		_ = st.Close()
+		return nil, err
+	}
+	return &Store{store: st, path: path, schemaOutdated: outdated, owned: true}, nil
+}
+
+func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
+		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
+		return nil, err
+	}
+	if err := ensureArchiveSchema(ctx, st.DB()); err != nil {
+		return nil, err
+	}
+	return &Store{store: st, path: path}, nil
+}
+
+func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	outdated, err := detectSchemaOutdated(ctx, st.DB())
+	if err != nil {
 		return nil, err
 	}
 	return &Store{store: st, path: path, schemaOutdated: outdated}, nil
@@ -151,6 +213,9 @@ func (s *Store) Close() error {
 	if s == nil || s.store == nil {
 		return nil
 	}
+	if !s.owned {
+		return nil
+	}
 	return s.store.Close()
 }
 
@@ -163,6 +228,14 @@ func Sync(ctx context.Context, archivePath, sourcePath string) (SyncResult, erro
 }
 
 func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, error) {
+	return syncWithStore(ctx, nil, options)
+}
+
+func SyncInto(ctx context.Context, opened *store.Store, options SyncOptions) (SyncResult, error) {
+	return syncWithStore(ctx, opened, options)
+}
+
+func syncWithStore(ctx context.Context, opened *store.Store, options SyncOptions) (SyncResult, error) {
 	totalStarted := time.Now()
 	extractStarted := time.Now()
 	data, err := messages.ExtractArchive(ctx, options.SourcePath)
@@ -180,15 +253,20 @@ func SyncWithOptions(ctx context.Context, options SyncOptions) (SyncResult, erro
 	contactMappings := applyContactNames(&data, contactNames)
 	ownerHandles := applyOwnerHandles(&data, contactNames, contactMappings)
 	mapElapsed := time.Since(mapStarted)
-	st, err := Open(ctx, options.ArchivePath)
+	var st *Store
+	if opened != nil {
+		st, err = Use(ctx, opened, options.ArchivePath)
+	} else {
+		st, err = Open(ctx, options.ArchivePath)
+	}
 	if err != nil {
-		return SyncResult{}, err
+		return SyncResult{}, archiveSyncErr(err)
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Now().UTC()
 	writeStarted := time.Now()
 	if err := st.ReplaceAll(ctx, data, contactMappings, ownerHandles, now); err != nil {
-		return SyncResult{}, err
+		return SyncResult{}, archiveSyncErr(err)
 	}
 	writeElapsed := time.Since(writeStarted)
 	return SyncResult{

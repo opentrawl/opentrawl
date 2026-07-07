@@ -41,9 +41,10 @@ Messages output.
 iMessage Crawl (imsgcrawl)
 Local-first iMessage archive crawler.
 
-Capabilities: metadata, status, sync, doctor, chats, messages, search, who, short_refs, open, contact-export
+Capabilities: metadata, status, doctor, sync, search, open, who, contacts_export, short_refs, chats, messages
 
 Agent-facing commands:
+  metadata        imsgcrawl metadata --json
   status          imsgcrawl status --json
   sync            imsgcrawl sync --json
   doctor          imsgcrawl doctor --json
@@ -52,7 +53,7 @@ Agent-facing commands:
   who             imsgcrawl who NAME --json
   search          imsgcrawl search QUERY --json
   open            imsgcrawl open REF --json
-  contact-export  imsgcrawl contacts export --json
+  contacts export imsgcrawl contacts export --json
 
 Machine output: add --json to print the structured manifest.
 ```
@@ -63,21 +64,15 @@ Machine output: add --json to print the structured manifest.
 
 ```text
 Status: ok
-Messages source and archive are readable.
-
-Messages source:
-  Database: /Users/example/Library/Messages/chat.db
-  Handles: 6
-  Chats: 4
-  Messages: 12
+Archive is fresh.
 
 Local archive:
   Database: /Users/example/.opentrawl/imsgcrawl/imsgcrawl.db
-  Last sync: 2026-06-07T09:15:02Z
-  Handles: 6
-  Chats: 4
-  Participants: 8
+  Last sync: 7 Jun 09:15
   Messages: 12
+  Chats: 4
+  Named contacts: 6
+  Since: 2026
 ```
 
 `sync` refreshes the local archive and prints what it imported.
@@ -125,9 +120,8 @@ Use it before a person-filtered search when a name may match more than one
 person.
 
 ```text
-Who "elon": 1 candidates.
-who            identifiers  last seen         messages
-Failing Elon   +15550102    2026-06-07 09:11  3
+who            last seen         items  identifiers
+Failing Elon   2026-06-07 09:11      3  +15550102
 ```
 
 `search` shows which conversation a hit came from and keeps the matched text in
@@ -138,11 +132,10 @@ when an agent or script needs refs for follow-up commands.
 ```text
 Search "candles budget": showing 1 of 1.
 Open: imsgcrawl open REF
-Use --json when you need refs for follow-up commands.
 
-date              from  conversation                  text
-2026-06-07 09:10  me    Cabinet Group (Elon, JD,      The candles budget is CORRECT.
-                         Xi, +1 more)
+date              who  where                         ref    text
+2026-06-07 09:10  me   Cabinet Group (Elon, JD,      8x7m2  The candles budget is CORRECT.
+                        Xi, +1 more)
 ```
 
 ```text
@@ -150,7 +143,6 @@ Failing Elon → Failing Elon
 Search filters: showing 2 of 3.
 More: imsgcrawl search --limit 3 --who "Failing Elon"
 Open: imsgcrawl open REF
-Use --json when you need refs for follow-up commands.
 ```
 
 ### Open
@@ -181,6 +173,9 @@ Context: 3 messages around this one.
 `contacts export` is intentionally narrow: display name plus phone numbers.
 
 ```text
+Contacts: showing 3 of 3.
+
+name          phone
 Donald        +15550100
 JD Vance      +15550101
 Failing Elon  +15550102
@@ -255,7 +250,7 @@ go install ./cmd/imsgcrawl
 imsgcrawl status
 ```
 
-Without Nix, install Go `1.26.2` or newer, then use the normal Go workflow:
+Without Nix, install Go `1.26.4` or newer, then use the normal Go workflow:
 
 ```bash
 go test ./...
@@ -268,7 +263,7 @@ Install `jq` if you want to run the smoke transcript or inspect JSON examples.
 ## Agent Smoke Transcript
 
 Use the smoke transcript when reviewing whether the CLI actually works for an
-agent. It runs the real `imsgcrawl` on `PATH`, uses a temporary archive, and
+agent. It runs the real `imsgcrawl` on `PATH`, uses a temporary state root, and
 writes exact stdout/stderr for progressive text and JSON commands to `/tmp`.
 
 ```bash
