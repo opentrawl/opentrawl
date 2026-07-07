@@ -36,6 +36,8 @@ file mode `0600`.
 ## Use
 
 ```sh
+linear inbox --team TRAWL
+linear ack 00000000-0000-4000-8000-000000000000
 linear comment TRAWL-99 --as coordinator "Ready for review."
 linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
 linear issue state TRAWL-99 --state Done --as coordinator
@@ -43,3 +45,24 @@ linear issue TRAWL-99
 linear issues --team TRAWL
 linear mcp
 ```
+
+## Directive queue
+
+Josh leaves human-authored comments on Linear issues. Agents run
+`linear inbox` to find comments from Josh that the app user has not
+reacted to yet.
+
+Convention is ack-then-act: run `linear ack <COMMENT-ID>` first, then
+act on the directive. If the tool says `already acked`, another agent
+owns that directive, so skip it.
+
+The ack is an eyes reaction from the Linear app user. That reaction is
+the queue state. There is no local inbox file.
+
+The ack is not an atomic claim. If 2 agents ack within the same instant,
+both can see `acked`: Linear treats duplicate reactions as success. The
+tool pre-checks the comment's reactions, which catches every normal
+case but not a simultaneous race. We accept that tradeoff.
+
+Claimed-but-crashed work is visible to Josh: an eyes reaction with no
+follow-up comment means re-ping.

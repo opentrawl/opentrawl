@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
+type graphDoer interface {
+	Do(ctx context.Context, query string, variables map[string]any, out any) error
+}
+
 type LinearAPI struct {
-	graph  *GraphQLClient
+	graph  graphDoer
 	logger *requestLogger
 }
 
@@ -21,6 +25,7 @@ type Team struct {
 }
 
 type Person struct {
+	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
 	Name        string `json:"name"`
 }
@@ -63,17 +68,27 @@ type Issue struct {
 }
 
 type Comment struct {
-	ID           string    `json:"id"`
-	URL          string    `json:"url"`
-	CreatedAt    string    `json:"createdAt"`
-	Body         string    `json:"body"`
-	User         *Person   `json:"user"`
-	BotActor     *BotActor `json:"botActor"`
-	ExternalUser *Person   `json:"externalUser"`
+	ID           string     `json:"id"`
+	URL          string     `json:"url"`
+	CreatedAt    string     `json:"createdAt"`
+	Body         string     `json:"body"`
+	User         *Person    `json:"user"`
+	BotActor     *BotActor  `json:"botActor"`
+	ExternalUser *Person    `json:"externalUser"`
+	Reactions    []Reaction `json:"reactions"`
+	Issue        *Issue     `json:"issue"`
+}
+
+type Reaction struct {
+	ID      string   `json:"id"`
+	Emoji   string   `json:"emoji"`
+	User    *Person  `json:"user"`
+	Comment *Comment `json:"comment"`
 }
 
 type PageInfo struct {
-	HasNextPage bool `json:"hasNextPage"`
+	HasNextPage bool   `json:"hasNextPage"`
+	EndCursor   string `json:"endCursor"`
 }
 
 type ListIssuesResult struct {

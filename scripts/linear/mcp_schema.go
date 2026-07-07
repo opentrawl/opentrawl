@@ -8,6 +8,22 @@ import (
 func mcpTools() []map[string]any {
 	return []map[string]any{
 		{
+			"name":        "inbox",
+			"description": "List Josh's unacknowledged directive comments.",
+			"inputSchema": objectSchema(map[string]any{
+				"team":  stringSchema("Optional Linear team key, for example TRAWL."),
+				"since": stringSchema("Optional duration window. Uses Go duration syntax plus d for days."),
+				"all":   boolSchema("List across all time. Cannot be used with since."),
+			}, nil),
+		},
+		{
+			"name":        "ack_comment",
+			"description": "Mark a directive comment as picked up with a visible eyes reaction.",
+			"inputSchema": objectSchema(map[string]any{
+				"comment_id": stringSchema("Linear comment id to acknowledge."),
+			}, []string{"comment_id"}),
+		},
+		{
 			"name":        "create_comment",
 			"description": "Create a Linear issue comment as an app actor display name.",
 			"inputSchema": objectSchema(map[string]any{
@@ -62,6 +78,10 @@ func stringSchema(description string) map[string]any {
 	return map[string]any{"type": "string", "description": description}
 }
 
+func boolSchema(description string) map[string]any {
+	return map[string]any{"type": "boolean", "description": description}
+}
+
 func requiredString(args map[string]json.RawMessage, name string) (string, error) {
 	value, err := optionalString(args, name)
 	if err != nil {
@@ -81,6 +101,18 @@ func optionalString(args map[string]json.RawMessage, name string) (string, error
 	var value string
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return "", fmt.Errorf("%s must be a string", name)
+	}
+	return value, nil
+}
+
+func optionalBool(args map[string]json.RawMessage, name string) (bool, error) {
+	raw, ok := args[name]
+	if !ok || len(raw) == 0 || string(raw) == "null" {
+		return false, nil
+	}
+	var value bool
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, fmt.Errorf("%s must be a boolean", name)
 	}
 	return value, nil
 }

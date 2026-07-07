@@ -12,6 +12,8 @@ Log:
 const rootHelp = `linear posts to Linear as an OAuth app actor.
 
 Usage:
+  linear inbox [--team <KEY>] [--since <duration>] [--all]
+  linear ack <COMMENT-ID>
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
@@ -23,15 +25,48 @@ Environment:
   LINEAR_CLIENT_ID      Linear OAuth app client id
   LINEAR_CLIENT_SECRET  Linear OAuth app client secret
 
-Write commands require --as. The value becomes Linear's createAsUser display name.
+Issue and comment write commands require --as. The value becomes Linear's createAsUser display name.
+Ack writes an eyes reaction as the app user and does not take --as.
 
 Examples:
+  linear inbox --team TRAWL
+  linear ack 00000000-0000-4000-8000-000000000000
   linear comment TRAWL-99 --as coordinator "Ready for review."
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
   linear issue state TRAWL-99 --state Done --as coordinator
   linear issue TRAWL-99
   linear issues --team TRAWL
   linear mcp
+` + commonHelp
+
+const inboxHelp = `List Josh's unacknowledged human comments.
+
+Usage:
+  linear inbox [--team <KEY>] [--since <duration>] [--all]
+
+Flags:
+  --team <KEY>          Optional Linear team key, for example TRAWL.
+  --since <duration>    Optional window. Uses Go duration syntax plus d for days. Default: 14d.
+  --all                 List across all time. Cannot be used with --since.
+
+Examples:
+  linear inbox --team TRAWL
+  linear inbox --team TRAWL --since 36h
+  linear inbox --all --team TRAWL
+` + commonHelp
+
+const ackHelp = `Mark a Linear comment as picked up.
+
+Usage:
+  linear ack <COMMENT-ID>
+
+Arguments:
+  COMMENT-ID  Linear comment id.
+
+Ack writes an eyes reaction as the app user. Reactions cannot carry a createAsUser display name, so this is fleet-level and does not take --as.
+
+Example:
+  linear ack 00000000-0000-4000-8000-000000000000
 ` + commonHelp
 
 const commentHelp = `Create a Linear comment as an app actor display name.
@@ -119,6 +154,8 @@ Usage:
   linear mcp
 
 Tools:
+  inbox          List Josh's unacknowledged directive comments.
+  ack_comment    Mark a directive comment as picked up with an eyes reaction.
   create_comment  Create a comment. Requires issue, actor and body.
   create_issue    Create an issue. Requires team, title and actor.
   get_issue       Show one issue and its comments.

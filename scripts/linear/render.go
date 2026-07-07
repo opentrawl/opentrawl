@@ -77,6 +77,45 @@ func RenderIssues(w io.Writer, result ListIssuesResult) error {
 	return nil
 }
 
+func RenderInbox(w io.Writer, result InboxResult) error {
+	if _, err := fmt.Fprintf(w, "inbox: %d unacked human comments %s\n", len(result.Comments), result.Window.Label); err != nil {
+		return err
+	}
+	if len(result.Comments) == 0 {
+		_, err := fmt.Fprintln(w, "Nothing unacked.")
+		return err
+	}
+	for _, comment := range result.Comments {
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+		title := comment.Issue.Identifier
+		if strings.TrimSpace(comment.Issue.Title) != "" {
+			title += " · " + comment.Issue.Title
+		}
+		if err := crender.WriteCard(w, crender.Card{
+			Title: title,
+			Fields: []crender.CardField{
+				{Label: "created", Value: commentTime(comment.CreatedAt)},
+				{Label: "author", Value: personName(comment.User, "Unknown")},
+				{Label: "comment id", Value: comment.ID},
+				{Label: "body", Value: strings.TrimRight(comment.Body, "\r\n")},
+			},
+		}); err != nil {
+			return err
+		}
+	}
+	if _, err := fmt.Fprintln(w, "\nAck a comment: linear ack <comment-id>"); err != nil {
+		return err
+	}
+	if !result.Window.All {
+		if _, err := fmt.Fprintln(w, "See older comments: linear inbox --all"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func RenderCreatedIssue(w io.Writer, created CreatedIssue) error {
 	return crender.WriteCard(w, crender.Card{
 		Title: "Created " + created.Issue.Identifier,
@@ -96,6 +135,24 @@ func RenderUpdatedIssue(w io.Writer, updated UpdatedIssue) error {
 			{Label: "state", Value: updated.Issue.State.Name},
 			{Label: "url", Value: updated.Issue.URL},
 		},
+	})
+}
+
+func RenderAck(w io.Writer, result AckResult) error {
+	fields := []crender.CardField{
+		{Label: "comment id", Value: result.CommentID},
+	}
+	if strings.TrimSpace(result.IssueIdentifier) != "" {
+		fields = append(fields, crender.CardField{Label: "issue", Value: result.IssueIdentifier})
+	}
+	status := "acked"
+	if result.AlreadyAcked {
+		status = "already acked"
+	}
+	fields = append(fields, crender.CardField{Label: "status", Value: status})
+	return crender.WriteCard(w, crender.Card{
+		Title:  "Comment acked",
+		Fields: fields,
 	})
 }
 
