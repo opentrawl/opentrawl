@@ -26,7 +26,10 @@ The wow hierarchy — what actually lands, strongest first:
 
 1. **Cross-source joins.** One question answered from three sources
    at once (the photo + the message thread + the calendar event).
-   No other product does this. Lead with these.
+   No other product does this. Lead with these. Product truth: v1
+   does NOT auto-join identities — the join is the AGENT chaining
+   real trawl calls over honest federation. That is the story, not
+   a limitation; never frame the product as magically stitching.
 2. **Fuzzy temporal recall.** "that dinner with Anna sometime last
    spring" resolving to an exact evening. Human memory is the
    competitor, and it loses.

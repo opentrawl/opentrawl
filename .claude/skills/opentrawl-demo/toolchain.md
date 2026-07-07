@@ -1,7 +1,12 @@
 # Verified toolchain recipes (smoke-tested 2026-07-07, arm64 macOS)
 
-Everything below ran green end-to-end under devenv. Reuse verbatim;
-don't rediscover.
+Everything below ran green end-to-end under devenv, in scratch
+projects OUTSIDE the repo (the evidence artifacts live in the
+session scratchpad of the 2026-07-07 CTO session — renders, frames,
+filter outputs). The repo's root devenv does NOT have these packages
+yet; adding them is bootstrap step one. Reuse the recipes verbatim;
+don't rediscover — and don't mistake "not installed here yet" for
+"unverified".
 
 ## Nix pinning
 
