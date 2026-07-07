@@ -59,9 +59,9 @@ observation table including `model_observation` and `place_observation` —
 then the asset re-enters `classification_queue` — except that a queue row
 already in `failed_download` keeps its state and reason on upsert
 (`internal/archive/crawl_statements.go:76`), so download failures are not
-silently reset by a sync. The scope of that deletion
-is an open fork (TRAWL-176, "Invalidation" below); until it is ruled, sync
-against an enriched archive is held.
+silently reset by a sync. That deletion scope is ruled correct
+(TRAWL-176, "Invalidation" below): metadata edits legitimately re-card,
+and sync owes cost visibility in return.
 
 ## Stage 2 — the classification queue
 
@@ -310,9 +310,9 @@ above:
   across all sent candidates instead of only the top one — the sidecar
   already ships ids for all five, so that is a prompt-version change gated
   on an eval run, not a schema change.
-- **TRAWL-172 (album join)** repairs invariant 9's inputs. Its archive-level
-  acceptance waits on the invalidation ruling below, because fixing
-  memberships changes fingerprints at scale.
+- **TRAWL-172 (album join)** repairs invariant 9's inputs. Fixing
+  memberships changes fingerprints at scale, so its archive-level
+  acceptance sync runs as measured, cleared spend (see "Invalidation").
 - **TRAWL-173 (downloads)** feeds stage 4's image selection: its output is
   the guarantee that a classifiable local image path exists (or a truthful
   `in_icloud` availability), never a silent 360 px thumbnail.
@@ -320,28 +320,28 @@ above:
   stage 3, which this doc now states; the spike designs the
   known-places-versus-trips split from here.
 
-## Invalidation — the open fork (TRAWL-176)
+## Invalidation — ruled (TRAWL-176)
 
-Current semantics: the fingerprint covers the whole asset JSON, and any
-change deletes every derived row including paid-for model cards and place
-evidence, then re-queues. That is coherent — albums and favourite are model
-inputs (invariant 9), so a metadata edit genuinely stales a card — but it
-converts routine library organizing into silent model spend — thousands of
-observations deleted by a single routine catch-up sync (measurements on
-TRAWL-176).
+Cards are **context-maximal by design**. Josh's ruling (2026-07-08): "the
+key product feature here imo is that we feed ALL the metadata (including
+enriched location stuff, and trip info later on) → into the LLM so that it
+knows this when it is classifying the image. thats the whole point."
 
-The fork, awaiting Josh's ruling (money question, queued via the CTO):
+Consequences:
 
-- **Option A — cards stay metadata-dependent.** Keep full invalidation, make
-  the spend visible and budgeted: sync reports how many cards it
-  invalidates; re-carding is a planned run, never an implicit queue drain.
-- **Option B — cards describe content only (recommended).** Split the
-  fingerprint: content changes (pixels, new render, media type) invalidate
-  cards; metadata-only changes update rows in place and leave
-  `model_observation`/`place_observation` untouched. Album and favourite
-  context then joins at read time for display, and drops out of the prompt
-  sidecar — a prompt-version bump whose card-quality cost is checked by one
-  eval run before adoption.
+- The fingerprint stays whole-asset. A metadata edit (album, favourite —
+  and later, enriched context such as trips) genuinely stales the card's
+  inputs, so it legitimately invalidates and re-cards. This is invariant 9
+  extended: everything the model consumes is change-tracked.
+- The engineering obligation is **cost visibility**, not narrower
+  invalidation: every sync reports how many cards and place observations it
+  invalidates before deleting them, and re-carding is visible, budgeted
+  spend — a reported count and a planned run, never a silent delete plus an
+  implicit queue drain. TRAWL-176 implements this.
+- The rejected alternative (content-only cards, metadata joined at display
+  time) is recorded here so it is not re-proposed: it was rejected because
+  it guts the product's core idea, not on cost grounds.
 
-Until the ruling: no sync runs against the enriched archive (TRAWL-166 holds
-its final catch-up), and TRAWL-172's fix does not get its acceptance sync.
+Until cost reporting lands, any sync against an enriched archive is
+preceded by a measured re-card count and cost estimate (staged copy,
+before/after row counts), cleared as spend.
