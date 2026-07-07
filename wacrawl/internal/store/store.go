@@ -6,14 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
+	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/crawlkit/whomatch"
-	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
 
 	// C SQLite via cgo, matching crawlkit/store after the modernc production
@@ -42,9 +41,11 @@ const (
 )
 
 type Store struct {
-	db   *sql.DB
-	q    *storedb.Queries
-	path string
+	store *ckstore.Store
+	db    *sql.DB
+	q     *storedb.Queries
+	path  string
+	owned bool
 }
 
 type ImportStats struct {
@@ -189,29 +190,13 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("db path is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("mkdir db dir: %w", err)
-	}
-	dsn := sqlitedsn.File(
-		path,
-		sqlitedsn.P("_foreign_keys", "1"),
-		sqlitedsn.P("_journal_mode", "WAL"),
-		sqlitedsn.P("_synchronous", "NORMAL"),
-		sqlitedsn.P("_busy_timeout", "5000"),
-	)
-	db, err := sql.Open("sqlite3", dsn)
+	st, err := ckstore.Open(ctx, ckstore.Options{Path: path})
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite: %w", err)
+		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping sqlite: %w", err)
-	}
-	s := &Store{db: db, q: storedb.New(db), path: path}
+	s := wrapStore(st, path, true)
 	if err := s.migrate(ctx); err != nil {
-		_ = db.Close()
+		_ = st.Close()
 		return nil, err
 	}
 	return s, nil
@@ -228,30 +213,53 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, err
 	}
-	dsn := sqlitedsn.File(
-		path,
-		sqlitedsn.P("mode", "ro"),
-		sqlitedsn.P("_query_only", "1"),
-		sqlitedsn.P("_busy_timeout", "5000"),
-	)
-	db, err := sql.Open("sqlite3", dsn)
+	st, err := ckstore.OpenReadOnly(ctx, path)
 	if err != nil {
-		return nil, fmt.Errorf("open sqlite read-only: %w", err)
+		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping sqlite read-only: %w", err)
+	if err := checkSchemaVersion(ctx, st.DB()); err != nil {
+		_ = st.Close()
+		return nil, err
 	}
-	return &Store{db: db, q: storedb.New(db), path: path}, nil
+	return wrapStore(st, path, true), nil
+}
+
+func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	out := wrapStore(st, path, false)
+	if err := out.migrate(ctx); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	if err := checkSchemaVersion(ctx, st.DB()); err != nil {
+		return nil, err
+	}
+	return wrapStore(st, path, false), nil
+}
+
+func wrapStore(st *ckstore.Store, path string, owned bool) *Store {
+	return &Store{store: st, db: st.DB(), q: storedb.New(st.DB()), path: path, owned: owned}
 }
 
 func (s *Store) Close() error {
-	if s == nil || s.db == nil {
+	if s == nil || s.store == nil || !s.owned {
 		return nil
 	}
-	return s.db.Close()
+	return s.store.Close()
 }
 
 func (s *Store) DB() *sql.DB {
@@ -259,6 +267,9 @@ func (s *Store) DB() *sql.DB {
 }
 
 func (s *Store) Path() string {
+	if s == nil {
+		return ""
+	}
 	return s.path
 }
 
@@ -274,6 +285,17 @@ func (s *Store) migrate(ctx context.Context) error {
 	}
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
 		return fmt.Errorf("set schema version: %w", err)
+	}
+	return nil
+}
+
+func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
+	var version int
+	if err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version); err != nil {
+		return fmt.Errorf("read schema version: %w", err)
+	}
+	if version != schemaVersion {
+		return fmt.Errorf("archive schema is not current: got %d, want %d", version, schemaVersion)
 	}
 	return nil
 }

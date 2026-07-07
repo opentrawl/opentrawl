@@ -45,12 +45,9 @@ Sync a fresh local archive:
 
 ```bash
 wacrawl sync
-wacrawl import --copy-media
 ```
 
-Inspect what was imported. Read commands sync automatically by default, so
-`status`, `chats`, `messages`, and `search` refresh the archive before reading
-when the local WhatsApp Desktop source is newer:
+Inspect what was imported:
 
 ```bash
 wacrawl status
@@ -93,12 +90,13 @@ It writes its own archive to:
 ~/.opentrawl/wacrawl/wacrawl.db
 ```
 
-Override either path when needed:
+Set the WhatsApp source path in `~/.opentrawl/wacrawl/config.toml`:
 
-```bash
-wacrawl --source "$HOME/Library/Group Containers/group.net.whatsapp.WhatsApp.shared" doctor
-wacrawl --db /tmp/wacrawl.db import
+```toml
+source = "~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared"
 ```
+
+Use `--state-root PATH` when you want a separate archive root for testing.
 
 ## Safety
 
@@ -127,20 +125,12 @@ wacrawl --json doctor
 Reports source availability, discovered database files, row counts, message date
 range, and importer schema notes.
 
-### `import`
+### `sync`
 
 Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 
 ```bash
-wacrawl import
-wacrawl import --copy-media
-```
-
-`sync` is the same command with a clearer name:
-
-```bash
 wacrawl sync
-wacrawl sync --copy-media
 ```
 
 Imports:
@@ -153,23 +143,24 @@ Imports:
 - media metadata and local media paths
 
 By default, media paths continue to point at WhatsApp Desktop's app container.
-Pass `--copy-media` to copy referenced media files into `media/` next to the
-archive database and rewrite copied message media paths to that archive copy.
+Set `copy_media = true` in `~/.opentrawl/wacrawl/config.toml` to copy
+referenced media files into `media/` next to the archive database and rewrite
+copied message media paths to that archive copy.
 Missing media files are counted in the import output and do not fail the import.
 
 ### `status`
 
-Show archive counts and import metadata:
+Show archive counts and metadata:
 
 ```bash
 wacrawl status
 ```
 
-Includes chat, unread-chat, unread-message, contact, group, participant,
-message, media-message, oldest, newest, last-import, and source fields.
+Includes message, media-message, chat, unread-chat, unread-message, contact,
+group, participant, source, and timestamp fields when they are available.
 
-By default, `status` first syncs the archive when the last sync is older than
-`--sync-max-age` and the WhatsApp Desktop source has newer data.
+`status` reads the existing archive. Run `wacrawl sync` when you want to
+refresh from WhatsApp Desktop.
 
 ### `chats`
 
@@ -224,47 +215,26 @@ Search the archive with SQLite FTS5:
 
 ```bash
 wacrawl search "launch"
-wacrawl search "invoice" --from-them --after 2026-01-01
+wacrawl search "invoice" --after 2026-01-01 --who "Alice Example"
 wacrawl --json search "restaurant"
 ```
 
 Search uses message text, chat name, sender name, and media title fields. It
-accepts the same filters as `messages`.
+accepts `--limit`, `--all`, `--after`, `--before`, and `--who`.
 
 ## Sync Behavior
 
-`wacrawl` keeps normal reads fresh without a daemon or background service.
-Before `status`, `chats`, `messages`, or `search`, it checks the archive's
-last import time. If the archive is stale, it inspects the WhatsApp Desktop
-source and imports a fresh snapshot only when the source is ahead.
-
-The default policy is:
-
-```text
---sync auto
---sync-max-age 15m
-```
-
-Sync modes:
-
-```text
---sync auto     Sync before reads when the archive is stale and source is ahead.
---sync always   Force a sync before every read command.
---sync never    Read only the existing archive.
-```
+`wacrawl` syncs only when you ask it to sync. Read commands such as `status`,
+`chats`, `messages`, and `search` inspect the existing archive without touching
+the WhatsApp Desktop source or changing local state.
 
 Examples:
 
 ```bash
-wacrawl search "release notes"
-wacrawl --sync always status
-wacrawl --sync never --json messages --limit 10
-wacrawl --sync-max-age 1h chats
+wacrawl sync
+wacrawl status
+wacrawl --json messages --limit 10
 ```
-
-If the WhatsApp Desktop source is unavailable and the archive already has data,
-`--sync auto` warns on stderr and continues with the existing archive.
-`--sync always` treats an unavailable source as an error.
 
 ## Encrypted Git Backup
 
@@ -293,7 +263,7 @@ plaintext hashes without decrypting backup contents. It does not contain
 message text, chat names, contacts, participant IDs, media metadata, filenames,
 or archive paths. Those fields live inside the `*.jsonl.gz.age` shards.
 
-Media previously copied with `wacrawl sync --copy-media` is included by default.
+Media previously copied with `copy_media = true` is included by default.
 Identical files share one encrypted blob with a random opaque object ID. Their
 content hashes remain inside the encrypted index. Use `backup push --no-media`
 or `backup pull --no-media` when only archive rows are wanted.
@@ -324,9 +294,9 @@ wacrawl backup status
 Useful safety variants:
 
 ```bash
-# Force a fresh WhatsApp import before writing the backup.
-wacrawl sync --copy-media
-wacrawl --sync never backup push
+# Force a fresh WhatsApp sync before writing the backup.
+wacrawl sync
+wacrawl backup push
 
 # Write and commit locally, but do not push to GitHub.
 wacrawl backup push --no-push
@@ -334,12 +304,12 @@ wacrawl backup push --no-push
 # Create a named checkpoint while pushing a backup.
 wacrawl backup push --tag snapshot/before-phone-migration
 
-# Restore into a throwaway database for testing.
-wacrawl --db /tmp/wacrawl-restore-test.db backup pull
-wacrawl --db /tmp/wacrawl-restore-test.db --sync never status
+# Restore into a throwaway state root for testing.
+wacrawl --state-root /tmp/wacrawl-restore-test backup pull
+wacrawl --state-root /tmp/wacrawl-restore-test status
 
 # Restore a historical tag, commit, or branch without changing the backup checkout.
-wacrawl --db /tmp/wacrawl-history.db backup pull --ref snapshot/before-phone-migration
+wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
 ```
 
 You should not need to run `git` manually for normal use. `backup push` handles
@@ -364,7 +334,7 @@ is no backup password. Each machine has an age identity file, usually:
 
 That file contains an `AGE-SECRET-KEY-...` private identity and is written with
 0600 permissions. Its matching public recipient starts with `age1...` and is
-safe to place in `~/.opentrawl/wacrawl/backup.json`, `manifest.json`, or docs.
+safe to place in `~/.opentrawl/wacrawl/config.toml`, `manifest.json`, or docs.
 
 For each shard, `wacrawl backup push`:
 
@@ -427,23 +397,22 @@ wacrawl backup init \
   --remote https://github.com/steipete/backup-wacrawl.git
 ```
 
-This writes `~/.opentrawl/wacrawl/backup.json`, creates `~/.opentrawl/wacrawl/age.key` if needed,
+This writes the `[backup]` table in `~/.opentrawl/wacrawl/config.toml`, creates `~/.opentrawl/wacrawl/age.key` if needed,
 clones or initializes the local backup checkout, and prints the public age
 recipient.
 
 The generated config looks like this:
 
-```json
-{
-  "repo": "~/Projects/backup-wacrawl",
-  "remote": "https://github.com/steipete/backup-wacrawl.git",
-  "identity": "~/.opentrawl/wacrawl/age.key",
-  "recipients": ["age1..."]
-}
+```toml
+[backup]
+repo = "~/Projects/backup-wacrawl"
+remote = "https://github.com/steipete/backup-wacrawl.git"
+identity = "~/.opentrawl/wacrawl/age.key"
+recipients = ["age1..."]
 ```
 
 Keep `~/.opentrawl/wacrawl/age.key` private. The public `age1...` recipient can be stored
-in `backup.json`; the `AGE-SECRET-KEY-...` identity must stay local or in a
+in `config.toml`; the `AGE-SECRET-KEY-...` identity must stay local or in a
 password manager.
 
 ### Push
@@ -454,16 +423,16 @@ Push an encrypted backup:
 wacrawl backup push
 ```
 
-`backup push` first pulls/rebases the configured backup checkout, then uses the
-normal read-time sync policy. With the default `--sync auto --sync-max-age 15m`,
-it refreshes the local archive only when the WhatsApp Desktop source is stale
-and newer than the archive. Then it exports stable JSONL, gzip-compresses each
+`backup push` first pulls/rebases the configured backup checkout, then exports
+the current local archive. Run `wacrawl sync` before `backup push` when you
+want to include the latest WhatsApp Desktop data. It exports stable JSONL,
+gzip-compresses each
 shard, encrypts each shard for every configured recipient, updates
 `manifest.json`, removes stale encrypted shards, commits, and pushes the backup
 repo. Copied files already under the archive `media/` directory are included by
-default; run `wacrawl sync --copy-media` first to capture media bytes still
-available from WhatsApp Desktop. `backup push` never reads media directly from
-the WhatsApp container.
+default; set `copy_media = true` and run `wacrawl sync` first to capture media
+bytes still available from WhatsApp Desktop. `backup push` never reads media
+directly from the WhatsApp container.
 
 Pass `--tag NAME` to tag the resulting snapshot commit. If the archive is
 unchanged, the tag points at the existing current snapshot. Existing tags are
@@ -500,7 +469,7 @@ database unless `--no-media` is set.
 Restore a historical tag, commit, or branch with `--ref`:
 
 ```bash
-wacrawl --db /tmp/wacrawl-history.db backup pull --ref snapshot/before-phone-migration
+wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
 ```
 
 Historical restore resolves the ref to a commit and reads its manifest and
@@ -510,8 +479,8 @@ change the backup repository's current branch.
 To test a restore without touching your real archive:
 
 ```bash
-wacrawl --db /tmp/wacrawl-restore-test.db backup pull
-wacrawl --db /tmp/wacrawl-restore-test.db --sync never status
+wacrawl --state-root /tmp/wacrawl-restore-test backup pull
+wacrawl --state-root /tmp/wacrawl-restore-test status
 ```
 
 ### Status
@@ -535,8 +504,8 @@ wacrawl backup init \
   --remote https://github.com/steipete/backup-wacrawl.git
 ```
 
-Copy the printed public recipient (`age1...`) into the `recipients` list in
-`~/.opentrawl/wacrawl/backup.json` on a machine that can already decrypt the backup, then
+Copy the printed public recipient (`age1...`) into `backup.recipients` in
+`~/.opentrawl/wacrawl/config.toml` on a machine that can already decrypt the backup, then
 run:
 
 ```bash
@@ -557,7 +526,6 @@ good recovery path. Do not commit the identity file. Do not paste the
 Useful flags:
 
 ```text
---config PATH        Backup config path. Default: ~/.opentrawl/wacrawl/backup.json
 --repo PATH          Local backup Git checkout.
 --remote URL         Backup Git remote.
 --identity PATH      Local age identity. Default: ~/.opentrawl/wacrawl/age.key
@@ -576,22 +544,21 @@ mkdir -p ~/.opentrawl/wacrawl
 ```
 
 Then restore `~/.opentrawl/wacrawl/age.key` from your password manager and create
-`~/.opentrawl/wacrawl/backup.json` pointing at the clone:
+`~/.opentrawl/wacrawl/config.toml` pointing at the clone:
 
-```json
-{
-  "repo": "~/Projects/backup-wacrawl",
-  "remote": "https://github.com/steipete/backup-wacrawl.git",
-  "identity": "~/.opentrawl/wacrawl/age.key",
-  "recipients": ["age1..."]
-}
+```toml
+[backup]
+repo = "~/Projects/backup-wacrawl"
+remote = "https://github.com/steipete/backup-wacrawl.git"
+identity = "~/.opentrawl/wacrawl/age.key"
+recipients = ["age1..."]
 ```
 
 Finally:
 
 ```bash
 wacrawl backup pull
-wacrawl --sync never status
+wacrawl status
 ```
 
 If decryption fails, the local `identity` does not match any recipient used for
@@ -601,18 +568,11 @@ backup repository; the archive data is already encrypted before the push.
 ## Global Flags
 
 ```text
---db PATH               Archive database path. Default: ~/.opentrawl/wacrawl/wacrawl.db
---source PATH           WhatsApp Desktop source path.
---sync MODE             Read-time sync policy: auto, always, or never. Default: auto.
---sync-max-age DURATION Staleness window for --sync auto. Default: 15m.
---json                  Emit JSON instead of human-readable output.
---version               Print the CLI version.
-```
-
-Import/sync flags:
-
-```text
---copy-media            Copy referenced media during import/sync.
+--json             Emit JSON instead of human-readable output.
+--state-root PATH  Use a different state root.
+-v, --verbose      Stream log lines to stderr.
+-vv                Stream debug log lines to stderr.
+--version          Print the CLI version.
 ```
 
 ## Data Format Notes

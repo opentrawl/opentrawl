@@ -1,10 +1,16 @@
-package cli
+package wacrawl
 
 import (
 	"path/filepath"
 	"strings"
 
 	"github.com/openclaw/wacrawl/internal/store"
+)
+
+const (
+	defaultMessageLimit = 20
+	messageRefPrefix    = store.MessageRefPrefix
+	openWindowEachSide  = 10
 )
 
 func messageRef(message store.Message) string {

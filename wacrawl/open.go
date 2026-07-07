@@ -1,14 +1,14 @@
-package cli
+package wacrawl
 
 import (
 	"context"
 	"database/sql"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/store"
@@ -45,64 +45,19 @@ type openMedia struct {
 	SizeBytes int64  `json:"size_bytes,omitempty"`
 }
 
-func (a *app) runOpen(ctx context.Context, args []string) error {
-	if commandWantsHelp(args) {
-		printCommandUsage(a.stdout, "open")
-		return nil
+func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	fs := flag.NewFlagSet("open", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		if errors.Is(err, flag.ErrHelp) {
-			printCommandUsage(a.stdout, "open")
-			return nil
-		}
-		return usageErr(err)
+	messageID, err := resolveOpenMessageID(ctx, st, ref)
+	if err != nil {
+		return err
 	}
-	if fs.NArg() != 1 {
-		return usageErr(errors.New("open requires exactly one ref"))
-	}
-	ref := strings.TrimSpace(fs.Arg(0))
-	if strings.Contains(ref, ":") {
-		messageID, cerr := parseMessageRef(ref)
-		if cerr != nil {
-			return cerr
-		}
-		return a.withReadStore(ctx, func(st *store.Store) error {
-			return a.openMessageID(ctx, st, messageID)
-		})
-	}
-	if !shortref.ValidAlias(ref) {
-		return unknownShortRefError()
-	}
-	return a.withExistingStore(ctx, func(st *store.Store) error {
-		if err := st.EnsureShortRefs(ctx); err != nil {
-			return err
-		}
-		fullRefs, err := st.ResolveShortRef(ctx, ref)
-		if err != nil {
-			return err
-		}
-		switch len(fullRefs) {
-		case 0:
-			return unknownShortRefError()
-		case 1:
-			messageID, cerr := parseMessageRef(fullRefs[0])
-			if cerr != nil {
-				return cerr
-			}
-			return a.openMessageID(ctx, st, messageID)
-		default:
-			return contractError("ambiguous_short_ref", "short ref matches more than one message", "rerun wacrawl search or use the full ref")
-		}
-	})
-}
-
-func (a *app) openMessageID(ctx context.Context, st *store.Store, messageID string) error {
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return contractError("not_found", "message was not found", "run wacrawl search again and pass one of its refs")
+		if errorsIsNoRows(err) {
+			return commandErr(1, "not_found", "message was not found", "run wacrawl search again and pass one of its refs")
 		}
 		return err
 	}
@@ -110,40 +65,65 @@ func (a *app) openMessageID(ctx context.Context, st *store.Store, messageID stri
 	if err != nil {
 		return err
 	}
-	return a.print(newOpenEnvelope(target, window))
+	result := newOpenEnvelope(target, window)
+	if req.Format == output.JSON {
+		return output.Write(req.Out, req.Format, "open", result)
+	}
+	return printOpen(req, result)
+}
+
+func resolveOpenMessageID(ctx context.Context, st *store.Store, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if strings.Contains(ref, ":") {
+		return parseMessageRef(ref)
+	}
+	if !shortref.ValidAlias(ref) {
+		return "", unknownShortRefError()
+	}
+	fullRefs, err := st.ResolveShortRef(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	switch len(fullRefs) {
+	case 0:
+		return "", unknownShortRefError()
+	case 1:
+		return parseMessageRef(fullRefs[0])
+	default:
+		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun wacrawl search or use the full ref")
+	}
 }
 
 func unknownShortRefError() error {
-	return contractError("unknown_short_ref", "short ref was not found", "use a full ref from wacrawl search")
+	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from wacrawl search")
 }
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", contractError("foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by wacrawl search")
+		return "", commandErr(1, "foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by wacrawl search")
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", contractError("invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by wacrawl search")
+		return "", commandErr(1, "invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by wacrawl search")
 	}
 	return messageID, nil
 }
 
-func (a *app) printOpen(result openEnvelope) error {
-	if _, err := fmt.Fprintf(a.stdout, "chat: %s\nref: %s\n\n", result.Chat, result.Ref); err != nil {
+func printOpen(req *crawlkit.Request, result openEnvelope) error {
+	if _, err := fmt.Fprintf(req.Out, "chat: %s\nref: %s\n\n", result.Chat, result.Ref); err != nil {
 		return err
 	}
-	width := render.OutputWidth(a.stdout)
+	width := render.OutputWidth(req.Out)
 	rows := make([]render.TranscriptRow, 0, len(result.Context))
 	for _, item := range result.Context {
-		prefix := openTranscriptPrefix(width, item)
 		rows = append(rows, render.TranscriptRow{
 			Time:   parseFormattedTime(item.Time),
-			Prefix: prefix,
+			Prefix: openTranscriptPrefix(width, item),
 			Text:   item.Text,
 		})
 	}
-	return render.WriteTranscript(a.stdout, rows)
+	return render.WriteTranscript(req.Out, rows)
 }
 
 func openTranscriptPrefix(width int, item openMessage) string {
@@ -193,7 +173,6 @@ func newOpenEnvelope(target store.Message, context []store.Message) openEnvelope
 }
 
 func newOpenMessage(message store.Message, current bool) openMessage {
-	media := messageMedia(message)
 	return openMessage{
 		Ref:     messageRef(message),
 		Time:    formatTime(message.Timestamp),
@@ -201,7 +180,7 @@ func newOpenMessage(message store.Message, current bool) openMessage {
 		Where:   outputField(messageWhere(message)),
 		Text:    messageText(message),
 		Type:    messageKind(message),
-		Media:   media,
+		Media:   messageMedia(message),
 		Starred: message.Starred,
 		Current: current,
 	}
@@ -219,4 +198,8 @@ func messageMedia(message store.Message) *openMedia {
 		return nil
 	}
 	return &openMedia{Type: kind, Title: title, SizeBytes: message.MediaSize}
+}
+
+func errorsIsNoRows(err error) bool {
+	return errors.Is(err, sql.ErrNoRows)
 }

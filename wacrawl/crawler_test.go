@@ -1,0 +1,319 @@
+package wacrawl
+
+import (
+	"bytes"
+	"context"
+	"database/sql"
+	"encoding/json"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/config"
+	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/output"
+	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/openclaw/wacrawl/internal/backup"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+func TestCrawlerCoreMethods(t *testing.T) {
+	ctx := context.Background()
+	sourceRoot := t.TempDir()
+	createDesktopFixture(t, sourceRoot)
+	stateRoot := t.TempDir()
+	paths := crawlkit.Paths{
+		Archive: filepath.Join(stateRoot, "wacrawl", "wacrawl.db"),
+		Config:  filepath.Join(stateRoot, "wacrawl", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "wacrawl", "logs"),
+	}
+	crawler := New()
+	crawler.cfg.Source = sourceRoot
+	crawler.cfg.CopyMedia = true
+
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	report, err := crawler.Sync(ctx, &crawlkit.Request{
+		Store:    writeStore,
+		Paths:    paths,
+		Format:   output.Text,
+		Out:      &bytes.Buffer{},
+		Progress: func(crawlkit.Progress) {},
+	})
+	if closeErr := writeStore.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Added != 3 || report.Updated != 0 || report.Removed != 0 {
+		t.Fatalf("sync report = %#v, want 3 added and zero updates/removals", report)
+	}
+
+	readStore := openReadStore(t, ctx, paths.Archive)
+	status, err := crawler.Status(ctx, readRequest(readStore, paths))
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "ok" || !countPresent(status.Counts, "messages", 3) || !countPresent(status.Counts, "participants", 1) {
+		t.Fatalf("status = %#v", status)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	search, err := crawler.Search(ctx, readRequest(readStore, paths), crawlkit.Query{Text: "launch", Limit: 20})
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.TotalMatches != 1 || len(search.Results) != 1 {
+		t.Fatalf("search = %#v, want one result", search)
+	}
+	hit := search.Results[0]
+	if hit.Ref != "wacrawl:msg/group-image" || hit.ShortRef == "" || hit.Who != "Alice Example" || hit.Where != "Launch Group" {
+		t.Fatalf("search hit = %#v", hit)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	who, err := crawler.Who(ctx, readRequest(readStore, paths), "Alice")
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(who) != 1 || who[0].Who != "Alice Example" || who[0].Messages != 1 {
+		t.Fatalf("who = %#v", who)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	contacts, err := crawler.ContactExport(ctx, readRequest(readStore, paths))
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contacts.Contacts) != 2 || !contactPresent(contacts.Contacts, "Alice Example", "+15550222") || !contactPresent(contacts.Contacts, "Bob Example", "+15550111") {
+		t.Fatalf("contacts = %#v", contacts)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	var openOut bytes.Buffer
+	err = crawler.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var opened openEnvelope
+	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
+		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
+	}
+	if opened.Ref != "wacrawl:msg/group-image" || opened.Message.Text != "launch now" || opened.Message.Media == nil {
+		t.Fatalf("opened = %#v", opened)
+	}
+}
+
+func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
+	stateRoot := t.TempDir()
+	code, stdout, stderr := captureRun(t, []string{"metadata", "--json", "--state-root", stateRoot}, New())
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("metadata JSON: %v\n%s", err, stdout)
+	}
+	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "unread", "messages", "backup_init", "backup_push", "backup_pull", "backup_status", "backup_snapshots"} {
+		if !stringSliceContains(manifest.Capabilities, capability) {
+			t.Fatalf("capabilities = %#v, missing %s", manifest.Capabilities, capability)
+		}
+	}
+	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "unread", "messages", "backup_init", "backup_push", "backup_pull", "backup_status", "backup_snapshots"} {
+		if _, ok := manifest.Commands[command]; !ok {
+			t.Fatalf("commands = %#v, missing %s", manifest.Commands, command)
+		}
+	}
+	if manifest.SchemaVersion != control.RunnerManifestVersion {
+		t.Fatalf("schema version = %d, want %d", manifest.SchemaVersion, control.RunnerManifestVersion)
+	}
+}
+
+func TestBackupInitWritesRootConfigOnly(t *testing.T) {
+	ctx := context.Background()
+	stateRoot := t.TempDir()
+	paths := crawlkit.Paths{
+		Archive: filepath.Join(stateRoot, "wacrawl", "wacrawl.db"),
+		Config:  filepath.Join(stateRoot, "wacrawl", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "wacrawl", "logs"),
+	}
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	if err := exec.Command("git", "init", "--bare", remote).Run(); err != nil {
+		t.Fatal(err)
+	}
+	crawler := New()
+	crawler.backupOpts = backup.Options{
+		Config:   crawler.cfg.Backup,
+		Repo:     filepath.Join(t.TempDir(), "backup"),
+		Remote:   remote,
+		Identity: filepath.Join(t.TempDir(), "age.key"),
+		Push:     false,
+	}
+	crawler.backupNoPush = true
+	var stdout bytes.Buffer
+	req := &crawlkit.Request{Paths: paths, Format: output.Text, Out: &stdout}
+	t.Setenv("GIT_AUTHOR_NAME", "OpenTrawl Test")
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GIT_COMMITTER_NAME", "OpenTrawl Test")
+	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
+	if err := crawler.runBackupInit(ctx, req); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stdout.String(), "recipient=age1") {
+		t.Fatalf("backup init output = %s", stdout.String())
+	}
+	var cfg Config
+	if err := config.LoadTOML(paths.Config, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Backup.Repo == "" || cfg.Backup.Identity == "" || len(cfg.Backup.Recipients) != 1 {
+		t.Fatalf("root config = %#v", cfg)
+	}
+	if _, err := os.Stat(filepath.Join(stateRoot, "wacrawl", "backup.json")); !os.IsNotExist(err) {
+		t.Fatalf("backup.json should not exist, stat err=%v", err)
+	}
+}
+
+func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
+	return &crawlkit.Request{Store: st, Paths: paths, Format: output.Text, Out: &bytes.Buffer{}}
+}
+
+func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Store {
+	t.Helper()
+	st, err := ckstore.OpenReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
+}
+
+func countPresent(counts []control.Count, id string, value int64) bool {
+	for _, count := range counts {
+		if count.ID == id && count.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
+func contactPresent(contacts []control.Contact, name, phone string) bool {
+	for _, contact := range contacts {
+		if contact.DisplayName == name && len(contact.PhoneNumbers) == 1 && contact.PhoneNumbers[0] == phone {
+			return true
+		}
+	}
+	return false
+}
+
+func captureRun(t *testing.T, args []string, crawler *Crawler) (int, string, string) {
+	t.Helper()
+	origStdout := os.Stdout
+	origStderr := os.Stderr
+	outR, outW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	errR, errW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = outW
+	os.Stderr = errW
+	code := crawlkit.Run(args, []crawlkit.Crawler{crawler})
+	_ = outW.Close()
+	_ = errW.Close()
+	os.Stdout = origStdout
+	os.Stderr = origStderr
+	stdout, _ := io.ReadAll(outR)
+	stderr, _ := io.ReadAll(errR)
+	_ = outR.Close()
+	_ = errR.Close()
+	return code, string(stdout), string(stderr)
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func createDesktopFixture(t *testing.T, dir string) {
+	t.Helper()
+	chat, err := sql.Open("sqlite3", filepath.Join(dir, "ChatStorage.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = chat.Close() }()
+	mustExec(t, chat, `
+create table ZWACHATSESSION (Z_PK integer primary key, ZCONTACTJID varchar, ZPARTNERNAME varchar, ZLASTMESSAGEDATE timestamp, ZUNREADCOUNT integer, ZARCHIVED integer, ZREMOVED integer, ZHIDDEN integer, ZSESSIONTYPE integer);
+create table ZWAGROUPINFO (Z_PK integer primary key, ZCHATSESSION integer, ZOWNERJID varchar, ZCREATIONDATE timestamp);
+create table ZWAGROUPMEMBER (Z_PK integer primary key, ZCHATSESSION integer, ZMEMBERJID varchar, ZCONTACTNAME varchar, ZFIRSTNAME varchar, ZISADMIN integer, ZISACTIVE integer);
+create table ZWAMEDIAITEM (Z_PK integer primary key, ZMESSAGE integer, ZMEDIALOCALPATH varchar, ZMEDIAURL varchar, ZTITLE varchar, ZVCARDNAME varchar, ZFILESIZE integer);
+create table ZWAMESSAGE (Z_PK integer primary key, ZCHATSESSION integer, ZGROUPMEMBER integer, ZMEDIAITEM integer, ZSTANZAID varchar, ZISFROMME integer, ZMESSAGEDATE timestamp, ZTEXT varchar, ZMESSAGETYPE integer, ZSTARRED integer, ZFROMJID varchar, ZTOJID varchar, ZPUSHNAME varchar);
+insert into ZWACHATSESSION values (1, '15550111@s.whatsapp.net', 'Bob Example', 700000020, 0, 0, 0, 0, 0);
+insert into ZWACHATSESSION values (2, '123@g.us', 'Launch Group', 700000010, 2, 0, 0, 0, 1);
+insert into ZWAGROUPINFO values (1, 2, 'owner@s.whatsapp.net', 699999000);
+insert into ZWAGROUPMEMBER values (1, 2, '222@lid', 'Alice Example', 'Alice', 1, 1);
+insert into ZWAMEDIAITEM values (1, 3, 'Media/123@g.us/a/test.jpg', 'https://example.invalid/media.enc', 'launch image', '', 42);
+insert into ZWAMESSAGE values (1, 1, null, null, 'dm-in', 0, 700000000, 'hello from bob', 0, 0, '15550111@s.whatsapp.net', '', 'Bob Example');
+insert into ZWAMESSAGE values (2, 1, null, null, 'dm-out', 1, 700000001, 'roger that', 0, 0, '', '15550111@s.whatsapp.net', '');
+insert into ZWAMESSAGE values (3, 2, 1, 1, 'group-image', 0, 700000002, 'launch now', 1, 1, '123@g.us', '', 'Alice Example');
+`)
+	contacts, err := sql.Open("sqlite3", filepath.Join(dir, "ContactsV2.sqlite"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = contacts.Close() }()
+	mustExec(t, contacts, `
+create table ZWAADDRESSBOOKCONTACT (ZWHATSAPPID varchar, ZPHONENUMBER varchar, ZFULLNAME varchar, ZGIVENNAME varchar, ZLASTNAME varchar, ZBUSINESSNAME varchar, ZUSERNAME varchar, ZLID varchar, ZABOUTTEXT varchar, ZLASTUPDATED timestamp);
+insert into ZWAADDRESSBOOKCONTACT values ('15550111@s.whatsapp.net', '+15550111', 'Bob Example', 'Bob', 'Example', '', '', '', '', 700000000);
+insert into ZWAADDRESSBOOKCONTACT values ('222@s.whatsapp.net', '+15550222', 'Alice Example', 'Alice', 'Example', '', '', '222', '', 700000000);
+`)
+	mediaPath := filepath.Join(dir, "Media", "123@g.us", "a", "test.jpg")
+	if err := os.MkdirAll(filepath.Dir(mediaPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mediaPath, []byte("image"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustExec(t *testing.T, db *sql.DB, query string) {
+	t.Helper()
+	if _, err := db.Exec(query); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestParseTimeDateOnlyUsesLocalMidnight(t *testing.T) {
+	fixed := time.FixedZone("UTC+2", 2*60*60)
+	previous := time.Local
+	time.Local = fixed
+	t.Cleanup(func() { time.Local = previous })
+
+	got, err := parseTime("2026-07-04")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 7, 3, 22, 0, 0, 0, time.UTC)
+	if !got.Equal(want) {
+		t.Fatalf("parseTime = %v, want %v", got, want)
+	}
+}

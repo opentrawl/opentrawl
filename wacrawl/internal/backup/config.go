@@ -16,14 +16,16 @@ const (
 var renameConfigFile = os.Rename
 
 type Config struct {
-	Repo       string   `json:"repo"`
-	Remote     string   `json:"remote"`
-	Identity   string   `json:"identity"`
-	Recipients []string `json:"recipients"`
+	Repo       string   `json:"repo" toml:"repo,omitempty"`
+	Remote     string   `json:"remote" toml:"remote,omitempty"`
+	Identity   string   `json:"identity" toml:"identity,omitempty"`
+	Recipients []string `json:"recipients" toml:"recipients,omitempty"`
 }
 
 type Options struct {
 	ConfigPath string
+	Config     Config
+	SaveConfig func(Config) error
 	Repo       string
 	Remote     string
 	Identity   string
@@ -43,17 +45,9 @@ func DefaultConfig() Config {
 	}
 }
 
-func DefaultConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "backup.json"
-	}
-	return filepath.Join(home, ".opentrawl", "wacrawl", "backup.json")
-}
-
 func LoadConfig(path string) (Config, error) {
 	if strings.TrimSpace(path) == "" {
-		path = DefaultConfigPath()
+		return DefaultConfig(), nil
 	}
 	cfg := DefaultConfig()
 	data, err := os.ReadFile(expandHome(path))
@@ -71,7 +65,7 @@ func LoadConfig(path string) (Config, error) {
 
 func SaveConfig(path string, cfg Config) error {
 	if strings.TrimSpace(path) == "" {
-		path = DefaultConfigPath()
+		return errors.New("backup config path is required")
 	}
 	path = expandHome(path)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -146,9 +140,13 @@ func syncConfigDir(dir string) error {
 }
 
 func ResolveOptions(opts Options) (Config, error) {
-	cfg, err := LoadConfig(opts.ConfigPath)
-	if err != nil {
-		return Config{}, err
+	cfg := mergeConfig(DefaultConfig(), opts.Config)
+	if strings.TrimSpace(opts.ConfigPath) != "" {
+		loaded, err := LoadConfig(opts.ConfigPath)
+		if err != nil {
+			return Config{}, err
+		}
+		cfg = loaded
 	}
 	if strings.TrimSpace(opts.Repo) != "" {
 		cfg.Repo = opts.Repo
@@ -165,6 +163,29 @@ func ResolveOptions(opts Options) (Config, error) {
 	cfg.Repo = expandHome(cfg.Repo)
 	cfg.Identity = expandHome(cfg.Identity)
 	return cfg, nil
+}
+
+func SaveResolvedConfig(opts Options, cfg Config) error {
+	if opts.SaveConfig != nil {
+		return opts.SaveConfig(cfg)
+	}
+	return SaveConfig(opts.ConfigPath, cfg)
+}
+
+func mergeConfig(base, overlay Config) Config {
+	if strings.TrimSpace(overlay.Repo) != "" {
+		base.Repo = overlay.Repo
+	}
+	if strings.TrimSpace(overlay.Remote) != "" {
+		base.Remote = overlay.Remote
+	}
+	if strings.TrimSpace(overlay.Identity) != "" {
+		base.Identity = overlay.Identity
+	}
+	if len(overlay.Recipients) > 0 {
+		base.Recipients = append([]string(nil), overlay.Recipients...)
+	}
+	return base
 }
 
 func expandHome(path string) string {

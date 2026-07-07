@@ -47,7 +47,7 @@ func TestEncryptedBackupPushPull(t *testing.T) {
 	runGit(t, "", "init", "--bare", remote)
 	repo := filepath.Join(t.TempDir(), "backup")
 	identity := filepath.Join(t.TempDir(), "age.key")
-	configPath := filepath.Join(t.TempDir(), "backup.json")
+	configPath := filepath.Join(t.TempDir(), "backup-config.json")
 	cfg, recipient, err := Init(ctx, Options{ConfigPath: configPath, Repo: repo, Remote: remote, Identity: identity, Push: false})
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +339,7 @@ func TestHistoricalSnapshotRestore(t *testing.T) {
 	remote := filepath.Join(t.TempDir(), "remote.git")
 	runGit(t, "", "init", "--bare", remote)
 	identity := filepath.Join(t.TempDir(), "age.key")
-	configPath := filepath.Join(t.TempDir(), "backup.json")
+	configPath := filepath.Join(t.TempDir(), "backup-config.json")
 	if _, _, err := Init(ctx, Options{ConfigPath: configPath, Repo: repo, Remote: remote, Identity: identity, Push: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +511,7 @@ func TestSnapshotHistoryValidation(t *testing.T) {
 	repo := filepath.Join(t.TempDir(), "backup")
 	remote := filepath.Join(t.TempDir(), "remote.git")
 	runGit(t, "", "init", "--bare", remote)
-	configPath := filepath.Join(t.TempDir(), "backup.json")
+	configPath := filepath.Join(t.TempDir(), "backup-config.json")
 	if _, _, err := Init(ctx, Options{ConfigPath: configPath, Repo: repo, Remote: remote, Identity: filepath.Join(t.TempDir(), "age.key"), Push: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +543,7 @@ func TestSnapshotHistoryValidation(t *testing.T) {
 }
 
 func TestConfigRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "backup.json")
+	path := filepath.Join(t.TempDir(), "backup-config.json")
 	cfg := DefaultConfig()
 	cfg.Repo = "~/Projects/example"
 	cfg.Recipients = []string{"age1example"}
@@ -563,9 +563,6 @@ func TestConfigRoundTrip(t *testing.T) {
 	}
 	if got := info.Mode().Perm(); got != 0o600 {
 		t.Fatalf("config mode = %#o, want 0600", got)
-	}
-	if DefaultConfigPath() == "" {
-		t.Fatal("default config path should not be empty")
 	}
 	if expandHome("~") == "~" || !strings.Contains(expandHome("~/Projects/example"), "Projects") {
 		t.Fatal("home expansion did not expand")
@@ -612,7 +609,7 @@ func TestConfigRoundTrip(t *testing.T) {
 
 func TestSaveConfigPreservesExistingConfigOnRenameFailure(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "backup.json")
+	path := filepath.Join(dir, "backup-config.json")
 	original := DefaultConfig()
 	original.Repo = "~/Projects/original"
 	original.Recipients = []string{"age1original"}
@@ -648,14 +645,14 @@ func TestSaveConfigPreservesExistingConfigOnRenameFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, entry := range entries {
-		if strings.HasPrefix(entry.Name(), ".backup.json.") && strings.HasSuffix(entry.Name(), ".tmp") {
+		if strings.HasPrefix(entry.Name(), ".backup-config.json.") && strings.HasSuffix(entry.Name(), ".tmp") {
 			t.Fatalf("temporary config file was not cleaned up: %s", entry.Name())
 		}
 	}
 }
 
 func TestAtomicConfigWriteReportsFilesystemErrors(t *testing.T) {
-	missingParent := filepath.Join(t.TempDir(), "missing", "backup.json")
+	missingParent := filepath.Join(t.TempDir(), "missing", "backup-config.json")
 	if err := writeFileAtomic(missingParent, []byte("{}\n"), 0o600); err == nil {
 		t.Fatal("expected missing parent error")
 	}

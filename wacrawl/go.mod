@@ -6,7 +6,10 @@ require filippo.io/age v1.3.1
 
 require github.com/mattn/go-sqlite3 v1.14.47
 
-require github.com/pelletier/go-toml/v2 v2.4.2 // indirect
+require (
+	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
+	google.golang.org/protobuf v1.36.11 // indirect
+)
 
 require (
 	filippo.io/hpke v0.4.0 // indirect

@@ -1,24 +1,12 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"os"
 
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/wacrawl/internal/cli"
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/wacrawl"
 )
 
 func main() {
-	os.Exit(run(os.Args[1:]))
-}
-
-func run(args []string) int {
-	if err := cli.Run(context.Background(), args, os.Stdout, os.Stderr); err != nil {
-		if !output.IsRendered(err) {
-			fmt.Fprintln(os.Stderr, err)
-		}
-		return cli.ExitCode(err)
-	}
-	return 0
+	os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{wacrawl.New()}))
 }

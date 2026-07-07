@@ -65,7 +65,7 @@ func Init(ctx context.Context, opts Options) (Config, string, error) {
 	if len(cfg.Recipients) == 0 {
 		cfg.Recipients = []string{recipient}
 	}
-	if err := SaveConfig(opts.ConfigPath, cfg); err != nil {
+	if err := SaveResolvedConfig(opts, cfg); err != nil {
 		return Config{}, "", err
 	}
 	if err := ensureRepo(ctx, cfg); err != nil {
@@ -562,7 +562,7 @@ tag names are visible Git metadata and should not contain sensitive text.
 ` + "```bash" + `
 wacrawl backup pull
 wacrawl backup snapshots
-wacrawl --db /tmp/wacrawl-history.db backup pull --ref snapshot/before-phone-migration
+wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
 ` + "```" + `
 
 ` + "`backup pull`" + ` decrypts every payload with the local age identity, verifies
@@ -572,7 +572,7 @@ directly from Git objects without changing this checkout's current branch.
 
 ## Recovery
 
-Install wacrawl, clone this repo to the path in ` + "`~/.opentrawl/wacrawl/backup.json`" + `,
+Install wacrawl, clone this repo to the path in ` + "`~/.opentrawl/wacrawl/config.toml`" + `,
 restore the local age identity file, then run:
 
 ` + "```bash" + `
