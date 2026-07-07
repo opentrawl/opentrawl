@@ -335,11 +335,14 @@ func TestClassifyLimitContractIsUsageError(t *testing.T) {
 
 func TestOpenHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
+	latitude := 52.36761
+	longitude := 4.90411
 	err := printOpenText(&out, archive.OpenResult{
 		Ref: "photoscrawl:asset/fixture",
 		Mechanical: archive.OpenMechanical{
 			Captured: &archive.OpenCaptured{Local: "2026-05-28T12:00:00+02:00", Timezone: "Europe/Amsterdam"},
 			Media:    &archive.OpenMedia{Kind: "photo", Width: 100, Height: 80},
+			Place:    &archive.OpenPlace{Name: "Synthetic Pier", Latitude: &latitude, Longitude: &longitude},
 			GPS:      &archive.OpenGPS{Latitude: 52, Longitude: 4, HorizontalAccuracyMeters: 8},
 			Address:  "Synthetic Street, Synthetic City",
 			Venue:    &archive.OpenVenue{Name: "Synthetic Pier", Tier: "venue_candidate", DistanceMeters: 12},
@@ -367,8 +370,8 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 		"Synthetic beach scene.",
 		"Captured: 2026-05-28 12:00 local (Europe/Amsterdam)",
 		"Media: photo, 100 x 80",
+		"Place: Synthetic Pier · 52.3676 N, 4.9041 E",
 		"GPS: 52.00000, 4.00000, +/-8m",
-		"Venue: Synthetic Pier, candidate, 12m from GPS",
 		"Camera: Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64",
 		"Uncertainty: exact venue.",
 		"Original: IMG_0001.JPG",
@@ -399,6 +402,27 @@ func TestOpenHumanOutputUsesKnownPlaceInsteadOfVenue(t *testing.T) {
 	)
 	if strings.Contains(got, "Venue:") || strings.Contains(got, "Synthetic Consultancy") {
 		t.Fatalf("known place output leaked venue:\n%s", got)
+	}
+}
+
+func TestOpenHumanOutputDoesNotRepeatAddressPlace(t *testing.T) {
+	var out strings.Builder
+	latitude := 52.36761
+	longitude := 4.90411
+	err := printOpenText(&out, archive.OpenResult{
+		Ref: "photoscrawl:asset/fixture",
+		Mechanical: archive.OpenMechanical{
+			Place:   &archive.OpenPlace{Name: "Synthetic Street, Synthetic City", Latitude: &latitude, Longitude: &longitude},
+			Address: "Synthetic Street, Synthetic City",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertHumanProseOutput(t, got, "Place: Synthetic Street, Synthetic City · 52.3676 N, 4.9041 E")
+	if strings.Contains(got, "Address: Synthetic Street, Synthetic City") {
+		t.Fatalf("address repeated after place fallback:\n%s", got)
 	}
 }
 

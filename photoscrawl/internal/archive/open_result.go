@@ -3,6 +3,7 @@ package archive
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ type OpenResult struct {
 type OpenMechanical struct {
 	Captured        *OpenCaptured        `json:"captured,omitempty"`
 	Media           *OpenMedia           `json:"media,omitempty"`
+	Place           *OpenPlace           `json:"place,omitempty"`
 	GPS             *OpenGPS             `json:"gps,omitempty"`
 	Address         string               `json:"address,omitempty"`
 	KnownPlace      *OpenKnownPlace      `json:"known_place,omitempty"`
@@ -50,6 +52,12 @@ type OpenGPS struct {
 	Latitude                 float64 `json:"latitude"`
 	Longitude                float64 `json:"longitude"`
 	HorizontalAccuracyMeters float64 `json:"horizontal_accuracy_meters,omitempty"`
+}
+
+type OpenPlace struct {
+	Name      string   `json:"name,omitempty"`
+	Latitude  *float64 `json:"latitude,omitempty"`
+	Longitude *float64 `json:"longitude,omitempty"`
 }
 
 type OpenVenue struct {
@@ -118,6 +126,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		Mechanical: OpenMechanical{
 			Captured:        openCaptured(asset),
 			Media:           openMedia(asset),
+			Place:           openPlace(placeObservations, locations),
 			GPS:             openGPS(locations),
 			Address:         openAddress(placeObservations),
 			KnownPlace:      knownPlace,
@@ -130,6 +139,138 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		},
 		Model: openModel(modelObservations),
 	}
+}
+
+func openPlace(rows, locations []map[string]any) *OpenPlace {
+	name := openPlaceName(rows)
+	latitude, longitude, ok := openPlaceLocation(locations)
+	if name == "" && !ok {
+		return nil
+	}
+	place := &OpenPlace{Name: name}
+	if ok {
+		place.Latitude = &latitude
+		place.Longitude = &longitude
+	}
+	return place
+}
+
+func openPlaceName(rows []map[string]any) string {
+	name := ""
+	rank := 0
+	distance := 0.0
+	hasDistance := false
+	for _, row := range rows {
+		candidate := openPlaceRowName(row)
+		if candidate == "" {
+			continue
+		}
+		candidateRank := openPlaceRowRank(row)
+		if candidateRank == 0 {
+			continue
+		}
+		candidateDistance, candidateHasDistance := openPlaceDistance(row)
+		if name == "" || candidateRank < rank || (candidateRank == rank && openPlaceDistanceLess(candidateDistance, candidateHasDistance, distance, hasDistance)) {
+			name = candidate
+			rank = candidateRank
+			distance = candidateDistance
+			hasDistance = candidateHasDistance
+		}
+	}
+	return name
+}
+
+func openPlaceRowName(row map[string]any) string {
+	if rowString(row, "observation_type") == knownPlaceObservationType {
+		var value map[string]any
+		if json.Unmarshal([]byte(rowString(row, "value_json")), &value) == nil {
+			if line := KnownPlaceCardLine(mapText(value, "kind"), mapText(value, "name"), rowBool(value, "after")); line != "" {
+				return line
+			}
+		}
+	}
+	return strings.TrimSpace(rowString(row, "value_text"))
+}
+
+func openPlaceRowRank(row map[string]any) int {
+	tier := strings.TrimSpace(rowString(row, "tier"))
+	switch strings.TrimSpace(rowString(row, "observation_type")) {
+	case "venue":
+		switch tier {
+		case "confirmed_venue":
+			return 1
+		case "venue_candidate":
+			return 2
+		}
+	case "poi_candidate":
+		if tier == "nearby_poi" {
+			return 3
+		}
+	case knownPlaceObservationType:
+		if tier == "" || tier == "known_place" {
+			return 4
+		}
+	case "address":
+		if tier == "" || tier == "area_context" {
+			return 5
+		}
+	default:
+		return 0
+	}
+	return 0
+}
+
+func openPlaceDistance(row map[string]any) (float64, bool) {
+	if row == nil || row["distance_meters"] == nil {
+		return 0, false
+	}
+	return rowFloat(row, "distance_meters"), true
+}
+
+func openPlaceDistanceLess(left float64, leftOK bool, right float64, rightOK bool) bool {
+	if leftOK != rightOK {
+		return leftOK
+	}
+	if !leftOK {
+		return false
+	}
+	if left == right {
+		return false
+	}
+	return left < right
+}
+
+func openPlaceLocation(rows []map[string]any) (float64, float64, bool) {
+	for _, row := range rows {
+		return openPlaceCoordinateValue(rowFloat(row, "latitude")), openPlaceCoordinateValue(rowFloat(row, "longitude")), true
+	}
+	return 0, 0, false
+}
+
+func OpenPlaceCardLine(place *OpenPlace) string {
+	if place == nil {
+		return ""
+	}
+	parts := []string{}
+	if name := strings.TrimSpace(place.Name); name != "" {
+		parts = append(parts, name)
+	}
+	if place.Latitude != nil && place.Longitude != nil {
+		parts = append(parts, openPlaceCoordinate(*place.Latitude, "N", "S")+", "+openPlaceCoordinate(*place.Longitude, "E", "W"))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func openPlaceCoordinate(value float64, positive, negative string) string {
+	direction := positive
+	if math.Signbit(value) {
+		direction = negative
+	}
+	return fmt.Sprintf("%.4f %s", math.Abs(openPlaceCoordinateValue(value)), direction)
+}
+
+func openPlaceCoordinateValue(value float64) float64 {
+	return math.Trunc(value*10000) / 10000
 }
 
 func openCaptured(asset map[string]any) *OpenCaptured {
