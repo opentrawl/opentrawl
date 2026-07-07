@@ -63,6 +63,6 @@ func (e lockHeldError) ErrorBody() output.ErrorBody {
 		Code:    "archive_busy",
 		Message: e.Error(),
 		Remedy:  "wait for the other run to finish, then run the command again",
-		Fields:  map[string]any{"lock": e.path},
+		Fields:  map[string]any{"lock_path": e.path},
 	}
 }

@@ -78,7 +78,7 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 	}
 	if wireChild {
 		req.Progress = func(progress Progress) {
-			_ = writeChildFrame(r.opts.stdout, childFrame{Type: "progress", Progress: &progress})
+			_ = writeChildFrame(r.opts.stdout, childProgressFrame(progress))
 		}
 	}
 	if err := executeVerb(ctx, source, verb, req, globals, format); err != nil {
@@ -102,7 +102,7 @@ func (r runner) openRunLog(paths sourcePaths, verb targetVerb, globals globalOpt
 		JSONProgress: format == output.JSON,
 	}
 	if attach {
-		opts.Stderr = &childLogFrameWriter{w: r.opts.stdout, source: paths.CrawlerID}
+		opts.Stderr = &childLogFrameWriter{w: r.opts.stdout}
 		if opts.Verbosity < 1 {
 			opts.Verbosity = 1
 		}

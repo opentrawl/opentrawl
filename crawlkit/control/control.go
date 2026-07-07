@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	SchemaVersion         = 1
 	RunnerManifestVersion = 2
+	SchemaVersion         = RunnerManifestVersion
 	ContractVersion       = 1
 	StatusSchemaVersion   = "crawlkit.control.v1"
 )
@@ -138,7 +138,7 @@ type Database struct {
 
 func NewManifest(id, displayName, binaryName string) Manifest {
 	return Manifest{
-		SchemaVersion:   SchemaVersion,
+		SchemaVersion:   RunnerManifestVersion,
 		ContractVersion: ContractVersion,
 		ID:              strings.TrimSpace(id),
 		DisplayName:     strings.TrimSpace(displayName),

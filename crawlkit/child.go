@@ -17,25 +17,24 @@ import (
 )
 
 type childFrame struct {
-	SchemaVersion int               `json:"schema_version"`
-	Type          string            `json:"type"`
-	Progress      *Progress         `json:"progress,omitempty"`
-	Output        string            `json:"output,omitempty"`
-	Error         *output.ErrorBody `json:"error,omitempty"`
-	ExitCode      int               `json:"exit_code,omitempty"`
-	LogLine       *childLogLine     `json:"log_line,omitempty"`
+	kind      childFrameKind
+	progress  Progress
+	logText   string
+	output    string
+	errorBody *output.ErrorBody
 }
 
-type childLogLine struct {
-	Level  string `json:"level"`
-	Source string `json:"source"`
-	Line   string `json:"line"`
-}
+type childFrameKind int
+
+const (
+	childFrameResult childFrameKind = iota
+	childFrameProgress
+	childFrameLog
+)
 
 type childLogFrameWriter struct {
 	mu      sync.Mutex
 	w       io.Writer
-	source  string
 	pending string
 }
 
@@ -55,26 +54,10 @@ func (w *childLogFrameWriter) Write(p []byte) (int, error) {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
-		err := writeChildFrame(w.w, childFrame{
-			Type: "log",
-			LogLine: &childLogLine{
-				Level:  childLogLevel(line),
-				Source: w.source,
-				Line:   line,
-			},
-		})
-		if err != nil {
+		if err := writeChildFrame(w.w, childLogFrame(line)); err != nil {
 			return len(p), err
 		}
 	}
-}
-
-func childLogLevel(line string) string {
-	fields := strings.Fields(line)
-	if len(fields) < 3 {
-		return ""
-	}
-	return strings.ToLower(fields[2])
 }
 
 type childRunError struct {
@@ -113,19 +96,16 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawl
 			err = result.err
 		}
 	}
-	frame := childFrame{
-		Type:     "result",
-		Output:   string(result.output),
-		ExitCode: exitCodeFor(err),
-	}
+	var body *output.ErrorBody
 	if err != nil {
-		body := errorBodyFor(err)
-		frame.Error = &body
+		errBody := errorBodyFor(err)
+		body = &errBody
 	}
+	frame := childResultFrame(string(result.output), body)
 	if writeErr := writeChildFrame(r.opts.stdout, frame); writeErr != nil && err == nil {
 		return 1
 	}
-	return frame.ExitCode
+	return exitCodeFor(err)
 }
 
 func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format) executionResult {
@@ -219,29 +199,27 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 				frames = nil
 				continue
 			}
-			switch frame.Type {
-			case "progress":
-				if frame.Progress != nil {
-					logProgress(runLog, *frame.Progress)
+			resetTimer(timer, watchdog)
+			switch frame.kind {
+			case childFrameProgress:
+				logProgress(runLog, frame.progress)
+			case childFrameLog:
+				if verbosity > 0 && logStream != nil {
+					_, _ = fmt.Fprintln(logStream, frame.logText)
 				}
-				resetTimer(timer, watchdog)
-			case "log":
-				if frame.LogLine != nil && verbosity > 0 && logStream != nil {
-					_, _ = fmt.Fprintln(logStream, frame.LogLine.Line)
-				}
-			case "result":
+			case childFrameResult:
 				waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace)
-				if frame.Error != nil {
+				if frame.errorBody != nil {
 					var exitErr *exec.ExitError
 					if waitErr != nil && !errors.As(waitErr, &exitErr) {
-						return executionResult{output: []byte(frame.Output), err: childExitError(waitErr, stderr())}
+						return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
 					}
-					return executionResult{output: []byte(frame.Output), err: childRunError{body: *frame.Error, code: frame.ExitCode}}
+					return executionResult{output: []byte(frame.output), err: childRunError{body: *frame.errorBody, code: childProcessExitCode(waitErr)}}
 				}
 				if waitErr != nil {
-					return executionResult{output: []byte(frame.Output), err: childExitError(waitErr, stderr())}
+					return executionResult{output: []byte(frame.output), err: childExitError(waitErr, stderr())}
 				}
-				return executionResult{output: []byte(frame.Output)}
+				return executionResult{output: []byte(frame.output)}
 			}
 		case err := <-decodeErrs:
 			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace)
@@ -257,6 +235,26 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 			return executionResult{err: errors.New("child exited without a result frame")}
 		}
 	}
+}
+
+func childProgressFrame(progress Progress) childFrame {
+	return childFrame{kind: childFrameProgress, progress: progress}
+}
+
+func childLogFrame(text string) childFrame {
+	return childFrame{kind: childFrameLog, logText: text}
+}
+
+func childResultFrame(output string, body *output.ErrorBody) childFrame {
+	return childFrame{kind: childFrameResult, output: output, errorBody: body}
+}
+
+func childProcessExitCode(err error) int {
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) {
+		return exitErr.ExitCode()
+	}
+	return 1
 }
 
 func waitForChildExit(ctx context.Context, cmd *exec.Cmd, done <-chan error, watchdog, grace time.Duration) error {

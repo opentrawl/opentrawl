@@ -936,7 +936,7 @@ func TestExecuteImportContactsRejectsBadManifests(t *testing.T) {
 	}{
 		{
 			name:     "wrong schema",
-			manifest: `{"schema_version":3,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true,"mutates":false}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
+			manifest: `{"schema_version":1,"contract_version":1,"id":"telecrawl","display_name":"Telegram Crawl","version":"0.0.0","capabilities":["contacts_export"],"binary":{"name":"telecrawl"},"commands":{"contact-export":{"argv":["telecrawl","--json","contacts","export"],"json":true,"mutates":false}},"privacy":{"contains_private_messages":true,"exports_secrets":false}}`,
 		},
 		{
 			name:     "wrong contract",

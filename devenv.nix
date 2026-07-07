@@ -11,7 +11,9 @@
   };
 
   packages = [
+    pkgs.buf
     pkgs.golangci-lint
+    pkgs.protoc-gen-go
     pkgs.sqlite
     pkgs.jq
   ];

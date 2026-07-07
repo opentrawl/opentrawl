@@ -28,7 +28,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if manifest.ID != "clawdex" || manifest.DisplayName != "Contacts" {
 		t.Fatalf("manifest identity = %#v", manifest)
 	}
-	if manifest.SchemaVersion != control.SchemaVersion || manifest.ContractVersion != control.ContractVersion {
+	if manifest.SchemaVersion != control.RunnerManifestVersion || manifest.ContractVersion != control.ContractVersion {
 		t.Fatalf("manifest versions = %#v", manifest)
 	}
 	if manifest.Version != Version {

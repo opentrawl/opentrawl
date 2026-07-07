@@ -8,7 +8,7 @@ import (
 
 func TestManifestDefaultsSchemaAndBinary(t *testing.T) {
 	manifest := NewManifest("slacrawl", "Slack Crawl", "slacrawl")
-	if manifest.SchemaVersion != SchemaVersion || manifest.ContractVersion != ContractVersion {
+	if manifest.SchemaVersion != RunnerManifestVersion || manifest.ContractVersion != ContractVersion {
 		t.Fatalf("manifest versions = %#v", manifest)
 	}
 	if manifest.Binary.Name != "slacrawl" {
