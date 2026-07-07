@@ -8,9 +8,9 @@ import (
 	"testing"
 )
 
-func TestReadChildFrameRejectsMalformedJSON(t *testing.T) {
+func TestReadChildFrameRejectsMalformedProto(t *testing.T) {
 	var buf bytes.Buffer
-	payload := []byte(`{"schema_version":1,`)
+	payload := []byte{0xff}
 	var prefix [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(prefix[:], uint64(len(payload)))
 	buf.Write(prefix[:n])

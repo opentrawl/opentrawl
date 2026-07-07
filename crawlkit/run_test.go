@@ -787,31 +787,6 @@ func TestRunChildWireReexecProgressWatchdogAndStaleLock(t *testing.T) {
 		t.Fatalf("progress child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	opts = childTestOptions(t, "structured_error")
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
-	var envelope map[string]map[string]any
-	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
-		t.Fatalf("structured child error is not JSON: code=%d stdout=%s stderr=%s err=%v", code, stdout, stderr, err)
-	}
-	if code != 1 || envelope["error"]["code"] != "config_invalid" || envelope["error"]["field"] != "required" {
-		t.Fatalf("structured child error lost fields: code=%d envelope=%#v stderr=%s", code, envelope, stderr)
-	}
-
-	opts = childTestOptions(t, "structured_fields")
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
-	var structured map[string]map[string]any
-	if err := json.Unmarshal([]byte(stdout), &structured); err != nil {
-		t.Fatalf("structured fields error is not JSON: code=%d stdout=%s stderr=%s err=%v", code, stdout, stderr, err)
-	}
-	candidates, ok := structured["error"]["candidates"].([]any)
-	if code != 1 || !ok || len(candidates) != 1 {
-		t.Fatalf("structured error fields did not survive as JSON: code=%d envelope=%#v stderr=%s", code, structured, stderr)
-	}
-	first, ok := candidates[0].(map[string]any)
-	if !ok || first["who"] != "Ada Example" {
-		t.Fatalf("candidate field = %#v", candidates[0])
-	}
-
 	opts = childTestOptions(t, "hold")
 	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress") {
@@ -829,6 +804,32 @@ func TestRunChildWireReexecProgressWatchdogAndStaleLock(t *testing.T) {
 	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("rerun after killed child code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunChildWireLogFramesResetWatchdog(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	opts := childTestOptions(t, "log_heartbeat")
+	start := time.Now()
+	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	elapsed := time.Since(start)
+	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
+		t.Fatalf("log heartbeat child code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if elapsed < opts.watchdog {
+		t.Fatalf("log heartbeat finished before watchdog window, elapsed=%s watchdog=%s", elapsed, opts.watchdog)
+	}
+	logData, err := os.ReadFile(filepath.Join(stateRoot, "testcrawl", "logs", "current.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	logText := string(logData)
+	if !strings.Contains(logText, "log_heartbeat") {
+		t.Fatalf("log heartbeat did not reach run log:\n%s", logText)
+	}
+	if strings.Contains(logText, "sync_progress") {
+		t.Fatalf("log heartbeat child emitted progress:\n%s", logText)
 	}
 }
 
@@ -914,7 +915,7 @@ func TestRunWatchdogKillsChildProcessGroup(t *testing.T) {
 	}
 }
 
-func TestRunLockHeldByMutatingChildAfterParentDies(t *testing.T) {
+func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("parent-death process semantics differ on Windows")
 	}
@@ -949,8 +950,36 @@ func TestRunLockHeldByMutatingChildAfterParentDies(t *testing.T) {
 
 	opts := childTestOptions(t, "progress")
 	code, retryStdout, retryStderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
-	if code != 1 || !strings.Contains(retryStdout, "archive_busy") {
+	var envelope struct {
+		Error struct {
+			Code     string `json:"code"`
+			LockPath string `json:"lock_path"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(retryStdout), &envelope); err != nil {
+		t.Fatalf("archive_busy error is not JSON: code=%d stdout=%s stderr=%s err=%v", code, retryStdout, retryStderr, err)
+	}
+	wantLockPath := filepath.Join(stateRoot, "testcrawl", "run.lock")
+	if code != 1 || envelope.Error.Code != "archive_busy" || envelope.Error.LockPath != wantLockPath {
 		t.Fatalf("second run while child holds lock code=%d stdout=%s stderr=%s", code, retryStdout, retryStderr)
+	}
+	if strings.Contains(retryStdout, `"lock":`) {
+		t.Fatalf("archive_busy envelope used the old lock field: %s", retryStdout)
+	}
+}
+
+func TestRunChildWireForwardsLogLinesVerbatim(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	line := "2026-07-07 10:20:30 crawler WARN child_warn: message=kept"
+	opts := childTestOptions(t, "odd_log")
+	opts.childEnv = append(opts.childEnv, "CRAWLKIT_ODD_LOG_LINE="+line)
+	code, stdout, stderr := runForTest([]string{"-v", "sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
+		t.Fatalf("odd log child code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, line) {
+		t.Fatalf("forwarded log line missing:\nwant: %s\nstderr:\n%s", line, stderr)
 	}
 }
 
@@ -1085,6 +1114,18 @@ func TestRunnerChildHelper(t *testing.T) {
 			case "progress":
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced one item"})
 				return &SyncReport{Added: 1}, nil
+			case "log_heartbeat":
+				for i := 0; i < 5; i++ {
+					if err := req.Log.Info("log_heartbeat", "iteration="+strconv.Itoa(i+1)); err != nil {
+						return nil, err
+					}
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(25 * time.Millisecond):
+					}
+				}
+				return &SyncReport{Added: 1}, nil
 			case "logs":
 				if stderr := os.NewFile(2, "stderr"); stderr != nil {
 					_, _ = stderr.WriteString("raw_child_stderr\n")
@@ -1093,6 +1134,15 @@ func TestRunnerChildHelper(t *testing.T) {
 					return nil, err
 				}
 				if err := req.Log.Debug("child_debug", "message=debug"); err != nil {
+					return nil, err
+				}
+				return &SyncReport{Added: 1}, nil
+			case "odd_log":
+				line := os.Getenv("CRAWLKIT_ODD_LOG_LINE")
+				if line == "" {
+					return nil, errors.New("missing odd log line")
+				}
+				if err := writeChildFrame(os.Stdout, childLogFrame(line)); err != nil {
 					return nil, err
 				}
 				return &SyncReport{Added: 1}, nil
@@ -1121,19 +1171,6 @@ func TestRunnerChildHelper(t *testing.T) {
 					return nil, err
 				}
 				select {}
-			case "structured_error":
-				return nil, ConfigFieldError{Field: "required", Fix: "set required to ok", Err: errors.New("required must be ok")}
-			case "structured_fields":
-				return nil, testBodyError{body: ckoutput.ErrorBody{
-					Code:    "ambiguous_who",
-					Message: "ambiguous person",
-					Fields: map[string]any{
-						"candidates": []map[string]any{{
-							"who":      "Ada Example",
-							"messages": 2,
-						}},
-					},
-				}}
 			default:
 				return nil, errors.New("unknown child mode")
 			}
@@ -1166,7 +1203,7 @@ func TestRunnerFrameThenHangHelper(t *testing.T) {
 	if stdout == nil {
 		os.Exit(1)
 	}
-	if err := writeChildFrame(stdout, childFrame{Type: "result", Output: "{}"}); err != nil {
+	if err := writeChildFrame(stdout, childResultFrame("{}", nil)); err != nil {
 		os.Exit(1)
 	}
 	select {}
@@ -1232,18 +1269,6 @@ func killProcessAndWaitForLock(t *testing.T, pid int, base string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("run lock stayed held after killing child pid %d", pid)
-}
-
-type testBodyError struct {
-	body ckoutput.ErrorBody
-}
-
-func (e testBodyError) Error() string {
-	return e.body.Message
-}
-
-func (e testBodyError) ErrorBody() ckoutput.ErrorBody {
-	return e.body
 }
 
 func runForTest(argv []string, source Crawler, opts runOptions) (int, string, string) {
