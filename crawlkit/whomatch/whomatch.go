@@ -8,15 +8,16 @@
 //
 // Higher Rank values are better. Close spelling uses edit distance on compact,
 // folded strings, with one adjacent transposition counting as one edit. Both
-// sides must be at least 3 runes and have the same first letter. The maximum
-// distance is 1 when the longer side is 3 to 8 runes, 2 when it is 9 to 12
-// runes, and 3 when it is longer.
+// sides must be at least 3 runes and have the same first letter after case and
+// Latin base-letter folding. The maximum distance is 1 when the longer side is
+// 3 to 8 runes, 2 when it is 9 to 12 runes, and 3 when it is longer.
 //
 // The rules.md §1.5 structural carve-out for this package — the match ladder
 // above and display-name picking — is documented once, on BestDisplayName.
 package whomatch
 
 import (
+	"slices"
 	"strings"
 	"time"
 	"unicode"
@@ -217,7 +218,7 @@ func closeSpelling(query, value string) bool {
 	distance := levenshteinDistance(query, value)
 	longest := max(queryLen, valueLen)
 	allowedDistance := closeSpellingDistance(longest)
-	return distance <= allowedDistance || isSingleAdjacentTransposition(query, value, allowedDistance)
+	return distance <= allowedDistance || isSingleAdjacentTransposition(query, value)
 }
 
 func closeSpellingDistance(longest int) int {
@@ -338,16 +339,74 @@ func hasLetter(value string) bool {
 func firstLetter(value string) (rune, bool) {
 	for _, r := range value {
 		if unicode.IsLetter(r) {
-			return foldRune(r), true
+			return firstLetterKey(r), true
 		}
 	}
 	return 0, false
 }
 
-func isSingleAdjacentTransposition(left, right string, allowedDistance int) bool {
-	if allowedDistance < 1 {
-		return false
+// firstLetterKey compares the structural first-letter gate by Latin base
+// letter. Close spelling still scores base-letter differences in the full edit
+// distance.
+func firstLetterKey(r rune) rune {
+	r = foldRune(r)
+	switch {
+	case strings.ContainsRune("àáâãäåāăąǎǟǡǻȁȃȧḁạảấầẩẫậắằẳẵặ", r):
+		return 'a'
+	case strings.ContainsRune("ḃḅḇ", r):
+		return 'b'
+	case strings.ContainsRune("çćĉċčḉ", r):
+		return 'c'
+	case strings.ContainsRune("ďđḋḍḏḑḓ", r):
+		return 'd'
+	case strings.ContainsRune("èéêëēĕėęěȅȇȩḕḗḙḛḝẹẻẽếềểễệ", r):
+		return 'e'
+	case strings.ContainsRune("ḟ", r):
+		return 'f'
+	case strings.ContainsRune("ĝğġģǧǵḡ", r):
+		return 'g'
+	case strings.ContainsRune("ĥȟḣḥḧḩḫẖ", r):
+		return 'h'
+	case strings.ContainsRune("ìíîïĩīĭįıǐȉȋḭḯỉị", r):
+		return 'i'
+	case strings.ContainsRune("ĵǰ", r):
+		return 'j'
+	case strings.ContainsRune("ķǩḱḳḵ", r):
+		return 'k'
+	case strings.ContainsRune("ĺļľłḷḹḻḽ", r):
+		return 'l'
+	case strings.ContainsRune("ḿṁṃ", r):
+		return 'm'
+	case strings.ContainsRune("ñńņňǹṅṇṉṋ", r):
+		return 'n'
+	case strings.ContainsRune("òóôõöøōŏőơǒǫǭȍȏȫȭȯȱṍṏṑṓọỏốồổỗộớờởỡợ", r):
+		return 'o'
+	case strings.ContainsRune("ṕṗ", r):
+		return 'p'
+	case strings.ContainsRune("ŕŗřȑȓṙṛṝṟ", r):
+		return 'r'
+	case strings.ContainsRune("śŝşšșṡṣṥṧṩ", r):
+		return 's'
+	case strings.ContainsRune("ţťțṫṭṯṱẗ", r):
+		return 't'
+	case strings.ContainsRune("ùúûüũūŭůűųưǔǖǘǚǜȕȗṳṵṷṹṻụủứừửữự", r):
+		return 'u'
+	case strings.ContainsRune("ṽṿ", r):
+		return 'v'
+	case strings.ContainsRune("ŵẁẃẅẇẉẘ", r):
+		return 'w'
+	case strings.ContainsRune("ẋẍ", r):
+		return 'x'
+	case strings.ContainsRune("ýÿŷȳẏẙỳỵỷỹ", r):
+		return 'y'
+	case strings.ContainsRune("źżžẑẓẕ", r):
+		return 'z'
+	default:
+		return r
 	}
+}
+
+func isSingleAdjacentTransposition(left, right string) bool {
 	a := []rune(left)
 	b := []rune(right)
 	if len(a) != len(b) {
@@ -363,23 +422,11 @@ func isSingleAdjacentTransposition(left, right string, allowedDistance int) bool
 			return i == firstDiff+1 &&
 				a[firstDiff] == b[i] &&
 				a[i] == b[firstDiff] &&
-				equalRunes(a[i+1:], b[i+1:])
+				slices.Equal(a[i+1:], b[i+1:])
 		}
 		firstDiff = i
 	}
 	return false
-}
-
-func equalRunes(left, right []rune) bool {
-	if len(left) != len(right) {
-		return false
-	}
-	for i := range left {
-		if left[i] != right[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func levenshteinDistance(left, right string) int {
