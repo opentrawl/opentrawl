@@ -1,0 +1,308 @@
+package imsgcrawl
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/openclaw/imsgcrawl/internal/messages"
+)
+
+const (
+	appID      = "imsgcrawl"
+	display    = "iMessage"
+	staleAfter = 7 * 24 * time.Hour
+)
+
+type Crawler struct {
+	chats    chatsOptions
+	messages messagesOptions
+}
+
+var _ crawlkit.FullCrawler = (*Crawler)(nil)
+
+func New() *Crawler {
+	return &Crawler{}
+}
+
+func (c *Crawler) Info() crawlkit.Info {
+	return crawlkit.Info{
+		ID:          appID,
+		Surface:     "imessage",
+		DisplayName: display,
+		Description: "Local-first iMessage archive crawler.",
+		ShortRefs:   true,
+		Privacy: control.Privacy{
+			ContainsPrivateMessages: true,
+			ExportsSecrets:          false,
+			LocalOnlyScopes:         []string{"apple-messages", "sqlite", "contact-handles", "message-archive", "message-text-search"},
+		},
+	}
+}
+
+func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+	status := control.NewStatus(appID, "Archive has not been synced.")
+	status.State = "missing"
+	if req.Store == nil {
+		return &status, nil
+	}
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "Archive could not be read."
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	archiveStatus, err := st.Status(ctx)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "Archive could not be inspected."
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	status.DatabasePath = archiveStatus.ArchivePath
+	status.DatabaseBytes = archiveStatus.ArchiveBytes
+	status.LastSyncAt = localRFC3339(archiveStatus.LastSyncAt)
+	status.Counts = statusCounts(archiveStatus)
+	switch {
+	case archiveStatus.Messages == 0:
+		status.State = "empty"
+		status.Summary = "Archive is empty."
+	case isStale(archiveStatus.LastSyncAt):
+		status.State = "stale"
+		status.Summary = "Archive is stale."
+	default:
+		status.State = "ok"
+		status.Summary = "Archive is fresh."
+	}
+	return &status, nil
+}
+
+func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+	return &crawlkit.Doctor{Checks: []crawlkit.Check{
+		checkSourceStore(ctx),
+		checkArchive(ctx, req),
+		checkFullDiskAccess(),
+	}}, nil
+}
+
+func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	options := archive.SearchOptions{
+		Limit:     query.Limit,
+		After:     appleDateOrZero(query.After),
+		HasAfter:  !query.After.IsZero(),
+		Before:    appleDateOrZero(query.Before),
+		HasBefore: !query.Before.IsZero(),
+	}
+	if strings.TrimSpace(query.Who) != "" {
+		candidate, err := resolveArchiveWho(ctx, st, query.Who)
+		if err != nil {
+			return crawlkit.SearchResult{}, err
+		}
+		options.Who = &candidate
+	}
+	page, err := st.SearchPage(ctx, query.Text, options)
+	if err != nil {
+		return crawlkit.SearchResult{}, err
+	}
+	hits := make([]crawlkit.Hit, 0, len(page.Items))
+	for _, item := range page.Items {
+		hit, err := searchHit(item)
+		if err != nil {
+			return crawlkit.SearchResult{}, err
+		}
+		hits = append(hits, hit)
+	}
+	return crawlkit.SearchResult{
+		Results:      hits,
+		TotalMatches: int(page.Total),
+		Truncated:    page.Total > int64(len(hits)),
+	}, nil
+}
+
+func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	resolution, err := st.ResolveWho(ctx, person)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]whomatch.Candidate, 0, len(resolution.Candidates))
+	for _, candidate := range resolution.Candidates {
+		out = append(out, whoCandidate(candidate))
+	}
+	return out, nil
+}
+
+func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	contacts, err := st.ExportContacts(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return &control.ContactExport{Contacts: contacts}, nil
+}
+
+func statusCounts(status archive.Status) []control.Count {
+	since := int64(0)
+	if status.EarliestMessageDate > 0 {
+		since = int64(archive.AppleDateTime(status.EarliestMessageDate).Year())
+	}
+	return []control.Count{
+		control.NewCount("messages", "messages", status.Messages),
+		control.NewCount("chats", "chats", status.Chats),
+		control.NewCount("named_contacts", "named contacts", status.NamedContacts),
+		control.NewCount("since", "since", since),
+	}
+}
+
+func checkSourceStore(ctx context.Context) crawlkit.Check {
+	if _, err := messages.Status(ctx, messages.DefaultChatDBPath()); err != nil {
+		return crawlkit.Check{
+			ID:      "source_store",
+			State:   "fail",
+			Message: "cannot read the source database",
+			Remedy:  fullDiskAccessRemedy,
+		}
+	}
+	return crawlkit.Check{ID: "source_store", State: "ok"}
+}
+
+func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
+	if req.Store == nil {
+		return crawlkit.Check{
+			ID:      "archive",
+			State:   "fail",
+			Message: "the archive database has not been synced",
+			Remedy:  "run imsgcrawl sync",
+		}
+	}
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return crawlkit.Check{
+			ID:      "archive",
+			State:   "fail",
+			Message: "cannot read the archive database",
+			Remedy:  "run imsgcrawl sync to rebuild the archive",
+		}
+	}
+	if _, err := st.Status(ctx); err != nil {
+		return crawlkit.Check{
+			ID:      "archive",
+			State:   "fail",
+			Message: "cannot inspect the archive database",
+			Remedy:  "run imsgcrawl sync to rebuild the archive",
+		}
+	}
+	if _, err := st.Chats(ctx, 1); errors.Is(err, archive.ErrSchemaOutdated) {
+		return crawlkit.Check{
+			ID:      "archive",
+			State:   "fail",
+			Message: "archive schema predates this version",
+			Remedy:  "run imsgcrawl sync to upgrade the archive schema",
+		}
+	}
+	return crawlkit.Check{ID: "archive", State: "ok"}
+}
+
+func checkFullDiskAccess() crawlkit.Check {
+	if err := canReadDirectory(filepath.Dir(messages.DefaultChatDBPath())); err != nil {
+		return crawlkit.Check{
+			ID:      "full_disk_access",
+			State:   "fail",
+			Message: "cannot read the Messages directory",
+			Remedy:  fullDiskAccessRemedy,
+		}
+	}
+	return crawlkit.Check{ID: "full_disk_access", State: "ok"}
+}
+
+func canReadDirectory(path string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	_, err = f.Readdirnames(1)
+	if errors.Is(err, io.EOF) {
+		return nil
+	}
+	return err
+}
+
+func resolveArchiveWho(ctx context.Context, st *archive.Store, who string) (archive.WhoCandidate, error) {
+	resolution, err := st.ResolveWho(ctx, who)
+	if err != nil {
+		return archive.WhoCandidate{}, err
+	}
+	candidate, ok := resolution.FilterCandidate()
+	if !ok {
+		return archive.WhoCandidate{}, fmt.Errorf("resolved who %q was not unique", who)
+	}
+	return candidate, nil
+}
+
+func whoCandidate(candidate archive.WhoCandidate) whomatch.Candidate {
+	return whomatch.Candidate{
+		Who:         strings.Join(strings.Fields(candidate.Who), " "),
+		Identifiers: append([]string{}, candidate.Identifiers...),
+		LastSeen:    parseArchiveTime(candidate.LastSeen),
+		Messages:    candidate.Messages,
+	}
+}
+
+func searchHit(item archive.SearchResult) (crawlkit.Hit, error) {
+	t := parseArchiveTime(item.Time)
+	if t.IsZero() && strings.TrimSpace(item.Time) != "" {
+		return crawlkit.Hit{}, fmt.Errorf("parse message time %q", item.Time)
+	}
+	return crawlkit.Hit{
+		Ref:      archive.MessageRef(item.MessageID),
+		ShortRef: item.ShortRef,
+		Time:     t,
+		Who:      outputField(senderName(item.FromMe, item.SenderLabel)),
+		Where:    outputField(searchChatDisplayName(item)),
+		Snippet:  outputField(searchSnippet(item)),
+	}, nil
+}
+
+func appleDateOrZero(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return archive.AppleDateFromTime(t)
+}
+
+func localRFC3339(value string) string {
+	if value == "" {
+		return ""
+	}
+	t, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return value
+	}
+	return t.Local().Format(time.RFC3339)
+}
+
+func isStale(value string) bool {
+	lastSync, err := time.Parse(time.RFC3339Nano, value)
+	return err != nil || time.Since(lastSync) > staleAfter
+}
