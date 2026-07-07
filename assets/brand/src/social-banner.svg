@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1500 500">
+<rect width="1500" height="500" fill="#ffffff"/>
+<g stroke="#e0e0e0" stroke-width="3" stroke-linecap="round" fill="none">
+<path d="M60 80 L260 40"/><path d="M260 40 L520 70"/><path d="M520 70 L780 35"/><path d="M780 35 L1050 60"/>
+<path d="M1050 60 L1300 40"/><path d="M1300 40 L1450 110"/><path d="M1450 110 L1440 300"/><path d="M1440 300 L1460 450"/>
+<path d="M60 80 L40 260"/><path d="M40 260 L70 430"/><path d="M70 430 L300 465"/><path d="M300 465 L560 445"/>
+<path d="M560 445 L900 470"/><path d="M900 470 L1180 450"/><path d="M1180 450 L1460 450"/>
+<path d="M260 40 L200 150"/><path d="M40 260 L180 240"/><path d="M1300 40 L1290 120"/>
+</g>
+<g fill="#dcdcdc">
+<circle cx="60" cy="80" r="8"/><circle cx="260" cy="40" r="6"/><circle cx="520" cy="70" r="8"/><circle cx="780" cy="35" r="6"/>
+<circle cx="1050" cy="60" r="8"/><circle cx="1300" cy="40" r="6"/><circle cx="1450" cy="110" r="7"/><circle cx="1440" cy="300" r="6"/>
+<circle cx="40" cy="260" r="7"/><circle cx="70" cy="430" r="6"/><circle cx="300" cy="465" r="8"/><circle cx="560" cy="445" r="6"/>
+<circle cx="900" cy="470" r="8"/><circle cx="1180" cy="450" r="6"/><circle cx="1460" cy="450" r="7"/>
+<circle cx="200" cy="150" r="6"/><circle cx="180" cy="240" r="7"/><circle cx="1290" cy="120" r="6"/>
+</g>
+<g transform="translate(291,76) scale(0.34)">
+  <!-- lockup: gem mark + lowercase wordmark; #101010 adapts to background -->
+  <g>
+    <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
+    <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
+    <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
+    <polygon points="56,428 270,428 512,952" fill="#e63323"/>
+    <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
+    <polygon points="754,428 968,428 512,952" fill="#c22417"/>
+    <g stroke="#101010" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" fill="none">
+      <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
+      <path d="M56 428 L968 428"/>
+      <path d="M292 196 L270 428 L512 952"/>
+      <path d="M732 196 L754 428 L512 952"/>
+    </g>
+    <g fill="#e63323" stroke="#101010" stroke-width="12">
+      <circle cx="292" cy="196" r="38"/>
+      <circle cx="732" cy="196" r="38"/>
+      <circle cx="56" cy="428" r="38"/>
+      <circle cx="968" cy="428" r="38"/>
+      <circle cx="512" cy="952" r="38"/>
+      <circle cx="270" cy="428" r="29"/>
+      <circle cx="754" cy="428" r="29"/>
+    </g>
+  </g>
+  <text x="1080" y="700" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
+        font-weight="700" font-size="340" letter-spacing="-3"
+        fill="#101010">open<tspan fill="#e63323">trawl</tspan></text>
+</g>
+</svg>

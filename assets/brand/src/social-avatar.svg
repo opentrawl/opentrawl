@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+<rect width="1024" height="1024" fill="#ffffff"/>
+<g transform="translate(512,512) scale(0.78) translate(-512,-574)">
+  <!-- v5 small-size variant (64px and below): no wrap, thicker seams, vertex nodes only -->
+  <polygon points="292,196 56,428 270,428" fill="#f2634f"/>
+  <polygon points="292,196 732,196 754,428 270,428" fill="#ef5a48"/>
+  <polygon points="732,196 968,428 754,428" fill="#f2634f"/>
+  <polygon points="56,428 270,428 512,952" fill="#e63323"/>
+  <polygon points="270,428 754,428 512,952" fill="#d92c1c"/>
+  <polygon points="754,428 968,428 512,952" fill="#c22417"/>
+  <g stroke="#101010" stroke-width="52" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M292 196 L732 196 L968 428 L512 952 L56 428 Z"/>
+    <path d="M56 428 L968 428"/>
+    <path d="M292 196 L270 428 L512 952"/>
+    <path d="M732 196 L754 428 L512 952"/>
+  </g>
+  <g fill="#e63323" stroke="#101010" stroke-width="18">
+    <circle cx="292" cy="196" r="56"/>
+    <circle cx="732" cy="196" r="56"/>
+    <circle cx="56" cy="428" r="56"/>
+    <circle cx="968" cy="428" r="56"/>
+    <circle cx="512" cy="952" r="56"/>
+  </g>
+</g>
+</svg>
