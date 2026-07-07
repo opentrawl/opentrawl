@@ -47,6 +47,15 @@ type ContactExporter interface {
 	ContactExport(ctx context.Context, req *Request) (*control.ContactExport, error)
 }
 
+type FullCrawler interface {
+	Crawler
+	Syncer
+	Searcher
+	WhoMatcher
+	Opener
+	ContactExporter
+}
+
 type Info struct {
 	ID          string
 	Surface     string
