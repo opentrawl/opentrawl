@@ -44,8 +44,12 @@ func execute(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return showHelp(args[1:], stdout)
 	}
 	switch args[0] {
+	case "ack":
+		return runAck(args[1:], stdout, opts)
 	case "comment":
 		return runComment(args[1:], stdin, stdout, opts)
+	case "inbox":
+		return runInbox(args[1:], stdout, opts)
 	case "issue":
 		return runIssue(args[1:], stdout, opts)
 	case "issues":
@@ -65,6 +69,64 @@ func execute(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	default:
 		return usageError{message: fmt.Sprintf("unknown command %q\n\nRun `linear --help`.", args[0])}
 	}
+}
+
+func runInbox(args []string, stdout io.Writer, opts commandOptions) error {
+	fs := newFlagSet("linear inbox")
+	team := fs.String("team", "", "Linear team key")
+	since := fs.String("since", "", "Duration window")
+	all := fs.Bool("all", false, "List all comments")
+	positionals, err := parseFlags(args, fs)
+	if err != nil {
+		return helpOrUsage(err, stdout, inboxHelp)
+	}
+	if len(positionals) > 0 {
+		return usageError{message: "linear inbox does not take positional arguments\n\nRun `linear inbox --help`."}
+	}
+	inboxOpts := InboxOptions{Team: *team, Since: *since, All: *all}
+	if _, err := parseInboxWindow(inboxOpts); err != nil {
+		return usageError{message: err.Error()}
+	}
+	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = api.Close()
+	}()
+	result, err := api.ListInbox(context.Background(), inboxOpts)
+	if err != nil {
+		return err
+	}
+	return RenderInbox(stdout, result)
+}
+
+func runAck(args []string, stdout io.Writer, opts commandOptions) error {
+	if len(args) == 0 || isHelp(args[0]) {
+		_, err := fmt.Fprint(stdout, ackHelp)
+		if err != nil {
+			return err
+		}
+		return helpShown{}
+	}
+	if strings.HasPrefix(args[0], "-") {
+		return usageError{message: "linear ack needs a comment id\n\nRun `linear ack --help`."}
+	}
+	if len(args) > 1 {
+		return usageError{message: "linear ack takes one comment id\n\nRun `linear ack --help`."}
+	}
+	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = api.Close()
+	}()
+	result, err := api.AckComment(context.Background(), args[0])
+	if err != nil {
+		return err
+	}
+	return RenderAck(stdout, result)
 }
 
 func runComment(args []string, stdin io.Reader, stdout io.Writer, opts commandOptions) error {
@@ -244,7 +306,9 @@ func showHelp(args []string, stdout io.Writer) error {
 		return err
 	}
 	text := map[string]string{
+		"ack":         ackHelp,
 		"comment":     commentHelp,
+		"inbox":       inboxHelp,
 		"issue":       issueHelp,
 		"issue new":   issueNewHelp,
 		"issue state": issueStateHelp,

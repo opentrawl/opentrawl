@@ -148,6 +148,42 @@ func (s *MCPServer) callTool(params json.RawMessage) (toolResult, error) {
 func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (string, error) {
 	ctx := context.Background()
 	switch name {
+	case "inbox":
+		team, err := optionalString(args, "team")
+		if err != nil {
+			return "", err
+		}
+		since, err := optionalString(args, "since")
+		if err != nil {
+			return "", err
+		}
+		all, err := optionalBool(args, "all")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		result, err := api.ListInbox(ctx, InboxOptions{Team: team, Since: since, All: all})
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderInbox(w, result) })
+	case "ack_comment":
+		commentID, err := requiredString(args, "comment_id")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		result, err := api.AckComment(ctx, commentID)
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderAck(w, result) })
 	case "create_comment":
 		issue, err := requiredString(args, "issue")
 		if err != nil {

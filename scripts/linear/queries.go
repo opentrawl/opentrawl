@@ -14,9 +14,13 @@ const commentFields = `
         url
         createdAt
         body
-        user { displayName name }
+        user { id displayName name }
         botActor { name userDisplayName type subType }
         externalUser { displayName name }`
+
+const inboxCommentFields = commentFields + `
+        reactions { emoji user { id } }
+        issue { identifier title }`
 
 const issueDetailFields = issueCoreFields + `
       comments(first: 100) {
@@ -55,6 +59,20 @@ query ListIssues($filter: IssueFilter!) {
     nodes {` + issueListFields + `
     }
     pageInfo { hasNextPage }
+  }
+}`
+
+const viewerIDQuery = `
+query ViewerID {
+  viewer { id }
+}`
+
+const inboxCommentsQuery = `
+query InboxComments($filter: CommentFilter, $after: String) {
+  comments(first: 100, after: $after, filter: $filter, orderBy: createdAt) {
+    nodes {` + inboxCommentFields + `
+    }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -109,6 +127,30 @@ mutation CreateIssue($input: IssueCreateInput!) {
   issueCreate(input: $input) {
     success
     issue {` + issueCoreFields + `
+    }
+  }
+}`
+
+const ackLookupQuery = `
+query AckLookup($id: String!) {
+  comment(id: $id) {
+    id
+    issue { identifier }
+    reactions { user { id } }
+  }
+}`
+
+const ackCommentMutation = `
+mutation AckComment($input: ReactionCreateInput!) {
+  reactionCreate(input: $input) {
+    success
+    reaction {
+      id
+      emoji
+      comment {
+        id
+        issue { identifier }
+      }
     }
   }
 }`
