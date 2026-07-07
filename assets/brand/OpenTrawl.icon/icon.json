@@ -1,0 +1,68 @@
+{
+  "fill": {
+    "linear-gradient": [
+      "extended-srgb:1.00000,1.00000,1.00000,1.00000",
+      "extended-srgb:0.90980,0.90980,0.90980,1.00000"
+    ],
+    "orientation": {
+      "start": {
+        "x": 0.5,
+        "y": 0.0
+      },
+      "stop": {
+        "x": 0.5,
+        "y": 1.0
+      }
+    }
+  },
+  "groups": [
+    {
+      "name": "Background",
+      "specular": false,
+      "layers": [
+        {
+          "image-name": "layer-bg-wrap.svg",
+          "name": "wrap",
+          "opacity": 0.6
+        }
+      ]
+    },
+    {
+      "name": "Foreground",
+      "specular": true,
+      "layers": [
+        {
+          "image-name": "layer-fg-gem.svg",
+          "name": "gem",
+          "opacity": 1.0
+        }
+      ]
+    }
+  ],
+  "supported-platforms": {
+    "squares": [
+      "macOS"
+    ]
+  },
+  "fill-specializations": [
+    {
+      "appearance": "dark",
+      "value": {
+        "linear-gradient": [
+          "extended-srgb:1.00000,1.00000,1.00000,1.00000",
+          "extended-srgb:0.90980,0.90980,0.90980,1.00000"
+        ],
+        "orientation": {
+          "start": {
+            "x": 0.5,
+            "y": 0.0
+          },
+          "stop": {
+            "x": 0.5,
+            "y": 1.0
+          }
+        }
+      }
+    }
+  ]
+}

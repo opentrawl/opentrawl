@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Icon Composer BACKGROUND layer: faint context network only, on transparency -->
+  <g stroke="#8a8a8a" stroke-width="8" stroke-linecap="round" fill="none">
+    <path d="M150 90 L420 60"/>
+    <path d="M420 60 L700 84"/>
+    <path d="M700 84 L920 120"/>
+    <path d="M920 120 L975 320"/>
+    <path d="M975 320 L977 368"/>
+    <path d="M981 488 L985 600"/>
+    <path d="M985 600 L930 830"/>
+    <path d="M930 830 L700 975"/>
+    <path d="M700 975 L573 977"/>
+    <path d="M453 980 L430 980"/>
+    <path d="M430 980 L180 930"/>
+    <path d="M180 930 L48 760"/>
+    <path d="M48 760 L30 560"/>
+    <path d="M30 560 L37 487"/>
+    <path d="M48 367 L60 240"/>
+    <path d="M60 240 L150 90"/>
+    <path d="M150 90 L244 160"/>
+    <path d="M420 60 L333 152"/>
+    <path d="M700 84 L715 138"/>
+    <path d="M920 120 L788 174"/>
+    <path d="M975 320 L972 368"/>
+    <path d="M985 600 L974 488"/>
+    <path d="M930 830 L570 935"/>
+    <path d="M700 975 L572 959"/>
+    <path d="M430 980 L455 971"/>
+    <path d="M180 930 L452 948"/>
+    <path d="M48 760 L55 488"/>
+    <path d="M60 240 L57 368"/>
+    <path d="M30 560 L44 487"/>
+  </g>
+  <g fill="#8a8a8a">
+    <circle cx="150" cy="90" r="14"/>
+    <circle cx="420" cy="60" r="11"/>
+    <circle cx="700" cy="84" r="14"/>
+    <circle cx="920" cy="120" r="12"/>
+    <circle cx="975" cy="320" r="13"/>
+    <circle cx="985" cy="600" r="11"/>
+    <circle cx="930" cy="830" r="14"/>
+    <circle cx="700" cy="975" r="12"/>
+    <circle cx="430" cy="980" r="14"/>
+    <circle cx="180" cy="930" r="12"/>
+    <circle cx="48" cy="760" r="12"/>
+    <circle cx="30" cy="560" r="11"/>
+    <circle cx="60" cy="240" r="13"/>
+  </g>
+</svg>
