@@ -7,6 +7,36 @@ the catch.
 Palette (matches the website): red #e63323, black #101010, white, greys.
 No gold, no other colours in the mark.
 
+## Brand guidelines
+
+Which asset where:
+
+- app icon (macOS 26+): `OpenTrawl.icon`, compiled to Assets.car at build time
+- app icon (pre-Tahoe): `exports/icns/OpenTrawl.icns`
+- menu bar: `exports/menubar/template-*.png` (or `src/glyph-menubar.svg`)
+- website: `exports/web/` — favicons, touch icon, `mark.svg`, lockups
+- social: `exports/social/` — X banner 1500x500, avatar (400 for upload)
+- video and print: `src/lockup.svg` (light or dark ink), or `src/mark.svg` alone
+
+Rules, learned the hard way — do not relitigate without a strong reason:
+
+- the gem's seams and node rings are always #101010, on every background;
+  never swap them to white on dark
+- the icon background does not change in dark mode (light tile pinned)
+- below 128px, always use `mark-small.svg`: no wrap, thicker seams, vertex
+  nodes only; the full mark's detail turns to mud at small sizes
+- the faint wrap never touches the gem's nodes — spokes stop short, the
+  outer ring breaks around the extreme vertices
+- gem cells use exactly the three reds (#ef5a48, #e63323, #c22417 plus
+  #f2634f on the crown corners); nodes stay red — no multicolour nodes
+- no gold, no gradients in the artwork, no baked shadows or gloss (the
+  system renders glass), no outlines around the gem, no photorealism
+- menu bar glyph is black + alpha only; the seam cuts are transparent,
+  not white
+- avatars for social are opaque white, not transparent (platforms
+  recompress and composite unpredictably)
+- wordmark: lowercase Helvetica bold, "open" in ink, "trawl" in red
+
 ## Layout
 
 - `src/` — canonical vector sources. `mark.svg` is the full mark, `mark-small.svg`
