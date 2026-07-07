@@ -6,10 +6,11 @@
 //
 //	RankExact > RankPrefix > RankSubstring > RankCloseSpelling
 //
-// Higher Rank values are better. Close spelling uses Levenshtein distance on
-// compact, folded strings. Both sides must be at least 3 runes. The maximum
-// distance is 1 when the longer side is 3 to 5 runes, and 3 when it is 6 runes
-// or longer. That keeps "miff" close to "mif" while rejecting 2-rune guesses.
+// Higher Rank values are better. Close spelling uses edit distance on compact,
+// folded strings, with one adjacent transposition counting as one edit. Both
+// sides must be at least 3 runes and have the same first letter. The maximum
+// distance is 1 when the longer side is 3 to 8 runes, 2 when it is 9 to 12
+// runes, and 3 when it is longer.
 //
 // The rules.md §1.5 structural carve-out for this package — the match ladder
 // above and display-name picking — is documented once, on BestDisplayName.
@@ -204,19 +205,26 @@ func closeSpelling(query, value string) bool {
 	if queryLen < 3 || valueLen < 3 {
 		return false
 	}
-	if !hasLetter(query) && !hasLetter(value) {
+	queryFirst, queryHasLetter := firstLetter(query)
+	valueFirst, valueHasLetter := firstLetter(value)
+	if !queryHasLetter || !valueHasLetter {
 		return false
 	}
+	if queryFirst != valueFirst {
+		return false
+	}
+
 	distance := levenshteinDistance(query, value)
 	longest := max(queryLen, valueLen)
-	return distance <= closeSpellingDistance(longest)
+	allowedDistance := closeSpellingDistance(longest)
+	return distance <= allowedDistance || isSingleAdjacentTransposition(query, value, allowedDistance)
 }
 
 func closeSpellingDistance(longest int) int {
 	switch {
-	case longest <= 5:
+	case longest <= 8:
 		return 1
-	case longest <= 10:
+	case longest <= 12:
 		return 2
 	default:
 		return 3
@@ -325,6 +333,53 @@ func hasLetter(value string) bool {
 		}
 	}
 	return false
+}
+
+func firstLetter(value string) (rune, bool) {
+	for _, r := range value {
+		if unicode.IsLetter(r) {
+			return foldRune(r), true
+		}
+	}
+	return 0, false
+}
+
+func isSingleAdjacentTransposition(left, right string, allowedDistance int) bool {
+	if allowedDistance < 1 {
+		return false
+	}
+	a := []rune(left)
+	b := []rune(right)
+	if len(a) != len(b) {
+		return false
+	}
+
+	firstDiff := -1
+	for i := range a {
+		if a[i] == b[i] {
+			continue
+		}
+		if firstDiff != -1 {
+			return i == firstDiff+1 &&
+				a[firstDiff] == b[i] &&
+				a[i] == b[firstDiff] &&
+				equalRunes(a[i+1:], b[i+1:])
+		}
+		firstDiff = i
+	}
+	return false
+}
+
+func equalRunes(left, right []rune) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func levenshteinDistance(left, right string) int {

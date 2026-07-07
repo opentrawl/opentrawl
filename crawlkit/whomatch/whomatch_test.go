@@ -49,16 +49,45 @@ func TestRankLadderOrdering(t *testing.T) {
 	}
 }
 
-func TestCloseSpellingJeffJef(t *testing.T) {
-	rank, ok := MatchRank("miff", []string{"mif"})
-	if !ok || rank != RankCloseSpelling {
-		t.Fatalf("MatchRank() = %v, %v; want %v, true", rank, ok, RankCloseSpelling)
+func TestCloseSpellingMatchesGenuineTypos(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		alias string
+	}{
+		{name: "missing middle letter", query: "danil", alias: "daniel"},
+		{name: "adjacent transposition", query: "jhon", alias: "john"},
+		{name: "single substitution", query: "robin", alias: "robyn"},
+		{name: "missing final duplicate", query: "miff", alias: "mif"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rank, ok := MatchRank(test.query, []string{test.alias})
+			if !ok || rank != RankCloseSpelling {
+				t.Fatalf("MatchRank(%q, %q) = %v, %v; want %v, true", test.query, test.alias, rank, ok, RankCloseSpelling)
+			}
+		})
 	}
 }
 
-func TestCloseSpellingRejectsTwoRuneQueries(t *testing.T) {
-	if rank, ok := MatchRank("jo", []string{"bo"}); ok {
-		t.Fatalf("MatchRank() = %v, true; want no match", rank)
+func TestCloseSpellingRejectsLooseShortWordMatches(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		alias string
+	}{
+		{name: "different first letter angel", query: "daniel", alias: "angel"},
+		{name: "different first letter mantel", query: "daniel", alias: "mantel"},
+		{name: "different first letter panel", query: "daniel", alias: "panel"},
+		{name: "same first letter distance two short word", query: "daniel", alias: "denzel"},
+		{name: "two rune query", query: "jo", alias: "bo"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if rank, ok := MatchRank(test.query, []string{test.alias}); ok {
+				t.Fatalf("MatchRank(%q, %q) = %v, true; want no match", test.query, test.alias, rank)
+			}
+		})
 	}
 }
 
