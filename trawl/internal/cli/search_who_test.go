@@ -86,6 +86,31 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 	}
 }
 
+func TestSearchWhoHumanHeadingShowsResolvedPerson(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:        "imsgcrawl",
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		searchQuery: "boat trip",
+		searchWho:   "alice@example.com",
+		search:      `{"query":"boat trip","results":[{"ref":"imessage:msg/1","short_ref":"abc12","time":"2026-05-14T09:12:00Z","who":"Alice Example","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
+		whoQuery:    "alice@example.com",
+		who:         `{"query":"alice@example.com","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "alice@example.com")
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, `Search "boat trip" with Alice Example: showing 1 of 1, newest first.`) {
+		t.Fatalf("stdout missing resolved who heading:\n%s", stdout)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
 func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{

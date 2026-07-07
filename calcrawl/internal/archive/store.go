@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/openclaw/crawlkit/config"
@@ -29,6 +30,7 @@ var ErrSchemaOutdated = errors.New("archive schema predates this version")
 type Store struct {
 	store *store.Store
 	path  string
+	owned bool
 }
 
 // DefaultPaths is the one archive path layout, from crawlkit/config. The base
@@ -66,7 +68,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, err
 	}
-	return &Store{store: st, path: path}, nil
+	return &Store{store: st, path: path, owned: true}, nil
 }
 
 func OpenExisting(ctx context.Context, path string) (*Store, error) {
@@ -89,7 +91,7 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
 	}
-	return &Store{store: st, path: path}, nil
+	return &Store{store: st, path: path, owned: true}, nil
 }
 
 func OpenExistingWritable(ctx context.Context, path string) (*Store, error) {
@@ -114,8 +116,47 @@ func OpenExistingWritable(ctx context.Context, path string) (*Store, error) {
 	return Open(ctx, path)
 }
 
+func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	if _, err := st.DB().ExecContext(ctx, schema+shortref.Schema); err != nil {
+		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
+		return nil, err
+	}
+	if err := state.EnsureSchema(ctx, st.DB()); err != nil {
+		return nil, err
+	}
+	return &Store{store: st, path: path}, nil
+}
+
+func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	version, err := st.SchemaVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if version != SchemaVersion {
+		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
+	}
+	return &Store{store: st, path: path}, nil
+}
+
 func (s *Store) Close() error {
 	if s == nil || s.store == nil {
+		return nil
+	}
+	if !s.owned {
 		return nil
 	}
 	return s.store.Close()

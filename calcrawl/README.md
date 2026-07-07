@@ -104,15 +104,14 @@ one day, and `ok` when the archive is current.
 
 ### sync
 
-JSON sync output is JSONL:
+JSON sync output reports generic change counts:
 
-```jsonl
-{"type":"progress","run_id":"019f23a1","command":"sync","event":"source_progress","message":"read Calendar source","done":1200,"unit":"events"}
-{"event":"complete","state":"ok","calendars":12,"events":1200,"new_events":4,"changed_events":2,"unchanged_events":1194,"deleted_events":0}
+```json
+{"added":4,"updated":2,"removed":0}
 ```
 
 Sync is idempotent. Re-running it updates changed events by event UUID and
-reports how many events were new, changed and unchanged.
+reports how many events were added, updated and removed.
 
 ### search
 
@@ -232,7 +231,8 @@ Access.
 ### contacts export
 
 `contacts export` returns the crawlkit contact-export shape. The current
-contract exports only identities with phone numbers:
+contact-export contract requires at least one phone number on each exported
+contact:
 
 ```json
 {

@@ -62,8 +62,13 @@ type Info struct {
 	Aliases     []string
 	DisplayName string
 	Description string
-	Privacy     control.Privacy
-	Config      any
+	// ShortRefs declares that the generated manifest includes the
+	// "short_refs" capability. Consumers key on that manifest capability,
+	// so crawlkit can change this declaration mechanism without changing
+	// the wire contract.
+	ShortRefs bool
+	Privacy   control.Privacy
+	Config    any
 }
 
 type Paths struct {

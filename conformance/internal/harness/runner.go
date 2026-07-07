@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ const commandTimeout = 30 * time.Second
 type Runner struct {
 	Binary  string
 	Timeout time.Duration
+	Trace   io.Writer
 }
 
 type CommandOutput struct {
@@ -40,6 +42,9 @@ func (r Runner) Run(ctx context.Context, args ...string) CommandOutput {
 
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	if r.Trace != nil {
+		_, _ = fmt.Fprintf(r.Trace, "spawn %s %s\n", r.Binary, strings.Join(args, " "))
+	}
 	cmd := exec.CommandContext(runCtx, r.Binary, args...) // #nosec G204 -- conformance explicitly runs the binary provided by the caller.
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

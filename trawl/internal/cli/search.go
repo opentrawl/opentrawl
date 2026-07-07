@@ -185,6 +185,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}
 		if err := renderSearchResults(r.stdout, merged, searchListContext{
 			Query:   query,
+			Who:     resolvedWhoName(whoResolved),
 			MoreCmd: c.moreCommand(query, sourceScope, merged.Rows),
 		}); err != nil {
 			return err

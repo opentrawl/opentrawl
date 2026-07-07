@@ -132,6 +132,9 @@ func renderError(w writer, format output.Format, err error) {
 		return
 	}
 	body := errorBodyFor(err)
+	if writeWhoResolutionErrorText(w, err, body) {
+		return
+	}
 	_, _ = fmt.Fprintf(w, "Error: %s\n", body.Message)
 	if strings.TrimSpace(body.Remedy) != "" {
 		_, _ = fmt.Fprintf(w, "\n%s\n", body.Remedy)

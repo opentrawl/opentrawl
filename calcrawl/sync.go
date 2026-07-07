@@ -1,104 +1,104 @@
-package cli
+package calcrawl
 
 import (
-	"errors"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
-	crawlog "github.com/openclaw/crawlkit/log"
+	"github.com/openclaw/crawlkit"
+	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/calendarstore"
 )
 
-type syncCompleteEvent struct {
-	Event            string `json:"event"`
-	State            string `json:"state"`
-	Calendars        int    `json:"calendars"`
-	Events           int    `json:"events"`
-	NewEvents        int    `json:"new_events"`
-	ChangedEvents    int    `json:"changed_events"`
-	UnchangedEvents  int    `json:"unchanged_events"`
-	DeletedEvents    int    `json:"deleted_events"`
-	SyncedAt         string `json:"synced_at"`
-	Source           string `json:"source_path"`
-	SourceModifiedAt string `json:"source_modified_at"`
-	Archive          string `json:"archive_path"`
-}
+const heartbeatEvery = 30 * time.Second
 
-func (r *runtime) runSync(args []string) error {
-	if hasHelpFlag(args) {
-		return printCommandUsage(r.stdout, []string{"sync"})
-	}
-	fs, err := r.parseNoFlags("sync", args)
-	if err != nil {
-		return err
-	}
-	if fs.NArg() != 0 {
-		return usageErr(errors.New("sync takes no arguments"))
-	}
+func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
 	syncStarted := time.Now()
-	sourceProgress := r.log.Progress(crawlog.ProgressOptions{Event: "source_progress", Unit: "events"})
-	if err := sourceProgress.Report(0, "reading Calendar source"); err != nil {
-		return err
+	sourceProgress := req.Log.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
+	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar source"); err != nil {
+		return nil, err
 	}
 	var data calendarstore.Data
 	sourceStarted := time.Now()
-	err = withHeartbeat(r.ctx, sourceProgress, 0, "reading Calendar source", func() error {
+	err := withHeartbeat(ctx, func() error {
+		return reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar source")
+	}, func() error {
 		var readErr error
-		data, readErr = calendarstore.Read(r.ctx, calendarstore.DefaultPath())
+		data, readErr = calendarstore.Read(ctx, calendarstore.DefaultPath())
 		return readErr
 	})
 	sourceElapsed := time.Since(sourceStarted)
 	if err != nil {
-		return sourceErr(fmt.Errorf("read Calendar source: %w", err))
+		return nil, sourceErr(fmt.Errorf("read Calendar source: %w", err))
 	}
-	if err := sourceProgress.Report(int64(len(data.Events)), "read Calendar source"); err != nil {
-		return err
+	if err := reportProgress(req, sourceProgress, "source", int64(len(data.Events)), 0, "read Calendar source"); err != nil {
+		return nil, err
 	}
-	st, err := archive.Open(r.ctx, archive.DefaultPath())
+	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { _ = st.Close() }()
-	archiveProgress := r.log.Progress(crawlog.ProgressOptions{Event: "archive_progress", Unit: "events", Total: int64(len(data.Events))})
-	if err := archiveProgress.Report(0, "writing archive"); err != nil {
-		return err
+	archiveProgress := req.Log.Progress(cklog.ProgressOptions{Event: "archive_progress", Unit: "events", Total: int64(len(data.Events))})
+	if err := reportProgress(req, archiveProgress, "archive", 0, int64(len(data.Events)), "writing archive"); err != nil {
+		return nil, err
 	}
 	var stats archive.SyncStats
 	archiveStarted := time.Now()
-	err = withHeartbeat(r.ctx, archiveProgress, int64(len(data.Events)), "writing archive", func() error {
+	err = withHeartbeat(ctx, func() error {
+		return reportProgress(req, archiveProgress, "archive", int64(len(data.Events)), int64(len(data.Events)), "writing archive")
+	}, func() error {
 		var applyErr error
-		stats, applyErr = st.ApplySnapshot(r.ctx, archiveCalendars(data.Calendars), archiveEvents(data.Events), archive.NewRunID(), time.Now(), data.SourcePath, data.SourceModifiedAt)
+		stats, applyErr = st.ApplySnapshot(ctx, archiveCalendars(data.Calendars), archiveEvents(data.Events), archive.NewRunID(), time.Now(), data.SourcePath, data.SourceModifiedAt)
 		return applyErr
 	})
 	archiveElapsed := time.Since(archiveStarted)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := archiveProgress.Report(int64(len(data.Events)), "wrote archive"); err != nil {
-		return err
+	if err := reportProgress(req, archiveProgress, "archive", int64(len(data.Events)), int64(len(data.Events)), "wrote archive"); err != nil {
+		return nil, err
 	}
-	r.logSyncTimings(stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
-	return r.syncComplete(syncCompleteEvent{
-		Event:            "complete",
-		State:            "ok",
-		Calendars:        stats.Calendars,
-		Events:           stats.Events,
-		NewEvents:        stats.NewEvents,
-		ChangedEvents:    stats.ChangedEvents,
-		UnchangedEvents:  stats.UnchangedEvents,
-		DeletedEvents:    stats.DeletedEvents,
-		SyncedAt:         stats.SyncedAt,
-		Source:           stats.SourcePath,
-		SourceModifiedAt: stats.SourceModifiedAt,
-		Archive:          stats.ArchivePath,
-	})
+	logSyncTimings(req, stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
+	return &crawlkit.SyncReport{
+		Added:   int64(stats.NewEvents),
+		Updated: int64(stats.ChangedEvents),
+		Removed: int64(stats.DeletedEvents),
+	}, nil
 }
 
-func (r *runtime) logSyncTimings(stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
-	_ = r.log.Info("sync_done", strings.Join([]string{
+func reportProgress(req *crawlkit.Request, progress *cklog.Progress, phase string, done, total int64, message string) error {
+	if req.Progress != nil {
+		req.Progress(crawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
+	}
+	return progress.Report(done, message)
+}
+
+func withHeartbeat(ctx context.Context, progress func() error, fn func() error) error {
+	doneCh := make(chan error, 1)
+	go func() {
+		doneCh <- fn()
+	}()
+	ticker := time.NewTicker(heartbeatEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case err := <-doneCh:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if err := progress(); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func logSyncTimings(req *crawlkit.Request, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
+	_ = req.Log.Info("sync_done", strings.Join([]string{
 		"calendars=" + strconv.Itoa(stats.Calendars),
 		"events=" + strconv.Itoa(stats.Events),
 		"new=" + strconv.Itoa(stats.NewEvents),
@@ -106,20 +106,11 @@ func (r *runtime) logSyncTimings(stats archive.SyncStats, totalElapsed, sourceEl
 		"deleted=" + strconv.Itoa(stats.DeletedEvents),
 		"elapsed_ms=" + elapsedMS(totalElapsed),
 	}, " "))
-	_ = r.log.Debug("sync_phase", strings.Join([]string{
+	_ = req.Log.Debug("sync_phase", strings.Join([]string{
 		"source=" + logQuote("calendar_store"),
 		"read_ms=" + elapsedMS(sourceElapsed),
 		"write_ms=" + elapsedMS(archiveElapsed),
 	}, " "))
-}
-
-func (r *runtime) syncComplete(event syncCompleteEvent) error {
-	if r.json {
-		return r.printJSONLine(event)
-	}
-	_, err := fmt.Fprintf(r.stdout, "Sync complete: %d calendars, %d events archived; %d new, %d changed.\n",
-		event.Calendars, event.Events, event.NewEvents, event.ChangedEvents)
-	return err
 }
 
 func archiveCalendars(calendars []calendarstore.Calendar) []archive.Calendar {

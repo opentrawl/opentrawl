@@ -1,6 +1,7 @@
 package crawlkit
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -14,7 +15,8 @@ import (
 )
 
 type searchOutput struct {
-	Query string `json:"query"`
+	Query    string `json:"query"`
+	SourceID string `json:"-"`
 	SearchResult
 }
 
@@ -114,32 +116,29 @@ func renderStatus(status *control.Status) render.Status {
 		Errors:   append([]string(nil), status.Errors...),
 	}
 	if len(status.Counts) > 0 {
-		fields := make([]render.Field, 0, len(status.Counts))
-		for _, count := range status.Counts {
-			label := firstText(count.Label, count.ID)
-			fields = append(fields, render.Field{Label: label, Value: strconv.FormatInt(count.Value, 10)})
+		archiveFields := archiveStatusFields(status)
+		if len(archiveFields) > 0 {
+			out.Sections = append(out.Sections, render.Section{Title: "Local archive", Fields: archiveFields})
 		}
-		out.Sections = append(out.Sections, render.Section{Title: "Counts", Fields: fields})
+	} else {
+		var archiveFields []render.Field
+		if status.ConfigPath != "" {
+			archiveFields = append(archiveFields, render.Field{Label: "Config", Value: status.ConfigPath})
+		}
+		if status.DatabasePath != "" {
+			archiveFields = append(archiveFields, render.Field{Label: "Database", Value: status.DatabasePath})
+		}
+		if status.DatabaseBytes > 0 {
+			archiveFields = append(archiveFields, render.Field{Label: "Database size", Value: strconv.FormatInt(status.DatabaseBytes, 10) + " bytes"})
+		}
+		if status.WALBytes > 0 {
+			archiveFields = append(archiveFields, render.Field{Label: "WAL size", Value: strconv.FormatInt(status.WALBytes, 10) + " bytes"})
+		}
+		if len(archiveFields) > 0 {
+			out.Sections = append(out.Sections, render.Section{Title: "Archive", Fields: archiveFields})
+		}
 	}
-	var archiveFields []render.Field
-	if status.ConfigPath != "" {
-		archiveFields = append(archiveFields, render.Field{Label: "Config", Value: status.ConfigPath})
-	}
-	if status.DatabasePath != "" {
-		archiveFields = append(archiveFields, render.Field{Label: "Database", Value: status.DatabasePath})
-	}
-	if status.DatabaseBytes > 0 {
-		archiveFields = append(archiveFields, render.Field{Label: "Database size", Value: strconv.FormatInt(status.DatabaseBytes, 10) + " bytes"})
-	}
-	if status.WALBytes > 0 {
-		archiveFields = append(archiveFields, render.Field{Label: "WAL size", Value: strconv.FormatInt(status.WALBytes, 10) + " bytes"})
-	}
-	if len(archiveFields) > 0 {
-		out.Sections = append(out.Sections, render.Section{Title: "Archive", Fields: archiveFields})
-	}
-	if status.LastSyncAt != "" {
-		out.Freshness = &render.Freshness{LastSync: status.LastSyncAt}
-	} else if status.LastImportAt != "" {
+	if status.LastSyncAt == "" && status.LastImportAt != "" {
 		out.Freshness = &render.Freshness{Label: "Last import", LastSync: status.LastImportAt}
 	}
 	if status.Freshness != nil && status.Freshness.Status != "" {
@@ -149,6 +148,40 @@ func renderStatus(status *control.Status) render.Status {
 		out.Freshness.State = status.Freshness.Status
 	}
 	return out
+}
+
+func archiveStatusFields(status *control.Status) []render.Field {
+	var fields []render.Field
+	if status.ConfigPath != "" {
+		fields = append(fields, render.Field{Label: "Config", Value: status.ConfigPath})
+	}
+	if status.DatabasePath != "" {
+		fields = append(fields, render.Field{Label: "Database", Value: status.DatabasePath})
+	}
+	if status.LastSyncAt != "" {
+		fields = append(fields, render.Field{Label: "Last sync", Value: shortStatusTime(status.LastSyncAt)})
+	}
+	for _, count := range status.Counts {
+		label := firstText(count.Label, count.ID)
+		fields = append(fields, render.Field{Label: displayFieldLabel(label), Value: strconv.FormatInt(count.Value, 10)})
+	}
+	return fields
+}
+
+func displayFieldLabel(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	return strings.ToUpper(value[:1]) + value[1:]
+}
+
+func shortStatusTime(value string) string {
+	t, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return value
+	}
+	return render.ShortLocalTime(t)
 }
 
 func renderDoctorChecks(doctor *Doctor) []render.Check {
@@ -192,24 +225,20 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			Text:     hit.Snippet,
 		})
 	}
-	if shouldWriteSearchSummary(value.SearchResult) {
-		if err := render.WriteSearchSummary(w, value.Query, len(value.Results), int64(max(value.TotalMatches, len(value.Results)))); err != nil {
-			return err
-		}
-		if value.Truncated {
-			if _, err := fmt.Fprintln(w, "Narrow results with --who, --after, or --before."); err != nil {
-				return err
-			}
-		}
-		if _, err := fmt.Fprintln(w); err != nil {
-			return err
-		}
+	hints := []string{}
+	if strings.TrimSpace(value.SourceID) != "" {
+		hints = append(hints, "Open: "+strings.TrimSpace(value.SourceID)+" open REF")
 	}
-	return render.WriteList(w, render.List{Heading: "Search results:", Empty: "No results.", Items: items})
-}
-
-func shouldWriteSearchSummary(result SearchResult) bool {
-	return result.Truncated || result.TotalMatches > len(result.Results)
+	if value.Truncated {
+		hints = append(hints, "Narrow results with --who, --after, or --before.")
+	}
+	return render.WriteList(w, render.List{
+		Heading:   searchHeading(value.Query, resolvedWhoName(value.WhoResolved), len(value.Results), max(value.TotalMatches, len(value.Results))),
+		Hints:     hints,
+		Items:     items,
+		ClampText: 2,
+		Empty:     searchEmptyText(value.Query),
+	})
 }
 
 func writeWhoText(w io.Writer, value whoOutput) error {
@@ -217,20 +246,20 @@ func writeWhoText(w io.Writer, value whoOutput) error {
 	for _, candidate := range value.Candidates {
 		rows = append(rows, []string{
 			candidate.Who,
-			strings.Join(candidate.Identifiers, ", "),
-			strconv.FormatInt(candidate.Messages, 10),
 			render.ShortLocalTime(candidate.lastSeen),
+			strconv.FormatInt(candidate.Messages, 10),
+			strings.Join(candidate.Identifiers, ", "),
 		})
 	}
 	if len(rows) == 0 {
-		_, err := fmt.Fprintln(w, "No matches.")
+		_, err := fmt.Fprintf(w, "No people matched %q.\n", value.Query)
 		return err
 	}
 	return render.WriteTable(w, []render.TableColumn{
-		{Header: "Name", Width: 20},
-		{Header: "Identifiers", Width: 28, Wrap: true},
-		{Header: "Messages", AlignRight: true},
-		{Header: "Last seen", Width: 16},
+		{Header: "who", Wrap: true},
+		{Header: "last seen"},
+		{Header: "items", AlignRight: true},
+		{Header: "identifiers", Wrap: true},
 	}, rows)
 }
 
@@ -271,12 +300,111 @@ func writeContactsText(w io.Writer, value *control.ContactExport) error {
 		_, err := fmt.Fprintln(w, "No contacts.")
 		return err
 	}
+	if _, err := fmt.Fprintf(w, "Contacts: showing %d of %d.\n\n", len(value.Contacts), len(value.Contacts)); err != nil {
+		return err
+	}
 	rows := make([][]string, 0, len(value.Contacts))
 	for _, contact := range value.Contacts {
 		rows = append(rows, []string{contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")})
 	}
 	return render.WriteTable(w, []render.TableColumn{
-		{Header: "Name", Width: 24},
-		{Header: "Phone numbers", Width: 32, Wrap: true},
+		{Header: "name", Wrap: true},
+		{Header: "phone"},
 	}, rows)
+}
+
+func searchHeading(query, who string, returned, total int) string {
+	query = strings.TrimSpace(query)
+	who = strings.TrimSpace(who)
+	switch {
+	case query != "" && who != "":
+		return fmt.Sprintf("Search %q with %s: showing %d of %d.", query, who, returned, total)
+	case query != "":
+		return fmt.Sprintf("Search %q: showing %d of %d.", query, returned, total)
+	case who != "":
+		return fmt.Sprintf("Search with %s: showing %d of %d.", who, returned, total)
+	default:
+		return fmt.Sprintf("Search filters: showing %d of %d.", returned, total)
+	}
+}
+
+func searchEmptyText(query string) string {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return "No matching items."
+	}
+	return fmt.Sprintf("No matches for %q.", query)
+}
+
+func resolvedWhoName(who *WhoResolved) string {
+	if who == nil {
+		return ""
+	}
+	return strings.Join(strings.Fields(who.Who), " ")
+}
+
+func writeWhoResolutionErrorText(w io.Writer, err error, body output.ErrorBody) bool {
+	var whoErr whoAmbiguityError
+	if !errors.As(err, &whoErr) {
+		return false
+	}
+	_, _ = fmt.Fprintf(w, "Error: %s\n", body.Message)
+	candidates := whoCandidateOutputs(whoErr.candidates)
+	switch {
+	case whoErr.code == 5 && len(candidates) == 0:
+		if retry := retrySearchWithoutWho(whoErr.query); retry != "" {
+			_, _ = fmt.Fprintf(w, "\nRetry without --who: %s\n", retry)
+		} else if strings.TrimSpace(body.Remedy) != "" {
+			_, _ = fmt.Fprintf(w, "\n%s\n", body.Remedy)
+		}
+	case whoErr.code == 5:
+		_, _ = fmt.Fprintln(w, "\nDid you mean:")
+		_ = writeWhoText(w, whoOutput{Query: whoErr.who, Candidates: candidates})
+		_, _ = fmt.Fprintf(w, "\nRetry with a suggestion: %s\n", retrySearchWithWho(whoErr.query, candidates[0]))
+	case len(candidates) == 0:
+		if strings.TrimSpace(body.Remedy) != "" {
+			_, _ = fmt.Fprintf(w, "\n%s\n", body.Remedy)
+		}
+	default:
+		_, _ = fmt.Fprintln(w)
+		_ = writeWhoText(w, whoOutput{Query: whoErr.who, Candidates: candidates})
+		_, _ = fmt.Fprintf(w, "\nRetry with one listed identifier: %s\n", retrySearchWithWho(whoErr.query, candidates[0]))
+	}
+	return true
+}
+
+func retrySearchWithWho(query string, candidate whoCandidateOutput) string {
+	parts := []string{"search"}
+	if strings.TrimSpace(query) != "" {
+		parts = append(parts, quoteRetryArg(query))
+	}
+	parts = append(parts, "--who", quoteRetryArg(candidateWhoFilter(candidate)))
+	return strings.Join(parts, " ")
+}
+
+func retrySearchWithoutWho(query string) string {
+	if strings.TrimSpace(query) == "" {
+		return ""
+	}
+	return "search " + quoteRetryArg(query)
+}
+
+func candidateWhoFilter(candidate whoCandidateOutput) string {
+	for _, identifier := range candidate.Identifiers {
+		if strings.TrimSpace(identifier) != "" {
+			return identifier
+		}
+	}
+	return candidate.Who
+}
+
+func quoteRetryArg(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return `""`
+	}
+	if strings.ContainsAny(value, " \t\"'") {
+		return strconv.Quote(value)
+	}
+	return value
 }

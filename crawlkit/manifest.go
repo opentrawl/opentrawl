@@ -30,7 +30,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 		DefaultDatabase: paths.Archive,
 		DefaultLogs:     paths.Logs,
 	}
-	manifest.Capabilities = capabilitiesFor(source)
+	manifest.Capabilities = capabilitiesFor(source, info)
 	commandStateRoot := ""
 	if strings.TrimSpace(stateRoot) != "" {
 		commandStateRoot = paths.StateRoot
@@ -39,7 +39,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	return manifest, nil
 }
 
-func capabilitiesFor(source Crawler) []string {
+func capabilitiesFor(source Crawler, info Info) []string {
 	caps := []string{"metadata", "status", "doctor"}
 	if _, ok := source.(Syncer); ok {
 		caps = append(caps, "sync")
@@ -55,6 +55,9 @@ func capabilitiesFor(source Crawler) []string {
 	}
 	if _, ok := source.(ContactExporter); ok {
 		caps = append(caps, "contacts_export")
+	}
+	if info.ShortRefs {
+		caps = append(caps, "short_refs")
 	}
 	for _, verb := range source.Verbs() {
 		name := commandKey(verb.Name)
@@ -139,6 +142,7 @@ func flagsForVerb(verb Verb) []control.Flag {
 func builtinSearchFlags(includeWho bool) []control.Flag {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
+	_ = fs.Bool("all", false, "return every result")
 	_ = fs.Int("limit", 20, "maximum results")
 	_ = fs.String("after", "", "only results at or after this date")
 	_ = fs.String("before", "", "only results before this date")
