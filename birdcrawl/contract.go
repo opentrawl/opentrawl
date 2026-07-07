@@ -1,12 +1,13 @@
-package cli
+package birdcrawl
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
@@ -186,15 +187,10 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	if err != nil {
 		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
 	}
-	if info, err := os.Stat(r.dbPath); err != nil {
-		if os.IsNotExist(err) {
-			return r.newStatusEnvelope("missing", "archive database is missing", "archive database is missing", store.Status{}, cfg)
-		}
-		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
-	} else if info.IsDir() {
-		return r.newStatusEnvelope("error", "archive database path is a directory", "archive database path is a directory", store.Status{}, cfg)
+	if r.req.Store == nil {
+		return r.newStatusEnvelope("missing", "archive database is missing", "archive database is missing", store.Status{}, cfg)
 	}
-	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
+	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
 	if err != nil {
 		if errors.Is(err, store.ErrSchemaOutdated) {
 			msg := "archive schema needs one sync to finish upgrading"
@@ -208,6 +204,24 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 		return r.newStatusEnvelope("error", "archive status cannot be read", "archive status cannot be read", store.Status{}, cfg)
 	}
 	return r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), statusSummary(status, formatHumanLocalTime), status, cfg)
+}
+
+func (r *runtime) status(ctx context.Context) (*control.Status, error) {
+	_ = ctx
+	envelope := r.statusEnvelope()
+	status := control.NewStatus(appID, envelope.humanSummary())
+	status.State = envelope.State
+	status.ConfigPath = r.configPath
+	status.DatabasePath = r.dbPath
+	status.LastSyncAt = envelope.Freshness.LastSync
+	status.LastImportAt = envelope.Freshness.LastImport
+	for _, count := range envelope.Counts {
+		status.Counts = append(status.Counts, control.NewCount(count.ID, count.Label, count.Value))
+	}
+	if envelope.Spend.LiveSyncPaused {
+		status.Warnings = append(status.Warnings, liveSyncPausedSentence(envelope.Spend.Month))
+	}
+	return &status, nil
 }
 
 func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status store.Status, cfg birdConfig) statusEnvelope {

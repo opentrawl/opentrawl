@@ -1,7 +1,7 @@
-package cli
+package birdcrawl
 
 import (
-	"flag"
+	"errors"
 	"io"
 
 	ckflags "github.com/openclaw/crawlkit/flags"
@@ -9,27 +9,22 @@ import (
 )
 
 func (r *runtime) runStats(args []string) error {
-	fs := flag.NewFlagSet("birdcrawl stats", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	window := fs.String("window", "30d", "")
-	by := fs.String("by", "likes", "")
-	limit := fs.Int("limit", defaultStatsLimit, "")
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
+	if len(args) > 0 {
+		return usageErr(errors.New("stats takes no positional arguments"))
 	}
 	// The one --limit contract (crawlkit/flags): --limit N is honored exactly,
 	// a limit below 1 is a usage error, no hidden cap. stats is a bounded
 	// top-N ranking, so it offers no --all.
-	limitN, err := ckflags.Limit(*limit, flagPassed(fs, "limit"), false)
+	limitN, err := ckflags.Limit(r.c.statsLimit, r.c.statsLimitSet, false)
 	if err != nil {
 		return usageErr(err)
 	}
-	parsedWindow, err := parseWindow(*window)
+	parsedWindow, err := parseWindow(r.c.statsWindow)
 	if err != nil {
 		return usageErr(err)
 	}
-	filter := store.StatsFilter{Window: parsedWindow, By: *by, Limit: limitN}
-	return r.withStore(func(st *store.Store) error {
+	filter := store.StatsFilter{Window: parsedWindow, By: r.c.statsBy, Limit: limitN}
+	return r.withReadOnlyStore(func(st *store.Store) error {
 		result, err := st.Stats(r.ctx, filter)
 		if err != nil {
 			return err
@@ -44,19 +39,6 @@ func (r *runtime) runStats(args []string) error {
 		}
 		return r.print(newStatsEnvelope(result, aliases, ownerAuthorID))
 	})
-}
-
-// flagPassed reports whether a flag was set explicitly on the command line
-// rather than left at its default, so flags.Limit can tell a real --limit from
-// the fallback.
-func flagPassed(fs *flag.FlagSet, name string) bool {
-	found := false
-	fs.Visit(func(f *flag.Flag) {
-		if f.Name == name {
-			found = true
-		}
-	})
-	return found
 }
 
 func newStatsEnvelope(result store.StatsResult, aliases map[string]string, ownerAuthorID string) statsEnvelope {

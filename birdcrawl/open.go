@@ -1,4 +1,4 @@
-package cli
+package birdcrawl
 
 import (
 	"errors"
@@ -20,7 +20,7 @@ func (r *runtime) runOpen(args []string) error {
 	if fs.NArg() != 1 {
 		return usageErr(errors.New("open takes exactly one ref"))
 	}
-	return r.withStore(func(st *store.Store) error {
+	return r.withReadOnlyStore(func(st *store.Store) error {
 		id, err := r.resolveOpenTweetID(st, fs.Arg(0))
 		if err != nil {
 			return err

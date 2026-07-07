@@ -1,19 +1,36 @@
-package cli
+package birdcrawl
 
 import (
 	"errors"
+	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/tomlfile"
 )
 
-const (
-	configEnv                     = "BIRDCRAWL_CONFIG"
-	defaultMonthlyBudgetUSDMicros = int64(10_000_000)
-)
+const defaultMonthlyBudgetUSDMicros = int64(10_000_000)
+
+type Config struct {
+	Handle           string `toml:"handle"`
+	UserID           string `toml:"user_id"`
+	MonthlyBudgetUSD string `toml:"monthly_budget_usd"`
+}
+
+func (c Config) Validate() error {
+	if strings.TrimSpace(c.MonthlyBudgetUSD) == "" {
+		return nil
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(c.MonthlyBudgetUSD), 64)
+	if err != nil {
+		return fmt.Errorf("monthly_budget_usd must be a number")
+	}
+	if value < 0 {
+		return fmt.Errorf("monthly_budget_usd must be at least 0")
+	}
+	return nil
+}
 
 type birdConfig struct {
 	Path                string
@@ -23,28 +40,8 @@ type birdConfig struct {
 	file                *tomlfile.File
 }
 
-func defaultConfigPath() string {
-	return filepath.Join(defaultBaseDir(), "config.toml")
-}
-
-func configPathForDB(dbPath string) string {
-	if env := strings.TrimSpace(os.Getenv(configEnv)); env != "" {
-		return expandHome(env)
-	}
-	if strings.TrimSpace(dbPath) == "" {
-		return defaultConfigPath()
-	}
-	dir := filepath.Dir(dbPath)
-	if dir == "." || dir == "" {
-		return defaultConfigPath()
-	}
-	return filepath.Join(dir, "config.toml")
-}
-
 func loadBirdConfig(path string) (birdConfig, error) {
-	if strings.TrimSpace(path) == "" {
-		path = defaultConfigPath()
-	}
+	path = strings.TrimSpace(path)
 	file, err := tomlfile.Read(path)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -89,26 +86,4 @@ func (c *birdConfig) SaveIdentity(userID, handle string) error {
 
 func (c birdConfig) MonthlyBudgetUSD() float64 {
 	return float64(c.MonthlyBudgetMicros) / 1_000_000
-}
-
-func expandHome(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" || path == "~" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		if path == "~" {
-			return home
-		}
-		return path
-	}
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
 }

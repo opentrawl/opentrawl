@@ -39,7 +39,7 @@ go build ./cmd/birdcrawl
 ./birdcrawl import archive /path/to/x-archive
 ```
 
-Use `--db PATH` to choose a database path. The default is
+Use `--state-root PATH` to choose a state root. The default database is
 `~/.opentrawl/birdcrawl/birdcrawl.db`.
 
 ## What it stores
@@ -92,7 +92,6 @@ Health:
 birdcrawl status
 birdcrawl doctor
 birdcrawl metadata --json
-birdcrawl version
 ```
 
 Human text is the default. Add `--json` for the contract envelope.

@@ -1,4 +1,4 @@
-package cli
+package birdcrawl
 
 import (
 	"encoding/json"
@@ -23,6 +23,8 @@ func (r *runtime) print(value any) error {
 		return r.printManifest(v)
 	case statusEnvelope:
 		return r.printStatus(v)
+	case spendEnvelope:
+		return r.printSpend(v)
 	case doctorOutput:
 		return r.printDoctor(v)
 	case searchEnvelope:
@@ -38,6 +40,18 @@ func (r *runtime) print(value any) error {
 	default:
 		return fmt.Errorf("internal: no human renderer for %T", value)
 	}
+}
+
+func (r *runtime) printSpend(value spendEnvelope) error {
+	return render.WriteCard(r.stdout, render.Card{
+		Title: "Monthly X API spend",
+		Fields: []render.CardField{
+			{Label: "Month", Value: value.Month},
+			{Label: "Spent", Value: "$" + value.SpentUSD},
+			{Label: "Cap", Value: "$" + value.MonthlyBudgetUSD},
+			{Label: "Remaining", Value: "$" + value.RemainingUSD},
+		},
+	})
 }
 
 func (r *runtime) printManifest(value control.Manifest) error {

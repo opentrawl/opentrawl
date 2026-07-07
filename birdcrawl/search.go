@@ -1,11 +1,13 @@
-package cli
+package birdcrawl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
 	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
@@ -18,7 +20,7 @@ func (r *runtime) runSearch(args []string) error {
 	if strings.TrimSpace(filter.Query) == "" {
 		return usageErr(errors.New("search takes a query, e.g. birdcrawl search QUERY"))
 	}
-	return r.withStore(func(st *store.Store) error {
+	return r.withReadOnlyStore(func(st *store.Store) error {
 		results, total, err := st.Search(r.ctx, filter)
 		if err != nil {
 			return err
@@ -33,6 +35,51 @@ func (r *runtime) runSearch(args []string) error {
 		}
 		return r.print(newSearchEnvelope(filter.Query, results, total, filter.Limit, aliases, ownerAuthorID))
 	})
+}
+
+func (r *runtime) search(ctx context.Context, query crawlkit.Query) (crawlkit.SearchResult, error) {
+	filter := store.SearchFilter{
+		Query:  query.Text,
+		Limit:  query.Limit,
+		After:  timePtr(query.After),
+		Before: timePtr(query.Before),
+	}
+	var out crawlkit.SearchResult
+	err := r.withReadOnlyStore(func(st *store.Store) error {
+		results, total, err := st.Search(ctx, filter)
+		if err != nil {
+			return err
+		}
+		aliases, err := aliasesForSearch(ctx, st, results)
+		if err != nil {
+			return err
+		}
+		ownerAuthorID, err := st.OwnerAuthorID(ctx)
+		if err != nil {
+			return err
+		}
+		out.Results = searchHits(results, aliases, ownerAuthorID)
+		out.TotalMatches = total
+		out.Truncated = total > len(out.Results)
+		return nil
+	})
+	return out, err
+}
+
+func searchHits(results []store.SearchResult, aliases map[string]string, ownerAuthorID string) []crawlkit.Hit {
+	hits := make([]crawlkit.Hit, 0, len(results))
+	for _, result := range results {
+		ref := store.TweetRef(result.ID)
+		hits = append(hits, crawlkit.Hit{
+			Ref:      ref,
+			ShortRef: aliases[ref],
+			Time:     result.CreatedAt.Local(),
+			Who:      jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
+			Where:    result.Where,
+			Snippet:  result.Snippet,
+		})
+	}
+	return hits
 }
 
 func parseSearchArgs(args []string) (store.SearchFilter, error) {
@@ -61,7 +108,7 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 				return filter, errors.New("--after takes a value")
 			}
 			i++
-			after, err := parseTimeFlag("--after", args[i])
+			after, err := parseTimeFlag("--after", args[i], false)
 			if err != nil {
 				return filter, err
 			}
@@ -71,7 +118,7 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 				return filter, errors.New("--before takes a value")
 			}
 			i++
-			before, err := parseTimeFlag("--before", args[i])
+			before, err := parseTimeFlag("--before", args[i], true)
 			if err != nil {
 				return filter, err
 			}
