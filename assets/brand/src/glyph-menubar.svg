@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- menu bar glyph: v5 silhouette — filled diamond, net cuts, node bumps at vertices -->
+  <polygon points="300,140 724,140 964,340 512,920 60,340" fill="#INK"/>
+  <g stroke="#BG" stroke-width="52" stroke-linecap="round" fill="none">
+    <path d="M60 340 L964 340"/>
+    <path d="M300 140 L512 920"/>
+    <path d="M724 140 L512 920"/>
+  </g>
+  <g fill="#INK">
+    <circle cx="300" cy="140" r="76"/>
+    <circle cx="724" cy="140" r="76"/>
+    <circle cx="60" cy="340" r="76"/>
+    <circle cx="964" cy="340" r="76"/>
+    <circle cx="512" cy="920" r="76"/>
+  </g>
+</svg>
