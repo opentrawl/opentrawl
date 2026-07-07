@@ -1,4 +1,4 @@
-package cli
+package birdcrawl
 
 import (
 	"context"
@@ -32,6 +32,13 @@ func (e *cliError) Error() string {
 }
 
 func (e *cliError) Unwrap() error { return e.err }
+
+func (e *cliError) ExitCode() int {
+	if e.code == 0 {
+		return 1
+	}
+	return e.code
+}
 
 func (e *cliError) ErrorBody() ckoutput.ErrorBody {
 	return ckoutput.ErrorBody{

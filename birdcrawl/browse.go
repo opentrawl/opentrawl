@@ -1,9 +1,7 @@
-package cli
+package birdcrawl
 
 import (
 	"errors"
-	"fmt"
-	"strconv"
 	"strings"
 
 	ckflags "github.com/openclaw/crawlkit/flags"
@@ -25,11 +23,11 @@ var browseCommands = map[string]browseCommand{
 }
 
 func (r *runtime) runBrowse(command browseCommand, args []string) error {
-	filter, err := parseListArgs(args)
+	filter, err := r.parseListArgs(args)
 	if err != nil {
 		return usageErr(err)
 	}
-	return r.withStore(func(st *store.Store) error {
+	return r.withReadOnlyStore(func(st *store.Store) error {
 		results, total, err := st.ListByRole(r.ctx, command.role, filter)
 		if err != nil {
 			return err
@@ -46,56 +44,26 @@ func (r *runtime) runBrowse(command browseCommand, args []string) error {
 	})
 }
 
-func parseListArgs(args []string) (store.ListFilter, error) {
-	var filter store.ListFilter
-	limit := defaultSearchLimit
-	limitSet := false
-	all := false
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--limit":
-			if i+1 >= len(args) {
-				return filter, errors.New("--limit takes a value")
-			}
-			i++
-			value, err := strconv.Atoi(args[i])
-			if err != nil {
-				return filter, fmt.Errorf("--limit must be a number: %s", args[i])
-			}
-			limit = value
-			limitSet = true
-		case "--all":
-			all = true
-		case "--after":
-			if i+1 >= len(args) {
-				return filter, errors.New("--after takes a value")
-			}
-			i++
-			after, err := parseTimeFlag("--after", args[i])
-			if err != nil {
-				return filter, err
-			}
-			filter.After = after
-		case "--before":
-			if i+1 >= len(args) {
-				return filter, errors.New("--before takes a value")
-			}
-			i++
-			before, err := parseTimeFlag("--before", args[i])
-			if err != nil {
-				return filter, err
-			}
-			filter.Before = before
-		default:
-			if strings.HasPrefix(args[i], "-") {
-				return filter, errors.New("unknown browse flag " + args[i])
-			}
-			return filter, errors.New("browse commands take no positional arguments")
-		}
+func (r *runtime) parseListArgs(args []string) (store.ListFilter, error) {
+	if len(args) > 0 {
+		return store.ListFilter{}, errors.New("browse commands take no positional arguments")
 	}
-	// The one --limit contract (crawlkit/flags): honored exactly as given,
-	// below 1 is a usage error, --all returns everything (Limit 0).
-	resolved, err := ckflags.Limit(limit, limitSet, all)
+	var filter store.ListFilter
+	if strings.TrimSpace(r.c.browseAfter) != "" {
+		after, err := parseTimeFlag("--after", r.c.browseAfter, false)
+		if err != nil {
+			return filter, err
+		}
+		filter.After = after
+	}
+	if strings.TrimSpace(r.c.browseBefore) != "" {
+		before, err := parseTimeFlag("--before", r.c.browseBefore, true)
+		if err != nil {
+			return filter, err
+		}
+		filter.Before = before
+	}
+	resolved, err := ckflags.Limit(r.c.browseLimit, r.c.browseLimitSet, r.c.browseAll)
 	if err != nil {
 		return filter, err
 	}

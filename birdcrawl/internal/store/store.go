@@ -28,6 +28,7 @@ type Store struct {
 	db   *sql.DB
 	path string
 	log  *cklog.Run
+	owns bool
 }
 
 type Tweet struct {
@@ -99,9 +100,20 @@ func open(ctx context.Context, path string, run *cklog.Run) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run}
+	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run, owns: true}
 	if err := s.migrate(ctx); err != nil {
 		_ = base.Close()
+		return nil, err
+	}
+	return s, nil
+}
+
+func Use(ctx context.Context, base *ckstore.Store, run *cklog.Run) (*Store, error) {
+	if base == nil {
+		return nil, errors.New("store is required")
+	}
+	s := &Store{base: base, db: base.DB(), path: base.Path(), log: run}
+	if err := s.migrate(ctx); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -121,7 +133,21 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 		_ = base.Close()
 		return nil, ErrSchemaOutdated
 	}
-	return &Store{base: base, db: base.DB(), path: base.Path()}, nil
+	return &Store{base: base, db: base.DB(), path: base.Path(), owns: true}, nil
+}
+
+func UseExisting(ctx context.Context, base *ckstore.Store, run *cklog.Run) (*Store, error) {
+	if base == nil {
+		return nil, errors.New("store is required")
+	}
+	outdated, err := hasLegacySyncState(ctx, base.DB())
+	if err != nil {
+		return nil, err
+	}
+	if outdated {
+		return nil, ErrSchemaOutdated
+	}
+	return &Store{base: base, db: base.DB(), path: base.Path(), log: run}, nil
 }
 
 // hasLegacySyncState is a cheap, read-only structural check — no write, no
@@ -133,7 +159,12 @@ func hasLegacySyncState(ctx context.Context, db *sql.DB) (bool, error) {
 	return legacyColumn > 0, err
 }
 
-func (s *Store) Close() error { return s.base.Close() }
+func (s *Store) Close() error {
+	if s == nil || !s.owns {
+		return nil
+	}
+	return s.base.Close()
+}
 func (s *Store) Path() string { return s.path }
 func (s *Store) SetLog(run *cklog.Run) {
 	s.log = run

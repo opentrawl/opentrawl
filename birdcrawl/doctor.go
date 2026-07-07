@@ -1,22 +1,16 @@
-package cli
+package birdcrawl
 
 import (
+	"context"
 	"errors"
-	"flag"
-	"io"
 	"strings"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 )
 
-func (r *runtime) runDoctor(args []string) error {
-	fs := flag.NewFlagSet("birdcrawl doctor", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
+func (r *runtime) doctor(ctx context.Context) (*crawlkit.Doctor, error) {
 	checks := []doctorCheck{}
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
@@ -58,8 +52,7 @@ func (r *runtime) runDoctor(args []string) error {
 	checks = append(checks, credentialsPresentCheck())
 	checks = append(checks, budgetHeadroomCheck(status, cfg))
 	checks = append(checks, r.xAPIUserProbeCheck(cfg, status))
-	logTail := r.logTail()
-	return r.print(doctorOutput{Checks: punctuateDoctorChecks(checks), Log: render.DoctorLogTailOutput(logTail), logTail: logTail})
+	return &crawlkit.Doctor{Checks: crawlkitChecks(punctuateDoctorChecks(checks))}, nil
 }
 
 func (r *runtime) dbIntegrityCheck(st *store.Store) doctorCheck {
@@ -136,6 +129,19 @@ func punctuateDoctorChecks(checks []doctorCheck) []doctorCheck {
 		checks[i].Message = withFullStop(checks[i].Message)
 	}
 	return checks
+}
+
+func crawlkitChecks(checks []doctorCheck) []crawlkit.Check {
+	out := make([]crawlkit.Check, 0, len(checks))
+	for _, check := range checks {
+		out = append(out, crawlkit.Check{
+			ID:      check.ID,
+			State:   check.State,
+			Message: check.Message,
+			Remedy:  check.Remedy,
+		})
+	}
+	return out
 }
 
 func withFullStop(value string) string {

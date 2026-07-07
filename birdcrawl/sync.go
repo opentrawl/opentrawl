@@ -1,15 +1,13 @@
-package cli
+package birdcrawl
 
 import (
-	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 )
@@ -67,17 +65,13 @@ type budgetExhaustedError struct{}
 
 func (budgetExhaustedError) Error() string { return "monthly X API budget exhausted" }
 
-func (r *runtime) runSync(args []string) error {
-	fs := flag.NewFlagSet("birdcrawl sync", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
+func (r *runtime) runSyncReport() (*crawlkit.SyncReport, error) {
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return r.withStore(func(st *store.Store) error {
+	var report *crawlkit.SyncReport
+	err = r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 		if err != nil {
 			return r.syncError(st, err, false)
@@ -88,8 +82,16 @@ func (r *runtime) runSync(args []string) error {
 			fetched := s.totals.Tweets > 0 || s.totals.Roles > 0 || s.totals.APISpendMicros > 0
 			return r.syncError(st, err, fetched)
 		}
+		report = syncReport(s.totals)
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	if report == nil {
+		report = &crawlkit.SyncReport{}
+	}
+	return report, nil
 }
 
 func (s *syncRunner) run() error {
@@ -364,27 +366,43 @@ func (s *syncRunner) printBatch(phase string, batch convertedPage, page xapi.Twe
 }
 
 func (s *syncRunner) print(event syncEvent) error {
-	if s.r.json {
-		return json.NewEncoder(s.r.stdout).Encode(event)
+	if s.r.req.Progress == nil {
+		return nil
 	}
 	if event.Type == "sync_complete" {
-		_, err := fmt.Fprintf(s.r.stdout, "sync complete: %d tweets, %d roles, %d profiles, %d deficient rows\n",
-			s.totals.Tweets, s.totals.Roles, s.totals.Profiles, s.totals.Deficient)
-		return err
+		s.r.req.Progress(crawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
+		return nil
 	}
+	message := ""
 	if event.Message != "" {
-		_, err := fmt.Fprintln(s.r.stdout, event.Message)
-		return err
+		message = event.Message
+	} else {
+		message = fmt.Sprintf("%s stored %d tweets", humanPhase(event.Phase), event.StoredTweets)
+		if event.StoredProfiles > 0 {
+			message += fmt.Sprintf(" from %d authors", event.StoredProfiles)
+		}
+		if event.DeficientRows > 0 {
+			message += fmt.Sprintf("; %d rows arrived without id or text", event.DeficientRows)
+		}
 	}
-	line := fmt.Sprintf("%s: stored %d tweets", humanPhase(event.Phase), event.StoredTweets)
-	if event.StoredProfiles > 0 {
-		line += fmt.Sprintf(" from %d authors", event.StoredProfiles)
+	s.r.req.Progress(crawlkit.Progress{
+		Phase:   event.Phase,
+		Done:    int64(event.StoredTweets),
+		Total:   int64(event.Fetched),
+		Message: message,
+	})
+	return nil
+}
+
+func syncReport(totals syncTotals) *crawlkit.SyncReport {
+	report := &crawlkit.SyncReport{
+		Added:   int64(totals.Tweets),
+		Updated: int64(totals.Roles + totals.Profiles),
 	}
-	if event.DeficientRows > 0 {
-		line += fmt.Sprintf("; %d rows arrived without id or text", event.DeficientRows)
+	if totals.Deficient > 0 {
+		report.Warnings = []string{fmt.Sprintf("%d deficient rows skipped", totals.Deficient)}
 	}
-	_, err := fmt.Fprintln(s.r.stdout, line)
-	return err
+	return report
 }
 
 func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {

@@ -1,4 +1,4 @@
-package cli
+package birdcrawl
 
 import (
 	"errors"
@@ -10,13 +10,10 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
-func (r *runtime) runImport(args []string) error {
-	if len(args) == 0 || args[0] != "archive" {
-		return usageErr(errors.New("import takes archive PATH"))
-	}
+func (r *runtime) runImportArchive(args []string) error {
 	fs := flag.NewFlagSet("birdcrawl import archive", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
 	}
 	if fs.NArg() != 1 {

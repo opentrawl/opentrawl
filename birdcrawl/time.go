@@ -1,4 +1,4 @@
-package cli
+package birdcrawl
 
 import (
 	"fmt"
@@ -9,10 +9,10 @@ import (
 	"github.com/openclaw/crawlkit/flags"
 )
 
-// parseTimeFlag parses an --after/--before value using the one fleet date
-// grammar (crawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD
-// date, dates read in local time.
-func parseTimeFlag(flagName, value string) (*time.Time, error) {
+// parseTimeFlag parses a date flag using the one fleet date grammar
+// (crawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD date, with
+// bare dates read in local time.
+func parseTimeFlag(flagName, value string, endOfDay bool) (*time.Time, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return nil, fmt.Errorf("%s requires a time", flagName)
@@ -20,6 +20,11 @@ func parseTimeFlag(flagName, value string) (*time.Time, error) {
 	t, err := flags.Date(value)
 	if err != nil {
 		return nil, fmt.Errorf("%s must be RFC3339 or YYYY-MM-DD: %s", flagName, value)
+	}
+	if endOfDay {
+		if day, err := time.ParseInLocation("2006-01-02", value, time.Local); err == nil {
+			t = day.Add(24*time.Hour - time.Second).UTC()
+		}
 	}
 	return &t, nil
 }
