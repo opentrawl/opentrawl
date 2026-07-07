@@ -70,6 +70,30 @@ func TestCloseSpellingMatchesGenuineTypos(t *testing.T) {
 	}
 }
 
+func TestCloseSpellingMatchesLatinBaseFirstLetter(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		alias string
+	}{
+		{name: "single word", query: "ozge", alias: "Özge"},
+		{name: "word in display name", query: "ozge", alias: "Özge Example"},
+		{name: "horned o", query: "oanh", alias: "Ơanh"},
+		{name: "horned u", query: "uyen", alias: "Ưyen"},
+		{name: "slashed o", query: "oscar", alias: "Øscar"},
+		{name: "stroke d", query: "dario", alias: "Đario"},
+		{name: "stroke l", query: "lukasz", alias: "Łukasz"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			rank, ok := MatchRank(test.query, []string{test.alias})
+			if !ok || rank != RankCloseSpelling {
+				t.Fatalf("MatchRank(%q, %q) = %v, %v; want %v, true", test.query, test.alias, rank, ok, RankCloseSpelling)
+			}
+		})
+	}
+}
+
 func TestCloseSpellingRejectsLooseShortWordMatches(t *testing.T) {
 	tests := []struct {
 		name  string

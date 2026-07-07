@@ -11,7 +11,25 @@ import (
 // handles). It returns "" when no spelling survives structural cleanup;
 // callers fall back to their own identifier ordering.
 //
-// Every rule is structural, applied in order:
+// This package has 2 deterministic rule ladders.
+//
+// Match ranking is structural and ordered:
+//  1. Exact match on normalised text or compact text.
+//  2. Prefix match on normalised text or compact text.
+//  3. Substring match on normalised text or compact text.
+//  4. Close spelling on compact folded strings, or word-by-word compact
+//     folded strings.
+//
+// Close spelling is deliberately narrow. Both sides must contain at least 3
+// runes and start with the same first letter after case folding and Latin
+// base-letter folding. The edit-distance allowance is 1 for 3 to 8 runes, 2
+// for 9 to 12 runes, and 3 above 12 runes. One adjacent transposition also
+// counts as a close spelling match. That accepts the classic swapped-letter
+// typo, such as jhon -> john, only when the strings have equal length, the
+// first-letter gate has already passed, and exactly one adjacent pair is
+// swapped.
+//
+// Display-name picking is structural and ordered:
 //  1. Angle-bracket spans are stripped ("Ebba K <ebbak@spotify.com>" becomes
 //     "Ebba K") and spellings that become identical pool their counts. A
 //     spelling that strips to nothing is dropped.
@@ -22,18 +40,18 @@ import (
 //  5. Fewer runes win.
 //  6. Alphabetical, case-insensitively, then exactly.
 //
-// rules.md §1.5 carve-out, documented once here for every crawler that
-// routes through this picker: agents retry who-resolution against this pick,
-// so the same input must give the same output every time — query-time
-// stability is a contract property. The rules above operate on string
-// structure only (counts, identifier equality, bracket spans, letter case,
-// length); none judges what a "good" name means — that is a model's call at
-// a different layer. A model call here is architecturally wrong on latency:
-// this runs inside every interactive who / search --who resolution. The
-// precompute-at-sync-time alternative was considered and rejected: the
-// candidate set is assembled at query time by merging records across events
-// and messages (union-find over shared identifiers), so a per-row sync-time
-// pick never sees the full spelling set it must choose from.
+// rules.md §1.5 carve-out, documented once here for every crawler that routes
+// through whomatch: agents retry who-resolution against these rules, so the
+// same input must give the same output every time. These rules operate on
+// string structure only: exact containment, compact character distance, one
+// adjacent swap, counts, identifier equality, bracket spans, case, and length.
+// None judges what a "good" name means; that is a model's call at a different
+// layer. A model call here is architecturally wrong on latency because these
+// rules run inside every interactive who / search --who resolution. The
+// precompute-at-sync-time alternative was considered and rejected: queries and
+// merged candidate sets are assembled at query time across events and messages
+// by shared identifiers, so a per-row sync-time pick never sees the full input
+// it must rank or choose from.
 func BestDisplayName(names map[string]int, identifiers []string) string {
 	counts := map[string]int{}
 	for value, count := range names {
