@@ -234,6 +234,15 @@ func openMechanicalFields(mechanical archive.OpenMechanical) []ckrender.CardFiel
 			fields = append(fields, ckrender.CardField{Label: "Media", Value: strings.Join(parts, ", ")})
 		}
 	}
+	placeNameRendered := false
+	placeAddressRendered := false
+	if place := mechanical.Place; place != nil {
+		if line := archive.OpenPlaceCardLine(place); line != "" {
+			fields = append(fields, ckrender.CardField{Label: "Place", Value: line})
+			placeNameRendered = strings.TrimSpace(place.Name) != ""
+			placeAddressRendered = strings.TrimSpace(place.Name) != "" && strings.EqualFold(strings.TrimSpace(place.Name), strings.TrimSpace(mechanical.Address))
+		}
+	}
 	if gps := mechanical.GPS; gps != nil {
 		value := cardformat.FormatCoordinate(gps.Latitude) + ", " + cardformat.FormatCoordinate(gps.Longitude)
 		if gps.HorizontalAccuracyMeters > 0 {
@@ -241,14 +250,14 @@ func openMechanicalFields(mechanical archive.OpenMechanical) []ckrender.CardFiel
 		}
 		fields = append(fields, ckrender.CardField{Label: "GPS", Value: value})
 	}
-	if mechanical.Address != "" {
+	if mechanical.Address != "" && !placeAddressRendered {
 		fields = append(fields, ckrender.CardField{Label: "Address", Value: mechanical.Address})
 	}
-	if knownPlace := mechanical.KnownPlace; knownPlace != nil {
+	if knownPlace := mechanical.KnownPlace; knownPlace != nil && !placeNameRendered {
 		if line := archive.KnownPlaceCardLine(knownPlace.Kind, knownPlace.Name, knownPlace.After); line != "" {
 			fields = append(fields, ckrender.CardField{Label: "Place", Value: line})
 		}
-	} else if venue := mechanical.Venue; venue != nil {
+	} else if venue := mechanical.Venue; venue != nil && !placeNameRendered {
 		value := venue.Name
 		if venue.Tier == "venue_candidate" {
 			value += ", candidate"
