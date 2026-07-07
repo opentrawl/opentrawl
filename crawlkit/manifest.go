@@ -16,6 +16,10 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	if err != nil {
 		return control.Manifest{}, err
 	}
+	spine, err := spineVerbDeclarations(source)
+	if err != nil {
+		return control.Manifest{}, err
+	}
 	if strings.TrimSpace(binaryName) == "" {
 		binaryName = filepathBase(os.Args[0])
 	}
@@ -35,7 +39,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	if strings.TrimSpace(stateRoot) != "" {
 		commandStateRoot = paths.StateRoot
 	}
-	manifest.Commands = commandTable(source, binaryName, commandStateRoot)
+	manifest.Commands = commandTable(source, binaryName, commandStateRoot, spine)
 	return manifest, nil
 }
 
@@ -60,6 +64,9 @@ func capabilitiesFor(source Crawler, info Info) []string {
 		caps = append(caps, "short_refs")
 	}
 	for _, verb := range source.Verbs() {
+		if _, ok := spineVerbKey(verb.Name); ok {
+			continue
+		}
 		name := commandKey(verb.Name)
 		if name != "" {
 			caps = append(caps, name)
@@ -68,34 +75,37 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	return uniqueStrings(caps)
 }
 
-func commandTable(source Crawler, binaryName, stateRoot string) map[string]control.Command {
+func commandTable(source Crawler, binaryName, stateRoot string, spine map[string]Verb) map[string]control.Command {
 	commands := map[string]control.Command{
-		"metadata": {Title: "Metadata", Argv: commandArgv(binaryName, stateRoot, "metadata"), JSON: true},
-		"status":   {Title: "Status", Argv: commandArgv(binaryName, stateRoot, "status"), JSON: true},
-		"doctor":   {Title: "Doctor", Argv: commandArgv(binaryName, stateRoot, "doctor"), JSON: true},
+		"metadata": applySpineDeclaration(control.Command{Title: "Metadata", Argv: commandArgv(binaryName, stateRoot, "metadata"), JSON: true}, spine, "metadata"),
+		"status":   applySpineDeclaration(control.Command{Title: "Status", Argv: commandArgv(binaryName, stateRoot, "status"), JSON: true}, spine, "status"),
+		"doctor":   applySpineDeclaration(control.Command{Title: "Doctor", Argv: commandArgv(binaryName, stateRoot, "doctor"), JSON: true}, spine, "doctor"),
 	}
 	if _, ok := source.(Syncer); ok {
-		commands["sync"] = control.Command{Title: "Sync", Argv: commandArgv(binaryName, stateRoot, "sync"), JSON: true, Mutates: true}
+		commands["sync"] = applySpineDeclaration(control.Command{Title: "Sync", Argv: commandArgv(binaryName, stateRoot, "sync"), JSON: true, Mutates: true}, spine, "sync")
 	}
 	if _, ok := source.(Searcher); ok {
 		_, supportsWho := source.(WhoMatcher)
-		commands["search"] = control.Command{
+		commands["search"] = applySpineDeclaration(control.Command{
 			Title: "Search",
 			Argv:  commandArgv(binaryName, stateRoot, "search", "QUERY"),
 			JSON:  true,
 			Flags: builtinSearchFlags(supportsWho),
-		}
+		}, spine, "search")
 	}
 	if _, ok := source.(WhoMatcher); ok {
-		commands["who"] = control.Command{Title: "Resolve person", Argv: commandArgv(binaryName, stateRoot, "who", "NAME"), JSON: true}
+		commands["who"] = applySpineDeclaration(control.Command{Title: "Resolve person", Argv: commandArgv(binaryName, stateRoot, "who", "NAME"), JSON: true}, spine, "who")
 	}
 	if _, ok := source.(Opener); ok {
-		commands["open"] = control.Command{Title: "Open", Argv: commandArgv(binaryName, stateRoot, "open", "REF"), JSON: true}
+		commands["open"] = applySpineDeclaration(control.Command{Title: "Open", Argv: commandArgv(binaryName, stateRoot, "open", "REF"), JSON: true}, spine, "open")
 	}
 	if _, ok := source.(ContactExporter); ok {
-		commands["contacts_export"] = control.Command{Title: "Export contacts", Argv: commandArgv(binaryName, stateRoot, "contacts", "export"), JSON: true}
+		commands["contacts_export"] = applySpineDeclaration(control.Command{Title: "Export contacts", Argv: commandArgv(binaryName, stateRoot, "contacts", "export"), JSON: true}, spine, "contacts_export")
 	}
 	for _, verb := range source.Verbs() {
+		if _, ok := spineVerbKey(verb.Name); ok {
+			continue
+		}
 		key := commandKey(verb.Name)
 		if key == "" {
 			continue
@@ -113,6 +123,16 @@ func commandTable(source Crawler, binaryName, stateRoot string) map[string]contr
 		}
 	}
 	return commands
+}
+
+func applySpineDeclaration(command control.Command, spine map[string]Verb, key string) control.Command {
+	verb, ok := spine[key]
+	if !ok {
+		return command
+	}
+	command.Flags = append(command.Flags, flagsForVerb(verb)...)
+	sort.Slice(command.Flags, func(i, j int) bool { return command.Flags[i].Name < command.Flags[j].Name })
+	return command
 }
 
 func commandArgv(binaryName, stateRoot string, args ...string) []string {
@@ -142,13 +162,7 @@ func flagsForVerb(verb Verb) []control.Flag {
 func builtinSearchFlags(includeWho bool) []control.Flag {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	_ = fs.Bool("all", false, "return every result")
-	_ = fs.Int("limit", 20, "maximum results")
-	_ = fs.String("after", "", "only results at or after this date")
-	_ = fs.String("before", "", "only results before this date")
-	if includeWho {
-		_ = fs.String("who", "", "only results involving this person")
-	}
+	defineSearchFlags(fs, includeWho)
 	return flagsFromSet(fs)
 }
 

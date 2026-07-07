@@ -190,6 +190,13 @@ func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, 
 }
 
 func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Request, globals globalOptions, format output.Format) error {
+	if verb.spine != nil {
+		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
+		if err != nil {
+			return err
+		}
+		verb.args = args
+	}
 	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.bespoke == nil {
 		return usageError{err: fmt.Errorf("%s takes no arguments", verb.name)}
 	}

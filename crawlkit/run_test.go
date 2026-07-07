@@ -37,6 +37,10 @@ type testCrawler struct {
 	syncFn   func(context.Context, *Request) (*SyncReport, error)
 }
 
+type testStatusCrawler struct {
+	verbs []Verb
+}
+
 type testConfig struct {
 	Required string `toml:"required"`
 }
@@ -115,6 +119,24 @@ func (c *testCrawler) Sync(ctx context.Context, req *Request) (*SyncReport, erro
 		return c.syncFn(ctx, req)
 	}
 	return &SyncReport{Added: 1}, nil
+}
+
+func (c *testStatusCrawler) Info() Info {
+	return Info{ID: "testcrawl", Surface: "test", DisplayName: "Test"}
+}
+
+func (c *testStatusCrawler) Status(ctx context.Context, req *Request) (*control.Status, error) {
+	status := control.NewStatus(c.Info().ID, "ready")
+	status.State = "ok"
+	return &status, nil
+}
+
+func (c *testStatusCrawler) Doctor(ctx context.Context, req *Request) (*Doctor, error) {
+	return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
+}
+
+func (c *testStatusCrawler) Verbs() []Verb {
+	return c.verbs
 }
 
 func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
@@ -401,6 +423,234 @@ func TestRunSyncJSONIncludesZeroCounts(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("zero sync JSON missing %s:\n%s", want, stdout)
 		}
+	}
+}
+
+func TestRunSpineSyncVerbParsesDeclaredFlags(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	includeArchived := false
+	backupRepo := ""
+	source := &testCrawler{verbs: []Verb{{
+		Name: "sync",
+		Flags: func(fs *flag.FlagSet) {
+			fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
+			fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+		},
+	}}}
+	opts := childTestOptions(t, "sync_flag")
+	code, stdout, stderr := runForTest([]string{"sync", "--include-archived", "--backup-repo", "synthetic", "--json", "--state-root", stateRoot}, source, opts)
+	if code != 0 || !strings.Contains(stdout, `"added": 7`) {
+		t.Fatalf("sync flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
+	stateRoot := t.TempDir()
+	includeArchived := false
+	backupRepo := ""
+	source := &testCrawler{verbs: []Verb{{
+		Name: "sync",
+		Flags: func(fs *flag.FlagSet) {
+			fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
+			fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+		},
+	}}}
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	syncCommand := manifest.Commands["sync"]
+	if syncCommand.Title != "Sync" || !syncCommand.Mutates || len(syncCommand.Flags) != 2 {
+		t.Fatalf("sync command = %#v", syncCommand)
+	}
+	flags := map[string]control.Flag{}
+	for _, flag := range syncCommand.Flags {
+		flags[flag.Name] = flag
+	}
+	if flag := flags["include-archived"]; flag.Usage != "include archived items" || flag.Default != "false" {
+		t.Fatalf("sync bool flag = %#v", flag)
+	}
+	if flag := flags["backup-repo"]; flag.Usage != "backup repository" || flag.Default != "" {
+		t.Fatalf("sync string flag = %#v", flag)
+	}
+	if got, want := strings.Join(syncCommand.Argv[1:], " "), "sync --json --state-root "+stateRoot; got != want {
+		t.Fatalf("sync argv suffix = %q, want %q", got, want)
+	}
+}
+
+func TestRunSpineSearchVerbPreservesPositionalQuery(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	exact := false
+	var got Query
+	source := &testCrawler{
+		verbs: []Verb{{
+			Name: "search",
+			Flags: func(fs *flag.FlagSet) {
+				fs.BoolVar(&exact, "exact", false, "match exactly")
+			},
+		}},
+		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+			got = q
+			return SearchResult{Results: []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}, TotalMatches: 1}, nil
+		},
+	}
+	code, stdout, stderr := runForTest([]string{"search", "exact", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || got.Text != "exact" || exact {
+		t.Fatalf("bare query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTest([]string{"search", "needle", "--exact", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || got.Text != "needle" || !exact {
+		t.Fatalf("flagged query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
+	}
+
+	exact = false
+	got = Query{}
+	code, stdout, stderr = runForTest([]string{"search", "--exact", "--json", "--state-root", stateRoot, "--", "--literal"}, source, runOptions{})
+	if code != 0 || got.Text != "--literal" || !exact {
+		t.Fatalf("dash query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
+	}
+}
+
+func TestRunSpineWhoVerbDropsDelimiterBeforeArityCheck(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	exact := false
+	var gotPerson string
+	source := &testCrawler{
+		verbs: []Verb{{
+			Name: "who",
+			Flags: func(fs *flag.FlagSet) {
+				fs.BoolVar(&exact, "exact", false, "match exactly")
+			},
+		}},
+		whoFn: func(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
+			gotPerson = person
+			return []whomatch.Candidate{{Who: "Ada Example", Identifiers: []string{"ada@example.com"}}}, nil
+		},
+	}
+	code, stdout, stderr := runForTest([]string{"who", "--exact", "--json", "--state-root", stateRoot, "--", "Ada"}, source, runOptions{})
+	if code != 0 || gotPerson != "Ada" || !exact {
+		t.Fatalf("who delimiter code=%d exact=%t person=%q stdout=%s stderr=%s", code, exact, gotPerson, stdout, stderr)
+	}
+}
+
+func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:    "sync",
+		Help:    "Sync archived items.",
+		Args:    []string{"PATH"},
+		Mutates: true,
+		Timeout: time.Second,
+		Run: func(ctx context.Context, req *Request) error {
+			return nil
+		},
+	}}}
+	wantMessage := "invalid sync Verb declaration"
+	wantDetail := "spine verb declarations may only set Name and Flags"
+	wantRemedy := "Remove Help, Run, Mutates, Timeout, and Args from the sync Verb declaration."
+
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantDetail) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("metadata invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantDetail) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("sync invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stdout != "" || !strings.Contains(stderr, wantMessage) || !strings.Contains(stderr, wantDetail) || !strings.Contains(stderr, wantRemedy) {
+		t.Fatalf("status invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsSpineVerbFlagCollision(t *testing.T) {
+	stateRoot := t.TempDir()
+	cases := []struct {
+		name        string
+		source      Crawler
+		args        []string
+		wantMessage string
+		wantRemedy  string
+	}{
+		{
+			name: "search flag",
+			source: &testCrawler{verbs: []Verb{{
+				Name: "search",
+				Flags: func(fs *flag.FlagSet) {
+					fs.Int("limit", 99, "crawler-owned limit")
+				},
+			}}},
+			args:        []string{"search", "needle", "--json", "--state-root", stateRoot},
+			wantMessage: "crawler flag --limit collides with a runner-owned flag",
+			wantRemedy:  "Remove --limit from the search Verb declaration; the runner owns that flag.",
+		},
+		{
+			name: "global flag",
+			source: &testCrawler{verbs: []Verb{{
+				Name: "sync",
+				Flags: func(fs *flag.FlagSet) {
+					fs.Bool("json", false, "crawler-owned JSON mode")
+				},
+			}}},
+			args:        []string{"sync", "--json", "--state-root", stateRoot},
+			wantMessage: "crawler flag --json collides with a runner-owned flag",
+			wantRemedy:  "Remove --json from the sync Verb declaration; the runner owns that flag.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, tc.source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
+				t.Fatalf("metadata collision code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+
+			code, stdout, stderr = runForTest(tc.args, tc.source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
+				t.Fatalf("invocation collision code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+		})
+	}
+}
+
+func TestRunUnsupportedSpineVerbDeclarationKeepsInvocationUsageError(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testStatusCrawler{verbs: []Verb{{Name: "sync"}}}
+
+	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 2 || stderr != "" || !strings.Contains(stdout, "source does not support sync") || strings.Contains(stdout, "invalid sync Verb declaration") {
+		t.Fatalf("unsupported sync invocation code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, "invalid sync Verb declaration: source does not implement Syncer") || !strings.Contains(stdout, "Implement crawlkit.Syncer or remove the sync Verb declaration.") {
+		t.Fatalf("unsupported sync metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsDuplicateSpineVerbDeclaration(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{Name: "sync"}, {Name: "sync"}}}
+	wantMessage := "invalid sync Verb declaration: declared more than once"
+	wantRemedy := "Keep one sync Verb declaration and remove the duplicate."
+
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("duplicate metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("duplicate sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
 
@@ -1260,36 +1510,47 @@ func TestRunnerChildHelper(t *testing.T) {
 		return
 	}
 	args := argsAfterDoubleDash(os.Args)
+	includeArchived := false
+	backupRepo := ""
 	source := &testCrawler{
-		verbs: []Verb{{
-			Name:    "archive import",
-			Help:    "Import an archive.",
-			Args:    []string{"PATH"},
-			Mutates: true,
-			Run: func(ctx context.Context, req *Request) error {
-				switch os.Getenv("CRAWLKIT_CHILD_MODE") {
-				case "bespoke_hold":
-					select {}
-				case "bespoke_progress_past_timeout":
-					for i := 0; i < 5; i++ {
-						req.Progress(Progress{Phase: "import", Done: int64(i + 1), Total: 5, Message: "still importing"})
-						select {
-						case <-ctx.Done():
-							return ctx.Err()
-						case <-time.After(80 * time.Millisecond):
+		verbs: []Verb{
+			{
+				Name:    "archive import",
+				Help:    "Import an archive.",
+				Args:    []string{"PATH"},
+				Mutates: true,
+				Run: func(ctx context.Context, req *Request) error {
+					switch os.Getenv("CRAWLKIT_CHILD_MODE") {
+					case "bespoke_hold":
+						select {}
+					case "bespoke_progress_past_timeout":
+						for i := 0; i < 5; i++ {
+							req.Progress(Progress{Phase: "import", Done: int64(i + 1), Total: 5, Message: "still importing"})
+							select {
+							case <-ctx.Done():
+								return ctx.Err()
+							case <-time.After(80 * time.Millisecond):
+							}
 						}
+						_, err := req.Out.Write([]byte("progressed\n"))
+						return err
+					case "bespoke":
+						req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
+						_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
+						return err
+					default:
+						return errors.New("wrong child mode for bespoke verb")
 					}
-					_, err := req.Out.Write([]byte("progressed\n"))
-					return err
-				case "bespoke":
-					req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
-					_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
-					return err
-				default:
-					return errors.New("wrong child mode for bespoke verb")
-				}
+				},
 			},
-		}},
+			{
+				Name: "sync",
+				Flags: func(fs *flag.FlagSet) {
+					fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
+					fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+				},
+			},
+		},
 		syncFn: func(ctx context.Context, req *Request) (*SyncReport, error) {
 			switch os.Getenv("CRAWLKIT_CHILD_MODE") {
 			case "zero_sync":
@@ -1297,6 +1558,15 @@ func TestRunnerChildHelper(t *testing.T) {
 			case "progress":
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced one item"})
 				return &SyncReport{Added: 1}, nil
+			case "sync_flag":
+				if !includeArchived {
+					return nil, errors.New("sync flag was not parsed")
+				}
+				if backupRepo != "synthetic" {
+					return nil, errors.New("sync string flag was not parsed")
+				}
+				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced archived items"})
+				return &SyncReport{Added: 7}, nil
 			case "log_heartbeat":
 				for i := 0; i < 5; i++ {
 					if err := req.Log.Info("log_heartbeat", "iteration="+strconv.Itoa(i+1)); err != nil {

@@ -25,12 +25,40 @@ type globalOptions struct {
 	args      []string
 }
 
+type globalFlagKind int
+
+const (
+	globalFlagJSON globalFlagKind = iota
+	globalFlagVerbose
+	globalFlagVeryVerbose
+	globalFlagVersion
+	globalFlagHelp
+	globalFlagStateRoot
+	globalFlagRunID
+)
+
+type globalFlagSpec struct {
+	tokens []string
+	kind   globalFlagKind
+}
+
+var globalFlagSpecs = []globalFlagSpec{
+	{tokens: []string{"--json"}, kind: globalFlagJSON},
+	{tokens: []string{"-v", "--verbose"}, kind: globalFlagVerbose},
+	{tokens: []string{"-vv"}, kind: globalFlagVeryVerbose},
+	{tokens: []string{"--version"}, kind: globalFlagVersion},
+	{tokens: []string{"-h", "--help", "-help"}, kind: globalFlagHelp},
+	{tokens: []string{"--state-root"}, kind: globalFlagStateRoot},
+	{tokens: []string{"--crawlkit-run-id"}, kind: globalFlagRunID},
+}
+
 type targetVerb struct {
 	name      string
 	tokens    []string
 	args      []string
 	mutates   bool
 	timeout   time.Duration
+	spine     *Verb
 	bespoke   *Verb
 	storeMode storeMode
 }
@@ -48,49 +76,97 @@ func parseGlobal(argv []string) (globalOptions, error) {
 	var opts globalOptions
 	for i := 0; i < len(argv); i++ {
 		arg := argv[i]
-		switch {
-		case arg == "--":
+		if arg == "--" {
 			opts.args = append(opts.args, argv[i:]...)
 			return opts, nil
-		case arg == "--json":
+		}
+		name, value, inline := splitFlagValue(arg)
+		spec, ok := globalFlagByToken(name)
+		if !ok {
+			opts.args = append(opts.args, arg)
+			continue
+		}
+		switch spec.kind {
+		case globalFlagJSON:
+			if inline {
+				opts.args = append(opts.args, arg)
+				continue
+			}
 			opts.json = true
-		case arg == "-v" || arg == "--verbose":
+		case globalFlagVerbose:
+			if inline {
+				opts.args = append(opts.args, arg)
+				continue
+			}
 			if opts.verbosity < 1 {
 				opts.verbosity = 1
 			}
-		case arg == "-vv":
-			opts.verbosity = 2
-		case arg == "--version":
-			opts.version = true
-		case arg == "--help" || arg == "-h" || arg == "-help":
-			opts.help = true
-		case arg == "--state-root":
-			i++
-			if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
-				return opts, usageError{err: errors.New("--state-root needs a path")}
+		case globalFlagVeryVerbose:
+			if inline {
+				opts.args = append(opts.args, arg)
+				continue
 			}
-			opts.stateRoot = argv[i]
-		case strings.HasPrefix(arg, "--state-root="):
-			opts.stateRoot = strings.TrimPrefix(arg, "--state-root=")
+			opts.verbosity = 2
+		case globalFlagVersion:
+			if inline {
+				opts.args = append(opts.args, arg)
+				continue
+			}
+			opts.version = true
+		case globalFlagHelp:
+			if inline {
+				opts.args = append(opts.args, arg)
+				continue
+			}
+			opts.help = true
+		case globalFlagStateRoot:
+			if !inline {
+				i++
+				if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
+					return opts, usageError{err: errors.New("--state-root needs a path")}
+				}
+				value = argv[i]
+			}
+			opts.stateRoot = value
 			if strings.TrimSpace(opts.stateRoot) == "" {
 				return opts, usageError{err: errors.New("--state-root needs a path")}
 			}
-		case arg == "--crawlkit-run-id":
-			i++
-			if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
-				return opts, usageError{err: errors.New("--crawlkit-run-id needs a value")}
+		case globalFlagRunID:
+			if !inline {
+				i++
+				if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
+					return opts, usageError{err: errors.New("--crawlkit-run-id needs a value")}
+				}
+				value = argv[i]
 			}
-			opts.runID = argv[i]
-		case strings.HasPrefix(arg, "--crawlkit-run-id="):
-			opts.runID = strings.TrimPrefix(arg, "--crawlkit-run-id=")
+			opts.runID = value
 			if strings.TrimSpace(opts.runID) == "" {
 				return opts, usageError{err: errors.New("--crawlkit-run-id needs a value")}
 			}
-		default:
-			opts.args = append(opts.args, arg)
 		}
 	}
 	return opts, nil
+}
+
+func globalFlagByToken(token string) (globalFlagSpec, bool) {
+	for _, spec := range globalFlagSpecs {
+		for _, candidate := range spec.tokens {
+			if token == candidate {
+				return spec, true
+			}
+		}
+	}
+	return globalFlagSpec{}, false
+}
+
+func runnerOwnedGlobalFlagNames() map[string]struct{} {
+	names := map[string]struct{}{}
+	for _, spec := range globalFlagSpecs {
+		for _, token := range spec.tokens {
+			names[strings.TrimLeft(token, "-")] = struct{}{}
+		}
+	}
+	return names
 }
 
 func selectSource(args []string, sources []Crawler) (Crawler, []string, error) {
@@ -170,34 +246,62 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 	}
 	switch name {
 	case "metadata":
-		return targetVerb{name: name, args: rest, storeMode: storeNone}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeNone}, nil
 	case "status", "doctor":
-		return targetVerb{name: name, args: rest, storeMode: storeOptional}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeOptional}, nil
 	case "sync":
 		if _, ok := source.(Syncer); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support sync")}
 		}
-		return targetVerb{name: name, args: rest, mutates: true, storeMode: storeWrite}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, mutates: true, spine: spineDeclaration(spine, name), storeMode: storeWrite}, nil
 	case "search":
 		if _, ok := source.(Searcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support search")}
 		}
-		return targetVerb{name: name, args: rest, storeMode: storeRead}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
 	case "open":
 		if _, ok := source.(Opener); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support open")}
 		}
-		return targetVerb{name: name, args: rest, storeMode: storeRead}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
 	case "who":
 		if _, ok := source.(WhoMatcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support who")}
 		}
-		return targetVerb{name: name, args: rest, storeMode: storeRead}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
 	case "contacts_export":
 		if _, ok := source.(ContactExporter); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support contacts export")}
 		}
-		return targetVerb{name: name, args: rest, storeMode: storeRead}, nil
+		spine, err := supportedSpineVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
 	}
 	for _, verb := range source.Verbs() {
 		if matched, verbRest := matchBespokeVerb(verb, args); matched {
@@ -328,11 +432,7 @@ func loadConfig(info Info, stateRoot string) error {
 func parseQuery(args []string) (Query, error) {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	limit := fs.Int("limit", 20, "maximum results")
-	all := fs.Bool("all", false, "return every result")
-	after := fs.String("after", "", "only results at or after this date")
-	before := fs.String("before", "", "only results before this date")
-	who := fs.String("who", "", "only results involving this person")
+	searchFlags := defineSearchFlags(fs, true)
 	flagArgs, positional, err := searchFlagArgs(args)
 	if err != nil {
 		return Query{}, err
@@ -350,21 +450,21 @@ func parseQuery(args []string) (Query, error) {
 			whoSet = true
 		}
 	})
-	resolvedLimit, err := ckflags.Limit(*limit, limitSet, *all)
+	resolvedLimit, err := ckflags.Limit(*searchFlags.limit, limitSet, *searchFlags.all)
 	if err != nil {
 		return Query{}, output.UsageError{Err: err}
 	}
-	if whoSet && strings.TrimSpace(*who) == "" {
+	if whoSet && strings.TrimSpace(*searchFlags.who) == "" {
 		return Query{}, output.UsageError{Err: errors.New("search --who requires an identity")}
 	}
-	query := Query{Limit: resolvedLimit, Who: *who}
+	query := Query{Limit: resolvedLimit, Who: *searchFlags.who}
 	if len(positional) > 0 {
 		query.Text = strings.Join(positional, " ")
 	}
-	if query.After, err = parseDateFlag("--after", *after); err != nil {
+	if query.After, err = parseDateFlag("--after", *searchFlags.after); err != nil {
 		return Query{}, err
 	}
-	if query.Before, err = parseDateFlag("--before", *before); err != nil {
+	if query.Before, err = parseDateFlag("--before", *searchFlags.before); err != nil {
 		return Query{}, err
 	}
 	if strings.TrimSpace(query.Text) == "" && strings.TrimSpace(query.Who) == "" && query.After.IsZero() && query.Before.IsZero() {
@@ -419,12 +519,71 @@ func splitFlagValue(arg string) (name, value string, inline bool) {
 }
 
 func knownSearchFlag(name string) bool {
-	switch name {
-	case "--limit", "--after", "--before", "--who", "--all":
-		return true
-	default:
+	if !strings.HasPrefix(name, "--") {
 		return false
 	}
+	_, ok := searchFlagByName(strings.TrimLeft(name, "-"))
+	return ok
+}
+
+type searchFlagSpec struct {
+	name  string
+	usage string
+}
+
+var searchFlagSpecs = []searchFlagSpec{
+	{name: "all", usage: "return every result"},
+	{name: "limit", usage: "maximum results"},
+	{name: "after", usage: "only results at or after this date"},
+	{name: "before", usage: "only results before this date"},
+	{name: "who", usage: "only results involving this person"},
+}
+
+type searchFlagValues struct {
+	all    *bool
+	limit  *int
+	after  *string
+	before *string
+	who    *string
+}
+
+func defineSearchFlags(fs *flag.FlagSet, includeWho bool) searchFlagValues {
+	var values searchFlagValues
+	for _, spec := range searchFlagSpecs {
+		if spec.name == "who" && !includeWho {
+			continue
+		}
+		switch spec.name {
+		case "all":
+			values.all = fs.Bool(spec.name, false, spec.usage)
+		case "limit":
+			values.limit = fs.Int(spec.name, 20, spec.usage)
+		case "after":
+			values.after = fs.String(spec.name, "", spec.usage)
+		case "before":
+			values.before = fs.String(spec.name, "", spec.usage)
+		case "who":
+			values.who = fs.String(spec.name, "", spec.usage)
+		}
+	}
+	return values
+}
+
+func searchFlagByName(name string) (searchFlagSpec, bool) {
+	for _, spec := range searchFlagSpecs {
+		if name == spec.name {
+			return spec, true
+		}
+	}
+	return searchFlagSpec{}, false
+}
+
+func runnerOwnedSearchFlagNames() map[string]struct{} {
+	names := map[string]struct{}{}
+	for _, spec := range searchFlagSpecs {
+		names[spec.name] = struct{}{}
+	}
+	return names
 }
 
 func parseDateFlag(name, raw string) (time.Time, error) {
