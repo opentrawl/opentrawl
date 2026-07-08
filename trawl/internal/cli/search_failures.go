@@ -73,8 +73,7 @@ func (r *Runtime) reportSourceFailure(sourceID, verb, detail string) {
 }
 
 // failureReason is the stable token JSON and logs share: a source that
-// hit the subprocess deadline is a timeout, anything else is an error
-// (non-zero exit, spawn failure, unparseable output).
+// hit the read deadline is a timeout, anything else is an error.
 func failureReason(err error) string {
 	if isTimeoutError(err) {
 		return "timeout"
@@ -83,7 +82,7 @@ func failureReason(err error) string {
 }
 
 // failureDetail is the human sentence for the same failure — the reason
-// a person reads on stderr, never a machine ref or the child argv. It
+// a person reads on stderr, never a machine ref or an internal argv. It
 // names the real deadline the source was held to.
 func (r *Runtime) failureDetail(err error) string {
 	return r.reasonDetail(failureReason(err))

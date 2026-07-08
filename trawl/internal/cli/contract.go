@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,17 +12,15 @@ import (
 const unknownFreshness = "—"
 
 type StatusEnvelope struct {
-	AppID           string       `json:"app_id"`
-	State           string       `json:"state"`
-	Summary         string       `json:"summary,omitempty"`
-	Freshness       *Freshness   `json:"freshness,omitempty"`
-	Counts          []Count      `json:"counts,omitempty"`
-	Auth            SafeAuth     `json:"auth,omitempty"`
-	DatabasePath    string       `json:"database_path,omitempty"`
-	Databases       []Database   `json:"databases,omitempty"`
-	LastSyncAt      string       `json:"last_sync_at,omitempty"`
-	LastImportAt    string       `json:"last_import_at,omitempty"`
-	LastSyncOutcome *SyncOutcome `json:"last_sync_outcome,omitempty"`
+	AppID        string     `json:"app_id"`
+	State        string     `json:"state"`
+	Summary      string     `json:"summary,omitempty"`
+	Freshness    *Freshness `json:"freshness,omitempty"`
+	Counts       []Count    `json:"counts,omitempty"`
+	DatabasePath string     `json:"database_path,omitempty"`
+	Databases    []Database `json:"databases,omitempty"`
+	LastSyncAt   string     `json:"last_sync_at,omitempty"`
+	LastImportAt string     `json:"last_import_at,omitempty"`
 }
 
 type Freshness struct {
@@ -102,53 +99,6 @@ func (v CountValue) text(id, label string) string {
 	}
 }
 
-type SafeAuth map[string]any
-
-func (a *SafeAuth) UnmarshalJSON(data []byte) error {
-	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
-		*a = nil
-		return nil
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.UseNumber()
-	var raw map[string]any
-	if err := decoder.Decode(&raw); err != nil {
-		return err
-	}
-	safe := SafeAuth{}
-	for key, value := range raw {
-		switch typed := value.(type) {
-		case bool:
-			safe[key] = typed
-		case string:
-			if key == "expires" {
-				safe[key] = typed
-			}
-		case nil:
-			if key == "expires" {
-				safe[key] = nil
-			}
-		}
-	}
-	if len(safe) == 0 {
-		*a = nil
-		return nil
-	}
-	*a = safe
-	return nil
-}
-
-func (a SafeAuth) boolKeys() []string {
-	var keys []string
-	for key, value := range a {
-		if _, ok := value.(bool); ok {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	return keys
-}
-
 type Database struct {
 	ID        string  `json:"id,omitempty"`
 	Label     string  `json:"label,omitempty"`
@@ -160,12 +110,6 @@ type Database struct {
 	IsPrimary bool    `json:"is_primary,omitempty"`
 	Bytes     int64   `json:"bytes,omitempty"`
 	Counts    []Count `json:"counts,omitempty"`
-}
-
-type SyncOutcome struct {
-	State      string `json:"state,omitempty"`
-	Message    string `json:"message,omitempty"`
-	FinishedAt string `json:"finished_at,omitempty"`
 }
 
 type DoctorEnvelope struct {

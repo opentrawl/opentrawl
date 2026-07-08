@@ -52,7 +52,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 	t.Setenv("COLUMNS", "200")
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "imessage,telegram", "--limit", "2")
@@ -98,7 +98,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 	t.Setenv("COLUMNS", "200")
 
 	stdout, stderr, code := runCLI(t, "search", "fair")
@@ -146,7 +146,7 @@ func TestSearchJSONHonorsLimitAboveOldCap(t *testing.T) {
 		search:      searchResultsJSON("boat trip", limit),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--limit", strconv.Itoa(limit))
 	if code != 0 {
@@ -179,7 +179,7 @@ func TestSearchHumanHonorsLimitAboveOldCap(t *testing.T) {
 		search:      searchResultsJSON("boat trip", limit),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 	t.Setenv("COLUMNS", "200")
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--limit", strconv.Itoa(limit))
@@ -204,7 +204,7 @@ func TestSearchRejectsNonPositiveLimit(t *testing.T) {
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			t.Setenv("PATH", writeFakeCrawlers(t))
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 
 			var stdout, stderr strings.Builder
 			err := Execute(args, &stdout, &stderr)
@@ -240,7 +240,7 @@ func TestSearchHumanOutputUsesShortRefsWhenEveryDisplayedRowCanResolve(t *testin
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip")
 	if code != 0 {
@@ -283,7 +283,7 @@ func TestSearchHumanOutputDegradesRefsPerRow(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip")
 	if code != 0 {
@@ -318,7 +318,7 @@ func TestSearchJSONOmitsShortRef(t *testing.T) {
 		],"total_matches":1,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
 	if code != 0 {
@@ -347,7 +347,7 @@ func TestSearchJSONIncludesFederatedEnvelope(t *testing.T) {
 		],"total_matches":2,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--limit", "1")
 	if code != 0 {
@@ -371,7 +371,7 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 		],"total_matches":5,"truncated":true}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
 	if code != 0 {
@@ -387,7 +387,6 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 }
 
 func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
-	invocations := filepath.Join(t.TempDir(), "fake.log")
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "gogcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail","paths":{"default_logs":"~/.gogcrawl/logs"}}`,
@@ -395,10 +394,9 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 			{"ref":"gogcrawl:mail/m1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 		],"total_matches":1,"truncated":false}`,
 	})
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", home)
-	t.Setenv("TRAWL_FAKE_LOG", invocations)
 
 	stdout, stderr, code := runCLI(t, "-vv", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
 	if code != 0 {
@@ -406,7 +404,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	}
 	for _, want := range []string{
 		"source_start: source=gogcrawl verb=search",
-		"source_exec: source=gogcrawl",
+		" search start: version=dev",
 		"source_done: source=gogcrawl verb=search",
 		"outcome=ok",
 		"results=1",
@@ -415,7 +413,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
 		}
 	}
-	logPath := filepath.Join(home, ".trawl", "logs", "trawl.log")
+	logPath := filepath.Join(home, ".opentrawl", "trawl", "logs", "trawl.log")
 	logTextBytes, err := os.ReadFile(logPath)
 	if err != nil {
 		t.Fatal(err)
@@ -424,16 +422,9 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	if !strings.Contains(logText, "source_done: source=gogcrawl verb=search") || !strings.Contains(logText, "outcome=ok") {
 		t.Fatalf("log missing source outcome:\n%s", logText)
 	}
-	invocationBytes, err := os.ReadFile(invocations)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(invocationBytes), "search boat trip --json --limit 1 -vv") {
-		t.Fatalf("verbose flag was not propagated:\n%s", string(invocationBytes))
-	}
 }
 
-func TestSearchVerbosePrefixesChildStderrLines(t *testing.T) {
+func TestSearchVerboseStreamsSourceLogLines(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:         "gogcrawl",
 		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail"}`,
@@ -441,24 +432,19 @@ func TestSearchVerbosePrefixesChildStderrLines(t *testing.T) {
 		searchStderr: "first child line\nsecond child line\nfinal child line",
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		"source=gogcrawl first child line\n",
-		"source=gogcrawl second child line\n",
-		"source=gogcrawl final child line",
+		"fake_stderr: first child line",
+		"fake_stderr: second child line",
+		"fake_stderr: final child line",
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
-		}
-	}
-	for _, line := range strings.Split(stderr, "\n") {
-		if strings.Contains(line, "child line") && !strings.HasPrefix(line, "source=gogcrawl ") {
-			t.Fatalf("child stderr line was not prefixed: %q\n%s", line, stderr)
 		}
 	}
 }
@@ -471,7 +457,7 @@ func TestSearchDoesNotForwardChildStderrWithoutVerbose(t *testing.T) {
 		searchStderr: "hidden child line\n",
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
 	if code != 0 {
@@ -482,7 +468,7 @@ func TestSearchDoesNotForwardChildStderrWithoutVerbose(t *testing.T) {
 	}
 }
 
-func TestSearchVerbosePrefixesConcurrentChildStderrLines(t *testing.T) {
+func TestSearchVerboseConcurrentSourceLogLinesStayWhole(t *testing.T) {
 	const lineCount = 100
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
@@ -499,7 +485,7 @@ func TestSearchVerbosePrefixesConcurrentChildStderrLines(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "imessage,telegram", "--limit", "1")
 	if code != 0 {
@@ -511,20 +497,20 @@ func TestSearchVerbosePrefixesConcurrentChildStderrLines(t *testing.T) {
 			continue
 		}
 		switch {
-		case strings.HasPrefix(line, "source=imessage imessage child-line "):
+		case strings.Contains(line, "fake_stderr: imessage child-line "):
 			seen["imessage"]++
-		case strings.HasPrefix(line, "source=telegram telegram child-line "):
+		case strings.Contains(line, "fake_stderr: telegram child-line "):
 			seen["telegram"]++
 		default:
-			t.Fatalf("child stderr line was sheared or unattributed: %q\n%s", line, stderr)
+			t.Fatalf("source log line was sheared or unattributed: %q\n%s", line, stderr)
 		}
-		if strings.Contains(line, "source=imessage") && strings.Contains(line, "source=telegram") {
-			t.Fatalf("child stderr line contains multiple sources: %q\n%s", line, stderr)
+		if strings.Contains(line, "imessage child-line") && strings.Contains(line, "telegram child-line") {
+			t.Fatalf("source log line contains multiple sources: %q\n%s", line, stderr)
 		}
 	}
 	for _, source := range []string{"imessage", "telegram"} {
 		if seen[source] != lineCount {
-			t.Fatalf("%s child stderr lines = %d, want %d\n%s", source, seen[source], lineCount, stderr)
+			t.Fatalf("%s source log lines = %d, want %d\n%s", source, seen[source], lineCount, stderr)
 		}
 	}
 }
@@ -536,7 +522,7 @@ func TestSearchJSONEmptyResultsEnvelope(t *testing.T) {
 		search:   `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
 	if code != 0 {
@@ -562,7 +548,7 @@ func TestSearchHelpDocumentsWho(t *testing.T) {
 		"match",
 		`trawl search invoice --who alex`,
 		`trawl search --who "Vendor Support" --after 2026-01-01`,
-		"Diagnostics: run with -v, or read ~/.trawl/logs/trawl.log",
+		"Diagnostics: run with -v, or read ~/.opentrawl/trawl/logs/trawl.log",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
@@ -576,7 +562,7 @@ func TestSearchHelpDocumentsWho(t *testing.T) {
 func TestSearchJSONNoCrawlersEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
 	if code != 0 {
@@ -633,7 +619,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			binDir := writeFakeCrawlers(t, tt.crawlers...)
 			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 
 			stdout, stderr, code := runCLI(t, "search", "boat trip")
 			if code != tt.wantCode {
@@ -663,7 +649,7 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
 	if code != 3 {
@@ -682,7 +668,7 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 // TRAWL-58: a source that blows the per-source deadline under fan-out
 // (the photoscrawl-timed-out-during-federation case) must surface as a
 // timeout — never a silent drop, and never conflated with a plain
-// crawler error. A live subprocess is held past a short real deadline.
+// crawler error. A fake crawler is held past a short real deadline.
 func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
@@ -697,7 +683,7 @@ func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "search", "grill")
 	if code != 3 {
@@ -728,7 +714,7 @@ func TestSearchTimeoutJSONCarriesReason(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "--json", "search", "grill")
 	if code != 3 {
@@ -764,7 +750,7 @@ func TestSearchTotalTimeoutExitsOne(t *testing.T) {
 		searchSleep: "3",
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLITimeout(t, 100*time.Millisecond, "search", "grill")
 	if code != 1 {
@@ -778,7 +764,7 @@ func TestSearchTotalTimeoutExitsOne(t *testing.T) {
 func TestSearchUnknownSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "missing")
 	if code != 1 {
@@ -802,7 +788,7 @@ func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 		],"total_matches":2,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 	t.Setenv("COLUMNS", "200")
 
 	stdout, stderr, code := runCLI(t, "search", "boat")

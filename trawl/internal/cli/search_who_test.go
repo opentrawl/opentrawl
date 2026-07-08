@@ -27,7 +27,7 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "Alice Example")
 	if code != 0 {
@@ -62,7 +62,7 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--who", "alice@example.com")
 	if code != 0 {
@@ -97,7 +97,7 @@ func TestSearchWhoHumanHeadingShowsResolvedPerson(t *testing.T) {
 		who:         `{"query":"alice@example.com","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "alice@example.com")
 	if code != 0 {
@@ -134,7 +134,7 @@ func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--who", "alice@example.com")
 	if code != 0 {
@@ -169,7 +169,7 @@ func TestSearchWhoPassesThroughWithPositionalSource(t *testing.T) {
 		who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "imessage", "boat", "trip", "--who", "Alice Example")
 	if code != 0 {
@@ -196,7 +196,7 @@ func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "Alice")
 	if code != 3 {
@@ -241,7 +241,7 @@ func TestSearchWhoAmbiguousFederatedResolutionJSON(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "alex")
 	if code != 4 {
@@ -274,7 +274,7 @@ func TestSearchWhoAmbiguousHumanOutputCapsCandidates(t *testing.T) {
 		who:        whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 12)),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "specs", "--who", "michael")
 	if code != 4 {
@@ -300,7 +300,7 @@ func TestSearchWhoAmbiguousJSONCapsCandidatesWithTotal(t *testing.T) {
 		who:        whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 55)),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "michael")
 	if code != 4 {
@@ -330,7 +330,7 @@ func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 		who:        `{"query":"alxe","candidates":[]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "alxe")
 	if code != 5 {
@@ -365,7 +365,7 @@ func TestSearchWhoCloseSpellingOnlyFederatedResolutionJSON(t *testing.T) {
 		]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "specs", "--who", "alxe")
 	if code != 5 {
@@ -426,13 +426,13 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "specs", "--who", "alex")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "alex → Alex Jones (Messages, WhatsApp)") {
+	if !strings.Contains(stdout, "alex → Alex Jones (Contacts, Messages, WhatsApp)") {
 		t.Fatalf("stdout missing clawdex-upgraded resolution:\n%s", stdout)
 	}
 	if stderr != "" {
@@ -451,7 +451,7 @@ func TestSearchFilterOnlyPassesThroughWithoutQuery(t *testing.T) {
 		who:           `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "--who", "Alice Example", "--after", "2026-01-01")
 	if code != 0 {
@@ -472,7 +472,7 @@ func TestSearchJSONIgnoresLegacyWhoMatched(t *testing.T) {
 		search:   `{"query":"specs","results":[],"total_matches":0,"truncated":false,"who_matched":["Alex Jones","Alex Chen"]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "specs")
 	if code != 0 {

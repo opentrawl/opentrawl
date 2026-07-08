@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
@@ -11,24 +13,24 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 		fakeCrawler{
 			name:     "imsgcrawl",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-			sync:     "{\"event\":\"progress\",\"stage\":\"messages\",\"done\":1,\"total\":2}\n{\"state\":\"ok\",\"message\":\"2 new messages in 1s\"}",
+			sync:     "{\"event\":\"progress\",\"stage\":\"messages\",\"done\":1,\"total\":2}\n{\"state\":\"ok\",\"added\":2}",
 		},
 		fakeCrawler{
 			name:     "telecrawl",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
-			sync:     `{"state":"ok","counts":[{"id":"messages","label":"messages","value":89}]}`,
+			sync:     `{"state":"ok","added":89}`,
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "sync", "imessage", "telegram")
 	if code != 0 {
 		t.Fatalf("sync code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"imessage  ok     2 new messages in 1s",
-		"telegram  ok     89 messages",
+		"imessage  ok     2 added",
+		"telegram  ok     89 added",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
@@ -45,10 +47,10 @@ func TestSyncJSONWritesOneEventPerSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		sync:     `{"state":"ok","message":"2 new messages in 1s","finished_at":"2026-07-02T14:03:00Z"}`,
+		sync:     `{"state":"ok","added":2}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "sync", "imessage")
 	if code != 0 {
@@ -85,7 +87,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 				{
 					name:     "imsgcrawl",
 					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-					sync:     `{"state":"ok","message":"2 new messages in 1s"}`,
+					sync:     `{"state":"ok","added":2}`,
 				},
 				{
 					name:     "telecrawl",
@@ -95,7 +97,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			},
 			args:       []string{"sync"},
 			wantCode:   3,
-			wantStdout: "telegram  error  sync did not return a final JSON outcome",
+			wantStdout: "telegram  error  sync failed",
 			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
 		},
 		{
@@ -107,7 +109,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			}},
 			args:       []string{"sync", "telegram"},
 			wantCode:   1,
-			wantStdout: "telegram  error  sync did not return a final JSON outcome",
+			wantStdout: "telegram  error  sync failed",
 			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
 		},
 	}
@@ -116,7 +118,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			binDir := writeFakeCrawlers(t, tt.crawlers...)
 			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 
 			stdout, stderr, code := runCLI(t, tt.args...)
 			if code != tt.wantCode {
@@ -135,7 +137,7 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 func TestSyncUnknownSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "sync", "missing")
 	if code != 1 {
@@ -143,5 +145,36 @@ func TestSyncUnknownSource(t *testing.T) {
 	}
 	if !strings.Contains(stderr, `Source "missing" was not found.`) {
 		t.Fatalf("stderr missing source error:\n%s", stderr)
+	}
+}
+
+func TestRunSourceSyncUsesChildRoutePastReadTimeout(t *testing.T) {
+	t.Setenv("HOME", syntheticHome(t))
+	writeFakeCrawlers(t, fakeCrawler{
+		name:      "slow-sync",
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"slow-sync","display_name":"Slow sync"}`,
+		sync:      `{"state":"ok","added":1}`,
+		syncSleep: "120ms",
+	})
+
+	r := &Runtime{
+		ctx:     context.Background(),
+		timeout: 50 * time.Millisecond,
+	}
+	source := discoverCrawlers(context.Background())[0]
+	started := time.Now()
+	data, stderr, err := r.runSourceSync(source)
+	if err != nil {
+		t.Fatalf("runSourceSync err=%v stderr=%s stdout=%s", err, stderr, data)
+	}
+	if elapsed := time.Since(started); elapsed < 100*time.Millisecond {
+		t.Fatalf("sync returned before slow child completed: elapsed=%s stdout=%s", elapsed, data)
+	}
+	outcome, ok := lastSyncOutcome(data)
+	if !ok {
+		t.Fatalf("sync stdout did not include final JSON outcome:\n%s", data)
+	}
+	if got := outcome.Added.String(); got != "1" {
+		t.Fatalf("added = %q, want 1; stdout=%s", got, data)
 	}
 }

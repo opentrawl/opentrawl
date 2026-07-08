@@ -1,11 +1,15 @@
 package cli
 
 import (
+	"context"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -83,7 +87,7 @@ func searchResolverSources(installed, searchSources []Source) []Source {
 }
 
 func sourceKey(source Source) string {
-	return firstNonEmpty(source.ID, source.Binary, source.Path)
+	return firstNonEmpty(source.ID, source.Binary, source.Surface)
 }
 
 func isClawdex(source Source) bool {
@@ -191,19 +195,46 @@ func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 		}
 		r.logSourceDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)), "suggestions="+strconv.Itoa(len(result.DidYouMean)))
 	}()
-	data, err := r.runSourceJSONVerb(source, "who", query)
+	matcher, ok := source.Crawler.(crawlkit.WhoMatcher)
+	if !ok {
+		result.Err = errorsForMetadata(source)
+		return result
+	}
+	var candidates []whomatch.Candidate
+	err := r.withSourceRequest(source, "who", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+		var whoErr error
+		candidates, whoErr = matcher.Who(ctx, req, query)
+		return whoErr
+	})
 	if err != nil {
 		result.Err = err
 		return result
 	}
-	envelope, err := decodeWhoEnvelope(data, source.ID)
-	if err != nil {
-		result.Err = err
-		return result
-	}
-	result.Candidates = envelope.Candidates
-	result.DidYouMean = envelope.DidYouMean
+	result.Candidates = whoCandidatesFromMatches(candidates, source.ID, query)
 	return result
+}
+
+func whoCandidatesFromMatches(candidates []whomatch.Candidate, sourceID, query string) []WhoCandidate {
+	out := make([]WhoCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		matchQuality := "unknown"
+		if rank, ok := candidate.MatchRank(query); ok {
+			matchQuality = rank.String()
+		}
+		lastSeen := ""
+		if !candidate.LastSeen.IsZero() {
+			lastSeen = candidate.LastSeen.UTC().Format(time.RFC3339)
+		}
+		out = append(out, normalizeWhoCandidate(crawlerWhoCandidate{
+			Who:          candidate.Who,
+			Identifiers:  append([]string(nil), candidate.Identifiers...),
+			MatchQuality: matchQuality,
+			Sources:      []string{sourceID},
+			LastSeen:     lastSeen,
+			Messages:     int(candidate.Messages),
+		}, sourceID))
+	}
+	return out
 }
 
 func mergeWhoRecords(records []whoRecord) []WhoCandidate {

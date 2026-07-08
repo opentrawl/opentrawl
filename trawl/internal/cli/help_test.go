@@ -9,10 +9,8 @@ import (
 )
 
 // Bare `trawl` (and `trawl --help`) used to hardcode a five-source prose
-// sentence, so birdcrawl, photoscrawl and clawdex were invisible from the
-// front door (TRAWL-86, Josh 2026-07-05). The source list must come from
-// the registry so every installed crawler shows up, and a binary missing
-// from PATH must simply be absent, not an error.
+// sentence. The source list now comes from the explicit crawlkit
+// registrations, so every registered crawler shows up.
 func TestSourcesLineListsEveryInstalledCrawler(t *testing.T) {
 	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
 	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"birdcrawl","display_name":"X"}`}
@@ -30,11 +28,13 @@ func TestSourcesLineListsEveryInstalledCrawler(t *testing.T) {
 }
 
 func TestSourcesLineDegradesHonestlyWithNoCrawlersInstalled(t *testing.T) {
-	t.Setenv("PATH", t.TempDir())
+	oldFactories := crawlerFactories
+	crawlerFactories = nil
+	t.Cleanup(func() { crawlerFactories = oldFactories })
 
 	line := sourcesLine(context.Background())
 
-	if !strings.Contains(line, "No crawlers are installed") {
+	if !strings.Contains(line, "No crawlers are registered") {
 		t.Errorf("sourcesLine() = %q, want an honest no-crawlers message", line)
 	}
 }
@@ -58,9 +58,9 @@ func TestBareTrawlHelpListsAllInstalledSources(t *testing.T) {
 	}
 }
 
-// A crawler that never lands on PATH must simply be absent from the
-// listing — no placeholder, no error line naming it.
-func TestBareTrawlHelpOmitsUninstalledCrawler(t *testing.T) {
+// A crawler that is not registered must simply be absent from the listing:
+// no placeholder, no error line naming it.
+func TestBareTrawlHelpOmitsUnregisteredCrawler(t *testing.T) {
 	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)

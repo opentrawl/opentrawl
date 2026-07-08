@@ -5,10 +5,10 @@ import (
 	"testing"
 )
 
-// discoverCrawlers projects each registry manifest into a Source. The
-// registry itself is tested in crawlkit/registry; here we assert the
-// projection: a valid manifest maps to id and binary, and a crawler
-// whose metadata does not parse keeps its binary name and an error.
+// discoverCrawlers projects each registered crawler manifest into a Source.
+// Here we assert the projection: a valid manifest maps to id and compiled
+// crawler name, and a crawler whose metadata does not parse keeps that name
+// and an error.
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	tests := []struct {
 		name       string

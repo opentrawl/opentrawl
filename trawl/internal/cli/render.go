@@ -76,7 +76,7 @@ func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 	if err := renderLastSync(w, status); err != nil {
 		return err
 	}
-	return renderAuth(w, status.Auth)
+	return nil
 }
 
 // renderDoctor is a glance first: one row per source, and each failing
@@ -188,7 +188,7 @@ func renderLastSync(w io.Writer, status StatusEnvelope) error {
 		lastSync = status.Freshness.LastSync
 	}
 	lastSync = firstNonEmpty(lastSync, status.LastSyncAt)
-	if lastSync == "" && status.LastSyncOutcome == nil && status.LastImportAt == "" {
+	if lastSync == "" && status.LastImportAt == "" {
 		return nil
 	}
 	if _, err := fmt.Fprintln(w, "last sync:"); err != nil {
@@ -201,43 +201,6 @@ func renderLastSync(w io.Writer, status StatusEnvelope) error {
 	}
 	if status.LastImportAt != "" {
 		if _, err := fmt.Fprintf(w, "  last import: %s\n", humanTime(status.LastImportAt)); err != nil {
-			return err
-		}
-	}
-	if status.LastSyncOutcome != nil {
-		outcome := firstNonEmpty(status.LastSyncOutcome.State, status.LastSyncOutcome.Message)
-		if outcome != "" {
-			if _, err := fmt.Fprintf(w, "  outcome: %s\n", outcome); err != nil {
-				return err
-			}
-		}
-		if status.LastSyncOutcome.FinishedAt != "" {
-			if _, err := fmt.Fprintf(w, "  finished: %s\n", humanTime(status.LastSyncOutcome.FinishedAt)); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func renderAuth(w io.Writer, auth SafeAuth) error {
-	if len(auth) == 0 {
-		return nil
-	}
-	if _, err := fmt.Fprintln(w, "auth:"); err != nil {
-		return err
-	}
-	for _, key := range auth.boolKeys() {
-		if _, err := fmt.Fprintf(w, "  %s: %t\n", humanLabel(key), auth[key]); err != nil {
-			return err
-		}
-	}
-	if value, ok := auth["expires"]; ok {
-		expires := unknownFreshness
-		if text, ok := value.(string); ok && text != "" {
-			expires = humanTime(text)
-		}
-		if _, err := fmt.Fprintf(w, "  expires: %s\n", expires); err != nil {
 			return err
 		}
 	}

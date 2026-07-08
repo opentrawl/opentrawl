@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/openclaw/crawlkit/control"
 )
 
 func TestStatusExitCodes(t *testing.T) {
@@ -69,7 +71,7 @@ func TestStatusExitCodes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			binDir := writeFakeCrawlers(t, tt.crawlers...)
 			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 			stdout, stderr, code := runCLI(t, tt.args...)
 			if code != tt.wantCode {
 				t.Fatalf("exit code = %d, want %d stdout=%s stderr=%s", code, tt.wantCode, stdout, stderr)
@@ -127,7 +129,7 @@ func TestDoctorExitCodes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			binDir := writeFakeCrawlers(t, tt.crawlers...)
 			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 			stdout, stderr, code := runCLI(t, tt.args...)
 			if code != tt.wantCode {
 				t.Fatalf("exit code = %d, want %d stdout=%s stderr=%s", code, tt.wantCode, stdout, stderr)
@@ -143,23 +145,62 @@ func TestDoctorExitCodes(t *testing.T) {
 }
 
 func TestJSONErrorAndSanitisedStatus(t *testing.T) {
+	status := control.NewStatus("imessage", "Archive is fresh.")
+	status.State = "ok"
+	status.LastSyncAt = "2026-07-02T14:03:00Z"
+	status.Freshness = &control.Freshness{Status: "fresh", AgeSeconds: 120}
+	status.Counts = []control.Count{
+		control.NewCount("messages", "messages", 42),
+	}
+	statusJSON, err := json.Marshal(status)
+	if err != nil {
+		t.Fatal(err)
+	}
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-		status:   `{"app_id":"imessage","state":"ok","auth":{"authorized":true,"token":"should-not-leak"},"token":"should-not-leak"}`,
+		status:   string(statusJSON),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "status", "--json")
 	if code != 0 {
 		t.Fatalf("status --json code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if strings.Contains(stdout, "should-not-leak") {
-		t.Fatalf("status JSON leaked unknown fields:\n%s", stdout)
+	var statuses []StatusEnvelope
+	if err := json.Unmarshal([]byte(stdout), &statuses); err != nil {
+		t.Fatalf("status JSON = %s err=%v", stdout, err)
 	}
-	if !strings.Contains(stdout, `"authorized":true`) {
-		t.Fatalf("status JSON dropped safe auth state:\n%s", stdout)
+	if len(statuses) != 1 {
+		t.Fatalf("statuses = %#v", statuses)
+	}
+	got := statuses[0]
+	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Archive is fresh." {
+		t.Fatalf("status = %#v", got)
+	}
+	if got.LastSyncAt != "2026-07-02T14:03:00Z" || got.Freshness == nil || got.Freshness.Status != "fresh" || got.Freshness.AgeSeconds != 120 {
+		t.Fatalf("freshness fields = %#v", got)
+	}
+	if len(got.Counts) != 1 || got.Counts[0].ID != "messages" || got.Counts[0].Value.text("messages", "messages") != "42" {
+		t.Fatalf("counts = %#v", got.Counts)
+	}
+	var raw []map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
+		t.Fatal(err)
+	}
+	wantKeys := map[string]bool{
+		"app_id":       true,
+		"state":        true,
+		"summary":      true,
+		"freshness":    true,
+		"counts":       true,
+		"last_sync_at": true,
+	}
+	for key := range raw[0] {
+		if !wantKeys[key] {
+			t.Fatalf("status JSON carried unexpected field %q in %s", key, stdout)
+		}
 	}
 
 	t.Setenv("PATH", t.TempDir())

@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/control"
 	ckoutput "github.com/openclaw/crawlkit/output"
 )
 
@@ -58,8 +60,8 @@ func Execute(args []string, stdout, stderr io.Writer) (err error) {
 	return execute(args, stdout, stderr, crawlerCommandTimeout)
 }
 
-// execute carries the per-source subprocess deadline so tests can drive
-// the real timeout path against a slow crawler without a 30s wait. It is
+// execute carries the per-source read deadline so tests can drive the
+// real timeout path against a slow crawler without a 30s wait. It is
 // the same seam as Runtime.now; production always passes the const.
 func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (err error) {
 	jsonOut := hasJSONFlag(args)
@@ -92,7 +94,7 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 	// Progressive discovery: a first token that is not a built-in command
 	// opens a crawler namespace (trawl <source> <verb>). This runs on the
 	// raw args, before kong and flag normalization, so a source's own
-	// flags reach the child untouched.
+	// flags reach the crawler verb untouched.
 	if token, ok := namespaceCandidate(args); ok {
 		runtime := &Runtime{
 			ctx:     context.Background(),
@@ -212,14 +214,8 @@ func collectStatus(r *Runtime, sources []Source) []StatusResult {
 			continue
 		}
 		started := r.logSourceStart(source, "status")
-		data, err := r.runSourceJSONVerb(source, "status")
+		status, err := r.statusSource(source)
 		if err != nil {
-			r.logSourceDone(source, "status", started, err)
-			status = errorStatus(source, "the crawler did not report its status")
-			results = append(results, StatusResult{Source: source, Status: status})
-			continue
-		}
-		if err := decodeContractJSON(data, &status); err != nil {
 			r.logSourceDone(source, "status", started, err)
 			status = errorStatus(source, "the crawler did not report its status")
 			results = append(results, StatusResult{Source: source, Status: status})
@@ -244,25 +240,70 @@ func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 			})
 		}
 		started := r.logSourceStart(source, "doctor")
-		data, err := r.runSourceJSONVerb(source, "doctor")
+		result, err := r.doctorSource(source)
 		if err != nil {
 			r.logSourceDone(source, "doctor", started, err)
 			checks = append(checks, doctorCommandFailed(source))
 			results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 			continue
 		}
-		var envelope DoctorEnvelope
-		if err := decodeContractJSON(data, &envelope); err != nil {
-			r.logSourceDone(source, "doctor", started, err)
-			checks = append(checks, doctorCommandFailed(source))
-			results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
-			continue
-		}
-		r.logSourceDone(source, "doctor", started, nil, "checks="+strconv.Itoa(len(envelope.Checks)))
-		checks = append(checks, normalizeChecks(envelope.Checks)...)
+		r.logSourceDone(source, "doctor", started, nil, "checks="+strconv.Itoa(len(result.Checks)))
+		checks = append(checks, result.Checks...)
 		results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 	}
 	return results
+}
+
+func (r *Runtime) statusSource(source Source) (StatusEnvelope, error) {
+	var status *control.Status
+	err := r.withSourceRequest(source, "status", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+		var runErr error
+		status, runErr = source.Crawler.Status(ctx, req)
+		return runErr
+	})
+	if err != nil {
+		return StatusEnvelope{}, err
+	}
+	return statusEnvelopeFromControl(source, status)
+}
+
+func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnvelope, error) {
+	if status == nil {
+		return errorStatus(source, "the crawler did not report its status"), nil
+	}
+	data, err := json.Marshal(status)
+	if err != nil {
+		return StatusEnvelope{}, err
+	}
+	var out StatusEnvelope
+	if err := decodeContractJSON(data, &out); err != nil {
+		return StatusEnvelope{}, err
+	}
+	return normalizeStatus(source, out), nil
+}
+
+func (r *Runtime) doctorSource(source Source) (DoctorResult, error) {
+	var doctor *crawlkit.Doctor
+	err := r.withSourceRequest(source, "doctor", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+		var runErr error
+		doctor, runErr = source.Crawler.Doctor(ctx, req)
+		return runErr
+	})
+	if err != nil {
+		return DoctorResult{}, err
+	}
+	checks := []DoctorCheck{}
+	if doctor != nil {
+		for _, check := range doctor.Checks {
+			checks = append(checks, DoctorCheck{
+				ID:      check.ID,
+				State:   check.State,
+				Message: check.Message,
+				Remedy:  check.Remedy,
+			})
+		}
+	}
+	return DoctorResult{Source: source.ID, Checks: normalizeChecks(checks), sourceInfo: source}, nil
 }
 
 func normalizeChecks(checks []DoctorCheck) []DoctorCheck {
@@ -424,13 +465,11 @@ Examples:
   trawl search falafel --json           # structured output; agents, prefer this`
 
 // trawlDescription builds the root --help text. The source list in the
-// middle paragraph comes from the registry, not a literal, so every
-// installed crawler shows up (birdcrawl, photoscrawl and clawdex were
-// invisible before this — TRAWL-86). Discovery spawns a `metadata --json`
-// probe per installed binary, so it only runs when this invocation is
-// actually going to render root help; every other command (including a
-// subcommand's own --help) already pays a discovery cost once inside its
-// own Run and must not pay a second one here.
+// middle paragraph comes from the compiled crawlkit registrations, not a
+// literal, so root help and command dispatch see the same crawler set. It
+// only runs when this invocation is actually going to render root help;
+// every other command (including a subcommand's own --help) discovers
+// once inside its own Run and must not pay a second time here.
 func trawlDescription(args []string) string {
 	if !wantsRootHelp(args) {
 		return trawlIntro + "\n\n" + trawlOutro

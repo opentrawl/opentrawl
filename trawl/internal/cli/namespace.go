@@ -6,26 +6,27 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/control"
 	ckoutput "github.com/openclaw/crawlkit/output"
 )
 
 // This is the progressive-discovery seam. `trawl <source>` opens one
 // crawler's own verbs as a namespace: the listing is served from its
-// manifest, and `trawl <source> <verb>` spawns the child binary — the
-// child stays internal plumbing (TRAWL-61, one door).
+// manifest, and `trawl <source> <verb>` runs that crawler through the
+// same crawlkit registration trawl uses for top-level fan-out.
 //
 // The top-level commands (status, sync, search, who, open, doctor) are a
 // separate, permanent surface: they fan a single request out across every
 // discovered source and render one typed, uniform result (a status table,
 // a merged search, a who resolution). `trawl <source> <verb>` instead
 // streams one crawler's own raw output untouched. Both read the same
-// registry (discoverCrawlers -> registry.Discover); there is no second,
-// hardcoded crawler list anywhere in trawl.
+// compiled crawlkit registrations; there is no second crawler list in
+// trawl.
 
 // namespaceCandidate reports the first non-flag token when it is not a
 // built-in command — a token that can only be a source or a typo. The
-// registry probe that tells the two apart is deferred to dispatch so the
+// source lookup that tells the two apart is deferred to dispatch so the
 // built-in fast path never pays for discovery.
 func namespaceCandidate(args []string) (string, bool) {
 	for _, arg := range args {
@@ -93,7 +94,7 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	if !ok {
 		leading := leadingLiterals(rest)
 		if len(leading) == 0 {
-			// The first token is a child flag: the verb came after its
+			// The first token is a crawler flag: the verb came after its
 			// flags. Name the shape, not the flag value.
 			return r.writeError("unknown_verb",
 				fmt.Sprintf("%s needs the verb first, before any flags.", source.DisplayName),
@@ -103,19 +104,23 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 			fmt.Sprintf("%s has no verb %q.", source.DisplayName, strings.Join(leading, " ")),
 			fmt.Sprintf("run: trawl %s", token))
 	}
-	// rest passes through verbatim — the user's own flags, including -v/-vv,
-	// already reach the child, so trawl injects nothing but the global
-	// --json (and only when the verb declares it emits JSON).
-	childArgs := append([]string(nil), rest...)
+	runArgs := append([]string{source.ID}, rest...)
 	if r.root.JSON && command.JSON && !containsArg(rest, "--json") {
-		childArgs = append(childArgs, "--json")
+		runArgs = append(runArgs, "--json")
 	}
-	// The child's stdout streams through raw. Its own hint lines still name
-	// the binary (TRAWL-121); crawlkit-generated, trawl-aware child output
-	// closes that in the wave. trawl's own surfaces stay module-name clean.
 	verb := firstNonFlag(rest)
 	started := r.logSourceStart(source, verb)
-	err := runCrawlerCommandPassThrough(r.ctx, source.Path, r.stdout, r.stderr, childArgs...)
+	out, captureErr := runCrawlkitCaptured(runArgs, []crawlkit.Crawler{source.Crawler})
+	if len(out.Stdout) > 0 {
+		_, _ = r.stdout.Write(out.Stdout)
+	}
+	if len(out.Stderr) > 0 {
+		_, _ = r.lockedStderr().Write(out.Stderr)
+	}
+	err := captureErr
+	if err == nil && out.Code != 0 {
+		err = exitErr{code: out.Code}
+	}
 	r.logSourceDone(source, verb, started, err)
 	return err
 }
@@ -136,9 +141,9 @@ func sourceTokens(sources []Source) []string {
 	return names
 }
 
-// renderNamespace lists a crawler's verbs — the progressive-discovery
-// surface. Verbs come straight from the manifest so the child binary is
-// never named; the invocation column is exactly what the user types.
+// renderNamespace lists a crawler's verbs. Verbs come straight from the
+// manifest so implementation plumbing is never named; the invocation
+// column is exactly what the user types.
 func (r *Runtime) renderNamespace(source Source, token string) error {
 	verbs := namespaceVerbList(source)
 	if r.root.JSON {
@@ -206,7 +211,7 @@ func namespaceVerbList(source Source) []namespaceVerb {
 // namespaceMatch finds the manifest command whose literal prefix the
 // request's leading tokens complete. It matches the full prefix, not just
 // the first token, so an incomplete verb — "contacts" without its "export"
-// — gets a trawl-owned error instead of reaching the child.
+// — gets a trawl-owned error instead of reaching crawlkit.
 func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 	leading := leadingLiterals(rest)
 	if len(leading) == 0 {
@@ -223,7 +228,7 @@ func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 
 // fixedVerbTokens is the literal command path the user must type: the
 // manifest argv up to its first placeholder or the trailing --json, minus
-// the binary. Manifest placeholders are UPPERCASE by convention (REF,
+// the source token. Manifest placeholders are UPPERCASE by convention (REF,
 // QUERY, NAME) — an exact, stable structural check (rules §1.5), so
 // everything from the first placeholder on is user-supplied.
 func fixedVerbTokens(command control.Command) []string {
@@ -255,7 +260,7 @@ func isPlaceholder(token string) bool {
 
 // leadingLiterals returns the verb words: the run of literal tokens after
 // any trawl global flags (--json, -v) the agent sprinkled ahead of the
-// verb, stopping at the first child flag. So `trawl imessage --json chats`
+// verb, stopping at the first crawler flag. So `trawl imessage --json chats`
 // still finds "chats", while `chats --limit 5` stops the verb at "chats".
 func leadingLiterals(rest []string) []string {
 	var out []string
@@ -284,7 +289,7 @@ func tokensHavePrefix(tokens, prefix []string) bool {
 }
 
 // commandInvocation is what the user types for a manifest command: the
-// argv minus the binary and the trailing --json the manifest carries for
+// argv minus the source token and the trailing --json the manifest carries for
 // programmatic callers. Placeholder args (REF, QUERY) stay, so the
 // listing shows that a verb takes an argument.
 func commandInvocation(command control.Command) string {

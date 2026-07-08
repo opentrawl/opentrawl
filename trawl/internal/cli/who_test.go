@@ -31,7 +31,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "who", "dave")
 	if code != 0 {
@@ -43,23 +43,23 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"Dave Exact",
-		"exact",
-		"2020-03-04",
-		"12",
-		"Messages",
-		"dave@example.com",
 		"Dave Daily",
 		"prefix",
 		"2026-06-30",
 		"1200",
-		"Messages, telegram",
+		"Contacts, Messages",
 		"+15550100001",
+		"Dave Exact",
+		"prefix",
+		"2020-03-04",
+		"12",
+		"Contacts",
+		"dave@example.com",
 		"Dave Archive",
-		"substring",
+		"prefix",
 		"2019-01-02",
 		"900",
-		"gmail",
+		"Contacts",
 		"dave.archive@example.com",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -79,7 +79,7 @@ func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
 		who:      `{"query":"alex","results":[{"who":"Alex Example","messages":1}]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "who", "alex")
 	if code != 1 {
@@ -101,7 +101,7 @@ func TestWhoIgnoresLegacyCandidateFieldAliases(t *testing.T) {
 		]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "who", "dave")
 	if code != 0 {
@@ -134,7 +134,7 @@ func TestWhoTableFitsTerminalWidthWithManyIdentifiers(t *testing.T) {
 		}}),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 	t.Setenv("COLUMNS", "80")
 
 	stdout, stderr, code := runCLI(t, "who", "michael")
@@ -165,7 +165,7 @@ func TestWhoTableCapsCandidateList(t *testing.T) {
 		who:      whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 12)),
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "who", "michael")
 	if code != 0 {
@@ -189,13 +189,13 @@ func TestWhoJSONReturnsPlainEnvelope(t *testing.T) {
 		who:      `{"query":"ali","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["imessage"],"messages":4,"last_seen":"2026-06-30T20:30:00Z"}]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "who", "ali")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"ali","total_candidates":1,"candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["imessage"],"last_seen":"2026-06-30T20:30:00Z","messages":4}],"sources_consulted":["clawdex"]}` + "\n"
+	want := `{"query":"ali","total_candidates":1,"candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["clawdex"],"last_seen":"2026-06-30T20:30:00Z","messages":4}],"sources_consulted":["clawdex"]}` + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
 	}

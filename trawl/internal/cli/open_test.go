@@ -15,7 +15,7 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 		openHuman: human,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "imessage:msg/8842")
 	if code != 0 {
@@ -39,7 +39,7 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 		openHuman: "human output",
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "open", "imessage:msg/8842")
 	if code != 0 {
@@ -59,7 +59,7 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 		open:     payload,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "open", "fake:msg/1")
 	if code != 0 {
@@ -81,7 +81,7 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 		openHuman:     human,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 0 {
@@ -98,7 +98,7 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 // TestOpenShortRefSurvivesEarlierErroringSource pins the TRAWL-130
 // fan-out contract: a source failing for a reason unrelated to short
 // refs is skipped, never aborts resolution. imsgcrawl sits before
-// telecrawl in registry order, so the erroring source is hit first.
+// telecrawl in registration order, so the erroring source is hit first.
 func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 	human := "Resolved human item\nref: telegram:msg/2"
 	binDir := writeFakeCrawlers(t,
@@ -119,7 +119,7 @@ func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 0 {
@@ -155,7 +155,7 @@ func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 1 {
@@ -198,7 +198,7 @@ func TestOpenShortRefUnknownDespiteOneErroringSource(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 1 {
@@ -221,7 +221,7 @@ func TestOpenShortRefReportsUnknown(t *testing.T) {
 		openExit:      1,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 1 {
@@ -251,7 +251,7 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 		},
 	)
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "open", "t7k3f")
 	if code != 1 {
@@ -274,7 +274,7 @@ func TestOpenShortRefRejectsLegacyLookupEnvelope(t *testing.T) {
 		open:          `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "t7k3f")
 	if code != 1 {
@@ -294,7 +294,7 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 		t.Run(ref, func(t *testing.T) {
 			binDir := writeFakeCrawlers(t)
 			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 
 			stdout, stderr, code := runCLI(t, "open", ref)
 			if code != 1 {
@@ -317,16 +317,16 @@ func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 		openStderr:    "crawler open failed",
 	})
 	t.Setenv("PATH", binDir)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "open", "imessage:msg/8842")
-	if code != 7 {
+	if code != 1 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if stdout != "partial crawler output\n" {
 		t.Fatalf("stdout = %q, want crawler stdout", stdout)
 	}
-	if stderr != "crawler open failed\n" {
-		t.Fatalf("stderr = %q, want crawler stderr", stderr)
+	if !strings.Contains(stderr, `Could not open ref "imessage:msg/8842".`) {
+		t.Fatalf("stderr = %q, want trawl open failure", stderr)
 	}
 }

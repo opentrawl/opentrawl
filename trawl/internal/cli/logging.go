@@ -1,13 +1,10 @@
 package cli
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
 	"strconv"
@@ -20,8 +17,7 @@ import (
 )
 
 const (
-	trawlLogFileName      = "trawl.log"
-	verboseLogsCapability = "verbose_logs"
+	trawlLogFileName = "trawl.log"
 )
 
 type logRun = cklog.Run
@@ -113,7 +109,7 @@ func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 		return err
 	}
 	_, _ = fmt.Fprintln(ctx.Stdout)
-	_, err := fmt.Fprintln(ctx.Stdout, "Diagnostics: run with -v, or read ~/.trawl/logs/trawl.log")
+	_, err := fmt.Fprintln(ctx.Stdout, "Diagnostics: run with -v, or read ~/.opentrawl/trawl/logs/trawl.log")
 	return err
 }
 
@@ -157,87 +153,11 @@ func trawlLogParts() (string, string, error) {
 	if err != nil || strings.TrimSpace(home) == "" {
 		return "", "", fmt.Errorf("resolve home for trawl log: %w", err)
 	}
-	return home, ".trawl", nil
-}
-
-func (r *Runtime) childVerboseArgs(source Source) []string {
-	if r.verbosity() <= 0 || !hasCapability(source, verboseLogsCapability) {
-		return nil
-	}
-	if r.verbosity() >= 2 {
-		return []string{"-vv"}
-	}
-	return []string{"-v"}
-}
-
-func (r *Runtime) runSourceCommandJSON(source Source, args ...string) ([]byte, error) {
-	return r.runSourceCommandWithTimeout(source, r.timeout, args...)
-}
-
-func (r *Runtime) runSourceJSONVerb(source Source, verb string, args ...string) ([]byte, error) {
-	commandArgs := append([]string{verb}, args...)
-	commandArgs = append(commandArgs, "--json")
-	commandArgs = append(commandArgs, r.childVerboseArgs(source)...)
-	return r.runSourceCommandWithTimeout(source, r.timeout, commandArgs...)
-}
-
-func (r *Runtime) runSourceJSONVerbNoTimeout(source Source, verb string, args ...string) ([]byte, error) {
-	commandArgs := append([]string{verb}, args...)
-	commandArgs = append(commandArgs, "--json")
-	commandArgs = append(commandArgs, r.childVerboseArgs(source)...)
-	return r.runSourceCommand(r.ctx, source, commandArgs...)
-}
-
-func (r *Runtime) runSourceCommandWithTimeout(source Source, timeout time.Duration, args ...string) ([]byte, error) {
-	commandCtx, cancel := context.WithTimeout(r.ctx, timeout)
-	defer cancel()
-
-	data, err := r.runSourceCommand(commandCtx, source, args...)
-	if err != nil {
-		if commandCtx.Err() != nil {
-			return data, sourceTimeoutError{command: strings.Join(args, " ")}
-		}
-		return data, err
-	}
-	return data, nil
-}
-
-func (r *Runtime) runSourceCommand(ctx context.Context, source Source, args ...string) ([]byte, error) {
-	r.logSourceExec(source, args)
-	cmd := exec.CommandContext(ctx, source.Path, args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = io.Discard
-	var childStderr *sourceStderrWriter
-	if r.verbosity() > 0 && hasCapability(source, verboseLogsCapability) {
-		childStderr = r.sourceStderr(source)
-		cmd.Stderr = childStderr
-	}
-	err := cmd.Run()
-	if childStderr != nil {
-		if closeErr := childStderr.Close(); err == nil {
-			err = closeErr
-		}
-	}
-	if err != nil {
-		return stdout.Bytes(), crawlerCommandError{
-			command: strings.Join(args, " "),
-			err:     err,
-		}
-	}
-	return stdout.Bytes(), nil
+	return filepath.Join(home, ".opentrawl"), "trawl", nil
 }
 
 func (r *Runtime) lockedStderr() io.Writer {
 	return lockedWriter{dst: r.stderr, mu: &r.stderrMu}
-}
-
-func (r *Runtime) sourceStderr(source Source) *sourceStderrWriter {
-	return &sourceStderrWriter{
-		dst:    r.stderr,
-		mu:     &r.stderrMu,
-		prefix: sourceField(source) + " ",
-	}
 }
 
 type lockedWriter struct {
@@ -249,61 +169,6 @@ func (w lockedWriter) Write(p []byte) (int, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return w.dst.Write(p)
-}
-
-type sourceStderrWriter struct {
-	dst    io.Writer
-	mu     *sync.Mutex
-	prefix string
-	buf    []byte
-}
-
-func (w *sourceStderrWriter) Write(p []byte) (int, error) {
-	written := 0
-	for len(p) > 0 {
-		i := bytes.IndexByte(p, '\n')
-		if i < 0 {
-			w.buf = append(w.buf, p...)
-			return written + len(p), nil
-		}
-		w.buf = append(w.buf, p[:i+1]...)
-		written += i + 1
-		if err := w.flush(); err != nil {
-			return written, err
-		}
-		p = p[i+1:]
-	}
-	return written, nil
-}
-
-func (w *sourceStderrWriter) Close() error {
-	if len(w.buf) == 0 {
-		return nil
-	}
-	return w.flush()
-}
-
-func (w *sourceStderrWriter) flush() error {
-	line := make([]byte, 0, len(w.prefix)+len(w.buf))
-	line = append(line, w.prefix...)
-	line = append(line, w.buf...)
-	w.buf = w.buf[:0]
-
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	_, err := w.dst.Write(line)
-	return err
-}
-
-func (r *Runtime) logSourceExec(source Source, args []string) {
-	if r.verbosity() < 2 {
-		return
-	}
-	argv := append([]string{source.Path}, args...)
-	r.logDebug("source_exec", strings.Join([]string{
-		sourceField(source),
-		"argv=" + logQuote(strings.Join(argv, " ")),
-	}, " "))
 }
 
 type sourceTimeoutError struct {

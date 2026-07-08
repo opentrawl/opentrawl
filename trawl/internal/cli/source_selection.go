@@ -35,7 +35,7 @@ func (r *Runtime) selectedSource(source string) (Source, error) {
 func (r *Runtime) writeSourceNotFound(source string) error {
 	return r.writeError("source_not_found",
 		fmt.Sprintf("Source %q was not found.", source),
-		"install the crawler on PATH")
+		"run: trawl status")
 }
 
 func splitSourceCSV(sourceCSV string) []string {
@@ -50,13 +50,21 @@ func splitSourceCSV(sourceCSV string) []string {
 	return names
 }
 
-// findSource matches an id, a binary name, or the human name of the
-// surface — "imessage" and "gmail" work the way people say them.
+// findSource matches an id, compiled crawler name, explicit alias, or the
+// human surface name — "imessage" and "gmail" work the way people say them.
 func findSource(sources []Source, name string) (Source, bool) {
 	want := strings.ToLower(strings.TrimSpace(name))
 	for _, candidate := range sources {
 		if candidate.ID == want || candidate.Binary == want {
 			return candidate, true
+		}
+		if strings.ToLower(strings.TrimSpace(candidate.Surface)) == want {
+			return candidate, true
+		}
+		for _, alias := range candidate.Aliases {
+			if strings.ToLower(strings.TrimSpace(alias)) == want {
+				return candidate, true
+			}
 		}
 		if alias := sourceAlias(candidate.DisplayName); alias != "" && alias == want {
 			return candidate, true

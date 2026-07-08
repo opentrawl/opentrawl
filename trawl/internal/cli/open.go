@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/openclaw/crawlkit"
 )
 
 type OpenCmd struct {
@@ -30,19 +33,22 @@ func (c *OpenCmd) Run(r *Runtime) error {
 }
 
 func (r *Runtime) openWithSource(source Source, ref string) error {
-	if !r.root.JSON {
-		return runCrawlerCommandPassThroughWithTimeout(r.ctx, source.Path, crawlerCommandTimeout, r.stdout, r.stderr, "open", ref)
+	if source.MetadataErr != nil {
+		return r.openFailed(ref, source.ID)
 	}
-	data, err := runCrawlerJSONWithArgs(r.ctx, source.Path, "open", ref)
+	opener, ok := source.Crawler.(crawlkit.Opener)
+	if !ok {
+		return r.openFailed(ref, source.ID)
+	}
+	started := r.logSourceStart(source, "open")
+	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *crawlkit.Request) error {
+		return opener.Open(ctx, req, ref)
+	})
+	r.logSourceDone(source, "open", started, err)
 	if err != nil {
 		return r.openFailed(ref, source.ID)
 	}
-	var payload any
-	if err := decodeContractJSON(data, &payload); err != nil {
-		return r.openFailed(ref, source.ID)
-	}
-	_, err = r.stdout.Write(data)
-	return err
+	return nil
 }
 
 func splitOpenRef(ref string) (string, string, bool) {
@@ -100,7 +106,7 @@ func (r *Runtime) openShortRef(alias string) error {
 	seenRefs := map[string]bool{}
 	var failures []shortRefFailure
 	for _, source := range sources {
-		refs, err := resolveSourceShortRef(r.ctx, source, alias)
+		refs, err := r.resolveSourceShortRef(source, alias)
 		if err != nil {
 			if errors.Is(err, errAmbiguousShortRef) {
 				return r.writeError("ambiguous_short_ref",
@@ -177,12 +183,26 @@ func shortRefSources(sources []Source) []Source {
 	return out
 }
 
-func resolveSourceShortRef(ctx context.Context, source Source, alias string) ([]string, error) {
-	data, runErr := runCrawlerJSONWithArgs(ctx, source.Path, "open", alias)
-	// Classify from the error envelope, not the exit code: live
-	// crawlers have emitted contract error envelopes at exit 0, and
-	// an exit-0 unknown_short_ref is still the contract "no match".
-	if envelope, ok := shortRefErrorEnvelope(data); ok {
+func (r *Runtime) resolveSourceShortRef(source Source, alias string) ([]string, error) {
+	opener, ok := source.Crawler.(crawlkit.Opener)
+	if !ok {
+		return nil, fmt.Errorf("source does not support open")
+	}
+	var data bytes.Buffer
+	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(true), &data, func(ctx context.Context, req *crawlkit.Request) error {
+		return opener.Open(ctx, req, alias)
+	})
+	if err != nil {
+		body := sourceErrorBody(err)
+		switch body.Code {
+		case "unknown_short_ref":
+			return nil, nil
+		case "ambiguous_short_ref":
+			return nil, errAmbiguousShortRef
+		}
+		return nil, fmt.Errorf("%s: %s", body.Code, body.Message)
+	}
+	if envelope, ok := shortRefErrorEnvelope(data.Bytes()); ok {
 		switch envelope.Error.Code {
 		case "unknown_short_ref":
 			return nil, nil
@@ -191,10 +211,7 @@ func resolveSourceShortRef(ctx context.Context, source Source, alias string) ([]
 		}
 		return nil, fmt.Errorf("%s: %s", envelope.Error.Code, envelope.Error.Message)
 	}
-	if runErr != nil {
-		return nil, runErr
-	}
-	ref, err := decodeShortRefOpenRef(data)
+	ref, err := decodeShortRefOpenRef(data.Bytes())
 	if err != nil {
 		return nil, err
 	}

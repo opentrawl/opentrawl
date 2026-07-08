@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
 	"strings"
 	"testing"
 )
@@ -21,6 +22,7 @@ func TestRunVersionFlag(t *testing.T) {
 }
 
 func TestRunUnknownCommand(t *testing.T) {
+	t.Setenv("HOME", syntheticHome(t))
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"export"}, &stdout, &stderr)
 	if code == 0 {
@@ -32,6 +34,7 @@ func TestRunUnknownCommand(t *testing.T) {
 }
 
 func TestRunUnknownFlagJSON(t *testing.T) {
+	t.Setenv("HOME", syntheticHome(t))
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"--json", "--not-a-real-flag"}, &stdout, &stderr)
 	if code == 0 {
@@ -63,7 +66,7 @@ func TestRunCommandUsageErrorsJSON(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 			var stdout, stderr bytes.Buffer
 			code := run(tc.args, &stdout, &stderr)
 			if code != 2 {
@@ -106,7 +109,7 @@ func TestRunHumanUsageErrorStrings(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("HOME", t.TempDir())
+			t.Setenv("HOME", syntheticHome(t))
 			var stdout, stderr bytes.Buffer
 			code := run(tc.args, &stdout, &stderr)
 			if code != 2 {
@@ -120,6 +123,16 @@ func TestRunHumanUsageErrorStrings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func syntheticHome(t *testing.T) string {
+	t.Helper()
+	home, err := os.MkdirTemp("/private/tmp", "trawl-147-home-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
+	return home
 }
 
 func assertSingleJSONDocument(t *testing.T, data string, out any) {

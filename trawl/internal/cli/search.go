@@ -1,15 +1,17 @@
 package cli
 
 import (
-	"bytes"
-	"encoding/json"
-	"errors"
+	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openclaw/crawlkit"
+	ckflags "github.com/openclaw/crawlkit/flags"
 )
 
 const (
@@ -44,8 +46,8 @@ type SearchRow struct {
 	Ref    string `json:"ref"`
 	// ShortRef is human display sugar only. short-refs.md keeps trawl's
 	// federated --json on the canonical ref so agents never pick up the
-	// weaker, expiring alias; the crawler-level search --json contract
-	// (crawlerSearchResult below) is untouched and still carries it.
+	// weaker, expiring alias; the crawler-level search contract still
+	// carries short_ref through crawlkit.Hit.
 	ShortRef string `json:"-"`
 	Time     string `json:"time"`
 	AllDay   bool   `json:"all_day,omitempty"`
@@ -67,24 +69,6 @@ type searchSourceResult struct {
 	Skipped    bool
 	SkipReason string
 	Err        error
-}
-
-type crawlerSearchResult struct {
-	Ref      string `json:"ref"`
-	ShortRef string `json:"short_ref,omitempty"`
-	Alias    string `json:"alias,omitempty"`
-	Time     string `json:"time"`
-	AllDay   bool   `json:"all_day"`
-	Who      string `json:"who"`
-	Where    string `json:"where"`
-	Snippet  string `json:"snippet"`
-}
-
-type crawlerSearchEnvelope struct {
-	Query        string                `json:"query"`
-	Results      []crawlerSearchResult `json:"results"`
-	TotalMatches int                   `json:"total_matches"`
-	Truncated    bool                  `json:"truncated"`
 }
 
 type federatedSearchEnvelope struct {
@@ -305,18 +289,26 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 	if options.who != "" && options.whoBySource != nil && who == "" {
 		return result
 	}
-	args := searchCommandArgs(query, options, who)
-	args = append(args, r.childVerboseArgs(source)...)
-	data, err := r.runSourceCommandJSON(source, args...)
+	crawlQuery, err := crawlkitSearchQuery(query, options, who)
 	if err != nil {
-		if searchContractErrorCode(data) == "unknown_who" {
-			return result
-		}
 		result.Err = err
 		return result
 	}
-	envelope, err := decodeSearchEnvelope(data)
+	searcher, ok := source.Crawler.(crawlkit.Searcher)
+	if !ok {
+		result.Err = fmt.Errorf("source does not support search")
+		return result
+	}
+	var envelope crawlkit.SearchResult
+	err = r.withSourceRequest(source, "search", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+		var searchErr error
+		envelope, searchErr = searcher.Search(ctx, req, crawlQuery)
+		return searchErr
+	})
 	if err != nil {
+		if sourceErrorBody(err).Code == "unknown_who" {
+			return result
+		}
 		result.Err = err
 		return result
 	}
@@ -324,16 +316,17 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 	result.Truncated = envelope.Truncated
 	result.Rows = make([]SearchRow, 0, len(envelope.Results))
 	for _, item := range envelope.Results {
-		parsed, ok := parseSearchTime(item.Time)
+		itemTime := formatSearchTime(item.Time)
+		parsed, ok := parseSearchTime(itemTime)
 		result.Rows = append(result.Rows, SearchRow{
 			Source:          source.ID,
 			Ref:             item.Ref,
-			Time:            item.Time,
+			Time:            itemTime,
 			AllDay:          item.AllDay,
 			Who:             item.Who,
 			Where:           item.Where,
 			Snippet:         item.Snippet,
-			ShortRef:        firstNonEmpty(item.ShortRef, item.Alias),
+			ShortRef:        item.ShortRef,
 			surface:         firstNonEmpty(source.DisplayName, source.ID),
 			sourceShortRefs: hasCapability(source, "short_refs"),
 			parsedTime:      parsed,
@@ -341,6 +334,48 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 		})
 	}
 	return result
+}
+
+func crawlkitSearchQuery(query string, options searchOptions, who string) (crawlkit.Query, error) {
+	after, err := parseSearchDateFlag("--after", options.after)
+	if err != nil {
+		return crawlkit.Query{}, err
+	}
+	before, err := parseSearchDateFlag("--before", options.before)
+	if err != nil {
+		return crawlkit.Query{}, err
+	}
+	return crawlkit.Query{
+		Text:   strings.TrimSpace(query),
+		Limit:  options.limit,
+		After:  after,
+		Before: before,
+		Who:    strings.TrimSpace(who),
+	}, nil
+}
+
+func parseSearchDateFlag(name, raw string) (time.Time, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	parsed, err := ckflags.Date(raw)
+	if err != nil {
+		return time.Time{}, usageErr{fmt.Errorf("%s: %w", name, err)}
+	}
+	if name == "--before" {
+		if day, err := time.ParseInLocation("2006-01-02", raw, time.Local); err == nil {
+			return day.Add(24*time.Hour - time.Second).UTC(), nil
+		}
+	}
+	return parsed, nil
+}
+
+func formatSearchTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return value.Format(time.RFC3339)
 }
 
 func (r *Runtime) logSearchOutcome(source Source, result searchSourceResult, started time.Time) {
@@ -376,61 +411,6 @@ func searchSourcesForResolvedWho(sources []Source, whoBySource map[string]string
 		}
 	}
 	return out
-}
-
-func searchCommandArgs(query string, options searchOptions, who string) []string {
-	args := []string{"search"}
-	if strings.TrimSpace(query) != "" {
-		args = append(args, query)
-	}
-	args = append(args, "--json", "--limit", strconv.Itoa(options.limit))
-	if options.after != "" {
-		args = append(args, "--after", options.after)
-	}
-	if options.before != "" {
-		args = append(args, "--before", options.before)
-	}
-	if who != "" {
-		args = append(args, "--who", who)
-	}
-	return args
-}
-
-func decodeSearchEnvelope(data []byte) (crawlerSearchEnvelope, error) {
-	var raw struct {
-		Query        string          `json:"query"`
-		Results      json.RawMessage `json:"results"`
-		TotalMatches int             `json:"total_matches"`
-		Truncated    bool            `json:"truncated"`
-	}
-	if err := decodeContractJSON(data, &raw); err != nil {
-		return crawlerSearchEnvelope{}, err
-	}
-	trimmed := bytes.TrimSpace(raw.Results)
-	if len(trimmed) == 0 || !bytes.HasPrefix(trimmed, []byte("[")) {
-		return crawlerSearchEnvelope{}, errors.New("search results array is missing")
-	}
-	var results []crawlerSearchResult
-	if err := decodeContractJSON(trimmed, &results); err != nil {
-		return crawlerSearchEnvelope{}, err
-	}
-	return crawlerSearchEnvelope{
-		Query:        raw.Query,
-		Results:      results,
-		TotalMatches: raw.TotalMatches,
-		Truncated:    raw.Truncated,
-	}, nil
-}
-
-func searchContractErrorCode(data []byte) string {
-	if len(bytes.TrimSpace(data)) == 0 {
-		return ""
-	}
-	var envelope ErrorEnvelope
-	if err := decodeContractJSON(data, &envelope); err != nil {
-		return ""
-	}
-	return strings.TrimSpace(envelope.Error.Code)
 }
 
 func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResult {

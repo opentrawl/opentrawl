@@ -12,7 +12,7 @@ import (
 )
 
 func TestSummariesListUsesIndexAndMarkdownOnly(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("COLUMNS", "80")
 	writeDerivedFile(t, home, "INDEX.md", `---
@@ -62,7 +62,7 @@ written_by: ai
 }
 
 func TestSummariesWithoutIndexReportsNoSummaries(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
 
@@ -79,7 +79,7 @@ func TestSummariesWithoutIndexReportsNoSummaries(t *testing.T) {
 }
 
 func TestSummariesJSONListIsOneDocument(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/subscriptions.md - what you pay for.\n")
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
@@ -103,7 +103,7 @@ func TestSummariesJSONListIsOneDocument(t *testing.T) {
 }
 
 func TestSummariesReadByNameStripsFrontmatterInHumanMode(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/subscriptions.md - what you pay for.\n")
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
@@ -124,7 +124,7 @@ func TestSummariesReadByNameStripsFrontmatterInHumanMode(t *testing.T) {
 }
 
 func TestSummariesReadJSONKeepsRawContentInOneDocument(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/subscriptions.md - what you pay for.\n")
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
@@ -147,7 +147,7 @@ func TestSummariesReadJSONKeepsRawContentInOneDocument(t *testing.T) {
 }
 
 func TestSummariesReportsAmbiguousName(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- first/subscriptions.md - one.\n- second/subscriptions.md - two.\n")
 	writeDerivedFile(t, home, "first/subscriptions.md", summaryFixture("Subscriptions"))
@@ -173,7 +173,7 @@ func TestSummariesReportsAmbiguousName(t *testing.T) {
 }
 
 func TestSummariesReportsUnknownNameAsJSONError(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/subscriptions.md - what you pay for.\n")
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
@@ -193,7 +193,7 @@ func TestSummariesReportsUnknownNameAsJSONError(t *testing.T) {
 }
 
 func TestSummariesIndexedTsvNeverResolvesAsName(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/subscriptions.md - what you pay for.\n- purchases/possessions.tsv - the same rows, tab-separated.\n")
 	writeDerivedFile(t, home, "purchases/subscriptions.md", summaryFixture("Subscriptions"))
@@ -209,7 +209,7 @@ func TestSummariesIndexedTsvNeverResolvesAsName(t *testing.T) {
 }
 
 func TestSummariesDanglingIndexEntryIsAContractError(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 	writeDerivedFile(t, home, "INDEX.md", "- purchases/ghost.md - a document that does not exist.\n")
 
@@ -228,7 +228,7 @@ func TestSummariesDanglingIndexEntryIsAContractError(t *testing.T) {
 }
 
 func TestSummariesReportsMissingDerivedRootAsJSONError(t *testing.T) {
-	home := t.TempDir()
+	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 
 	stdout, stderr, code := runCLI(t, "--json", "summaries")
@@ -237,7 +237,7 @@ func TestSummariesReportsMissingDerivedRootAsJSONError(t *testing.T) {
 	}
 	doc := decodeSingleJSONDocument(t, stdout)
 	errDoc := doc["error"].(map[string]any)
-	if errDoc["code"] != "no_summaries" || !strings.Contains(errDoc["message"].(string), "~/.trawl/derived") {
+	if errDoc["code"] != "no_summaries" || !strings.Contains(errDoc["message"].(string), "~/.opentrawl/trawl/derived") {
 		t.Fatalf("error = %#v", errDoc)
 	}
 	if stderr != "" {
@@ -269,7 +269,7 @@ func TestSummariesHelpIsDiscoverable(t *testing.T) {
 
 func writeDerivedFile(t *testing.T, home, rel, content string) {
 	t.Helper()
-	path := filepath.Join(home, ".trawl", "derived", filepath.FromSlash(rel))
+	path := filepath.Join(home, ".opentrawl", "trawl", "derived", filepath.FromSlash(rel))
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}

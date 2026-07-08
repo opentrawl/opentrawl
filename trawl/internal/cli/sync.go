@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/openclaw/crawlkit"
 )
 
 const syncStateWidth = 5
@@ -30,6 +32,9 @@ type syncCrawlerOutcome struct {
 	Stage      string      `json:"stage,omitempty"`
 	Done       json.Number `json:"done,omitempty"`
 	Total      json.Number `json:"total,omitempty"`
+	Added      json.Number `json:"added,omitempty"`
+	Updated    json.Number `json:"updated,omitempty"`
+	Removed    json.Number `json:"removed,omitempty"`
 	Counts     []Count     `json:"counts,omitempty"`
 	FinishedAt string      `json:"finished_at,omitempty"`
 	Error      *ErrorBody  `json:"error,omitempty"`
@@ -70,7 +75,10 @@ func syncSource(r *Runtime, source Source) SyncResult {
 		r.logSourceDone(source, "sync", started, source.MetadataErr)
 		return syncFailureResult(source, "metadata failed")
 	}
-	data, err := r.runSourceJSONVerbNoTimeout(source, "sync")
+	data, stderr, err := r.runSourceSync(source)
+	if len(stderr) > 0 {
+		_, _ = r.lockedStderr().Write(stderr)
+	}
 	if err != nil {
 		r.logSourceDone(source, "sync", started, err)
 		return syncFailureResult(source, "sync failed")
@@ -85,6 +93,13 @@ func syncSource(r *Runtime, source Source) SyncResult {
 }
 
 func lastSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
+	trimmed := strings.TrimSpace(string(data))
+	if trimmed != "" && json.Valid([]byte(trimmed)) {
+		var outcome syncCrawlerOutcome
+		if err := decodeContractJSON([]byte(trimmed), &outcome); err == nil {
+			return outcome, true
+		}
+	}
 	lines := strings.Split(string(data), "\n")
 	var last syncCrawlerOutcome
 	found := false
@@ -116,6 +131,7 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 		outcome.Summary,
 		syncErrorMessage(outcome.Error),
 		syncCountsText(outcome.Counts),
+		syncReportText(outcome),
 		syncProgressText(outcome),
 	)
 	return SyncResult{
@@ -127,6 +143,24 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 		FinishedAt: outcome.FinishedAt,
 		Error:      outcome.Error,
 	}
+}
+
+func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
+	args := []string{source.ID, "sync", "--json"}
+	switch r.verbosity() {
+	case 1:
+		args = append([]string{"-v"}, args...)
+	case 2:
+		args = append([]string{"-vv"}, args...)
+	}
+	out, err := runCrawlkitCaptured(args, []crawlkit.Crawler{source.Crawler})
+	if err != nil {
+		return nil, nil, err
+	}
+	if out.Code != 0 {
+		return out.Stdout, out.Stderr, crawlerCommandError{command: "sync", err: exitErr{code: out.Code}}
+	}
+	return out.Stdout, out.Stderr, nil
 }
 
 func syncFailureResult(source Source, message string) SyncResult {
@@ -158,6 +192,28 @@ func syncCountsText(counts []Count) string {
 	parts := make([]string, 0, len(counts))
 	for _, count := range counts {
 		parts = append(parts, formatCount(count))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func syncReportText(outcome syncCrawlerOutcome) string {
+	parts := make([]string, 0, 3)
+	for _, item := range []struct {
+		value json.Number
+		label string
+	}{
+		{outcome.Added, "added"},
+		{outcome.Updated, "updated"},
+		{outcome.Removed, "removed"},
+	} {
+		if item.value.String() == "" {
+			continue
+		}
+		value, err := item.value.Int64()
+		if err != nil || value == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", formatInteger(value, "", item.label), item.label))
 	}
 	return strings.Join(parts, " · ")
 }

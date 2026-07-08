@@ -1,77 +1,97 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os/exec"
 	"strings"
-	"time"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/registry"
 )
 
-const crawlerCommandTimeout = 30 * time.Second
+const crawlerCommandTimeout = crawlkit.DefaultReadTimeout
 
-// Source is one installed crawler as trawl uses it: the addressable id,
+// Source is one registered crawler as trawl uses it: the addressable id,
 // the surface name a person says out loud, the verbs it exposes, and the
-// resolved binary path trawl spawns. It is a flat projection of the
-// crawlkit manifest — the registry is the one discoverer.
+// typed crawler value trawl calls in-process.
 type Source struct {
 	ID           string
 	Binary       string
-	Path         string
+	Surface      string
+	Aliases      []string
 	DisplayName  string
 	Description  string
 	Capabilities []string
 	LogDir       string
 	Commands     map[string]control.Command
 	MetadataErr  error
+	Crawler      crawlkit.Crawler
 }
 
-// discoverCrawlers asks the registry which crawlers are installed and
-// projects each manifest into a Source. A crawler whose metadata did not
-// parse keeps its binary name as the id and carries the probe error so
-// status and doctor can surface it.
+// discoverCrawlers projects the explicit crawlkit registrations into the
+// existing trawl Source shape. A crawler whose generated metadata did not
+// parse keeps its id and carries the error so status and doctor can surface it.
 func discoverCrawlers(ctx context.Context) []Source {
-	crawlers := registry.Discover(ctx)
+	_ = ctx
+	crawlers := registeredCrawlers()
 	sources := make([]Source, 0, len(crawlers))
 	for _, crawler := range crawlers {
-		if crawler.Err != nil {
+		info := crawler.Info()
+		manifest, err := crawlkitManifest(crawler)
+		if err != nil {
 			sources = append(sources, Source{
-				ID:          crawler.Name,
-				Binary:      crawler.Name,
-				Path:        crawler.Path,
-				MetadataErr: crawler.Err,
+				ID:          firstNonEmpty(info.ID, info.Surface),
+				Binary:      info.ID,
+				Surface:     info.Surface,
+				Aliases:     append([]string(nil), info.Aliases...),
+				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, info.ID),
+				Crawler:     crawler,
+				MetadataErr: err,
 			})
 			continue
 		}
-		m := crawler.Manifest
 		sources = append(sources, Source{
-			ID:           m.ID,
-			Binary:       firstNonEmpty(m.Binary.Name, crawler.Name),
-			Path:         crawler.Path,
-			DisplayName:  m.DisplayName,
-			Description:  m.Description,
-			Capabilities: m.Capabilities,
-			LogDir:       m.Paths.DefaultLogs,
-			Commands:     m.Commands,
+			ID:           manifest.ID,
+			Binary:       info.ID,
+			Surface:      info.Surface,
+			Aliases:      append([]string(nil), info.Aliases...),
+			DisplayName:  manifest.DisplayName,
+			Description:  manifest.Description,
+			Capabilities: manifest.Capabilities,
+			LogDir:       manifest.Paths.DefaultLogs,
+			Commands:     manifest.Commands,
+			Crawler:      crawler,
 		})
 	}
 	return sources
 }
 
-// sourcesLine renders the registry's installed crawlers as id/surface-name
-// pairs for the root --help intro. A binary missing from PATH is simply
-// absent from registry.Discover's result — the honest degrade is that it
-// never appears, not a placeholder or an error.
+func crawlkitManifest(source crawlkit.Crawler) (control.Manifest, error) {
+	out, err := runCrawlkitCaptured([]string{"metadata", "--json"}, []crawlkit.Crawler{source})
+	if err != nil {
+		return control.Manifest{}, err
+	}
+	if out.Code != 0 {
+		return control.Manifest{}, fmt.Errorf("metadata failed")
+	}
+	var manifest control.Manifest
+	if err := decodeContractJSON(out.Stdout, &manifest); err != nil {
+		return control.Manifest{}, err
+	}
+	if strings.TrimSpace(manifest.ID) == "" {
+		return control.Manifest{}, errors.New("metadata id is empty")
+	}
+	manifest.ID = strings.TrimSpace(manifest.ID)
+	return manifest, nil
+}
+
+// sourcesLine renders the compiled-in crawlers as id/surface-name pairs for
+// the root --help intro.
 func sourcesLine(ctx context.Context) string {
 	sources := discoverCrawlers(ctx)
 	if len(sources) == 0 {
-		return "No crawlers are installed on PATH yet."
+		return "No crawlers are registered yet."
 	}
 	pairs := make([]string, 0, len(sources))
 	for _, source := range sources {
@@ -83,74 +103,6 @@ func sourcesLine(ctx context.Context) string {
 		pairs = append(pairs, source.ID)
 	}
 	return "Sources go by id or surface name: " + strings.Join(pairs, ", ") + " — trawl status lists yours."
-}
-
-func runCrawlerJSONWithArgs(ctx context.Context, path, verb string, args ...string) ([]byte, error) {
-	commandArgs := append([]string{verb}, args...)
-	commandArgs = append(commandArgs, "--json")
-	return runCrawlerCommandWithTimeout(ctx, path, crawlerCommandTimeout, commandArgs...)
-}
-
-func runCrawlerCommandWithTimeout(ctx context.Context, path string, timeout time.Duration, args ...string) ([]byte, error) {
-	commandCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	data, err := runCrawlerCommand(commandCtx, path, args...)
-	if err != nil {
-		if commandCtx.Err() != nil {
-			return nil, fmt.Errorf("%s timed out", strings.Join(args, " "))
-		}
-		return data, err
-	}
-	return data, nil
-}
-
-func runCrawlerCommandPassThroughWithTimeout(ctx context.Context, path string, timeout time.Duration, stdout, stderr io.Writer, args ...string) error {
-	commandCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	if err := runCrawlerCommandPassThrough(commandCtx, path, stdout, stderr, args...); err != nil {
-		if commandCtx.Err() != nil {
-			return fmt.Errorf("%s timed out", strings.Join(args, " "))
-		}
-		return err
-	}
-	return nil
-}
-
-func runCrawlerCommandPassThrough(ctx context.Context, path string, stdout, stderr io.Writer, args ...string) error {
-	cmd := exec.CommandContext(ctx, path, args...)
-	cmd.Stdout = stdout
-	cmd.Stderr = stderr
-	if err := cmd.Run(); err != nil {
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			code := exit.ExitCode()
-			if code < 0 {
-				code = 1
-			}
-			return exitErr{code: code}
-		}
-		return crawlerCommandError{
-			command: strings.Join(args, " "),
-			err:     err,
-		}
-	}
-	return nil
-}
-
-func runCrawlerCommand(ctx context.Context, path string, args ...string) ([]byte, error) {
-	cmd := exec.CommandContext(ctx, path, args...)
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = io.Discard
-	if err := cmd.Run(); err != nil {
-		return stdout.Bytes(), crawlerCommandError{
-			command: strings.Join(args, " "),
-			err:     err,
-		}
-	}
-	return stdout.Bytes(), nil
 }
 
 type crawlerCommandError struct {
