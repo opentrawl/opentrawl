@@ -9,7 +9,6 @@ import (
 )
 
 type commandError struct {
-	code    int
 	name    string
 	message string
 	remedy  string
@@ -28,10 +27,7 @@ func (e commandError) Unwrap() error {
 }
 
 func (e commandError) ExitCode() int {
-	if e.code == 0 {
-		return 1
-	}
-	return e.code
+	return 1
 }
 
 func (e commandError) ErrorBody() output.ErrorBody {
@@ -43,10 +39,6 @@ func (e commandError) ErrorBody() output.ErrorBody {
 }
 
 func commandErr(kind, message, remedy string, err error) error {
-	return commandErrCode(1, kind, message, remedy, err)
-}
-
-func commandErrCode(code int, kind, message, remedy string, err error) error {
 	if err == nil {
 		err = errors.New(message)
 	}
@@ -54,7 +46,7 @@ func commandErrCode(code int, kind, message, remedy string, err error) error {
 	if strings.TrimSpace(remedy) != "" {
 		wrapped = log.WorldMustChange{Err: err, Message: message, Remedy: remedy}
 	}
-	return commandError{code: code, name: kind, message: message, remedy: remedy, err: wrapped}
+	return commandError{name: kind, message: message, remedy: remedy, err: wrapped}
 }
 
 func archiveErr(err error) error {

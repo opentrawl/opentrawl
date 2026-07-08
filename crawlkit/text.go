@@ -230,6 +230,9 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		hints = append(hints, "Open: "+strings.TrimSpace(value.SourceID)+" open REF")
 	}
 	if value.Truncated {
+		if total := max(value.TotalMatches, len(value.Results)); total > len(value.Results) {
+			hints = append(hints, fmt.Sprintf("More: rerun with --limit %d or --all.", total))
+		}
 		hints = append(hints, "Narrow results with --who, --after, or --before.")
 	}
 	return render.WriteList(w, render.List{

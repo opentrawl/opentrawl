@@ -71,29 +71,6 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	return &Store{store: st, path: path, owned: true}, nil
 }
 
-func OpenExisting(ctx context.Context, path string) (*Store, error) {
-	if path == "" {
-		path = DefaultPath()
-	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	st, err := store.OpenReadOnly(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	version, err := st.SchemaVersion(ctx)
-	if err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	if version != SchemaVersion {
-		_ = st.Close()
-		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
-	}
-	return &Store{store: st, path: path, owned: true}, nil
-}
-
 func OpenExistingWritable(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()

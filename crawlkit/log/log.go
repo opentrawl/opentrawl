@@ -602,7 +602,9 @@ func (p *Progress) eventPayload(now time.Time, done int64, message string) progr
 
 func (p *Progress) writeProgress(event progressEvent) error {
 	if p.run.jsonProgress {
-		return json.NewEncoder(p.run.stderr).Encode(event)
+		enc := json.NewEncoder(p.run.stderr)
+		enc.SetEscapeHTML(false)
+		return enc.Encode(event)
 	}
 	_, err := fmt.Fprintln(p.run.stderr, p.humanProgress(event))
 	return err

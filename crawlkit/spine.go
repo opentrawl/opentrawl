@@ -114,7 +114,7 @@ func invalidSpineVerbFieldsError(key string, fields []string) spineVerbError {
 
 func invalidSpineVerbStoreError(key string, declared StoreAccess) spineVerbError {
 	return spineVerbError{
-		message: fmt.Sprintf("invalid %s Verb declaration: %s does not narrow default %s", key, storeAccessName(declared), storeModeGoName(spineDefaultStoreMode(key))),
+		message: fmt.Sprintf("invalid %s Verb declaration: %s is not valid; %s", key, storeAccessName(declared), spineVerbStoreAllowance(key)),
 		remedy:  spineVerbStoreRemedy(key),
 	}
 }
@@ -247,9 +247,22 @@ func spineVerbStoreRemedy(key string) string {
 	case storeOptional:
 		return fmt.Sprintf("Remove Store from the %s Verb declaration, or set Store to StoreNone.", key)
 	case storeWrite:
-		return fmt.Sprintf("Remove Store from the %s Verb declaration; %s always uses default storeWrite.", key, key)
+		return fmt.Sprintf("Remove Store from the %s Verb declaration; %s always writes the archive.", key, key)
 	default:
 		return fmt.Sprintf("Remove Store from the %s Verb declaration.", key)
+	}
+}
+
+func spineVerbStoreAllowance(key string) string {
+	switch spineDefaultStoreMode(key) {
+	case storeRead:
+		return "use StoreNone or StoreOptional"
+	case storeOptional:
+		return "use StoreNone"
+	case storeWrite:
+		return key + " always writes the archive"
+	default:
+		return "remove Store"
 	}
 }
 

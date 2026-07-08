@@ -117,25 +117,6 @@ func archiveSyncErr(err error) error {
 	return archiveSyncError{err: err}
 }
 
-func OpenExisting(ctx context.Context, path string) (*Store, error) {
-	if path == "" {
-		path = DefaultPath()
-	}
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	st, err := store.OpenReadOnly(ctx, path)
-	if err != nil {
-		return nil, err
-	}
-	outdated, err := detectSchemaOutdated(ctx, st.DB())
-	if err != nil {
-		_ = st.Close()
-		return nil, err
-	}
-	return &Store{store: st, path: path, schemaOutdated: outdated, owned: true}, nil
-}
-
 func OpenForDerivedRepair(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()

@@ -27,6 +27,16 @@ func TestWriteJSON(t *testing.T) {
 	}
 }
 
+func TestWriteJSONDoesNotEscapeHTML(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Write(&buf, JSON, "search", map[string]any{"snippet": "needle <alice@example.com>"}); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte(`\u003c`)) || !bytes.Contains(buf.Bytes(), []byte(`<alice@example.com>`)) {
+		t.Fatalf("json output escaped HTML: %s", buf.String())
+	}
+}
+
 func TestWriteLogRejectsAmbiguousLabels(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Write(&buf, Log, "status.ok-1", map[string]any{"ok": true}); err != nil {
@@ -92,6 +102,20 @@ func TestWriteErrorContractEnvelope(t *testing.T) {
 	}
 	if _, ok := raw["error"]["did_you_mean"]; !ok {
 		t.Fatalf("non-empty did_you_mean should be kept: %s", buf.String())
+	}
+}
+
+func TestWriteErrorDoesNotEscapeHTML(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteError(&buf, ErrorBody{
+		Code:    "usage",
+		Message: "retry with <alice@example.com>",
+		Remedy:  "run search <query>",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(buf.Bytes(), []byte(`\u003c`)) || !bytes.Contains(buf.Bytes(), []byte(`<alice@example.com>`)) {
+		t.Fatalf("error JSON escaped HTML: %s", buf.String())
 	}
 }
 

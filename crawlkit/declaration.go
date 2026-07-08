@@ -95,21 +95,6 @@ func storeAccessName(access StoreAccess) string {
 	}
 }
 
-func storeModeGoName(mode storeMode) string {
-	switch mode {
-	case storeNone:
-		return "storeNone"
-	case storeOptional:
-		return "storeOptional"
-	case storeRead:
-		return "storeRead"
-	case storeWrite:
-		return "storeWrite"
-	default:
-		return fmt.Sprintf("storeMode(%d)", mode)
-	}
-}
-
 func storeModeManifestValue(mode storeMode) string {
 	switch mode {
 	case storeNone:

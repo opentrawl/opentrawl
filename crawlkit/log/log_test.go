@@ -499,6 +499,33 @@ func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	}
 }
 
+func TestJSONProgressDoesNotEscapeHTML(t *testing.T) {
+	now := fixedTime()
+	var stderr bytes.Buffer
+	run := newTestRunWithOptions(t, Options{
+		StateRoot:    t.TempDir(),
+		CrawlerID:    "crawl",
+		RunID:        "json-progress-raw-run",
+		Command:      "sync",
+		JSONProgress: true,
+		Stderr:       &stderr,
+		Now:          func() time.Time { return now },
+	})
+	if err := run.Progress(ProgressOptions{Total: 2}).Report(1, "reading <ada@example.com>"); err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(stderr.Bytes(), []byte(`\u003c`)) || !bytes.Contains(stderr.Bytes(), []byte(`<ada@example.com>`)) {
+		t.Fatalf("JSON progress escaped HTML: %s", stderr.String())
+	}
+	var event progressEvent
+	if err := json.Unmarshal(bytes.TrimSpace(stderr.Bytes()), &event); err != nil {
+		t.Fatal(err)
+	}
+	if event.Message != "reading <ada@example.com>" {
+		t.Fatalf("message = %q", event.Message)
+	}
+}
+
 func TestNamedLogFileAndVerboseMirroring(t *testing.T) {
 	now := fixedTime()
 	var verbose bytes.Buffer

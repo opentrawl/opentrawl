@@ -651,6 +651,7 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 	for _, want := range []string{
 		`Search "hello": showing 1 of 3.`,
 		"Open: testcrawl open REF",
+		"More: rerun with --limit 3 or --all.",
 		"Narrow results with --who, --after, or --before.",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -906,7 +907,7 @@ func TestRunRejectsSpineStoreWidening(t *testing.T) {
 				Store: StoreRequired,
 			}}},
 			args:        []string{"search", "needle", "--json"},
-			wantMessage: "invalid search Verb declaration: StoreRequired does not narrow default storeRead",
+			wantMessage: "invalid search Verb declaration: StoreRequired is not valid; use StoreNone or StoreOptional",
 			wantRemedy:  "Remove Store from the search Verb declaration, or set Store to StoreNone or StoreOptional.",
 		},
 		{
@@ -916,8 +917,8 @@ func TestRunRejectsSpineStoreWidening(t *testing.T) {
 				Store: StoreNone,
 			}}},
 			args:        []string{"sync", "--json"},
-			wantMessage: "invalid sync Verb declaration: StoreNone does not narrow default storeWrite",
-			wantRemedy:  "Remove Store from the sync Verb declaration; sync always uses default storeWrite.",
+			wantMessage: "invalid sync Verb declaration: StoreNone is not valid; sync always writes the archive",
+			wantRemedy:  "Remove Store from the sync Verb declaration; sync always writes the archive.",
 		},
 	}
 	for _, tc := range cases {

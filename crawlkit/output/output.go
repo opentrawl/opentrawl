@@ -60,7 +60,7 @@ func (e ErrorBody) MarshalJSON() ([]byte, error) {
 		}
 		body[key] = value
 	}
-	return json.Marshal(body)
+	return marshalJSONNoEscape(body)
 }
 
 func (e *ErrorBody) UnmarshalJSON(data []byte) error {
@@ -111,6 +111,7 @@ type ErrorEnvelope struct {
 
 func WriteError(w io.Writer, body ErrorBody) error {
 	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
 	return enc.Encode(ErrorEnvelope{Error: body})
 }
 
@@ -207,6 +208,7 @@ func Write(w io.Writer, format Format, label string, value any) error {
 	case JSON:
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
+		enc.SetEscapeHTML(false)
 		return enc.Encode(value)
 	case Log:
 		if label == "" {
@@ -215,7 +217,7 @@ func Write(w io.Writer, format Format, label string, value any) error {
 		if !validLogLabel(label) {
 			return UsageError{Err: fmt.Errorf("invalid log label %q", label)}
 		}
-		body, err := json.Marshal(value)
+		body, err := marshalJSONNoEscape(value)
 		if err != nil {
 			return err
 		}
@@ -227,6 +229,16 @@ func Write(w io.Writer, format Format, label string, value any) error {
 	default:
 		return UsageError{Err: fmt.Errorf("unknown output format %q", format)}
 	}
+}
+
+func marshalJSONNoEscape(value any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(value); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 func validLogLabel(label string) bool {
