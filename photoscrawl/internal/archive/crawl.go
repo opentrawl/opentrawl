@@ -25,20 +25,25 @@ type SyncOptions struct {
 }
 
 type SyncResult struct {
-	Database              string `json:"database"`
-	Provider              string `json:"provider"`
-	SnapshotID            string `json:"snapshot_id"`
-	SourceLibraryID       string `json:"source_library_id"`
-	AssetsSeen            int    `json:"assets_seen"`
-	AssetsNew             int    `json:"assets_new"`
-	AssetsChanged         int    `json:"assets_changed"`
-	AssetsUnchanged       int    `json:"assets_unchanged"`
-	ResourcesSeen         int    `json:"resources_seen"`
-	AlbumMembershipsSeen  int    `json:"album_memberships_seen"`
-	LocationsSeen         int    `json:"locations_seen"`
-	QueuedForClassify     int    `json:"queued_for_classify"`
-	QueuedNeedsDownload   int    `json:"queued_needs_download"`
-	PreviouslySeenMissing int    `json:"previously_seen_missing"`
+	Database                          string `json:"database"`
+	Provider                          string `json:"provider"`
+	SnapshotID                        string `json:"snapshot_id"`
+	SourceLibraryID                   string `json:"source_library_id"`
+	AssetsSeen                        int    `json:"assets_seen"`
+	AssetsNew                         int    `json:"assets_new"`
+	AssetsChanged                     int    `json:"assets_changed"`
+	AssetsUnchanged                   int    `json:"assets_unchanged"`
+	ResourcesSeen                     int    `json:"resources_seen"`
+	AlbumMembershipsSeen              int    `json:"album_memberships_seen"`
+	LocationsSeen                     int    `json:"locations_seen"`
+	QueuedForClassify                 int    `json:"queued_for_classify"`
+	QueuedNeedsDownload               int    `json:"queued_needs_download"`
+	ClassificationQueuePending        int    `json:"classification_queue_pending"`
+	PreviouslySeenMissing             int    `json:"previously_seen_missing"`
+	InvalidatedModelObservationAssets int    `json:"invalidated_model_observation_assets"`
+	InvalidatedModelObservationRows   int    `json:"invalidated_model_observation_rows"`
+	InvalidatedPlaceObservationAssets int    `json:"invalidated_place_observation_assets"`
+	InvalidatedPlaceObservationRows   int    `json:"invalidated_place_observation_rows"`
 }
 
 func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
@@ -196,6 +201,15 @@ where source_library_id = ? and last_seen_snapshot_id <> ?
 	}
 	c.result.PreviouslySeenMissing = missing
 
+	var pending int
+	if err := tx.QueryRowContext(ctx, `
+select count(*) from classification_queue
+where state = 'pending'
+	`).Scan(&pending); err != nil {
+		return fmt.Errorf("count pending classification queue: %w", err)
+	}
+	c.result.ClassificationQueuePending = pending
+
 	cursor := state.NewCursor(tx)
 	if err := cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID); err != nil {
 		return err
@@ -218,9 +232,11 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 	}
 
 	if seenBefore {
-		if err := resetAssetDerivedRows(ctx, tx, assetID); err != nil {
+		counts, err := resetAssetDerivedRows(ctx, tx, assetID)
+		if err != nil {
 			return err
 		}
+		c.addInvalidatedObservations(counts)
 	}
 	for i, resource := range asset.Resources {
 		if err := c.insertResource(ctx, assetID, i, resource); err != nil {
@@ -244,6 +260,17 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 		return err
 	}
 	return c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
+}
+
+func (c *syncImporter) addInvalidatedObservations(counts invalidatedObservationRows) {
+	if counts.ModelObservationRows > 0 {
+		c.result.InvalidatedModelObservationAssets++
+		c.result.InvalidatedModelObservationRows += counts.ModelObservationRows
+	}
+	if counts.PlaceObservationRows > 0 {
+		c.result.InvalidatedPlaceObservationAssets++
+		c.result.InvalidatedPlaceObservationRows += counts.PlaceObservationRows
+	}
 }
 
 func (c *syncImporter) previousAssetFingerprint(ctx context.Context, sourceID, assetID string) (string, bool, error) {

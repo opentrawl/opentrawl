@@ -49,11 +49,11 @@ Per asset, sync writes:
   from the snapshot. Coordinates are stored exactly as Photos holds them
   (phone photos in mainland China are GCJ-02; see the provider seam rules).
 - `crawl_seen_asset` — the asset fingerprint: sha256 over the entire
-  marshalled asset JSON (`internal/archive/crawl.go:272`), including albums
+  marshalled asset JSON (`internal/archive/crawl.go:299`), including albums
   and favourite.
 
 Change detection: an asset whose fingerprint changed is re-upserted, and
-`resetAssetDerivedRows` (`internal/archive/crawl_writes.go:101`) deletes all
+`resetAssetDerivedRows` (`internal/archive/crawl_writes.go:106`) deletes all
 derived rows for it — resources, memberships, locations, and every
 observation table including `model_observation` and `place_observation` —
 then the asset re-enters `classification_queue` — except that a queue row
@@ -333,15 +333,19 @@ Consequences:
   and later, enriched context such as trips) genuinely stales the card's
   inputs, so it legitimately invalidates and re-cards. This is invariant 9
   extended: everything the model consumes is change-tracked.
-- The engineering obligation is **cost visibility**, not narrower
+- The engineering obligation is cost visibility, not narrower
   invalidation: every sync reports how many cards and place observations it
-  invalidates before deleting them, and re-carding is visible, budgeted
-  spend — a reported count and a planned run, never a silent delete plus an
-  implicit queue drain. TRAWL-176 implements this.
+  invalidates before deleting them. Re-carding is visible, budgeted spend:
+  a reported count and a planned run, never a silent delete plus an implicit
+  queue drain. The sync summary, `--json` output, and log line report
+  `invalidated_model_observation_assets`,
+  `invalidated_model_observation_rows`,
+  `invalidated_place_observation_assets`,
+  `invalidated_place_observation_rows`, and `classification_queue_pending`.
 - The rejected alternative (content-only cards, metadata joined at display
   time) is recorded here so it is not re-proposed: it was rejected because
   it guts the product's core idea, not on cost grounds.
 
-Until cost reporting lands, any sync against an enriched archive is
-preceded by a measured re-card count and cost estimate (staged copy,
-before/after row counts), cleared as spend.
+Sync against an enriched archive now reports the re-card count and pending
+queue depth in the run output. The operator can see the cost before deciding
+whether to drain the queue with `classify`.

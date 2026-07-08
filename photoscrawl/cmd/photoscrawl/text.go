@@ -75,10 +75,38 @@ func printSyncText(w io.Writer, result archive.SyncResult) error {
 	if _, err := fmt.Fprintf(w, "Imported: %d resources, %d album memberships, %d locations\n", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Classification queue: %d queued, %d need download\n", result.QueuedForClassify, result.QueuedNeedsDownload); err != nil {
+	if _, err := fmt.Fprintf(w, "Invalidated observations: model %s; place %s\n",
+		syncInvalidationText(result.InvalidatedModelObservationAssets, result.InvalidatedModelObservationRows),
+		syncInvalidationText(result.InvalidatedPlaceObservationAssets, result.InvalidatedPlaceObservationRows)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(w,
+		"Classification queue: %d queued this run, %d %s download, %d pending now\n",
+		result.QueuedForClassify,
+		result.QueuedNeedsDownload,
+		syncNeedWord(result.QueuedNeedsDownload),
+		result.ClassificationQueuePending); err != nil {
 		return err
 	}
 	return nil
+}
+
+func syncInvalidationText(assets, rows int) string {
+	return fmt.Sprintf("%d %s, %d %s", assets, syncUnit(assets, "asset"), rows, syncUnit(rows, "row"))
+}
+
+func syncNeedWord(count int) string {
+	if count == 1 {
+		return "needs"
+	}
+	return "need"
+}
+
+func syncUnit(count int, singular string) string {
+	if count == 1 {
+		return singular
+	}
+	return singular + "s"
 }
 
 type statusOutput struct {

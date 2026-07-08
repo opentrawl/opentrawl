@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
@@ -167,10 +168,119 @@ func TestSyncExpandsHomeInLibraryPath(t *testing.T) {
 	}
 }
 
+func TestSyncReportsObservationInvalidationCost(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := fakeProvider{snapshot: fakeSnapshot(false, false)}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sourceID := stableID("source_library", libraryPath)
+	assetID := stableID("asset", sourceID, "fixture-asset-1")
+	seedObservationInvalidationRows(t, ctx, paths, assetID)
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	updateResult, err := db.DB().ExecContext(ctx, `
+update classification_queue
+set state = 'content_classified',
+    reason = 'model_observations',
+    updated_at = ?
+where asset_id = ?
+`, fixedClock("2026-05-28T10:30:00Z")().Format(time.RFC3339Nano), assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := updateResult.RowsAffected(); err != nil {
+		t.Fatal(err)
+	} else if rows != 1 {
+		t.Fatalf("updated classified queue rows = %d, want 1", rows)
+	}
+
+	provider.snapshot = fakeSnapshot(false, false)
+	provider.snapshot.Assets[0].Favorite = true
+	result, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T11:00:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AssetsChanged != 1 {
+		t.Fatalf("changed assets = %d, want 1", result.AssetsChanged)
+	}
+
+	assertSyncSummaryNumber(t, result, "invalidated_model_observation_assets", 1)
+	assertSyncSummaryNumber(t, result, "invalidated_model_observation_rows", 2)
+	assertSyncSummaryNumber(t, result, "invalidated_place_observation_assets", 1)
+	assertSyncSummaryNumber(t, result, "invalidated_place_observation_rows", 1)
+	assertSyncSummaryNumber(t, result, "classification_queue_pending", 1)
+}
+
 func testPaths(t *testing.T) Paths {
 	t.Helper()
 	root := t.TempDir()
 	return Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite"), CacheDir: filepath.Join(root, "cache")}
+}
+
+func seedObservationInvalidationRows(t *testing.T, ctx context.Context, paths Paths, assetID string) {
+	t.Helper()
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+
+	for _, row := range []struct{ id, observationType, text string }{
+		{"fixture-card-summary", modelObservationCardSummary, "Synthetic beach scene."},
+		{"fixture-card-description", modelObservationCardDescription, "A synthetic beach fixture with visible album context."},
+	} {
+		if _, err := db.DB().ExecContext(ctx, `
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
+values (?, ?, ?, ?, '{}', 1.0, 'model_multimodal', 'fixture-model', 'v1', '')
+`, row.id, assetID, row.observationType, row.text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := db.DB().ExecContext(ctx, `
+insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
+values ('fixture-place', ?, 'venue', 'Synthetic Pier', '{"name":"Synthetic Pier"}', 'place_context', 'apple', 'hit', 'venue_candidate', 12, '')
+`, assetID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func assertSyncSummaryNumber(t *testing.T, result SyncResult, field string, want int) {
+	t.Helper()
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var summary map[string]any
+	if err := json.Unmarshal(data, &summary); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := summary[field].(float64)
+	if !ok {
+		t.Fatalf("sync summary missing numeric field %q in %s", field, data)
+	}
+	if int(got) != want {
+		t.Fatalf("sync summary %s = %d, want %d in %s", field, int(got), want, data)
+	}
 }
 
 func mkdirLibrary(path string) error {

@@ -146,18 +146,23 @@ func TestCommandWritesCrawlkitLog(t *testing.T) {
 func TestSyncHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printSyncText(&out, archive.SyncResult{
-		Database:              filepath.Join("tmp", "photos.sqlite"),
-		Provider:              "photos_sqlite_snapshot",
-		AssetsSeen:            10,
-		AssetsNew:             0,
-		AssetsChanged:         0,
-		AssetsUnchanged:       10,
-		ResourcesSeen:         20,
-		AlbumMembershipsSeen:  3,
-		LocationsSeen:         7,
-		QueuedForClassify:     0,
-		QueuedNeedsDownload:   0,
-		PreviouslySeenMissing: 0,
+		Database:                          filepath.Join("tmp", "photos.sqlite"),
+		Provider:                          "photos_sqlite_snapshot",
+		AssetsSeen:                        10,
+		AssetsNew:                         0,
+		AssetsChanged:                     0,
+		AssetsUnchanged:                   10,
+		ResourcesSeen:                     20,
+		AlbumMembershipsSeen:              3,
+		LocationsSeen:                     7,
+		QueuedForClassify:                 2,
+		QueuedNeedsDownload:               1,
+		ClassificationQueuePending:        3,
+		PreviouslySeenMissing:             0,
+		InvalidatedModelObservationAssets: 1,
+		InvalidatedModelObservationRows:   2,
+		InvalidatedPlaceObservationAssets: 1,
+		InvalidatedPlaceObservationRows:   1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -167,8 +172,40 @@ func TestSyncHumanOutputIsProse(t *testing.T) {
 		"Provider: photos_sqlite_snapshot",
 		"Assets: 10 seen, 0 new, 0 changed, 10 unchanged, 0 missing",
 		"Imported: 20 resources, 3 album memberships, 7 locations",
-		"Classification queue: 0 queued, 0 need download",
+		"Invalidated observations: model 1 asset, 2 rows; place 1 asset, 1 row",
+		"Classification queue: 2 queued this run, 1 needs download, 3 pending now",
 	)
+}
+
+func TestSyncLogMessageReportsInvalidationCost(t *testing.T) {
+	got := syncLogMessage(archive.SyncResult{
+		Provider:                          "photos_sqlite_snapshot",
+		AssetsSeen:                        10,
+		AssetsNew:                         1,
+		AssetsChanged:                     2,
+		AssetsUnchanged:                   7,
+		QueuedForClassify:                 3,
+		QueuedNeedsDownload:               1,
+		ClassificationQueuePending:        4,
+		PreviouslySeenMissing:             5,
+		InvalidatedModelObservationAssets: 2,
+		InvalidatedModelObservationRows:   6,
+		InvalidatedPlaceObservationAssets: 1,
+		InvalidatedPlaceObservationRows:   3,
+	})
+	for _, want := range []string{
+		"queued_for_classify=3",
+		"queued_needs_download=1",
+		"classification_queue_pending=4",
+		"invalidated_model_observation_assets=2",
+		"invalidated_model_observation_rows=6",
+		"invalidated_place_observation_assets=1",
+		"invalidated_place_observation_rows=3",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sync log message missing %q in %q", want, got)
+		}
+	}
 }
 
 func TestSearchHumanOutputIsProse(t *testing.T) {
