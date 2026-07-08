@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/openclaw/crawlkit"
@@ -69,9 +70,10 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if search.TotalMatches != 3 || !search.Truncated || len(search.Results) != 2 {
 		t.Fatalf("search = %#v, want 2 of 3 truncated", search)
 	}
-	if search.Results[0].Ref != archive.RefPrefix+"m3" || search.Results[0].ShortRef == "" || search.Results[0].Who != "me (alice@example.com)" {
+	if !strings.HasPrefix(search.Results[0].Ref, archive.RefPrefix) || search.Results[0].ShortRef == "" || search.Results[0].Who != "me (alice@example.com)" {
 		t.Fatalf("search hit = %#v", search.Results[0])
 	}
+	firstSearchID := strings.TrimPrefix(search.Results[0].Ref, archive.RefPrefix)
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	candidates, err := source.Who(ctx, readRequest(readStore, paths), "alice")
@@ -94,7 +96,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
 		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
 	}
-	if opened.ID != "m3" || opened.Headers.ToAddress == "" || opened.Headers.CcAddress == "" {
+	if opened.ID != firstSearchID || opened.Headers.ToAddress == "" || opened.Headers.CcAddress == "" {
 		t.Fatalf("opened message = %#v", opened)
 	}
 

@@ -20,12 +20,9 @@ func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, err
 	if err != nil {
 		return 0, err
 	}
-	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
-	if err != nil {
-		return 0, err
-	}
-	query := `select count(*) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
-	args := []any{ftsQuery}
+	plan := ckstore.RouteFTS5Query(filter.Query)
+	ftsClause, args := ftsSearchClause("messages_fts", []string{"f.text", "f.chat", "f.sender", "f.media"}, plan)
+	query := `select count(*) from messages_fts f join messages m on m.rowid=f.rowid where ` + ftsClause
 	if filter.ChatJID != "" {
 		query += " and m.chat_jid = ?"
 		args = append(args, filter.ChatJID)

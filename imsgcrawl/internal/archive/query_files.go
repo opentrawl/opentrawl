@@ -3,6 +3,8 @@ package archive
 import (
 	_ "embed"
 	"strings"
+
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 //go:embed queries/chats/summary.sql
@@ -107,6 +109,7 @@ const searchTimeBeforeFilter = `  and m.date <= ?`
 
 const searchFTSJoin = `join messages_fts on messages_fts.source_rowid = m.source_rowid`
 const searchFTSFilter = `  and messages_fts match ?`
+const searchFTSLikeFilter = `  and messages_fts.text like ? escape '\'`
 const searchFTSOrder = `rank, cm.chat_rowid`
 const searchNewestOrder = `m.date desc, m.source_rowid desc`
 
@@ -146,11 +149,18 @@ func searchFTSFilterClause(query string) string {
 	if strings.TrimSpace(query) == "" {
 		return ""
 	}
+	plan := ckstore.RouteFTS5Query(query)
+	if plan.Mode == ckstore.FTS5QueryLike {
+		return strings.TrimRight(strings.Repeat(searchFTSLikeFilter+"\n", len(plan.LikePatterns)), "\n")
+	}
 	return searchFTSFilter
 }
 
 func searchOrderClause(query string) string {
 	if strings.TrimSpace(query) == "" {
+		return searchNewestOrder
+	}
+	if ckstore.RouteFTS5Query(query).Mode == ckstore.FTS5QueryLike {
 		return searchNewestOrder
 	}
 	return searchFTSOrder

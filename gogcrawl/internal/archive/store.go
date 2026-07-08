@@ -55,11 +55,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		path = DefaultPath()
 	}
 	st, err := ckstore.Open(ctx, ckstore.Options{
-		Path:          path,
-		Schema:        schema + state.Schema + shortref.Schema,
-		SchemaVersion: schemaVersion,
+		Path:   path,
+		Schema: schema + state.Schema + shortref.Schema,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
+		_ = st.Close()
 		return nil, err
 	}
 	return &Store{store: st, path: path, owned: true}, nil
@@ -74,6 +81,9 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	}
 	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		return nil, err
 	}
 	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
 		return nil, err

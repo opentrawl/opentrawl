@@ -10,6 +10,21 @@ import (
 
 const fts5SnippetMaxRunes = 120
 
+const FTS5TrigramTokenizer = "tokenize='trigram'"
+
+type FTS5QueryMode string
+
+const (
+	FTS5QueryMatch FTS5QueryMode = "match"
+	FTS5QueryLike  FTS5QueryMode = "like"
+)
+
+type FTS5QueryPlan struct {
+	Mode         FTS5QueryMode
+	Match        string
+	LikePatterns []string
+}
+
 func FTS5Phrase(value string) string {
 	return `"` + strings.ReplaceAll(strings.TrimSpace(value), `"`, `""`) + `"`
 }
@@ -40,13 +55,53 @@ func FTS5Terms(value, operator string) (string, error) {
 // by implicit AND, discarding punctuation that could be parsed as operators.
 // It returns an empty string when no searchable tokens remain.
 func FTS5TokenQuery(value string) string {
+	tokens := fts5QueryTokens(value)
+	terms := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		terms = append(terms, FTS5Phrase(token))
+	}
+	return strings.Join(terms, " ")
+}
+
+// RouteFTS5Query returns the query shape for the fleet trigram FTS5
+// convention. Trigram MATCH has no token for a CJK term shorter than three
+// runes, so a query with any such term uses LIKE patterns against the same FTS
+// table columns. Every other query uses MATCH. The rule is structural: it only
+// checks Unicode CJK codepoint ranges, with no language detection or scoring.
+func RouteFTS5Query(value string) FTS5QueryPlan {
+	tokens := fts5QueryTokens(value)
+	if len(tokens) == 0 {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			return FTS5QueryPlan{Mode: FTS5QueryMatch}
+		}
+		return FTS5QueryPlan{
+			Mode:         FTS5QueryLike,
+			LikePatterns: []string{"%" + EscapeLike(trimmed) + "%"},
+		}
+	}
+	if hasShortCJKTerm(tokens) {
+		patterns := make([]string, 0, len(tokens))
+		for _, token := range tokens {
+			patterns = append(patterns, "%"+EscapeLike(token)+"%")
+		}
+		return FTS5QueryPlan{Mode: FTS5QueryLike, LikePatterns: patterns}
+	}
+	terms := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		terms = append(terms, FTS5Phrase(token))
+	}
+	return FTS5QueryPlan{Mode: FTS5QueryMatch, Match: strings.Join(terms, " ")}
+}
+
+func fts5QueryTokens(value string) []string {
 	terms := make([]string, 0)
 	var token strings.Builder
 	flush := func() {
 		if token.Len() == 0 {
 			return
 		}
-		terms = append(terms, FTS5Phrase(token.String()))
+		terms = append(terms, token.String())
 		token.Reset()
 	}
 	for _, r := range value {
@@ -57,7 +112,53 @@ func FTS5TokenQuery(value string) string {
 		flush()
 	}
 	flush()
-	return strings.Join(terms, " ")
+	return terms
+}
+
+func hasShortCJKTerm(tokens []string) bool {
+	for _, token := range tokens {
+		cjk := 0
+		for _, r := range token {
+			if isCJKRune(r) {
+				cjk++
+			}
+		}
+		if cjk > 0 && cjk < 3 {
+			return true
+		}
+	}
+	return false
+}
+
+func isCJKRune(r rune) bool {
+	switch {
+	case r >= 0x3400 && r <= 0x4DBF:
+		return true
+	case r >= 0x4E00 && r <= 0x9FFF:
+		return true
+	case r >= 0xF900 && r <= 0xFAFF:
+		return true
+	case r >= 0x20000 && r <= 0x2FA1F:
+		return true
+	case r >= 0x3040 && r <= 0x30FF:
+		return true
+	case r >= 0x31F0 && r <= 0x31FF:
+		return true
+	case r >= 0xFF66 && r <= 0xFF9F:
+		return true
+	case r >= 0x1100 && r <= 0x11FF:
+		return true
+	case r >= 0x3130 && r <= 0x318F:
+		return true
+	case r >= 0xA960 && r <= 0xA97F:
+		return true
+	case r >= 0xAC00 && r <= 0xD7FF:
+		return true
+	case r >= 0xD7B0 && r <= 0xD7FF:
+		return true
+	default:
+		return false
+	}
 }
 
 // FTS5Snippet returns a plain text search fragment centred near a query match.

@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	schemaVersion     = 1
+	schemaVersion     = 2
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
 	MessageRefPrefix       = "whatsapp:msg/"
@@ -276,6 +276,10 @@ func (s *Store) Path() string {
 }
 
 func (s *Store) migrate(ctx context.Context) error {
+	current, err := userVersion(ctx, s.db)
+	if err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("migrate schema: %w", err)
 	}
@@ -285,16 +289,27 @@ func (s *Store) migrate(ctx context.Context) error {
 	if err := shortref.EnsureSchema(ctx, s.db); err != nil {
 		return err
 	}
+	if err := ensureSearchIndex(ctx, s.db, current); err != nil {
+		return err
+	}
 	if _, err := s.db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
 		return fmt.Errorf("set schema version: %w", err)
 	}
 	return nil
 }
 
-func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
+func userVersion(ctx context.Context, db *sql.DB) (int, error) {
 	var version int
 	if err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version); err != nil {
-		return fmt.Errorf("read schema version: %w", err)
+		return 0, fmt.Errorf("read schema version: %w", err)
+	}
+	return version, nil
+}
+
+func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
+	version, err := userVersion(ctx, db)
+	if err != nil {
+		return err
 	}
 	if version != schemaVersion {
 		return fmt.Errorf("archive schema is not current: got %d, want %d", version, schemaVersion)

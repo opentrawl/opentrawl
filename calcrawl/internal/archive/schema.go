@@ -1,5 +1,16 @@
 package archive
 
+import "github.com/openclaw/crawlkit/store"
+
+const eventsFTSSchema = `create virtual table if not exists events_fts using fts5(
+  event_uid unindexed,
+  summary,
+  description,
+  location,
+  participants,
+  ` + store.FTS5TrigramTokenizer + `
+);`
+
 const schema = `
 create table if not exists calendars (
   calendar_id text primary key,
@@ -75,11 +86,5 @@ create index if not exists idx_events_start on events(start_unix, event_uid);
 create index if not exists idx_events_calendar on events(calendar_id, event_uid);
 create index if not exists idx_participants_phone on participants(phone_number);
 
-create virtual table if not exists events_fts using fts5(
-  event_uid unindexed,
-  summary,
-  description,
-  location,
-  participants
-);
+` + eventsFTSSchema + `
 `

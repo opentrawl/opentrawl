@@ -1,6 +1,15 @@
 package archive
 
-const schemaVersion = 2
+import ckstore "github.com/openclaw/crawlkit/store"
+
+const schemaVersion = 3
+
+const messagesFTSSchema = `create virtual table if not exists messages_fts using fts5(
+  id unindexed,
+  subject,
+  body,
+  ` + ckstore.FTS5TrigramTokenizer + `
+);`
 
 const schema = `
 create table if not exists messages (
@@ -46,11 +55,7 @@ create table if not exists gmail_labels (
 
 drop table if exists ingested_shards;
 
-create virtual table if not exists messages_fts using fts5(
-  id unindexed,
-  subject,
-  body
-);
+` + messagesFTSSchema + `
 
 create index if not exists idx_messages_time on messages(time_unix desc, id);
 create index if not exists idx_messages_from_address on messages(from_address);

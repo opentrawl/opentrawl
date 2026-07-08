@@ -1,10 +1,21 @@
 package store
 
+import ckstore "github.com/openclaw/crawlkit/store"
+
 // schemaVersion 2 replaced the hand-rolled sync_state(kind, cursor,
 // last_sync_at, last_result, coverage_note) table with crawlkit's
 // canonical state.Schema. migrateLegacySyncState copies every legacy row
 // into the canonical shape before dropping the old table — see store.go.
-const schemaVersion = 2
+const schemaVersion = 3
+
+const tweetsFTSSchema = `create virtual table if not exists tweets_fts using fts5(
+	text,
+	author_handle,
+	author_name,
+	content='tweets',
+	content_rowid='rowid',
+	` + ckstore.FTS5TrigramTokenizer + `
+);`
 
 const schemaSQL = `
 create table if not exists tweets (
@@ -50,13 +61,7 @@ create index if not exists idx_tweets_conversation_id on tweets(conversation_id)
 create index if not exists idx_tweet_roles_role on tweet_roles(role, tweet_id);
 create index if not exists idx_profiles_handle on profiles(handle);
 
-create virtual table if not exists tweets_fts using fts5(
-	text,
-	author_handle,
-	author_name,
-	content='tweets',
-	content_rowid='rowid'
-);
+` + tweetsFTSSchema + `
 
 create trigger if not exists tweets_fts_ai after insert on tweets begin
 	insert into tweets_fts(rowid, text, author_handle, author_name)

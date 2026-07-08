@@ -1,6 +1,10 @@
 package archive
 
-const schemaVersion = 6
+import "github.com/openclaw/crawlkit/store"
+
+const schemaVersion = 7
+
+const messagesFTSSchema = `create virtual table if not exists messages_fts using fts5(source_rowid unindexed, text, ` + store.FTS5TrigramTokenizer + `);`
 
 // The leading drop tombstones the old key/value sync_state table so the
 // canonical crawlkit state.Schema (appended at Open) can create sync_state in
@@ -52,7 +56,7 @@ create table if not exists messages (
   has_attachments integer not null default 0
 );
 
-create virtual table if not exists messages_fts using fts5(source_rowid unindexed, text);
+` + messagesFTSSchema + `
 
 create table if not exists contact_mappings (
   kind text not null,

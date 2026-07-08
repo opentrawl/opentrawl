@@ -10,7 +10,7 @@ import (
 const (
 	AppID         = "notes"
 	DisplayName   = "Notes"
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 type Note struct {

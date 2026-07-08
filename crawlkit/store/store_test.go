@@ -256,3 +256,92 @@ func TestFTS5Helpers(t *testing.T) {
 		t.Fatal("unsafe FTS table should fail")
 	}
 }
+
+func TestRouteFTS5Query(t *testing.T) {
+	tests := []struct {
+		input        string
+		mode         FTS5QueryMode
+		match        string
+		likePatterns []string
+	}{
+		{input: "launch", mode: FTS5QueryMatch, match: `"launch"`},
+		{input: "鹤鸣茶社", mode: FTS5QueryMatch, match: `"鹤鸣茶社"`},
+		{input: "鸣茶社", mode: FTS5QueryMatch, match: `"鸣茶社"`},
+		{input: "茶社", mode: FTS5QueryLike, likePatterns: []string{"%茶社%"}},
+		{input: "北京", mode: FTS5QueryLike, likePatterns: []string{"%北京%"}},
+		{input: "tea 茶社", mode: FTS5QueryLike, likePatterns: []string{"%tea%", "%茶社%"}},
+		{input: "tea 鹤鸣茶社", mode: FTS5QueryMatch, match: `"tea" "鹤鸣茶社"`},
+		{input: "北京 上海", mode: FTS5QueryLike, likePatterns: []string{"%北京%", "%上海%"}},
+		{input: "100% 茶社", mode: FTS5QueryLike, likePatterns: []string{"%100%", "%茶社%"}},
+	}
+	for _, tt := range tests {
+		got := RouteFTS5Query(tt.input)
+		if got.Mode != tt.mode {
+			t.Fatalf("%q mode = %q, want %q", tt.input, got.Mode, tt.mode)
+		}
+		if got.Match != tt.match {
+			t.Fatalf("%q match = %q, want %q", tt.input, got.Match, tt.match)
+		}
+		if strings.Join(got.LikePatterns, "\x00") != strings.Join(tt.likePatterns, "\x00") {
+			t.Fatalf("%q like patterns = %#v, want %#v", tt.input, got.LikePatterns, tt.likePatterns)
+		}
+	}
+}
+
+func TestRouteFTS5QueryAgainstTrigramTable(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, Options{
+		Path:   filepath.Join(t.TempDir(), "trigram.db"),
+		Schema: `create virtual table docs using fts5(body, ` + FTS5TrigramTokenizer + `);`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	for _, body := range []string{
+		"meet at 鹤鸣茶社 for launch planning",
+		"tea notes from 北京",
+	} {
+		if _, err := st.DB().ExecContext(ctx, `insert into docs(body) values (?)`, body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tests := []struct {
+		query string
+		want  int
+	}{
+		{query: "茶社", want: 1},
+		{query: "鸣茶社", want: 1},
+		{query: "鹤鸣茶社", want: 1},
+		{query: "launch", want: 1},
+		{query: "tea 北京", want: 1},
+	}
+	for _, tt := range tests {
+		plan := RouteFTS5Query(tt.query)
+		where, args := testFTS5Where("docs", []string{"body"}, plan)
+		var got int
+		if err := st.DB().QueryRowContext(ctx, `select count(*) from docs where `+where, args...).Scan(&got); err != nil {
+			t.Fatalf("%q query failed: %v", tt.query, err)
+		}
+		if got != tt.want {
+			t.Fatalf("%q matches %d rows, want %d", tt.query, got, tt.want)
+		}
+	}
+}
+
+func testFTS5Where(table string, columns []string, plan FTS5QueryPlan) (string, []any) {
+	if plan.Mode == FTS5QueryMatch {
+		return table + " match ?", []any{plan.Match}
+	}
+	var parts []string
+	var args []any
+	for _, pattern := range plan.LikePatterns {
+		var columnParts []string
+		for _, column := range columns {
+			columnParts = append(columnParts, QuoteIdent(column)+" like ? escape '\\'")
+			args = append(args, pattern)
+		}
+		parts = append(parts, "("+strings.Join(columnParts, " or ")+")")
+	}
+	return strings.Join(parts, " and "), args
+}

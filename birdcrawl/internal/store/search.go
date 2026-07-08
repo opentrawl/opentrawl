@@ -37,13 +37,11 @@ func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult
 	if strings.TrimSpace(filter.Query) == "" {
 		return nil, 0, errors.New("search query required")
 	}
-	queryText, err := ckstore.FTS5Terms(filter.Query, "")
-	if err != nil {
-		return nil, 0, err
-	}
+	plan := ckstore.RouteFTS5Query(filter.Query)
+	ftsClause, ftsArgs := ftsSearchClause("tweets_fts", []string{"f.text", "f.author_handle", "f.author_name"}, plan)
 	where, args := searchWhere(filter, "t.")
-	countQuery := `select count(*) from tweets_fts f join tweets t on t.rowid = f.rowid where tweets_fts match ?` + where
-	countArgs := append([]any{queryText}, args...)
+	countQuery := `select count(*) from tweets_fts f join tweets t on t.rowid = f.rowid where ` + ftsClause + where
+	countArgs := append(append([]any{}, ftsArgs...), args...)
 	var total int
 	if err := s.db.QueryRowContext(ctx, countQuery, countArgs...).Scan(&total); err != nil {
 		return nil, 0, err
@@ -53,7 +51,7 @@ coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,'
 from tweets_fts f
 join tweets t on t.rowid = f.rowid
 left join tweets p on p.id = t.in_reply_to_id
-where tweets_fts match ?` + where + `
+where ` + ftsClause + where + `
 order by t.created_at desc, t.id desc limit ?`
 	args = append(countArgs, limitArg(filter.Limit))
 	rows, err := s.db.QueryContext(ctx, selectQuery, args...)

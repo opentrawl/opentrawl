@@ -73,11 +73,19 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPath()
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema, SchemaVersion: schemaVersion})
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema + state.Schema})
 	if err != nil {
 		return nil, err
 	}
 	out := &Store{store: st, path: path}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	if err := ensureArchiveSchema(ctx, st.DB()); err != nil {
 		_ = st.Close()
 		return nil, err
@@ -148,6 +156,9 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	if _, err := st.DB().ExecContext(ctx, schema+state.Schema); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		return nil, err
+	}
 	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
 		return nil, err
 	}
@@ -176,6 +187,10 @@ func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, err
 // pre-migration key/value sync_state (no source_name column) all mean the
 // remedy is one sync (rules §1.16/§1.17).
 func detectSchemaOutdated(ctx context.Context, db *sql.DB) (bool, error) {
+	version, err := schemaMigrationVersion(ctx, db)
+	if err != nil {
+		return false, err
+	}
 	hasDisplayName, err := tableHasColumn(ctx, db, "handles", "display_name")
 	if err != nil {
 		return false, err
@@ -188,7 +203,20 @@ func detectSchemaOutdated(ctx context.Context, db *sql.DB) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return !hasDisplayName || !hasContactKey || !hasCanonicalState, nil
+	return version != schemaVersion || !hasDisplayName || !hasContactKey || !hasCanonicalState, nil
+}
+
+func schemaMigrationVersion(ctx context.Context, db *sql.DB) (int, error) {
+	var exists int
+	if err := db.QueryRowContext(ctx, `select count(*) from sqlite_master where type = 'table' and name = 'schema_migrations'`).Scan(&exists); err != nil {
+		return 0, err
+	}
+	if exists == 0 {
+		return 0, nil
+	}
+	var version int
+	err := db.QueryRowContext(ctx, `select coalesce(max(version), 0) from schema_migrations`).Scan(&version)
+	return version, err
 }
 
 func (s *Store) Close() error {
