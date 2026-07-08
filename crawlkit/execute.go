@@ -312,6 +312,11 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 }
 
 func fillSearchShortRefs(ctx context.Context, req *Request, hits []Hit) error {
+	if req == nil || req.Store == nil {
+		// Verbs declared StoreNone manage their own storage; there is no
+		// runner-owned short-ref index to consult.
+		return nil
+	}
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {
 		refs = append(refs, hit.Ref)

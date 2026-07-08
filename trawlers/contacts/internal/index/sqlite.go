@@ -1,6 +1,7 @@
 package index
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -15,10 +16,7 @@ import (
 
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/crawlkit/render"
-
-	// C SQLite via cgo, matching crawlkit/store after the modernc production
-	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
-	_ "github.com/mattn/go-sqlite3"
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 const (
@@ -77,11 +75,12 @@ func (s Store) indexPath() string {
 }
 
 func (s Store) indexMatches(fp markdownFingerprint) (bool, error) {
-	db, err := sql.Open("sqlite3", s.indexPath())
+	st, err := ckstore.OpenReadOnly(context.Background(), s.indexPath())
 	if err != nil {
 		return false, nil
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 	rows, err := db.Query(`select key, value from meta where key in ('schema_version', 'count', 'newest_mtime', 'frontmatter_hash')`)
 	if err != nil {
 		return false, nil
@@ -117,24 +116,29 @@ func (s Store) rebuildIndex(people []model.Person, fp markdownFingerprint) (int,
 		_ = os.Remove(tmpPath)
 		return 0, err
 	}
-	defer func() { _ = os.Remove(tmpPath) }()
-	db, err := sql.Open("sqlite3", tmpPath)
+	defer func() {
+		_ = os.Remove(tmpPath)
+		_ = os.Remove(tmpPath + "-wal")
+		_ = os.Remove(tmpPath + "-shm")
+	}()
+	st, err := ckstore.Open(context.Background(), ckstore.Options{Path: tmpPath})
 	if err != nil {
 		return 0, err
 	}
+	db := st.DB()
 	if err := createIndexSchema(db); err != nil {
-		_ = db.Close()
+		_ = st.Close()
 		return 0, err
 	}
 	tx, err := db.Begin()
 	if err != nil {
-		_ = db.Close()
+		_ = st.Close()
 		return 0, err
 	}
 	for _, p := range people {
 		if err := insertIndexedPerson(tx, p); err != nil {
 			_ = tx.Rollback()
-			_ = db.Close()
+			_ = st.Close()
 			return 0, err
 		}
 	}
@@ -146,15 +150,19 @@ func (s Store) rebuildIndex(people []model.Person, fp markdownFingerprint) (int,
 	} {
 		if _, err := tx.Exec(`insert into meta(key, value) values (?, ?)`, key, value); err != nil {
 			_ = tx.Rollback()
-			_ = db.Close()
+			_ = st.Close()
 			return 0, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		_ = db.Close()
+		_ = st.Close()
 		return 0, err
 	}
-	if err := db.Close(); err != nil {
+	if _, err := db.Exec(`pragma wal_checkpoint(TRUNCATE)`); err != nil {
+		_ = st.Close()
+		return 0, err
+	}
+	if err := st.Close(); err != nil {
 		return 0, err
 	}
 	if err := os.Chmod(tmpPath, 0o600); err != nil {
@@ -216,11 +224,12 @@ func (s Store) personIDsForQuery(query string) ([]string, error) {
 	if _, _, err := s.ensureIndex(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", s.indexPath())
+	st, err := ckstore.OpenReadOnly(context.Background(), s.indexPath())
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 
 	var ids []string
 	if id, ok, err := personIDByExactID(db, query); err != nil {
@@ -337,11 +346,12 @@ func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
 	if match == "" {
 		return nil, nil
 	}
-	db, err := sql.Open("sqlite3", s.indexPath())
+	st, err := ckstore.OpenReadOnly(context.Background(), s.indexPath())
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 	rows, err := db.Query(`
 		select p.id, p.name
 		from person_fts
@@ -375,11 +385,12 @@ func (s Store) indexedIdentifiers() (map[identifierKey][]string, error) {
 	if _, _, err := s.ensureIndex(); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", s.indexPath())
+	st, err := ckstore.OpenReadOnly(context.Background(), s.indexPath())
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 	rows, err := db.Query(`select kind, value, person_id from identifiers order by kind, value, person_id`)
 	if err != nil {
 		return nil, err

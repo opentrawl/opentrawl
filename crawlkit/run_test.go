@@ -809,6 +809,47 @@ func TestRunSpineSyncVerbParsesDeclaredFlags(t *testing.T) {
 	}
 }
 
+func TestRunPrefixedBespokeSyncDoesNotNeedSyncer(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testStatusCrawler{verbs: []Verb{{
+		Name:  "sync apple",
+		Help:  "Preview Apple Contacts sync",
+		Store: StoreNone,
+		Run: func(ctx context.Context, req *Request) error {
+			if len(req.Args) > 0 {
+				return fmt.Errorf("args = %v", req.Args)
+			}
+			_, err := req.Out.Write([]byte("apple sync preview\n"))
+			return err
+		},
+	}}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "apple", "--json"}, source, runOptions{})
+	if code != 0 || stdout != "apple sync preview\n" || stderr != "" {
+		t.Fatalf("sync apple code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, source, runOptions{})
+	if code != 2 || stderr != "" || !strings.Contains(stdout, "source does not support sync") {
+		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	if _, ok := manifest.Commands["sync"]; ok {
+		t.Fatalf("metadata advertised generic sync: %#v", manifest.Commands["sync"])
+	}
+	if got := manifest.Commands["sync_apple"]; got.Title != "Preview Apple Contacts sync" || got.Mutates {
+		t.Fatalf("sync_apple command = %#v", got)
+	}
+}
+
 func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 	stateRoot := t.TempDir()
 	includeArchived := false

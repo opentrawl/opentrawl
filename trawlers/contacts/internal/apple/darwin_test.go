@@ -101,6 +101,27 @@ func TestReadAddressBookDatabaseReportsMissingTable(t *testing.T) {
 	}
 }
 
+func TestReadAddressBookDatabaseDoesNotCreateLiveSidecars(t *testing.T) {
+	path := filepath.Join(t.TempDir(), addressBookDBName)
+	createAddressBookFixture(t, path, []fixtureContact{{
+		PK:         1,
+		Identifier: "fixture-contact:ABPerson",
+		FirstName:  "Ada",
+		LastName:   "Example",
+		Emails:     []string{"ada@example.com"},
+	}})
+	setWALModeWithoutSidecars(t, path)
+
+	contacts, err := readAddressBookDatabase(t.Context(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contacts) != 1 || contacts[0].Name() != "Ada Example" {
+		t.Fatalf("contacts = %#v", contacts)
+	}
+	assertNoAddressBookSidecars(t, path)
+}
+
 type fixtureContact struct {
 	PK           int
 	Identifier   string
@@ -221,4 +242,37 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
+}
+
+func setWALModeWithoutSidecars(t *testing.T, path string) {
+	t.Helper()
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`pragma journal_mode=WAL`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`pragma wal_checkpoint(TRUNCATE)`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Remove(path + suffix); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
+	}
+}
+
+func assertNoAddressBookSidecars(t *testing.T, path string) {
+	t.Helper()
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+			t.Fatalf("live sidecar %s stat err = %v, want not exist", path+suffix, err)
+		}
+	}
 }

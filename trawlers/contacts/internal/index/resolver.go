@@ -1,7 +1,7 @@
 package index
 
 import (
-	"database/sql"
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/crawlkit/render"
+	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -102,11 +103,12 @@ func (s Store) ResolveWho(query string) (WhoCandidate, error) {
 }
 
 func (s Store) indexedIdentifiersByPerson() (map[string][]identifierKey, error) {
-	db, err := sql.Open("sqlite3", s.indexPath())
+	st, err := ckstore.OpenReadOnly(context.Background(), s.indexPath())
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 	rows, err := db.Query(`select person_id, kind, value from identifiers order by person_id, kind, value`)
 	if err != nil {
 		return nil, err

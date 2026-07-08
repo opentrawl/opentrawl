@@ -210,6 +210,9 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 	if len(args) == 0 {
 		return targetVerb{}, usageError{err: errors.New("verb is required")}
 	}
+	if verb, ok, err := resolvePrefixedBespokeVerb(source, args); ok || err != nil {
+		return verb, err
+	}
 	name := args[0]
 	rest := args[1:]
 	if name == "contacts" && len(rest) > 0 && rest[0] == "export" {
@@ -293,6 +296,26 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		}
 	}
 	return targetVerb{}, usageError{err: fmt.Errorf("unknown verb %q", name)}
+}
+
+func resolvePrefixedBespokeVerb(source Crawler, args []string) (targetVerb, bool, error) {
+	for _, verb := range source.Verbs() {
+		if _, ok := spineVerbKey(verb.Name); ok {
+			continue
+		}
+		if len(strings.Fields(verb.Name)) < 2 {
+			continue
+		}
+		if matched, verbRest := matchBespokeVerb(verb, args); matched {
+			v := verb
+			mode, err := storeModeForVerb(verb)
+			if err != nil {
+				return targetVerb{}, true, err
+			}
+			return targetVerb{name: commandKey(verb.Name), tokens: strings.Fields(verb.Name), args: verbRest, mutates: verb.Mutates, timeout: verb.Timeout, bespoke: &v, storeMode: mode}, true, nil
+		}
+	}
+	return targetVerb{}, false, nil
 }
 
 func (verb targetVerb) childArgs() []string {

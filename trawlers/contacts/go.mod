@@ -5,7 +5,6 @@ go 1.26.4
 replace github.com/openclaw/crawlkit => ../../crawlkit
 
 require (
-	github.com/alecthomas/kong v1.15.0
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.47
 	github.com/openclaw/crawlkit v0.5.2

@@ -100,6 +100,40 @@ func TestReadOnlyRejectsWrites(t *testing.T) {
 	}
 }
 
+func TestForeignReadOnlyDoesNotCreateWALSidecars(t *testing.T) {
+	ctx := context.Background()
+	path := walModeFixtureWithoutSidecars(t)
+
+	ro, err := OpenReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ro.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !sqliteSidecarExists(path) {
+		t.Fatal("mode=ro negative control did not create a WAL sidecar")
+	}
+	removeSQLiteSidecars(t, path)
+
+	foreign, err := OpenForeignReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := foreign.DB().QueryRowContext(ctx, `select count(*) from things`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if err := foreign.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("count = %d, want 1", count)
+	}
+	assertNoSQLiteSidecars(t, path)
+	t.Log("foreign_read_no_sidecars=true wal_exists=false shm_exists=false")
+}
+
 func TestOpenEscapesURIReservedPathCharacters(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -139,6 +173,59 @@ func TestOpenEscapesURIReservedPathCharacters(t *testing.T) {
 	}
 	if value != "one" {
 		t.Fatalf("value = %q", value)
+	}
+}
+
+func walModeFixtureWithoutSidecars(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "foreign.db")
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`pragma journal_mode=WAL`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`create table things(id text primary key); insert into things(id) values('a');`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`pragma wal_checkpoint(TRUNCATE)`); err != nil {
+		_ = db.Close()
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	removeSQLiteSidecars(t, path)
+	return path
+}
+
+func sqliteSidecarExists(path string) bool {
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+func assertNoSQLiteSidecars(t *testing.T, path string) {
+	t.Helper()
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if _, err := os.Stat(path + suffix); !os.IsNotExist(err) {
+			t.Fatalf("sidecar %s stat err = %v, want not exist", path+suffix, err)
+		}
+	}
+}
+
+func removeSQLiteSidecars(t *testing.T, path string) {
+	t.Helper()
+	for _, suffix := range []string{"-wal", "-shm"} {
+		if err := os.Remove(path + suffix); err != nil && !os.IsNotExist(err) {
+			t.Fatal(err)
+		}
 	}
 }
 

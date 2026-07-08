@@ -108,6 +108,35 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	return &Store{db: db, path: path}, nil
 }
 
+// OpenForeignReadOnly opens a static SQLite database file this crawler does
+// not own. The file must be quiescent; snapshot live app stores before calling.
+func OpenForeignReadOnly(ctx context.Context, path string) (*Store, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, errors.New("sqlite path is required")
+	}
+	if path != ":memory:" && !strings.HasPrefix(path, "file:") {
+		if _, err := os.Stat(path); err != nil {
+			return nil, fmt.Errorf("stat sqlite db: %w", err)
+		}
+	}
+	db, err := sql.Open("sqlite3", foreignReadOnlyDSN(path))
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite readonly: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	if err := db.PingContext(ctx); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping sqlite readonly: %w", err)
+	}
+	if err := applySessionPragmas(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("apply session pragmas: %w", err)
+	}
+	return &Store{db: db, path: path}, nil
+}
+
 func (s *Store) Close() error {
 	if s == nil || s.db == nil {
 		return nil
@@ -233,6 +262,10 @@ func writeDSN(path string) string {
 
 func readOnlyDSN(path string) string {
 	return dsn(path, "mode=ro&_query_only=1&_foreign_keys=1&_busy_timeout=5000")
+}
+
+func foreignReadOnlyDSN(path string) string {
+	return dsn(path, "mode=ro&immutable=1&_query_only=1&_foreign_keys=1&_busy_timeout=5000")
 }
 
 // temp_store and mmap_size have no DSN form in the cgo driver. Both pools

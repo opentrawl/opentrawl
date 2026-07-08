@@ -2,7 +2,7 @@
 written_by: ai
 ---
 
-# 🧩 clawdex
+# clawdex
 
 Local-first contact crawler and markdown archive CLI.
 
@@ -31,12 +31,20 @@ index/
 .clawdex/repairs/
 ```
 
-Config is stored at `~/.opentrawl/contacts/config.toml` by default. `--repo DIR` or
-`CONTACTS_REPO=DIR` overrides the configured contacts repo for one run.
+Config is stored at `~/.opentrawl/contacts/config.toml` by default. Set
+`repo_path` in that file, or use `CONTACTS_REPO=DIR` to point one run at a
+different contacts repo. The runner owns global flags, so there is no
+contacts-specific `--repo` flag.
 
 ## Examples
 
-No standalone command examples are listed.
+```bash
+trawl contacts init /path/to/contacts
+trawl contacts import apple --input contacts.ndjson
+trawl contacts who Ada
+trawl contacts who 'Ada Lovelace'
+trawl contacts repair --dry-run
+```
 
 ## Imports and sync safety
 
@@ -57,14 +65,14 @@ Birdclaw and Discrawl DM imports read local archives only. They import DM
 conversations with more than `--min-messages` messages, add source-specific
 tags, and store stable pointers under `accounts.x` or `accounts.discord`.
 
-Crawler contact imports read `trawl <crawler> contacts export --json`. They update
-existing people when a phone, email, or handle matches the sqlite index. They
-do not create person files for unknown contacts. Unknown contacts are staged
-one line at a time in `index/unmatched.md` for deliberate review.
+The old cross-crawler `import contacts` path has been removed. Import one
+reviewed source at a time with `import apple`, `import google`, `import
+birdclaw`, or `import discrawl`.
 
-`sync apple` and `sync google` are preview-only placeholders for now. Remote
-address-book writes need a conflict report before they become active. Notes stay
-local-only and are never written to Apple or Google.
+`trawl contacts sync apple` and `trawl contacts sync google` are preview-only
+placeholders for now. Remote address-book writes need a conflict report before
+they become active. Notes stay local-only and are never written to Apple or
+Google.
 
 ## Markdown Repair
 
@@ -79,7 +87,9 @@ parses strictly first, then does best-effort repair when frontmatter is damaged:
 - warn about missing or stale avatar files and repair avatar metadata when the
   image still exists
 
-Repair commands are not exposed without a command surface.
+`trawl contacts doctor` reports damage without writing. `trawl contacts repair`
+writes repaired markdown, updates avatar metadata when possible, and rebuilds
+the derived index. Use `--dry-run` to preview the repair.
 
 ## Storage
 

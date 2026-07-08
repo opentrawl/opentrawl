@@ -122,6 +122,6 @@ func ResolveRepoPath(flagRepo string, cfg Config) (string, error) {
 	case strings.TrimSpace(cfg.RepoPath) != "":
 		return crawlconfig.ExpandHome(cfg.RepoPath), nil
 	default:
-		return "", errors.New("contacts repo not configured; run trawl contacts init DIR or pass --repo DIR")
+		return "", errors.New("contacts repo not configured; run trawl contacts init DIR, set repo_path, or set CONTACTS_REPO")
 	}
 }

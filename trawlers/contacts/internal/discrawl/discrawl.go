@@ -2,29 +2,26 @@ package discrawl
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/openclaw/clawdex/internal/model"
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 type Adapter struct {
 	DBPath string
-	Binary string
 }
 
 type dmRow struct {
-	ChannelID     string `json:"channel_id"`
-	Name          string `json:"name"`
-	Messages      int    `json:"messages"`
-	FirstMessage  string `json:"first_message"`
-	LastMessage   string `json:"last_message"`
-	CounterpartID string `json:"counterpart_id"`
+	ChannelID     string
+	Name          string
+	Messages      int
+	FirstMessage  string
+	LastMessage   string
+	CounterpartID string
 }
 
 func (a Adapter) ListDMContacts(ctx context.Context, minMessages int) ([]model.SourceContact, error) {
@@ -35,43 +32,46 @@ func (a Adapter) ListDMContacts(ctx context.Context, minMessages int) ([]model.S
 	if err != nil {
 		return nil, err
 	}
-	binary := strings.TrimSpace(a.Binary)
-	if binary == "" {
-		binary = "sqlite3"
-	}
-	query := fmt.Sprintf(dmQuery, minMessages)
-	// #nosec G204 -- sqlite3 is a configured binary and all arguments are passed without a shell.
-	cmd := exec.CommandContext(ctx, binary, "-json", "file:"+dbPath+"?mode=ro&immutable=1", query)
-	raw, err := cmd.Output()
+	st, err := ckstore.OpenForeignReadOnly(ctx, dbPath)
 	if err != nil {
-		return nil, sqliteErr(err)
+		return nil, fmt.Errorf("discrawl sqlite query: %w", err)
 	}
-	var rows []dmRow
-	if len(strings.TrimSpace(string(raw))) == 0 {
-		return nil, nil
+	defer func() { _ = st.Close() }()
+	rows, err := st.DB().QueryContext(ctx, dmQuery, minMessages)
+	if err != nil {
+		return nil, fmt.Errorf("discrawl sqlite query: %w", err)
 	}
-	if err := json.Unmarshal(raw, &rows); err != nil {
-		return nil, err
-	}
-	out := make([]model.SourceContact, 0, len(rows))
-	for _, row := range rows {
-		name := strings.TrimSpace(row.Name)
-		if name == "" || row.ChannelID == "" {
-			continue
+	defer func() { _ = rows.Close() }()
+	var out []model.SourceContact
+	for rows.Next() {
+		var row dmRow
+		if err := rows.Scan(&row.ChannelID, &row.Name, &row.Messages, &row.FirstMessage, &row.LastMessage, &row.CounterpartID); err != nil {
+			return nil, err
 		}
-		accounts := map[string][]string{"discord": {"channel:" + row.ChannelID}}
-		if row.CounterpartID != "" {
-			accounts["discord"] = append(accounts["discord"], "user:"+row.CounterpartID)
+		contact, ok := row.contact()
+		if ok {
+			out = append(out, contact)
 		}
-		out = append(out, model.SourceContact{
-			Source:     "discord",
-			ExternalID: row.ChannelID,
-			Name:       name,
-			Tags:       []string{"discord", "dm"},
-			Accounts:   accounts,
-		})
 	}
-	return out, nil
+	return out, rows.Err()
+}
+
+func (r dmRow) contact() (model.SourceContact, bool) {
+	name := strings.TrimSpace(r.Name)
+	if name == "" || r.ChannelID == "" {
+		return model.SourceContact{}, false
+	}
+	accounts := map[string][]string{"discord": {"channel:" + r.ChannelID}}
+	if r.CounterpartID != "" {
+		accounts["discord"] = append(accounts["discord"], "user:"+r.CounterpartID)
+	}
+	return model.SourceContact{
+		Source:     "discord",
+		ExternalID: r.ChannelID,
+		Name:       name,
+		Tags:       []string{"discord", "dm"},
+		Accounts:   accounts,
+	}, true
 }
 
 func resolveDBPath(path string) (string, error) {
@@ -92,27 +92,19 @@ func resolveDBPath(path string) (string, error) {
 	return filepath.Abs(path)
 }
 
-func sqliteErr(err error) error {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
-		return fmt.Errorf("discrawl sqlite query: %s", strings.TrimSpace(string(exitErr.Stderr)))
-	}
-	return err
-}
-
 const dmQuery = `
 with dm as (
   select
     c.id as channel_id,
-    c.name as name,
+    coalesce(c.name, '') as name,
     count(m.id) as messages,
-    min(m.created_at) as first_message,
-    max(m.created_at) as last_message
+    coalesce(min(m.created_at), '') as first_message,
+    coalesce(max(m.created_at), '') as last_message
   from channels c
   join messages m on m.channel_id = c.id
   where c.guild_id = '@me' and c.kind = 'dm'
   group by c.id, c.name
-  having count(m.id) > %d
+  having count(m.id) > ?
 ),
 self as (
   select m.author_id

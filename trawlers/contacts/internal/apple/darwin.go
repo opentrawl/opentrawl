@@ -6,14 +6,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/openclaw/crawlkit/cache"
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 const addressBookDBName = "AddressBook-v22.abcddb"
@@ -52,6 +51,8 @@ type labeledValue struct {
 }
 
 func ReadSystem(ctx context.Context) ([]Contact, error) {
+	// Apple Contacts has no crawlkit crawler contract in this tree. This
+	// explicit import path reads the local AddressBook database read-only.
 	dir, err := addressBookDir()
 	if err != nil {
 		return nil, err
@@ -131,14 +132,25 @@ func addressBookDatabasePaths(dir string) ([]string, error) {
 }
 
 func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error) {
-	db, err := sql.Open("sqlite3", readOnlySQLiteURI(path))
+	snapshotDir, err := os.MkdirTemp("", "clawdex-addressbook-")
 	if err != nil {
 		return nil, addressBookAccessError{Path: path, Err: err}
 	}
-	defer func() { _ = db.Close() }()
-	if err := db.PingContext(ctx); err != nil {
+	defer func() { _ = os.RemoveAll(snapshotDir) }()
+	snapshot, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{
+		SourcePath:     path,
+		DestinationDir: snapshotDir,
+		Name:           filepath.Base(path),
+	})
+	if err != nil {
 		return nil, addressBookAccessError{Path: path, Err: err}
 	}
+	st, err := ckstore.OpenForeignReadOnly(ctx, snapshot.Path)
+	if err != nil {
+		return nil, addressBookAccessError{Path: path, Err: err}
+	}
+	defer func() { _ = st.Close() }()
+	db := st.DB()
 
 	schema, err := inspectAddressBookSchema(ctx, db, path)
 	if err != nil {
@@ -177,14 +189,6 @@ func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error
 		contacts = append(contacts, record.contact)
 	}
 	return contacts, nil
-}
-
-func readOnlySQLiteURI(path string) string {
-	uri := url.URL{Scheme: "file", Path: path}
-	query := uri.Query()
-	query.Set("mode", "ro")
-	uri.RawQuery = query.Encode()
-	return uri.String()
 }
 
 func inspectAddressBookSchema(ctx context.Context, db *sql.DB, path string) (addressBookSchema, error) {
