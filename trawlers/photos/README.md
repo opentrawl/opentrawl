@@ -27,8 +27,8 @@ documents/screenshots/receipts exist, and which assets belong together.
 ```sh
 trawl photos metadata --json
 trawl photos status --json
-trawl photos doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
-trawl photos sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+trawl photos doctor --json
+trawl photos sync --json
 trawl photos classify --limit 100 --json
 trawl photos classify --model gemma4:e4b --limit 20 --json
 trawl photos search "drone beach portugal" --json
@@ -42,6 +42,8 @@ the canonical `photos:asset/<32-hex>` ref.
 Default runtime paths live under `~/.opentrawl/photos/`. The primary
 database is `~/.opentrawl/photos/photos.db`; provider caches, exported
 originals, logs, config and eval artifacts stay under the same crawler root.
+Set `library_path` in `~/.opentrawl/photos/config.toml` only when your Photos
+library is not at the default macOS path.
 
 A lifecrawler-format `export` command is planned but does not exist
 yet.

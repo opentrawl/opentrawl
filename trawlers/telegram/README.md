@@ -125,7 +125,6 @@ Defaults:
 - archive DB: `~/.opentrawl/telegram/telegram.db`
 - archived media copied from local Telegram caches, plus Telegram cloud media
   when `--fetch-media` is used: `~/.opentrawl/telegram/media/`
-- config: `~/.opentrawl/telegram/config.toml`
 
 Use a temporary home for tests:
 
