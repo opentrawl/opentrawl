@@ -12,7 +12,7 @@ func TestSyncInitializesArchiveAndStatus(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
-	paths := Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite")}
+	paths := Paths{DataDir: root, Database: filepath.Join(root, "photoscrawl.db")}
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
 	if err := mkdirLibrary(libraryPath); err != nil {
 		t.Fatal(err)

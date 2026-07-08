@@ -2,8 +2,8 @@
 .devenv/
 .devenv.flake.nix
 .photoscrawl/
-photos.sqlite
-photos.sqlite-*
+photoscrawl.db
+photoscrawl.db-*
 tmp/
 dist/
 docs/frontier-classification-poc.md

@@ -39,21 +39,21 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 			return DoctorCheck{
 				ID:      "archive",
 				State:   "missing",
-				Message: "photos.sqlite has not been initialized",
+				Message: "photoscrawl.db has not been initialized",
 				Remedy:  archiveRemedy,
 			}
 		}
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "cannot access photos.sqlite archive",
+			Message: "cannot access photoscrawl.db archive",
 			Remedy:  archiveRemedy,
 		}
 	} else if info.IsDir() {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "photos.sqlite archive path is a directory",
+			Message: "photoscrawl.db archive path is a directory",
 			Remedy:  archiveRemedy,
 		}
 	}
@@ -63,7 +63,7 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "cannot open photos.sqlite archive",
+			Message: "cannot open photoscrawl.db archive",
 			Remedy:  archiveRemedy,
 		}
 	}
@@ -74,7 +74,7 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "photos.sqlite archive is not intact",
+			Message: "photoscrawl.db archive is not intact",
 			Remedy:  archiveRemedy,
 		}
 	}

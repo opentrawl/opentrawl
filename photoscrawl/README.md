@@ -6,7 +6,7 @@ written_by: ai
 
 Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
 
-`photoscrawl` builds a `photos.sqlite` archive from a user's Photos library. The
+`photoscrawl` builds a `photoscrawl.db` archive from a user's Photos library. The
 goal is not photo backup. The goal is to help users understand their own library:
 where photos were taken, when they were taken, what is visible, which
 documents/screenshots/receipts exist, and which assets belong together.
@@ -40,7 +40,7 @@ Use that alias with `open` for local terminal work. JSON keeps
 the canonical `photoscrawl:asset/<32-hex>` ref.
 
 Default runtime paths live under `~/.opentrawl/photoscrawl/`. The primary
-database is `~/.opentrawl/photoscrawl/photos.sqlite`; provider caches, exported
+database is `~/.opentrawl/photoscrawl/photoscrawl.db`; provider caches, exported
 originals, logs, config and eval artifacts stay under the same crawler root.
 
 A lifecrawler-format `export` command is planned but does not exist
@@ -71,7 +71,7 @@ parked photos and unpark them once the place cache covers their location.
 
 If an original download fails, `classify` marks that asset as `failed_download`.
 It will not try that download again until an operator resets it:
-`sqlite3 ~/.opentrawl/photoscrawl/photos.sqlite "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
+`sqlite3 ~/.opentrawl/photoscrawl/photoscrawl.db "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
 
 ## photoscrawl-lab
 
@@ -154,7 +154,7 @@ without pretending GPS, face labels, or classifier labels are perfect facts.
 
 ## v1 Scope
 
-Build `photos.sqlite` with:
+Build `photoscrawl.db` with:
 
 - assets and resource metadata from Apple Photos;
 - local original-download queue; disk use is bounded by serial downloads and

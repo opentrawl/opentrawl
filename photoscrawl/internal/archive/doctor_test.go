@@ -12,7 +12,7 @@ func TestDoctorReportsArchiveState(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	root := t.TempDir()
-	paths := Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite")}
+	paths := Paths{DataDir: root, Database: filepath.Join(root, "photoscrawl.db")}
 
 	result, err := Doctor(ctx, paths, DoctorOptions{LibraryPath: filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")})
 	if err != nil {

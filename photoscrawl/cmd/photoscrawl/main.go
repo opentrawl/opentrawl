@@ -94,7 +94,7 @@ func run(ctx context.Context, args []string) (err error) {
 	case "status":
 		fs := flag.NewFlagSet("status", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
+		dbPath := fs.String("db", "", "photoscrawl.db path")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		formatFlag := fs.String("format", "", "output format")
 		if err := fs.Parse(args[1:]); err != nil {
@@ -120,7 +120,7 @@ func run(ctx context.Context, args []string) (err error) {
 	case "doctor":
 		fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
+		dbPath := fs.String("db", "", "photoscrawl.db path")
 		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		formatFlag := fs.String("format", "", "output format")
@@ -150,7 +150,7 @@ func run(ctx context.Context, args []string) (err error) {
 	case "sync":
 		fs := flag.NewFlagSet("sync", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
+		dbPath := fs.String("db", "", "photoscrawl.db path")
 		libraryPath := fs.String("library", "", "Photos Library.photoslibrary path")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		formatFlag := fs.String("format", "", "output format")
@@ -179,7 +179,7 @@ func run(ctx context.Context, args []string) (err error) {
 	case "classify":
 		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
-		dbPath := fs.String("db", "", "photos.sqlite path")
+		dbPath := fs.String("db", "", "photoscrawl.db path")
 		all := fs.Bool("all", false, "classify all pending assets")
 		limit := fs.Int("limit", 100, "max pending assets to classify")
 		model := fs.String("model", "", "Ollama-API vision model for content observations; local or cloud")
