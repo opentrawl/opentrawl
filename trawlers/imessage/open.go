@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -24,7 +24,7 @@ var (
 	errInvalidRef = errors.New("ref is not an imessage message ref")
 )
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
@@ -46,7 +46,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, newOpenOutput(result))
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.Contains(ref, ":") {
 		return c.resolveShortRef(ctx, req, ref)
@@ -61,15 +61,15 @@ func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref
 	return messageID, nil
 }
 
-func (c *Crawler) resolveShortRef(ctx context.Context, req *crawlkit.Request, alias string) (string, error) {
-	if !crawlkit.ValidShortRef(alias) {
+func (c *Crawler) resolveShortRef(ctx context.Context, req *trawlkit.Request, alias string) (string, error) {
+	if !trawlkit.ValidShortRef(alias) {
 		return "", commandErr(1, "invalid_ref", errInvalidRef, "use a ref in the form imessage:msg/ID or a short ref from search")
 	}
 	resolved, err := req.ResolveShortRef(ctx, alias)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandErr(1, "unknown_short_ref", errors.New("short ref was not found"), "rerun search or use the full ref")
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandErr(1, "ambiguous_short_ref", errors.New("short ref matches more than one message"), "rerun search or use the full ref")
 	}
 	if err != nil {

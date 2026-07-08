@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (

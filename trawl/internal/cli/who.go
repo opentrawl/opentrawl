@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type WhoCmd struct {

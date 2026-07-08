@@ -8,9 +8,9 @@ The contract every crawler implements. This is the plugin API: a
 crawler is any binary, in any language, that speaks these commands. The
 `trawl` CLI and the Mac app couple to nothing else.
 
-The Go types live in crawlkit's `control` package (manifest, status
+The Go types live in trawlkit's `control` package (manifest, status
 envelope, contact export are already there); this document is the
-authority for what v1 adds. Changes go upstream to crawlkit.
+authority for what v1 adds. Changes go upstream to trawlkit.
 
 All examples use synthetic data.
 
@@ -29,7 +29,7 @@ first-class surface held to the same rules as JSON.
 
 Logging is part of the tool contract. Every crawler writes an
 always-on plain text log in its state root, under `logs/`, using the
-shared crawlkit log grammar. Normal stdout and stderr stay clean:
+shared trawlkit log grammar. Normal stdout and stderr stay clean:
 commands do not print log lines unless the user asks for them.
 
 Every verb accepts `-v` and `--verbose`. `-v` streams the same log
@@ -37,12 +37,12 @@ lines to stderr while still writing the log file. `-vv` also writes
 debug detail, such as subprocess argv, per-source elapsed times and
 per-shard phase timings.
 
-The runner owns this for crawlers registered through `crawlkit.Run`.
+The runner owns this for crawlers registered through `trawlkit.Run`.
 Those crawlers stream typed log lines to the parent over the runner
 wire, and the parent renders them only when the user asks with `-v` or
 `-vv`. Schema-v2 manifests do not declare a `verbose_logs` capability.
 Logs are a runner contract property, not a per-crawler feature flag.
-Schema-v1 crawlers that have not adopted `crawlkit.Run` still declare
+Schema-v1 crawlers that have not adopted `trawlkit.Run` still declare
 `verbose_logs` when `trawl` should forward verbose flags and stderr.
 
 Every help page ends with a diagnostics line naming the flag and log
@@ -66,13 +66,13 @@ normal command output stays free of logs.
 | `open <ref> --json` | one item, full detail |
 | `doctor --json` | diagnostics with remedies |
 
-Optional capability: `contacts export --json` (crawlkit
+Optional capability: `contacts export --json` (trawlkit
 `ContactExport` shape). Declare it in metadata; v1 crawlers in this
 repo all implement it.
 
 ## metadata
 
-The manifest from crawlkit `control.Manifest`, plus:
+The manifest from trawlkit `control.Manifest`, plus:
 
 ```json
 {
@@ -95,7 +95,7 @@ The manifest from crawlkit `control.Manifest`, plus:
 
 ## status
 
-The crawlkit `control.Status` envelope. Counts are the crawler's
+The trawlkit `control.Status` envelope. Counts are the crawler's
 self-declared headline metrics, in display order — the app and
 `trawl status` render them verbatim:
 
@@ -187,7 +187,7 @@ identity logic.
 The `<query>` argument to `search` is optional when at least one
 filter (`--who`, `--after`, `--before`) is present: a filter-only
 search lists the newest matching items. `search` with no query and
-no filters is an error. Crawlkit owns the alias index and manifests always
+no filters is an error. Trawlkit owns the alias index and manifests always
 include `short_refs` (see [short-refs.md](short-refs.md)). Crawlers include the
 computed alias as `"short_ref"` on every result in their own `--json` output.
 The full `ref` stays the canonical identity; `short_ref` is display sugar so a
@@ -264,7 +264,7 @@ These apply to every command, both output modes:
 
 ## Contract checks
 
-The test suite and `crawlkit/conformance` helpers verify command grammar,
+The test suite and `trawlkit/conformance` helpers verify command grammar,
 JSON shapes, bounds, secret patterns, read-only reads, and behaviour on
 empty and corrupt archives. These checks are the contract's tripwires —
 prose drifts, tests do not. They remember known defect classes; they are

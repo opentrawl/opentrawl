@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	crawlconfig "github.com/openclaw/crawlkit/config"
+	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 )
 
 const (

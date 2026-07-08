@@ -182,7 +182,7 @@ Failing Elon  +15550102
 
 Text is the agent/human reading surface. JSON is the machine/workflow surface.
 It includes local IDs and stable field names, so code can pipe it through `jq`
-or feed it to crawlkit/CrawlBar-style consumers.
+or feed it to trawlkit/CrawlBar-style consumers.
 
 ```bash
 trawl --json imsgcrawl status

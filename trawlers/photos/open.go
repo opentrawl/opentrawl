@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/photoscrawl/internal/archive"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	resolved, err := c.resolveInputRef(ctx, req, ref)
 	if err != nil {
 		return err
@@ -33,12 +33,12 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, result)
 }
 
-func (c *Crawler) resolveInputRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") || strings.Contains(ref, "/") {
 		return ref, nil
 	}
-	if !crawlkit.ValidShortRef(ref) {
+	if !trawlkit.ValidShortRef(ref) {
 		return "", commandError{
 			Code:    "invalid_ref",
 			Message: "ref is not a photos asset ref",
@@ -46,10 +46,10 @@ func (c *Crawler) resolveInputRef(ctx context.Context, req *crawlkit.Request, re
 		}
 	}
 	fullRefs, err := req.ResolveShortRef(ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found", Remedy: "rerun search or use the full ref"}
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandError{Code: "ambiguous_short_ref", Message: "short ref matches more than one asset", Remedy: "rerun search or use the full ref"}
 	}
 	if err != nil {

@@ -6,10 +6,10 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type openOutput struct {
@@ -19,7 +19,7 @@ type openOutput struct {
 	Text    string              `json:"text,omitempty"`
 }
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))

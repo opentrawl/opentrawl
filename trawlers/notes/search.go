@@ -6,14 +6,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	results, total, err := st.Search(ctx, query.Text, archive.SearchOptions{
 		Limit:  query.Limit,
@@ -21,11 +21,11 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 		Before: query.Before,
 	})
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(results))
+	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
-		hits = append(hits, crawlkit.Hit{
+		hits = append(hits, trawlkit.Hit{
 			Ref:     result.Ref,
 			Time:    parseContractTime(result.Time),
 			Who:     "me",
@@ -36,7 +36,7 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	if req.Log != nil {
 		_ = req.Log.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(results), total))
 	}
-	return crawlkit.SearchResult{
+	return trawlkit.SearchResult{
 		Results:      hits,
 		TotalMatches: int(total),
 		Truncated:    query.Limit > 0 && len(results) < int(total),

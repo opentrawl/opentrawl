@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 // TestLegacySyncStateTombstonedOnce covers the TRAWL-82 migration: a writable
 // open drops the pre-canonical key/value sync_state and creates the canonical
-// crawlkit shape, and a later open never re-drops the canonical table (so an
+// trawlkit shape, and a later open never re-drops the canonical table (so an
 // already-migrated archive keeps its markers).
 func TestLegacySyncStateTombstonedOnce(t *testing.T) {
 	t.Parallel()

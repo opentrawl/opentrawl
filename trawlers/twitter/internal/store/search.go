@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type SearchFilter struct {

@@ -8,8 +8,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openclaw/crawlkit/config"
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 var ErrSchemaOutdated = errors.New("archive schema predates this version")

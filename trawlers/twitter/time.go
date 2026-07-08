@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 // parseTimeFlag parses a date flag using the one fleet date grammar
-// (crawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD date, with
+// (trawlkit/flags.Date): an RFC3339 timestamp or a bare YYYY-MM-DD date, with
 // bare dates read in local time.
 func parseTimeFlag(flagName, value string, endOfDay bool) (*time.Time, error) {
 	value = strings.TrimSpace(value)

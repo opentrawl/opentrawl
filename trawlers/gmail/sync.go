@@ -11,14 +11,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	cklog "github.com/openclaw/crawlkit/log"
-	"github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	if c.syncMax < 0 {
 		return nil, output.UsageError{Err: errors.New("sync --max must be 0 or greater")}
 	}
@@ -72,7 +72,7 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	if err := st.MarkSyncCompleted(ctx, time.Now().UTC()); err != nil {
 		return nil, err
 	}
-	return &crawlkit.SyncReport{Added: int64(result.Inserted)}, nil
+	return &trawlkit.SyncReport{Added: int64(result.Inserted)}, nil
 }
 
 type syncResult struct {
@@ -82,7 +82,7 @@ type syncResult struct {
 	Shards   int
 }
 
-func (c *Crawler) backupRepo(req *crawlkit.Request) string {
+func (c *Crawler) backupRepo(req *trawlkit.Request) string {
 	if strings.TrimSpace(c.backupRepoPath) != "" {
 		return strings.TrimSpace(c.backupRepoPath)
 	}
@@ -163,7 +163,7 @@ func removeRemoteConfigSections(config string) string {
 	return strings.Join(out, "\n")
 }
 
-func (c *Crawler) ingestPendingShards(ctx context.Context, req *crawlkit.Request, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncResult, error) {
+func (c *Crawler) ingestPendingShards(ctx context.Context, req *trawlkit.Request, st *archive.Store, repo string, shards []archive.BackupShard, progress *cklog.Progress, done *atomic.Int64) (syncResult, error) {
 	out := syncResult{Shards: len(shards)}
 	for _, shard := range shards {
 		var plaintext []byte
@@ -196,7 +196,7 @@ func (c *Crawler) ingestPendingShards(ctx context.Context, req *crawlkit.Request
 	return out, nil
 }
 
-func (c *Crawler) withHeartbeat(ctx context.Context, req *crawlkit.Request, progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
+func (c *Crawler) withHeartbeat(ctx context.Context, req *trawlkit.Request, progress *cklog.Progress, done *atomic.Int64, message string, fn func() error) error {
 	if err := reportProgress(req, progress, done.Load(), 0, message); err != nil {
 		return err
 	}
@@ -223,9 +223,9 @@ func (c *Crawler) withHeartbeat(ctx context.Context, req *crawlkit.Request, prog
 	return err
 }
 
-func reportProgress(req *crawlkit.Request, progress *cklog.Progress, done, total int64, message string) error {
+func reportProgress(req *trawlkit.Request, progress *cklog.Progress, done, total int64, message string) error {
 	if req != nil && req.Progress != nil {
-		req.Progress(crawlkit.Progress{Phase: "sync", Done: done, Total: total, Message: message})
+		req.Progress(trawlkit.Progress{Phase: "sync", Done: done, Total: total, Message: message})
 	}
 	if progress == nil {
 		return nil
@@ -233,14 +233,14 @@ func reportProgress(req *crawlkit.Request, progress *cklog.Progress, done, total
 	return progress.Report(done, message)
 }
 
-func logProgress(req *crawlkit.Request, opts cklog.ProgressOptions) *cklog.Progress {
+func logProgress(req *trawlkit.Request, opts cklog.ProgressOptions) *cklog.Progress {
 	if req == nil || req.Log == nil {
 		return nil
 	}
 	return req.Log.Progress(opts)
 }
 
-func logGogCommand(req *crawlkit.Request, client gog.Client, args ...string) {
+func logGogCommand(req *trawlkit.Request, client gog.Client, args ...string) {
 	argv := append([]string{client.Binary}, args...)
 	_ = logDebug(req, "subprocess_exec", "argv="+logQuote(strings.Join(argv, " ")))
 }
@@ -256,7 +256,7 @@ func backupGmailPushArgs(repo, query string, max int) []string {
 	return args
 }
 
-func logShardTimings(req *crawlkit.Request, result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
+func logShardTimings(req *trawlkit.Request, result archive.IngestResult, decryptElapsed, ingestElapsed time.Duration) {
 	shard := result.Shard
 	rows := result.Seen + result.Labels
 	_ = logInfo(req, "shard_done", strings.Join([]string{
@@ -275,21 +275,21 @@ func logShardTimings(req *crawlkit.Request, result archive.IngestResult, decrypt
 	}, " "))
 }
 
-func logInfo(req *crawlkit.Request, event, message string) error {
+func logInfo(req *trawlkit.Request, event, message string) error {
 	if req == nil || req.Log == nil {
 		return nil
 	}
 	return req.Log.Info(event, message)
 }
 
-func logWarn(req *crawlkit.Request, event, message string) error {
+func logWarn(req *trawlkit.Request, event, message string) error {
 	if req == nil || req.Log == nil {
 		return nil
 	}
 	return req.Log.Warn(event, message)
 }
 
-func logDebug(req *crawlkit.Request, event, message string) error {
+func logDebug(req *trawlkit.Request, event, message string) error {
 	if req == nil || req.Log == nil {
 		return nil
 	}

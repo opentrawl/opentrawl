@@ -10,10 +10,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -29,7 +29,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	createMessagesFixture(t, sourcePath)
 
 	stateRoot := filepath.Join(home, ".opentrawl")
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, appID, appID+".db"),
 		Config:  filepath.Join(stateRoot, appID, "config.toml"),
 		Logs:    filepath.Join(stateRoot, appID, "logs"),
@@ -40,12 +40,12 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncReq := &crawlkit.Request{
+	syncReq := &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
-		Progress: func(crawlkit.Progress) {},
+		Progress: func(trawlkit.Progress) {},
 	}
 	report, err := source.Sync(ctx, syncReq)
 	if err == nil {
@@ -68,7 +68,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 
 	readStore := openReadStore(t, ctx, paths.Archive)
 	searchReq := readRequest(readStore, paths)
-	search, err := source.Search(ctx, searchReq, crawlkit.Query{Text: "launch", Limit: 20})
+	search, err := source.Search(ctx, searchReq, trawlkit.Query{Text: "launch", Limit: 20})
 	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
@@ -87,7 +87,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
-	err = source.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
+	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +121,7 @@ func TestCrawlerSyncClassifiesArchiveUseFailureAsArchiveError(t *testing.T) {
 	}
 	createMessagesFixture(t, sourcePath)
 
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(home, ".opentrawl", appID, appID+".db"),
 		Config:  filepath.Join(home, ".opentrawl", appID, "config.toml"),
 		Logs:    filepath.Join(home, ".opentrawl", appID, "logs"),
@@ -135,7 +135,7 @@ func TestCrawlerSyncClassifiesArchiveUseFailureAsArchiveError(t *testing.T) {
 	}
 
 	readOnlyStore := openReadStore(t, ctx, paths.Archive)
-	_, err = New().Sync(ctx, &crawlkit.Request{
+	_, err = New().Sync(ctx, &trawlkit.Request{
 		Store:  readOnlyStore,
 		Paths:  paths,
 		Format: ckoutput.Text,
@@ -157,8 +157,8 @@ func TestCrawlerSyncClassifiesArchiveUseFailureAsArchiveError(t *testing.T) {
 	}
 }
 
-func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
-	return &crawlkit.Request{
+func readRequest(st *ckstore.Store, paths trawlkit.Paths) *trawlkit.Request {
+	return &trawlkit.Request{
 		Store:  st,
 		Paths:  paths,
 		Format: ckoutput.Text,
@@ -166,7 +166,7 @@ func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
 	}
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {

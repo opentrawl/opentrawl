@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	filter := store.MessageFilter{
 		Query: strings.TrimSpace(query.Text),
@@ -29,23 +29,23 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	if strings.TrimSpace(query.Who) != "" {
 		keys, err := resolveWhoKeys(ctx, st, query.Who)
 		if err != nil {
-			return crawlkit.SearchResult{}, err
+			return trawlkit.SearchResult{}, err
 		}
 		filter.Who = query.Who
 		filter.WhoKeys = keys
 	}
 	total, err := st.SearchCount(ctx, filter)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	messages, err := st.Search(ctx, filter)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(messages))
+	hits := make([]trawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message)
-		hits = append(hits, crawlkit.Hit{
+		hits = append(hits, trawlkit.Hit{
 			Ref:     ref,
 			Time:    message.Timestamp,
 			Who:     outputField(messageWhoForFormat(message, req.Format)),
@@ -53,7 +53,7 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 			Snippet: outputField(messageSnippet(message)),
 		})
 	}
-	return crawlkit.SearchResult{
+	return trawlkit.SearchResult{
 		WhoResolved:  query.WhoResolved,
 		Results:      hits,
 		TotalMatches: total,
@@ -61,7 +61,7 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	}, nil
 }
 
-func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))

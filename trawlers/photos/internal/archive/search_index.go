@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 // Bump when the FTS build changes in a way that requires re-deriving the

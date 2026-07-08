@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestListDMContactsViaStoreAdapter(t *testing.T) {

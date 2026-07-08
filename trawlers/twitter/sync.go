@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -66,12 +66,12 @@ type budgetExhaustedError struct{}
 
 func (budgetExhaustedError) Error() string { return "monthly X API budget exhausted" }
 
-func (r *runtime) runSyncReport() (*crawlkit.SyncReport, error) {
+func (r *runtime) runSyncReport() (*trawlkit.SyncReport, error) {
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
 		return nil, err
 	}
-	var report *crawlkit.SyncReport
+	var report *trawlkit.SyncReport
 	err = r.withStore(func(st *store.Store) error {
 		client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
 		if err != nil {
@@ -90,7 +90,7 @@ func (r *runtime) runSyncReport() (*crawlkit.SyncReport, error) {
 		return nil, err
 	}
 	if report == nil {
-		report = &crawlkit.SyncReport{}
+		report = &trawlkit.SyncReport{}
 	}
 	return report, nil
 }
@@ -371,7 +371,7 @@ func (s *syncRunner) print(event syncEvent) error {
 		return nil
 	}
 	if event.Type == "sync_complete" {
-		s.r.req.Progress(crawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
+		s.r.req.Progress(trawlkit.Progress{Phase: "sync", Done: int64(s.totals.Tweets), Message: event.Message})
 		return nil
 	}
 	message := ""
@@ -386,7 +386,7 @@ func (s *syncRunner) print(event syncEvent) error {
 			message += fmt.Sprintf("; %s rows arrived without id or text", render.FormatInteger(int64(event.DeficientRows)))
 		}
 	}
-	s.r.req.Progress(crawlkit.Progress{
+	s.r.req.Progress(trawlkit.Progress{
 		Phase:   event.Phase,
 		Done:    int64(event.StoredTweets),
 		Total:   int64(event.Fetched),
@@ -395,8 +395,8 @@ func (s *syncRunner) print(event syncEvent) error {
 	return nil
 }
 
-func syncReport(totals syncTotals) *crawlkit.SyncReport {
-	report := &crawlkit.SyncReport{
+func syncReport(totals syncTotals) *trawlkit.SyncReport {
+	report := &trawlkit.SyncReport{
 		Added:   int64(totals.Tweets),
 		Updated: int64(totals.Roles + totals.Profiles),
 	}

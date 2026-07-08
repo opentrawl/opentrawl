@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/crawlkit/cache"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const addressBookDBName = "AddressBook-v22.abcddb"
@@ -51,7 +51,7 @@ type labeledValue struct {
 }
 
 func ReadSystem(ctx context.Context) ([]Contact, error) {
-	// Apple Contacts has no crawlkit crawler contract in this tree. This
+	// Apple Contacts has no trawlkit crawler contract in this tree. This
 	// explicit import path reads the local AddressBook database read-only.
 	dir, err := addressBookDir()
 	if err != nil {

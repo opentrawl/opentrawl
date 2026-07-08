@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	ckstate "github.com/openclaw/crawlkit/state"
+	ckstate "github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-// Sync state lives in the one crawlkit state.Store (TRAWL-82), keyed by
+// Sync state lives in the one trawlkit state.Store (TRAWL-82), keyed by
 // twitter's old five-column sync_state "kind": each kind becomes three
 // canonical rows (cursor, last_result, coverage_note) sharing that kind as
 // entity_id, so the exact shape SyncState/SyncStateUpdate already expose
@@ -24,7 +24,7 @@ const (
 	stateEntityCoverageNote = "sync_coverage_note"
 )
 
-// queryExecer is the read/write surface crawlkit/state.Store needs. Both
+// queryExecer is the read/write surface trawlkit/state.Store needs. Both
 // *sql.DB and *sql.Tx satisfy it, so the same sync-state helpers work for a
 // plain read and for a write inside an existing transaction (addSpend must
 // read the running total with the write's own tx, not a second connection,

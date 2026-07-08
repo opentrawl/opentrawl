@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (c *syncImporter) insertResource(ctx context.Context, assetID string, index int, resource photos.Resource) error {

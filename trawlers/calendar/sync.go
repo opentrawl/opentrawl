@@ -7,15 +7,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/calendarstore"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	syncStarted := time.Now()
 	sourceProgress := req.Log.Progress(cklog.ProgressOptions{Event: "source_progress", Unit: "events"})
 	if err := reportProgress(req, sourceProgress, "source", 0, 0, "reading Calendar source"); err != nil {
@@ -62,16 +62,16 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		return nil, err
 	}
 	logSyncTimings(req, stats, time.Since(syncStarted), sourceElapsed, archiveElapsed)
-	return &crawlkit.SyncReport{
+	return &trawlkit.SyncReport{
 		Added:   int64(stats.NewEvents),
 		Updated: int64(stats.ChangedEvents),
 		Removed: int64(stats.DeletedEvents),
 	}, nil
 }
 
-func reportProgress(req *crawlkit.Request, progress *cklog.Progress, phase string, done, total int64, message string) error {
+func reportProgress(req *trawlkit.Request, progress *cklog.Progress, phase string, done, total int64, message string) error {
 	if req.Progress != nil {
-		req.Progress(crawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
+		req.Progress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
 	}
 	return progress.Report(done, message)
 }
@@ -97,7 +97,7 @@ func withHeartbeat(ctx context.Context, progress func() error, fn func() error) 
 	}
 }
 
-func logSyncTimings(req *crawlkit.Request, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
+func logSyncTimings(req *trawlkit.Request, stats archive.SyncStats, totalElapsed, sourceElapsed, archiveElapsed time.Duration) {
 	_ = req.Log.Info("sync_done", strings.Join([]string{
 		"calendars=" + strconv.Itoa(stats.Calendars),
 		"events=" + strconv.Itoa(stats.Events),

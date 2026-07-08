@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/state"
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {

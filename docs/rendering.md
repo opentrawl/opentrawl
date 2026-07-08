@@ -4,7 +4,7 @@ written_by: ai
 
 # Rendering
 
-Every crawler's human output is built from four shared crawlkit
+Every crawler's human output is built from four shared trawlkit
 components. Crawlers hand over data; the library owns layout, labels,
 wrapping, truncation, empty states and time formatting. Hand-rolled
 list or table rendering in a crawler is a defect.
@@ -13,7 +13,7 @@ The bar is the blind-person test (AGENTS.md): someone who has never
 seen the tool must understand every line cold — what each column is,
 what each value means, and what to do next.
 
-## The components (crawlkit/render)
+## The components (trawlkit/render)
 
 - `WriteList` — record lists: search hits, messages, tweets, emails,
   events. Heading first (`Bookmarks: showing 20 of 398, newest
@@ -37,7 +37,7 @@ what each value means, and what to do next.
 - `WriteTranscript` — ordered conversation context around one message,
   with day separators and a `>` marker on the target.
 
-Help text comes from `crawlkit/usage`: commands declared in groups
+Help text comes from `trawlkit/usage`: commands declared in groups
 (read your archive / keep it fresh / health), rendered identically
 for every crawler.
 

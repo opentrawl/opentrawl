@@ -1,6 +1,6 @@
 package telecrawl
 
-import "github.com/openclaw/crawlkit/render"
+import "github.com/opentrawl/opentrawl/trawlkit/render"
 
 func groupDigits(value int) string {
 	return groupDigits64(int64(value))

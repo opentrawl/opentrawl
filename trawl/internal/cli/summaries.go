@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type SummariesCmd struct {

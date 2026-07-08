@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const legacyTwitterTime = "Mon Jan 02 15:04:05 -0700 2006"

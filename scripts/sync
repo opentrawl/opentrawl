@@ -15,7 +15,7 @@ cd "$(git rev-parse --show-toplevel)"
 # dir  upstream  outbound
 table() {
   cat <<'EOF'
-crawlkit          https://github.com/openclaw/crawlkit.git    https://github.com/openclaw/crawlkit.git
+trawlkit          https://github.com/opentrawl/opentrawl/trawlkit.git    https://github.com/opentrawl/opentrawl/trawlkit.git
 trawlers/imessage https://github.com/openclaw/imsgcrawl.git   https://github.com/openclaw/imsgcrawl.git
 trawlers/photos   https://github.com/openclaw/photoscrawl.git https://github.com/openclaw/photoscrawl.git
 trawlers/telegram https://github.com/openclaw/telecrawl.git   git@github.com:joshp123/telecrawl.git

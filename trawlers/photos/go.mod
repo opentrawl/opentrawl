@@ -4,10 +4,10 @@ go 1.26.4
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.47
-	github.com/openclaw/crawlkit v0.12.3-0.20260619121233-9a636444e780
+	github.com/opentrawl/opentrawl/trawlkit v0.12.3-0.20260619121233-9a636444e780
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect

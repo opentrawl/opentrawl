@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
-const crawlerCommandTimeout = crawlkit.DefaultReadTimeout
+const crawlerCommandTimeout = trawlkit.DefaultReadTimeout
 
 // Source is one registered crawler as trawl uses it: the addressable id,
 // the surface name a person says out loud, the verbs it exposes, and the
@@ -26,10 +26,10 @@ type Source struct {
 	LogDir       string
 	Commands     map[string]control.Command
 	MetadataErr  error
-	Crawler      crawlkit.Crawler
+	Crawler      trawlkit.Crawler
 }
 
-// discoverCrawlers projects the explicit crawlkit registrations into the
+// discoverCrawlers projects the explicit trawlkit registrations into the
 // existing trawl Source shape. A crawler whose generated metadata did not
 // parse keeps its id and carries the error so status and doctor can surface it.
 func discoverCrawlers(ctx context.Context) []Source {
@@ -38,7 +38,7 @@ func discoverCrawlers(ctx context.Context) []Source {
 	sources := make([]Source, 0, len(crawlers))
 	for _, crawler := range crawlers {
 		info := crawler.Info()
-		manifest, err := crawlkitManifest(crawler)
+		manifest, err := trawlkitManifest(crawler)
 		if err != nil {
 			id := firstNonEmpty(info.ID, info.Surface)
 			sources = append(sources, Source{
@@ -112,8 +112,8 @@ func legacyRoutingAliases(id string) []string {
 	}
 }
 
-func crawlkitManifest(source crawlkit.Crawler) (control.Manifest, error) {
-	manifest, err := crawlkit.Manifest(source)
+func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {
+	manifest, err := trawlkit.Manifest(source)
 	if err != nil {
 		return control.Manifest{}, err
 	}

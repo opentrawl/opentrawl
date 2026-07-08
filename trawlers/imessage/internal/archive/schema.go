@@ -3,7 +3,7 @@ package archive
 const schemaVersion = 6
 
 // The leading drop tombstones the old key/value sync_state table so the
-// canonical crawlkit state.Schema (appended at Open) can create sync_state in
+// canonical trawlkit state.Schema (appended at Open) can create sync_state in
 // its own shape. Only the writable sync path applies this schema, and sync
 // fully rewrites sync_state, so dropping on open never loses live state; a
 // pre-migration archive re-derives its state in one sync (rules §1.17).

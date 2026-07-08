@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
 type stateSpec struct {
@@ -25,7 +25,7 @@ type stateSpec struct {
 	description string
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	sourcePath := strings.TrimSpace(c.syncStorePath)
 	source := "live"
 	label := strings.TrimSpace(c.syncLabel)
@@ -36,10 +36,10 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	if err != nil {
 		return nil, err
 	}
-	return &crawlkit.SyncReport{Added: int64(stats.NewVersions), Updated: int64(stats.Observations)}, nil
+	return &trawlkit.SyncReport{Added: int64(stats.NewVersions), Updated: int64(stats.Observations)}, nil
 }
 
-func (c *Crawler) runSyncStore(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 1 {
 		return usageError("sync-store needs one NoteStore.sqlite path")
 	}
@@ -58,7 +58,7 @@ func (c *Crawler) runSyncStore(ctx context.Context, req *crawlkit.Request) error
 	return err
 }
 
-func (c *Crawler) syncSource(ctx context.Context, req *crawlkit.Request, sourcePath, source, label string, replaceNotes bool) (archive.SyncStats, error) {
+func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, replaceNotes bool) (archive.SyncStats, error) {
 	start := time.Now().UTC()
 	sourcePath = strings.TrimSpace(sourcePath)
 	snap, err := notesdb.SnapshotPath(sourcePath)
@@ -86,7 +86,7 @@ func (c *Crawler) syncSource(ctx context.Context, req *crawlkit.Request, sourceP
 	return stats, nil
 }
 
-func syncSnapshot(ctx context.Context, req *crawlkit.Request, st *archive.Store, snap notesdb.Snapshot, source, detail string, replaceNotes bool, start time.Time) (archive.SyncStats, error) {
+func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store, snap notesdb.Snapshot, source, detail string, replaceNotes bool, start time.Time) (archive.SyncStats, error) {
 	var progress *cklog.Progress
 	if req.Log != nil {
 		progress = req.Log.Progress(cklog.ProgressOptions{Event: "notes_sync", Unit: "states"})
@@ -102,7 +102,7 @@ func syncSnapshot(ctx context.Context, req *crawlkit.Request, st *archive.Store,
 	var final notesdb.FinalState
 	for i, spec := range specs {
 		if req.Progress != nil {
-			req.Progress(crawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
+			req.Progress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
 		}
 		reportLogProgress(progress, int64(i), "reading Notes store state")
 		state, err := wal.Materialize(snap.Path, walData, spec.offset)
@@ -179,7 +179,7 @@ func syncSnapshot(ctx context.Context, req *crawlkit.Request, st *archive.Store,
 	stats.WALCommits = len(walOffsets)
 	stats.SourcePath = archive.SourcePathHint(snap.SourcePath)
 	if req.Progress != nil {
-		req.Progress(crawlkit.Progress{Phase: "archive", Done: int64(len(bodies)), Total: int64(len(bodies)), Message: "wrote Notes archive"})
+		req.Progress(trawlkit.Progress{Phase: "archive", Done: int64(len(bodies)), Total: int64(len(bodies)), Message: "wrote Notes archive"})
 	}
 	reportLogProgress(progress, int64(len(specs)), "wrote Notes archive")
 	return stats, nil

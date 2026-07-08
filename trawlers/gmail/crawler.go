@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const (
@@ -30,20 +30,20 @@ type Crawler struct {
 }
 
 var (
-	_ crawlkit.Crawler         = (*Crawler)(nil)
-	_ crawlkit.Syncer          = (*Crawler)(nil)
-	_ crawlkit.Searcher        = (*Crawler)(nil)
-	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
-	_ crawlkit.Opener          = (*Crawler)(nil)
-	_ crawlkit.ContactExporter = (*Crawler)(nil)
+	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Syncer          = (*Crawler)(nil)
+	_ trawlkit.Searcher        = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.Opener          = (*Crawler)(nil)
+	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{gog: gog.New(gog.DefaultBinary)}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          appID,
 		Surface:     "gmail",
 		DisplayName: displayName,
@@ -56,8 +56,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{
 			Name: "sync",
 			Flags: func(fs *flag.FlagSet) {
@@ -68,12 +68,12 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 		},
 		{
 			Name:  "contacts_export",
-			Store: crawlkit.StoreNone,
+			Store: trawlkit.StoreNone,
 		},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(appID, "Archive has not been synced.")
 	status.State = "missing"
 	status.DatabasePath = req.Paths.Archive
@@ -103,8 +103,8 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
-	return &crawlkit.Doctor{Checks: []crawlkit.Check{
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
+	return &trawlkit.Doctor{Checks: []trawlkit.Check{
 		c.checkGogBinary(),
 		c.checkGogVersion(ctx),
 		c.checkGogAuth(ctx),
@@ -112,10 +112,10 @@ func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.
 	}}, nil
 }
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.SearchResult{}, archiveErr(err)
+		return trawlkit.SearchResult{}, archiveErr(err)
 	}
 	opts := archive.SearchOptions{
 		Query: strings.TrimSpace(query.Text),
@@ -130,23 +130,23 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	}
 	result, err := st.Search(ctx, opts)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(result.Results))
+	hits := make([]trawlkit.Hit, 0, len(result.Results))
 	for _, hit := range result.Results {
 		converted, err := searchHit(hit)
 		if err != nil {
-			return crawlkit.SearchResult{}, err
+			return trawlkit.SearchResult{}, err
 		}
 		hits = append(hits, converted)
 	}
-	out := crawlkit.SearchResult{
+	out := trawlkit.SearchResult{
 		Results:      hits,
 		TotalMatches: int(result.TotalMatches),
 		Truncated:    result.Truncated,
 	}
 	if result.WhoResolved != nil {
-		out.WhoResolved = &crawlkit.WhoResolved{
+		out.WhoResolved = &trawlkit.WhoResolved{
 			Who:         result.WhoResolved.Who,
 			Identifiers: append([]string(nil), result.WhoResolved.Identifiers...),
 		}
@@ -155,7 +155,7 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	return out, nil
 }
 
-func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(err)
@@ -171,7 +171,7 @@ func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string)
 	return out, nil
 }
 
-func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
 	contacts, err := c.exportContacts(ctx)
 	if err != nil {
 		return nil, commandErr("gog_contacts_failed", "gog could not list Google contacts", "run gog auth list --check --plain, then gog login <email> if auth is invalid", err)
@@ -204,46 +204,46 @@ func statusState(status archive.Status) (string, string) {
 	return "ok", "Recently synced."
 }
 
-func (c *Crawler) checkGogBinary() crawlkit.Check {
+func (c *Crawler) checkGogBinary() trawlkit.Check {
 	if _, err := c.gog.LookPath(); err != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "gog_binary",
 			State:   "fail",
 			Message: "gog is not on PATH",
 			Remedy:  "install gog and make sure your shell can run gog",
 		}
 	}
-	return crawlkit.Check{ID: "gog_binary", State: "ok"}
+	return trawlkit.Check{ID: "gog_binary", State: "ok"}
 }
 
-func (c *Crawler) checkGogVersion(ctx context.Context) crawlkit.Check {
+func (c *Crawler) checkGogVersion(ctx context.Context) trawlkit.Check {
 	version, err := c.gog.Version(ctx)
 	if err != nil {
-		return crawlkit.Check{ID: "gog_version", State: "fail", Message: "gog version cannot be checked", Remedy: "upgrade gogcli"}
+		return trawlkit.Check{ID: "gog_version", State: "fail", Message: "gog version cannot be checked", Remedy: "upgrade gogcli"}
 	}
 	if !versionAtLeast(version, minGogVersion) {
-		return crawlkit.Check{ID: "gog_version", State: "fail", Message: fmt.Sprintf("gog version %s is below %s", version, minGogVersion), Remedy: "upgrade gogcli"}
+		return trawlkit.Check{ID: "gog_version", State: "fail", Message: fmt.Sprintf("gog version %s is below %s", version, minGogVersion), Remedy: "upgrade gogcli"}
 	}
-	return crawlkit.Check{ID: "gog_version", State: "ok", Message: version}
+	return trawlkit.Check{ID: "gog_version", State: "ok", Message: version}
 }
 
-func (c *Crawler) checkGogAuth(ctx context.Context) crawlkit.Check {
+func (c *Crawler) checkGogAuth(ctx context.Context) trawlkit.Check {
 	status, err := c.gog.AuthStatus(ctx)
 	if err != nil {
-		return crawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog auth check failed", Remedy: "run gog login <email>"}
+		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog auth check failed", Remedy: "run gog login <email>"}
 	}
 	if !status.FoundAccount {
-		return crawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no stored account", Remedy: "run gog login <email>"}
+		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no stored account", Remedy: "run gog login <email>"}
 	}
 	if !status.Authorized {
-		return crawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no valid stored account", Remedy: "run gog login <email>"}
+		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no valid stored account", Remedy: "run gog login <email>"}
 	}
-	return crawlkit.Check{ID: "gog_auth", State: "ok"}
+	return trawlkit.Check{ID: "gog_auth", State: "ok"}
 }
 
-func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
+func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
 	if req.Store == nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database has not been synced", Remedy: "run trawl gmail sync"}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database has not been synced", Remedy: "run trawl gmail sync"}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
@@ -251,10 +251,10 @@ func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 		if errors.Is(err, archive.ErrSchemaMismatch) {
 			remedy = "remove the old archive and run trawl gmail sync"
 		}
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: remedy}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: remedy}
 	}
 	if _, err := st.Status(ctx); err != nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl gmail sync to rebuild the archive"}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl gmail sync to rebuild the archive"}
 	}
-	return crawlkit.Check{ID: "archive", State: "ok"}
+	return trawlkit.Check{ID: "archive", State: "ok"}
 }

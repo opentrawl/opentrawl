@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 
-	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 // usageRemedy is the one next-step hint for every caller mistake. It rides the
 // error body's remedy field, kept out of the message (rules §2.4).
 const usageRemedy = "Run 'trawl twitter --help'."
 
-// cliError carries a command failure's exit code and the crawlkit error body
-// (crawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as
+// cliError carries a command failure's exit code and the trawlkit error body
+// (trawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as
 // {"error": {...}} in JSON mode; in text mode main prints Error().
 type cliError struct {
 	code    int

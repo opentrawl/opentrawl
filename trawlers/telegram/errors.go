@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 type commandError struct {

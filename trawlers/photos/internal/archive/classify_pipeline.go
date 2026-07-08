@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/model"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/model"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type classifyWrite struct {
@@ -60,7 +60,7 @@ type contentItem struct {
 	downloadBytes    int64
 }
 
-// classifyContentInputs drives model classification through crawlkit's
+// classifyContentInputs drives model classification through trawlkit's
 // model.Run, which owns the loop guardrails: bounded retries, adaptive
 // concurrency, 429-requeue-never-fail, and the rule-1.15 quota abort.
 // photoscrawl keeps what is photoscrawl's: originals export inside prepare,
@@ -172,7 +172,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	return err
 }
 
-// runLogger hands crawlkit's model.Run events to the classify log.
+// runLogger hands trawlkit's model.Run events to the classify log.
 type runLogger struct{ logger classifyLogger }
 
 func (l runLogger) Info(event, message string) error {

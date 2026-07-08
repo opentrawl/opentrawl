@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestKnownPlaceMatchRequiresWindowAndRadius(t *testing.T) {

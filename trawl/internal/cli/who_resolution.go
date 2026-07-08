@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const whoWorkerLimit = 4
@@ -197,13 +197,13 @@ func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 		}
 		r.logSourceDone(source, "who", started, nil, "candidates="+strconv.Itoa(len(result.Candidates)), "suggestions="+strconv.Itoa(len(result.DidYouMean)))
 	}()
-	matcher, ok := source.Crawler.(crawlkit.WhoMatcher)
+	matcher, ok := source.Crawler.(trawlkit.WhoMatcher)
 	if !ok {
 		result.Err = errorsForMetadata(source)
 		return result
 	}
 	var candidates []whomatch.Candidate
-	err := r.withSourceRequest(source, "who", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "who", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var whoErr error
 		candidates, whoErr = matcher.Who(ctx, req, query)
 		return whoErr

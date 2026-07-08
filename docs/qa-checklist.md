@@ -12,7 +12,7 @@ transcript against section 1. This applies to any landing that touches:
 
 - `*output*.go`
 - `render/`
-- crawlkit's `result.go` or any `render_*.go`
+- trawlkit's `result.go` or any `render_*.go`
 - `search.go` or `search_flags.go`
 
 Until scheduling exists, `scripts/output-dump` is a manual or on-demand dump.

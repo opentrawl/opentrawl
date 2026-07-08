@@ -71,7 +71,6 @@ not edit a subtree without knowing where the change will land; see
 
 | directory | upstream | outbound path |
 |---|---|---|
-| crawlkit | openclaw/crawlkit | direct (maintainer) |
 | trawlers/imessage | openclaw/imsgcrawl | direct (admin) |
 | trawlers/photos | openclaw/photoscrawl | direct (admin) |
 | trawlers/telegram | openclaw/telecrawl | via joshp123/telecrawl fork + PR |

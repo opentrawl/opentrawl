@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const whoCandidateLimit = 20

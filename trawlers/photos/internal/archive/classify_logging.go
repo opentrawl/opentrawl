@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
 type classifyLogger struct {

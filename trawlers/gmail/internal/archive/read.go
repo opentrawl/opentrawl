@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {

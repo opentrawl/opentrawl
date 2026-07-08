@@ -12,15 +12,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/config"
-	"github.com/openclaw/crawlkit/shortref"
-	"github.com/openclaw/crawlkit/state"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/imsgcrawl/internal/addressbook"
 	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-// Sync-state lives in the one crawlkit state.Store (TRAWL-82). Scalar sync
+// Sync-state lives in the one trawlkit state.Store (TRAWL-82). Scalar sync
 // markers are keyed under the "sync" entity type; derived-state bookkeeping
 // under "derived".
 const (
@@ -47,7 +47,7 @@ type SyncOptions struct {
 	UseDefaultAddressBook bool
 }
 
-// DefaultPaths is the one archive path layout, from crawlkit/config. The base
+// DefaultPaths is the one archive path layout, from trawlkit/config. The base
 // dir is the fleet-wide state root, ~/.opentrawl/imessage (TRAWL-99).
 func DefaultPaths() config.Paths {
 	paths, _ := config.App{Name: "imessage", BaseDir: "~/.opentrawl/imessage"}.DefaultPaths()

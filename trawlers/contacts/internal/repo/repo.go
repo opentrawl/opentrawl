@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openclaw/crawlkit/mirror"
+	"github.com/opentrawl/opentrawl/trawlkit/mirror"
 )
 
 type Repo struct {

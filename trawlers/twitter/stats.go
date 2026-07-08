@@ -4,15 +4,15 @@ import (
 	"errors"
 	"io"
 
-	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 func (r *runtime) runStats(args []string) error {
 	if len(args) > 0 {
 		return usageErr(errors.New("stats takes no positional arguments"))
 	}
-	// The one --limit contract (crawlkit/flags): --limit N is honored exactly,
+	// The one --limit contract (trawlkit/flags): --limit N is honored exactly,
 	// a limit below 1 is a usage error, no hidden cap. stats is a bounded
 	// top-N ranking.
 	limitN, err := ckflags.Limit(r.c.statsLimit, r.c.statsLimitSet)

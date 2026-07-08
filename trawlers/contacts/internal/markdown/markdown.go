@@ -510,7 +510,7 @@ func splitList(value string) []string {
 // parseTime reads a frontmatter timestamp back from a person/note markdown
 // file this app already wrote (created_at, updated_at, occurred_at, ...),
 // not a live --after/--before CLI flag value. It shares the fleet's three
-// layouts by coincidence, but crawlkit/flags.Date's TRAWL-131 lift was
+// layouts by coincidence, but trawlkit/flags.Date's TRAWL-131 lift was
 // scoped to CLI date flags (calcrawl/telecrawl/wacrawl/photoscrawl):
 // switching this one to local-midnight-for-bare-dates would reinterpret
 // timestamps already committed to real files on disk, a different and

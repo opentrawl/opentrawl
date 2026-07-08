@@ -48,7 +48,7 @@ The layers, bottom to top:
    `trawl`. Each owns extraction, its own archive database, auth and
    session handling, search, status and privacy policy. Each conforms
    to the shared control contract.
-3. Control contract: a crawlkit-defined JSON contract every crawler
+3. Control contract: a trawlkit-defined JSON contract every crawler
    speaks: `metadata`, `status`, `sync`, `search`, `open`, `doctor` and
    `contacts export`, all with `--json`, all bounded, all human readable.
 4. Federation surface: one CLI (`trawl`) that runs registered
@@ -166,9 +166,9 @@ The bar for every line of code and every surface in this repo:
   global install; a Homebrew tap and a Nix flake cover CLI users. No
   ad-hoc global installs, and no `trawl install` package manager. State
   and config live under one root with per-crawler subdirectories, not
-  scattered dotfiles, via a crawlkit config option (no fork needed).
+  scattered dotfiles, via a trawlkit config option (no fork needed).
 - Observability for free. Structured logs, run history and doctor
-  diagnostics come from crawlkit once, in one consistent, greppable,
+  diagnostics come from trawlkit once, in one consistent, greppable,
   agent-first shape — a crawler gets debuggability by using the
   substrate, not by designing its own logging. Nothing leaves the
   machine.
@@ -191,7 +191,7 @@ The bar for every line of code and every surface in this repo:
 
 ## Prior art and how we relate to it
 
-- crawlkit (openclaw): the substrate. Shared SQLite, snapshot,
+- trawlkit (openclaw): the substrate. Shared SQLite, snapshot,
   sync-state, vector and control mechanics. We build on it and push
   contract work back upstream; we do not fork it.
 - crawlbar (openclaw): proved the control-plane idea and wrote down the

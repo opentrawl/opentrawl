@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/cache"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
 
-	// C SQLite via cgo, matching crawlkit/store. Requires -tags sqlite_fts5.
+	// C SQLite via cgo, matching trawlkit/store. Requires -tags sqlite_fts5.
 	_ "github.com/mattn/go-sqlite3"
 )
 

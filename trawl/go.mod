@@ -5,7 +5,8 @@ go 1.26.4
 require (
 	github.com/alecthomas/kong v1.15.0
 	github.com/mattn/go-runewidth v0.0.24
-	github.com/openclaw/crawlkit v0.13.1
+	github.com/mattn/go-sqlite3 v1.14.47
+	github.com/opentrawl/opentrawl/trawlkit v0.13.1
 )
 
 require (
@@ -29,7 +30,6 @@ require (
 	github.com/klauspost/compress v1.18.6 // indirect
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
-	github.com/mattn/go-sqlite3 v1.14.47 // indirect
 	github.com/ncruces/go-strftime v1.0.0 // indirect
 	github.com/ogen-go/ogen v1.22.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.4.2 // indirect
@@ -75,7 +75,7 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../trawlkit
 
 replace github.com/openclaw/clawdex => ../trawlers/contacts
 

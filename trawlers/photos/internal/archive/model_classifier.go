@@ -15,9 +15,9 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
+	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
 const (

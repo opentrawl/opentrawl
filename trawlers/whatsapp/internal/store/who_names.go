@@ -5,13 +5,13 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 // chooseWhoName keeps wacrawl's source-precedence ladder — contact full name
 // beats push name beats any other observed name — because that ordering is
 // crawler input knowledge. Which spelling wins inside each tier is
-// centralized in crawlkit; the structural rules and the rules.md §1.5
+// centralized in trawlkit; the structural rules and the rules.md §1.5
 // carve-out are documented on whomatch.BestDisplayName.
 func chooseWhoName(names map[string]*whoNameEvidence, identifiers []string) string {
 	contact := map[string]int{}

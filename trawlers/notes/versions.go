@@ -6,11 +6,11 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	ckflags "github.com/openclaw/crawlkit/flags"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type versionListOutput struct {
@@ -18,7 +18,7 @@ type versionListOutput struct {
 	Versions []archive.Version `json:"versions"`
 }
 
-func (c *Crawler) runVersions(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runVersions(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 1 {
 		return usageError("versions needs one note identifier, ref or title prefix")
 	}
@@ -41,7 +41,7 @@ func (c *Crawler) runVersions(ctx context.Context, req *crawlkit.Request) error 
 	return printVersionsText(req.Out, out)
 }
 
-func (c *Crawler) runAtTime(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runAtTime(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 1 {
 		return usageError("at-time needs one note identifier, ref or title prefix")
 	}

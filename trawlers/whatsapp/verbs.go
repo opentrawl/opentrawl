@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	ckflags "github.com/openclaw/crawlkit/flags"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type intFlag struct {
@@ -53,21 +53,21 @@ type chatRow struct {
 	MessageCount  int    `json:"message_count"`
 }
 
-func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(fmt.Errorf("chats takes flags only"))
 	}
 	return c.listChats(ctx, req, c.chatsUnread)
 }
 
-func (c *Crawler) runUnread(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runUnread(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(fmt.Errorf("unread takes flags only"))
 	}
 	return c.listChats(ctx, req, true)
 }
 
-func (c *Crawler) listChats(ctx context.Context, req *crawlkit.Request, unread bool) error {
+func (c *Crawler) listChats(ctx context.Context, req *trawlkit.Request, unread bool) error {
 	limit, err := ckflags.Limit(c.chatsLimit.value, c.chatsLimit.set)
 	if err != nil {
 		return usageErr(err)
@@ -114,7 +114,7 @@ func newChatsEnvelope(chats []store.Chat, total int, unread bool) chatsEnvelope 
 	return chatsEnvelope{Chats: rows, Total: total, Truncated: total > len(rows), unread: unread}
 }
 
-func printChats(req *crawlkit.Request, value chatsEnvelope) error {
+func printChats(req *trawlkit.Request, value chatsEnvelope) error {
 	heading := "Chats"
 	empty := "No chats."
 	hint := "Messages: trawl whatsapp messages --chat CHAT"
@@ -245,7 +245,7 @@ type messageListOutput struct {
 	aliases   map[string]string
 }
 
-func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(fmt.Errorf("messages takes flags only"))
 	}
@@ -285,7 +285,7 @@ func newMessageListOutput(limit int, messages []store.Message, aliases map[strin
 	}
 }
 
-func printMessages(req *crawlkit.Request, value messageListOutput) error {
+func printMessages(req *trawlkit.Request, value messageListOutput) error {
 	hints := []string{"Open: trawl whatsapp open REF"}
 	if value.Truncated {
 		hints = append(hints, "Narrow: trawl whatsapp messages --limit N --after DATE --before DATE --chat JID")

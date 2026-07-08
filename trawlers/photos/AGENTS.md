@@ -6,22 +6,22 @@ written_by: ai
 
 ## Purpose
 
-`photoscrawl` is a local-first OpenClaw/crawlkit crawler for Apple Photos. It
+`photoscrawl` is a local-first OpenClaw/trawlkit crawler for Apple Photos. It
 builds a provenance-backed `photoscrawl.db` archive from a user's Photos library
 without uploading private media by default.
 
 ## Stack
 
 - Product code is Go.
-- Use `github.com/openclaw/crawlkit` for SQLite hygiene, JSON output, status
+- Use `github.com/opentrawl/opentrawl/trawlkit` for SQLite hygiene, JSON output, status
   shape, snapshots, state cursors, vector/embedding primitives when needed, and
   future TUI pieces.
-- This is a crawlkit-family repo. Follow current crawlkit conventions for
+- This is a trawlkit-family repo. Follow current trawlkit conventions for
   config, data, cache, logs, control/status metadata, and runtime paths. If the
-  repo drifts from crawlkit conventions, fix the drift when touching nearby
+  repo drifts from trawlkit conventions, fix the drift when touching nearby
   code; do not only report it.
 - Do not add legacy compatibility paths, fallback runtime roots, or repo-local
-  path shims. Migrate old photoscrawl path handling to current crawlkit
+  path shims. Migrate old photoscrawl path handling to current trawlkit
   semantics instead of preserving `~/.photoscrawl` or `PHOTOSCRAWL_HOME` as
   product behavior.
 - Darwin-only cgo bridges to Apple frameworks are allowed when PhotoKit, Vision,
@@ -32,7 +32,7 @@ without uploading private media by default.
 - Tests must not touch the live Photos library. Use temp SQLite files and small
   synthetic fixtures only.
 - Boy Scout rule: every touched path should be simpler, more consistent, or
-  better aligned with crawlkit than before. Small cleanup beats TODO drift.
+  better aligned with trawlkit than before. Small cleanup beats TODO drift.
 
 ## Product Boundaries
 
@@ -41,7 +41,7 @@ without uploading private media by default.
   thumbnails, originals, exported media, extracted metadata dumps, GPS dumps,
   face data, OCR text, classifier output, logs containing asset metadata, or
   any other user-derived archive material.
-- Keep private crawl artifacts outside the repo under the current crawlkit
+- Keep private crawl artifacts outside the repo under the current trawlkit
   runtime data/cache/state dirs, or `/tmp/` for short-lived fixtures. Existing
   local dotdir artifacts are migration inputs, not product-path conventions.
 - If verification needs real Photos access, run it read-only and report counts
@@ -89,7 +89,7 @@ without uploading private media by default.
   must default outside the repo. Do not commit real eval manifests, rendered
   images, metadata sidecars, OCR/barcode extracts, model responses, summaries, or
   reports.
-- Eval code must respect the stack boundary. Product-path code is Go/crawlkit;
+- Eval code must respect the stack boundary. Product-path code is Go/trawlkit;
   temporary shell/Python snippets are acceptable only during exploration and
   should be promoted to Go or removed once the shape is known.
 

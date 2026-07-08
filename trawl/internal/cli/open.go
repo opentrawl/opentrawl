@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 type OpenCmd struct {
@@ -36,12 +36,12 @@ func (r *Runtime) openWithSource(source Source, ref string) error {
 	if source.MetadataErr != nil {
 		return r.openFailed(ref, source)
 	}
-	opener, ok := source.Crawler.(crawlkit.Opener)
+	opener, ok := source.Crawler.(trawlkit.Opener)
 	if !ok {
 		return r.openFailed(ref, source)
 	}
 	started := r.logSourceStart(source, "open")
-	err := r.withSourceRequest(source, "open", sourceStoreFor(source, sourceStoreRead), outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "open", sourceStoreFor(source, sourceStoreRead), outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *trawlkit.Request) error {
 		return opener.Open(ctx, req, ref)
 	})
 	r.logSourceDone(source, "open", started, err)
@@ -185,12 +185,12 @@ func shortRefSources(sources []Source) []Source {
 }
 
 func (r *Runtime) resolveSourceShortRef(source Source, alias string) ([]string, error) {
-	opener, ok := source.Crawler.(crawlkit.Opener)
+	opener, ok := source.Crawler.(trawlkit.Opener)
 	if !ok {
 		return nil, fmt.Errorf("source does not support open")
 	}
 	var data bytes.Buffer
-	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(true), &data, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(true), &data, func(ctx context.Context, req *trawlkit.Request) error {
 		return opener.Open(ctx, req, alias)
 	})
 	if err != nil {

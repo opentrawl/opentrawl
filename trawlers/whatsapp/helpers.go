@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/openclaw/crawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 func parseTime(value string) (time.Time, error) {

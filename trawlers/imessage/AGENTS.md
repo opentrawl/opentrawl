@@ -19,7 +19,7 @@ here. Those belong in the relevant source crawler, clawdex, or a higher-level
 private aggregation layer.
 
 Product code is Go. Keep source-specific SQLite parsing in this repo. Use
-`github.com/openclaw/crawlkit` only for provider-neutral mechanics such as
+`github.com/opentrawl/opentrawl/trawlkit` only for provider-neutral mechanics such as
 control metadata, status payloads, output conventions, SQLite helpers, and
 future archive/snapshot mechanics.
 

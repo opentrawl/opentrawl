@@ -74,7 +74,7 @@ search query.
 
 ```json
 {
-  "schema_version": "crawlkit.control.v1",
+  "schema_version": "trawlkit.control.v1",
   "contract_version": 1,
   "id": "calendar",
   "display_name": "Calendar",
@@ -230,7 +230,7 @@ Access.
 
 ### contacts export
 
-`contacts export` returns the crawlkit contact-export shape. The current
+`contacts export` returns the trawlkit contact-export shape. The current
 contact-export contract requires at least one phone number on each exported
 contact:
 
@@ -258,5 +258,5 @@ Tests and public examples use synthetic data only.
   rows Calendar.app exposes and the `has_recurrences` flag.
 - There is no curation layer. Birthdays, subscribed holidays and other noisy
   calendars are archived with the rest of the source.
-- Contact export is limited by the current crawlkit shape, so attendee emails
+- Contact export is limited by the current trawlkit shape, so attendee emails
   without phone numbers are searchable but not exported as contacts.

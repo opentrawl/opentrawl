@@ -2,7 +2,6 @@ package cli
 
 import (
 	clawdex "github.com/openclaw/clawdex"
-	"github.com/openclaw/crawlkit"
 	imsgcrawl "github.com/openclaw/imsgcrawl"
 	photoscrawl "github.com/openclaw/photoscrawl"
 	telecrawl "github.com/openclaw/telecrawl"
@@ -11,22 +10,23 @@ import (
 	"github.com/opentrawl/opentrawl/calcrawl"
 	"github.com/opentrawl/opentrawl/gogcrawl"
 	notes "github.com/opentrawl/opentrawl/trawlers/notes"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-var crawlerFactories = []func() crawlkit.Crawler{
-	func() crawlkit.Crawler { return imsgcrawl.New() },
-	func() crawlkit.Crawler { return telecrawl.New() },
-	func() crawlkit.Crawler { return wacrawl.New() },
-	func() crawlkit.Crawler { return photoscrawl.New() },
-	func() crawlkit.Crawler { return gogcrawl.New() },
-	func() crawlkit.Crawler { return calcrawl.New() },
-	func() crawlkit.Crawler { return birdcrawl.New() },
-	func() crawlkit.Crawler { return clawdex.New() },
-	func() crawlkit.Crawler { return notes.New() },
+var crawlerFactories = []func() trawlkit.Crawler{
+	func() trawlkit.Crawler { return imsgcrawl.New() },
+	func() trawlkit.Crawler { return telecrawl.New() },
+	func() trawlkit.Crawler { return wacrawl.New() },
+	func() trawlkit.Crawler { return photoscrawl.New() },
+	func() trawlkit.Crawler { return gogcrawl.New() },
+	func() trawlkit.Crawler { return calcrawl.New() },
+	func() trawlkit.Crawler { return birdcrawl.New() },
+	func() trawlkit.Crawler { return clawdex.New() },
+	func() trawlkit.Crawler { return notes.New() },
 }
 
-func registeredCrawlers() []crawlkit.Crawler {
-	sources := make([]crawlkit.Crawler, 0, len(crawlerFactories))
+func registeredCrawlers() []trawlkit.Crawler {
+	sources := make([]trawlkit.Crawler, 0, len(crawlerFactories))
 	for _, factory := range crawlerFactories {
 		sources = append(sources, factory())
 	}
@@ -34,5 +34,5 @@ func registeredCrawlers() []crawlkit.Crawler {
 }
 
 func ExecuteCrawlerWire(args []string) int {
-	return crawlkit.Run(args, registeredCrawlers())
+	return trawlkit.Run(args, registeredCrawlers())
 }

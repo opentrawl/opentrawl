@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.47
-	github.com/openclaw/crawlkit v0.12.3-0.20260619102715-6e14735bb248
+	github.com/opentrawl/opentrawl/trawlkit v0.12.3-0.20260619102715-6e14735bb248
 	modernc.org/sqlite v1.53.0
 )
 
@@ -24,4 +24,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit

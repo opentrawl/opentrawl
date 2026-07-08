@@ -356,7 +356,7 @@ IDs, completeness, privacy, or size needs full inspection.
 - Are message/search/open/contact outputs human-readable enough for an agent to use?
 - Are there machine-only fields, unstable IDs, hashes, or local internals that should not be agent-facing?
 - Are errors useful, or only Go/SQLite/parser noise?
-- Which outputs should become crawlkit-standard textproto or agent-friendly text later?
+- Which outputs should become trawlkit-standard textproto or agent-friendly text later?
 EOF
 
 echo "review: $review"

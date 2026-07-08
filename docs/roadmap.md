@@ -10,10 +10,13 @@ behind them.
 
 ## Decisions already made
 
-- Hybrid ownership: fork only where blocked. crawlkit, imsgcrawl and
+- Hybrid ownership: fork only where blocked. imsgcrawl and
   photoscrawl sync directly with openclaw (maintainer access); telecrawl,
   wacrawl and clawdex sync through joshp123 forks; the Gmail, Calendar,
   Apple Notes and Signal crawlers are monorepo-native.
+- Ruled 2026-07-09: trawlkit is a hard fork of openclaw/crawlkit —
+  monorepo-native, module path under opentrawl/opentrawl, no outbound
+  sync. Upstream is credited in the README and nothing more.
 - One monorepo under the opentrawl org, open source (MIT), with
   attribution. Imported crawler modules live under `trawlers/` as git
   subtrees; `scripts/sync` moves changes both ways.
@@ -46,7 +49,7 @@ Goal: the single entry point exists from day one, and the contract
 behind it is written down, versioned and testable. Everything that
 follows is agent-testable through `trawl` from the start.
 
-What exists versus what is missing: crawlkit's `control` package
+What exists versus what is missing: trawlkit's `control` package
 already defines the manifest, the status envelope (including declared
 counts) and the contact-export contract. What does not exist yet: read
 surfaces (`search`, `open`) in the contract, bounded and paginated
@@ -64,7 +67,7 @@ grammars, missing metadata, unbounded dumps).
   manifests, `status` and `doctor` federation over whatever crawlers
   are installed. Thin, but real — the single entry point everything
   else plugs into and every agent tests through.
-- extend the crawlkit control contract with the missing pieces above,
+- extend the trawlkit control contract with the missing pieces above,
   pushed upstream as we go.
 - define the golden-path bar as a checklist derived from the crawler
   quality rubric and the imsgcrawl evaluation, so "done" is mechanical
@@ -94,7 +97,7 @@ correctly in `trawl`. Highly parallel.
 | wacrawl | archive works, readiness unproven | readiness proof, stop auto-sync on read, status envelope; watch WhatsApp passkey pairing risk |
 | gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of upstream `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |
 | calcrawl (new) | private scaffold exists | rebuild clean in monorepo. Primary source: the local Calendar.app store (Calendar.sqlitedb in its group container — carries iCloud, Google and local calendars; snapshot pattern per docs/tcc.md). Google-direct via `gogcli` secondary. Archive, search |
-| clawdex | contact layer works | adopt the crawlkit contact-export contract, contract compliance, import loop from all v1 crawlers; storage review: markdown-as-truth is right for human-curated identities, but verify it holds at import scale — crawler contact dumps must merge into curated people, never auto-generate thousands of person files |
+| clawdex | contact layer works | adopt the trawlkit contact-export contract, contract compliance, import loop from all v1 crawlers; storage review: markdown-as-truth is right for human-curated identities, but verify it holds at import scale — crawler contact dumps must merge into curated people, never auto-generate thousands of person files |
 
 Contact export is a v1 requirement for every crawler, because identity
 joins are the horizon and re-crawling later is the expensive path.
@@ -140,7 +143,7 @@ on every row.
   coupling to crawlers.
 - every surface stays clig.dev compliant and curated; adding a flag is
   a design decision, not a default response to a feature request.
-- design hook for v2 deltas: sync cursors already exist in crawlkit, so
+- design hook for v2 deltas: sync cursors already exist in trawlkit, so
   `trawl diff --since 24h` is a federation feature later, not
   per-crawler work.
 

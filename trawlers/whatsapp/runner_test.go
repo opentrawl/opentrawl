@@ -9,15 +9,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
 	wastore "github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }

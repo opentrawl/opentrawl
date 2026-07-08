@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	crender "github.com/openclaw/crawlkit/render"
+	crender "github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func RenderIssue(w io.Writer, issue Issue) error {

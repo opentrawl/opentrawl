@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	ckmodel "github.com/openclaw/crawlkit/model"
+	ckmodel "github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
 func normalizeOllamaGenerateURL(raw string) (string, error) {

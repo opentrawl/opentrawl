@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 func (s *Store) Status(ctx context.Context) (Status, error) {

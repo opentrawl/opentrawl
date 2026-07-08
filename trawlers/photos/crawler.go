@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/flags"
-	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/photoscrawl/internal/archive"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const (
@@ -34,18 +34,18 @@ type Config struct {
 }
 
 var (
-	_ crawlkit.Crawler  = (*Crawler)(nil)
-	_ crawlkit.Syncer   = (*Crawler)(nil)
-	_ crawlkit.Searcher = (*Crawler)(nil)
-	_ crawlkit.Opener   = (*Crawler)(nil)
+	_ trawlkit.Crawler  = (*Crawler)(nil)
+	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Searcher = (*Crawler)(nil)
+	_ trawlkit.Opener   = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          "photos",
 		Surface:     "photos",
 		DisplayName: "Photos",
@@ -64,8 +64,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{
 			Name:    "classify",
 			Help:    "Write metadata, place and model-card observations.",
@@ -83,7 +83,7 @@ func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.classifyModel, "model", "", "Ollama-API vision model for content observations; local or cloud")
 }
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	paths := archivePaths(req)
 	status, err := archive.Status(ctx, paths)
 	if err != nil {
@@ -92,24 +92,24 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 	return controlStatus(status, req.Paths.Config), nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	result, err := archive.Doctor(ctx, archivePaths(req), archive.DoctorOptions{LibraryPath: c.cfg.LibraryPath})
 	if err != nil {
 		return nil, err
 	}
-	checks := make([]crawlkit.Check, 0, len(result.Checks))
+	checks := make([]trawlkit.Check, 0, len(result.Checks))
 	for _, check := range result.Checks {
-		checks = append(checks, crawlkit.Check{
+		checks = append(checks, trawlkit.Check{
 			ID:      check.ID,
 			State:   check.State,
 			Message: check.Message,
 			Remedy:  check.Remedy,
 		})
 	}
-	return &crawlkit.Doctor{Checks: checks}, nil
+	return &trawlkit.Doctor{Checks: checks}, nil
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {
 		var err error
@@ -137,7 +137,7 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	if req.Log != nil {
 		_ = req.Log.Info("sync_written", syncLogMessage(result))
 	}
-	return &crawlkit.SyncReport{
+	return &trawlkit.SyncReport{
 		Added:    int64(result.AssetsNew),
 		Updated:  int64(result.AssetsChanged),
 		Removed:  int64(result.PreviouslySeenMissing),
@@ -145,7 +145,7 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	}, nil
 }
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	result, err := archive.Search(ctx, archivePaths(req), archive.SearchOptions{
 		Query:  query.Text,
 		Limit:  query.Limit,
@@ -153,27 +153,27 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 		Before: queryTime(query.Before),
 	})
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(result.Results))
+	hits := make([]trawlkit.Hit, 0, len(result.Results))
 	for _, hit := range result.Results {
 		converted, err := searchHit(hit)
 		if err != nil {
-			return crawlkit.SearchResult{}, err
+			return trawlkit.SearchResult{}, err
 		}
 		hits = append(hits, converted)
 	}
 	if req.Log != nil {
 		_ = req.Log.Info("search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(result.Results), result.TotalMatches, result.Truncated))
 	}
-	return crawlkit.SearchResult{
+	return trawlkit.SearchResult{
 		Results:      hits,
 		TotalMatches: result.TotalMatches,
 		Truncated:    result.Truncated,
 	}, nil
 }
 
-func (c *Crawler) runClassify(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return output.UsageError{Err: fmt.Errorf("classify takes flags only")}
 	}
@@ -206,7 +206,7 @@ func (c *Crawler) runClassify(ctx context.Context, req *crawlkit.Request) error 
 	return output.Write(req.Out, req.Format, "classify", result)
 }
 
-func archivePaths(req *crawlkit.Request) archive.Paths {
+func archivePaths(req *trawlkit.Request) archive.Paths {
 	base := filepath.Dir(req.Paths.Archive)
 	return archive.Paths{
 		ConfigPath: req.Paths.Config,
@@ -236,16 +236,16 @@ func controlStatus(status archive.StatusResult, configPath string) *control.Stat
 	return &out
 }
 
-func searchHit(hit archive.SearchHit) (crawlkit.Hit, error) {
+func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 	var capturedAt time.Time
 	if timeText := strings.TrimSpace(hit.Time); timeText != "" {
 		parsed, err := time.Parse(time.RFC3339, timeText)
 		if err != nil {
-			return crawlkit.Hit{}, fmt.Errorf("parse search hit time: %w", err)
+			return trawlkit.Hit{}, fmt.Errorf("parse search hit time: %w", err)
 		}
 		capturedAt = parsed
 	}
-	return crawlkit.Hit{
+	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     capturedAt,
@@ -262,11 +262,11 @@ func queryTime(value time.Time) string {
 	return value.UTC().Format(time.RFC3339)
 }
 
-func reportProgress(req *crawlkit.Request, phase string, done, total int64, message string) {
+func reportProgress(req *trawlkit.Request, phase string, done, total int64, message string) {
 	if req.Progress == nil {
 		return
 	}
-	req.Progress(crawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
+	req.Progress(trawlkit.Progress{Phase: phase, Done: done, Total: total, Message: message})
 }
 
 func withHeartbeat(ctx context.Context, progress func(), fn func() error) error {

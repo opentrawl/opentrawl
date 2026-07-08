@@ -17,12 +17,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }
@@ -208,7 +208,7 @@ func runTelecrawl(t *testing.T, args ...string) (int, string, string) {
 	var stdout, stderr bytes.Buffer
 	stdoutDone := copyPipe(&stdout, stdoutReader)
 	stderrDone := copyPipe(&stderr, stderrReader)
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	_ = stdoutWriter.Close()
 	_ = stderrWriter.Close()
 	if err := <-stdoutDone; err != nil {

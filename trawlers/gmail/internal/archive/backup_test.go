@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 func TestIngestBackupMessageShardParsesRawRFC822(t *testing.T) {

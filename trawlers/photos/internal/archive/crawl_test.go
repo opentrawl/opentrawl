@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {

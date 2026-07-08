@@ -15,8 +15,8 @@ import (
 	"unicode"
 
 	"github.com/openclaw/clawdex/internal/model"
-	"github.com/openclaw/crawlkit/render"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (

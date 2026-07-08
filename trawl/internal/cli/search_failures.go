@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 // Federated search fans out to every source and merges the survivors.

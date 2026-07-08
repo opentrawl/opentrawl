@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type archiveColumnMigration struct {

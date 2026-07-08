@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -25,7 +25,7 @@ const coreDataUnixOffset = 978307200
 func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := setupCalendarFixture(t)
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "calendar", "calendar.db"),
 		Config:  filepath.Join(stateRoot, "calendar", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "calendar", "logs"),
@@ -36,12 +36,12 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncReq := &crawlkit.Request{
+	syncReq := &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
-		Progress: func(crawlkit.Progress) {},
+		Progress: func(trawlkit.Progress) {},
 	}
 	report, err := source.Sync(ctx, syncReq)
 	if err == nil {
@@ -64,7 +64,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 
 	readStore := openReadStore(t, ctx, paths.Archive)
 	searchReq := readRequest(readStore, paths)
-	search, err := source.Search(ctx, searchReq, crawlkit.Query{Text: "planning", Limit: 20})
+	search, err := source.Search(ctx, searchReq, trawlkit.Query{Text: "planning", Limit: 20})
 	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
@@ -89,7 +89,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
-	err = source.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
+	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 }
 
 func TestCalendarVerbsDeclareReadAndWriteAccess(t *testing.T) {
-	manifest, err := crawlkit.Manifest(New())
+	manifest, err := trawlkit.Manifest(New())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,8 +228,8 @@ func TestCalendarsAnnotationPreservesMeaningWhitespace(t *testing.T) {
 	}
 }
 
-func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
-	return &crawlkit.Request{
+func readRequest(st *ckstore.Store, paths trawlkit.Paths) *trawlkit.Request {
+	return &trawlkit.Request{
 		Store:  st,
 		Paths:  paths,
 		Format: ckoutput.Text,
@@ -237,11 +237,11 @@ func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
 	}
 }
 
-func syncedCalendarFixture(t *testing.T) (string, crawlkit.Paths) {
+func syncedCalendarFixture(t *testing.T) (string, trawlkit.Paths) {
 	t.Helper()
 	ctx := context.Background()
 	stateRoot := setupCalendarFixture(t)
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "calendar", "calendar.db"),
 		Config:  filepath.Join(stateRoot, "calendar", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "calendar", "logs"),
@@ -250,12 +250,12 @@ func syncedCalendarFixture(t *testing.T) (string, crawlkit.Paths) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = New().Sync(ctx, &crawlkit.Request{
+	_, err = New().Sync(ctx, &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
-		Progress: func(crawlkit.Progress) {},
+		Progress: func(trawlkit.Progress) {},
 	})
 	if closeErr := writeStore.Close(); closeErr != nil {
 		t.Fatal(closeErr)
@@ -274,9 +274,9 @@ func runCalcrawlForTest(t *testing.T, stateRoot string, args ...string) (string,
 
 func runCalcrawlWireForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
 	t.Helper()
-	t.Setenv("CRAWLKIT_STATE_ROOT", stateRoot)
-	t.Setenv("CRAWLKIT_RUN_ID", "test")
-	wireArgs := append([]string{crawlkit.HiddenWireSubcommand}, args...)
+	t.Setenv("TRAWLKIT_STATE_ROOT", stateRoot)
+	t.Setenv("TRAWLKIT_RUN_ID", "test")
+	wireArgs := append([]string{trawlkit.HiddenWireSubcommand}, args...)
 	return runCalcrawlArgsForTest(t, wireArgs...)
 }
 
@@ -294,7 +294,7 @@ func runCalcrawlArgsForTest(t *testing.T, args ...string) (string, string, int) 
 	}
 	os.Stdout = stdoutWriter
 	os.Stderr = stderrWriter
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	_ = stdoutWriter.Close()
 	_ = stderrWriter.Close()
 	os.Stdout = oldStdout
@@ -382,7 +382,7 @@ func parseHintCommand(t *testing.T, command string) []string {
 	return tokens
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {

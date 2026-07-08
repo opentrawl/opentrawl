@@ -5,28 +5,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	report := telegramdesktop.Probe(ctx, telegramdesktop.Options{Path: c.doctor.Path})
-	checks := []crawlkit.Check{sourceStoreCheck(report)}
+	checks := []trawlkit.Check{sourceStoreCheck(report)}
 	checks = append(checks, archiveChecks(ctx, req)...)
-	return &crawlkit.Doctor{Checks: checks}, nil
+	return &trawlkit.Doctor{Checks: checks}, nil
 }
 
 func (r *runtime) printDoctor(value doctorOutput) error {
 	return render.WriteDoctor(r.stdout, doctorRenderChecks(value.Checks), value.logTail)
 }
 
-func sourceStoreCheck(report telegramdesktop.Report) crawlkit.Check {
+func sourceStoreCheck(report telegramdesktop.Report) trawlkit.Check {
 	if report.Exists && report.Accessible && report.Error == "" {
-		return crawlkit.Check{ID: "source_store", State: "ok", Message: "Telegram source data is readable."}
+		return trawlkit.Check{ID: "source_store", State: "ok", Message: "Telegram source data is readable."}
 	}
-	check := crawlkit.Check{
+	check := trawlkit.Check{
 		ID:     "source_store",
 		State:  "missing",
 		Remedy: "Install or open Telegram Desktop, or pass --path to a readable Telegram data directory.",
@@ -42,9 +42,9 @@ func sourceStoreCheck(report telegramdesktop.Report) crawlkit.Check {
 	return check
 }
 
-func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check {
+func archiveChecks(ctx context.Context, req *trawlkit.Request) []trawlkit.Check {
 	if req.Store == nil {
-		return []crawlkit.Check{{
+		return []trawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
 			Message: "Telegram archive has not been created.",
@@ -53,7 +53,7 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 	}
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return []crawlkit.Check{{
+		return []trawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
 			Message: "Telegram archive cannot be read.",
@@ -63,7 +63,7 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(ctx)
 	if err != nil {
-		return []crawlkit.Check{{
+		return []trawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
 			Message: "Telegram archive status cannot be read.",
@@ -71,16 +71,16 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 		}}
 	}
 	if status.Messages == 0 {
-		return []crawlkit.Check{{ID: "archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "run trawl telegram sync to fill the archive."}}
+		return []trawlkit.Check{{ID: "archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "run trawl telegram sync to fill the archive."}}
 	}
-	return []crawlkit.Check{
+	return []trawlkit.Check{
 		{ID: "archive", State: "ok", Message: "Archive is readable."},
-		crawlkitSyncRecencyCheck(status),
+		trawlkitSyncRecencyCheck(status),
 	}
 }
 
-func crawlkitSyncRecencyCheck(status store.Status) crawlkit.Check {
-	check := crawlkit.Check{ID: "sync_recency", State: "ok", Message: "Recently synced."}
+func trawlkitSyncRecencyCheck(status store.Status) trawlkit.Check {
+	check := trawlkit.Check{ID: "sync_recency", State: "ok", Message: "Recently synced."}
 	switch {
 	case status.LastImportAt.IsZero():
 		check.State = "warn"

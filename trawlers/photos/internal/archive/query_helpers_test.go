@@ -8,7 +8,7 @@ import (
 // TestSearchTimeBoundDateOnlyUsesLocalMidnight pins a deliberate behavior
 // change from the TRAWL-131 date-parser lift: searchTimeBound used to read
 // a bare YYYY-MM-DD date as UTC midnight (time.Parse); it now goes through
-// crawlkit/flags.Date, which reads it as midnight in the machine's local
+// trawlkit/flags.Date, which reads it as midnight in the machine's local
 // timezone, matching every other crawler's --after/--before grammar. The
 // zone is fixed here so the test does not depend on the machine it runs on.
 func TestSearchTimeBoundDateOnlyUsesLocalMidnight(t *testing.T) {

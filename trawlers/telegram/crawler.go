@@ -8,12 +8,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const appID = "telegram"
@@ -82,20 +82,20 @@ type topicsOptions struct {
 }
 
 var (
-	_ crawlkit.Crawler         = (*Crawler)(nil)
-	_ crawlkit.Syncer          = (*Crawler)(nil)
-	_ crawlkit.Searcher        = (*Crawler)(nil)
-	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
-	_ crawlkit.Opener          = (*Crawler)(nil)
-	_ crawlkit.ContactExporter = (*Crawler)(nil)
+	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Syncer          = (*Crawler)(nil)
+	_ trawlkit.Searcher        = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.Opener          = (*Crawler)(nil)
+	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          appID,
 		Surface:     "telegram",
 		DisplayName: "Telegram",
@@ -108,8 +108,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{Name: "doctor", Flags: c.bindDoctorFlags},
 		{Name: "sync", Flags: c.bindSyncFlags},
 		{Name: "search", Flags: c.bindSearchFlags},
@@ -121,7 +121,7 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 	}
 }
 
-func (c *Crawler) handler(ctx context.Context, req *crawlkit.Request) *runtime {
+func (c *Crawler) handler(ctx context.Context, req *trawlkit.Request) *runtime {
 	return &runtime{
 		c:          c,
 		ctx:        ctx,
@@ -137,7 +137,7 @@ func (c *Crawler) handler(ctx context.Context, req *crawlkit.Request) *runtime {
 type runtime struct {
 	c          *Crawler
 	ctx        context.Context
-	req        *crawlkit.Request
+	req        *trawlkit.Request
 	stdout     io.Writer
 	json       bool
 	dbPath     string

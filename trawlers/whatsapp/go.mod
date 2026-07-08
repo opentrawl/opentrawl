@@ -12,8 +12,8 @@ require (
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
-	github.com/openclaw/crawlkit v0.13.1
+	github.com/opentrawl/opentrawl/trawlkit v0.13.1
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit

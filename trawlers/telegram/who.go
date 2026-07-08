@@ -8,13 +8,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	query := normalizeWords(person)
 	if query == "" {
 		return nil, usageErr(errors.New("who takes a name"))

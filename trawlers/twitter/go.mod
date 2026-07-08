@@ -2,7 +2,7 @@ module github.com/opentrawl/opentrawl/birdcrawl
 
 go 1.26.4
 
-require github.com/openclaw/crawlkit v0.13.1
+require github.com/opentrawl/opentrawl/trawlkit v0.13.1
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
@@ -13,4 +13,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const staleAfter = 24 * time.Hour
@@ -25,18 +25,18 @@ type Crawler struct {
 }
 
 var (
-	_ crawlkit.Crawler  = (*Crawler)(nil)
-	_ crawlkit.Syncer   = (*Crawler)(nil)
-	_ crawlkit.Searcher = (*Crawler)(nil)
-	_ crawlkit.Opener   = (*Crawler)(nil)
+	_ trawlkit.Crawler  = (*Crawler)(nil)
+	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Searcher = (*Crawler)(nil)
+	_ trawlkit.Opener   = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          archive.AppID,
 		Surface:     archive.AppID,
 		DisplayName: archive.DisplayName,
@@ -49,8 +49,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{Name: "sync", Flags: c.syncFlags},
 		{
 			Name:    "sync-store",
@@ -58,7 +58,7 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Args:    []string{"PATH"},
 			Flags:   c.syncStoreFlags,
 			Mutates: true,
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runSyncStore(ctx, req)
 			},
 		},
@@ -66,8 +66,8 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Name:  "versions",
 			Help:  "List recovered versions for one note",
 			Args:  []string{"NOTE"},
-			Store: crawlkit.StoreRequired,
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Store: trawlkit.StoreRequired,
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runVersions(ctx, req)
 			},
 		},
@@ -76,8 +76,8 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Help:  "Open the recovered version at or before a time",
 			Args:  []string{"NOTE"},
 			Flags: c.atTimeFlags,
-			Store: crawlkit.StoreRequired,
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Store: trawlkit.StoreRequired,
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runAtTime(ctx, req)
 			},
 		},
@@ -101,7 +101,7 @@ func (c *Crawler) atTimeFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.atTimeRaw, "time", "", "RFC3339 time")
 }
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(archive.AppID, "Not synced yet.")
 	status.State = "missing"
 	status.DatabasePath = req.Paths.Archive
@@ -137,9 +137,9 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	sourcePath, sourceErr := notesdb.DefaultStorePath()
-	return &crawlkit.Doctor{Checks: []crawlkit.Check{
+	return &trawlkit.Doctor{Checks: []trawlkit.Check{
 		checkSourceStore(sourcePath, sourceErr),
 		checkArchive(ctx, req),
 	}}, nil
@@ -172,9 +172,9 @@ func coverageWarnings(items []archive.Coverage) []string {
 	return warnings
 }
 
-func checkSourceStore(path string, pathErr error) crawlkit.Check {
+func checkSourceStore(path string, pathErr error) trawlkit.Check {
 	if pathErr != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "source_store",
 			State:   "fail",
 			Message: "cannot locate the Apple Notes database",
@@ -182,28 +182,28 @@ func checkSourceStore(path string, pathErr error) crawlkit.Check {
 		}
 	}
 	if _, err := os.Stat(path); err != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "source_store",
 			State:   "fail",
 			Message: "cannot read the Apple Notes database",
 			Remedy:  "grant Full Disk Access, then run trawl notes sync; or run trawl notes sync --store PATH",
 		}
 	}
-	return crawlkit.Check{ID: "source_store", State: "ok"}
+	return trawlkit.Check{ID: "source_store", State: "ok"}
 }
 
-func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
+func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
 	if req.Store == nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive has not been synced", Remedy: "run trawl notes sync"}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive has not been synced", Remedy: "run trawl notes sync"}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: "run trawl notes sync"}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: "run trawl notes sync"}
 	}
 	if _, err := st.Status(ctx); err != nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl notes sync"}
+		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl notes sync"}
 	}
-	return crawlkit.Check{ID: "archive", State: "ok"}
+	return trawlkit.Check{ID: "archive", State: "ok"}
 }
 
 func commandErr(code, message, remedy string, err error) error {

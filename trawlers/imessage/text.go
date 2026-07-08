@@ -7,8 +7,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (

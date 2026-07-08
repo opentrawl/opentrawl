@@ -8,13 +8,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
-func (c *Crawler) runContacts(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.Request) error {
 	r := c.handler(ctx, req)
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("contacts takes flags only"))
@@ -39,7 +39,7 @@ func (c *Crawler) runContacts(ctx context.Context, req *crawlkit.Request) error 
 	})
 }
 
-func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))

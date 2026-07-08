@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type StatusResult struct {

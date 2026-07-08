@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (

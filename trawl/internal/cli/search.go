@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	ckflags "github.com/openclaw/crawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 const (
@@ -57,7 +57,7 @@ type SearchRow struct {
 	// ShortRef is human display sugar only. short-refs.md keeps trawl's
 	// federated --json on the canonical ref so agents never pick up the
 	// weaker, expiring alias; the crawler-level search contract still
-	// carries short_ref through crawlkit.Hit.
+	// carries short_ref through trawlkit.Hit.
 	ShortRef     string `json:"-"`
 	Time         string `json:"time"`
 	AllDay       bool   `json:"all_day,omitempty"`
@@ -307,18 +307,18 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 	if options.who != "" && options.whoBySource != nil && who == "" {
 		return result
 	}
-	crawlQuery, err := crawlkitSearchQuery(query, options, who)
+	crawlQuery, err := trawlkitSearchQuery(query, options, who)
 	if err != nil {
 		result.Err = err
 		return result
 	}
-	searcher, ok := source.Crawler.(crawlkit.Searcher)
+	searcher, ok := source.Crawler.(trawlkit.Searcher)
 	if !ok {
 		result.Err = fmt.Errorf("source does not support search")
 		return result
 	}
-	var envelope crawlkit.SearchResult
-	err = r.withSourceRequest(source, "search", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	var envelope trawlkit.SearchResult
+	err = r.withSourceRequest(source, "search", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var searchErr error
 		envelope, searchErr = searcher.Search(ctx, req, crawlQuery)
 		return searchErr
@@ -357,16 +357,16 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 	return result
 }
 
-func crawlkitSearchQuery(query string, options searchOptions, who string) (crawlkit.Query, error) {
+func trawlkitSearchQuery(query string, options searchOptions, who string) (trawlkit.Query, error) {
 	after, err := parseSearchDateFlag("--after", options.after)
 	if err != nil {
-		return crawlkit.Query{}, err
+		return trawlkit.Query{}, err
 	}
 	before, err := parseSearchDateFlag("--before", options.before)
 	if err != nil {
-		return crawlkit.Query{}, err
+		return trawlkit.Query{}, err
 	}
-	return crawlkit.Query{
+	return trawlkit.Query{
 		Text:   strings.TrimSpace(query),
 		Limit:  options.limit,
 		After:  after,

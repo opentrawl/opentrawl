@@ -17,11 +17,11 @@ import (
 	"testing"
 	"time"
 
-	cklog "github.com/openclaw/crawlkit/log"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	"github.com/openclaw/photoscrawl/internal/place"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const fixtureModelURL = "http://127.0.0.1:11434/api/generate"
@@ -656,7 +656,7 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 	assertContentOutcomesSumToProcessed(t, third)
 }
 
-func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
+func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -674,7 +674,7 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 		PhotosVersion:       "fixture",
 		AuthorizationStatus: "authorized",
 		Assets: []photos.Asset{
-			remoteFixtureAsset("crawlkit-log-download-fails", "2026-05-29T12:00:00Z"),
+			remoteFixtureAsset("trawlkit-log-download-fails", "2026-05-29T12:00:00Z"),
 		},
 	}}
 	if _, err := Sync(ctx, paths, SyncOptions{
@@ -806,7 +806,7 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	if result.ContentClassified != 1 || result.ModelCallAttempts != 2 || result.ModelRateLimitEvents != 1 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
-	// Retry lines are crawlkit model.Run's phase now: they identify the item
+	// Retry lines are trawlkit model.Run's phase now: they identify the item
 	// by batch index; asset refs stay on the outcome lines.
 	foundRetry := false
 	for _, got := range logs.events {
@@ -1717,7 +1717,7 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	if !result.RateLimitAborted {
 		t.Fatalf("expected rate limit abort, result = %+v", result)
 	}
-	// crawlkit model.Run aborts after 8 consecutive quota refusals.
+	// trawlkit model.Run aborts after 8 consecutive quota refusals.
 	if result.RateLimitRequeued < 8 {
 		t.Fatalf("rate limit requeued = %d, want >= 8", result.RateLimitRequeued)
 	}

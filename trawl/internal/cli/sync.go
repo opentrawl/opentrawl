@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const syncStateWidth = 5
@@ -159,7 +159,7 @@ func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
 	case 2:
 		args = append([]string{"-vv"}, args...)
 	}
-	out, err := runCrawlkitCaptured(args, []crawlkit.Crawler{source.Crawler})
+	out, err := runTrawlkitCaptured(args, []trawlkit.Crawler{source.Crawler})
 	if err != nil {
 		return nil, nil, err
 	}

@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchListContext) error {

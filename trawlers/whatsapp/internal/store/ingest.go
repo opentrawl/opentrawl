@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, groups []Group, participants []GroupParticipant, messages []Message) error {

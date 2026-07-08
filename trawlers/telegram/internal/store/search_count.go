@@ -5,7 +5,7 @@ import (
 	"errors"
 	"strings"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (s *Store) CountSearch(ctx context.Context, filter MessageFilter) (int, error) {

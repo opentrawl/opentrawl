@@ -4,12 +4,12 @@ import (
 	"context"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
-func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(err)

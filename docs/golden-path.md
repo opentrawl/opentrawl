@@ -49,9 +49,9 @@ API, and drift in one crawler taxes every consumer.
       missing, no working verb unadvertised, contract version stated
 - [ ] status declares headline counts worth showing a human — the
       Mac app renders these verbatim
-- [ ] contact export implemented and validated against the crawlkit
+- [ ] contact export implemented and validated against the trawlkit
       shape; every person-shaped record the source holds is exportable
-- [ ] built on the crawlkit substrate (config, store, snapshot, sync
+- [ ] built on the trawlkit substrate (config, store, snapshot, sync
       state) rather than private reimplementations — observability and
       fixes land once
 
