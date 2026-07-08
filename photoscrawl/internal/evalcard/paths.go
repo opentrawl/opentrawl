@@ -11,7 +11,7 @@ import (
 	ckmodel "github.com/openclaw/crawlkit/model"
 )
 
-func normalizeOllamaGenerateURL(raw string) string {
+func normalizeOllamaGenerateURL(raw string) (string, error) {
 	return ckmodel.GenerateEndpoint(raw)
 }
 

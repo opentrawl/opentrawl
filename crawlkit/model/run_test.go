@@ -47,7 +47,11 @@ func okHandler() http.Handler {
 func runClient(t *testing.T, handler http.Handler) *Client {
 	t.Helper()
 	server := sandboxSafeServer(t, handler)
-	return New(Config{BaseURL: server.URL, Model: "fixture-model"})
+	client, err := New(Config{BaseURL: server.URL, Model: "fixture-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
 }
 
 func simplePrepare(ctx context.Context, index int) (Request, error) {
@@ -254,7 +258,10 @@ func TestRunStressAccountingHoldsUnderFlakyProvider(t *testing.T) {
 }
 
 func TestRunRequiresLogger(t *testing.T) {
-	client := New(Config{BaseURL: DefaultBaseURL, Model: "m"})
+	client, err := New(Config{BaseURL: DefaultBaseURL, Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if _, err := Run(context.Background(), client, 1, simplePrepare,
 		func(Result) error { return nil }, nil); err == nil {
 		t.Fatal("nil logger accepted")

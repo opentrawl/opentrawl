@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 const (
 	DefaultBaseURL     = "http://127.0.0.1:11434"
 	DefaultGenerateURL = DefaultBaseURL + "/api/generate"
+	ollamaOnlyRule     = "model inference goes through Ollama only (Ollama-only policy, crawlkit/model doc; ruling 2026-07-08)"
 	requestTimeout     = 20 * time.Minute
 )
 
@@ -62,41 +64,78 @@ func (e *HTTPError) Error() string {
 	return fmt.Sprintf("model request returned %s: %s", e.Status, body)
 }
 
-func New(cfg Config) *Client {
+func New(cfg Config) (*Client, error) {
+	baseURL, err := NormalizeBaseURL(cfg.BaseURL)
+	if err != nil {
+		return nil, err
+	}
 	apiKey := ""
 	if envName := strings.TrimSpace(cfg.BearerKeyEnv); envName != "" {
 		apiKey = strings.TrimSpace(os.Getenv(envName))
 	}
 	return &Client{
-		baseURL: NormalizeBaseURL(cfg.BaseURL),
+		baseURL: baseURL,
 		model:   strings.TrimSpace(cfg.Model),
 		apiKey:  apiKey,
 		client:  &http.Client{Timeout: requestTimeout},
-	}
+	}, nil
 }
 
-func NormalizeBaseURL(raw string) string {
+func NormalizeBaseURL(raw string) (string, error) {
 	value := strings.TrimRight(strings.TrimSpace(raw), "/")
 	if value == "" {
-		return DefaultBaseURL
+		value = DefaultBaseURL
 	}
 	for _, suffix := range []string{"/api/generate", "/v1/chat/completions"} {
 		if strings.HasSuffix(value, suffix) {
-			return strings.TrimSuffix(value, suffix)
+			value = strings.TrimSuffix(value, suffix)
+			break
 		}
 	}
-	return value
+	if err := validateOllamaBaseURL(value); err != nil {
+		return "", err
+	}
+	return value, nil
 }
 
-func GenerateEndpoint(raw string) string {
-	baseURL := NormalizeBaseURL(raw)
+func GenerateEndpoint(raw string) (string, error) {
+	baseURL, err := NormalizeBaseURL(raw)
+	if err != nil {
+		return "", err
+	}
 	switch {
 	case strings.HasSuffix(baseURL, "/api"):
-		return baseURL + "/generate"
+		return baseURL + "/generate", nil
 	case strings.HasSuffix(baseURL, "/v1"):
-		return baseURL + "/chat/completions"
+		return baseURL + "/chat/completions", nil
 	default:
-		return baseURL + "/api/generate"
+		return baseURL + "/api/generate", nil
+	}
+}
+
+func validateOllamaBaseURL(value string) error {
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return fmt.Errorf("model base URL %q is invalid: %w", value, err)
+	}
+	host := strings.ToLower(parsed.Hostname())
+	if parsed.Scheme == "" || parsed.Host == "" || host == "" {
+		return fmt.Errorf("%s; host %q is not an Ollama endpoint", ollamaOnlyRule, host)
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	switch {
+	case host == "localhost" || host == "127.0.0.1" || host == "::1":
+		if scheme == "http" || scheme == "https" {
+			return nil
+		}
+		return fmt.Errorf("%s; endpoint %q must use http or https for loopback Ollama endpoints", ollamaOnlyRule, value)
+	case host == "ollama.com" || strings.HasSuffix(host, ".ollama.com"):
+		if scheme == "https" && (parsed.Port() == "" || parsed.Port() == "443") {
+			return nil
+		}
+		return fmt.Errorf("%s; endpoint %q must use https on port 443 for Ollama cloud", ollamaOnlyRule, value)
+	default:
+		return fmt.Errorf("%s; host %q is not an Ollama endpoint", ollamaOnlyRule, host)
 	}
 }
 
@@ -140,7 +179,11 @@ func (c *Client) generateNative(ctx context.Context, request Request) (Response,
 		},
 	}
 	var response nativeGenerateResponse
-	if err := c.post(ctx, GenerateEndpoint(c.baseURL), payload, &response); err != nil {
+	endpoint, err := GenerateEndpoint(c.baseURL)
+	if err != nil {
+		return Response{}, err
+	}
+	if err := c.post(ctx, endpoint, payload, &response); err != nil {
 		return Response{}, err
 	}
 	if strings.TrimSpace(response.Error) != "" {
@@ -211,7 +254,11 @@ func (c *Client) generateChat(ctx context.Context, request Request) (Response, e
 		Stream:      false,
 	}
 	var response chatResponse
-	if err := c.post(ctx, GenerateEndpoint(c.baseURL), payload, &response); err != nil {
+	endpoint, err := GenerateEndpoint(c.baseURL)
+	if err != nil {
+		return Response{}, err
+	}
+	if err := c.post(ctx, endpoint, payload, &response); err != nil {
 		return Response{}, err
 	}
 	if response.Error != nil && strings.TrimSpace(response.Error.Message) != "" {

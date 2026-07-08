@@ -24,6 +24,8 @@ import (
 	"github.com/openclaw/photoscrawl/internal/place"
 )
 
+const fixtureModelURL = "http://127.0.0.1:11434/api/generate"
+
 func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -110,7 +112,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
@@ -203,7 +205,7 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
@@ -319,7 +321,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 		LogSink:  logs,
 	})
@@ -396,7 +398,7 @@ join asset a on a.id = q.asset_id
 	second, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:30:00Z"),
 	})
 	if err != nil {
@@ -444,7 +446,7 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 	first, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
@@ -468,7 +470,7 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 	second, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:25:00Z"),
 	})
 	if err != nil {
@@ -486,7 +488,7 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 	third, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:30:00Z"),
 	})
 	if err != nil {
@@ -546,7 +548,7 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 		LogSink:  run,
 	})
@@ -643,7 +645,7 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 		LogSink:  logs,
 	})
@@ -1555,7 +1557,7 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		All:      true,
 		Model:    "fixture-vision",
-		ModelURL: "http://fixture.test/api/generate",
+		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 		LogSink:  &recordingClassifyLogSink{},
 	})

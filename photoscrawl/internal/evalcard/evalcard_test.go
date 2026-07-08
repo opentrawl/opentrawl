@@ -15,7 +15,11 @@ func TestNormalizeOllamaGenerateURL(t *testing.T) {
 		"http://127.0.0.1:11434/api/generate": "http://127.0.0.1:11434/api/generate",
 	}
 	for input, want := range tests {
-		if got := normalizeOllamaGenerateURL(input); got != want {
+		got, err := normalizeOllamaGenerateURL(input)
+		if err != nil {
+			t.Fatalf("normalizeOllamaGenerateURL(%q): %v", input, err)
+		}
+		if got != want {
 			t.Fatalf("normalizeOllamaGenerateURL(%q) = %q, want %q", input, got, want)
 		}
 	}
