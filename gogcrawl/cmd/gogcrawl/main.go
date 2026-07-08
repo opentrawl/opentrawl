@@ -1,19 +1,12 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"os"
 
-	"github.com/openclaw/crawlkit/output"
-	"github.com/opentrawl/opentrawl/gogcrawl/internal/cli"
+	"github.com/openclaw/crawlkit"
+	"github.com/opentrawl/opentrawl/gogcrawl"
 )
 
 func main() {
-	if err := cli.Run(context.Background(), os.Args[1:], os.Stdout, os.Stderr); err != nil {
-		if !output.IsRendered(err) {
-			_, _ = fmt.Fprintln(os.Stderr, err)
-		}
-		os.Exit(cli.ExitCode(err))
-	}
+	os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{gogcrawl.New()}))
 }
