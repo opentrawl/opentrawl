@@ -33,6 +33,250 @@ func childStderrLines(source string, count int) string {
 	return b.String()
 }
 
+func testSearchRow(t *testing.T, source, ref, timestamp string, sourceRank int) SearchRow {
+	t.Helper()
+	parsed, ok := parseSearchTime(timestamp)
+	if timestamp != "" && !ok {
+		t.Fatalf("bad test timestamp %q", timestamp)
+	}
+	return SearchRow{
+		Source:     source,
+		Ref:        ref,
+		Time:       timestamp,
+		sourceRank: sourceRank,
+		parsedTime: parsed,
+		timeOK:     ok,
+	}
+}
+
+func searchRefs(rows []SearchRow) []string {
+	refs := make([]string, 0, len(rows))
+	for _, row := range rows {
+		refs = append(refs, row.Ref)
+	}
+	return refs
+}
+
+func TestRankTierSortInterleavesBySourceRank(t *testing.T) {
+	rows := []SearchRow{
+		testSearchRow(t, "alpha", "alpha:rank-1", "2026-07-01T09:00:00Z", 1),
+		testSearchRow(t, "charlie", "charlie:rank-0", "2026-05-01T09:00:00Z", 0),
+		testSearchRow(t, "delta", "delta:b", "2026-01-01T09:00:00Z", 2),
+		testSearchRow(t, "beta", "beta:rank-1", "2026-06-01T09:00:00Z", 1),
+		testSearchRow(t, "alpha", "alpha:rank-0", "2026-01-01T09:00:00Z", 0),
+		testSearchRow(t, "delta", "delta:a", "2026-01-01T09:00:00Z", 2),
+		testSearchRow(t, "beta", "beta:rank-0", "2026-05-01T09:00:00Z", 0),
+	}
+
+	rankTierSort(rows)
+
+	want := []string{
+		"beta:rank-0",
+		"charlie:rank-0",
+		"alpha:rank-0",
+		"alpha:rank-1",
+		"beta:rank-1",
+		"delta:a",
+		"delta:b",
+	}
+	if got := strings.Join(searchRefs(rows), ","); got != strings.Join(want, ",") {
+		t.Fatalf("refs = %v, want %v", searchRefs(rows), want)
+	}
+}
+
+func TestMergedSearchRowsInvoiceSortMode(t *testing.T) {
+	results := []searchSourceResult{
+		{
+			Total: 1,
+			Rows: []SearchRow{
+				testSearchRow(t, "imessage", "imessage:strong-old-invoice", "2023-04-01T09:00:00Z", 0),
+			},
+		},
+		{
+			Total: 2,
+			Rows: []SearchRow{
+				testSearchRow(t, "gmail", "gmail:recent-rank-0", "2026-06-02T09:00:00Z", 0),
+				testSearchRow(t, "gmail", "gmail:weak-recent-footer", "2026-06-01T09:00:00Z", 1),
+			},
+		},
+	}
+
+	relevance := mergedSearchRows(results, 10, searchSortRelevance)
+	if got := strings.Join(searchRefs(relevance.Rows), ","); got != "gmail:recent-rank-0,imessage:strong-old-invoice,gmail:weak-recent-footer" {
+		t.Fatalf("relevance refs = %v", searchRefs(relevance.Rows))
+	}
+	if relevance.TotalMatches != 3 || relevance.Truncated || relevance.More != 0 {
+		t.Fatalf("relevance counters = total %d truncated %t more %d", relevance.TotalMatches, relevance.Truncated, relevance.More)
+	}
+
+	recency := mergedSearchRows(results, 10, searchSortRecency)
+	if got := strings.Join(searchRefs(recency.Rows), ","); got != "gmail:recent-rank-0,gmail:weak-recent-footer,imessage:strong-old-invoice" {
+		t.Fatalf("recency refs = %v", searchRefs(recency.Rows))
+	}
+}
+
+func TestSearchSortModeSelection(t *testing.T) {
+	tests := []struct {
+		name  string
+		query string
+		sort  string
+		want  searchSortMode
+	}{
+		{name: "query defaults relevance", query: "invoice", want: searchSortRelevance},
+		{name: "empty query defaults recency", want: searchSortRecency},
+		{name: "empty query ignores relevance override", sort: "relevance", want: searchSortRecency},
+		{name: "query allows relevance override", query: "invoice", sort: "relevance", want: searchSortRelevance},
+		{name: "query allows recency override", query: "invoice", sort: "recency", want: searchSortRecency},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveSearchSort(tt.query, tt.sort)
+			if err != nil {
+				t.Fatalf("resolveSearchSort returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("mode = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearchHeadingNamesSortMode(t *testing.T) {
+	if got := searchHeading("invoice", "", 2, 5, searchSortRelevance); got != `Search "invoice": showing 2 of 5, best matches first.` {
+		t.Fatalf("relevance heading = %q", got)
+	}
+	if got := searchHeading("", "Alex Example", 2, 5, searchSortRecency); got != `Search with Alex Example: showing 2 of 5, newest first.` {
+		t.Fatalf("recency heading = %q", got)
+	}
+}
+
+func TestSearchQuerylessRecencyGolden(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:          "imsgcrawl",
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			searchNoQuery: true,
+			search: `{"query":"","results":[
+				{"ref":"imessage:msg/old","time":"2026-05-11T08:00:00Z","who":"Alice","where":"Invoices","snippet":"older filter match"}
+			],"total_matches":5,"truncated":true}`,
+		},
+		fakeCrawler{
+			name:          "telecrawl",
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			searchNoQuery: true,
+			search: `{"query":"","results":[
+				{"ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},
+				{"ref":"telegram:msg/mid","time":"2026-05-12T10:00:00Z","who":"Cara","where":"Ops","snippet":"middle filter match"}
+			],"total_matches":2,"truncated":false}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+	t.Setenv("COLUMNS", "200")
+
+	stdout, stderr, code := runCLI(t, "search", "--source", "imessage,telegram", "--after", "2026-01-01", "--limit", "2")
+	if code != 0 {
+		t.Fatalf("search code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	want := strings.Join([]string{
+		"Search filters: showing 2 of 7, newest first.",
+		"Open: trawl open REF",
+		"More: trawl search --source imessage,telegram --after 2026-01-01 --limit 4",
+		"",
+		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", "date", "source", "who", "where", "ref", "text"),
+		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", shortLocalTestTime(t, "2026-05-14T09:00:00Z"), "Telegram", "Bob", "Ops", "telegram:msg/new", "newer filter match"),
+		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", shortLocalTestTime(t, "2026-05-12T10:00:00Z"), "Telegram", "Cara", "Ops", "telegram:msg/mid", "middle filter match"),
+	}, "\n") + "\n"
+	if stdout != want {
+		t.Fatalf("stdout = %q\nwant   = %q", stdout, want)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchQuerylessRecencyJSONGolden(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:          "imsgcrawl",
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			searchNoQuery: true,
+			search: `{"query":"","results":[
+				{"ref":"imessage:msg/old","time":"2026-05-11T08:00:00Z","who":"Alice","where":"Invoices","snippet":"older filter match"}
+			],"total_matches":5,"truncated":true}`,
+		},
+		fakeCrawler{
+			name:          "telecrawl",
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			searchNoQuery: true,
+			search: `{"query":"","results":[
+				{"ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},
+				{"ref":"telegram:msg/mid","time":"2026-05-12T10:00:00Z","who":"Cara","where":"Ops","snippet":"middle filter match"}
+			],"total_matches":2,"truncated":false}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, stderr, code := runCLI(t, "--json", "search", "--source", "imessage,telegram", "--after", "2026-01-01", "--limit", "2")
+	if code != 0 {
+		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	want := `{"query":"","results":[{"source":"telegram","ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},{"source":"telegram","ref":"telegram:msg/mid","time":"2026-05-12T10:00:00Z","who":"Cara","where":"Ops","snippet":"middle filter match"}],"total_matches":7,"truncated":true}` + "\n"
+	if stdout != want {
+		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	}
+	if stderr != "" {
+		t.Fatalf("stderr = %s", stderr)
+	}
+}
+
+func TestSearchQuerylessRelevanceSortRendersLikePlainQueryless(t *testing.T) {
+	binDir := writeFakeCrawlers(t, fakeCrawler{
+		name:          "imsgcrawl",
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		searchNoQuery: true,
+		search: `{"query":"","results":[
+			{"ref":"imessage:msg/new","time":"2026-05-14T09:00:00Z","who":"Alice","where":"Invoices","snippet":"newer filter match"},
+			{"ref":"imessage:msg/old","time":"2026-05-11T08:00:00Z","who":"Bob","where":"Invoices","snippet":"older filter match"}
+		],"total_matches":2,"truncated":false}`,
+	})
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+	t.Setenv("COLUMNS", "200")
+
+	args := []string{"search", "--source", "imessage", "--after", "2026-01-01", "--limit", "1"}
+	plainStdout, plainStderr, plainCode := runCLI(t, args...)
+	if plainCode != 0 {
+		t.Fatalf("plain search code = %d stderr=%s stdout=%s", plainCode, plainStderr, plainStdout)
+	}
+	sortArgs := append(append([]string{}, args...), "--sort", "relevance")
+	sortStdout, sortStderr, sortCode := runCLI(t, sortArgs...)
+	if sortCode != 0 {
+		t.Fatalf("search --sort=relevance code = %d stderr=%s stdout=%s", sortCode, sortStderr, sortStdout)
+	}
+	if sortStdout != plainStdout {
+		t.Fatalf("search --sort=relevance stdout = %q\nplain stdout = %q", sortStdout, plainStdout)
+	}
+	for _, want := range []string{
+		"Search filters: showing 1 of 2, newest first.",
+		"More: trawl search --source imessage --after 2026-01-01 --limit 2",
+	} {
+		if !strings.Contains(sortStdout, want) {
+			t.Fatalf("search --sort=relevance stdout missing %q:\n%s", want, sortStdout)
+		}
+	}
+	if strings.Contains(sortStdout, "--sort") {
+		t.Fatalf("queryless More line must not echo inert --sort:\n%s", sortStdout)
+	}
+	if plainStderr != "" {
+		t.Fatalf("plain stderr = %s", plainStderr)
+	}
+	if sortStderr != "" {
+		t.Fatalf("search --sort=relevance stderr = %s", sortStderr)
+	}
+}
+
 func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
@@ -60,7 +304,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		t.Fatalf("search code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		`Search "boat trip": showing 2 of 4, newest first.`,
+		`Search "boat trip": showing 2 of 4, best matches first.`,
 		"Open: trawl open REF",
 		`More: trawl search "boat trip" --source imessage,telegram --limit 4`,
 		"date              source    who    where   ref                text",
@@ -219,6 +463,24 @@ func TestSearchRejectsNonPositiveLimit(t *testing.T) {
 				t.Fatalf("missing limit error: %v", err)
 			}
 		})
+	}
+}
+
+func TestSearchRejectsInvalidSort(t *testing.T) {
+	t.Setenv("PATH", writeFakeCrawlers(t))
+	t.Setenv("HOME", syntheticHome(t))
+
+	var stdout, stderr strings.Builder
+	err := Execute([]string{"search", "boat trip", "--sort", "freshest"}, &stdout, &stderr)
+	if code := ExitCode(err); code != 2 {
+		t.Fatalf("code = %d, want 2 stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	var usage usageErr
+	if !errors.As(err, &usage) {
+		t.Fatalf("err = %T %[1]v, want usageErr", err)
+	}
+	if !strings.Contains(err.Error(), "search --sort must be relevance or recency") {
+		t.Fatalf("missing sort error: %v", err)
 	}
 }
 

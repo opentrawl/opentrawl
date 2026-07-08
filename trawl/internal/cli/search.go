@@ -18,6 +18,15 @@ const (
 	searchWorkerLimit = 4
 )
 
+type searchSortMode string
+
+const (
+	searchSortRelevance searchSortMode = "relevance"
+	searchSortRecency   searchSortMode = "recency"
+
+	searchQueryDefaultSort = searchSortRelevance
+)
+
 type SearchCmd struct {
 	Query  []string `arg:"" optional:"" help:"Search words; optional when --who, --after, or --before is present"`
 	Source string   `name:"source" help:"Comma-separated source ids"`
@@ -25,6 +34,7 @@ type SearchCmd struct {
 	After  string   `name:"after" help:"Start date"`
 	Before string   `name:"before" help:"End date"`
 	Who    string   `name:"who" placeholder:"person" help:"Resolve a person or sender, then filter by the exact match"`
+	Sort   string   `name:"sort" placeholder:"mode" help:"Sort rows by relevance or recency"`
 }
 
 func (SearchCmd) Help() string {
@@ -57,6 +67,7 @@ type SearchRow struct {
 
 	surface         string
 	sourceShortRefs bool
+	sourceRank      int
 	parsedTime      time.Time
 	timeOK          bool
 }
@@ -102,6 +113,10 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	if strings.TrimSpace(query) == "" && whoInput == "" && strings.TrimSpace(c.After) == "" && strings.TrimSpace(c.Before) == "" {
 		return usageErr{fmt.Errorf("search requires a query or at least one filter (--who, --after, --before)")}
 	}
+	sortMode, err := resolveSearchSort(query, c.Sort)
+	if err != nil {
+		return err
+	}
 	if len(sources) == 0 {
 		if r.root.JSON {
 			if err := writeJSON(r.stdout, emptySearchEnvelope(query)); err != nil {
@@ -145,7 +160,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		who:         whoInput,
 		whoBySource: whoBySource,
 	})
-	merged := mergedSearchRows(results, limit)
+	merged := mergedSearchRows(results, limit, sortMode)
 	r.reportSearchFailures(results)
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, federatedSearchEnvelope{
@@ -170,6 +185,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		if err := renderSearchResults(r.stdout, merged, searchListContext{
 			Query:   query,
 			Who:     resolvedWhoName(whoResolved),
+			Sort:    sortMode,
 			MoreCmd: c.moreCommand(query, sourceScope, merged.Rows),
 		}); err != nil {
 			return err
@@ -315,7 +331,7 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 	result.Total = envelope.TotalMatches
 	result.Truncated = envelope.Truncated
 	result.Rows = make([]SearchRow, 0, len(envelope.Results))
-	for _, item := range envelope.Results {
+	for sourceRank, item := range envelope.Results {
 		itemTime := formatSearchTime(item.Time)
 		parsed, ok := parseSearchTime(itemTime)
 		result.Rows = append(result.Rows, SearchRow{
@@ -329,6 +345,7 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 			ShortRef:        item.ShortRef,
 			surface:         firstNonEmpty(source.DisplayName, source.ID),
 			sourceShortRefs: hasCapability(source, "short_refs"),
+			sourceRank:      sourceRank,
 			parsedTime:      parsed,
 			timeOK:          ok,
 		})
@@ -413,7 +430,7 @@ func searchSourcesForResolvedWho(sources []Source, whoBySource map[string]string
 	return out
 }
 
-func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResult {
+func mergedSearchRows(results []searchSourceResult, limit int, sortMode searchSortMode) mergedSearchResult {
 	var rows []SearchRow
 	total := 0
 	truncated := false
@@ -425,7 +442,12 @@ func mergedSearchRows(results []searchSourceResult, limit int) mergedSearchResul
 		total += result.Total
 		truncated = truncated || result.Truncated
 	}
-	stableSearchSort(rows)
+	switch sortMode {
+	case searchSortRelevance:
+		rankTierSort(rows)
+	default:
+		stableSearchSort(rows)
+	}
 	if len(rows) > limit {
 		rows = rows[:limit]
 		truncated = true
@@ -459,9 +481,49 @@ func stableSearchSort(rows []SearchRow) {
 	})
 }
 
+func rankTierSort(rows []SearchRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		left := rows[i]
+		right := rows[j]
+		if left.sourceRank != right.sourceRank {
+			return left.sourceRank < right.sourceRank
+		}
+		if left.timeOK != right.timeOK {
+			return left.timeOK
+		}
+		if left.timeOK && !left.parsedTime.Equal(right.parsedTime) {
+			return left.parsedTime.After(right.parsedTime)
+		}
+		if left.Source != right.Source {
+			return left.Source < right.Source
+		}
+		return left.Ref < right.Ref
+	})
+}
+
 func parseSearchTime(value string) (time.Time, bool) {
 	parsed, err := time.Parse(time.RFC3339, value)
 	return parsed, err == nil
+}
+
+func resolveSearchSort(query, raw string) (searchSortMode, error) {
+	query = strings.TrimSpace(query)
+	switch strings.TrimSpace(raw) {
+	case "":
+		if query == "" {
+			return searchSortRecency, nil
+		}
+		return searchQueryDefaultSort, nil
+	case string(searchSortRelevance):
+		if query == "" {
+			return searchSortRecency, nil
+		}
+		return searchSortRelevance, nil
+	case string(searchSortRecency):
+		return searchSortRecency, nil
+	default:
+		return "", usageErr{fmt.Errorf("search --sort must be relevance or recency")}
+	}
 }
 
 func normalizeSearchLimit(limit int) (int, error) {

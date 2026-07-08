@@ -103,7 +103,7 @@ func TestSearchWhoHumanHeadingShowsResolvedPerson(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, `Search "boat trip" with Alice Example: showing 1 of 1, newest first.`) {
+	if !strings.Contains(stdout, `Search "boat trip" with Alice Example: showing 1 of 1, best matches first.`) {
 		t.Fatalf("stdout missing resolved who heading:\n%s", stdout)
 	}
 	if stderr != "" {

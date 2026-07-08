@@ -15,7 +15,7 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 		hints = append(hints, "More: "+list.MoreCmd)
 	}
 	return render.WriteList(w, render.List{
-		Heading:   searchHeading(list.Query, list.Who, len(merged.Rows), merged.TotalMatches),
+		Heading:   searchHeading(list.Query, list.Who, len(merged.Rows), merged.TotalMatches, list.Sort),
 		Hints:     hints,
 		Items:     searchListItems(merged.Rows),
 		ClampText: 2,
@@ -26,6 +26,7 @@ func renderSearchResults(w io.Writer, merged mergedSearchResult, list searchList
 type searchListContext struct {
 	Query   string
 	Who     string
+	Sort    searchSortMode
 	MoreCmd string
 }
 
@@ -52,20 +53,24 @@ func searchEmptySentence(query string) string {
 	return fmt.Sprintf("No matches for %q.", query)
 }
 
-func searchHeading(query, who string, shown, total int) string {
+func searchHeading(query, who string, shown, total int, sortMode searchSortMode) string {
 	query = strings.TrimSpace(query)
 	who = strings.TrimSpace(who)
 	shownText := render.FormatInteger(int64(shown))
 	totalText := render.FormatInteger(int64(total))
+	order := "newest first"
+	if sortMode == searchSortRelevance {
+		order = "best matches first"
+	}
 	switch {
 	case query != "" && who != "":
-		return fmt.Sprintf("Search %q with %s: showing %s of %s, newest first.", query, who, shownText, totalText)
+		return fmt.Sprintf("Search %q with %s: showing %s of %s, %s.", query, who, shownText, totalText, order)
 	case query != "":
-		return fmt.Sprintf("Search %q: showing %s of %s, newest first.", query, shownText, totalText)
+		return fmt.Sprintf("Search %q: showing %s of %s, %s.", query, shownText, totalText, order)
 	case who != "":
-		return fmt.Sprintf("Search with %s: showing %s of %s, newest first.", who, shownText, totalText)
+		return fmt.Sprintf("Search with %s: showing %s of %s, %s.", who, shownText, totalText, order)
 	default:
-		return fmt.Sprintf("Search filters: showing %s of %s, newest first.", shownText, totalText)
+		return fmt.Sprintf("Search filters: showing %s of %s, %s.", shownText, totalText, order)
 	}
 }
 
@@ -102,6 +107,11 @@ func (c *SearchCmd) moreCommand(query, sourceScope string, shown []SearchRow) st
 	}
 	if sourceScope != "" {
 		parts = append(parts, "--source", sourceScope)
+	}
+	if strings.TrimSpace(query) != "" {
+		if sortMode := strings.TrimSpace(c.Sort); sortMode != "" {
+			parts = append(parts, "--sort", sortMode)
+		}
 	}
 	if who := strings.TrimSpace(c.Who); who != "" {
 		parts = append(parts, "--who", quoteExampleArg(who))
