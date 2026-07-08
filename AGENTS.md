@@ -64,20 +64,22 @@ copy its text into this public repo.
 
 ## Layout and upstreams
 
-Each crawler directory is a git subtree synced with an upstream repo.
-Do not edit a subtree without knowing where the change will land; see
+Crawler modules live under `trawlers/` with surface-name directory
+names. Imported modules are git subtrees synced with upstream repos. Do
+not edit a subtree without knowing where the change will land; see
 [docs/sync.md](docs/sync.md) and run `scripts/sync list`.
 
 | directory | upstream | outbound path |
 |---|---|---|
 | crawlkit | openclaw/crawlkit | direct (maintainer) |
-| imsgcrawl | openclaw/imsgcrawl | direct (admin) |
-| photoscrawl | openclaw/photoscrawl | direct (admin) |
-| telecrawl | openclaw/telecrawl | via joshp123/telecrawl fork + PR |
-| wacrawl | openclaw/wacrawl | via joshp123/wacrawl fork + PR |
-| clawdex | openclaw/clawdex | via joshp123/clawdex fork + PR |
+| trawlers/imessage | openclaw/imsgcrawl | direct (admin) |
+| trawlers/photos | openclaw/photoscrawl | direct (admin) |
+| trawlers/telegram | openclaw/telecrawl | via joshp123/telecrawl fork + PR |
+| trawlers/whatsapp | openclaw/wacrawl | via joshp123/wacrawl fork + PR |
+| trawlers/contacts | openclaw/clawdex | via joshp123/clawdex fork + PR |
 
-Everything else (docs, scripts, the `trawl` CLI, the app) is
+`trawlers/gmail`, `trawlers/calendar`, `trawlers/twitter`,
+`trawlers/notes`, docs, scripts, the `trawl` CLI and the app are
 monorepo-native with no upstream.
 
 ## Documentation rules

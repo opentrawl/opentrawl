@@ -14,7 +14,16 @@ golangci-lint config verify --config "$root/.golangci.yml"
 modules=()
 while IFS= read -r module; do
   modules+=("$module")
-done < <(git ls-files 'go.mod' '*/go.mod' | sort | sed 's#/go.mod$##; s#^go.mod$#.#')
+done < <(
+  git ls-files |
+    while IFS= read -r file; do
+      case "$file" in
+      go.mod) echo "." ;;
+      */go.mod) dirname "$file" ;;
+      esac
+    done |
+    sort
+)
 
 if [ "${#modules[@]}" -eq 0 ]; then
   echo "check-lint: no Go modules found"

@@ -2,7 +2,7 @@ module github.com/openclaw/telecrawl
 
 go 1.26.4
 
-replace github.com/openclaw/crawlkit => ../crawlkit
+replace github.com/openclaw/crawlkit => ../../crawlkit
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.47

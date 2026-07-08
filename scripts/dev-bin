@@ -31,4 +31,4 @@ while IFS= read -r go_mod; do
       go build -o "$output" "./cmd/$name"
     )
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
-done < <(find . -maxdepth 2 -name go.mod -print | sort)
+done < <(find . -path ./.git -prune -o -name go.mod -print | sort)

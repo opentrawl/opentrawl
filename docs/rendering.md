@@ -64,5 +64,5 @@ surfaces.
   feedback, never a recorded crawler error.
 
 Adopted by birdcrawl and telecrawl first; remaining crawlers move on
-next touch. imsgcrawl's private text table and the gogcrawl/clawdex
-copies are superseded by these components.
+next touch. imsgcrawl's private text table and the gogcrawl and
+clawdex copies are superseded by these components.

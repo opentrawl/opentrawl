@@ -24,4 +24,4 @@ require (
 	modernc.org/memory v1.11.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../crawlkit
+replace github.com/openclaw/crawlkit => ../../crawlkit

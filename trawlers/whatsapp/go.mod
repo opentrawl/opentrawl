@@ -16,4 +16,4 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../crawlkit
+replace github.com/openclaw/crawlkit => ../../crawlkit

@@ -77,20 +77,20 @@ require (
 
 replace github.com/openclaw/crawlkit => ../crawlkit
 
-replace github.com/openclaw/clawdex => ../clawdex
+replace github.com/openclaw/clawdex => ../trawlers/contacts
 
-replace github.com/openclaw/imsgcrawl => ../imsgcrawl
+replace github.com/openclaw/imsgcrawl => ../trawlers/imessage
 
-replace github.com/openclaw/telecrawl => ../telecrawl
+replace github.com/openclaw/telecrawl => ../trawlers/telegram
 
-replace github.com/openclaw/wacrawl => ../wacrawl
+replace github.com/openclaw/wacrawl => ../trawlers/whatsapp
 
-replace github.com/openclaw/photoscrawl => ../photoscrawl
+replace github.com/openclaw/photoscrawl => ../trawlers/photos
 
-replace github.com/opentrawl/opentrawl/gogcrawl => ../gogcrawl
+replace github.com/opentrawl/opentrawl/gogcrawl => ../trawlers/gmail
 
-replace github.com/opentrawl/opentrawl/calcrawl => ../calcrawl
+replace github.com/opentrawl/opentrawl/calcrawl => ../trawlers/calendar
 
-replace github.com/opentrawl/opentrawl/birdcrawl => ../birdcrawl
+replace github.com/opentrawl/opentrawl/birdcrawl => ../trawlers/twitter
 
 replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes

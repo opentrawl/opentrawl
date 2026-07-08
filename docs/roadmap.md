@@ -15,8 +15,8 @@ behind them.
   wacrawl and clawdex sync through joshp123 forks; the Gmail, Calendar,
   Apple Notes and Signal crawlers are monorepo-native.
 - One monorepo under the opentrawl org, open source (MIT), with
-  attribution. Crawler directories are git subtrees; `scripts/sync`
-  moves changes both ways.
+  attribution. Imported crawler modules live under `trawlers/` as git
+  subtrees; `scripts/sync` moves changes both ways.
 - The Mac app is built from scratch in SwiftUI, minimum macOS one below
   current. Upstream crawlbar is a cherry-pick source (its control
   protocol doc and quality rubric are worth keeping; its settings UI is

@@ -4,12 +4,13 @@ written_by: ai
 
 # Syncing with upstreams
 
-Each crawler directory is a git subtree of an upstream repo. The full
-history was imported at creation, so upstream attribution is preserved.
+Imported crawler modules are git subtrees of upstream repos. They live
+under `trawlers/` with surface-name directory names. The full history
+was imported at creation, so upstream attribution is preserved.
 
 Three commands cover everything:
 
-- `scripts/sync list` shows every directory, its upstream, and where
+- `scripts/sync list` shows every subtree directory, its upstream, and where
   outbound changes go.
 - `scripts/sync pull <dir>` merges upstream main into the directory.
   Run it before starting work in a subtree.
