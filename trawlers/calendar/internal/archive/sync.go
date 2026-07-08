@@ -111,10 +111,10 @@ insert into events(
   event_uid, source_row_id, uuid, unique_identifier, calendar_id, calendar_title,
   calendar_type, calendar_external_id, account_name, account_type, start_time,
   end_time, start_unix, end_unix, all_day, summary, description, status, url,
-  has_recurrences, organizer_name, organizer_email, organizer_phone,
+  has_recurrences, availability, organizer_name, organizer_email, organizer_phone,
   location_title, location_address, attendees_json, participants_text,
   fingerprint, sync_run_id
-) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(event_uid) do update set
   source_row_id = excluded.source_row_id,
   uuid = excluded.uuid,
@@ -135,6 +135,7 @@ on conflict(event_uid) do update set
   status = excluded.status,
   url = excluded.url,
   has_recurrences = excluded.has_recurrences,
+  availability = excluded.availability,
   organizer_name = excluded.organizer_name,
   organizer_email = excluded.organizer_email,
   organizer_phone = excluded.organizer_phone,
@@ -147,7 +148,7 @@ on conflict(event_uid) do update set
 `, event.UID, event.SourceRowID, event.UUID, event.UniqueIdentifier, event.Calendar.ID, event.Calendar.Title,
 		event.Calendar.Type, event.Calendar.ExternalID, event.Account.Name, event.Account.Type, event.Start,
 		event.End, event.StartUnix, event.EndUnix, boolInt(event.AllDay), event.Summary, event.Description,
-		event.Status, event.URL, boolInt(event.HasRecurrences), event.Organizer.DisplayName, event.Organizer.Email,
+		event.Status, event.URL, boolInt(event.HasRecurrences), nullableInt64(event.Availability), event.Organizer.DisplayName, event.Organizer.Email,
 		event.Organizer.PhoneNumber, event.Location.Title, event.Location.Address, string(attendeesJSON),
 		event.ParticipantsText, fingerprint, runID)
 	if err != nil {
@@ -231,4 +232,11 @@ func boolInt(value bool) int {
 		return 1
 	}
 	return 0
+}
+
+func nullableInt64(value *int64) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }

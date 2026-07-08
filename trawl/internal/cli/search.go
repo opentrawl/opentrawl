@@ -58,12 +58,14 @@ type SearchRow struct {
 	// federated --json on the canonical ref so agents never pick up the
 	// weaker, expiring alias; the crawler-level search contract still
 	// carries short_ref through crawlkit.Hit.
-	ShortRef string `json:"-"`
-	Time     string `json:"time"`
-	AllDay   bool   `json:"all_day,omitempty"`
-	Who      string `json:"who"`
-	Where    string `json:"where"`
-	Snippet  string `json:"snippet"`
+	ShortRef     string `json:"-"`
+	Time         string `json:"time"`
+	AllDay       bool   `json:"all_day,omitempty"`
+	Who          string `json:"who"`
+	Where        string `json:"where"`
+	Calendar     string `json:"calendar,omitempty"`
+	Snippet      string `json:"snippet"`
+	Availability *int64 `json:"availability,omitempty"`
 
 	surface         string
 	sourceShortRefs bool
@@ -341,7 +343,9 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 			AllDay:          item.AllDay,
 			Who:             item.Who,
 			Where:           item.Where,
+			Calendar:        item.Calendar,
 			Snippet:         item.Snippet,
+			Availability:    item.Availability,
 			ShortRef:        item.ShortRef,
 			surface:         firstNonEmpty(source.DisplayName, source.ID),
 			sourceShortRefs: hasCapability(source, "short_refs"),

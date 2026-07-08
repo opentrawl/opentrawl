@@ -11,6 +11,8 @@ create table if not exists calendars (
   account_name text not null default '',
   account_type integer not null default 0,
   account_disabled integer not null default 0,
+  meaning text default '',
+  meaning_stated_at text default '',
   sync_run_id text not null default ''
 );
 
@@ -35,6 +37,7 @@ create table if not exists events (
   status text not null default '',
   url text not null default '',
   has_recurrences integer not null default 0,
+  availability integer,
   organizer_name text not null default '',
   organizer_email text not null default '',
   organizer_phone text not null default '',

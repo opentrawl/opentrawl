@@ -39,6 +39,7 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 			Source:   row.surface,
 			Who:      normalizeSelf(row.Who),
 			Where:    normalizeSelf(row.Where),
+			Calendar: row.Calendar,
 			Ref:      row.Ref,
 			Text:     row.Snippet,
 		})

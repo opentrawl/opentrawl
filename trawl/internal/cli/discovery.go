@@ -113,15 +113,8 @@ func legacyRoutingAliases(id string) []string {
 }
 
 func crawlkitManifest(source crawlkit.Crawler) (control.Manifest, error) {
-	out, err := runCrawlkitCaptured([]string{"metadata", "--json"}, []crawlkit.Crawler{source})
+	manifest, err := crawlkit.Manifest(source)
 	if err != nil {
-		return control.Manifest{}, err
-	}
-	if out.Code != 0 {
-		return control.Manifest{}, fmt.Errorf("metadata failed")
-	}
-	var manifest control.Manifest
-	if err := decodeContractJSON(out.Stdout, &manifest); err != nil {
 		return control.Manifest{}, err
 	}
 	if strings.TrimSpace(manifest.ID) == "" {

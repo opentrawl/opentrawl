@@ -119,11 +119,11 @@ func archiveCalendars(calendars []calendarstore.Calendar) []archive.Calendar {
 		out = append(out, archive.Calendar{
 			ID:              strconv.FormatInt(calendar.RowID, 10),
 			SourceRowID:     calendar.RowID,
-			Title:           fallbackTitle(calendar.Title, "Calendar"),
+			Title:           strings.TrimSpace(calendar.Title),
 			Type:            calendar.Type,
 			ExternalID:      strings.TrimSpace(calendar.ExternalID),
 			StoreID:         calendar.StoreID,
-			AccountName:     fallbackTitle(calendar.StoreName, "Default"),
+			AccountName:     strings.TrimSpace(calendar.StoreName),
 			AccountType:     calendar.StoreType,
 			AccountDisabled: calendar.StoreDisabled,
 		})
@@ -145,12 +145,12 @@ func archiveEvents(events []calendarstore.Event) []archive.Event {
 			UniqueIdentifier: strings.TrimSpace(event.UniqueIdentifier),
 			Calendar: archive.CalendarProvenance{
 				ID:         calendarID,
-				Title:      fallbackTitle(event.Calendar.Title, "Calendar"),
+				Title:      strings.TrimSpace(event.Calendar.Title),
 				Type:       event.Calendar.Type,
 				ExternalID: strings.TrimSpace(event.Calendar.ExternalID),
 			},
 			Account: archive.AccountProvenance{
-				Name: fallbackTitle(event.Calendar.StoreName, "Default"),
+				Name: strings.TrimSpace(event.Calendar.StoreName),
 				Type: event.Calendar.StoreType,
 			},
 			Start:              event.Start.Value,
@@ -163,6 +163,7 @@ func archiveEvents(events []calendarstore.Event) []archive.Event {
 			Status:             archive.NormalizeEventStatus(event.Status),
 			URL:                strings.TrimSpace(event.URL),
 			HasRecurrences:     event.HasRecurrences,
+			Availability:       event.Availability,
 			Organizer:          archivePerson(event.Organizer),
 			Location:           location,
 			Attendees:          attendees,
@@ -220,13 +221,6 @@ func participantsText(attendees []archive.Attendee) string {
 
 func locationSearchText(location archive.Location) string {
 	return strings.TrimSpace(strings.Join([]string{location.Title, location.Address}, " "))
-}
-
-func fallbackTitle(value, fallback string) string {
-	if strings.TrimSpace(value) != "" {
-		return strings.TrimSpace(value)
-	}
-	return fallback
 }
 
 func appendIfNotEmpty(values []string, value string) []string {

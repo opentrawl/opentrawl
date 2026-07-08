@@ -253,6 +253,33 @@ func TestWriteListSourceColumn(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
+func TestWriteListCalendarColumn(t *testing.T) {
+	t.Setenv("COLUMNS", "100")
+	var buf bytes.Buffer
+	err := WriteList(&buf, List{
+		Heading: "Search \"planning\": showing 1 of 1, newest first.",
+		Items: []ListItem{{
+			Time:     time.Date(2026, 3, 4, 9, 0, 0, 0, time.Local),
+			Who:      "Alice",
+			Where:    "Room 1",
+			Calendar: "Work",
+			Ref:      "calendar:event/1",
+			Text:     "Planning meeting",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Join([]string{
+		"Search \"planning\": showing 1 of 1, newest first.",
+		"",
+		"date              who    where   calendar  ref               text",
+		"2026-03-04 09:00  Alice  Room 1  Work      calendar:event/1  Planning meeting",
+		"",
+	}, "\n")
+	assertGolden(t, buf.String(), want)
+}
+
 // TestWriteListShedsRefsBeforeSqueezingDate is the TRAWL-102 degrade
 // tripwire: when the terminal cannot fit every column, refs move to a
 // per-row open: line — a truncated ref or timestamp is garbage, so the

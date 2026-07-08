@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/openclaw/crawlkit"
@@ -62,6 +63,7 @@ func printOpenText(w io.Writer, event archive.EventDetail) error {
 		{Label: "Calendar", Value: event.Calendar},
 		{Label: "Account", Value: event.Account},
 		{Label: "Status", Value: event.Status},
+		{Label: "Availability", Value: availabilityString(event.Availability)},
 		{Label: "Organizer", Value: personName(event.Organizer)},
 		{Label: "Attendees", Value: attendeesLine(event.Attendees)},
 		{Label: "Ref", Value: event.Ref},
@@ -72,6 +74,13 @@ func printOpenText(w io.Writer, event archive.EventDetail) error {
 		Body:   event.Description,
 		Hints:  []string{"JSON: add --json for the full record."},
 	})
+}
+
+func availabilityString(value *int64) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.FormatInt(*value, 10)
 }
 
 func formatEventWhen(startValue, endValue string, allDay bool) string {

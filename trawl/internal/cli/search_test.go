@@ -329,8 +329,8 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 			name:     "calcrawl",
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
 			search: `{"query":"fair","results":[
-				{"ref":"calendar:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","snippet":"Art fair"},
-				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","snippet":"fair prep call"}
+				{"ref":"calendar:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","calendar":"Personal","snippet":"Art fair"},
+				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","calendar":"Work","snippet":"fair prep call"}
 			],"total_matches":2,"truncated":false}`,
 		},
 		fakeCrawler{
@@ -352,6 +352,9 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	if !strings.Contains(stdout, "2026-03-27  ") || strings.Contains(stdout, "2026-03-27 00:00") {
 		t.Fatalf("all-day row must show a bare date, never 00:00:\n%s", stdout)
 	}
+	if !strings.Contains(stdout, "calendar") || !strings.Contains(stdout, "Personal") || !strings.Contains(stdout, "Work") {
+		t.Fatalf("calendar field missing from human search rows:\n%s", stdout)
+	}
 	for _, want := range []string{
 		shortLocalTestTime(t, "2026-03-26T20:00:00+01:00"),
 		shortLocalTestTime(t, "2026-03-25T09:12:00+01:00"),
@@ -370,11 +373,16 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 		t.Fatalf("federated JSON: %v\n%s", err, stdout)
 	}
 	byRef := map[string]bool{}
+	calendarByRef := map[string]string{}
 	for _, row := range envelope.Results {
 		byRef[row.Ref] = row.AllDay
+		calendarByRef[row.Ref] = row.Calendar
 	}
 	if !byRef["calendar:event/aaa"] || byRef["calendar:event/bbb"] || byRef["imessage:msg/1"] {
 		t.Fatalf("federated all_day bits wrong: %#v\n%s", byRef, stdout)
+	}
+	if calendarByRef["calendar:event/aaa"] != "Personal" || calendarByRef["calendar:event/bbb"] != "Work" || calendarByRef["imessage:msg/1"] != "" {
+		t.Fatalf("federated calendar fields wrong: %#v\n%s", calendarByRef, stdout)
 	}
 	if strings.Count(stdout, "all_day") != 1 {
 		t.Fatalf("all_day must appear only on the all-day row:\n%s", stdout)

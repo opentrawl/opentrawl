@@ -39,7 +39,22 @@ func (c *Crawler) Info() crawlkit.Info {
 }
 
 func (c *Crawler) Verbs() []crawlkit.Verb {
-	return nil
+	return []crawlkit.Verb{
+		{
+			Name:    "calendars annotate",
+			Help:    "Record the user's stated meaning for a calendar. This writes to the local archive.",
+			Args:    []string{"CALENDAR_ID", "MEANING"},
+			Mutates: true,
+			Store:   crawlkit.StoreRequired,
+			Run:     c.annotateCalendar,
+		},
+		{
+			Name:  "calendars",
+			Help:  "List archived calendars.",
+			Store: crawlkit.StoreRequired,
+			Run:   c.calendars,
+		},
+	}
 }
 
 func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
@@ -255,13 +270,15 @@ func searchHit(result archive.SearchResult) (crawlkit.Hit, error) {
 		return crawlkit.Hit{}, err
 	}
 	return crawlkit.Hit{
-		Ref:      result.Ref,
-		ShortRef: result.ShortRef,
-		Time:     t,
-		Who:      result.Who,
-		Where:    result.Where,
-		Snippet:  result.Snippet,
-		AllDay:   result.AllDay,
+		Ref:          result.Ref,
+		ShortRef:     result.ShortRef,
+		Time:         t,
+		Who:          result.Who,
+		Where:        result.Where,
+		Calendar:     result.Calendar,
+		Snippet:      result.Snippet,
+		AllDay:       result.AllDay,
+		Availability: result.Availability,
 	}, nil
 }
 

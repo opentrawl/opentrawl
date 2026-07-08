@@ -238,6 +238,7 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			Source:   hit.Source,
 			Who:      hit.Who,
 			Where:    hit.Where,
+			Calendar: hit.Calendar,
 			Ref:      hit.Ref,
 			Text:     hit.Snippet,
 		})

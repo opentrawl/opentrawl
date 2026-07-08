@@ -42,6 +42,11 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	return manifest, nil
 }
 
+// Manifest returns the typed control manifest for an in-process crawler.
+func Manifest(source Crawler) (control.Manifest, error) {
+	return generateManifest(source, "", filepathBase(os.Args[0]))
+}
+
 func capabilitiesFor(source Crawler, info Info) []string {
 	caps := []string{"metadata", "status", "doctor"}
 	if _, ok := source.(Syncer); ok {

@@ -3,10 +3,12 @@ package calcrawl
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -67,6 +69,12 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if hit.Who != "Alice Example" || hit.Where != "Room 1" {
 		t.Fatalf("search hit who/where = %q/%q", hit.Who, hit.Where)
 	}
+	if hit.Calendar != "Work" {
+		t.Fatalf("search hit calendar = %q, want Work", hit.Calendar)
+	}
+	if hit.Availability == nil || *hit.Availability != 2 {
+		t.Fatalf("search hit availability = %#v, want raw 2", hit.Availability)
+	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
@@ -82,6 +90,9 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if opened.Calendar != "Work" || opened.Location == nil || opened.Location.Address != "1 Example Street" {
 		t.Fatalf("opened event = %#v", opened)
 	}
+	if opened.Availability == nil || *opened.Availability != 2 {
+		t.Fatalf("opened availability = %#v, want raw 2", opened.Availability)
+	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	contacts, err := source.ContactExport(ctx, readRequest(readStore, paths))
@@ -94,6 +105,118 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 }
 
+func TestCalendarVerbsDeclareReadAndWriteAccess(t *testing.T) {
+	manifest, err := crawlkit.Manifest(New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	calendars := manifest.Commands["calendars"]
+	if calendars.Mutates || calendars.Store != "read" {
+		t.Fatalf("calendars command = %#v, want non-mutating read", calendars)
+	}
+	annotate := manifest.Commands["calendars_annotate"]
+	if !annotate.Mutates || annotate.Store != "write" {
+		t.Fatalf("calendars annotate command = %#v, want mutating write", annotate)
+	}
+	if !strings.Contains(annotate.Title, "writes to the local archive") {
+		t.Fatalf("annotate help does not say it writes: %q", annotate.Title)
+	}
+}
+
+func TestCalendarsReadVerbDoesNotMutateArchive(t *testing.T) {
+	stateRoot, paths := syncedCalendarFixture(t)
+	before := fileHash(t, paths.Archive)
+
+	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	if code != 0 {
+		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	after := fileHash(t, paths.Archive)
+	if before != after {
+		t.Fatalf("calendars read verb mutated archive: before=%x after=%x", before, after)
+	}
+}
+
+func TestCalendarsHintCommandAndAnnotationRoundTrip(t *testing.T) {
+	stateRoot, _ := syncedCalendarFixture(t)
+
+	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	if code != 0 {
+		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var listing calendarsOutput
+	if err := json.Unmarshal([]byte(stdout), &listing); err != nil {
+		t.Fatalf("calendars JSON: %v\n%s", err, stdout)
+	}
+	work := findCalendarRow(t, listing.Calendars, "Work")
+	if work.AccountName != "iCloud" || work.AccountType != 1 || work.AccountTypeLabel != "EKSourceTypeExchange" || work.ExternalID != "work-calendar" || work.Disabled || work.EventCount != 1 {
+		t.Fatalf("work calendar row = %#v", work)
+	}
+	if work.Meaning != "" || work.MeaningStatedAt != "" {
+		t.Fatalf("new calendar meaning = %q/%q, want empty", work.Meaning, work.MeaningStatedAt)
+	}
+	hint := findCalendarHint(t, listing.Hints, work.ID)
+	if hint.Prompt != `Ask the user what "Work" means to them, set CALENDAR_MEANING to their exact words.` {
+		t.Fatalf("hint prompt = %q", hint.Prompt)
+	}
+	if !strings.Contains(hint.Command, "trawl calendar calendars annotate "+work.ID) {
+		t.Fatalf("hint = %#v", hint)
+	}
+
+	t.Setenv("CALENDAR_MEANING", "Used for work planning with Alice")
+	args := hintedCommandArgs(t, hint.Command)
+	stdout, stderr, code = runCalcrawlWireForTest(t, stateRoot, args...)
+	if code != 0 {
+		t.Fatalf("hinted command code=%d stdout=%s stderr=%s args=%#v", code, stdout, stderr, args)
+	}
+
+	stdout, stderr, code = runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	if code != 0 {
+		t.Fatalf("calendars after annotate code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), &listing); err != nil {
+		t.Fatalf("calendars JSON after annotate: %v\n%s", err, stdout)
+	}
+	work = findCalendarRow(t, listing.Calendars, "Work")
+	if work.Meaning != "Used for work planning with Alice" || work.MeaningStatedAt != time.Now().UTC().Format("2006-01-02") {
+		t.Fatalf("annotated work calendar = %#v", work)
+	}
+}
+
+func TestCalendarsAnnotationPreservesMeaningWhitespace(t *testing.T) {
+	stateRoot, _ := syncedCalendarFixture(t)
+	stdout, stderr, code := runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	if code != 0 {
+		t.Fatalf("calendars code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var listing calendarsOutput
+	if err := json.Unmarshal([]byte(stdout), &listing); err != nil {
+		t.Fatalf("calendars JSON: %v\n%s", err, stdout)
+	}
+	work := findCalendarRow(t, listing.Calendars, "Work")
+	hint := findCalendarHint(t, listing.Hints, work.ID)
+
+	wantMeaning := "  Used for work planning with Alice  "
+	t.Setenv("CALENDAR_MEANING", wantMeaning)
+	args := hintedCommandArgs(t, hint.Command)
+	stdout, stderr, code = runCalcrawlWireForTest(t, stateRoot, args...)
+	if code != 0 {
+		t.Fatalf("hinted command code=%d stdout=%s stderr=%s args=%#v", code, stdout, stderr, args)
+	}
+
+	stdout, stderr, code = runCalcrawlForTest(t, stateRoot, "calendar", "calendars", "--json")
+	if code != 0 {
+		t.Fatalf("calendars after annotate code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if err := json.Unmarshal([]byte(stdout), &listing); err != nil {
+		t.Fatalf("calendars JSON after annotate: %v\n%s", err, stdout)
+	}
+	work = findCalendarRow(t, listing.Calendars, "Work")
+	if work.Meaning != wantMeaning {
+		t.Fatalf("annotated work calendar meaning = %q, want %q", work.Meaning, wantMeaning)
+	}
+}
+
 func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
 	return &crawlkit.Request{
 		Store:  st,
@@ -101,6 +224,151 @@ func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
 		Format: ckoutput.Text,
 		Out:    &bytes.Buffer{},
 	}
+}
+
+func syncedCalendarFixture(t *testing.T) (string, crawlkit.Paths) {
+	t.Helper()
+	ctx := context.Background()
+	stateRoot := setupCalendarFixture(t)
+	paths := crawlkit.Paths{
+		Archive: filepath.Join(stateRoot, "calendar", "calendar.db"),
+		Config:  filepath.Join(stateRoot, "calendar", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "calendar", "logs"),
+	}
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = New().Sync(ctx, &crawlkit.Request{
+		Store:    writeStore,
+		Paths:    paths,
+		Format:   ckoutput.Text,
+		Out:      &bytes.Buffer{},
+		Progress: func(crawlkit.Progress) {},
+	})
+	if closeErr := writeStore.Close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return stateRoot, paths
+}
+
+func runCalcrawlForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
+	t.Helper()
+	_ = stateRoot
+	return runCalcrawlArgsForTest(t, args...)
+}
+
+func runCalcrawlWireForTest(t *testing.T, stateRoot string, args ...string) (string, string, int) {
+	t.Helper()
+	t.Setenv("CRAWLKIT_STATE_ROOT", stateRoot)
+	t.Setenv("CRAWLKIT_RUN_ID", "test")
+	wireArgs := append([]string{crawlkit.HiddenWireSubcommand}, args...)
+	return runCalcrawlArgsForTest(t, wireArgs...)
+}
+
+func runCalcrawlArgsForTest(t *testing.T, args ...string) (string, string, int) {
+	t.Helper()
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	var stdout, stderr bytes.Buffer
+	_, _ = stdout.ReadFrom(stdoutReader)
+	_, _ = stderr.ReadFrom(stderrReader)
+	_ = stdoutReader.Close()
+	_ = stderrReader.Close()
+	return stdout.String(), stderr.String(), code
+}
+
+func fileHash(t *testing.T, path string) [32]byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return sha256.Sum256(data)
+}
+
+func findCalendarRow(t *testing.T, rows []calendarRow, title string) calendarRow {
+	t.Helper()
+	for _, row := range rows {
+		if row.Title == title {
+			return row
+		}
+	}
+	t.Fatalf("calendar %q not found in %#v", title, rows)
+	return calendarRow{}
+}
+
+func findCalendarHint(t *testing.T, hints []calendarHint, calendarID string) calendarHint {
+	t.Helper()
+	for _, hint := range hints {
+		if hint.CalendarID == calendarID {
+			return hint
+		}
+	}
+	t.Fatalf("calendar hint %q not found in %#v", calendarID, hints)
+	return calendarHint{}
+}
+
+func hintedCommandArgs(t *testing.T, command string) []string {
+	t.Helper()
+	tokens := parseHintCommand(t, command)
+	if len(tokens) < 2 || tokens[0] != "trawl" || tokens[1] != "calendar" {
+		t.Fatalf("hint command = %#v, want trawl calendar ...", tokens)
+	}
+	args := make([]string, 0, len(tokens)-1)
+	for _, token := range tokens[1:] {
+		args = append(args, os.ExpandEnv(token))
+	}
+	return args
+}
+
+func parseHintCommand(t *testing.T, command string) []string {
+	t.Helper()
+	var tokens []string
+	var current strings.Builder
+	inQuote := false
+	for _, r := range command {
+		switch r {
+		case '"':
+			inQuote = !inQuote
+		case ' ', '\t', '\n':
+			if inQuote {
+				current.WriteRune(r)
+				continue
+			}
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+		default:
+			current.WriteRune(r)
+		}
+	}
+	if inQuote {
+		t.Fatalf("unclosed quote in hint command %q", command)
+	}
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+	return tokens
 }
 
 func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Store {
@@ -114,7 +382,11 @@ func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Stor
 
 func setupCalendarFixture(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home, err := os.MkdirTemp("/private/tmp", "trawl-152-calcrawl-home-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(home) })
 	t.Setenv("HOME", home)
 	t.Setenv("TZ", "UTC")
 	dir := filepath.Join(home, "Library", "Group Containers", "group.com.apple.calendar")
@@ -144,7 +416,7 @@ func createCalendarSchema(t *testing.T, db *sql.DB) {
 			ROWID integer primary key, summary text, description text, start_date real, end_date real,
 			start_tz text, end_tz text, all_day integer, calendar_id integer, organizer_id integer,
 			status integer, url text, has_recurrences integer, has_attendees integer, UUID text,
-			unique_identifier text, entity_type integer, location_id integer
+			unique_identifier text, entity_type integer, location_id integer, availability integer
 		)`,
 		`create table Participant (
 			ROWID integer primary key, entity_type integer, type integer, status integer, role integer,
@@ -162,20 +434,20 @@ func insertCalendarRows(t *testing.T, db *sql.DB) {
 	t.Helper()
 	mustExec(t, db, `insert into Store(ROWID, name, type, disabled) values
 		(1, 'iCloud', 1, 0),
-		(2, 'Subscribed Calendars', 2, 0),
+		(2, 'Subscribed Calendars', 4, 0),
 		(3, 'Reminders', 3, 0)`)
 	mustExec(t, db, `insert into Calendar(ROWID, store_id, title, type, external_id) values
 		(10, 1, 'Work', 1, 'work-calendar'),
-		(11, 2, 'Holidays', 2, 'holidays-calendar'),
+		(11, 2, 'Holidays', 3, 'holidays-calendar'),
 		(12, 3, 'Reminders list', 3, 'reminders-calendar')`)
-	insertEvent(t, db, 100, "11111111-1111-1111-1111-111111111111", "event-planning", "Planning meeting", "Discuss launch with Alice.", time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC), time.Date(2026, 3, 4, 9, 30, 0, 0, time.UTC), false, 10, 1000, 1, "https://example.com/event", true, 900)
-	insertEvent(t, db, 101, "22222222-2222-2222-2222-222222222222", "event-holiday", "Public holiday", "Subscribed holiday.", time.Date(2026, 5, 4, 22, 0, 0, 0, time.UTC), time.Date(2026, 5, 5, 22, 0, 0, 0, time.UTC), true, 11, 0, 0, "", false, 901)
+	insertEvent(t, db, 100, "11111111-1111-1111-1111-111111111111", "event-planning", "Planning meeting", "Discuss launch with Alice.", time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC), time.Date(2026, 3, 4, 9, 30, 0, 0, time.UTC), false, 10, 1000, 1, "https://example.com/event", true, 900, 2)
+	insertEvent(t, db, 101, "22222222-2222-2222-2222-222222222222", "event-holiday", "Public holiday", "Subscribed holiday.", time.Date(2026, 5, 4, 22, 0, 0, 0, time.UTC), time.Date(2026, 5, 5, 22, 0, 0, 0, time.UTC), true, 11, 0, 0, "", false, 901, 1)
 	mustExec(t, db, `insert into CalendarItem(
 		ROWID, summary, description, start_date, end_date, start_tz, end_tz, all_day,
 		calendar_id, organizer_id, status, url, has_recurrences, has_attendees,
-		UUID, unique_identifier, entity_type, location_id
+		UUID, unique_identifier, entity_type, location_id, availability
 	) values (103, 'Task row', '', 0, 0, 'UTC', 'UTC', 0, 10, 0, 1, '', 0, 0,
-		'44444444-4444-4444-4444-444444444444', 'task-row', 1, 0)`)
+		'44444444-4444-4444-4444-444444444444', 'task-row', 1, 0, 0)`)
 	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
 		(500, 'Alice Example', 'alice@example.com', 'Alice', 'Example'),
 		(501, 'Bob Example', 'bob@example.com', 'Bob', 'Example'),
@@ -191,14 +463,14 @@ func insertCalendarRows(t *testing.T, db *sql.DB) {
 		(901, 'Netherlands', '', 101)`)
 }
 
-func insertEvent(t *testing.T, db *sql.DB, rowID int, uuid, uniqueID, summary, description string, start, end time.Time, allDay bool, calendarID, organizerID, status int, url string, recurs bool, locationID int) {
+func insertEvent(t *testing.T, db *sql.DB, rowID int, uuid, uniqueID, summary, description string, start, end time.Time, allDay bool, calendarID, organizerID, status int, url string, recurs bool, locationID int, availability int) {
 	t.Helper()
 	mustExec(t, db, `insert into CalendarItem(
 		ROWID, summary, description, start_date, end_date, start_tz, end_tz, all_day,
 		calendar_id, organizer_id, status, url, has_recurrences, has_attendees,
-		UUID, unique_identifier, entity_type, location_id
-	) values (?, ?, ?, ?, ?, 'Europe/Amsterdam', 'Europe/Amsterdam', ?, ?, ?, ?, ?, ?, 1, ?, ?, 2, ?)`,
-		rowID, summary, description, coreDate(start), coreDate(end), boolInt(allDay), calendarID, organizerID, status, url, boolInt(recurs), uuid, uniqueID, locationID)
+		UUID, unique_identifier, entity_type, location_id, availability
+	) values (?, ?, ?, ?, ?, 'Europe/Amsterdam', 'Europe/Amsterdam', ?, ?, ?, ?, ?, ?, 1, ?, ?, 2, ?, ?)`,
+		rowID, summary, description, coreDate(start), coreDate(end), boolInt(allDay), calendarID, organizerID, status, url, boolInt(recurs), uuid, uniqueID, locationID, availability)
 }
 
 func coreDate(t time.Time) float64 {

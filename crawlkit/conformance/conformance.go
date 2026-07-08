@@ -31,6 +31,7 @@ type searchResult struct {
 	Time                  *string `json:"time"`
 	Who                   *string `json:"who"`
 	Where                 *string `json:"where"`
+	Calendar              *string `json:"calendar"`
 	Snippet               *string `json:"snippet"`
 	SnippetFrontTruncated *bool   `json:"snippet_front_truncated"`
 	FrontTruncated        *bool   `json:"front_truncated"`
@@ -121,6 +122,7 @@ func checkSearchResult(index int, result searchResult) []string {
 		{name: "ref", value: result.Ref},
 		{name: "who", value: result.Who},
 		{name: "where", value: result.Where},
+		{name: "calendar", value: result.Calendar},
 		{name: "snippet", value: result.Snippet},
 	} {
 		if field.value != nil {

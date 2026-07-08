@@ -532,27 +532,31 @@ func (f *fakeSource) search(ctx context.Context, req *crawlkit.Request, query cr
 	for _, row := range envelope.Results {
 		parsed, _ := time.Parse(time.RFC3339, row.Time)
 		hits = append(hits, crawlkit.Hit{
-			Ref:      row.Ref,
-			ShortRef: firstNonEmpty(row.ShortRef, row.Alias),
-			Time:     parsed,
-			Who:      row.Who,
-			Where:    row.Where,
-			Snippet:  row.Snippet,
-			AllDay:   row.AllDay,
+			Ref:          row.Ref,
+			ShortRef:     firstNonEmpty(row.ShortRef, row.Alias),
+			Time:         parsed,
+			Who:          row.Who,
+			Where:        row.Where,
+			Calendar:     row.Calendar,
+			Snippet:      row.Snippet,
+			AllDay:       row.AllDay,
+			Availability: row.Availability,
 		})
 	}
 	return crawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}, nil
 }
 
 type fakeSearchResult struct {
-	Ref      string `json:"ref"`
-	ShortRef string `json:"short_ref,omitempty"`
-	Alias    string `json:"alias,omitempty"`
-	Time     string `json:"time"`
-	AllDay   bool   `json:"all_day"`
-	Who      string `json:"who"`
-	Where    string `json:"where"`
-	Snippet  string `json:"snippet"`
+	Ref          string `json:"ref"`
+	ShortRef     string `json:"short_ref,omitempty"`
+	Alias        string `json:"alias,omitempty"`
+	Time         string `json:"time"`
+	AllDay       bool   `json:"all_day"`
+	Who          string `json:"who"`
+	Where        string `json:"where"`
+	Calendar     string `json:"calendar,omitempty"`
+	Snippet      string `json:"snippet"`
+	Availability *int64 `json:"availability,omitempty"`
 }
 
 type fakeSearchEnvelope struct {

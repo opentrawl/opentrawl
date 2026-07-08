@@ -136,13 +136,19 @@ func readEvents(ctx context.Context, db *sql.DB, calendars []Calendar) ([]Event,
 	if err != nil {
 		return nil, err
 	}
+	availabilityExpr := "null"
+	if ok, err := tableHasColumn(ctx, db, "CalendarItem", "availability"); err != nil {
+		return nil, err
+	} else if ok {
+		availabilityExpr = "ci.availability"
+	}
 	rows, err := db.QueryContext(ctx, `
 select ci.ROWID, coalesce(ci.UUID, ''), coalesce(ci.unique_identifier, ''),
        coalesce(ci.summary, ''), coalesce(ci.description, ''),
        coalesce(ci.start_date, 0), coalesce(ci.end_date, 0),
        coalesce(ci.start_tz, ''), coalesce(ci.end_tz, ''), coalesce(ci.all_day, 0),
        ci.calendar_id, coalesce(ci.organizer_id, 0), coalesce(ci.status, 0),
-       coalesce(ci.url, ''), coalesce(ci.has_recurrences, 0), coalesce(ci.location_id, 0)
+       coalesce(ci.url, ''), coalesce(ci.has_recurrences, 0), `+availabilityExpr+`, coalesce(ci.location_id, 0)
 from CalendarItem ci
 join Calendar c on c.ROWID = ci.calendar_id
 join Store s on s.ROWID = c.store_id
@@ -158,10 +164,11 @@ order by ci.start_date, ci.ROWID`)
 		var startCore, endCore float64
 		var startTZ, endTZ string
 		var allDay, hasRecurrences int64
+		var availability sql.NullInt64
 		var calendarID, organizerID, status, locationID int64
 		if err := rows.Scan(&event.RowID, &event.UUID, &event.UniqueIdentifier, &event.Summary,
 			&event.Description, &startCore, &endCore, &startTZ, &endTZ, &allDay, &calendarID,
-			&organizerID, &status, &event.URL, &hasRecurrences, &locationID); err != nil {
+			&organizerID, &status, &event.URL, &hasRecurrences, &availability, &locationID); err != nil {
 			return nil, err
 		}
 		calendar, ok := calendarByID[calendarID]
@@ -174,6 +181,10 @@ order by ci.start_date, ci.ROWID`)
 		event.End = convertTime(endCore, firstNonEmpty(endTZ, startTZ), event.AllDay)
 		event.Status = eventStatus(status)
 		event.HasRecurrences = hasRecurrences != 0
+		if availability.Valid {
+			value := availability.Int64
+			event.Availability = &value
+		}
 		event.Attendees = participants[event.RowID]
 		if organizer, ok := organizers[organizerID]; ok {
 			event.Organizer = organizer
@@ -186,6 +197,29 @@ order by ci.start_date, ci.ROWID`)
 		out = append(out, event)
 	}
 	return out, rows.Err()
+}
+
+func tableHasColumn(ctx context.Context, db *sql.DB, table, column string) (bool, error) {
+	rows, err := db.QueryContext(ctx, `pragma table_info(`+store.QuoteIdent(table)+`)`)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var cid int64
+		var name string
+		var typ string
+		var notNull int64
+		var defaultValue sql.NullString
+		var pk int64
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == column {
+			return true, nil
+		}
+	}
+	return false, rows.Err()
 }
 
 func readParticipants(ctx context.Context, db *sql.DB) (map[int64][]Participant, map[int64]Person, error) {

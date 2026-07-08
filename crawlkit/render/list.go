@@ -25,6 +25,7 @@ type ListItem struct {
 	Source   string
 	Who      string
 	Where    string
+	Calendar string
 	Ref      string
 	Text     string
 }
@@ -97,7 +98,7 @@ func writeListIntro(w io.Writer, heading string, hints []string) error {
 }
 
 func listRenderColumns(l List, outputWidth int) ([]renderColumn, bool) {
-	columns := make([]renderColumn, 0, 6)
+	columns := make([]renderColumn, 0, 7)
 	if listHasDate(l.Items) {
 		columns = append(columns, renderColumn{Header: "date", Width: listDateColumnWidth(l.Items)})
 	}
@@ -119,6 +120,12 @@ func listRenderColumns(l List, outputWidth int) ([]renderColumn, bool) {
 			Width:  boundedListColumnWidth("where", l.Items, listWhereWidth, func(item ListItem) string { return item.Where }),
 		})
 	}
+	if listHasValue(l.Items, func(item ListItem) string { return item.Calendar }) {
+		columns = append(columns, renderColumn{
+			Header: "calendar",
+			Width:  boundedListColumnWidth("calendar", l.Items, listWhereWidth, func(item ListItem) string { return item.Calendar }),
+		})
+	}
 	if listHasValue(l.Items, func(item ListItem) string { return item.Ref }) {
 		columns = append(columns, renderColumn{
 			Header: "ref",
@@ -134,10 +141,10 @@ func listRenderColumns(l List, outputWidth int) ([]renderColumn, bool) {
 	return fitListColumns(columns, outputWidth)
 }
 
-// fitListColumns makes room for a readable text column. The who and
-// where columns shrink first; if that is not enough, the ref column
-// sheds to a per-row "open:" line. Date, source and ref cells are
-// never truncated — a clipped timestamp or ref is garbage.
+// fitListColumns makes room for a readable text column. The who, where and
+// calendar columns shrink first; if that is not enough, the ref column sheds
+// to a per-row "open:" line. Date, source and ref cells are never truncated:
+// a clipped timestamp or ref is garbage.
 func fitListColumns(columns []renderColumn, outputWidth int) ([]renderColumn, bool) {
 	text := len(columns) - 1
 	for text > 0 && listFixedBudget(columns)+listMinTextWidth > outputWidth {
@@ -187,7 +194,7 @@ func listFixedBudget(columns []renderColumn) int {
 func widestListShrinkColumn(columns []renderColumn) int {
 	column := -1
 	for i := range columns {
-		if columns[i].Header != "who" && columns[i].Header != "where" {
+		if columns[i].Header != "who" && columns[i].Header != "where" && columns[i].Header != "calendar" {
 			continue
 		}
 		if columns[i].Width <= minPlainColumnWidth {
@@ -214,6 +221,8 @@ func listRows(items []ListItem, columns []renderColumn) [][]string {
 				row = append(row, HumanIdentity(item.Who))
 			case "where":
 				row = append(row, HumanIdentity(item.Where))
+			case "calendar":
+				row = append(row, HumanIdentity(item.Calendar))
 			case "ref":
 				row = append(row, item.Ref)
 			case "text":

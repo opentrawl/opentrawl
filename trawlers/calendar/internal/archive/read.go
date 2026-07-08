@@ -91,12 +91,14 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 		}
 		ref := RefForUID(row.UID)
 		results = append(results, SearchResult{
-			Ref:     ref,
-			Time:    canonicalEventTime(row.Start),
-			Who:     row.Who(),
-			Where:   row.Where(),
-			Snippet: row.Snippet(),
-			AllDay:  row.AllDay != 0,
+			Ref:          ref,
+			Time:         canonicalEventTime(row.Start),
+			Who:          row.Who(),
+			Where:        row.Where(),
+			Calendar:     row.CalendarTitle,
+			Snippet:      row.Snippet(),
+			AllDay:       row.AllDay != 0,
+			Availability: row.AvailabilityPtr(),
 		})
 	}
 	if err := rows.Close(); err != nil {
@@ -124,13 +126,13 @@ func (s *Store) OpenEvent(ctx context.Context, ref string) (EventDetail, error) 
 	err := s.store.DB().QueryRowContext(ctx, `
 select event_uid, uuid, unique_identifier, calendar_id, calendar_title, calendar_type,
        calendar_external_id, account_name, account_type, start_time, end_time, all_day,
-       summary, description, status, url, has_recurrences, organizer_name,
+       summary, description, status, url, has_recurrences, availability, organizer_name,
        organizer_email, organizer_phone, location_title, location_address, attendees_json
 from events
 where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID,
 		&row.CalendarTitle, &row.CalendarType, &row.CalendarExternalID, &row.AccountName,
 		&row.AccountType, &row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description,
-		&row.Status, &row.URL, &row.HasRecurrences, &row.OrganizerName, &row.OrganizerEmail,
+		&row.Status, &row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
 		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON)
 	if errors.Is(err, sql.ErrNoRows) {
 		return EventDetail{}, fmt.Errorf("event not found: %s", ref)
@@ -155,6 +157,7 @@ where event_uid = ?`, uid).Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row
 		AllDay:               row.AllDay != 0,
 		Calendar:             row.CalendarTitle,
 		Account:              row.AccountName,
+		Availability:         row.AvailabilityPtr(),
 		Location:             row.Location(),
 		Organizer:            Person{DisplayName: row.OrganizerName, Email: row.OrganizerEmail, PhoneNumber: row.OrganizerPhone},
 		Attendees:            attendees,
@@ -356,7 +359,7 @@ join events e on e.event_uid = events_fts.event_uid`
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title,
        e.calendar_type, e.calendar_external_id, e.account_name, e.account_type,
        e.start_time, e.end_time, e.all_day, e.summary, e.description, e.status,
-       e.url, e.has_recurrences, e.organizer_name, e.organizer_email,
+       e.url, e.has_recurrences, e.availability, e.organizer_name, e.organizer_email,
        e.organizer_phone, e.location_title, e.location_address, e.attendees_json
 from ` + from + `
 ` + where + `
@@ -382,6 +385,7 @@ type eventRow struct {
 	Status             string
 	URL                string
 	HasRecurrences     int
+	Availability       sql.NullInt64
 	OrganizerName      string
 	OrganizerEmail     string
 	OrganizerPhone     string
@@ -394,7 +398,7 @@ func scanEventRow(rows *sql.Rows, row *eventRow) error {
 	return rows.Scan(&row.UID, &row.UUID, &row.UniqueIdentifier, &row.CalendarID, &row.CalendarTitle,
 		&row.CalendarType, &row.CalendarExternalID, &row.AccountName, &row.AccountType,
 		&row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description, &row.Status,
-		&row.URL, &row.HasRecurrences, &row.OrganizerName, &row.OrganizerEmail,
+		&row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
 		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON)
 }
 
@@ -462,6 +466,14 @@ func (r eventRow) Calendar() CalendarProvenance {
 
 func (r eventRow) Account() AccountProvenance {
 	return AccountProvenance{Name: r.AccountName, Type: r.AccountType}
+}
+
+func (r eventRow) AvailabilityPtr() *int64 {
+	if !r.Availability.Valid {
+		return nil
+	}
+	value := r.Availability.Int64
+	return &value
 }
 
 func (r eventRow) Location() *Location {

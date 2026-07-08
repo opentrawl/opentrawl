@@ -11,7 +11,7 @@ const (
 	AppID         = "calendar"
 	LegacyAppID   = "calcrawl"
 	DisplayName   = "Calendar"
-	SchemaVersion = 2
+	SchemaVersion = 3
 
 	DefaultSearchLimit = 20
 )
@@ -26,6 +26,9 @@ type Calendar struct {
 	AccountName     string
 	AccountType     int64
 	AccountDisabled bool
+	Meaning         string
+	MeaningStatedAt string
+	EventCount      int64
 }
 
 type Person struct {
@@ -109,6 +112,7 @@ type Event struct {
 	Status             string
 	URL                string
 	HasRecurrences     bool
+	Availability       *int64
 	Organizer          Person
 	Location           Location
 	Attendees          []Attendee
@@ -142,13 +146,15 @@ type Status struct {
 }
 
 type SearchResult struct {
-	Ref      string `json:"ref"`
-	ShortRef string `json:"short_ref"`
-	Time     string `json:"time"`
-	Who      string `json:"who"`
-	Where    string `json:"where"`
-	Snippet  string `json:"snippet"`
-	AllDay   bool   `json:"all_day"`
+	Ref          string `json:"ref"`
+	ShortRef     string `json:"short_ref"`
+	Time         string `json:"time"`
+	Who          string `json:"who"`
+	Where        string `json:"where"`
+	Calendar     string `json:"calendar"`
+	Snippet      string `json:"snippet"`
+	AllDay       bool   `json:"all_day"`
+	Availability *int64 `json:"availability,omitempty"`
 }
 
 type EventDetail struct {
@@ -163,6 +169,7 @@ type EventDetail struct {
 	AllDay               bool       `json:"all_day"`
 	Calendar             string     `json:"calendar"`
 	Account              string     `json:"account"`
+	Availability         *int64     `json:"availability,omitempty"`
 	Location             *Location  `json:"location,omitempty"`
 	Organizer            Person     `json:"organizer,omitempty"`
 	Attendees            []Attendee `json:"attendees,omitempty"`
@@ -185,6 +192,7 @@ func (e Event) Fingerprint() string {
 		Status           string
 		URL              string
 		HasRecurrences   bool
+		Availability     *int64
 		Organizer        Person
 		Location         Location
 		Attendees        []Attendee
@@ -201,6 +209,7 @@ func (e Event) Fingerprint() string {
 		Status:           e.Status,
 		URL:              e.URL,
 		HasRecurrences:   e.HasRecurrences,
+		Availability:     e.Availability,
 		Organizer:        e.Organizer,
 		Location:         e.Location,
 		Attendees:        e.Attendees,

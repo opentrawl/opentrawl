@@ -32,6 +32,7 @@ type Event struct {
 	Status           string
 	URL              string
 	HasRecurrences   bool
+	Availability     *int64
 	Location         Location
 	Attendees        []Participant
 }

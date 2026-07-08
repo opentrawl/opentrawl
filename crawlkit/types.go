@@ -139,14 +139,16 @@ type SearchResult struct {
 }
 
 type Hit struct {
-	Source   string    `json:"source,omitempty"`
-	Ref      string    `json:"ref"`
-	ShortRef string    `json:"short_ref,omitempty"`
-	Time     time.Time `json:"time"`
-	Who      string    `json:"who,omitempty"`
-	Where    string    `json:"where,omitempty"`
-	Snippet  string    `json:"snippet,omitempty"`
-	AllDay   bool      `json:"all_day,omitempty"`
+	Source       string    `json:"source,omitempty"`
+	Ref          string    `json:"ref"`
+	ShortRef     string    `json:"short_ref,omitempty"`
+	Time         time.Time `json:"time"`
+	Who          string    `json:"who,omitempty"`
+	Where        string    `json:"where,omitempty"`
+	Calendar     string    `json:"calendar,omitempty"`
+	Snippet      string    `json:"snippet,omitempty"`
+	AllDay       bool      `json:"all_day,omitempty"`
+	Availability *int64    `json:"availability,omitempty"`
 }
 
 type Doctor struct {
