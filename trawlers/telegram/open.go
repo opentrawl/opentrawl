@@ -26,7 +26,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
-	sourcePK, err := r.resolveOpenMessageRef(st, ref)
+	sourcePK, err := r.resolveOpenMessageRef(ref)
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return r.printOpen(envelope)
 }
 
-func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, error) {
+func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		sourcePK, err := parseMessageRef(ref)
@@ -53,11 +53,11 @@ func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, err
 		}
 		return sourcePK, nil
 	}
-	fullRefs, err := st.ResolveShortRef(r.ctx, ref)
-	if errors.Is(err, store.ErrUnknownShortRef) {
+	fullRefs, err := r.req.ResolveShortRef(r.ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
 		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
 	}
-	if errors.Is(err, store.ErrAmbiguousShortRef) {
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
 		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "run trawl telegram search again and use the longer displayed ref or the full ref from trawl telegram search --json.")
 	}
 	if err != nil {

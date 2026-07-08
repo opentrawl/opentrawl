@@ -393,7 +393,6 @@ func (f *fakeSource) Info() crawlkit.Info {
 		Surface:     sourceAlias(f.manifest.DisplayName),
 		DisplayName: f.manifest.DisplayName,
 		Description: f.manifest.Description,
-		ShortRefs:   fakeHasCapability(f.manifest, "short_refs"),
 	}
 }
 

@@ -36,7 +36,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "calendar",
 		DisplayName: archive.DisplayName,
 		Description: "Local-first Apple Calendar archive crawler.",
-		ShortRefs:   true,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

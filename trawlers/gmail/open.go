@@ -27,14 +27,12 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return archiveErr(err)
 	}
-	result, err := st.OpenMessage(ctx, ref)
+	resolved, err := c.resolveOpenRef(ctx, req, ref)
 	if err != nil {
-		if errors.Is(err, archive.ErrUnknownShortRef) {
-			return commandErr("unknown_short_ref", "short ref is unknown", "use a full gmail:msg ref", err)
-		}
-		if errors.Is(err, archive.ErrAmbiguousShortRef) {
-			return commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gmail:msg ref", err)
-		}
+		return err
+	}
+	result, err := st.OpenMessage(ctx, resolved)
+	if err != nil {
 		return commandErr("message_not_found", "message could not be opened", "search again and pass a gmail:msg ref", err)
 	}
 	result = boundOpenResult(result)
@@ -42,11 +40,29 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "open", result)
 	}
-	return printOpenText(req.Out, openOutput{OpenResult: result, shortRef: openShortRef(ctx, st, result.Ref)})
+	return printOpenText(req.Out, openOutput{OpenResult: result, shortRef: openShortRef(ctx, req, result.Ref)})
 }
 
-func openShortRef(ctx context.Context, st *archive.Store, ref string) string {
-	aliases, err := st.ShortRefs(ctx, []string{ref})
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if strings.Contains(ref, ":") {
+		return ref, nil
+	}
+	matches, err := req.ResolveShortRef(ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+		return "", commandErr("unknown_short_ref", "short ref is unknown", "use a full gmail:msg ref", err)
+	}
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gmail:msg ref", err)
+	}
+	if err != nil {
+		return "", err
+	}
+	return matches[0], nil
+}
+
+func openShortRef(ctx context.Context, req *crawlkit.Request, ref string) string {
+	aliases, err := req.ShortRefAliases(ctx, []string{ref})
 	if err != nil {
 		return ""
 	}

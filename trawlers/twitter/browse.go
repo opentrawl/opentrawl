@@ -32,7 +32,7 @@ func (r *runtime) runBrowse(command browseCommand, args []string) error {
 		if err != nil {
 			return err
 		}
-		aliases, err := aliasesForSearch(r.ctx, st, results)
+		aliases, err := aliasesForSearch(r.ctx, r.req, results)
 		if err != nil {
 			return err
 		}

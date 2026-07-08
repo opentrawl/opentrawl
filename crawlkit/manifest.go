@@ -64,9 +64,7 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	if _, ok := source.(ContactExporter); ok {
 		caps = append(caps, "contacts_export")
 	}
-	if info.ShortRefs {
-		caps = append(caps, "short_refs")
-	}
+	caps = append(caps, "short_refs")
 	for _, verb := range source.Verbs() {
 		if _, ok := spineVerbKey(verb.Name); ok {
 			continue

@@ -50,7 +50,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "photos",
 		DisplayName: "Photos",
 		Description: "Local-first, read-only Apple Photos archive crawler.",
-		ShortRefs:   true,
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ExportsSecrets: false,

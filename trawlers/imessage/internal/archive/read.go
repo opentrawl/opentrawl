@@ -222,9 +222,6 @@ func (s *Store) searchResults(ctx context.Context, query string, options SearchO
 		return nil, err
 	}
 	for i := range out {
-		if alias, err := s.ShortRefForMessage(ctx, out[i].MessageID); err == nil {
-			out[i].ShortRef = alias
-		}
 		if out[i].ChatID == "" {
 			continue
 		}
@@ -361,4 +358,14 @@ func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
 		}
 	}
 	return out, nil
+}
+
+func getStateAnySource(ctx context.Context, syncState *state.Store, entityType, entityID string) (state.Record, bool, error) {
+	for _, source := range []string{syncSource, legacySyncSource} {
+		rec, ok, err := syncState.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.Record{}, false, nil
 }

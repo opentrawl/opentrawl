@@ -30,7 +30,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error 
 		if err != nil {
 			return err
 		}
-		shortRefs, err := st.ShortRefsFor(r.ctx, messageRefs(messages))
+		shortRefs, err := shortRefsForMessages(r.ctx, req, messages)
 		if err != nil {
 			return err
 		}

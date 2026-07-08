@@ -363,9 +363,6 @@ func (s *Store) ImportArchive(ctx context.Context, batch ImportBatch) (ImportSta
 	if err != nil {
 		return ImportStats{}, err
 	}
-	if err := s.RebuildShortRefs(ctx); err != nil {
-		return ImportStats{}, err
-	}
 	stats.Tweets = len(batch.Tweets)
 	stats.Profiles = len(batch.Profiles)
 	for _, role := range batch.Roles {

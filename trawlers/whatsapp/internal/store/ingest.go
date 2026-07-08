@@ -2,11 +2,9 @@ package store
 
 import (
 	"context"
-	"database/sql"
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
 )
@@ -121,9 +119,6 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 			return err
 		}
 	}
-	if err := replaceShortRefs(ctx, tx, messages); err != nil {
-		return err
-	}
 	now := stats.FinishedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -135,23 +130,5 @@ func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Co
 	if err := syncState.Set(ctx, syncSource, syncEntityType, stateSourcePath, stats.SourcePath); err != nil {
 		return err
 	}
-	if err := syncState.Set(ctx, syncSource, derivedEntityType, shortRefFingerprintKey, shortRefsFingerprint(messageFullRefs(messages))); err != nil {
-		return err
-	}
 	return tx.Commit()
-}
-
-func replaceShortRefs(ctx context.Context, tx *sql.Tx, messages []Message) error {
-	if err := shortref.EnsureSchema(ctx, tx); err != nil {
-		return err
-	}
-	index := shortref.NewSQLiteIndex(tx)
-	if err := index.Clear(ctx); err != nil {
-		return err
-	}
-	entries, err := shortref.BuildSlice(messageFullRefs(messages))
-	if err != nil {
-		return err
-	}
-	return index.UpsertEntries(ctx, shortref.LookupEntries(entries))
 }

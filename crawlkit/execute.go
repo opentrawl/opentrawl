@@ -230,9 +230,16 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		return writeResult(req.Out, format, "doctor", doctor)
 	case "sync":
-		report, err := source.(Syncer).Sync(ctx, req)
-		if err != nil {
-			return err
+		report, syncErr := source.(Syncer).Sync(ctx, req)
+		rebuildErr := rebuildSourceShortRefs(ctx, source, req)
+		if syncErr != nil {
+			if rebuildErr != nil {
+				return errors.Join(syncErr, rebuildErr)
+			}
+			return syncErr
+		}
+		if rebuildErr != nil {
+			return rebuildErr
 		}
 		return writeResult(req.Out, format, "sync", report)
 	case "search":
@@ -253,6 +260,9 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		if result.TotalMatches < len(result.Results) {
 			return fmt.Errorf("search total_matches is less than results length")
+		}
+		if err := fillSearchShortRefs(ctx, req, result.Results); err != nil {
+			return err
 		}
 		info := source.Info()
 		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: firstText(info.Surface, info.ID), SearchResult: result})
@@ -286,7 +296,51 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		return usageError{err: fmt.Errorf("unknown verb %q", verb.name)}
 	}
 	req.Args = verb.args
+	if verb.mutates {
+		runErr := verb.bespoke.Run(ctx, req)
+		rebuildErr := rebuildSourceShortRefs(ctx, source, req)
+		if runErr != nil {
+			if rebuildErr != nil {
+				return errors.Join(runErr, rebuildErr)
+			}
+			return runErr
+		}
+		return rebuildErr
+	}
 	return verb.bespoke.Run(ctx, req)
+}
+
+func fillSearchShortRefs(ctx context.Context, req *Request, hits []Hit) error {
+	refs := make([]string, 0, len(hits))
+	for _, hit := range hits {
+		refs = append(refs, hit.Ref)
+	}
+	aliases, err := req.ShortRefAliases(ctx, refs)
+	if err != nil {
+		return err
+	}
+	for i := range hits {
+		hits[i].ShortRef = aliases[hits[i].Ref]
+	}
+	return nil
+}
+
+func rebuildSourceShortRefs(ctx context.Context, source Crawler, req *Request) error {
+	provider, ok := source.(ShortRefProvider)
+	if !ok || req.Store == nil {
+		return nil
+	}
+	records, err := provider.ShortRefRecords(ctx, req)
+	if err != nil {
+		return err
+	}
+	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+		return err
+	}
+	if req.Log != nil {
+		_ = req.Log.Info("short_refs_rebuilt", fmt.Sprintf("refs=%d", len(records)))
+	}
+	return nil
 }
 
 func validateReadFlags(verb targetVerb) error {

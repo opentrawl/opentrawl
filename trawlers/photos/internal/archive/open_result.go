@@ -17,9 +17,6 @@ type OpenResult struct {
 	Stale         *OpenStale     `json:"stale,omitempty"`
 	Mechanical    OpenMechanical `json:"mechanical"`
 	Model         OpenModel      `json:"model,omitempty"`
-	// ShortRef is a human-display alias only; the canonical Ref is the JSON
-	// identity (open JSON never carries the ephemeral short alias).
-	ShortRef string `json:"-"`
 }
 
 type OpenStale struct {
@@ -129,7 +126,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 	}
 	return OpenResult{
 		SchemaVersion: 3,
-		Ref:           assetRef(rowString(asset, "id")),
+		Ref:           AssetRef(rowString(asset, "id")),
 		Stale:         openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
 			Captured:        openCaptured(asset),

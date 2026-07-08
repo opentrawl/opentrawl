@@ -129,10 +129,7 @@ func (s *Store) CommitLivePage(ctx context.Context, page LivePage) error {
 	if err != nil {
 		return err
 	}
-	if len(tweetFullRefs(page.Tweets)) == 0 {
-		return nil
-	}
-	return s.RebuildShortRefs(ctx)
+	return nil
 }
 
 func (s *Store) AddSpend(ctx context.Context, month string, micros int64, at time.Time) error {

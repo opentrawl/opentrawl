@@ -53,12 +53,7 @@ type Info struct {
 	Aliases     []string
 	DisplayName string
 	Description string
-	// ShortRefs declares that the generated manifest includes the
-	// "short_refs" capability. Consumers key on that manifest capability,
-	// so crawlkit can change this declaration mechanism without changing
-	// the wire contract.
-	ShortRefs bool
-	Privacy   control.Privacy
+	Privacy     control.Privacy
 	// DefaultPaths overrides the runner's default per-crawler paths when a
 	// crawler owns a non-SQLite archive or an existing state layout.
 	DefaultPaths Paths
@@ -79,6 +74,14 @@ type Request struct {
 	Args     []string
 	Log      *cklog.Run
 	Progress func(Progress)
+}
+
+type ShortRefRecord struct {
+	Ref string
+}
+
+type ShortRefProvider interface {
+	ShortRefRecords(ctx context.Context, req *Request) ([]ShortRefRecord, error)
 }
 
 type Verb struct {

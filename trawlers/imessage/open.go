@@ -29,7 +29,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	messageID, err := resolveOpenRef(ctx, st, ref)
+	messageID, err := c.resolveOpenRef(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -46,10 +46,10 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, newOpenOutput(result))
 }
 
-func resolveOpenRef(ctx context.Context, st *archive.Store, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.Contains(ref, ":") {
-		return resolveShortRef(ctx, st, ref)
+		return c.resolveShortRef(ctx, req, ref)
 	}
 	messageID, err := parseMessageRef(ref)
 	if err != nil {
@@ -61,26 +61,25 @@ func resolveOpenRef(ctx context.Context, st *archive.Store, ref string) (string,
 	return messageID, nil
 }
 
-func resolveShortRef(ctx context.Context, st *archive.Store, alias string) (string, error) {
-	if !archive.ValidShortRef(alias) {
+func (c *Crawler) resolveShortRef(ctx context.Context, req *crawlkit.Request, alias string) (string, error) {
+	if !crawlkit.ValidShortRef(alias) {
 		return "", commandErr(1, "invalid_ref", errInvalidRef, "use a ref in the form imessage:msg/ID or a short ref from search")
 	}
-	resolved, err := st.ResolveShortRef(ctx, alias)
+	resolved, err := req.ResolveShortRef(ctx, alias)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+		return "", commandErr(1, "unknown_short_ref", errors.New("short ref was not found"), "rerun search or use the full ref")
+	}
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", commandErr(1, "ambiguous_short_ref", errors.New("short ref matches more than one message"), "rerun search or use the full ref")
+	}
 	if err != nil {
 		return "", err
 	}
-	switch len(resolved.FullRefs) {
-	case 0:
-		return "", commandErr(1, "unknown_short_ref", errors.New("short ref was not found"), "rerun search or use the full ref")
-	case 1:
-		messageID, err := parseMessageRef(resolved.FullRefs[0])
-		if err != nil {
-			return "", err
-		}
-		return messageID, nil
-	default:
-		return "", commandErr(1, "ambiguous_short_ref", errors.New("short ref matches more than one message"), "rerun search or use the full ref")
+	messageID, err := parseMessageRef(resolved[0])
+	if err != nil {
+		return "", err
 	}
+	return messageID, nil
 }
 
 func parseMessageRef(ref string) (string, error) {

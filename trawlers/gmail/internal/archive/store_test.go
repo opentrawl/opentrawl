@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -392,7 +393,7 @@ func TestSearchFilterOnlyUsesNewestMatchingItems(t *testing.T) {
 	}
 }
 
-func TestShortRefsResolveAndFailSafely(t *testing.T) {
+func TestSharedShortRefsResolveAndFailSafely(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
 	if err != nil {
@@ -407,33 +408,50 @@ func TestShortRefsResolveAndFailSafely(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	records := []crawlkit.ShortRefRecord{
+		{Ref: RefPrefix + "m1"},
+		{Ref: RefPrefix + "m2"},
+	}
+	req := &crawlkit.Request{Store: st.store}
+	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+		t.Fatal(err)
+	}
 	search, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(search.Results) != 1 || search.Results[0].ShortRef == "" || search.Results[0].Ref == search.Results[0].ShortRef {
-		t.Fatalf("short ref search = %#v", search)
+	if len(search.Results) != 1 {
+		t.Fatalf("search = %#v", search)
 	}
-	open, err := st.OpenMessage(ctx, search.Results[0].ShortRef)
+	aliases, err := req.ShortRefAliases(ctx, []string{search.Results[0].Ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := aliases[search.Results[0].Ref]
+	if alias == "" || alias == search.Results[0].Ref {
+		t.Fatalf("alias = %q for search = %#v", alias, search)
+	}
+	resolved, err := req.ResolveShortRef(ctx, alias)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open, err := st.OpenMessage(ctx, resolved[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	if open.Ref != search.Results[0].Ref {
 		t.Fatalf("open ref = %q, want %q", open.Ref, search.Results[0].Ref)
 	}
-	if _, err := st.RebuildShortRefs(ctx); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := st.store.DB().ExecContext(ctx, `
-insert into short_refs(alias, full_ref)
-values ('22222', ?), ('22222', ?)
-`, RefPrefix+"m1", RefPrefix+"m2"); err != nil {
+insert into short_refs(alias, full_ref, canonical_ref)
+values ('22222', ?, ?), ('22222', ?, ?)
+`, RefPrefix+"m1", RefPrefix+"m1", RefPrefix+"m2", RefPrefix+"m2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := st.OpenMessage(ctx, "22222"); !errors.Is(err, ErrAmbiguousShortRef) {
+	if _, err := req.ResolveShortRef(ctx, "22222"); !errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
 		t.Fatalf("ambiguous error = %v", err)
 	}
-	if _, err := st.OpenMessage(ctx, "33333"); !errors.Is(err, ErrUnknownShortRef) {
+	if _, err := req.ResolveShortRef(ctx, "33333"); !errors.Is(err, crawlkit.ErrUnknownShortRef) {
 		t.Fatalf("unknown error = %v", err)
 	}
 }

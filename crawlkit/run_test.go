@@ -22,6 +22,7 @@ import (
 	"github.com/openclaw/crawlkit/control"
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/openclaw/crawlkit/shortref"
 	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/crawlkit/whomatch"
 )
@@ -29,7 +30,6 @@ import (
 type testCrawler struct {
 	id       string
 	surface  string
-	shortRef bool
 	cfg      *testConfig
 	verbs    []Verb
 	statusFn func(context.Context, *Request) (*control.Status, error)
@@ -50,6 +50,11 @@ type testContactCrawler struct {
 
 type testOpenContactCrawler struct {
 	*testContactCrawler
+}
+
+type testShortRefCrawler struct {
+	*testCrawler
+	records []ShortRefRecord
 }
 
 type testConfig struct {
@@ -77,7 +82,6 @@ func (c *testCrawler) Info() Info {
 		Surface:     firstText(c.surface, "test"),
 		DisplayName: "Test",
 		Description: "Synthetic test crawler.",
-		ShortRefs:   c.shortRef,
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -130,6 +134,10 @@ func (c *testCrawler) Sync(ctx context.Context, req *Request) (*SyncReport, erro
 		return c.syncFn(ctx, req)
 	}
 	return &SyncReport{Added: 1}, nil
+}
+
+func (c *testShortRefCrawler) ShortRefRecords(ctx context.Context, req *Request) ([]ShortRefRecord, error) {
+	return append([]ShortRefRecord(nil), c.records...), nil
 }
 
 func (c *testStatusCrawler) Info() Info {
@@ -222,8 +230,8 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	if searchFlags["limit"] != "20" {
 		t.Fatalf("search limit default = %q", searchFlags["limit"])
 	}
-	if slices.Contains(manifest.Capabilities, "short_refs") {
-		t.Fatalf("capabilities unexpectedly include short_refs: %#v", manifest.Capabilities)
+	if !slices.Contains(manifest.Capabilities, "short_refs") {
+		t.Fatalf("capabilities missing short_refs: %#v", manifest.Capabilities)
 	}
 	if got, want := strings.Join(cmd.Argv[1:], " "), "archive import PATH --json"; got != want {
 		t.Fatalf("archive_import argv suffix = %q, want %q", got, want)
@@ -339,9 +347,9 @@ func TestRunIgnoresChildStateEnvOutsideWireInvocation(t *testing.T) {
 	}
 }
 
-func TestRunMetadataAdvertisesDeclaredShortRefs(t *testing.T) {
+func TestRunMetadataAdvertisesShortRefs(t *testing.T) {
 	stateRoot := t.TempDir()
-	source := &testCrawler{shortRef: true}
+	source := &testCrawler{}
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -352,6 +360,36 @@ func TestRunMetadataAdvertisesDeclaredShortRefs(t *testing.T) {
 	}
 	if !slices.Contains(manifest.Capabilities, "short_refs") {
 		t.Fatalf("capabilities missing short_refs: %#v", manifest.Capabilities)
+	}
+}
+
+func TestExecuteVerbRebuildsShortRefsAfterFailedSync(t *testing.T) {
+	ctx := context.Background()
+	ref := "testcrawl:item/partial"
+	source := &testShortRefCrawler{
+		testCrawler: &testCrawler{syncFn: func(context.Context, *Request) (*SyncReport, error) {
+			return nil, errors.New("late sync failure")
+		}},
+		records: []ShortRefRecord{{Ref: ref}},
+	}
+	st, err := ckstore.Open(ctx, ckstore.Options{Path: filepath.Join(t.TempDir(), "testcrawl.db")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	req := &Request{Store: st, Format: ckoutput.JSON, Out: &bytes.Buffer{}}
+
+	err = executeVerb(ctx, source, targetVerb{name: "sync"}, req, globalOptions{}, ckoutput.JSON)
+	if err == nil || !strings.Contains(err.Error(), "late sync failure") {
+		t.Fatalf("executeVerb err = %v, want late sync failure", err)
+	}
+
+	resolved, err := (&Request{Store: st}).ResolveShortRef(ctx, shortref.Alias(ref, shortref.MinLength))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resolved) != 1 || resolved[0] != ref {
+		t.Fatalf("resolved = %#v, want %q", resolved, ref)
 	}
 }
 

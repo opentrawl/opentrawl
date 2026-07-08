@@ -49,7 +49,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Aliases:     []string{"x"},
 		DisplayName: "X",
 		Description: "Local-first X archive crawler.",
-		ShortRefs:   true,
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,

@@ -104,7 +104,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "telegram",
 		DisplayName: "Telegram",
 		Description: "Local-first Telegram archive crawler.",
-		ShortRefs:   true,
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,

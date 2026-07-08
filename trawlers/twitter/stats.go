@@ -29,7 +29,7 @@ func (r *runtime) runStats(args []string) error {
 		if err != nil {
 			return err
 		}
-		aliases, err := aliasesForStats(r.ctx, st, result.Rows)
+		aliases, err := aliasesForStats(r.ctx, r.req, result.Rows)
 		if err != nil {
 			return err
 		}

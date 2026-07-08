@@ -187,14 +187,13 @@ identity logic.
 The `<query>` argument to `search` is optional when at least one
 filter (`--who`, `--after`, `--before`) is present: a filter-only
 search lists the newest matching items. `search` with no query and
-no filters is an error. Crawlers that build alias indexes declare
-`short_refs` (see [short-refs.md](short-refs.md)) and include the
-computed alias as `"short_ref"` on every result in `--json` — the
-same value their own human mode displays. The full `ref` stays the
-canonical identity; `short_ref` is display sugar so a federating
-reader (trawl) can render the short form without inventing its own
-alias length. Trawl's agent-facing `--json` still keeps short refs
-out by default (short-refs.md, JSON mode).
+no filters is an error. Crawlkit owns the alias index and manifests always
+include `short_refs` (see [short-refs.md](short-refs.md)). Crawlers include the
+computed alias as `"short_ref"` on every result in their own `--json` output.
+The full `ref` stays the canonical identity; `short_ref` is display sugar so a
+federating reader (trawl) can render the short form without inventing its own
+alias length. Trawl's agent-facing
+`--json` still keeps short refs out by default (short-refs.md, JSON mode).
 
 A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item

@@ -40,7 +40,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
 		Description: "Local-first WhatsApp Desktop archive crawler.",
-		ShortRefs:   true,
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,

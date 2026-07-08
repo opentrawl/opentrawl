@@ -261,7 +261,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error 
 	if err != nil {
 		return err
 	}
-	aliases, err := searchAliases(ctx, st, messages)
+	aliases, err := searchAliases(ctx, req, messages)
 	if err != nil {
 		return err
 	}

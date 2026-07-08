@@ -44,9 +44,6 @@ func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events 
 			return err
 		}
 		stats.DeletedEvents = deleted
-		if err := rebuildShortRefsTx(ctx, tx); err != nil {
-			return err
-		}
 		stateStore := state.New(tx)
 		if err := stateStore.Set(ctx, syncSource, syncEntity, syncStatus, completeState); err != nil {
 			return err

@@ -1,6 +1,7 @@
 package birdcrawl
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -13,6 +14,8 @@ import (
 
 	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/output"
+	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -110,6 +113,58 @@ func TestHandlerUsageErrorExitsTwo(t *testing.T) {
 	}
 }
 
+func TestSharedShortRefsRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	archivePath := filepath.Join(t.TempDir(), "birdcrawl.db")
+	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawStore.Close() }()
+
+	st, err := store.Use(ctx, rawStore, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
+	if _, err := st.ImportArchive(ctx, store.ImportBatch{Tweets: []store.Tweet{{
+		ID:           "short-round-trip",
+		CreatedAt:    now,
+		AuthorID:     "owner",
+		AuthorHandle: "example_owner",
+		AuthorName:   "Owner Example",
+		Text:         "needle tweet for shared short refs",
+	}}, ImportedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	req := &crawlkit.Request{Store: rawStore, Paths: crawlkit.Paths{Archive: archivePath}, Format: output.JSON, Out: &out}
+	crawler := New()
+	records, err := crawler.ShortRefRecords(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+	search, err := crawler.Search(ctx, req, crawlkit.Query{Text: "needle", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fillTestShortRefs(t, ctx, req, search.Results)
+	if len(search.Results) != 1 || search.Results[0].ShortRef == "" {
+		t.Fatalf("search results = %#v", search.Results)
+	}
+	out.Reset()
+	if err := crawler.Open(ctx, req, search.Results[0].ShortRef); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "needle tweet for shared short refs") {
+		t.Fatalf("open output = %s", out.String())
+	}
+}
+
 func TestDirectVersionVerbRejected(t *testing.T) {
 	result := runBirdcrawlRaw(t, stateRootForRun(t), "version")
 	if result.code != 2 {
@@ -117,6 +172,21 @@ func TestDirectVersionVerbRejected(t *testing.T) {
 	}
 	if !strings.Contains(result.stderr, `unknown verb "version"`) {
 		t.Fatalf("stderr missing rejected version verb:\n%s", result.stderr)
+	}
+}
+
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+	t.Helper()
+	refs := make([]string, 0, len(hits))
+	for _, hit := range hits {
+		refs = append(refs, hit.Ref)
+	}
+	aliases, err := req.ShortRefAliases(ctx, refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range hits {
+		hits[i].ShortRef = aliases[hits[i].Ref]
 	}
 }
 

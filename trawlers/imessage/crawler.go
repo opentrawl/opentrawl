@@ -47,7 +47,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "imessage",
 		DisplayName: display,
 		Description: "Local-first iMessage archive crawler.",
-		ShortRefs:   true,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

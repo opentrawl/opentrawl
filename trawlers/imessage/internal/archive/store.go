@@ -31,9 +31,6 @@ const (
 	stateSourcePath       = "source_path"
 	stateSourceBytes      = "source_bytes"
 	stateSourceModifiedAt = "source_modified_at"
-
-	derivedEntityType      = "derived"
-	stateShortRefsBuiltFor = "short_refs_built_for_last_sync_at"
 )
 
 type Store struct {
@@ -322,9 +319,6 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 			if _, err := tx.ExecContext(ctx, `insert or ignore into owner_handles(kind, normalized_handle) values(?, ?)`, h.Kind, h.NormalizedHandle); err != nil {
 				return err
 			}
-		}
-		if err := rebuildShortRefsInTx(ctx, tx, data.Messages, syncedAt); err != nil {
-			return err
 		}
 		return replaceSyncState(ctx, tx, data, syncedAt)
 	})

@@ -20,7 +20,7 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 	switch write.outcome {
 	case contentOutcomeFailedDownload:
 		fields := []string{
-			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logStringField("reason", publicClassifyErrorReason(write.downloadErr, "original export failed")),
 		}
 		if errors.Is(write.downloadErr, photos.ErrExportAlreadyRunning) {
@@ -29,24 +29,24 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 		logger.warn("failed_download", fields...)
 	case contentOutcomeNotInPhotoKit:
 		logger.warn("not_in_photokit",
-			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logStringField("reason", "photokit asset not found"),
 		)
 	case contentOutcomeFailedParse:
 		logger.warn("failed_parse",
-			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logStringField("reason", "model response could not be parsed"),
 		)
 	case contentOutcomeFailedModel:
 		logger.warn("failed_model",
-			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logStringField("reason", publicClassifyErrorReason(write.contentErr, "model request failed")),
 		)
 	case contentOutcomeClassified:
 		// Successes log too: stage durations per card are the structural
 		// answer to "where does the time go" — silence hides bottlenecks.
 		logger.info("card_written",
-			logTokenField("asset_ref", assetRef(write.input.AssetID)),
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logInt64Field("download_ms", write.downloadDuration.Milliseconds()),
 			logInt64Field("model_ms", write.modelDuration.Milliseconds()),
 			logIntField("model_attempts", write.modelAttempts),
@@ -72,14 +72,14 @@ func (logger classifyLogger) logPlaceGeocode(key, outcome string, duration time.
 
 func (logger classifyLogger) logPlaceParked(input classifyInput, reason string) {
 	logger.warn("place_parked",
-		logTokenField("asset_ref", assetRef(input.AssetID)),
+		logTokenField("asset_ref", AssetRef(input.AssetID)),
 		logStringField("reason", reason),
 	)
 }
 
 func (logger classifyLogger) logPlaceUnparked(input classifyInput, reason string) {
 	logger.info("place_unparked",
-		logTokenField("asset_ref", assetRef(input.AssetID)),
+		logTokenField("asset_ref", AssetRef(input.AssetID)),
 		logStringField("reason", reason),
 	)
 }

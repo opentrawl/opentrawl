@@ -36,13 +36,22 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	report, err := source.Sync(ctx, &crawlkit.Request{
+	syncReq := &crawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
 		Progress: func(crawlkit.Progress) {},
-	})
+	}
+	report, err := source.Sync(ctx, syncReq)
+	if err == nil {
+		records, recordsErr := source.ShortRefRecords(ctx, syncReq)
+		if recordsErr != nil {
+			err = recordsErr
+		} else if _, rebuildErr := syncReq.RebuildShortRefs(ctx, records); rebuildErr != nil {
+			err = rebuildErr
+		}
+	}
 	if closeErr := writeStore.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
@@ -54,7 +63,9 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 
 	readStore := openReadStore(t, ctx, paths.Archive)
-	search, err := source.Search(ctx, readRequest(readStore, paths), crawlkit.Query{Text: "planning", Limit: 20})
+	searchReq := readRequest(readStore, paths)
+	search, err := source.Search(ctx, searchReq, crawlkit.Query{Text: "planning", Limit: 20})
+	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -369,6 +380,21 @@ func parseHintCommand(t *testing.T, command string) []string {
 		tokens = append(tokens, current.String())
 	}
 	return tokens
+}
+
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+	t.Helper()
+	refs := make([]string, 0, len(hits))
+	for _, hit := range hits {
+		refs = append(refs, hit.Ref)
+	}
+	aliases, err := req.ShortRefAliases(ctx, refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range hits {
+		hits[i].ShortRef = aliases[hits[i].Ref]
+	}
 }
 
 func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Store {

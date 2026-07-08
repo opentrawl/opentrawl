@@ -2,6 +2,7 @@ package photoscrawl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -15,7 +16,7 @@ import (
 )
 
 func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
-	resolved, err := resolveInputRef(ctx, archivePaths(req), ref)
+	resolved, err := c.resolveInputRef(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -32,30 +33,32 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, result)
 }
 
-func resolveInputRef(ctx context.Context, paths archive.Paths, ref string) (string, error) {
+func (c *Crawler) resolveInputRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") || strings.Contains(ref, "/") {
 		return ref, nil
 	}
-	if !archive.ValidShortRef(ref) {
+	if !crawlkit.ValidShortRef(ref) {
 		return "", commandError{
 			Code:    "invalid_ref",
 			Message: "ref is not a photos asset ref",
 			Remedy:  "use a ref in the form photos:asset/ID or a short ref from search",
 		}
 	}
-	resolved, err := archive.ResolveShortRef(ctx, paths, ref)
+	fullRefs, err := req.ResolveShortRef(ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found", Remedy: "rerun search or use the full ref"}
+	}
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", commandError{Code: "ambiguous_short_ref", Message: "short ref matches more than one asset", Remedy: "rerun search or use the full ref"}
+	}
 	if err != nil {
 		return "", err
 	}
-	switch len(resolved.FullRefs) {
-	case 0:
+	if len(fullRefs) != 1 {
 		return "", commandError{Code: "unknown_short_ref", Message: "short ref was not found", Remedy: "rerun search or use the full ref"}
-	case 1:
-		return resolved.FullRefs[0], nil
-	default:
-		return "", commandError{Code: "ambiguous_short_ref", Message: "short ref matches more than one asset", Remedy: "rerun search or use the full ref"}
 	}
+	return fullRefs[0], nil
 }
 
 func printOpenText(w io.Writer, result archive.OpenResult) error {

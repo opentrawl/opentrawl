@@ -236,10 +236,6 @@ where state = 'pending'
 	if err := cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID); err != nil {
 		return err
 	}
-	if err := rebuildShortRefsInTx(ctx, tx); err != nil {
-		return fmt.Errorf("rebuild short refs: %w", err)
-	}
-
 	return nil
 }
 

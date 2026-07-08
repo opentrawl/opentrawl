@@ -2,15 +2,10 @@ package store
 
 import (
 	"context"
-	"io"
-	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
-
-	cklog "github.com/openclaw/crawlkit/log"
 )
 
 func TestSchemaMigrationSetsUserVersion(t *testing.T) {
@@ -201,92 +196,6 @@ func TestListByRoleFiltersOrdersAndCounts(t *testing.T) {
 	}
 	if total != 2 || len(all) != 2 {
 		t.Fatalf("bookmark limit 0 = total %d rows %d, want all 2", total, len(all))
-	}
-}
-
-func TestShortRefsRebuildLookupAndAliasDisplay(t *testing.T) {
-	ctx := context.Background()
-	st := openTestStore(t)
-	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
-	tweets := []Tweet{
-		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
-		testTweet("b", now.Add(time.Minute), "owner", "example_owner", "Owner Example", "second"),
-	}
-	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: tweets, ImportedAt: now}); err != nil {
-		t.Fatal(err)
-	}
-	aliases, err := st.ShortRefAliases(ctx, []string{TweetRef("a"), TweetRef("b")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, ref := range []string{TweetRef("a"), TweetRef("b")} {
-		alias := aliases[ref]
-		if alias == "" {
-			t.Fatalf("alias for %s is empty", ref)
-		}
-		matches, err := st.ResolveShortRef(ctx, alias)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(matches) != 1 || matches[0] != ref {
-			t.Fatalf("lookup %s = %#v, want %s", alias, matches, ref)
-		}
-	}
-}
-
-func TestEnsureShortRefsLogsReadRefresh(t *testing.T) {
-	ctx := context.Background()
-	st := openTestStore(t)
-	run, err := cklog.NewRun(cklog.Options{
-		StateRoot: filepath.Join(t.TempDir(), "logs"),
-		CrawlerID: "birdcrawl",
-		Command:   "search",
-		Stderr:    io.Discard,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = run.Finish(nil) })
-	st.SetLog(run)
-	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
-	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: []Tweet{
-		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
-	}, ImportedAt: now}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.db.ExecContext(ctx, `insert into tweets(id, created_at, text, first_source) values(?, ?, ?, ?)`, "b", formatUTC(now.Add(time.Minute)), "second", "archive"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.ShortRefAliases(ctx, []string{TweetRef("b")}); err != nil {
-		t.Fatal(err)
-	}
-	logData, err := os.ReadFile(run.Path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(logData), "short_refs_refresh: rebuilt derived short ref cache on read") {
-		t.Fatalf("refresh log missing:\n%s", string(logData))
-	}
-}
-
-func TestShortRefsCurrentPropagatesIndexReadError(t *testing.T) {
-	ctx := context.Background()
-	st := openTestStore(t)
-	now := time.Date(2026, 7, 4, 12, 0, 0, 0, time.UTC)
-	if _, err := st.ImportArchive(ctx, ImportBatch{Tweets: []Tweet{
-		testTweet("a", now, "owner", "example_owner", "Owner Example", "first"),
-	}, ImportedAt: now}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := st.db.ExecContext(ctx, `drop table short_refs`); err != nil {
-		t.Fatal(err)
-	}
-	current, err := st.shortRefsCurrent(ctx)
-	if err == nil {
-		t.Fatal("expected short_refs read error")
-	}
-	if current {
-		t.Fatal("current = true, want false")
 	}
 }
 

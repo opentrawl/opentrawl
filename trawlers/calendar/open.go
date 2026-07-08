@@ -2,6 +2,7 @@ package calcrawl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strconv"
@@ -10,7 +11,6 @@ import (
 	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/crawlkit/shortref"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 )
 
@@ -19,7 +19,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	resolved, err := resolveOpenRef(ctx, st, ref)
+	resolved, err := c.resolveOpenRef(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -34,26 +34,25 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, event)
 }
 
-func resolveOpenRef(ctx context.Context, st *archive.Store, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return ref, nil
 	}
-	if !shortref.ValidAlias(ref) {
+	if !crawlkit.ValidShortRef(ref) {
 		return "", commandErr(1, "unknown_short_ref", fmt.Errorf("unknown short ref %q", ref), "rerun search or use the full ref")
 	}
-	matches, err := st.ResolveShortRef(ctx, ref)
+	matches, err := req.ResolveShortRef(ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+		return "", commandErr(1, "unknown_short_ref", fmt.Errorf("unknown short ref %q", ref), "rerun search or use the full ref")
+	}
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", commandErr(1, "ambiguous_short_ref", fmt.Errorf("short ref %q matches %d events", ref, len(matches)), "rerun search or use the full ref")
+	}
 	if err != nil {
 		return "", err
 	}
-	switch len(matches) {
-	case 0:
-		return "", commandErr(1, "unknown_short_ref", fmt.Errorf("unknown short ref %q", ref), "rerun search or use the full ref")
-	case 1:
-		return matches[0], nil
-	default:
-		return "", commandErr(1, "ambiguous_short_ref", fmt.Errorf("short ref %q matches %d events", ref, len(matches)), "rerun search or use the full ref")
-	}
+	return matches[0], nil
 }
 
 func printOpenText(w io.Writer, event archive.EventDetail) error {

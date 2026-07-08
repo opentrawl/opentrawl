@@ -10,7 +10,7 @@ import (
 	"github.com/openclaw/crawlkit/flags"
 )
 
-func assetRef(id string) string {
+func AssetRef(id string) string {
 	return photoscrawlRef(id)
 }
 

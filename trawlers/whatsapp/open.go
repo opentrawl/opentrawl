@@ -11,7 +11,6 @@ import (
 	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -52,7 +51,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	messageID, err := resolveOpenMessageID(ctx, st, ref)
+	messageID, err := c.resolveOpenMessageID(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -78,26 +77,25 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpen(req, result)
 }
 
-func resolveOpenMessageID(ctx context.Context, st *store.Store, ref string) (string, error) {
+func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return parseMessageRef(ref)
 	}
-	if !shortref.ValidAlias(ref) {
+	fullRefs, err := req.ResolveShortRef(ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
 		return "", unknownShortRefError()
 	}
-	fullRefs, err := st.ResolveShortRef(ctx, ref)
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl whatsapp search or use the full ref")
+	}
 	if err != nil {
 		return "", err
 	}
-	switch len(fullRefs) {
-	case 0:
+	if len(fullRefs) != 1 {
 		return "", unknownShortRefError()
-	case 1:
-		return parseMessageRef(fullRefs[0])
-	default:
-		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl whatsapp search or use the full ref")
 	}
+	return parseMessageRef(fullRefs[0])
 }
 
 func unknownShortRefError() error {

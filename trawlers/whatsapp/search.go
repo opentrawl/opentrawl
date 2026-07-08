@@ -2,7 +2,6 @@ package wacrawl
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -43,20 +42,15 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	if err != nil {
 		return crawlkit.SearchResult{}, err
 	}
-	aliases, err := searchAliases(ctx, st, messages)
-	if err != nil {
-		return crawlkit.SearchResult{}, err
-	}
 	hits := make([]crawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message)
 		hits = append(hits, crawlkit.Hit{
-			Ref:      ref,
-			ShortRef: aliases[ref],
-			Time:     message.Timestamp,
-			Who:      outputField(messageWhoForFormat(message, req.Format)),
-			Where:    outputField(messageWhereForFormat(message, req.Format)),
-			Snippet:  outputField(messageSnippet(message)),
+			Ref:     ref,
+			Time:    message.Timestamp,
+			Who:     outputField(messageWhoForFormat(message, req.Format)),
+			Where:   outputField(messageWhereForFormat(message, req.Format)),
+			Snippet: outputField(messageSnippet(message)),
 		})
 	}
 	return crawlkit.SearchResult{
@@ -117,15 +111,4 @@ func whoCandidateForFormat(candidate store.WhoCandidate, format output.Format) w
 	out.Who = humanParticipantLabel(out.Who)
 	out.Identifiers = humanParticipantIdentifiers(out.Identifiers)
 	return out
-}
-
-func searchAliases(ctx context.Context, st *store.Store, messages []store.Message) (map[string]string, error) {
-	if len(messages) == 0 {
-		return nil, nil
-	}
-	aliases, err := st.ShortRefAliases(ctx, messageRefs(messages))
-	if errors.Is(err, store.ErrShortRefIndexStale) {
-		return nil, nil
-	}
-	return aliases, err
 }

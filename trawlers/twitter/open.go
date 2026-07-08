@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openclaw/crawlkit/shortref"
+	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -21,7 +21,7 @@ func (r *runtime) runOpen(args []string) error {
 		return usageErr(errors.New("open takes exactly one ref"))
 	}
 	return r.withReadOnlyStore(func(st *store.Store) error {
-		id, err := r.resolveOpenTweetID(st, fs.Arg(0))
+		id, err := r.resolveOpenTweetID(fs.Arg(0))
 		if err != nil {
 			return err
 		}
@@ -32,7 +32,7 @@ func (r *runtime) runOpen(args []string) error {
 		if err != nil {
 			return err
 		}
-		aliases, err := aliasesForOpen(r.ctx, st, result)
+		aliases, err := aliasesForOpen(r.ctx, r.req, result)
 		if err != nil {
 			return err
 		}
@@ -44,7 +44,7 @@ func (r *runtime) runOpen(args []string) error {
 	})
 }
 
-func (r *runtime) resolveOpenTweetID(st *store.Store, ref string) (string, error) {
+func (r *runtime) resolveOpenTweetID(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		id, err := store.ParseTweetRef(ref)
@@ -53,25 +53,27 @@ func (r *runtime) resolveOpenTweetID(st *store.Store, ref string) (string, error
 		}
 		return id, nil
 	}
-	if !shortref.ValidAlias(ref) {
+	if !crawlkit.ValidShortRef(ref) {
 		return "", r.unknownShortRef(ref)
 	}
-	matches, err := st.ResolveShortRef(r.ctx, ref)
+	matches, err := r.req.ResolveShortRef(r.ctx, ref)
+	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+		return "", r.unknownShortRef(ref)
+	}
+	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet", "Rerun trawl twitter search or use the full ref.")
+	}
 	if err != nil {
 		return "", err
 	}
-	switch len(matches) {
-	case 0:
+	if len(matches) != 1 {
 		return "", r.unknownShortRef(ref)
-	case 1:
-		id, err := store.ParseTweetRef(matches[0])
-		if err != nil {
-			return "", err
-		}
-		return id, nil
-	default:
-		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet", "Rerun trawl twitter search or use the full ref.")
 	}
+	id, err := store.ParseTweetRef(matches[0])
+	if err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (r *runtime) unknownShortRef(ref string) error {

@@ -107,13 +107,6 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	if err := rows.Err(); err != nil {
 		return nil, 0, err
 	}
-	for i := range results {
-		shortRef, err := s.ShortRefForFullRef(ctx, results[i].Ref)
-		if err != nil {
-			return nil, 0, err
-		}
-		results[i].ShortRef = shortRef
-	}
 	return results, total, nil
 }
 

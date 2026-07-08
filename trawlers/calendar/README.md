@@ -247,9 +247,8 @@ contact:
 All reads and writes are local. `calcrawl` does not send calendar content,
 metadata, contacts, paths or counts to any service.
 
-Read commands do not sync or change source content. They may refresh derived
-caches such as the short-ref index. If the archive is missing, they return the
-missing state or a sync remedy and do not create the archive.
+Read commands do not sync or change source content. If the archive is missing,
+they return the missing state or a sync remedy and do not create the archive.
 
 Tests and public examples use synthetic data only.
 

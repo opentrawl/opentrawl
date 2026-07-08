@@ -69,11 +69,6 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	} else if rebuilt {
 		_ = logInfo(req, "participants_rebuilt", fmt.Sprintf("messages=%d", messages))
 	}
-	if rebuilt, refs, err := st.EnsureShortRefs(ctx); err != nil {
-		return nil, err
-	} else if rebuilt {
-		_ = logInfo(req, "short_refs_rebuilt", fmt.Sprintf("refs=%d", refs))
-	}
 	if err := st.MarkSyncCompleted(ctx, time.Now().UTC()); err != nil {
 		return nil, err
 	}

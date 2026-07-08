@@ -242,7 +242,7 @@ func TestOpenDedupesAlbumTitles(t *testing.T) {
 
 	sourceID := stableID("source_library", libraryPath)
 	assetID := stableID("asset", sourceID, "fixture-asset-1")
-	opened, err := Open(ctx, paths, assetRef(assetID))
+	opened, err := Open(ctx, paths, AssetRef(assetID))
 	if err != nil {
 		t.Fatal(err)
 	}

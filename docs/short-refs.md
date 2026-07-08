@@ -29,10 +29,11 @@ Generate the alias from the canonical full ref:
 The source-prefixed full ref is the hash input, so aliases work across
 federated sources without becoming item ids.
 
-Short refs are stable enough to copy from current search output into open. They
-are not permanent public identifiers. An alias changes only when the full ref
-changes, the source id changes, or a later archive item creates a collision
-that forces extension. If an old alias becomes ambiguous, it must fail safely.
+Short refs are stable for a canonical archive. Rebuilding the same archive
+produces the same aliases. Ref-prefix migrations do not change aliases because
+the alias corpus contains canonical full refs only. Legacy full refs are
+normalised to canonical refs at lookup time; they never take part in collision
+extension.
 
 ## Where the mapping lives
 
@@ -62,10 +63,10 @@ negligible for that count — today that means 5 for the small archives
 and 6 for the large ones, and nobody ever configures it. The numbers
 above are the arithmetic behind that choice, not settings.
 
-Each crawler owns the archive and canonical refs. It may keep a derived alias
-index beside its search index for speed. That index is a cache, not state. It
-can be rebuilt, deleted, or healed on read under the same rules as other
-derived indexes.
+Each crawler owns the archive and canonical refs. Crawlkit owns the derived
+alias index beside the archive for speed. That index is a cache, not state. The
+runner rebuilds it after every sync or mutating custom verb attempt, even when
+the attempt returns an error after writing partial data.
 
 Trawl may keep an in-memory map while rendering one search result. It must not
 write a "last search" alias database.
@@ -76,9 +77,8 @@ machine after a rebuild — assign different ids to the same item,
 which breaks the rule that archives are derived data reproducible
 from the source. The table would also need creating, backing up and
 healing in every crawler. The function needs none of that and any
-process can evaluate it. A crawler may still keep a computed
-alias-to-ref cache table for fast resolution — that is a cache of
-the function, self-healing like every other derived index, never a
+process can evaluate it. Crawlkit keeps a computed alias-to-ref cache
+table for fast resolution. That is a cache of the function, not a
 source of truth.
 
 ## Open resolution flow
@@ -92,33 +92,32 @@ source of truth.
 For `trawl open t7k3f`:
 
 1. Validate the alias length and alphabet.
-2. Discover sources that declare short-ref support.
+2. Discover sources from the manifest; `short_refs` is always present.
 3. Ask each source to resolve the alias against its archive.
 4. Require exactly one canonical full ref across all sources.
 5. Call that source's normal `open` with the full ref.
 6. Render the normal open result.
 
 Resolution is one indexed lookup, not a scan: crawlkit ships the
-alias index (alias to full ref, computed at sync alongside the FTS
-index) so every crawler gets fast resolution for free. The index is
-derived data under the usual rules — rebuildable, self-healing, never
-a source of truth.
+alias index with the alias, stored full ref, and canonical full ref. `open`
+looks up the alias and reads the canonical ref from that row. It does not scan
+the archive's refs to repair legacy prefixes. The index is derived data under
+the usual rules: rebuildable and never a source of truth.
 
-Resolution is read-only. A crawler may refresh a derived alias index while it
-resolves, but it must not sync, import, or mutate source content.
+Resolution is read-only. A crawler must not sync, import, mutate source
+content, or rebuild the alias index while it resolves.
 
 ## Collision and unknown aliases
 
 Collisions may exist. They must never resolve silently.
 
 Search display should prefer the shortest safe alias. If 5 characters collide,
-show 6 — and this is precomputed, not runtime guessing. The crawler
-holds the full corpus, so when it builds the alias index it detects
-every colliding prefix with plain set arithmetic and stores each
-item's shortest unambiguous form. Display reads the answer; nothing
-is discovered at render time. Collisions only need handling at
-resolution when an alias from an older, smaller corpus has since
-become ambiguous — and that fails safely rather than picking.
+show 6 — and this is precomputed, not runtime guessing. Crawlkit builds the
+alias index from the crawler's full ref list, detects every colliding prefix
+with plain set arithmetic, and stores each item's shortest unambiguous form.
+Display reads the answer; nothing is discovered at render time. If a caller
+passes an alias that currently matches more than one canonical ref, resolution
+fails safely rather than picking.
 
 `trawl open t7k3f` has 3 outcomes:
 
@@ -161,19 +160,19 @@ should use the normal error shape, with codes such as `unknown_short_ref` and
 
 ## Contract impact
 
-Contract v1 full refs remain valid and authoritative. Add a v1.1 capability,
-`short_refs`, for crawlers that can resolve aliases. Since the suite
-is pre-1.0 with no external consumers, this can land as a breaking
-change wherever that is simpler — contract versioning is for our own
+Contract v1 full refs remain valid and authoritative. The v1 manifest always
+includes `short_refs`; the old crawler-side boolean declaration is retired.
+Since the suite is pre-1.0 with no external consumers, this can land as a
+breaking change wherever that is simpler — contract versioning is for our own
 coherence, not for compatibility theatre. The capability means:
 
-- the crawler can resolve a short alias to zero, one, or many full refs
-- the crawler can return the shortest safe alias for a known full ref
+- crawlkit can resolve a short alias to zero, one, or many full refs
+- crawlkit can return the shortest safe alias for a known full ref
 - `open` output still carries the canonical full `ref`
 - search JSON keeps the current `ref` field unchanged
 
 Trawl should display short refs only when every displayed alias can be resolved
-safely. Sources without `short_refs` keep showing full refs.
+safely.
 
 The deterministic mechanism this all rests on is spelled out with the
 formula and the collision arithmetic under "Where the mapping lives".

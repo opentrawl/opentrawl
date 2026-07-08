@@ -30,9 +30,6 @@ func TestCrawlerVerbs(t *testing.T) {
 			t.Fatalf("spine verb %q has invalid declaration: %+v", name, verb)
 		}
 	}
-	if !crawler.Info().ShortRefs {
-		t.Fatal("telecrawl must declare short refs")
-	}
 }
 
 func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
@@ -58,6 +55,7 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fillTestShortRefs(t, ctx, req, search.Results)
 	if search.TotalMatches != 1 || len(search.Results) != 1 || search.Results[0].Ref != "telegram:msg/1" {
 		t.Fatalf("search result = %+v", search)
 	}
@@ -153,7 +151,37 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 	if err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.RebuildShortRefs(ctx); err != nil {
+	rebuildSyntheticShortRefs(t, ctx, archivePath)
+}
+
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+	t.Helper()
+	refs := make([]string, 0, len(hits))
+	for _, hit := range hits {
+		refs = append(refs, hit.Ref)
+	}
+	aliases, err := req.ShortRefAliases(ctx, refs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range hits {
+		hits[i].ShortRef = aliases[hits[i].Ref]
+	}
+}
+
+func rebuildSyntheticShortRefs(t *testing.T, ctx context.Context, archivePath string) {
+	t.Helper()
+	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawStore.Close() }()
+	req := &crawlkit.Request{Store: rawStore, Paths: crawlkit.Paths{Archive: archivePath}}
+	records, err := New().ShortRefRecords(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 }

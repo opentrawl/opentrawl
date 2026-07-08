@@ -233,7 +233,7 @@ func storeImportResult(ctx context.Context, st *store.Store, result *telegramdes
 		if err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages); err != nil {
 			return err
 		}
-		return st.RebuildShortRefs(ctx)
+		return nil
 	}
 	if len(result.Chats) == 0 {
 		return fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
@@ -244,7 +244,7 @@ func storeImportResult(ctx context.Context, st *store.Store, result *telegramdes
 			return err
 		}
 	}
-	return st.RebuildShortRefs(ctx)
+	return nil
 }
 
 func refreshImportMediaStats(result *telegramdesktop.ImportResult) {

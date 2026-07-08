@@ -21,8 +21,6 @@ type SearchResult struct {
 	Results      []SearchHit `json:"results"`
 	TotalMatches int         `json:"total_matches"`
 	Truncated    bool        `json:"truncated"`
-
-	ShortRefsRebuilt bool `json:"-"`
 }
 
 type SearchHit struct {
@@ -198,10 +196,6 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("count search matches: %w", err)
 	}
-	shortRefsReady, err := shortRefsCurrent(ctx, db.DB())
-	if err != nil {
-		return SearchResult{}, err
-	}
 	rows, err := db.DB().QueryContext(ctx, `
 with asset_matches as (
   select asset.id, asset_fts.rank as hit_rank
@@ -267,7 +261,7 @@ limit ?
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
-		hit.Ref = assetRef(hit.ID)
+		hit.Ref = AssetRef(hit.ID)
 		hit.Time = localCaptureTime(hit.CreationDate, timezoneName)
 		if !strings.HasPrefix(hit.Where, "GPS ") {
 			hit.Where = cleanPlacePhrase(hit.Where)
@@ -282,13 +276,6 @@ limit ?
 	}
 	if err := rows.Close(); err != nil {
 		return SearchResult{}, err
-	}
-	if shortRefsReady {
-		for i := range result.Results {
-			if alias, err := shortRefForFullRef(ctx, db.DB(), result.Results[i].Ref); err == nil {
-				result.Results[i].ShortRef = alias
-			}
-		}
 	}
 	return result, nil
 }

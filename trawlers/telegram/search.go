@@ -35,13 +35,9 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	if err != nil {
 		return crawlkit.SearchResult{}, err
 	}
-	shortRefs, err := st.ShortRefsFor(ctx, messageRefs(messages))
-	if err != nil {
-		return crawlkit.SearchResult{}, err
-	}
 	return crawlkit.SearchResult{
 		WhoResolved:  crawlkitWhoResolved(query.WhoResolved, resolved),
-		Results:      searchHits(messages, shortRefs),
+		Results:      searchHits(messages),
 		TotalMatches: total,
 		Truncated:    total > len(messages),
 	}, nil
@@ -77,25 +73,16 @@ func (c *Crawler) searchFilter(query crawlkit.Query) (store.MessageFilter, error
 	return filter, nil
 }
 
-func messageRefs(messages []store.Message) []string {
-	refs := make([]string, 0, len(messages))
-	for _, message := range messages {
-		refs = append(refs, messageRef(message.SourcePK))
-	}
-	return refs
-}
-
-func searchHits(messages []store.Message, shortRefs map[string]string) []crawlkit.Hit {
+func searchHits(messages []store.Message) []crawlkit.Hit {
 	hits := make([]crawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message.SourcePK)
 		hits = append(hits, crawlkit.Hit{
-			Ref:      ref,
-			ShortRef: shortRefs[ref],
-			Time:     message.Timestamp.Local(),
-			Who:      outputField(messageWho(message)),
-			Where:    outputField(messageWhereForList(message)),
-			Snippet:  outputField(messageSnippet(message)),
+			Ref:     ref,
+			Time:    message.Timestamp.Local(),
+			Who:     outputField(messageWho(message)),
+			Where:   outputField(messageWhereForList(message)),
+			Snippet: outputField(messageSnippet(message)),
 		})
 	}
 	return hits

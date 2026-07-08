@@ -77,14 +77,12 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
 		return SearchResult{}, fmt.Errorf("search messages: %w", err)
 	}
 	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: limit > 0 && total > int64(limit)}
-	var refs []string
 	for rows.Next() {
 		var id, when, fromName, fromAddress, subject, body string
 		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body); err != nil {
 			return SearchResult{}, err
 		}
 		ref := RefPrefix + id
-		refs = append(refs, ref)
 		result.Results = append(result.Results, SearchHit{
 			Ref:     ref,
 			Time:    when,
@@ -103,21 +101,10 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
 	if result.Results == nil {
 		result.Results = []SearchHit{}
 	}
-	shortRefs, err := s.ShortRefs(ctx, refs)
-	if err != nil {
-		return SearchResult{}, err
-	}
-	for i := range result.Results {
-		result.Results[i].ShortRef = shortRefs[result.Results[i].Ref]
-	}
 	return result, nil
 }
 
 func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error) {
-	ref, err := s.ResolveRef(ctx, ref)
-	if err != nil {
-		return OpenResult{}, err
-	}
 	id, err := parseRef(ref)
 	if err != nil {
 		return OpenResult{}, err

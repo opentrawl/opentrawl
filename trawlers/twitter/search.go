@@ -25,7 +25,7 @@ func (r *runtime) runSearch(args []string) error {
 		if err != nil {
 			return err
 		}
-		aliases, err := aliasesForSearch(r.ctx, st, results)
+		aliases, err := aliasesForSearch(r.ctx, r.req, results)
 		if err != nil {
 			return err
 		}
@@ -50,15 +50,11 @@ func (r *runtime) search(ctx context.Context, query crawlkit.Query) (crawlkit.Se
 		if err != nil {
 			return err
 		}
-		aliases, err := aliasesForSearch(ctx, st, results)
-		if err != nil {
-			return err
-		}
 		ownerAuthorID, err := st.OwnerAuthorID(ctx)
 		if err != nil {
 			return err
 		}
-		out.Results = searchHits(results, aliases, ownerAuthorID)
+		out.Results = searchHits(results, ownerAuthorID)
 		out.TotalMatches = total
 		out.Truncated = total > len(out.Results)
 		return nil
@@ -66,17 +62,16 @@ func (r *runtime) search(ctx context.Context, query crawlkit.Query) (crawlkit.Se
 	return out, err
 }
 
-func searchHits(results []store.SearchResult, aliases map[string]string, ownerAuthorID string) []crawlkit.Hit {
+func searchHits(results []store.SearchResult, ownerAuthorID string) []crawlkit.Hit {
 	hits := make([]crawlkit.Hit, 0, len(results))
 	for _, result := range results {
 		ref := store.TweetRef(result.ID)
 		hits = append(hits, crawlkit.Hit{
-			Ref:      ref,
-			ShortRef: aliases[ref],
-			Time:     result.CreatedAt.Local(),
-			Who:      jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
-			Where:    result.Where,
-			Snippet:  result.Snippet,
+			Ref:     ref,
+			Time:    result.CreatedAt.Local(),
+			Who:     jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
+			Where:   result.Where,
+			Snippet: result.Snippet,
 		})
 	}
 	return hits

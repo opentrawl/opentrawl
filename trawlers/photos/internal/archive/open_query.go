@@ -97,15 +97,7 @@ end, distance_meters, id
 			return OpenResult{}, err
 		}
 	}
-	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations)
-	// The short alias is a human-display convenience, shown only when the index
-	// is current — the same gate search uses — so a displayed Ref always
-	// resolves via `open`. A stale or not-yet-built index leaves it blank, which
-	// self-heals on the next sync.
-	if current, err := shortRefsCurrent(ctx, db.DB()); err == nil && current {
-		result.ShortRef, _ = shortRefForFullRef(ctx, db.DB(), result.Ref)
-	}
-	return result, nil
+	return newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations), nil
 }
 
 func tableExists(ctx context.Context, db *sql.DB, name string) (bool, error) {
