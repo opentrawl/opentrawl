@@ -88,11 +88,8 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		command.Mutates = true
 		commands["sync"] = applySpineDeclaration(command, spine, "sync")
 	}
-	if _, ok := source.(Searcher); ok {
-		_, supportsWho := source.(WhoMatcher)
-		command := spineCommand("Search archive items", binaryName, "search", "search", "QUERY")
-		command.Flags = builtinSearchFlags(supportsWho)
-		commands["search"] = applySpineDeclaration(command, spine, "search")
+	if command, ok := searchCommand(source, binaryName, spine); ok {
+		commands["search"] = command
 	}
 	if _, ok := source.(WhoMatcher); ok {
 		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, "who", "who", "NAME"), spine, "who")
@@ -125,6 +122,16 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		}
 	}
 	return commands
+}
+
+func searchCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
+	if _, ok := source.(Searcher); !ok {
+		return control.Command{}, false
+	}
+	_, supportsWho := source.(WhoMatcher)
+	command := spineCommand("Search archive items", binaryName, "search", "search", "QUERY")
+	command.Flags = builtinSearchFlags(supportsWho)
+	return applySpineDeclaration(command, spine, "search"), true
 }
 
 func spineCommand(title, binaryName, key string, args ...string) control.Command {

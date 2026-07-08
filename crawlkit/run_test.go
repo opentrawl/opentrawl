@@ -43,6 +43,10 @@ type testStatusCrawler struct {
 	verbs []Verb
 }
 
+type testSearchCrawler struct {
+	testStatusCrawler
+}
+
 type testContactCrawler struct {
 	*testCrawler
 	contactExportFn func(context.Context, *Request) (*control.ContactExport, error)
@@ -156,6 +160,14 @@ func (c *testStatusCrawler) Doctor(ctx context.Context, req *Request) (*Doctor, 
 
 func (c *testStatusCrawler) Verbs() []Verb {
 	return c.verbs
+}
+
+func (c *testSearchCrawler) Search(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+	return SearchResult{
+		Results:      []Hit{{Ref: c.Info().ID + ":1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+		TotalMatches: 3,
+		Truncated:    true,
+	}, nil
 }
 
 func (c *testContactCrawler) ContactExport(ctx context.Context, req *Request) (*control.ContactExport, error) {
@@ -718,6 +730,48 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("search text missing %q:\n%s", want, stdout)
 		}
+	}
+}
+
+func TestRunSearchTruncationHintUsesManifestFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		source  Crawler
+		want    string
+		notWant string
+	}{
+		{
+			name:    "who-less",
+			source:  &testSearchCrawler{},
+			want:    "Narrow results with --after or --before.",
+			notWant: "--who",
+		},
+		{
+			name: "who-capable",
+			source: &testCrawler{searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+				return SearchResult{
+					Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+					TotalMatches: 3,
+					Truncated:    true,
+				}, nil
+			}},
+			want: "Narrow results with --who, --after, or --before.",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateRoot := t.TempDir()
+			createArchive(t, stateRoot)
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "hello"}, tc.source, runOptions{})
+			if code != 0 {
+				t.Fatalf("search text code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+			if !strings.Contains(stdout, tc.want) {
+				t.Fatalf("search text missing %q:\n%s", tc.want, stdout)
+			}
+			if tc.notWant != "" && strings.Contains(stdout, tc.notWant) {
+				t.Fatalf("search text includes %q:\n%s", tc.notWant, stdout)
+			}
+		})
 	}
 }
 
