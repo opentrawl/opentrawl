@@ -81,14 +81,14 @@ func TestMovedResearchVerbsReturnUsage(t *testing.T) {
 }
 
 func TestStatusHumanOutputIsProse(t *testing.T) {
-	dbPath := filepath.Join(t.TempDir(), "photos.sqlite")
+	dbPath := filepath.Join(t.TempDir(), "photoscrawl.db")
 	out, errOut, err := captureRunOutput(t, []string{"status", "--db", dbPath})
 	if err != nil {
 		t.Fatalf("status: %v stderr=%s stdout=%s", err, errOut, out)
 	}
 	assertHumanProseOutput(t, out,
 		"Status: missing",
-		"photos.sqlite has not been initialized",
+		"photoscrawl.db has not been initialized",
 		"Counts:",
 		"Archived photos: none",
 		"Archive:",
@@ -146,7 +146,7 @@ func TestCommandWritesCrawlkitLog(t *testing.T) {
 func TestSyncHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printSyncText(&out, archive.SyncResult{
-		Database:                   filepath.Join("tmp", "photos.sqlite"),
+		Database:                   filepath.Join("tmp", "photoscrawl.db"),
 		Provider:                   "photos_sqlite_snapshot",
 		AssetsSeen:                 10,
 		AssetsNew:                  0,
@@ -312,7 +312,7 @@ func TestDoctorHumanOutputIsProse(t *testing.T) {
 	if err := os.MkdirAll(libraryPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dbPath := filepath.Join(dir, "photos.sqlite")
+	dbPath := filepath.Join(dir, "photoscrawl.db")
 	out, errOut, err := captureRunOutput(t, []string{"doctor", "--db", dbPath, "--library", libraryPath})
 	if err != nil {
 		t.Fatalf("doctor: %v stderr=%s stdout=%s", err, errOut, out)
@@ -375,7 +375,7 @@ func TestShortRefErrorsAreStructured(t *testing.T) {
 // --limit contract like search does: a limit below 1 and --all combined with
 // --limit are usage errors, refused before any archive or model work.
 func TestClassifyLimitContractIsUsageError(t *testing.T) {
-	db := filepath.Join(t.TempDir(), "photos.sqlite")
+	db := filepath.Join(t.TempDir(), "photoscrawl.db")
 	for _, args := range [][]string{
 		{"classify", "--limit", "0", "--db", db, "--json"},
 		{"classify", "--all", "--limit", "5", "--db", db, "--json"},
@@ -573,7 +573,7 @@ func buildCLIShortRefArchive(t *testing.T) (string, string, string) {
 	t.Helper()
 	ctx := context.Background()
 	root := t.TempDir()
-	dbPath := filepath.Join(root, "photos.sqlite")
+	dbPath := filepath.Join(root, "photoscrawl.db")
 	libraryPath := filepath.Join(root, "Fixture Photos Library.photoslibrary")
 	if err := os.MkdirAll(libraryPath, 0o755); err != nil {
 		t.Fatal(err)

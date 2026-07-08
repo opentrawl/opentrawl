@@ -9,7 +9,7 @@ import (
 func TestControlManifest(t *testing.T) {
 	paths := Paths{
 		ConfigPath: filepath.Join("config", "config.toml"),
-		Database:   filepath.Join("data", "photos.sqlite"),
+		Database:   filepath.Join("data", "photoscrawl.db"),
 		CacheDir:   "cache",
 		LogDir:     "logs",
 		ShareDir:   "share",

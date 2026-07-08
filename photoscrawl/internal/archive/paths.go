@@ -6,7 +6,7 @@ import (
 	crawlconfig "github.com/openclaw/crawlkit/config"
 )
 
-const databaseFilename = "photos.sqlite"
+const databaseFilename = "photoscrawl.db"
 
 var runtimeApp = crawlconfig.App{Name: "photoscrawl", BaseDir: "~/.opentrawl/photoscrawl"}
 

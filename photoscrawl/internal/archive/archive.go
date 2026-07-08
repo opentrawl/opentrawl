@@ -35,7 +35,7 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			status.State = "missing"
-			status.Summary = "photos.sqlite has not been initialized"
+			status.Summary = "photoscrawl.db has not been initialized"
 			return status, nil
 		}
 		return StatusResult{}, err
@@ -57,7 +57,7 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 		status.Freshness = &StatusFreshness{LastSync: metrics.LastImportAt}
 	}
 	status.Databases = []control.Database{
-		control.SQLiteDatabase("photos", "photos.sqlite", "primary", paths.Database, true, metrics.Counts),
+		control.SQLiteDatabase("photos", "photoscrawl.db", "primary", paths.Database, true, metrics.Counts),
 	}
 	return status, nil
 }
@@ -112,7 +112,7 @@ from asset
 func statusSummary(photos int64) string {
 	switch photos {
 	case 0:
-		return "photos.sqlite is initialized but has no crawled photos"
+		return "photoscrawl.db is initialized but has no crawled photos"
 	case 1:
 		return "1 photo archived"
 	default:

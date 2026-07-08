@@ -7,7 +7,7 @@ written_by: ai
 ## Purpose
 
 `photoscrawl` is a local-first OpenClaw/crawlkit crawler for Apple Photos. It
-builds a provenance-backed `photos.sqlite` archive from a user's Photos library
+builds a provenance-backed `photoscrawl.db` archive from a user's Photos library
 without uploading private media by default.
 
 ## Stack
@@ -37,7 +37,7 @@ without uploading private media by default.
 ## Product Boundaries
 
 - NO PRIVATE DATA IN THE REPO. Do not commit, stage, copy, or write private
-  Photos data into this checkout: Photos libraries, `photos.sqlite`, snapshots,
+  Photos data into this checkout: Photos libraries, `photoscrawl.db`, snapshots,
   thumbnails, originals, exported media, extracted metadata dumps, GPS dumps,
   face data, OCR text, classifier output, logs containing asset metadata, or
   any other user-derived archive material.

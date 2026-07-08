@@ -311,7 +311,7 @@ where asset_id = ? and superseded_at is null
 func testPaths(t *testing.T) Paths {
 	t.Helper()
 	root := t.TempDir()
-	return Paths{DataDir: root, Database: filepath.Join(root, "photos.sqlite"), CacheDir: filepath.Join(root, "cache")}
+	return Paths{DataDir: root, Database: filepath.Join(root, "photoscrawl.db"), CacheDir: filepath.Join(root, "cache")}
 }
 
 func seedObservationInvalidationRows(t *testing.T, ctx context.Context, paths Paths, assetID string) {

@@ -27,7 +27,7 @@ func TestDefaultPathsUseOpenTrawlStateRoot(t *testing.T) {
 	if paths.DataDir != base {
 		t.Fatalf("DataDir = %q", paths.DataDir)
 	}
-	if paths.Database != filepath.Join(base, "photos.sqlite") {
+	if paths.Database != filepath.Join(base, "photoscrawl.db") {
 		t.Fatalf("Database = %q", paths.Database)
 	}
 	if paths.CacheDir != filepath.Join(base, "cache") {
@@ -48,7 +48,7 @@ func TestDefaultPathsIgnoreLegacyDotdir(t *testing.T) {
 	if err := os.MkdirAll(legacy, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(legacy, "photos.sqlite"), nil, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(legacy, "photoscrawl.db"), nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
@@ -57,10 +57,10 @@ func TestDefaultPathsIgnoreLegacyDotdir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if paths.DataDir == legacy || paths.Database == filepath.Join(legacy, "photos.sqlite") {
+	if paths.DataDir == legacy || paths.Database == filepath.Join(legacy, "photoscrawl.db") {
 		t.Fatalf("DefaultPaths used legacy dotdir: %+v", paths)
 	}
-	if paths.Database != filepath.Join(home, ".opentrawl", "photoscrawl", "photos.sqlite") {
+	if paths.Database != filepath.Join(home, ".opentrawl", "photoscrawl", "photoscrawl.db") {
 		t.Fatalf("Database = %q", paths.Database)
 	}
 }
