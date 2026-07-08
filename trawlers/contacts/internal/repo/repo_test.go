@@ -36,7 +36,7 @@ func TestConfigLoadWriteAndResolve(t *testing.T) {
 func TestNormalizeFillsDefaults(t *testing.T) {
 	cfg := Config{}
 	cfg.Normalize()
-	if cfg.Version != 1 || cfg.RepoPath == "" || cfg.Git.Remote != DefaultRemote || cfg.Git.Branch != "main" || cfg.Google.Adapter != "gog" {
+	if cfg.Version != 1 || cfg.RepoPath == "" || cfg.Git.Remote != DefaultRemote || cfg.Git.Branch != "main" {
 		t.Fatalf("cfg = %#v", cfg)
 	}
 	got, err := ResolveRepoPath("/tmp/direct", cfg)

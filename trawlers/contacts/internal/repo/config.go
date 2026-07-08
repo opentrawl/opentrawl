@@ -21,28 +21,19 @@ type Config struct {
 	Git      GitConfig `toml:"git" json:"git"`
 	Repair   Repair    `toml:"repair" json:"repair"`
 	Google   Google    `toml:"google" json:"google"`
-	Apple    Apple     `toml:"apple" json:"apple"`
 }
 
 type GitConfig struct {
-	Remote   string `toml:"remote" json:"remote"`
-	Branch   string `toml:"branch" json:"branch"`
-	AutoPull bool   `toml:"auto_pull" json:"auto_pull"`
-	AutoPush bool   `toml:"auto_push" json:"auto_push"`
+	Remote string `toml:"remote" json:"remote"`
+	Branch string `toml:"branch" json:"branch"`
 }
 
 type Repair struct {
-	AutoRepair         bool `toml:"auto_repair" json:"auto_repair"`
 	BackupBeforeRepair bool `toml:"backup_before_repair" json:"backup_before_repair"`
 }
 
 type Google struct {
 	DefaultAccount string `toml:"default_account" json:"default_account"`
-	Adapter        string `toml:"adapter" json:"adapter"`
-}
-
-type Apple struct {
-	Enabled bool `toml:"enabled" json:"enabled"`
 }
 
 var appConfig = crawlconfig.App{Name: "contacts", ConfigEnv: DefaultConfigEnv, BaseDir: "~/.opentrawl/contacts"}
@@ -61,11 +52,8 @@ func DefaultConfig() Config {
 			Branch: "main",
 		},
 		Repair: Repair{
-			AutoRepair:         true,
 			BackupBeforeRepair: true,
 		},
-		Google: Google{Adapter: "gog"},
-		Apple:  Apple{Enabled: true},
 	}
 }
 
@@ -122,9 +110,6 @@ func (c *Config) Normalize() {
 	}
 	if strings.TrimSpace(c.Git.Branch) == "" {
 		c.Git.Branch = "main"
-	}
-	if strings.TrimSpace(c.Google.Adapter) == "" {
-		c.Google.Adapter = "gog"
 	}
 }
 

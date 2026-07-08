@@ -18,11 +18,7 @@ import (
 
 const appID = "telegram"
 
-type Config struct{}
-
 type Crawler struct {
-	cfg Config
-
 	doctor doctorOptions
 	sync   syncOptions
 	search searchOptions
@@ -104,7 +100,6 @@ func (c *Crawler) Info() crawlkit.Info {
 		Surface:     "telegram",
 		DisplayName: "Telegram",
 		Description: "Local-first Telegram archive crawler.",
-		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

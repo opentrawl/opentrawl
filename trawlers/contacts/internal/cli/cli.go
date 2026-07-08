@@ -36,8 +36,8 @@ import (
 var Version = "dev"
 
 type CLI struct {
-	Config  string `name:"config" help:"Config path" env:"CLAWDEX_CONFIG"`
-	Repo    string `name:"repo" help:"Contacts data repo path" env:"CLAWDEX_REPO"`
+	Config  string `name:"config" help:"Config path"`
+	Repo    string `name:"repo" help:"Contacts data repo path"`
 	JSON    bool   `name:"json" help:"Write JSON to stdout"`
 	DryRun  bool   `name:"dry-run" short:"n" help:"Preview changes without writing"`
 	NoInput bool   `name:"no-input" help:"Never prompt"`
@@ -908,7 +908,6 @@ func (c *DoctorCmd) Run(r *Runtime) error {
 		return r.printDoctorReport(r.doctorReport())
 	}
 	store := r.store
-	store.Repo.Config.Repair.AutoRepair = false
 	people, err := store.People()
 	if err != nil {
 		return err

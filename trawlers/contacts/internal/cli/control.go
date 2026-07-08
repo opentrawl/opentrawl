@@ -214,9 +214,7 @@ func (r *Runtime) printDoctorReport(report DoctorReport) error {
 }
 
 func (r *Runtime) readOnlyStore() index.Store {
-	store := r.store
-	store.Repo.Config.Repair.AutoRepair = false
-	return store
+	return r.store
 }
 
 func (r *Runtime) personRepairProblemCount() (int, error) {
