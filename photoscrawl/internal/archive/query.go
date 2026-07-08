@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/openclaw/crawlkit/store"
 )
 
 type SearchOptions struct {
@@ -33,6 +31,7 @@ type SearchHit struct {
 	Who     string `json:"who"`
 	Where   string `json:"where"`
 	Snippet string `json:"snippet"`
+	Stale   bool   `json:"stale,omitempty"`
 
 	ID           string `json:"-"`
 	ShortRef     string `json:"short_ref,omitempty"`
@@ -40,6 +39,8 @@ type SearchHit struct {
 	MediaType    string `json:"-"`
 	CreationDate string `json:"-"`
 	Title        string `json:"-"`
+	StaleSince   string `json:"-"`
+	StaleReason  string `json:"-"`
 }
 
 const searchWhoSQL = `coalesce((
@@ -58,6 +59,7 @@ const searchWherePlaceSQL = `coalesce((
   from place_observation
   where asset_id = asset.id
     and observation_type = 'known_place'
+    and superseded_at is null
     and trim(value_text) <> ''
   order by id
   limit 1
@@ -66,6 +68,7 @@ const searchWherePlaceSQL = `coalesce((
   from place_observation
   where asset_id = asset.id
     and observation_type = 'venue'
+    and superseded_at is null
     and tier in ('confirmed_venue', 'venue_candidate')
     and trim(value_text) <> ''
   order by case tier when 'confirmed_venue' then 1 else 2 end, distance_meters, id
@@ -75,6 +78,7 @@ const searchWherePlaceSQL = `coalesce((
   from place_observation
   where asset_id = asset.id
     and observation_type = 'address'
+    and superseded_at is null
     and trim(value_text) <> ''
   order by id
   limit 1
@@ -101,6 +105,7 @@ const searchCardSummarySQL = `coalesce((
   from model_observation
   where asset_id = asset.id
     and observation_type = '` + modelObservationCardSummary + `'
+    and superseded_at is null
     and trim(value_text) <> ''
   order by id
   limit 1
@@ -111,8 +116,47 @@ const searchCardDescriptionSQL = `coalesce((
   from model_observation
   where asset_id = asset.id
     and observation_type = '` + modelObservationCardDescription + `'
+    and superseded_at is null
     and trim(value_text) <> ''
   order by id
+  limit 1
+), '')`
+
+const searchStaleSinceSQL = `coalesce((
+  select stale_since
+  from (
+    select stale_since, stale_reason
+    from model_observation
+    where asset_id = asset.id
+      and superseded_at is null
+      and trim(coalesce(stale_since, '')) <> ''
+    union all
+    select stale_since, stale_reason
+    from place_observation
+    where asset_id = asset.id
+      and superseded_at is null
+      and trim(coalesce(stale_since, '')) <> ''
+  )
+  order by stale_since
+  limit 1
+), '')`
+
+const searchStaleReasonSQL = `coalesce((
+  select coalesce(stale_reason, '')
+  from (
+    select stale_since, stale_reason
+    from model_observation
+    where asset_id = asset.id
+      and superseded_at is null
+      and trim(coalesce(stale_since, '')) <> ''
+    union all
+    select stale_since, stale_reason
+    from place_observation
+    where asset_id = asset.id
+      and superseded_at is null
+      and trim(coalesce(stale_since, '')) <> ''
+  )
+  order by stale_since
   limit 1
 ), '')`
 
@@ -139,7 +183,7 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("before must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
 	}
-	db, err := store.OpenReadOnly(ctx, paths.Database)
+	db, err := openExistingArchive(ctx, paths.Database)
 	if err != nil {
 		return SearchResult{}, err
 	}
@@ -197,7 +241,9 @@ select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
        `+searchWhoSQL+` as who,
        `+whereSQL+` as where_label,
        `+searchCardSummarySQL+` as card_summary,
-       `+searchCardDescriptionSQL+` as card_description
+       `+searchCardDescriptionSQL+` as card_description,
+       `+searchStaleSinceSQL+` as stale_since,
+       `+searchStaleReasonSQL+` as stale_reason
 from matched_assets
 join asset on asset.id = matched_assets.id
 order by matched_assets.hit_rank, asset.creation_date desc, asset.id
@@ -217,7 +263,7 @@ limit ?
 	for rows.Next() {
 		var hit SearchHit
 		var assetBody, cardSummary, cardDescription, timezoneName string
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription); err != nil {
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription, &hit.StaleSince, &hit.StaleReason); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
@@ -227,6 +273,7 @@ limit ?
 			hit.Where = cleanPlacePhrase(hit.Where)
 		}
 		hit.Snippet = searchSnippet(query, cardSummary, cardDescription, hit.Title, assetBody)
+		hit.Stale = strings.TrimSpace(hit.StaleSince) != ""
 		result.Results = append(result.Results, hit)
 	}
 	if err := rows.Err(); err != nil {

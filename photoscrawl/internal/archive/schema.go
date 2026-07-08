@@ -174,7 +174,10 @@ create table if not exists model_observation (
   source text not null,
   model_id text not null,
   prompt_version text not null,
-  evidence_id text not null
+  evidence_id text not null,
+  stale_since text,
+  stale_reason text,
+  superseded_at text
 );
 
 create table if not exists place_observation (
@@ -188,7 +191,10 @@ create table if not exists place_observation (
   cache_status text not null,
   tier text not null,
   distance_meters real,
-  evidence_id text not null
+  evidence_id text not null,
+  stale_since text,
+  stale_reason text,
+  superseded_at text
 );
 
 create table if not exists known_place (

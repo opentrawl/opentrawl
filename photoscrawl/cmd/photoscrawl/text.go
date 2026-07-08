@@ -75,9 +75,9 @@ func printSyncText(w io.Writer, result archive.SyncResult) error {
 	if _, err := fmt.Fprintf(w, "Imported: %d resources, %d album memberships, %d locations\n", result.ResourcesSeen, result.AlbumMembershipsSeen, result.LocationsSeen); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Invalidated observations: model %s; place %s\n",
-		syncInvalidationText(result.InvalidatedModelObservationAssets, result.InvalidatedModelObservationRows),
-		syncInvalidationText(result.InvalidatedPlaceObservationAssets, result.InvalidatedPlaceObservationRows)); err != nil {
+	if _, err := fmt.Fprintf(w, "Marked stale: model %s; place %s\n",
+		syncStaleText(result.MarkedStaleModelAssets, result.MarkedStaleModelRows),
+		syncStaleText(result.MarkedStalePlaceAssets, result.MarkedStalePlaceRows)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(w,
@@ -91,7 +91,7 @@ func printSyncText(w io.Writer, result archive.SyncResult) error {
 	return nil
 }
 
-func syncInvalidationText(assets, rows int) string {
+func syncStaleText(assets, rows int) string {
 	return fmt.Sprintf("%d %s, %d %s", assets, syncUnit(assets, "asset"), rows, syncUnit(rows, "row"))
 }
 
@@ -181,13 +181,17 @@ func searchMoreHint(result archive.SearchResult) string {
 func searchListItems(hits []archive.SearchHit) []ckrender.ListItem {
 	items := make([]ckrender.ListItem, 0, len(hits))
 	for _, hit := range hits {
+		text := hit.Snippet
+		if hit.Stale {
+			text = strings.TrimSpace("[STALE] " + text)
+		}
 		items = append(items, ckrender.ListItem{
 			Time:     parseCaptureTime(hit.Time),
 			DateOnly: true,
 			Who:      hit.Who,
 			Where:    hit.Where,
 			Ref:      searchDisplayRef(hit),
-			Text:     hit.Snippet,
+			Text:     text,
 		})
 	}
 	return items
@@ -213,6 +217,14 @@ func writeOpen(w io.Writer, format output.Format, result archive.OpenResult) err
 // 32-hex canonical ref is deliberately absent — it is machine slop in human
 // output (rules §2.3) and stays in the JSON record.
 func printOpenText(w io.Writer, result archive.OpenResult) error {
+	if result.Stale != nil && strings.TrimSpace(result.Stale.Banner) != "" {
+		if _, err := fmt.Fprintln(w, result.Stale.Banner); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintln(w); err != nil {
+			return err
+		}
+	}
 	title := strings.TrimSpace(result.Model.Summary)
 	if title == "" {
 		title = openFallbackTitle(result)

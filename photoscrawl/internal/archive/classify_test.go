@@ -139,6 +139,167 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	}
 }
 
+func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	provider := fakeProvider{snapshot: fakeSnapshot(false, false)}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := openArchive(ctx, paths.Database)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	firstClassifier := modelClassifier{modelID: "fixture-vision", promptVersion: modelPromptVersion}
+	firstInput := loadTestClassifyInputs(t, ctx, db, "")[0]
+	firstInput.Place = recardPlaceContext("Old Synthetic Pier")
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, _, err := writeModelClassification(ctx, tx, firstInput, firstClassifier, recardModelResult(
+			"Old oldcardterm synthetic card.",
+			"Old oldcardterm description for the retained history row.",
+			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "old synthetic place"},
+		), fixedClock("2026-05-28T10:15:00Z")(), "", "")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	provider.snapshot = fakeSnapshot(false, false)
+	provider.snapshot.Assets[0].Favorite = true
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:30:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	secondInput := loadTestClassifyInputs(t, ctx, db, "")[0]
+	secondInput.Place = recardPlaceContext("New Synthetic Pier")
+	secondClassifier := modelClassifier{modelID: "fixture-vision-v2", promptVersion: modelPromptVersion}
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, _, err := writeModelClassification(ctx, tx, secondInput, secondClassifier, recardModelResult(
+			"New newcardterm synthetic card.",
+			"New newcardterm description for the active row.",
+			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "new synthetic place"},
+		), fixedClock("2026-05-28T10:45:00Z")(), "", "")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sourceID := stableID("source_library", libraryPath)
+	assetID := stableID("asset", sourceID, "fixture-asset-1")
+	var oldModelStaleSince, oldModelSupersededAt, newModelStaleSince, newModelSupersededAt string
+	if err := db.DB().QueryRowContext(ctx, `
+select coalesce(stale_since, ''), coalesce(superseded_at, '')
+from model_observation
+where asset_id = ? and observation_type = ? and value_text like 'Old oldcardterm%'
+`, assetID, modelObservationCardSummary).Scan(&oldModelStaleSince, &oldModelSupersededAt); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DB().QueryRowContext(ctx, `
+select coalesce(stale_since, ''), coalesce(superseded_at, '')
+from model_observation
+where asset_id = ? and observation_type = ? and value_text like 'New newcardterm%'
+`, assetID, modelObservationCardSummary).Scan(&newModelStaleSince, &newModelSupersededAt); err != nil {
+		t.Fatal(err)
+	}
+	if oldModelStaleSince != "2026-05-28T10:30:00Z" || oldModelSupersededAt != "2026-05-28T10:45:00Z" {
+		t.Fatalf("old model row stale=%q superseded=%q", oldModelStaleSince, oldModelSupersededAt)
+	}
+	if newModelStaleSince != "" || newModelSupersededAt != "" {
+		t.Fatalf("new model row stale=%q superseded=%q", newModelStaleSince, newModelSupersededAt)
+	}
+
+	var oldPlaceStaleSince, oldPlaceSupersededAt string
+	if err := db.DB().QueryRowContext(ctx, `
+select coalesce(stale_since, ''), coalesce(superseded_at, '')
+from place_observation
+where asset_id = ? and observation_type = 'venue' and value_text = 'Old Synthetic Pier'
+`, assetID).Scan(&oldPlaceStaleSince, &oldPlaceSupersededAt); err != nil {
+		t.Fatal(err)
+	}
+	if oldPlaceStaleSince != "2026-05-28T10:30:00Z" || oldPlaceSupersededAt != "2026-05-28T10:45:00Z" {
+		t.Fatalf("old place row stale=%q superseded=%q", oldPlaceStaleSince, oldPlaceSupersededAt)
+	}
+
+	opened, err := Open(ctx, paths, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.Stale != nil {
+		t.Fatalf("open returned stale banner for active card: %#v", opened.Stale)
+	}
+	if opened.Model.Summary != "New newcardterm synthetic card." {
+		t.Fatalf("open summary = %q", opened.Model.Summary)
+	}
+	if opened.Mechanical.Venue == nil || opened.Mechanical.Venue.Name != "New Synthetic Pier" {
+		t.Fatalf("open venue = %#v", opened.Mechanical.Venue)
+	}
+	oldSearch, err := Search(ctx, paths, SearchOptions{Query: "oldcardterm", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldSearch.TotalMatches != 0 {
+		t.Fatalf("superseded old card search = %#v", oldSearch.Results)
+	}
+	newSearch, err := Search(ctx, paths, SearchOptions{Query: "newcardterm", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(newSearch.Results) != 1 || newSearch.Results[0].Stale {
+		t.Fatalf("new card search = %#v", newSearch.Results)
+	}
+}
+
+func recardModelResult(summary, description string, plausibility venuePlausibility) modelResult {
+	return modelResult{
+		VenuePlausibility: plausibility,
+		Observations: []contentObservation{
+			{
+				ObservationType: modelObservationCardSummary,
+				ValueText:       summary,
+				Value:           map[string]any{"text": summary},
+			},
+			{
+				ObservationType: modelObservationCardDescription,
+				ValueText:       description,
+				Value:           map[string]any{"text": description},
+			},
+		},
+	}
+}
+
+func recardPlaceContext(name string) *classifyPlaceContext {
+	return &classifyPlaceContext{
+		CacheStatus: "hit",
+		Result: place.Result{
+			Provider:  "apple",
+			Source:    "fixture",
+			POIStatus: place.POIStatusFound,
+			POICandidates: []place.POICandidate{{
+				Name:      name,
+				Category:  "pier",
+				DistanceM: 12,
+				Tier:      place.TierVenueCandidate,
+				Source:    "fixture",
+			}},
+		},
+	}
+}
+
 func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)

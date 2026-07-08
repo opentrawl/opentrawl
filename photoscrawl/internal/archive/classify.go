@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
 )
 
 const (
@@ -91,11 +90,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 		limit = 100
 	}
 
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return ClassifyResult{}, err
 	}

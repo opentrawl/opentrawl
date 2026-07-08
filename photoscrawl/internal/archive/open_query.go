@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-
-	"github.com/openclaw/crawlkit/store"
 )
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
@@ -14,7 +12,7 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 	if rowID == "" {
 		return OpenResult{}, errors.New("ref is required")
 	}
-	db, err := store.OpenReadOnly(ctx, paths.Database)
+	db, err := openExistingArchive(ctx, paths.Database)
 	if err != nil {
 		return OpenResult{}, err
 	}
@@ -59,10 +57,13 @@ order by album_title, album_kind
 		return OpenResult{}, err
 	}
 	modelObservations, err := rows(ctx, db.DB(), `
-select observation_type, value_text, value_json, model_id, prompt_version
+select observation_type, value_text, value_json, model_id, prompt_version,
+       coalesce(stale_since, '') as stale_since,
+       coalesce(stale_reason, '') as stale_reason
 from model_observation
 where asset_id = ?
   and observation_type in ('`+modelObservationCardSummary+`', '`+modelObservationCardDescription+`', '`+modelObservationCardOCR+`', '`+modelObservationCardUncertainty+`')
+  and superseded_at is null
 order by case observation_type
   when '`+modelObservationCardSummary+`' then 1
   when '`+modelObservationCardDescription+`' then 2
@@ -79,9 +80,12 @@ end, id
 		return OpenResult{}, err
 	} else if ok {
 		placeObservations, err = rows(ctx, db.DB(), `
-select observation_type, value_text, value_json, provider, cache_status, tier, distance_meters
+select observation_type, value_text, value_json, provider, cache_status, tier, distance_meters,
+       coalesce(stale_since, '') as stale_since,
+       coalesce(stale_reason, '') as stale_reason
 from place_observation
 where asset_id = ?
+  and superseded_at is null
 order by case observation_type
   when 'known_place' then 1
   when 'venue' then 2

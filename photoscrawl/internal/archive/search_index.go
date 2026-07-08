@@ -71,7 +71,8 @@ from asset
 			 select id, asset_id, label, label from metadata_observation`,
 			`insert into observation_fts(id, asset_id, title, body)
 			 select id, asset_id, '', value_text from place_observation
-			 where observation_type not in ('` + knownPlaceObservationType + `', 'poi_candidate')`,
+			 where observation_type not in ('` + knownPlaceObservationType + `', 'poi_candidate')
+			   and superseded_at is null`,
 		} {
 			res, err := tx.ExecContext(ctx, stmt)
 			if err != nil {
@@ -113,7 +114,7 @@ func rebuildKnownPlaceFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `
 select id, asset_id, value_text, value_json
 from place_observation
-where observation_type = ?`, knownPlaceObservationType)
+where observation_type = ? and superseded_at is null`, knownPlaceObservationType)
 	if err != nil {
 		return 0, fmt.Errorf("read known place observations: %w", err)
 	}
@@ -163,6 +164,7 @@ func rebuildCardFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
 select asset_id, id, observation_type, value_text
 from model_observation
 where observation_type in (?1, ?2, ?3, ?4)
+  and superseded_at is null
 order by asset_id,
          case observation_type when ?1 then 0 when ?2 then 1 when ?3 then 2 else 3 end,
          id`,

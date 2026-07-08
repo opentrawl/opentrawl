@@ -98,21 +98,25 @@ func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sour
 	return nil
 }
 
-type invalidatedObservationRows struct {
+type markedStaleRows struct {
 	ModelObservationRows int
 	PlaceObservationRows int
 }
 
-func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) (invalidatedObservationRows, error) {
-	counts, err := countInvalidatedObservationRows(ctx, tx, assetID)
+const syncStaleReason = "asset metadata changed in sync (fingerprint drift)"
+
+func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string, staleSince time.Time) (markedStaleRows, error) {
+	counts, err := markAssetObservationsStale(ctx, tx, assetID, staleSince)
 	if err != nil {
-		return invalidatedObservationRows{}, err
+		return markedStaleRows{}, err
+	}
+	if err := deleteResetObservationFTS(ctx, tx, assetID); err != nil {
+		return markedStaleRows{}, err
 	}
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
 		"metadata_observation", "text_observation", "face_observation",
-		"model_observation", "place_observation",
-		"asset_fts", "observation_fts", "edge",
+		"asset_fts", "edge",
 	}
 	for _, table := range tables {
 		column := "asset_id"
@@ -130,19 +134,61 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) (inv
 			_, err = tx.ExecContext(ctx, query, assetID)
 		}
 		if err != nil {
-			return invalidatedObservationRows{}, fmt.Errorf("clear %s for asset: %w", table, err)
+			return markedStaleRows{}, fmt.Errorf("clear %s for asset: %w", table, err)
 		}
 	}
 	return counts, nil
 }
 
-func countInvalidatedObservationRows(ctx context.Context, tx *sql.Tx, assetID string) (invalidatedObservationRows, error) {
-	var counts invalidatedObservationRows
-	if err := tx.QueryRowContext(ctx, `select count(*) from model_observation where asset_id = ?`, assetID).Scan(&counts.ModelObservationRows); err != nil {
-		return counts, fmt.Errorf("count model observations before reset: %w", err)
+func markAssetObservationsStale(ctx context.Context, tx *sql.Tx, assetID string, staleSince time.Time) (markedStaleRows, error) {
+	var counts markedStaleRows
+	if err := tx.QueryRowContext(ctx, `
+select count(*)
+from model_observation
+where asset_id = ?
+  and superseded_at is null
+  and stale_since is null
+`, assetID).Scan(&counts.ModelObservationRows); err != nil {
+		return counts, fmt.Errorf("count model observations before stale mark: %w", err)
 	}
-	if err := tx.QueryRowContext(ctx, `select count(*) from place_observation where asset_id = ?`, assetID).Scan(&counts.PlaceObservationRows); err != nil {
-		return counts, fmt.Errorf("count place observations before reset: %w", err)
+	if err := tx.QueryRowContext(ctx, `
+select count(*)
+from place_observation
+where asset_id = ?
+  and superseded_at is null
+  and stale_since is null
+`, assetID).Scan(&counts.PlaceObservationRows); err != nil {
+		return counts, fmt.Errorf("count place observations before stale mark: %w", err)
+	}
+	staleAt := staleSince.UTC().Format(time.RFC3339Nano)
+	for _, table := range []string{"model_observation", "place_observation"} {
+		if _, err := tx.ExecContext(ctx, `
+update `+store.QuoteIdent(table)+`
+set stale_since = coalesce(stale_since, ?),
+    stale_reason = ?
+where asset_id = ?
+  and superseded_at is null
+  and stale_since is null
+`, staleAt, syncStaleReason, assetID); err != nil {
+			return counts, fmt.Errorf("mark %s stale: %w", table, err)
+		}
 	}
 	return counts, nil
+}
+
+func deleteResetObservationFTS(ctx context.Context, tx *sql.Tx, assetID string) error {
+	if _, err := tx.ExecContext(ctx, `
+delete from observation_fts
+where asset_id = ?
+  and id not in (
+    select id from model_observation
+    where asset_id = ? and superseded_at is null
+    union
+    select id from place_observation
+    where asset_id = ? and superseded_at is null
+  )
+`, assetID, assetID, assetID); err != nil {
+		return fmt.Errorf("clear reset observation fts: %w", err)
+	}
+	return nil
 }

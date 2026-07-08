@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openclaw/photoscrawl/internal/cardformat"
 	"github.com/openclaw/photoscrawl/internal/place"
@@ -13,15 +14,20 @@ import (
 const placeObservationSource = "place_context"
 
 func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility) (int, error) {
+	return writePlaceClassificationAt(ctx, tx, input, plausibility, time.Now().UTC())
+}
+
+func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, classifiedAt time.Time) (int, error) {
 	if input.Place == nil && input.KnownPlace == nil {
-		return 0, clearPlaceObservations(ctx, tx, input.AssetID)
+		return 0, supersedePlaceObservations(ctx, tx, input.AssetID, classifiedAt)
 	}
-	if err := clearPlaceObservations(ctx, tx, input.AssetID); err != nil {
+	if err := supersedePlaceObservations(ctx, tx, input.AssetID, classifiedAt); err != nil {
 		return 0, err
 	}
 	written := 0
+	generationID := classifiedAt.UTC().Format(time.RFC3339Nano)
 	if input.KnownPlace != nil {
-		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, *input.KnownPlace)
+		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, generationID, *input.KnownPlace)
 		if err != nil {
 			return written, err
 		}
@@ -34,7 +40,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	place.NormalizeResult(&result)
 	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
 	if address := addressLine(result.Address); address != "" {
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, "address", address, map[string]any{
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, generationID, "address", address, map[string]any{
 			"address": result.Address,
 			"area":    result.Area,
 		}, result.Provider, input.Place.CacheStatus, place.TierAreaContext, 0)
@@ -59,7 +65,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		}
 		seenCandidates[key] = true
 		value := placeCandidateValue(candidate)
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, generationID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
@@ -69,7 +75,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 			continue
 		}
 		value["tier"] = tier
-		n, err = insertPlaceObservation(ctx, tx, input.AssetID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
+		n, err = insertPlaceObservation(ctx, tx, input.AssetID, generationID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
@@ -79,7 +85,7 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	return written, nil
 }
 
-func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
+func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, generationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, nil
@@ -88,11 +94,11 @@ func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, kind, text
 	if err != nil {
 		return 0, err
 	}
-	observationID := stableID("place_observation", assetID, kind, text, tier)
 	var distanceValue any
 	if distance > 0 {
 		distanceValue = distance
 	}
+	observationID := stableID("place_observation", assetID, generationID, kind, text, tier)
 	if _, err := tx.ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -113,7 +119,7 @@ values (?, ?, ?, ?)
 	return 1, nil
 }
 
-func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string, match KnownPlaceMatch) (int, error) {
+func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, generationID string, match KnownPlaceMatch) (int, error) {
 	label := KnownPlaceWhereLabel(match.Kind, match.Name, match.After)
 	if label == "" {
 		return 0, nil
@@ -127,7 +133,7 @@ func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID string
 	if err != nil {
 		return 0, err
 	}
-	observationID := stableID("place_observation", assetID, knownPlaceObservationType, match.Kind, match.Name)
+	observationID := stableID("place_observation", assetID, generationID, knownPlaceObservationType, match.Kind, match.Name)
 	if _, err := tx.ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -144,19 +150,27 @@ values (?, ?, ?, ?)
 	return 1, nil
 }
 
-func clearPlaceObservations(ctx context.Context, tx *sql.Tx, assetID string) error {
+func supersedePlaceObservations(ctx context.Context, tx *sql.Tx, assetID string, supersededAt time.Time) error {
 	if strings.TrimSpace(assetID) == "" {
 		return nil
 	}
+	timestamp := supersededAt.UTC().Format(time.RFC3339Nano)
 	if _, err := tx.ExecContext(ctx, `
 delete from observation_fts
 where asset_id = ?
-  and id in (select id from place_observation where asset_id = ?)
+  and id in (
+    select id from place_observation
+    where asset_id = ? and superseded_at is null
+  )
 `, assetID, assetID); err != nil {
-		return fmt.Errorf("clear place observation fts: %w", err)
+		return fmt.Errorf("clear superseded place observation fts: %w", err)
 	}
-	if _, err := tx.ExecContext(ctx, `delete from place_observation where asset_id = ?`, assetID); err != nil {
-		return fmt.Errorf("clear place observations: %w", err)
+	if _, err := tx.ExecContext(ctx, `
+update place_observation
+set superseded_at = ?
+where asset_id = ? and superseded_at is null
+`, timestamp, assetID); err != nil {
+		return fmt.Errorf("supersede place observations: %w", err)
 	}
 	return nil
 }

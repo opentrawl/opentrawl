@@ -323,7 +323,7 @@ func TestSearchExcludesUnselectedPOICandidates(t *testing.T) {
 			{"venue", "UMI Sushi"},
 			{"address", "Simeonstrasse 1 Trier"},
 		} {
-			if _, err := insertPlaceObservation(ctx, tx, assetID, row.kind, row.text, map[string]any{}, "fixture", "hit", "poi", 10); err != nil {
+			if _, err := insertPlaceObservation(ctx, tx, assetID, "fixture-generation", row.kind, row.text, map[string]any{}, "fixture", "hit", "poi", 10); err != nil {
 				return err
 			}
 		}

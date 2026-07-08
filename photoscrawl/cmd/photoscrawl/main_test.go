@@ -146,23 +146,23 @@ func TestCommandWritesCrawlkitLog(t *testing.T) {
 func TestSyncHumanOutputIsProse(t *testing.T) {
 	var out strings.Builder
 	err := printSyncText(&out, archive.SyncResult{
-		Database:                          filepath.Join("tmp", "photos.sqlite"),
-		Provider:                          "photos_sqlite_snapshot",
-		AssetsSeen:                        10,
-		AssetsNew:                         0,
-		AssetsChanged:                     0,
-		AssetsUnchanged:                   10,
-		ResourcesSeen:                     20,
-		AlbumMembershipsSeen:              3,
-		LocationsSeen:                     7,
-		QueuedForClassify:                 2,
-		QueuedNeedsDownload:               1,
-		ClassificationQueuePending:        3,
-		PreviouslySeenMissing:             0,
-		InvalidatedModelObservationAssets: 1,
-		InvalidatedModelObservationRows:   2,
-		InvalidatedPlaceObservationAssets: 1,
-		InvalidatedPlaceObservationRows:   1,
+		Database:                   filepath.Join("tmp", "photos.sqlite"),
+		Provider:                   "photos_sqlite_snapshot",
+		AssetsSeen:                 10,
+		AssetsNew:                  0,
+		AssetsChanged:              0,
+		AssetsUnchanged:            10,
+		ResourcesSeen:              20,
+		AlbumMembershipsSeen:       3,
+		LocationsSeen:              7,
+		QueuedForClassify:          2,
+		QueuedNeedsDownload:        1,
+		ClassificationQueuePending: 3,
+		PreviouslySeenMissing:      0,
+		MarkedStaleModelAssets:     1,
+		MarkedStaleModelRows:       2,
+		MarkedStalePlaceAssets:     1,
+		MarkedStalePlaceRows:       1,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -172,35 +172,35 @@ func TestSyncHumanOutputIsProse(t *testing.T) {
 		"Provider: photos_sqlite_snapshot",
 		"Assets: 10 seen, 0 new, 0 changed, 10 unchanged, 0 missing",
 		"Imported: 20 resources, 3 album memberships, 7 locations",
-		"Invalidated observations: model 1 asset, 2 rows; place 1 asset, 1 row",
+		"Marked stale: model 1 asset, 2 rows; place 1 asset, 1 row",
 		"Classification queue: 2 queued this run, 1 needs download, 3 pending now",
 	)
 }
 
 func TestSyncLogMessageReportsInvalidationCost(t *testing.T) {
 	got := syncLogMessage(archive.SyncResult{
-		Provider:                          "photos_sqlite_snapshot",
-		AssetsSeen:                        10,
-		AssetsNew:                         1,
-		AssetsChanged:                     2,
-		AssetsUnchanged:                   7,
-		QueuedForClassify:                 3,
-		QueuedNeedsDownload:               1,
-		ClassificationQueuePending:        4,
-		PreviouslySeenMissing:             5,
-		InvalidatedModelObservationAssets: 2,
-		InvalidatedModelObservationRows:   6,
-		InvalidatedPlaceObservationAssets: 1,
-		InvalidatedPlaceObservationRows:   3,
+		Provider:                   "photos_sqlite_snapshot",
+		AssetsSeen:                 10,
+		AssetsNew:                  1,
+		AssetsChanged:              2,
+		AssetsUnchanged:            7,
+		QueuedForClassify:          3,
+		QueuedNeedsDownload:        1,
+		ClassificationQueuePending: 4,
+		PreviouslySeenMissing:      5,
+		MarkedStaleModelAssets:     2,
+		MarkedStaleModelRows:       6,
+		MarkedStalePlaceAssets:     1,
+		MarkedStalePlaceRows:       3,
 	})
 	for _, want := range []string{
 		"queued_for_classify=3",
 		"queued_needs_download=1",
 		"classification_queue_pending=4",
-		"invalidated_model_observation_assets=2",
-		"invalidated_model_observation_rows=6",
-		"invalidated_place_observation_assets=1",
-		"invalidated_place_observation_rows=3",
+		"marked_stale_model_assets=2",
+		"marked_stale_model_rows=6",
+		"marked_stale_place_assets=1",
+		"marked_stale_place_rows=3",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("sync log message missing %q in %q", want, got)
@@ -233,6 +233,24 @@ func TestSearchHumanOutputIsProse(t *testing.T) {
 	if strings.Contains(got, "2026-05-28T12:00:00+02:00") {
 		t.Fatalf("human search output leaked a raw RFC3339 timestamp:\n%s", got)
 	}
+}
+
+func TestSearchHumanOutputMarksStaleHits(t *testing.T) {
+	var out strings.Builder
+	err := printSearchText(&out, archive.SearchResult{
+		Query:        "receipt",
+		TotalMatches: 1,
+		Results: []archive.SearchHit{{
+			Ref:     "photoscrawl:asset/fixture",
+			Time:    "2026-05-28T12:00:00+02:00",
+			Snippet: "receipt candidate from stale card",
+			Stale:   true,
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertHumanProseOutput(t, out.String(), "[STALE] receipt candidate from stale card")
 }
 
 func TestSearchHumanOutputUsesShortRefWhenAvailable(t *testing.T) {
@@ -417,6 +435,33 @@ func TestOpenHumanOutputIsProse(t *testing.T) {
 	if strings.Contains(got, "photoscrawl:asset/fixture") {
 		t.Fatalf("human open output leaked the full machine ref:\n%s", got)
 	}
+}
+
+func TestOpenHumanOutputPrintsStaleBanner(t *testing.T) {
+	var out strings.Builder
+	err := printOpenText(&out, archive.OpenResult{
+		Ref: "photoscrawl:asset/fixture",
+		Stale: &archive.OpenStale{
+			Since:  "2026-05-28T11:00:00Z",
+			Reason: "asset metadata changed in sync (fingerprint drift)",
+			Banner: archive.StaleCardBanner("2026-05-28T11:00:00Z", "asset metadata changed in sync (fingerprint drift)"),
+		},
+		Model: archive.OpenModel{
+			Summary:     "Synthetic beach scene.",
+			Description: "A stale card still renders its full description.",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := out.String()
+	assertHumanProseOutput(t, got,
+		"DEBUG INFO: THIS CARD IS STALE",
+		"stale since 2026-05-28T11:00:00Z: asset metadata changed in sync (fingerprint drift)",
+		"PLEASE FIX.",
+		"Synthetic beach scene.",
+		"A stale card still renders its full description.",
+	)
 }
 
 func TestOpenHumanOutputUsesKnownPlaceInsteadOfVenue(t *testing.T) {

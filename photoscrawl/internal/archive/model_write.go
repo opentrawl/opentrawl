@@ -10,23 +10,24 @@ import (
 )
 
 func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, _, _ string) (int, int, error) {
-	if err := clearModelObservations(ctx, tx, input.AssetID, classifier.modelID); err != nil {
+	if err := supersedeModelObservations(ctx, tx, input.AssetID, classifiedAt); err != nil {
 		return 0, 0, err
 	}
 
-	placeWritten, err := writePlaceClassification(ctx, tx, input, result.VenuePlausibility)
+	placeWritten, err := writePlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, classifiedAt)
 	if err != nil {
 		return 0, placeWritten, err
 	}
 	written := 0
 	cardFTSID := ""
 	cardTexts := []string{}
+	generationID := classifiedAt.UTC().Format(time.RFC3339Nano)
 	for _, observation := range result.Observations {
 		valueJSON, err := jsonText(observation.Value)
 		if err != nil {
 			return written, placeWritten, err
 		}
-		observationID := stableID("model_observation", input.AssetID, modelClassifierSource, classifier.modelID, classifier.promptVersion, observation.ObservationType, observation.ValueText)
+		observationID := stableID("model_observation", input.AssetID, modelClassifierSource, classifier.modelID, classifier.promptVersion, generationID, observation.ObservationType, observation.ValueText)
 		if _, err := tx.ExecContext(ctx, `
 insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -86,28 +87,27 @@ on conflict(id) do update set
 	return nil
 }
 
-func clearModelObservations(ctx context.Context, tx *sql.Tx, assetID, modelID string) error {
+func supersedeModelObservations(ctx context.Context, tx *sql.Tx, assetID string, supersededAt time.Time) error {
 	if strings.TrimSpace(assetID) == "" {
 		return errors.New("asset id is required")
 	}
+	timestamp := supersededAt.UTC().Format(time.RFC3339Nano)
 	if _, err := tx.ExecContext(ctx, `
 delete from observation_fts
 where asset_id = ?
   and id in (
     select id from model_observation
-    where asset_id = ? and source in (?, ?) and model_id = ?
+    where asset_id = ? and source in (?, ?) and superseded_at is null
   )
-`, assetID, assetID, modelClassifierSource, "local_multimodal", modelID); err != nil {
-		return fmt.Errorf("clear model observation fts: %w", err)
+`, assetID, assetID, modelClassifierSource, "local_multimodal"); err != nil {
+		return fmt.Errorf("clear superseded model observation fts: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-delete from model_observation
-where asset_id = ? and source in (?, ?) and model_id = ?
-`, assetID, modelClassifierSource, "local_multimodal", modelID); err != nil {
-		return fmt.Errorf("clear model observations: %w", err)
-	}
-	if err := clearPlaceObservations(ctx, tx, assetID); err != nil {
-		return err
+update model_observation
+set superseded_at = ?
+where asset_id = ? and source in (?, ?) and superseded_at is null
+`, timestamp, assetID, modelClassifierSource, "local_multimodal"); err != nil {
+		return fmt.Errorf("supersede model observations: %w", err)
 	}
 	return nil
 }

@@ -14,7 +14,6 @@ import (
 
 	crawlconfig "github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/state"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
@@ -25,25 +24,25 @@ type SyncOptions struct {
 }
 
 type SyncResult struct {
-	Database                          string `json:"database"`
-	Provider                          string `json:"provider"`
-	SnapshotID                        string `json:"snapshot_id"`
-	SourceLibraryID                   string `json:"source_library_id"`
-	AssetsSeen                        int    `json:"assets_seen"`
-	AssetsNew                         int    `json:"assets_new"`
-	AssetsChanged                     int    `json:"assets_changed"`
-	AssetsUnchanged                   int    `json:"assets_unchanged"`
-	ResourcesSeen                     int    `json:"resources_seen"`
-	AlbumMembershipsSeen              int    `json:"album_memberships_seen"`
-	LocationsSeen                     int    `json:"locations_seen"`
-	QueuedForClassify                 int    `json:"queued_for_classify"`
-	QueuedNeedsDownload               int    `json:"queued_needs_download"`
-	ClassificationQueuePending        int    `json:"classification_queue_pending"`
-	PreviouslySeenMissing             int    `json:"previously_seen_missing"`
-	InvalidatedModelObservationAssets int    `json:"invalidated_model_observation_assets"`
-	InvalidatedModelObservationRows   int    `json:"invalidated_model_observation_rows"`
-	InvalidatedPlaceObservationAssets int    `json:"invalidated_place_observation_assets"`
-	InvalidatedPlaceObservationRows   int    `json:"invalidated_place_observation_rows"`
+	Database                   string `json:"database"`
+	Provider                   string `json:"provider"`
+	SnapshotID                 string `json:"snapshot_id"`
+	SourceLibraryID            string `json:"source_library_id"`
+	AssetsSeen                 int    `json:"assets_seen"`
+	AssetsNew                  int    `json:"assets_new"`
+	AssetsChanged              int    `json:"assets_changed"`
+	AssetsUnchanged            int    `json:"assets_unchanged"`
+	ResourcesSeen              int    `json:"resources_seen"`
+	AlbumMembershipsSeen       int    `json:"album_memberships_seen"`
+	LocationsSeen              int    `json:"locations_seen"`
+	QueuedForClassify          int    `json:"queued_for_classify"`
+	QueuedNeedsDownload        int    `json:"queued_needs_download"`
+	ClassificationQueuePending int    `json:"classification_queue_pending"`
+	PreviouslySeenMissing      int    `json:"previously_seen_missing"`
+	MarkedStaleModelAssets     int    `json:"marked_stale_model_assets"`
+	MarkedStaleModelRows       int    `json:"marked_stale_model_rows"`
+	MarkedStalePlaceAssets     int    `json:"marked_stale_place_assets"`
+	MarkedStalePlaceRows       int    `json:"marked_stale_place_rows"`
 }
 
 func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
@@ -78,11 +77,7 @@ func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error
 		return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
 	}
 
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -232,11 +227,11 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 	}
 
 	if seenBefore {
-		counts, err := resetAssetDerivedRows(ctx, tx, assetID)
+		counts, err := resetAssetDerivedRows(ctx, tx, assetID, c.completedAt)
 		if err != nil {
 			return err
 		}
-		c.addInvalidatedObservations(counts)
+		c.addMarkedStaleObservations(counts)
 	}
 	for i, resource := range asset.Resources {
 		if err := c.insertResource(ctx, assetID, i, resource); err != nil {
@@ -262,14 +257,14 @@ func (c *syncImporter) upsertAsset(ctx context.Context, tx *sql.Tx, sourceID, sn
 	return c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint)
 }
 
-func (c *syncImporter) addInvalidatedObservations(counts invalidatedObservationRows) {
+func (c *syncImporter) addMarkedStaleObservations(counts markedStaleRows) {
 	if counts.ModelObservationRows > 0 {
-		c.result.InvalidatedModelObservationAssets++
-		c.result.InvalidatedModelObservationRows += counts.ModelObservationRows
+		c.result.MarkedStaleModelAssets++
+		c.result.MarkedStaleModelRows += counts.ModelObservationRows
 	}
 	if counts.PlaceObservationRows > 0 {
-		c.result.InvalidatedPlaceObservationAssets++
-		c.result.InvalidatedPlaceObservationRows += counts.PlaceObservationRows
+		c.result.MarkedStalePlaceAssets++
+		c.result.MarkedStalePlaceRows += counts.PlaceObservationRows
 	}
 }
 

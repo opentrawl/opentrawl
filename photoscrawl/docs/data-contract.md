@@ -52,16 +52,16 @@ Per asset, sync writes:
   marshalled asset JSON (`internal/archive/crawl.go:299`), including albums
   and favourite.
 
-Change detection: an asset whose fingerprint changed is re-upserted, and
-`resetAssetDerivedRows` (`internal/archive/crawl_writes.go:106`) deletes all
-derived rows for it — resources, memberships, locations, and every
-observation table including `model_observation` and `place_observation` —
-then the asset re-enters `classification_queue` — except that a queue row
-already in `failed_download` keeps its state and reason on upsert
-(`internal/archive/crawl_statements.go:76`), so download failures are not
-silently reset by a sync. That deletion scope is ruled correct
-(TRAWL-176, "Invalidation" below): metadata edits legitimately re-card,
-and sync owes cost visibility in return.
+Change detection: an asset whose fingerprint changed is re-upserted.
+`resetAssetDerivedRows` (`internal/archive/crawl_writes.go`) deletes only
+the rows that sync re-imports losslessly: resources, memberships,
+locations, local metadata, OCR/text, faces, edges, and `asset_fts`.
+It does not delete `model_observation` or `place_observation`. Instead,
+it marks their active rows with `stale_since` and `stale_reason`, keeps
+their search entries, and re-enters the asset in `classification_queue`.
+A queue row already in `failed_download` still keeps its state and reason
+on upsert (`internal/archive/crawl_statements.go:76`), so download
+failures are not silently reset by a sync.
 
 ## Stage 2 — the classification queue
 
@@ -327,25 +327,36 @@ key product feature here imo is that we feed ALL the metadata (including
 enriched location stuff, and trip info later on) → into the LLM so that it
 knows this when it is classifying the image. thats the whole point."
 
+Josh's rework ruling on 2026-07-08 supersedes deletion semantics for
+model and place products: changed inputs mark cards stale, and successful
+re-card runs retain history.
+
 Consequences:
 
 - The fingerprint stays whole-asset. A metadata edit (album, favourite —
   and later, enriched context such as trips) genuinely stales the card's
-  inputs, so it legitimately invalidates and re-cards. This is invariant 9
+  inputs, so it legitimately marks stale and re-cards. This is invariant 9
   extended: everything the model consumes is change-tracked.
-- The engineering obligation is cost visibility, not narrower
-  invalidation: every sync reports how many cards and place observations it
-  invalidates before deleting them. Re-carding is visible, budgeted spend:
-  a reported count and a planned run, never a silent delete plus an implicit
-  queue drain. The sync summary, `--json` output, and log line report
-  `invalidated_model_observation_assets`,
-  `invalidated_model_observation_rows`,
-  `invalidated_place_observation_assets`,
-  `invalidated_place_observation_rows`, and `classification_queue_pending`.
+- Sync deletes only Apple-derived rows it can rebuild from the same
+  snapshot. It marks active `model_observation` and `place_observation`
+  rows stale with `stale_since` and `stale_reason`, for example
+  `asset metadata changed in sync (fingerprint drift)`.
+- Stale active cards stay usable. Search keeps them findable and marks
+  hits with `[STALE]`. `open` renders the full card with a debug banner:
+  `DEBUG INFO: THIS CARD IS STALE - generated before the latest metadata
+  sync (...) PLEASE FIX.`
+- A successful re-card does not delete the previous card. It sets
+  `superseded_at` on prior active model and place rows, writes fresh rows,
+  and removes superseded rows from default search/open results. The old
+  rows stay in SQLite as history.
+- The sync summary, `--json` output, and log line report
+  `marked_stale_model_assets`, `marked_stale_model_rows`,
+  `marked_stale_place_assets`, `marked_stale_place_rows`, and
+  `classification_queue_pending`.
 - The rejected alternative (content-only cards, metadata joined at display
   time) is recorded here so it is not re-proposed: it was rejected because
   it guts the product's core idea, not on cost grounds.
 
-Sync against an enriched archive now reports the re-card count and pending
+Sync against an enriched archive now reports the stale count and pending
 queue depth in the run output. The operator can see the cost before deciding
 whether to drain the queue with `classify`.

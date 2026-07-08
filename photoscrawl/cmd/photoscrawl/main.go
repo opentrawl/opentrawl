@@ -273,8 +273,8 @@ func syncLogMessage(result archive.SyncResult) string {
 	return fmt.Sprintf(
 		"provider=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
 			"queued_for_classify=%d queued_needs_download=%d classification_queue_pending=%d "+
-			"invalidated_model_observation_assets=%d invalidated_model_observation_rows=%d "+
-			"invalidated_place_observation_assets=%d invalidated_place_observation_rows=%d",
+			"marked_stale_model_assets=%d marked_stale_model_rows=%d "+
+			"marked_stale_place_assets=%d marked_stale_place_rows=%d",
 		result.Provider,
 		result.AssetsSeen,
 		result.AssetsNew,
@@ -284,10 +284,10 @@ func syncLogMessage(result archive.SyncResult) string {
 		result.QueuedForClassify,
 		result.QueuedNeedsDownload,
 		result.ClassificationQueuePending,
-		result.InvalidatedModelObservationAssets,
-		result.InvalidatedModelObservationRows,
-		result.InvalidatedPlaceObservationAssets,
-		result.InvalidatedPlaceObservationRows,
+		result.MarkedStaleModelAssets,
+		result.MarkedStaleModelRows,
+		result.MarkedStalePlaceAssets,
+		result.MarkedStalePlaceRows,
 	)
 }
 

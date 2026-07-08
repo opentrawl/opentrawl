@@ -203,9 +203,6 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		switch write.outcome {
 		case contentOutcomeFailedParse, contentOutcomeFailedModel:
-			if err := clearModelObservations(ctx, tx, write.input.AssetID, classifier.modelID); err != nil {
-				return err
-			}
 			state, reason := contentOutcomeQueueStateReason(write)
 			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
 		}

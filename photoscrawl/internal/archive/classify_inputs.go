@@ -99,6 +99,7 @@ union all
     and mo.model_id = ?
     and mo.prompt_version = ?
     and mo.observation_type = ?
+    and mo.superseded_at is null
 )`
 		args = append(args, modelClassifierSource, refreshModelID, modelPromptVersion, modelObservationCardSummary)
 	}

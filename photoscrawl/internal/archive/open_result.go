@@ -14,11 +14,18 @@ import (
 type OpenResult struct {
 	SchemaVersion int            `json:"schema_version"`
 	Ref           string         `json:"ref"`
+	Stale         *OpenStale     `json:"stale,omitempty"`
 	Mechanical    OpenMechanical `json:"mechanical"`
 	Model         OpenModel      `json:"model,omitempty"`
 	// ShortRef is a human-display alias only; the canonical Ref is the JSON
 	// identity (open JSON never carries the ephemeral short alias).
 	ShortRef string `json:"-"`
+}
+
+type OpenStale struct {
+	Since  string `json:"since"`
+	Reason string `json:"reason"`
+	Banner string `json:"banner"`
 }
 
 type OpenMechanical struct {
@@ -123,6 +130,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 	return OpenResult{
 		SchemaVersion: 3,
 		Ref:           assetRef(rowString(asset, "id")),
+		Stale:         openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
 			Captured:        openCaptured(asset),
 			Media:           openMedia(asset),
@@ -139,6 +147,42 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		},
 		Model: openModel(modelObservations),
 	}
+}
+
+func openStale(groups ...[]map[string]any) *OpenStale {
+	since := ""
+	reason := ""
+	for _, rows := range groups {
+		for _, row := range rows {
+			rowSince := strings.TrimSpace(rowString(row, "stale_since"))
+			if rowSince == "" {
+				continue
+			}
+			if since != "" && rowSince >= since {
+				continue
+			}
+			since = rowSince
+			reason = strings.TrimSpace(rowString(row, "stale_reason"))
+		}
+	}
+	if since == "" {
+		return nil
+	}
+	return &OpenStale{
+		Since:  since,
+		Reason: reason,
+		Banner: StaleCardBanner(since, reason),
+	}
+}
+
+func StaleCardBanner(since, reason string) string {
+	since = strings.TrimSpace(since)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "unknown reason"
+	}
+	return "DEBUG INFO: THIS CARD IS STALE - generated before the latest metadata sync (stale since " +
+		since + ": " + reason + "). It will be regenerated on the next classify run. PLEASE FIX."
 }
 
 func openPlace(rows, locations []map[string]any) *OpenPlace {

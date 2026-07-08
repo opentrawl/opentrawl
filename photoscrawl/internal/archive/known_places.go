@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit/flags"
-	"github.com/openclaw/crawlkit/store"
 )
 
 const (
@@ -56,11 +55,7 @@ type KnownPlaceMatch struct {
 }
 
 func SetKnownPlaces(ctx context.Context, paths Paths, places []KnownPlace) (KnownPlaceSetResult, error) {
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return KnownPlaceSetResult{}, err
 	}
@@ -104,11 +99,7 @@ on conflict(label_kind, display_name) do update set
 }
 
 func ListKnownPlaces(ctx context.Context, paths Paths) (KnownPlaceListResult, error) {
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return KnownPlaceListResult{}, err
 	}

@@ -168,7 +168,7 @@ func TestSyncExpandsHomeInLibraryPath(t *testing.T) {
 	}
 }
 
-func TestSyncReportsObservationInvalidationCost(t *testing.T) {
+func TestSyncMarksObservationsStaleAndKeepsCardsSearchable(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -224,11 +224,88 @@ where asset_id = ?
 		t.Fatalf("changed assets = %d, want 1", result.AssetsChanged)
 	}
 
-	assertSyncSummaryNumber(t, result, "invalidated_model_observation_assets", 1)
-	assertSyncSummaryNumber(t, result, "invalidated_model_observation_rows", 2)
-	assertSyncSummaryNumber(t, result, "invalidated_place_observation_assets", 1)
-	assertSyncSummaryNumber(t, result, "invalidated_place_observation_rows", 1)
+	assertSyncSummaryNumber(t, result, "marked_stale_model_assets", 1)
+	assertSyncSummaryNumber(t, result, "marked_stale_model_rows", 2)
+	assertSyncSummaryNumber(t, result, "marked_stale_place_assets", 1)
+	assertSyncSummaryNumber(t, result, "marked_stale_place_rows", 1)
 	assertSyncSummaryNumber(t, result, "classification_queue_pending", 1)
+
+	var modelRows, placeRows, cardFTSRows int
+	var modelStaleSince, modelStaleReason, placeStaleSince, placeStaleReason string
+	if err := db.DB().QueryRowContext(ctx, `
+select count(*), min(stale_since), min(stale_reason)
+from model_observation
+where asset_id = ? and superseded_at is null
+`, assetID).Scan(&modelRows, &modelStaleSince, &modelStaleReason); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DB().QueryRowContext(ctx, `
+select count(*), min(stale_since), min(stale_reason)
+from place_observation
+where asset_id = ? and superseded_at is null
+`, assetID).Scan(&placeRows, &placeStaleSince, &placeStaleReason); err != nil {
+		t.Fatal(err)
+	}
+	if modelRows != 2 || placeRows != 1 {
+		t.Fatalf("retained rows: model=%d place=%d, want 2/1", modelRows, placeRows)
+	}
+	if modelStaleSince != "2026-05-28T11:00:00Z" || placeStaleSince != "2026-05-28T11:00:00Z" {
+		t.Fatalf("stale_since model=%q place=%q", modelStaleSince, placeStaleSince)
+	}
+	if modelStaleReason != syncStaleReason || placeStaleReason != syncStaleReason {
+		t.Fatalf("stale_reason model=%q place=%q", modelStaleReason, placeStaleReason)
+	}
+	if err := db.DB().QueryRowContext(ctx, `
+select count(*)
+from observation_fts
+where asset_id = ? and id = 'fixture-card-summary'
+`, assetID).Scan(&cardFTSRows); err != nil {
+		t.Fatal(err)
+	}
+	if cardFTSRows != 1 {
+		t.Fatalf("card fts rows = %d, want 1", cardFTSRows)
+	}
+	search, err := Search(ctx, paths, SearchOptions{Query: "visible", Limit: 5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(search.Results) != 1 || !search.Results[0].Stale {
+		t.Fatalf("stale card search = %#v", search.Results)
+	}
+	opened, err := Open(ctx, paths, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.Stale == nil || !strings.Contains(opened.Stale.Banner, "DEBUG INFO: THIS CARD IS STALE") {
+		t.Fatalf("open stale banner = %#v", opened.Stale)
+	}
+
+	provider.snapshot.Assets[0].Hidden = true
+	result, err = Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T12:00:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.AssetsChanged != 1 {
+		t.Fatalf("third sync changed assets = %d, want 1", result.AssetsChanged)
+	}
+	assertSyncSummaryNumber(t, result, "marked_stale_model_assets", 0)
+	assertSyncSummaryNumber(t, result, "marked_stale_model_rows", 0)
+	assertSyncSummaryNumber(t, result, "marked_stale_place_assets", 0)
+	assertSyncSummaryNumber(t, result, "marked_stale_place_rows", 0)
+	if err := db.DB().QueryRowContext(ctx, `
+select min(stale_since)
+from model_observation
+where asset_id = ? and superseded_at is null
+`, assetID).Scan(&modelStaleSince); err != nil {
+		t.Fatal(err)
+	}
+	if modelStaleSince != "2026-05-28T11:00:00Z" {
+		t.Fatalf("third sync stale_since = %q, want first stale mark", modelStaleSince)
+	}
 }
 
 func testPaths(t *testing.T) Paths {
@@ -259,6 +336,18 @@ values (?, ?, ?, ?, '{}', 1.0, 'model_multimodal', 'fixture-model', 'v1', '')
 	if _, err := db.DB().ExecContext(ctx, `
 insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
 values ('fixture-place', ?, 'venue', 'Synthetic Pier', '{"name":"Synthetic Pier"}', 'place_context', 'apple', 'hit', 'venue_candidate', 12, '')
+`, assetID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB().ExecContext(ctx, `
+insert into observation_fts(id, asset_id, title, body)
+values ('fixture-card-summary', ?, '', 'Synthetic beach scene. A synthetic beach fixture with visible album context.')
+`, assetID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB().ExecContext(ctx, `
+insert into observation_fts(id, asset_id, title, body)
+values ('fixture-place', ?, '', 'Synthetic Pier')
 `, assetID); err != nil {
 		t.Fatal(err)
 	}
