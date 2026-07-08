@@ -24,7 +24,7 @@ const (
 	searchSortRelevance searchSortMode = "relevance"
 	searchSortRecency   searchSortMode = "recency"
 
-	searchQueryDefaultSort = searchSortRelevance
+	searchQueryDefaultSort = searchSortRecency
 )
 
 type SearchCmd struct {

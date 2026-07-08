@@ -122,7 +122,7 @@ func TestSearchSortModeSelection(t *testing.T) {
 		sort  string
 		want  searchSortMode
 	}{
-		{name: "query defaults relevance", query: "invoice", want: searchSortRelevance},
+		{name: "query defaults recency", query: "invoice", want: searchSortRecency},
 		{name: "empty query defaults recency", want: searchSortRecency},
 		{name: "empty query ignores relevance override", sort: "relevance", want: searchSortRecency},
 		{name: "query allows relevance override", query: "invoice", sort: "relevance", want: searchSortRelevance},
@@ -304,7 +304,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		t.Fatalf("search code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		`Search "boat trip": showing 2 of 4, best matches first.`,
+		`Search "boat trip": showing 2 of 4, newest first.`,
 		"Open: trawl open REF",
 		`More: trawl search "boat trip" --source imessage,telegram --limit 4`,
 		"date              source    who    where   ref                text",
