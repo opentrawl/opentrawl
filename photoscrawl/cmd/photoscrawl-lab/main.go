@@ -70,7 +70,7 @@ func run(ctx context.Context, args []string) error {
 		cacheDir := fs.String("cache-dir", "", "private original cache directory")
 		promptPath := fs.String("prompt", "", "photo-card prompt file")
 		models := fs.String("models", "", "comma-separated Ollama models")
-		ollamaURL := fs.String("ollama-url", "", "Ollama generate URL or base URL")
+		ollamaURL := fs.String("ollama-url", "", "Ollama generate URL or base URL; host must be localhost, 127.0.0.1, ::1, ollama.com, or an ollama.com subdomain")
 		allowICloud := fs.Bool("allow-icloud-downloads", false, "allow PhotoKit to download missing originals")
 		limit := fs.Int("limit", 15, "max images to prepare")
 		concurrency := fs.Int("concurrency", 4, "max concurrent model calls")

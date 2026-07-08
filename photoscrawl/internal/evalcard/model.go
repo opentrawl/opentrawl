@@ -97,11 +97,15 @@ func runOneModelCall(ctx context.Context, outputDir, promptText string, input pr
 		out.Error = err.Error()
 		return err
 	}
-	client := ckmodel.New(ckmodel.Config{
+	client, err := ckmodel.New(ckmodel.Config{
 		BaseURL:      baseURL,
 		Model:        model,
 		BearerKeyEnv: apiKeyEnv,
 	})
+	if err != nil {
+		out.Error = err.Error()
+		return err
+	}
 	response, err := client.Generate(ctx, ckmodel.Request{
 		Prompt: renderedPrompt,
 		Images: []ckmodel.Image{{

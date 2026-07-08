@@ -111,7 +111,10 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	modelID := strings.TrimSpace(opts.Model)
 	var classifier *modelClassifier
 	if modelID != "" {
-		modelClassifier := newModelClassifier(modelID, opts.ModelURL, opts.ModelKeyEnv)
+		modelClassifier, err := newModelClassifier(modelID, opts.ModelURL, opts.ModelKeyEnv)
+		if err != nil {
+			return ClassifyResult{}, err
+		}
 		classifier = &modelClassifier
 		result.Classifier = metadataClassifierSource + "+" + modelClassifierSource
 		result.ModelID = modelID

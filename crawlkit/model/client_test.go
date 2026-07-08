@@ -25,6 +25,95 @@ func sandboxSafeServer(t *testing.T, handler http.Handler) *httptest.Server {
 	return server
 }
 
+func newTestClient(t *testing.T, cfg Config) *Client {
+	t.Helper()
+	client, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return client
+}
+
+func TestNormalizeBaseURLAllowsOllamaHosts(t *testing.T) {
+	tests := map[string]string{
+		"":                                       DefaultBaseURL,
+		"http://localhost:11434":                 "http://localhost:11434",
+		"http://127.0.0.1:21434/api/generate":    "http://127.0.0.1:21434",
+		"http://[::1]:31434/v1/chat/completions": "http://[::1]:31434",
+		"https://ollama.com/api":                 "https://ollama.com/api",
+		"https://OLLAMA.COM":                     "https://OLLAMA.COM",
+		"https://ollama.com:443/api/generate":    "https://ollama.com:443",
+		"https://vision.ollama.com/v1":           "https://vision.ollama.com/v1",
+		// url.URL.Hostname strips userinfo before validation, so the dial goes to ollama.com.
+		"https://evil.com@ollama.com": "https://evil.com@ollama.com",
+	}
+	for input, want := range tests {
+		got, err := NormalizeBaseURL(input)
+		if err != nil {
+			t.Fatalf("NormalizeBaseURL(%q): %v", input, err)
+		}
+		if got != want {
+			t.Fatalf("NormalizeBaseURL(%q) = %q, want %q", input, got, want)
+		}
+	}
+}
+
+func TestNewRejectsNonOllamaHosts(t *testing.T) {
+	tests := map[string]string{
+		"https://generativelanguage.googleapis.com/v1beta/openai": `host "generativelanguage.googleapis.com" is not an Ollama endpoint`,
+		"https://api.openai.com/v1":                               `host "api.openai.com" is not an Ollama endpoint`,
+		"https://fixture.test/api":                                `host "fixture.test" is not an Ollama endpoint`,
+		"https://ollama.com.evil.tld":                             `host "ollama.com.evil.tld" is not an Ollama endpoint`,
+		"https://notollama.com":                                   `host "notollama.com" is not an Ollama endpoint`,
+		"https://ollama.com@evil.com":                             `host "evil.com" is not an Ollama endpoint`,
+		"http://ollama.com":                                       `endpoint "http://ollama.com" must use https on port 443 for Ollama cloud`,
+		"https://ollama.com:8443":                                 `endpoint "https://ollama.com:8443" must use https on port 443 for Ollama cloud`,
+		"ftp://127.0.0.1:11434":                                   `endpoint "ftp://127.0.0.1:11434" must use http or https for loopback Ollama endpoints`,
+		"gopher://localhost:11434":                                `endpoint "gopher://localhost:11434" must use http or https for loopback Ollama endpoints`,
+		"https://[2001:db8::1]:11434":                             `host "2001:db8::1" is not an Ollama endpoint`,
+		"https://8.8.8.8:11434":                                   `host "8.8.8.8" is not an Ollama endpoint`,
+		"https://xn--ollama-XXX.com-style":                        `host "xn--ollama-xxx.com-style" is not an Ollama endpoint`,
+		"https://ollama.com.":                                     `host "ollama.com." is not an Ollama endpoint`,
+	}
+	for input, detail := range tests {
+		_, err := NormalizeBaseURL(input)
+		if err == nil {
+			t.Fatalf("NormalizeBaseURL accepted %q", input)
+		}
+		want := ollamaOnlyRule + "; " + detail
+		if err.Error() != want {
+			t.Fatalf("NormalizeBaseURL(%q) error = %q, want %q", input, err.Error(), want)
+		}
+
+		_, err = New(Config{BaseURL: input, Model: "m"})
+		if err == nil {
+			t.Fatalf("New accepted %q", input)
+		}
+		if err.Error() != want {
+			t.Fatalf("New(%q) error = %q, want %q", input, err.Error(), want)
+		}
+	}
+}
+
+func TestGenerateEndpointRejectsNonOllamaHosts(t *testing.T) {
+	_, err := GenerateEndpoint("https://generativelanguage.googleapis.com/v1beta/openai")
+	want := `model inference goes through Ollama only (Ollama-only policy, crawlkit/model doc; ruling 2026-07-08); host "generativelanguage.googleapis.com" is not an Ollama endpoint`
+	if err == nil || err.Error() != want {
+		t.Fatalf("GenerateEndpoint error = %v, want %q", err, want)
+	}
+	t.Log(err.Error())
+}
+
+func TestNewDefaultsEmptyBaseURL(t *testing.T) {
+	client, err := New(Config{Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.baseURL != DefaultBaseURL {
+		t.Fatalf("baseURL = %q, want %q", client.baseURL, DefaultBaseURL)
+	}
+}
+
 func TestGenerateNativeSendsBearerAndImagePayload(t *testing.T) {
 	t.Setenv("MODEL_TEST_KEY", "secret-token")
 	var sawPath string
@@ -61,7 +150,7 @@ func TestGenerateNativeSendsBearerAndImagePayload(t *testing.T) {
 		})
 	}))
 
-	client := New(Config{
+	client := newTestClient(t, Config{
 		BaseURL:      server.URL + "/api",
 		Model:        "fixture-model",
 		BearerKeyEnv: "MODEL_TEST_KEY",
@@ -112,7 +201,7 @@ func TestGenerateChatUsesOpenAICompatibleEndpoint(t *testing.T) {
 		})
 	}))
 
-	client := New(Config{BaseURL: server.URL + "/v1", Model: "openai-compatible"})
+	client := newTestClient(t, Config{BaseURL: server.URL + "/v1", Model: "openai-compatible"})
 	response, err := client.Generate(context.Background(), Request{Prompt: "describe this"})
 	if err != nil {
 		t.Fatal(err)

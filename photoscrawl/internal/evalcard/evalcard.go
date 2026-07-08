@@ -120,6 +120,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if sample != "latest" && sample != "random" {
 		return Result{}, fmt.Errorf("unsupported sample %q", sample)
 	}
+	ollamaGenerateURLUsed, err := normalizeOllamaGenerateURL(opts.OllamaGenerateURL)
+	if err != nil {
+		return Result{}, err
+	}
 
 	outputDir, err := defaultedOutputDir(opts.OutputDir, opts.DefaultOutputRoot, now)
 	if err != nil {
@@ -186,7 +190,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		AssetsSkipped:         map[string]int{},
 		ManifestPath:          filepath.Join(outputDir, "manifest.jsonl"),
 		SummaryPath:           filepath.Join(outputDir, "summary.json"),
-		OllamaGenerateURLUsed: normalizeOllamaGenerateURL(opts.OllamaGenerateURL),
+		OllamaGenerateURLUsed: ollamaGenerateURLUsed,
 	}
 
 	assets := imageAssets(snapshot.Assets, sample, opts.Seed)

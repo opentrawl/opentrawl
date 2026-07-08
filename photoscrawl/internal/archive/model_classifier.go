@@ -32,17 +32,21 @@ type modelClassifier struct {
 	client        *model.Client
 }
 
-func newModelClassifier(modelID, baseURL, bearerKeyEnv string) modelClassifier {
+func newModelClassifier(modelID, baseURL, bearerKeyEnv string) (modelClassifier, error) {
+	client, err := model.New(model.Config{
+		BaseURL:      baseURL,
+		Model:        modelID,
+		BearerKeyEnv: bearerKeyEnv,
+	})
+	if err != nil {
+		return modelClassifier{}, err
+	}
 	return modelClassifier{
 		modelID:       strings.TrimSpace(modelID),
 		promptVersion: modelPromptVersion,
-		baseURL:       model.NormalizeBaseURL(baseURL),
-		client: model.New(model.Config{
-			BaseURL:      baseURL,
-			Model:        modelID,
-			BearerKeyEnv: bearerKeyEnv,
-		}),
-	}
+		baseURL:       baseURL,
+		client:        client,
+	}, nil
 }
 
 // imageMeta is what buildRequest learns about the image on the prepare side;
