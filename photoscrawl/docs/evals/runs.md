@@ -55,10 +55,8 @@ photoscrawl-lab eval-card \
   --json
 ```
 
-Provider-direct calls (Gemini or any other) are prohibited: model inference
-goes through Ollama only (Ollama-only policy, crawlkit/model doc; ruling
-2026-07-08). The Gemini OpenAI-compatible command shape that used to sit here
-is removed; `--ollama-url` accepts Ollama hosts only.
+The eval harness takes its endpoint from `--ollama-url`. The listed baseline
+uses `--ollama-url https://ollama.com/api`.
 
 Run details:
 
@@ -139,11 +137,9 @@ photoscrawl-lab eval-card \
   --json
 ```
 
-The Gemini OpenAI-compatible baseline shape that used to sit here is removed:
-provider-direct inference is prohibited (Ollama-only policy, crawlkit/model
-doc; ruling 2026-07-08). The `gemini-flash-latest` scores in the table below
-were measured through that now-prohibited path before the ruling; they remain as
-historical data only and are not a currently runnable configuration.
+The listed Ollama-hosted baseline uses `--ollama-url https://ollama.com/api`.
+The `gemini-flash-latest` rows in the table below are historical data and need a
+rerun before reuse.
 
 Run details:
 

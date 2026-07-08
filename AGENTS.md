@@ -25,6 +25,16 @@ work.
    check.
 5. If you are unsure whether something is private, it is. Stop and ask.
 
+## Scope discipline
+
+1. External service endpoints and API integrations come only from explicit
+   application configuration. Library code validates shape; it does not choose
+   providers.
+2. Do not add provider integrations, endpoints, API keys, network calls or side
+   functionality beyond what the ticket explicitly asks for.
+3. If a task seems to need a new endpoint, provider, credential or side
+   surface, stop and ask the maintainer before coding it.
+
 ## What this repo is
 
 OpenTrawl: local-first crawlers for your digital life, one `trawl` CLI,

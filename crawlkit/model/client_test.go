@@ -34,7 +34,7 @@ func newTestClient(t *testing.T, cfg Config) *Client {
 	return client
 }
 
-func TestNormalizeBaseURLAllowsOllamaHosts(t *testing.T) {
+func TestNormalizeBaseURLAllowsHTTPAndHTTPSHosts(t *testing.T) {
 	tests := map[string]string{
 		"":                                       DefaultBaseURL,
 		"http://localhost:11434":                 "http://localhost:11434",
@@ -42,10 +42,10 @@ func TestNormalizeBaseURLAllowsOllamaHosts(t *testing.T) {
 		"http://[::1]:31434/v1/chat/completions": "http://[::1]:31434",
 		"https://ollama.com/api":                 "https://ollama.com/api",
 		"https://OLLAMA.COM":                     "https://OLLAMA.COM",
-		"https://ollama.com:443/api/generate":    "https://ollama.com:443",
-		"https://vision.ollama.com/v1":           "https://vision.ollama.com/v1",
-		// url.URL.Hostname strips userinfo before validation, so the dial goes to ollama.com.
-		"https://evil.com@ollama.com": "https://evil.com@ollama.com",
+		"https://models.example.com/v1beta":      "https://models.example.com/v1beta",
+		"https://models.example.com/v1":          "https://models.example.com/v1",
+		"https://fixture.test/api":               "https://fixture.test/api",
+		"https://example.com:8443/models":        "https://example.com:8443/models",
 	}
 	for input, want := range tests {
 		got, err := NormalizeBaseURL(input)
@@ -58,29 +58,20 @@ func TestNormalizeBaseURLAllowsOllamaHosts(t *testing.T) {
 	}
 }
 
-func TestNewRejectsNonOllamaHosts(t *testing.T) {
+func TestNewRejectsInvalidBaseURLs(t *testing.T) {
 	tests := map[string]string{
-		"https://generativelanguage.googleapis.com/v1beta/openai": `host "generativelanguage.googleapis.com" is not an Ollama endpoint`,
-		"https://api.openai.com/v1":                               `host "api.openai.com" is not an Ollama endpoint`,
-		"https://fixture.test/api":                                `host "fixture.test" is not an Ollama endpoint`,
-		"https://ollama.com.evil.tld":                             `host "ollama.com.evil.tld" is not an Ollama endpoint`,
-		"https://notollama.com":                                   `host "notollama.com" is not an Ollama endpoint`,
-		"https://ollama.com@evil.com":                             `host "evil.com" is not an Ollama endpoint`,
-		"http://ollama.com":                                       `endpoint "http://ollama.com" must use https on port 443 for Ollama cloud`,
-		"https://ollama.com:8443":                                 `endpoint "https://ollama.com:8443" must use https on port 443 for Ollama cloud`,
-		"ftp://127.0.0.1:11434":                                   `endpoint "ftp://127.0.0.1:11434" must use http or https for loopback Ollama endpoints`,
-		"gopher://localhost:11434":                                `endpoint "gopher://localhost:11434" must use http or https for loopback Ollama endpoints`,
-		"https://[2001:db8::1]:11434":                             `host "2001:db8::1" is not an Ollama endpoint`,
-		"https://8.8.8.8:11434":                                   `host "8.8.8.8" is not an Ollama endpoint`,
-		"https://xn--ollama-XXX.com-style":                        `host "xn--ollama-xxx.com-style" is not an Ollama endpoint`,
-		"https://ollama.com.":                                     `host "ollama.com." is not an Ollama endpoint`,
+		"ftp://127.0.0.1:11434":    `model base URL "ftp://127.0.0.1:11434" must use http or https`,
+		"gopher://localhost:11434": `model base URL "gopher://localhost:11434" must use http or https`,
+		"https://":                 `model base URL "https:" must include a host`,
+		"http:///api":              `model base URL "http:///api" must include a host`,
+		"localhost:11434":          `model base URL "localhost:11434" must use http or https`,
+		"://bad":                   `model base URL "://bad" is invalid: parse "://bad": missing protocol scheme`,
 	}
-	for input, detail := range tests {
+	for input, want := range tests {
 		_, err := NormalizeBaseURL(input)
 		if err == nil {
 			t.Fatalf("NormalizeBaseURL accepted %q", input)
 		}
-		want := ollamaOnlyRule + "; " + detail
 		if err.Error() != want {
 			t.Fatalf("NormalizeBaseURL(%q) error = %q, want %q", input, err.Error(), want)
 		}
@@ -95,13 +86,15 @@ func TestNewRejectsNonOllamaHosts(t *testing.T) {
 	}
 }
 
-func TestGenerateEndpointRejectsNonOllamaHosts(t *testing.T) {
-	_, err := GenerateEndpoint("https://generativelanguage.googleapis.com/v1beta/openai")
-	want := `model inference goes through Ollama only (Ollama-only policy, crawlkit/model doc; ruling 2026-07-08); host "generativelanguage.googleapis.com" is not an Ollama endpoint`
-	if err == nil || err.Error() != want {
-		t.Fatalf("GenerateEndpoint error = %v, want %q", err, want)
+func TestGenerateEndpointAcceptsConfiguredHost(t *testing.T) {
+	got, err := GenerateEndpoint("https://models.example.com/v1beta/openai")
+	if err != nil {
+		t.Fatalf("GenerateEndpoint returned error: %v", err)
 	}
-	t.Log(err.Error())
+	want := "https://models.example.com/v1beta/openai/api/generate"
+	if got != want {
+		t.Fatalf("GenerateEndpoint = %q, want %q", got, want)
+	}
 }
 
 func TestNewDefaultsEmptyBaseURL(t *testing.T) {
