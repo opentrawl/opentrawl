@@ -263,7 +263,7 @@ Install `jq` if you want to run the smoke transcript or inspect JSON examples.
 ## Agent Smoke Transcript
 
 Use the smoke transcript when reviewing whether the CLI actually works for an
-agent. It runs the real `imsgcrawl` on `PATH`, uses a temporary state root, and
+agent. It runs the real `imsgcrawl` on `PATH` with a synthetic `HOME`, then
 writes exact stdout/stderr for progressive text and JSON commands to `/tmp`.
 
 ```bash

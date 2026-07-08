@@ -148,7 +148,6 @@ func commandHelpFlagSummary(flag control.Flag) string {
 func globalHelpFlags() []usage.Flag {
 	return []usage.Flag{
 		{Name: "--json", Summary: "write JSON to stdout"},
-		{Name: "--state-root PATH", Summary: "use a different state root"},
 		{Name: "-v, --verbose", Summary: "stream log lines to stderr"},
 		{Name: "-vv", Summary: "stream debug log lines to stderr"},
 		{Name: "--version", Summary: "print version and exit"},
@@ -167,7 +166,7 @@ func helpFooter(manifest control.Manifest) []string {
 func commandUsageName(command control.Command) string {
 	var parts []string
 	for _, arg := range command.Argv[1:] {
-		if arg == "--json" || arg == "--state-root" {
+		if arg == "--json" {
 			break
 		}
 		parts = append(parts, arg)

@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/openclaw/crawlkit"
@@ -152,7 +153,7 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 }
 
 func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	code, stdout, stderr := runGogcrawl(t, stateRoot, "metadata", "--json")
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -186,8 +187,8 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 func TestRunContactsExportStoreNoneFreshNoArchive(t *testing.T) {
 	binary := buildGogcrawl(t)
 	installFakeGog(t)
-	stateRoot := t.TempDir()
-	archivePath := filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db")
+	stateRoot := stateRootForRun(t)
+	archivePath := archivePathForRun(stateRoot)
 	code, stdout, stderr := runGogcrawlBinary(t, binary, stateRoot, "contacts", "export", "--json")
 	if code != 0 {
 		t.Fatalf("contacts export code=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -202,6 +203,22 @@ func TestRunContactsExportStoreNoneFreshNoArchive(t *testing.T) {
 	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
 		t.Fatalf("contacts export created archive: err=%v path=%s", err, archivePath)
 	}
+	t.Logf("fresh contacts export archive absent at resolved state root: path=%s", archivePath)
+}
+
+func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
+	binary := buildGogcrawl(t)
+	installFakeGog(t)
+	stateRoot := stateRootForRun(t)
+	archivePath := archivePathForRun(stateRoot)
+	code, stdout, stderr := runGogcrawlBinary(t, binary, stateRoot, "sync", "--query", "project", "--max", "25", "--json")
+	if code != 0 {
+		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if _, err := os.Stat(archivePath); err != nil {
+		t.Fatalf("sync archive missing: err=%v path=%s", err, archivePath)
+	}
+	t.Logf("sync archive exists at resolved state root: path=%s", archivePath)
 }
 
 func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
@@ -254,14 +271,12 @@ func runGogcrawl(t *testing.T, stateRoot string, args ...string) (int, string, s
 
 func runGogcrawlBinary(t *testing.T, binary, stateRoot string, args ...string) (int, string, string) {
 	t.Helper()
-	allArgs := append([]string{}, args...)
-	allArgs = append(allArgs, "--state-root", stateRoot)
-	cmd := exec.Command(binary, allArgs...)
+	cmd := exec.Command(binary, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Env = os.Environ()
+	cmd.Env = envWithHome(os.Environ(), filepath.Dir(stateRoot))
 	err := cmd.Run()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -270,6 +285,26 @@ func runGogcrawlBinary(t *testing.T, binary, stateRoot string, args ...string) (
 		t.Fatalf("gogcrawl %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
 	}
 	return 0, stdout.String(), stderr.String()
+}
+
+func stateRootForRun(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), ".opentrawl")
+}
+
+func archivePathForRun(stateRoot string) string {
+	return filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db")
+}
+
+func envWithHome(env []string, home string) []string {
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "HOME=") {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return append(out, "HOME="+home)
 }
 
 func buildGogcrawl(t *testing.T) string {

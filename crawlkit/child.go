@@ -32,6 +32,13 @@ const (
 	childFrameLog
 )
 
+const (
+	childStateRootEnv = "CRAWLKIT_STATE_ROOT"
+	childRunIDEnv     = "CRAWLKIT_RUN_ID"
+)
+
+const childWireEnvRemedy = "invoke the parent crawler command; the runner supplies CRAWLKIT_STATE_ROOT and CRAWLKIT_RUN_ID for hidden wire child runs"
+
 type childLogFrameWriter struct {
 	mu      sync.Mutex
 	w       io.Writer
@@ -80,6 +87,26 @@ func (e childRunError) ErrorBody() output.ErrorBody {
 	return e.body
 }
 
+type childWireEnvError struct {
+	name string
+}
+
+func (e childWireEnvError) Error() string {
+	return fmt.Sprintf("%s is required", e.name)
+}
+
+func (e childWireEnvError) ExitCode() int {
+	return 2
+}
+
+func (e childWireEnvError) ErrorBody() output.ErrorBody {
+	return output.ErrorBody{
+		Code:    "usage",
+		Message: e.Error(),
+		Remedy:  childWireEnvRemedy,
+	}
+}
+
 func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawler) int {
 	globals, err := parseGlobal(argv)
 	format := output.Text
@@ -87,6 +114,9 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawl
 		format = output.JSON
 	}
 	var result executionResult
+	if err == nil {
+		globals, err = childWireGlobals(globals)
+	}
 	if err == nil {
 		source, rest, selectErr := selectSource(globals.args, sources)
 		if selectErr != nil {
@@ -134,15 +164,12 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 		}
 	}
 	args := append([]string{}, r.opts.childPrefixArgs...)
-	args = append(args, HiddenWireSubcommand, "--crawlkit-run-id", runLog.RunID())
+	args = append(args, HiddenWireSubcommand)
 	switch globals.verbosity {
 	case 1:
 		args = append(args, "-v")
 	case 2:
 		args = append(args, "-vv")
-	}
-	if globals.stateRoot != "" {
-		args = append(args, "--state-root", globals.stateRoot)
 	}
 	if format == output.JSON {
 		args = append(args, "--json")
@@ -152,9 +179,15 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	args = append(args, verb.args...)
 	cmd := exec.Command(executable, args...) // #nosec G204 -- self-reexec path and test helper are controlled by the runner.
 	configureChildCommand(cmd)
-	if len(r.opts.childEnv) > 0 {
-		cmd.Env = append([]string(nil), r.opts.childEnv...)
+	env := r.opts.childEnv
+	if len(env) == 0 {
+		env = os.Environ()
+	} else {
+		env = append([]string(nil), env...)
 	}
+	env = setEnvValue(env, childStateRootEnv, paths.StateRoot)
+	env = setEnvValue(env, childRunIDEnv, runLog.RunID())
+	cmd.Env = env
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return executionResult{err: fmt.Errorf("open child stdout: %w", err)}
@@ -175,6 +208,32 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 		result.err = err
 	}
 	return result
+}
+
+func childWireGlobals(globals globalOptions) (globalOptions, error) {
+	stateRoot := strings.TrimSpace(os.Getenv(childStateRootEnv))
+	if stateRoot == "" {
+		return globals, childWireEnvError{name: childStateRootEnv}
+	}
+	runID := strings.TrimSpace(os.Getenv(childRunIDEnv))
+	if runID == "" {
+		return globals, childWireEnvError{name: childRunIDEnv}
+	}
+	globals.stateRoot = stateRoot
+	globals.runID = runID
+	return globals, nil
+}
+
+func setEnvValue(env []string, key, value string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env)+1)
+	for _, entry := range env {
+		if strings.HasPrefix(entry, prefix) {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return append(out, prefix+value)
 }
 
 func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr func() string, watchdog, grace time.Duration, runLog *cklog.Run, verbosity int, logStream io.Writer) executionResult {

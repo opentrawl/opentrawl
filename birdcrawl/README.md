@@ -39,8 +39,7 @@ go build ./cmd/birdcrawl
 ./birdcrawl import archive /path/to/x-archive
 ```
 
-Use `--state-root PATH` to choose a state root. The default database is
-`~/.opentrawl/birdcrawl/birdcrawl.db`.
+The default database is `~/.opentrawl/birdcrawl/birdcrawl.db`.
 
 ## What it stores
 

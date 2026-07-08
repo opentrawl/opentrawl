@@ -28,19 +28,19 @@ func TestMain(m *testing.M) {
 func TestRunBackupStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
 	ctx := context.Background()
 	setGitIdentity(t)
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	archivePath := filepath.Join(stateRoot, "wacrawl", "wacrawl.db")
 
 	cfg := seedBackupConfig(t, ctx)
 	writeConfig(t, stateRoot, Config{Backup: cfg})
 
-	code, stdout, stderr := captureRun(t, []string{"backup", "init", "--no-push", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr := captureRun(t, []string{"backup", "init", "--no-push", "--json"}, New())
 	if code != 0 || !strings.Contains(stdout, `"recipient"`) {
 		t.Fatalf("backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	assertNoArchive(t, archivePath, "backup init")
 
-	code, stdout, stderr = captureRun(t, []string{"status", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr = captureRun(t, []string{"status", "--json"}, New())
 	if code != 0 {
 		t.Fatalf("status after backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -53,13 +53,13 @@ func TestRunBackupStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
 	}
 	assertNoArchive(t, archivePath, "status after backup init")
 
-	code, stdout, stderr = captureRun(t, []string{"backup", "status", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr = captureRun(t, []string{"backup", "status", "--json"}, New())
 	if code != 0 || !strings.Contains(stdout, `"manifest"`) {
 		t.Fatalf("backup status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	assertNoArchive(t, archivePath, "backup status")
 
-	code, stdout, stderr = captureRun(t, []string{"backup", "snapshots", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr = captureRun(t, []string{"backup", "snapshots", "--json"}, New())
 	if code != 0 || !strings.Contains(stdout, `"snapshots"`) {
 		t.Fatalf("backup snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -69,7 +69,7 @@ func TestRunBackupStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
 
 func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
 	ctx := context.Background()
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	archivePath := filepath.Join(stateRoot, "wacrawl", "wacrawl.db")
 	st, err := wastore.Open(ctx, archivePath)
 	if err != nil {
@@ -79,7 +79,7 @@ func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, stdout, stderr := captureRun(t, []string{"status", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr := captureRun(t, []string{"status", "--json"}, New())
 	if code != 0 {
 		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -96,10 +96,10 @@ func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
 }
 
 func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	createAmbiguousWhoArchive(t, stateRoot)
 
-	code, stdout, stderr := captureRun(t, []string{"search", "needle", "--who", "CASEY", "--json", "--state-root", stateRoot}, New())
+	code, stdout, stderr := captureRun(t, []string{"search", "needle", "--who", "CASEY", "--json"}, New())
 	if code != 4 || stderr != "" {
 		t.Fatalf("ambiguous JSON code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -115,7 +115,7 @@ func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
 		t.Fatalf("ambiguous candidates missing from JSON:\n%s", stdout)
 	}
 
-	code, stdout, stderr = captureRun(t, []string{"search", "needle", "--who", "CASEY", "--state-root", stateRoot}, New())
+	code, stdout, stderr = captureRun(t, []string{"search", "needle", "--who", "CASEY"}, New())
 	if code != 4 || stdout != "" {
 		t.Fatalf("ambiguous text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}

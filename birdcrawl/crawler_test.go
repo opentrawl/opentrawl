@@ -18,7 +18,7 @@ import (
 )
 
 func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	out := runBirdcrawl(t, stateRoot, "metadata", "--json")
 	var manifest control.Manifest
 	if err := json.Unmarshal(out, &manifest); err != nil {
@@ -78,7 +78,7 @@ func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 }
 
 func TestSpendFiguresReachable(t *testing.T) {
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	month := time.Now().UTC().Format("2006-01")
 	seedSpend(t, stateRoot, month, 2_500_000)
 	out := runBirdcrawl(t, stateRoot, "spend", "--json")
@@ -95,7 +95,7 @@ func TestSpendFiguresReachable(t *testing.T) {
 }
 
 func TestHandlerUsageErrorExitsTwo(t *testing.T) {
-	result := runBirdcrawlRaw(t, t.TempDir(), "import", "archive")
+	result := runBirdcrawlRaw(t, stateRootForRun(t), "import", "archive")
 	if result.code != 2 {
 		t.Fatalf("exit code = %d, want 2\nstdout:\n%s\nstderr:\n%s", result.code, result.stdout, result.stderr)
 	}
@@ -105,7 +105,7 @@ func TestHandlerUsageErrorExitsTwo(t *testing.T) {
 }
 
 func TestDirectVersionVerbRejected(t *testing.T) {
-	result := runBirdcrawlRaw(t, t.TempDir(), "version")
+	result := runBirdcrawlRaw(t, stateRootForRun(t), "version")
 	if result.code != 2 {
 		t.Fatalf("exit code = %d, want 2\nstdout:\n%s\nstderr:\n%s", result.code, result.stdout, result.stderr)
 	}
@@ -115,7 +115,7 @@ func TestDirectVersionVerbRejected(t *testing.T) {
 }
 
 func TestRunnerConfigPathAcceptsExistingBudgetShape(t *testing.T) {
-	stateRoot := t.TempDir()
+	stateRoot := stateRootForRun(t)
 	base := filepath.Join(stateRoot, "birdcrawl")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		t.Fatal(err)
@@ -152,13 +152,12 @@ func runBirdcrawl(t *testing.T, stateRoot string, args ...string) []byte {
 func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlResult {
 	t.Helper()
 	binary := buildBirdcrawl(t)
-	allArgs := append([]string{"--state-root", stateRoot}, args...)
-	cmd := exec.Command(binary, allArgs...)
+	cmd := exec.Command(binary, args...)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	cmd.Env = append(os.Environ(), "HOME="+t.TempDir())
+	cmd.Env = append(os.Environ(), "HOME="+filepath.Dir(stateRoot))
 	err := cmd.Run()
 	if err != nil {
 		var exitErr *exec.ExitError
@@ -168,6 +167,11 @@ func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlRe
 		t.Fatalf("birdcrawl %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
 	}
 	return birdcrawlResult{stdout: stdout.Bytes(), stderr: stderr.String()}
+}
+
+func stateRootForRun(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), ".opentrawl")
 }
 
 func buildBirdcrawl(t *testing.T) string {
