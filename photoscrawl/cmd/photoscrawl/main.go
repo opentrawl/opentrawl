@@ -174,7 +174,7 @@ func run(ctx context.Context, args []string) (err error) {
 		if err := writeSync(os.Stdout, format, result); err != nil {
 			return err
 		}
-		logInfo(runLog, "sync_written", fmt.Sprintf("provider=%s assets=%d new=%d changed=%d unchanged=%d missing=%d", result.Provider, result.AssetsSeen, result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.PreviouslySeenMissing))
+		logInfo(runLog, "sync_written", syncLogMessage(result))
 		return nil
 	case "classify":
 		fs := flag.NewFlagSet("classify", flag.ContinueOnError)
@@ -267,6 +267,28 @@ func run(ctx context.Context, args []string) (err error) {
 	default:
 		return usage()
 	}
+}
+
+func syncLogMessage(result archive.SyncResult) string {
+	return fmt.Sprintf(
+		"provider=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
+			"queued_for_classify=%d queued_needs_download=%d classification_queue_pending=%d "+
+			"invalidated_model_observation_assets=%d invalidated_model_observation_rows=%d "+
+			"invalidated_place_observation_assets=%d invalidated_place_observation_rows=%d",
+		result.Provider,
+		result.AssetsSeen,
+		result.AssetsNew,
+		result.AssetsChanged,
+		result.AssetsUnchanged,
+		result.PreviouslySeenMissing,
+		result.QueuedForClassify,
+		result.QueuedNeedsDownload,
+		result.ClassificationQueuePending,
+		result.InvalidatedModelObservationAssets,
+		result.InvalidatedModelObservationRows,
+		result.InvalidatedPlaceObservationAssets,
+		result.InvalidatedPlaceObservationRows,
+	)
 }
 
 func usage() error {

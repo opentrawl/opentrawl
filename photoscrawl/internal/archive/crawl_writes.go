@@ -98,7 +98,16 @@ func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sour
 	return nil
 }
 
-func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) error {
+type invalidatedObservationRows struct {
+	ModelObservationRows int
+	PlaceObservationRows int
+}
+
+func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) (invalidatedObservationRows, error) {
+	counts, err := countInvalidatedObservationRows(ctx, tx, assetID)
+	if err != nil {
+		return invalidatedObservationRows{}, err
+	}
 	tables := []string{
 		"asset_resource", "album_membership", "location_observation",
 		"metadata_observation", "text_observation", "face_observation",
@@ -121,8 +130,19 @@ func resetAssetDerivedRows(ctx context.Context, tx *sql.Tx, assetID string) erro
 			_, err = tx.ExecContext(ctx, query, assetID)
 		}
 		if err != nil {
-			return fmt.Errorf("clear %s for asset: %w", table, err)
+			return invalidatedObservationRows{}, fmt.Errorf("clear %s for asset: %w", table, err)
 		}
 	}
-	return nil
+	return counts, nil
+}
+
+func countInvalidatedObservationRows(ctx context.Context, tx *sql.Tx, assetID string) (invalidatedObservationRows, error) {
+	var counts invalidatedObservationRows
+	if err := tx.QueryRowContext(ctx, `select count(*) from model_observation where asset_id = ?`, assetID).Scan(&counts.ModelObservationRows); err != nil {
+		return counts, fmt.Errorf("count model observations before reset: %w", err)
+	}
+	if err := tx.QueryRowContext(ctx, `select count(*) from place_observation where asset_id = ?`, assetID).Scan(&counts.PlaceObservationRows); err != nil {
+		return counts, fmt.Errorf("count place observations before reset: %w", err)
+	}
+	return counts, nil
 }
