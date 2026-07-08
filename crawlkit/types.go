@@ -62,9 +62,6 @@ type Info struct {
 	Aliases     []string
 	DisplayName string
 	Description string
-	// ArchiveFilename declares the archive database filename. Empty uses
-	// "<ID>.db"; non-empty values must be a filename, not a path.
-	ArchiveFilename string
 	// ShortRefs declares that the generated manifest includes the
 	// "short_refs" capability. Consumers key on that manifest capability,
 	// so crawlkit can change this declaration mechanism without changing

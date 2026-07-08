@@ -21,10 +21,6 @@ func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
 	if sourceID == "" {
 		return sourcePaths{}, errors.New("source id is required")
 	}
-	archiveName, err := archiveFilename(info)
-	if err != nil {
-		return sourcePaths{}, err
-	}
 	root := strings.TrimSpace(stateRoot)
 	if root == "" {
 		home, err := os.UserHomeDir()
@@ -40,7 +36,7 @@ func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
 		CrawlerID: sourceID,
 		Base:      base,
 		Paths: Paths{
-			Archive: filepath.Join(base, archiveName),
+			Archive: filepath.Join(base, sourceID+".db"),
 			Config:  filepath.Join(base, "config.toml"),
 			Logs:    filepath.Join(base, "logs"),
 		},

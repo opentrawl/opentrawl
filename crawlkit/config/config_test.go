@@ -58,32 +58,6 @@ func TestPlatformDefaultPathsUseXDGDirs(t *testing.T) {
 	}
 }
 
-func TestDefaultPathsUseDeclaredArchiveFilename(t *testing.T) {
-	home := t.TempDir()
-	setTestHome(t, home)
-
-	paths, err := (App{Name: "thingcrawl", ArchiveFilename: "archive.sqlite"}).DefaultPaths()
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantBase := filepath.Join(home, ".config", "thingcrawl")
-	if paths.DBPath != filepath.Join(wantBase, "archive.sqlite") {
-		t.Fatalf("db path = %q", paths.DBPath)
-	}
-}
-
-func TestDefaultPathsRejectPathShapedArchiveFilename(t *testing.T) {
-	home := t.TempDir()
-	setTestHome(t, home)
-
-	for _, filename := range []string{"sub/archive.sqlite", "../archive.sqlite"} {
-		_, err := (App{Name: "thingcrawl", ArchiveFilename: filename}).DefaultPaths()
-		if err == nil {
-			t.Fatalf("DefaultPaths accepted archive filename %q", filename)
-		}
-	}
-}
-
 func TestPlatformDefaultPathsUsePlatformFallbacks(t *testing.T) {
 	home := t.TempDir()
 	configHome, dataHome, cacheHome, stateHome := defaultPlatformTestDirs(home)

@@ -19,9 +19,6 @@ type App struct {
 	BaseDir       string
 	LegacyBaseDir string
 	PlatformDirs  bool
-	// ArchiveFilename declares the archive database filename. Empty uses
-	// "<Name>.db"; non-empty values must be a filename, not a path.
-	ArchiveFilename string
 }
 
 type Paths struct {
@@ -83,18 +80,14 @@ func (a App) DefaultPaths() (Paths, error) {
 }
 
 func (app App) defaultPaths() (Paths, error) {
-	archiveFilename, err := ArchiveFilename(app.Name, app.ArchiveFilename)
-	if err != nil {
-		return Paths{}, err
-	}
 	if app.PlatformDirs && strings.TrimSpace(app.BaseDir) == "" {
-		return platformPaths(app.Name, archiveFilename)
+		return platformPaths(app.Name)
 	}
 	base := ExpandHome(app.BaseDir)
 	return Paths{
 		BaseDir:    base,
 		ConfigPath: filepath.Join(base, "config.toml"),
-		DBPath:     filepath.Join(base, archiveFilename),
+		DBPath:     filepath.Join(base, app.Name+".db"),
 		CacheDir:   filepath.Join(base, "cache"),
 		LogDir:     filepath.Join(base, "logs"),
 		ShareDir:   filepath.Join(base, "share"),
@@ -109,15 +102,11 @@ func (a App) LegacyPaths() (Paths, bool, error) {
 	if strings.TrimSpace(app.LegacyBaseDir) == "" {
 		return Paths{}, false, nil
 	}
-	archiveFilename, err := ArchiveFilename(app.Name, app.ArchiveFilename)
-	if err != nil {
-		return Paths{}, false, err
-	}
 	base := ExpandHome(app.LegacyBaseDir)
 	return Paths{
 		BaseDir:    base,
 		ConfigPath: filepath.Join(base, "config.toml"),
-		DBPath:     filepath.Join(base, archiveFilename),
+		DBPath:     filepath.Join(base, app.Name+".db"),
 		CacheDir:   filepath.Join(base, "cache"),
 		LogDir:     filepath.Join(base, "logs"),
 		ShareDir:   filepath.Join(base, "share"),
@@ -197,7 +186,7 @@ func EnsureRuntimeDirs(cfg RuntimeConfig) error {
 	return nil
 }
 
-func platformPaths(name, archiveFilename string) (Paths, error) {
+func platformPaths(name string) (Paths, error) {
 	xdgMu.Lock()
 	defer xdgMu.Unlock()
 
@@ -212,37 +201,11 @@ func platformPaths(name, archiveFilename string) (Paths, error) {
 	return Paths{
 		BaseDir:    dataDir,
 		ConfigPath: filepath.Join(configDir, "config.toml"),
-		DBPath:     filepath.Join(dataDir, archiveFilename),
+		DBPath:     filepath.Join(dataDir, name+".db"),
 		CacheDir:   cacheDir,
 		LogDir:     filepath.Join(stateDir, "logs"),
 		ShareDir:   filepath.Join(dataDir, "share"),
 	}, nil
-}
-
-// ArchiveFilenameError reports a declared archive filename that is not a
-// single filename.
-type ArchiveFilenameError struct {
-	Filename string
-}
-
-func (e ArchiveFilenameError) Error() string {
-	if strings.TrimSpace(e.Filename) == "" {
-		return "archive filename is empty"
-	}
-	return fmt.Sprintf("archive filename %q must be a filename, not a path", strings.TrimSpace(e.Filename))
-}
-
-// ArchiveFilename returns the declared archive filename, or "<name>.db" when
-// no filename is declared.
-func ArchiveFilename(name, declared string) (string, error) {
-	if declared == "" {
-		return strings.TrimSpace(name) + ".db", nil
-	}
-	filename := strings.TrimSpace(declared)
-	if filename == "" || strings.ContainsAny(filename, `/\`) || strings.Contains(filename, "..") {
-		return "", ArchiveFilenameError{Filename: declared}
-	}
-	return filename, nil
 }
 
 func platformHomes() (configHome, dataHome, cacheHome, stateHome string, err error) {

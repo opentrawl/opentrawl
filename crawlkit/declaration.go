@@ -4,36 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/output"
 )
-
-type archiveFilenameDeclarationError struct {
-	filename string
-}
-
-func (e archiveFilenameDeclarationError) Error() string {
-	if strings.TrimSpace(e.filename) == "" {
-		return "invalid archive filename: archive filename is empty"
-	}
-	return fmt.Sprintf("invalid archive filename %q: archive filename must be a filename, not a path", strings.TrimSpace(e.filename))
-}
-
-func (e archiveFilenameDeclarationError) ErrorBody() output.ErrorBody {
-	return output.ErrorBody{
-		Code:    "invalid_archive_filename",
-		Message: e.Error(),
-		Remedy:  "Set ArchiveFilename to one filename only; remove directories, path separators, and \"..\".",
-	}
-}
-
-func archiveFilename(info Info) (string, error) {
-	filename, err := config.ArchiveFilename(info.ID, info.ArchiveFilename)
-	if err != nil {
-		return "", archiveFilenameDeclarationError{filename: info.ArchiveFilename}
-	}
-	return filename, nil
-}
 
 func supportedVerbDeclarations(source Crawler) (map[string]Verb, error) {
 	spine, err := supportedSpineVerbDeclarations(source)

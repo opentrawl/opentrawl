@@ -27,17 +27,16 @@ import (
 )
 
 type testCrawler struct {
-	id              string
-	surface         string
-	archiveFilename string
-	shortRef        bool
-	cfg             *testConfig
-	verbs           []Verb
-	statusFn        func(context.Context, *Request) (*control.Status, error)
-	doctorFn        func(context.Context, *Request) (*Doctor, error)
-	searchFn        func(context.Context, *Request, Query) (SearchResult, error)
-	whoFn           func(context.Context, *Request, string) ([]whomatch.Candidate, error)
-	syncFn          func(context.Context, *Request) (*SyncReport, error)
+	id       string
+	surface  string
+	shortRef bool
+	cfg      *testConfig
+	verbs    []Verb
+	statusFn func(context.Context, *Request) (*control.Status, error)
+	doctorFn func(context.Context, *Request) (*Doctor, error)
+	searchFn func(context.Context, *Request, Query) (SearchResult, error)
+	whoFn    func(context.Context, *Request, string) ([]whomatch.Candidate, error)
+	syncFn   func(context.Context, *Request) (*SyncReport, error)
 }
 
 type testStatusCrawler struct {
@@ -74,12 +73,11 @@ func (c *testCrawler) Info() Info {
 		id = "testcrawl"
 	}
 	info := Info{
-		ID:              id,
-		Surface:         firstText(c.surface, "test"),
-		DisplayName:     "Test",
-		Description:     "Synthetic test crawler.",
-		ArchiveFilename: c.archiveFilename,
-		ShortRefs:       c.shortRef,
+		ID:          id,
+		Surface:     firstText(c.surface, "test"),
+		DisplayName: "Test",
+		Description: "Synthetic test crawler.",
+		ShortRefs:   c.shortRef,
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -338,88 +336,6 @@ func TestRunIgnoresChildStateEnvOutsideWireInvocation(t *testing.T) {
 	}
 	if manifest.Paths.DefaultDatabase == filepath.Join(envRoot, "testcrawl", "testcrawl.db") {
 		t.Fatalf("%s affected non-child metadata path: %s", childStateRootEnv, manifest.Paths.DefaultDatabase)
-	}
-}
-
-func TestRunMetadataUsesDeclaredArchiveFilename(t *testing.T) {
-	stateRoot := t.TempDir()
-	archivePath := filepath.Join(stateRoot, "testcrawl", "photos.sqlite")
-	source := &testCrawler{
-		archiveFilename: "photos.sqlite",
-		statusFn: func(ctx context.Context, req *Request) (*control.Status, error) {
-			if req.Paths.Archive != archivePath {
-				t.Fatalf("status archive path = %q, want %q", req.Paths.Archive, archivePath)
-			}
-			status := control.NewStatus("testcrawl", "ready")
-			status.State = "ok"
-			return &status, nil
-		},
-		doctorFn: func(ctx context.Context, req *Request) (*Doctor, error) {
-			if req.Paths.Archive != archivePath {
-				t.Fatalf("doctor archive path = %q, want %q", req.Paths.Archive, archivePath)
-			}
-			return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
-		},
-	}
-
-	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
-	if code != 0 {
-		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var manifest control.Manifest
-	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
-		t.Fatalf("manifest json = %s err=%v", stdout, err)
-	}
-	if manifest.Paths.DefaultDatabase != archivePath {
-		t.Fatalf("default database = %q, want %q", manifest.Paths.DefaultDatabase, archivePath)
-	}
-
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
-	if code != 0 {
-		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"doctor", "--json"}, source, runOptions{})
-	if code != 0 {
-		t.Fatalf("doctor code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-
-	createArchiveAt(t, archivePath)
-	source.searchFn = func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
-		if req.Paths.Archive != archivePath {
-			t.Fatalf("search archive path = %q, want %q", req.Paths.Archive, archivePath)
-		}
-		if req.Store == nil {
-			t.Fatal("search Store is nil")
-		}
-		return SearchResult{
-			Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
-			TotalMatches: 1,
-		}, nil
-	}
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, `"results"`) {
-		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-}
-
-func TestRunRejectsPathShapedArchiveFilename(t *testing.T) {
-	stateRoot := t.TempDir()
-	for _, filename := range []string{"sub/photos.sqlite", "../x.db"} {
-		t.Run(filename, func(t *testing.T) {
-			source := &testCrawler{archiveFilename: filename}
-			wantMessage := "invalid archive filename"
-			wantRemedy := "Set ArchiveFilename to one filename only"
-
-			code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
-			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
-				t.Fatalf("metadata invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
-			}
-
-			code, stdout, stderr = runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
-			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
-				t.Fatalf("status invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
-			}
-		})
 	}
 }
 
