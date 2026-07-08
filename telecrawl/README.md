@@ -17,30 +17,23 @@ It is local-first:
 
 ## Install
 
-Build from the monorepo root; the binary lands in the repo-local bin
-directory that `trawl` discovers:
+Build `trawl` from the monorepo root:
 
 ```bash
 scripts/dev-bin
 ```
 
-Or build just this crawler, from this directory:
-
-```bash
-go build ./cmd/telecrawl
-```
-
 ## Setup
 
 No language runtime setup is required. `telecrawl` imports Telegram Desktop
-`tdata` and native macOS Postbox data through the Go binary.
+`tdata` and native macOS Postbox data through `trawl`.
 
 ## Sync
 
 ```bash
-telecrawl doctor
-telecrawl sync
-telecrawl status
+trawl telecrawl doctor
+trawl telecrawl sync
+trawl telecrawl status
 ```
 
 Sync defaults to:
@@ -51,14 +44,14 @@ Sync defaults to:
 Use `0` for no limit:
 
 ```bash
-telecrawl sync --dialogs-limit 0 --messages-limit 0
+trawl telecrawl sync --dialogs-limit 0 --messages-limit 0
 ```
 
 Add `--fetch-media` when you also want Telegram cloud media that is not cached
 locally:
 
 ```bash
-telecrawl sync --dialogs-limit 0 --messages-limit 0 --fetch-media
+trawl telecrawl sync --dialogs-limit 0 --messages-limit 0 --fetch-media
 ```
 
 Remote media fetches are bounded best-effort operations. Run with `-v` to see
@@ -82,7 +75,7 @@ When no `--path` is provided on macOS, `telecrawl` checks Telegram Desktop
 flag is needed. To import a copied archive directly:
 
 ```bash
-telecrawl sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
+trawl telecrawl sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
 Native macOS syncs include every local `account-*` database they find; if more
@@ -90,25 +83,25 @@ than one account is present, stored chat and sender IDs are account-scoped to
 avoid collisions. They archive cached media by default and store Telegram peer
 records as contacts for message enrichment. Contacts can include phone numbers,
 usernames, and archived avatar paths when those values exist locally, and are
-visible through `telecrawl contacts`. `--fetch-media` also uses the existing
+visible through `trawl telecrawl contacts`. `--fetch-media` also uses the existing
 native Telegram session to fetch missing cloud media when account auth data is
 present; this does not launch Telegram or start a login/2FA flow.
 
 Useful reads:
 
 ```bash
-telecrawl folders
-telecrawl contacts
-telecrawl chats --limit 20
-telecrawl chats --folder FOLDER_ID
-telecrawl chats --unread
-telecrawl topics --chat CHAT_ID
-telecrawl messages --limit 20
-telecrawl messages --chat CHAT_ID --after 2026-01-01
-telecrawl messages --chat CHAT_ID --topic TOPIC_ID
-telecrawl messages --chat CHAT_ID --pinned
-telecrawl search "query"
-telecrawl search "query" --chat CHAT_ID --topic TOPIC_ID
+trawl telecrawl folders
+trawl telecrawl contacts
+trawl telecrawl chats --limit 20
+trawl telecrawl chats --folder FOLDER_ID
+trawl telecrawl chats --unread
+trawl telecrawl topics --chat CHAT_ID
+trawl telecrawl messages --limit 20
+trawl telecrawl messages --chat CHAT_ID --after 2026-01-01
+trawl telecrawl messages --chat CHAT_ID --topic TOPIC_ID
+trawl telecrawl messages --chat CHAT_ID --pinned
+trawl telecrawl search "query"
+trawl telecrawl search "query" --chat CHAT_ID --topic TOPIC_ID
 ```
 
 Telegram folders, forum topics, reply/thread IDs, pinned messages, edits,
@@ -121,8 +114,8 @@ chat.
 Add `--json` before the command for machine-readable output:
 
 ```bash
-telecrawl --json status
-telecrawl --json search "invoice"
+trawl --json telecrawl status
+trawl --json telecrawl search "invoice"
 ```
 
 ## Data Paths
@@ -143,15 +136,15 @@ Use a temporary home for tests:
 
 ```bash
 test_home="$(mktemp -d)"
-HOME="$test_home" telecrawl status
+HOME="$test_home" trawl telecrawl status
 ```
 
 Override the Telegram source:
 
 ```bash
-telecrawl doctor --path "/path/to/tdata"
-telecrawl sync --path "/path/to/tdata"
-telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
+trawl telecrawl doctor --path "/path/to/tdata"
+trawl telecrawl sync --path "/path/to/tdata"
+trawl telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
 ## Backup
@@ -159,8 +152,8 @@ telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
 Create `https://github.com/steipete/backup-telecrawl` first, then initialize:
 
 ```bash
-telecrawl backup init
-telecrawl backup push
+trawl telecrawl backup init
+trawl telecrawl backup push
 ```
 
 The default config stores backup settings under `[backup]`:
@@ -175,7 +168,7 @@ identity = "~/.opentrawl/telecrawl/age.key"
 Use a different repository:
 
 ```bash
-telecrawl backup init \
+trawl telecrawl backup init \
   --repo ~/Projects/backup-telecrawl \
   --remote https://github.com/steipete/backup-telecrawl.git
 ```
@@ -183,15 +176,15 @@ telecrawl backup init \
 Inspect backup metadata:
 
 ```bash
-telecrawl backup status
-telecrawl backup snapshots
+trawl telecrawl backup status
+trawl telecrawl backup snapshots
 ```
 
 Restore into the current archive DB:
 
 ```bash
-telecrawl backup pull
-telecrawl status
+trawl telecrawl backup pull
+trawl telecrawl status
 ```
 
 Every changed backup is a Git commit. Add a non-moving, visible checkpoint tag
@@ -199,8 +192,8 @@ when needed, then restore that tag, commit, or branch without switching the
 backup checkout:
 
 ```bash
-telecrawl backup push --tag snapshot/before-migration
-telecrawl backup pull --ref snapshot/before-migration
+trawl telecrawl backup push --tag snapshot/before-migration
+trawl telecrawl backup pull --ref snapshot/before-migration
 ```
 
 `backup snapshots --limit N` lists recent manifest-changing commits and tags.
@@ -212,8 +205,8 @@ Restore into a temporary home for validation:
 backup_repo="$HOME/Projects/backup-telecrawl"
 backup_identity="$HOME/.opentrawl/telecrawl/age.key"
 test_home="$(mktemp -d)"
-HOME="$test_home" telecrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
-HOME="$test_home" telecrawl status
+HOME="$test_home" trawl telecrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" trawl telecrawl status
 ```
 
 ## Backup Security Model
@@ -245,7 +238,7 @@ decrypt the backup, the encrypted backup cannot be restored.
 On another machine:
 
 ```bash
-telecrawl backup init --no-push
+trawl telecrawl backup init --no-push
 cat ~/.opentrawl/telecrawl/config.toml
 ```
 
@@ -253,7 +246,7 @@ Copy that machine's public `recipient` into the first machine's
 `~/.opentrawl/telecrawl/config.toml`, then re-encrypt current shards:
 
 ```bash
-telecrawl backup push
+trawl telecrawl backup push
 ```
 
 The private `AGE-SECRET-KEY-...` identity must not be committed or shared.

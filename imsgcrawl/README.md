@@ -16,14 +16,14 @@ tests, CrawlBar, or other workflows that need stable fields and local IDs.
 ## Quick Start
 
 ```bash
-imsgcrawl status
-imsgcrawl sync
-imsgcrawl chats
-imsgcrawl messages --chat 42
-imsgcrawl who elon
-imsgcrawl search "candles budget"
-imsgcrawl open imsgcrawl:msg/8831
-imsgcrawl contacts export
+trawl imsgcrawl status
+trawl imsgcrawl sync
+trawl imsgcrawl chats
+trawl imsgcrawl messages --chat 42
+trawl imsgcrawl who elon
+trawl imsgcrawl search "candles budget"
+trawl imsgcrawl open imsgcrawl:msg/8831
+trawl imsgcrawl contacts export
 ```
 
 List commands are bounded by default. They show how many rows were returned and
@@ -44,16 +44,16 @@ Local-first iMessage archive crawler.
 Capabilities: metadata, status, doctor, sync, search, open, who, contacts_export, short_refs, chats, messages
 
 Agent-facing commands:
-  metadata        imsgcrawl metadata --json
-  status          imsgcrawl status --json
-  sync            imsgcrawl sync --json
-  doctor          imsgcrawl doctor --json
-  chats           imsgcrawl chats --json
-  messages        imsgcrawl messages --json
-  who             imsgcrawl who NAME --json
-  search          imsgcrawl search QUERY --json
-  open            imsgcrawl open REF --json
-  contacts export imsgcrawl contacts export --json
+  metadata        trawl imsgcrawl metadata --json
+  status          trawl imsgcrawl status --json
+  sync            trawl imsgcrawl sync --json
+  doctor          trawl imsgcrawl doctor --json
+  chats           trawl imsgcrawl chats --json
+  messages        trawl imsgcrawl messages --json
+  who             trawl imsgcrawl who NAME --json
+  search          trawl imsgcrawl search QUERY --json
+  open            trawl imsgcrawl open REF --json
+  contacts export trawl imsgcrawl contacts export --json
 
 Machine output: add --json to print the structured manifest.
 ```
@@ -84,9 +84,9 @@ a human or agent to choose the right conversation.
 
 ```text
 Chats: showing 3 of 4, newest first.
-More: imsgcrawl chats --limit 4
-All: imsgcrawl chats --all
-Open: imsgcrawl messages --chat CHAT_ID
+More: trawl imsgcrawl chats --limit 4
+All: trawl imsgcrawl chats --all
+Open: trawl imsgcrawl messages --chat CHAT_ID
 
 chat  kind    msgs  latest            conversation
 42    group   6     2026-06-07 09:10  Cabinet Group (Elon, JD, Xi, +1 more)
@@ -101,9 +101,9 @@ column and are not truncated; row limits control size.
 
 ```text
 Messages in Cabinet Group (chat 42): showing 3 of 6, newest-first.
-More: imsgcrawl messages --chat 42 --limit 6
-All: imsgcrawl messages --chat 42 --all
-Search: imsgcrawl search QUERY
+More: trawl imsgcrawl messages --chat 42 --limit 6
+All: trawl imsgcrawl messages --chat 42 --all
+Search: trawl imsgcrawl search QUERY
 
 date              from        text
 2026-06-07 09:10  me          The candles budget is CORRECT.
@@ -131,7 +131,7 @@ when an agent or script needs refs for follow-up commands.
 
 ```text
 Search "candles budget": showing 1 of 1.
-Open: imsgcrawl open REF
+Open: trawl imsgcrawl open REF
 
 date              who  where                         ref    text
 2026-06-07 09:10  me   Cabinet Group (Elon, JD,      8x7m2  The candles budget is CORRECT.
@@ -141,8 +141,8 @@ date              who  where                         ref    text
 ```text
 Failing Elon → Failing Elon
 Search filters: showing 2 of 3.
-More: imsgcrawl search --limit 3 --who "Failing Elon"
-Open: imsgcrawl open REF
+More: trawl imsgcrawl search --limit 3 --who "Failing Elon"
+Open: trawl imsgcrawl open REF
 ```
 
 ### Open
@@ -188,14 +188,14 @@ It includes local IDs and stable field names, so code can pipe it through `jq`
 or feed it to crawlkit/CrawlBar-style consumers.
 
 ```bash
-imsgcrawl --json status
-imsgcrawl --json chats --limit 20
-imsgcrawl --json messages --chat 42 --limit 20
-imsgcrawl --json who elon
-imsgcrawl --json search --limit 20 "candles budget"
-imsgcrawl --json search --who "Failing Elon" --limit 20
-imsgcrawl --json open imsgcrawl:msg/8831
-imsgcrawl --json contacts export
+trawl --json imsgcrawl status
+trawl --json imsgcrawl chats --limit 20
+trawl --json imsgcrawl messages --chat 42 --limit 20
+trawl --json imsgcrawl who elon
+trawl --json imsgcrawl search --limit 20 "candles budget"
+trawl --json imsgcrawl search --who "Failing Elon" --limit 20
+trawl --json imsgcrawl open imsgcrawl:msg/8831
+trawl --json imsgcrawl contacts export
 ```
 
 Search JSON keeps the envelope small and parseable:
@@ -240,22 +240,22 @@ public examples must use fake fixture data.
 
 ## Development
 
-The repo is designed to be tested through the real `imsgcrawl` binary.
+The repo is designed to be tested through `trawl imsgcrawl`.
 
 With Nix/devenv:
 
 ```bash
 direnv allow
-go install ./cmd/imsgcrawl
-imsgcrawl status
+scripts/dev-bin
+trawl imsgcrawl status
 ```
 
 Without Nix, install Go `1.26.4` or newer, then use the normal Go workflow:
 
 ```bash
 go test ./...
-go install ./cmd/imsgcrawl
-imsgcrawl status
+scripts/dev-bin
+trawl imsgcrawl status
 ```
 
 Install `jq` if you want to run the smoke transcript or inspect JSON examples.
@@ -263,7 +263,7 @@ Install `jq` if you want to run the smoke transcript or inspect JSON examples.
 ## Agent Smoke Transcript
 
 Use the smoke transcript when reviewing whether the CLI actually works for an
-agent. It runs the real `imsgcrawl` on `PATH` with a synthetic `HOME`, then
+agent. It runs `trawl imsgcrawl` with a synthetic `HOME`, then
 writes exact stdout/stderr for progressive text and JSON commands to `/tmp`.
 
 ```bash

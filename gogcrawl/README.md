@@ -40,14 +40,14 @@ bytes.
 ## Commands
 
 ```sh
-gogcrawl metadata --json
-gogcrawl status --json
-gogcrawl sync --json
-gogcrawl sync --query "from:me" --max 25 --json
-gogcrawl search "project sync" --json
-gogcrawl open gogcrawl:msg/<gmail-message-id> --json
-gogcrawl doctor --json
-gogcrawl contacts export --json
+trawl gogcrawl metadata --json
+trawl gogcrawl status --json
+trawl gogcrawl sync --json
+trawl gogcrawl sync --query "from:me" --max 25 --json
+trawl gogcrawl search "project sync" --json
+trawl gogcrawl open gogcrawl:msg/<gmail-message-id> --json
+trawl gogcrawl doctor --json
+trawl gogcrawl contacts export --json
 ```
 
 `contacts export` uses `gog contacts list --json`. It exports only

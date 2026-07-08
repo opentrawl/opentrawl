@@ -9,10 +9,10 @@ cross-source verb or flag is a design decision recorded in this file, not
 a response to a feature request.
 
 There are two kinds of command. The cross-source verbs below run over
-every installed crawler at once — the one door. Each source is also its
+every registered source at once — the one door. Each source is also its
 own namespace: `trawl <source>` lists that crawler's verbs and
 `trawl <source> <verb>` runs one, served from the source's manifest so
-the crawler binary is never named to the reader (see Namespaces).
+the source package is never named to the reader (see Namespaces).
 
 All examples use synthetic data.
 
@@ -31,7 +31,7 @@ Global flags: `--json`, `--help`, `--version`. Nothing else.
 
 ## status
 
-Health of every installed crawler at a glance. One line per source:
+Health of every registered source at a glance. One line per source:
 state, freshness, and the headline counts the crawler itself declares.
 
 ```
@@ -86,14 +86,14 @@ $ trawl open imessage:msg/8842
 
 ## doctor
 
-Diagnoses one crawler or all of them: binary found, contract version,
+Diagnoses one crawler or all of them: source registered, contract version,
 auth state, source store reachable, permissions (TCC), archive
 integrity. Every failing check comes with the exact remedy command.
 
 ## Namespaces
 
 `trawl <source>` opens one crawler's own verbs. The list is served from
-the source's manifest, so it teaches itself without naming the binary:
+the source's manifest, so it teaches itself without naming package internals:
 
 ```
 $ trawl imessage
@@ -112,11 +112,11 @@ Verbs:
 Run a verb: trawl imessage <verb>
 ```
 
-`trawl <source> <verb> [args]` runs that verb by spawning the child
-crawler and streaming its output; `--json` on a source that emits JSON
+`trawl <source> <verb> [args]` runs that verb through the registered
+crawler and streams its output; `--json` on a source that emits JSON
 flows through. `trawl <source> --json` returns the verb list as JSON for
 agents. An unknown or incomplete verb gets a trawl-owned error, never the
-child's — the child stays internal plumbing.
+crawler's — source internals stay internal.
 
 ## Behaviour rules
 
@@ -134,8 +134,7 @@ child's — the child stays internal plumbing.
 
 ## Discovery
 
-Crawlers are found by the crawlkit registry: one list of known binary
-names (`crawlkit/registry`), probed on PATH (which includes `.dev/bin`
-inside the dev shell). A binary is a crawler if `<binary> metadata --json`
-returns a valid manifest. Registration is that list — no config files, no
-drop-in manifests, no registration step.
+Crawlers are registered explicitly in `trawl`: one hand-written list of
+source constructors. The manifest still comes from each crawler's
+contract metadata. Registration is code — no config files, no drop-in
+manifests, no per-source install step.

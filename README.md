@@ -28,11 +28,11 @@ commands never write.
 
 ## How it works
 
-One crawler per service. Each is a standalone binary that extracts
-your data into its own local SQLite archive and speaks a small,
-common command contract. On top of that contract sit two surfaces:
+One crawler per service. Each extracts your data into its own local
+SQLite archive and speaks a small, common command contract. On top
+of that contract sit two surfaces:
 
-- `trawl`, a CLI that finds your installed crawlers and federates
+- `trawl`, a CLI that fronts the registered crawlers and federates
   them: `trawl status`, `trawl sync`, `trawl search "boat trip"`,
   `trawl open <ref>`, `trawl doctor`
 - Trawl, a macOS menu bar app that handles authorisation, runs syncs
@@ -65,9 +65,9 @@ packaged for end users.
 
 ## Working on it
 
-Clone, run `devenv shell`, and everything works — crawlers build from
-source into a repo-local bin directory that `trawl` discovers. No
-global installs. With [direnv](https://direnv.net), `direnv allow`
+Clone, run `devenv shell`, and everything works — `trawl` builds from
+source into a repo-local bin directory. No global installs. With
+[direnv](https://direnv.net), `direnv allow`
 once and every new terminal in this directory activates itself. Read
 [AGENTS.md](AGENTS.md) first (this repo is public and the privacy
 rules are enforced in CI), then [docs/sync.md](docs/sync.md) for how

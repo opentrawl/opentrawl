@@ -54,6 +54,19 @@ capture() {
   "$@" >"$stdout" 2>"$stderr"
 }
 
+capture_trawl() {
+  local stdout stderr source
+  stdout="$1"
+  stderr="$2"
+  source="$3"
+  shift 3
+  if [ -n "$source" ]; then
+    capture "$stdout" "$stderr" trawl "$source" "$@"
+  else
+    capture "$stdout" "$stderr" trawl "$@"
+  fi
+}
+
 json_declares_capability() {
   local file capability
   file="$1"
@@ -140,9 +153,9 @@ unknown_who_token="zzqx-nobody"
 trawl_ambiguous_who=""
 
 run_who_contract_smoke() {
-  local surface command state declares_search found command_succeeded fragment tag json err human count exact_name filter_json filter_err filter_rc words word search_rc search_tag search_json search_err search_ok ambiguous
+  local surface source state declares_search found command_succeeded fragment tag json err human count exact_name filter_json filter_err filter_rc words word search_rc search_tag search_json search_err search_ok ambiguous
   surface="$1"
-  command="$2"
+  source="$2"
   state="$3"
   declares_search="$4"
   found=""
@@ -152,7 +165,7 @@ run_who_contract_smoke() {
     tag="$(slug "$surface-who-$fragment")"
     json="$rawdir/$tag.json"
     err="$rawdir/$tag.stderr.txt"
-    if capture "$json" "$err" "$command" who "$fragment" --json; then
+    if capture_trawl "$json" "$err" "$source" who "$fragment" --json; then
       command_succeeded=1
       if ! valid_who_json "$json"; then
         bad "$surface who JSON is missing query, candidates, who, or identifiers"
@@ -162,14 +175,14 @@ run_who_contract_smoke() {
       if [ "${count:-0}" -gt 0 ]; then
         found=1
         human="$rawdir/$tag-human.txt"
-        capture "$human" "$rawdir/$tag-human.stderr.txt" "$command" who "$fragment"
+        capture_trawl "$human" "$rawdir/$tag-human.stderr.txt" "$source" who "$fragment"
         ok "$surface who JSON envelope"
         check_human_who_capture "$surface" "$human"
         # An identifier, not the display name: names can be ambiguous
         # (several "American Express" sender variants); the contract
         # guarantees identifiers filter directly and cannot miss.
         exact_name="$(jq -r '.candidates[0].identifiers[0] // .candidates[0].who // empty' "$json")"
-        if [ -z "$trawl_ambiguous_who" ] && [ "$command" != "trawl" ] && [ "$count" -ge 2 ]; then
+        if [ -z "$trawl_ambiguous_who" ] && [ -n "$source" ] && [ "$count" -ge 2 ]; then
           ambiguous="$(first_repeated_who_token "$json")"
           if [ -z "$ambiguous" ] && [ "${#fragment}" -ge 2 ]; then
             ambiguous="$fragment"
@@ -188,7 +201,7 @@ run_who_contract_smoke() {
       skip "$surface who v1.2: no candidates from common fragments"
     fi
     if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
-      run_unknown_who_smoke "$surface" "$command" "the"
+      run_unknown_who_smoke "$surface" "$source" "the"
     fi
     return
   fi
@@ -200,13 +213,13 @@ run_who_contract_smoke() {
 
   filter_json="$rawdir/$(slug "$surface-search-who-filter-only").json"
   filter_err="$rawdir/$(slug "$surface-search-who-filter-only").stderr.txt"
-  capture "$filter_json" "$filter_err" "$command" search --who "$exact_name" --json --limit 1
+  capture_trawl "$filter_json" "$filter_err" "$source" search --who "$exact_name" --json --limit 1
   filter_rc=$?
   # Exit 3 is trawl's documented partial-results code (a source
   # without the who capability was skipped) — still a success here.
   if [ "$filter_rc" -ne 0 ] && [ "$filter_rc" -ne 3 ]; then
     bad "$surface search --who failed while discovering a probe word"
-    run_unknown_who_smoke "$surface" "$command" "the"
+    run_unknown_who_smoke "$surface" "$source" "the"
     return
   fi
 
@@ -217,12 +230,12 @@ run_who_contract_smoke() {
     search_tag="$(slug "$surface-search-who-$word")"
     search_json="$rawdir/$search_tag.json"
     search_err="$rawdir/$search_tag.stderr.txt"
-    capture "$search_json" "$search_err" "$command" search "$word" --who "$exact_name" --json --limit 3
+    capture_trawl "$search_json" "$search_err" "$source" search "$word" --who "$exact_name" --json --limit 3
     search_rc=$?
     if [ "$search_rc" -eq 0 ] || [ "$search_rc" -eq 3 ]; then
       if grep -q '"who_matched"[[:space:]]*:' "$search_json"; then
         bad "$surface search --who JSON still contains who_matched"
-        run_unknown_who_smoke "$surface" "$command" "${word:-the}"
+        run_unknown_who_smoke "$surface" "$source" "${word:-the}"
         return
       fi
       if valid_search_who_json "$search_json"; then
@@ -232,27 +245,27 @@ run_who_contract_smoke() {
       fi
     elif grep -q '"who_matched"[[:space:]]*:' "$search_json" 2>/dev/null; then
       bad "$surface search --who JSON still contains who_matched"
-      run_unknown_who_smoke "$surface" "$command" "${word:-the}"
+      run_unknown_who_smoke "$surface" "$source" "${word:-the}"
       return
     fi
   done
   if [ -z "$search_ok" ]; then
     bad "$surface search --who JSON lacks who_resolved or results"
-    run_unknown_who_smoke "$surface" "$command" "${word:-the}"
+    run_unknown_who_smoke "$surface" "$source" "${word:-the}"
     return
   fi
 
-  run_unknown_who_smoke "$surface" "$command" "$word"
+  run_unknown_who_smoke "$surface" "$source" "$word"
 }
 
 run_unknown_who_smoke() {
-  local surface command word unknown_json unknown_err unknown_code
+  local surface source word unknown_json unknown_err unknown_code
   surface="$1"
-  command="$2"
+  source="$2"
   word="$3"
   unknown_json="$rawdir/$(slug "$surface-search-who-unknown").json"
   unknown_err="$rawdir/$(slug "$surface-search-who-unknown").stderr.txt"
-  capture "$unknown_json" "$unknown_err" "$command" search "$word" --who "$unknown_who_token" --json --limit 3
+  capture_trawl "$unknown_json" "$unknown_err" "$source" search "$word" --who "$unknown_who_token" --json --limit 3
   unknown_code=$?
   if [ "$unknown_code" -ne 5 ]; then
     bad "$surface unknown --who exit = $unknown_code, want 5"
@@ -311,16 +324,12 @@ while read -r source state; do
     *) bad "state $state" ;;
   esac
 
-  # 2. Contract: the conformance harness is the machine-checkable part.
-  if conformance "$source" >/dev/null 2>&1; then
-    ok "conformance"
-  else
-    bad "conformance (run: conformance $source)"
-  fi
-
+  # 2. Contract: metadata through trawl is the machine-checkable part
+  # now that first-party crawler binaries are gone.
   metadata_json="$rawdir/$source-metadata.json"
   metadata_err="$rawdir/$source-metadata.stderr.txt"
-  if capture "$metadata_json" "$metadata_err" "$source" metadata --json; then
+  if capture_trawl "$metadata_json" "$metadata_err" "$source" metadata --json; then
+    ok "metadata through trawl"
     declares_search="$(json_declares_capability "$metadata_json" "search")"
     [ "$declares_search" = "true" ] || declares_search=false
     declares_who="$(json_declares_capability "$metadata_json" "who")"
@@ -334,11 +343,11 @@ while read -r source state; do
   # 3. Round-trip on real data: search issues a ref, open expands it.
   # Only meaningful when the crawler declares search and has an archive.
   if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
-    "$source" search "the" --json --limit 3 > "$rawdir/$source-search.json" 2>/dev/null
+    trawl "$source" search "the" --json --limit 3 > "$rawdir/$source-search.json" 2>/dev/null
     ref="$(jq -r '.results[0].ref // empty' "$rawdir/$source-search.json" 2>/dev/null)"
     if [ -z "$ref" ]; then
       meh "round-trip skipped: search \"the\" matched nothing"
-    elif "$source" open "$ref" --json > "$rawdir/$source-open.json" 2>&1; then
+    elif trawl "$source" open "$ref" --json > "$rawdir/$source-open.json" 2>&1; then
       ok "search → open round-trip ($ref)"
     else
       bad "open failed on ref search issued: $ref"
@@ -350,7 +359,7 @@ while read -r source state; do
   # JSON, Go struct dumps, fmt errors. The JSON side is covered above;
   # both modes go into the transcript.
   for verb in status doctor; do
-    out="$("$source" "$verb" 2>&1 | head -40)"
+    out="$(trawl "$source" "$verb" 2>&1 | head -40)"
     printf '%s\n' "$out" > "$rawdir/$source-$verb-human.txt"
     case "$out" in
       ""|\{*|\[*)
@@ -361,9 +370,9 @@ while read -r source state; do
     esac
   done
   if [ "$declares_search" = "true" ] && { [ "$state" = "ok" ] || [ "$state" = "stale" ]; }; then
-    "$source" search "the" --limit 3 > "$rawdir/$source-search-human.txt" 2>&1
+    trawl "$source" search "the" --limit 3 > "$rawdir/$source-search-human.txt" 2>&1
     if [ -n "$ref" ]; then
-      "$source" open "$ref" > "$rawdir/$source-open-human.txt" 2>&1
+      trawl "$source" open "$ref" > "$rawdir/$source-open-human.txt" 2>&1
     fi
   fi
 
@@ -373,17 +382,17 @@ while read -r source state; do
     run_who_contract_smoke "$source" "$source" "$state" "$declares_search"
   fi
 
-  # 6. Documented truthfully: every "$source <verb>" line the README
+  # 6. Documented truthfully: every "trawl $source <verb>" line the README
   # shows in a shell block must at least be a real command.
   readme="$repo/$source/README.md"
   if [ -f "$readme" ]; then
-    verbs="$(awk '/^```/{code=!code; next} code && $1 == "'"$source"'" {print $2}' "$readme" | sort -u)"
+    verbs="$(awk '/^```/{code=!code; next} code && $1 == "trawl" && $2 == "'"$source"'" {print $3}' "$readme" | sort -u)"
     for verb in $verbs; do
       case "$verb" in -*|"") continue ;; esac
-      if "$source" "$verb" --help >/dev/null 2>&1; then
+      if trawl "$source" "$verb" --help >/dev/null 2>&1; then
         ok "README documents a real command: $verb"
       else
-        bad "README documents \"$source $verb\" but the command fails --help"
+        bad "README documents \"trawl $source $verb\" but the command fails --help"
       fi
     done
   else
@@ -393,7 +402,7 @@ done <<< "$sources"
 
 echo
 echo "== contract v1.2 who, through trawl =="
-run_who_contract_smoke "trawl" "trawl" "ok" "true"
+run_who_contract_smoke "trawl" "" "ok" "true"
 run_trawl_ambiguous_who_smoke
 
 echo

@@ -8,7 +8,6 @@ import (
 	"flag"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -21,6 +20,13 @@ import (
 	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/archive"
 )
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
+		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	}
+	os.Exit(m.Run())
+}
 
 func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
@@ -194,10 +200,12 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 
 func TestRunSyncThroughCrawlkitChildCreatesArchive(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
+	t.Setenv("HOME", home)
+	t.Setenv("CRAWLKIT_STATE_ROOT", "")
+	t.Setenv("CRAWLKIT_RUN_ID", "")
 	createSyntheticLibrary(t, filepath.Join(home, "Pictures", "Photos Library.photoslibrary"))
-	binary := buildPhotoscrawl(t)
 
-	code, stdout, stderr := runPhotoscrawlBinary(t, binary, home, "sync", "--json")
+	stdout, stderr, code := captureRun(t, []string{"sync", "--json"})
 	if code != 0 {
 		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -209,19 +217,21 @@ func TestRunSyncThroughCrawlkitChildCreatesArchive(t *testing.T) {
 
 func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
+	t.Setenv("HOME", home)
+	t.Setenv("CRAWLKIT_STATE_ROOT", "")
+	t.Setenv("CRAWLKIT_RUN_ID", "")
 	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
 	createSyntheticLibrary(t, libraryPath)
-	binary := buildPhotoscrawl(t)
 	archivePath := filepath.Join(home, ".opentrawl", "photoscrawl", "photoscrawl.db")
 
-	code, stdout, stderr := runPhotoscrawlBinary(t, binary, home, "sync", "--json")
+	stdout, stderr, code := captureRun(t, []string{"sync", "--json"})
 	if code != 0 {
 		t.Fatalf("first sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	seedStaleObservationRows(t, archivePath, "json")
 	setSyntheticFavorite(t, libraryPath, 0)
 
-	code, stdout, stderr = runPhotoscrawlBinary(t, binary, home, "sync", "--json")
+	stdout, stderr, code = captureRun(t, []string{"sync", "--json"})
 	if code != 0 {
 		t.Fatalf("json sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -248,7 +258,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 
 	seedStaleObservationRows(t, archivePath, "human")
 	setSyntheticFavorite(t, libraryPath, 1)
-	code, stdout, stderr = runPhotoscrawlBinary(t, binary, home, "sync")
+	stdout, stderr, code = captureRun(t, []string{"sync"})
 	if code != 0 {
 		t.Fatalf("human sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -263,7 +273,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 		}
 	}
 
-	code, stdout, stderr = runPhotoscrawlBinary(t, binary, home, "status", "--json")
+	stdout, stderr, code = captureRun(t, []string{"status", "--json"})
 	if code != 0 {
 		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -363,55 +373,6 @@ func openReadStore(t *testing.T, ctx context.Context, path string) *store.Store 
 		t.Fatal(err)
 	}
 	return st
-}
-
-func buildPhotoscrawl(t *testing.T) string {
-	t.Helper()
-	binary := filepath.Join(t.TempDir(), "photoscrawl")
-	cmd := exec.Command("go", "build", "-o", binary, "./cmd/photoscrawl")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Env = os.Environ()
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("build photoscrawl: %v\n%s", err, stderr.String())
-	}
-	return binary
-}
-
-func runPhotoscrawlBinary(t *testing.T, binary, home string, args ...string) (int, string, string) {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Env = envWithHome(os.Environ(), home)
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode(), stdout.String(), stderr.String()
-		}
-		t.Fatalf("photoscrawl %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
-	}
-	return 0, stdout.String(), stderr.String()
-}
-
-func envWithHome(env []string, home string) []string {
-	out := make([]string, 0, len(env)+1)
-	for _, entry := range env {
-		switch {
-		case strings.HasPrefix(entry, "HOME="):
-			continue
-		case strings.HasPrefix(entry, "PHOTOSCRAWL_CONFIG="):
-			continue
-		case strings.HasPrefix(entry, "CRAWLKIT_STATE_ROOT="):
-			continue
-		case strings.HasPrefix(entry, "CRAWLKIT_RUN_ID="):
-			continue
-		}
-		out = append(out, entry)
-	}
-	return append(out, "HOME="+home)
 }
 
 func createSyntheticLibrary(t *testing.T, libraryPath string) {

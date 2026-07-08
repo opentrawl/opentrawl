@@ -35,8 +35,8 @@ incoming replies are not obtainable from any X source.
 Run:
 
 ```sh
-go build ./cmd/birdcrawl
-./birdcrawl import archive /path/to/x-archive
+scripts/dev-bin
+trawl birdcrawl import archive /path/to/x-archive
 ```
 
 The default database is `~/.opentrawl/birdcrawl/birdcrawl.db`.
@@ -69,28 +69,28 @@ else. Tokens never appear in output, errors or logs.
 Read your archive:
 
 ```sh
-birdcrawl tweets
-birdcrawl bookmarks
-birdcrawl likes
-birdcrawl mentions
-birdcrawl search "solar kettle" --limit 20
-birdcrawl open t7k3f
-birdcrawl stats --window 30d --by likes --limit 10
+trawl birdcrawl tweets
+trawl birdcrawl bookmarks
+trawl birdcrawl likes
+trawl birdcrawl mentions
+trawl birdcrawl search "solar kettle" --limit 20
+trawl birdcrawl open t7k3f
+trawl birdcrawl stats --window 30d --by likes --limit 10
 ```
 
 Keep it fresh:
 
 ```sh
-birdcrawl sync
-birdcrawl import archive /path/to/x-archive
+trawl birdcrawl sync
+trawl birdcrawl import archive /path/to/x-archive
 ```
 
 Health:
 
 ```sh
-birdcrawl status
-birdcrawl doctor
-birdcrawl metadata --json
+trawl birdcrawl status
+trawl birdcrawl doctor
+trawl birdcrawl metadata --json
 ```
 
 Human text is the default. Add `--json` for the contract envelope.

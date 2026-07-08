@@ -89,7 +89,7 @@ correctly in `trawl`. Highly parallel.
 
 | crawler | state | main gaps |
 |---|---|---|
-| imsgcrawl | golden path: archive with source parity, FTS proven | installed binary, human-shaped IDs and timestamps, attachment handling |
+| imsgcrawl | golden path: archive with source parity, FTS proven | trawl registration, human-shaped IDs and timestamps, attachment handling |
 | telecrawl | works: archive and media proven | metadata drift, status envelope |
 | wacrawl | archive works, readiness unproven | readiness proof, stop auto-sync on read, status envelope; watch WhatsApp passkey pairing risk |
 | gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of upstream `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |

@@ -14,7 +14,7 @@ out. It does not use the network.
 
 ## What it reads
 
-`calcrawl sync` reads:
+`trawl calcrawl sync` reads:
 
 ```text
 ~/Library/Group Containers/group.com.apple.calendar/Calendar.sqlitedb
@@ -55,16 +55,16 @@ any time.
 ## Commands
 
 ```bash
-calcrawl doctor
-calcrawl sync
-calcrawl status
-calcrawl search "planning"
-calcrawl search "planning" --who "Alice Example"
-calcrawl search --who alice@example.com
-calcrawl who alice
-calcrawl open t7k3f
-calcrawl open calcrawl:event/11111111-1111-1111-1111-111111111111
-calcrawl contacts export
+trawl calcrawl doctor
+trawl calcrawl sync
+trawl calcrawl status
+trawl calcrawl search "planning"
+trawl calcrawl search "planning" --who "Alice Example"
+trawl calcrawl search --who alice@example.com
+trawl calcrawl who alice
+trawl calcrawl open t7k3f
+trawl calcrawl open calcrawl:event/11111111-1111-1111-1111-111111111111
+trawl calcrawl contacts export
 ```
 
 Add `--json` to any command for machine output. Flags work before or after the

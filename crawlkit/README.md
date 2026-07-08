@@ -22,7 +22,7 @@ See `AGENTS.md` for the ownership boundary.
 - `mirror`: clone/init/pull/commit/push helpers plus non-mutating fetch, immutable tags, Git-object reads, and history inspection for private snapshot repos.
 - `model`: a local Ollama-compatible model client with retry, timeout, and concurrency guardrails for extraction and classification work.
 - `output`: text/json/log output helpers, and the one `{"error":{code,message,remedy}}` JSON error envelope.
-- `registry`: the one place that knows which crawlers are installed; probes each one's `metadata --json` into a manifest for trawl.
+- `registry`: legacy manifest probing for external crawler binaries.
 - `render`: shared human-output rendering — cards, tables, lists, transcripts, status and doctor pages — so every crawler's terminal output looks like one product.
 - `shortref`: short, human-typeable aliases for a crawler's long internal refs, plus the SQLite index that resolves them back.
 - `state`: the one sync-state store (cursors, freshness, scalar markers), plus a cursor-shaped adapter for a crawler that already had that table layout.
@@ -34,9 +34,9 @@ See `AGENTS.md` for the ownership boundary.
 
 - The 8 crawlers in this monorepo — `birdcrawl`, `calcrawl`, `clawdex`,
   `gogcrawl`, `imsgcrawl`, `photoscrawl`, `telecrawl`, and `wacrawl` — plus
-  `trawl`, the cross-source CLI that fronts all of them, consume `crawlkit`
-  through the Go workspace on `main`. There is no separate install or
-  release step.
+  `trawl`, the cross-source CLI that fronts registered sources, consume
+  `crawlkit` through the Go workspace on `main`. There is no separate
+  per-source install or release step.
 - The apps keep provider schemas, auth, desktop/API parsing, privacy filters,
   and user-facing CLI contracts. `crawlkit` owns only the reusable mechanics.
 
