@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -25,16 +26,17 @@ import (
 )
 
 type testCrawler struct {
-	id       string
-	surface  string
-	shortRef bool
-	cfg      *testConfig
-	verbs    []Verb
-	statusFn func(context.Context, *Request) (*control.Status, error)
-	doctorFn func(context.Context, *Request) (*Doctor, error)
-	searchFn func(context.Context, *Request, Query) (SearchResult, error)
-	whoFn    func(context.Context, *Request, string) ([]whomatch.Candidate, error)
-	syncFn   func(context.Context, *Request) (*SyncReport, error)
+	id              string
+	surface         string
+	archiveFilename string
+	shortRef        bool
+	cfg             *testConfig
+	verbs           []Verb
+	statusFn        func(context.Context, *Request) (*control.Status, error)
+	doctorFn        func(context.Context, *Request) (*Doctor, error)
+	searchFn        func(context.Context, *Request, Query) (SearchResult, error)
+	whoFn           func(context.Context, *Request, string) ([]whomatch.Candidate, error)
+	syncFn          func(context.Context, *Request) (*SyncReport, error)
 }
 
 type testStatusCrawler struct {
@@ -62,11 +64,12 @@ func (c *testCrawler) Info() Info {
 		id = "testcrawl"
 	}
 	info := Info{
-		ID:          id,
-		Surface:     firstText(c.surface, "test"),
-		DisplayName: "Test",
-		Description: "Synthetic test crawler.",
-		ShortRefs:   c.shortRef,
+		ID:              id,
+		Surface:         firstText(c.surface, "test"),
+		DisplayName:     "Test",
+		Description:     "Synthetic test crawler.",
+		ArchiveFilename: c.archiveFilename,
+		ShortRefs:       c.shortRef,
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -198,6 +201,88 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	}
 }
 
+func TestRunMetadataUsesDeclaredArchiveFilename(t *testing.T) {
+	stateRoot := t.TempDir()
+	archivePath := filepath.Join(stateRoot, "testcrawl", "photos.sqlite")
+	source := &testCrawler{
+		archiveFilename: "photos.sqlite",
+		statusFn: func(ctx context.Context, req *Request) (*control.Status, error) {
+			if req.Paths.Archive != archivePath {
+				t.Fatalf("status archive path = %q, want %q", req.Paths.Archive, archivePath)
+			}
+			status := control.NewStatus("testcrawl", "ready")
+			status.State = "ok"
+			return &status, nil
+		},
+		doctorFn: func(ctx context.Context, req *Request) (*Doctor, error) {
+			if req.Paths.Archive != archivePath {
+				t.Fatalf("doctor archive path = %q, want %q", req.Paths.Archive, archivePath)
+			}
+			return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
+		},
+	}
+
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	if manifest.Paths.DefaultDatabase != archivePath {
+		t.Fatalf("default database = %q, want %q", manifest.Paths.DefaultDatabase, archivePath)
+	}
+
+	code, stdout, stderr = runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	code, stdout, stderr = runForTest([]string{"doctor", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("doctor code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	createArchiveAt(t, archivePath)
+	source.searchFn = func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+		if req.Paths.Archive != archivePath {
+			t.Fatalf("search archive path = %q, want %q", req.Paths.Archive, archivePath)
+		}
+		if req.Store == nil {
+			t.Fatal("search Store is nil")
+		}
+		return SearchResult{
+			Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+			TotalMatches: 1,
+		}, nil
+	}
+	code, stdout, stderr = runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, `"results"`) {
+		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsPathShapedArchiveFilename(t *testing.T) {
+	stateRoot := t.TempDir()
+	for _, filename := range []string{"sub/photos.sqlite", "../x.db"} {
+		t.Run(filename, func(t *testing.T) {
+			source := &testCrawler{archiveFilename: filename}
+			wantMessage := "invalid archive filename"
+			wantRemedy := "Set ArchiveFilename to one filename only"
+
+			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+				t.Fatalf("metadata invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+
+			code, stdout, stderr = runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+				t.Fatalf("status invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+		})
+	}
+}
+
 func TestRunMetadataAdvertisesDeclaredShortRefs(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{shortRef: true}
@@ -290,6 +375,113 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 	code, stdout, _ = runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"results"`) {
 		t.Fatalf("search code=%d stdout=%s", code, stdout)
+	}
+}
+
+func TestRunBespokeStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+		if req.Store != nil {
+			t.Fatalf("%s Store = %#v, want nil", name, req.Store)
+		}
+		_, err := fmt.Fprintf(req.Out, "%s store=nil\n", name)
+		return err
+	})}
+
+	opts := childTestOptions(t, "backup_init")
+	code, stdout, stderr := runForTest([]string{"backup", "init", "--json", "--state-root", stateRoot}, source, opts)
+	if code != 0 || !strings.Contains(stdout, "backup init store=nil") {
+		t.Fatalf("backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	code, stdout, stderr = runForTest([]string{"backup", "status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "backup status store=nil") {
+		t.Fatalf("backup status code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	code, stdout, stderr = runForTest([]string{"backup", "snapshots", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "backup snapshots store=nil") {
+		t.Fatalf("backup snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Fatalf("archive exists after StoreNone backup verbs: err=%v path=%s", err, archivePath)
+	}
+	t.Logf("archive_exists_after_store_none=false archive_path=%s", archivePath)
+}
+
+func TestRunBespokeStoreOptionalSeesNilThenOpenStore(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:  "archive inspect",
+		Help:  "Inspect the archive if present.",
+		Store: StoreOptional,
+		Run: func(ctx context.Context, req *Request) error {
+			if req.Store == nil {
+				_, err := io.WriteString(req.Out, "optional store=nil\n")
+				return err
+			}
+			_, err := io.WriteString(req.Out, "optional store=open\n")
+			return err
+		},
+	}}}
+
+	code, stdout, stderr := runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "optional store=nil") {
+		t.Fatalf("optional missing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	createArchive(t, stateRoot)
+	code, stdout, stderr = runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "optional store=open") {
+		t.Fatalf("optional existing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunBespokeStoreRequiredRequiresArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:  "archive inspect",
+		Help:  "Inspect the archive.",
+		Store: StoreRequired,
+		Run: func(ctx context.Context, req *Request) error {
+			if req.Store == nil {
+				t.Fatal("StoreRequired Store is nil")
+			}
+			_, err := io.WriteString(req.Out, "required store=open\n")
+			return err
+		},
+	}}}
+
+	code, stdout, stderr := runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 2 || !strings.Contains(stdout, "archive does not exist") || stderr != "" {
+		t.Fatalf("required missing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	createArchive(t, stateRoot)
+	code, stdout, stderr = runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "required store=open") {
+		t.Fatalf("required existing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsBespokeStoreOptionalWithMutates(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:    "backup restore",
+		Help:    "Restore a backup.",
+		Mutates: true,
+		Store:   StoreOptional,
+		Run: func(ctx context.Context, req *Request) error {
+			return nil
+		},
+	}}}
+	wantMessage := "invalid backup restore Verb declaration: StoreOptional cannot be used with Mutates"
+	wantRemedy := "Set Store to StoreNone"
+
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("metadata invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	code, stdout, stderr = runForTest([]string{"backup", "restore", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("invocation invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
 
@@ -1399,6 +1591,65 @@ func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
 	}
 }
 
+func TestRunStoreNoneMutatingBespokeVerbReexecsAndHoldsRunLock(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("parent-death process semantics differ on Windows")
+	}
+	stateRoot := t.TempDir()
+	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	marker := filepath.Join(t.TempDir(), "store-none-lock-holder-pid")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(exe, "-test.run=TestRunnerStoreNoneLockParentHelper", "--", stateRoot, marker) // #nosec G204 -- test helper path and marker are controlled by the test.
+	cmd.Env = append(os.Environ(), "CRAWLKIT_STORE_NONE_LOCK_PARENT=1")
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	childPID := waitForPIDMarker(t, marker, done, func() string { return stderr.String() })
+	defer func() {
+		killProcessAndWaitForLock(t, childPID, filepath.Join(stateRoot, "testcrawl"))
+		select {
+		case <-done:
+		case <-time.After(time.Second):
+			_ = cmd.Process.Kill()
+			t.Fatalf("store none lock parent did not exit stdout=%s stderr=%s", stdout.String(), stderr.String())
+		}
+	}()
+
+	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+		if req.Store != nil {
+			t.Fatalf("%s Store = %#v, want nil", name, req.Store)
+		}
+		_, err := fmt.Fprintf(req.Out, "%s store=nil\n", name)
+		return err
+	})}
+	opts := childTestOptions(t, "backup_init")
+	code, retryStdout, retryStderr := runForTest([]string{"backup", "init", "--json", "--state-root", stateRoot}, source, opts)
+	var envelope struct {
+		Error struct {
+			Code     string `json:"code"`
+			LockPath string `json:"lock_path"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(retryStdout), &envelope); err != nil {
+		t.Fatalf("archive_busy error is not JSON: code=%d stdout=%s stderr=%s err=%v", code, retryStdout, retryStderr, err)
+	}
+	wantLockPath := filepath.Join(stateRoot, "testcrawl", "run.lock")
+	if code != 1 || envelope.Error.Code != "archive_busy" || envelope.Error.LockPath != wantLockPath {
+		t.Fatalf("second StoreNone mutating run while child holds lock code=%d stdout=%s stderr=%s", code, retryStdout, retryStderr)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Fatalf("StoreNone mutating verb created archive: err=%v path=%s", err, archivePath)
+	}
+}
+
 func TestRunChildWireForwardsLogLinesVerbatim(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -1512,45 +1763,76 @@ func TestRunnerChildHelper(t *testing.T) {
 	args := argsAfterDoubleDash(os.Args)
 	includeArchived := false
 	backupRepo := ""
-	source := &testCrawler{
-		verbs: []Verb{
-			{
-				Name:    "archive import",
-				Help:    "Import an archive.",
-				Args:    []string{"PATH"},
-				Mutates: true,
-				Run: func(ctx context.Context, req *Request) error {
-					switch os.Getenv("CRAWLKIT_CHILD_MODE") {
-					case "bespoke_hold":
-						select {}
-					case "bespoke_progress_past_timeout":
-						for i := 0; i < 5; i++ {
-							req.Progress(Progress{Phase: "import", Done: int64(i + 1), Total: 5, Message: "still importing"})
-							select {
-							case <-ctx.Done():
-								return ctx.Err()
-							case <-time.After(80 * time.Millisecond):
-							}
+	verbs := []Verb{
+		{
+			Name:    "archive import",
+			Help:    "Import an archive.",
+			Args:    []string{"PATH"},
+			Mutates: true,
+			Run: func(ctx context.Context, req *Request) error {
+				switch os.Getenv("CRAWLKIT_CHILD_MODE") {
+				case "bespoke_hold":
+					select {}
+				case "bespoke_progress_past_timeout":
+					for i := 0; i < 5; i++ {
+						req.Progress(Progress{Phase: "import", Done: int64(i + 1), Total: 5, Message: "still importing"})
+						select {
+						case <-ctx.Done():
+							return ctx.Err()
+						case <-time.After(80 * time.Millisecond):
 						}
-						_, err := req.Out.Write([]byte("progressed\n"))
-						return err
-					case "bespoke":
-						req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
-						_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
-						return err
-					default:
-						return errors.New("wrong child mode for bespoke verb")
 					}
-				},
-			},
-			{
-				Name: "sync",
-				Flags: func(fs *flag.FlagSet) {
-					fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
-					fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
-				},
+					_, err := req.Out.Write([]byte("progressed\n"))
+					return err
+				case "bespoke":
+					req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
+					_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
+					return err
+				default:
+					return errors.New("wrong child mode for bespoke verb")
+				}
 			},
 		},
+		{
+			Name: "sync",
+			Flags: func(fs *flag.FlagSet) {
+				fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
+				fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+			},
+		},
+	}
+	verbs = append(verbs, backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+		switch os.Getenv("CRAWLKIT_CHILD_MODE") {
+		case "backup_init":
+			if name != "backup init" {
+				return fmt.Errorf("wrong backup child verb %s", name)
+			}
+			if req.Store != nil {
+				return errors.New("backup init Store is not nil")
+			}
+			_, err := io.WriteString(req.Out, "backup init store=nil\n")
+			return err
+		case "store_none_lock_hold":
+			if name != "backup init" {
+				return fmt.Errorf("wrong lock child verb %s", name)
+			}
+			if req.Store != nil {
+				return errors.New("store none lock holder Store is not nil")
+			}
+			marker := os.Getenv("CRAWLKIT_LOCK_MARKER")
+			if marker == "" {
+				return errors.New("missing lock marker")
+			}
+			if err := os.WriteFile(marker, []byte(strconv.Itoa(os.Getpid())+"\n"), 0o600); err != nil {
+				return err
+			}
+			select {}
+		default:
+			return errors.New("wrong child mode for backup verb")
+		}
+	})...)
+	source := &testCrawler{
+		verbs: verbs,
 		syncFn: func(ctx context.Context, req *Request) (*SyncReport, error) {
 			switch os.Getenv("CRAWLKIT_CHILD_MODE") {
 			case "zero_sync":
@@ -1645,6 +1927,24 @@ func TestRunnerLockParentHelper(t *testing.T) {
 	opts.watchdog = time.Hour
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_LOCK_MARKER="+args[1])
 	code := runner{opts: opts}.run([]string{"sync", "--json", "--state-root", args[0]}, []Crawler{&testCrawler{}})
+	os.Exit(code)
+}
+
+func TestRunnerStoreNoneLockParentHelper(t *testing.T) {
+	if os.Getenv("CRAWLKIT_STORE_NONE_LOCK_PARENT") != "1" {
+		return
+	}
+	args := argsAfterDoubleDash(os.Args)
+	if len(args) != 2 {
+		os.Exit(2)
+	}
+	opts := childTestOptions(t, "store_none_lock_hold")
+	opts.watchdog = time.Hour
+	opts.childEnv = append(opts.childEnv, "CRAWLKIT_LOCK_MARKER="+args[1])
+	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+		return errors.New("store none lock parent should re-exec before running handler")
+	})}
+	code := runner{opts: opts}.run([]string{"backup", "init", "--json", "--state-root", args[0]}, []Crawler{source})
 	os.Exit(code)
 }
 
@@ -1743,7 +2043,11 @@ func runSourcesForTest(argv []string, sources []Crawler, opts runOptions) (int, 
 
 func createArchive(t *testing.T, stateRoot string) {
 	t.Helper()
-	path := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	createArchiveAt(t, filepath.Join(stateRoot, "testcrawl", "testcrawl.db"))
+}
+
+func createArchiveAt(t *testing.T, path string) {
+	t.Helper()
 	st, err := ckstore.Open(context.Background(), ckstore.Options{
 		Path:   path,
 		Schema: `create table if not exists things(id text primary key);`,
@@ -1753,6 +2057,36 @@ func createArchive(t *testing.T, stateRoot string) {
 	}
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func backupFixtureVerbs(run func(context.Context, *Request, string) error) []Verb {
+	return []Verb{
+		{
+			Name:    "backup init",
+			Help:    "Initialise backup state.",
+			Mutates: true,
+			Store:   StoreNone,
+			Run: func(ctx context.Context, req *Request) error {
+				return run(ctx, req, "backup init")
+			},
+		},
+		{
+			Name:  "backup status",
+			Help:  "Show backup status.",
+			Store: StoreNone,
+			Run: func(ctx context.Context, req *Request) error {
+				return run(ctx, req, "backup status")
+			},
+		},
+		{
+			Name:  "backup snapshots",
+			Help:  "List backup snapshots.",
+			Store: StoreNone,
+			Run: func(ctx context.Context, req *Request) error {
+				return run(ctx, req, "backup snapshots")
+			},
+		},
 	}
 }
 

@@ -18,7 +18,7 @@ import (
 )
 
 func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format, wireChild bool) (result executionResult) {
-	paths, err := resolveSourcePaths(globals.stateRoot, source.Info().ID)
+	paths, err := resolveSourcePaths(globals.stateRoot, source.Info())
 	if err != nil {
 		return executionResult{err: err}
 	}
