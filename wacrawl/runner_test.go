@@ -86,6 +86,74 @@ func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
 	}
 }
 
+func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	createLIDOnlyArchive(t, stateRoot)
+
+	humanCommands := map[string][]string{
+		"chats":      {"chats"},
+		"messages":   {"messages", "--all", "--asc"},
+		"search":     {"search", "synthetic", "--limit", "10"},
+		"open group": {"open", "whatsapp:msg/group-lid"},
+		"open dm":    {"open", "whatsapp:msg/dm-lid"},
+		"who group":  {"who", "155500000000001@lid"},
+	}
+	for name, args := range humanCommands {
+		code, stdout, stderr := captureRun(t, args, New())
+		if code != 0 {
+			t.Fatalf("%s code=%d stdout=%s stderr=%s", name, code, stdout, stderr)
+		}
+		if strings.Contains(stdout, "@lid") {
+			t.Fatalf("%s human output leaked LID:\n%s", name, stdout)
+		}
+		if !containsHumanPrivacyPlaceholder(stdout) {
+			t.Fatalf("%s human output missing privacy placeholder:\n%s", name, stdout)
+		}
+	}
+
+	jsonCommands := map[string][]string{
+		"chats":      {"--json", "chats"},
+		"messages":   {"--json", "messages", "--all", "--asc"},
+		"search":     {"--json", "search", "synthetic", "--limit", "10"},
+		"open group": {"--json", "open", "whatsapp:msg/group-lid"},
+		"open dm":    {"--json", "open", "whatsapp:msg/dm-lid"},
+		"who group":  {"--json", "who", "155500000000001@lid"},
+	}
+	for name, args := range jsonCommands {
+		code, stdout, stderr := captureRun(t, args, New())
+		if code != 0 {
+			t.Fatalf("%s JSON code=%d stdout=%s stderr=%s", name, code, stdout, stderr)
+		}
+		if !strings.Contains(stdout, "@lid") {
+			t.Fatalf("%s JSON output should keep LID:\n%s", name, stdout)
+		}
+		if strings.Contains(stdout, "unknown participant") {
+			t.Fatalf("%s JSON output should not use privacy placeholder:\n%s", name, stdout)
+		}
+	}
+}
+
+func containsHumanPrivacyPlaceholder(output string) bool {
+	// TRAWL-1 list tables can truncate the final "t"; the visible stem still
+	// proves the LID was masked instead of printed raw.
+	return strings.Contains(output, "unknown participan")
+}
+
+func TestMessageWhoPrefersPhoneJIDOverLIDSuffixedName(t *testing.T) {
+	message := wastore.Message{
+		SenderJID:  "casey@s.whatsapp.net",
+		SenderName: "Casey@lid",
+	}
+
+	got := messageWho(message)
+	if got != "casey@s.whatsapp.net" {
+		t.Fatalf("messageWho = %q, want sender JID", got)
+	}
+	if strings.Contains(got, "unknown participant") {
+		t.Fatalf("messageWho masked non-LID sender JID: %q", got)
+	}
+}
+
 func countIDPresent(counts []control.Count, id string) bool {
 	for _, count := range counts {
 		if count.ID == id {
@@ -93,6 +161,33 @@ func countIDPresent(counts []control.Count, id string) bool {
 		}
 	}
 	return false
+}
+
+func createLIDOnlyArchive(t *testing.T, stateRoot string) {
+	t.Helper()
+	ctx := context.Background()
+	st, err := wastore.Open(ctx, filepath.Join(stateRoot, "whatsapp", "whatsapp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+
+	groupLID := "155500000000001@lid"
+	directLID := "155500000000002@lid"
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	chats := []wastore.Chat{
+		{JID: "trail@g.us", Kind: "group", Name: "Trail crew", LastMessageAt: now, MessageCount: 1},
+		{JID: directLID, Kind: "dm", LastMessageAt: now.Add(time.Minute), MessageCount: 1},
+	}
+	groups := []wastore.Group{{JID: "trail@g.us", Name: "Trail crew", OwnerJID: "owner@s.whatsapp.net", CreatedAt: now.Add(-time.Hour)}}
+	participants := []wastore.GroupParticipant{{GroupJID: "trail@g.us", UserJID: groupLID, IsActive: true}}
+	messages := []wastore.Message{
+		{SourcePK: 1, ChatJID: "trail@g.us", ChatName: "Trail crew", MessageID: "group-lid", SenderJID: groupLID, SenderName: groupLID, Timestamp: now, Text: "synthetic group message", RawType: 0, MessageType: "text"},
+		{SourcePK: 2, ChatJID: directLID, MessageID: "dm-lid", SenderJID: directLID, SenderName: directLID, Timestamp: now.Add(time.Minute), Text: "synthetic direct message", RawType: 0, MessageType: "text"},
+	}
+	if err := st.ReplaceAll(ctx, wastore.ImportStats{FinishedAt: now}, nil, chats, groups, participants, messages); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func createAmbiguousWhoArchive(t *testing.T, stateRoot string) {

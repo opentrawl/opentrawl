@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/store"
 )
@@ -53,8 +54,8 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 			Ref:      ref,
 			ShortRef: aliases[ref],
 			Time:     message.Timestamp,
-			Who:      outputField(messageWho(message)),
-			Where:    outputField(messageWhere(message)),
+			Who:      outputField(messageWhoForFormat(message, req.Format)),
+			Where:    outputField(messageWhereForFormat(message, req.Format)),
 			Snippet:  outputField(messageSnippet(message)),
 		})
 	}
@@ -77,7 +78,7 @@ func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string)
 	}
 	out := make([]whomatch.Candidate, 0, len(resolution.Candidates))
 	for _, candidate := range resolution.Candidates {
-		out = append(out, whoCandidate(candidate))
+		out = append(out, whoCandidateForFormat(candidate, req.Format))
 	}
 	return out, nil
 }
@@ -106,6 +107,16 @@ func whoCandidate(candidate store.WhoCandidate) whomatch.Candidate {
 		LastSeen:    candidate.LastSeen,
 		Messages:    int64(candidate.Messages),
 	}
+}
+
+func whoCandidateForFormat(candidate store.WhoCandidate, format output.Format) whomatch.Candidate {
+	out := whoCandidate(candidate)
+	if format == output.JSON {
+		return out
+	}
+	out.Who = humanParticipantLabel(out.Who)
+	out.Identifiers = humanParticipantIdentifiers(out.Identifiers)
+	return out
 }
 
 func searchAliases(ctx context.Context, st *store.Store, messages []store.Message) (map[string]string, error) {

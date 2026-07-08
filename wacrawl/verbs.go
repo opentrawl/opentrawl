@@ -143,11 +143,11 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	for _, chat := range value.Chats {
 		rows = append(rows, []string{
 			render.ShortLocalTime(parseFormattedTime(chat.LastMessageAt)),
-			chat.ChatID,
+			chatDisplayID(chat.ChatID),
 			chat.Kind,
 			render.FormatInteger(int64(chat.UnreadCount)),
 			render.FormatInteger(int64(chat.MessageCount)),
-			chatDisplayName(chat.Name),
+			chatDisplayName(chat),
 		})
 	}
 	return render.WriteTable(req.Out, []render.TableColumn{
@@ -160,9 +160,19 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	}, rows)
 }
 
-func chatDisplayName(name string) string {
-	if name = outputField(name); name != "" {
+func chatDisplayID(chatID string) string {
+	if privacyID(chatID) {
+		return "privacy id"
+	}
+	return chatID
+}
+
+func chatDisplayName(chat chatRow) string {
+	if name := outputField(chat.Name); name != "" {
 		return name
+	}
+	if privacyID(chat.ChatID) {
+		return unknownPrivacyParticipant
 	}
 	return "WhatsApp chat"
 }

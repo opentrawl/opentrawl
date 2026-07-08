@@ -71,7 +71,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return err
 	}
-	result := newOpenEnvelope(target, window, participants)
+	result := newOpenEnvelope(target, window, participants, req.Format)
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "open", result)
 	}
@@ -198,14 +198,14 @@ func sameTranscriptDate(a, b time.Time) bool {
 	return ay == by && am == bm && ad == bd
 }
 
-func newOpenEnvelope(target store.Message, context []store.Message, participants []string) openEnvelope {
+func newOpenEnvelope(target store.Message, context []store.Message, participants []string, format output.Format) openEnvelope {
 	openContext := make([]openMessage, 0, len(context))
 	before := 0
 	after := 0
 	for _, message := range context {
 		current := message.SourcePK == target.SourcePK
 		if current {
-			openContext = append(openContext, newOpenMessage(message, true))
+			openContext = append(openContext, newOpenMessage(message, true, format))
 			continue
 		}
 		if message.Timestamp.Before(target.Timestamp) || (message.Timestamp.Equal(target.Timestamp) && message.SourcePK < target.SourcePK) {
@@ -213,30 +213,59 @@ func newOpenEnvelope(target store.Message, context []store.Message, participants
 		} else {
 			after++
 		}
-		openContext = append(openContext, newOpenMessage(message, false))
+		openContext = append(openContext, newOpenMessage(message, false, format))
 	}
 	return openEnvelope{
 		Ref:          messageRef(target),
-		Chat:         messageWhere(target),
-		Participants: append([]string(nil), participants...),
-		Message:      newOpenMessage(target, true),
+		Chat:         messageWhereForFormat(target, format),
+		Participants: participantsForFormat(participants, format),
+		Message:      newOpenMessage(target, true, format),
 		Context:      openContext,
 		Window:       openWindowSummary{Before: before, After: after},
 	}
 }
 
-func newOpenMessage(message store.Message, current bool) openMessage {
+func participantsForFormat(participants []string, format output.Format) []string {
+	if format == output.JSON {
+		return append([]string(nil), participants...)
+	}
+	out := make([]string, 0, len(participants))
+	for _, participant := range participants {
+		label := humanParticipantLabel(participant)
+		if label == "" {
+			continue
+		}
+		out = append(out, label)
+	}
+	return out
+}
+
+func newOpenMessage(message store.Message, current bool, format output.Format) openMessage {
 	return openMessage{
 		Ref:     messageRef(message),
 		Time:    formatTime(message.Timestamp),
-		Who:     outputField(messageWho(message)),
-		Where:   outputField(messageWhere(message)),
+		Who:     outputField(messageWhoForFormat(message, format)),
+		Where:   outputField(messageWhereForFormat(message, format)),
 		Text:    messageText(message),
 		Type:    messageKind(message),
 		Media:   messageMedia(message),
 		Starred: message.Starred,
 		Current: current,
 	}
+}
+
+func messageWhoForFormat(message store.Message, format output.Format) string {
+	if format == output.JSON {
+		return messageWhoJSON(message)
+	}
+	return messageWho(message)
+}
+
+func messageWhereForFormat(message store.Message, format output.Format) string {
+	if format == output.JSON {
+		return messageWhereJSON(message)
+	}
+	return messageWhere(message)
 }
 
 func messageMedia(message store.Message) *openMedia {

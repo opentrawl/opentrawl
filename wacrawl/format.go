@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	defaultMessageLimit = 20
-	messageRefPrefix    = store.MessageRefPrefix
-	openWindowEachSide  = 10
+	defaultMessageLimit       = 20
+	messageRefPrefix          = store.MessageRefPrefix
+	openWindowEachSide        = 10
+	unknownPrivacyParticipant = "unknown participant (privacy id)"
 )
 
 func messageRef(message store.Message) string {
@@ -32,6 +33,15 @@ func messageWho(message store.Message) string {
 	if name := humanDisplayName(message.SenderName); name != "" {
 		return name
 	}
+	if privacyID(message.SenderName) {
+		if identifier := senderIdentifier(message.SenderJID); identifier != "" {
+			return identifier
+		}
+		return unknownPrivacyParticipant
+	}
+	if privacyID(message.SenderJID) {
+		return unknownPrivacyParticipant
+	}
 	if identifier := senderIdentifier(message.SenderName); identifier != "" {
 		return identifier
 	}
@@ -41,9 +51,38 @@ func messageWho(message store.Message) string {
 	return "Unknown sender"
 }
 
+func messageWhoJSON(message store.Message) string {
+	if message.FromMe {
+		return "me"
+	}
+	if name := humanDisplayName(message.SenderName); name != "" {
+		return name
+	}
+	if identifier := senderMachineIdentifier(message.SenderName); identifier != "" {
+		return identifier
+	}
+	if identifier := senderMachineIdentifier(message.SenderJID); identifier != "" {
+		return identifier
+	}
+	return "Unknown sender"
+}
+
 func messageWhere(message store.Message) string {
 	if name := humanDisplayName(message.ChatName); name != "" {
 		return name
+	}
+	if privacyID(message.ChatJID) {
+		return unknownPrivacyParticipant
+	}
+	return "Unknown chat"
+}
+
+func messageWhereJSON(message store.Message) string {
+	if name := humanDisplayName(message.ChatName); name != "" {
+		return name
+	}
+	if privacyID(message.ChatJID) {
+		return outputField(message.ChatJID)
 	}
 	return "Unknown chat"
 }
@@ -245,10 +284,53 @@ func senderIdentifier(value string) string {
 	if value == "" {
 		return ""
 	}
+	if privacyID(value) {
+		return ""
+	}
+	return senderMachineIdentifier(value)
+}
+
+func senderMachineIdentifier(value string) string {
+	value = outputField(value)
+	if value == "" {
+		return ""
+	}
 	if looksLikePhone(value) || strings.Contains(value, "@") {
 		return value
 	}
 	return ""
+}
+
+func privacyID(value string) bool {
+	return strings.HasSuffix(strings.ToLower(strings.TrimSpace(value)), "@lid")
+}
+
+func humanParticipantLabel(value string) string {
+	value = outputField(value)
+	if privacyID(value) {
+		return unknownPrivacyParticipant
+	}
+	return value
+}
+
+func humanParticipantIdentifiers(values []string) []string {
+	out := make([]string, 0, len(values))
+	hidden := false
+	for _, value := range values {
+		value = outputField(value)
+		if value == "" {
+			continue
+		}
+		if privacyID(value) {
+			hidden = true
+			continue
+		}
+		out = append(out, value)
+	}
+	if hidden {
+		out = append(out, "privacy id")
+	}
+	return out
 }
 
 func outputField(value string) string {
