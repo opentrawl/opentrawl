@@ -15,10 +15,7 @@ import (
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
 
-// Sync reports logical changes in the replaced archive scope by Telegram
-// source message key: added keys were absent before import, updated keys were
-// present with changed archived content, and removed keys were present but
-// absent from import.
+// Sync reports the message changes observed by the archive write.
 func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
 	r := c.handler(ctx, req)
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
@@ -52,12 +49,9 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		if err := prepareImportResultForWrite(r.ctx, st, &result); err != nil {
 			return err
 		}
-		counts, err := syncOperationCounts(r.ctx, st, &result, c.sync.Chat)
-		if err != nil {
-			return err
-		}
 		writeStarted := time.Now()
-		if err := storeImportResult(r.ctx, st, &result, c.sync.Chat); err != nil {
+		counts, err := storeImportResult(r.ctx, st, &result, c.sync.Chat)
+		if err != nil {
 			return err
 		}
 		writeElapsed := time.Since(writeStarted)
@@ -73,67 +67,6 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		return &crawlkit.SyncReport{}, nil
 	}
 	return report, nil
-}
-
-type syncOperationReport struct {
-	Added   int64
-	Updated int64
-	Removed int64
-}
-
-func syncOperationCounts(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (syncOperationReport, error) {
-	existing, err := syncExistingMessages(ctx, st, result, chatFilter)
-	if err != nil {
-		return syncOperationReport{}, err
-	}
-	imported := make(map[int64]struct{}, len(result.Messages))
-	var report syncOperationReport
-	for _, message := range result.Messages {
-		imported[message.SourcePK] = struct{}{}
-		existingMessage, ok := existing[message.SourcePK]
-		if !ok {
-			report.Added++
-		} else if normalizedArchivedMessage(existingMessage) != normalizedArchivedMessage(message) {
-			report.Updated++
-		}
-	}
-	for sourcePK := range existing {
-		if _, ok := imported[sourcePK]; !ok {
-			report.Removed++
-		}
-	}
-	return report, nil
-}
-
-func syncExistingMessages(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (map[int64]store.Message, error) {
-	if strings.TrimSpace(chatFilter) == "" {
-		return st.MessageContents(ctx, "")
-	}
-	out := map[int64]store.Message{}
-	for _, chat := range result.Chats {
-		messages, err := st.MessageContents(ctx, chat.JID)
-		if err != nil {
-			return nil, err
-		}
-		for sourcePK, message := range messages {
-			out[sourcePK] = message
-		}
-	}
-	return out, nil
-}
-
-func normalizedArchivedMessage(message store.Message) store.Message {
-	message.Snippet = ""
-	message.Timestamp = archivedTime(message.Timestamp)
-	message.EditTime = archivedTime(message.EditTime)
-	return message
-}
-
-func archivedTime(t time.Time) time.Time {
-	if t.IsZero() {
-		return time.Time{}
-	}
-	return time.Unix(t.UTC().Unix(), 0).UTC()
 }
 
 // logSyncTimings uses one canonical sync event for the one canonical verb.
@@ -228,23 +161,29 @@ func prepareImportResultForWrite(ctx context.Context, st *store.Store, result *t
 	return nil
 }
 
-func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) error {
+func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (store.SyncStats, error) {
 	if strings.TrimSpace(chatFilter) == "" {
-		if err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages); err != nil {
-			return err
+		stats, err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
+		if err != nil {
+			return store.SyncStats{}, err
 		}
-		return nil
+		return stats, nil
 	}
 	if len(result.Chats) == 0 {
-		return fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
+		return store.SyncStats{}, fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
 	}
+	var stats store.SyncStats
 	for _, chat := range result.Chats {
 		partial := importResultForChat(*result, chat.JID)
-		if err := st.UpsertChat(ctx, partial.Stats, chat.JID, partial.Contacts, partial.Chats, partial.Folders, partial.FolderChats, partial.Topics, partial.Participants, partial.Messages); err != nil {
-			return err
+		chatStats, err := st.UpsertChat(ctx, partial.Stats, chat.JID, partial.Contacts, partial.Chats, partial.Folders, partial.FolderChats, partial.Topics, partial.Participants, partial.Messages)
+		if err != nil {
+			return store.SyncStats{}, err
 		}
+		stats.Added += chatStats.Added
+		stats.Updated += chatStats.Updated
+		stats.Removed += chatStats.Removed
 	}
-	return nil
+	return stats, nil
 }
 
 func refreshImportMediaStats(result *telegramdesktop.ImportResult) {

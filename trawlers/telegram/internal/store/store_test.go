@@ -175,7 +175,7 @@ func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 
 	source := openTestStore(t, filepath.Join(t.TempDir(), "source.db"))
 	stats := ImportStats{SourcePath: "tdata", DBPath: source.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
-	if err := source.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
+	if _, err := source.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
 		t.Fatal(err)
 	}
 	storedFolders, err := source.ListFolders(ctx)
@@ -202,7 +202,7 @@ func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 
 	restored := openTestStore(t, filepath.Join(t.TempDir(), "restored.db"))
 	stats.DBPath = restored.Path()
-	if err := restored.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
+	if _, err := restored.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
 		t.Fatal(err)
 	}
 	chats, err = restored.ChatsInFolder(ctx, "2", 10)
@@ -247,6 +247,36 @@ func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 	}
 }
 
+func TestReplaceAllReturnsSyncStats(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 5, 9, 3, 17, 53, 0, time.UTC)
+	later := now.Add(time.Hour)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "replace-stats.db"))
+	chat := Chat{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 2}
+	firstMessages := []Message{
+		{SourcePK: 1, ChatJID: "100", ChatName: "Alice Example", MessageID: "1", SenderJID: "100", SenderName: "Alice Example", Timestamp: now, Text: "kept"},
+		{SourcePK: 2, ChatJID: "100", ChatName: "Alice Example", MessageID: "2", SenderJID: "100", SenderName: "Alice Example", Timestamp: now.Add(time.Minute), Text: "removed"},
+	}
+	first, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now}, nil, []Chat{chat}, nil, nil, nil, nil, firstMessages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSyncStats(t, first, 2, 0, 0)
+
+	chat.LastMessageAt = later
+	chat.MessageCount = 2
+	secondMessages := []Message{
+		{SourcePK: 1, ChatJID: "100", ChatName: "Alice Example", MessageID: "1", SenderJID: "100", SenderName: "Alice Example", Timestamp: now, Text: "changed"},
+		{SourcePK: 3, ChatJID: "100", ChatName: "Alice Example", MessageID: "3", SenderJID: "100", SenderName: "Alice Example", Timestamp: later, Text: "added"},
+	}
+	second, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: later, FinishedAt: later}, nil, []Chat{chat}, nil, nil, nil, nil, secondMessages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSyncStats(t, second, 1, 1, 1)
+}
+
 func openTestStore(t *testing.T, path string) *Store {
 	t.Helper()
 	st, err := Open(context.Background(), path)
@@ -265,7 +295,7 @@ func TestSearchWhoFiltersGroupParticipants(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "600", FullName: "Group Member"}},
 		[]Chat{{JID: "500", Kind: "group", Name: "team room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
@@ -306,7 +336,7 @@ func TestWhoFilterIncludesDirectChatBothSides(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "tdata", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "tdata", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", PeerType: "user", FullName: "Direct Person"}},
 		[]Chat{
 			{JID: "200", Kind: "user", Name: "Direct Person", LastMessageAt: now.Add(2 * time.Minute), MessageCount: 3},
@@ -363,7 +393,7 @@ func TestResolveWhoExcludesGroupChatTitles(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{
 			{JID: "600", PeerType: "user", FullName: "Samm Person"},
 			{JID: "-1001", PeerType: "group", FullName: "Weekend road trip"},
@@ -407,7 +437,7 @@ func TestResolveWhoMatchesUnnamedParticipantIdentifiersWithSharedMatcher(t *test
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", PeerType: "user", FullName: "Sam Example"}},
 		[]Chat{{JID: "-1009", Kind: "group", Name: "resolver room", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
@@ -453,7 +483,7 @@ func TestResolveWhoFoldsOwnerIdentifiersToMe(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		nil,
 		[]Chat{{JID: "300", Kind: "user", Name: "Recipient Person", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
@@ -491,7 +521,7 @@ func TestResolveWhoDedupesAndMatchesGenerously(t *testing.T) {
 	ctx := context.Background()
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	st := openTestStore(t, filepath.Join(t.TempDir(), "telecrawl.db"))
-	if err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "postbox", StartedAt: now, FinishedAt: now},
 		[]Contact{{JID: "200", Phone: "+1555200200", FullName: "Alice Example", Username: "alice_example"}},
 		[]Chat{{JID: "100", Kind: "user", Name: "example chat", LastMessageAt: now.Add(time.Minute), MessageCount: 2}},
 		nil,
@@ -728,7 +758,7 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 	msgB2 := Message{SourcePK: 3, ChatJID: "-1002", ChatName: "Chat B", MessageID: "2", SenderJID: "20", SenderName: "Bob", Timestamp: later, Text: "hello b2", MessageType: "Message"}
 
 	initial := ImportStats{SourcePath: "tdata", DBPath: st.Path(), Chats: 2, Messages: 3, StartedAt: now, FinishedAt: now}
-	if err := st.ReplaceAll(
+	if _, err := st.ReplaceAll(
 		ctx, initial,
 		nil,
 		[]Chat{chatA, chatB},
@@ -745,7 +775,7 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 	updatedMsgA := Message{SourcePK: 4, ChatJID: "-1001", ChatName: "Chat A Updated", MessageID: "2", SenderJID: "10", SenderName: "Alice", Timestamp: later, Text: "updated a", MessageType: "Message", MediaType: "photo", MediaTitle: "pic.jpg"}
 
 	upsertStats := ImportStats{SourcePath: "tdata", DBPath: st.Path(), Chats: 1, Messages: 1, MediaMessages: 1, StartedAt: later, FinishedAt: later}
-	if err := st.UpsertChat(
+	chatStats, err := st.UpsertChat(
 		ctx, upsertStats, "-1001",
 		nil,
 		[]Chat{updatedChatA},
@@ -753,9 +783,11 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 		nil,
 		nil,
 		[]Message{updatedMsgA},
-	); err != nil {
+	)
+	if err != nil {
 		t.Fatal(err)
 	}
+	assertSyncStats(t, chatStats, 1, 0, 1)
 
 	status, err := st.Status(ctx)
 	if err != nil {
@@ -876,5 +908,12 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 	}
 	if !ok || rec.Value != "tdata" {
 		t.Fatalf("source_path = %q ok=%v, want %q", rec.Value, ok, "tdata")
+	}
+}
+
+func assertSyncStats(t *testing.T, got SyncStats, added, updated, removed int64) {
+	t.Helper()
+	if got.Added != added || got.Updated != updated || got.Removed != removed {
+		t.Fatalf("sync stats = %+v, want added=%d updated=%d removed=%d", got, added, updated, removed)
 	}
 }

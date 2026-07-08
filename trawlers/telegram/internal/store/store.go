@@ -328,12 +328,16 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
-func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
+func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	defer rollback(tx)
+	syncStats, err := messageSyncStats(ctx, tx, messages, chatJID)
+	if err != nil {
+		return SyncStats{}, err
+	}
 	chatID := parseInt64(chatJID)
 	preserveFolderState := len(folders) == 0 && len(folderChats) == 0
 	var existingFolderID string
@@ -351,16 +355,16 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 		{"delete from chats where id = ?", []any{chatID}},
 	} {
 		if _, err := tx.ExecContext(ctx, q.sql, q.args...); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	if !preserveFolderState {
 		if _, err := tx.ExecContext(ctx, `delete from folder_chats where chat_jid = ?`, chatJID); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	if err := insertContacts(ctx, tx, contacts); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	for _, c := range chats {
 		if preserveFolderState && c.FolderID == "" {
@@ -368,41 +372,41 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 		}
 		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?)`,
 			parseInt64(c.JID), c.Kind, c.Name, c.Username, unix(c.LastMessageAt), c.UnreadCount, c.MessageCount, c.FolderID, boolInt(c.Forum)); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, f := range folders {
 		if _, err := tx.ExecContext(ctx, `insert into folders(id,title,emoticon,color,flags_json) values(?,?,?,?,?) on conflict(id) do update set title=excluded.title, emoticon=excluded.emoticon, color=excluded.color, flags_json=excluded.flags_json`,
 			f.ID, f.Title, f.Emoticon, f.Color, f.FlagsJSON); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, fc := range folderChats {
 		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?)`,
 			fc.FolderID, fc.ChatJID, fc.Position); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, t := range topics {
 		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			t.ChatJID, t.TopicID, t.Title, t.TopMessageID, t.IconColor, t.IconEmojiID, t.UnreadCount, t.UnreadMentionsCount, t.UnreadReactionsCount, boolInt(t.Pinned), boolInt(t.Closed), boolInt(t.Hidden), unix(t.LastMessageAt)); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	if err := insertMessages(ctx, tx, messages); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	now := stats.FinishedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
-		return err
+		return SyncStats{}, err
 	}
-	return tx.Commit()
+	return syncStats, tx.Commit()
 }
 
 // writeSyncMarkers records the import watermark and source path as scalar
@@ -415,58 +419,62 @@ func writeSyncMarkers(ctx context.Context, tx *sql.Tx, now time.Time, sourcePath
 	return markers.Set(ctx, syncSource, syncEntityType, syncSourcePath, sourcePath)
 }
 
-func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
+func (s *Store) ReplaceAll(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	defer rollback(tx)
+	syncStats, err := messageSyncStats(ctx, tx, messages, "")
+	if err != nil {
+		return SyncStats{}, err
+	}
 	for _, q := range []string{"delete from messages_fts", "delete from messages", "delete from topics", "delete from folder_chats", "delete from folders", "delete from chats", "delete from contacts", "delete from groups", "delete from group_participants"} {
 		if _, err := tx.ExecContext(ctx, q); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	if err := insertContacts(ctx, tx, contacts); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	for _, c := range chats {
 		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?)`,
 			parseInt64(c.JID), c.Kind, c.Name, c.Username, unix(c.LastMessageAt), c.UnreadCount, c.MessageCount, c.FolderID, boolInt(c.Forum)); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, f := range folders {
 		if _, err := tx.ExecContext(ctx, `insert into folders(id,title,emoticon,color,flags_json) values(?,?,?,?,?)`,
 			f.ID, f.Title, f.Emoticon, f.Color, f.FlagsJSON); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, fc := range folderChats {
 		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?)`,
 			fc.FolderID, fc.ChatJID, fc.Position); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	for _, t := range topics {
 		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 			t.ChatJID, t.TopicID, t.Title, t.TopMessageID, t.IconColor, t.IconEmojiID, t.UnreadCount, t.UnreadMentionsCount, t.UnreadReactionsCount, boolInt(t.Pinned), boolInt(t.Closed), boolInt(t.Hidden), unix(t.LastMessageAt)); err != nil {
-			return err
+			return SyncStats{}, err
 		}
 	}
 	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	if err := insertMessages(ctx, tx, messages); err != nil {
-		return err
+		return SyncStats{}, err
 	}
 	now := stats.FinishedAt
 	if now.IsZero() {
 		now = time.Now().UTC()
 	}
 	if err := writeSyncMarkers(ctx, tx, now, stats.SourcePath); err != nil {
-		return err
+		return SyncStats{}, err
 	}
-	return tx.Commit()
+	return syncStats, tx.Commit()
 }
 
 func insertContacts(ctx context.Context, tx *sql.Tx, contacts []Contact) error {

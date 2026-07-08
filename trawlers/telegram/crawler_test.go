@@ -148,7 +148,7 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 		MessageType: "text",
 	}}
 	stats := store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
-	if err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, nil, messages); err != nil {
+	if _, err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	rebuildSyntheticShortRefs(t, ctx, archivePath)
@@ -218,7 +218,7 @@ func writeSyntheticGroupArchive(t *testing.T, ctx context.Context, archivePath s
 		MessageType: "text",
 	}}
 	stats := store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
-	if err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, participants, messages); err != nil {
+	if _, err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, participants, messages); err != nil {
 		t.Fatal(err)
 	}
 }
