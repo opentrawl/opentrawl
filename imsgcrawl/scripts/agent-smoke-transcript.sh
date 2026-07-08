@@ -83,8 +83,24 @@ if [[ -z "$out_dir" ]]; then
   out_dir="${TMPDIR:-/tmp}/imsgcrawl-agent-smoke-$(date -u +%Y%m%dT%H%M%SZ)-$$"
 fi
 raw_dir="$out_dir/raw"
-state_root="$out_dir/state"
-mkdir -p "$raw_dir" "$state_root"
+synthetic_home="$out_dir/home"
+mkdir -p "$raw_dir" "$synthetic_home"
+real_home="${HOME:-}"
+if [[ -z "$real_home" ]]; then
+  echo "HOME is not set" >&2
+  exit 2
+fi
+mkdir -p "$synthetic_home/Library"
+messages_link="$synthetic_home/Library/Messages"
+if [[ ! -e "$messages_link" && ! -L "$messages_link" ]]; then
+  ln -s "$real_home/Library/Messages" "$messages_link"
+fi
+addressbook_source="$real_home/Library/Application Support/AddressBook"
+addressbook_link="$synthetic_home/Library/Application Support/AddressBook"
+if [[ -d "$addressbook_source" && ! -e "$addressbook_link" && ! -L "$addressbook_link" ]]; then
+  mkdir -p "$synthetic_home/Library/Application Support"
+  ln -s "$addressbook_source" "$addressbook_link"
+fi
 
 review="$out_dir/review.txt"
 transcript="$out_dir/transcript.txt"
@@ -224,7 +240,8 @@ Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Binary: $(command -v imsgcrawl)
 Output directory: $out_dir
 Raw output directory: $raw_dir
-Temporary state root: $state_root
+Synthetic HOME: $synthetic_home
+Source links: Messages and optional AddressBook from the invoking HOME
 Preview bytes per stream: $preview_bytes
 
 This review contains bounded previews. Exact raw stdout/stderr for each command
@@ -240,7 +257,8 @@ imsgcrawl Agent Smoke Transcript
 Generated at: $(date -u +%Y-%m-%dT%H:%M:%SZ)
 Binary: $(command -v imsgcrawl)
 Output directory: $out_dir
-Temporary state root: $state_root
+Synthetic HOME: $synthetic_home
+Source links: Messages and optional AddressBook from the invoking HOME
 
 This transcript intentionally contains exact local command output inline. Treat
 it as private local crawler data. Do not commit it, paste it into public systems,
@@ -260,20 +278,20 @@ run_step "help-search-topic" imsgcrawl help search
 run_step "help-open-topic" imsgcrawl help open
 run_step "help-contacts-export-flag" imsgcrawl contacts export --help
 
-run_step "metadata-text" imsgcrawl --state-root "$state_root" metadata
-run_step "metadata-json" imsgcrawl --json --state-root "$state_root" metadata
+run_step "metadata-text" env HOME="$synthetic_home" imsgcrawl metadata
+run_step "metadata-json" env HOME="$synthetic_home" imsgcrawl --json metadata
 
-run_step "status-before-sync-text" imsgcrawl --state-root "$state_root" status
-run_step "status-before-sync-json" imsgcrawl --json --state-root "$state_root" status
-run_step "sync-text" imsgcrawl --state-root "$state_root" sync
-run_step "sync-json" imsgcrawl --json --state-root "$state_root" sync
-run_step "status-after-sync-text" imsgcrawl --state-root "$state_root" status
-run_step "status-after-sync-json" imsgcrawl --json --state-root "$state_root" status
+run_step "status-before-sync-text" env HOME="$synthetic_home" imsgcrawl status
+run_step "status-before-sync-json" env HOME="$synthetic_home" imsgcrawl --json status
+run_step "sync-text" env HOME="$synthetic_home" imsgcrawl sync
+run_step "sync-json" env HOME="$synthetic_home" imsgcrawl --json sync
+run_step "status-after-sync-text" env HOME="$synthetic_home" imsgcrawl status
+run_step "status-after-sync-json" env HOME="$synthetic_home" imsgcrawl --json status
 
-run_step "chats-text-default" imsgcrawl --state-root "$state_root" chats
-run_step "chats-json-default" imsgcrawl --json --state-root "$state_root" chats
+run_step "chats-text-default" env HOME="$synthetic_home" imsgcrawl chats
+run_step "chats-json-default" env HOME="$synthetic_home" imsgcrawl --json chats
 chats_json="$last_stdout"
-run_step "chats-json-limit-one" imsgcrawl --json --state-root "$state_root" chats --limit 1
+run_step "chats-json-limit-one" env HOME="$synthetic_home" imsgcrawl --json chats --limit 1
 
 first_chat_id=$(jq -r '.items[0].chat_id // empty' "$chats_json" 2>/dev/null || true)
 first_chat_count=$(jq -r '.items[0].message_count // empty' "$chats_json" 2>/dev/null || true)
@@ -283,39 +301,39 @@ small_chat_count=$(jq -r --argjson max "$max_all_messages" '[.items[] | select((
 append_note "Selected first_chat_id=$first_chat_id first_chat_message_count=$first_chat_count small_chat_id=$small_chat_id small_chat_message_count=$small_chat_count max_all_messages=$max_all_messages."
 
 if [[ -n "$first_chat_id" ]]; then
-  run_step "messages-text-default-first-chat" imsgcrawl --state-root "$state_root" messages --chat "$first_chat_id"
-  run_step "messages-json-default-first-chat" imsgcrawl --json --state-root "$state_root" messages --chat "$first_chat_id"
-  run_step "messages-json-limit-three-first-chat" imsgcrawl --json --state-root "$state_root" messages --chat "$first_chat_id" --limit 3
+  run_step "messages-text-default-first-chat" env HOME="$synthetic_home" imsgcrawl messages --chat "$first_chat_id"
+  run_step "messages-json-default-first-chat" env HOME="$synthetic_home" imsgcrawl --json messages --chat "$first_chat_id"
+  run_step "messages-json-limit-three-first-chat" env HOME="$synthetic_home" imsgcrawl --json messages --chat "$first_chat_id" --limit 3
 else
   append_note "No chat ID was available, so message commands were skipped."
 fi
 
 if [[ -n "$small_chat_id" ]]; then
-  run_step "messages-text-all-small-chat" imsgcrawl --state-root "$state_root" messages --chat "$small_chat_id" --all
-  run_step "messages-json-all-small-chat" imsgcrawl --json --state-root "$state_root" messages --chat "$small_chat_id" --all
+  run_step "messages-text-all-small-chat" env HOME="$synthetic_home" imsgcrawl messages --chat "$small_chat_id" --all
+  run_step "messages-json-all-small-chat" env HOME="$synthetic_home" imsgcrawl --json messages --chat "$small_chat_id" --all
 else
   append_note "No chat with 1..$max_all_messages messages was available, so messages --all was skipped."
 fi
 
 if [[ -n "$search_query" ]]; then
-  run_step "search-text-limit-three" imsgcrawl --state-root "$state_root" search --limit 3 "$search_query"
-  run_step "search-json-limit-three" imsgcrawl --json --state-root "$state_root" search --limit 3 "$search_query"
+  run_step "search-text-limit-three" env HOME="$synthetic_home" imsgcrawl search --limit 3 "$search_query"
+  run_step "search-json-limit-three" env HOME="$synthetic_home" imsgcrawl --json search --limit 3 "$search_query"
   search_json="$last_stdout"
   first_search_ref=$(jq -r '.results[0].ref // empty' "$search_json" 2>/dev/null || true)
   if [[ -n "$first_search_ref" ]]; then
-    run_step "open-text-first-search-result" imsgcrawl --state-root "$state_root" open "$first_search_ref"
-    run_step "open-json-first-search-result" imsgcrawl --json --state-root "$state_root" open "$first_search_ref"
+    run_step "open-text-first-search-result" env HOME="$synthetic_home" imsgcrawl open "$first_search_ref"
+    run_step "open-json-first-search-result" env HOME="$synthetic_home" imsgcrawl --json open "$first_search_ref"
   else
     append_note "Search returned no ref, so open was skipped."
   fi
 else
-  run_step "search-text-empty-hit-shape" imsgcrawl --state-root "$state_root" search --limit 3 "imsgcrawl-agent-smoke-no-match"
-  run_step "search-json-empty-hit-shape" imsgcrawl --json --state-root "$state_root" search --limit 3 "imsgcrawl-agent-smoke-no-match"
+  run_step "search-text-empty-hit-shape" env HOME="$synthetic_home" imsgcrawl search --limit 3 "imsgcrawl-agent-smoke-no-match"
+  run_step "search-json-empty-hit-shape" env HOME="$synthetic_home" imsgcrawl --json search --limit 3 "imsgcrawl-agent-smoke-no-match"
   append_note "No --query was supplied, so hit-search quality was not tested."
 fi
 
-run_step "contacts-export-text" imsgcrawl --state-root "$state_root" contacts export
-run_step "contacts-export-json" imsgcrawl --json --state-root "$state_root" contacts export
+run_step "contacts-export-text" env HOME="$synthetic_home" imsgcrawl contacts export
+run_step "contacts-export-json" env HOME="$synthetic_home" imsgcrawl --json contacts export
 
 cat >>"$review" <<'EOF'
 

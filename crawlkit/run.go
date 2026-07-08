@@ -20,11 +20,13 @@ type runOptions struct {
 	executable      string
 	childPrefixArgs []string
 	childEnv        []string
-	baseContext     context.Context
-	readTimeout     time.Duration
-	watchdog        time.Duration
-	killGrace       time.Duration
-	signalContext   func(context.Context) (context.Context, context.CancelFunc)
+	// stateRoot is test-only injection for in-process runs.
+	stateRoot     string
+	baseContext   context.Context
+	readTimeout   time.Duration
+	watchdog      time.Duration
+	killGrace     time.Duration
+	signalContext func(context.Context) (context.Context, context.CancelFunc)
 }
 
 type runner struct {
@@ -73,6 +75,9 @@ func (r runner) run(argv []string, sources []Crawler) int {
 			renderError(r.opts.stderr, output.Text, err)
 		}
 		return exitCodeFor(err)
+	}
+	if r.opts.stateRoot != "" {
+		globals.stateRoot = r.opts.stateRoot
 	}
 	format := output.Text
 	if globals.json {

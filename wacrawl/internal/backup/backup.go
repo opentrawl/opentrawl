@@ -562,7 +562,7 @@ tag names are visible Git metadata and should not contain sensitive text.
 ` + "```bash" + `
 wacrawl backup pull
 wacrawl backup snapshots
-wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
+wacrawl backup pull --ref snapshot/before-phone-migration
 ` + "```" + `
 
 ` + "`backup pull`" + ` decrypts every payload with the local age identity, verifies

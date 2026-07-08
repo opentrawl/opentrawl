@@ -33,8 +33,6 @@ const (
 	globalFlagVeryVerbose
 	globalFlagVersion
 	globalFlagHelp
-	globalFlagStateRoot
-	globalFlagRunID
 )
 
 type globalFlagSpec struct {
@@ -48,8 +46,6 @@ var globalFlagSpecs = []globalFlagSpec{
 	{tokens: []string{"-vv"}, kind: globalFlagVeryVerbose},
 	{tokens: []string{"--version"}, kind: globalFlagVersion},
 	{tokens: []string{"-h", "--help", "-help"}, kind: globalFlagHelp},
-	{tokens: []string{"--state-root"}, kind: globalFlagStateRoot},
-	{tokens: []string{"--crawlkit-run-id"}, kind: globalFlagRunID},
 }
 
 type targetVerb struct {
@@ -80,7 +76,7 @@ func parseGlobal(argv []string) (globalOptions, error) {
 			opts.args = append(opts.args, argv[i:]...)
 			return opts, nil
 		}
-		name, value, inline := splitFlagValue(arg)
+		name, _, inline := splitFlagValue(arg)
 		spec, ok := globalFlagByToken(name)
 		if !ok {
 			opts.args = append(opts.args, arg)
@@ -119,30 +115,6 @@ func parseGlobal(argv []string) (globalOptions, error) {
 				continue
 			}
 			opts.help = true
-		case globalFlagStateRoot:
-			if !inline {
-				i++
-				if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
-					return opts, usageError{err: errors.New("--state-root needs a path")}
-				}
-				value = argv[i]
-			}
-			opts.stateRoot = value
-			if strings.TrimSpace(opts.stateRoot) == "" {
-				return opts, usageError{err: errors.New("--state-root needs a path")}
-			}
-		case globalFlagRunID:
-			if !inline {
-				i++
-				if i >= len(argv) || strings.TrimSpace(argv[i]) == "" {
-					return opts, usageError{err: errors.New("--crawlkit-run-id needs a value")}
-				}
-				value = argv[i]
-			}
-			opts.runID = value
-			if strings.TrimSpace(opts.runID) == "" {
-				return opts, usageError{err: errors.New("--crawlkit-run-id needs a value")}
-			}
 		}
 	}
 	return opts, nil

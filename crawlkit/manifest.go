@@ -38,11 +38,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 		DefaultLogs:     paths.Logs,
 	}
 	manifest.Capabilities = capabilitiesFor(source, info)
-	commandStateRoot := ""
-	if strings.TrimSpace(stateRoot) != "" {
-		commandStateRoot = paths.StateRoot
-	}
-	manifest.Commands = commandTable(source, binaryName, commandStateRoot, spine)
+	manifest.Commands = commandTable(source, binaryName, spine)
 	return manifest, nil
 }
 
@@ -78,31 +74,31 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	return uniqueStrings(caps)
 }
 
-func commandTable(source Crawler, binaryName, stateRoot string, spine map[string]Verb) map[string]control.Command {
+func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[string]control.Command {
 	commands := map[string]control.Command{
-		"metadata": applySpineDeclaration(spineCommand("Metadata", binaryName, stateRoot, "metadata", "metadata"), spine, "metadata"),
-		"status":   applySpineDeclaration(spineCommand("Status", binaryName, stateRoot, "status", "status"), spine, "status"),
-		"doctor":   applySpineDeclaration(spineCommand("Doctor", binaryName, stateRoot, "doctor", "doctor"), spine, "doctor"),
+		"metadata": applySpineDeclaration(spineCommand("Metadata", binaryName, "metadata", "metadata"), spine, "metadata"),
+		"status":   applySpineDeclaration(spineCommand("Status", binaryName, "status", "status"), spine, "status"),
+		"doctor":   applySpineDeclaration(spineCommand("Doctor", binaryName, "doctor", "doctor"), spine, "doctor"),
 	}
 	if _, ok := source.(Syncer); ok {
-		command := spineCommand("Sync", binaryName, stateRoot, "sync", "sync")
+		command := spineCommand("Sync", binaryName, "sync", "sync")
 		command.Mutates = true
 		commands["sync"] = applySpineDeclaration(command, spine, "sync")
 	}
 	if _, ok := source.(Searcher); ok {
 		_, supportsWho := source.(WhoMatcher)
-		command := spineCommand("Search", binaryName, stateRoot, "search", "search", "QUERY")
+		command := spineCommand("Search", binaryName, "search", "search", "QUERY")
 		command.Flags = builtinSearchFlags(supportsWho)
 		commands["search"] = applySpineDeclaration(command, spine, "search")
 	}
 	if _, ok := source.(WhoMatcher); ok {
-		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, stateRoot, "who", "who", "NAME"), spine, "who")
+		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, "who", "who", "NAME"), spine, "who")
 	}
 	if _, ok := source.(Opener); ok {
-		commands["open"] = applySpineDeclaration(spineCommand("Open", binaryName, stateRoot, "open", "open", "REF"), spine, "open")
+		commands["open"] = applySpineDeclaration(spineCommand("Open", binaryName, "open", "open", "REF"), spine, "open")
 	}
 	if _, ok := source.(ContactExporter); ok {
-		commands["contacts_export"] = applySpineDeclaration(spineCommand("Export contacts", binaryName, stateRoot, "contacts_export", "contacts", "export"), spine, "contacts_export")
+		commands["contacts_export"] = applySpineDeclaration(spineCommand("Export contacts", binaryName, "contacts_export", "contacts", "export"), spine, "contacts_export")
 	}
 	for _, verb := range source.Verbs() {
 		if _, ok := spineVerbKey(verb.Name); ok {
@@ -116,7 +112,6 @@ func commandTable(source Crawler, binaryName, stateRoot string, spine map[string
 		argv := append([]string{binaryName}, strings.Fields(verb.Name)...)
 		argv = append(argv, verb.Args...)
 		argv = append(argv, "--json")
-		argv = appendStateRoot(argv, stateRoot)
 		commands[key] = control.Command{
 			Title:   strings.TrimSpace(verb.Help),
 			Argv:    argv,
@@ -129,10 +124,10 @@ func commandTable(source Crawler, binaryName, stateRoot string, spine map[string
 	return commands
 }
 
-func spineCommand(title, binaryName, stateRoot, key string, args ...string) control.Command {
+func spineCommand(title, binaryName, key string, args ...string) control.Command {
 	return control.Command{
 		Title: title,
-		Argv:  commandArgv(binaryName, stateRoot, args...),
+		Argv:  commandArgv(binaryName, args...),
 		JSON:  true,
 		Store: storeModeManifestValue(spineDefaultStoreMode(key)),
 	}
@@ -149,18 +144,9 @@ func applySpineDeclaration(command control.Command, spine map[string]Verb, key s
 	return command
 }
 
-func commandArgv(binaryName, stateRoot string, args ...string) []string {
+func commandArgv(binaryName string, args ...string) []string {
 	argv := append([]string{binaryName}, args...)
-	argv = append(argv, "--json")
-	return appendStateRoot(argv, stateRoot)
-}
-
-func appendStateRoot(argv []string, stateRoot string) []string {
-	stateRoot = strings.TrimSpace(stateRoot)
-	if stateRoot == "" {
-		return argv
-	}
-	return append(argv, "--state-root", stateRoot)
+	return append(argv, "--json")
 }
 
 func flagsForVerb(verb Verb) []control.Flag {

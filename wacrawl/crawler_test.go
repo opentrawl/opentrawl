@@ -119,8 +119,8 @@ func TestCrawlerCoreMethods(t *testing.T) {
 }
 
 func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
-	stateRoot := t.TempDir()
-	code, stdout, stderr := captureRun(t, []string{"metadata", "--json", "--state-root", stateRoot}, New())
+	stateRootForRun(t)
+	code, stdout, stderr := captureRun(t, []string{"metadata", "--json"}, New())
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -243,6 +243,13 @@ func captureRun(t *testing.T, args []string, crawler *Crawler) (int, string, str
 	_ = outR.Close()
 	_ = errR.Close()
 	return code, string(stdout), string(stderr)
+}
+
+func stateRootForRun(t *testing.T) string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	return filepath.Join(home, ".opentrawl")
 }
 
 func stringSliceContains(values []string, want string) bool {

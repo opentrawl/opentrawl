@@ -1,6 +1,7 @@
 package crawlkit
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -46,6 +47,10 @@ type testStatusCrawler struct {
 type testContactCrawler struct {
 	*testCrawler
 	contactExportFn func(context.Context, *Request) (*control.ContactExport, error)
+}
+
+type testOpenContactCrawler struct {
+	*testContactCrawler
 }
 
 type testConfig struct {
@@ -157,6 +162,10 @@ func (c *testContactCrawler) ContactExport(ctx context.Context, req *Request) (*
 	}}}, nil
 }
 
+func (c *testOpenContactCrawler) Open(ctx context.Context, req *Request, ref string) error {
+	return nil
+}
+
 func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{
@@ -170,7 +179,7 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	source.verbs[0].Flags = func(fs *flag.FlagSet) {
 		fs.String("path", "", "archive path")
 	}
-	code, stdout, _ := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s", code, stdout)
 	}
@@ -218,13 +227,117 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	if slices.Contains(manifest.Capabilities, "short_refs") {
 		t.Fatalf("capabilities unexpectedly include short_refs: %#v", manifest.Capabilities)
 	}
-	if got, want := strings.Join(cmd.Argv[1:], " "), "archive import PATH --json --state-root "+stateRoot; got != want {
+	if got, want := strings.Join(cmd.Argv[1:], " "), "archive import PATH --json"; got != want {
 		t.Fatalf("archive_import argv suffix = %q, want %q", got, want)
 	}
-	for name, command := range manifest.Commands {
-		if !argvHasStateRoot(command.Argv, stateRoot) {
-			t.Fatalf("command %q argv does not pin state root: %#v", name, command.Argv)
+	assertNoInternalFlagTokens(t, stdout)
+}
+
+func TestRunMetadataDoesNotAdvertiseInternalStateFlags(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{testCrawler: &testCrawler{
+		verbs: []Verb{{
+			Name: "sync",
+			Flags: func(fs *flag.FlagSet) {
+				fs.Bool("include-archived", false, "include archived items")
+			},
+		}},
+	}}}
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	assertNoInternalFlagTokens(t, stdout)
+}
+
+func TestRunDeclaredStateRootFlagUsesCrawlerNamespaceAndChildWire(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testCrawler{verbs: []Verb{
+		{
+			Name: "sync",
+			Flags: func(fs *flag.FlagSet) {
+				fs.String("state-root", "", "crawler-owned state root")
+			},
+		},
+		{
+			Name:    "archive import",
+			Help:    "Import an archive.",
+			Args:    []string{"PATH"},
+			Mutates: true,
+			Flags: func(fs *flag.FlagSet) {
+				fs.String("state-root", "", "crawler-owned state root")
+			},
+		},
+	}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	for _, command := range []string{"sync", "archive_import"} {
+		if !commandHasFlag(manifest.Commands[command], "state-root") {
+			t.Fatalf("%s manifest flags missing state-root: %#v", command, manifest.Commands[command].Flags)
 		}
+	}
+
+	syncValue := "crawler-sync-root"
+	syncProofPath := filepath.Join(t.TempDir(), "sync-proof.txt")
+	opts := childTestOptions(t, "declared_state_root_sync")
+	opts.childEnv = append(opts.childEnv,
+		"CRAWLKIT_EXPECT_STATE_ROOT="+stateRoot,
+		"CRAWLKIT_EXPECT_DECLARED_STATE_ROOT="+syncValue,
+		"CRAWLKIT_DECLARED_STATE_ROOT_PROOF="+syncProofPath,
+	)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--state-root", syncValue, "--json"}, source, opts)
+	if code != 0 || !strings.Contains(stdout, `"added": 13`) {
+		t.Fatalf("declared state-root sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	syncProof := readProofFile(t, syncProofPath)
+	assertProofLine(t, syncProof, "mode=sync")
+	assertProofLine(t, syncProof, "declared_state_root="+syncValue)
+	assertProofLine(t, syncProof, "wire_state_root_matches_parent=true")
+	assertProofLine(t, syncProof, "request_state_root_matches_parent=true")
+	t.Logf("declared-state-root sync proof:\n%s", syncProof)
+
+	bespokeValue := "crawler-bespoke-root"
+	bespokeProofPath := filepath.Join(t.TempDir(), "bespoke-proof.txt")
+	opts = childTestOptions(t, "declared_state_root_bespoke")
+	opts.childEnv = append(opts.childEnv,
+		"CRAWLKIT_EXPECT_STATE_ROOT="+stateRoot,
+		"CRAWLKIT_EXPECT_DECLARED_STATE_ROOT="+bespokeValue,
+		"CRAWLKIT_DECLARED_STATE_ROOT_PROOF="+bespokeProofPath,
+	)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "import", "--state-root", bespokeValue, "--json", "/tmp/archive.zip"}, source, opts)
+	if code != 0 || !strings.Contains(stdout, "bespoke:/tmp/archive.zip") {
+		t.Fatalf("declared state-root bespoke code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	bespokeProof := readProofFile(t, bespokeProofPath)
+	assertProofLine(t, bespokeProof, "mode=bespoke")
+	assertProofLine(t, bespokeProof, "declared_state_root="+bespokeValue)
+	assertProofLine(t, bespokeProof, "wire_state_root_matches_parent=true")
+	assertProofLine(t, bespokeProof, "request_state_root_matches_parent=true")
+	t.Logf("declared-state-root bespoke proof:\n%s", bespokeProof)
+}
+
+func TestRunIgnoresChildStateEnvOutsideWireInvocation(t *testing.T) {
+	envRoot := t.TempDir()
+	t.Setenv(childStateRootEnv, envRoot)
+	t.Setenv(childRunIDEnv, "env-run")
+	code, stdout, stderr := runForTest([]string{"metadata", "--json"}, &testCrawler{}, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	if manifest.Paths.DefaultDatabase == filepath.Join(envRoot, "testcrawl", "testcrawl.db") {
+		t.Fatalf("%s affected non-child metadata path: %s", childStateRootEnv, manifest.Paths.DefaultDatabase)
 	}
 }
 
@@ -249,7 +362,7 @@ func TestRunMetadataUsesDeclaredArchiveFilename(t *testing.T) {
 		},
 	}
 
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -261,11 +374,11 @@ func TestRunMetadataUsesDeclaredArchiveFilename(t *testing.T) {
 		t.Fatalf("default database = %q, want %q", manifest.Paths.DefaultDatabase, archivePath)
 	}
 
-	code, stdout, stderr = runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTest([]string{"doctor", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"doctor", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("doctor code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -283,7 +396,7 @@ func TestRunMetadataUsesDeclaredArchiveFilename(t *testing.T) {
 			TotalMatches: 1,
 		}, nil
 	}
-	code, stdout, stderr = runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"results"`) {
 		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -297,12 +410,12 @@ func TestRunRejectsPathShapedArchiveFilename(t *testing.T) {
 			wantMessage := "invalid archive filename"
 			wantRemedy := "Set ArchiveFilename to one filename only"
 
-			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 				t.Fatalf("metadata invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
 
-			code, stdout, stderr = runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+			code, stdout, stderr = runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 				t.Fatalf("status invalid archive filename code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
@@ -313,7 +426,7 @@ func TestRunRejectsPathShapedArchiveFilename(t *testing.T) {
 func TestRunMetadataAdvertisesDeclaredShortRefs(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{shortRef: true}
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -336,7 +449,7 @@ func TestRunConfigDecodeValidateAndJSONEnvelope(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := &testCrawler{cfg: &testConfig{}}
-	code, stdout, _ := runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
 	if code != 1 {
 		t.Fatalf("code = %d stdout=%s", code, stdout)
 	}
@@ -379,11 +492,11 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 			return &status, nil
 		},
 	}
-	code, stdout, _ := runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
 	if code != 0 || !statusSawNil || !statusSawLog {
 		t.Fatalf("status code=%d sawNil=%t sawLog=%t stdout=%s", code, statusSawNil, statusSawLog, stdout)
 	}
-	code, stdout, _ = runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "archive does not exist") {
 		t.Fatalf("missing archive code=%d stdout=%s", code, stdout)
 	}
@@ -399,7 +512,7 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 		results := []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}
 		return SearchResult{Results: results, TotalMatches: len(results)}, nil
 	}
-	code, stdout, _ = runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"results"`) {
 		t.Fatalf("search code=%d stdout=%s", code, stdout)
 	}
@@ -417,15 +530,15 @@ func TestRunBespokeStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
 	})}
 
 	opts := childTestOptions(t, "backup_init")
-	code, stdout, stderr := runForTest([]string{"backup", "init", "--json", "--state-root", stateRoot}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"backup", "init", "--json"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, "backup init store=nil") {
 		t.Fatalf("backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTest([]string{"backup", "status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "status", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "backup status store=nil") {
 		t.Fatalf("backup status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTest([]string{"backup", "snapshots", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "snapshots", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "backup snapshots store=nil") {
 		t.Fatalf("backup snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -451,12 +564,12 @@ func TestRunBespokeStoreOptionalSeesNilThenOpenStore(t *testing.T) {
 		},
 	}}}
 
-	code, stdout, stderr := runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "optional store=nil") {
 		t.Fatalf("optional missing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	createArchive(t, stateRoot)
-	code, stdout, stderr = runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "optional store=open") {
 		t.Fatalf("optional existing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -477,12 +590,12 @@ func TestRunBespokeStoreRequiredRequiresArchive(t *testing.T) {
 		},
 	}}}
 
-	code, stdout, stderr := runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "archive does not exist") || stderr != "" {
 		t.Fatalf("required missing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	createArchive(t, stateRoot)
-	code, stdout, stderr = runForTest([]string{"archive", "inspect", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, "required store=open") {
 		t.Fatalf("required existing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -502,11 +615,11 @@ func TestRunRejectsBespokeStoreOptionalWithMutates(t *testing.T) {
 	wantMessage := "invalid backup restore Verb declaration: StoreOptional cannot be used with Mutates"
 	wantRemedy := "Set Store to StoreNone"
 
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("metadata invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTest([]string{"backup", "restore", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "restore", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("invocation invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -521,7 +634,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		results := []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}
 		return SearchResult{Results: results, TotalMatches: 12, Truncated: true}, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"search", "--json", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("default search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -541,7 +654,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("search envelope = %#v", envelope)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--limit", "3", "--after", "2026-01-01T00:00:00Z", "--before", "2026-01-31T00:00:00Z", "--who", "Ada", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--limit", "3", "--after", "2026-01-01T00:00:00Z", "--before", "2026-01-31T00:00:00Z", "--who", "Ada"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("flagged search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -555,7 +668,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		time.Local = fixedLocal
 		defer func() { time.Local = previousLocal }()
 
-		code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--before", "2026-01-31", "--state-root", stateRoot}, source, runOptions{})
+		code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--before", "2026-01-31"}, source, runOptions{})
 		if code != 0 {
 			t.Fatalf("date-only before search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 		}
@@ -565,7 +678,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		}
 	}()
 
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--all", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--all"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("all search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -573,7 +686,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("all query = %#v", got)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "--json", "--who", "Ada", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "--who", "Ada"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("filter-only search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -581,17 +694,17 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("filter-only query = %#v", got)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--who", "", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--who", ""}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "search --who requires an identity") || stderr != "" {
 		t.Fatalf("empty who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--limit", "0", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--limit", "0"}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "--limit must be at least 1") || stderr != "" {
 		t.Fatalf("bad limit code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "--json", "--state-root", stateRoot, "--", "--help"}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "--", "--help"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("dash query search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -599,7 +712,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("dash query = %#v", got)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json"}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "search needs a query or filter") || stderr != "" {
 		t.Fatalf("empty search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -615,7 +728,7 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 			Truncated:    true,
 		}, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"search", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "hello"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("search text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -634,7 +747,7 @@ func TestRunSyncJSONIncludesZeroCounts(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	opts := childTestOptions(t, "zero_sync")
-	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 0 {
 		t.Fatalf("zero sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -658,7 +771,7 @@ func TestRunSpineSyncVerbParsesDeclaredFlags(t *testing.T) {
 		},
 	}}}
 	opts := childTestOptions(t, "sync_flag")
-	code, stdout, stderr := runForTest([]string{"sync", "--include-archived", "--backup-repo", "synthetic", "--json", "--state-root", stateRoot}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--include-archived", "--backup-repo", "synthetic", "--json"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 7`) {
 		t.Fatalf("sync flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -675,7 +788,7 @@ func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 			fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
 		},
 	}}}
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -697,7 +810,7 @@ func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 	if flag := flags["backup-repo"]; flag.Usage != "backup repository" || flag.Default != "" {
 		t.Fatalf("sync string flag = %#v", flag)
 	}
-	if got, want := strings.Join(syncCommand.Argv[1:], " "), "sync --json --state-root "+stateRoot; got != want {
+	if got, want := strings.Join(syncCommand.Argv[1:], " "), "sync --json"; got != want {
 		t.Fatalf("sync argv suffix = %q, want %q", got, want)
 	}
 }
@@ -719,19 +832,19 @@ func TestRunSpineSearchVerbPreservesPositionalQuery(t *testing.T) {
 			return SearchResult{Results: []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}, TotalMatches: 1}, nil
 		},
 	}
-	code, stdout, stderr := runForTest([]string{"search", "exact", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "exact", "--json"}, source, runOptions{})
 	if code != 0 || got.Text != "exact" || exact {
 		t.Fatalf("bare query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--exact", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--exact", "--json"}, source, runOptions{})
 	if code != 0 || got.Text != "needle" || !exact {
 		t.Fatalf("flagged query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
 	}
 
 	exact = false
 	got = Query{}
-	code, stdout, stderr = runForTest([]string{"search", "--exact", "--json", "--state-root", stateRoot, "--", "--literal"}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--exact", "--json", "--", "--literal"}, source, runOptions{})
 	if code != 0 || got.Text != "--literal" || !exact {
 		t.Fatalf("dash query code=%d exact=%t query=%#v stdout=%s stderr=%s", code, exact, got, stdout, stderr)
 	}
@@ -754,7 +867,7 @@ func TestRunSpineWhoVerbDropsDelimiterBeforeArityCheck(t *testing.T) {
 			return []whomatch.Candidate{{Who: "Ada Example", Identifiers: []string{"ada@example.com"}}}, nil
 		},
 	}
-	code, stdout, stderr := runForTest([]string{"who", "--exact", "--json", "--state-root", stateRoot, "--", "Ada"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"who", "--exact", "--json", "--", "Ada"}, source, runOptions{})
 	if code != 0 || gotPerson != "Ada" || !exact {
 		t.Fatalf("who delimiter code=%d exact=%t person=%q stdout=%s stderr=%s", code, exact, gotPerson, stdout, stderr)
 	}
@@ -782,7 +895,7 @@ func TestRunSpineContactExportStoreNoneFreshNoArchive(t *testing.T) {
 		},
 	}
 
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -794,7 +907,7 @@ func TestRunSpineContactExportStoreNoneFreshNoArchive(t *testing.T) {
 		t.Fatalf("contacts_export manifest store = %q, want none", got)
 	}
 
-	code, stdout, stderr = runForTest([]string{"contacts", "export", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"contacts", "export", "--json"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"contacts"`) {
 		t.Fatalf("contacts_export StoreNone code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -820,7 +933,7 @@ func TestRunSpineSearchStoreOptionalFreshNoArchive(t *testing.T) {
 		},
 	}
 
-	code, stdout, stderr := runForTest([]string{"search", "--json", "--state-root", stateRoot, "needle"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "--json", "needle"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `"results"`) {
 		t.Fatalf("search StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -845,17 +958,17 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 	wantDetail := "spine verb declarations may only set Name, Flags, and Store"
 	wantRemedy := "Remove Help, Run, Mutates, Timeout, and Args from the sync Verb declaration."
 
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantDetail) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("metadata invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantDetail) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("sync invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"status"}, source, runOptions{})
 	if code != 1 || stdout != "" || !strings.Contains(stderr, wantMessage) || !strings.Contains(stderr, wantDetail) || !strings.Contains(stderr, wantRemedy) {
 		t.Fatalf("status invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -876,7 +989,7 @@ func TestRunRejectsSpineStoreWidening(t *testing.T) {
 				Name:  "search",
 				Store: StoreRequired,
 			}}},
-			args:        []string{"search", "needle", "--json", "--state-root", stateRoot},
+			args:        []string{"search", "needle", "--json"},
 			wantMessage: "invalid search Verb declaration: StoreRequired does not narrow default storeRead",
 			wantRemedy:  "Remove Store from the search Verb declaration, or set Store to StoreNone or StoreOptional.",
 		},
@@ -886,19 +999,19 @@ func TestRunRejectsSpineStoreWidening(t *testing.T) {
 				Name:  "sync",
 				Store: StoreNone,
 			}}},
-			args:        []string{"sync", "--json", "--state-root", stateRoot},
+			args:        []string{"sync", "--json"},
 			wantMessage: "invalid sync Verb declaration: StoreNone does not narrow default storeWrite",
 			wantRemedy:  "Remove Store from the sync Verb declaration; sync always uses default storeWrite.",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, tc.source, runOptions{})
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, tc.source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
 				t.Fatalf("metadata invalid Store code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
 
-			code, stdout, stderr = runForTest(tc.args, tc.source, runOptions{})
+			code, stdout, stderr = runForTestAt(stateRoot, tc.args, tc.source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
 				t.Fatalf("invocation invalid Store code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
@@ -923,7 +1036,7 @@ func TestRunRejectsSpineVerbFlagCollision(t *testing.T) {
 					fs.Int("limit", 99, "crawler-owned limit")
 				},
 			}}},
-			args:        []string{"search", "needle", "--json", "--state-root", stateRoot},
+			args:        []string{"search", "needle", "--json"},
 			wantMessage: "crawler flag --limit collides with a runner-owned flag",
 			wantRemedy:  "Remove --limit from the search Verb declaration; the runner owns that flag.",
 		},
@@ -935,19 +1048,19 @@ func TestRunRejectsSpineVerbFlagCollision(t *testing.T) {
 					fs.Bool("json", false, "crawler-owned JSON mode")
 				},
 			}}},
-			args:        []string{"sync", "--json", "--state-root", stateRoot},
+			args:        []string{"sync", "--json"},
 			wantMessage: "crawler flag --json collides with a runner-owned flag",
 			wantRemedy:  "Remove --json from the sync Verb declaration; the runner owns that flag.",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, tc.source, runOptions{})
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, tc.source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
 				t.Fatalf("metadata collision code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
 
-			code, stdout, stderr = runForTest(tc.args, tc.source, runOptions{})
+			code, stdout, stderr = runForTestAt(stateRoot, tc.args, tc.source, runOptions{})
 			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
 				t.Fatalf("invocation collision code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
@@ -959,12 +1072,12 @@ func TestRunUnsupportedSpineVerbDeclarationKeepsInvocationUsageError(t *testing.
 	stateRoot := t.TempDir()
 	source := &testStatusCrawler{verbs: []Verb{{Name: "sync"}}}
 
-	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, source, runOptions{})
 	if code != 2 || stderr != "" || !strings.Contains(stdout, "source does not support sync") || strings.Contains(stdout, "invalid sync Verb declaration") {
 		t.Fatalf("unsupported sync invocation code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, "invalid sync Verb declaration: source does not implement Syncer") || !strings.Contains(stdout, "Implement crawlkit.Syncer or remove the sync Verb declaration.") {
 		t.Fatalf("unsupported sync metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -976,12 +1089,12 @@ func TestRunRejectsDuplicateSpineVerbDeclaration(t *testing.T) {
 	wantMessage := "invalid sync Verb declaration: declared more than once"
 	wantRemedy := "Keep one sync Verb declaration and remove the duplicate."
 
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("duplicate metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("duplicate sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -999,7 +1112,7 @@ func TestRunStatusTextRendersEveryDeclaredCount(t *testing.T) {
 		}
 		return &status, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"status"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1021,7 +1134,7 @@ func TestRunWhoTextUsesNeutralCountHeader(t *testing.T) {
 			Messages:    3,
 		}}, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"who", "Ada", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"who", "Ada"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1075,7 +1188,7 @@ func TestWriteResultNormalizesEmptyJSONArrays(t *testing.T) {
 
 func TestRunAmbiguousSourceIsUsageError(t *testing.T) {
 	stateRoot := t.TempDir()
-	code, stdout, stderr := runSourcesForTest([]string{"shared", "status", "--json", "--state-root", stateRoot}, []Crawler{
+	code, stdout, stderr := runSourcesForTestAt(stateRoot, []string{"shared", "status", "--json"}, []Crawler{
 		&testCrawler{id: "one", surface: "shared"},
 		&testCrawler{id: "two", surface: "shared"},
 	}, runOptions{})
@@ -1108,7 +1221,7 @@ func TestRunSearchWhoResolutionJSONContract(t *testing.T) {
 			}, nil
 		},
 	}
-	code, stdout, stderr := runForTest([]string{"search", "needle", "--json", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "needle", "--json", "--who", "Ada"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("search --who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1150,7 +1263,7 @@ func TestRunSearchWhoTextHeadingShowsResolvedPerson(t *testing.T) {
 			}, nil
 		},
 	}
-	code, stdout, stderr := runForTest([]string{"search", "needle", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "needle", "--who", "Ada"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("search --who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1170,7 +1283,7 @@ func TestRunWhoJSONContract(t *testing.T) {
 			Messages:    3,
 		}}, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"who", "Ada", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"who", "Ada", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1212,7 +1325,7 @@ func TestRunSearchWhoResolutionErrorsUseContractExitCodes(t *testing.T) {
 			{Who: "Ada Other", Identifiers: []string{"ada.other@example.com"}},
 		}, nil
 	}}
-	code, stdout, stderr := runForTest([]string{"search", "needle", "--json", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "needle", "--json", "--who", "Ada"}, source, runOptions{})
 	if code != 4 || stderr != "" || !strings.Contains(stdout, `"code":"ambiguous_who"`) || !strings.Contains(stdout, `"candidates"`) {
 		t.Fatalf("ambiguous who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1220,7 +1333,7 @@ func TestRunSearchWhoResolutionErrorsUseContractExitCodes(t *testing.T) {
 	source.whoFn = func(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
 		return nil, nil
 	}
-	code, stdout, stderr = runForTest([]string{"search", "needle", "--json", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--who", "Ada"}, source, runOptions{})
 	if code != 5 || stderr != "" || !strings.Contains(stdout, `"code":"unknown_who"`) {
 		t.Fatalf("unknown who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1241,7 +1354,7 @@ func TestRunSearchWhoAmbiguousTextListsCandidatesAndRetry(t *testing.T) {
 			return SearchResult{}, nil
 		},
 	}
-	code, stdout, stderr := runForTest([]string{"search", "needle", "--state-root", stateRoot, "--who", "Ada"}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "needle", "--who", "Ada"}, source, runOptions{})
 	if code != 4 || stdout != "" {
 		t.Fatalf("ambiguous who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1258,7 +1371,7 @@ func TestRunSearchWhoAmbiguousTextListsCandidatesAndRetry(t *testing.T) {
 
 func TestRunTextErrorsUseStderr(t *testing.T) {
 	stateRoot := t.TempDir()
-	code, stdout, stderr := runForTest([]string{"search", "--state-root", stateRoot, "hello"}, &testCrawler{}, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "hello"}, &testCrawler{}, runOptions{})
 	if code != 2 {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1280,7 +1393,7 @@ func TestRunMetadataSkipsConfigValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	source := &testCrawler{cfg: &testConfig{}}
-	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1301,12 +1414,12 @@ func TestRunHelpUsesSharedUsage(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "top", args: []string{"--help", "--state-root", stateRoot}, want: "Commands:\n"},
-		{name: "verb", args: []string{"status", "--help", "--state-root", stateRoot}, want: "test status:"},
-		{name: "help command", args: []string{"help", "search", "--state-root", stateRoot}, want: "--limit VALUE"},
+		{name: "top", args: []string{"--help"}, want: "Commands:\n"},
+		{name: "verb", args: []string{"status", "--help"}, want: "test status:"},
+		{name: "help command", args: []string{"help", "search"}, want: "--limit VALUE"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			code, stdout, stderr := runForTest(tc.args, source, runOptions{})
+			code, stdout, stderr := runForTestAt(stateRoot, tc.args, source, runOptions{})
 			if code != 0 {
 				t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
@@ -1319,6 +1432,7 @@ func TestRunHelpUsesSharedUsage(t *testing.T) {
 			if !strings.Contains(stdout, "Diagnostics: run with -v, or read ") {
 				t.Fatalf("help missing diagnostics line:\n%s", stdout)
 			}
+			assertNoInternalFlagTokens(t, stdout)
 		})
 	}
 
@@ -1332,7 +1446,7 @@ func TestRunHelpUsesSharedUsage(t *testing.T) {
 			fs.Int("limit", 20, "maximum rows")
 		},
 	}}}
-	code, stdout, stderr := runForTest([]string{"help", "archive", "import", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"help", "archive", "import"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("bespoke help code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1349,6 +1463,40 @@ func TestRunHelpUsesSharedUsage(t *testing.T) {
 	if !strings.Contains(stdout, "maximum rows (default 20)") {
 		t.Fatalf("bespoke help missing default in summary:\n%s", stdout)
 	}
+	assertNoInternalFlagTokens(t, stdout)
+}
+
+func TestRunHelpDoesNotExposeInternalStateFlags(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{testCrawler: &testCrawler{}}}
+	for _, args := range [][]string{
+		{"--help"},
+		{"help", "metadata"},
+		{"help", "status"},
+		{"help", "doctor"},
+		{"help", "sync"},
+		{"help", "search"},
+		{"help", "who"},
+		{"help", "open"},
+		{"help", "contacts", "export"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			code, stdout, stderr := runForTestAt(stateRoot, args, source, runOptions{})
+			if code != 0 || stderr != "" {
+				t.Fatalf("help code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+			assertNoInternalFlagTokens(t, stdout)
+		})
+	}
+
+	code, stdout, stderr := runSourcesForTestAt(stateRoot, []string{"--help"}, []Crawler{
+		&testCrawler{id: "one", surface: "one"},
+		&testCrawler{id: "two", surface: "two"},
+	}, runOptions{})
+	if code != 0 || stderr != "" {
+		t.Fatalf("root help code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	assertNoInternalFlagTokens(t, stdout)
 }
 
 func TestRunWorldMustChangeUsesSharedErrorBody(t *testing.T) {
@@ -1359,7 +1507,7 @@ func TestRunWorldMustChangeUsesSharedErrorBody(t *testing.T) {
 			Remedy:  "grant Full Disk Access",
 		}
 	}}
-	code, stdout, stderr := runForTest([]string{"status", "--json", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" {
 		t.Fatalf("json world error code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1371,7 +1519,7 @@ func TestRunWorldMustChangeUsesSharedErrorBody(t *testing.T) {
 		t.Fatalf("world error envelope = %#v", envelope.Error)
 	}
 
-	code, stdout, stderr = runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"status"}, source, runOptions{})
 	if code != 1 || stdout != "" {
 		t.Fatalf("text world error code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1388,12 +1536,12 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 		args []string
 		want string
 	}{
-		{name: "metadata", args: []string{"metadata", "--state-root", stateRoot}, want: "Metadata\n"},
-		{name: "status", args: []string{"status", "--state-root", stateRoot}, want: "Status: ok\nready\n"},
-		{name: "doctor", args: []string{"doctor", "--state-root", stateRoot}, want: "Doctor checks:\n"},
+		{name: "metadata", args: []string{"metadata"}, want: "Metadata\n"},
+		{name: "status", args: []string{"status"}, want: "Status: ok\nready\n"},
+		{name: "doctor", args: []string{"doctor"}, want: "Doctor checks:\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			code, stdout, _ := runForTest(tc.args, source, runOptions{})
+			code, stdout, _ := runForTestAt(stateRoot, tc.args, source, runOptions{})
 			if code != 0 {
 				t.Fatalf("code=%d stdout=%s", code, stdout)
 			}
@@ -1407,13 +1555,13 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 	}
 
 	createArchive(t, stateRoot)
-	code, stdout, _ := runForTest([]string{"search", "--state-root", stateRoot, "hello"}, source, runOptions{})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"search", "hello"}, source, runOptions{})
 	if code != 0 || !strings.Contains(stdout, `Search "hello": showing 1 of 1.`) || strings.Contains(stdout, "&{") {
 		t.Fatalf("search text code=%d stdout=%s", code, stdout)
 	}
 
 	opts := childTestOptions(t, "progress")
-	code, stdout, stderr := runForTest([]string{"sync", "--state-root", stateRoot}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, "Sync complete") || strings.Contains(stdout, "&{") {
 		t.Fatalf("sync text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1437,7 +1585,7 @@ func TestRunBespokeVerbReceivesPositionalArgs(t *testing.T) {
 			return err
 		},
 	}}}
-	code, stdout, _ := runForTest([]string{"archive", "import", "--dry-run", "--state-root", stateRoot, "/tmp/archive.zip"}, source, runOptions{})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"archive", "import", "--dry-run", "/tmp/archive.zip"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("code=%d stdout=%s", code, stdout)
 	}
@@ -1450,7 +1598,7 @@ func TestRunBespokeVerbReceivesPositionalArgs(t *testing.T) {
 
 	dryRun = false
 	sawArgs = nil
-	code, stdout, _ = runForTest([]string{"archive", "import", "--state-root", stateRoot, "/tmp/archive.zip", "--dry-run"}, source, runOptions{})
+	code, stdout, _ = runForTestAt(stateRoot, []string{"archive", "import", "/tmp/archive.zip", "--dry-run"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("flag after positional code=%d stdout=%s", code, stdout)
 	}
@@ -1470,7 +1618,7 @@ func TestRunDeadlineCancelsContextAwareRead(t *testing.T) {
 		return SearchResult{}, ctx.Err()
 	}}
 	start := time.Now()
-	code, stdout, _ := runForTest([]string{"search", "--json", "--state-root", stateRoot, "wait"}, source, runOptions{readTimeout: 20 * time.Millisecond})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"search", "--json", "wait"}, source, runOptions{readTimeout: 20 * time.Millisecond})
 	if code != 1 || time.Since(start) > time.Second {
 		t.Fatalf("deadline code=%d elapsed=%s stdout=%s", code, time.Since(start), stdout)
 	}
@@ -1495,7 +1643,7 @@ func TestRunDeadlineInterruptsBlockedSQLiteRead(t *testing.T) {
 		return SearchResult{}, err
 	}}
 	start := time.Now()
-	code, stdout, _ := runForTest([]string{"search", "--json", "--state-root", stateRoot, "sqlite"}, source, runOptions{readTimeout: 20 * time.Millisecond})
+	code, stdout, _ := runForTestAt(stateRoot, []string{"search", "--json", "sqlite"}, source, runOptions{readTimeout: 20 * time.Millisecond})
 	if code != 1 || time.Since(start) > 2*time.Second {
 		t.Fatalf("sqlite interrupt code=%d elapsed=%s stdout=%s", code, time.Since(start), stdout)
 	}
@@ -1546,13 +1694,13 @@ func TestRunChildWireReexecProgressWatchdogAndStaleLock(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	opts := childTestOptions(t, "progress")
-	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("progress child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
 	opts = childTestOptions(t, "hold")
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress") {
 		t.Fatalf("watchdog code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1565,10 +1713,88 @@ func TestRunChildWireReexecProgressWatchdogAndStaleLock(t *testing.T) {
 	}
 
 	opts = childTestOptions(t, "progress")
-	code, stdout, stderr = runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("rerun after killed child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
+}
+
+func TestRunChildWireCarriesStateRootAndRunIDThroughEnv(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	opts := childTestOptions(t, "env_wire")
+	opts.childEnv = append(opts.childEnv, "CRAWLKIT_EXPECT_STATE_ROOT="+stateRoot)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
+	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
+		t.Fatalf("env wire child code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunWireChildRequiresStateRootAndRunIDEnv(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		env   string
+		value string
+		unset bool
+		want  string
+	}{
+		{
+			name:  "missing state root",
+			env:   childStateRootEnv,
+			unset: true,
+			want:  "CRAWLKIT_STATE_ROOT is required",
+		},
+		{
+			name:  "empty state root",
+			env:   childStateRootEnv,
+			value: "",
+			want:  "CRAWLKIT_STATE_ROOT is required",
+		},
+		{
+			name:  "missing run id",
+			env:   childRunIDEnv,
+			unset: true,
+			want:  "CRAWLKIT_RUN_ID is required",
+		},
+		{
+			name:  "empty run id",
+			env:   childRunIDEnv,
+			value: "",
+			want:  "CRAWLKIT_RUN_ID is required",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setEnvForTest(t, childStateRootEnv, t.TempDir())
+			setEnvForTest(t, childRunIDEnv, "run-1")
+			if tc.unset {
+				unsetEnvForTest(t, tc.env)
+			} else {
+				setEnvForTest(t, tc.env, tc.value)
+			}
+
+			code, frame, stderr := runWireForTest(t, []string{HiddenWireSubcommand, "--json", "testcrawl", "sync"}, &testCrawler{}, runOptions{})
+			if code != 2 || stderr != "" || frame.kind != childFrameResult || frame.errorBody == nil {
+				t.Fatalf("wire env failure code=%d frame=%#v stderr=%s", code, frame, stderr)
+			}
+			if frame.errorBody.Code != "usage" || frame.errorBody.Message != tc.want || frame.errorBody.Remedy != "invoke the parent crawler command; the runner supplies CRAWLKIT_STATE_ROOT and CRAWLKIT_RUN_ID for hidden wire child runs" {
+				t.Fatalf("wire env error body = %#v, want message %q", frame.errorBody, tc.want)
+			}
+			t.Logf("hidden wire env failure proof: env=%s code=%d message=%q remedy=%q", tc.env, code, frame.errorBody.Message, frame.errorBody.Remedy)
+		})
+	}
+}
+
+func TestRunChildWireOverwritesStaleParentStateRootEnv(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	setEnvForTest(t, childStateRootEnv, filepath.Join(t.TempDir(), "stale"))
+	opts := childTestOptions(t, "env_wire")
+	opts.childEnv = append(opts.childEnv, "CRAWLKIT_EXPECT_STATE_ROOT="+stateRoot)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
+	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
+		t.Fatalf("stale env wire child code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	t.Log("stale CRAWLKIT_STATE_ROOT overwritten by parent state root: true")
 }
 
 func TestRunChildWireLogFramesResetWatchdog(t *testing.T) {
@@ -1576,7 +1802,7 @@ func TestRunChildWireLogFramesResetWatchdog(t *testing.T) {
 	createArchive(t, stateRoot)
 	opts := childTestOptions(t, "log_heartbeat")
 	start := time.Now()
-	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	elapsed := time.Since(start)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("log heartbeat child code=%d stdout=%s stderr=%s", code, stdout, stderr)
@@ -1607,13 +1833,13 @@ func TestRunMutatingBespokeVerbUsesWireReexec(t *testing.T) {
 		Mutates: true,
 	}}}
 	opts := childTestOptions(t, "bespoke")
-	code, stdout, stderr := runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "/tmp/archive.zip"}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "import", "--json", "/tmp/archive.zip"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, "bespoke:/tmp/archive.zip") {
 		t.Fatalf("bespoke child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
 	opts = childTestOptions(t, "bespoke")
-	code, stdout, stderr = runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "--", "/tmp/archive.zip", "--literal"}, source, opts)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "import", "--json", "--", "/tmp/archive.zip", "--literal"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, "bespoke:/tmp/archive.zip --literal") {
 		t.Fatalf("bespoke child with -- code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1646,7 +1872,7 @@ func TestRunMutatingBespokeStoreRequiredMatchesDefault(t *testing.T) {
 			if tc.env != "" {
 				opts.childEnv = append(opts.childEnv, "CRAWLKIT_CHILD_BESPOKE_STORE="+tc.env)
 			}
-			code, stdout, stderr := runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "/tmp/archive.zip"}, source, opts)
+			code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "import", "--json", "/tmp/archive.zip"}, source, opts)
 			if code != 0 || !strings.Contains(stdout, "bespoke:/tmp/archive.zip") {
 				t.Fatalf("%s code=%d stdout=%s stderr=%s", tc.name, code, stdout, stderr)
 			}
@@ -1677,7 +1903,7 @@ func TestRunMutatingVerbTimeoutControlsWatchdog(t *testing.T) {
 	opts := childTestOptions(t, "bespoke_hold")
 	opts.watchdog = time.Second
 	start := time.Now()
-	code, stdout, stderr := runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "/tmp/archive.zip"}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "import", "--json", "/tmp/archive.zip"}, source, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress for 30ms") {
 		t.Fatalf("bespoke watchdog code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1699,7 +1925,7 @@ func TestRunMutatingVerbTimeoutIsProgressWatchdog(t *testing.T) {
 	opts := childTestOptions(t, "bespoke_progress_past_timeout")
 	opts.watchdog = time.Second
 	start := time.Now()
-	code, stdout, stderr := runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "/tmp/archive.zip"}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "import", "--json", "/tmp/archive.zip"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, "progressed") {
 		t.Fatalf("bespoke progress watchdog code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1714,7 +1940,7 @@ func TestRunWatchdogKillsChildProcessGroup(t *testing.T) {
 	marker := filepath.Join(t.TempDir(), "grandchild-alive")
 	opts := childTestOptions(t, "tree")
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_TREE_MARKER="+marker)
-	code, stdout, stderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	if code != 1 || !strings.Contains(stdout, "made no progress") {
 		t.Fatalf("process tree watchdog code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1758,7 +1984,7 @@ func TestRunChildWireArchiveBusyLockPathRoundTrips(t *testing.T) {
 	}
 
 	opts := childTestOptions(t, "progress")
-	code, retryStdout, retryStderr := runForTest([]string{"sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, retryStdout, retryStderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
 	var envelope struct {
 		Error struct {
 			Code     string `json:"code"`
@@ -1817,7 +2043,7 @@ func TestRunStoreNoneMutatingBespokeVerbReexecsAndHoldsRunLock(t *testing.T) {
 		return err
 	})}
 	opts := childTestOptions(t, "backup_init")
-	code, retryStdout, retryStderr := runForTest([]string{"backup", "init", "--json", "--state-root", stateRoot}, source, opts)
+	code, retryStdout, retryStderr := runForTestAt(stateRoot, []string{"backup", "init", "--json"}, source, opts)
 	var envelope struct {
 		Error struct {
 			Code     string `json:"code"`
@@ -1842,7 +2068,7 @@ func TestRunChildWireForwardsLogLinesVerbatim(t *testing.T) {
 	line := "2026-07-07 10:20:30 crawler WARN child_warn: message=kept"
 	opts := childTestOptions(t, "odd_log")
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_ODD_LOG_LINE="+line)
-	code, stdout, stderr := runForTest([]string{"-v", "sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"-v", "sync", "--json"}, &testCrawler{}, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("odd log child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -1864,7 +2090,7 @@ func TestRunChildVerboseLoggingSurvivesWireReexec(t *testing.T) {
 			stateRoot := t.TempDir()
 			createArchive(t, stateRoot)
 			opts := childTestOptions(t, "logs")
-			code, stdout, stderr := runForTest([]string{tc.verbose, "sync", "--json", "--state-root", stateRoot}, &testCrawler{}, opts)
+			code, stdout, stderr := runForTestAt(stateRoot, []string{tc.verbose, "sync", "--json"}, &testCrawler{}, opts)
 			if code != 0 {
 				t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 			}
@@ -1949,6 +2175,8 @@ func TestRunnerChildHelper(t *testing.T) {
 	args := argsAfterDoubleDash(os.Args)
 	includeArchived := false
 	backupRepo := ""
+	declaredBespokeStateRoot := ""
+	declaredSyncStateRoot := ""
 	verbs := []Verb{
 		{
 			Name:    "archive import",
@@ -1956,6 +2184,9 @@ func TestRunnerChildHelper(t *testing.T) {
 			Args:    []string{"PATH"},
 			Mutates: true,
 			Store:   childBespokeStoreAccess(),
+			Flags: func(fs *flag.FlagSet) {
+				fs.StringVar(&declaredBespokeStateRoot, "state-root", "", "crawler-owned state root")
+			},
 			Run: func(ctx context.Context, req *Request) error {
 				switch os.Getenv("CRAWLKIT_CHILD_MODE") {
 				case "bespoke_hold":
@@ -1971,6 +2202,13 @@ func TestRunnerChildHelper(t *testing.T) {
 					}
 					_, err := req.Out.Write([]byte("progressed\n"))
 					return err
+				case "declared_state_root_bespoke":
+					if err := writeDeclaredStateRootProof(req, "bespoke", declaredBespokeStateRoot); err != nil {
+						return err
+					}
+					req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
+					_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
+					return err
 				case "bespoke":
 					req.Progress(Progress{Phase: "import", Done: 1, Total: 1, Message: "imported archive"})
 					_, err := req.Out.Write([]byte("bespoke:" + strings.Join(req.Args, " ") + "\n"))
@@ -1985,6 +2223,7 @@ func TestRunnerChildHelper(t *testing.T) {
 			Flags: func(fs *flag.FlagSet) {
 				fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
 				fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+				fs.StringVar(&declaredSyncStateRoot, "state-root", "", "crawler-owned state root")
 			},
 		},
 	}
@@ -2036,6 +2275,31 @@ func TestRunnerChildHelper(t *testing.T) {
 				}
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced archived items"})
 				return &SyncReport{Added: 7}, nil
+			case "declared_state_root_sync":
+				if err := writeDeclaredStateRootProof(req, "sync", declaredSyncStateRoot); err != nil {
+					return nil, err
+				}
+				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced declared state root"})
+				return &SyncReport{Added: 13}, nil
+			case "env_wire":
+				expectedRoot := os.Getenv("CRAWLKIT_EXPECT_STATE_ROOT")
+				if expectedRoot == "" {
+					return nil, errors.New("missing expected state root")
+				}
+				if got := os.Getenv(childStateRootEnv); got != expectedRoot {
+					return nil, fmt.Errorf("%s = %q, want %q", childStateRootEnv, got, expectedRoot)
+				}
+				resolvedRoot := filepath.Dir(filepath.Dir(req.Paths.Archive))
+				if resolvedRoot != expectedRoot {
+					return nil, fmt.Errorf("resolved state root = %q, want %q", resolvedRoot, expectedRoot)
+				}
+				if req.Log == nil {
+					return nil, errors.New("missing child run log")
+				}
+				if got := os.Getenv(childRunIDEnv); got == "" || req.Log.RunID() != got {
+					return nil, fmt.Errorf("child run id = %q, env %s = %q", req.Log.RunID(), childRunIDEnv, got)
+				}
+				return &SyncReport{Added: 1}, nil
 			case "log_heartbeat":
 				for i := 0; i < 5; i++ {
 					if err := req.Log.Info("log_heartbeat", "iteration="+strconv.Itoa(i+1)); err != nil {
@@ -2113,7 +2377,8 @@ func TestRunnerLockParentHelper(t *testing.T) {
 	opts := childTestOptions(t, "lock_hold")
 	opts.watchdog = time.Hour
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_LOCK_MARKER="+args[1])
-	code := runner{opts: opts}.run([]string{"sync", "--json", "--state-root", args[0]}, []Crawler{&testCrawler{}})
+	opts.stateRoot = args[0]
+	code := runner{opts: opts}.run([]string{"sync", "--json"}, []Crawler{&testCrawler{}})
 	os.Exit(code)
 }
 
@@ -2128,10 +2393,11 @@ func TestRunnerStoreNoneLockParentHelper(t *testing.T) {
 	opts := childTestOptions(t, "store_none_lock_hold")
 	opts.watchdog = time.Hour
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_LOCK_MARKER="+args[1])
+	opts.stateRoot = args[0]
 	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
 		return errors.New("store none lock parent should re-exec before running handler")
 	})}
-	code := runner{opts: opts}.run([]string{"backup", "init", "--json", "--state-root", args[0]}, []Crawler{source})
+	code := runner{opts: opts}.run([]string{"backup", "init", "--json"}, []Crawler{source})
 	os.Exit(code)
 }
 
@@ -2209,6 +2475,15 @@ func killProcessAndWaitForLock(t *testing.T, pid int, base string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("run lock stayed held after killing child pid %d", pid)
+}
+
+func runForTestAt(stateRoot string, argv []string, source Crawler, opts runOptions) (int, string, string) {
+	return runSourcesForTestAt(stateRoot, argv, []Crawler{source}, opts)
+}
+
+func runSourcesForTestAt(stateRoot string, argv []string, sources []Crawler, opts runOptions) (int, string, string) {
+	opts.stateRoot = stateRoot
+	return runSourcesForTest(argv, sources, opts)
 }
 
 func runForTest(argv []string, source Crawler, opts runOptions) (int, string, string) {
@@ -2290,6 +2565,45 @@ func childBespokeStoreAccess() StoreAccess {
 	}
 }
 
+func writeDeclaredStateRootProof(req *Request, mode, declaredStateRoot string) error {
+	expectedRoot := os.Getenv("CRAWLKIT_EXPECT_STATE_ROOT")
+	if expectedRoot == "" {
+		return errors.New("missing expected state root")
+	}
+	expectedDeclared := os.Getenv("CRAWLKIT_EXPECT_DECLARED_STATE_ROOT")
+	if expectedDeclared == "" {
+		return errors.New("missing expected declared state root")
+	}
+	if declaredStateRoot != expectedDeclared {
+		return fmt.Errorf("declared state-root = %q, want %q", declaredStateRoot, expectedDeclared)
+	}
+	if got := os.Getenv(childStateRootEnv); got != expectedRoot {
+		return fmt.Errorf("%s = %q, want %q", childStateRootEnv, got, expectedRoot)
+	}
+	resolvedRoot := filepath.Dir(filepath.Dir(req.Paths.Archive))
+	if resolvedRoot != expectedRoot {
+		return fmt.Errorf("resolved state root = %q, want %q", resolvedRoot, expectedRoot)
+	}
+	if req.Log == nil {
+		return errors.New("missing child run log")
+	}
+	if got := os.Getenv(childRunIDEnv); got == "" || req.Log.RunID() != got {
+		return fmt.Errorf("child run id = %q, env %s = %q", req.Log.RunID(), childRunIDEnv, got)
+	}
+	proofPath := os.Getenv("CRAWLKIT_DECLARED_STATE_ROOT_PROOF")
+	if proofPath == "" {
+		return errors.New("missing declared state root proof path")
+	}
+	proof := strings.Join([]string{
+		"mode=" + mode,
+		"declared_state_root=" + declaredStateRoot,
+		"wire_state_root_matches_parent=true",
+		"request_state_root_matches_parent=true",
+		"child_run_id_matches_log=true",
+	}, "\n") + "\n"
+	return os.WriteFile(proofPath, []byte(proof), 0o600)
+}
+
 func childTestOptions(t *testing.T, mode string) runOptions {
 	t.Helper()
 	exe, err := os.Executable()
@@ -2306,6 +2620,24 @@ func childTestOptions(t *testing.T, mode string) runOptions {
 	}
 }
 
+func runWireForTest(t *testing.T, argv []string, source Crawler, opts runOptions) (int, childFrame, string) {
+	t.Helper()
+	var stdout, stderr bytes.Buffer
+	opts.stdout = &stdout
+	opts.stderr = &stderr
+	if opts.signalContext == nil {
+		opts.signalContext = func(ctx context.Context) (context.Context, context.CancelFunc) {
+			return ctx, func() {}
+		}
+	}
+	code := runner{opts: opts}.run(argv, []Crawler{source})
+	frame, err := readChildFrame(bufio.NewReader(bytes.NewReader(stdout.Bytes())))
+	if err != nil {
+		t.Fatalf("wire stdout frame err=%v stdout=%q stderr=%s", err, stdout.String(), stderr.String())
+	}
+	return code, frame, stderr.String()
+}
+
 func argsAfterDoubleDash(args []string) []string {
 	for i, arg := range args {
 		if arg == "--" {
@@ -2315,13 +2647,69 @@ func argsAfterDoubleDash(args []string) []string {
 	return nil
 }
 
-func argvHasStateRoot(argv []string, stateRoot string) bool {
-	for i := 0; i+1 < len(argv); i++ {
-		if argv[i] == "--state-root" && argv[i+1] == stateRoot {
+func setEnvForTest(t *testing.T, key, value string) {
+	t.Helper()
+	old, ok := os.LookupEnv(key)
+	if err := os.Setenv(key, value); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if ok {
+			_ = os.Setenv(key, old)
+			return
+		}
+		_ = os.Unsetenv(key)
+	})
+}
+
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	old, ok := os.LookupEnv(key)
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if ok {
+			_ = os.Setenv(key, old)
+		}
+	})
+}
+
+func commandHasFlag(command control.Command, name string) bool {
+	for _, flag := range command.Flags {
+		if flag.Name == name {
 			return true
 		}
 	}
 	return false
+}
+
+func readProofFile(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func assertProofLine(t *testing.T, proof, want string) {
+	t.Helper()
+	for _, line := range strings.Split(proof, "\n") {
+		if line == want {
+			return
+		}
+	}
+	t.Fatalf("proof missing %q:\n%s", want, proof)
+}
+
+func assertNoInternalFlagTokens(t *testing.T, text string) {
+	t.Helper()
+	for _, token := range []string{"--state-root", "--crawlkit-run-id"} {
+		if strings.Contains(text, token) {
+			t.Fatalf("output contains internal flag token %s:\n%s", token, text)
+		}
+	}
 }
 
 func containsString(values []string, want string) bool {

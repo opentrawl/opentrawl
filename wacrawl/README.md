@@ -96,7 +96,7 @@ Set the WhatsApp source path in `~/.opentrawl/wacrawl/config.toml`:
 source = "~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared"
 ```
 
-Use `--state-root PATH` when you want a separate archive root for testing.
+Use a temporary `HOME` when you want a separate test archive.
 
 ## Safety
 
@@ -304,12 +304,15 @@ wacrawl backup push --no-push
 # Create a named checkpoint while pushing a backup.
 wacrawl backup push --tag snapshot/before-phone-migration
 
-# Restore into a throwaway state root for testing.
-wacrawl --state-root /tmp/wacrawl-restore-test backup pull
-wacrawl --state-root /tmp/wacrawl-restore-test status
+# Restore into a temporary home for testing.
+backup_repo="$HOME/Projects/backup-wacrawl"
+backup_identity="$HOME/.opentrawl/wacrawl/age.key"
+test_home="$(mktemp -d)"
+HOME="$test_home" wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" wacrawl status
 
 # Restore a historical tag, commit, or branch without changing the backup checkout.
-wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
+wacrawl backup pull --ref snapshot/before-phone-migration
 ```
 
 You should not need to run `git` manually for normal use. `backup push` handles
@@ -469,7 +472,7 @@ database unless `--no-media` is set.
 Restore a historical tag, commit, or branch with `--ref`:
 
 ```bash
-wacrawl --state-root /tmp/wacrawl-history backup pull --ref snapshot/before-phone-migration
+wacrawl backup pull --ref snapshot/before-phone-migration
 ```
 
 Historical restore resolves the ref to a commit and reads its manifest and
@@ -479,8 +482,11 @@ change the backup repository's current branch.
 To test a restore without touching your real archive:
 
 ```bash
-wacrawl --state-root /tmp/wacrawl-restore-test backup pull
-wacrawl --state-root /tmp/wacrawl-restore-test status
+backup_repo="$HOME/Projects/backup-wacrawl"
+backup_identity="$HOME/.opentrawl/wacrawl/age.key"
+test_home="$(mktemp -d)"
+HOME="$test_home" wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" wacrawl status
 ```
 
 ### Status
@@ -569,7 +575,6 @@ backup repository; the archive data is already encrypted before the push.
 
 ```text
 --json             Emit JSON instead of human-readable output.
---state-root PATH  Use a different state root.
 -v, --verbose      Stream log lines to stderr.
 -vv                Stream debug log lines to stderr.
 --version          Print the CLI version.
