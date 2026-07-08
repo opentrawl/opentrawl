@@ -15,7 +15,9 @@ Which asset where:
 - app icon (pre-Tahoe): `exports/icns/OpenTrawl.icns`
 - menu bar: `exports/menubar/template-*.png` (or `src/glyph-menubar.svg`)
 - website: `exports/web/` — favicons, touch icon, `mark.svg`, lockups
-- social: `exports/social/` — X banner 1500x500, avatar (400 for upload)
+- social: `exports/social/` — X banner 1500x500, avatar (400 for upload);
+  `avatar-glass.jpg` (1024, white background) is the system-rendered Liquid
+  Glass tile for GitHub and anywhere else that wants the "real app icon" look
 - video and print: `src/lockup.svg` (light or dark ink), or `src/mark.svg` alone
 
 Rules, learned the hard way — do not relitigate without a strong reason:
@@ -77,6 +79,12 @@ Known caveat: ictool previews ignore `fill-specializations`, so its Dark
 export shows an auto-darkened tile. The real system renderer reads the pin
 from the compiled Assets.car. Verify in a live dock once the Mac app ships
 the icon.
+
+Regenerate `exports/social/avatar-glass.jpg` (the glass tile as a flat image):
+export the Default rendition with ictool at 1024, composite onto white
+(headless Chrome over a plain white page works), convert to JPEG with
+`sips -s format jpeg -s formatOptions 92`. The transparent ictool PNG is
+not committed (over the repo's 1MB binary limit).
 
 Ship in an app bundle: `Assets.car` into `Contents/Resources`, set
 `CFBundleIconName` to `OpenTrawl`, keep `OpenTrawl.icns` alongside with
