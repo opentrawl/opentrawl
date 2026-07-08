@@ -96,27 +96,25 @@ type Verb struct {
 	Args    []string
 	Flags   func(fs *flag.FlagSet)
 	Mutates bool
-	// Store declares archive access for bespoke verbs. StoreDefault keeps
-	// the Mutates-based default.
+	// Store declares archive access. StoreDefault keeps the runner default.
 	Store   StoreAccess
 	Timeout time.Duration
 	Run     func(ctx context.Context, req *Request) error
 }
 
-// StoreAccess declares how a bespoke verb opens the archive store.
+// StoreAccess declares how a verb opens the archive store.
 type StoreAccess int
 
 const (
-	// StoreDefault maps non-mutating verbs to a required read-only store
-	// and mutating verbs to a required read-write store.
+	// StoreDefault keeps the verb's runner default.
 	StoreDefault StoreAccess = iota
 	// StoreNone runs without opening or creating an archive.
 	StoreNone
 	// StoreOptional opens the archive read-only when it exists. It is only
 	// valid on non-mutating verbs.
 	StoreOptional
-	// StoreRequired opens the archive, read-only for non-mutating verbs and
-	// read-write for mutating verbs.
+	// StoreRequired opens a bespoke verb's archive, read-only for
+	// non-mutating verbs and read-write for mutating verbs.
 	StoreRequired
 )
 

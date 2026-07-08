@@ -250,13 +250,15 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeNone}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "status", "doctor":
 		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeOptional}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "sync":
 		if _, ok := source.(Syncer); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support sync")}
@@ -265,7 +267,8 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, mutates: true, spine: spineDeclaration(spine, name), storeMode: storeWrite}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, mutates: true, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "search":
 		if _, ok := source.(Searcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support search")}
@@ -274,7 +277,8 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "open":
 		if _, ok := source.(Opener); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support open")}
@@ -283,7 +287,8 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "who":
 		if _, ok := source.(WhoMatcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support who")}
@@ -292,7 +297,8 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "contacts_export":
 		if _, ok := source.(ContactExporter); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support contacts export")}
@@ -301,7 +307,8 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if err != nil {
 			return targetVerb{}, err
 		}
-		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeRead}, nil
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	}
 	for _, verb := range source.Verbs() {
 		if matched, verbRest := matchBespokeVerb(verb, args); matched {

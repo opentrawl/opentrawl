@@ -92,6 +92,9 @@ func validateSpineVerb(key string, verb Verb, decls map[string]Verb, supportErr 
 	if collisions := spineFlagCollisions(key, declaredFlagNames(verb)); len(collisions) > 0 {
 		return spineFlagCollisionVerbError(key, collisions)
 	}
+	if err := validateSpineVerbStore(key, verb.Store); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -104,8 +107,15 @@ func unsupportedSpineVerbError(source Crawler, key string) error {
 
 func invalidSpineVerbFieldsError(key string, fields []string) spineVerbError {
 	return spineVerbError{
-		message: fmt.Sprintf("invalid %s Verb declaration: spine verb declarations may only set Name and Flags", key),
+		message: fmt.Sprintf("invalid %s Verb declaration: spine verb declarations may only set Name, Flags, and Store", key),
 		remedy:  fmt.Sprintf("Remove %s from the %s Verb declaration.", humanList(fields), key),
+	}
+}
+
+func invalidSpineVerbStoreError(key string, declared StoreAccess) spineVerbError {
+	return spineVerbError{
+		message: fmt.Sprintf("invalid %s Verb declaration: %s does not narrow default %s", key, storeAccessName(declared), storeModeGoName(spineDefaultStoreMode(key))),
+		remedy:  spineVerbStoreRemedy(key),
 	}
 }
 
@@ -147,9 +157,6 @@ func invalidSpineVerbFields(verb Verb) []string {
 	if verb.Mutates {
 		fields = append(fields, "Mutates")
 	}
-	if verb.Store != StoreDefault {
-		fields = append(fields, "Store")
-	}
 	if verb.Timeout != 0 {
 		fields = append(fields, "Timeout")
 	}
@@ -185,6 +192,65 @@ func unsupportedSpineInterface(source Crawler, key string) string {
 		}
 	}
 	return ""
+}
+
+func validateSpineVerbStore(key string, declared StoreAccess) error {
+	if declared == StoreDefault {
+		return nil
+	}
+	switch spineDefaultStoreMode(key) {
+	case storeRead:
+		if declared == StoreNone || declared == StoreOptional {
+			return nil
+		}
+	case storeOptional:
+		if declared == StoreNone {
+			return nil
+		}
+	}
+	return invalidSpineVerbStoreError(key, declared)
+}
+
+func spineStoreMode(key string, verb *Verb) storeMode {
+	if verb == nil || verb.Store == StoreDefault {
+		return spineDefaultStoreMode(key)
+	}
+	switch verb.Store {
+	case StoreNone:
+		return storeNone
+	case StoreOptional:
+		return storeOptional
+	default:
+		return spineDefaultStoreMode(key)
+	}
+}
+
+func spineDefaultStoreMode(key string) storeMode {
+	switch key {
+	case "metadata":
+		return storeNone
+	case "status", "doctor":
+		return storeOptional
+	case "sync":
+		return storeWrite
+	case "search", "open", "who", "contacts_export":
+		return storeRead
+	default:
+		return storeRead
+	}
+}
+
+func spineVerbStoreRemedy(key string) string {
+	switch spineDefaultStoreMode(key) {
+	case storeRead:
+		return fmt.Sprintf("Remove Store from the %s Verb declaration, or set Store to StoreNone or StoreOptional.", key)
+	case storeOptional:
+		return fmt.Sprintf("Remove Store from the %s Verb declaration, or set Store to StoreNone.", key)
+	case storeWrite:
+		return fmt.Sprintf("Remove Store from the %s Verb declaration; %s always uses default storeWrite.", key, key)
+	default:
+		return fmt.Sprintf("Remove Store from the %s Verb declaration.", key)
+	}
 }
 
 func declaredFlagNames(verb Verb) []string {
