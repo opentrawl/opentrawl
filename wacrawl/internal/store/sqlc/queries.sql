@@ -80,39 +80,6 @@ select
 from contacts
 order by jid;
 
--- name: ExportChats :many
-select
-	jid,
-	kind,
-	coalesce(name, '') as name,
-	coalesce(last_message_at, 0) as last_message_at,
-	unread_count,
-	archived,
-	removed,
-	hidden,
-	raw_session_type
-from chats
-order by jid;
-
--- name: ExportGroups :many
-select
-	jid,
-	coalesce(name, '') as name,
-	coalesce(owner_jid, '') as owner_jid,
-	coalesce(created_at, 0) as created_at
-from groups
-order by jid;
-
--- name: ExportParticipants :many
-select
-	group_jid,
-	user_jid,
-	coalesce(contact_name, '') as contact_name,
-	is_admin,
-	is_active
-from group_participants
-order by group_jid, user_jid;
-
 -- name: DeleteMessagesFTS :exec
 delete from messages_fts;
 

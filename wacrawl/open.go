@@ -57,7 +57,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
 		if errorsIsNoRows(err) {
-			return commandErr(1, "not_found", "message was not found", "run wacrawl search again and pass one of its refs")
+			return commandErr(1, "not_found", "message was not found", "run trawl wacrawl search again and pass one of its refs")
 		}
 		return err
 	}
@@ -90,22 +90,22 @@ func resolveOpenMessageID(ctx context.Context, st *store.Store, ref string) (str
 	case 1:
 		return parseMessageRef(fullRefs[0])
 	default:
-		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun wacrawl search or use the full ref")
+		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl wacrawl search or use the full ref")
 	}
 }
 
 func unknownShortRefError() error {
-	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from wacrawl search")
+	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from trawl wacrawl search")
 }
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", commandErr(1, "foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by wacrawl search")
+		return "", commandErr(1, "foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by trawl wacrawl search")
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", commandErr(1, "invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by wacrawl search")
+		return "", commandErr(1, "invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by trawl wacrawl search")
 	}
 	return messageID, nil
 }

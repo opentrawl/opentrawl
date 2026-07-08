@@ -32,7 +32,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	}
 	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
 	if errors.Is(err, store.ErrMessageNotFound) {
-		return r.contractError("not_found", "message was not found in this archive", "Run telecrawl search --json again and use one of the returned refs.")
+		return r.contractError("not_found", "message was not found in this archive", "Run trawl telecrawl search --json again and use one of the returned refs.")
 	}
 	if err != nil {
 		return err
@@ -49,22 +49,22 @@ func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, err
 	if strings.Contains(ref, ":") {
 		sourcePK, err := parseMessageRef(ref)
 		if err != nil {
-			return 0, r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by telecrawl search --json, such as telecrawl:msg/<id>.")
+			return 0, r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by trawl telecrawl search --json, such as telecrawl:msg/<id>.")
 		}
 		return sourcePK, nil
 	}
 	fullRefs, err := st.ResolveShortRef(r.ctx, ref)
 	if errors.Is(err, store.ErrUnknownShortRef) {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run telecrawl search and copy the displayed short ref, or use a full ref from telecrawl search --json.")
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run trawl telecrawl search and copy the displayed short ref, or use a full ref from trawl telecrawl search --json.")
 	}
 	if errors.Is(err, store.ErrAmbiguousShortRef) {
-		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "Run telecrawl search again and use the longer displayed ref or the full ref from telecrawl search --json.")
+		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "Run trawl telecrawl search again and use the longer displayed ref or the full ref from trawl telecrawl search --json.")
 	}
 	if err != nil {
 		return 0, err
 	}
 	if len(fullRefs) != 1 {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run telecrawl search and copy the displayed short ref, or use a full ref from telecrawl search --json.")
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run trawl telecrawl search and copy the displayed short ref, or use a full ref from trawl telecrawl search --json.")
 	}
 	sourcePK, err := parseMessageRef(fullRefs[0])
 	if err != nil {
@@ -108,7 +108,7 @@ func (r *runtime) printOpen(value openEnvelope) error {
 	}
 	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
 		chatID := value.Chat.Ref[strings.LastIndex(value.Chat.Ref, "/")+1:]
-		if _, err := fmt.Fprintf(r.stdout, "More: telecrawl messages --chat %s\n", chatID); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: trawl telecrawl messages --chat %s\n", chatID); err != nil {
 			return err
 		}
 	}

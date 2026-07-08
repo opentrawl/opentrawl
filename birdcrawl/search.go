@@ -18,7 +18,7 @@ func (r *runtime) runSearch(args []string) error {
 		return usageErr(err)
 	}
 	if strings.TrimSpace(filter.Query) == "" {
-		return usageErr(errors.New("search takes a query, e.g. birdcrawl search QUERY"))
+		return usageErr(errors.New("search takes a query, e.g. trawl birdcrawl search QUERY"))
 	}
 	return r.withReadOnlyStore(func(st *store.Store) error {
 		results, total, err := st.Search(r.ctx, filter)

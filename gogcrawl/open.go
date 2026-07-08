@@ -78,7 +78,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 	if value.BodyTruncated {
 		hints = append(hints, fmt.Sprintf("... %s more characters. Open the full message in Gmail.", commaInt(value.BodyElidedChars)))
 	}
-	hints = append(hints, "JSON: gogcrawl open REF --json for the full record.")
+	hints = append(hints, "JSON: trawl gogcrawl open REF --json for the full record.")
 	return render.WriteCard(w, render.Card{
 		Title: title,
 		Fields: []render.CardField{

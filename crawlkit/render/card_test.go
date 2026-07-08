@@ -18,8 +18,8 @@ func TestWriteCardWithBodyAndHints(t *testing.T) {
 		},
 		Body: "Body text wraps cleanly across the card body for detail views.",
 		Hints: []string{
-			"Search: examplecrawl search QUERY",
-			"Open: examplecrawl open c4",
+			"Search: trawl examplecrawl search QUERY",
+			"Open: trawl examplecrawl open c4",
 		},
 	})
 	if err != nil {
@@ -34,8 +34,8 @@ func TestWriteCardWithBodyAndHints(t *testing.T) {
 		"Body text wraps cleanly across the card body",
 		"for detail views.",
 		"",
-		"Search: examplecrawl search QUERY",
-		"Open: examplecrawl open c4",
+		"Search: trawl examplecrawl search QUERY",
+		"Open: trawl examplecrawl open c4",
 		"",
 	}, "\n")
 	assertGolden(t, buf.String(), want)

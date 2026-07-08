@@ -11,7 +11,6 @@ See `AGENTS.md` for the ownership boundary.
 
 ## Packages
 
-- `backup`: age-encrypted JSONL/Gzip shards, backup manifests, recipient/identity helpers, history listing, and historical-ref restore verification.
 - `cache`: safe read-only local cache and SQLite DB/WAL/SHM snapshot helpers.
 - `config`: standard TOML config paths, opt-in platform-native runtime dirs,
   migration-safe legacy path fallback, and token diagnostics.

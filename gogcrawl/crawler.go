@@ -244,18 +244,18 @@ func (c *Crawler) checkGogAuth(ctx context.Context) crawlkit.Check {
 
 func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 	if req.Store == nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database has not been synced", Remedy: "run gogcrawl sync"}
+		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database has not been synced", Remedy: "run trawl gogcrawl sync"}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		remedy := "run gogcrawl sync to rebuild the archive"
+		remedy := "run trawl gogcrawl sync to rebuild the archive"
 		if errors.Is(err, archive.ErrSchemaMismatch) {
-			remedy = "remove the old archive and run gogcrawl sync"
+			remedy = "remove the old archive and run trawl gogcrawl sync"
 		}
 		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: remedy}
 	}
 	if _, err := st.Status(ctx); err != nil {
-		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run gogcrawl sync to rebuild the archive"}
+		return crawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl gogcrawl sync to rebuild the archive"}
 	}
 	return crawlkit.Check{ID: "archive", State: "ok"}
 }

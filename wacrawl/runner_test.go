@@ -4,17 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/wacrawl/internal/backup"
 	wastore "github.com/openclaw/wacrawl/internal/store"
 )
 
@@ -23,48 +20,6 @@ func TestMain(m *testing.M) {
 		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
-}
-
-func TestRunBackupStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
-	ctx := context.Background()
-	setGitIdentity(t)
-	stateRoot := stateRootForRun(t)
-	archivePath := filepath.Join(stateRoot, "wacrawl", "wacrawl.db")
-
-	cfg := seedBackupConfig(t, ctx)
-	writeConfig(t, stateRoot, Config{Backup: cfg})
-
-	code, stdout, stderr := captureRun(t, []string{"backup", "init", "--no-push", "--json"}, New())
-	if code != 0 || !strings.Contains(stdout, `"recipient"`) {
-		t.Fatalf("backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	assertNoArchive(t, archivePath, "backup init")
-
-	code, stdout, stderr = captureRun(t, []string{"status", "--json"}, New())
-	if code != 0 {
-		t.Fatalf("status after backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var status control.Status
-	if err := json.Unmarshal([]byte(stdout), &status); err != nil {
-		t.Fatalf("status JSON: %v\n%s", err, stdout)
-	}
-	if status.State != "missing" {
-		t.Fatalf("status state after backup init = %q, want missing\n%s", status.State, stdout)
-	}
-	assertNoArchive(t, archivePath, "status after backup init")
-
-	code, stdout, stderr = captureRun(t, []string{"backup", "status", "--json"}, New())
-	if code != 0 || !strings.Contains(stdout, `"manifest"`) {
-		t.Fatalf("backup status code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	assertNoArchive(t, archivePath, "backup status")
-
-	code, stdout, stderr = captureRun(t, []string{"backup", "snapshots", "--json"}, New())
-	if code != 0 || !strings.Contains(stdout, `"snapshots"`) {
-		t.Fatalf("backup snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	assertNoArchive(t, archivePath, "backup snapshots")
-	t.Logf("archive_exists_after_backup_store_none=false archive_path=%s", archivePath)
 }
 
 func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
@@ -128,88 +83,6 @@ func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("ambiguous text missing %q:\n%s", want, stderr)
 		}
-	}
-}
-
-func seedBackupConfig(t *testing.T, ctx context.Context) backup.Config {
-	t.Helper()
-	remote := filepath.Join(t.TempDir(), "remote.git")
-	runGit(t, "", "init", "--bare", remote)
-	repo := filepath.Join(t.TempDir(), "backup")
-	identity := filepath.Join(t.TempDir(), "age.key")
-	cfg, _, err := backup.Init(ctx, backup.Options{
-		Repo:       repo,
-		Remote:     remote,
-		Identity:   identity,
-		Push:       false,
-		SaveConfig: func(backup.Config) error { return nil },
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	source := openSyntheticBackupStore(t, ctx)
-	result, err := backup.Push(ctx, source, backup.Options{Config: cfg, Push: false})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result.Messages != 1 {
-		t.Fatalf("seed backup result = %+v", result)
-	}
-	return cfg
-}
-
-func openSyntheticBackupStore(t *testing.T, ctx context.Context) *wastore.Store {
-	t.Helper()
-	st, err := wastore.Open(ctx, filepath.Join(t.TempDir(), "seed.db"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
-	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
-	err = st.ReplaceAll(
-		ctx,
-		wastore.ImportStats{FinishedAt: now},
-		[]wastore.Contact{{JID: "alice@s.whatsapp.net", Phone: "+15550100", FullName: "Alice Example", UpdatedAt: now}},
-		[]wastore.Chat{{JID: "alice@s.whatsapp.net", Kind: "dm", Name: "Alice Example", LastMessageAt: now, MessageCount: 1}},
-		nil,
-		nil,
-		[]wastore.Message{{SourcePK: 1, ChatJID: "alice@s.whatsapp.net", ChatName: "Alice Example", MessageID: "seed", SenderJID: "alice@s.whatsapp.net", SenderName: "Alice Example", Timestamp: now, Text: "seed message", RawType: 0, MessageType: "text"}},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return st
-}
-
-func writeConfig(t *testing.T, stateRoot string, cfg Config) {
-	t.Helper()
-	if err := config.WriteTOML(filepath.Join(stateRoot, "wacrawl", "config.toml"), cfg, 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func setGitIdentity(t *testing.T) {
-	t.Helper()
-	t.Setenv("GIT_AUTHOR_NAME", "OpenTrawl Test")
-	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "OpenTrawl Test")
-	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...) // #nosec G204 -- tests pass fixed Git commands and temporary paths.
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
-	}
-}
-
-func assertNoArchive(t *testing.T, archivePath, step string) {
-	t.Helper()
-	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Fatalf("%s created archive: err=%v path=%s", step, err, archivePath)
 	}
 }
 

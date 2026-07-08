@@ -8,7 +8,6 @@ import (
 
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
@@ -26,61 +25,19 @@ func (r *runtime) printManifest(value control.Manifest) error {
 			{Label: "Database", Value: value.Paths.DefaultDatabase},
 			{Label: "Logs", Value: value.Paths.DefaultLogs},
 		},
-		Hints: []string{"JSON: telecrawl metadata --json"},
+		Hints: []string{"JSON: trawl telecrawl metadata --json"},
 	})
-}
-
-func (r *runtime) printBackupInit(value backupInitOutput) error {
-	return render.WriteCard(r.stdout, render.Card{
-		Title: "Backup initialised",
-		Fields: []render.CardField{
-			{Label: "Repo", Value: value.Repo},
-			{Label: "Remote", Value: value.Remote},
-			{Label: "Identity", Value: value.Identity},
-			{Label: "Recipient", Value: value.Recipient},
-		},
-	})
-}
-
-func (r *runtime) printBackupStatus(value backupStatusOutput) error {
-	return render.WriteCard(r.stdout, render.Card{
-		Title: "Backup status",
-		Fields: []render.CardField{
-			{Label: "Repo", Value: value.Repo},
-			{Label: "Exported", Value: shortLocalTime(value.Manifest.Exported)},
-			{Label: "Encrypted", Value: strconv.FormatBool(value.Manifest.Encrypted)},
-			{Label: "Messages", Value: strconv.Itoa(value.Manifest.Counts.Messages)},
-			{Label: "Shards", Value: strconv.Itoa(len(value.Manifest.Shards))},
-		},
-	})
-}
-
-func (r *runtime) printBackupResult(value backup.Result) error {
-	fields := []render.CardField{
-		{Label: "Repo", Value: value.Repo},
-		{Label: "Changed", Value: strconv.FormatBool(value.Changed)},
-		{Label: "Encrypted", Value: strconv.FormatBool(value.Encrypted)},
-		{Label: "Messages", Value: strconv.Itoa(value.Messages)},
-		{Label: "Shards", Value: strconv.Itoa(value.Shards)},
-	}
-	if value.Ref != "" {
-		fields = append(fields, render.CardField{Label: "Ref", Value: value.Ref})
-	}
-	if value.Tag != "" {
-		fields = append(fields, render.CardField{Label: "Tag", Value: value.Tag})
-	}
-	return render.WriteCard(r.stdout, render.Card{Title: "Backup result", Fields: fields})
 }
 
 func (r *runtime) printChats(value chatsEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "Chats: showing %s of %s, newest first.\n", groupDigits(len(value.Chats)), groupDigits(value.Total)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Messages: telecrawl messages --chat ID"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout, "Messages: trawl telecrawl messages --chat ID"); err != nil {
 		return err
 	}
 	if value.Total > len(value.Chats) {
-		if _, err := fmt.Fprintln(r.stdout, "All: telecrawl chats --all"); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "All: trawl telecrawl chats --all"); err != nil {
 			return err
 		}
 	}
@@ -121,7 +78,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 		return err
 	}
 	if value.Total > len(value.Topics) {
-		if _, err := fmt.Fprintf(r.stdout, "All: telecrawl topics --chat %s --all\n", value.ChatID); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "All: trawl telecrawl topics --chat %s --all\n", value.ChatID); err != nil {
 			return err
 		}
 	}
@@ -146,9 +103,9 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 }
 
 func (r *runtime) printMessages(value messagesEnvelope) error {
-	hints := []string{"Open: telecrawl open REF"}
+	hints := []string{"Open: trawl telecrawl open REF"}
 	if value.Total > len(value.Messages) {
-		hints = append(hints, "Narrow: telecrawl messages --chat ID --after DATE --before DATE", "All: telecrawl messages --all")
+		hints = append(hints, "Narrow: trawl telecrawl messages --chat ID --after DATE --before DATE", "All: trawl telecrawl messages --all")
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Messages: showing %s of %s, newest first.", groupDigits(len(value.Messages)), groupDigits(value.Total)),
@@ -168,7 +125,7 @@ func (r *runtime) printContacts(value contactsEnvelope) error {
 		return err
 	}
 	if value.Total > len(value.Contacts) {
-		if _, err := fmt.Fprintln(r.stdout, "All: telecrawl contacts --all"); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "All: trawl telecrawl contacts --all"); err != nil {
 			return err
 		}
 	}

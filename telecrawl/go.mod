@@ -5,7 +5,6 @@ go 1.26.4
 replace github.com/openclaw/crawlkit => ../crawlkit
 
 require (
-	filippo.io/age v1.3.1
 	github.com/mattn/go-sqlite3 v1.14.47
 	modernc.org/sqlite v1.53.0
 )
@@ -57,7 +56,6 @@ require (
 )
 
 require (
-	filippo.io/hpke v0.4.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect

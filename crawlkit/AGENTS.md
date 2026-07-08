@@ -5,8 +5,8 @@ mechanics that make each crawler smaller and more uniform.
 
 The boundary rule: code moves into `crawlkit` only when it is provider
 neutral and at least two crawlers use it. It owns config paths, SQLite
-hygiene, backup/snapshot shards, git mirror mechanics, sync state, output
-and render helpers, control/status metadata, and safe read-only cache
+hygiene, snapshot helpers, git mirror mechanics, sync state, output and
+render helpers, control/status metadata, and safe read-only cache
 snapshots. It does not own provider API clients, auth flows, app database
 schemas, provider cache parsing, app FTS bodies or ranking, or app CLI
 command contracts — those stay in the crawlers.

@@ -53,7 +53,7 @@ surfaces (`search`, `open`) in the contract, bounded and paginated
 output rules, the secrets rule (booleans and expiry only), human-shaped
 output rules (real timestamps, human names, semantically meaningful
 field names), error and progress shapes, and anything that enforces
-conformance — today every crawler drifts its own way (different flag
+contract compliance — today every crawler drifts its own way (different flag
 grammars, missing metadata, unbounded dumps).
 
 - design the full `trawl` CLI surface first, to
@@ -69,9 +69,9 @@ grammars, missing metadata, unbounded dumps).
 - define the golden-path bar as a checklist derived from the crawler
   quality rubric and the imsgcrawl evaluation, so "done" is mechanical
   per crawler.
-- build a conformance harness: point it at any crawler binary and it
-  verifies the contract (shapes, bounds, secret leaks, empty and corrupt
-  archive behaviour). This is what makes the plugin story real.
+- build contract checks that verify the shared shapes, bounds, secret
+  leaks, and empty and corrupt archive behaviour. This is what makes the
+  plugin story real.
 - solve macOS TCC (privacy permissions) holistically before the
   architecture hardens. Crawlers read TCC-protected stores (Messages,
   Notes, Photos), so decide once who holds Full Disk Access — the Mac
@@ -84,7 +84,7 @@ grammars, missing metadata, unbounded dumps).
 
 ## Phase 2: per-crawler hardening to the bar
 
-Goal: every v1 crawler passes the conformance harness and shows up
+Goal: every v1 crawler passes the contract checks and shows up
 correctly in `trawl`. Highly parallel.
 
 | crawler | state | main gaps |
@@ -126,7 +126,7 @@ acceptance gate for everything: Josh reviews smoke results, not diffs.
 Mechanics: `scripts/smoke` lives in the repo and is generic (no
 personal data in the script or in anything committed); its output is a
 local-only report for Josh. Runs after every substantial change; the
-conformance harness checks the contract, the smoke suite checks
+contract checks cover the shared shapes, the smoke suite checks
 reality.
 
 ## Phase 3: full federation
@@ -198,6 +198,6 @@ glance. No settings maze.
 - all prose (docs, PRs, commits) follows plain-language style. Code must
   read as self-documenting or it does not merge.
 - verification over assertion: a crawler change is done when the
-  conformance harness passes against a real archive AND a
+  contract checks pass against a real archive AND a
   non-authoring model review of raw output transcripts passes the
   blind-person bar — not when it builds.

@@ -49,12 +49,14 @@ the CLI and the app. See [docs/contract.md](docs/contract.md).
 | iMessage | imsgcrawl | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
 | Telegram | telecrawl | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
 | WhatsApp | wacrawl | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
+| X/Twitter | birdcrawl | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
+| Gmail | gogcrawl | [openclaw/gogcrawl](https://github.com/openclaw/gogcrawl) |
+| Calendar | calcrawl | [openclaw/calcrawl](https://github.com/openclaw/calcrawl) |
 | Contacts | clawdex | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
 | Apple Photos | photoscrawl | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
 | shared substrate | crawlkit | [openclaw/crawlkit](https://github.com/openclaw/crawlkit) |
 
-Gmail, Calendar, Apple Notes and Signal are in progress — see the
-[roadmap](docs/roadmap.md).
+Apple Notes and Signal are in progress — see the [roadmap](docs/roadmap.md).
 
 ## Status
 

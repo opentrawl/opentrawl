@@ -30,9 +30,9 @@ func (r *runtime) doctor(ctx context.Context) (*crawlkit.Doctor, error) {
 		return nil
 	})
 	if err != nil {
-		integrityMessage, indexMessage, remedy := "archive database cannot be opened", "search index cannot be checked", "Run birdcrawl import archive PATH."
+		integrityMessage, indexMessage, remedy := "archive database cannot be opened", "search index cannot be checked", "Run trawl birdcrawl import archive PATH."
 		if errors.Is(err, store.ErrSchemaOutdated) {
-			integrityMessage, indexMessage, remedy = "archive schema needs one sync to finish upgrading", "search index cannot be checked until the archive upgrades", "Run birdcrawl sync."
+			integrityMessage, indexMessage, remedy = "archive schema needs one sync to finish upgrading", "search index cannot be checked until the archive upgrades", "Run trawl birdcrawl sync."
 		}
 		checks = append(checks, doctorCheck{
 			ID:      "database_integrity",
@@ -58,7 +58,7 @@ func (r *runtime) doctor(ctx context.Context) (*crawlkit.Doctor, error) {
 func (r *runtime) dbIntegrityCheck(st *store.Store) doctorCheck {
 	result, err := st.Integrity(r.ctx)
 	if err != nil || result != "ok" {
-		return doctorCheck{ID: "database_integrity", State: "fail", Message: "database integrity check failed", Remedy: "Restore the archive from backup or re-run birdcrawl import archive PATH."}
+		return doctorCheck{ID: "database_integrity", State: "fail", Message: "database integrity check failed", Remedy: "Restore the archive from backup or re-run trawl birdcrawl import archive PATH."}
 	}
 	return doctorCheck{ID: "database_integrity", State: "ok", Message: "database integrity check passed"}
 }
@@ -66,27 +66,27 @@ func (r *runtime) dbIntegrityCheck(st *store.Store) doctorCheck {
 func (r *runtime) ftsParityCheck(st *store.Store) doctorCheck {
 	tweets, fts, err := st.FTSParity(r.ctx)
 	if err != nil {
-		return doctorCheck{ID: "search_index", State: "fail", Message: "search index cannot be read", Remedy: "Re-run birdcrawl import archive PATH to rebuild derived search state."}
+		return doctorCheck{ID: "search_index", State: "fail", Message: "search index cannot be read", Remedy: "Re-run trawl birdcrawl import archive PATH to rebuild derived search state."}
 	}
 	if tweets != fts {
-		return doctorCheck{ID: "search_index", State: "fail", Message: "search index does not cover every tweet", Remedy: "Re-run birdcrawl import archive PATH to rebuild derived search state."}
+		return doctorCheck{ID: "search_index", State: "fail", Message: "search index does not cover every tweet", Remedy: "Re-run trawl birdcrawl import archive PATH to rebuild derived search state."}
 	}
 	return doctorCheck{ID: "search_index", State: "ok", Message: "search index covers every tweet"}
 }
 
 func dumpImportedCheck(status store.Status) doctorCheck {
 	if status.LastImportAt.IsZero() {
-		return doctorCheck{ID: "dump_imported", State: "missing", Message: "no X archive dump has been imported", Remedy: "Run birdcrawl import archive PATH."}
+		return doctorCheck{ID: "dump_imported", State: "missing", Message: "no X archive dump has been imported", Remedy: "Run trawl birdcrawl import archive PATH."}
 	}
 	return doctorCheck{ID: "dump_imported", State: "ok", Message: "X archive dump has been imported"}
 }
 
 func stalenessCheck(status store.Status) doctorCheck {
 	if status.Tweets == 0 {
-		return doctorCheck{ID: "sync_recency", State: "missing", Message: "archive is empty", Remedy: "Run birdcrawl import archive PATH."}
+		return doctorCheck{ID: "sync_recency", State: "missing", Message: "archive is empty", Remedy: "Run trawl birdcrawl import archive PATH."}
 	}
 	if status.LastLiveSync.IsZero() {
-		return doctorCheck{ID: "sync_recency", State: "stale", Message: "live X API sync has not run", Remedy: "Set up X API credentials and run birdcrawl sync."}
+		return doctorCheck{ID: "sync_recency", State: "stale", Message: "live X API sync has not run", Remedy: "Set up X API credentials and run trawl birdcrawl sync."}
 	}
 	return doctorCheck{ID: "sync_recency", State: "ok", Message: "live sync has run"}
 }
@@ -119,7 +119,7 @@ func (r *runtime) xAPIUserProbeCheck(cfg birdConfig, status store.Status) doctor
 	}
 	_, _, err = client.Me(r.ctx)
 	if err != nil {
-		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "X did not accept the account probe (the one networked check)", Remedy: "Refresh the OAuth credentials and re-run birdcrawl doctor."}
+		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "X did not accept the account probe (the one networked check)", Remedy: "Refresh the OAuth credentials and re-run trawl birdcrawl doctor."}
 	}
 	return doctorCheck{ID: "x_account_reachable", State: "ok", Message: "X account is reachable (the one networked check)"}
 }

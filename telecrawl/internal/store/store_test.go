@@ -89,135 +89,137 @@ insert into sync_state(key,value,updated_at) values('last_import_at','legacy',1)
 	}
 }
 
-func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
+func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	now := time.Date(2026, 5, 9, 3, 17, 53, 0, time.UTC)
-	data := SnapshotData{
-		Contacts: []Contact{{
-			JID:       "9",
-			PeerType:  "user",
-			Phone:     "+15551234567",
-			FullName:  "Peter Example",
-			FirstName: "Peter",
-			LastName:  "Example",
-			Username:  "peter",
-			UpdatedAt: now,
-		}},
-		Chats: []Chat{{
-			JID:           "-10042",
-			Kind:          "channel",
-			Name:          "coding",
-			LastMessageAt: now,
-			UnreadCount:   1,
-			MessageCount:  2,
-			FolderID:      "2",
-			Forum:         true,
-		}},
-		Folders: []Folder{{
-			ID:        "2",
-			Title:     "Clawd",
-			Emoticon:  "laptop",
-			Color:     3,
-			FlagsJSON: `{"groups":true}`,
-		}},
-		FolderChats: []FolderChat{{
-			FolderID: "2",
-			ChatJID:  "-10042",
-			Position: 0,
-		}},
-		Topics: []Topic{{
-			ChatJID:              "-10042",
-			TopicID:              "17",
-			Title:                "General",
-			TopMessageID:         "17",
-			IconColor:            0x6fb9f0,
-			UnreadCount:          1,
-			UnreadMentionsCount:  1,
-			UnreadReactionsCount: 1,
-			Pinned:               true,
-			LastMessageAt:        now,
-		}},
-		Participants: []GroupParticipant{{
-			GroupJID:    "-10042",
-			UserJID:     "9",
-			ContactName: "Peter Example",
-			FirstName:   "Peter",
-			IsActive:    true,
-		}},
-		Messages: []Message{{
-			SourcePK:      1,
-			ChatJID:       "-10042",
-			ChatName:      "coding",
-			MessageID:     "18",
-			TopicID:       "17",
-			ReplyToID:     "17",
-			ThreadID:      "17",
-			SenderJID:     "9",
-			SenderName:    "Peter",
-			Timestamp:     now,
-			EditTime:      now.Add(time.Minute),
-			Text:          "yo",
-			MessageType:   "Message",
-			MediaType:     "webpage",
-			MediaTitle:    "GitHub",
-			MediaSize:     123,
-			MetadataType:  "web_page",
-			MetadataTitle: "GitHub",
-			MetadataURL:   "https://github.com/openclaw/telecrawl",
-			MetadataJSON:  `{"url":"https://github.com/openclaw/telecrawl"}`,
-			ForwardJSON:   `{"from_name":"someone"}`,
-			ReactionsJSON: `{"results":[]}`,
-			Views:         10,
-			Forwards:      2,
-			RepliesCount:  3,
-			Pinned:        true,
-		}},
-	}
+	contacts := []Contact{{
+		JID:       "9",
+		PeerType:  "user",
+		Phone:     "+15551234567",
+		FullName:  "Peter Example",
+		FirstName: "Peter",
+		LastName:  "Example",
+		Username:  "peter",
+		UpdatedAt: now,
+	}}
+	chats := []Chat{{
+		JID:           "-10042",
+		Kind:          "channel",
+		Name:          "coding",
+		LastMessageAt: now,
+		UnreadCount:   1,
+		MessageCount:  2,
+		FolderID:      "2",
+		Forum:         true,
+	}}
+	folders := []Folder{{
+		ID:        "2",
+		Title:     "Clawd",
+		Emoticon:  "laptop",
+		Color:     3,
+		FlagsJSON: `{"groups":true}`,
+	}}
+	folderChats := []FolderChat{{
+		FolderID: "2",
+		ChatJID:  "-10042",
+		Position: 0,
+	}}
+	topics := []Topic{{
+		ChatJID:              "-10042",
+		TopicID:              "17",
+		Title:                "General",
+		TopMessageID:         "17",
+		IconColor:            0x6fb9f0,
+		UnreadCount:          1,
+		UnreadMentionsCount:  1,
+		UnreadReactionsCount: 1,
+		Pinned:               true,
+		LastMessageAt:        now,
+	}}
+	participants := []GroupParticipant{{
+		GroupJID:    "-10042",
+		UserJID:     "9",
+		ContactName: "Peter Example",
+		FirstName:   "Peter",
+		IsActive:    true,
+	}}
+	messages := []Message{{
+		SourcePK:      1,
+		ChatJID:       "-10042",
+		ChatName:      "coding",
+		MessageID:     "18",
+		TopicID:       "17",
+		ReplyToID:     "17",
+		ThreadID:      "17",
+		SenderJID:     "9",
+		SenderName:    "Peter",
+		Timestamp:     now,
+		EditTime:      now.Add(time.Minute),
+		Text:          "yo",
+		MessageType:   "Message",
+		MediaType:     "webpage",
+		MediaTitle:    "GitHub",
+		MediaSize:     123,
+		MetadataType:  "web_page",
+		MetadataTitle: "GitHub",
+		MetadataURL:   "https://github.com/openclaw/telecrawl",
+		MetadataJSON:  `{"url":"https://github.com/openclaw/telecrawl"}`,
+		ForwardJSON:   `{"from_name":"someone"}`,
+		ReactionsJSON: `{"results":[]}`,
+		Views:         10,
+		Forwards:      2,
+		RepliesCount:  3,
+		Pinned:        true,
+	}}
 
 	source := openTestStore(t, filepath.Join(t.TempDir(), "source.db"))
-	if err := source.ImportSnapshot(ctx, data, "tdata", now); err != nil {
+	stats := ImportStats{SourcePath: "tdata", DBPath: source.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
+	if err := source.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
 		t.Fatal(err)
 	}
-	exported, err := source.ExportAll(ctx)
+	storedFolders, err := source.ListFolders(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(exported.Folders); got != 1 {
+	if got := len(storedFolders); got != 1 {
 		t.Fatalf("folders = %d, want 1", got)
 	}
-	if got := len(exported.FolderChats); got != 1 {
-		t.Fatalf("folder chats = %d, want 1", got)
+	storedContacts, err := source.ListContacts(ctx, 10)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := len(exported.Topics); got != 1 {
-		t.Fatalf("topics = %d, want 1", got)
-	}
-	if got := len(exported.Contacts); got != 1 {
+	if got := len(storedContacts); got != 1 {
 		t.Fatalf("contacts = %d, want 1", got)
 	}
-	if got := len(exported.Participants); got != 1 {
-		t.Fatalf("participants = %d, want 1", got)
+	var storedParticipants int
+	if err := source.db.QueryRowContext(ctx, `select count(*) from group_participants`).Scan(&storedParticipants); err != nil {
+		t.Fatal(err)
+	}
+	if storedParticipants != 1 {
+		t.Fatalf("participants = %d, want 1", storedParticipants)
 	}
 
 	restored := openTestStore(t, filepath.Join(t.TempDir(), "restored.db"))
-	if err := restored.ImportSnapshot(ctx, exported, "backup", now); err != nil {
+	stats.DBPath = restored.Path()
+	if err := restored.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
 		t.Fatal(err)
 	}
-	chats, err := restored.ChatsInFolder(ctx, "2", 10)
+	chats, err = restored.ChatsInFolder(ctx, "2", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(chats) != 1 || chats[0].Name != "coding" || !chats[0].Forum {
 		t.Fatalf("folder chats = %#v", chats)
 	}
-	topics, err := restored.ListTopics(ctx, "-10042", 10)
+	topics, err = restored.ListTopics(ctx, "-10042", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(topics) != 1 || topics[0].TopicID != "17" || !topics[0].Pinned {
 		t.Fatalf("topics = %#v", topics)
 	}
-	messages, err := restored.Messages(ctx, MessageFilter{ChatJID: "-10042", TopicID: "17", Pinned: true, Limit: 10})
+	messages, err = restored.Messages(ctx, MessageFilter{ChatJID: "-10042", TopicID: "17", Pinned: true, Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,15 +230,20 @@ func TestSnapshotRoundTripPreservesTelegramStructure(t *testing.T) {
 	if msg.ReplyToID != "17" || msg.ReactionsJSON == "" || msg.ForwardJSON == "" || msg.Views != 10 || !msg.Pinned || msg.MetadataType != "web_page" || msg.MetadataURL == "" {
 		t.Fatalf("message metadata lost: %#v", msg)
 	}
-	restoredExport, err := restored.ExportAll(ctx)
+	restoredContacts, err := restored.ListContacts(ctx, 10)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(restoredExport.Contacts) != 1 || restoredExport.Contacts[0].Phone != "+15551234567" || restoredExport.Contacts[0].PeerType != "user" {
-		t.Fatalf("contact lost: %#v", restoredExport.Contacts)
+	if len(restoredContacts) != 1 || restoredContacts[0].Phone != "+15551234567" || restoredContacts[0].PeerType != "user" {
+		t.Fatalf("contact lost: %#v", restoredContacts)
 	}
-	if len(restoredExport.Participants) != 1 || restoredExport.Participants[0].UserJID != "9" || !restoredExport.Participants[0].IsActive {
-		t.Fatalf("participant lost: %#v", restoredExport.Participants)
+	var userJID string
+	var isActive int
+	if err := restored.db.QueryRowContext(ctx, `select user_jid,is_active from group_participants`).Scan(&userJID, &isActive); err != nil {
+		t.Fatal(err)
+	}
+	if userJID != "9" || isActive == 0 {
+		t.Fatalf("participant lost: user=%q active=%d", userJID, isActive)
 	}
 }
 

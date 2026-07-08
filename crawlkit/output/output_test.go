@@ -64,7 +64,7 @@ func TestWriteErrorContractEnvelope(t *testing.T) {
 	if err := WriteError(&buf, ErrorBody{
 		Code:    "usage",
 		Message: "search --limit must be between 1 and 200",
-		Remedy:  "run gogcrawl help",
+		Remedy:  "run trawl gogcrawl help",
 		Fields: map[string]any{
 			"candidates":      []string{},
 			"candidate_total": 0,

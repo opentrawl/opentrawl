@@ -434,10 +434,10 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 	}
 }
 
-func TestRunBespokeStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
+func TestRunBespokeStoreNoneFreshMaintenanceVerbsDoNotCreateArchive(t *testing.T) {
 	stateRoot := t.TempDir()
 	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
-	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+	source := &testCrawler{verbs: maintenanceFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
 		if req.Store != nil {
 			t.Fatalf("%s Store = %#v, want nil", name, req.Store)
 		}
@@ -445,21 +445,21 @@ func TestRunBespokeStoreNoneFreshBackupVerbsDoNotCreateArchive(t *testing.T) {
 		return err
 	})}
 
-	opts := childTestOptions(t, "backup_init")
-	code, stdout, stderr := runForTestAt(stateRoot, []string{"backup", "init", "--json"}, source, opts)
-	if code != 0 || !strings.Contains(stdout, "backup init store=nil") {
-		t.Fatalf("backup init code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	opts := childTestOptions(t, "maintenance_init")
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"maintenance", "init", "--json"}, source, opts)
+	if code != 0 || !strings.Contains(stdout, "maintenance init store=nil") {
+		t.Fatalf("maintenance init code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "status", "--json"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, "backup status store=nil") {
-		t.Fatalf("backup status code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"maintenance", "status", "--json"}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "maintenance status store=nil") {
+		t.Fatalf("maintenance status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "snapshots", "--json"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, "backup snapshots store=nil") {
-		t.Fatalf("backup snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"maintenance", "snapshots", "--json"}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, "maintenance snapshots store=nil") {
+		t.Fatalf("maintenance snapshots code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Fatalf("archive exists after StoreNone backup verbs: err=%v path=%s", err, archivePath)
+		t.Fatalf("archive exists after StoreNone maintenance verbs: err=%v path=%s", err, archivePath)
 	}
 	t.Logf("archive_exists_after_store_none=false archive_path=%s", archivePath)
 }
@@ -520,22 +520,22 @@ func TestRunBespokeStoreRequiredRequiresArchive(t *testing.T) {
 func TestRunRejectsBespokeStoreOptionalWithMutates(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{verbs: []Verb{{
-		Name:    "backup restore",
-		Help:    "Restore a backup.",
+		Name:    "maintenance restore",
+		Help:    "Restore state.",
 		Mutates: true,
 		Store:   StoreOptional,
 		Run: func(ctx context.Context, req *Request) error {
 			return nil
 		},
 	}}}
-	wantMessage := "invalid backup restore Verb declaration: StoreOptional cannot be used with Mutates"
+	wantMessage := "invalid maintenance restore Verb declaration: StoreOptional cannot be used with Mutates"
 	wantRemedy := "Set Store to StoreNone"
 
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("metadata invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"backup", "restore", "--json"}, source, runOptions{})
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"maintenance", "restore", "--json"}, source, runOptions{})
 	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
 		t.Fatalf("invocation invalid StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -650,8 +650,8 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 	}
 	for _, want := range []string{
 		`Search "hello": showing 1 of 3.`,
-		"Open: testcrawl open REF",
-		"More: rerun with --limit 3 or --all.",
+		"Open: trawl testcrawl open REF",
+		`More: trawl testcrawl search "hello" --limit 2`,
 		"Narrow results with --who, --after, or --before.",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -679,16 +679,16 @@ func TestRunSpineSyncVerbParsesDeclaredFlags(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	includeArchived := false
-	backupRepo := ""
+	sourceRoot := ""
 	source := &testCrawler{verbs: []Verb{{
 		Name: "sync",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
-			fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+			fs.StringVar(&sourceRoot, "source-root", "", "source root")
 		},
 	}}}
 	opts := childTestOptions(t, "sync_flag")
-	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--include-archived", "--backup-repo", "synthetic", "--json"}, source, opts)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--include-archived", "--source-root", "synthetic", "--json"}, source, opts)
 	if code != 0 || !strings.Contains(stdout, `"added": 7`) {
 		t.Fatalf("sync flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -697,12 +697,12 @@ func TestRunSpineSyncVerbParsesDeclaredFlags(t *testing.T) {
 func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 	stateRoot := t.TempDir()
 	includeArchived := false
-	backupRepo := ""
+	sourceRoot := ""
 	source := &testCrawler{verbs: []Verb{{
 		Name: "sync",
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
-			fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+			fs.StringVar(&sourceRoot, "source-root", "", "source root")
 		},
 	}}}
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
@@ -724,7 +724,7 @@ func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 	if flag := flags["include-archived"]; flag.Usage != "include archived items" || flag.Default != "false" {
 		t.Fatalf("sync bool flag = %#v", flag)
 	}
-	if flag := flags["backup-repo"]; flag.Usage != "backup repository" || flag.Default != "" {
+	if flag := flags["source-root"]; flag.Usage != "source root" || flag.Default != "" {
 		t.Fatalf("sync string flag = %#v", flag)
 	}
 	if got, want := strings.Join(syncCommand.Argv[1:], " "), "sync --json"; got != want {
@@ -1952,15 +1952,15 @@ func TestRunStoreNoneMutatingBespokeVerbReexecsAndHoldsRunLock(t *testing.T) {
 		}
 	}()
 
-	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+	source := &testCrawler{verbs: maintenanceFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
 		if req.Store != nil {
 			t.Fatalf("%s Store = %#v, want nil", name, req.Store)
 		}
 		_, err := fmt.Fprintf(req.Out, "%s store=nil\n", name)
 		return err
 	})}
-	opts := childTestOptions(t, "backup_init")
-	code, retryStdout, retryStderr := runForTestAt(stateRoot, []string{"backup", "init", "--json"}, source, opts)
+	opts := childTestOptions(t, "maintenance_init")
+	code, retryStdout, retryStderr := runForTestAt(stateRoot, []string{"maintenance", "init", "--json"}, source, opts)
 	var envelope struct {
 		Error struct {
 			Code     string `json:"code"`
@@ -2091,7 +2091,7 @@ func TestRunnerChildHelper(t *testing.T) {
 	}
 	args := argsAfterDoubleDash(os.Args)
 	includeArchived := false
-	backupRepo := ""
+	sourceRoot := ""
 	declaredBespokeStateRoot := ""
 	declaredSyncStateRoot := ""
 	verbs := []Verb{
@@ -2139,24 +2139,24 @@ func TestRunnerChildHelper(t *testing.T) {
 			Name: "sync",
 			Flags: func(fs *flag.FlagSet) {
 				fs.BoolVar(&includeArchived, "include-archived", false, "include archived items")
-				fs.StringVar(&backupRepo, "backup-repo", "", "backup repository")
+				fs.StringVar(&sourceRoot, "source-root", "", "source root")
 				fs.StringVar(&declaredSyncStateRoot, "state-root", "", "crawler-owned state root")
 			},
 		},
 	}
-	verbs = append(verbs, backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+	verbs = append(verbs, maintenanceFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
 		switch os.Getenv("CRAWLKIT_CHILD_MODE") {
-		case "backup_init":
-			if name != "backup init" {
-				return fmt.Errorf("wrong backup child verb %s", name)
+		case "maintenance_init":
+			if name != "maintenance init" {
+				return fmt.Errorf("wrong maintenance child verb %s", name)
 			}
 			if req.Store != nil {
-				return errors.New("backup init Store is not nil")
+				return errors.New("maintenance init Store is not nil")
 			}
-			_, err := io.WriteString(req.Out, "backup init store=nil\n")
+			_, err := io.WriteString(req.Out, "maintenance init store=nil\n")
 			return err
 		case "store_none_lock_hold":
-			if name != "backup init" {
+			if name != "maintenance init" {
 				return fmt.Errorf("wrong lock child verb %s", name)
 			}
 			if req.Store != nil {
@@ -2171,7 +2171,7 @@ func TestRunnerChildHelper(t *testing.T) {
 			}
 			select {}
 		default:
-			return errors.New("wrong child mode for backup verb")
+			return errors.New("wrong child mode for maintenance verb")
 		}
 	})...)
 	source := &testCrawler{
@@ -2187,7 +2187,7 @@ func TestRunnerChildHelper(t *testing.T) {
 				if !includeArchived {
 					return nil, errors.New("sync flag was not parsed")
 				}
-				if backupRepo != "synthetic" {
+				if sourceRoot != "synthetic" {
 					return nil, errors.New("sync string flag was not parsed")
 				}
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced archived items"})
@@ -2311,10 +2311,10 @@ func TestRunnerStoreNoneLockParentHelper(t *testing.T) {
 	opts.watchdog = time.Hour
 	opts.childEnv = append(opts.childEnv, "CRAWLKIT_LOCK_MARKER="+args[1])
 	opts.stateRoot = args[0]
-	source := &testCrawler{verbs: backupFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
+	source := &testCrawler{verbs: maintenanceFixtureVerbs(func(ctx context.Context, req *Request, name string) error {
 		return errors.New("store none lock parent should re-exec before running handler")
 	})}
-	code := runner{opts: opts}.run([]string{"backup", "init", "--json"}, []Crawler{source})
+	code := runner{opts: opts}.run([]string{"maintenance", "init", "--json"}, []Crawler{source})
 	os.Exit(code)
 }
 
@@ -2439,31 +2439,31 @@ func createArchiveAt(t *testing.T, path string) {
 	}
 }
 
-func backupFixtureVerbs(run func(context.Context, *Request, string) error) []Verb {
+func maintenanceFixtureVerbs(run func(context.Context, *Request, string) error) []Verb {
 	return []Verb{
 		{
-			Name:    "backup init",
-			Help:    "Initialise backup state.",
+			Name:    "maintenance init",
+			Help:    "Initialise maintenance state.",
 			Mutates: true,
 			Store:   StoreNone,
 			Run: func(ctx context.Context, req *Request) error {
-				return run(ctx, req, "backup init")
+				return run(ctx, req, "maintenance init")
 			},
 		},
 		{
-			Name:  "backup status",
-			Help:  "Show backup status.",
+			Name:  "maintenance status",
+			Help:  "Show maintenance status.",
 			Store: StoreNone,
 			Run: func(ctx context.Context, req *Request) error {
-				return run(ctx, req, "backup status")
+				return run(ctx, req, "maintenance status")
 			},
 		},
 		{
-			Name:  "backup snapshots",
-			Help:  "List backup snapshots.",
+			Name:  "maintenance snapshots",
+			Help:  "List maintenance snapshots.",
 			Store: StoreNone,
 			Run: func(ctx context.Context, req *Request) error {
-				return run(ctx, req, "backup snapshots")
+				return run(ctx, req, "maintenance snapshots")
 			},
 		},
 	}

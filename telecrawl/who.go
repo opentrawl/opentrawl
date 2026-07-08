@@ -54,7 +54,7 @@ func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) e
 	if len(didYouMean) > 0 {
 		fields["did_you_mean"] = whoCandidates(didYouMean)
 	}
-	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "Run telecrawl who <name>, or search without --who to check whether matching messages exist.", fields)
+	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "Run trawl telecrawl who <name>, or search without --who to check whether matching messages exist.", fields)
 }
 
 func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {

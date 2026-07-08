@@ -234,9 +234,9 @@ func statusSummary(status store.Status) string {
 		return "archive is empty"
 	case "stale":
 		if status.LastImportAt.IsZero() {
-			return "archive has never been synced; run telecrawl sync to refresh."
+			return "archive has never been synced; run trawl telecrawl sync to refresh."
 		}
-		return "archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old; run telecrawl sync to refresh."
+		return "archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old; run trawl telecrawl sync to refresh."
 	default:
 		return "archive is fresh"
 	}
@@ -316,7 +316,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive has not been created.",
-			Remedy:  "Run telecrawl sync to create the archive.",
+			Remedy:  "Run trawl telecrawl sync to create the archive.",
 		}}
 	} else if info.IsDir() {
 		return []doctorCheck{{
@@ -324,7 +324,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive path is a directory.",
-			Remedy:  "Use a writable state root, then run telecrawl sync.",
+			Remedy:  "Use a writable state root, then run trawl telecrawl sync.",
 		}}
 	}
 	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
@@ -334,7 +334,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive cannot be read.",
-			Remedy:  "Run telecrawl sync to rebuild the archive.",
+			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
 		}}
 	}
 	defer func() { _ = st.Close() }()
@@ -345,11 +345,11 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive status cannot be read.",
-			Remedy:  "Run telecrawl sync to rebuild the archive.",
+			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
 		}}
 	}
 	if status.Messages == 0 {
-		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl sync to fill the archive."}}
+		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run trawl telecrawl sync to fill the archive."}}
 	}
 	return []doctorCheck{
 		{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."},
@@ -363,11 +363,11 @@ func syncRecencyCheck(status store.Status) doctorCheck {
 	case status.LastImportAt.IsZero():
 		check.State = "warn"
 		check.Message = "Archive has never been synced."
-		check.Remedy = "run telecrawl sync"
+		check.Remedy = "run trawl telecrawl sync"
 	case time.Since(status.LastImportAt) > statusFreshFor:
 		check.State = "warn"
 		check.Message = "Archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old."
-		check.Remedy = "run telecrawl sync"
+		check.Remedy = "run trawl telecrawl sync"
 	}
 	return check
 }

@@ -250,11 +250,11 @@ func (r *runtime) printStats(value statsEnvelope) error {
 	if _, err := fmt.Fprintln(r.stdout, statsFreshnessHint(value.Results)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Open: birdcrawl open REF"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout, "Open: trawl birdcrawl open REF"); err != nil {
 		return err
 	}
 	if value.Population > len(value.Results) {
-		if _, err := fmt.Fprintf(r.stdout, "More: birdcrawl stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: trawl birdcrawl stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
 			return err
 		}
 	}
@@ -279,21 +279,21 @@ func (r *runtime) printStats(value statsEnvelope) error {
 }
 
 func searchHints(query string, limit int, truncated bool) []string {
-	hints := []string{"Open: birdcrawl open REF"}
+	hints := []string{"Open: trawl birdcrawl open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
-			"All: birdcrawl search "+quoteSearchQuery(query)+" --all")
+			"More: trawl birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
+			"All: trawl birdcrawl search "+quoteSearchQuery(query)+" --all")
 	}
 	return hints
 }
 
 func browseHints(kind string, limit int, truncated bool) []string {
-	hints := []string{"Open: birdcrawl open REF"}
+	hints := []string{"Open: trawl birdcrawl open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)),
-			"All: birdcrawl "+kind+" --all")
+			"More: trawl birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)),
+			"All: trawl birdcrawl "+kind+" --all")
 	}
 	return hints
 }

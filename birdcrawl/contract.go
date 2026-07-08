@@ -194,7 +194,7 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	if err != nil {
 		if errors.Is(err, store.ErrSchemaOutdated) {
 			msg := "archive schema needs one sync to finish upgrading"
-			return r.newStatusEnvelope("error", msg, msg+"; run: birdcrawl sync", store.Status{}, cfg)
+			return r.newStatusEnvelope("error", msg, msg+"; run: trawl birdcrawl sync", store.Status{}, cfg)
 		}
 		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 	}

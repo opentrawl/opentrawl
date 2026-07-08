@@ -99,13 +99,13 @@ func TestLogContract(t *testing.T) {
 				if err := b.Info("scan", "b one"); err != nil {
 					t.Fatal(err)
 				}
-				if err := a.Error("backup_failed", errors.New("backup fetch exited early")); err != nil {
+				if err := a.Error("source_failed", errors.New("source fetch exited early")); err != nil {
 					t.Fatal(err)
 				}
 				if err := b.Finish(nil); err != nil {
 					t.Fatal(err)
 				}
-				if err := a.Finish(errors.New("backup fetch exited early")); err != nil {
+				if err := a.Finish(errors.New("source fetch exited early")); err != nil {
 					t.Fatal(err)
 				}
 				file, err := os.OpenFile(a.Path(), os.O_WRONLY|os.O_APPEND, 0o644)
@@ -446,10 +446,10 @@ func TestDebugProgressAndWorldMustChange(t *testing.T) {
 	if err := run.Debug("detail", "hidden"); err != nil {
 		t.Fatal(err)
 	}
-	if err := run.Progress(ProgressOptions{Total: 4, Unit: "items"}).Report(1, "fetching backup"); err != nil {
+	if err := run.Progress(ProgressOptions{Total: 4, Unit: "items"}).Report(1, "fetching source"); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(human.String(), "fetching backup 1/4 items elapsed=0s") {
+	if !strings.Contains(human.String(), "fetching source 1/4 items elapsed=0s") {
 		t.Fatalf("human progress missing: %q", human.String())
 	}
 	if strings.Contains(strings.Join(readLogLines(t, run.Path()), "\n"), "hidden") {
@@ -636,7 +636,7 @@ func TestExplicitErrorVisibility(t *testing.T) {
 		},
 		{
 			name: "internal visibility is hidden even with operational event name",
-			line: Line{Level: LevelError, Command: "sync", Event: "sync_failed", Message: `error="backup fetch exited early" visibility=internal`, Visibility: VisibilityInternal},
+			line: Line{Level: LevelError, Command: "sync", Event: "sync_failed", Message: `error="source fetch exited early" visibility=internal`, Visibility: VisibilityInternal},
 			want: false,
 		},
 		{

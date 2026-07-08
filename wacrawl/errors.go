@@ -57,7 +57,7 @@ func archiveErr(err error) error {
 	if err == nil {
 		return nil
 	}
-	return commandErr(1, "archive", err.Error(), "run wacrawl sync")
+	return commandErr(1, "archive", err.Error(), "run trawl wacrawl sync")
 }
 
 func usageErr(err error) error {

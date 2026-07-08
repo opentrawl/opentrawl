@@ -140,7 +140,7 @@ The bar for every line of code and every surface in this repo:
   phrasing and confidence of claims. Code never inspects model prose
   to judge or route it — cognitive decisions are asked of the model
   as structured answers and gated mechanically.
-- Deterministic checks are tripwires, not gates. Regex/conformance
+- Deterministic checks are tripwires, not gates. Regex/contract
   checks only remember previously discovered defects. The gate for
   any output-shape change is an adversarial review by a model that
   did not author the change, over raw transcripts of every affected
@@ -191,7 +191,7 @@ The bar for every line of code and every surface in this repo:
 
 ## Prior art and how we relate to it
 
-- crawlkit (openclaw): the substrate. Shared SQLite, snapshot, backup,
+- crawlkit (openclaw): the substrate. Shared SQLite, snapshot,
   sync-state, vector and control mechanics. We build on it and push
   contract work back upstream; we do not fork it.
 - crawlbar (openclaw): proved the control-plane idea and wrote down the

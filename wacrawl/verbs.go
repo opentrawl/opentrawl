@@ -117,7 +117,7 @@ func newChatsEnvelope(chats []store.Chat, total int, unread bool) chatsEnvelope 
 func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	heading := "Chats"
 	empty := "No chats."
-	hint := "Messages: wacrawl messages --chat CHAT"
+	hint := "Messages: trawl wacrawl messages --chat CHAT"
 	if value.unread {
 		heading = "Unread chats"
 		empty = "No unread chats."
@@ -131,9 +131,9 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	}
 	if value.Truncated {
 		if value.unread {
-			_, _ = fmt.Fprintln(req.Out, "All: wacrawl unread --all")
+			_, _ = fmt.Fprintln(req.Out, "All: trawl wacrawl unread --all")
 		} else {
-			_, _ = fmt.Fprintln(req.Out, "All: wacrawl chats --all")
+			_, _ = fmt.Fprintln(req.Out, "All: trawl wacrawl chats --all")
 		}
 	}
 	if _, err := fmt.Fprintln(req.Out); err != nil {
@@ -284,9 +284,9 @@ func newMessageListOutput(limit int, messages []store.Message, aliases map[strin
 }
 
 func printMessages(req *crawlkit.Request, value messageListOutput) error {
-	hints := []string{"Open: wacrawl open REF"}
+	hints := []string{"Open: trawl wacrawl open REF"}
 	if value.Truncated {
-		hints = append(hints, "Narrow: wacrawl messages --limit N --after DATE --before DATE --chat JID")
+		hints = append(hints, "Narrow: trawl wacrawl messages --limit N --after DATE --before DATE --chat JID")
 	}
 	return render.WriteList(req.Out, render.List{
 		Heading:   fmt.Sprintf("Messages: showing %d, newest first.", value.Returned),

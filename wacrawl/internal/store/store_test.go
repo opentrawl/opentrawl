@@ -142,10 +142,6 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 		t.Fatalf("unexpected unread chats: %+v", unreadChats)
 	}
 
-	exported, err := st.ExportAll(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
 	contactsOut, err := st.Contacts(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -153,38 +149,15 @@ func TestStoreReplaceStatusListSearch(t *testing.T) {
 	if len(contactsOut) != 1 || contactsOut[0].JID != "alice@s.whatsapp.net" {
 		t.Fatalf("unexpected contacts: %+v", contactsOut)
 	}
-	if err := exported.Validate(); err != nil {
+	var groupCount, participantCount int
+	if err := st.DB().QueryRowContext(ctx, `select count(*) from groups`).Scan(&groupCount); err != nil {
 		t.Fatal(err)
 	}
-	if len(exported.Contacts) != 1 || len(exported.Chats) != 1 || len(exported.Groups) != 1 || len(exported.Participants) != 1 || len(exported.Messages) != 2 {
-		t.Fatalf("unexpected export: %+v", exported)
-	}
-	if stats := exported.ImportStats("backup", st.Path(), now); stats.Messages != 2 || stats.MediaMessages != 1 || stats.SourcePath != "backup" {
-		t.Fatalf("unexpected export stats: %+v", stats)
-	}
-	if stats := exported.ImportStats("backup", st.Path(), time.Time{}); stats.FinishedAt.IsZero() || stats.StartedAt.IsZero() {
-		t.Fatalf("zero finished time was not defaulted: %+v", stats)
-	}
-	restored, err := Open(ctx, filepath.Join(t.TempDir(), "restored.db"))
-	if err != nil {
+	if err := st.DB().QueryRowContext(ctx, `select count(*) from group_participants`).Scan(&participantCount); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { _ = restored.Close() }()
-	if err := restored.ImportSnapshot(ctx, exported, "backup", now); err != nil {
-		t.Fatal(err)
-	}
-	restoredStatus, err := restored.Status(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if restoredStatus.Messages != 2 || restoredStatus.LastSource != "backup" {
-		t.Fatalf("unexpected restored status: %+v", restoredStatus)
-	}
-	if err := (SnapshotData{Messages: []Message{{SourcePK: 1}, {SourcePK: 1}}}).Validate(); err == nil {
-		t.Fatal("expected duplicate source_pk validation error")
-	}
-	if err := (SnapshotData{Messages: []Message{{}}}).Validate(); err == nil {
-		t.Fatal("expected empty source_pk validation error")
+	if groupCount != 1 || participantCount != 1 {
+		t.Fatalf("unexpected group counts: groups=%d participants=%d", groupCount, participantCount)
 	}
 }
 
@@ -310,7 +283,7 @@ func TestReplaceAllDuplicateSourcePKFails(t *testing.T) {
 	}
 }
 
-func TestImportSnapshotRefreshesFTS(t *testing.T) {
+func TestReplaceAllRefreshesFTS(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))
 	if err != nil {
@@ -319,19 +292,18 @@ func TestImportSnapshotRefreshesFTS(t *testing.T) {
 	defer func() { _ = st.Close() }()
 
 	now := time.Date(2026, 4, 25, 12, 0, 0, 0, time.UTC)
-	base := SnapshotData{
-		Chats: []Chat{{JID: "chat", Kind: "dm", Name: "Chat", LastMessageAt: now}},
-		Messages: []Message{{
-			SourcePK:  1,
-			ChatJID:   "chat",
-			ChatName:  "Chat",
-			MessageID: "a",
-			Timestamp: now,
-			Text:      "old import text",
-			RawType:   0,
-		}},
-	}
-	if err := st.ImportSnapshot(ctx, base, "first", now); err != nil {
+	chats := []Chat{{JID: "chat", Kind: "dm", Name: "Chat", LastMessageAt: now}}
+	messages := []Message{{
+		SourcePK:  1,
+		ChatJID:   "chat",
+		ChatName:  "Chat",
+		MessageID: "a",
+		Timestamp: now,
+		Text:      "old import text",
+		RawType:   0,
+	}}
+	stats := ImportStats{SourcePath: "first", DBPath: st.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
+	if err := st.ReplaceAll(ctx, stats, nil, chats, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	results, err := st.Search(ctx, MessageFilter{Query: "old", Limit: 10})
@@ -342,10 +314,11 @@ func TestImportSnapshotRefreshesFTS(t *testing.T) {
 		t.Fatalf("expected old FTS result, got %d", len(results))
 	}
 
-	updated := base
-	updated.Messages[0].Text = "new import text"
-	updated.Messages[0].MediaTitle = "fresh media title"
-	if err := st.ImportSnapshot(ctx, updated, "second", now.Add(time.Minute)); err != nil {
+	messages[0].Text = "new import text"
+	messages[0].MediaTitle = "fresh media title"
+	stats.SourcePath = "second"
+	stats.FinishedAt = now.Add(time.Minute)
+	if err := st.ReplaceAll(ctx, stats, nil, chats, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	results, err = st.Search(ctx, MessageFilter{Query: "old", Limit: 10})

@@ -120,15 +120,19 @@ insert into ZWAGROUPMEMBER values (2, 2, '222@lid', 'Alice Duplicate', 'Alicia',
 		t.Fatalf("duplicate chat rows were not merged correctly: %+v", chats[0])
 	}
 
-	exported, err := archive.ExportAll(ctx)
-	if err != nil {
+	var ownerJID string
+	if err := archive.DB().QueryRowContext(ctx, `select owner_jid from groups`).Scan(&ownerJID); err != nil {
 		t.Fatal(err)
 	}
-	if len(exported.Groups) != 1 || exported.Groups[0].OwnerJID != "owner@s.whatsapp.net" {
-		t.Fatalf("duplicate group rows were not merged correctly: %+v", exported.Groups)
+	if ownerJID != "owner@s.whatsapp.net" {
+		t.Fatalf("duplicate group rows were not merged correctly: owner=%q", ownerJID)
 	}
-	if len(exported.Participants) != 1 || !exported.Participants[0].IsAdmin || !exported.Participants[0].IsActive {
-		t.Fatalf("duplicate participant rows were not merged correctly: %+v", exported.Participants)
+	var isAdmin, isActive int
+	if err := archive.DB().QueryRowContext(ctx, `select is_admin,is_active from group_participants`).Scan(&isAdmin, &isActive); err != nil {
+		t.Fatal(err)
+	}
+	if isAdmin == 0 || isActive == 0 {
+		t.Fatalf("duplicate participant rows were not merged correctly: admin=%d active=%d", isAdmin, isActive)
 	}
 }
 
@@ -276,12 +280,12 @@ insert into ZWAMESSAGE values (7, 2, 3, null, 'blob-group', 0, 700000041, 'group
 		t.Fatal(err)
 	}
 
-	exported, err := archive.ExportAll(ctx)
+	messages, err := archive.Messages(ctx, store.MessageFilter{Limit: 20, Asc: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	byID := map[string]store.Message{}
-	for _, msg := range exported.Messages {
+	for _, msg := range messages {
 		if msg.SenderName == pushBlob || msg.SenderName == firstBlob {
 			t.Fatalf("protobuf blob stored as sender_name: %+v", msg)
 		}

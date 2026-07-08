@@ -47,7 +47,7 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 	case archiveStatus.Messages == 0:
 		status.State = "empty"
 		if archiveStatus.LastImportAt.IsZero() {
-			status.Summary = "Archive is empty; run wacrawl sync to populate it."
+			status.Summary = "Archive is empty; run trawl wacrawl sync to populate it."
 		} else {
 			status.Summary = "Archive contains no messages from the last sync."
 		}
@@ -116,19 +116,19 @@ func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) cr
 	case chatDB == "":
 		check.State = "missing"
 		check.Message = "WhatsApp Desktop chat database was not found"
-		check.Remedy = "open WhatsApp Desktop once, then run wacrawl sync"
+		check.Remedy = "open WhatsApp Desktop once, then run trawl wacrawl sync"
 	case errors.Is(chatDBStatErr, os.ErrNotExist):
 		check.State = "missing"
 		check.Message = "WhatsApp Desktop chat database was not found"
-		check.Remedy = "open WhatsApp Desktop once, then run wacrawl sync"
+		check.Remedy = "open WhatsApp Desktop once, then run trawl wacrawl sync"
 	case chatDBStatErr != nil && !isPermissionError(chatDBStatErr):
 		check.State = "fail"
 		check.Message = chatDBStatErr.Error()
-		check.Remedy = "check the WhatsApp Desktop store path, then run wacrawl doctor again"
+		check.Remedy = "check the WhatsApp Desktop store path, then run trawl wacrawl doctor again"
 	case canaryErr != nil && !isPermissionError(canaryErr):
 		check.State = "fail"
 		check.Message = "cannot read WhatsApp Desktop database: " + canaryErr.Error()
-		check.Remedy = "close WhatsApp Desktop if it is busy, then run wacrawl doctor again"
+		check.Remedy = "close WhatsApp Desktop if it is busy, then run trawl wacrawl doctor again"
 	default:
 		check.State = "ok"
 		check.Message = "WhatsApp Desktop store found"
@@ -165,16 +165,16 @@ func archiveCheck(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 	case strings.TrimSpace(req.Paths.Archive) == "":
 		check.State = "fail"
 		check.Message = "archive database path is empty"
-		check.Remedy = "run wacrawl sync with a valid state root"
+		check.Remedy = "run trawl wacrawl sync with a valid state root"
 	case req.Store == nil:
 		check.State = "missing"
 		check.Message = "archive database does not exist"
-		check.Remedy = "run wacrawl sync"
+		check.Remedy = "run trawl wacrawl sync"
 	default:
 		if _, err := store.UseExisting(ctx, req.Store, req.Paths.Archive); err != nil {
 			check.State = "error"
 			check.Message = err.Error()
-			check.Remedy = "move the corrupt archive aside, then run wacrawl sync"
+			check.Remedy = "move the corrupt archive aside, then run trawl wacrawl sync"
 			return check
 		}
 		check.State = "ok"

@@ -226,12 +226,13 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		})
 	}
 	hints := []string{}
-	if strings.TrimSpace(value.SourceID) != "" {
-		hints = append(hints, "Open: "+strings.TrimSpace(value.SourceID)+" open REF")
+	sourceID := strings.TrimSpace(value.SourceID)
+	if sourceID != "" {
+		hints = append(hints, "Open: trawl "+sourceID+" open REF")
 	}
 	if value.Truncated {
-		if total := max(value.TotalMatches, len(value.Results)); total > len(value.Results) {
-			hints = append(hints, fmt.Sprintf("More: rerun with --limit %d or --all.", total))
+		if sourceID != "" && strings.TrimSpace(value.Query) != "" {
+			hints = append(hints, fmt.Sprintf("More: trawl %s search %s --limit %d", sourceID, quoteSearchArg(value.Query), nextSearchLimit(len(value.Results))))
 		}
 		hints = append(hints, "Narrow results with --who, --after, or --before.")
 	}
@@ -242,6 +243,17 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		ClampText: 2,
 		Empty:     searchEmptyText(value.Query),
 	})
+}
+
+func nextSearchLimit(shown int) int {
+	if shown < 1 {
+		return 20
+	}
+	return shown * 2
+}
+
+func quoteSearchArg(value string) string {
+	return strconv.Quote(strings.TrimSpace(value))
 }
 
 func writeWhoText(w io.Writer, value whoOutput) error {

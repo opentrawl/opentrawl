@@ -3,10 +3,8 @@ package telecrawl
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -44,23 +42,6 @@ func (r *runtime) print(v any) error {
 			}
 		}
 		return nil
-	case []backup.Snapshot:
-		for _, snapshot := range value {
-			ref := snapshot.Ref
-			if len(snapshot.Tags) > 0 {
-				ref = snapshot.Tags[0]
-			}
-			if _, err := fmt.Fprintf(r.stdout, "%s\t%s\t%d\t%d\t%s\n", ref, shortLocalTime(snapshot.Exported), snapshot.Counts.Messages, snapshot.Shards, strings.Join(snapshot.Tags, ",")); err != nil {
-				return err
-			}
-		}
-		return nil
-	case backup.Result:
-		return r.printBackupResult(value)
-	case backupInitOutput:
-		return r.printBackupInit(value)
-	case backupStatusOutput:
-		return r.printBackupStatus(value)
 	case chatsEnvelope:
 		return r.printChats(value)
 	case topicsEnvelope:

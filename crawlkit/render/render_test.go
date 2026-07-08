@@ -134,7 +134,7 @@ func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
 			RunID:      "internal-run-id",
 			Command:    "sync",
 			Event:      "run_failed",
-			Message:    `error="archive.db has not been synced" remedy="run imsgcrawl sync" visibility=user`,
+			Message:    `error="archive.db has not been synced" remedy="run trawl imsgcrawl sync" visibility=user`,
 			Timestamp:  when,
 			Visibility: cklog.VisibilityUserFacing,
 		},
@@ -151,7 +151,7 @@ func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
 		`"what_happened":"sync ended with error"`,
 		`"what_happened":"archive.db has not been synced"`,
 		`"when":"2026-07-03T10:45:00Z"`,
-		`"remedy":"run imsgcrawl sync"`,
+		`"remedy":"run trawl imsgcrawl sync"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("doctor log json = %s, missing %s", got, want)
@@ -224,8 +224,8 @@ func TestWriteStatus(t *testing.T) {
 			},
 			MostRecentError: &cklog.Line{
 				Command: "sync",
-				Event:   "backup_failed",
-				Message: `error="backup fetch exited early" remedy="try again when the network is available"`,
+				Event:   "source_failed",
+				Message: `error="source fetch exited early" remedy="try again when the source is available"`,
 			},
 		},
 	})
@@ -250,8 +250,8 @@ func TestWriteStatus(t *testing.T) {
 		"",
 		"Recent log:",
 		"  Last run: sync succeeded at 2026-07-02 14:03",
-		"  Most recent error: sync backup failed: backup fetch exited early",
-		"    Remedy: try again when the network is available",
+		"  Most recent error: sync source failed: source fetch exited early",
+		"    Remedy: try again when the source is available",
 		"",
 	}, "\n")
 	if buf.String() != want {

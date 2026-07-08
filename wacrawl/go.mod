@@ -2,8 +2,6 @@ module github.com/openclaw/wacrawl
 
 go 1.26.4
 
-require filippo.io/age v1.3.1
-
 require github.com/mattn/go-sqlite3 v1.14.47
 
 require (
@@ -12,11 +10,9 @@ require (
 )
 
 require (
-	filippo.io/hpke v0.4.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/mattn/go-runewidth v0.0.24 // indirect
 	github.com/openclaw/crawlkit v0.13.1
-	golang.org/x/crypto v0.53.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 )
 

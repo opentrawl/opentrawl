@@ -6,15 +6,15 @@ written_by: ai
 
 The per-crawler definition of done. A crawler is v1-ready when every
 box below is checked and proven — "proven" means command output,
-conformance-harness results, or tests, not assertion.
+contract test results, or tests, not assertion.
 
 This checklist is the operational form of [vision.md](vision.md): each
 section enforces named design and engineering principles. It derives
 from the crawler quality rubric and the iMessage crawler evaluation,
 the cleanest slice so far. Use it three ways: as the lane brief when a
 crawler is being hardened, as the review contract when the work comes
-back, and as the conformance harness's manual counterpart — the
-harness automates what can be automated; this file is the whole bar.
+back, and as the manual counterpart to automated contract checks. Those
+checks cover what can be automated; this file is the whole bar.
 
 ## Archive
 
@@ -40,7 +40,7 @@ product, and it must be trustworthy before anything builds on it.
 Enforces: contract first; one obvious way — the contract is the plugin
 API, and drift in one crawler taxes every consumer.
 
-- [ ] passes the conformance harness against a real archive
+- [ ] passes the contract checks against a real archive
 - [ ] output changes reviewed adversarially by a non-authoring model
       over raw transcripts, both output modes, trawl-rendered included
 - [ ] all required commands present, grammar `verb args --json`
@@ -53,7 +53,7 @@ API, and drift in one crawler taxes every consumer.
       shape; every person-shaped record the source holds is exportable
 - [ ] built on the crawlkit substrate (config, store, snapshot, sync
       state) rather than private reimplementations — observability and
-      backup mechanics arrive free, and fixes land once
+      fixes land once
 
 ## Output quality
 

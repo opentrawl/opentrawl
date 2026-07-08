@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -19,7 +18,6 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit"
-	ckbackup "github.com/openclaw/crawlkit/backup"
 )
 
 func TestMain(m *testing.M) {
@@ -27,25 +25,6 @@ func TestMain(m *testing.M) {
 		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
-}
-
-func TestBackupRunnerVerbsDoNotOpenArchiveOnFreshState(t *testing.T) {
-	stateRoot := stateRootForRun(t)
-	repo := seedBackupRepo(t)
-	writeBackupConfig(t, stateRoot, repo, filepath.Join(t.TempDir(), "age.key"))
-	archivePath := archivePathForRun(stateRoot)
-
-	for _, args := range [][]string{
-		{"--json", "backup", "init", "--no-push"},
-		{"--json", "backup", "status"},
-		{"--json", "backup", "snapshots"},
-	} {
-		code, stdout, stderr := runTelecrawl(t, args...)
-		if code != 0 {
-			t.Fatalf("%s code=%d stdout=%s stderr=%s", strings.Join(args, " "), code, stdout, stderr)
-		}
-		assertNoTelecrawlArchive(t, archivePath)
-	}
 }
 
 func TestSearchJSONUsesLocalOffsetTimestamp(t *testing.T) {
@@ -262,14 +241,6 @@ func copyPipe(dst *bytes.Buffer, src *os.File) <-chan error {
 	return done
 }
 
-func assertNoTelecrawlArchive(t *testing.T, archivePath string) {
-	t.Helper()
-	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Fatalf("telecrawl.db exists after backup StoreNone verb: err=%v path=%s", err, archivePath)
-	}
-	t.Logf("telecrawl_db_exists=false path=%s", archivePath)
-}
-
 func alterArchivedMessageText(t *testing.T, archivePath, text string) {
 	t.Helper()
 	db, err := sql.Open("sqlite3", archivePath)
@@ -348,54 +319,6 @@ func assertSyncTextReport(t *testing.T, stdout string, added, updated, removed i
 	}, "\n")
 	if stdout != want {
 		t.Fatalf("sync report text = %q, want %q", stdout, want)
-	}
-}
-
-func writeBackupConfig(t *testing.T, stateRoot, repo, identity string) {
-	t.Helper()
-	cfgDir := filepath.Join(stateRoot, "telecrawl")
-	if err := os.MkdirAll(cfgDir, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	body := strings.Join([]string{
-		"[backup]",
-		"repo = " + strconv.Quote(repo),
-		`remote = ""`,
-		"identity = " + strconv.Quote(identity),
-		"",
-	}, "\n")
-	if err := os.WriteFile(filepath.Join(cfgDir, "config.toml"), []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func seedBackupRepo(t *testing.T) string {
-	t.Helper()
-	repo := filepath.Join(t.TempDir(), "backup")
-	runGit(t, "", "init", "-b", "main", repo)
-	manifest := ckbackup.Manifest{
-		Format:    ckbackup.FormatVersion,
-		Encrypted: true,
-		Exported:  time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
-		Counts:    map[string]int{"messages": 0},
-	}
-	if err := ckbackup.WriteManifest(repo, manifest); err != nil {
-		t.Fatal(err)
-	}
-	runGit(t, repo, "add", "manifest.json")
-	runGit(t, repo, "-c", "user.name=telecrawl", "-c", "user.email=telecrawl@example.com", "commit", "-m", "seed backup manifest")
-	return repo
-}
-
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, string(output))
 	}
 }
 

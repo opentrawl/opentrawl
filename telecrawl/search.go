@@ -135,9 +135,14 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
-	hints := []string{"Open: telecrawl open REF"}
+	hints := []string{"Open: trawl telecrawl open REF"}
 	if value.Truncated {
-		hints = append(hints, searchMoreHint(value), searchAllHint(value))
+		if more := searchMoreHint(value); more != "" {
+			hints = append(hints, more)
+		}
+		if all := searchAllHint(value); all != "" {
+			hints = append(hints, all)
+		}
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   searchHeading(value),
@@ -157,20 +162,33 @@ func searchHeading(value searchEnvelope) string {
 
 func searchMoreHint(value searchEnvelope) string {
 	nextLimit := nextSearchLimit(value.Limit)
-	if strings.TrimSpace(value.Query) == "" {
-		return fmt.Sprintf("More: telecrawl search --limit %d", nextLimit)
+	parts := searchCommandParts(value)
+	if len(parts) == 0 {
+		return ""
 	}
-	return fmt.Sprintf("More: telecrawl search %s --limit %d", strconv.Quote(value.Query), nextLimit)
+	return fmt.Sprintf("More: trawl telecrawl search %s --limit %d", strings.Join(parts, " "), nextLimit)
 }
 
 // searchAllHint mirrors searchMoreHint so the offered command is runnable:
 // it carries the query when there is one, since bare `search` without a query
 // or filter is a usage error.
 func searchAllHint(value searchEnvelope) string {
-	if strings.TrimSpace(value.Query) == "" {
-		return "All: telecrawl search --all"
+	parts := searchCommandParts(value)
+	if len(parts) == 0 {
+		return ""
 	}
-	return fmt.Sprintf("All: telecrawl search %s --all", strconv.Quote(value.Query))
+	return fmt.Sprintf("All: trawl telecrawl search %s --all", strings.Join(parts, " "))
+}
+
+func searchCommandParts(value searchEnvelope) []string {
+	var parts []string
+	if query := strings.TrimSpace(value.Query); query != "" {
+		parts = append(parts, strconv.Quote(query))
+	}
+	if who := strings.TrimSpace(value.WhoQuery); who != "" {
+		parts = append(parts, "--who", strconv.Quote(who))
+	}
+	return parts
 }
 
 func nextSearchLimit(limit int) int {

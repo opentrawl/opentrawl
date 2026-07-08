@@ -29,7 +29,7 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 	}
 	st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return nil, commandErr("archive_open_failed", "cannot open the archive database", "remove the old archive and run gogcrawl sync again", err)
+		return nil, commandErr("archive_open_failed", "cannot open the archive database", "remove the old archive and run trawl gogcrawl sync again", err)
 	}
 	startedAt := time.Now().UTC()
 	if err := st.MarkSyncStarted(ctx, startedAt); err != nil {
@@ -50,11 +50,11 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		logGogCommand(req, c.gog, backupGmailPushArgs(repo, c.syncQuery, c.syncMax)...)
 		return c.gog.BackupGmailPush(ctx, gog.BackupPushRequest{Repo: repo, Query: c.syncQuery, Max: c.syncMax})
 	}); err != nil {
-		return nil, commandErr("gog_backup_failed", "Gmail backup failed", "run gogcrawl doctor", err)
+		return nil, commandErr("gog_backup_failed", "Gmail backup failed", "run trawl gogcrawl doctor", err)
 	}
 	shards, err := archive.LoadBackupManifest(repo)
 	if err != nil {
-		return nil, commandErr("backup_manifest_failed", "backup manifest cannot be read", "run gogcrawl sync again", err)
+		return nil, commandErr("backup_manifest_failed", "backup manifest cannot be read", "run trawl gogcrawl sync again", err)
 	}
 	pending, err := st.PendingBackupShards(ctx, shards)
 	if err != nil {
@@ -103,7 +103,7 @@ func (c *Crawler) ensureBackupRepo(ctx context.Context, repo string) error {
 			return commandErr("backup_repo_failed", "backup repo parent cannot be created", "check --backup-repo", err)
 		}
 		if err := c.gog.BackupInit(ctx, repo); err != nil {
-			return commandErr("gog_backup_init_failed", "backup repo could not be initialised", "upgrade gogcli and run gogcrawl doctor", err)
+			return commandErr("gog_backup_init_failed", "backup repo could not be initialised", "upgrade gogcli and run trawl gogcrawl doctor", err)
 		}
 		if err := removeBackupRemotes(repo); err != nil {
 			return commandErr("backup_repo_failed", "backup repo remote could not be removed", "check --backup-repo", err)
@@ -181,7 +181,7 @@ func (c *Crawler) ingestPendingShards(ctx context.Context, req *crawlkit.Request
 		})
 		decryptElapsed := time.Since(decryptStarted)
 		if err != nil {
-			return out, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), "run gogcrawl doctor", err)
+			return out, commandErr("gog_backup_cat_failed", fmt.Sprintf("backup shard cannot be decrypted: %s", shard.Path), "run trawl gogcrawl doctor", err)
 		}
 		ingestStarted := time.Now()
 		result, err := st.IngestBackupShard(ctx, shard, plaintext)

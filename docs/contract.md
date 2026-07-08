@@ -263,13 +263,11 @@ These apply to every command, both output modes:
   the point of use, logging one line when they do — derived state
   self-heals; there are no repair verbs.
 
-## Conformance
+## Contract checks
 
-The conformance harness (this repo, phase 1) verifies a binary against
-this document: command grammar, JSON shapes, bounds, secret patterns,
-read-only reads, and behaviour on empty and corrupt archives. A crawler
-that passes is in the suite; one that does not is not. The harness is
-the contract's tripwires — prose drifts, tests do not. The harness
-remembers known defect classes; it is not the quality gate. Output
-changes additionally pass an adversarial model review of raw
-transcripts (see vision.md engineering principles).
+The test suite and `crawlkit/conformance` helpers verify command grammar,
+JSON shapes, bounds, secret patterns, read-only reads, and behaviour on
+empty and corrupt archives. These checks are the contract's tripwires —
+prose drifts, tests do not. They remember known defect classes; they are
+not the quality gate. Output changes additionally pass an adversarial
+model review of raw transcripts (see vision.md engineering principles).

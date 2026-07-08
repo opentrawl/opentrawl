@@ -13,15 +13,12 @@ import (
 	cklog "github.com/openclaw/crawlkit/log"
 	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/telecrawl/internal/backup"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
 const appID = "telecrawl"
 
-type Config struct {
-	Backup backup.Config `toml:"backup"`
-}
+type Config struct{}
 
 type Crawler struct {
 	cfg Config
@@ -34,7 +31,6 @@ type Crawler struct {
 	messages messageOptions
 	contacts listOptions
 	topics   topicsOptions
-	backup   backupOptions
 }
 
 type doctorOptions struct {
@@ -92,22 +88,10 @@ type topicsOptions struct {
 	All      bool
 }
 
-type backupOptions struct {
-	Repo       string
-	Remote     string
-	Identity   string
-	Recipients []string
-	NoPush     bool
-	Ref        string
-	Tag        string
-	Limit      int
-	LimitSet   bool
-}
-
 var _ crawlkit.FullCrawler = (*Crawler)(nil)
 
 func New() *Crawler {
-	return &Crawler{cfg: Config{Backup: backup.DefaultConfig()}}
+	return &Crawler{}
 }
 
 func (c *Crawler) Info() crawlkit.Info {
@@ -121,7 +105,7 @@ func (c *Crawler) Info() crawlkit.Info {
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"telegram-desktop", "telegram-macos-postbox", "sqlite", "encrypted-git-backup"},
+			LocalOnlyScopes:         []string{"telegram-desktop", "telegram-macos-postbox", "sqlite"},
 		},
 	}
 }
@@ -136,11 +120,6 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 		{Name: "topics", Help: "List archived Telegram forum topics.", Flags: c.bindTopicsFlags, Run: c.runTopics},
 		{Name: "messages", Help: "List archived Telegram messages.", Flags: c.bindMessagesFlags, Run: c.runMessages},
 		{Name: "contacts", Help: "List archived Telegram contacts.", Flags: c.bindContactsFlags, Run: c.runContacts},
-		{Name: "backup init", Help: "Initialise the encrypted Telegram backup.", Flags: c.bindBackupFlags, Mutates: true, Store: crawlkit.StoreNone, Run: c.backupInit},
-		{Name: "backup push", Help: "Push an encrypted Telegram backup snapshot.", Flags: c.bindBackupFlags, Mutates: true, Run: c.backupPush},
-		{Name: "backup pull", Help: "Restore the Telegram archive from backup.", Flags: c.bindBackupFlags, Mutates: true, Run: c.backupPull},
-		{Name: "backup status", Help: "Show encrypted Telegram backup status.", Flags: c.bindBackupFlags, Store: crawlkit.StoreNone, Run: c.backupStatus},
-		{Name: "backup snapshots", Help: "List encrypted Telegram backup snapshots.", Flags: c.bindBackupFlags, Store: crawlkit.StoreNone, Run: c.backupSnapshots},
 	}
 }
 
@@ -269,21 +248,6 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.messages.HasMedia, "media", false, "only media messages")
 	fs.BoolVar(&c.messages.Pinned, "pinned", false, "only pinned messages")
 	fs.BoolVar(&c.messages.Asc, "asc", false, "oldest messages first")
-}
-
-func (c *Crawler) bindBackupFlags(fs *flag.FlagSet) {
-	c.backup = backupOptions{Limit: 20}
-	fs.StringVar(&c.backup.Repo, "repo", "", "backup repository")
-	fs.StringVar(&c.backup.Remote, "remote", "", "backup remote")
-	fs.StringVar(&c.backup.Identity, "identity", "", "age identity path")
-	fs.StringVar(&c.backup.Ref, "ref", "", "backup ref")
-	fs.StringVar(&c.backup.Tag, "tag", "", "snapshot tag")
-	fs.Var(trackedInt{value: &c.backup.Limit, seen: &c.backup.LimitSet}, "limit", "maximum snapshots")
-	fs.Func("recipient", "age recipient", func(value string) error {
-		c.backup.Recipients = append(c.backup.Recipients, value)
-		return nil
-	})
-	fs.BoolVar(&c.backup.NoPush, "no-push", false, "do not push backup changes")
 }
 
 type trackedInt struct {

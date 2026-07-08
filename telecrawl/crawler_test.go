@@ -19,7 +19,7 @@ func TestCrawlerVerbs(t *testing.T) {
 	for _, verb := range crawler.Verbs() {
 		verbs[verb.Name] = verb
 	}
-	for _, name := range []string{"doctor", "sync", "search", "chats", "folders", "topics", "messages", "contacts", "backup init", "backup push", "backup pull", "backup status", "backup snapshots"} {
+	for _, name := range []string{"doctor", "sync", "search", "chats", "folders", "topics", "messages", "contacts"} {
 		if _, ok := verbs[name]; !ok {
 			t.Fatalf("missing verb %q", name)
 		}
@@ -28,12 +28,6 @@ func TestCrawlerVerbs(t *testing.T) {
 		verb := verbs[name]
 		if verb.Name != name || verb.Flags == nil || verb.Help != "" || verb.Run != nil || verb.Mutates || verb.Timeout != 0 || len(verb.Args) != 0 {
 			t.Fatalf("spine verb %q has invalid declaration: %+v", name, verb)
-		}
-	}
-	for _, name := range []string{"backup init", "backup status", "backup snapshots"} {
-		verb := verbs[name]
-		if verb.Store != crawlkit.StoreNone {
-			t.Fatalf("%s Store = %v, want StoreNone", name, verb.Store)
 		}
 	}
 	if !crawler.Info().ShortRefs {
@@ -107,26 +101,25 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 	}
 	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 0, 0, 0, time.UTC)
-	data := store.SnapshotData{
-		Contacts: []store.Contact{
-			{JID: "100", PeerType: "user", Phone: "+15550100001", FullName: "Alice Example", Username: "alice_example", UpdatedAt: now},
-			{JID: "200", PeerType: "user", FullName: "Bob Example", Username: "bob_example", UpdatedAt: now},
-		},
-		Chats: []store.Chat{{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 1}},
-		Messages: []store.Message{{
-			SourcePK:    1,
-			ChatJID:     "100",
-			ChatName:    "Alice Example",
-			MessageID:   "1",
-			SenderJID:   "100",
-			SenderName:  "Alice Example",
-			Timestamp:   now,
-			Text:        "synthetic launch note",
-			RawType:     0,
-			MessageType: "text",
-		}},
+	contacts := []store.Contact{
+		{JID: "100", PeerType: "user", Phone: "+15550100001", FullName: "Alice Example", Username: "alice_example", UpdatedAt: now},
+		{JID: "200", PeerType: "user", FullName: "Bob Example", Username: "bob_example", UpdatedAt: now},
 	}
-	if err := st.ImportSnapshot(ctx, data, "/synthetic/source", now); err != nil {
+	chats := []store.Chat{{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 1}}
+	messages := []store.Message{{
+		SourcePK:    1,
+		ChatJID:     "100",
+		ChatName:    "Alice Example",
+		MessageID:   "1",
+		SenderJID:   "100",
+		SenderName:  "Alice Example",
+		Timestamp:   now,
+		Text:        "synthetic launch note",
+		RawType:     0,
+		MessageType: "text",
+	}}
+	stats := store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
+	if err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.RebuildShortRefs(ctx); err != nil {

@@ -180,7 +180,7 @@ func checkArchivePresent(req *crawlkit.Request) crawlkit.Check {
 			ID:      "archive",
 			State:   "fail",
 			Message: "archive has not been synced",
-			Remedy:  "run: calcrawl sync",
+			Remedy:  "run: trawl calcrawl sync",
 		}
 	}
 	return crawlkit.Check{ID: "archive", State: "ok"}
@@ -192,7 +192,7 @@ func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Che
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema is not current",
-			Remedy:  "run: calcrawl sync",
+			Remedy:  "run: trawl calcrawl sync",
 		}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -201,7 +201,7 @@ func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Che
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema is not current",
-			Remedy:  "run: calcrawl sync",
+			Remedy:  "run: trawl calcrawl sync",
 		}
 	}
 	if _, err := st.Status(ctx); err != nil {
@@ -209,7 +209,7 @@ func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Che
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema could not be inspected",
-			Remedy:  "run: calcrawl sync",
+			Remedy:  "run: trawl calcrawl sync",
 		}
 	}
 	return crawlkit.Check{ID: "schema", State: "ok"}

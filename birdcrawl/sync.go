@@ -416,7 +416,7 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		if fetched {
 			r.recordPartialSync(st, "partial: rate limited")
 		}
-		return r.contractError("rate_limited", "X API rate limit reached", "re-run birdcrawl sync; it resumes from the committed cursor")
+		return r.contractError("rate_limited", "X API rate limit reached", "re-run trawl birdcrawl sync; it resumes from the committed cursor")
 	case errors.As(err, &deficient):
 		return r.contractError("deficient_input", err.Error(), "check the X API response shape before storing more rows")
 	case errors.As(err, &authErr):
@@ -432,7 +432,7 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		if fetched {
 			r.recordPartialSync(st, "partial: X credits exhausted")
 		}
-		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side", "buy credits or raise the spend cap in the X developer console (Billing), then re-run birdcrawl sync")
+		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side", "buy credits or raise the spend cap in the X developer console (Billing), then re-run trawl birdcrawl sync")
 	case errors.As(err, &budget):
 		if fetched {
 			r.recordPartialSync(st, "partial: budget exhausted")

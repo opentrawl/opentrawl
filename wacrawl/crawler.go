@@ -2,17 +2,14 @@ package wacrawl
 
 import (
 	"flag"
-	"time"
 
 	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/wacrawl/internal/backup"
 )
 
 type Config struct {
-	Source    string        `toml:"source,omitempty"`
-	CopyMedia bool          `toml:"copy_media,omitempty"`
-	Backup    backup.Config `toml:"backup,omitempty"`
+	Source    string `toml:"source,omitempty"`
+	CopyMedia bool   `toml:"copy_media,omitempty"`
 }
 
 type Crawler struct {
@@ -23,10 +20,6 @@ type Crawler struct {
 	chatsUnread bool
 
 	messageFlags messageFlagValues
-
-	backupOpts   backup.Options
-	backupNoPush bool
-	backupLimit  intFlag
 }
 
 var _ crawlkit.FullCrawler = (*Crawler)(nil)
@@ -46,7 +39,7 @@ func (c *Crawler) Info() crawlkit.Info {
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
-			LocalOnlyScopes:         []string{"whatsapp-desktop", "sqlite", "encrypted-git-backup", "contact-export"},
+			LocalOnlyScopes:         []string{"whatsapp-desktop", "sqlite", "contact-export"},
 		},
 	}
 }
@@ -70,45 +63,6 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Help:  "List archived WhatsApp messages.",
 			Flags: c.bindMessageFlags,
 			Run:   c.runMessages,
-		},
-		{
-			Name:    "backup init",
-			Help:    "Create encrypted Git backup configuration.",
-			Flags:   c.bindBackupInitFlags,
-			Mutates: true,
-			Store:   crawlkit.StoreNone,
-			Timeout: 10 * time.Minute,
-			Run:     c.runBackupInit,
-		},
-		{
-			Name:    "backup push",
-			Help:    "Write an encrypted Git backup snapshot.",
-			Flags:   c.bindBackupPushFlags,
-			Mutates: true,
-			Timeout: 10 * time.Minute,
-			Run:     c.runBackupPush,
-		},
-		{
-			Name:    "backup pull",
-			Help:    "Restore an encrypted Git backup snapshot.",
-			Flags:   c.bindBackupPullFlags,
-			Mutates: true,
-			Timeout: 10 * time.Minute,
-			Run:     c.runBackupPull,
-		},
-		{
-			Name:  "backup status",
-			Help:  "Show encrypted Git backup status.",
-			Flags: c.bindBackupStatusFlags,
-			Store: crawlkit.StoreNone,
-			Run:   c.runBackupStatus,
-		},
-		{
-			Name:  "backup snapshots",
-			Help:  "List encrypted Git backup snapshots.",
-			Flags: c.bindBackupSnapshotsFlags,
-			Store: crawlkit.StoreNone,
-			Run:   c.runBackupSnapshots,
 		},
 	}
 }

@@ -7,18 +7,14 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/output"
 	ckstore "github.com/openclaw/crawlkit/store"
-	"github.com/openclaw/wacrawl/internal/backup"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -128,63 +124,18 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("metadata JSON: %v\n%s", err, stdout)
 	}
-	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "unread", "messages", "backup_init", "backup_push", "backup_pull", "backup_status", "backup_snapshots"} {
+	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "unread", "messages"} {
 		if !stringSliceContains(manifest.Capabilities, capability) {
 			t.Fatalf("capabilities = %#v, missing %s", manifest.Capabilities, capability)
 		}
 	}
-	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "unread", "messages", "backup_init", "backup_push", "backup_pull", "backup_status", "backup_snapshots"} {
+	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "unread", "messages"} {
 		if _, ok := manifest.Commands[command]; !ok {
 			t.Fatalf("commands = %#v, missing %s", manifest.Commands, command)
 		}
 	}
 	if manifest.SchemaVersion != control.RunnerManifestVersion {
 		t.Fatalf("schema version = %d, want %d", manifest.SchemaVersion, control.RunnerManifestVersion)
-	}
-}
-
-func TestBackupInitWritesRootConfigOnly(t *testing.T) {
-	ctx := context.Background()
-	stateRoot := t.TempDir()
-	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "wacrawl", "wacrawl.db"),
-		Config:  filepath.Join(stateRoot, "wacrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "wacrawl", "logs"),
-	}
-	remote := filepath.Join(t.TempDir(), "remote.git")
-	if err := exec.Command("git", "init", "--bare", remote).Run(); err != nil {
-		t.Fatal(err)
-	}
-	crawler := New()
-	crawler.backupOpts = backup.Options{
-		Config:   crawler.cfg.Backup,
-		Repo:     filepath.Join(t.TempDir(), "backup"),
-		Remote:   remote,
-		Identity: filepath.Join(t.TempDir(), "age.key"),
-		Push:     false,
-	}
-	crawler.backupNoPush = true
-	var stdout bytes.Buffer
-	req := &crawlkit.Request{Paths: paths, Format: output.Text, Out: &stdout}
-	t.Setenv("GIT_AUTHOR_NAME", "OpenTrawl Test")
-	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
-	t.Setenv("GIT_COMMITTER_NAME", "OpenTrawl Test")
-	t.Setenv("GIT_COMMITTER_EMAIL", "test@example.com")
-	if err := crawler.runBackupInit(ctx, req); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(stdout.String(), "recipient=age1") {
-		t.Fatalf("backup init output = %s", stdout.String())
-	}
-	var cfg Config
-	if err := config.LoadTOML(paths.Config, &cfg); err != nil {
-		t.Fatal(err)
-	}
-	if cfg.Backup.Repo == "" || cfg.Backup.Identity == "" || len(cfg.Backup.Recipients) != 1 {
-		t.Fatalf("root config = %#v", cfg)
-	}
-	if _, err := os.Stat(filepath.Join(stateRoot, "wacrawl", "backup.json")); !os.IsNotExist(err) {
-		t.Fatalf("backup.json should not exist, stat err=%v", err)
 	}
 }
 

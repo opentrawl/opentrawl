@@ -23,15 +23,15 @@ func printChatsText(w io.Writer, value chatListOutput) error {
 		return err
 	}
 	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: imsgcrawl chats --limit %d\nAll: imsgcrawl chats --all\n", nextLimit(value.Limit, value.Total)); err != nil {
+		if _, err := fmt.Fprintf(w, "More: trawl imsgcrawl chats --limit %d\nAll: trawl imsgcrawl chats --all\n", nextLimit(value.Limit, value.Total)); err != nil {
 			return err
 		}
 	}
-	if _, err := io.WriteString(w, "Open: imsgcrawl messages --chat CHAT_ID\n\n"); err != nil {
+	if _, err := io.WriteString(w, "Open: trawl imsgcrawl messages --chat CHAT_ID\n\n"); err != nil {
 		return err
 	}
 	if len(value.Items) == 0 {
-		_, err := io.WriteString(w, "No chats yet. Run imsgcrawl sync.\n")
+		_, err := io.WriteString(w, "No chats yet. Run trawl imsgcrawl sync.\n")
 		return err
 	}
 	rows := make([][]string, 0, len(value.Items))
@@ -62,11 +62,11 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	var hints []string
 	if !value.Complete {
 		hints = append(hints,
-			fmt.Sprintf("More: imsgcrawl messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
-			fmt.Sprintf("All: imsgcrawl messages --chat %s --all", value.ChatID),
+			fmt.Sprintf("More: trawl imsgcrawl messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
+			fmt.Sprintf("All: trawl imsgcrawl messages --chat %s --all", value.ChatID),
 		)
 	}
-	hints = append(hints, "Search: imsgcrawl search QUERY")
+	hints = append(hints, "Search: trawl imsgcrawl search QUERY")
 	items := make([]render.ListItem, 0, len(value.Items))
 	for _, item := range value.Items {
 		items = append(items, render.ListItem{

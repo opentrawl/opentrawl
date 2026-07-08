@@ -50,5 +50,5 @@ func commandErr(kind, message, remedy string, err error) error {
 }
 
 func archiveErr(err error) error {
-	return commandErr("archive_missing", "archive database is not ready", "run gogcrawl sync", err)
+	return commandErr("archive_missing", "archive database is not ready", "run trawl gogcrawl sync", err)
 }

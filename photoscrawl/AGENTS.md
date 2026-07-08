@@ -150,7 +150,7 @@ belongs to a model. Before committing any output-shape change:
    review over summarized output reviews nothing.
 2. Have a model that did not write the change review those transcripts
    adversarially (refute, not approve) against the blind-person test below.
-3. The conformance regexes are tripwires that remember past defects. They are
+3. The contract regexes are tripwires that remember past defects. They are
    never sufficient and passing them proves nothing new. When the model
    review finds a defect class, add a tripwire so it cannot regress — but the
    review itself is the gate.

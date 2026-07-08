@@ -35,7 +35,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	}
 	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
 	if errors.Is(err, archive.ErrMessageNotFound) {
-		return commandErr(1, "not_found", errors.New("message ref was not found"), "run imsgcrawl search --json again and use a current ref")
+		return commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imsgcrawl search --json again and use a current ref")
 	}
 	if err != nil {
 		return err
@@ -54,7 +54,7 @@ func resolveOpenRef(ctx context.Context, st *archive.Store, ref string) (string,
 	messageID, err := parseMessageRef(ref)
 	if err != nil {
 		if errors.Is(err, errForeignRef) {
-			return "", commandErr(1, "foreign_ref", err, "use a ref returned by imsgcrawl search --json")
+			return "", commandErr(1, "foreign_ref", err, "use a ref returned by trawl imsgcrawl search --json")
 		}
 		return "", commandErr(1, "invalid_ref", err, "use a ref in the form imsgcrawl:msg/ID")
 	}
