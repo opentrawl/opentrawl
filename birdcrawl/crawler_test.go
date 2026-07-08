@@ -1,21 +1,27 @@
 package birdcrawl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
+		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	}
+	os.Exit(m.Run())
+}
 
 func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	stateRoot := stateRootForRun(t)
@@ -151,40 +157,50 @@ func runBirdcrawl(t *testing.T, stateRoot string, args ...string) []byte {
 
 func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlResult {
 	t.Helper()
-	binary := buildBirdcrawl(t)
-	cmd := exec.Command(binary, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Env = append(os.Environ(), "HOME="+filepath.Dir(stateRoot))
-	err := cmd.Run()
+	t.Setenv("HOME", filepath.Dir(stateRoot))
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return birdcrawlResult{stdout: stdout.Bytes(), stderr: stderr.String(), code: exitErr.ExitCode()}
-		}
-		t.Fatalf("birdcrawl %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
+		t.Fatal(err)
 	}
-	return birdcrawlResult{stdout: stdout.Bytes(), stderr: stderr.String()}
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	if err := stdoutW.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrW.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := io.ReadAll(stdoutR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := io.ReadAll(stderrR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stdoutR.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrR.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return birdcrawlResult{stdout: stdout, stderr: string(stderr), code: code}
 }
 
 func stateRootForRun(t *testing.T) string {
 	t.Helper()
 	return filepath.Join(t.TempDir(), ".opentrawl")
-}
-
-func buildBirdcrawl(t *testing.T) string {
-	t.Helper()
-	binary := filepath.Join(t.TempDir(), "birdcrawl")
-	cmd := exec.Command("go", "build", "-o", binary, "./cmd/birdcrawl")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Env = os.Environ()
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("build birdcrawl: %v\nstderr:\n%s", err, stderr.String())
-	}
-	return binary
 }
 
 func seedSpend(t *testing.T, stateRoot, month string, micros int64) {

@@ -44,13 +44,14 @@ The layers, bottom to top:
 
 1. Source apps: Messages, Telegram, WhatsApp, Gmail, Calendar, Notes,
    Signal, and later Photos, X and others.
-2. Source crawlers: one Go binary per source. Each owns extraction, its
-   own archive database, auth and session handling, search, status and
-   privacy policy. Each conforms to the shared control contract.
+2. Source crawlers: one Go package per source, registered behind
+   `trawl`. Each owns extraction, its own archive database, auth and
+   session handling, search, status and privacy policy. Each conforms
+   to the shared control contract.
 3. Control contract: a crawlkit-defined JSON contract every crawler
    speaks: `metadata`, `status`, `sync`, `search`, `open`, `doctor` and
    `contacts export`, all with `--json`, all bounded, all human readable.
-4. Federation surface: one CLI (`trawl`) that discovers installed
+4. Federation surface: one CLI (`trawl`) that runs registered
    crawlers through the contract and gives agents and humans a single
    surface: status across everything, sync anything, search across
    sources. One Mac app that shows the key per-crawler metrics and

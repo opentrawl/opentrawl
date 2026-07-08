@@ -25,14 +25,14 @@ documents/screenshots/receipts exist, and which assets belong together.
 ## First Commands
 
 ```sh
-go run ./cmd/photoscrawl metadata --json
-go run ./cmd/photoscrawl status --json
-go run ./cmd/photoscrawl doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
-go run ./cmd/photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
-go run ./cmd/photoscrawl classify --limit 100 --json
-go run ./cmd/photoscrawl classify --model gemma4:e4b --limit 20 --json
-go run ./cmd/photoscrawl search "drone beach portugal" --json
-go run ./cmd/photoscrawl open photoscrawl:asset/<32-hex> --json
+trawl photoscrawl metadata --json
+trawl photoscrawl status --json
+trawl photoscrawl doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+trawl photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+trawl photoscrawl classify --limit 100 --json
+trawl photoscrawl classify --model gemma4:e4b --limit 20 --json
+trawl photoscrawl search "drone beach portugal" --json
+trawl photoscrawl open photoscrawl:asset/<32-hex> --json
 ```
 
 Human search output shows a short ref when the archive can resolve it safely.

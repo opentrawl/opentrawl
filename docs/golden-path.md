@@ -93,8 +93,8 @@ outputs.
 
 Enforces: agents run unimpeded; declarative, minimal install surface.
 
-- [ ] installs as a real binary (dev shell and tap); `go run` is not a
-      product
+- [ ] is reachable through `trawl` from the dev shell and packaged
+      builds; `go run` is not a product
 - [ ] doctor diagnoses the real failure modes — missing TCC grant (by
       canary read, per [tcc.md](tcc.md)), expired auth, missing source
       app, stale schema — each with the exact remedy command

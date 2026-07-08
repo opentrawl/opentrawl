@@ -14,23 +14,10 @@ WhatsApp Web, or write back into WhatsApp's app container.
 
 ## Install
 
-Build from the monorepo root; the binary lands in the repo-local bin
-directory that `trawl` discovers:
+Build `trawl` from the monorepo root:
 
 ```bash
 scripts/dev-bin
-```
-
-Or build just this crawler, from this directory:
-
-```bash
-go build ./cmd/wacrawl
-```
-
-Check the built binary:
-
-```bash
-wacrawl --version
 ```
 
 ## Quick Start
@@ -38,34 +25,34 @@ wacrawl --version
 First, check whether `wacrawl` can see the local WhatsApp Desktop data:
 
 ```bash
-wacrawl doctor
+trawl wacrawl doctor
 ```
 
 Sync a fresh local archive:
 
 ```bash
-wacrawl sync
+trawl wacrawl sync
 ```
 
 Inspect what was imported:
 
 ```bash
-wacrawl status
-wacrawl chats --limit 20
-wacrawl unread --limit 20
-wacrawl messages --limit 20
+trawl wacrawl status
+trawl wacrawl chats --limit 20
+trawl wacrawl unread --limit 20
+trawl wacrawl messages --limit 20
 ```
 
 Search message text:
 
 ```bash
-wacrawl search "release notes"
+trawl wacrawl search "release notes"
 ```
 
 Use JSON for scripts:
 
 ```bash
-wacrawl --json search "invoice" --from-them --after 2026-01-01
+trawl --json wacrawl search "invoice" --from-them --after 2026-01-01
 ```
 
 ## What It Reads
@@ -118,8 +105,8 @@ local and out of commits, backups, and shared logs unless that is intentional.
 Inspect the source path and database shape:
 
 ```bash
-wacrawl doctor
-wacrawl --json doctor
+trawl wacrawl doctor
+trawl --json wacrawl doctor
 ```
 
 Reports source availability, discovered database files, row counts, message date
@@ -130,7 +117,7 @@ range, and importer schema notes.
 Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 
 ```bash
-wacrawl sync
+trawl wacrawl sync
 ```
 
 Imports:
@@ -153,13 +140,13 @@ Missing media files are counted in the import output and do not fail the import.
 Show archive counts and metadata:
 
 ```bash
-wacrawl status
+trawl wacrawl status
 ```
 
 Includes message, media-message, chat, unread-chat, unread-message, contact,
 group, participant, source, and timestamp fields when they are available.
 
-`status` reads the existing archive. Run `wacrawl sync` when you want to
+`status` reads the existing archive. Run `trawl wacrawl sync` when you want to
 refresh from WhatsApp Desktop.
 
 ### `chats`
@@ -167,9 +154,9 @@ refresh from WhatsApp Desktop.
 List chats ordered by newest message:
 
 ```bash
-wacrawl chats
-wacrawl chats --limit 100
-wacrawl chats --unread
+trawl wacrawl chats
+trawl wacrawl chats --limit 100
+trawl wacrawl chats --unread
 ```
 
 Unread state comes from WhatsApp Desktop's per-chat unread counter. Message
@@ -180,8 +167,8 @@ rows do not expose a reliable incoming per-message "read by me" flag.
 List only chats with unread messages:
 
 ```bash
-wacrawl unread
-wacrawl unread --limit 100
+trawl wacrawl unread
+trawl wacrawl unread --limit 100
 ```
 
 ### `messages`
@@ -189,10 +176,10 @@ wacrawl unread --limit 100
 List archived messages:
 
 ```bash
-wacrawl messages
-wacrawl messages --chat 1234567890@s.whatsapp.net
-wacrawl messages --after 2026-01-01 --from-them
-wacrawl messages --has-media --json
+trawl wacrawl messages
+trawl wacrawl messages --chat 1234567890@s.whatsapp.net
+trawl wacrawl messages --after 2026-01-01 --from-them
+trawl wacrawl messages --has-media --json
 ```
 
 Filters:
@@ -214,9 +201,9 @@ Filters:
 Search the archive with SQLite FTS5:
 
 ```bash
-wacrawl search "launch"
-wacrawl search "invoice" --after 2026-01-01 --who "Alice Example"
-wacrawl --json search "restaurant"
+trawl wacrawl search "launch"
+trawl wacrawl search "invoice" --after 2026-01-01 --who "Alice Example"
+trawl --json wacrawl search "restaurant"
 ```
 
 Search uses message text, chat name, sender name, and media title fields. It
@@ -231,9 +218,9 @@ the WhatsApp Desktop source or changing local state.
 Examples:
 
 ```bash
-wacrawl sync
-wacrawl status
-wacrawl --json messages --limit 10
+trawl wacrawl sync
+trawl wacrawl status
+trawl --json wacrawl messages --limit 10
 ```
 
 ## Encrypted Git Backup
@@ -274,45 +261,45 @@ Use these most of the time:
 
 ```bash
 # First-time setup on a machine.
-wacrawl backup init \
+trawl wacrawl backup init \
   --repo ~/Projects/backup-wacrawl \
   --remote https://github.com/steipete/backup-wacrawl.git
 
 # Refresh WhatsApp data if needed, encrypt, commit, and push to GitHub.
-wacrawl backup push
+trawl wacrawl backup push
 
 # Pull the Git backup, decrypt, verify, and import into the local archive.
-wacrawl backup pull
+trawl wacrawl backup pull
 
 # List restorable commits and any snapshot tags.
-wacrawl backup snapshots
+trawl wacrawl backup snapshots
 
 # Inspect the backup manifest without decrypting message data.
-wacrawl backup status
+trawl wacrawl backup status
 ```
 
 Useful safety variants:
 
 ```bash
 # Force a fresh WhatsApp sync before writing the backup.
-wacrawl sync
-wacrawl backup push
+trawl wacrawl sync
+trawl wacrawl backup push
 
 # Write and commit locally, but do not push to GitHub.
-wacrawl backup push --no-push
+trawl wacrawl backup push --no-push
 
 # Create a named checkpoint while pushing a backup.
-wacrawl backup push --tag snapshot/before-phone-migration
+trawl wacrawl backup push --tag snapshot/before-phone-migration
 
 # Restore into a temporary home for testing.
 backup_repo="$HOME/Projects/backup-wacrawl"
 backup_identity="$HOME/.opentrawl/wacrawl/age.key"
 test_home="$(mktemp -d)"
-HOME="$test_home" wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
-HOME="$test_home" wacrawl status
+HOME="$test_home" trawl wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" trawl wacrawl status
 
 # Restore a historical tag, commit, or branch without changing the backup checkout.
-wacrawl backup pull --ref snapshot/before-phone-migration
+trawl wacrawl backup pull --ref snapshot/before-phone-migration
 ```
 
 You should not need to run `git` manually for normal use. `backup push` handles
@@ -339,7 +326,7 @@ That file contains an `AGE-SECRET-KEY-...` private identity and is written with
 0600 permissions. Its matching public recipient starts with `age1...` and is
 safe to place in `~/.opentrawl/wacrawl/config.toml`, `manifest.json`, or docs.
 
-For each shard, `wacrawl backup push`:
+For each shard, `trawl wacrawl backup push`:
 
 1. Exports rows from the local archive as deterministic JSONL.
 2. Streams copied media through hashing, gzip, and age encryption in one pass.
@@ -348,7 +335,7 @@ For each shard, `wacrawl backup push`:
 5. Writes only encrypted `*.jsonl.gz.age` payloads to Git.
 6. Writes `manifest.json` with cleartext metadata used for status, diffing, and restore verification.
 
-`wacrawl backup pull` does the reverse: it pulls/rebases the backup repo,
+`trawl wacrawl backup pull` does the reverse: it pulls/rebases the backup repo,
 checks manifest shard paths, decrypts each shard with the local age identity,
 verifies row and media hashes, restores copied media under `media/` next to the
 configured database, localizes portable media paths, validates cross-table
@@ -381,7 +368,7 @@ Important limits:
 - If `~/.opentrawl/wacrawl/age.key` is lost and no other configured recipient exists, the
   encrypted backup cannot be restored.
 - If an age identity is compromised, remove its public recipient, run
-  `wacrawl backup push` to re-encrypt current shards, and consider rewriting or
+  `trawl wacrawl backup push` to re-encrypt current shards, and consider rewriting or
   deleting old Git history because older commits may still be decryptable with
   the compromised key.
 - X25519 age recipients are not post-quantum. They are a practical modern
@@ -395,7 +382,7 @@ Important limits:
 Initialize the backup repository and local age identity:
 
 ```bash
-wacrawl backup init \
+trawl wacrawl backup init \
   --repo ~/Projects/backup-wacrawl \
   --remote https://github.com/steipete/backup-wacrawl.git
 ```
@@ -423,17 +410,17 @@ password manager.
 Push an encrypted backup:
 
 ```bash
-wacrawl backup push
+trawl wacrawl backup push
 ```
 
 `backup push` first pulls/rebases the configured backup checkout, then exports
-the current local archive. Run `wacrawl sync` before `backup push` when you
+the current local archive. Run `trawl wacrawl sync` before `backup push` when you
 want to include the latest WhatsApp Desktop data. It exports stable JSONL,
 gzip-compresses each
 shard, encrypts each shard for every configured recipient, updates
 `manifest.json`, removes stale encrypted shards, commits, and pushes the backup
 repo. Copied files already under the archive `media/` directory are included by
-default; set `copy_media = true` and run `wacrawl sync` first to capture media
+default; set `copy_media = true` and run `trawl wacrawl sync` first to capture media
 bytes still available from WhatsApp Desktop. `backup push` never reads media
 directly from the WhatsApp container.
 
@@ -449,7 +436,7 @@ Use `--no-push` for local dry runs that commit into the backup checkout but do
 not push to the remote:
 
 ```bash
-wacrawl backup push --no-push
+trawl wacrawl backup push --no-push
 ```
 
 Use `--no-media` to omit copied media from a snapshot. The current backup then
@@ -460,7 +447,7 @@ contains archive rows only; earlier Git commits still retain their media blobs.
 Restore from the backup repo:
 
 ```bash
-wacrawl backup pull
+trawl wacrawl backup pull
 ```
 
 `backup pull` pulls/rebases the configured backup repo, decrypts every shard with
@@ -472,7 +459,7 @@ database unless `--no-media` is set.
 Restore a historical tag, commit, or branch with `--ref`:
 
 ```bash
-wacrawl backup pull --ref snapshot/before-phone-migration
+trawl wacrawl backup pull --ref snapshot/before-phone-migration
 ```
 
 Historical restore resolves the ref to a commit and reads its manifest and
@@ -485,8 +472,8 @@ To test a restore without touching your real archive:
 backup_repo="$HOME/Projects/backup-wacrawl"
 backup_identity="$HOME/.opentrawl/wacrawl/age.key"
 test_home="$(mktemp -d)"
-HOME="$test_home" wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
-HOME="$test_home" wacrawl status
+HOME="$test_home" trawl wacrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" trawl wacrawl status
 ```
 
 ### Status
@@ -494,7 +481,7 @@ HOME="$test_home" wacrawl status
 Inspect backup metadata:
 
 ```bash
-wacrawl backup status
+trawl wacrawl backup status
 ```
 
 This reports encryption status, shard count, message count, export timestamp,
@@ -505,7 +492,7 @@ and repo path. It reads `manifest.json`; it does not need to decrypt shards.
 Each machine that should restore needs its own age identity. On the new machine:
 
 ```bash
-wacrawl backup init \
+trawl wacrawl backup init \
   --repo ~/Projects/backup-wacrawl \
   --remote https://github.com/steipete/backup-wacrawl.git
 ```
@@ -515,12 +502,12 @@ Copy the printed public recipient (`age1...`) into `backup.recipients` in
 run:
 
 ```bash
-wacrawl backup push
+trawl wacrawl backup push
 ```
 
 After that push, newly written shards are encrypted for all configured
 recipients. If you added a recipient after data already existed, run a normal
-`wacrawl backup push`; unchanged plaintext shards are re-encrypted when the
+`trawl wacrawl backup push`; unchanged plaintext shards are re-encrypted when the
 manifest/config changes.
 
 For personal setup, storing a copy of `~/.opentrawl/wacrawl/age.key` in 1Password is a
@@ -563,8 +550,8 @@ recipients = ["age1..."]
 Finally:
 
 ```bash
-wacrawl backup pull
-wacrawl status
+trawl wacrawl backup pull
+trawl wacrawl status
 ```
 
 If decryption fails, the local `identity` does not match any recipient used for
@@ -610,7 +597,6 @@ Requires Go 1.26 or newer.
 
 ```bash
 go test ./...
-go build -o bin/wacrawl ./cmd/wacrawl
 ```
 
 Regenerate sqlc wrappers after changing `internal/store/sqlc/`:

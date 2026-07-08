@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
-	"strings"
 	"testing"
 
 	"github.com/openclaw/crawlkit"
@@ -18,6 +17,13 @@ import (
 	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 )
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
+		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	}
+	os.Exit(m.Run())
+}
 
 func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	installFakeGog(t)
@@ -185,11 +191,10 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 }
 
 func TestRunContactsExportStoreNoneFreshNoArchive(t *testing.T) {
-	binary := buildGogcrawl(t)
 	installFakeGog(t)
 	stateRoot := stateRootForRun(t)
 	archivePath := archivePathForRun(stateRoot)
-	code, stdout, stderr := runGogcrawlBinary(t, binary, stateRoot, "contacts", "export", "--json")
+	code, stdout, stderr := runGogcrawl(t, stateRoot, "contacts", "export", "--json")
 	if code != 0 {
 		t.Fatalf("contacts export code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -207,11 +212,10 @@ func TestRunContactsExportStoreNoneFreshNoArchive(t *testing.T) {
 }
 
 func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
-	binary := buildGogcrawl(t)
 	installFakeGog(t)
 	stateRoot := stateRootForRun(t)
 	archivePath := archivePathForRun(stateRoot)
-	code, stdout, stderr := runGogcrawlBinary(t, binary, stateRoot, "sync", "--query", "project", "--max", "25", "--json")
+	code, stdout, stderr := runGogcrawl(t, stateRoot, "sync", "--query", "project", "--max", "25", "--json")
 	if code != 0 {
 		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -265,26 +269,45 @@ func flagSet(name string) *flag.FlagSet {
 
 func runGogcrawl(t *testing.T, stateRoot string, args ...string) (int, string, string) {
 	t.Helper()
-	binary := buildGogcrawl(t)
-	return runGogcrawlBinary(t, binary, stateRoot, args...)
-}
-
-func runGogcrawlBinary(t *testing.T, binary, stateRoot string, args ...string) (int, string, string) {
-	t.Helper()
-	cmd := exec.Command(binary, args...)
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	cmd.Env = envWithHome(os.Environ(), filepath.Dir(stateRoot))
-	err := cmd.Run()
+	t.Setenv("HOME", filepath.Dir(stateRoot))
+	oldStdout := os.Stdout
+	oldStderr := os.Stderr
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return exitErr.ExitCode(), stdout.String(), stderr.String()
-		}
-		t.Fatalf("gogcrawl %v: %v\nstdout:\n%s\nstderr:\n%s", args, err, stdout.String(), stderr.String())
+		t.Fatal(err)
 	}
-	return 0, stdout.String(), stderr.String()
+	stderrR, stderrW, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutW
+	os.Stderr = stderrW
+	defer func() {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+	}()
+	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	if err := stdoutW.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrW.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := io.ReadAll(stdoutR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stderr, err := io.ReadAll(stderrR)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stdoutR.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := stderrR.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return code, string(stdout), string(stderr)
 }
 
 func stateRootForRun(t *testing.T) string {
@@ -294,30 +317,6 @@ func stateRootForRun(t *testing.T) string {
 
 func archivePathForRun(stateRoot string) string {
 	return filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db")
-}
-
-func envWithHome(env []string, home string) []string {
-	out := make([]string, 0, len(env)+1)
-	for _, entry := range env {
-		if strings.HasPrefix(entry, "HOME=") {
-			continue
-		}
-		out = append(out, entry)
-	}
-	return append(out, "HOME="+home)
-}
-
-func buildGogcrawl(t *testing.T) string {
-	t.Helper()
-	binary := filepath.Join(t.TempDir(), "gogcrawl")
-	cmd := exec.Command("go", "build", "-o", binary, "./cmd/gogcrawl")
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	cmd.Env = os.Environ()
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("build gogcrawl: %v\n%s", err, stderr.String())
-	}
-	return binary
 }
 
 func sortedKeys[V any](values map[string]V) []string {
