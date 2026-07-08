@@ -1,4 +1,4 @@
-package cli
+package telecrawl
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ func (r *runtime) printManifest(value control.Manifest) error {
 			{Label: "ID", Value: value.ID},
 			{Label: "Version", Value: value.Version},
 			{Label: "Database", Value: value.Paths.DefaultDatabase},
-			{Label: "Logs", Value: defaultLogPath()},
+			{Label: "Logs", Value: value.Paths.DefaultLogs},
 		},
 		Hints: []string{"JSON: telecrawl metadata --json"},
 	})

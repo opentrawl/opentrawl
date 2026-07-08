@@ -1,42 +1,33 @@
-package cli
+package telecrawl
 
 import (
 	"context"
-	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit"
 	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
 )
 
-func (r *runtime) runImport(command string, args []string) error {
-	fs := flag.NewFlagSet("telecrawl "+command, flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	path := fs.String("path", r.source, "")
-	dialogsLimit := fs.Int("dialogs-limit", telegramdesktop.DefaultDialogsLimit, "")
-	messagesLimit := fs.Int("messages-limit", telegramdesktop.DefaultMessagesLimit, "")
-	chat := fs.String("chat", "", "")
-	fetchMedia := fs.Bool("fetch-media", false, "")
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
-	if fs.NArg() != 0 {
-		return usageErr(errors.New("import takes flags only"))
-	}
-	progress, stopProgress := r.startCommandProgress("sync_progress", "starting sync")
+// Sync reports logical changes in the replaced archive scope by Telegram
+// source message key: added keys were absent before import, updated keys were
+// present with changed archived content, and removed keys were present but
+// absent from import.
+func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+	r := c.handler(ctx, req)
+	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
 	defer stopProgress()
-	return r.withStore(func(st *store.Store) error {
+	var report *crawlkit.SyncReport
+	err := r.withStore(func(st *store.Store) error {
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
-		if *fetchMedia {
+		if c.sync.FetchMedia {
 			var err error
 			existingMediaSourcePath, existingMediaRefs, err = existingMediaRefsForImport(r.ctx, st)
 			if err != nil {
@@ -45,11 +36,11 @@ func (r *runtime) runImport(command string, args []string) error {
 		}
 		importStarted := time.Now()
 		result, err := telegramdesktop.Import(r.ctx, telegramdesktop.ImportOptions{
-			Path:                    *path,
-			DialogsLimit:            *dialogsLimit,
-			MessagesLimit:           *messagesLimit,
-			ChatID:                  *chat,
-			FetchMedia:              *fetchMedia,
+			Path:                    c.sync.Path,
+			DialogsLimit:            c.sync.DialogsLimit,
+			MessagesLimit:           c.sync.MessagesLimit,
+			ChatID:                  c.sync.Chat,
+			FetchMedia:              c.sync.FetchMedia,
 			Progress:                progress,
 			ExistingMediaSourcePath: existingMediaSourcePath,
 			ExistingMediaRefs:       existingMediaRefs,
@@ -58,32 +49,119 @@ func (r *runtime) runImport(command string, args []string) error {
 		if err != nil {
 			return err
 		}
+		if err := prepareImportResultForWrite(r.ctx, st, &result); err != nil {
+			return err
+		}
+		counts, err := syncOperationCounts(r.ctx, st, &result, c.sync.Chat)
+		if err != nil {
+			return err
+		}
 		writeStarted := time.Now()
-		if err := storeImportResult(r.ctx, st, &result, *chat); err != nil {
+		if err := storeImportResult(r.ctx, st, &result, c.sync.Chat); err != nil {
 			return err
 		}
 		writeElapsed := time.Since(writeStarted)
-		r.logImportTimings(result.Stats, importElapsed, writeElapsed, *fetchMedia, *chat)
+		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, c.sync.Chat)
 		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
-		return r.print(result.Stats)
+		report = &crawlkit.SyncReport{Added: counts.Added, Updated: counts.Updated, Removed: counts.Removed}
+		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
+	if report == nil {
+		return &crawlkit.SyncReport{}, nil
+	}
+	return report, nil
 }
 
-// logImportTimings always logs under the canonical "sync" event, never the
-// alias the user typed (import/sync). One operation, one event name, so
-// log analysis and the verbose_logs stream stay stable across aliases.
-func (r *runtime) logImportTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
+type syncOperationReport struct {
+	Added   int64
+	Updated int64
+	Removed int64
+}
+
+func syncOperationCounts(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (syncOperationReport, error) {
+	existing, err := syncExistingMessages(ctx, st, result, chatFilter)
+	if err != nil {
+		return syncOperationReport{}, err
+	}
+	imported := make(map[int64]struct{}, len(result.Messages))
+	var report syncOperationReport
+	for _, message := range result.Messages {
+		imported[message.SourcePK] = struct{}{}
+		existingMessage, ok := existing[message.SourcePK]
+		if !ok {
+			report.Added++
+		} else if normalizedArchivedMessage(existingMessage) != normalizedArchivedMessage(message) {
+			report.Updated++
+		}
+	}
+	for sourcePK := range existing {
+		if _, ok := imported[sourcePK]; !ok {
+			report.Removed++
+		}
+	}
+	return report, nil
+}
+
+func syncExistingMessages(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (map[int64]store.Message, error) {
+	if strings.TrimSpace(chatFilter) == "" {
+		return st.MessageContents(ctx, "")
+	}
+	out := map[int64]store.Message{}
+	for _, chat := range result.Chats {
+		messages, err := st.MessageContents(ctx, chat.JID)
+		if err != nil {
+			return nil, err
+		}
+		for sourcePK, message := range messages {
+			out[sourcePK] = message
+		}
+	}
+	return out, nil
+}
+
+func normalizedArchivedMessage(message store.Message) store.Message {
+	message.Snippet = ""
+	message.Timestamp = archivedTime(message.Timestamp)
+	message.EditTime = archivedTime(message.EditTime)
+	return message
+}
+
+func archivedTime(t time.Time) time.Time {
+	if t.IsZero() {
+		return time.Time{}
+	}
+	return time.Unix(t.UTC().Unix(), 0).UTC()
+}
+
+// logSyncTimings uses one canonical sync event for the one canonical verb.
+// The event name is hardcoded so log analysis and verbose output stay stable.
+func (r *runtime) logSyncTimings(stats store.ImportStats, importElapsed, writeElapsed time.Duration, fetchMedia bool, chatFilter string) {
 	totalElapsed := stats.FinishedAt.Sub(stats.StartedAt)
 	if totalElapsed <= 0 {
 		totalElapsed = importElapsed + writeElapsed
 	}
-	_ = r.logInfo("sync_done", strings.Join([]string{
+	parts := []string{
 		"messages=" + strconv.Itoa(stats.Messages),
 		"chats=" + strconv.Itoa(stats.Chats),
 		"media_messages=" + strconv.Itoa(stats.MediaMessages),
 		"media_files=" + strconv.Itoa(stats.MediaFiles),
 		"elapsed_ms=" + elapsedMS(totalElapsed),
-	}, " "))
+	}
+	if fetchMedia {
+		parts = append(parts,
+			"remote_media_candidates="+strconv.Itoa(stats.RemoteMediaCandidates),
+			"remote_media_attempted="+strconv.Itoa(stats.RemoteMediaAttempted),
+			"remote_media_downloads="+strconv.Itoa(stats.RemoteMediaDownloads),
+			"remote_media_missing="+strconv.Itoa(stats.RemoteMediaMissing),
+			"remote_media_unavailable="+strconv.Itoa(stats.RemoteMediaUnavailable),
+			"remote_media_timeouts="+strconv.Itoa(stats.RemoteMediaTimeouts),
+			"remote_media_errors="+strconv.Itoa(stats.RemoteMediaErrors),
+		)
+	}
+	_ = r.logInfo("sync_done", strings.Join(parts, " "))
 	_ = r.logDebug("sync_phase", strings.Join([]string{
 		"source=" + logQuote("telegram"),
 		"import_ms=" + elapsedMS(importElapsed),
@@ -94,14 +172,20 @@ func (r *runtime) logImportTimings(stats store.ImportStats, importElapsed, write
 }
 
 type commandProgress struct {
+	req      *crawlkit.Request
+	phase    string
 	progress *cklog.Progress
 	done     chan struct{}
 }
 
-func (r *runtime) startCommandProgress(event, firstMessage string) (*commandProgress, func()) {
+func (r *runtime) startCommandProgress(event, phase, firstMessage string) (*commandProgress, func()) {
 	progress := &commandProgress{
-		progress: r.log.Progress(cklog.ProgressOptions{Event: event, Unit: "messages"}),
-		done:     make(chan struct{}),
+		req:   r.req,
+		phase: phase,
+		done:  make(chan struct{}),
+	}
+	if r.log != nil {
+		progress.progress = r.log.Progress(cklog.ProgressOptions{Event: event, Unit: "messages"})
 	}
 	_ = progress.Report(0, firstMessage)
 	go func() {
@@ -124,17 +208,27 @@ func (r *runtime) startCommandProgress(event, firstMessage string) (*commandProg
 }
 
 func (p *commandProgress) Report(done int64, message string) error {
-	if p == nil || p.progress == nil {
+	if p == nil {
+		return nil
+	}
+	if p.req != nil && p.req.Progress != nil {
+		p.req.Progress(crawlkit.Progress{Phase: p.phase, Done: done, Message: message})
+	}
+	if p.progress == nil {
 		return nil
 	}
 	return p.progress.Report(done, message)
 }
 
-func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) error {
+func prepareImportResultForWrite(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult) error {
 	if err := preserveExistingMediaRefs(ctx, st, result.Stats.SourcePath, result.Messages); err != nil {
 		return err
 	}
 	refreshImportMediaStats(result)
+	return nil
+}
+
+func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) error {
 	if strings.TrimSpace(chatFilter) == "" {
 		if err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages); err != nil {
 			return err
@@ -283,6 +377,21 @@ func importResultForChat(result telegramdesktop.ImportResult, chatJID string) te
 	}
 	out.Contacts = contactsForMessages(result.Contacts, out.Messages, out.Participants, chatJID)
 	return out
+}
+
+func logQuote(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	if value == "" {
+		return strconv.Quote("")
+	}
+	if strings.ContainsAny(value, " \t\r\n\"") {
+		return strconv.Quote(value)
+	}
+	return value
+}
+
+func elapsedMS(value time.Duration) string {
+	return strconv.FormatInt(value.Milliseconds(), 10)
 }
 
 func contactsForMessages(contacts []store.Contact, messages []store.Message, participants []store.GroupParticipant, chatJID string) []store.Contact {

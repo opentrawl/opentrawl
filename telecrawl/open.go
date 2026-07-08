@@ -1,12 +1,15 @@
-package cli
+package telecrawl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
+	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
@@ -16,24 +19,29 @@ const (
 	openTranscriptMaxWhoWidth = 32
 )
 
-func (r *runtime) runOpen(args []string) error {
-	if len(args) != 1 {
-		return usageErr(errors.New("open takes exactly one ref"))
+func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+	r := c.handler(ctx, req)
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	return r.withStore(func(st *store.Store) error {
-		sourcePK, err := r.resolveOpenMessageRef(st, args[0])
-		if err != nil {
-			return err
-		}
-		window, err := st.OpenMessageWindow(r.ctx, sourcePK, openContextRadius)
-		if errors.Is(err, store.ErrMessageNotFound) {
-			return r.contractError("not_found", "message was not found in this archive", "Run telecrawl search --json again and use one of the returned refs.")
-		}
-		if err != nil {
-			return err
-		}
-		return r.print(newOpenEnvelope(window))
-	})
+	defer func() { _ = st.Close() }()
+	sourcePK, err := r.resolveOpenMessageRef(st, ref)
+	if err != nil {
+		return err
+	}
+	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
+	if errors.Is(err, store.ErrMessageNotFound) {
+		return r.contractError("not_found", "message was not found in this archive", "Run telecrawl search --json again and use one of the returned refs.")
+	}
+	if err != nil {
+		return err
+	}
+	envelope := newOpenEnvelope(window)
+	if req.Format == ckoutput.JSON {
+		return ckoutput.Write(req.Out, req.Format, "open", envelope)
+	}
+	return r.printOpen(envelope)
 }
 
 func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, error) {

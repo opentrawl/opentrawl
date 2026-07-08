@@ -431,7 +431,7 @@ tag names are visible Git metadata and should not contain sensitive text.
 ` + "```bash" + `
 telecrawl backup pull
 telecrawl backup snapshots
-telecrawl --db /tmp/telecrawl-history.db backup pull --ref snapshot/before-migration
+telecrawl backup pull --ref snapshot/before-migration
 ` + "```" + `
 
 ` + "`backup pull`" + ` decrypts every shard with the local age identity, verifies the
@@ -441,7 +441,7 @@ without changing this checkout's current branch.
 
 ## Recovery
 
-Install telecrawl, clone this repo to the path in ` + "`~/.opentrawl/telecrawl/backup.json`" + `,
+Install telecrawl, clone this repo to the path in ` + "`~/.opentrawl/telecrawl/config.toml`" + `,
 restore the local age identity file, then run:
 
 ` + "```bash" + `

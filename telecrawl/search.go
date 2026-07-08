@@ -1,38 +1,80 @@
-package cli
+package telecrawl
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
-func (r *runtime) runSearch(args []string) error {
-	filter, err := r.messageFilter("telecrawl search", args, true, defaultSearchLimit)
+func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+	r := c.handler(ctx, req)
+	filter, err := c.searchFilter(query)
 	if err != nil {
-		return err
+		return crawlkit.SearchResult{}, err
 	}
-	return r.withStore(func(st *store.Store) error {
-		resolved, err := r.resolveSearchWhoFilter(st, &filter)
-		if err != nil {
-			return err
-		}
-		messages, err := st.Search(r.ctx, filter)
-		if err != nil {
-			return err
-		}
-		total, err := st.CountSearch(r.ctx, filter)
-		if err != nil {
-			return err
-		}
-		shortRefs, err := st.ShortRefsFor(r.ctx, messageRefs(messages))
-		if err != nil {
-			return err
-		}
-		return r.print(newSearchEnvelope(filter.Query, messages, total, filter.Limit, filter.Who, resolved, shortRefs))
-	})
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	defer func() { _ = st.Close() }()
+	resolved, err := r.resolveSearchWhoFilter(st, &filter)
+	if err != nil {
+		return crawlkit.SearchResult{}, err
+	}
+	messages, err := st.Search(ctx, filter)
+	if err != nil {
+		return crawlkit.SearchResult{}, err
+	}
+	total, err := st.CountSearch(ctx, filter)
+	if err != nil {
+		return crawlkit.SearchResult{}, err
+	}
+	shortRefs, err := st.ShortRefsFor(ctx, messageRefs(messages))
+	if err != nil {
+		return crawlkit.SearchResult{}, err
+	}
+	return crawlkit.SearchResult{
+		WhoResolved:  crawlkitWhoResolved(query.WhoResolved, resolved),
+		Results:      searchHits(messages, shortRefs),
+		TotalMatches: total,
+		Truncated:    total > len(messages),
+	}, nil
+}
+
+func (c *Crawler) searchFilter(query crawlkit.Query) (store.MessageFilter, error) {
+	if c.search.FromMe && c.search.FromThem {
+		return store.MessageFilter{}, usageErr(errors.New("--from-me and --from-them conflict"))
+	}
+	filter := store.MessageFilter{
+		Query:    strings.Join(strings.Fields(query.Text), " "),
+		ChatJID:  strings.TrimSpace(c.search.ChatJID),
+		Sender:   strings.TrimSpace(c.search.Sender),
+		TopicID:  strings.TrimSpace(c.search.TopicID),
+		Who:      normalizeWords(query.Who),
+		Limit:    query.Limit,
+		HasMedia: c.search.HasMedia,
+		Pinned:   c.search.Pinned,
+		Asc:      c.search.Asc,
+	}
+	if !query.After.IsZero() {
+		after := query.After
+		filter.After = &after
+	}
+	if !query.Before.IsZero() {
+		before := query.Before
+		filter.Before = &before
+	}
+	if c.search.FromMe || c.search.FromThem {
+		fromMe := c.search.FromMe
+		filter.FromMe = &fromMe
+	}
+	return filter, nil
 }
 
 func messageRefs(messages []store.Message) []string {
@@ -41,6 +83,32 @@ func messageRefs(messages []store.Message) []string {
 		refs = append(refs, messageRef(message.SourcePK))
 	}
 	return refs
+}
+
+func searchHits(messages []store.Message, shortRefs map[string]string) []crawlkit.Hit {
+	hits := make([]crawlkit.Hit, 0, len(messages))
+	for _, message := range messages {
+		ref := messageRef(message.SourcePK)
+		hits = append(hits, crawlkit.Hit{
+			Ref:      ref,
+			ShortRef: shortRefs[ref],
+			Time:     message.Timestamp.Local(),
+			Who:      outputField(messageWho(message)),
+			Where:    outputField(messageWhereForList(message)),
+			Snippet:  outputField(messageSnippet(message)),
+		})
+	}
+	return hits
+}
+
+func crawlkitWhoResolved(queryResolved *crawlkit.WhoResolved, resolved *store.WhoCandidate) *crawlkit.WhoResolved {
+	if queryResolved != nil {
+		return &crawlkit.WhoResolved{Who: queryResolved.Who, Identifiers: append([]string(nil), queryResolved.Identifiers...)}
+	}
+	if resolved == nil {
+		return nil
+	}
+	return &crawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
 }
 
 func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageFilter) (*store.WhoCandidate, error) {

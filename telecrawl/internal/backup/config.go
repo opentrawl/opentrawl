@@ -1,12 +1,13 @@
 package backup
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	ckconfig "github.com/openclaw/crawlkit/config"
 )
 
 const (
@@ -14,10 +15,10 @@ const (
 )
 
 type Config struct {
-	Repo       string   `json:"repo"`
-	Remote     string   `json:"remote"`
-	Identity   string   `json:"identity"`
-	Recipients []string `json:"recipients"`
+	Repo       string   `toml:"repo" json:"repo"`
+	Remote     string   `toml:"remote" json:"remote"`
+	Identity   string   `toml:"identity" json:"identity"`
+	Recipients []string `toml:"recipients" json:"recipients"`
 }
 
 type Options struct {
@@ -43,9 +44,9 @@ func DefaultConfig() Config {
 func DefaultConfigPath() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return "backup.json"
+		return "config.toml"
 	}
-	return filepath.Join(home, ".opentrawl", "telecrawl", "backup.json")
+	return filepath.Join(home, ".opentrawl", "telecrawl", "config.toml")
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -63,10 +64,14 @@ func LoadConfig(path string) (Config, error) {
 	if len(strings.TrimSpace(string(data))) == 0 {
 		return cfg, nil
 	}
-	if err := json.Unmarshal(data, &cfg); err != nil {
+	var root struct {
+		Backup Config `toml:"backup"`
+	}
+	root.Backup = cfg
+	if err := ckconfig.LoadTOML(path, &root); err != nil {
 		return Config{}, fmt.Errorf("read backup config: %w", err)
 	}
-	return cfg, nil
+	return root.Backup, nil
 }
 
 func SaveConfig(path string, cfg Config) error {
@@ -77,12 +82,9 @@ func SaveConfig(path string, cfg Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	return os.WriteFile(path, data, 0o600)
+	return ckconfig.WriteTOML(path, struct {
+		Backup Config `toml:"backup"`
+	}{Backup: cfg}, 0o600)
 }
 
 func ResolveOptions(opts Options) (Config, error) {

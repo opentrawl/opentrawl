@@ -35,15 +35,15 @@ go build ./cmd/telecrawl
 No language runtime setup is required. `telecrawl` imports Telegram Desktop
 `tdata` and native macOS Postbox data through the Go binary.
 
-## Import
+## Sync
 
 ```bash
 telecrawl doctor
-telecrawl import
+telecrawl sync
 telecrawl status
 ```
 
-Import defaults to:
+Sync defaults to:
 
 - latest `200` dialogs
 - latest `500` messages per dialog
@@ -51,21 +51,21 @@ Import defaults to:
 Use `0` for no limit:
 
 ```bash
-telecrawl import --dialogs-limit 0 --messages-limit 0
+telecrawl sync --dialogs-limit 0 --messages-limit 0
 ```
 
 Add `--fetch-media` when you also want Telegram cloud media that is not cached
 locally:
 
 ```bash
-telecrawl import --dialogs-limit 0 --messages-limit 0 --fetch-media
+telecrawl sync --dialogs-limit 0 --messages-limit 0 --fetch-media
 ```
 
-Remote media fetches are bounded best-effort operations. Import stats report how
-many remote media candidates were attempted, downloaded, still missing,
+Remote media fetches are bounded best-effort operations. Run with `-v` to see
+how many remote media candidates were attempted, downloaded, still missing,
 unavailable, timed out, or errored.
 
-Repeat imports reuse existing archived media for the same source before remote
+Repeat syncs reuse existing archived media for the same source before remote
 fetch is attempted, so `--fetch-media` only tries media that is not already in
 the local archive.
 
@@ -77,15 +77,15 @@ when Telegram returns a downloadable file.
 search; it is not a cross-source schema and can contain private Telegram
 metadata.
 
-When no `--source` is provided on macOS, `telecrawl` checks Telegram Desktop
+When no `--path` is provided on macOS, `telecrawl` checks Telegram Desktop
 `tdata` first, then the native Telegram for macOS group container. No backend
 flag is needed. To import a copied archive directly:
 
 ```bash
-telecrawl import --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
+telecrawl sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
-Native macOS imports include every local `account-*` database they find; if more
+Native macOS syncs include every local `account-*` database they find; if more
 than one account is present, stored chat and sender IDs are account-scoped to
 avoid collisions. They archive cached media by default and store Telegram peer
 records as contacts for message enrichment. Contacts can include phone numbers,
@@ -135,22 +135,23 @@ Defaults:
 - archive DB: `~/.opentrawl/telecrawl/telecrawl.db`
 - archived media copied from local Telegram caches, plus Telegram cloud media
   when `--fetch-media` is used: `~/.opentrawl/telecrawl/media/`
-- backup config: `~/.opentrawl/telecrawl/backup.json`
+- config: `~/.opentrawl/telecrawl/config.toml`
 - age identity: `~/.opentrawl/telecrawl/age.key`
 - backup checkout: `~/Projects/backup-telecrawl`
 
-Override the archive DB:
+Use a temporary home for tests:
 
 ```bash
-telecrawl --db /tmp/telecrawl.db status
+test_home="$(mktemp -d)"
+HOME="$test_home" telecrawl status
 ```
 
 Override the Telegram source:
 
 ```bash
-telecrawl --source "/path/to/tdata" doctor
-telecrawl --source "/path/to/tdata" import
-telecrawl --source "/path/to/6N38VWS5BX.ru.keepcoder.Telegram" import
+telecrawl doctor --path "/path/to/tdata"
+telecrawl sync --path "/path/to/tdata"
+telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
 ## Backup
@@ -162,21 +163,19 @@ telecrawl backup init
 telecrawl backup push
 ```
 
-The default backup config points at:
+The default config stores backup settings under `[backup]`:
 
-```json
-{
-  "repo": "~/Projects/backup-telecrawl",
-  "remote": "https://github.com/steipete/backup-telecrawl.git",
-  "identity": "~/.opentrawl/telecrawl/age.key"
-}
+```toml
+[backup]
+repo = "~/Projects/backup-telecrawl"
+remote = "https://github.com/steipete/backup-telecrawl.git"
+identity = "~/.opentrawl/telecrawl/age.key"
 ```
 
-Use a different repository or config path:
+Use a different repository:
 
 ```bash
 telecrawl backup init \
-  --config ~/.opentrawl/telecrawl/backup.json \
   --repo ~/Projects/backup-telecrawl \
   --remote https://github.com/steipete/backup-telecrawl.git
 ```
@@ -201,17 +200,20 @@ backup checkout:
 
 ```bash
 telecrawl backup push --tag snapshot/before-migration
-telecrawl --db /tmp/telecrawl-history.db backup pull --ref snapshot/before-migration
+telecrawl backup pull --ref snapshot/before-migration
 ```
 
 `backup snapshots --limit N` lists recent manifest-changing commits and tags.
 Keep tag names non-sensitive because Git metadata is not encrypted.
 
-Restore into a throwaway DB for validation:
+Restore into a temporary home for validation:
 
 ```bash
-telecrawl --db /tmp/telecrawl-restore-test.db backup pull
-telecrawl --db /tmp/telecrawl-restore-test.db status
+backup_repo="$HOME/Projects/backup-telecrawl"
+backup_identity="$HOME/.opentrawl/telecrawl/age.key"
+test_home="$(mktemp -d)"
+HOME="$test_home" telecrawl backup pull --repo "$backup_repo" --identity "$backup_identity"
+HOME="$test_home" telecrawl status
 ```
 
 ## Backup Security Model
@@ -244,11 +246,11 @@ On another machine:
 
 ```bash
 telecrawl backup init --no-push
-cat ~/.opentrawl/telecrawl/backup.json
+cat ~/.opentrawl/telecrawl/config.toml
 ```
 
 Copy that machine's public `recipient` into the first machine's
-`~/.opentrawl/telecrawl/backup.json`, then re-encrypt current shards:
+`~/.opentrawl/telecrawl/config.toml`, then re-encrypt current shards:
 
 ```bash
 telecrawl backup push

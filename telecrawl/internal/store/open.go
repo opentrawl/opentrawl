@@ -5,8 +5,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
+
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 var ErrMessageNotFound = errors.New("message not found")
@@ -28,22 +29,25 @@ func OpenReadOnly(ctx context.Context, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("db path is required")
 	}
-	if info, err := os.Stat(path); err != nil {
-		return nil, err
-	} else if info.IsDir() {
-		return nil, fmt.Errorf("db path is a directory: %s", path)
-	}
-	dsn := fmt.Sprintf("file:%s?mode=ro&_query_only=1&_foreign_keys=1&_busy_timeout=5000", path)
-	db, err := sql.Open("sqlite3", dsn)
+	st, err := ckstore.OpenReadOnly(ctx, path)
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	out, err := UseExisting(ctx, st, path)
+	if err != nil {
+		_ = st.Close()
 		return nil, err
 	}
-	return &Store{db: db, path: path}, nil
+	out.owned = true
+	return out, nil
+}
+
+func userVersion(ctx context.Context, db *sql.DB) (int, error) {
+	var version int
+	if err := db.QueryRowContext(ctx, "pragma user_version").Scan(&version); err != nil {
+		return 0, err
+	}
+	return version, nil
 }
 
 func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius int) (MessageWindow, error) {

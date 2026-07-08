@@ -1,4 +1,4 @@
-package cli
+package telecrawl
 
 import (
 	"os"
@@ -234,9 +234,9 @@ func statusSummary(status store.Status) string {
 		return "archive is empty"
 	case "stale":
 		if status.LastImportAt.IsZero() {
-			return "archive has never been imported; run telecrawl import to refresh."
+			return "archive has never been synced; run telecrawl sync to refresh."
 		}
-		return "archive import is " + agePhrase(time.Since(status.LastImportAt)) + " old; run telecrawl import to refresh."
+		return "archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old; run telecrawl sync to refresh."
 	default:
 		return "archive is fresh"
 	}
@@ -279,7 +279,7 @@ func oldestMessageYear(status store.Status) int64 {
 
 func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
 	logTail := r.logTail()
-	checks := []doctorCheck{sourceStoreCheck(report)}
+	checks := []doctorCheck{sourceStoreEnvelopeCheck(report)}
 	checks = append(checks, r.archiveChecks()...)
 	return doctorOutput{
 		Checks:  checks,
@@ -288,7 +288,7 @@ func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
 	}
 }
 
-func sourceStoreCheck(report telegramdesktop.Report) doctorCheck {
+func sourceStoreEnvelopeCheck(report telegramdesktop.Report) doctorCheck {
 	if report.Exists && report.Accessible && report.Error == "" {
 		return doctorCheck{ID: "source_store", Label: "Telegram data", State: "ok", Message: "Telegram source data is readable."}
 	}
@@ -316,7 +316,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive has not been created.",
-			Remedy:  "Run telecrawl import to create the archive.",
+			Remedy:  "Run telecrawl sync to create the archive.",
 		}}
 	} else if info.IsDir() {
 		return []doctorCheck{{
@@ -324,7 +324,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive path is a directory.",
-			Remedy:  "Pass --db with a sqlite archive path, then run telecrawl import.",
+			Remedy:  "Use a writable state root, then run telecrawl sync.",
 		}}
 	}
 	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
@@ -334,7 +334,7 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive cannot be read.",
-			Remedy:  "Run telecrawl import to rebuild the archive.",
+			Remedy:  "Run telecrawl sync to rebuild the archive.",
 		}}
 	}
 	defer func() { _ = st.Close() }()
@@ -345,11 +345,11 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			Label:   "Archive",
 			State:   "missing",
 			Message: "telecrawl archive status cannot be read.",
-			Remedy:  "Run telecrawl import to rebuild the archive.",
+			Remedy:  "Run telecrawl sync to rebuild the archive.",
 		}}
 	}
 	if status.Messages == 0 {
-		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl import to fill the archive."}}
+		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run telecrawl sync to fill the archive."}}
 	}
 	return []doctorCheck{
 		{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."},
@@ -358,16 +358,16 @@ func (r *runtime) archiveChecks() []doctorCheck {
 }
 
 func syncRecencyCheck(status store.Status) doctorCheck {
-	check := doctorCheck{ID: "sync_recency", Label: "Archive import", State: "ok", Message: "Archive import is fresh."}
+	check := doctorCheck{ID: "sync_recency", Label: "Archive sync", State: "ok", Message: "Archive sync is fresh."}
 	switch {
 	case status.LastImportAt.IsZero():
 		check.State = "warn"
-		check.Message = "Archive has never been imported."
-		check.Remedy = "run telecrawl import"
+		check.Message = "Archive has never been synced."
+		check.Remedy = "run telecrawl sync"
 	case time.Since(status.LastImportAt) > statusFreshFor:
 		check.State = "warn"
-		check.Message = "Archive import is " + agePhrase(time.Since(status.LastImportAt)) + " old."
-		check.Remedy = "run telecrawl import"
+		check.Message = "Archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old."
+		check.Remedy = "run telecrawl sync"
 	}
 	return check
 }

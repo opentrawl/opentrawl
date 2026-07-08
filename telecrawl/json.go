@@ -1,4 +1,4 @@
-package cli
+package telecrawl
 
 import (
 	"github.com/openclaw/telecrawl/internal/store"

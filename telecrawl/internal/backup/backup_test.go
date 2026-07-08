@@ -38,7 +38,7 @@ func TestEncryptedBackupPushPull(t *testing.T) {
 	runGit(t, "", "init", "--bare", remote)
 	repo := filepath.Join(t.TempDir(), "backup")
 	identity := filepath.Join(t.TempDir(), "age.key")
-	configPath := filepath.Join(t.TempDir(), "backup.json")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
 	cfg, recipient, err := Init(ctx, Options{ConfigPath: configPath, Repo: repo, Remote: remote, Identity: identity, Push: false})
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +183,7 @@ func TestHistoricalSnapshotRestore(t *testing.T) {
 	runGit(t, "", "init", "--bare", remote)
 	repo := filepath.Join(t.TempDir(), "backup")
 	identity := filepath.Join(t.TempDir(), "age.key")
-	configPath := filepath.Join(t.TempDir(), "backup.json")
+	configPath := filepath.Join(t.TempDir(), "config.toml")
 	if _, _, err := Init(ctx, Options{ConfigPath: configPath, Repo: repo, Remote: remote, Identity: identity, Push: false}); err != nil {
 		t.Fatal(err)
 	}
@@ -270,12 +270,19 @@ func TestEmptyBackupPreservesCountsAndIsIdempotent(t *testing.T) {
 }
 
 func TestConfigRoundTrip(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "backup.json")
+	path := filepath.Join(t.TempDir(), "config.toml")
 	cfg := DefaultConfig()
 	cfg.Repo = "~/Projects/example"
 	cfg.Recipients = []string{"age1example"}
 	if err := SaveConfig(path, cfg); err != nil {
 		t.Fatal(err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "[backup]") || strings.Contains(string(data), "backup.json") {
+		t.Fatalf("unexpected config file:\n%s", data)
 	}
 	loaded, err := LoadConfig(path)
 	if err != nil {
@@ -290,7 +297,7 @@ func TestConfigRoundTrip(t *testing.T) {
 	if expandHome("~") == "~" || !strings.Contains(expandHome("~/Projects/example"), "Projects") {
 		t.Fatal("home expansion did not expand")
 	}
-	if _, err := LoadConfig(filepath.Join(t.TempDir(), "missing.json")); err != nil {
+	if _, err := LoadConfig(filepath.Join(t.TempDir(), "missing.toml")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := LoadConfig(t.TempDir()); err == nil {
@@ -529,7 +536,7 @@ func TestEnsureRepoFallsBackToLocalInitWhenCloneFails(t *testing.T) {
 	}
 }
 
-func TestBackupReadmeUsesSupportedStatusCommand(t *testing.T) {
+func TestBackupReadmeUsesSupportedRestoreCommands(t *testing.T) {
 	repo := t.TempDir()
 	if err := writeBackupReadme(repo); err != nil {
 		t.Fatal(err)
@@ -542,8 +549,14 @@ func TestBackupReadmeUsesSupportedStatusCommand(t *testing.T) {
 	if strings.Contains(body, "--sync never") {
 		t.Fatal("backup README contains unsupported --sync flag")
 	}
+	if strings.Contains(body, "--state-root") {
+		t.Fatal("backup README contains unsupported --state-root flag")
+	}
 	if !strings.Contains(body, "telecrawl status") {
 		t.Fatal("backup README omits the supported status command")
+	}
+	if !strings.Contains(body, "telecrawl backup pull --ref snapshot/before-migration") {
+		t.Fatal("backup README omits the supported historical restore command")
 	}
 }
 

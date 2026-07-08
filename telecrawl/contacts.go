@@ -1,37 +1,29 @@
-package cli
+package telecrawl
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"fmt"
-	"io"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
-func (r *runtime) runContacts(args []string) error {
-	if len(args) > 0 && args[0] == "export" {
-		return r.runContactsExport(args[1:])
-	}
-	fs := flag.NewFlagSet("telecrawl contacts", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	limit := fs.Int("limit", 100, "")
-	all := fs.Bool("all", false, "")
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
-	}
-	if fs.NArg() != 0 {
+func (c *Crawler) runContacts(ctx context.Context, req *crawlkit.Request) error {
+	r := c.handler(ctx, req)
+	if len(req.Args) != 0 {
 		return usageErr(errors.New("contacts takes flags only"))
 	}
-	n, err := flags.Limit(*limit, flagPassed(fs, "limit"), *all)
+	n, err := flags.Limit(c.contacts.Limit, c.contacts.LimitSet, c.contacts.All)
 	if err != nil {
 		return usageErr(err)
 	}
-	return r.withStore(func(st *store.Store) error {
+	return r.withReadOnlyStore(func(st *store.Store) error {
 		contacts, err := st.ListContacts(r.ctx, n)
 		if err != nil {
 			return err
@@ -47,23 +39,31 @@ func (r *runtime) runContacts(args []string) error {
 	})
 }
 
-func (r *runtime) runContactsExport(args []string) error {
-	fs := flag.NewFlagSet("telecrawl contacts export", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
+func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	if fs.NArg() != 0 {
-		return usageErr(errors.New("contacts export takes no arguments"))
+	defer func() { _ = st.Close() }()
+	contacts, err := st.ExportContacts(ctx)
+	if err != nil {
+		return nil, err
 	}
-	return r.withStore(func(st *store.Store) error {
-		contacts, err := st.ExportContacts(r.ctx)
-		if err != nil {
-			return err
+	exported := exportContacts(contacts)
+	out := make([]control.Contact, 0, len(exported))
+	for _, contact := range exported {
+		var phones []string
+		for _, phone := range contact.PhoneNumbers {
+			if phone = strings.TrimSpace(phone); phone != "" {
+				phones = append(phones, phone)
+			}
 		}
-		export := contactExport{Contacts: exportContacts(contacts)}
-		return r.print(export)
-	})
+		if len(phones) == 0 {
+			continue
+		}
+		out = append(out, control.Contact{DisplayName: contact.DisplayName, PhoneNumbers: phones})
+	}
+	return &control.ContactExport{Contacts: out}, nil
 }
 
 type contactExport struct {

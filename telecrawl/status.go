@@ -1,21 +1,47 @@
-package cli
+package telecrawl
 
 import (
-	"flag"
-	"io"
+	"context"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
+	"github.com/openclaw/telecrawl/internal/store"
 )
 
-func (r *runtime) runStatus(args []string) error {
-	fs := flag.NewFlagSet("telecrawl status", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	if err := fs.Parse(args); err != nil {
-		return usageErr(err)
+func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+	status := control.NewStatus(appID, "archive database is missing")
+	status.State = "missing"
+	status.DatabasePath = req.Paths.Archive
+	if req.Store == nil {
+		return &status, nil
 	}
-	return r.print(r.statusEnvelope())
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "archive database cannot be read"
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	defer func() { _ = st.Close() }()
+	archiveStatus, err := st.Status(ctx)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "archive status cannot be read"
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	status.LastImportAt = formatOptionalTime(archiveStatus.LastImportAt)
+	status.Counts = []control.Count{
+		control.NewCount("messages", "messages", int64(archiveStatus.Messages)),
+		control.NewCount("chats", "chats", int64(archiveStatus.Chats)),
+		control.NewCount("since", "since", oldestMessageYear(archiveStatus)),
+	}
+	status.State = statusState(archiveStatus)
+	status.Summary = statusSummary(archiveStatus)
+	return &status, nil
 }
 
 func (r *runtime) printStatus(value statusEnvelope) error {
@@ -59,7 +85,7 @@ func statusRenderFreshness(freshness freshnessEnvelope) *render.Freshness {
 	if freshness.LastSync == "" {
 		return nil
 	}
-	return &render.Freshness{LastSync: shortLocalTime(parseRenderTime(freshness.LastSync)), Label: "Last import"}
+	return &render.Freshness{LastSync: shortLocalTime(parseRenderTime(freshness.LastSync)), Label: "Last sync"}
 }
 
 func statusCountLabel(id, fallback string) string {

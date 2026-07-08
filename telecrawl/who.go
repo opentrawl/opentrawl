@@ -1,42 +1,51 @@
-package cli
+package telecrawl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
+	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/render"
+	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
-func (r *runtime) runWho(args []string) error {
-	if len(args) == 0 {
-		return usageErr(errors.New("who takes a name"))
-	}
-	query := normalizeCLIWords(strings.Join(args, " "))
+func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+	query := normalizeWords(person)
 	if query == "" {
-		return usageErr(errors.New("who takes a name"))
+		return nil, usageErr(errors.New("who takes a name"))
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
-		candidates, err := st.ResolveWho(r.ctx, query)
-		if err != nil {
-			return err
-		}
-		return r.print(newWhoEnvelope(query, candidates))
-	})
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	defer func() { _ = st.Close() }()
+	candidates, err := st.ResolveWho(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	return whoMatchCandidates(candidates), nil
+}
+
+func whoMatchCandidates(candidates []store.WhoCandidate) []whomatch.Candidate {
+	out := make([]whomatch.Candidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		out = append(out, whomatch.Candidate{
+			Who:         candidate.Who,
+			Identifiers: append([]string(nil), candidate.Identifiers...),
+			LastSeen:    candidate.LastSeen,
+			Messages:    int64(candidate.Messages),
+		})
+	}
+	return out
 }
 
 func (r *runtime) ambiguousWhoError(query, who string, candidates []store.WhoCandidate) error {
-	return &cliError{
-		code:    4,
-		name:    "ambiguous_who",
-		message: "--who matched more than one person",
-		remedy:  "Retry with one identifier from candidates.",
-		fields:  map[string]any{"candidates": whoCandidates(candidates)},
-		human:   ambiguousWhoText(query, who, candidates),
-	}
+	return commandErrFields(4, "ambiguous_who", fmt.Errorf("ambiguous --who %q", who), "Retry with one identifier from candidates.", map[string]any{"candidates": whoCandidates(candidates)})
 }
 
 func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) error {
@@ -45,14 +54,7 @@ func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) e
 	if len(didYouMean) > 0 {
 		fields["did_you_mean"] = whoCandidates(didYouMean)
 	}
-	return &cliError{
-		code:    5,
-		name:    "unknown_who",
-		message: "--who did not match a person",
-		remedy:  "Run telecrawl who <name>, or search without --who to check whether matching messages exist.",
-		fields:  fields,
-		human:   unknownWhoText(who, didYouMean),
-	}
+	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "Run telecrawl who <name>, or search without --who to check whether matching messages exist.", fields)
 }
 
 func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {

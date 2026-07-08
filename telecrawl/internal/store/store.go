@@ -5,14 +5,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/openclaw/crawlkit/shortref"
 	"github.com/openclaw/crawlkit/state"
+	ckstore "github.com/openclaw/crawlkit/store"
 
 	// C SQLite via cgo, matching crawlkit/store after the modernc→mattn swap
 	// (TRAWL-56): the pure-Go driver ran hot paths 10-100x slower. Requires
@@ -32,8 +31,10 @@ const (
 )
 
 type Store struct {
-	db   *sql.DB
-	path string
+	store *ckstore.Store
+	db    *sql.DB
+	path  string
+	owned bool
 }
 
 type ImportStats struct {
@@ -222,26 +223,32 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("db path is required")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return nil, fmt.Errorf("mkdir db dir: %w", err)
-	}
-	dsn := fmt.Sprintf("file:%s?_foreign_keys=1&_journal_mode=WAL&_synchronous=NORMAL&_busy_timeout=5000", path)
-	db, err := sql.Open("sqlite3", dsn)
+	st, err := ckstore.Open(ctx, ckstore.Options{Path: path})
 	if err != nil {
 		return nil, err
 	}
-	db.SetMaxOpenConns(1)
-	if err := db.PingContext(ctx); err != nil {
-		_ = db.Close()
+	out, err := Use(ctx, st, path)
+	if err != nil {
+		_ = st.Close()
 		return nil, err
 	}
-	s := &Store{db: db, path: path}
+	out.owned = true
+	return out, nil
+}
+
+func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	db := st.DB()
+	s := &Store{store: st, db: db, path: path}
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if err := migrate(ctx, db); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	// Tombstone the pre-canonical key/value sync_state before creating the
@@ -253,22 +260,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	// not just make the marker re-derive on a later run.
 	legacy, err := legacySyncState(ctx, db)
 	if err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	var legacyMarkers map[string]string
 	if legacy {
 		if legacyMarkers, err = legacySyncStateValues(ctx, db); err != nil {
-			_ = db.Close()
 			return nil, err
 		}
 		if _, err := db.ExecContext(ctx, `drop table if exists sync_state`); err != nil {
-			_ = db.Close()
 			return nil, err
 		}
 	}
 	if err := state.EnsureSchema(ctx, db); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if len(legacyMarkers) > 0 {
@@ -279,31 +282,49 @@ func Open(ctx context.Context, path string) (*Store, error) {
 				continue
 			}
 			if err := markers.Set(ctx, syncSource, syncEntityType, key, value); err != nil {
-				_ = db.Close()
 				return nil, err
 			}
 		}
 	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if err := shortref.EnsureSchema(ctx, db); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, `create index if not exists idx_short_refs_full_ref on short_refs(full_ref)`); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	if _, err := db.ExecContext(ctx, fmt.Sprintf("pragma user_version = %d", schemaVersion)); err != nil {
-		_ = db.Close()
 		return nil, err
 	}
 	return s, nil
 }
 
-func (s *Store) Close() error { return s.db.Close() }
+func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	version, err := userVersion(ctx, st.DB())
+	if err != nil {
+		return nil, err
+	}
+	if version != schemaVersion {
+		return nil, fmt.Errorf("database schema version %d is not supported by telecrawl schema %d", version, schemaVersion)
+	}
+	return &Store{store: st, db: st.DB(), path: path}, nil
+}
+
+func (s *Store) Close() error {
+	if s == nil || !s.owned || s.store == nil {
+		return nil
+	}
+	return s.store.Close()
+}
+
 func (s *Store) Path() string { return s.path }
 
 func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) error {
