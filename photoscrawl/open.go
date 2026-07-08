@@ -40,8 +40,8 @@ func resolveInputRef(ctx context.Context, paths archive.Paths, ref string) (stri
 	if !archive.ValidShortRef(ref) {
 		return "", commandError{
 			Code:    "invalid_ref",
-			Message: "ref is not a photoscrawl asset ref",
-			Remedy:  "use a ref in the form photoscrawl:asset/ID or a short ref from search",
+			Message: "ref is not a photos asset ref",
+			Remedy:  "use a ref in the form photos:asset/ID or a short ref from search",
 		}
 	}
 	resolved, err := archive.ResolveShortRef(ctx, paths, ref)
@@ -67,7 +67,7 @@ func printOpenText(w io.Writer, result archive.OpenResult) error {
 	if len(result.Model.Uncertainties) > 0 {
 		fields = append(fields, render.CardField{Label: "Uncertainty", Value: strings.Join(result.Model.Uncertainties, "; ") + "."})
 	}
-	if ref := strings.TrimSpace(result.ShortRef); ref != "" {
+	if ref := strings.TrimSpace(result.Ref); ref != "" {
 		fields = append(fields, render.CardField{Label: "Ref", Value: ref})
 	}
 	return render.WriteCard(w, render.Card{
@@ -97,7 +97,7 @@ func openMechanicalFields(mechanical archive.OpenMechanical) []render.CardField 
 	if media := mechanical.Media; media != nil {
 		parts := nonEmptyText(media.Kind)
 		if media.Width > 0 && media.Height > 0 {
-			parts = append(parts, fmt.Sprintf("%d x %d", media.Width, media.Height))
+			parts = append(parts, fmt.Sprintf("%s x %s", render.FormatInteger(int64(media.Width)), render.FormatInteger(int64(media.Height))))
 		}
 		if media.DurationSeconds > 0 {
 			parts = append(parts, fmt.Sprintf("%.1fs", media.DurationSeconds))
@@ -146,7 +146,7 @@ func openMechanicalFields(mechanical archive.OpenMechanical) []render.CardField 
 		titles := []string{}
 		for i, album := range mechanical.Albums {
 			if i == 3 {
-				titles = append(titles, fmt.Sprintf("and %d more", len(mechanical.Albums)-3))
+				titles = append(titles, fmt.Sprintf("and %s more", render.FormatInteger(int64(len(mechanical.Albums)-3))))
 				break
 			}
 			titles = append(titles, album.Title)
@@ -195,7 +195,7 @@ func humanBytes(bytes int64) string {
 	case bytes >= kb:
 		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(kb))
 	case bytes > 0:
-		return fmt.Sprintf("%d B", bytes)
+		return render.FormatInteger(bytes) + " B"
 	default:
 		return "unknown size"
 	}

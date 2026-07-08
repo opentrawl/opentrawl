@@ -18,13 +18,13 @@ Requirements:
 gog --version
 ```
 
-The archive lives at `~/.opentrawl/gogcrawl/gogcrawl.db` by default. `gogcrawl`
-also owns a local encrypted backup repo at `~/.opentrawl/gogcrawl/backup`.
+The archive lives at `~/.opentrawl/gmail/gmail.db` by default. `gogcrawl`
+also owns a local encrypted backup repo at `~/.opentrawl/gmail/backup`.
 
 Sync runs:
 
 ```sh
-gog backup gmail push --no-push --repo ~/.opentrawl/gogcrawl/backup
+gog backup gmail push --no-push --repo ~/.opentrawl/gmail/backup
 ```
 
 `gog` owns Gmail fetch, cache resume and checkpointing. `gogcrawl`
@@ -40,14 +40,14 @@ bytes.
 ## Commands
 
 ```sh
-trawl gogcrawl metadata --json
-trawl gogcrawl status --json
-trawl gogcrawl sync --json
-trawl gogcrawl sync --query "from:me" --max 25 --json
-trawl gogcrawl search "project sync" --json
-trawl gogcrawl open gogcrawl:msg/<gmail-message-id> --json
-trawl gogcrawl doctor --json
-trawl gogcrawl contacts export --json
+trawl gmail metadata --json
+trawl gmail status --json
+trawl gmail sync --json
+trawl gmail sync --query "from:me" --max 25 --json
+trawl gmail search "project sync" --json
+trawl gmail open gmail:msg/<gmail-message-id> --json
+trawl gmail doctor --json
+trawl gmail contacts export --json
 ```
 
 `contacts export` uses `gog contacts list --json`. It exports only

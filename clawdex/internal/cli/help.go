@@ -25,7 +25,7 @@ func helpWithDiagnostics(options kong.HelpOptions, ctx *kong.Context) error {
 
 func clawdexUsageDoc() usage.Doc {
 	return usage.Doc{
-		Tool:    "clawdex",
+		Tool:    "trawl contacts",
 		Tagline: "your contacts: one person per markdown file, indexed and searchable",
 		Groups: []usage.Group{
 			{Title: "Read your contacts", Commands: []usage.Command{
@@ -41,7 +41,7 @@ func clawdexUsageDoc() usage.Doc {
 			}},
 			{Title: "Repo and health", Commands: []usage.Command{
 				{Name: "init", Summary: "Create the contacts repo."},
-				{Name: "config", Summary: "Show or set clawdex config."},
+				{Name: "config", Summary: "Show or set contacts config."},
 				{Name: "git", Summary: "Status, commit, pull and push for the data repo."},
 				{Name: "status", Summary: "People and source counts."},
 				{Name: "doctor", Summary: "Diagnose problems; every failure has a remedy."},
@@ -56,12 +56,12 @@ func clawdexUsageDoc() usage.Doc {
 			{Name: "-v, -vv", Summary: "Log to stderr."},
 		},
 		Examples: []string{
-			"clawdex who alice",
-			"clawdex person show \"Ada Lovelace\"",
-			"clawdex search \"boat trip\" --limit 5",
+			"trawl contacts who alice",
+			"trawl contacts person show \"Ada Lovelace\"",
+			"trawl contacts search \"boat trip\" --limit 5",
 		},
 		Footer: []string{
-			"Run 'clawdex COMMAND --help' for flags and details.",
+			"Run 'trawl contacts COMMAND --help' for flags and details.",
 			diagnosticsLine(),
 		},
 	}

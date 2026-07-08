@@ -13,7 +13,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "clawdex",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"clawdex","display_name":"Contacts"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
 			whoQuery: "dave",
 			who: `{"query":"dave","candidates":[
 				{"who":"Dave Archive","identifiers":["dave.archive@example.com"],"match_quality":"contains","sources":["gmail"],"messages":900,"last_seen":"2019-01-02T09:00:00Z"},
@@ -45,19 +45,19 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 	for _, want := range []string{
 		"Dave Daily",
 		"prefix",
-		"2026-06-30",
-		"1200",
+		shortLocalTestTime(t, "2026-06-30T20:30:00Z"),
+		"1,200",
 		"Contacts, Messages",
-		"+15550100001",
+		"+1 (555) 010-0001",
 		"Dave Exact",
 		"prefix",
-		"2020-03-04",
+		shortLocalTestTime(t, "2020-03-04T08:00:00Z"),
 		"12",
 		"Contacts",
 		"dave@example.com",
 		"Dave Archive",
 		"prefix",
-		"2019-01-02",
+		shortLocalTestTime(t, "2019-01-02T09:00:00Z"),
 		"900",
 		"Contacts",
 		"dave.archive@example.com",
@@ -85,7 +85,7 @@ func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "imessage who failed") {
+	if !strings.Contains(stderr, "Messages who failed") {
 		t.Fatalf("stderr missing who failure:\n%s", stderr)
 	}
 }
@@ -185,7 +185,7 @@ func TestWhoTableCapsCandidateList(t *testing.T) {
 func TestWhoJSONReturnsPlainEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "clawdex",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"clawdex","display_name":"Contacts"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
 		who:      `{"query":"ali","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["imessage"],"messages":4,"last_seen":"2026-06-30T20:30:00Z"}]}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -195,7 +195,7 @@ func TestWhoJSONReturnsPlainEnvelope(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"ali","total_candidates":1,"candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["clawdex"],"last_seen":"2026-06-30T20:30:00Z","messages":4}],"sources_consulted":["clawdex"]}` + "\n"
+	want := `{"query":"ali","total_candidates":1,"candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["contacts"],"last_seen":"2026-06-30T20:30:00Z","messages":4}],"sources_consulted":["contacts"]}` + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
 	}

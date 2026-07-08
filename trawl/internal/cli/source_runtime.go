@@ -106,14 +106,27 @@ func resolveSourcePaths(source Source) (resolvedSourcePaths, error) {
 		return resolvedSourcePaths{}, fmt.Errorf("source id is required")
 	}
 	base := filepath.Join(stateRoot, id)
+	paths := crawlkit.Paths{
+		Archive: filepath.Join(base, id+".db"),
+		Config:  filepath.Join(base, "config.toml"),
+		Logs:    filepath.Join(base, "logs"),
+	}
+	if source.Crawler != nil {
+		defaults := source.Crawler.Info().DefaultPaths
+		if strings.TrimSpace(defaults.Archive) != "" {
+			paths.Archive = ckconfig.ExpandHome(defaults.Archive)
+		}
+		if strings.TrimSpace(defaults.Config) != "" {
+			paths.Config = ckconfig.ExpandHome(defaults.Config)
+		}
+		if strings.TrimSpace(defaults.Logs) != "" {
+			paths.Logs = ckconfig.ExpandHome(defaults.Logs)
+		}
+	}
 	return resolvedSourcePaths{
 		stateRoot: stateRoot,
 		base:      base,
-		paths: crawlkit.Paths{
-			Archive: filepath.Join(base, id+".db"),
-			Config:  filepath.Join(base, "config.toml"),
-			Logs:    filepath.Join(base, "logs"),
-		},
+		paths:     paths,
 	}, nil
 }
 
@@ -170,6 +183,13 @@ func openSourceStore(ctx context.Context, paths crawlkit.Paths, access sourceSto
 	default:
 		return nil, fmt.Errorf("unknown store access %d", access)
 	}
+}
+
+func sourceStoreFor(source Source, fallback sourceStoreAccess) sourceStoreAccess {
+	if source.Crawler != nil && source.Crawler.Info().ID == "contacts" {
+		return sourceStoreNone
+	}
+	return fallback
 }
 
 func pathExists(path string) (bool, error) {

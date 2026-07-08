@@ -12,7 +12,10 @@ import (
 	"github.com/openclaw/imsgcrawl/internal/messages"
 )
 
-const MessageRefPrefix = "imsgcrawl:msg/"
+const (
+	MessageRefPrefix       = "imessage:msg/"
+	LegacyMessageRefPrefix = "imsgcrawl:msg/"
+)
 
 type ShortRefResolution struct {
 	FullRefs []string
@@ -43,8 +46,11 @@ func (s *Store) ResolveShortRef(ctx context.Context, alias string) (ShortRefReso
 }
 
 func (s *Store) ShortRefForMessage(ctx context.Context, messageID string) (string, error) {
-	fullRef := MessageRef(messageID)
-	return s.shortRefForFullRef(ctx, fullRef)
+	alias, err := s.shortRefForFullRef(ctx, MessageRef(messageID))
+	if err != nil || alias != "" {
+		return alias, err
+	}
+	return s.shortRefForFullRef(ctx, LegacyMessageRefPrefix+strings.TrimSpace(messageID))
 }
 
 func (s *Store) shortRefForFullRef(ctx context.Context, fullRef string) (string, error) {
@@ -98,11 +104,11 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	syncState := state.New(s.store.DB())
-	lastSync, hasLastSync, err := syncState.Get(ctx, syncSource, syncEntityType, stateLastSyncAt)
+	lastSync, hasLastSync, err := getStateAnySource(ctx, syncState, syncEntityType, stateLastSyncAt)
 	if err != nil {
 		return false, err
 	}
-	builtFor, hasBuiltFor, err := syncState.Get(ctx, syncSource, derivedEntityType, stateShortRefsBuiltFor)
+	builtFor, hasBuiltFor, err := getStateAnySource(ctx, syncState, derivedEntityType, stateShortRefsBuiltFor)
 	if err != nil {
 		return false, err
 	}
@@ -119,6 +125,16 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return messageCount == refCount, nil
+}
+
+func getStateAnySource(ctx context.Context, syncState *state.Store, entityType, entityID string) (state.Record, bool, error) {
+	for _, source := range []string{syncSource, legacySyncSource} {
+		rec, ok, err := syncState.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.Record{}, false, nil
 }
 
 func (s *Store) rebuildShortRefs(ctx context.Context) error {

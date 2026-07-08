@@ -29,14 +29,14 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 		t.Fatalf("sync code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"imessage  ok     2 added",
-		"telegram  ok     89 added",
+		"Messages  ok     2 added",
+		"Telegram  ok     89 added",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}
 	}
-	for _, want := range []string{"imessage syncing…", "telegram syncing…"} {
+	for _, want := range []string{"Messages syncing…", "Telegram syncing…"} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
 		}
@@ -97,8 +97,8 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			},
 			args:       []string{"sync"},
 			wantCode:   3,
-			wantStdout: "telegram  error  sync failed",
-			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
+			wantStdout: "Telegram  error  sync failed",
+			wantStderr: "Telegram sync failed.\n  Remedy: run trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -109,8 +109,8 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			}},
 			args:       []string{"sync", "telegram"},
 			wantCode:   1,
-			wantStdout: "telegram  error  sync failed",
-			wantStderr: "telegram sync failed.\n  Remedy: run: trawl doctor telegram",
+			wantStdout: "Telegram  error  sync failed",
+			wantStderr: "Telegram sync failed.\n  Remedy: run trawl doctor telegram",
 		},
 	}
 

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAliasIsDeterministic(t *testing.T) {
-	fullRef := "telecrawl:msg/1234567890123456789"
+	fullRef := "telegram:msg/1234567890123456789"
 	first := Alias(fullRef, 10)
 	if len(first) != 10 {
 		t.Fatalf("alias length = %d, want 10", len(first))
@@ -128,11 +128,11 @@ func TestBuildExtendsCollisions(t *testing.T) {
 }
 
 func TestBuildIsDeterministicAcrossInputOrder(t *testing.T) {
-	forward, err := BuildSlice([]string{"telecrawl:msg/2", "telecrawl:msg/1", "telecrawl:msg/2"})
+	forward, err := BuildSlice([]string{"telegram:msg/2", "telegram:msg/1", "telegram:msg/2"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	reverse, err := BuildSlice([]string{"telecrawl:msg/2", "telecrawl:msg/1"})
+	reverse, err := BuildSlice([]string{"telegram:msg/2", "telegram:msg/1"})
 	if err != nil {
 		t.Fatal(err)
 	}

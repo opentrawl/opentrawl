@@ -54,12 +54,12 @@ func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) e
 	if len(didYouMean) > 0 {
 		fields["did_you_mean"] = whoCandidates(didYouMean)
 	}
-	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "Run trawl telecrawl who <name>, or search without --who to check whether matching messages exist.", fields)
+	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "run trawl telegram who <name>, or search without --who to check whether matching messages exist.", fields)
 }
 
 func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "ambiguous --who %q: %d people match.\n\n", who, len(candidates))
+	fmt.Fprintf(&out, "ambiguous --who %q: %s people match.\n\n", who, render.FormatInteger(int64(len(candidates))))
 	_ = writeWhoTable(&out, candidates)
 	if retry := retrySearchExample(query, candidates); retry != "" {
 		fmt.Fprintf(&out, "\nRetry with: %s", retry)
@@ -90,7 +90,7 @@ func retrySearchExample(query string, candidates []store.WhoCandidate) string {
 	if who == "" {
 		return ""
 	}
-	parts := []string{"telecrawl", "search"}
+	parts := []string{"trawl", "telegram", "search"}
 	if strings.TrimSpace(query) != "" {
 		parts = append(parts, quoteShellArg(query))
 	}
@@ -146,9 +146,9 @@ func writeWhoTable(w io.Writer, candidates []store.WhoCandidate) error {
 		})
 	}
 	return render.WriteTable(w, []render.TableColumn{
-		{Header: "Who"},
-		{Header: "Last seen"},
-		{Header: "Messages", AlignRight: true},
-		{Header: "Identifiers", Wrap: true, Width: 0},
+		{Header: "who"},
+		{Header: "last seen"},
+		{Header: "messages", AlignRight: true},
+		{Header: "identifiers", Wrap: true, Width: 0},
 	}, rows)
 }

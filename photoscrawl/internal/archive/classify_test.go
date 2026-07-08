@@ -696,7 +696,7 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 	stateRoot := t.TempDir()
 	run, err := cklog.NewRun(cklog.Options{
 		StateRoot: stateRoot,
-		CrawlerID: "photoscrawl",
+		CrawlerID: "photos",
 		RunID:     "synthetic-log-run",
 		Command:   "classify",
 		Version:   "test",
@@ -723,7 +723,7 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 		t.Fatalf("classify result = %#v", result)
 	}
 
-	reader, err := cklog.NewReader(stateRoot, "photoscrawl")
+	reader, err := cklog.NewReader(stateRoot, "photos")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -736,7 +736,7 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 			continue
 		}
 		t.Logf("log line: %s", line.Raw)
-		if !strings.Contains(line.Message, "asset_ref=photoscrawl:asset/") || !strings.Contains(line.Message, `reason="original export failed"`) {
+		if !strings.Contains(line.Message, "asset_ref=photos:asset/") || !strings.Contains(line.Message, `reason="original export failed"`) {
 			t.Fatalf("failed_download message = %q", line.Message)
 		}
 		return
@@ -875,7 +875,7 @@ func (sink *recordingClassifyLogSink) Warn(event, message string) error {
 func assertRecordedLogEvent(t *testing.T, sink *recordingClassifyLogSink, event string) {
 	t.Helper()
 	for _, got := range sink.events {
-		if got.event == event && strings.Contains(got.message, "asset_ref=photoscrawl:asset/") && strings.Contains(got.message, "reason=") {
+		if got.event == event && strings.Contains(got.message, "asset_ref=photos:asset/") && strings.Contains(got.message, "reason=") {
 			return
 		}
 	}

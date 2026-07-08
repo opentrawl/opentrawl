@@ -19,7 +19,7 @@ photoscrawl-lab place-context --input <private-eval-run>/metadata/E001.json --js
 To render already-cached evidence without another provider call:
 
 ```sh
-photoscrawl-lab place-context --input ~/.opentrawl/photoscrawl/cache/place-context/<key>.json
+photoscrawl-lab place-context --input ~/.opentrawl/photos/cache/place-context/<key>.json
 ```
 
 The command reads the eval metadata JSON shape, uses the asset's own
@@ -71,7 +71,7 @@ labels from distance.
 
 The first repo implementation uses Apple's native CoreLocation reverse geocoder
 plus MapKit nearby point-of-interest search. It is network-backed, cached under
-`~/.opentrawl/photoscrawl/cache/place-context`, and good enough to test the
+`~/.opentrawl/photos/cache/place-context`, and good enough to test the
 command boundary without API keys. `MKErrorPlacemarkNotFound` from MapKit POI
 search is stored as `poi_status: "none"` because Apple found an address but no
 named POI inside the requested radius.

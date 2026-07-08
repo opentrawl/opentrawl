@@ -47,7 +47,7 @@ func New() *Crawler {
 
 func (c *Crawler) Info() crawlkit.Info {
 	return crawlkit.Info{
-		ID:          "photoscrawl",
+		ID:          "photos",
 		Surface:     "photos",
 		DisplayName: "Photos",
 		Description: "Local-first, read-only Apple Photos archive crawler.",
@@ -224,8 +224,11 @@ func archivePaths(req *crawlkit.Request) archive.Paths {
 }
 
 func controlStatus(status archive.StatusResult, configPath string) *control.Status {
-	out := control.NewStatus("photoscrawl", status.Summary)
+	out := control.NewStatus("photos", status.Summary)
 	out.State = status.State
+	if out.State == "ok" {
+		out.Summary = "Recently synced."
+	}
 	out.ConfigPath = configPath
 	out.DatabasePath = status.DatabasePath
 	out.DatabaseBytes = status.DatabaseBytes

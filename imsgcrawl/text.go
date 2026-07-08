@@ -3,7 +3,6 @@ package imsgcrawl
 import (
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -19,37 +18,39 @@ const (
 )
 
 func printChatsText(w io.Writer, value chatListOutput) error {
-	if _, err := fmt.Fprintf(w, "Chats: showing %d of %d, newest first.\n", value.Returned, value.Total); err != nil {
+	if _, err := fmt.Fprintf(w, "Chats: showing %s of %s, newest first.\n", render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total)); err != nil {
 		return err
 	}
 	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: trawl imsgcrawl chats --limit %d\nAll: trawl imsgcrawl chats --all\n", nextLimit(value.Limit, value.Total)); err != nil {
+		if _, err := fmt.Fprintf(w, "More: trawl imessage chats --limit %d\nAll: trawl imessage chats --all\n", nextLimit(value.Limit, value.Total)); err != nil {
 			return err
 		}
 	}
-	if _, err := io.WriteString(w, "Open: trawl imsgcrawl messages --chat CHAT_ID\n\n"); err != nil {
+	if _, err := io.WriteString(w, "Open: trawl imessage messages --chat CHAT_ID\n\n"); err != nil {
 		return err
 	}
 	if len(value.Items) == 0 {
-		_, err := io.WriteString(w, "No chats yet. Run trawl imsgcrawl sync.\n")
+		_, err := io.WriteString(w, "No chats yet. Remedy: run trawl imessage sync.\n")
 		return err
 	}
 	rows := make([][]string, 0, len(value.Items))
 	for _, item := range value.Items {
 		rows = append(rows, []string{
+			shortArchiveTime(archive.FormatAppleDateTime(item.LatestMessageDate)),
 			item.ChatID,
 			item.Kind,
-			strconv.FormatInt(item.MessageCount, 10),
-			shortArchiveTime(archive.FormatAppleDateTime(item.LatestMessageDate)),
+			"-",
+			render.FormatInteger(item.MessageCount),
 			chatConversation(item),
 		})
 	}
 	return render.WriteTable(w, []render.TableColumn{
+		{Header: "last"},
 		{Header: "chat"},
 		{Header: "kind"},
-		{Header: "msgs", AlignRight: true},
-		{Header: "latest"},
-		{Header: "conversation", Wrap: true},
+		{Header: "unread", AlignRight: true},
+		{Header: "messages", AlignRight: true},
+		{Header: "name", Wrap: true},
 	}, rows)
 }
 
@@ -58,15 +59,15 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	if value.Chat != nil {
 		conversation = chatConversation(*value.Chat)
 	}
-	heading := fmt.Sprintf("Messages in %s (chat %s): showing %d of %d, %s.", conversation, value.ChatID, value.Returned, value.Total, value.Order)
+	heading := fmt.Sprintf("Messages in %s (chat %s): showing %s of %s, %s.", conversation, value.ChatID, render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total), value.Order)
 	var hints []string
 	if !value.Complete {
 		hints = append(hints,
-			fmt.Sprintf("More: trawl imsgcrawl messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
-			fmt.Sprintf("All: trawl imsgcrawl messages --chat %s --all", value.ChatID),
+			fmt.Sprintf("More: trawl imessage messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
+			fmt.Sprintf("All: trawl imessage messages --chat %s --all", value.ChatID),
 		)
 	}
-	hints = append(hints, "Search: trawl imsgcrawl search QUERY")
+	hints = append(hints, "Search: trawl imessage search QUERY")
 	items := make([]render.ListItem, 0, len(value.Items))
 	for _, item := range value.Items {
 		items = append(items, render.ListItem{
@@ -113,7 +114,7 @@ func openTranscriptPrefix(width int, item openMessageOutput) string {
 	if whoWidth > openTranscriptMaxWhoWidth {
 		whoWidth = openTranscriptMaxWhoWidth
 	}
-	return fixed + render.Truncate(item.Who, whoWidth) + ": "
+	return fixed + render.Truncate(render.HumanIdentity(item.Who), whoWidth) + ": "
 }
 
 func openDateSpan(context []openMessageOutput) string {
@@ -150,7 +151,7 @@ func senderName(fromMe bool, label string) string {
 	}
 	label = strings.TrimSpace(label)
 	if label != "" && label != "them" {
-		return label
+		return render.HumanIdentity(label)
 	}
 	return "them"
 }
@@ -315,7 +316,7 @@ func looksPhoneLikeTitle(value string) bool {
 func participantPreview(handles []string, total int64) string {
 	if len(handles) == 0 {
 		if total > 0 {
-			return fmt.Sprintf("%d people", total)
+			return fmt.Sprintf("%s people", render.FormatInteger(total))
 		}
 		return ""
 	}
@@ -323,9 +324,12 @@ func participantPreview(handles []string, total int64) string {
 	if limit > 4 {
 		limit = 4
 	}
-	parts := append([]string{}, handles[:limit]...)
+	parts := make([]string, 0, limit+1)
+	for _, handle := range handles[:limit] {
+		parts = append(parts, render.HumanIdentity(handle))
+	}
 	if remaining := int(total) - limit; remaining > 0 {
-		parts = append(parts, fmt.Sprintf("+%d more", remaining))
+		parts = append(parts, fmt.Sprintf("+%s more", render.FormatInteger(int64(remaining))))
 	}
 	return strings.Join(parts, ", ")
 }

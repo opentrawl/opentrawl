@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 )
@@ -377,12 +378,12 @@ func (s *syncRunner) print(event syncEvent) error {
 	if event.Message != "" {
 		message = event.Message
 	} else {
-		message = fmt.Sprintf("%s stored %d tweets", humanPhase(event.Phase), event.StoredTweets)
+		message = fmt.Sprintf("%s stored %s tweets", humanPhase(event.Phase), render.FormatInteger(int64(event.StoredTweets)))
 		if event.StoredProfiles > 0 {
-			message += fmt.Sprintf(" from %d authors", event.StoredProfiles)
+			message += fmt.Sprintf(" from %s authors", render.FormatInteger(int64(event.StoredProfiles)))
 		}
 		if event.DeficientRows > 0 {
-			message += fmt.Sprintf("; %d rows arrived without id or text", event.DeficientRows)
+			message += fmt.Sprintf("; %s rows arrived without id or text", render.FormatInteger(int64(event.DeficientRows)))
 		}
 	}
 	s.r.req.Progress(crawlkit.Progress{
@@ -400,7 +401,7 @@ func syncReport(totals syncTotals) *crawlkit.SyncReport {
 		Updated: int64(totals.Roles + totals.Profiles),
 	}
 	if totals.Deficient > 0 {
-		report.Warnings = []string{fmt.Sprintf("%d deficient rows skipped", totals.Deficient)}
+		report.Warnings = []string{fmt.Sprintf("%s deficient rows skipped", render.FormatInteger(int64(totals.Deficient)))}
 	}
 	return report
 }
@@ -416,23 +417,23 @@ func (r *runtime) syncError(st *store.Store, err error, fetched bool) error {
 		if fetched {
 			r.recordPartialSync(st, "partial: rate limited")
 		}
-		return r.contractError("rate_limited", "X API rate limit reached", "re-run trawl birdcrawl sync; it resumes from the committed cursor")
+		return r.contractError("rate_limited", "X API rate limit reached", "re-run trawl twitter sync; it resumes from the committed cursor")
 	case errors.As(err, &deficient):
 		return r.contractError("deficient_input", err.Error(), "check the X API response shape before storing more rows")
 	case errors.As(err, &authErr):
 		_ = st.SetAuthTokenValid(r.ctx, false, time.Now().UTC())
-		return r.contractError("auth_failed", "X API credentials were rejected", "refresh the OAuth credentials in ~/.opentrawl/birdcrawl/credentials.toml")
+		return r.contractError("auth_failed", "X API credentials were rejected", "refresh the OAuth credentials in ~/.opentrawl/twitter/credentials.toml")
 	case errors.Is(err, xapi.ErrCredentialsMissing):
-		return r.contractError("credentials_missing", "X API credentials are missing", "create ~/.opentrawl/birdcrawl/credentials.toml with OAuth user tokens")
+		return r.contractError("credentials_missing", "X API credentials are missing", "create ~/.opentrawl/twitter/credentials.toml with OAuth user tokens")
 	case errors.Is(err, xapi.ErrCredentialsIncomplete):
-		return r.contractError("credentials_missing", "X API credentials are incomplete", "add client_id, client_secret, access_token, and refresh_token to ~/.opentrawl/birdcrawl/credentials.toml")
+		return r.contractError("credentials_missing", "X API credentials are incomplete", "add client_id, client_secret, access_token, and refresh_token to ~/.opentrawl/twitter/credentials.toml")
 	case errors.Is(err, xapi.ErrCredentialsPermissions):
-		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions", "set ~/.opentrawl/birdcrawl/credentials.toml permissions to 0600")
+		return r.contractError("credentials_missing", "X API credentials file has unsafe permissions", "set ~/.opentrawl/twitter/credentials.toml permissions to 0600")
 	case errors.As(err, &payment):
 		if fetched {
 			r.recordPartialSync(st, "partial: X credits exhausted")
 		}
-		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side", "buy credits or raise the spend cap in the X developer console (Billing), then re-run trawl birdcrawl sync")
+		return r.contractError("payment_required", "X refused the request: credits or the billing-cycle spend cap are exhausted on the X side", "buy credits or raise the spend cap in the X developer console (Billing), then re-run trawl twitter sync")
 	case errors.As(err, &budget):
 		if fetched {
 			r.recordPartialSync(st, "partial: budget exhausted")

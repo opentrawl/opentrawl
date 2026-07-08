@@ -8,7 +8,7 @@
 # The script is generic and holds no personal data. Personal probe
 # queries live in an uncommitted local file, ~/.trawl/smoke.jsonl, one
 # JSON object per line:
-#   {"query": "boat trip", "source": "imsgcrawl", "expect": "Saturday"}
+#   {"query": "boat trip", "source": "imessage", "expect": "Saturday"}
 # "source" and "expect" are optional: source pins where a hit must come
 # from, expect is a substring that must appear in some result snippet.
 # Without the file, the cross-source section runs a generic probe only.
@@ -318,7 +318,7 @@ while read -r source state; do
   # never set up on this machine — flagged, but not a failure.
   case "$state" in
     ok) ok "state ok" ;;
-    stale) meh "state stale — run: trawl sync $source" ;;
+    stale) meh "state stale — run trawl sync $source" ;;
     empty) meh "state empty — archive exists but holds nothing yet" ;;
     missing) meh "state missing — not set up on this machine" ;;
     *) bad "state $state" ;;

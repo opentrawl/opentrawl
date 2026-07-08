@@ -6,7 +6,7 @@ written_by: ai
 
 Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
 
-`photoscrawl` builds a `photoscrawl.db` archive from a user's Photos library. The
+`photoscrawl` builds a `photos.db` archive from a user's Photos library. The
 goal is not photo backup. The goal is to help users understand their own library:
 where photos were taken, when they were taken, what is visible, which
 documents/screenshots/receipts exist, and which assets belong together.
@@ -25,22 +25,22 @@ documents/screenshots/receipts exist, and which assets belong together.
 ## First Commands
 
 ```sh
-trawl photoscrawl metadata --json
-trawl photoscrawl status --json
-trawl photoscrawl doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
-trawl photoscrawl sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
-trawl photoscrawl classify --limit 100 --json
-trawl photoscrawl classify --model gemma4:e4b --limit 20 --json
-trawl photoscrawl search "drone beach portugal" --json
-trawl photoscrawl open photoscrawl:asset/<32-hex> --json
+trawl photos metadata --json
+trawl photos status --json
+trawl photos doctor --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+trawl photos sync --library "$HOME/Pictures/Photos Library.photoslibrary" --json
+trawl photos classify --limit 100 --json
+trawl photos classify --model gemma4:e4b --limit 20 --json
+trawl photos search "drone beach portugal" --json
+trawl photos open photos:asset/<32-hex> --json
 ```
 
 Human search output shows a short ref when the archive can resolve it safely.
 Use that alias with `open` for local terminal work. JSON keeps
-the canonical `photoscrawl:asset/<32-hex>` ref.
+the canonical `photos:asset/<32-hex>` ref.
 
-Default runtime paths live under `~/.opentrawl/photoscrawl/`. The primary
-database is `~/.opentrawl/photoscrawl/photoscrawl.db`; provider caches, exported
+Default runtime paths live under `~/.opentrawl/photos/`. The primary
+database is `~/.opentrawl/photos/photos.db`; provider caches, exported
 originals, logs, config and eval artifacts stay under the same crawler root.
 
 A lifecrawler-format `export` command is planned but does not exist
@@ -71,7 +71,7 @@ parked photos and unpark them once the place cache covers their location.
 
 If an original download fails, `classify` marks that asset as `failed_download`.
 It will not try that download again until an operator resets it:
-`sqlite3 ~/.opentrawl/photoscrawl/photoscrawl.db "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
+`sqlite3 ~/.opentrawl/photos/photos.db "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
 
 ## photoscrawl-lab
 
@@ -103,8 +103,8 @@ the address line.
 the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs
 from originals, passes full metadata as a sidecar prompt input, and writes all
 private images, metadata, and model responses under
-`~/.opentrawl/photoscrawl/evals`. If `--allow-icloud-downloads` is set, PhotoKit
-may download missing originals into `~/.opentrawl/photoscrawl/cache/originals`;
+`~/.opentrawl/photos/evals`. If `--allow-icloud-downloads` is set, PhotoKit
+may download missing originals into `~/.opentrawl/photos/cache/originals`;
 normal sync/classify commands do not force iCloud downloads.
 
 There is no standalone place backfill command. Library-scale place caching is
@@ -154,7 +154,7 @@ without pretending GPS, face labels, or classifier labels are perfect facts.
 
 ## v1 Scope
 
-Build `photoscrawl.db` with:
+Build `photos.db` with:
 
 - assets and resource metadata from Apple Photos;
 - local original-download queue; disk use is bounded by serial downloads and

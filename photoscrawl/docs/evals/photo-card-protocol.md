@@ -36,7 +36,7 @@ photoscrawl-lab eval-card \
 The harness uses originals only. It first looks for a local original inside the
 Photos package. If `--allow-icloud-downloads` is set and the original is not
 local, it asks PhotoKit to download/export the original into a private cache
-under `~/.opentrawl/photoscrawl/cache/originals`. Normal sync behavior remains
+under `~/.opentrawl/photos/cache/originals`. Normal sync behavior remains
 read-only/local-first and does not force iCloud downloads.
 
 For each asset, the harness writes a canonical full-resolution JPEG to the
@@ -49,7 +49,7 @@ separate private JSON sidecar and passed to the prompt.
 Default run output is:
 
 ```text
-~/.opentrawl/photoscrawl/evals/<run-id>/
+~/.opentrawl/photos/evals/<run-id>/
   images/E001.jpg
   metadata/E001.json
   raw/E001__ollama__<model>__photo-card-v3.json

@@ -7,12 +7,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
-const unknownFreshness = "—"
+const unknownFreshness = "not synced yet"
 
 type StatusEnvelope struct {
 	AppID        string     `json:"app_id"`
+	Surface      string     `json:"surface,omitempty"`
 	State        string     `json:"state"`
 	Summary      string     `json:"summary,omitempty"`
 	Freshness    *Freshness `json:"freshness,omitempty"`
@@ -89,9 +92,9 @@ func (v CountValue) text(id, label string) string {
 	case bool:
 		return strconv.FormatBool(value)
 	case int:
-		return formatInteger(int64(value), id, label)
+		return render.FormatCount(int64(value), id, label)
 	case int64:
-		return formatInteger(value, id, label)
+		return render.FormatCount(value, id, label)
 	case float64:
 		return strconv.FormatFloat(value, 'f', -1, 64)
 	default:
@@ -143,8 +146,18 @@ func normalizeStatus(source Source, status StatusEnvelope) StatusEnvelope {
 	if status.AppID == "" {
 		status.AppID = source.ID
 	}
+	if status.Surface == "" {
+		status.Surface = sourceHumanName(source)
+	}
+	status.State = strings.TrimSpace(status.State)
 	if status.State == "" {
 		status.State = "error"
+	}
+	switch status.State {
+	case "ok":
+		status.Summary = "Recently synced."
+	case "missing", "error":
+		status.Summary = "Not synced yet."
 	}
 	return status
 }
@@ -152,6 +165,7 @@ func normalizeStatus(source Source, status StatusEnvelope) StatusEnvelope {
 func errorStatus(source Source, summary string) StatusEnvelope {
 	return StatusEnvelope{
 		AppID:   source.ID,
+		Surface: sourceHumanName(source),
 		State:   "error",
 		Summary: summary,
 	}
@@ -163,29 +177,6 @@ func statusFailed(status StatusEnvelope) bool {
 
 func checkFailed(check DoctorCheck) bool {
 	return check.State == "fail" || check.State == "error" || check.State == "missing"
-}
-
-func formatInteger(value int64, id, label string) string {
-	name := strings.ToLower(strings.TrimSpace(label))
-	if name == "" {
-		name = strings.ToLower(strings.TrimSpace(id))
-	}
-	if name == "since" || strings.Contains(name, "year") {
-		return strconv.FormatInt(value, 10)
-	}
-	sign := ""
-	if value < 0 {
-		sign = "-"
-		value = -value
-	}
-	digits := strconv.FormatInt(value, 10)
-	var chunks []string
-	for len(digits) > 3 {
-		chunks = append([]string{digits[len(digits)-3:]}, chunks...)
-		digits = digits[:len(digits)-3]
-	}
-	chunks = append([]string{digits}, chunks...)
-	return sign + strings.Join(chunks, ",")
 }
 
 func freshnessText(status StatusEnvelope, now time.Time) string {
@@ -201,6 +192,11 @@ func freshnessText(status StatusEnvelope, now time.Time) string {
 	}
 	if status.LastSyncAt != "" {
 		if parsed, err := time.Parse(time.RFC3339, status.LastSyncAt); err == nil {
+			return humanDuration(now.Sub(parsed))
+		}
+	}
+	if status.LastImportAt != "" {
+		if parsed, err := time.Parse(time.RFC3339, status.LastImportAt); err == nil {
 			return humanDuration(now.Sub(parsed))
 		}
 	}

@@ -50,7 +50,7 @@ func Status(ctx context.Context, path string) (StatusReport, error) {
 	db := st.DB()
 	report := StatusReport{
 		SchemaVersion: control.StatusSchemaVersion,
-		AppID:         "imsgcrawl",
+		AppID:         "imessage",
 		State:         "ok",
 		Summary:       "Messages database is readable.",
 		DatabasePath:  snap.SourcePath,

@@ -52,7 +52,7 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 			t.Fatalf("unexpected capability %q in %#v", capability, manifest.Capabilities)
 		}
 	}
-	if got := manifest.Paths.DefaultDatabase; got != filepath.Join(home, ".opentrawl", "photoscrawl", "photoscrawl.db") {
+	if got := manifest.Paths.DefaultDatabase; got != filepath.Join(home, ".opentrawl", "photos", "photos.db") {
 		t.Fatalf("default database = %q", got)
 	}
 	classify := manifest.Commands["classify"]
@@ -74,9 +74,9 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	root := t.TempDir()
 	stateRoot := filepath.Join(root, "state")
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "photoscrawl", "photoscrawl.db"),
-		Config:  filepath.Join(stateRoot, "photoscrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "photoscrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "photos", "photos.db"),
+		Config:  filepath.Join(stateRoot, "photos", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "photos", "logs"),
 	}
 	t.Setenv("HOME", filepath.Join(root, "home"))
 	createSyntheticLibrary(t, filepath.Join(root, "home", "Pictures", "Photos Library.photoslibrary"))
@@ -162,9 +162,9 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 	home := filepath.Join(root, "home")
 	stateRoot := filepath.Join(home, ".opentrawl")
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "photoscrawl", "photoscrawl.db"),
-		Config:  filepath.Join(stateRoot, "photoscrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "photoscrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "photos", "photos.db"),
+		Config:  filepath.Join(stateRoot, "photos", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "photos", "logs"),
 	}
 	t.Setenv("HOME", home)
 	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
@@ -209,7 +209,7 @@ func TestRunSyncThroughCrawlkitChildCreatesArchive(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	archivePath := filepath.Join(home, ".opentrawl", "photoscrawl", "photoscrawl.db")
+	archivePath := filepath.Join(home, ".opentrawl", "photos", "photos.db")
 	if _, err := os.Stat(archivePath); err != nil {
 		t.Fatalf("archive was not created at %s: %v", archivePath, err)
 	}
@@ -222,7 +222,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 	t.Setenv("CRAWLKIT_RUN_ID", "")
 	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
 	createSyntheticLibrary(t, libraryPath)
-	archivePath := filepath.Join(home, ".opentrawl", "photoscrawl", "photoscrawl.db")
+	archivePath := filepath.Join(home, ".opentrawl", "photos", "photos.db")
 
 	stdout, stderr, code := captureRun(t, []string{"sync", "--json"})
 	if code != 0 {
@@ -250,7 +250,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 		}
 	}
 
-	assertSyncWrittenLog(t, filepath.Join(home, ".opentrawl", "photoscrawl", "logs", "current.log"),
+	assertSyncWrittenLog(t, filepath.Join(home, ".opentrawl", "photos", "logs", "current.log"),
 		"provider=photos_sqlite_snapshot assets=1 new=0 changed=1 unchanged=0 missing=0 "+
 			"queued_for_classify=1 queued_needs_download=1 classification_queue_pending=1 "+
 			"marked_stale_model_assets=1 marked_stale_model_rows=2 "+

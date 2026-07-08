@@ -24,7 +24,8 @@ const schemaVersion = 6
 // Sync markers live in the canonical crawlkit state.Store (table sync_state)
 // under one source name and entity type; each marker is a keyed scalar value.
 const (
-	syncSource       = "telecrawl"
+	syncSource       = "telegram"
+	legacySyncSource = "telecrawl"
 	syncEntityType   = "sync"
 	syncLastImportAt = "last_import_at"
 	syncSourcePath   = "source_path"
@@ -313,7 +314,7 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 		return nil, err
 	}
 	if version != schemaVersion {
-		return nil, fmt.Errorf("database schema version %d is not supported by telecrawl schema %d", version, schemaVersion)
+		return nil, fmt.Errorf("database schema version %d is not supported by telegram schema %d", version, schemaVersion)
 	}
 	return &Store{store: st, db: st.DB(), path: path}, nil
 }

@@ -4,7 +4,7 @@ Telegram archive CLI.
 
 `telecrawl` reads local Telegram Desktop `tdata` archives and native Telegram
 for macOS Postbox databases, stores a searchable SQLite archive in
-`~/.opentrawl/telecrawl/telecrawl.db`.
+`~/.opentrawl/telegram/telegram.db`.
 
 It is local-first:
 
@@ -28,9 +28,9 @@ No language runtime setup is required. `telecrawl` imports Telegram Desktop
 ## Sync
 
 ```bash
-trawl telecrawl doctor
-trawl telecrawl sync
-trawl telecrawl status
+trawl telegram doctor
+trawl telegram sync
+trawl telegram status
 ```
 
 Sync defaults to:
@@ -41,14 +41,14 @@ Sync defaults to:
 Use `0` for no limit:
 
 ```bash
-trawl telecrawl sync --dialogs-limit 0 --messages-limit 0
+trawl telegram sync --dialogs-limit 0 --messages-limit 0
 ```
 
 Add `--fetch-media` when you also want Telegram cloud media that is not cached
 locally:
 
 ```bash
-trawl telecrawl sync --dialogs-limit 0 --messages-limit 0 --fetch-media
+trawl telegram sync --dialogs-limit 0 --messages-limit 0 --fetch-media
 ```
 
 Remote media fetches are bounded best-effort operations. Run with `-v` to see
@@ -72,7 +72,7 @@ When no `--path` is provided on macOS, `telecrawl` checks Telegram Desktop
 flag is needed. To import a copied archive directly:
 
 ```bash
-trawl telecrawl sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
+trawl telegram sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
 Native macOS syncs include every local `account-*` database they find; if more
@@ -80,25 +80,25 @@ than one account is present, stored chat and sender IDs are account-scoped to
 avoid collisions. They archive cached media by default and store Telegram peer
 records as contacts for message enrichment. Contacts can include phone numbers,
 usernames, and archived avatar paths when those values exist locally, and are
-visible through `trawl telecrawl contacts`. `--fetch-media` also uses the existing
+visible through `trawl telegram contacts`. `--fetch-media` also uses the existing
 native Telegram session to fetch missing cloud media when account auth data is
 present; this does not launch Telegram or start a login/2FA flow.
 
 Useful reads:
 
 ```bash
-trawl telecrawl folders
-trawl telecrawl contacts
-trawl telecrawl chats --limit 20
-trawl telecrawl chats --folder FOLDER_ID
-trawl telecrawl chats --unread
-trawl telecrawl topics --chat CHAT_ID
-trawl telecrawl messages --limit 20
-trawl telecrawl messages --chat CHAT_ID --after 2026-01-01
-trawl telecrawl messages --chat CHAT_ID --topic TOPIC_ID
-trawl telecrawl messages --chat CHAT_ID --pinned
-trawl telecrawl search "query"
-trawl telecrawl search "query" --chat CHAT_ID --topic TOPIC_ID
+trawl telegram folders
+trawl telegram contacts
+trawl telegram chats --limit 20
+trawl telegram chats --folder FOLDER_ID
+trawl telegram chats --unread
+trawl telegram topics --chat CHAT_ID
+trawl telegram messages --limit 20
+trawl telegram messages --chat CHAT_ID --after 2026-01-01
+trawl telegram messages --chat CHAT_ID --topic TOPIC_ID
+trawl telegram messages --chat CHAT_ID --pinned
+trawl telegram search "query"
+trawl telegram search "query" --chat CHAT_ID --topic TOPIC_ID
 ```
 
 Telegram folders, forum topics, reply/thread IDs, pinned messages, edits,
@@ -122,24 +122,24 @@ Defaults:
 - Telegram Desktop source: `~/Library/Application Support/Telegram Desktop/tdata`
 - native macOS Postbox source:
   `~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram`
-- archive DB: `~/.opentrawl/telecrawl/telecrawl.db`
+- archive DB: `~/.opentrawl/telegram/telegram.db`
 - archived media copied from local Telegram caches, plus Telegram cloud media
-  when `--fetch-media` is used: `~/.opentrawl/telecrawl/media/`
-- config: `~/.opentrawl/telecrawl/config.toml`
+  when `--fetch-media` is used: `~/.opentrawl/telegram/media/`
+- config: `~/.opentrawl/telegram/config.toml`
 
 Use a temporary home for tests:
 
 ```bash
 test_home="$(mktemp -d)"
-HOME="$test_home" trawl telecrawl status
+HOME="$test_home" trawl telegram status
 ```
 
 Override the Telegram source:
 
 ```bash
-trawl telecrawl doctor --path "/path/to/tdata"
-trawl telecrawl sync --path "/path/to/tdata"
-trawl telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
+trawl telegram doctor --path "/path/to/tdata"
+trawl telegram sync --path "/path/to/tdata"
+trawl telegram sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
 ```
 
 ## Reset
@@ -147,11 +147,11 @@ trawl telecrawl sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
 Remove local state:
 
 ```bash
-rm -rf ~/.opentrawl/telecrawl
+rm -rf ~/.opentrawl/telegram
 ```
 
 Remove only the archive:
 
 ```bash
-rm -f ~/.opentrawl/telecrawl/telecrawl.db ~/.opentrawl/telecrawl/telecrawl.db-*
+rm -f ~/.opentrawl/telegram/telegram.db ~/.opentrawl/telegram/telegram.db-*
 ```

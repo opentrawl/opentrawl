@@ -76,18 +76,18 @@ func capabilitiesFor(source Crawler, info Info) []string {
 
 func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[string]control.Command {
 	commands := map[string]control.Command{
-		"metadata": applySpineDeclaration(spineCommand("Metadata", binaryName, "metadata", "metadata"), spine, "metadata"),
-		"status":   applySpineDeclaration(spineCommand("Status", binaryName, "status", "status"), spine, "status"),
-		"doctor":   applySpineDeclaration(spineCommand("Doctor", binaryName, "doctor", "doctor"), spine, "doctor"),
+		"metadata": applySpineDeclaration(spineCommand("Show crawler metadata", binaryName, "metadata", "metadata"), spine, "metadata"),
+		"status":   applySpineDeclaration(spineCommand("Show archive status", binaryName, "status", "status"), spine, "status"),
+		"doctor":   applySpineDeclaration(spineCommand("Check archive setup", binaryName, "doctor", "doctor"), spine, "doctor"),
 	}
 	if _, ok := source.(Syncer); ok {
-		command := spineCommand("Sync", binaryName, "sync", "sync")
+		command := spineCommand("Sync the archive", binaryName, "sync", "sync")
 		command.Mutates = true
 		commands["sync"] = applySpineDeclaration(command, spine, "sync")
 	}
 	if _, ok := source.(Searcher); ok {
 		_, supportsWho := source.(WhoMatcher)
-		command := spineCommand("Search", binaryName, "search", "search", "QUERY")
+		command := spineCommand("Search archive items", binaryName, "search", "search", "QUERY")
 		command.Flags = builtinSearchFlags(supportsWho)
 		commands["search"] = applySpineDeclaration(command, spine, "search")
 	}
@@ -95,7 +95,7 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, "who", "who", "NAME"), spine, "who")
 	}
 	if _, ok := source.(Opener); ok {
-		commands["open"] = applySpineDeclaration(spineCommand("Open", binaryName, "open", "open", "REF"), spine, "open")
+		commands["open"] = applySpineDeclaration(spineCommand("Open an item", binaryName, "open", "open", "REF"), spine, "open")
 	}
 	if _, ok := source.(ContactExporter); ok {
 		commands["contacts_export"] = applySpineDeclaration(spineCommand("Export contacts", binaryName, "contacts_export", "contacts", "export"), spine, "contacts_export")

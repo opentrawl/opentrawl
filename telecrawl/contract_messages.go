@@ -75,10 +75,11 @@ func newOpenEnvelope(window store.MessageWindow) openEnvelope {
 		context = append(context, openMessageFromStore(message, isTarget))
 	}
 	return openEnvelope{
-		Ref:     targetRef,
-		Chat:    openChatFromMessage(window.Target),
-		Message: openMessageFromStore(window.Target, true),
-		Context: context,
+		Ref:          targetRef,
+		Chat:         openChatFromMessage(window.Target),
+		Participants: append([]string(nil), window.Participants...),
+		Message:      openMessageFromStore(window.Target, true),
+		Context:      context,
 		ContextWindow: openWindow{
 			Before:          targetPosition,
 			After:           len(context) - targetPosition - 1,
@@ -141,7 +142,7 @@ func chatRef(jid string) string {
 	if jid == "" {
 		return ""
 	}
-	return "telecrawl:chat/" + jid
+	return "telegram:chat/" + jid
 }
 
 func formatOptionalTime(t time.Time) string {

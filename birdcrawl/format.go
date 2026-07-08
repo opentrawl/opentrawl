@@ -2,7 +2,8 @@ package birdcrawl
 
 import (
 	"strconv"
-	"strings"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
 func itoa(value int) string {
@@ -15,17 +16,5 @@ func groupDigits(value int) string {
 }
 
 func groupDigits64(value int64) string {
-	s := strconv.FormatInt(value, 10)
-	neg := false
-	if strings.HasPrefix(s, "-") {
-		neg = true
-		s = s[1:]
-	}
-	for i := len(s) - 3; i > 0; i -= 3 {
-		s = s[:i] + "," + s[i:]
-	}
-	if neg {
-		return "-" + s
-	}
-	return s
+	return render.FormatInteger(value)
 }

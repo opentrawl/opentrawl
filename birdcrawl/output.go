@@ -55,7 +55,11 @@ func (r *runtime) printSpend(value spendEnvelope) error {
 }
 
 func (r *runtime) printManifest(value control.Manifest) error {
-	if _, err := fmt.Fprintf(r.stdout, "%s: %s\nversion: %s\n", value.ID, value.Description, value.Version); err != nil {
+	name := strings.TrimSpace(value.DisplayName)
+	if name == "" {
+		name = value.ID
+	}
+	if _, err := fmt.Fprintf(r.stdout, "%s: %s\nversion: %s\n", name, value.Description, value.Version); err != nil {
 		return err
 	}
 	_, err := fmt.Fprintf(r.stdout, "database: %s\nlogs: %s\n", value.Paths.DefaultDatabase, value.Paths.DefaultLogs)
@@ -132,12 +136,12 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 		items = append(items, render.ListItem{
 			Time: item.timeValue,
 			Who:  humanWhoCell(item.rawWho, item.authorID, item.inReplyTo, item.inReplyToAuthorID, value.ownerAuthorID),
-			Ref:  displayRef(item.Ref, item.ShortRef),
+			Ref:  item.Ref,
 			Text: item.Snippet,
 		})
 	}
 	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("Search %q: showing %d of %d.", value.Query, len(value.Results), value.TotalMatches),
+		Heading:   fmt.Sprintf("Search %q: showing %s of %s, newest first.", value.Query, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches))),
 		Hints:     searchHints(value.Query, value.Limit, value.Truncated),
 		Items:     items,
 		ClampText: 2,
@@ -152,12 +156,12 @@ func (r *runtime) printList(value listEnvelope) error {
 		items = append(items, render.ListItem{
 			Time: item.timeValue,
 			Who:  browseWho(item, value.ownerAuthorID),
-			Ref:  displayRef(item.Ref, item.ShortRef),
+			Ref:  item.Ref,
 			Text: item.Text,
 		})
 	}
 	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("%s: showing %d of %d, newest first.", command.title, len(value.Results), value.Total),
+		Heading:   fmt.Sprintf("%s: showing %s of %s, newest first.", command.title, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.Total))),
 		Hints:     browseHints(value.Kind, value.Limit, value.Truncated),
 		Items:     items,
 		ClampText: 0,
@@ -213,7 +217,7 @@ func (r *runtime) printOpenContext(title string, tweets []openTweet, ownerAuthor
 	}
 	width := render.OutputWidth(r.stdout)
 	for _, tweet := range tweets {
-		ref := displayRef(tweet.Ref, tweet.ShortRef)
+		ref := tweet.Ref
 		who := humanName(tweet.Who, tweet.authorID, ownerAuthorID)
 		if tweet.Unavailable {
 			who = "unavailable"
@@ -244,17 +248,17 @@ func (r *runtime) printStats(value statsEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "Your top tweets by %s, last %s.\n", value.By, humanWindow(value.Window)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "Showing %d of %d.\n", len(value.Results), value.Population); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "Showing %s of %s.\n", render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.Population))); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(r.stdout, statsFreshnessHint(value.Results)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Open: trawl birdcrawl open REF"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout, "Open: trawl twitter open REF"); err != nil {
 		return err
 	}
 	if value.Population > len(value.Results) {
-		if _, err := fmt.Fprintf(r.stdout, "More: trawl birdcrawl stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: trawl twitter stats --by %s --limit %d\n", value.By, statsNextLimit(len(value.Results))); err != nil {
 			return err
 		}
 	}
@@ -266,7 +270,7 @@ func (r *runtime) printStats(value statsEnvelope) error {
 		rows = append(rows, []string{
 			render.ShortLocalTime(row.timeValue),
 			groupDigits64(row.Count),
-			displayRef(row.Ref, row.ShortRef),
+			row.Ref,
 			row.Text,
 		})
 	}
@@ -279,21 +283,21 @@ func (r *runtime) printStats(value statsEnvelope) error {
 }
 
 func searchHints(query string, limit int, truncated bool) []string {
-	hints := []string{"Open: trawl birdcrawl open REF"}
+	hints := []string{"Open: trawl twitter open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: trawl birdcrawl search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
-			"All: trawl birdcrawl search "+quoteSearchQuery(query)+" --all")
+			"More: trawl twitter search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
+			"All: trawl twitter search "+quoteSearchQuery(query)+" --all")
 	}
 	return hints
 }
 
 func browseHints(kind string, limit int, truncated bool) []string {
-	hints := []string{"Open: trawl birdcrawl open REF"}
+	hints := []string{"Open: trawl twitter open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: trawl birdcrawl "+kind+" --limit "+itoa(nextLimit(limit)),
-			"All: trawl birdcrawl "+kind+" --all")
+			"More: trawl twitter "+kind+" --limit "+itoa(nextLimit(limit)),
+			"All: trawl twitter "+kind+" --all")
 	}
 	return hints
 }
@@ -323,9 +327,16 @@ func browseWho(item listResult, ownerAuthorID string) string {
 
 func humanName(value, authorID, ownerAuthorID string) string {
 	if ownerAuthorID != "" && authorID == ownerAuthorID {
-		return "me"
+		return selfDisplayName(value)
 	}
 	return value
+}
+
+func selfDisplayName(value string) string {
+	if handle := displayHandle(value); handle != "" {
+		return "me (" + handle + ")"
+	}
+	return "me"
 }
 
 // jsonWho is the sender only; the reply target lives in where/in_reply_to.
@@ -370,13 +381,6 @@ func displayHandle(value string) string {
 		return ""
 	}
 	return strings.TrimSuffix(value[start+1:], ")")
-}
-
-func displayRef(fullRef, shortRef string) string {
-	if shortRef != "" {
-		return shortRef
-	}
-	return fullRef
 }
 
 func countsLine(tweet openTweet) string {

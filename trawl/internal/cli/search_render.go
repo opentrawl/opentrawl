@@ -38,7 +38,7 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 			Source:   row.surface,
 			Who:      normalizeSelf(row.Who),
 			Where:    normalizeSelf(row.Where),
-			Ref:      searchDisplayRef(row),
+			Ref:      row.Ref,
 			Text:     row.Snippet,
 		})
 	}
@@ -55,15 +55,17 @@ func searchEmptySentence(query string) string {
 func searchHeading(query, who string, shown, total int) string {
 	query = strings.TrimSpace(query)
 	who = strings.TrimSpace(who)
+	shownText := render.FormatInteger(int64(shown))
+	totalText := render.FormatInteger(int64(total))
 	switch {
 	case query != "" && who != "":
-		return fmt.Sprintf("Search %q with %s: showing %d of %d, newest first.", query, who, shown, total)
+		return fmt.Sprintf("Search %q with %s: showing %s of %s, newest first.", query, who, shownText, totalText)
 	case query != "":
-		return fmt.Sprintf("Search %q: showing %d of %d, newest first.", query, shown, total)
+		return fmt.Sprintf("Search %q: showing %s of %s, newest first.", query, shownText, totalText)
 	case who != "":
-		return fmt.Sprintf("Search with %s: showing %d of %d, newest first.", who, shown, total)
+		return fmt.Sprintf("Search with %s: showing %s of %s, newest first.", who, shownText, totalText)
 	default:
-		return fmt.Sprintf("Search filters: showing %d of %d, newest first.", shown, total)
+		return fmt.Sprintf("Search filters: showing %s of %s, newest first.", shownText, totalText)
 	}
 }
 
@@ -74,22 +76,21 @@ func resolvedWhoName(candidate *WhoCandidate) string {
 	return strings.Join(strings.Fields(candidate.Who), " ")
 }
 
-// searchDisplayRef degrades per row: the short alias when this row's
-// source can resolve one, its full ref otherwise. One source without
-// short refs never drags the whole table down to machine refs.
-func searchDisplayRef(row SearchRow) string {
-	if row.sourceShortRefs && strings.TrimSpace(row.ShortRef) != "" {
-		return row.ShortRef
-	}
-	return row.Ref
-}
-
 // normalizeSelf makes every crawler's self-name read the same way.
 func normalizeSelf(name string) string {
-	if strings.EqualFold(strings.TrimSpace(name), "me") {
+	name = strings.TrimSpace(name)
+	if strings.EqualFold(name, "me") {
 		return "me"
 	}
-	return strings.TrimSpace(name)
+	lower := strings.ToLower(name)
+	if strings.HasPrefix(lower, "me (") && strings.HasSuffix(name, ")") {
+		identity := strings.TrimSpace(name[len("me (") : len(name)-1])
+		if identity == "" {
+			return "me"
+		}
+		return "me (" + identity + ")"
+	}
+	return name
 }
 
 // moreCommand is the copy-pasteable next page: the same search, run

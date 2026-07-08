@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
@@ -176,7 +177,9 @@ func parseDump(files dumpFiles, importedAt time.Time) ([]store.Tweet, []store.Ro
 	counters.likesWithoutText = hollow
 	if len(liked) > 0 && hollow*2 > len(liked) {
 		return nil, nil, nil, counters, fmt.Errorf(
-			"like.js looks deficient: %d of %d rows carry no text; refusing to import hollow rows", hollow, len(liked))
+			"like.js looks deficient: %s of %s rows carry no text; refusing to import hollow rows",
+			render.FormatInteger(int64(hollow)),
+			render.FormatInteger(int64(len(liked))))
 	}
 	tweets := append(authored, liked...)
 	roles = append(roles, likeRoles...)

@@ -40,7 +40,7 @@ SOURCE     STATE  FRESH    HEADLINE
 imessage   ok     2m ago   12,345 messages · 87 chats · since 2014
 telegram   ok     1h ago   23,456 messages · 145 chats · since 2016
 whatsapp   stale  3d ago   3,456 messages · 42 chats · since 2019
-gmail      error  —        auth expired — run: trawl doctor gmail
+gmail      error  —        auth expired — run trawl doctor gmail
 ```
 
 `trawl status <source>` shows one crawler in detail: databases, counts,

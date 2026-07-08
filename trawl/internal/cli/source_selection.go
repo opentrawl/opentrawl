@@ -35,7 +35,7 @@ func (r *Runtime) selectedSource(source string) (Source, error) {
 func (r *Runtime) writeSourceNotFound(source string) error {
 	return r.writeError("source_not_found",
 		fmt.Sprintf("Source %q was not found.", source),
-		"run: trawl status")
+		"run trawl status")
 }
 
 func splitSourceCSV(sourceCSV string) []string {
@@ -77,12 +77,20 @@ func sourceAlias(displayName string) string {
 	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(displayName), " ", ""))
 }
 
+func sourceHumanName(source Source) string {
+	return firstNonEmpty(source.DisplayName, source.Surface, source.ID)
+}
+
+func sourceCommandToken(source Source) string {
+	return firstNonEmpty(source.ID, source.Surface, source.Binary)
+}
+
 // surfaceNames maps source ids to the human surface name (Gmail,
 // iMessage) so data cells never show module names.
 func surfaceNames(sources []Source) map[string]string {
 	out := make(map[string]string, len(sources))
 	for _, source := range sources {
-		if name := strings.TrimSpace(source.DisplayName); name != "" {
+		if name := strings.TrimSpace(sourceHumanName(source)); name != "" {
 			out[source.ID] = name
 		}
 	}

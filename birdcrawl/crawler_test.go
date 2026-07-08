@@ -71,7 +71,7 @@ func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	if !equalStrings(gotCaps, wantCaps) {
 		t.Fatalf("capabilities = %v, want %v", gotCaps, wantCaps)
 	}
-	wantConfig := filepath.Join(stateRoot, "birdcrawl", "config.toml")
+	wantConfig := filepath.Join(stateRoot, "twitter", "config.toml")
 	if manifest.Paths.DefaultConfig != wantConfig {
 		t.Fatalf("default config = %q, want %q", manifest.Paths.DefaultConfig, wantConfig)
 	}
@@ -122,7 +122,7 @@ func TestDirectVersionVerbRejected(t *testing.T) {
 
 func TestRunnerConfigPathAcceptsExistingBudgetShape(t *testing.T) {
 	stateRoot := stateRootForRun(t)
-	base := filepath.Join(stateRoot, "birdcrawl")
+	base := filepath.Join(stateRoot, "twitter")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -205,14 +205,14 @@ func stateRootForRun(t *testing.T) string {
 
 func seedSpend(t *testing.T, stateRoot, month string, micros int64) {
 	t.Helper()
-	base := filepath.Join(stateRoot, "birdcrawl")
+	base := filepath.Join(stateRoot, "twitter")
 	if err := os.MkdirAll(base, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(base, "config.toml"), []byte("monthly_budget_usd = \"10\"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(context.Background(), filepath.Join(base, "birdcrawl.db"))
+	st, err := store.Open(context.Background(), filepath.Join(base, "twitter.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -19,11 +19,14 @@ func photoscrawlRef(id string) string {
 	if id == "" {
 		return ""
 	}
-	return "photoscrawl:" + strings.Replace(id, ":", "/", 1)
+	return "photos:" + strings.Replace(id, ":", "/", 1)
 }
 
 func normalizeRef(ref string) string {
-	ref = strings.TrimPrefix(strings.TrimSpace(ref), "photoscrawl:")
+	ref = strings.TrimSpace(ref)
+	for _, prefix := range []string{"photos:", "photoscrawl:"} {
+		ref = strings.TrimPrefix(ref, prefix)
+	}
 	return strings.Replace(ref, "/", ":", 1)
 }
 

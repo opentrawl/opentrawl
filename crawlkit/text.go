@@ -98,7 +98,7 @@ func writeManifestText(w io.Writer, manifest control.Manifest) error {
 		{Label: "ID", Value: manifest.ID},
 		{Label: "Name", Value: manifest.DisplayName},
 		{Label: "Version", Value: manifest.Version},
-		{Label: "Commands", Value: strconv.Itoa(len(manifest.Commands))},
+		{Label: "Commands", Value: render.FormatInteger(int64(len(manifest.Commands)))},
 		{Label: "Database", Value: manifest.Paths.DefaultDatabase},
 		{Label: "Logs", Value: manifest.Paths.DefaultLogs},
 	}
@@ -111,7 +111,7 @@ func renderStatus(status *control.Status) render.Status {
 	}
 	out := render.Status{
 		State:    render.StatusState(status.State),
-		Summary:  status.Summary,
+		Summary:  statusSummary(status),
 		Warnings: append([]string(nil), status.Warnings...),
 		Errors:   append([]string(nil), status.Errors...),
 	}
@@ -129,10 +129,10 @@ func renderStatus(status *control.Status) render.Status {
 			archiveFields = append(archiveFields, render.Field{Label: "Database", Value: status.DatabasePath})
 		}
 		if status.DatabaseBytes > 0 {
-			archiveFields = append(archiveFields, render.Field{Label: "Database size", Value: strconv.FormatInt(status.DatabaseBytes, 10) + " bytes"})
+			archiveFields = append(archiveFields, render.Field{Label: "Database size", Value: render.FormatInteger(status.DatabaseBytes) + " bytes"})
 		}
 		if status.WALBytes > 0 {
-			archiveFields = append(archiveFields, render.Field{Label: "WAL size", Value: strconv.FormatInt(status.WALBytes, 10) + " bytes"})
+			archiveFields = append(archiveFields, render.Field{Label: "WAL size", Value: render.FormatInteger(status.WALBytes) + " bytes"})
 		}
 		if len(archiveFields) > 0 {
 			out.Sections = append(out.Sections, render.Section{Title: "Archive", Fields: archiveFields})
@@ -163,9 +163,26 @@ func archiveStatusFields(status *control.Status) []render.Field {
 	}
 	for _, count := range status.Counts {
 		label := firstText(count.Label, count.ID)
-		fields = append(fields, render.Field{Label: displayFieldLabel(label), Value: strconv.FormatInt(count.Value, 10)})
+		fields = append(fields, render.Field{Label: displayFieldLabel(label), Value: render.FormatCount(count.Value, count.ID, label)})
 	}
 	return fields
+}
+
+func statusSummary(status *control.Status) string {
+	if status == nil {
+		return "No status returned."
+	}
+	switch strings.TrimSpace(status.State) {
+	case "ok":
+		return "Recently synced."
+	case "stale":
+		if strings.TrimSpace(status.Summary) != "" {
+			return status.Summary
+		}
+		return "Needs sync."
+	default:
+		return status.Summary
+	}
 }
 
 func displayFieldLabel(value string) string {
@@ -205,9 +222,9 @@ func writeSyncReportText(w io.Writer, report *SyncReport) error {
 		return render.WriteCard(w, render.Card{Title: "Sync complete"})
 	}
 	fields := []render.CardField{
-		{Label: "Added", Value: strconv.FormatInt(report.Added, 10)},
-		{Label: "Updated", Value: strconv.FormatInt(report.Updated, 10)},
-		{Label: "Removed", Value: strconv.FormatInt(report.Removed, 10)},
+		{Label: "Added", Value: render.FormatInteger(report.Added)},
+		{Label: "Updated", Value: render.FormatInteger(report.Updated)},
+		{Label: "Removed", Value: render.FormatInteger(report.Removed)},
 	}
 	return render.WriteCard(w, render.Card{Title: "Sync complete", Fields: fields, Hints: report.Warnings})
 }
@@ -221,7 +238,7 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			Source:   hit.Source,
 			Who:      hit.Who,
 			Where:    hit.Where,
-			Ref:      firstText(hit.ShortRef, hit.Ref),
+			Ref:      hit.Ref,
 			Text:     hit.Snippet,
 		})
 	}
@@ -262,8 +279,8 @@ func writeWhoText(w io.Writer, value whoOutput) error {
 		rows = append(rows, []string{
 			candidate.Who,
 			render.ShortLocalTime(candidate.lastSeen),
-			strconv.FormatInt(candidate.Messages, 10),
-			strings.Join(candidate.Identifiers, ", "),
+			render.FormatInteger(candidate.Messages),
+			strings.Join(humanIdentifiers(candidate.Identifiers), ", "),
 		})
 	}
 	if len(rows) == 0 {
@@ -315,12 +332,12 @@ func writeContactsText(w io.Writer, value *control.ContactExport) error {
 		_, err := fmt.Fprintln(w, "No contacts.")
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Contacts: showing %d of %d.\n\n", len(value.Contacts), len(value.Contacts)); err != nil {
+	if _, err := fmt.Fprintf(w, "Contacts: showing %s of %s.\n\n", render.FormatInteger(int64(len(value.Contacts))), render.FormatInteger(int64(len(value.Contacts)))); err != nil {
 		return err
 	}
 	rows := make([][]string, 0, len(value.Contacts))
 	for _, contact := range value.Contacts {
-		rows = append(rows, []string{contact.DisplayName, strings.Join(contact.PhoneNumbers, ", ")})
+		rows = append(rows, []string{contact.DisplayName, strings.Join(humanPhones(contact.PhoneNumbers), ", ")})
 	}
 	return render.WriteTable(w, []render.TableColumn{
 		{Header: "name", Wrap: true},
@@ -328,18 +345,36 @@ func writeContactsText(w io.Writer, value *control.ContactExport) error {
 	}, rows)
 }
 
+func humanPhones(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, render.FormatPhone(value))
+	}
+	return out
+}
+
+func humanIdentifiers(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		out = append(out, render.HumanIdentity(value))
+	}
+	return out
+}
+
 func searchHeading(query, who string, returned, total int) string {
 	query = strings.TrimSpace(query)
 	who = strings.TrimSpace(who)
+	shown := render.FormatInteger(int64(returned))
+	matches := render.FormatInteger(int64(total))
 	switch {
 	case query != "" && who != "":
-		return fmt.Sprintf("Search %q with %s: showing %d of %d.", query, who, returned, total)
+		return fmt.Sprintf("Search %q with %s: showing %s of %s, newest first.", query, who, shown, matches)
 	case query != "":
-		return fmt.Sprintf("Search %q: showing %d of %d.", query, returned, total)
+		return fmt.Sprintf("Search %q: showing %s of %s, newest first.", query, shown, matches)
 	case who != "":
-		return fmt.Sprintf("Search with %s: showing %d of %d.", who, returned, total)
+		return fmt.Sprintf("Search with %s: showing %s of %s, newest first.", who, shown, matches)
 	default:
-		return fmt.Sprintf("Search filters: showing %d of %d.", returned, total)
+		return fmt.Sprintf("Search filters: showing %s of %s, newest first.", shown, matches)
 	}
 }
 

@@ -111,14 +111,14 @@ func printSearch(r *Runtime, v searchEnvelope) error {
 			Text: hit.Snippet,
 		})
 	}
-	hints := []string{"Show a person: clawdex person show NAME"}
+	hints := []string{"Show a person: trawl contacts person show NAME"}
 	if v.Truncated {
 		hints = append(hints,
-			fmt.Sprintf("More: clawdex search %q --limit %d", v.Query, nextLimit(v.limit)),
-			fmt.Sprintf("All: clawdex search %q --all", v.Query))
+			fmt.Sprintf("More: trawl contacts search %q --limit %d", v.Query, nextLimit(v.limit)),
+			fmt.Sprintf("All: trawl contacts search %q --all", v.Query))
 	}
 	return render.WriteList(r.stdout, render.List{
-		Heading:   fmt.Sprintf("Search %q: showing %d of %d, best match first.", v.Query, len(v.Results), v.TotalMatches),
+		Heading:   fmt.Sprintf("Search %q: showing %s of %s, best match first.", v.Query, render.FormatInteger(int64(len(v.Results))), render.FormatInteger(int64(v.TotalMatches))),
 		Hints:     hints,
 		Items:     items,
 		ClampText: 2,
@@ -132,25 +132,25 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 			_, err := fmt.Fprintf(r.stdout, "No people match %q.\n", v.Query)
 			return err
 		}
-		_, err := fmt.Fprintln(r.stdout, "No people yet. Import some: clawdex import --help")
+		_, err := fmt.Fprintln(r.stdout, "No people yet. Import some: trawl contacts import --help")
 		return err
 	}
-	heading := fmt.Sprintf("People: showing %d of %d, A to Z.", len(v.People), v.Total)
+	heading := fmt.Sprintf("People: showing %s of %s, A to Z.", render.FormatInteger(int64(len(v.People))), render.FormatInteger(int64(v.Total)))
 	if v.Query != "" {
-		heading = fmt.Sprintf("People matching %q: showing %d of %d, A to Z.", v.Query, len(v.People), v.Total)
+		heading = fmt.Sprintf("People matching %q: showing %s of %s, A to Z.", v.Query, render.FormatInteger(int64(len(v.People))), render.FormatInteger(int64(v.Total)))
 	}
 	if _, err := fmt.Fprintln(r.stdout, heading); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Show one: clawdex person show NAME"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout, "Show one: trawl contacts person show NAME"); err != nil {
 		return err
 	}
 	if v.Truncated {
-		more := fmt.Sprintf("More: clawdex person list --limit %d", nextLimit(v.limit))
-		all := "All: clawdex person list --all"
+		more := fmt.Sprintf("More: trawl contacts person list --limit %d", nextLimit(v.limit))
+		all := "All: trawl contacts person list --all"
 		if v.Query != "" {
-			more = fmt.Sprintf("More: clawdex person list --query %q --limit %d", v.Query, nextLimit(v.limit))
-			all = fmt.Sprintf("All: clawdex person list --query %q --all", v.Query)
+			more = fmt.Sprintf("More: trawl contacts person list --query %q --limit %d", v.Query, nextLimit(v.limit))
+			all = fmt.Sprintf("All: trawl contacts person list --query %q --all", v.Query)
 		}
 		if _, err := fmt.Fprintln(r.stdout, more); err != nil {
 			return err
@@ -179,7 +179,7 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 	}
 	rows := make([][]string, 0, len(v.People))
 	for _, p := range v.People {
-		row := []string{p.Name, firstContactValue(p.Emails), firstContactValue(p.Phones)}
+		row := []string{p.Name, firstContactValue(p.Emails), render.FormatPhone(firstContactValue(p.Phones))}
 		if anyTags {
 			row = append(row, strings.Join(p.Tags, ", "))
 		}
@@ -194,7 +194,7 @@ func printPersonCard(r *Runtime, p model.Person) error {
 		{Label: "aka", Value: strings.Join(p.AKA, ", ")},
 		{Label: "tags", Value: strings.Join(p.Tags, ", ")},
 		{Label: "email", Value: joinContactValues(p.Emails)},
-		{Label: "phone", Value: joinContactValues(p.Phones)},
+		{Label: "phone", Value: joinPhoneValues(p.Phones)},
 		{Label: "address", Value: joinAddresses(p.Addresses)},
 		{Label: "sources", Value: strings.Join(sortedSourceNames(p), ", ")},
 		{Label: "file", Value: p.Path},
@@ -282,6 +282,16 @@ func joinContactValues(values []model.ContactValue) string {
 	out := make([]string, 0, len(values))
 	for _, value := range values {
 		if v := strings.TrimSpace(value.Value); v != "" {
+			out = append(out, v)
+		}
+	}
+	return strings.Join(out, ", ")
+}
+
+func joinPhoneValues(values []model.ContactValue) string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if v := render.FormatPhone(strings.TrimSpace(value.Value)); v != "" {
 			out = append(out, v)
 		}
 	}

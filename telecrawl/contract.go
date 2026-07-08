@@ -122,6 +122,7 @@ type searchResult struct {
 type openEnvelope struct {
 	Ref            string        `json:"ref"`
 	Chat           openChat      `json:"chat"`
+	Participants   []string      `json:"participants,omitempty"`
 	Message        openMessage   `json:"message"`
 	Context        []openMessage `json:"context"`
 	ContextWindow  openWindow    `json:"context_window"`
@@ -202,7 +203,7 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 
 func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
 	return statusEnvelope{
-		AppID:     "telecrawl",
+		AppID:     "telegram",
 		State:     state,
 		Summary:   summary,
 		Freshness: statusFreshness(status),
@@ -231,14 +232,14 @@ func statusState(status store.Status) string {
 func statusSummary(status store.Status) string {
 	switch statusState(status) {
 	case "empty":
-		return "archive is empty"
+		return "Telegram has no messages yet."
 	case "stale":
 		if status.LastImportAt.IsZero() {
-			return "archive has never been synced; run trawl telecrawl sync to refresh."
+			return "Telegram has never been synced; run trawl telegram sync to refresh."
 		}
-		return "archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old; run trawl telecrawl sync to refresh."
+		return "Telegram was synced " + agePhrase(time.Since(status.LastImportAt)) + " ago; run trawl telegram sync to refresh."
 	default:
-		return "archive is fresh"
+		return "Recently synced."
 	}
 }
 
@@ -315,16 +316,16 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
-			Message: "telecrawl archive has not been created.",
-			Remedy:  "Run trawl telecrawl sync to create the archive.",
+			Message: "Telegram archive has not been created.",
+			Remedy:  "run trawl telegram sync to create the archive.",
 		}}
 	} else if info.IsDir() {
 		return []doctorCheck{{
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
-			Message: "telecrawl archive path is a directory.",
-			Remedy:  "Use a writable state root, then run trawl telecrawl sync.",
+			Message: "Telegram archive path is a directory.",
+			Remedy:  "Use a writable state root, then run trawl telegram sync.",
 		}}
 	}
 	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
@@ -333,8 +334,8 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
-			Message: "telecrawl archive cannot be read.",
-			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
+			Message: "Telegram archive cannot be read.",
+			Remedy:  "run trawl telegram sync to rebuild the archive.",
 		}}
 	}
 	defer func() { _ = st.Close() }()
@@ -344,12 +345,12 @@ func (r *runtime) archiveChecks() []doctorCheck {
 			ID:      "archive",
 			Label:   "Archive",
 			State:   "missing",
-			Message: "telecrawl archive status cannot be read.",
-			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
+			Message: "Telegram archive status cannot be read.",
+			Remedy:  "run trawl telegram sync to rebuild the archive.",
 		}}
 	}
 	if status.Messages == 0 {
-		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run trawl telecrawl sync to fill the archive."}}
+		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "run trawl telegram sync to fill the archive."}}
 	}
 	return []doctorCheck{
 		{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."},
@@ -358,16 +359,16 @@ func (r *runtime) archiveChecks() []doctorCheck {
 }
 
 func syncRecencyCheck(status store.Status) doctorCheck {
-	check := doctorCheck{ID: "sync_recency", Label: "Archive sync", State: "ok", Message: "Archive sync is fresh."}
+	check := doctorCheck{ID: "sync_recency", Label: "Telegram sync", State: "ok", Message: "Recently synced."}
 	switch {
 	case status.LastImportAt.IsZero():
 		check.State = "warn"
-		check.Message = "Archive has never been synced."
-		check.Remedy = "run trawl telecrawl sync"
+		check.Message = "Telegram has never been synced."
+		check.Remedy = "run trawl telegram sync"
 	case time.Since(status.LastImportAt) > statusFreshFor:
 		check.State = "warn"
-		check.Message = "Archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old."
-		check.Remedy = "run trawl telecrawl sync"
+		check.Message = "Telegram was synced " + agePhrase(time.Since(status.LastImportAt)) + " ago."
+		check.Remedy = "run trawl telegram sync"
 	}
 	return check
 }

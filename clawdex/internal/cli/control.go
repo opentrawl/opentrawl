@@ -23,7 +23,7 @@ func (c *MetadataCmd) Run(r *Runtime) error {
 }
 
 func controlManifest() control.Manifest {
-	m := control.NewManifest("clawdex", "Contacts", "clawdex")
+	m := control.NewManifest("contacts", "Contacts", "clawdex")
 	m.Version = Version
 	m.Description = "Local-first contact identity layer backed by markdown and git."
 	m.Paths = control.Paths{
@@ -127,7 +127,7 @@ func (r *Runtime) controlStatus() control.Status {
 }
 
 func (r *Runtime) newControlStatus(summary string) control.Status {
-	status := control.NewStatus("clawdex", summary)
+	status := control.NewStatus("contacts", summary)
 	status.ConfigPath = r.configPath
 	status.DatabasePath = r.repo.Path
 	return status
@@ -168,24 +168,24 @@ func (r *Runtime) configDoctorCheck() DoctorCheck {
 
 func (r *Runtime) contactsRepoDoctorCheck() (DoctorCheck, []model.Person, bool, bool) {
 	if err := r.repo.Require(); err != nil {
-		return failCheck("contacts_repo", fmt.Sprintf("contacts repo not initialised at %s", r.repo.Path), fmt.Sprintf("run clawdex init %s", r.repo.Path)), nil, false, true
+		return failCheck("contacts_repo", fmt.Sprintf("contacts repo not initialised at %s", r.repo.Path), fmt.Sprintf("run trawl contacts init %s", r.repo.Path)), nil, false, true
 	}
 	if _, err := os.Stat(filepath.Join(r.repo.Path, ".git")); err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return failCheck("contacts_repo", fmt.Sprintf("contacts repo at %s is not a git repo", r.repo.Path), fmt.Sprintf("run clawdex init %s", r.repo.Path)), nil, false, false
+			return failCheck("contacts_repo", fmt.Sprintf("contacts repo at %s is not a git repo", r.repo.Path), fmt.Sprintf("run trawl contacts init %s", r.repo.Path)), nil, false, false
 		}
-		return failCheck("contacts_repo", fmt.Sprintf("cannot inspect git repo at %s: %v", r.repo.Path, err), fmt.Sprintf("check %s is readable or run clawdex init %s", r.repo.Path, r.repo.Path)), nil, false, false
+		return failCheck("contacts_repo", fmt.Sprintf("cannot inspect git repo at %s: %v", r.repo.Path, err), fmt.Sprintf("check %s is readable or run trawl contacts init %s", r.repo.Path, r.repo.Path)), nil, false, false
 	}
 	people, err := r.readOnlyStore().People()
 	if err != nil {
-		return failCheck("contacts_repo", fmt.Sprintf("contacts repo cannot be read: %v", err), "run clawdex doctor --repair"), nil, false, false
+		return failCheck("contacts_repo", fmt.Sprintf("contacts repo cannot be read: %v", err), "run trawl contacts doctor --repair"), nil, false, false
 	}
 	repairProblems, err := r.personRepairProblemCount()
 	if err != nil {
-		return failCheck("contacts_repo", fmt.Sprintf("person markdown parse failed: %v", err), "run clawdex doctor --repair"), people, false, false
+		return failCheck("contacts_repo", fmt.Sprintf("person markdown parse failed: %v", err), "run trawl contacts doctor --repair"), people, false, false
 	}
 	if repairProblems > 0 {
-		return failCheck("contacts_repo", personRepairSummary(repairProblems), "run clawdex doctor --repair"), people, false, false
+		return failCheck("contacts_repo", personRepairSummary(repairProblems), "run trawl contacts doctor --repair"), people, false, false
 	}
 	return okCheck("contacts_repo"), people, true, false
 }
@@ -202,7 +202,7 @@ func (r *Runtime) indexDoctorCheck(people []model.Person, contactsOK, contactsMi
 		return failCheck("index", fmt.Sprintf("index database cannot be opened: %v", err), "fix contacts_repo first")
 	}
 	if status.People != len(people) {
-		return failCheck("index", fmt.Sprintf("index has %d people, markdown has %d", status.People, len(people)), "rerun clawdex doctor")
+		return failCheck("index", fmt.Sprintf("index has %s people, markdown has %s", render.FormatInteger(int64(status.People)), render.FormatInteger(int64(len(people)))), "rerun trawl contacts doctor")
 	}
 	return okCheck("index")
 }
@@ -283,7 +283,7 @@ func statusSections(status control.Status) []render.Section {
 		for _, count := range status.Counts {
 			fields = append(fields, render.Field{
 				Label: humanLabel(firstNonEmpty(count.Label, count.ID)),
-				Value: fmt.Sprint(count.Value),
+				Value: render.FormatCount(count.Value, count.ID, count.Label),
 			})
 		}
 		sections = append(sections, render.Section{Title: "Contacts", Fields: fields})
@@ -375,12 +375,12 @@ func humanDoctorRemedy(check DoctorCheck) string {
 		return ""
 	}
 	switch {
-	case strings.HasPrefix(remedy, "run clawdex init "):
-		return "run clawdex init"
+	case strings.HasPrefix(remedy, "run trawl contacts init "):
+		return "run trawl contacts init"
 	case strings.HasPrefix(remedy, "check ") && strings.Contains(remedy, "valid TOML"):
 		return "check the config file is valid TOML and readable"
-	case strings.HasPrefix(remedy, "check ") && strings.Contains(remedy, "run clawdex init"):
-		return "check the contacts repo is readable or run clawdex init"
+	case strings.HasPrefix(remedy, "check ") && strings.Contains(remedy, "run trawl contacts init"):
+		return "check the contacts repo is readable or run trawl contacts init"
 	}
 	return strings.ReplaceAll(remedy, "contacts_repo", "contacts repo")
 }
@@ -442,14 +442,14 @@ func personRepairSummary(count int) string {
 	if count == 1 {
 		return "1 person markdown file needs repair"
 	}
-	return fmt.Sprintf("%d person markdown files need repair", count)
+	return fmt.Sprintf("%s person markdown files need repair", render.FormatInteger(int64(count)))
 }
 
 func peopleStatusSummary(count int) string {
 	if count == 1 {
 		return "1 person, initialised"
 	}
-	return fmt.Sprintf("%d people, initialised", count)
+	return fmt.Sprintf("%s people, initialised", render.FormatInteger(int64(count)))
 }
 
 func okCheck(id string) DoctorCheck {

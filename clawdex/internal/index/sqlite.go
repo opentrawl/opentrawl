@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/openclaw/clawdex/internal/model"
+	"github.com/openclaw/crawlkit/render"
 
 	// C SQLite via cgo, matching crawlkit/store after the modernc production
 	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
@@ -66,7 +67,7 @@ func (s Store) ensureIndex() (int, bool, error) {
 		return 0, false, err
 	}
 	if s.Log != nil {
-		_, _ = fmt.Fprintf(s.Log, "index rebuilt: %d people\n", count)
+		_, _ = fmt.Fprintf(s.Log, "index rebuilt: %s people\n", render.FormatInteger(int64(count)))
 	}
 	return count, true, nil
 }

@@ -52,7 +52,7 @@ func (r Repo) Require() error {
 		return errors.New("repo path is required")
 	}
 	if _, err := os.Stat(filepath.Join(r.Path, "people")); err != nil {
-		return fmt.Errorf("contacts repo not initialized at %s; run clawdex init %s", r.Path, r.Path)
+		return fmt.Errorf("contacts repo not initialised at %s; run trawl contacts init %s", r.Path, r.Path)
 	}
 	return nil
 }

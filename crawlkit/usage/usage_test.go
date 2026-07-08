@@ -28,8 +28,8 @@ func TestDocRenderFull(t *testing.T) {
 			"birdcrawl search \"from:alex\"",
 		},
 		Footer: []string{
-			"Run trawl birdcrawl doctor when setup looks wrong.",
-			"Run trawl birdcrawl help <command> for command details.",
+			"Run trawl twitter doctor when setup looks wrong.",
+			"Run trawl twitter help <command> for command details.",
 		},
 	}
 	want := strings.Join([]string{
@@ -51,8 +51,8 @@ func TestDocRenderFull(t *testing.T) {
 		"  birdcrawl posts --limit 20",
 		"  birdcrawl search \"from:alex\"",
 		"",
-		"Run trawl birdcrawl doctor when setup looks wrong.",
-		"Run trawl birdcrawl help <command> for command details.",
+		"Run trawl twitter doctor when setup looks wrong.",
+		"Run trawl twitter help <command> for command details.",
 		"",
 	}, "\n")
 	if got := doc.Render(); got != want {

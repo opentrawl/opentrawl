@@ -25,28 +25,28 @@ scripts/dev-bin
 First, check whether `wacrawl` can see the local WhatsApp Desktop data:
 
 ```bash
-trawl wacrawl doctor
+trawl whatsapp doctor
 ```
 
 Sync a fresh local archive:
 
 ```bash
-trawl wacrawl sync
+trawl whatsapp sync
 ```
 
 Inspect what was imported:
 
 ```bash
-trawl wacrawl status
-trawl wacrawl chats --limit 20
-trawl wacrawl unread --limit 20
-trawl wacrawl messages --limit 20
+trawl whatsapp status
+trawl whatsapp chats --limit 20
+trawl whatsapp unread --limit 20
+trawl whatsapp messages --limit 20
 ```
 
 Search message text:
 
 ```bash
-trawl wacrawl search "release notes"
+trawl whatsapp search "release notes"
 ```
 
 Use JSON for scripts:
@@ -74,10 +74,10 @@ Message/Media/
 It writes its own archive to:
 
 ```text
-~/.opentrawl/wacrawl/wacrawl.db
+~/.opentrawl/whatsapp/whatsapp.db
 ```
 
-Set the WhatsApp source path in `~/.opentrawl/wacrawl/config.toml`:
+Set the WhatsApp source path in `~/.opentrawl/whatsapp/config.toml`:
 
 ```toml
 source = "~/Library/Group Containers/group.net.whatsapp.WhatsApp.shared"
@@ -94,7 +94,7 @@ Use a temporary `HOME` when you want a separate test archive.
 - Does not use the WhatsApp network protocol.
 - Does not upload data during normal archive/search commands.
 
-The archive can contain private message data. Keep `~/.opentrawl/wacrawl/wacrawl.db`
+The archive can contain private message data. Keep `~/.opentrawl/whatsapp/whatsapp.db`
 local and out of commits, backups, and shared logs unless that is intentional.
 
 ## Commands
@@ -104,7 +104,7 @@ local and out of commits, backups, and shared logs unless that is intentional.
 Inspect the source path and database shape:
 
 ```bash
-trawl wacrawl doctor
+trawl whatsapp doctor
 trawl --json wacrawl doctor
 ```
 
@@ -116,7 +116,7 @@ range, and importer schema notes.
 Snapshot WhatsApp Desktop data and replace the local archive in one transaction:
 
 ```bash
-trawl wacrawl sync
+trawl whatsapp sync
 ```
 
 Imports:
@@ -129,7 +129,7 @@ Imports:
 - media metadata and local media paths
 
 By default, media paths continue to point at WhatsApp Desktop's app container.
-Set `copy_media = true` in `~/.opentrawl/wacrawl/config.toml` to copy
+Set `copy_media = true` in `~/.opentrawl/whatsapp/config.toml` to copy
 referenced media files into `media/` next to the archive database and rewrite
 copied message media paths to that archive copy.
 Missing media files are counted in the import output and do not fail the import.
@@ -139,13 +139,13 @@ Missing media files are counted in the import output and do not fail the import.
 Show archive counts and metadata:
 
 ```bash
-trawl wacrawl status
+trawl whatsapp status
 ```
 
 Includes message, media-message, chat, unread-chat, unread-message, contact,
 group, participant, source, and timestamp fields when they are available.
 
-`status` reads the existing archive. Run `trawl wacrawl sync` when you want to
+`status` reads the existing archive. Run `trawl whatsapp sync` when you want to
 refresh from WhatsApp Desktop.
 
 ### `chats`
@@ -153,9 +153,9 @@ refresh from WhatsApp Desktop.
 List chats ordered by newest message:
 
 ```bash
-trawl wacrawl chats
-trawl wacrawl chats --limit 100
-trawl wacrawl chats --unread
+trawl whatsapp chats
+trawl whatsapp chats --limit 100
+trawl whatsapp chats --unread
 ```
 
 Unread state comes from WhatsApp Desktop's per-chat unread counter. Message
@@ -166,8 +166,8 @@ rows do not expose a reliable incoming per-message "read by me" flag.
 List only chats with unread messages:
 
 ```bash
-trawl wacrawl unread
-trawl wacrawl unread --limit 100
+trawl whatsapp unread
+trawl whatsapp unread --limit 100
 ```
 
 ### `messages`
@@ -175,10 +175,10 @@ trawl wacrawl unread --limit 100
 List archived messages:
 
 ```bash
-trawl wacrawl messages
-trawl wacrawl messages --chat 1234567890@s.whatsapp.net
-trawl wacrawl messages --after 2026-01-01 --from-them
-trawl wacrawl messages --has-media --json
+trawl whatsapp messages
+trawl whatsapp messages --chat 1234567890@s.whatsapp.net
+trawl whatsapp messages --after 2026-01-01 --from-them
+trawl whatsapp messages --has-media --json
 ```
 
 Filters:
@@ -200,8 +200,8 @@ Filters:
 Search the archive with SQLite FTS5:
 
 ```bash
-trawl wacrawl search "launch"
-trawl wacrawl search "invoice" --after 2026-01-01 --who "Alice Example"
+trawl whatsapp search "launch"
+trawl whatsapp search "invoice" --after 2026-01-01 --who "Alice Example"
 trawl --json wacrawl search "restaurant"
 ```
 
@@ -217,8 +217,8 @@ the WhatsApp Desktop source or changing local state.
 Examples:
 
 ```bash
-trawl wacrawl sync
-trawl wacrawl status
+trawl whatsapp sync
+trawl whatsapp status
 trawl --json wacrawl messages --limit 10
 ```
 

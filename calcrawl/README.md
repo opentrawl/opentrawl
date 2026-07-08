@@ -14,7 +14,7 @@ out. It does not use the network.
 
 ## What it reads
 
-`trawl calcrawl sync` reads:
+`trawl calendar sync` reads:
 
 ```text
 ~/Library/Group Containers/group.com.apple.calendar/Calendar.sqlitedb
@@ -33,13 +33,13 @@ the Reminders store. There is no include or exclude configuration.
 The archive lives at:
 
 ```text
-~/.opentrawl/calcrawl/calcrawl.db
+~/.opentrawl/calendar/calendar.db
 ```
 
 Logs live under:
 
 ```text
-~/.opentrawl/calcrawl/logs/calcrawl.log
+~/.opentrawl/calendar/logs/calendar.log
 ```
 
 The archive stores calendars, account/store provenance, events, start and end
@@ -55,16 +55,16 @@ any time.
 ## Commands
 
 ```bash
-trawl calcrawl doctor
-trawl calcrawl sync
-trawl calcrawl status
-trawl calcrawl search "planning"
-trawl calcrawl search "planning" --who "Alice Example"
-trawl calcrawl search --who alice@example.com
-trawl calcrawl who alice
-trawl calcrawl open t7k3f
-trawl calcrawl open calcrawl:event/11111111-1111-1111-1111-111111111111
-trawl calcrawl contacts export
+trawl calendar doctor
+trawl calendar sync
+trawl calendar status
+trawl calendar search "planning"
+trawl calendar search "planning" --who "Alice Example"
+trawl calendar search --who alice@example.com
+trawl calendar who alice
+trawl calendar open t7k3f
+trawl calendar open calendar:event/11111111-1111-1111-1111-111111111111
+trawl calendar contacts export
 ```
 
 Add `--json` to any command for machine output. Flags work before or after the
@@ -76,7 +76,7 @@ search query.
 {
   "schema_version": "crawlkit.control.v1",
   "contract_version": 1,
-  "id": "calcrawl",
+  "id": "calendar",
   "display_name": "Calendar",
   "capabilities": ["metadata", "status", "sync", "search", "open", "doctor", "contacts_export", "who", "short_refs"]
 }
@@ -86,7 +86,7 @@ search query.
 
 ```json
 {
-  "app_id": "calcrawl",
+  "app_id": "calendar",
   "state": "ok",
   "summary": "Archive is fresh.",
   "freshness": {"last_sync": "2026-07-02T14:03:11+02:00"},
@@ -122,7 +122,7 @@ Search returns 20 rows by default. Use `--limit N` to choose a different count:
   "query": "planning",
   "results": [
     {
-      "ref": "calcrawl:event/11111111-1111-1111-1111-111111111111",
+      "ref": "calendar:event/11111111-1111-1111-1111-111111111111",
       "short_ref": "3qdr5",
       "time": "2026-03-04T10:00:00+01:00",
       "who": "Alice Example",
@@ -195,7 +195,7 @@ unknown aliases return `unknown_short_ref`, and ambiguous aliases return
 
 ```json
 {
-  "ref": "calcrawl:event/11111111-1111-1111-1111-111111111111",
+  "ref": "calendar:event/11111111-1111-1111-1111-111111111111",
   "uuid": "11111111-1111-1111-1111-111111111111",
   "title": "Planning meeting",
   "start": "2026-03-04T10:00:00+01:00",

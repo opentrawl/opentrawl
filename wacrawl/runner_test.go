@@ -25,7 +25,7 @@ func TestMain(m *testing.M) {
 func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := stateRootForRun(t)
-	archivePath := filepath.Join(stateRoot, "wacrawl", "wacrawl.db")
+	archivePath := filepath.Join(stateRoot, "whatsapp", "whatsapp.db")
 	st, err := wastore.Open(ctx, archivePath)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func countIDPresent(counts []control.Count, id string) bool {
 func createAmbiguousWhoArchive(t *testing.T, stateRoot string) {
 	t.Helper()
 	ctx := context.Background()
-	st, err := wastore.Open(ctx, filepath.Join(stateRoot, "wacrawl", "wacrawl.db"))
+	st, err := wastore.Open(ctx, filepath.Join(stateRoot, "whatsapp", "whatsapp.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,9 +6,8 @@ import (
 )
 
 // discoverCrawlers projects each registered crawler manifest into a Source.
-// Here we assert the projection: a valid manifest maps to id and compiled
-// crawler name, and a crawler whose metadata does not parse keeps that name
-// and an error.
+// Here we assert the projection: a valid manifest maps to runtime id, and a
+// crawler whose metadata does not parse keeps that name and an error.
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -18,10 +17,10 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 		wantErr    bool
 	}{
 		{
-			name:       "valid manifest maps id and binary",
-			crawler:    fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage","binary":{"name":"imsgcrawl"}}`},
-			wantID:     "imsgcrawl",
-			wantBinary: "imsgcrawl",
+			name:       "valid manifest maps runtime id",
+			crawler:    fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"}}`},
+			wantID:     "imessage",
+			wantBinary: "imessage",
 		},
 		{
 			name:       "invalid metadata keeps binary name and errors",

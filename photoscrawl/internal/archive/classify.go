@@ -12,7 +12,7 @@ import (
 
 const (
 	metadataClassifierSource        = "archive_metadata"
-	metadataClassifierModelID       = "photoscrawl.archive-metadata.v1"
+	metadataClassifierModelID       = "photos.archive-metadata.v1"
 	metadataClassifierInputVersion  = "asset-resource-album.v1"
 	metadataClassificationBatchSize = 500
 )

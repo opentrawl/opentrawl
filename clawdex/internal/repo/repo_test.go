@@ -116,14 +116,14 @@ func TestRepoGuardErrors(t *testing.T) {
 		t.Fatal("expected empty require path error")
 	}
 	missing := filepath.Join(t.TempDir(), "missing")
-	if err := Open(missing, cfg).Require(); err == nil || !strings.Contains(err.Error(), "not initialized") {
+	if err := Open(missing, cfg).Require(); err == nil || !strings.Contains(err.Error(), "not initialised") {
 		t.Fatalf("require missing err = %v", err)
 	}
 }
 
 func TestRequireFailsBeforeInit(t *testing.T) {
 	err := Open(t.TempDir(), DefaultConfig()).Require()
-	if err == nil || !strings.Contains(err.Error(), "not initialized") {
+	if err == nil || !strings.Contains(err.Error(), "not initialised") {
 		t.Fatalf("err = %v", err)
 	}
 	if got := escapeTOML(`a"b\c`); got != `a\"b\\c` {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
@@ -22,21 +23,29 @@ func (r *runtime) print(v any) error {
 	case doctorOutput:
 		return r.printDoctor(value)
 	case store.ImportStats:
-		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %d\nmessages: %d\nmedia_messages: %d\nmedia_files: %d\nmedia_bytes: %d\nstarted_at: %s\nfinished_at: %s\n",
-			value.SourcePath, value.DBPath, value.Chats, value.Messages, value.MediaMessages, value.MediaFiles, value.MediaBytes, shortLocalTime(value.StartedAt), shortLocalTime(value.FinishedAt)); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %s\nmessages: %s\nmedia_messages: %s\nmedia_files: %s\nmedia_bytes: %s\nstarted_at: %s\nfinished_at: %s\n",
+			value.SourcePath,
+			value.DBPath,
+			render.FormatInteger(int64(value.Chats)),
+			render.FormatInteger(int64(value.Messages)),
+			render.FormatInteger(int64(value.MediaMessages)),
+			render.FormatInteger(int64(value.MediaFiles)),
+			render.FormatInteger(value.MediaBytes),
+			shortLocalTime(value.StartedAt),
+			shortLocalTime(value.FinishedAt)); err != nil {
 			return err
 		}
 		if hasRemoteMediaStats(value) {
 			if _, err := fmt.Fprintf(
 				r.stdout,
-				"remote_media_candidates: %d\nremote_media_attempted: %d\nremote_media_downloads: %d\nremote_media_missing: %d\nremote_media_unavailable: %d\nremote_media_timeouts: %d\nremote_media_errors: %d\n",
-				value.RemoteMediaCandidates,
-				value.RemoteMediaAttempted,
-				value.RemoteMediaDownloads,
-				value.RemoteMediaMissing,
-				value.RemoteMediaUnavailable,
-				value.RemoteMediaTimeouts,
-				value.RemoteMediaErrors,
+				"remote_media_candidates: %s\nremote_media_attempted: %s\nremote_media_downloads: %s\nremote_media_missing: %s\nremote_media_unavailable: %s\nremote_media_timeouts: %s\nremote_media_errors: %s\n",
+				render.FormatInteger(int64(value.RemoteMediaCandidates)),
+				render.FormatInteger(int64(value.RemoteMediaAttempted)),
+				render.FormatInteger(int64(value.RemoteMediaDownloads)),
+				render.FormatInteger(int64(value.RemoteMediaMissing)),
+				render.FormatInteger(int64(value.RemoteMediaUnavailable)),
+				render.FormatInteger(int64(value.RemoteMediaTimeouts)),
+				render.FormatInteger(int64(value.RemoteMediaErrors)),
 			); err != nil {
 				return err
 			}

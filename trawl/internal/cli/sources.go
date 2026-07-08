@@ -1,6 +1,7 @@
 package cli
 
 import (
+	clawdex "github.com/openclaw/clawdex"
 	"github.com/openclaw/crawlkit"
 	imsgcrawl "github.com/openclaw/imsgcrawl"
 	photoscrawl "github.com/openclaw/photoscrawl"
@@ -19,6 +20,7 @@ var crawlerFactories = []func() crawlkit.Crawler{
 	func() crawlkit.Crawler { return gogcrawl.New() },
 	func() crawlkit.Crawler { return calcrawl.New() },
 	func() crawlkit.Crawler { return birdcrawl.New() },
+	func() crawlkit.Crawler { return clawdex.New() },
 }
 
 func registeredCrawlers() []crawlkit.Crawler {

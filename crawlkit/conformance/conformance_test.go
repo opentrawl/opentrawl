@@ -76,7 +76,7 @@ func TestCheckHumanOutput(t *testing.T) {
 }
 
 func TestCheckSearchEnvelope(t *testing.T) {
-	good := `{"query":"launch","results":[{"ref":"imsgcrawl:message/1","time":"2026-07-02T14:03:11+02:00","who":"me","where":"Alice Example","snippet_front_truncated":true,"snippet":"` + "\u2026" + `middle of the message"}]}`
+	good := `{"query":"launch","results":[{"ref":"imessage:msg/1","time":"2026-07-02T14:03:11+02:00","who":"me","where":"Alice Example","snippet_front_truncated":true,"snippet":"` + "\u2026" + `middle of the message"}]}`
 	cases := []struct {
 		name string
 		in   string
@@ -98,7 +98,7 @@ func TestCheckSearchEnvelope(t *testing.T) {
 		},
 		{
 			name: "bad time",
-			in:   `{"results":[{"ref":"imsgcrawl:message/1","time":"yesterday","snippet":"hello"}]}`,
+			in:   `{"results":[{"ref":"imessage:msg/1","time":"yesterday","snippet":"hello"}]}`,
 			want: `search result 0 time is not RFC3339: "yesterday"`,
 		},
 		{
@@ -108,17 +108,17 @@ func TestCheckSearchEnvelope(t *testing.T) {
 		},
 		{
 			name: "uppercase me",
-			in:   `{"results":[{"ref":"imsgcrawl:message/1","time":"2026-07-02T14:03:11+02:00","who":"Me","snippet":"hello"}]}`,
+			in:   `{"results":[{"ref":"imessage:msg/1","time":"2026-07-02T14:03:11+02:00","who":"Me","snippet":"hello"}]}`,
 			want: `search result 0 who renders "Me"; use lowercase me`,
 		},
 		{
 			name: "front truncation without marker",
-			in:   `{"results":[{"ref":"imsgcrawl:message/1","time":"2026-07-02T14:03:11+02:00","snippet_front_truncated":true,"snippet":"middle of the message"}]}`,
+			in:   `{"results":[{"ref":"imessage:msg/1","time":"2026-07-02T14:03:11+02:00","snippet_front_truncated":true,"snippet":"middle of the message"}]}`,
 			want: "search result 0 snippet is front-truncated but has no leading marker",
 		},
 		{
 			name: "unmapped enum in snippet",
-			in:   `{"results":[{"ref":"calcrawl:event/1","time":"2026-07-02T14:03:11+02:00","snippet":"status_7"}]}`,
+			in:   `{"results":[{"ref":"calendar:event/1","time":"2026-07-02T14:03:11+02:00","snippet":"status_7"}]}`,
 			want: "search result 0 snippet contains an unmapped enum value: status_7",
 		},
 	}

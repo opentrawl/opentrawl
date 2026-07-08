@@ -164,7 +164,7 @@ func TestSummariesReportsAmbiguousName(t *testing.T) {
 		`Summary "subscriptions" is ambiguous`,
 		"first/subscriptions.md",
 		"second/subscriptions.md",
-		"Remedy: run: trawl summaries",
+		"Remedy: run trawl summaries",
 	} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
@@ -184,7 +184,7 @@ func TestSummariesReportsUnknownNameAsJSONError(t *testing.T) {
 	}
 	doc := decodeSingleJSONDocument(t, stdout)
 	errDoc := doc["error"].(map[string]any)
-	if errDoc["code"] != "unknown_summary" || errDoc["remedy"] != "run: trawl summaries" {
+	if errDoc["code"] != "unknown_summary" || errDoc["remedy"] != "run trawl summaries" {
 		t.Fatalf("error = %#v", errDoc)
 	}
 	if stderr != "" {

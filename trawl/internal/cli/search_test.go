@@ -83,10 +83,10 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "calcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calcrawl","display_name":"Calendar"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
 			search: `{"query":"fair","results":[
-				{"ref":"calcrawl:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","snippet":"Art fair"},
-				{"ref":"calcrawl:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","snippet":"fair prep call"}
+				{"ref":"calendar:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","snippet":"Art fair"},
+				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","snippet":"fair prep call"}
 			],"total_matches":2,"truncated":false}`,
 		},
 		fakeCrawler{
@@ -129,7 +129,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	for _, row := range envelope.Results {
 		byRef[row.Ref] = row.AllDay
 	}
-	if !byRef["calcrawl:event/aaa"] || byRef["calcrawl:event/bbb"] || byRef["imessage:msg/1"] {
+	if !byRef["calendar:event/aaa"] || byRef["calendar:event/bbb"] || byRef["imessage:msg/1"] {
 		t.Fatalf("federated all_day bits wrong: %#v\n%s", byRef, stdout)
 	}
 	if strings.Count(stdout, "all_day") != 1 {
@@ -222,7 +222,7 @@ func TestSearchRejectsNonPositiveLimit(t *testing.T) {
 	}
 }
 
-func TestSearchHumanOutputUsesShortRefsWhenEveryDisplayedRowCanResolve(t *testing.T) {
+func TestSearchHumanOutputUsesFullRefsWhenEveryDisplayedRowHasShortRef(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
@@ -246,14 +246,14 @@ func TestSearchHumanOutputUsesShortRefsWhenEveryDisplayedRowCanResolve(t *testin
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	for _, want := range []string{"t7k3f", "q8n4c"} {
+	for _, want := range []string{"imessage:msg/8842", "telegram:msg/1930"} {
 		if !strings.Contains(stdout, want) {
-			t.Fatalf("stdout missing short ref %q:\n%s", want, stdout)
+			t.Fatalf("stdout missing full ref %q:\n%s", want, stdout)
 		}
 	}
-	for _, unwanted := range []string{"imessage:msg/8842", "telegram:msg/1930"} {
+	for _, unwanted := range []string{"t7k3f", "q8n4c"} {
 		if strings.Contains(stdout, unwanted) {
-			t.Fatalf("stdout leaked full ref %q:\n%s", unwanted, stdout)
+			t.Fatalf("stdout leaked short ref %q:\n%s", unwanted, stdout)
 		}
 	}
 	if stderr != "" {
@@ -261,11 +261,7 @@ func TestSearchHumanOutputUsesShortRefsWhenEveryDisplayedRowCanResolve(t *testin
 	}
 }
 
-// TestSearchHumanOutputDegradesRefsPerRow is the tripwire for the
-// all-or-nothing degrade defect (TRAWL-2 mechanism note): one source
-// without short refs must not drag every other row down to long
-// machine refs.
-func TestSearchHumanOutputDegradesRefsPerRow(t *testing.T) {
+func TestSearchHumanOutputUsesFullRefsPerRow(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
@@ -289,14 +285,14 @@ func TestSearchHumanOutputDegradesRefsPerRow(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "t7k3f") {
-		t.Fatalf("stdout dropped the short ref for the capable source:\n%s", stdout)
+	if !strings.Contains(stdout, "imessage:msg/8842") {
+		t.Fatalf("stdout missing full ref for the capable source:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "telegram:msg/1930") {
 		t.Fatalf("stdout missing full ref for the source without short refs:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "imessage:msg/8842") {
-		t.Fatalf("stdout leaked the full ref for a row that has a short ref:\n%s", stdout)
+	if strings.Contains(stdout, "t7k3f") {
+		t.Fatalf("stdout leaked a short ref:\n%s", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -389,23 +385,23 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "gogcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail","paths":{"default_logs":"~/.gogcrawl/logs"}}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail","paths":{"default_logs":"~/.opentrawl/gmail/logs"}}`,
 		search: `{"query":"boat trip","results":[
-			{"ref":"gogcrawl:mail/m1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
+			{"ref":"gmail:msg/m1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 		],"total_matches":1,"truncated":false}`,
 	})
 	home := syntheticHome(t)
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", home)
 
-	stdout, stderr, code := runCLI(t, "-vv", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	stdout, stderr, code := runCLI(t, "-vv", "search", "boat trip", "--source", "gmail", "--limit", "1")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		"source_start: source=gogcrawl verb=search",
+		"source_start: source=gmail verb=search",
 		" search start: version=dev",
-		"source_done: source=gogcrawl verb=search",
+		"source_done: source=gmail verb=search",
 		"outcome=ok",
 		"results=1",
 	} {
@@ -419,7 +415,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText := string(logTextBytes)
-	if !strings.Contains(logText, "source_done: source=gogcrawl verb=search") || !strings.Contains(logText, "outcome=ok") {
+	if !strings.Contains(logText, "source_done: source=gmail verb=search") || !strings.Contains(logText, "outcome=ok") {
 		t.Fatalf("log missing source outcome:\n%s", logText)
 	}
 }
@@ -427,14 +423,14 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 func TestSearchVerboseStreamsSourceLogLines(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:         "gogcrawl",
-		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail"}`,
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
 		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 		searchStderr: "first child line\nsecond child line\nfinal child line",
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
 
-	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	stdout, stderr, code := runCLI(t, "-v", "search", "boat trip", "--source", "gmail", "--limit", "1")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -452,14 +448,14 @@ func TestSearchVerboseStreamsSourceLogLines(t *testing.T) {
 func TestSearchDoesNotForwardChildStderrWithoutVerbose(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:         "gogcrawl",
-		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gogcrawl","display_name":"Gmail"}`,
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
 		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 		searchStderr: "hidden child line\n",
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
 
-	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "gogcrawl", "--limit", "1")
+	stdout, stderr, code := runCLI(t, "search", "boat trip", "--source", "gmail", "--limit", "1")
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -600,8 +596,8 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				},
 			},
 			wantCode:   3,
-			wantStdout: "note: 1 of 2 sources unavailable — results are partial (see stderr)",
-			wantStderr: "telegram search failed: the crawler returned an error.\n  Remedy: run: trawl doctor telegram",
+			wantStdout: "note: 1 of 2 sources unavailable - results are partial (see stderr)",
+			wantStderr: "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -611,7 +607,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				search:   `not-json`,
 			}},
 			wantCode:   1,
-			wantStderr: "telegram search failed: the crawler returned an error.\n  Remedy: run: trawl doctor telegram",
+			wantStderr: "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram",
 		},
 	}
 
@@ -659,7 +655,7 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	if stdout != want {
 		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
 	}
-	if !strings.Contains(stderr, "telegram search failed: the crawler returned an error.\n  Remedy: run: trawl doctor telegram") {
+	if !strings.Contains(stderr, "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram") {
 		t.Fatalf("stderr missing failure:\n%s", stderr)
 	}
 }
@@ -689,10 +685,10 @@ func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("partial timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "photos search failed: timed out after 100ms.\n  Remedy:") {
+	if !strings.Contains(stderr, "Photos search failed: timed out after 100ms.\n  Remedy:") {
 		t.Fatalf("stderr missing loud timeout line:\n%s", stderr)
 	}
-	if !strings.Contains(stdout, "note: 1 of 2 sources unavailable — results are partial (see stderr)") {
+	if !strings.Contains(stdout, "note: 1 of 2 sources unavailable - results are partial (see stderr)") {
 		t.Fatalf("stdout missing partial note:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "imessage:msg/1") {
@@ -756,7 +752,7 @@ func TestSearchTotalTimeoutExitsOne(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("total timeout exit = %d, want 1 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "photos search failed: timed out after 100ms") {
+	if !strings.Contains(stderr, "Photos search failed: timed out after 100ms") {
 		t.Fatalf("stderr missing timeout line:\n%s", stderr)
 	}
 }
@@ -781,10 +777,10 @@ func TestSearchUnknownSource(t *testing.T) {
 func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "birdcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"birdcrawl","display_name":"X"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"twitter","display_name":"X"}`,
 		search: `{"query":"boat","results":[
-			{"ref":"birdcrawl:tweet/1","short_ref":"hmn42","time":"2026-05-14T09:12:00Z","who":"me","where":"","snippet":"tweet one"},
-			{"ref":"birdcrawl:tweet/2","short_ref":"eygc4","time":"2026-05-13T09:12:00Z","who":"Anthony","where":"","snippet":"tweet two"}
+			{"ref":"twitter:tweet/1","short_ref":"hmn42","time":"2026-05-14T09:12:00Z","who":"me","where":"","snippet":"tweet one"},
+			{"ref":"twitter:tweet/2","short_ref":"eygc4","time":"2026-05-13T09:12:00Z","who":"Anthony","where":"","snippet":"tweet two"}
 		],"total_matches":2,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -798,7 +794,7 @@ func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	if strings.Contains(stdout, "where") {
 		t.Fatalf("stdout rendered an all-empty where column:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "date              source  who      ref    text") {
+	if !strings.Contains(stdout, "date              source  who      ref              text") {
 		t.Fatalf("stdout missing compacted header:\n%s", stdout)
 	}
 	if stderr != "" {

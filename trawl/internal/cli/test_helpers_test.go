@@ -345,7 +345,7 @@ func newFakeSource(t *testing.T, crawler fakeCrawler) crawlkit.Crawler {
 		return &fakeSearch{base}
 	case hasOpen:
 		return &fakeOpen{base}
-	case base.manifest.ID == "clawdex" && strings.TrimSpace(crawler.who) != "":
+	case base.manifest.ID == "contacts" && strings.TrimSpace(crawler.who) != "":
 		return &fakeWho{base}
 	default:
 		return base

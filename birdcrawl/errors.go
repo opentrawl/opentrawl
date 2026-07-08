@@ -10,7 +10,7 @@ import (
 
 // usageRemedy is the one next-step hint for every caller mistake. It rides the
 // error body's remedy field, kept out of the message (rules §2.4).
-const usageRemedy = "Run 'birdcrawl --help'."
+const usageRemedy = "Run 'trawl twitter --help'."
 
 // cliError carries a command failure's exit code and the crawlkit error body
 // (crawlkit/output). One shape: WriteJSONErrorIfNeeded renders it as

@@ -26,7 +26,7 @@ func TestStatusExitCodes(t *testing.T) {
 			}},
 			args:       []string{"status"},
 			wantCode:   0,
-			wantStdout: "imessage  Messages  ok",
+			wantStdout: "Messages  ok",
 		},
 		{
 			name:       "requested source missing",
@@ -51,8 +51,8 @@ func TestStatusExitCodes(t *testing.T) {
 			},
 			args:       []string{"status"},
 			wantCode:   3,
-			wantStdout: "telegram  Telegram  error",
-			wantStderr: "telegram status failed.\n  Remedy: run: trawl doctor telegram",
+			wantStdout: "Telegram  error",
+			wantStderr: "Telegram status failed.\n  Remedy: run trawl doctor telegram",
 		},
 		{
 			name: "all failed",
@@ -63,7 +63,7 @@ func TestStatusExitCodes(t *testing.T) {
 			args:       []string{"status"},
 			wantCode:   1,
 			wantStdout: "the crawler did not identify itself",
-			wantStderr: "telecrawl status failed.\n  Remedy: run: trawl doctor telecrawl",
+			wantStderr: "telecrawl status failed.\n  Remedy: run trawl doctor telecrawl",
 		},
 	}
 
@@ -104,7 +104,7 @@ func TestDoctorExitCodes(t *testing.T) {
 			}},
 			args:       []string{"doctor"},
 			wantCode:   0,
-			wantStdout: "imessage  ok     1 check: source store",
+			wantStdout: "Messages  ok     1 check: source store",
 		},
 		{
 			name: "failing check",
@@ -144,6 +144,31 @@ func TestDoctorExitCodes(t *testing.T) {
 	}
 }
 
+func TestStatusRendersUniformUnsyncedSummary(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "wacrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"whatsapp","display_name":"WhatsApp"}`,
+			status:   `{"app_id":"whatsapp","state":"missing","summary":"WhatsApp archive is empty."}`,
+		},
+		fakeCrawler{
+			name:     "calcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
+			status:   `{"app_id":"calendar","state":"error","summary":"Calendar has never synced."}`,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, _, code := runCLI(t, "status")
+	if code != 1 {
+		t.Fatalf("status code = %d stdout=%s", code, stdout)
+	}
+	if count := strings.Count(stdout, "Not synced yet."); count != 2 {
+		t.Fatalf("status output did not normalise both unsynced summaries:\n%s", stdout)
+	}
+}
+
 func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	status := control.NewStatus("imessage", "Archive is fresh.")
 	status.State = "ok"
@@ -176,7 +201,7 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 		t.Fatalf("statuses = %#v", statuses)
 	}
 	got := statuses[0]
-	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Archive is fresh." {
+	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Recently synced." {
 		t.Fatalf("status = %#v", got)
 	}
 	if got.LastSyncAt != "2026-07-02T14:03:00Z" || got.Freshness == nil || got.Freshness.Status != "fresh" || got.Freshness.AgeSeconds != 120 {
@@ -192,6 +217,7 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	wantKeys := map[string]bool{
 		"app_id":       true,
 		"state":        true,
+		"surface":      true,
 		"summary":      true,
 		"freshness":    true,
 		"counts":       true,

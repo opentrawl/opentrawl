@@ -40,11 +40,12 @@ func discoverCrawlers(ctx context.Context) []Source {
 		info := crawler.Info()
 		manifest, err := crawlkitManifest(crawler)
 		if err != nil {
+			id := firstNonEmpty(info.ID, info.Surface)
 			sources = append(sources, Source{
-				ID:          firstNonEmpty(info.ID, info.Surface),
-				Binary:      info.ID,
+				ID:          id,
+				Binary:      id,
 				Surface:     info.Surface,
-				Aliases:     append([]string(nil), info.Aliases...),
+				Aliases:     sourceAliases(info.Aliases, id),
 				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, info.ID),
 				Crawler:     crawler,
 				MetadataErr: err,
@@ -53,9 +54,9 @@ func discoverCrawlers(ctx context.Context) []Source {
 		}
 		sources = append(sources, Source{
 			ID:           manifest.ID,
-			Binary:       info.ID,
+			Binary:       firstNonEmpty(info.ID, manifest.Binary.Name),
 			Surface:      info.Surface,
-			Aliases:      append([]string(nil), info.Aliases...),
+			Aliases:      sourceAliases(info.Aliases, manifest.ID),
 			DisplayName:  manifest.DisplayName,
 			Description:  manifest.Description,
 			Capabilities: manifest.Capabilities,
@@ -65,6 +66,50 @@ func discoverCrawlers(ctx context.Context) []Source {
 		})
 	}
 	return sources
+}
+
+func sourceAliases(current []string, id string) []string {
+	aliases := append([]string(nil), current...)
+	for _, alias := range legacyRoutingAliases(strings.TrimSpace(id)) {
+		aliases = appendUniqueAlias(aliases, alias)
+	}
+	return aliases
+}
+
+func appendUniqueAlias(aliases []string, alias string) []string {
+	alias = strings.TrimSpace(alias)
+	if alias == "" {
+		return aliases
+	}
+	for _, existing := range aliases {
+		if strings.EqualFold(strings.TrimSpace(existing), alias) {
+			return aliases
+		}
+	}
+	return append(aliases, alias)
+}
+
+func legacyRoutingAliases(id string) []string {
+	switch id {
+	case "imessage":
+		return []string{"imsgcrawl"}
+	case "telegram":
+		return []string{"telecrawl"}
+	case "whatsapp":
+		return []string{"wacrawl"}
+	case "contacts":
+		return []string{"clawdex"}
+	case "photos":
+		return []string{"photoscrawl"}
+	case "gmail":
+		return []string{"gogcrawl"}
+	case "calendar":
+		return []string{"calcrawl"}
+	case "twitter":
+		return []string{"birdcrawl"}
+	default:
+		return nil
+	}
 }
 
 func crawlkitManifest(source crawlkit.Crawler) (control.Manifest, error) {
@@ -86,23 +131,17 @@ func crawlkitManifest(source crawlkit.Crawler) (control.Manifest, error) {
 	return manifest, nil
 }
 
-// sourcesLine renders the compiled-in crawlers as id/surface-name pairs for
-// the root --help intro.
+// sourcesLine renders the compiled-in crawlers in the words people type.
 func sourcesLine(ctx context.Context) string {
 	sources := discoverCrawlers(ctx)
 	if len(sources) == 0 {
 		return "No crawlers are registered yet."
 	}
-	pairs := make([]string, 0, len(sources))
+	names := make([]string, 0, len(sources))
 	for _, source := range sources {
-		alias := sourceAlias(source.DisplayName)
-		if alias != "" && alias != source.ID {
-			pairs = append(pairs, source.ID+"/"+alias)
-			continue
-		}
-		pairs = append(pairs, source.ID)
+		names = append(names, sourceHumanName(source))
 	}
-	return "Sources go by id or surface name: " + strings.Join(pairs, ", ") + " — trawl status lists yours."
+	return "Sources: " + strings.Join(names, ", ") + ". Run trawl status to see yours."
 }
 
 type crawlerCommandError struct {

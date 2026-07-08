@@ -70,6 +70,57 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	}
 }
 
+func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
+	tests := []struct {
+		name    string
+		crawler fakeCrawler
+		fullRef string
+		payload string
+	}{
+		{
+			name: "whatsapp",
+			crawler: fakeCrawler{
+				name:     "wacrawl",
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"whatsapp","display_name":"WhatsApp"}`,
+				openRef:  "wacrawl:msg/group-image",
+				open:     `{"ref":"wacrawl:msg/group-image"}`,
+			},
+			fullRef: "wacrawl:msg/group-image",
+			payload: `{"ref":"wacrawl:msg/group-image"}`,
+		},
+		{
+			name: "calendar",
+			crawler: fakeCrawler{
+				name:     "calcrawl",
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
+				openRef:  "calcrawl:event/11111111-1111-1111-1111-111111111111",
+				open:     `{"ref":"calcrawl:event/11111111-1111-1111-1111-111111111111"}`,
+			},
+			fullRef: "calcrawl:event/11111111-1111-1111-1111-111111111111",
+			payload: `{"ref":"calcrawl:event/11111111-1111-1111-1111-111111111111"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			binDir := writeFakeCrawlers(t, tt.crawler)
+			t.Setenv("PATH", binDir)
+			t.Setenv("HOME", syntheticHome(t))
+
+			stdout, stderr, code := runCLI(t, "--json", "open", tt.fullRef)
+			if code != 0 {
+				t.Fatalf("open --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
+			}
+			if stdout != tt.payload+"\n" {
+				t.Fatalf("stdout = %q, want raw payload", stdout)
+			}
+			if stderr != "" {
+				t.Fatalf("stderr = %s", stderr)
+			}
+		})
+	}
+}
+
 func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	human := "Resolved human item\nref: imessage:msg/1"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
@@ -167,12 +218,12 @@ func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 	if strings.Contains(stderr, "was not found") {
 		t.Fatalf("stderr claims unknown when every source errored:\n%s", stderr)
 	}
-	for _, want := range []string{`Could not resolve short ref "t7k3f"`, "imessage", "telegram", "command_failed"} {
+	for _, want := range []string{`Could not resolve short ref "t7k3f"`, "Messages", "Telegram", "command_failed"} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
 		}
 	}
-	if !strings.Contains(stderr, "run: trawl doctor") {
+	if !strings.Contains(stderr, "run trawl doctor") {
 		t.Fatalf("stderr missing a runnable doctor remedy:\n%s", stderr)
 	}
 }
@@ -326,7 +377,7 @@ func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	if stdout != "partial crawler output\n" {
 		t.Fatalf("stdout = %q, want crawler stdout", stdout)
 	}
-	if !strings.Contains(stderr, `Could not open ref "imessage:msg/8842".`) {
+	if !strings.Contains(stderr, `Messages could not open ref "imessage:msg/8842".`) {
 		t.Fatalf("stderr = %q, want trawl open failure", stderr)
 	}
 }

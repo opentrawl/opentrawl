@@ -31,10 +31,11 @@ func TestParseTweetRef(t *testing.T) {
 		want    string
 		wantErr bool
 	}{
-		{name: "valid", ref: "birdcrawl:tweet/12345", want: "12345"},
-		{name: "wrong crawler", ref: "telecrawl:msg/12345", wantErr: true},
-		{name: "missing id", ref: "birdcrawl:tweet/", wantErr: true},
-		{name: "space", ref: "birdcrawl:tweet/12 345", wantErr: true},
+		{name: "valid", ref: "twitter:tweet/12345", want: "12345"},
+		{name: "legacy", ref: "birdcrawl:tweet/12345", want: "12345"},
+		{name: "wrong crawler", ref: "telegram:msg/12345", wantErr: true},
+		{name: "missing id", ref: "twitter:tweet/", wantErr: true},
+		{name: "space", ref: "twitter:tweet/12 345", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

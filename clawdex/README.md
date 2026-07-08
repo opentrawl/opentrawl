@@ -31,7 +31,7 @@ index/
 .clawdex/repairs/
 ```
 
-Config is stored at `~/.opentrawl/clawdex/config.toml` by default. `--repo DIR` or
+Config is stored at `~/.opentrawl/contacts/config.toml` by default. `--repo DIR` or
 `CLAWDEX_REPO=DIR` overrides the configured contacts repo for one run.
 
 ## Examples

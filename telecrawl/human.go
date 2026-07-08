@@ -2,7 +2,6 @@ package telecrawl
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +24,7 @@ func (r *runtime) printManifest(value control.Manifest) error {
 			{Label: "Database", Value: value.Paths.DefaultDatabase},
 			{Label: "Logs", Value: value.Paths.DefaultLogs},
 		},
-		Hints: []string{"JSON: trawl telecrawl metadata --json"},
+		Hints: []string{"JSON: trawl telegram metadata --json"},
 	})
 }
 
@@ -33,11 +32,11 @@ func (r *runtime) printChats(value chatsEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "Chats: showing %s of %s, newest first.\n", groupDigits(len(value.Chats)), groupDigits(value.Total)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Messages: trawl telecrawl messages --chat ID"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout, "Messages: trawl telegram messages --chat ID"); err != nil {
 		return err
 	}
 	if value.Total > len(value.Chats) {
-		if _, err := fmt.Fprintln(r.stdout, "All: trawl telecrawl chats --all"); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "All: trawl telegram chats --all"); err != nil {
 			return err
 		}
 	}
@@ -52,19 +51,19 @@ func (r *runtime) printChats(value chatsEnvelope) error {
 	for _, chat := range value.Chats {
 		rows = append(rows, []string{
 			shortLocalTime(chat.LastMessageAt),
-			chat.Kind,
-			strconv.Itoa(chat.UnreadCount),
-			chatMessageCount(chat),
 			chat.JID,
+			chat.Kind,
+			render.FormatInteger(int64(chat.UnreadCount)),
+			chatMessageCount(chat),
 			chatName(chat),
 		})
 	}
 	return render.WriteTable(r.stdout, []render.TableColumn{
 		{Header: "last"},
+		{Header: "chat"},
 		{Header: "kind"},
 		{Header: "unread", AlignRight: true},
 		{Header: "messages", AlignRight: true},
-		{Header: "chat id"},
 		{Header: "name", Wrap: true},
 	}, rows)
 }
@@ -78,7 +77,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 		return err
 	}
 	if value.Total > len(value.Topics) {
-		if _, err := fmt.Fprintf(r.stdout, "All: trawl telecrawl topics --chat %s --all\n", value.ChatID); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "All: trawl telegram topics --chat %s --all\n", value.ChatID); err != nil {
 			return err
 		}
 	}
@@ -89,7 +88,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 	for _, topic := range value.Topics {
 		rows = append(rows, []string{
 			shortLocalTime(topic.LastMessageAt),
-			strconv.Itoa(topic.UnreadCount),
+			render.FormatInteger(int64(topic.UnreadCount)),
 			topic.TopicID,
 			topic.Title,
 		})
@@ -103,9 +102,9 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 }
 
 func (r *runtime) printMessages(value messagesEnvelope) error {
-	hints := []string{"Open: trawl telecrawl open REF"}
+	hints := []string{"Open: trawl telegram open REF"}
 	if value.Total > len(value.Messages) {
-		hints = append(hints, "Narrow: trawl telecrawl messages --chat ID --after DATE --before DATE", "All: trawl telecrawl messages --all")
+		hints = append(hints, "Narrow: trawl telegram messages --chat ID --after DATE --before DATE", "All: trawl telegram messages --all")
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Messages: showing %s of %s, newest first.", groupDigits(len(value.Messages)), groupDigits(value.Total)),
@@ -125,7 +124,7 @@ func (r *runtime) printContacts(value contactsEnvelope) error {
 		return err
 	}
 	if value.Total > len(value.Contacts) {
-		if _, err := fmt.Fprintln(r.stdout, "All: trawl telecrawl contacts --all"); err != nil {
+		if _, err := fmt.Fprintln(r.stdout, "All: trawl telegram contacts --all"); err != nil {
 			return err
 		}
 	}
@@ -137,7 +136,7 @@ func (r *runtime) printContacts(value contactsEnvelope) error {
 		rows = append(rows, []string{
 			contactDisplayName(contact),
 			cleanTelegramUsername(contact.Username),
-			strings.TrimSpace(contact.Phone),
+			render.FormatPhone(strings.TrimSpace(contact.Phone)),
 		})
 	}
 	return render.WriteTable(r.stdout, []render.TableColumn{
@@ -157,7 +156,7 @@ func (r *runtime) printFolders(value foldersEnvelope) error {
 		rows = append(rows, []string{
 			folder.ID,
 			folder.Title,
-			strconv.Itoa(folder.ChatCount),
+			render.FormatInteger(int64(folder.ChatCount)),
 		})
 	}
 	return render.WriteTable(r.stdout, []render.TableColumn{
@@ -193,7 +192,7 @@ func messageListItems(messages []store.Message, shortRefs map[string]string) []r
 			Time:  message.Timestamp,
 			Who:   who,
 			Where: messageWhereForList(message),
-			Ref:   displayRef(ref, shortRefs[ref]),
+			Ref:   ref,
 			Text:  messageText(message),
 		})
 	}

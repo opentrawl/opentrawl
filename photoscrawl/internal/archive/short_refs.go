@@ -12,9 +12,10 @@ import (
 )
 
 const (
-	shortRefsSyncSource = "photoscrawl"
-	shortRefsEntityType = "derived_index"
-	shortRefsEntityID   = "short_refs"
+	shortRefsSyncSource       = "photos"
+	legacyShortRefsSyncSource = "photoscrawl"
+	shortRefsEntityType       = "derived_index"
+	shortRefsEntityID         = "short_refs"
 )
 
 type ShortRefResolution struct {
@@ -72,7 +73,11 @@ limit 1
 	}
 	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
-		return "", rows.Err()
+		legacy := legacyAssetRef(fullRef)
+		if legacy == "" {
+			return "", rows.Err()
+		}
+		return shortRefForFullRef(ctx, db, legacy)
 	}
 	var alias string
 	if err := rows.Scan(&alias); err != nil {
@@ -163,7 +168,7 @@ func shortRefsBuiltFor(ctx context.Context, db *sql.DB) (string, error) {
 	if err != nil || !exists {
 		return "", err
 	}
-	rec, ok, err := state.NewCursor(db).Get(ctx, shortRefsSyncSource, shortRefsEntityType, shortRefsEntityID)
+	rec, ok, err := getCursorAnySource(ctx, state.NewCursor(db), shortRefsEntityType, shortRefsEntityID)
 	if err != nil {
 		return "", err
 	}
@@ -171,6 +176,23 @@ func shortRefsBuiltFor(ctx context.Context, db *sql.DB) (string, error) {
 		return "", nil
 	}
 	return rec.Cursor, nil
+}
+
+func getCursorAnySource(ctx context.Context, cursors *state.CursorStore, entityType, entityID string) (state.CursorRecord, bool, error) {
+	for _, source := range []string{shortRefsSyncSource, legacyShortRefsSyncSource} {
+		rec, ok, err := cursors.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.CursorRecord{}, false, nil
+}
+
+func legacyAssetRef(ref string) string {
+	if !strings.HasPrefix(ref, "photos:") {
+		return ""
+	}
+	return "photoscrawl:" + strings.TrimPrefix(ref, "photos:")
 }
 
 func latestSnapshotCompletedAt(ctx context.Context, db *sql.DB) (string, error) {

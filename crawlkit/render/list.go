@@ -211,9 +211,9 @@ func listRows(items []ListItem, columns []renderColumn) [][]string {
 			case "source":
 				row = append(row, item.Source)
 			case "who":
-				row = append(row, item.Who)
+				row = append(row, HumanIdentity(item.Who))
 			case "where":
-				row = append(row, item.Where)
+				row = append(row, HumanIdentity(item.Where))
 			case "ref":
 				row = append(row, item.Ref)
 			case "text":

@@ -30,14 +30,14 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := t.TempDir()
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db"),
-		Config:  filepath.Join(stateRoot, "gogcrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "gogcrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "gmail", "gmail.db"),
+		Config:  filepath.Join(stateRoot, "gmail", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "gmail", "logs"),
 	}
 	source := New()
 	source.syncQuery = "project"
 	source.syncMax = 25
-	source.backupRepoPath = filepath.Join(stateRoot, "gogcrawl", "backup")
+	source.backupRepoPath = filepath.Join(stateRoot, "gmail", "backup")
 
 	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
 	if err != nil {
@@ -69,7 +69,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if search.TotalMatches != 3 || !search.Truncated || len(search.Results) != 2 {
 		t.Fatalf("search = %#v, want 2 of 3 truncated", search)
 	}
-	if search.Results[0].Ref != archive.RefPrefix+"m3" || search.Results[0].ShortRef == "" || search.Results[0].Who != "me" {
+	if search.Results[0].Ref != archive.RefPrefix+"m3" || search.Results[0].ShortRef == "" || search.Results[0].Who != "me (alice@example.com)" {
 		t.Fatalf("search hit = %#v", search.Results[0])
 	}
 
@@ -112,9 +112,9 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := t.TempDir()
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db"),
-		Config:  filepath.Join(stateRoot, "gogcrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "gogcrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "gmail", "gmail.db"),
+		Config:  filepath.Join(stateRoot, "gmail", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "gmail", "logs"),
 	}
 	source := New()
 
@@ -316,7 +316,7 @@ func stateRootForRun(t *testing.T) string {
 }
 
 func archivePathForRun(stateRoot string) string {
-	return filepath.Join(stateRoot, "gogcrawl", "gogcrawl.db")
+	return filepath.Join(stateRoot, "gmail", "gmail.db")
 }
 
 func sortedKeys[V any](values map[string]V) []string {

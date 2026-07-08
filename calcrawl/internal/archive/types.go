@@ -8,7 +8,8 @@ import (
 )
 
 const (
-	AppID         = "calcrawl"
+	AppID         = "calendar"
+	LegacyAppID   = "calcrawl"
 	DisplayName   = "Calendar"
 	SchemaVersion = 2
 
@@ -214,10 +215,14 @@ func RefForUID(uid string) string {
 }
 
 func UIDFromRef(ref string) (string, bool) {
-	const prefix = AppID + ":event/"
 	value := strings.TrimSpace(ref)
+	prefix := AppID + ":event/"
 	if !strings.HasPrefix(value, prefix) {
-		return "", false
+		legacyPrefix := LegacyAppID + ":event/"
+		if !strings.HasPrefix(value, legacyPrefix) {
+			return "", false
+		}
+		prefix = legacyPrefix
 	}
 	uid := strings.TrimSpace(strings.TrimPrefix(value, prefix))
 	if uid == "" || strings.ContainsAny(uid, "\r\n\t") {

@@ -15,7 +15,7 @@ func TestManifestDefaultsSchemaAndBinary(t *testing.T) {
 		t.Fatalf("binary = %#v", manifest.Binary)
 	}
 	if manifest.Commands == nil {
-		t.Fatal("commands map should be initialized")
+		t.Fatal("commands map should be initialised")
 	}
 }
 

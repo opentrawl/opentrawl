@@ -194,7 +194,7 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 	if err != nil {
 		if errors.Is(err, store.ErrSchemaOutdated) {
 			msg := "archive schema needs one sync to finish upgrading"
-			return r.newStatusEnvelope("error", msg, msg+"; run: trawl birdcrawl sync", store.Status{}, cfg)
+			return r.newStatusEnvelope("error", msg, msg+"; run trawl twitter sync", store.Status{}, cfg)
 		}
 		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 	}
@@ -218,9 +218,6 @@ func (r *runtime) status(ctx context.Context) (*control.Status, error) {
 	for _, count := range envelope.Counts {
 		status.Counts = append(status.Counts, control.NewCount(count.ID, count.Label, count.Value))
 	}
-	if envelope.Spend.LiveSyncPaused {
-		status.Warnings = append(status.Warnings, liveSyncPausedSentence(envelope.Spend.Month))
-	}
 	return &status, nil
 }
 
@@ -238,7 +235,7 @@ func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status 
 		summaryHuman = appendSentence(summaryHuman, liveSyncPausedSentence(month))
 	}
 	return statusEnvelope{
-		AppID:        "birdcrawl",
+		AppID:        "twitter",
 		State:        state,
 		Summary:      summary,
 		summaryHuman: summaryHuman,
@@ -298,7 +295,7 @@ func statusSummary(status store.Status, formatTime func(time.Time) string) strin
 	case strings.HasPrefix(status.LiveSyncResult, "partial"):
 		live = "last live sync at " + formatTime(status.LastLiveSync) + " was " + status.LiveSyncResult
 	default:
-		live = "live synced at " + formatTime(status.LastLiveSync)
+		live = "recently synced at " + formatTime(status.LastLiveSync)
 	}
 	if !status.CoverageThrough.IsZero() {
 		return "archive dump imported through " + formatTime(status.CoverageThrough) + "; " + live
@@ -351,41 +348,45 @@ func newOpenEnvelope(result store.OpenResult, aliases map[string]string, ownerAu
 	replyingTo, replyingToAuthorID := openReplyingTo(result.Tweet, result.Ancestors)
 	return openEnvelope{
 		Ref:                store.TweetRef(result.Tweet.ID),
-		Tweet:              newOpenTweet(result.Tweet, aliases, replyingTo, replyingToAuthorID),
-		Ancestors:          newAncestorTweets(result.Ancestors, aliases),
-		Replies:            newOpenTweets(result.Replies, aliases),
+		Tweet:              newOpenTweet(result.Tweet, aliases, replyingTo, replyingToAuthorID, ownerAuthorID),
+		Ancestors:          newAncestorTweets(result.Ancestors, aliases, ownerAuthorID),
+		Replies:            newOpenTweets(result.Replies, aliases, ownerAuthorID),
 		AncestorsTruncated: result.AncestorsTruncated,
 		RepliesTruncated:   result.RepliesTruncated,
 		ownerAuthorID:      ownerAuthorID,
 	}
 }
 
-func newOpenTweets(tweets []store.Tweet, aliases map[string]string) []openTweet {
+func newOpenTweets(tweets []store.Tweet, aliases map[string]string, ownerAuthorID string) []openTweet {
 	out := make([]openTweet, 0, len(tweets))
 	for _, tweet := range tweets {
-		out = append(out, newOpenTweet(tweet, aliases, "", ""))
+		out = append(out, newOpenTweet(tweet, aliases, "", "", ownerAuthorID))
 	}
 	return out
 }
 
-func newAncestorTweets(tweets []store.OpenTweet, aliases map[string]string) []openTweet {
+func newAncestorTweets(tweets []store.OpenTweet, aliases map[string]string, ownerAuthorID string) []openTweet {
 	out := make([]openTweet, 0, len(tweets))
 	for _, tweet := range tweets {
 		if !tweet.Available {
 			out = append(out, openTweet{Ref: tweet.Ref, Text: tweet.Text, Unavailable: true})
 			continue
 		}
-		out = append(out, newOpenTweet(tweet.Tweet, aliases, "", ""))
+		out = append(out, newOpenTweet(tweet.Tweet, aliases, "", "", ownerAuthorID))
 	}
 	return out
 }
 
-func newOpenTweet(tweet store.Tweet, aliases map[string]string, replyingTo string, replyingToAuthorID string) openTweet {
+func newOpenTweet(tweet store.Tweet, aliases map[string]string, replyingTo string, replyingToAuthorID string, ownerAuthorID string) openTweet {
 	ref := store.TweetRef(tweet.ID)
+	who := store.DisplayName(tweet.AuthorName, tweet.AuthorHandle)
+	if ownerAuthorID != "" && tweet.AuthorID == ownerAuthorID {
+		who = selfDisplayName(who)
+	}
 	return openTweet{
 		Ref:          ref,
 		Time:         formatOptionalTime(tweet.CreatedAt),
-		Who:          store.DisplayName(tweet.AuthorName, tweet.AuthorHandle),
+		Who:          who,
 		Text:         tweet.Text,
 		InReplyTo:    tweet.InReplyToID,
 		LikeCount:    tweet.LikeCount,

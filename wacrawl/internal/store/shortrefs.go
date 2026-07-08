@@ -88,6 +88,38 @@ func (s *Store) ShortRefAliases(ctx context.Context, fullRefs []string) (map[str
 	for _, fullRef := range fullRefs {
 		args = append(args, fullRef)
 	}
+	aliases, err := s.shortRefAliasesFor(ctx, args)
+	if err != nil {
+		return nil, err
+	}
+	if len(aliases) == len(fullRefs) {
+		return aliases, nil
+	}
+	legacyArgs := make([]any, 0, len(fullRefs))
+	legacyToCanonical := map[string]string{}
+	for _, fullRef := range fullRefs {
+		if strings.HasPrefix(fullRef, MessageRefPrefix) {
+			legacy := legacyMessageFullRef(fullRef)
+			legacyArgs = append(legacyArgs, legacy)
+			legacyToCanonical[legacy] = fullRef
+		}
+	}
+	if len(legacyArgs) == 0 {
+		return aliases, nil
+	}
+	legacyAliases, err := s.shortRefAliasesFor(ctx, legacyArgs)
+	if err != nil {
+		return nil, err
+	}
+	for legacy, alias := range legacyAliases {
+		if canonical := legacyToCanonical[legacy]; canonical != "" && aliases[canonical] == "" {
+			aliases[canonical] = alias
+		}
+	}
+	return aliases, nil
+}
+
+func (s *Store) shortRefAliasesFor(ctx context.Context, args []any) (map[string]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
 select full_ref, alias
 from short_refs
@@ -98,7 +130,7 @@ order by full_ref, length(alias) desc
 		return nil, fmt.Errorf("read short ref aliases: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	aliases := make(map[string]string, len(fullRefs))
+	aliases := make(map[string]string, len(args))
 	for rows.Next() {
 		var fullRef, alias string
 		if err := rows.Scan(&fullRef, &alias); err != nil {
@@ -115,7 +147,7 @@ order by full_ref, length(alias) desc
 }
 
 func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
-	rec, ok, err := state.New(s.db).Get(ctx, syncSource, derivedEntityType, shortRefFingerprintKey)
+	rec, ok, err := getStateAnySource(ctx, state.New(s.db), derivedEntityType, shortRefFingerprintKey)
 	if err != nil || !ok {
 		return false, nil
 	}
@@ -124,7 +156,8 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if stored != shortRefsFingerprint(refs) {
+	legacyRefs := legacyMessageFullRefs(refs)
+	if stored != shortRefsFingerprint(refs) && stored != shortRefsFingerprint(legacyRefs) {
 		return false, nil
 	}
 	if len(refs) == 0 {
@@ -137,12 +170,36 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 	if len(indexedRefs) != len(refs) {
 		return false, nil
 	}
-	for i := range refs {
-		if refs[i] != indexedRefs[i] {
-			return false, nil
+	if fullRefsEqual(refs, indexedRefs) || fullRefsEqual(legacyRefs, indexedRefs) {
+		return true, nil
+	}
+	return false, nil
+}
+
+func fullRefsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
 		}
 	}
-	return true, nil
+	return true
+}
+
+func legacyMessageFullRef(ref string) string {
+	return LegacyMessageRefPrefix + strings.TrimPrefix(ref, MessageRefPrefix)
+}
+
+func legacyMessageFullRefs(refs []string) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.HasPrefix(ref, MessageRefPrefix) {
+			out = append(out, legacyMessageFullRef(ref))
+		}
+	}
+	return out
 }
 
 func (s *Store) allMessageFullRefs(ctx context.Context) ([]string, error) {

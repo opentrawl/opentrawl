@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/openclaw/crawlkit/control"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/store"
 )
 
@@ -35,7 +36,7 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 	if err != nil {
 		if os.IsNotExist(err) {
 			status.State = "missing"
-			status.Summary = "photoscrawl.db has not been initialized"
+			status.Summary = "photos.db has not been initialised"
 			return status, nil
 		}
 		return StatusResult{}, err
@@ -57,13 +58,13 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 		status.Freshness = &StatusFreshness{LastSync: metrics.LastImportAt}
 	}
 	status.Databases = []control.Database{
-		control.SQLiteDatabase("photos", "photoscrawl.db", "primary", paths.Database, true, metrics.Counts),
+		control.SQLiteDatabase("photos", "photos.db", "primary", paths.Database, true, metrics.Counts),
 	}
 	return status, nil
 }
 
 func newStatus(summary string) StatusResult {
-	base := control.NewStatus("photoscrawl", summary)
+	base := control.NewStatus("photos", summary)
 	return StatusResult{
 		SchemaVersion: base.SchemaVersion,
 		AppID:         base.AppID,
@@ -121,11 +122,11 @@ from asset
 func statusSummary(photos int64) string {
 	switch photos {
 	case 0:
-		return "photoscrawl.db is initialized but has no crawled photos"
+		return "photos.db is initialised but has no crawled photos"
 	case 1:
 		return "1 photo archived"
 	default:
-		return fmt.Sprintf("%d photos archived", photos)
+		return fmt.Sprintf("%s photos archived", render.FormatInteger(photos))
 	}
 }
 

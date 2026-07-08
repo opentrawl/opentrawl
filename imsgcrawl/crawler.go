@@ -18,7 +18,7 @@ import (
 )
 
 const (
-	appID      = "imsgcrawl"
+	appID      = "imessage"
 	display    = "iMessage"
 	staleAfter = 7 * 24 * time.Hour
 )
@@ -82,7 +82,7 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 		status.Summary = "Archive is stale."
 	default:
 		status.State = "ok"
-		status.Summary = "Archive is fresh."
+		status.Summary = "Recently synced."
 	}
 	return &status, nil
 }
@@ -192,7 +192,7 @@ func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 			ID:      "archive",
 			State:   "fail",
 			Message: "the archive database has not been synced",
-			Remedy:  "run trawl imsgcrawl sync",
+			Remedy:  "run trawl imessage sync",
 		}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -201,7 +201,7 @@ func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 			ID:      "archive",
 			State:   "fail",
 			Message: "cannot read the archive database",
-			Remedy:  "run trawl imsgcrawl sync to rebuild the archive",
+			Remedy:  "run trawl imessage sync to rebuild the archive",
 		}
 	}
 	if _, err := st.Status(ctx); err != nil {
@@ -209,7 +209,7 @@ func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 			ID:      "archive",
 			State:   "fail",
 			Message: "cannot inspect the archive database",
-			Remedy:  "run trawl imsgcrawl sync to rebuild the archive",
+			Remedy:  "run trawl imessage sync to rebuild the archive",
 		}
 	}
 	if _, err := st.Chats(ctx, 1); errors.Is(err, archive.ErrSchemaOutdated) {
@@ -217,7 +217,7 @@ func checkArchive(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 			ID:      "archive",
 			State:   "fail",
 			Message: "archive schema predates this version",
-			Remedy:  "run trawl imsgcrawl sync to upgrade the archive schema",
+			Remedy:  "run trawl imessage sync to upgrade the archive schema",
 		}
 	}
 	return crawlkit.Check{ID: "archive", State: "ok"}

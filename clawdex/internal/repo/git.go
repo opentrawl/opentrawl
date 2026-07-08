@@ -9,7 +9,7 @@ import (
 	"github.com/openclaw/crawlkit/mirror"
 )
 
-var ErrRemoteNotConfigured = errors.New("git remote is not configured; run clawdex config set git.remote URL or clawdex init DIR --remote URL")
+var ErrRemoteNotConfigured = errors.New("git remote is not configured; run trawl contacts config set git.remote URL or trawl contacts init DIR --remote URL")
 
 func (r Repo) MirrorOptions() mirror.Options {
 	return mirror.Options{RepoPath: r.Path, Remote: r.Config.Git.Remote, Branch: r.Config.Git.Branch}

@@ -9,7 +9,7 @@ import (
 // namespaceManifest is an iMessage-shaped manifest: verbs whose invocation
 // matches the user token (chats, search) plus one whose key differs from the
 // tokens the user types (thread-export -> "threads export").
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage","description":"Local-first iMessage archive crawler.","binary":{"name":"imsgcrawl"},"capabilities":["chats","search"],"commands":{"chats":{"title":"Chats","argv":["imsgcrawl","chats","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"Local-first iMessage archive crawler.","binary":{"name":"imsgcrawl"},"capabilities":["chats","search"],"commands":{"chats":{"title":"Chats","argv":["imsgcrawl","chats","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
@@ -24,7 +24,7 @@ func TestNamespaceListingHuman(t *testing.T) {
 		t.Fatalf("code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"iMessage — Local-first iMessage archive crawler.",
+		"iMessage - Local-first iMessage archive crawler.",
 		"Verbs:",
 		"chats",
 		"threads export",
@@ -48,7 +48,7 @@ func TestNamespaceListingJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 		t.Fatalf("json: %v\n%s", err, stdout)
 	}
-	if got.Source != "imsgcrawl" || got.Surface != "iMessage" {
+	if got.Source != "imessage" || got.Surface != "iMessage" {
 		t.Fatalf("listing header = %#v", got)
 	}
 	verbs := map[string]bool{}

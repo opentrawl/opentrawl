@@ -17,8 +17,8 @@ type WhoCmd struct {
 
 func (WhoCmd) Help() string {
 	return `Examples:
-  clawdex who alice
-  clawdex who alice@example.com --json`
+  trawl contacts who alice
+  trawl contacts who alice@example.com --json`
 }
 
 type whoEnvelope struct {
@@ -84,13 +84,13 @@ func whoCandidates(candidates []index.WhoCandidate) []whoCandidate {
 
 func printWhoTable(w io.Writer, envelope whoEnvelope) error {
 	if len(envelope.Candidates) == 0 {
-		_, err := fmt.Fprintf(w, "No people match %q. Search instead: clawdex search %q\n", envelope.Query, envelope.Query)
+		_, err := fmt.Fprintf(w, "No people match %q. Search instead: trawl contacts search %q\n", envelope.Query, envelope.Query)
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Who is %q: %s, best match first.\n", envelope.Query, countNoun(len(envelope.Candidates), "person", "people")); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(w, "Show one: clawdex person show NAME"); err != nil {
+	if _, err := fmt.Fprintln(w, "Show one: trawl contacts person show NAME"); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w); err != nil {
@@ -104,7 +104,7 @@ func printWhoTable(w io.Writer, envelope whoEnvelope) error {
 			candidate.Who,
 			formatWhoLastSeen(candidate.LastSeen),
 			strings.Join(candidate.Sources, ", "),
-			strings.Join(humanIdentifiers(candidate.Identifiers), ", "),
+			render.FormatPhoneList(strings.Join(humanIdentifiers(candidate.Identifiers), ", ")),
 		})
 	}
 	return render.WriteTable(w, []render.TableColumn{

@@ -47,8 +47,8 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 		return []crawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
-			Message: "telecrawl archive has not been created.",
-			Remedy:  "Run trawl telecrawl sync to create the archive.",
+			Message: "Telegram archive has not been created.",
+			Remedy:  "run trawl telegram sync to create the archive.",
 		}}
 	}
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -56,8 +56,8 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 		return []crawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
-			Message: "telecrawl archive cannot be read.",
-			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
+			Message: "Telegram archive cannot be read.",
+			Remedy:  "run trawl telegram sync to rebuild the archive.",
 		}}
 	}
 	defer func() { _ = st.Close() }()
@@ -66,12 +66,12 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 		return []crawlkit.Check{{
 			ID:      "archive",
 			State:   "missing",
-			Message: "telecrawl archive status cannot be read.",
-			Remedy:  "Run trawl telecrawl sync to rebuild the archive.",
+			Message: "Telegram archive status cannot be read.",
+			Remedy:  "run trawl telegram sync to rebuild the archive.",
 		}}
 	}
 	if status.Messages == 0 {
-		return []crawlkit.Check{{ID: "archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "Run trawl telecrawl sync to fill the archive."}}
+		return []crawlkit.Check{{ID: "archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "run trawl telegram sync to fill the archive."}}
 	}
 	return []crawlkit.Check{
 		{ID: "archive", State: "ok", Message: "Archive is readable."},
@@ -80,16 +80,16 @@ func archiveChecks(ctx context.Context, req *crawlkit.Request) []crawlkit.Check 
 }
 
 func crawlkitSyncRecencyCheck(status store.Status) crawlkit.Check {
-	check := crawlkit.Check{ID: "sync_recency", State: "ok", Message: "Archive sync is fresh."}
+	check := crawlkit.Check{ID: "sync_recency", State: "ok", Message: "Recently synced."}
 	switch {
 	case status.LastImportAt.IsZero():
 		check.State = "warn"
 		check.Message = "Archive has never been synced."
-		check.Remedy = "run trawl telecrawl sync"
+		check.Remedy = "run trawl telegram sync"
 	case time.Since(status.LastImportAt) > statusFreshFor:
 		check.State = "warn"
 		check.Message = "Archive sync is " + agePhrase(time.Since(status.LastImportAt)) + " old."
-		check.Remedy = "run trawl telecrawl sync"
+		check.Remedy = "run trawl telegram sync"
 	}
 	return check
 }

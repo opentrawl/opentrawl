@@ -30,12 +30,12 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	result, err := st.OpenMessage(ctx, ref)
 	if err != nil {
 		if errors.Is(err, archive.ErrUnknownShortRef) {
-			return commandErr("unknown_short_ref", "short ref is unknown", "use a full gogcrawl:msg ref", err)
+			return commandErr("unknown_short_ref", "short ref is unknown", "use a full gmail:msg ref", err)
 		}
 		if errors.Is(err, archive.ErrAmbiguousShortRef) {
-			return commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gogcrawl:msg ref", err)
+			return commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gmail:msg ref", err)
 		}
-		return commandErr("message_not_found", "message could not be opened", "search again and pass a gogcrawl:msg ref", err)
+		return commandErr("message_not_found", "message could not be opened", "search again and pass a gmail:msg ref", err)
 	}
 	result = boundOpenResult(result)
 	_ = logInfo(req, "open_complete", "result=message")
@@ -78,7 +78,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 	if value.BodyTruncated {
 		hints = append(hints, fmt.Sprintf("... %s more characters. Open the full message in Gmail.", commaInt(value.BodyElidedChars)))
 	}
-	hints = append(hints, "JSON: trawl gogcrawl open REF --json for the full record.")
+	hints = append(hints, "JSON: trawl gmail open REF --json for the full record.")
 	return render.WriteCard(w, render.Card{
 		Title: title,
 		Fields: []render.CardField{

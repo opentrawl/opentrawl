@@ -16,7 +16,7 @@ import (
 	"github.com/openclaw/telecrawl/internal/store"
 )
 
-const appID = "telecrawl"
+const appID = "telegram"
 
 type Config struct{}
 

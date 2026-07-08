@@ -167,8 +167,8 @@ func TestClassifyPlacePhaseUnparksCachedPendingAssets(t *testing.T) {
 func TestClassifyPlaceResolverUsesCurrentBackfillDir(t *testing.T) {
 	root := t.TempDir()
 	paths := Paths{
-		DataDir:  filepath.Join(root, ".opentrawl", "photoscrawl"),
-		CacheDir: filepath.Join(root, ".opentrawl", "photoscrawl", "cache"),
+		DataDir:  filepath.Join(root, ".opentrawl", "photos"),
+		CacheDir: filepath.Join(root, ".opentrawl", "photos", "cache"),
 	}
 	legacyBackfillDir := filepath.Join(root, ".photoscrawl", "backfills", "place-context-full", "apple-ingest")
 	if err := os.MkdirAll(legacyBackfillDir, 0o755); err != nil {

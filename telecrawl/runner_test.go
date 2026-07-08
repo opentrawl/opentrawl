@@ -100,7 +100,7 @@ func TestSyncPreservedMediaRefsDoNotCountAsUpdated(t *testing.T) {
 		t.Fatalf("first sync report = %+v, want added=1 updated=0 removed=0", first)
 	}
 	archivePath := archivePathForRun(stateRoot)
-	mediaPath := filepath.Join(stateRoot, "telecrawl", "media", "preserved-fixture.bin")
+	mediaPath := filepath.Join(stateRoot, "telegram", "media", "preserved-fixture.bin")
 	preserveArchivedMessageMedia(t, archivePath, mediaPath, "preserved fixture media")
 
 	code, stdout, stderr := runTelecrawl(t, "sync", "--path", source)
@@ -120,7 +120,7 @@ func TestSyncPreservedMediaRefsWithChatFilterDoNotCountAsUpdated(t *testing.T) {
 		t.Fatalf("first sync report = %+v, want added=1 updated=0 removed=0", first)
 	}
 	archivePath := archivePathForRun(stateRoot)
-	mediaPath := filepath.Join(stateRoot, "telecrawl", "media", "preserved-fixture.bin")
+	mediaPath := filepath.Join(stateRoot, "telegram", "media", "preserved-fixture.bin")
 	preserveArchivedMessageMedia(t, archivePath, mediaPath, "preserved fixture media")
 
 	code, stdout, stderr := runTelecrawl(t, "sync", "--path", source, "--chat", "100")
@@ -228,7 +228,7 @@ func stateRootForRun(t *testing.T) string {
 }
 
 func archivePathForRun(stateRoot string) string {
-	return filepath.Join(stateRoot, "telecrawl", "telecrawl.db")
+	return filepath.Join(stateRoot, "telegram", "telegram.db")
 }
 
 func copyPipe(dst *bytes.Buffer, src *os.File) <-chan error {

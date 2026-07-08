@@ -204,16 +204,16 @@ func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 	}
 	for _, want := range []string{
 		"imessage:msg/1",
-		"note: 1 of 2 sources skipped — results are partial (see stderr)",
+		"note: 1 of 2 sources skipped - results are partial (see stderr)",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}
 	}
-	if !strings.Contains(stderr, "telegram cannot filter by person yet") {
+	if !strings.Contains(stderr, "Telegram cannot filter by person yet") {
 		t.Fatalf("stderr missing capability note:\n%s", stderr)
 	}
-	if strings.Contains(stderr, "telegram search failed") {
+	if strings.Contains(stderr, "Telegram search failed") {
 		t.Fatalf("stderr reported skipped source as failure:\n%s", stderr)
 	}
 }
@@ -396,7 +396,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "clawdex",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"clawdex","display_name":"Contacts"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
 			whoQuery: "alex",
 			who: `{"query":"alex","candidates":[
 				{"who":"Alex Jones","identifiers":["+15550100123"],"match_quality":"prefix","sources":["imessage","whatsapp"],"last_seen":"2026-07-01T08:00:00Z","messages":20}

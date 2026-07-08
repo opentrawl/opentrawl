@@ -256,7 +256,7 @@ func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 
 func (r *Runtime) statusSource(source Source) (StatusEnvelope, error) {
 	var status *control.Status
-	err := r.withSourceRequest(source, "status", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "status", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
 		var runErr error
 		status, runErr = source.Crawler.Status(ctx, req)
 		return runErr
@@ -284,7 +284,7 @@ func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnv
 
 func (r *Runtime) doctorSource(source Source) (DoctorResult, error) {
 	var doctor *crawlkit.Doctor
-	err := r.withSourceRequest(source, "doctor", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "doctor", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
 		var runErr error
 		doctor, runErr = source.Crawler.Doctor(ctx, req)
 		return runErr
@@ -364,8 +364,8 @@ func (r *Runtime) reportStatusFailures(results []StatusResult) {
 		if !statusFailed(result.Status) {
 			continue
 		}
-		_, _ = fmt.Fprintf(r.stderr, "%s status failed.\n", result.Source.ID)
-		_, _ = fmt.Fprintf(r.stderr, "  Remedy: run: trawl doctor %s\n", result.Source.ID)
+		_, _ = fmt.Fprintf(r.stderr, "%s status failed.\n", sourceHumanName(result.Source))
+		_, _ = fmt.Fprintf(r.stderr, "  Remedy: run trawl doctor %s\n", sourceCommandToken(result.Source))
 	}
 }
 
@@ -375,8 +375,8 @@ func (r *Runtime) reportDoctorFailures(results []DoctorResult) {
 			if !checkFailed(check) {
 				continue
 			}
-			_, _ = fmt.Fprintf(r.stderr, "%s %s failed.\n", result.Source, humanLabel(check.ID))
-			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(check.Remedy, fmt.Sprintf("run: trawl doctor %s", result.Source)))
+			_, _ = fmt.Fprintf(r.stderr, "%s %s failed.\n", doctorSourceName(result), humanLabel(check.ID))
+			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(check.Remedy, fmt.Sprintf("run trawl doctor %s", doctorSourceCommandToken(result))))
 		}
 	}
 }
@@ -461,7 +461,7 @@ Examples:
   trawl imessage                        # list what the iMessage crawler can do
   trawl imessage chats                  # run one source's own verb
   trawl summaries                       # precomputed answers: subscriptions, possessions, spending
-  trawl open imsgcrawl:msg/8842         # expand a ref search returned
+  trawl open imessage:msg/8842          # expand a ref search returned
   trawl search falafel --json           # structured output; agents, prefer this`
 
 // trawlDescription builds the root --help text. The source list in the
@@ -501,11 +501,11 @@ func wantsRootHelp(args []string) bool {
 // built-in command or an installed source — and lists the sources found,
 // so a mistyped source name reveals the namespace instead of hiding it.
 func unknownCommandErr(name string, sources []string) error {
-	message := fmt.Sprintf("unknown command %q — commands are status, sync, search, summaries, who, open, doctor", name)
+	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, summaries, who, open, doctor", name)
 	if len(sources) > 0 {
 		message += "; sources are " + strings.Join(sources, ", ")
 	}
-	message += "; run: trawl --help"
+	message += "; run trawl --help"
 	return usageErr{errors.New(message)}
 }
 

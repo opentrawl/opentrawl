@@ -45,6 +45,50 @@ func (s *Store) MessageWindow(ctx context.Context, target Message, eachSide int)
 	return s.withCanonicalSenderNames(ctx, out)
 }
 
+func (s *Store) GroupParticipants(ctx context.Context, chatJID string) ([]string, error) {
+	chatJID = strings.TrimSpace(chatJID)
+	if chatJID == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+select coalesce(
+	nullif(trim(c.full_name), ''),
+	nullif(trim(gp.contact_name), ''),
+	nullif(trim(c.business_name), ''),
+	nullif(trim(c.first_name || ' ' || c.last_name), ''),
+	nullif(trim(gp.user_jid), '')
+) as display_name
+from group_participants gp
+join chats ch on ch.jid = gp.group_jid and ch.kind = 'group'
+left join contacts c on `+contactJIDPredicate("c", "gp.user_jid")+`
+where gp.group_jid = ?
+  and gp.is_active != 0
+order by lower(display_name), display_name`, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	seen := map[string]struct{}{}
+	out := []string{}
+	for rows.Next() {
+		var displayName string
+		if err := rows.Scan(&displayName); err != nil {
+			return nil, err
+		}
+		displayName = normalizeWhoIdentity(displayName)
+		if displayName == "" {
+			continue
+		}
+		key := strings.ToLower(displayName)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, displayName)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) messagesBefore(ctx context.Context, target Message, limit int) ([]Message, error) {
 	if limit == 0 {
 		return nil, nil

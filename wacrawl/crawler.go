@@ -30,7 +30,7 @@ func New() *Crawler {
 
 func (c *Crawler) Info() crawlkit.Info {
 	return crawlkit.Info{
-		ID:          "wacrawl",
+		ID:          "whatsapp",
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
 		Description: "Local-first WhatsApp Desktop archive crawler.",

@@ -41,15 +41,25 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		out.NewestMessage = fromUnix(newest.Int64)
 	}
 	markers := state.New(s.db)
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncLastImportAt); err == nil && ok {
+	if rec, ok, err := getStateAnySource(ctx, markers, syncEntityType, syncLastImportAt); err == nil && ok {
 		if t, err := time.Parse(time.RFC3339Nano, rec.Value); err == nil {
 			out.LastImportAt = t
 		}
 	}
-	if rec, ok, err := markers.Get(ctx, syncSource, syncEntityType, syncSourcePath); err == nil && ok {
+	if rec, ok, err := getStateAnySource(ctx, markers, syncEntityType, syncSourcePath); err == nil && ok {
 		out.LastSource = rec.Value
 	}
 	return out, nil
+}
+
+func getStateAnySource(ctx context.Context, markers *state.Store, entityType, entityID string) (state.Record, bool, error) {
+	for _, source := range []string{syncSource, legacySyncSource} {
+		rec, ok, err := markers.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.Record{}, false, nil
 }
 
 func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, error) {

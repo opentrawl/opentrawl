@@ -134,7 +134,7 @@ func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
 			RunID:      "internal-run-id",
 			Command:    "sync",
 			Event:      "run_failed",
-			Message:    `error="archive.db has not been synced" remedy="run trawl imsgcrawl sync" visibility=user`,
+			Message:    `error="archive.db has not been synced" remedy="run trawl imessage sync" visibility=user`,
 			Timestamp:  when,
 			Visibility: cklog.VisibilityUserFacing,
 		},
@@ -151,7 +151,7 @@ func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
 		`"what_happened":"sync ended with error"`,
 		`"what_happened":"archive.db has not been synced"`,
 		`"when":"2026-07-03T10:45:00Z"`,
-		`"remedy":"run trawl imsgcrawl sync"`,
+		`"remedy":"run trawl imessage sync"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("doctor log json = %s, missing %s", got, want)
@@ -234,7 +234,7 @@ func TestWriteStatus(t *testing.T) {
 	}
 	want := strings.Join([]string{
 		"Status: ok",
-		"Archive is fresh.",
+		"Recently synced.",
 		"",
 		"Local archive:",
 		"  Database: /tmp/example.db",

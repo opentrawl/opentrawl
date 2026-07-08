@@ -110,7 +110,7 @@ The first query layer is asset traversal:
   summary, description, and uncertainty. It does not expose evidence refs.
 
 Human search output may show a derived short ref for local copy and paste.
-JSON keeps the canonical `photoscrawl:asset/<32-hex>` ref. `open` accepts
+JSON keeps the canonical `photos:asset/<32-hex>` ref. `open` accepts
 either form when the alias resolves to exactly one asset.
 
 Higher concepts like trips, recurring places, drone flights, or named places are

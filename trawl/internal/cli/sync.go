@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit"
+	"github.com/openclaw/crawlkit/render"
 )
 
 const syncStateWidth = 5
@@ -22,6 +23,9 @@ type SyncResult struct {
 	Counts     []Count    `json:"counts,omitempty"`
 	FinishedAt string     `json:"finished_at,omitempty"`
 	Error      *ErrorBody `json:"error,omitempty"`
+
+	displaySource string
+	commandToken  string
 }
 
 type syncCrawlerOutcome struct {
@@ -52,7 +56,7 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	sourceWidth := syncSourceWidth(sources)
 	results := make([]SyncResult, 0, len(sources))
 	for _, source := range sources {
-		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", source.ID)
+		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
 		result := syncSource(r, source)
 		results = append(results, result)
 		if r.root.JSON {
@@ -135,13 +139,15 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 		syncProgressText(outcome),
 	)
 	return SyncResult{
-		Event:      "sync",
-		Source:     source.ID,
-		State:      state,
-		Message:    message,
-		Counts:     outcome.Counts,
-		FinishedAt: outcome.FinishedAt,
-		Error:      outcome.Error,
+		Event:         "sync",
+		Source:        source.ID,
+		State:         state,
+		Message:       message,
+		Counts:        outcome.Counts,
+		FinishedAt:    outcome.FinishedAt,
+		Error:         outcome.Error,
+		displaySource: sourceHumanName(source),
+		commandToken:  sourceCommandToken(source),
 	}
 }
 
@@ -164,12 +170,14 @@ func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
 }
 
 func syncFailureResult(source Source, message string) SyncResult {
-	remedy := fmt.Sprintf("run: trawl doctor %s", source.ID)
+	remedy := fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))
 	return SyncResult{
-		Event:   "sync",
-		Source:  source.ID,
-		State:   "error",
-		Message: message,
+		Event:         "sync",
+		Source:        source.ID,
+		State:         "error",
+		Message:       message,
+		displaySource: sourceHumanName(source),
+		commandToken:  sourceCommandToken(source),
 		Error: &ErrorBody{
 			Code:    "sync_failed",
 			Message: message,
@@ -213,7 +221,7 @@ func syncReportText(outcome syncCrawlerOutcome) string {
 		if err != nil || value == 0 {
 			continue
 		}
-		parts = append(parts, fmt.Sprintf("%s %s", formatInteger(value, "", item.label), item.label))
+		parts = append(parts, fmt.Sprintf("%s %s", render.FormatInteger(value), item.label))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -226,9 +234,16 @@ func syncProgressText(outcome syncCrawlerOutcome) string {
 	done := outcome.Done.String()
 	total := outcome.Total.String()
 	if done != "" && total != "" {
-		return fmt.Sprintf("%s %s/%s", stage, done, total)
+		return fmt.Sprintf("%s %s/%s", stage, syncNumberText(outcome.Done), syncNumberText(outcome.Total))
 	}
 	return stage
+}
+
+func syncNumberText(value json.Number) string {
+	if parsed, err := value.Int64(); err == nil {
+		return render.FormatInteger(parsed)
+	}
+	return value.String()
 }
 
 func syncResultFailed(result SyncResult) bool {
@@ -260,10 +275,10 @@ func syncExit(results []SyncResult) error {
 }
 
 func (r *Runtime) reportSyncFailure(result SyncResult) {
-	remedy := fmt.Sprintf("run: trawl doctor %s", result.Source)
+	remedy := fmt.Sprintf("run trawl doctor %s", firstNonEmpty(result.commandToken, result.Source))
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}
-	_, _ = fmt.Fprintf(r.stderr, "%s sync failed.\n", result.Source)
+	_, _ = fmt.Fprintf(r.stderr, "%s sync failed.\n", firstNonEmpty(result.displaySource, result.Source))
 	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 }

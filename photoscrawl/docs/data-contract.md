@@ -110,7 +110,7 @@ home.
 `internal/archive/classify_place_phase.go` with radius 150 m. Resolution
 order per coordinate key:
 
-1. **Cache** — `~/.opentrawl/photoscrawl/cache/place-context/<key>.json`.
+1. **Cache** — `~/.opentrawl/photos/cache/place-context/<key>.json`.
    The key is the coordinate rounded with the radius; nearby photos share
    one lookup. Lookup also accepts the legacy hashed key format, so old
    cache entries stay valid.

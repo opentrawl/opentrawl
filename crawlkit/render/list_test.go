@@ -13,8 +13,8 @@ func TestWriteListFull(t *testing.T) {
 	err := WriteList(&buf, List{
 		Heading: "Bookmarks: showing 2 of 398, newest first.",
 		Hints: []string{
-			"Open: trawl birdcrawl open REF",
-			"More: trawl birdcrawl bookmarks --limit 40",
+			"Open: trawl twitter open REF",
+			"More: trawl twitter bookmarks --limit 40",
 		},
 		Items: []ListItem{
 			{
@@ -38,8 +38,8 @@ func TestWriteListFull(t *testing.T) {
 	}
 	want := strings.Join([]string{
 		"Bookmarks: showing 2 of 398, newest first.",
-		"Open: trawl birdcrawl open REF",
-		"More: trawl birdcrawl bookmarks --limit 40",
+		"Open: trawl twitter open REF",
+		"More: trawl twitter bookmarks --limit 40",
 		"",
 		"date              who       where   ref  text",
 		"2026-07-04 09:30  Ada 🙂    lab     a1   First message with emoji.",
@@ -288,14 +288,14 @@ func TestWriteListEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteList(&buf, List{
 		Heading: "Bookmarks: showing 0 of 398.",
-		Hints:   []string{"Sync: trawl birdcrawl sync"},
-		Empty:   "No bookmarks archived yet. Run 'trawl birdcrawl sync'.",
+		Hints:   []string{"Sync: trawl twitter sync"},
+		Empty:   "No bookmarks archived yet. Run 'trawl twitter sync'.",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := strings.Join([]string{
-		"No bookmarks archived yet. Run 'trawl birdcrawl sync'.",
+		"No bookmarks archived yet. Run 'trawl twitter sync'.",
 		"",
 	}, "\n")
 	assertGolden(t, buf.String(), want)

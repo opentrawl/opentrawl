@@ -33,7 +33,7 @@ func (s *Store) SetOwnerAccount(ctx context.Context, email string) error {
 
 func (s *Store) OwnerEmails(ctx context.Context) (map[string]struct{}, error) {
 	out := map[string]struct{}{}
-	if rec, ok, err := state.New(s.store.DB()).Get(ctx, sourceName, ownerEntityType, accountEmailEntityID); err != nil {
+	if rec, ok, err := getStateAnySource(ctx, state.New(s.store.DB()), ownerEntityType, accountEmailEntityID); err != nil {
 		return nil, err
 	} else if ok {
 		if email := normalizeEmail(rec.Value); email != "" {
@@ -70,7 +70,7 @@ func (s *Store) EnsureParticipants(ctx context.Context) (bool, int64, error) {
 	if err != nil {
 		return false, 0, err
 	}
-	rec, ok, err := state.New(s.store.DB()).Get(ctx, sourceName, derivedEntityType, participantCountEntityID)
+	rec, ok, err := getStateAnySource(ctx, state.New(s.store.DB()), derivedEntityType, participantCountEntityID)
 	if err != nil {
 		return false, 0, err
 	}

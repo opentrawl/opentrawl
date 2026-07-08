@@ -20,8 +20,8 @@ const (
 )
 
 var (
-	errForeignRef = errors.New("ref is not from imsgcrawl")
-	errInvalidRef = errors.New("ref is not an imsgcrawl message ref")
+	errForeignRef = errors.New("ref is not from imessage")
+	errInvalidRef = errors.New("ref is not an imessage message ref")
 )
 
 func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
@@ -35,7 +35,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	}
 	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
 	if errors.Is(err, archive.ErrMessageNotFound) {
-		return commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imsgcrawl search --json again and use a current ref")
+		return commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imessage search --json again and use a current ref")
 	}
 	if err != nil {
 		return err
@@ -54,16 +54,16 @@ func resolveOpenRef(ctx context.Context, st *archive.Store, ref string) (string,
 	messageID, err := parseMessageRef(ref)
 	if err != nil {
 		if errors.Is(err, errForeignRef) {
-			return "", commandErr(1, "foreign_ref", err, "use a ref returned by trawl imsgcrawl search --json")
+			return "", commandErr(1, "foreign_ref", err, "use a ref returned by trawl imessage search --json")
 		}
-		return "", commandErr(1, "invalid_ref", err, "use a ref in the form imsgcrawl:msg/ID")
+		return "", commandErr(1, "invalid_ref", err, "use a ref in the form imessage:msg/ID")
 	}
 	return messageID, nil
 }
 
 func resolveShortRef(ctx context.Context, st *archive.Store, alias string) (string, error) {
 	if !archive.ValidShortRef(alias) {
-		return "", commandErr(1, "invalid_ref", errInvalidRef, "use a ref in the form imsgcrawl:msg/ID or a short ref from search")
+		return "", commandErr(1, "invalid_ref", errInvalidRef, "use a ref in the form imessage:msg/ID or a short ref from search")
 	}
 	resolved, err := st.ResolveShortRef(ctx, alias)
 	if err != nil {
@@ -85,10 +85,14 @@ func resolveShortRef(ctx context.Context, st *archive.Store, alias string) (stri
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
-	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", errForeignRef
+	prefix := messageRefPrefix
+	if !strings.HasPrefix(ref, prefix) {
+		if !strings.HasPrefix(ref, archive.LegacyMessageRefPrefix) {
+			return "", errForeignRef
+		}
+		prefix = archive.LegacyMessageRefPrefix
 	}
-	messageID := strings.TrimPrefix(ref, messageRefPrefix)
+	messageID := strings.TrimPrefix(ref, prefix)
 	if messageID == "" || strings.TrimSpace(messageID) != messageID {
 		return "", errInvalidRef
 	}
@@ -143,20 +147,14 @@ func printOpenText(w io.Writer, value openOutput) error {
 	if span != "" {
 		title += ", " + span
 	}
-	for _, line := range render.WrapWithIndent("Transcript: ", title, render.OutputWidth(w), "") {
-		if _, err := fmt.Fprintln(w, line); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "Ref: %s\n", value.Ref); err != nil {
+	if err := render.WriteTranscriptHeader(w, render.TranscriptHeader{
+		Title:        title,
+		Ref:          value.Ref,
+		Participants: value.Chat.Participants,
+	}); err != nil {
 		return err
 	}
-	if len(value.Chat.Participants) > 0 {
-		if _, err := fmt.Fprintf(w, "Participants: %s\n", strings.Join(value.Chat.Participants, ", ")); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\n", formatArchiveTime(value.Message.Time), value.Message.Who); err != nil {
+	if _, err := fmt.Fprintf(w, "\nTime: %s\nFrom: %s\n", formatArchiveTime(value.Message.Time), render.HumanIdentity(value.Message.Who)); err != nil {
 		return err
 	}
 	if err := render.WriteWrappedField(w, "Text", displayMessageText(value.Message.Text, value.Message.HasAttachments)); err != nil {
@@ -165,7 +163,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 	if _, err := io.WriteString(w, "\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "Context: %d messages around this one.\n\n", len(value.Context)); err != nil {
+	if _, err := fmt.Fprintf(w, "Context: %s messages around this one.\n\n", render.FormatInteger(int64(len(value.Context)))); err != nil {
 		return err
 	}
 	return printOpenTranscript(w, value.Context)

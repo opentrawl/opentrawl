@@ -44,15 +44,25 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	// A pre-migration archive (legacy key/value sync_state) errors here; treat
 	// it as absent so status still renders, and one sync re-derives it.
 	syncState := state.New(s.db)
-	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateLastImportAt); err == nil && ok {
+	if rec, ok, err := getStateAnySource(ctx, syncState, syncEntityType, stateLastImportAt); err == nil && ok {
 		if t, terr := time.Parse(time.RFC3339Nano, rec.Value); terr == nil {
 			out.LastImportAt = t
 		}
 	}
-	if rec, ok, err := syncState.Get(ctx, syncSource, syncEntityType, stateSourcePath); err == nil && ok {
+	if rec, ok, err := getStateAnySource(ctx, syncState, syncEntityType, stateSourcePath); err == nil && ok {
 		out.LastSource = rec.Value
 	}
 	return out, nil
+}
+
+func getStateAnySource(ctx context.Context, syncState *state.Store, entityType, entityID string) (state.Record, bool, error) {
+	for _, source := range []string{syncSource, legacySyncSource} {
+		rec, ok, err := syncState.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.Record{}, false, nil
 }
 
 func (s *Store) ListChats(ctx context.Context, limit int) ([]Chat, error) {

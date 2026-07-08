@@ -63,6 +63,9 @@ where full_ref = ?
 order by length(alias) desc, alias
 limit 1`, fullRef).Scan(&alias)
 	if errors.Is(err, sql.ErrNoRows) {
+		if legacy := legacyRef(fullRef); legacy != "" {
+			return s.ShortRefForFullRef(ctx, legacy)
+		}
 		return "", nil
 	}
 	if err != nil {
@@ -72,6 +75,13 @@ limit 1`, fullRef).Scan(&alias)
 		return "", err
 	}
 	return alias, nil
+}
+
+func legacyRef(ref string) string {
+	if !strings.HasPrefix(ref, AppID+":") {
+		return ""
+	}
+	return LegacyAppID + ":" + strings.TrimPrefix(ref, AppID+":")
 }
 
 func rebuildShortRefsTx(ctx context.Context, tx *sql.Tx) error {

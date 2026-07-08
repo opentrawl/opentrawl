@@ -79,8 +79,8 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 	}
 	if source.MetadataErr != nil {
 		return r.writeError("crawler_unidentified",
-			fmt.Sprintf("%s did not identify itself.", source.ID),
-			fmt.Sprintf("run: trawl doctor %s", source.ID))
+			fmt.Sprintf("%s did not identify itself.", sourceHumanName(source)),
+			fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source)))
 	}
 	rest := argsAfter(args, token)
 	if firstNonFlag(rest) == "" {
@@ -97,12 +97,12 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 			// The first token is a crawler flag: the verb came after its
 			// flags. Name the shape, not the flag value.
 			return r.writeError("unknown_verb",
-				fmt.Sprintf("%s needs the verb first, before any flags.", source.DisplayName),
-				fmt.Sprintf("run: trawl %s", token))
+				fmt.Sprintf("%s needs the verb first, before any flags.", sourceHumanName(source)),
+				fmt.Sprintf("run trawl %s", token))
 		}
 		return r.writeError("unknown_verb",
-			fmt.Sprintf("%s has no verb %q.", source.DisplayName, strings.Join(leading, " ")),
-			fmt.Sprintf("run: trawl %s", token))
+			fmt.Sprintf("%s has no verb %q.", sourceHumanName(source), strings.Join(leading, " ")),
+			fmt.Sprintf("run trawl %s", token))
 	}
 	runArgs := append([]string{source.ID}, rest...)
 	if r.root.JSON && command.JSON && !containsArg(rest, "--json") {
@@ -125,17 +125,16 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	return err
 }
 
-// sourceTokens is the user-facing name for each installed crawler —
-// surface alias where known (imessage), id otherwise — so an unknown-token
-// error can list the sources that are valid to type.
+// sourceTokens is the primary user-facing name for each installed crawler, so
+// an unknown-token error lists the source ids that are valid to type.
 func sourceTokens(sources []Source) []string {
 	names := make([]string, 0, len(sources))
 	for _, source := range sources {
-		if alias := sourceAlias(source.DisplayName); alias != "" {
-			names = append(names, alias)
+		if source.ID != "" {
+			names = append(names, source.ID)
 			continue
 		}
-		names = append(names, source.ID)
+		names = append(names, sourceCommandToken(source))
 	}
 	sort.Strings(names)
 	return names
@@ -154,9 +153,9 @@ func (r *Runtime) renderNamespace(source Source, token string) error {
 			Verbs:       verbs,
 		})
 	}
-	header := source.DisplayName
+	header := sourceHumanName(source)
 	if desc := strings.TrimSpace(source.Description); desc != "" {
-		header = header + " — " + desc
+		header = header + " - " + desc
 	}
 	if _, err := fmt.Fprintf(r.stdout, "%s\n\n", header); err != nil {
 		return err

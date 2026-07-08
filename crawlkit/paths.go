@@ -31,15 +31,25 @@ func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
 	}
 	root = config.ExpandHome(root)
 	base := filepath.Join(root, sourceID)
+	paths := Paths{
+		Archive: filepath.Join(base, sourceID+".db"),
+		Config:  filepath.Join(base, "config.toml"),
+		Logs:    filepath.Join(base, "logs"),
+	}
+	if strings.TrimSpace(info.DefaultPaths.Archive) != "" {
+		paths.Archive = config.ExpandHome(info.DefaultPaths.Archive)
+	}
+	if strings.TrimSpace(info.DefaultPaths.Config) != "" {
+		paths.Config = config.ExpandHome(info.DefaultPaths.Config)
+	}
+	if strings.TrimSpace(info.DefaultPaths.Logs) != "" {
+		paths.Logs = config.ExpandHome(info.DefaultPaths.Logs)
+	}
 	return sourcePaths{
 		StateRoot: root,
 		CrawlerID: sourceID,
 		Base:      base,
-		Paths: Paths{
-			Archive: filepath.Join(base, sourceID+".db"),
-			Config:  filepath.Join(base, "config.toml"),
-			Logs:    filepath.Join(base, "logs"),
-		},
+		Paths:     paths,
 	}, nil
 }
 

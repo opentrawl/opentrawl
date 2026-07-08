@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit"
 	ckoutput "github.com/openclaw/crawlkit/output"
@@ -32,7 +32,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	}
 	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
 	if errors.Is(err, store.ErrMessageNotFound) {
-		return r.contractError("not_found", "message was not found in this archive", "Run trawl telecrawl search --json again and use one of the returned refs.")
+		return r.contractError("not_found", "message was not found in this archive", "run trawl telegram search --json again and use one of the returned refs.")
 	}
 	if err != nil {
 		return err
@@ -49,22 +49,22 @@ func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, err
 	if strings.Contains(ref, ":") {
 		sourcePK, err := parseMessageRef(ref)
 		if err != nil {
-			return 0, r.contractError("invalid_ref", "ref is not a telecrawl message ref", "Use a ref returned by trawl telecrawl search --json, such as telecrawl:msg/<id>.")
+			return 0, r.contractError("invalid_ref", "ref is not a telegram message ref", "use a ref returned by trawl telegram search --json, such as telegram:msg/<id>.")
 		}
 		return sourcePK, nil
 	}
 	fullRefs, err := st.ResolveShortRef(r.ctx, ref)
 	if errors.Is(err, store.ErrUnknownShortRef) {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run trawl telecrawl search and copy the displayed short ref, or use a full ref from trawl telecrawl search --json.")
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
 	}
 	if errors.Is(err, store.ErrAmbiguousShortRef) {
-		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "Run trawl telecrawl search again and use the longer displayed ref or the full ref from trawl telecrawl search --json.")
+		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "run trawl telegram search again and use the longer displayed ref or the full ref from trawl telegram search --json.")
 	}
 	if err != nil {
 		return 0, err
 	}
 	if len(fullRefs) != 1 {
-		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "Run trawl telecrawl search and copy the displayed short ref, or use a full ref from trawl telecrawl search --json.")
+		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
 	}
 	sourcePK, err := parseMessageRef(fullRefs[0])
 	if err != nil {
@@ -74,10 +74,14 @@ func (r *runtime) resolveOpenMessageRef(st *store.Store, ref string) (int64, err
 }
 
 func parseMessageRef(ref string) (int64, error) {
-	if !strings.HasPrefix(ref, store.MessageRefPrefix) {
-		return 0, errors.New("invalid message ref")
+	prefix := store.MessageRefPrefix
+	if !strings.HasPrefix(ref, prefix) {
+		if !strings.HasPrefix(ref, store.LegacyMessageRefPrefix) {
+			return 0, errors.New("invalid message ref")
+		}
+		prefix = store.LegacyMessageRefPrefix
 	}
-	rawID := strings.TrimPrefix(ref, store.MessageRefPrefix)
+	rawID := strings.TrimPrefix(ref, prefix)
 	if rawID == "" {
 		return 0, errors.New("invalid message ref")
 	}
@@ -89,30 +93,38 @@ func parseMessageRef(ref string) (int64, error) {
 }
 
 func (r *runtime) printOpen(value openEnvelope) error {
-	if _, err := fmt.Fprintf(r.stdout, "chat: %s (%s)\n", value.Chat.Name, value.Chat.Ref); err != nil {
+	title := value.Chat.Name
+	if span := openDateSpan(value.Context); span != "" {
+		title += ", " + span
+	}
+	if err := render.WriteTranscriptHeader(r.stdout, render.TranscriptHeader{
+		Title:        title,
+		Ref:          value.Ref,
+		Participants: value.Participants,
+	}); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(r.stdout, "ref: %s\n", value.Ref); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(r.stdout, "target: %s %s\n", shortLocalTime(parseRenderTime(value.Message.Time)), value.Message.Sender.DisplayName); err != nil {
+	if _, err := fmt.Fprintf(r.stdout, "\nTime: %s\nFrom: %s\n", shortLocalTime(parseRenderTime(value.Message.Time)), render.HumanIdentity(value.Message.Sender.DisplayName)); err != nil {
 		return err
 	}
 	if strings.TrimSpace(value.Message.Text) != "" {
-		if _, err := fmt.Fprintf(r.stdout, "text: %s\n", value.Message.Text); err != nil {
+		if err := render.WriteWrappedField(r.stdout, "Text", value.Message.Text); err != nil {
 			return err
 		}
 	}
-	if _, err := fmt.Fprintf(r.stdout, "Showing %s and %s.\n", contextCountPhrase(value.ContextWindow.Before, "earlier message", "earlier messages"), contextCountPhrase(value.ContextWindow.After, "message after", "messages after")); err != nil {
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(r.stdout, "Context: %s messages around this one.\n", render.FormatInteger(int64(len(value.Context)))); err != nil {
 		return err
 	}
 	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
 		chatID := value.Chat.Ref[strings.LastIndex(value.Chat.Ref, "/")+1:]
-		if _, err := fmt.Fprintf(r.stdout, "More: trawl telecrawl messages --chat %s\n", chatID); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: trawl telegram messages --chat %s\n", chatID); err != nil {
 			return err
 		}
 	}
-	if _, err := io.WriteString(r.stdout, "\n"); err != nil {
+	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
 	rows := make([]render.TranscriptRow, 0, len(value.Context))
@@ -148,22 +160,35 @@ func openTranscriptPrefix(width int, message openMessage) string {
 	if whoWidth > openTranscriptMaxWhoWidth {
 		whoWidth = openTranscriptMaxWhoWidth
 	}
-	return fixed + render.Truncate(message.Sender.DisplayName, whoWidth) + ": "
+	return fixed + render.Truncate(render.HumanIdentity(message.Sender.DisplayName), whoWidth) + ": "
 }
 
-func contextCountPhrase(count int, singular, plural string) string {
-	if count == 0 {
-		switch singular {
-		case "message after":
-			return "none after"
-		default:
-			return "no " + plural
+func openDateSpan(context []openMessage) string {
+	var first time.Time
+	var last time.Time
+	for _, item := range context {
+		t := parseRenderTime(item.Time)
+		if t.IsZero() {
+			continue
 		}
+		if first.IsZero() {
+			first = t
+		}
+		last = t
 	}
-	if count == 1 {
-		return "1 " + singular
+	if first.IsZero() {
+		return ""
 	}
-	return strconv.Itoa(count) + " " + plural
+	if sameTranscriptDate(first, last) {
+		return first.Format("2 Jan 2006")
+	}
+	return first.Format("2 Jan 2006") + " to " + last.Format("2 Jan 2006")
+}
+
+func sameTranscriptDate(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
 }
 
 func mediaSummary(message openMessage) string {

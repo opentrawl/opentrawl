@@ -27,8 +27,8 @@ func WriteCard(w io.Writer, c Card) error {
 		wrote = true
 	}
 	for _, field := range c.Fields {
-		label := strings.TrimSpace(field.Label)
-		value := strings.TrimSpace(field.Value)
+		label := DisplayLabel(field.Label)
+		value := HumanCell(label, field.Value)
 		if label == "" || value == "" {
 			continue
 		}

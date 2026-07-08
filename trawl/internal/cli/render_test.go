@@ -47,10 +47,10 @@ func TestRenderStatusTable(t *testing.T) {
 	if err := renderStatusTable(&out, results, now); err != nil {
 		t.Fatal(err)
 	}
-	want := "source    surface   state  fresh   headline\n" +
-		"imessage  iMessage  ok     2m ago  12,345 messages · 87 chats · since 2014\n" +
-		"telegram  Telegram  stale  3d ago  23,456 messages\n" +
-		"gmail     Gmail     error  —       auth expired\n"
+	want := "source    state  recently synced  headline\n" +
+		"iMessage  ok     2m ago           12,345 messages · 87 chats · since 2014\n" +
+		"Telegram  stale  3d ago           23,456 messages\n" +
+		"Gmail     error  not synced yet   auth expired\n"
 	if out.String() != want {
 		t.Fatalf("status table:\n%s\nwant:\n%s", out.String(), want)
 	}
@@ -67,6 +67,29 @@ func TestStatusHeadlineDropsZeroSinceAndYearCounts(t *testing.T) {
 	want := "0 messages · 2 senders"
 	if headline != want {
 		t.Fatalf("headline = %q, want %q", headline, want)
+	}
+}
+
+func TestStatusHeadlineUsesFailedSummaryBeforeCounts(t *testing.T) {
+	headline := statusHeadline(StatusEnvelope{
+		State:   "missing",
+		Summary: "Not synced yet.",
+		Counts: []Count{
+			{ID: "messages", Label: "messages", Value: countValue(int64(0))},
+			{ID: "senders", Label: "senders", Value: countValue(int64(0))},
+		},
+	})
+	if headline != "Not synced yet." {
+		t.Fatalf("headline = %q, want normalised failed summary", headline)
+	}
+}
+
+func TestNormalizeSelfKeepsKnownIdentity(t *testing.T) {
+	if got := normalizeSelf("ME (@jjpcodes)"); got != "me (@jjpcodes)" {
+		t.Fatalf("normalizeSelf = %q", got)
+	}
+	if got := normalizeSelf(" me () "); got != "me" {
+		t.Fatalf("normalizeSelf empty identity = %q", got)
 	}
 }
 

@@ -6,7 +6,7 @@ import (
 	crawlconfig "github.com/openclaw/crawlkit/config"
 )
 
-var runtimeApp = crawlconfig.App{Name: "photoscrawl", BaseDir: "~/.opentrawl/photoscrawl"}
+var runtimeApp = crawlconfig.App{Name: "photos", BaseDir: "~/.opentrawl/photos"}
 
 type Paths struct {
 	ConfigPath string

@@ -24,9 +24,9 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	ctx := context.Background()
 	stateRoot := setupCalendarFixture(t)
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "calcrawl", "calcrawl.db"),
-		Config:  filepath.Join(stateRoot, "calcrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "calcrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "calendar", "calendar.db"),
+		Config:  filepath.Join(stateRoot, "calendar", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "calendar", "logs"),
 	}
 	source := New()
 
@@ -61,7 +61,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 		t.Fatalf("search = %#v, want one result", search)
 	}
 	hit := search.Results[0]
-	if hit.Ref != "calcrawl:event/11111111-1111-1111-1111-111111111111" || hit.ShortRef == "" {
+	if hit.Ref != "calendar:event/11111111-1111-1111-1111-111111111111" || hit.ShortRef == "" {
 		t.Fatalf("search hit refs = %#v", hit)
 	}
 	if hit.Who != "Alice Example" || hit.Where != "Room 1" {

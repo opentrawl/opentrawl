@@ -15,6 +15,7 @@ var ErrMessageNotFound = errors.New("message not found")
 type MessageWindow struct {
 	Target          Message
 	Messages        []Message
+	Participants    []string
 	BeforeTruncated bool
 	AfterTruncated  bool
 }
@@ -79,9 +80,14 @@ func (s *Store) OpenMessageWindow(ctx context.Context, sourcePK int64, radius in
 			break
 		}
 	}
+	participants, err := s.groupParticipants(ctx, target.ChatJID)
+	if err != nil {
+		return MessageWindow{}, err
+	}
 	return MessageWindow{
 		Target:          target,
 		Messages:        messages,
+		Participants:    participants,
 		BeforeTruncated: beforeTruncated,
 		AfterTruncated:  afterTruncated,
 	}, nil
@@ -155,4 +161,50 @@ func reverseMessages(messages []Message) {
 	for i, j := 0, len(messages)-1; i < j; i, j = i+1, j-1 {
 		messages[i], messages[j] = messages[j], messages[i]
 	}
+}
+
+func (s *Store) groupParticipants(ctx context.Context, chatJID string) ([]string, error) {
+	chatJID = strings.TrimSpace(chatJID)
+	if chatJID == "" {
+		return nil, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `
+select coalesce(
+	nullif(trim(c.full_name), ''),
+	nullif(trim(gp.contact_name), ''),
+	nullif(trim(c.business_name), ''),
+	nullif(trim(c.first_name || ' ' || c.last_name), ''),
+	nullif(trim(gp.first_name), ''),
+	nullif(trim(c.username), ''),
+	nullif(trim(gp.user_jid), '')
+) as display_name
+from group_participants gp
+join chats ch on cast(ch.id as text) = gp.group_jid and ch.kind in ('group','channel')
+left join contacts c on c.jid = gp.user_jid
+where gp.group_jid = ?
+  and gp.is_active != 0
+order by lower(display_name), display_name`, chatJID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	seen := map[string]struct{}{}
+	out := []string{}
+	for rows.Next() {
+		var displayName string
+		if err := rows.Scan(&displayName); err != nil {
+			return nil, err
+		}
+		displayName = normalizeDisplayName(displayName)
+		if displayName == "" {
+			continue
+		}
+		key := strings.ToLower(displayName)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, displayName)
+	}
+	return out, rows.Err()
 }

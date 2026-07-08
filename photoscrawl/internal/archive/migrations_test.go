@@ -157,7 +157,7 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 		if err != nil {
 			t.Fatal(err)
 		}
-		if opened.Ref != "photoscrawl:asset/old-schema" || opened.Model.Summary != "Old migrationterm card." || opened.Stale != nil {
+		if opened.Ref != "photos:asset/old-schema" || opened.Model.Summary != "Old migrationterm card." || opened.Stale != nil {
 			t.Fatalf("opened old-schema card = %#v", opened)
 		}
 		assertMigrated(t, paths)
@@ -168,7 +168,7 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(search.Results) != 1 || search.Results[0].Ref != "photoscrawl:asset/old-schema" || search.Results[0].Stale {
+		if len(search.Results) != 1 || search.Results[0].Ref != "photos:asset/old-schema" || search.Results[0].Stale {
 			t.Fatalf("old-schema search = %#v", search.Results)
 		}
 		assertMigrated(t, paths)

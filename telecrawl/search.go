@@ -135,7 +135,7 @@ func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageF
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {
-	hints := []string{"Open: trawl telecrawl open REF"}
+	hints := []string{"Open: trawl telegram open REF"}
 	if value.Truncated {
 		if more := searchMoreHint(value); more != "" {
 			hints = append(hints, more)
@@ -155,9 +155,9 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 
 func searchHeading(value searchEnvelope) string {
 	if strings.TrimSpace(value.Query) == "" {
-		return fmt.Sprintf("Search filters: showing %d of %d.", len(value.Results), value.TotalMatches)
+		return fmt.Sprintf("Search filters: showing %s of %s, newest first.", render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches)))
 	}
-	return fmt.Sprintf("Search %q: showing %d of %d.", value.Query, len(value.Results), value.TotalMatches)
+	return fmt.Sprintf("Search %q: showing %s of %s, newest first.", value.Query, render.FormatInteger(int64(len(value.Results))), render.FormatInteger(int64(value.TotalMatches)))
 }
 
 func searchMoreHint(value searchEnvelope) string {
@@ -166,7 +166,7 @@ func searchMoreHint(value searchEnvelope) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("More: trawl telecrawl search %s --limit %d", strings.Join(parts, " "), nextLimit)
+	return fmt.Sprintf("More: trawl telegram search %s --limit %d", strings.Join(parts, " "), nextLimit)
 }
 
 // searchAllHint mirrors searchMoreHint so the offered command is runnable:
@@ -177,7 +177,7 @@ func searchAllHint(value searchEnvelope) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("All: trawl telecrawl search %s --all", strings.Join(parts, " "))
+	return fmt.Sprintf("All: trawl telegram search %s --all", strings.Join(parts, " "))
 }
 
 func searchCommandParts(value searchEnvelope) []string {
@@ -210,9 +210,9 @@ func searchListItems(results []searchResult) []render.ListItem {
 	for _, item := range results {
 		items = append(items, render.ListItem{
 			Time:  parseRenderTime(item.Time),
-			Who:   item.Who,
-			Where: item.Where,
-			Ref:   displayRef(item.Ref, item.ShortRef),
+			Who:   render.HumanIdentity(item.Who),
+			Where: render.HumanIdentity(item.Where),
+			Ref:   item.Ref,
 			Text:  item.Snippet,
 		})
 	}

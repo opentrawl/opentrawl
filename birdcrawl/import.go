@@ -11,7 +11,7 @@ import (
 )
 
 func (r *runtime) runImportArchive(args []string) error {
-	fs := flag.NewFlagSet("birdcrawl import archive", flag.ContinueOnError)
+	fs := flag.NewFlagSet("twitter import archive", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)

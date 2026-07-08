@@ -25,7 +25,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &manifest); err != nil {
 		t.Fatalf("manifest json = %s err=%v", out.String(), err)
 	}
-	if manifest.ID != "clawdex" || manifest.DisplayName != "Contacts" {
+	if manifest.ID != "contacts" || manifest.DisplayName != "Contacts" {
 		t.Fatalf("manifest identity = %#v", manifest)
 	}
 	if manifest.SchemaVersion != control.RunnerManifestVersion || manifest.ContractVersion != control.ContractVersion {
@@ -37,7 +37,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	if !reflect.DeepEqual(manifest.Capabilities, []string{"status", "doctor", "who", "search", "verbose_logs"}) {
 		t.Fatalf("capabilities = %#v", manifest.Capabilities)
 	}
-	if manifest.Paths.DefaultLogs != filepath.Join(os.Getenv("HOME"), ".opentrawl", "clawdex", "logs") {
+	if manifest.Paths.DefaultLogs != filepath.Join(os.Getenv("HOME"), ".opentrawl", "contacts", "logs") {
 		t.Fatalf("default logs = %q", manifest.Paths.DefaultLogs)
 	}
 	if _, ok := manifest.Commands["contact-export"]; ok {
@@ -183,7 +183,7 @@ func TestExecuteDoctorHumanOutputUsesRenderer(t *testing.T) {
 		"config: ok",
 		"contacts repo: missing",
 		"index: missing",
-		"Remedy: run clawdex init",
+		"Remedy: run trawl contacts init",
 	)
 }
 
@@ -198,7 +198,7 @@ func TestExecuteDoctorJSONMissingHealthyAndCorrupt(t *testing.T) {
 	if len(report.Checks) != 3 || report.Checks[0].ID != "config" || report.Checks[1].ID != "contacts_repo" || report.Checks[2].ID != "index" {
 		t.Fatalf("missing checks = %#v", report.Checks)
 	}
-	if report.Checks[1].State != "fail" || !strings.Contains(report.Checks[1].Remedy, "clawdex init") {
+	if report.Checks[1].State != "fail" || !strings.Contains(report.Checks[1].Remedy, "trawl contacts init") {
 		t.Fatalf("contacts_repo check = %#v", report.Checks[1])
 	}
 	if report.Checks[2].State != "fail" || !strings.Contains(report.Checks[2].Message, "without a contacts repo") {

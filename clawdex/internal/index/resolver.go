@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/openclaw/clawdex/internal/model"
+	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -40,7 +41,7 @@ type WhoResolutionError struct {
 func (e *WhoResolutionError) Error() string {
 	switch e.Code {
 	case WhoErrorAmbiguous:
-		return fmt.Sprintf("ambiguous_who: %q matched %d people", e.Query, len(e.Candidates))
+		return fmt.Sprintf("ambiguous_who: %q matched %s people", e.Query, render.FormatInteger(int64(len(e.Candidates))))
 	case WhoErrorUnknown:
 		return fmt.Sprintf("unknown_who: %q", e.Query)
 	default:

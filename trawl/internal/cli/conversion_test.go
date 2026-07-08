@@ -20,7 +20,7 @@ func TestStatusEnvelopeFromControlUsesTypedCrawlkitStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Archive is fresh." {
+	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Recently synced." {
 		t.Fatalf("status = %#v", got)
 	}
 	if got.LastSyncAt != "2026-07-02T14:03:00Z" || len(got.Counts) != 1 {
@@ -28,6 +28,18 @@ func TestStatusEnvelopeFromControlUsesTypedCrawlkitStatus(t *testing.T) {
 	}
 	if got.Counts[0].Value.text("messages", "messages") != "42" {
 		t.Fatalf("count value = %#v", got.Counts[0].Value)
+	}
+}
+
+func TestNormalizeStatusOwnsUnsyncedSummary(t *testing.T) {
+	for _, state := range []string{"missing", "error"} {
+		got := normalizeStatus(Source{ID: "gmail", DisplayName: "Gmail"}, StatusEnvelope{
+			State:   state,
+			Summary: "crawler-specific unsynced wording",
+		})
+		if got.Summary != "Not synced yet." {
+			t.Fatalf("state %s summary = %q, want uniform unsynced summary", state, got.Summary)
+		}
 	}
 }
 

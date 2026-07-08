@@ -7,7 +7,7 @@ Recommend deterministic short refs with collision extension. Keep full refs
 canonical. Do not add a Trawl mapping database or make short refs the JSON
 identity.
 
-The full ref stays authoritative: `telecrawl:msg/1234567890123456789`. The
+The full ref stays authoritative: `telegram:msg/1234567890123456789`. The
 short ref is human copy sugar: `t7k3f`, up to 6 characters.
 
 A human should be able to copy `t7k3f` from search into `trawl open t7k3f`.

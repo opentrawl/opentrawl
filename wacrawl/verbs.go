@@ -117,7 +117,7 @@ func newChatsEnvelope(chats []store.Chat, total int, unread bool) chatsEnvelope 
 func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	heading := "Chats"
 	empty := "No chats."
-	hint := "Messages: trawl wacrawl messages --chat CHAT"
+	hint := "Messages: trawl whatsapp messages --chat CHAT"
 	if value.unread {
 		heading = "Unread chats"
 		empty = "No unread chats."
@@ -126,14 +126,14 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 		_, err := fmt.Fprintln(req.Out, empty)
 		return err
 	}
-	if _, err := fmt.Fprintf(req.Out, "%s: showing %d of %d.\n%s\n", heading, len(value.Chats), value.Total, hint); err != nil {
+	if _, err := fmt.Fprintf(req.Out, "%s: showing %s of %s, newest first.\n%s\n", heading, render.FormatInteger(int64(len(value.Chats))), render.FormatInteger(int64(value.Total)), hint); err != nil {
 		return err
 	}
 	if value.Truncated {
 		if value.unread {
-			_, _ = fmt.Fprintln(req.Out, "All: trawl wacrawl unread --all")
+			_, _ = fmt.Fprintln(req.Out, "All: trawl whatsapp unread --all")
 		} else {
-			_, _ = fmt.Fprintln(req.Out, "All: trawl wacrawl chats --all")
+			_, _ = fmt.Fprintln(req.Out, "All: trawl whatsapp chats --all")
 		}
 	}
 	if _, err := fmt.Fprintln(req.Out); err != nil {
@@ -143,19 +143,19 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	for _, chat := range value.Chats {
 		rows = append(rows, []string{
 			render.ShortLocalTime(parseFormattedTime(chat.LastMessageAt)),
-			chat.Kind,
-			strconv.Itoa(chat.UnreadCount),
-			strconv.Itoa(chat.MessageCount),
 			chat.ChatID,
+			chat.Kind,
+			render.FormatInteger(int64(chat.UnreadCount)),
+			render.FormatInteger(int64(chat.MessageCount)),
 			chatDisplayName(chat.Name),
 		})
 	}
 	return render.WriteTable(req.Out, []render.TableColumn{
 		{Header: "last"},
+		{Header: "chat"},
 		{Header: "kind"},
 		{Header: "unread", AlignRight: true},
 		{Header: "messages", AlignRight: true},
-		{Header: "chat id"},
 		{Header: "name", Wrap: true},
 	}, rows)
 }
@@ -284,12 +284,12 @@ func newMessageListOutput(limit int, messages []store.Message, aliases map[strin
 }
 
 func printMessages(req *crawlkit.Request, value messageListOutput) error {
-	hints := []string{"Open: trawl wacrawl open REF"}
+	hints := []string{"Open: trawl whatsapp open REF"}
 	if value.Truncated {
-		hints = append(hints, "Narrow: trawl wacrawl messages --limit N --after DATE --before DATE --chat JID")
+		hints = append(hints, "Narrow: trawl whatsapp messages --limit N --after DATE --before DATE --chat JID")
 	}
 	return render.WriteList(req.Out, render.List{
-		Heading:   fmt.Sprintf("Messages: showing %d, newest first.", value.Returned),
+		Heading:   fmt.Sprintf("Messages: showing %s, newest first.", render.FormatInteger(int64(value.Returned))),
 		Hints:     hints,
 		Items:     messageListItems(value.Messages, value.aliases),
 		ClampText: 0,
@@ -305,7 +305,7 @@ func messageListItems(messages []store.Message, aliases map[string]string) []ren
 			Time:  m.Timestamp,
 			Who:   outputField(messageWho(m)),
 			Where: outputField(messageWhere(m)),
-			Ref:   displayRef(full, aliases[full]),
+			Ref:   full,
 			Text:  messageText(m),
 		})
 	}

@@ -17,7 +17,7 @@ what each value means, and what to do next.
 
 - `WriteList` — record lists: search hits, messages, tweets, emails,
   events. Heading first (`Bookmarks: showing 20 of 398, newest
-  first.`), then copy-pasteable hint lines (`Open: trawl birdcrawl
+  first.`), then copy-pasteable hint lines (`Open: trawl twitter
   open REF`, `More: ...`), then a labelled table: `date  source  who  where
   ref  text`. Columns whose values are all empty are omitted (the
   source column only appears in the federated trawl view). A row can

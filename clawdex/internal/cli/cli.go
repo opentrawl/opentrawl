@@ -46,9 +46,9 @@ type CLI struct {
 	Version kong.VersionFlag `name:"version" help:"Print version and exit"`
 
 	Metadata MetadataCmd `cmd:"" help:"Print control metadata"`
-	Init     InitCmd     `cmd:"" help:"Initialize a contacts data repo"`
+	Init     InitCmd     `cmd:"" help:"Initialise a contacts data repo"`
 	Status   StatusCmd   `cmd:"" help:"Show contacts repo status"`
-	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit clawdex config"`
+	ConfigC  ConfigCmd   `cmd:"" name:"config" help:"Show or edit contacts config"`
 	Person   PersonCmd   `cmd:"" help:"Read people"`
 	Contacts ContactsCmd `cmd:"" help:"Export contact JSON"`
 	Who      WhoCmd      `cmd:"" help:"Resolve a person by name, alias, or identifier"`
@@ -182,7 +182,7 @@ type usageErr struct{ error }
 // (rules §2.3/§2.4): the message stays machine-clean and the next step lives
 // in remedy, never glued onto the message.
 func (e usageErr) ErrorBody() ckoutput.ErrorBody {
-	return ckoutput.ErrorBody{Code: "usage", Message: e.Error(), Remedy: "Run 'clawdex --help'."}
+	return ckoutput.ErrorBody{Code: "usage", Message: e.Error(), Remedy: "Run 'trawl contacts --help'."}
 }
 
 type InitCmd struct {
@@ -383,7 +383,7 @@ func (f crawlerImportFailures) Error() string {
 	if len(f) == 1 {
 		return "1 crawler import failed"
 	}
-	return fmt.Sprintf("%d crawler imports failed", len(f))
+	return fmt.Sprintf("%s crawler imports failed", render.FormatInteger(int64(len(f))))
 }
 
 func (f crawlerImportFailures) Unwrap() []error {
@@ -895,7 +895,7 @@ func (c *GitPushCmd) Run(r *Runtime) error {
 }
 
 type GitCommitCmd struct {
-	Message string `name:"message" short:"m" help:"Commit message" default:"sync: update clawdex contacts"`
+	Message string `name:"message" short:"m" help:"Commit message" default:"sync: update contacts"`
 }
 
 func (c *GitCommitCmd) Run(r *Runtime) error {
@@ -1030,7 +1030,7 @@ func peopleMessage(count int) string {
 	if count == 1 {
 		return "1 person"
 	}
-	return fmt.Sprintf("%d people", count)
+	return fmt.Sprintf("%s people", render.FormatInteger(int64(count)))
 }
 
 func repairMessage(item string, count int, dryRun bool) string {
@@ -1044,7 +1044,7 @@ func repairMessage(item string, count int, dryRun bool) string {
 	if count == 1 {
 		return fmt.Sprintf("1 %s %s", item, action)
 	}
-	return fmt.Sprintf("%d %s %s", count, pluralItem(item), action)
+	return fmt.Sprintf("%s %s %s", render.FormatInteger(int64(count)), pluralItem(item), action)
 }
 
 func pluralItem(item string) string {
@@ -1058,7 +1058,7 @@ func countNoun(count int, singular, plural string) string {
 	if count == 1 {
 		return "1 " + singular
 	}
-	return fmt.Sprintf("%d %s", count, plural)
+	return fmt.Sprintf("%s %s", render.FormatInteger(int64(count)), plural)
 }
 
 func firstNonEmpty(values ...string) string {

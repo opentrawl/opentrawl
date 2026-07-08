@@ -16,13 +16,14 @@ import (
 )
 
 const (
-	sourceName          = "gogcrawl"
+	sourceName          = "gmail"
+	legacySourceName    = "gogcrawl"
 	syncEntityType      = "sync"
 	lastStartedEntityID = "last_started_at"
 	lastDoneEntityID    = "last_completed_at"
 )
 
-var ErrSchemaMismatch = errors.New("archive schema version does not match this gogcrawl version")
+var ErrSchemaMismatch = errors.New("archive schema version does not match this gmail version")
 
 type Store struct {
 	store *ckstore.Store
@@ -31,9 +32,9 @@ type Store struct {
 }
 
 // DefaultPaths is the one archive path layout, from crawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/gogcrawl (TRAWL-99).
+// dir is the fleet-wide state root, ~/.opentrawl/gmail (TRAWL-99).
 func DefaultPaths() config.Paths {
-	paths, _ := (config.App{Name: "gogcrawl", BaseDir: "~/.opentrawl/gogcrawl"}).DefaultPaths()
+	paths, _ := (config.App{Name: "gmail", BaseDir: "~/.opentrawl/gmail"}).DefaultPaths()
 	return paths
 }
 
@@ -145,11 +146,11 @@ func (s *Store) MarkSyncCompleted(ctx context.Context, when time.Time) error {
 
 func (s *Store) SyncMarkers(ctx context.Context) (SyncMarkers, error) {
 	stateStore := state.New(s.store.DB())
-	started, hasStarted, err := stateStore.Get(ctx, sourceName, syncEntityType, lastStartedEntityID)
+	started, hasStarted, err := getStateAnySource(ctx, stateStore, syncEntityType, lastStartedEntityID)
 	if err != nil {
 		return SyncMarkers{}, err
 	}
-	done, hasDone, err := stateStore.Get(ctx, sourceName, syncEntityType, lastDoneEntityID)
+	done, hasDone, err := getStateAnySource(ctx, stateStore, syncEntityType, lastDoneEntityID)
 	if err != nil {
 		return SyncMarkers{}, err
 	}
@@ -161,6 +162,16 @@ func (s *Store) SyncMarkers(ctx context.Context) (SyncMarkers, error) {
 		markers.PreviousRunIncomplete = true
 	}
 	return markers, nil
+}
+
+func getStateAnySource(ctx context.Context, stateStore *state.Store, entityType, entityID string) (state.Record, bool, error) {
+	for _, source := range []string{sourceName, legacySourceName} {
+		rec, ok, err := stateStore.Get(ctx, source, entityType, entityID)
+		if err != nil || ok {
+			return rec, ok, err
+		}
+	}
+	return state.Record{}, false, nil
 }
 
 func recordTime(rec state.Record) time.Time {

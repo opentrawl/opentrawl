@@ -27,26 +27,26 @@ func (c *OpenCmd) Run(r *Runtime) error {
 	if strings.Contains(ref, ":") {
 		return r.writeError("invalid_ref",
 			"Ref is missing a source or path.",
-			"refs look like <source>:<path>, for example imsgcrawl:msg/8842")
+			"refs look like <source>:<path>, for example imessage:msg/8842")
 	}
 	return r.openShortRef(ref)
 }
 
 func (r *Runtime) openWithSource(source Source, ref string) error {
 	if source.MetadataErr != nil {
-		return r.openFailed(ref, source.ID)
+		return r.openFailed(ref, source)
 	}
 	opener, ok := source.Crawler.(crawlkit.Opener)
 	if !ok {
-		return r.openFailed(ref, source.ID)
+		return r.openFailed(ref, source)
 	}
 	started := r.logSourceStart(source, "open")
-	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "open", sourceStoreFor(source, sourceStoreRead), outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *crawlkit.Request) error {
 		return opener.Open(ctx, req, ref)
 	})
 	r.logSourceDone(source, "open", started, err)
 	if err != nil {
-		return r.openFailed(ref, source.ID)
+		return r.openFailed(ref, source)
 	}
 	return nil
 }
@@ -64,10 +64,10 @@ func splitOpenRef(ref string) (string, string, bool) {
 	return source, path, true
 }
 
-func (r *Runtime) openFailed(ref, source string) error {
+func (r *Runtime) openFailed(ref string, source Source) error {
 	return r.writeError("open_failed",
-		fmt.Sprintf("Could not open ref %q.", ref),
-		fmt.Sprintf("run: trawl doctor %s", source))
+		fmt.Sprintf("%s could not open ref %q.", sourceHumanName(source), ref),
+		fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source)))
 }
 
 const (
@@ -89,8 +89,9 @@ type shortRefMatch struct {
 // in the fan-out fails this way, so the caller learns exactly what
 // broke instead of a misattributed "trawl doctor <first source>".
 type shortRefFailure struct {
-	SourceID string
-	Err      error
+	SourceID    string
+	DisplayName string
+	Err         error
 }
 
 var errAmbiguousShortRef = errors.New("ambiguous short ref")
@@ -121,7 +122,7 @@ func (r *Runtime) openShortRef(alias string) error {
 				"alias=" + logQuote(alias),
 				"error=" + logQuote(err.Error()),
 			}, " "))
-			failures = append(failures, shortRefFailure{SourceID: source.ID, Err: err})
+			failures = append(failures, shortRefFailure{SourceID: source.ID, DisplayName: sourceHumanName(source), Err: err})
 			continue
 		}
 		for _, ref := range refs {
@@ -154,11 +155,11 @@ func (r *Runtime) openShortRef(alias string) error {
 func (r *Runtime) shortRefResolutionFailed(alias string, failures []shortRefFailure) error {
 	reasons := make([]string, 0, len(failures))
 	for _, failure := range failures {
-		reasons = append(reasons, fmt.Sprintf("%s (%s)", failure.SourceID, failure.Err))
+		reasons = append(reasons, fmt.Sprintf("%s (%s)", firstNonEmpty(failure.DisplayName, failure.SourceID), failure.Err))
 	}
 	return r.writeError("short_ref_resolution_failed",
 		fmt.Sprintf("Could not resolve short ref %q. Every source failed: %s.", alias, strings.Join(reasons, ", ")),
-		"run: trawl doctor")
+		"run trawl doctor")
 }
 
 func validShortRefAlias(alias string) bool {

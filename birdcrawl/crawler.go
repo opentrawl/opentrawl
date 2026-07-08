@@ -15,7 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 )
 
-const appID = "birdcrawl"
+const appID = "twitter"
 
 type Crawler struct {
 	cfg Config

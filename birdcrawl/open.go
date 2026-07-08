@@ -12,7 +12,7 @@ import (
 )
 
 func (r *runtime) runOpen(args []string) error {
-	fs := flag.NewFlagSet("birdcrawl open", flag.ContinueOnError)
+	fs := flag.NewFlagSet("twitter open", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	if err := fs.Parse(args); err != nil {
 		return usageErr(err)
@@ -27,7 +27,7 @@ func (r *runtime) runOpen(args []string) error {
 		}
 		result, err := st.OpenTweet(r.ctx, id)
 		if errors.Is(err, store.ErrTweetNotFound) {
-			return r.contractError("not_found", "tweet was not found in this archive", "Run trawl birdcrawl search and use one of the returned refs.")
+			return r.contractError("not_found", "tweet was not found in this archive", "run trawl twitter search and use one of the returned refs.")
 		}
 		if err != nil {
 			return err
@@ -49,7 +49,7 @@ func (r *runtime) resolveOpenTweetID(st *store.Store, ref string) (string, error
 	if strings.Contains(ref, ":") {
 		id, err := store.ParseTweetRef(ref)
 		if err != nil {
-			return "", r.contractError("invalid_ref", "ref is not a birdcrawl tweet ref", "Use a ref returned by trawl birdcrawl search --json, such as birdcrawl:tweet/123.")
+			return "", r.contractError("invalid_ref", "ref is not a twitter tweet ref", "Use a ref returned by trawl twitter search --json, such as twitter:tweet/123.")
 		}
 		return id, nil
 	}
@@ -70,7 +70,7 @@ func (r *runtime) resolveOpenTweetID(st *store.Store, ref string) (string, error
 		}
 		return id, nil
 	default:
-		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet", "Rerun trawl birdcrawl search or use the full ref.")
+		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet", "Rerun trawl twitter search or use the full ref.")
 	}
 }
 

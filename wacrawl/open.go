@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/crawlkit/output"
@@ -15,11 +16,12 @@ import (
 )
 
 type openEnvelope struct {
-	Ref     string            `json:"ref"`
-	Chat    string            `json:"chat"`
-	Message openMessage       `json:"message"`
-	Context []openMessage     `json:"context"`
-	Window  openWindowSummary `json:"window"`
+	Ref          string            `json:"ref"`
+	Chat         string            `json:"chat"`
+	Participants []string          `json:"participants,omitempty"`
+	Message      openMessage       `json:"message"`
+	Context      []openMessage     `json:"context"`
+	Window       openWindowSummary `json:"window"`
 }
 
 type openWindowSummary struct {
@@ -57,7 +59,7 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	target, err := st.MessageByID(ctx, messageID)
 	if err != nil {
 		if errorsIsNoRows(err) {
-			return commandErr(1, "not_found", "message was not found", "run trawl wacrawl search again and pass one of its refs")
+			return commandErr(1, "not_found", "message was not found", "run trawl whatsapp search again and pass one of its refs")
 		}
 		return err
 	}
@@ -65,7 +67,11 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	if err != nil {
 		return err
 	}
-	result := newOpenEnvelope(target, window)
+	participants, err := st.GroupParticipants(ctx, target.ChatJID)
+	if err != nil {
+		return err
+	}
+	result := newOpenEnvelope(target, window, participants)
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "open", result)
 	}
@@ -90,28 +96,46 @@ func resolveOpenMessageID(ctx context.Context, st *store.Store, ref string) (str
 	case 1:
 		return parseMessageRef(fullRefs[0])
 	default:
-		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl wacrawl search or use the full ref")
+		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl whatsapp search or use the full ref")
 	}
 }
 
 func unknownShortRefError() error {
-	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from trawl wacrawl search")
+	return commandErr(1, "unknown_short_ref", "short ref was not found", "use a full ref from trawl whatsapp search")
 }
 
 func parseMessageRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if !strings.HasPrefix(ref, messageRefPrefix) {
-		return "", commandErr(1, "foreign_ref", "ref does not belong to wacrawl", "pass a ref returned by trawl wacrawl search")
+		if !strings.HasPrefix(ref, store.LegacyMessageRefPrefix) {
+			return "", commandErr(1, "foreign_ref", "ref does not belong to whatsapp", "pass a ref returned by trawl whatsapp search")
+		}
+		messageID := strings.TrimSpace(strings.TrimPrefix(ref, store.LegacyMessageRefPrefix))
+		if messageID == "" {
+			return "", commandErr(1, "invalid_ref", "whatsapp message ref is missing its message id", "pass a complete ref returned by trawl whatsapp search")
+		}
+		return messageID, nil
 	}
 	messageID := strings.TrimSpace(strings.TrimPrefix(ref, messageRefPrefix))
 	if messageID == "" {
-		return "", commandErr(1, "invalid_ref", "wacrawl message ref is missing its message id", "pass a complete ref returned by trawl wacrawl search")
+		return "", commandErr(1, "invalid_ref", "whatsapp message ref is missing its message id", "pass a complete ref returned by trawl whatsapp search")
 	}
 	return messageID, nil
 }
 
 func printOpen(req *crawlkit.Request, result openEnvelope) error {
-	if _, err := fmt.Fprintf(req.Out, "chat: %s\nref: %s\n\n", result.Chat, result.Ref); err != nil {
+	title := result.Chat
+	if span := openDateSpan(result.Context); span != "" {
+		title += ", " + span
+	}
+	if err := render.WriteTranscriptHeader(req.Out, render.TranscriptHeader{
+		Title:        title,
+		Ref:          result.Ref,
+		Participants: result.Participants,
+	}); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(req.Out, "\nContext: %s messages around this one.\n\n", render.FormatInteger(int64(len(result.Context)))); err != nil {
 		return err
 	}
 	width := render.OutputWidth(req.Out)
@@ -133,9 +157,9 @@ func openTranscriptPrefix(width int, item openMessage) string {
 	}
 	when := item.Time
 	if parsed := parseFormattedTime(item.Time); !parsed.IsZero() {
-		when = parsed.Format("2006-01-02 15:04")
+		when = parsed.Format("15:04")
 	}
-	fixed := fmt.Sprintf("%s  %s  ", marker, when)
+	fixed := fmt.Sprintf("%s %s  ", marker, when)
 	whoWidth := width - render.DisplayWidth(fixed) - render.DisplayWidth(": ") - 1
 	if whoWidth < 8 {
 		whoWidth = 8
@@ -143,10 +167,38 @@ func openTranscriptPrefix(width int, item openMessage) string {
 	if whoWidth > 32 {
 		whoWidth = 32
 	}
-	return fixed + render.Truncate(item.Who, whoWidth) + ": "
+	return fixed + render.Truncate(render.HumanIdentity(item.Who), whoWidth) + ": "
 }
 
-func newOpenEnvelope(target store.Message, context []store.Message) openEnvelope {
+func openDateSpan(context []openMessage) string {
+	var first time.Time
+	var last time.Time
+	for _, item := range context {
+		t := parseFormattedTime(item.Time)
+		if t.IsZero() {
+			continue
+		}
+		if first.IsZero() {
+			first = t
+		}
+		last = t
+	}
+	if first.IsZero() {
+		return ""
+	}
+	if sameTranscriptDate(first, last) {
+		return first.Format("2 Jan 2006")
+	}
+	return first.Format("2 Jan 2006") + " to " + last.Format("2 Jan 2006")
+}
+
+func sameTranscriptDate(a, b time.Time) bool {
+	ay, am, ad := a.Date()
+	by, bm, bd := b.Date()
+	return ay == by && am == bm && ad == bd
+}
+
+func newOpenEnvelope(target store.Message, context []store.Message, participants []string) openEnvelope {
 	openContext := make([]openMessage, 0, len(context))
 	before := 0
 	after := 0
@@ -164,11 +216,12 @@ func newOpenEnvelope(target store.Message, context []store.Message) openEnvelope
 		openContext = append(openContext, newOpenMessage(message, false))
 	}
 	return openEnvelope{
-		Ref:     messageRef(target),
-		Chat:    messageWhere(target),
-		Message: newOpenMessage(target, true),
-		Context: openContext,
-		Window:  openWindowSummary{Before: before, After: after},
+		Ref:          messageRef(target),
+		Chat:         messageWhere(target),
+		Participants: append([]string(nil), participants...),
+		Message:      newOpenMessage(target, true),
+		Context:      openContext,
+		Window:       openWindowSummary{Before: before, After: after},
 	}
 }
 

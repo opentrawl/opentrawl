@@ -58,7 +58,7 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if search.TotalMatches != 1 || len(search.Results) != 1 || search.Results[0].Ref != "telecrawl:msg/1" {
+	if search.TotalMatches != 1 || len(search.Results) != 1 || search.Results[0].Ref != "telegram:msg/1" {
 		t.Fatalf("search result = %+v", search)
 	}
 	if search.Results[0].ShortRef == "" {
@@ -93,6 +93,37 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	}
 }
 
+func TestOpenGroupTranscriptShowsParticipantsAndContext(t *testing.T) {
+	ctx := context.Background()
+	archivePath := t.TempDir() + "/telecrawl.db"
+	writeSyntheticGroupArchive(t, ctx, archivePath)
+
+	rawStore, err := ckstore.OpenReadOnly(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawStore.Close() }()
+
+	var out bytes.Buffer
+	req := &crawlkit.Request{
+		Store:  rawStore,
+		Paths:  crawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
+		Format: ckoutput.Text,
+		Out:    &out,
+	}
+	if err := New().Open(ctx, req, "telegram:msg/1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Participants: Alice Example",
+		"Context: 1 messages around this one.",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Fatalf("open output missing %q:\n%s", want, out.String())
+		}
+	}
+}
+
 func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string) {
 	t.Helper()
 	st, err := store.Open(ctx, archivePath)
@@ -123,6 +154,43 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 		t.Fatal(err)
 	}
 	if err := st.RebuildShortRefs(ctx); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func writeSyntheticGroupArchive(t *testing.T, ctx context.Context, archivePath string) {
+	t.Helper()
+	st, err := store.Open(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 14, 0, 0, 0, time.UTC)
+	contacts := []store.Contact{
+		{JID: "100", PeerType: "user", Phone: "+15550100001", FullName: "Alice Example", Username: "alice_example", UpdatedAt: now},
+	}
+	chats := []store.Chat{{JID: "-10042", Kind: "group", Name: "Launch Group", LastMessageAt: now, MessageCount: 1}}
+	participants := []store.GroupParticipant{{
+		GroupJID:    "-10042",
+		UserJID:     "100",
+		ContactName: "Alice Example",
+		FirstName:   "Alice",
+		IsActive:    true,
+	}}
+	messages := []store.Message{{
+		SourcePK:    1,
+		ChatJID:     "-10042",
+		ChatName:    "Launch Group",
+		MessageID:   "1",
+		SenderJID:   "100",
+		SenderName:  "Alice",
+		Timestamp:   now,
+		Text:        "synthetic group launch note",
+		RawType:     0,
+		MessageType: "text",
+	}}
+	stats := store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: len(chats), Messages: len(messages), StartedAt: now, FinishedAt: now}
+	if err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, participants, messages); err != nil {
 		t.Fatal(err)
 	}
 }

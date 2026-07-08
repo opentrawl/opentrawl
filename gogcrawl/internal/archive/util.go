@@ -13,7 +13,10 @@ import (
 	ckstore "github.com/openclaw/crawlkit/store"
 )
 
-const RefPrefix = "gogcrawl:msg/"
+const (
+	RefPrefix       = "gmail:msg/"
+	LegacyRefPrefix = "gogcrawl:msg/"
+)
 
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {
 	var count int64
@@ -65,6 +68,9 @@ func formatArchiveTime(value time.Time) string {
 func parseRef(ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	id, ok := strings.CutPrefix(ref, RefPrefix)
+	if !ok {
+		id, ok = strings.CutPrefix(ref, LegacyRefPrefix)
+	}
 	if !ok || strings.TrimSpace(id) == "" {
 		return "", fmt.Errorf("ref must look like %s<gmail-message-id>", RefPrefix)
 	}
@@ -73,6 +79,9 @@ func parseRef(ref string) (string, error) {
 
 func displaySender(name, address string, ownerEmails map[string]struct{}) string {
 	if isOwnerEmail(address, ownerEmails) {
+		if email := normalizeEmail(address); email != "" {
+			return "me (" + email + ")"
+		}
 		return "me"
 	}
 	if strings.TrimSpace(name) != "" {

@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"io"
+
+	"github.com/openclaw/crawlkit/render"
 )
 
 // Federated search fans out to every source and merges the survivors.
@@ -17,6 +19,9 @@ import (
 type failedSource struct {
 	Source string `json:"source"`
 	Reason string `json:"reason"`
+
+	displayName  string
+	commandToken string
 }
 
 // searchExit is the deterministic exit contract: the same failure shape
@@ -54,22 +59,29 @@ func searchSuccesses(results []searchSourceResult) int {
 func (r *Runtime) reportSearchFailures(results []searchSourceResult) {
 	for _, result := range results {
 		if result.Skipped {
-			_, _ = fmt.Fprintf(r.stderr, "%s cannot filter by person yet\n", result.Source.ID)
+			_, _ = fmt.Fprintf(r.stderr, "%s cannot filter by person yet\n", sourceHumanName(result.Source))
 			continue
 		}
 		if result.Err == nil {
 			continue
 		}
-		r.reportSourceFailure(result.Source.ID, "search", r.failureDetail(result.Err))
+		r.reportSourceFailure(result.Source, "search", r.failureDetail(result.Err))
 	}
 }
 
 // reportSourceFailure is the one stderr shape for a source that
 // dropped out of a verb: what failed on one line, the remedy on its
 // own line below it.
-func (r *Runtime) reportSourceFailure(sourceID, verb, detail string) {
-	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", sourceID, verb, detail)
-	_, _ = fmt.Fprintf(r.stderr, "  Remedy: run: trawl doctor %s\n", sourceID)
+func (r *Runtime) reportSourceFailure(source Source, verb, detail string) {
+	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", sourceHumanName(source), verb, detail)
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: run trawl doctor %s\n", sourceCommandToken(source))
+}
+
+func (r *Runtime) reportFailedSourceFailure(source failedSource, verb, detail string) {
+	display := firstNonEmpty(source.displayName, source.Source)
+	command := firstNonEmpty(source.commandToken, source.Source)
+	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", display, verb, detail)
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: run trawl doctor %s\n", command)
 }
 
 // failureReason is the stable token JSON and logs share: a source that
@@ -100,8 +112,10 @@ func failedSearchSources(results []searchSourceResult) []failedSource {
 	for _, result := range results {
 		if result.Err != nil {
 			failures = append(failures, failedSource{
-				Source: result.Source.ID,
-				Reason: failureReason(result.Err),
+				Source:       result.Source.ID,
+				Reason:       failureReason(result.Err),
+				displayName:  sourceHumanName(result.Source),
+				commandToken: sourceCommandToken(result.Source),
 			})
 		}
 	}
@@ -131,6 +145,6 @@ func renderSearchPartialNote(w io.Writer, results []searchSourceResult) error {
 	} else if skipped > 0 {
 		reason = "skipped or unavailable"
 	}
-	_, err := fmt.Fprintf(w, "note: %d of %d sources %s — results are partial (see stderr)\n", blocked, len(results), reason)
+	_, err := fmt.Fprintf(w, "note: %s of %s sources %s - results are partial (see stderr)\n", render.FormatInteger(int64(blocked)), render.FormatInteger(int64(len(results))), reason)
 	return err
 }

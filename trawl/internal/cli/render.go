@@ -30,8 +30,7 @@ func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error
 	rows := make([][]string, 0, len(results))
 	for _, result := range results {
 		rows = append(rows, []string{
-			result.Source.ID,
-			result.Source.DisplayName,
+			sourceHumanName(result.Source),
 			result.Status.State,
 			freshnessText(result.Status, now),
 			statusHeadline(result.Status),
@@ -39,27 +38,26 @@ func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error
 	}
 	return render.WriteTable(w, []render.TableColumn{
 		{Header: "source"},
-		{Header: "surface"},
 		{Header: "state"},
-		{Header: "fresh"},
+		{Header: "recently synced"},
 		{Header: "headline"},
 	}, rows)
 }
 
 func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 	status := result.Status
-	if _, err := fmt.Fprintf(w, "source: %s\n", result.Source.ID); err != nil {
+	if _, err := fmt.Fprintf(w, "source: %s\n", sourceHumanName(result.Source)); err != nil {
 		return err
 	}
-	if surface := strings.TrimSpace(result.Source.DisplayName); surface != "" {
-		if _, err := fmt.Fprintf(w, "surface: %s\n", surface); err != nil {
+	if id := strings.TrimSpace(result.Source.ID); id != "" && id != sourceHumanName(result.Source) {
+		if _, err := fmt.Fprintf(w, "id: %s\n", id); err != nil {
 			return err
 		}
 	}
 	if _, err := fmt.Fprintf(w, "state: %s\n", status.State); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(w, "fresh: %s\n", freshnessText(status, now)); err != nil {
+	if _, err := fmt.Fprintf(w, "recently synced: %s\n", freshnessText(status, now)); err != nil {
 		return err
 	}
 	if status.Summary != "" {
@@ -88,19 +86,26 @@ func renderDoctor(w io.Writer, results []DoctorResult) error {
 		return err
 	}
 	type failure struct {
-		source string
-		check  DoctorCheck
+		source  string
+		command string
+		check   DoctorCheck
 	}
 	rows := make([][]string, 0, len(results))
 	var failures []failure
 	for _, result := range results {
+		sourceName := doctorSourceName(result)
+		commandToken := doctorSourceCommandToken(result)
 		var failedNames []string
 		names := make([]string, 0, len(result.Checks))
 		for _, check := range result.Checks {
 			names = append(names, humanLabel(check.ID))
 			if checkFailed(check) {
 				failedNames = append(failedNames, humanLabel(check.ID))
-				failures = append(failures, failure{source: result.Source, check: check})
+				failures = append(failures, failure{
+					source:  sourceName,
+					command: commandToken,
+					check:   check,
+				})
 			}
 		}
 		if len(failedNames) == 0 {
@@ -108,12 +113,14 @@ func renderDoctor(w io.Writer, results []DoctorResult) error {
 			if len(result.Checks) == 1 {
 				plural = "check"
 			}
-			rows = append(rows, []string{result.Source, "ok", fmt.Sprintf("%d %s: %s", len(result.Checks), plural, strings.Join(names, ", "))})
+			rows = append(rows, []string{sourceName, "ok", fmt.Sprintf("%s %s: %s", render.FormatInteger(int64(len(result.Checks))), plural, strings.Join(names, ", "))})
 			continue
 		}
-		summary := fmt.Sprintf("%s failed · %d of %d ok",
-			strings.Join(failedNames, ", "), len(result.Checks)-len(failedNames), len(result.Checks))
-		rows = append(rows, []string{result.Source, "FAIL", summary})
+		summary := fmt.Sprintf("%s failed · %s of %s ok",
+			strings.Join(failedNames, ", "),
+			render.FormatInteger(int64(len(result.Checks)-len(failedNames))),
+			render.FormatInteger(int64(len(result.Checks))))
+		rows = append(rows, []string{sourceName, "FAIL", summary})
 	}
 	if err := render.WriteTable(w, []render.TableColumn{
 		{Header: "source"},
@@ -130,9 +137,27 @@ func renderDoctor(w io.Writer, results []DoctorResult) error {
 			if _, err := fmt.Fprintf(w, "  Remedy: %s\n", remedy); err != nil {
 				return err
 			}
+		} else if failed.command != "" {
+			if _, err := fmt.Fprintf(w, "  Remedy: run trawl doctor %s\n", failed.command); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+func doctorSourceName(result DoctorResult) string {
+	if name := sourceHumanName(result.sourceInfo); name != "" {
+		return name
+	}
+	return result.Source
+}
+
+func doctorSourceCommandToken(result DoctorResult) string {
+	if token := sourceCommandToken(result.sourceInfo); token != "" {
+		return token
+	}
+	return result.Source
 }
 
 func renderDatabases(w io.Writer, status StatusEnvelope) error {
@@ -227,6 +252,9 @@ func humanTime(value string) string {
 const headlineCountLimit = 3
 
 func statusHeadline(status StatusEnvelope) string {
+	if statusFailed(status) {
+		return status.Summary
+	}
 	if len(status.Counts) == 0 {
 		return status.Summary
 	}

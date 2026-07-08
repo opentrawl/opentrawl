@@ -649,9 +649,9 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 		t.Fatalf("search text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	for _, want := range []string{
-		`Search "hello": showing 1 of 3.`,
-		"Open: trawl testcrawl open REF",
-		`More: trawl testcrawl search "hello" --limit 2`,
+		`Search "hello": showing 1 of 3, newest first.`,
+		"Open: trawl test open REF",
+		`More: trawl test search "hello" --limit 2`,
 		"Narrow results with --who, --after, or --before.",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -714,7 +714,7 @@ func TestRunMetadataAdvertisesSpineVerbFlags(t *testing.T) {
 		t.Fatalf("manifest json = %s err=%v", stdout, err)
 	}
 	syncCommand := manifest.Commands["sync"]
-	if syncCommand.Title != "Sync" || !syncCommand.Mutates || len(syncCommand.Flags) != 2 {
+	if syncCommand.Title != "Sync the archive" || !syncCommand.Mutates || len(syncCommand.Flags) != 2 {
 		t.Fatalf("sync command = %#v", syncCommand)
 	}
 	flags := map[string]control.Flag{}
@@ -1184,7 +1184,7 @@ func TestRunSearchWhoTextHeadingShowsResolvedPerson(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --who code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, `Search "needle" with Ada Example: showing 1 of 1.`) {
+	if !strings.Contains(stdout, `Search "needle" with Ada Example: showing 1 of 1, newest first.`) {
 		t.Fatalf("search heading missing resolved person:\n%s", stdout)
 	}
 }
@@ -1454,7 +1454,7 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 		want string
 	}{
 		{name: "metadata", args: []string{"metadata"}, want: "Metadata\n"},
-		{name: "status", args: []string{"status"}, want: "Status: ok\nready\n"},
+		{name: "status", args: []string{"status"}, want: "Status: ok\nRecently synced.\n"},
 		{name: "doctor", args: []string{"doctor"}, want: "Doctor checks:\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1473,7 +1473,7 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 
 	createArchive(t, stateRoot)
 	code, stdout, _ := runForTestAt(stateRoot, []string{"search", "hello"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, `Search "hello": showing 1 of 1.`) || strings.Contains(stdout, "&{") {
+	if code != 0 || !strings.Contains(stdout, `Search "hello": showing 1 of 1, newest first.`) || strings.Contains(stdout, "&{") {
 		t.Fatalf("search text code=%d stdout=%s", code, stdout)
 	}
 

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,9 +26,9 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	createDesktopFixture(t, sourceRoot)
 	stateRoot := t.TempDir()
 	paths := crawlkit.Paths{
-		Archive: filepath.Join(stateRoot, "wacrawl", "wacrawl.db"),
-		Config:  filepath.Join(stateRoot, "wacrawl", "config.toml"),
-		Logs:    filepath.Join(stateRoot, "wacrawl", "logs"),
+		Archive: filepath.Join(stateRoot, "whatsapp", "whatsapp.db"),
+		Config:  filepath.Join(stateRoot, "whatsapp", "config.toml"),
+		Logs:    filepath.Join(stateRoot, "whatsapp", "logs"),
 	}
 	crawler := New()
 	crawler.cfg.Source = sourceRoot
@@ -74,7 +75,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 		t.Fatalf("search = %#v, want one result", search)
 	}
 	hit := search.Results[0]
-	if hit.Ref != "wacrawl:msg/group-image" || hit.ShortRef == "" || hit.Who != "Alice Example" || hit.Where != "Launch Group" {
+	if hit.Ref != "whatsapp:msg/group-image" || hit.ShortRef == "" || hit.Who != "Alice Example" || hit.Where != "Launch Group" {
 		t.Fatalf("search hit = %#v", hit)
 	}
 
@@ -109,8 +110,27 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	if err := json.Unmarshal(openOut.Bytes(), &opened); err != nil {
 		t.Fatalf("open JSON: %v\n%s", err, openOut.String())
 	}
-	if opened.Ref != "wacrawl:msg/group-image" || opened.Message.Text != "launch now" || opened.Message.Media == nil {
+	if opened.Ref != "whatsapp:msg/group-image" || opened.Message.Text != "launch now" || opened.Message.Media == nil {
 		t.Fatalf("opened = %#v", opened)
+	}
+	if len(opened.Participants) != 1 || opened.Participants[0] != "Alice Example" {
+		t.Fatalf("participants = %#v, want Alice Example", opened.Participants)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	openOut.Reset()
+	err = crawler.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: output.Text, Out: &openOut}, hit.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Participants: Alice Example",
+		"Context: 1 messages around this one.",
+	} {
+		if !strings.Contains(openOut.String(), want) {
+			t.Fatalf("open text missing %q:\n%s", want, openOut.String())
+		}
 	}
 }
 

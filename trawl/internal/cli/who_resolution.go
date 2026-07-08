@@ -80,8 +80,8 @@ func searchResolverSources(installed, searchSources []Source) []Source {
 			add(source)
 		}
 	}
-	if clawdex, ok := findSource(installed, "clawdex"); ok && clawdex.MetadataErr == nil {
-		add(clawdex)
+	if contacts, ok := findSource(installed, "contacts"); ok && contacts.MetadataErr == nil {
+		add(contacts)
 	}
 	return out
 }
@@ -91,7 +91,7 @@ func sourceKey(source Source) string {
 }
 
 func isClawdex(source Source) bool {
-	return strings.EqualFold(source.ID, "clawdex") || strings.EqualFold(source.Binary, "clawdex")
+	return strings.EqualFold(source.ID, "contacts") || strings.EqualFold(source.Binary, "contacts")
 }
 
 func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWhoResolution {
@@ -103,8 +103,10 @@ func collectFederatedWho(r *Runtime, sources []Source, query string) federatedWh
 	for _, result := range results {
 		if result.Err != nil {
 			failed = append(failed, failedSource{
-				Source: result.Source.ID,
-				Reason: failureReason(result.Err),
+				Source:       result.Source.ID,
+				Reason:       failureReason(result.Err),
+				displayName:  sourceHumanName(result.Source),
+				commandToken: sourceCommandToken(result.Source),
 			})
 			continue
 		}
@@ -201,7 +203,7 @@ func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 		return result
 	}
 	var candidates []whomatch.Candidate
-	err := r.withSourceRequest(source, "who", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "who", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
 		var whoErr error
 		candidates, whoErr = matcher.Who(ctx, req, query)
 		return whoErr
@@ -419,7 +421,7 @@ func skippedWhoSources(sources []Source) []string {
 
 func (r *Runtime) reportWhoFailures(resolution federatedWhoResolution) {
 	for _, failure := range resolution.FailedSources {
-		r.reportSourceFailure(failure.Source, "who", r.reasonDetail(failure.Reason))
+		r.reportFailedSourceFailure(failure, "who", r.reasonDetail(failure.Reason))
 	}
 }
 

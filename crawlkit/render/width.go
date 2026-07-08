@@ -127,8 +127,9 @@ func WrapWithIndent(prefix, value string, width int, continuationIndent string) 
 }
 
 func WriteWrappedField(w io.Writer, label, value string) error {
-	prefix := strings.TrimSpace(label) + ": "
-	for _, line := range WrapWithIndent(prefix, value, OutputWidth(w), "") {
+	displayLabel := DisplayLabel(label)
+	prefix := displayLabel + ": "
+	for _, line := range WrapWithIndent(prefix, HumanCell(displayLabel, value), OutputWidth(w), "") {
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
@@ -138,11 +139,11 @@ func WriteWrappedField(w io.Writer, label, value string) error {
 
 func WriteSearchSummary(w io.Writer, query string, returned int, total int64) error {
 	if strings.TrimSpace(query) == "" {
-		_, err := fmt.Fprintf(w, "Search filters: showing %d of %d.\n", returned, total)
+		_, err := fmt.Fprintf(w, "Search filters: showing %s of %s.\n", FormatInteger(int64(returned)), FormatInteger(total))
 		return err
 	}
 	prefix := "Search \""
-	suffix := fmt.Sprintf("\": showing %d of %d.", returned, total)
+	suffix := fmt.Sprintf("\": showing %s of %s.", FormatInteger(int64(returned)), FormatInteger(total))
 	queryWidth := OutputWidth(w) - DisplayWidth(prefix) - DisplayWidth(suffix)
 	if queryWidth < 1 {
 		queryWidth = 1

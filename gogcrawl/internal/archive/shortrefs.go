@@ -23,7 +23,7 @@ func (s *Store) EnsureShortRefs(ctx context.Context) (bool, int64, error) {
 	if err != nil {
 		return false, 0, err
 	}
-	rec, ok, err := state.New(s.store.DB()).Get(ctx, sourceName, derivedEntityType, shortRefCountEntityID)
+	rec, ok, err := getStateAnySource(ctx, state.New(s.store.DB()), derivedEntityType, shortRefCountEntityID)
 	if err != nil {
 		return false, 0, err
 	}
@@ -123,7 +123,42 @@ func (s *Store) ShortRefs(ctx context.Context, fullRefs []string) (map[string]st
 			out[ref] = alias
 		}
 	}
+	if len(out) != len(fullRefs) {
+		legacy := legacyRefs(fullRefs)
+		for start := 0; start < len(legacy); start += chunkSize {
+			end := start + chunkSize
+			if end > len(legacy) {
+				end = len(legacy)
+			}
+			aliases, err := index.Aliases(ctx, legacy[start:end])
+			if err != nil {
+				return nil, err
+			}
+			for ref, alias := range aliases {
+				if canonical := canonicalRef(ref); canonical != "" && out[canonical] == "" {
+					out[canonical] = alias
+				}
+			}
+		}
+	}
 	return out, nil
+}
+
+func legacyRefs(fullRefs []string) []string {
+	out := make([]string, 0, len(fullRefs))
+	for _, ref := range fullRefs {
+		if strings.HasPrefix(ref, RefPrefix) {
+			out = append(out, LegacyRefPrefix+strings.TrimPrefix(ref, RefPrefix))
+		}
+	}
+	return out
+}
+
+func canonicalRef(ref string) string {
+	if !strings.HasPrefix(ref, LegacyRefPrefix) {
+		return ""
+	}
+	return RefPrefix + strings.TrimPrefix(ref, LegacyRefPrefix)
 }
 
 func (s *Store) messageRefs(ctx context.Context) ([]string, error) {

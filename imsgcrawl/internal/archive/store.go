@@ -24,7 +24,8 @@ import (
 // markers are keyed under the "sync" entity type; derived-state bookkeeping
 // under "derived".
 const (
-	syncSource            = "imsgcrawl"
+	syncSource            = "imessage"
+	legacySyncSource      = "imsgcrawl"
 	syncEntityType        = "sync"
 	stateLastSyncAt       = "last_sync_at"
 	stateSourcePath       = "source_path"
@@ -50,9 +51,9 @@ type SyncOptions struct {
 }
 
 // DefaultPaths is the one archive path layout, from crawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/imsgcrawl (TRAWL-99).
+// dir is the fleet-wide state root, ~/.opentrawl/imessage (TRAWL-99).
 func DefaultPaths() config.Paths {
-	paths, _ := config.App{Name: "imsgcrawl", BaseDir: "~/.opentrawl/imsgcrawl"}.DefaultPaths()
+	paths, _ := config.App{Name: "imessage", BaseDir: "~/.opentrawl/imessage"}.DefaultPaths()
 	return paths
 }
 
@@ -92,7 +93,7 @@ var ErrArchiveSync = errors.New("archive sync failed")
 // ErrSchemaOutdated means the archive predates a schema addition this
 // binary's read queries need. Reads never migrate source-derived content, so
 // the remedy is one sync, which upgrades the schema.
-var ErrSchemaOutdated = errors.New("archive schema predates this version; run: trawl imsgcrawl sync")
+var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl imessage sync")
 
 type archiveSyncError struct {
 	err error

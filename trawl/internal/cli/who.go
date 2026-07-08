@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -243,7 +242,7 @@ func renderWhoTable(w io.Writer, candidates []WhoCandidate, surfaces map[string]
 			humanLabel(candidate.MatchQuality),
 			whoSources(candidate.Sources, surfaces),
 			whoLastSeen(candidate),
-			strconv.FormatInt(int64(candidate.Messages), 10),
+			render.FormatInteger(int64(candidate.Messages)),
 			whoIdentifiers(candidate.Identifiers),
 		})
 	}
@@ -258,7 +257,7 @@ func renderWhoTable(w io.Writer, candidates []WhoCandidate, surfaces map[string]
 		return err
 	}
 	if more := len(candidates) - len(displayed); more > 0 {
-		_, err := fmt.Fprintf(w, "…and %d more; narrow the name\n", more)
+		_, err := fmt.Fprintf(w, "…and %s more; narrow the name\n", render.FormatInteger(int64(more)))
 		return err
 	}
 	return nil

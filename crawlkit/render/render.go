@@ -151,7 +151,11 @@ func WriteStatus(w io.Writer, status Status) error {
 	if state == "" {
 		state = StatusUnknown
 	}
-	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", state, strings.TrimSpace(status.Summary)); err != nil {
+	summary := strings.TrimSpace(status.Summary)
+	if state == StatusOK {
+		summary = "Recently synced."
+	}
+	if _, err := fmt.Fprintf(w, "Status: %s\n%s\n", state, summary); err != nil {
 		return err
 	}
 	for _, section := range status.Sections {
@@ -259,11 +263,11 @@ func writeSection(w io.Writer, section Section) error {
 		return err
 	}
 	for _, field := range section.Fields {
-		label := strings.TrimSpace(field.Label)
+		label := DisplayLabel(field.Label)
 		if label == "" {
 			continue
 		}
-		if _, err := fmt.Fprintf(w, "  %s: %s\n", label, emptyDash(field.Value)); err != nil {
+		if _, err := fmt.Fprintf(w, "  %s: %s\n", label, emptyDash(HumanCell(label, field.Value))); err != nil {
 			return err
 		}
 	}

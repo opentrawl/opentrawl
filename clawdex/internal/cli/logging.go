@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	clawdexLogFileName = "clawdex.log"
+	clawdexLogFileName = "contacts.log"
 	logTailLimit       = 500
 )
 
@@ -196,7 +196,7 @@ func logPathParts(logDir string) (string, string) {
 	stateRoot := filepath.Dir(baseDir)
 	crawlerID := filepath.Base(baseDir)
 	if strings.TrimSpace(crawlerID) == "" || crawlerID == "." || crawlerID == string(filepath.Separator) {
-		return baseDir, "clawdex"
+		return baseDir, "contacts"
 	}
 	return stateRoot, crawlerID
 }
@@ -384,5 +384,5 @@ func elapsedMS(value time.Duration) string {
 }
 
 func diagnosticsLine() string {
-	return "Diagnostics: run with -v, or read ~/.opentrawl/clawdex/logs/clawdex.log"
+	return "Diagnostics: run with -v, or read ~/.opentrawl/contacts/logs/contacts.log"
 }

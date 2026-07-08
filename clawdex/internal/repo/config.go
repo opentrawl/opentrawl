@@ -10,8 +10,8 @@ import (
 )
 
 const (
-	DefaultConfigEnv = "CLAWDEX_CONFIG"
-	RepoEnv          = "CLAWDEX_REPO"
+	DefaultConfigEnv = "CONTACTS_CONFIG"
+	RepoEnv          = "CONTACTS_REPO"
 	DefaultRemote    = ""
 )
 
@@ -45,13 +45,13 @@ type Apple struct {
 	Enabled bool `toml:"enabled" json:"enabled"`
 }
 
-var appConfig = crawlconfig.App{Name: "clawdex", ConfigEnv: DefaultConfigEnv, BaseDir: "~/.opentrawl/clawdex"}
+var appConfig = crawlconfig.App{Name: "contacts", ConfigEnv: DefaultConfigEnv, BaseDir: "~/.opentrawl/contacts"}
 
 func DefaultConfig() Config {
 	paths, err := appConfig.DefaultPaths()
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		paths.ShareDir = filepath.Join(home, ".opentrawl", "clawdex", "contacts")
+		paths.ShareDir = filepath.Join(home, ".opentrawl", "contacts", "share")
 	}
 	return Config{
 		Version:  1,
@@ -73,7 +73,7 @@ func ResolveConfigPath(flagPath string) string {
 	path, err := appConfig.ResolveConfigPath(flagPath)
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".opentrawl", "clawdex", "config.toml")
+		return filepath.Join(home, ".opentrawl", "contacts", "config.toml")
 	}
 	return path
 }
@@ -82,7 +82,7 @@ func DefaultLogDir() string {
 	paths, err := appConfig.DefaultPaths()
 	if err != nil {
 		home, _ := os.UserHomeDir()
-		return filepath.Join(home, ".opentrawl", "clawdex", "logs")
+		return filepath.Join(home, ".opentrawl", "contacts", "logs")
 	}
 	return paths.LogDir
 }
@@ -137,6 +137,6 @@ func ResolveRepoPath(flagRepo string, cfg Config) (string, error) {
 	case strings.TrimSpace(cfg.RepoPath) != "":
 		return crawlconfig.ExpandHome(cfg.RepoPath), nil
 	default:
-		return "", errors.New("contacts repo not configured; run clawdex init DIR or pass --repo DIR")
+		return "", errors.New("contacts repo not configured; run trawl contacts init DIR or pass --repo DIR")
 	}
 }

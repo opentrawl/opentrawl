@@ -10,7 +10,10 @@ import (
 	"github.com/openclaw/crawlkit/shortref"
 )
 
-const MessageRefPrefix = "telecrawl:msg/"
+const (
+	MessageRefPrefix       = "telegram:msg/"
+	LegacyMessageRefPrefix = "telecrawl:msg/"
+)
 
 var (
 	ErrUnknownShortRef   = errors.New("unknown short ref")
@@ -122,6 +125,20 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 		return nil, err
 	}
 	if len(aliases) != len(refs) {
+		legacyAliases, err := s.aliasesFor(ctx, legacyMessageRefs(refs))
+		if err != nil {
+			return nil, err
+		}
+		for _, ref := range refs {
+			if aliases[ref] != "" {
+				continue
+			}
+			if alias := legacyAliases[legacyMessageFullRef(ref)]; alias != "" {
+				aliases[ref] = alias
+			}
+		}
+	}
+	if len(aliases) != len(refs) {
 		if err := s.RebuildShortRefs(ctx); err != nil {
 			return nil, err
 		}
@@ -131,6 +148,20 @@ func (s *Store) ShortRefsFor(ctx context.Context, fullRefs []string) (map[string
 		}
 	}
 	return aliases, nil
+}
+
+func legacyMessageFullRef(ref string) string {
+	return LegacyMessageRefPrefix + strings.TrimPrefix(ref, MessageRefPrefix)
+}
+
+func legacyMessageRefs(refs []string) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.HasPrefix(ref, MessageRefPrefix) {
+			out = append(out, legacyMessageFullRef(ref))
+		}
+	}
+	return out
 }
 
 // aliasesFor resolves short-ref aliases in chunks. crawlkit's Aliases issues

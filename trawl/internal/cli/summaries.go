@@ -70,7 +70,7 @@ func (c *SummariesCmd) readSummary(r *Runtime, docs []summaryDocument) error {
 	case 0:
 		return r.writeError("unknown_summary",
 			fmt.Sprintf("Summary %q was not found.", name),
-			"run: trawl summaries")
+			"run trawl summaries")
 	case 1:
 		data, err := os.ReadFile(matches[0].absolutePath)
 		if err != nil {
@@ -91,7 +91,7 @@ func (c *SummariesCmd) readSummary(r *Runtime, docs []summaryDocument) error {
 	default:
 		return r.writeError("ambiguous_summary",
 			fmt.Sprintf("Summary %q is ambiguous: %s.", name, strings.Join(summaryPaths(matches), ", ")),
-			"run: trawl summaries")
+			"run trawl summaries")
 	}
 }
 
@@ -192,5 +192,5 @@ func stripFrontmatter(content string) string {
 func (r *Runtime) writeNoSummaries(root string) error {
 	return r.writeError("no_summaries",
 		fmt.Sprintf("No summaries exist yet in %s.", tildePath(root)),
-		"generate derived summaries, then run: trawl summaries")
+		"generate derived summaries, then run trawl summaries")
 }

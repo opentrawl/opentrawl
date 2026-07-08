@@ -116,7 +116,7 @@ func TestSearchWhoFiltersParticipantsAndFoldsOwner(t *testing.T) {
 	}
 	foundMeSender := false
 	for _, hit := range ownerSearch.Results {
-		if hit.Ref == RefPrefix+"m2" && hit.Who == "me" {
+		if hit.Ref == RefPrefix+"m2" && hit.Who == "me (alias@example.com)" {
 			foundMeSender = true
 		}
 	}

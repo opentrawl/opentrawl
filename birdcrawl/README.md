@@ -27,7 +27,7 @@ From an extracted or zipped X archive dump:
 - `like.js` for liked tweets
 
 From the X API (with your own OAuth credentials in
-`~/.opentrawl/birdcrawl/credentials.toml`, permissions 0600): your own
+`~/.opentrawl/twitter/credentials.toml`, permissions 0600): your own
 timelines and bookmarks. Replies to you come from the mentions
 timeline, which X caps at roughly the 800 most recent — older
 incoming replies are not obtainable from any X source.
@@ -36,10 +36,10 @@ Run:
 
 ```sh
 scripts/dev-bin
-trawl birdcrawl import archive /path/to/x-archive
+trawl twitter import archive /path/to/x-archive
 ```
 
-The default database is `~/.opentrawl/birdcrawl/birdcrawl.db`.
+The default database is `~/.opentrawl/twitter/twitter.db`.
 
 ## What it stores
 
@@ -54,7 +54,7 @@ birdcrawl stores a local SQLite archive with:
 Refs use this shape:
 
 ```text
-birdcrawl:tweet/1800000000000000001
+twitter:tweet/1800000000000000001
 ```
 
 ## What it never sends
@@ -69,28 +69,28 @@ else. Tokens never appear in output, errors or logs.
 Read your archive:
 
 ```sh
-trawl birdcrawl tweets
-trawl birdcrawl bookmarks
-trawl birdcrawl likes
-trawl birdcrawl mentions
-trawl birdcrawl search "solar kettle" --limit 20
-trawl birdcrawl open t7k3f
-trawl birdcrawl stats --window 30d --by likes --limit 10
+trawl twitter tweets
+trawl twitter bookmarks
+trawl twitter likes
+trawl twitter mentions
+trawl twitter search "solar kettle" --limit 20
+trawl twitter open t7k3f
+trawl twitter stats --window 30d --by likes --limit 10
 ```
 
 Keep it fresh:
 
 ```sh
-trawl birdcrawl sync
-trawl birdcrawl import archive /path/to/x-archive
+trawl twitter sync
+trawl twitter import archive /path/to/x-archive
 ```
 
 Health:
 
 ```sh
-trawl birdcrawl status
-trawl birdcrawl doctor
-trawl birdcrawl metadata --json
+trawl twitter status
+trawl twitter doctor
+trawl twitter metadata --json
 ```
 
 Human text is the default. Add `--json` for the contract envelope.
@@ -98,7 +98,7 @@ Human text is the default. Add `--json` for the contract envelope.
 Browse and search return 20 results by default; `--limit N` is
 honored exactly and `--all` returns everything. `--after`/`--before`
 take RFC3339 or YYYY-MM-DD. `open` accepts a short ref from human
-output or a full `birdcrawl:tweet/ID` ref, and returns one tweet, up
+output or a full `twitter:tweet/ID` ref, and returns one tweet, up
 to 3 ancestors and up to 20 replies.
 
 ## Current status

@@ -163,7 +163,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error 
 	}
 	chat, err := st.Chat(ctx, chatID)
 	if errors.Is(err, archive.ErrChatNotFound) {
-		return commandErr(1, "not_found", fmt.Errorf("chat %s was not found", chatID), "run trawl imsgcrawl chats and use a current chat id")
+		return commandErr(1, "not_found", fmt.Errorf("chat %s was not found", chatID), "run trawl imessage chats and use a current chat id")
 	}
 	if err != nil {
 		return err

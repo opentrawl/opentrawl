@@ -12,18 +12,18 @@ import (
 // sentence. The source list now comes from the explicit crawlkit
 // registrations, so every registered crawler shows up.
 func TestSourcesLineListsEveryInstalledCrawler(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
-	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"birdcrawl","display_name":"X"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
+	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X"}`}
 	binDir := writeFakeCrawlers(t, imsg, bird)
 	t.Setenv("PATH", binDir)
 
 	line := sourcesLine(context.Background())
 
-	if !strings.Contains(line, "imsgcrawl/imessage") {
-		t.Errorf("sourcesLine() = %q, want imsgcrawl/imessage", line)
+	if !strings.Contains(line, "iMessage") {
+		t.Errorf("sourcesLine() = %q, want iMessage", line)
 	}
-	if !strings.Contains(line, "birdcrawl/x") {
-		t.Errorf("sourcesLine() = %q, want birdcrawl/x", line)
+	if !strings.Contains(line, "X") {
+		t.Errorf("sourcesLine() = %q, want X", line)
 	}
 }
 
@@ -40,9 +40,9 @@ func TestSourcesLineDegradesHonestlyWithNoCrawlersInstalled(t *testing.T) {
 }
 
 func TestBareTrawlHelpListsAllInstalledSources(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
-	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"birdcrawl","display_name":"X"}`}
-	photo := fakeCrawler{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photoscrawl","display_name":"Photos"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
+	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X"}`}
+	photo := fakeCrawler{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos"}`}
 	binDir := writeFakeCrawlers(t, imsg, bird, photo)
 	t.Setenv("PATH", binDir)
 
@@ -51,7 +51,7 @@ func TestBareTrawlHelpListsAllInstalledSources(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	for _, want := range []string{"imsgcrawl/imessage", "birdcrawl/x", "photoscrawl/photos"} {
+	for _, want := range []string{"iMessage", "X", "Photos"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("bare trawl help missing %q:\n%s", want, stdout)
 		}
@@ -61,7 +61,7 @@ func TestBareTrawlHelpListsAllInstalledSources(t *testing.T) {
 // A crawler that is not registered must simply be absent from the listing:
 // no placeholder, no error line naming it.
 func TestBareTrawlHelpOmitsUnregisteredCrawler(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 
@@ -73,7 +73,7 @@ func TestBareTrawlHelpOmitsUnregisteredCrawler(t *testing.T) {
 	if strings.Contains(stdout, "birdcrawl") {
 		t.Errorf("bare trawl help named an uninstalled crawler:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "imsgcrawl/imessage") {
+	if !strings.Contains(stdout, "iMessage") {
 		t.Errorf("bare trawl help missing the one installed crawler:\n%s", stdout)
 	}
 }
@@ -85,7 +85,7 @@ func TestBareTrawlHelpOmitsUnregisteredCrawler(t *testing.T) {
 // alongside -h/--help, in either order, must not defeat the match either
 // — that was a second real bug caught on re-review.
 func TestShortHelpFlagListsSources(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 
@@ -101,7 +101,7 @@ func TestShortHelpFlagListsSources(t *testing.T) {
 			if exitCode != 0 {
 				t.Fatalf("exit code = %d, want 0", exitCode)
 			}
-			if !strings.Contains(stdout, "imsgcrawl/imessage") {
+			if !strings.Contains(stdout, "iMessage") {
 				t.Errorf("trawl %s missing the sources line:\n%s", strings.Join(args, " "), stdout)
 			}
 		})
@@ -111,7 +111,7 @@ func TestShortHelpFlagListsSources(t *testing.T) {
 // Subcommand help must not pay the discovery cost or print the source
 // list — only root help does.
 func TestSubcommandHelpDoesNotListSources(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imsgcrawl","display_name":"iMessage"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 	logPath := filepath.Join(t.TempDir(), "calls.log")

@@ -9,7 +9,7 @@ import (
 
 const (
 	fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
-	archiveRemedy        = "run trawl photoscrawl sync"
+	archiveRemedy        = "run trawl photos sync"
 )
 
 type DoctorOptions struct {
@@ -39,21 +39,21 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 			return DoctorCheck{
 				ID:      "archive",
 				State:   "missing",
-				Message: "photoscrawl.db has not been initialized",
+				Message: "photos.db has not been initialised",
 				Remedy:  archiveRemedy,
 			}
 		}
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "cannot access photoscrawl.db archive",
+			Message: "cannot access photos.db archive",
 			Remedy:  archiveRemedy,
 		}
 	} else if info.IsDir() {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "photoscrawl.db archive path is a directory",
+			Message: "photos.db archive path is a directory",
 			Remedy:  archiveRemedy,
 		}
 	}
@@ -63,7 +63,7 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "cannot open photoscrawl.db archive",
+			Message: "cannot open photos.db archive",
 			Remedy:  archiveRemedy,
 		}
 	}
@@ -74,7 +74,7 @@ func archiveCheck(ctx context.Context, paths Paths) DoctorCheck {
 		return DoctorCheck{
 			ID:      "archive",
 			State:   "fail",
-			Message: "photoscrawl.db archive is not intact",
+			Message: "photos.db archive is not intact",
 			Remedy:  archiveRemedy,
 		}
 	}

@@ -24,13 +24,15 @@ const (
 	schemaVersion     = 1
 	maxJSONUnixSecond = 253402300799 // 9999-12-31T23:59:59Z, the largest time.Time JSON can marshal.
 
-	MessageRefPrefix = "wacrawl:msg/"
-	ownerWhoKey      = "owner:me"
+	MessageRefPrefix       = "whatsapp:msg/"
+	LegacyMessageRefPrefix = "wacrawl:msg/"
+	ownerWhoKey            = "owner:me"
 
 	// Sync-state lives in the one crawlkit state.Store (TRAWL-82). Scalar sync
 	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
 	// derived from the archive, sits under "derived".
-	syncSource        = "wacrawl"
+	syncSource        = "whatsapp"
+	legacySyncSource  = "wacrawl"
 	syncEntityType    = "sync"
 	derivedEntityType = "derived"
 	stateLastImportAt = "last_import_at"

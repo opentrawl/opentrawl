@@ -182,6 +182,7 @@ func renderCellLines(value string, column renderColumn, header bool) []string {
 	if header {
 		return []string{Truncate(compactTableCell(value), column.Width)}
 	}
+	value = HumanCell(column.Header, value)
 	if column.Wrap {
 		value = strings.TrimRight(normalizeTableCell(value), "\n")
 		var lines []string

@@ -45,7 +45,7 @@ What would change this recommendation:
 `open` human mode should render one card with 2 visibly separate blocks:
 
 ```text
-photoscrawl:asset/syn-2024-0001
+photos:asset/syn-2024-0001
 
 Captured: 14 May 2024, 7.42pm local (America/Los_Angeles)
 Media: photo, 4032 x 3024
@@ -161,7 +161,7 @@ but it must not reintroduce raw provenance as the main shape.
 ```json
 {
   "schema_version": 3,
-  "ref": "photoscrawl:asset/syn-2024-0001",
+  "ref": "photos:asset/syn-2024-0001",
   "mechanical": {
     "captured": {
       "local": "2024-05-14T19:42:18-07:00",
@@ -245,7 +245,7 @@ Evidence is gone from human `open`.
 Do not print:
 
 ```text
-Evidence: 12 records - photoscrawl evidence photoscrawl:asset/...
+Evidence: 12 records - photoscrawl evidence photos:asset/...
 ```
 
 That line is not useful. A human cannot act on "12 records" without opening a

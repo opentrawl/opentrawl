@@ -76,7 +76,21 @@ func (s *Store) ShortRefAliases(ctx context.Context, fullRefs []string) (map[str
 	if err := s.EnsureShortRefs(ctx); err != nil {
 		return nil, err
 	}
-	return shortref.NewSQLiteIndex(s.db).Aliases(ctx, fullRefs)
+	index := shortref.NewSQLiteIndex(s.db)
+	aliases, err := index.Aliases(ctx, fullRefs)
+	if err != nil || len(aliases) == len(fullRefs) {
+		return aliases, err
+	}
+	legacyAliases, err := index.Aliases(ctx, legacyTweetFullRefs(fullRefs))
+	if err != nil {
+		return nil, err
+	}
+	for legacy, alias := range legacyAliases {
+		if canonical := canonicalTweetRef(legacy); canonical != "" && aliases[canonical] == "" {
+			aliases[canonical] = alias
+		}
+	}
+	return aliases, nil
 }
 
 func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
@@ -92,13 +106,30 @@ func (s *Store) shortRefsCurrent(ctx context.Context) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	if stored != shortRefsFingerprint(refs) {
+	if stored != shortRefsFingerprint(refs) && stored != shortRefsFingerprint(legacyTweetFullRefs(refs)) {
 		return false, nil
 	}
 	if _, err := s.shortRefFullRefs(ctx); err != nil {
 		return false, err
 	}
 	return true, nil
+}
+
+func legacyTweetFullRefs(refs []string) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.HasPrefix(ref, TweetRefPrefix) {
+			out = append(out, LegacyTweetRefPrefix+strings.TrimPrefix(ref, TweetRefPrefix))
+		}
+	}
+	return out
+}
+
+func canonicalTweetRef(ref string) string {
+	if !strings.HasPrefix(ref, LegacyTweetRefPrefix) {
+		return ""
+	}
+	return TweetRefPrefix + strings.TrimPrefix(ref, LegacyTweetRefPrefix)
 }
 
 func (s *Store) logShortRefRefresh() error {

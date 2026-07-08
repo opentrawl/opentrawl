@@ -68,7 +68,10 @@ type Info struct {
 	// the wire contract.
 	ShortRefs bool
 	Privacy   control.Privacy
-	Config    any
+	// DefaultPaths overrides the runner's default per-crawler paths when a
+	// crawler owns a non-SQLite archive or an existing state layout.
+	DefaultPaths Paths
+	Config       any
 }
 
 type Paths struct {

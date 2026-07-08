@@ -11,7 +11,7 @@ import (
 	crawlconfig "github.com/openclaw/crawlkit/config"
 )
 
-const libraryPathRemedy = "set library_path in ~/.opentrawl/photoscrawl/config.toml"
+const libraryPathRemedy = "set library_path in ~/.opentrawl/photos/config.toml"
 
 func sourceStoreChecks(libraryPath string) []DoctorCheck {
 	path, err := photosLibraryPath(libraryPath)

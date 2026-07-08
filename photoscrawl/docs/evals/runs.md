@@ -25,7 +25,7 @@ Not allowed:
 - OCR/barcode/ticket/passport/receipt text;
 - copied model responses from real user images;
 - private output paths beyond the generic
-  `~/.opentrawl/photoscrawl/evals/<run-id>` shape.
+  `~/.opentrawl/photos/evals/<run-id>` shape.
 
 ## 3 July 2026 blocked baseline and model preflight
 

@@ -16,6 +16,42 @@ type TranscriptRow struct {
 	ContinuationIndent string
 }
 
+type TranscriptHeader struct {
+	Title        string
+	Ref          string
+	Participants []string
+}
+
+func WriteTranscriptHeader(w io.Writer, header TranscriptHeader) error {
+	title := strings.TrimSpace(header.Title)
+	if title != "" {
+		for _, line := range WrapWithIndent("Transcript: ", title, OutputWidth(w), "") {
+			if _, err := fmt.Fprintln(w, line); err != nil {
+				return err
+			}
+		}
+	}
+	if ref := strings.TrimSpace(header.Ref); ref != "" {
+		if err := WriteWrappedField(w, "Ref", ref); err != nil {
+			return err
+		}
+	}
+	if len(header.Participants) > 0 {
+		parts := make([]string, 0, len(header.Participants))
+		for _, participant := range header.Participants {
+			if participant = HumanIdentity(participant); participant != "" {
+				parts = append(parts, participant)
+			}
+		}
+		if len(parts) > 0 {
+			if err := WriteWrappedField(w, "Participants", strings.Join(parts, ", ")); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // WriteTranscript writes ordered transcript rows with a day separator whenever
 // the row date changes.
 func WriteTranscript(w io.Writer, rows []TranscriptRow) error {

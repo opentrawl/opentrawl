@@ -12,7 +12,7 @@ usage() {
 Usage:
   scripts/agent-smoke-transcript.sh [--query TEXT] [--max-all-messages N] [--preview-bytes N] [--inline-raw] [--out-dir DIR]
 
-Runs iMessage through `trawl imsgcrawl` and captures exact stdout/stderr for a
+Runs iMessage through `trawl imessage` and captures exact stdout/stderr for a
 progressive agent smoke pass. Exact raw outputs are written only to the local
 output directory, which defaults to /tmp. The default review file contains
 bounded previews plus raw file paths, not a full giant transcript.
@@ -270,27 +270,27 @@ fi
 : >"$manifest_jsonl"
 
 run_step "version" trawl --version
-run_step "source-help" trawl imsgcrawl
-run_step "help-chats-flag" trawl imsgcrawl chats --help
-run_step "help-messages-flag" trawl imsgcrawl messages --help
-run_step "help-search-flag" trawl imsgcrawl search --help
-run_step "help-open-flag" trawl imsgcrawl open --help
-run_step "help-contacts-export-flag" trawl imsgcrawl contacts export --help
+run_step "source-help" trawl imessage
+run_step "help-chats-flag" trawl imessage chats --help
+run_step "help-messages-flag" trawl imessage messages --help
+run_step "help-search-flag" trawl imessage search --help
+run_step "help-open-flag" trawl imessage open --help
+run_step "help-contacts-export-flag" trawl imessage contacts export --help
 
-run_step "metadata-text" env HOME="$synthetic_home" trawl imsgcrawl metadata
-run_step "metadata-json" env HOME="$synthetic_home" trawl --json imsgcrawl metadata
+run_step "metadata-text" env HOME="$synthetic_home" trawl imessage metadata
+run_step "metadata-json" env HOME="$synthetic_home" trawl --json imessage metadata
 
-run_step "status-before-sync-text" env HOME="$synthetic_home" trawl imsgcrawl status
-run_step "status-before-sync-json" env HOME="$synthetic_home" trawl --json imsgcrawl status
-run_step "sync-text" env HOME="$synthetic_home" trawl imsgcrawl sync
-run_step "sync-json" env HOME="$synthetic_home" trawl --json imsgcrawl sync
-run_step "status-after-sync-text" env HOME="$synthetic_home" trawl imsgcrawl status
-run_step "status-after-sync-json" env HOME="$synthetic_home" trawl --json imsgcrawl status
+run_step "status-before-sync-text" env HOME="$synthetic_home" trawl imessage status
+run_step "status-before-sync-json" env HOME="$synthetic_home" trawl --json imessage status
+run_step "sync-text" env HOME="$synthetic_home" trawl imessage sync
+run_step "sync-json" env HOME="$synthetic_home" trawl --json imessage sync
+run_step "status-after-sync-text" env HOME="$synthetic_home" trawl imessage status
+run_step "status-after-sync-json" env HOME="$synthetic_home" trawl --json imessage status
 
-run_step "chats-text-default" env HOME="$synthetic_home" trawl imsgcrawl chats
-run_step "chats-json-default" env HOME="$synthetic_home" trawl --json imsgcrawl chats
+run_step "chats-text-default" env HOME="$synthetic_home" trawl imessage chats
+run_step "chats-json-default" env HOME="$synthetic_home" trawl --json imessage chats
 chats_json="$last_stdout"
-run_step "chats-json-limit-one" env HOME="$synthetic_home" trawl --json imsgcrawl chats --limit 1
+run_step "chats-json-limit-one" env HOME="$synthetic_home" trawl --json imessage chats --limit 1
 
 first_chat_id=$(jq -r '.items[0].chat_id // empty' "$chats_json" 2>/dev/null || true)
 first_chat_count=$(jq -r '.items[0].message_count // empty' "$chats_json" 2>/dev/null || true)
@@ -300,39 +300,39 @@ small_chat_count=$(jq -r --argjson max "$max_all_messages" '[.items[] | select((
 append_note "Selected first_chat_id=$first_chat_id first_chat_message_count=$first_chat_count small_chat_id=$small_chat_id small_chat_message_count=$small_chat_count max_all_messages=$max_all_messages."
 
 if [[ -n "$first_chat_id" ]]; then
-  run_step "messages-text-default-first-chat" env HOME="$synthetic_home" trawl imsgcrawl messages --chat "$first_chat_id"
-  run_step "messages-json-default-first-chat" env HOME="$synthetic_home" trawl --json imsgcrawl messages --chat "$first_chat_id"
-  run_step "messages-json-limit-three-first-chat" env HOME="$synthetic_home" trawl --json imsgcrawl messages --chat "$first_chat_id" --limit 3
+  run_step "messages-text-default-first-chat" env HOME="$synthetic_home" trawl imessage messages --chat "$first_chat_id"
+  run_step "messages-json-default-first-chat" env HOME="$synthetic_home" trawl --json imessage messages --chat "$first_chat_id"
+  run_step "messages-json-limit-three-first-chat" env HOME="$synthetic_home" trawl --json imessage messages --chat "$first_chat_id" --limit 3
 else
   append_note "No chat ID was available, so message commands were skipped."
 fi
 
 if [[ -n "$small_chat_id" ]]; then
-  run_step "messages-text-all-small-chat" env HOME="$synthetic_home" trawl imsgcrawl messages --chat "$small_chat_id" --all
-  run_step "messages-json-all-small-chat" env HOME="$synthetic_home" trawl --json imsgcrawl messages --chat "$small_chat_id" --all
+  run_step "messages-text-all-small-chat" env HOME="$synthetic_home" trawl imessage messages --chat "$small_chat_id" --all
+  run_step "messages-json-all-small-chat" env HOME="$synthetic_home" trawl --json imessage messages --chat "$small_chat_id" --all
 else
   append_note "No chat with 1..$max_all_messages messages was available, so messages --all was skipped."
 fi
 
 if [[ -n "$search_query" ]]; then
-  run_step "search-text-limit-three" env HOME="$synthetic_home" trawl imsgcrawl search --limit 3 "$search_query"
-  run_step "search-json-limit-three" env HOME="$synthetic_home" trawl --json imsgcrawl search --limit 3 "$search_query"
+  run_step "search-text-limit-three" env HOME="$synthetic_home" trawl imessage search --limit 3 "$search_query"
+  run_step "search-json-limit-three" env HOME="$synthetic_home" trawl --json imessage search --limit 3 "$search_query"
   search_json="$last_stdout"
   first_search_ref=$(jq -r '.results[0].ref // empty' "$search_json" 2>/dev/null || true)
   if [[ -n "$first_search_ref" ]]; then
-    run_step "open-text-first-search-result" env HOME="$synthetic_home" trawl imsgcrawl open "$first_search_ref"
-    run_step "open-json-first-search-result" env HOME="$synthetic_home" trawl --json imsgcrawl open "$first_search_ref"
+    run_step "open-text-first-search-result" env HOME="$synthetic_home" trawl imessage open "$first_search_ref"
+    run_step "open-json-first-search-result" env HOME="$synthetic_home" trawl --json imessage open "$first_search_ref"
   else
     append_note "Search returned no ref, so open was skipped."
   fi
 else
-  run_step "search-text-empty-hit-shape" env HOME="$synthetic_home" trawl imsgcrawl search --limit 3 "imsgcrawl-agent-smoke-no-match"
-  run_step "search-json-empty-hit-shape" env HOME="$synthetic_home" trawl --json imsgcrawl search --limit 3 "imsgcrawl-agent-smoke-no-match"
+  run_step "search-text-empty-hit-shape" env HOME="$synthetic_home" trawl imessage search --limit 3 "imsgcrawl-agent-smoke-no-match"
+  run_step "search-json-empty-hit-shape" env HOME="$synthetic_home" trawl --json imessage search --limit 3 "imsgcrawl-agent-smoke-no-match"
   append_note "No --query was supplied, so hit-search quality was not tested."
 fi
 
-run_step "contacts-export-text" env HOME="$synthetic_home" trawl imsgcrawl contacts export
-run_step "contacts-export-json" env HOME="$synthetic_home" trawl --json imsgcrawl contacts export
+run_step "contacts-export-text" env HOME="$synthetic_home" trawl imessage contacts export
+run_step "contacts-export-json" env HOME="$synthetic_home" trawl --json imessage contacts export
 
 cat >>"$review" <<'EOF'
 
