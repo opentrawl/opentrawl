@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,59 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	}
 	if snapshot.Metadata["snapshot"] != "crawlkit_sqlite_copy" || snapshot.Metadata["album_join_table"] != "Z_34ASSETS" {
 		t.Fatalf("metadata = %#v", snapshot.Metadata)
+	}
+}
+
+func TestSQLiteAlbumJoinIgnoresFetchOrderAssetColumn(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "Photos.sqlite")
+	db, err := store.Open(context.Background(), store.Options{Path: dbPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.DB().Exec(`create table Z_34ASSETS (
+		Z_PK integer primary key,
+		Z_3ASSETS integer,
+		Z_34ALBUMS integer,
+		Z_FOK_3ASSETS integer
+	)`); err != nil {
+		t.Fatal(err)
+	}
+
+	join, ok, err := sqliteAlbumJoin(context.Background(), db.DB())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("album join table was not found")
+	}
+	want := sqliteAlbumJoinTable{Table: "Z_34ASSETS", AlbumColumn: "Z_34ALBUMS", AssetColumn: "Z_3ASSETS"}
+	if join != want {
+		t.Fatalf("join = %#v, want %#v", join, want)
+	}
+}
+
+func TestSQLiteAlbumJoinRejectsAmbiguousAssetColumns(t *testing.T) {
+	t.Parallel()
+	dbPath := filepath.Join(t.TempDir(), "Photos.sqlite")
+	db, err := store.Open(context.Background(), store.Options{Path: dbPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	if _, err := db.DB().Exec(`create table Z_34ASSETS (
+		Z_PK integer primary key,
+		Z_3ASSETS integer,
+		Z_4ASSETS integer,
+		Z_34ALBUMS integer
+	)`); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err = sqliteAlbumJoin(context.Background(), db.DB())
+	if err == nil || !strings.Contains(err.Error(), "ambiguous sqlite album join asset columns in Z_34ASSETS: Z_3ASSETS, Z_4ASSETS") {
+		t.Fatalf("err = %v", err)
 	}
 }
 
@@ -149,8 +203,10 @@ func createSyntheticPhotosDB(db *sql.DB) error {
 			ZTRASHEDSTATE integer
 		)`,
 		`create table Z_34ASSETS (
+			Z_PK integer primary key,
+			Z_3ASSETS integer,
 			Z_34ALBUMS integer,
-			Z_3ASSETS integer
+			Z_FOK_3ASSETS integer
 		)`,
 	}
 	for _, statement := range statements {
@@ -177,7 +233,7 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 	if _, err := db.Exec(`insert into ZGENERICALBUM(Z_PK, ZUUID, ZTITLE, ZKIND, ZCLOUDALBUMSUBTYPE, ZTRASHEDSTATE) values (10, 'album-uuid-1', 'Synthetic Album', 2, 0, 0)`); err != nil {
 		return err
 	}
-	_, err := db.Exec(`insert into Z_34ASSETS(Z_34ALBUMS, Z_3ASSETS) values (10, 1)`)
+	_, err := db.Exec(`insert into Z_34ASSETS(Z_PK, Z_3ASSETS, Z_34ALBUMS, Z_FOK_3ASSETS) values (100, 1, 10, 64)`)
 	return err
 }
 

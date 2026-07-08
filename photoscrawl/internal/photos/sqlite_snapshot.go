@@ -347,21 +347,55 @@ func sqliteAlbumJoin(ctx context.Context, db *sql.DB) (sqliteAlbumJoinTable, boo
 		if err != nil {
 			return sqliteAlbumJoinTable{}, false, err
 		}
-		var albumColumn, assetColumn string
-		for _, column := range columns {
-			upper := strings.ToUpper(column)
-			switch {
-			case strings.HasSuffix(upper, "ALBUMS"):
-				albumColumn = column
-			case strings.HasSuffix(upper, "ASSETS") && !strings.HasSuffix(upper, "ALBUMS"):
-				assetColumn = column
-			}
+		albumColumn, err := sqliteAlbumJoinColumn(table, columns, "album", "ALBUMS")
+		if err != nil {
+			return sqliteAlbumJoinTable{}, false, err
+		}
+		assetColumn, err := sqliteAlbumJoinColumn(table, columns, "asset", "ASSETS")
+		if err != nil {
+			return sqliteAlbumJoinTable{}, false, err
 		}
 		if albumColumn != "" && assetColumn != "" {
 			return sqliteAlbumJoinTable{Table: table, AlbumColumn: albumColumn, AssetColumn: assetColumn}, true, nil
 		}
 	}
 	return sqliteAlbumJoinTable{}, false, nil
+}
+
+func sqliteAlbumJoinColumn(table string, columns []string, role, suffix string) (string, error) {
+	candidates := []string{}
+	for _, column := range columns {
+		if sqliteCoreDataJoinColumn(strings.ToUpper(column), suffix) {
+			candidates = append(candidates, column)
+		}
+	}
+	switch len(candidates) {
+	case 0:
+		return "", nil
+	case 1:
+		return candidates[0], nil
+	default:
+		return "", fmt.Errorf("ambiguous sqlite album join %s columns in %s: %s", role, table, strings.Join(candidates, ", "))
+	}
+}
+
+func sqliteCoreDataJoinColumn(upper, suffix string) bool {
+	if strings.HasPrefix(upper, "Z_FOK_") {
+		return false
+	}
+	if !strings.HasPrefix(upper, "Z_") || !strings.HasSuffix(upper, suffix) {
+		return false
+	}
+	number := strings.TrimSuffix(strings.TrimPrefix(upper, "Z_"), suffix)
+	if number == "" {
+		return false
+	}
+	for _, r := range number {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func sqliteColumnNames(ctx context.Context, db *sql.DB, table string) ([]string, error) {
