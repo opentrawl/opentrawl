@@ -43,6 +43,11 @@ type testStatusCrawler struct {
 	verbs []Verb
 }
 
+type testContactCrawler struct {
+	*testCrawler
+	contactExportFn func(context.Context, *Request) (*control.ContactExport, error)
+}
+
 type testConfig struct {
 	Required string `toml:"required"`
 }
@@ -142,6 +147,16 @@ func (c *testStatusCrawler) Verbs() []Verb {
 	return c.verbs
 }
 
+func (c *testContactCrawler) ContactExport(ctx context.Context, req *Request) (*control.ContactExport, error) {
+	if c.contactExportFn != nil {
+		return c.contactExportFn(ctx, req)
+	}
+	return &control.ContactExport{Contacts: []control.Contact{{
+		DisplayName:  "Ada Example",
+		PhoneNumbers: []string{"+15550100"},
+	}}}, nil
+}
+
 func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{
@@ -173,8 +188,20 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 		t.Fatalf("metadata wrote a run log: err=%v", err)
 	}
 	cmd := manifest.Commands["archive_import"]
-	if !cmd.Mutates || len(cmd.Flags) != 1 || cmd.Flags[0].Name != "path" || cmd.Flags[0].Usage != "archive path" {
+	if !cmd.Mutates || cmd.Store != "write" || len(cmd.Flags) != 1 || cmd.Flags[0].Name != "path" || cmd.Flags[0].Usage != "archive path" {
 		t.Fatalf("archive_import command = %#v", cmd)
+	}
+	for name, want := range map[string]string{
+		"metadata": "none",
+		"status":   "optional",
+		"doctor":   "optional",
+		"sync":     "write",
+		"search":   "read",
+		"who":      "read",
+	} {
+		if got := manifest.Commands[name].Store; got != want {
+			t.Fatalf("%s store = %q, want %q", name, got, want)
+		}
 	}
 	searchFlags := map[string]string{}
 	for _, flag := range manifest.Commands["search"].Flags {
@@ -733,6 +760,75 @@ func TestRunSpineWhoVerbDropsDelimiterBeforeArityCheck(t *testing.T) {
 	}
 }
 
+func TestRunSpineContactExportStoreNoneFreshNoArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	source := &testContactCrawler{
+		testCrawler: &testCrawler{verbs: []Verb{{
+			Name:  "contacts_export",
+			Store: StoreNone,
+		}}},
+		contactExportFn: func(ctx context.Context, req *Request) (*control.ContactExport, error) {
+			if req.Store != nil {
+				t.Fatalf("contacts_export Store = %#v, want nil", req.Store)
+			}
+			if req.Paths.Archive != archivePath {
+				t.Fatalf("contacts_export archive path = %q, want %q", req.Paths.Archive, archivePath)
+			}
+			return &control.ContactExport{Contacts: []control.Contact{{
+				DisplayName:  "Ada Example",
+				PhoneNumbers: []string{"+15550100"},
+			}}}, nil
+		},
+	}
+
+	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var manifest control.Manifest
+	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
+		t.Fatalf("manifest json = %s err=%v", stdout, err)
+	}
+	if got := manifest.Commands["contacts_export"].Store; got != "none" {
+		t.Fatalf("contacts_export manifest store = %q, want none", got)
+	}
+
+	code, stdout, stderr = runForTest([]string{"contacts", "export", "--json", "--state-root", stateRoot}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, `"contacts"`) {
+		t.Fatalf("contacts_export StoreNone code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Fatalf("contacts_export StoreNone created archive: err=%v path=%s", err, archivePath)
+	}
+	t.Logf("contacts_export_store_none_archive_exists=false archive_path=%s", archivePath)
+}
+
+func TestRunSpineSearchStoreOptionalFreshNoArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	source := &testCrawler{
+		verbs: []Verb{{
+			Name:  "search",
+			Store: StoreOptional,
+		}},
+		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
+			if req.Store != nil {
+				t.Fatalf("search Store = %#v, want nil", req.Store)
+			}
+			return SearchResult{Results: []Hit{}, TotalMatches: 0}, nil
+		},
+	}
+
+	code, stdout, stderr := runForTest([]string{"search", "--json", "--state-root", stateRoot, "needle"}, source, runOptions{})
+	if code != 0 || !strings.Contains(stdout, `"results"`) {
+		t.Fatalf("search StoreOptional code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
+		t.Fatalf("search StoreOptional created archive: err=%v path=%s", err, archivePath)
+	}
+}
+
 func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 	stateRoot := t.TempDir()
 	source := &testCrawler{verbs: []Verb{{
@@ -746,7 +842,7 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 		},
 	}}}
 	wantMessage := "invalid sync Verb declaration"
-	wantDetail := "spine verb declarations may only set Name and Flags"
+	wantDetail := "spine verb declarations may only set Name, Flags, and Store"
 	wantRemedy := "Remove Help, Run, Mutates, Timeout, and Args from the sync Verb declaration."
 
 	code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, source, runOptions{})
@@ -762,6 +858,51 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 	code, stdout, stderr = runForTest([]string{"status", "--state-root", stateRoot}, source, runOptions{})
 	if code != 1 || stdout != "" || !strings.Contains(stderr, wantMessage) || !strings.Contains(stderr, wantDetail) || !strings.Contains(stderr, wantRemedy) {
 		t.Fatalf("status invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsSpineStoreWidening(t *testing.T) {
+	stateRoot := t.TempDir()
+	cases := []struct {
+		name        string
+		source      Crawler
+		args        []string
+		wantMessage string
+		wantRemedy  string
+	}{
+		{
+			name: "read spine cannot declare required store",
+			source: &testCrawler{verbs: []Verb{{
+				Name:  "search",
+				Store: StoreRequired,
+			}}},
+			args:        []string{"search", "needle", "--json", "--state-root", stateRoot},
+			wantMessage: "invalid search Verb declaration: StoreRequired does not narrow default storeRead",
+			wantRemedy:  "Remove Store from the search Verb declaration, or set Store to StoreNone or StoreOptional.",
+		},
+		{
+			name: "sync cannot declare store",
+			source: &testCrawler{verbs: []Verb{{
+				Name:  "sync",
+				Store: StoreNone,
+			}}},
+			args:        []string{"sync", "--json", "--state-root", stateRoot},
+			wantMessage: "invalid sync Verb declaration: StoreNone does not narrow default storeWrite",
+			wantRemedy:  "Remove Store from the sync Verb declaration; sync always uses default storeWrite.",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			code, stdout, stderr := runForTest([]string{"metadata", "--json", "--state-root", stateRoot}, tc.source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
+				t.Fatalf("metadata invalid Store code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+
+			code, stdout, stderr = runForTest(tc.args, tc.source, runOptions{})
+			if code != 1 || stderr != "" || !strings.Contains(stdout, tc.wantMessage) || !strings.Contains(stdout, tc.wantRemedy) {
+				t.Fatalf("invocation invalid Store code=%d stdout=%s stderr=%s", code, stdout, stderr)
+			}
+		})
 	}
 }
 
@@ -1478,6 +1619,51 @@ func TestRunMutatingBespokeVerbUsesWireReexec(t *testing.T) {
 	}
 }
 
+func TestRunMutatingBespokeStoreRequiredMatchesDefault(t *testing.T) {
+	results := map[string]struct {
+		stdout string
+		stderr string
+	}{}
+	for _, tc := range []struct {
+		name  string
+		store StoreAccess
+		env   string
+	}{
+		{name: "default", store: StoreDefault},
+		{name: "required", store: StoreRequired, env: "required"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stateRoot := t.TempDir()
+			archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+			source := &testCrawler{verbs: []Verb{{
+				Name:    "archive import",
+				Help:    "Import an archive.",
+				Args:    []string{"PATH"},
+				Mutates: true,
+				Store:   tc.store,
+			}}}
+			opts := childTestOptions(t, "bespoke")
+			if tc.env != "" {
+				opts.childEnv = append(opts.childEnv, "CRAWLKIT_CHILD_BESPOKE_STORE="+tc.env)
+			}
+			code, stdout, stderr := runForTest([]string{"archive", "import", "--json", "--state-root", stateRoot, "/tmp/archive.zip"}, source, opts)
+			if code != 0 || !strings.Contains(stdout, "bespoke:/tmp/archive.zip") {
+				t.Fatalf("%s code=%d stdout=%s stderr=%s", tc.name, code, stdout, stderr)
+			}
+			if _, err := os.Stat(archivePath); err != nil {
+				t.Fatalf("%s archive was not created at %s: %v", tc.name, archivePath, err)
+			}
+			results[tc.name] = struct {
+				stdout string
+				stderr string
+			}{stdout: stdout, stderr: stderr}
+		})
+	}
+	if results["default"] != results["required"] {
+		t.Fatalf("StoreRequired mutating output differs from StoreDefault: default=%#v required=%#v", results["default"], results["required"])
+	}
+}
+
 func TestRunMutatingVerbTimeoutControlsWatchdog(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -1769,6 +1955,7 @@ func TestRunnerChildHelper(t *testing.T) {
 			Help:    "Import an archive.",
 			Args:    []string{"PATH"},
 			Mutates: true,
+			Store:   childBespokeStoreAccess(),
 			Run: func(ctx context.Context, req *Request) error {
 				switch os.Getenv("CRAWLKIT_CHILD_MODE") {
 				case "bespoke_hold":
@@ -2087,6 +2274,19 @@ func backupFixtureVerbs(run func(context.Context, *Request, string) error) []Ver
 				return run(ctx, req, "backup snapshots")
 			},
 		},
+	}
+}
+
+func childBespokeStoreAccess() StoreAccess {
+	switch os.Getenv("CRAWLKIT_CHILD_BESPOKE_STORE") {
+	case "none":
+		return StoreNone
+	case "optional":
+		return StoreOptional
+	case "required":
+		return StoreRequired
+	default:
+		return StoreDefault
 	}
 }
 

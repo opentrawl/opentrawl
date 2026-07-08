@@ -108,6 +108,51 @@ func storeModeForVerb(verb Verb) (storeMode, error) {
 	}
 }
 
+func storeAccessName(access StoreAccess) string {
+	switch access {
+	case StoreDefault:
+		return "StoreDefault"
+	case StoreNone:
+		return "StoreNone"
+	case StoreOptional:
+		return "StoreOptional"
+	case StoreRequired:
+		return "StoreRequired"
+	default:
+		return fmt.Sprintf("StoreAccess(%d)", access)
+	}
+}
+
+func storeModeGoName(mode storeMode) string {
+	switch mode {
+	case storeNone:
+		return "storeNone"
+	case storeOptional:
+		return "storeOptional"
+	case storeRead:
+		return "storeRead"
+	case storeWrite:
+		return "storeWrite"
+	default:
+		return fmt.Sprintf("storeMode(%d)", mode)
+	}
+}
+
+func storeModeManifestValue(mode storeMode) string {
+	switch mode {
+	case storeNone:
+		return "none"
+	case storeOptional:
+		return "optional"
+	case storeRead:
+		return "read"
+	case storeWrite:
+		return "write"
+	default:
+		return ""
+	}
+}
+
 func verbDisplayName(verb Verb) string {
 	name := strings.Join(strings.Fields(verb.Name), " ")
 	if name == "" {

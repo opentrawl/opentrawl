@@ -53,6 +53,7 @@ type Command struct {
 	Argv       []string `json:"argv"`
 	JSON       bool     `json:"json"`
 	Mutates    bool     `json:"mutates"`
+	Store      string   `json:"store,omitempty"`
 	Legacy     bool     `json:"legacy,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
 	Flags      []Flag   `json:"flags,omitempty"`
