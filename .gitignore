@@ -8,3 +8,6 @@ dist/
 .dev/
 .devenv/
 .direnv/
+
+# private local agent instructions — never commit (references private paths)
+/CLAUDE.md
