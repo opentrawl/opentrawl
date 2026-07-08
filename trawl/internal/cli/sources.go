@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl"
 	"github.com/opentrawl/opentrawl/calcrawl"
 	"github.com/opentrawl/opentrawl/gogcrawl"
+	notes "github.com/opentrawl/opentrawl/trawlers/notes"
 )
 
 var crawlerFactories = []func() crawlkit.Crawler{
@@ -21,6 +22,7 @@ var crawlerFactories = []func() crawlkit.Crawler{
 	func() crawlkit.Crawler { return calcrawl.New() },
 	func() crawlkit.Crawler { return birdcrawl.New() },
 	func() crawlkit.Crawler { return clawdex.New() },
+	func() crawlkit.Crawler { return notes.New() },
 }
 
 func registeredCrawlers() []crawlkit.Crawler {

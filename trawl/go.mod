@@ -71,6 +71,7 @@ require (
 	github.com/opentrawl/opentrawl/birdcrawl v0.0.0
 	github.com/opentrawl/opentrawl/calcrawl v0.0.0
 	github.com/opentrawl/opentrawl/gogcrawl v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/notes v0.0.0
 	golang.org/x/sys v0.46.0 // indirect
 )
 
@@ -91,3 +92,5 @@ replace github.com/opentrawl/opentrawl/gogcrawl => ../gogcrawl
 replace github.com/opentrawl/opentrawl/calcrawl => ../calcrawl
 
 replace github.com/opentrawl/opentrawl/birdcrawl => ../birdcrawl
+
+replace github.com/opentrawl/opentrawl/trawlers/notes => ../trawlers/notes
