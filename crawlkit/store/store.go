@@ -19,8 +19,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const DefaultBusyTimeoutMillis = 5000
-
 type Options struct {
 	Path          string
 	Schema        string

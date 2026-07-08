@@ -38,13 +38,6 @@ type searchResult struct {
 	TruncatedFront        *bool   `json:"truncated_front"`
 }
 
-func AssertHumanOutput(t *testing.T, humanOutput string) {
-	t.Helper()
-	for _, failure := range CheckHumanOutput(humanOutput) {
-		t.Error(failure)
-	}
-}
-
 func AssertSearchEnvelope(t *testing.T, envelope []byte) {
 	t.Helper()
 	for _, failure := range CheckSearchEnvelope(envelope) {
