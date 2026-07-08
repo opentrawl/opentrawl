@@ -15,8 +15,9 @@ import (
 )
 
 type searchOutput struct {
-	Query    string `json:"query"`
-	SourceID string `json:"-"`
+	Query       string `json:"query"`
+	SourceID    string `json:"-"`
+	SupportsWho bool   `json:"-"`
 	SearchResult
 }
 
@@ -252,7 +253,7 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		if sourceID != "" && strings.TrimSpace(value.Query) != "" {
 			hints = append(hints, fmt.Sprintf("More: trawl %s search %s --limit %d", sourceID, quoteSearchArg(value.Query), nextSearchLimit(len(value.Results))))
 		}
-		hints = append(hints, "Narrow results with --who, --after, or --before.")
+		hints = append(hints, narrowSearchHint(value.SupportsWho))
 	}
 	return render.WriteList(w, render.List{
 		Heading:   searchHeading(value.Query, resolvedWhoName(value.WhoResolved), len(value.Results), max(value.TotalMatches, len(value.Results))),
@@ -261,6 +262,13 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		ClampText: 2,
 		Empty:     searchEmptyText(value.Query),
 	})
+}
+
+func narrowSearchHint(supportsWho bool) string {
+	if supportsWho {
+		return "Narrow results with --who, --after, or --before."
+	}
+	return "Narrow results with --after or --before."
 }
 
 func nextSearchLimit(shown int) int {

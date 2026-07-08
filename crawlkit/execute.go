@@ -265,7 +265,8 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 			return err
 		}
 		info := source.Info()
-		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: firstText(info.Surface, info.ID), SearchResult: result})
+		_, supportsWho := source.(WhoMatcher)
+		return writeResult(req.Out, format, "search", searchOutput{Query: query.Text, SourceID: firstText(info.Surface, info.ID), SupportsWho: supportsWho, SearchResult: result})
 	case "open":
 		if len(verb.args) != 1 {
 			return usageError{err: errors.New("open needs one ref")}
