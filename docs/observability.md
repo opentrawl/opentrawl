@@ -17,7 +17,7 @@ Prior art for the report bundle: how Codex and Claude package session
 context for debugging — inspiration, not a copy, and not distributed
 tracing; this is one machine.
 
-## What every crawler gets from crawlkit
+## What every crawler gets from trawlkit
 
 One plain text log per crawler, and exactly one line grammar for
 every line, with no exceptions:
@@ -27,7 +27,7 @@ every line, with no exceptions:
     2026-07-02 22:41:03 INFO  019f23a1 sync start: gogcrawl 0.4.1+8f3c2d on macos 15
     2026-07-02 22:41:07 ERROR 019f23a1 sync gog_backup_failed: backup fetch exited early
 
-One grammar because exactly one thing writes it: crawlkit's logging
+One grammar because exactly one thing writes it: trawlkit's logging
 helper. Crawlers cannot emit a differently shaped line, because the
 only way to log is through the helper — the format is enforced by
 construction, not by convention. Writes are single-line atomic

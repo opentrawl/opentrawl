@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/config"
-	"github.com/openclaw/crawlkit/shortref"
-	"github.com/openclaw/crawlkit/state"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (
@@ -31,7 +31,7 @@ type Store struct {
 	owned bool
 }
 
-// DefaultPaths is the one archive path layout, from crawlkit/config. The base
+// DefaultPaths is the one archive path layout, from trawlkit/config. The base
 // dir is the fleet-wide state root, ~/.opentrawl/gmail (TRAWL-99).
 func DefaultPaths() config.Paths {
 	paths, _ := (config.App{Name: "gmail", BaseDir: "~/.opentrawl/gmail"}).DefaultPaths()

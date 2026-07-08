@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
-func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
 	r := c.handler(ctx, req)
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("chats takes flags only"))
@@ -48,7 +48,7 @@ func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
 	})
 }
 
-func (c *Crawler) runFolders(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.Request) error {
 	r := c.handler(ctx, req)
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("folders takes flags only"))
@@ -65,7 +65,7 @@ func (c *Crawler) runFolders(ctx context.Context, req *crawlkit.Request) error {
 	})
 }
 
-func (c *Crawler) runTopics(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runTopics(ctx context.Context, req *trawlkit.Request) error {
 	r := c.handler(ctx, req)
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("topics takes flags only"))

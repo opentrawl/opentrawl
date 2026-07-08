@@ -12,16 +12,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }
@@ -139,7 +139,7 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	req := &crawlkit.Request{Store: rawStore, Paths: crawlkit.Paths{Archive: archivePath}, Format: output.JSON, Out: &out}
+	req := &trawlkit.Request{Store: rawStore, Paths: trawlkit.Paths{Archive: archivePath}, Format: output.JSON, Out: &out}
 	crawler := New()
 	records, err := crawler.ShortRefRecords(ctx, req)
 	if err != nil {
@@ -148,7 +148,7 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
-	search, err := crawler.Search(ctx, req, crawlkit.Query{Text: "needle", Limit: 10})
+	search, err := crawler.Search(ctx, req, trawlkit.Query{Text: "needle", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestDirectVersionVerbRejected(t *testing.T) {
 	}
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {
@@ -244,7 +244,7 @@ func runBirdcrawlRaw(t *testing.T, stateRoot string, args ...string) birdcrawlRe
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
 	}()
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	if err := stdoutW.Close(); err != nil {
 		t.Fatal(err)
 	}

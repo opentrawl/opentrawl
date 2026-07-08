@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (
@@ -94,7 +94,7 @@ func displaySender(name, address string, ownerEmails map[string]struct{}) string
 }
 
 func plainSnippet(query, subject, body string) string {
-	// Keep this local until crawlkit grows the canonical helper: plain
+	// Keep this local until trawlkit grows the canonical helper: plain
 	// fragment, flattened whitespace, no FTS marker brackets.
 	text := flattenWhitespace(strings.TrimSpace(subject + " " + body))
 	if text == "" {

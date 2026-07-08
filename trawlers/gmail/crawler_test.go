@@ -11,16 +11,16 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }
@@ -29,7 +29,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	installFakeGog(t)
 	ctx := context.Background()
 	stateRoot := t.TempDir()
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "gmail", "gmail.db"),
 		Config:  filepath.Join(stateRoot, "gmail", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "gmail", "logs"),
@@ -43,12 +43,12 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncReq := &crawlkit.Request{
+	syncReq := &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
-		Progress: func(crawlkit.Progress) {},
+		Progress: func(trawlkit.Progress) {},
 	}
 	report, err := source.Sync(ctx, syncReq)
 	if err == nil {
@@ -71,7 +71,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 
 	readStore := openReadStore(t, ctx, paths.Archive)
 	searchReq := readRequest(readStore, paths)
-	search, err := source.Search(ctx, searchReq, crawlkit.Query{Text: "project", Limit: 2})
+	search, err := source.Search(ctx, searchReq, trawlkit.Query{Text: "project", Limit: 2})
 	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
@@ -96,7 +96,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
-	err = source.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, search.Results[0].Ref)
+	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &openOut}, search.Results[0].Ref)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -109,7 +109,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 		t.Fatalf("opened message = %#v", opened)
 	}
 
-	contacts, err := source.ContactExport(ctx, &crawlkit.Request{Paths: paths})
+	contacts, err := source.ContactExport(ctx, &trawlkit.Request{Paths: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,21 +122,21 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 	installFakeGog(t)
 	ctx := context.Background()
 	stateRoot := t.TempDir()
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "gmail", "gmail.db"),
 		Config:  filepath.Join(stateRoot, "gmail", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "gmail", "logs"),
 	}
 	source := New()
 
-	missing, err := source.Status(ctx, &crawlkit.Request{Paths: paths})
+	missing, err := source.Status(ctx, &trawlkit.Request{Paths: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if missing.State != "missing" || len(missing.Counts) != 3 {
 		t.Fatalf("missing status = %#v", missing)
 	}
-	doctor, err := source.Doctor(ctx, &crawlkit.Request{Paths: paths})
+	doctor, err := source.Doctor(ctx, &trawlkit.Request{Paths: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 		t.Fatalf("verbs = %#v", verbs)
 	}
 	contactsVerb, ok := verbByName(verbs, "contacts_export")
-	if !ok || contactsVerb.Store != crawlkit.StoreNone {
+	if !ok || contactsVerb.Store != trawlkit.StoreNone {
 		t.Fatalf("contacts_export verb = %#v, ok=%v", contactsVerb, ok)
 	}
 	fs := flagSet("sync")
@@ -236,8 +236,8 @@ func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
 	t.Logf("sync archive exists at resolved state root: path=%s", archivePath)
 }
 
-func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
-	return &crawlkit.Request{
+func readRequest(st *ckstore.Store, paths trawlkit.Paths) *trawlkit.Request {
+	return &trawlkit.Request{
 		Store:  st,
 		Paths:  paths,
 		Format: ckoutput.Text,
@@ -245,7 +245,7 @@ func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
 	}
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {
@@ -269,7 +269,7 @@ func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Stor
 	return st
 }
 
-func hasCheck(checks []crawlkit.Check, id, state string) bool {
+func hasCheck(checks []trawlkit.Check, id, state string) bool {
 	for _, check := range checks {
 		if check.ID == id && check.State == state {
 			return true
@@ -278,13 +278,13 @@ func hasCheck(checks []crawlkit.Check, id, state string) bool {
 	return false
 }
 
-func verbByName(verbs []crawlkit.Verb, name string) (crawlkit.Verb, bool) {
+func verbByName(verbs []trawlkit.Verb, name string) (trawlkit.Verb, bool) {
 	for _, verb := range verbs {
 		if verb.Name == name {
 			return verb, true
 		}
 	}
-	return crawlkit.Verb{}, false
+	return trawlkit.Verb{}, false
 }
 
 func flagSet(name string) *flag.FlagSet {
@@ -312,7 +312,7 @@ func runGogcrawl(t *testing.T, stateRoot string, args ...string) (int, string, s
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
 	}()
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	if err := stdoutW.Close(); err != nil {
 		t.Fatal(err)
 	}

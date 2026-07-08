@@ -5,13 +5,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(appID, "archive database is missing")
 	status.State = "missing"
 	status.DatabasePath = req.Paths.Archive

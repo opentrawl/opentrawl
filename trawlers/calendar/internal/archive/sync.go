@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openclaw/crawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 func (s *Store) ApplySnapshot(ctx context.Context, calendars []Calendar, events []Event, runID string, syncedAt time.Time, sourcePath, sourceModifiedAt string) (SyncStats, error) {

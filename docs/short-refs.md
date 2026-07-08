@@ -63,7 +63,7 @@ negligible for that count — today that means 5 for the small archives
 and 6 for the large ones, and nobody ever configures it. The numbers
 above are the arithmetic behind that choice, not settings.
 
-Each crawler owns the archive and canonical refs. Crawlkit owns the derived
+Each crawler owns the archive and canonical refs. Trawlkit owns the derived
 alias index beside the archive for speed. That index is a cache, not state. The
 runner rebuilds it after every sync or mutating custom verb attempt, even when
 the attempt returns an error after writing partial data.
@@ -71,13 +71,13 @@ the attempt returns an error after writing partial data.
 Trawl may keep an in-memory map while rendering one search result. It must not
 write a "last search" alias database.
 
-Why not a crawlkit mapping table of assigned ids? Assignment creates
+Why not a trawlkit mapping table of assigned ids? Assignment creates
 state: ids depend on insertion order, so two machines — or one
 machine after a rebuild — assign different ids to the same item,
 which breaks the rule that archives are derived data reproducible
 from the source. The table would also need creating, backing up and
 healing in every crawler. The function needs none of that and any
-process can evaluate it. Crawlkit keeps a computed alias-to-ref cache
+process can evaluate it. Trawlkit keeps a computed alias-to-ref cache
 table for fast resolution. That is a cache of the function, not a
 source of truth.
 
@@ -98,7 +98,7 @@ For `trawl open t7k3f`:
 5. Call that source's normal `open` with the full ref.
 6. Render the normal open result.
 
-Resolution is one indexed lookup, not a scan: crawlkit ships the
+Resolution is one indexed lookup, not a scan: trawlkit ships the
 alias index with the alias, stored full ref, and canonical full ref. `open`
 looks up the alias and reads the canonical ref from that row. It does not scan
 the archive's refs to repair legacy prefixes. The index is derived data under
@@ -112,7 +112,7 @@ content, or rebuild the alias index while it resolves.
 Collisions may exist. They must never resolve silently.
 
 Search display should prefer the shortest safe alias. If 5 characters collide,
-show 6 — and this is precomputed, not runtime guessing. Crawlkit builds the
+show 6 — and this is precomputed, not runtime guessing. Trawlkit builds the
 alias index from the crawler's full ref list, detects every colliding prefix
 with plain set arithmetic, and stores each item's shortest unambiguous form.
 Display reads the answer; nothing is discovered at render time. If a caller
@@ -166,8 +166,8 @@ Since the suite is pre-1.0 with no external consumers, this can land as a
 breaking change wherever that is simpler — contract versioning is for our own
 coherence, not for compatibility theatre. The capability means:
 
-- crawlkit can resolve a short alias to zero, one, or many full refs
-- crawlkit can return the shortest safe alias for a known full ref
+- trawlkit can resolve a short alias to zero, one, or many full refs
+- trawlkit can return the shortest safe alias for a known full ref
 - `open` output still carries the canonical full `ref`
 - search JSON keeps the current `ref` field unchanged
 

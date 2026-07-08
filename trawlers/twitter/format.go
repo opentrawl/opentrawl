@@ -3,7 +3,7 @@ package birdcrawl
 import (
 	"strconv"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func itoa(value int) string {

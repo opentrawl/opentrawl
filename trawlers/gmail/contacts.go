@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/gog"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 func (c *Crawler) exportContacts(ctx context.Context) ([]control.Contact, error) {

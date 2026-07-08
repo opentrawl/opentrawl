@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func countTable(ctx context.Context, db *sql.DB, table string) (int64, error) {

@@ -7,8 +7,8 @@ import (
 
 const ftsSnippetMaxRunes = 120
 
-// contractSnippet mirrors crawlkit/store.FTS5Snippet until imsgcrawl can move
-// to the next crawlkit release that publishes the helper.
+// contractSnippet mirrors trawlkit/store.FTS5Snippet until imsgcrawl can move
+// to the next trawlkit release that publishes the helper.
 func contractSnippet(text, query string) string {
 	text = collapseSnippetWhitespace(text)
 	if text == "" {

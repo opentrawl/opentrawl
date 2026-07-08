@@ -10,11 +10,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/photoscrawl/internal/archive"
 	"github.com/openclaw/photoscrawl/internal/evalcard"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 func main() {

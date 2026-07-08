@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/cache"
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const maxPhotosSQLiteSnapshotBytes int64 = 20 * 1024 * 1024 * 1024
@@ -56,7 +56,7 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 		PhotosVersion: "unknown",
 		Metadata: map[string]any{
 			"source":           "Photos.sqlite",
-			"snapshot":         "crawlkit_sqlite_copy",
+			"snapshot":         "trawlkit_sqlite_copy",
 			"database_path":    "database/Photos.sqlite",
 			"snapshot_files":   len(snapshot.Files),
 			"snapshot_bytes":   snapshot.SizeBytes,

@@ -3,11 +3,11 @@ module github.com/opentrawl/opentrawl/gogcrawl
 go 1.26.4
 
 require (
-	github.com/openclaw/crawlkit v0.13.1
+	github.com/opentrawl/opentrawl/trawlkit v0.13.1
 	golang.org/x/net v0.56.0
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect

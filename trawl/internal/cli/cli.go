@@ -12,9 +12,9 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 var Version = "dev"
@@ -256,7 +256,7 @@ func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 
 func (r *Runtime) statusSource(source Source) (StatusEnvelope, error) {
 	var status *control.Status
-	err := r.withSourceRequest(source, "status", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	err := r.withSourceRequest(source, "status", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var runErr error
 		status, runErr = source.Crawler.Status(ctx, req)
 		return runErr
@@ -283,8 +283,8 @@ func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnv
 }
 
 func (r *Runtime) doctorSource(source Source) (DoctorResult, error) {
-	var doctor *crawlkit.Doctor
-	err := r.withSourceRequest(source, "doctor", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *crawlkit.Request) error {
+	var doctor *trawlkit.Doctor
+	err := r.withSourceRequest(source, "doctor", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var runErr error
 		doctor, runErr = source.Crawler.Doctor(ctx, req)
 		return runErr
@@ -465,7 +465,7 @@ Examples:
   trawl search falafel --json           # structured output; agents, prefer this`
 
 // trawlDescription builds the root --help text. The source list in the
-// middle paragraph comes from the compiled crawlkit registrations, not a
+// middle paragraph comes from the compiled trawlkit registrations, not a
 // literal, so root help and command dispatch see the same crawler set. It
 // only runs when this invocation is actually going to render root help;
 // every other command (including a subcommand's own --help) discovers

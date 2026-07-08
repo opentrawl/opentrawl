@@ -14,7 +14,7 @@ documents/screenshots/receipts exist, and which assets belong together.
 ## Principles
 
 - Go product code only.
-- Use `github.com/openclaw/crawlkit` for shared crawler mechanics.
+- Use `github.com/opentrawl/opentrawl/trawlkit` for shared crawler mechanics.
 - Local-first by default; no cloud model calls unless the user explicitly selects
   assets or derivatives to send.
 - Read-only Photos access. Never write back to Photos.
@@ -48,7 +48,7 @@ library is not at the default macOS path.
 A lifecrawler-format `export` command is planned but does not exist
 yet.
 
-`sync` snapshots `database/Photos.sqlite` with crawlkit's SQLite snapshot helper
+`sync` snapshots `database/Photos.sqlite` with trawlkit's SQLite snapshot helper
 and reads the copy. This is the headless path: it needs Full Disk Access for the
 terminal or app, not a recurring Photos TCC prompt. PhotoKit remains available
 only for explicit original export flows such as

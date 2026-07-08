@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type openEnvelope struct {
@@ -46,7 +46,7 @@ type openMedia struct {
 	SizeBytes int64  `json:"size_bytes,omitempty"`
 }
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
@@ -77,16 +77,16 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpen(req, result)
 }
 
-func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return parseMessageRef(ref)
 	}
 	fullRefs, err := req.ResolveShortRef(ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", unknownShortRefError()
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandErr(1, "ambiguous_short_ref", "short ref matches more than one message", "rerun trawl whatsapp search or use the full ref")
 	}
 	if err != nil {
@@ -121,7 +121,7 @@ func parseMessageRef(ref string) (string, error) {
 	return messageID, nil
 }
 
-func printOpen(req *crawlkit.Request, result openEnvelope) error {
+func printOpen(req *trawlkit.Request, result openEnvelope) error {
 	title := result.Chat
 	if span := openDateSpan(result.Context); span != "" {
 		title += ", " + span

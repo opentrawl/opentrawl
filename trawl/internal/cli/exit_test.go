@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/crawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 func TestStatusExitCodes(t *testing.T) {

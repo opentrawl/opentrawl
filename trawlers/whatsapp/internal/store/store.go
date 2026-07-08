@@ -9,13 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/shortref"
-	"github.com/openclaw/crawlkit/state"
-	ckstore "github.com/openclaw/crawlkit/store"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/openclaw/wacrawl/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 
-	// C SQLite via cgo, matching crawlkit/store after the modernc production
+	// C SQLite via cgo, matching trawlkit/store after the modernc production
 	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -28,7 +28,7 @@ const (
 	LegacyMessageRefPrefix = "wacrawl:msg/"
 	ownerWhoKey            = "owner:me"
 
-	// Sync-state lives in the one crawlkit state.Store (TRAWL-82). Scalar sync
+	// Sync-state lives in the one trawlkit state.Store (TRAWL-82). Scalar sync
 	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
 	// derived from the archive, sits under "derived".
 	syncSource        = "whatsapp"
@@ -303,7 +303,7 @@ func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
 }
 
 // migrateSyncState tombstones the pre-state.Store key/value sync_state table
-// (TRAWL-82). Its columns collide with crawlkit/state and everything it held —
+// (TRAWL-82). Its columns collide with trawlkit/state and everything it held —
 // the last-import marker, source path and short-ref fingerprint — is re-derived
 // by one sync, so we drop, never map (rules §1.17). The drop only fires on a
 // pre-migration archive (no source_name column), so a canonical archive keeps

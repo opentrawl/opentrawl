@@ -4,7 +4,7 @@ go 1.26.4
 
 require (
 	github.com/mattn/go-sqlite3 v1.14.47
-	github.com/openclaw/crawlkit v0.13.1
+	github.com/opentrawl/opentrawl/trawlkit v0.13.1
 )
 
 require (
@@ -15,4 +15,4 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit

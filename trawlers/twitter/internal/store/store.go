@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	cklog "github.com/openclaw/crawlkit/log"
-	ckstate "github.com/openclaw/crawlkit/state"
-	ckstore "github.com/openclaw/crawlkit/store"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckstate "github.com/opentrawl/opentrawl/trawlkit/state"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 var ErrTweetNotFound = errors.New("tweet not found")
@@ -215,7 +215,7 @@ func (s *Store) migrate(ctx context.Context) error {
 
 // migrateLegacySyncState is the one-time, value-preserving move off
 // birdcrawl's old sync_state(kind, cursor, last_sync_at, last_result,
-// coverage_note) table onto crawlkit's canonical state.Schema. It runs
+// coverage_note) table onto trawlkit's canonical state.Schema. It runs
 // inside the same transaction as the version bump, so a crash never
 // leaves the archive between shapes.
 //

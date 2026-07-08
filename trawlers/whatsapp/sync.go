@@ -8,15 +8,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/wacrawl/internal/store"
 	"github.com/openclaw/wacrawl/internal/whatsappdb"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
 const heartbeatEvery = 30 * time.Second
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	st, err := store.Use(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, err
@@ -32,14 +32,14 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		return nil, err
 	}
 	logImportTimings(req, stats)
-	return &crawlkit.SyncReport{
+	return &trawlkit.SyncReport{
 		Added:   int64(stats.Messages),
 		Updated: 0,
 		Removed: 0,
 	}, nil
 }
 
-func importProgress(req *crawlkit.Request) (func(whatsappdb.ImportProgress), func()) {
+func importProgress(req *trawlkit.Request) (func(whatsappdb.ImportProgress), func()) {
 	var runProgress *cklog.Progress
 	if req.Log != nil {
 		runProgress = req.Log.Progress(cklog.ProgressOptions{Event: "sync_progress", Unit: "stage", Total: 5})
@@ -57,7 +57,7 @@ func importProgress(req *crawlkit.Request) (func(whatsappdb.ImportProgress), fun
 		last = event
 		mu.Unlock()
 		if req.Progress != nil {
-			req.Progress(crawlkit.Progress{Phase: "sync", Done: event.Done, Total: event.Total, Message: event.Message})
+			req.Progress(trawlkit.Progress{Phase: "sync", Done: event.Done, Total: event.Total, Message: event.Message})
 		}
 		if runProgress != nil {
 			_ = runProgress.Report(event.Done, event.Message)
@@ -90,7 +90,7 @@ func importProgress(req *crawlkit.Request) (func(whatsappdb.ImportProgress), fun
 	return report, stop
 }
 
-func logImportTimings(req *crawlkit.Request, stats store.ImportStats) {
+func logImportTimings(req *trawlkit.Request, stats store.ImportStats) {
 	if req.Log == nil {
 		return
 	}

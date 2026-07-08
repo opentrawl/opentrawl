@@ -13,7 +13,7 @@ import (
 	"text/template"
 	"time"
 
-	ckmodel "github.com/openclaw/crawlkit/model"
+	ckmodel "github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
 type storedModelOutput struct {

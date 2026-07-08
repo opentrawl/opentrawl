@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const maxOpenBodyRunes = 4000
@@ -22,7 +22,7 @@ type openOutput struct {
 	shortRef string
 }
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(err)
@@ -43,16 +43,16 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, openOutput{OpenResult: result, shortRef: openShortRef(ctx, req, result.Ref)})
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return ref, nil
 	}
 	matches, err := req.ResolveShortRef(ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandErr("unknown_short_ref", "short ref is unknown", "use a full gmail:msg ref", err)
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandErr("ambiguous_short_ref", "short ref is ambiguous", "rerun search or use the full gmail:msg ref", err)
 	}
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref
 	return matches[0], nil
 }
 
-func openShortRef(ctx context.Context, req *crawlkit.Request, ref string) string {
+func openShortRef(ctx context.Context, req *trawlkit.Request, ref string) string {
 	aliases, err := req.ShortRefAliases(ctx, []string{ref})
 	if err != nil {
 		return ""

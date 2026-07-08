@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
 	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func TestSharedShortRefResolverUsesStoredLegacyRows(t *testing.T) {
@@ -56,8 +56,8 @@ func TestSharedShortRefResolverUsesStoredLegacyRows(t *testing.T) {
 	if err := st.ReplaceAll(ctx, data, nil, nil, syncedAt); err != nil {
 		t.Fatal(err)
 	}
-	records := []crawlkit.ShortRefRecord{{Ref: MessageRef("1")}}
-	if _, err := (&crawlkit.Request{Store: st.store}).RebuildShortRefs(ctx, records); err != nil {
+	records := []trawlkit.ShortRefRecord{{Ref: MessageRef("1")}}
+	if _, err := (&trawlkit.Request{Store: st.store}).RebuildShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,7 +69,7 @@ func TestSharedShortRefResolverUsesStoredLegacyRows(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resolved, err := (&crawlkit.Request{Store: st.store}).ResolveShortRef(ctx, alias)
+	resolved, err := (&trawlkit.Request{Store: st.store}).ResolveShortRef(ctx, alias)
 	if err != nil {
 		t.Fatal(err)
 	}

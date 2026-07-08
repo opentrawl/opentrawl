@@ -2,7 +2,7 @@ module linear
 
 go 1.26.4
 
-require github.com/openclaw/crawlkit v0.0.0
+require github.com/opentrawl/opentrawl/trawlkit v0.0.0
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
@@ -11,4 +11,4 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace github.com/openclaw/crawlkit => ../../crawlkit
+replace github.com/opentrawl/opentrawl/trawlkit => ../../trawlkit

@@ -8,15 +8,15 @@ Date: 2026-05-28
 
 ## Decision
 
-Build `photoscrawl` as a standalone OpenClaw/crawlkit Go crawler. It owns the
+Build `photoscrawl` as a standalone OpenClaw/trawlkit Go crawler. It owns the
 Apple Photos schema, local classification policy, privacy policy, and query
-surface. `crawlkit` owns reusable mechanics only.
+surface. `trawlkit` owns reusable mechanics only.
 
 ## Source Strategy
 
 Use the safest source available for each job:
 
-1. A crawlkit SQLite snapshot of `database/Photos.sqlite` for headless asset,
+1. A trawlkit SQLite snapshot of `database/Photos.sqlite` for headless asset,
    resource, album, and location enumeration.
 2. PhotoKit only for explicit media export flows, such as original export when
    the user allows iCloud downloads.

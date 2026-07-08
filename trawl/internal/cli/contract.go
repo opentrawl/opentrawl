@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const unknownFreshness = "not synced yet"

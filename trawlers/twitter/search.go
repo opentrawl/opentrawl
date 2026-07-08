@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 func (r *runtime) runSearch(args []string) error {
@@ -37,14 +37,14 @@ func (r *runtime) runSearch(args []string) error {
 	})
 }
 
-func (r *runtime) search(ctx context.Context, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (r *runtime) search(ctx context.Context, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	filter := store.SearchFilter{
 		Query:  query.Text,
 		Limit:  query.Limit,
 		After:  timePtr(query.After),
 		Before: timePtr(query.Before),
 	}
-	var out crawlkit.SearchResult
+	var out trawlkit.SearchResult
 	err := r.withReadOnlyStore(func(st *store.Store) error {
 		results, total, err := st.Search(ctx, filter)
 		if err != nil {
@@ -62,11 +62,11 @@ func (r *runtime) search(ctx context.Context, query crawlkit.Query) (crawlkit.Se
 	return out, err
 }
 
-func searchHits(results []store.SearchResult, ownerAuthorID string) []crawlkit.Hit {
-	hits := make([]crawlkit.Hit, 0, len(results))
+func searchHits(results []store.SearchResult, ownerAuthorID string) []trawlkit.Hit {
+	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
 		ref := store.TweetRef(result.ID)
-		hits = append(hits, crawlkit.Hit{
+		hits = append(hits, trawlkit.Hit{
 			Ref:     ref,
 			Time:    result.CreatedAt.Local(),
 			Who:     jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
@@ -125,7 +125,7 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 	if len(positionals) != 1 {
 		return filter, errors.New("search takes exactly one query")
 	}
-	// The one --limit contract (crawlkit/flags): honored exactly as given,
+	// The one --limit contract (trawlkit/flags): honored exactly as given,
 	// and below 1 is a usage error.
 	resolved, err := ckflags.Limit(limit, limitSet)
 	if err != nil {

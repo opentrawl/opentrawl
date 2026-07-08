@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestArchiveOpenMigratesOldObservationColumns(t *testing.T) {

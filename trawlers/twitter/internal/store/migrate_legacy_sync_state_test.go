@@ -15,7 +15,7 @@ import (
 // last_sync_at, last_result, coverage_note) table holds a real financial
 // ledger (spend:<month>) and pagination cursors that cost real X API
 // dollars to re-derive, so nothing may be lost or reset when an archive
-// upgrades onto crawlkit's canonical state.Schema.
+// upgrades onto trawlkit's canonical state.Schema.
 func TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "birdcrawl.db")
@@ -137,7 +137,7 @@ func TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent(t *testing.T) {
 		t.Fatalf("schema version = %d, want %d", version, schemaVersion)
 	}
 
-	// The table must now carry the canonical crawlkit shape, not the
+	// The table must now carry the canonical trawlkit shape, not the
 	// legacy one.
 	var hasSourceName int
 	if err := st.db.QueryRowContext(ctx, `select count(*) from pragma_table_info('sync_state') where name = 'source_name'`).Scan(&hasSourceName); err != nil {
@@ -209,7 +209,7 @@ func dumpSyncState(ctx context.Context, path string) (string, error) {
 }
 
 // TestMigrateLegacySyncStateUnparseableLastSyncAt pins the one place the
-// migration cannot be literally byte-identical: crawlkit's canonical
+// migration cannot be literally byte-identical: trawlkit's canonical
 // state.Store.Get parses updated_at as RFC3339Nano and hard-errors on
 // anything else, unlike the old parseStoredTime, which silently treated
 // ANY parse failure — blank or corrupt — as zero time. So a legacy row

@@ -9,18 +9,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	cklog "github.com/openclaw/crawlkit/log"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
 // Sync reports the message changes observed by the archive write.
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	r := c.handler(ctx, req)
 	progress, stopProgress := r.startCommandProgress("sync_progress", "messages", "starting sync")
 	defer stopProgress()
-	var report *crawlkit.SyncReport
+	var report *trawlkit.SyncReport
 	err := r.withStore(func(st *store.Store) error {
 		var existingMediaSourcePath string
 		var existingMediaRefs []telegramdesktop.ExistingMediaRef
@@ -57,14 +57,14 @@ func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.Sy
 		writeElapsed := time.Since(writeStarted)
 		r.logSyncTimings(result.Stats, importElapsed, writeElapsed, c.sync.FetchMedia, c.sync.Chat)
 		_ = progress.Report(int64(result.Stats.Messages), "sync complete")
-		report = &crawlkit.SyncReport{Added: counts.Added, Updated: counts.Updated, Removed: counts.Removed}
+		report = &trawlkit.SyncReport{Added: counts.Added, Updated: counts.Updated, Removed: counts.Removed}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 	if report == nil {
-		return &crawlkit.SyncReport{}, nil
+		return &trawlkit.SyncReport{}, nil
 	}
 	return report, nil
 }
@@ -105,7 +105,7 @@ func (r *runtime) logSyncTimings(stats store.ImportStats, importElapsed, writeEl
 }
 
 type commandProgress struct {
-	req      *crawlkit.Request
+	req      *trawlkit.Request
 	phase    string
 	progress *cklog.Progress
 	done     chan struct{}
@@ -145,7 +145,7 @@ func (p *commandProgress) Report(done int64, message string) error {
 		return nil
 	}
 	if p.req != nil && p.req.Progress != nil {
-		p.req.Progress(crawlkit.Progress{Phase: p.phase, Done: done, Message: message})
+		p.req.Progress(trawlkit.Progress{Phase: p.phase, Done: done, Message: message})
 	}
 	if p.progress == nil {
 		return nil

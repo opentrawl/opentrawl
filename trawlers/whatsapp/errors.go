@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/openclaw/crawlkit/log"
-	"github.com/openclaw/crawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"

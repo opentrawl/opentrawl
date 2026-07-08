@@ -9,13 +9,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/trawl/internal/cli"
 	"github.com/opentrawl/opentrawl/trawl/internal/qa"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(cli.ExecuteCrawlerWire(os.Args[1:]))
 	}
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))

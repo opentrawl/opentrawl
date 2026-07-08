@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/calendarstore"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const staleAfter = 24 * time.Hour
@@ -18,20 +18,20 @@ const staleAfter = 24 * time.Hour
 type Crawler struct{}
 
 var (
-	_ crawlkit.Crawler         = (*Crawler)(nil)
-	_ crawlkit.Syncer          = (*Crawler)(nil)
-	_ crawlkit.Searcher        = (*Crawler)(nil)
-	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
-	_ crawlkit.Opener          = (*Crawler)(nil)
-	_ crawlkit.ContactExporter = (*Crawler)(nil)
+	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Syncer          = (*Crawler)(nil)
+	_ trawlkit.Searcher        = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.Opener          = (*Crawler)(nil)
+	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          archive.AppID,
 		Surface:     "calendar",
 		DisplayName: archive.DisplayName,
@@ -44,26 +44,26 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{
 			Name:    "calendars annotate",
 			Help:    "Record the user's stated meaning for a calendar. This writes to the local archive.",
 			Args:    []string{"CALENDAR_ID", "MEANING"},
 			Mutates: true,
-			Store:   crawlkit.StoreRequired,
+			Store:   trawlkit.StoreRequired,
 			Run:     c.annotateCalendar,
 		},
 		{
 			Name:  "calendars",
 			Help:  "List archived calendars.",
-			Store: crawlkit.StoreRequired,
+			Store: trawlkit.StoreRequired,
 			Run:   c.calendars,
 		},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(archive.AppID, "Archive has not been synced.")
 	status.State = "missing"
 	if req.Store == nil {
@@ -104,30 +104,30 @@ func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
-	return &crawlkit.Doctor{Checks: []crawlkit.Check{
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
+	return &trawlkit.Doctor{Checks: []trawlkit.Check{
 		checkSourceStore(ctx),
 		checkArchivePresent(req),
 		checkArchiveSchema(ctx, req),
 	}}, nil
 }
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	var whoFilter *archive.WhoFilter
-	var whoResolved *crawlkit.WhoResolved
+	var whoResolved *trawlkit.WhoResolved
 	if strings.TrimSpace(query.Who) != "" {
 		candidate, err := resolveArchiveWho(ctx, st, query.Text, query.Who)
 		if err != nil {
-			return crawlkit.SearchResult{}, err
+			return trawlkit.SearchResult{}, err
 		}
 		filter := candidate.Filter()
 		whoFilter = filter
 		resolved := candidate.Resolved()
-		whoResolved = &crawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
+		whoResolved = &trawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
 	}
 	results, total, err := st.Search(ctx, query.Text, archive.SearchOptions{
 		Limit:  query.Limit,
@@ -136,18 +136,18 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 		Who:    whoFilter,
 	})
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(results))
+	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
 		hit, err := searchHit(result)
 		if err != nil {
-			return crawlkit.SearchResult{}, err
+			return trawlkit.SearchResult{}, err
 		}
 		hits = append(hits, hit)
 	}
 	_ = req.Log.Info("search_complete", fmt.Sprintf("returned=%d total=%d", len(results), total))
-	return crawlkit.SearchResult{
+	return trawlkit.SearchResult{
 		WhoResolved:  whoResolved,
 		Results:      hits,
 		TotalMatches: int(total),
@@ -155,7 +155,7 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawl
 	}, nil
 }
 
-func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -171,7 +171,7 @@ func (c *Crawler) Who(ctx context.Context, req *crawlkit.Request, person string)
 	return out, nil
 }
 
-func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -183,33 +183,33 @@ func (c *Crawler) ContactExport(ctx context.Context, req *crawlkit.Request) (*co
 	return &control.ContactExport{Contacts: contacts}, nil
 }
 
-func checkSourceStore(ctx context.Context) crawlkit.Check {
+func checkSourceStore(ctx context.Context) trawlkit.Check {
 	if err := calendarstore.CanaryRead(ctx, calendarstore.DefaultPath()); err != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "source_store",
 			State:   "fail",
 			Message: "cannot read the Calendar database",
 			Remedy:  fullDiskAccessRemedy,
 		}
 	}
-	return crawlkit.Check{ID: "source_store", State: "ok"}
+	return trawlkit.Check{ID: "source_store", State: "ok"}
 }
 
-func checkArchivePresent(req *crawlkit.Request) crawlkit.Check {
+func checkArchivePresent(req *trawlkit.Request) trawlkit.Check {
 	if req.Store == nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "archive",
 			State:   "fail",
 			Message: "archive has not been synced",
 			Remedy:  "run trawl calendar sync",
 		}
 	}
-	return crawlkit.Check{ID: "archive", State: "ok"}
+	return trawlkit.Check{ID: "archive", State: "ok"}
 }
 
-func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
+func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
 	if req.Store == nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema is not current",
@@ -218,7 +218,7 @@ func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Che
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema is not current",
@@ -226,14 +226,14 @@ func checkArchiveSchema(ctx context.Context, req *crawlkit.Request) crawlkit.Che
 		}
 	}
 	if _, err := st.Status(ctx); err != nil {
-		return crawlkit.Check{
+		return trawlkit.Check{
 			ID:      "schema",
 			State:   "fail",
 			Message: "archive schema could not be inspected",
 			Remedy:  "run trawl calendar sync",
 		}
 	}
-	return crawlkit.Check{ID: "schema", State: "ok"}
+	return trawlkit.Check{ID: "schema", State: "ok"}
 }
 
 func isStale(status archive.Status) bool {
@@ -270,12 +270,12 @@ func unixOrZero(t time.Time) int64 {
 	return t.Unix()
 }
 
-func searchHit(result archive.SearchResult) (crawlkit.Hit, error) {
+func searchHit(result archive.SearchResult) (trawlkit.Hit, error) {
 	t, err := parseEventTime(result.Time)
 	if err != nil {
-		return crawlkit.Hit{}, err
+		return trawlkit.Hit{}, err
 	}
-	return crawlkit.Hit{
+	return trawlkit.Hit{
 		Ref:          result.Ref,
 		ShortRef:     result.ShortRef,
 		Time:         t,

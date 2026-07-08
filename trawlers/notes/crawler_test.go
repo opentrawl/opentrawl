@@ -13,11 +13,11 @@ import (
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestSyncSearchOpenAndAtTime(t *testing.T) {
@@ -50,7 +50,7 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	}
 
 	readReq := testRequest(t, archivePath, output.JSON, nil, false)
-	search, err := c.Search(context.Background(), readReq, crawlkit.Query{Text: "second", Limit: 20})
+	search, err := c.Search(context.Background(), readReq, trawlkit.Query{Text: "second", Limit: 20})
 	closeStore(t, readReq)
 	if err != nil {
 		t.Fatal(err)
@@ -198,7 +198,7 @@ func TestSyncBackfillsCurrentTitleForHistoricalVersionSearch(t *testing.T) {
 	}
 
 	searchReq := testRequest(t, archivePath, output.JSON, nil, false)
-	search, err := c.Search(context.Background(), searchReq, crawlkit.Query{Text: "needle", Limit: 20})
+	search, err := c.Search(context.Background(), searchReq, trawlkit.Query{Text: "needle", Limit: 20})
 	closeStore(t, searchReq)
 	if err != nil {
 		t.Fatal(err)
@@ -383,7 +383,7 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 	return buf.Bytes()
 }
 
-func testRequest(t *testing.T, path string, format output.Format, out *bytes.Buffer, write bool) *crawlkit.Request {
+func testRequest(t *testing.T, path string, format output.Format, out *bytes.Buffer, write bool) *trawlkit.Request {
 	t.Helper()
 	var st *ckstore.Store
 	var err error
@@ -398,15 +398,15 @@ func testRequest(t *testing.T, path string, format output.Format, out *bytes.Buf
 	if out == nil {
 		out = &bytes.Buffer{}
 	}
-	return &crawlkit.Request{
+	return &trawlkit.Request{
 		Store:  st,
-		Paths:  crawlkit.Paths{Archive: path, Config: filepath.Join(filepath.Dir(path), "config.toml"), Logs: filepath.Join(filepath.Dir(path), "logs")},
+		Paths:  trawlkit.Paths{Archive: path, Config: filepath.Join(filepath.Dir(path), "config.toml"), Logs: filepath.Join(filepath.Dir(path), "logs")},
 		Format: format,
 		Out:    out,
 	}
 }
 
-func closeStore(t *testing.T, req *crawlkit.Request) {
+func closeStore(t *testing.T, req *trawlkit.Request) {
 	t.Helper()
 	if req != nil && req.Store != nil {
 		if err := req.Store.Close(); err != nil {

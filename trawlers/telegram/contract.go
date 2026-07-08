@@ -5,9 +5,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (

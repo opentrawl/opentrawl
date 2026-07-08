@@ -9,11 +9,11 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	ckconfig "github.com/openclaw/crawlkit/config"
-	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type sourceStoreAccess int
@@ -28,10 +28,10 @@ const (
 type resolvedSourcePaths struct {
 	stateRoot string
 	base      string
-	paths     crawlkit.Paths
+	paths     trawlkit.Paths
 }
 
-func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sourceStoreAccess, format ckoutput.Format, out io.Writer, fn func(context.Context, *crawlkit.Request) error) (err error) {
+func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sourceStoreAccess, format ckoutput.Format, out io.Writer, fn func(context.Context, *trawlkit.Request) error) (err error) {
 	if source.Crawler == nil {
 		return errorsForMetadata(source)
 	}
@@ -68,13 +68,13 @@ func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sour
 	if st != nil {
 		defer func() { _ = st.Close() }()
 	}
-	req := &crawlkit.Request{
+	req := &trawlkit.Request{
 		Store:  st,
 		Paths:  paths.paths,
 		Format: format,
 		Out:    out,
 		Log:    runLog,
-		Progress: func(progress crawlkit.Progress) {
+		Progress: func(progress trawlkit.Progress) {
 			_ = runLog.Info(progressLogEvent(progress.Phase), progressFields(progress))
 		},
 	}
@@ -106,7 +106,7 @@ func resolveSourcePaths(source Source) (resolvedSourcePaths, error) {
 		return resolvedSourcePaths{}, fmt.Errorf("source id is required")
 	}
 	base := filepath.Join(stateRoot, id)
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(base, id+".db"),
 		Config:  filepath.Join(base, "config.toml"),
 		Logs:    filepath.Join(base, "logs"),
@@ -137,7 +137,7 @@ func loadSourceConfig(source Source, paths resolvedSourcePaths) error {
 	}
 	rv := reflect.ValueOf(info.Config)
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
-		return crawlkit.ConfigFieldError{Field: "config", Fix: "pass a pointer to the crawler config struct"}
+		return trawlkit.ConfigFieldError{Field: "config", Fix: "pass a pointer to the crawler config struct"}
 	}
 	exists, err := pathExists(paths.paths.Config)
 	if err != nil {
@@ -148,7 +148,7 @@ func loadSourceConfig(source Source, paths resolvedSourcePaths) error {
 			return fmt.Errorf("load config: %w", err)
 		}
 	}
-	if validator, ok := info.Config.(crawlkit.ConfigValidator); ok {
+	if validator, ok := info.Config.(trawlkit.ConfigValidator); ok {
 		if err := validator.Validate(); err != nil {
 			return err
 		}
@@ -156,7 +156,7 @@ func loadSourceConfig(source Source, paths resolvedSourcePaths) error {
 	return nil
 }
 
-func openSourceStore(ctx context.Context, paths crawlkit.Paths, access sourceStoreAccess) (*ckstore.Store, error) {
+func openSourceStore(ctx context.Context, paths trawlkit.Paths, access sourceStoreAccess) (*ckstore.Store, error) {
 	switch access {
 	case sourceStoreNone:
 		return nil, nil
@@ -229,7 +229,7 @@ func progressLogEvent(phase string) string {
 	return event
 }
 
-func progressFields(progress crawlkit.Progress) string {
+func progressFields(progress trawlkit.Progress) string {
 	parts := []string{fmt.Sprintf("done=%d", progress.Done)}
 	if progress.Total > 0 {
 		parts = append(parts, fmt.Sprintf("total=%d", progress.Total))

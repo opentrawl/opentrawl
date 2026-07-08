@@ -5,12 +5,12 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
-func (r *runtime) doctor(ctx context.Context) (*crawlkit.Doctor, error) {
+func (r *runtime) doctor(ctx context.Context) (*trawlkit.Doctor, error) {
 	checks := []doctorCheck{}
 	cfg, err := loadBirdConfig(r.configPath)
 	if err != nil {
@@ -52,7 +52,7 @@ func (r *runtime) doctor(ctx context.Context) (*crawlkit.Doctor, error) {
 	checks = append(checks, credentialsPresentCheck())
 	checks = append(checks, budgetHeadroomCheck(status, cfg))
 	checks = append(checks, r.xAPIUserProbeCheck(cfg, status))
-	return &crawlkit.Doctor{Checks: crawlkitChecks(punctuateDoctorChecks(checks))}, nil
+	return &trawlkit.Doctor{Checks: trawlkitChecks(punctuateDoctorChecks(checks))}, nil
 }
 
 func (r *runtime) dbIntegrityCheck(st *store.Store) doctorCheck {
@@ -131,10 +131,10 @@ func punctuateDoctorChecks(checks []doctorCheck) []doctorCheck {
 	return checks
 }
 
-func crawlkitChecks(checks []doctorCheck) []crawlkit.Check {
-	out := make([]crawlkit.Check, 0, len(checks))
+func trawlkitChecks(checks []doctorCheck) []trawlkit.Check {
+	out := make([]trawlkit.Check, 0, len(checks))
 	for _, check := range checks {
-		out = append(out, crawlkit.Check{
+		out = append(out, trawlkit.Check{
 			ID:      check.ID,
 			State:   check.State,
 			Message: check.Message,

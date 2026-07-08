@@ -6,17 +6,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/whomatch"
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func searchHit(hit archive.SearchHit) (crawlkit.Hit, error) {
+func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 	t, err := parseContractTime(hit.Time)
 	if err != nil {
-		return crawlkit.Hit{}, err
+		return trawlkit.Hit{}, err
 	}
-	return crawlkit.Hit{
+	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     t,

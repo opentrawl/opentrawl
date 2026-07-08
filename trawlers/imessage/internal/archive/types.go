@@ -3,7 +3,7 @@ package archive
 import (
 	"time"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type SyncResult struct {

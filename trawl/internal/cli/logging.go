@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/alecthomas/kong"
-	cklog "github.com/openclaw/crawlkit/log"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/openclaw/crawlkit/state"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const (

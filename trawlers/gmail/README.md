@@ -52,7 +52,7 @@ trawl gmail contacts export --json
 
 `contacts export` uses `gog contacts list --json`. It exports only
 contacts with a display name and at least one phone number, matching the
-crawlkit contact-export contract.
+trawlkit contact-export contract.
 
 `status` reports the archive as stale when the last completed sync is
 more than 24 hours old.

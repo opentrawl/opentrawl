@@ -14,16 +14,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }
@@ -73,7 +73,7 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	stateRoot := filepath.Join(root, "state")
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "photos", "photos.db"),
 		Config:  filepath.Join(stateRoot, "photos", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "photos", "logs"),
@@ -86,10 +86,10 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncReq := &crawlkit.Request{Store: writeStore, Paths: paths, Progress: func(crawlkit.Progress) {}}
+	syncReq := &trawlkit.Request{Store: writeStore, Paths: paths, Progress: func(trawlkit.Progress) {}}
 	report, err := source.Sync(ctx, syncReq)
 	if err == nil {
-		var records []crawlkit.ShortRefRecord
+		var records []trawlkit.ShortRefRecord
 		records, err = source.ShortRefRecords(ctx, syncReq)
 		if err == nil {
 			_, err = syncReq.RebuildShortRefs(ctx, records)
@@ -107,7 +107,7 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 
 	readStore := openReadStore(t, ctx, paths.Archive)
 	searchReq := readRequest(readStore, paths)
-	search, err := source.Search(ctx, searchReq, crawlkit.Query{Text: "synthetic", Limit: 20})
+	search, err := source.Search(ctx, searchReq, trawlkit.Query{Text: "synthetic", Limit: 20})
 	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
@@ -123,7 +123,7 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
-	err = source.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
+	err = source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,7 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	if err := fs.Parse([]string{"--limit", "1"}); err != nil {
 		t.Fatal(err)
 	}
-	err = classify.Run(ctx, &crawlkit.Request{Store: classifyStore, Paths: paths, Format: output.JSON, Out: &classifyOut, Progress: func(crawlkit.Progress) {}})
+	err = classify.Run(ctx, &trawlkit.Request{Store: classifyStore, Paths: paths, Format: output.JSON, Out: &classifyOut, Progress: func(trawlkit.Progress) {}})
 	if closeErr := classifyStore.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
@@ -171,7 +171,7 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	stateRoot := filepath.Join(home, ".opentrawl")
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "photos", "photos.db"),
 		Config:  filepath.Join(stateRoot, "photos", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "photos", "logs"),
@@ -186,7 +186,7 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = source.Sync(ctx, &crawlkit.Request{Store: writeStore, Paths: paths, Progress: func(crawlkit.Progress) {}})
+	_, err = source.Sync(ctx, &trawlkit.Request{Store: writeStore, Paths: paths, Progress: func(trawlkit.Progress) {}})
 	if closeErr := writeStore.Close(); closeErr != nil {
 		t.Fatal(closeErr)
 	}
@@ -195,7 +195,7 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 	}
 
 	readStore := openReadStore(t, ctx, paths.Archive)
-	search, err := source.Search(ctx, readRequest(readStore, paths), crawlkit.Query{Text: "dateless", Limit: 20})
+	search, err := source.Search(ctx, readRequest(readStore, paths), trawlkit.Query{Text: "dateless", Limit: 20})
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -208,11 +208,11 @@ func TestSearchKeepsDatelessAssets(t *testing.T) {
 	}
 }
 
-func TestRunSyncThroughCrawlkitChildCreatesArchive(t *testing.T) {
+func TestRunSyncThroughTrawlkitChildCreatesArchive(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	t.Setenv("HOME", home)
-	t.Setenv("CRAWLKIT_STATE_ROOT", "")
-	t.Setenv("CRAWLKIT_RUN_ID", "")
+	t.Setenv("TRAWLKIT_STATE_ROOT", "")
+	t.Setenv("TRAWLKIT_RUN_ID", "")
 	createSyntheticLibrary(t, filepath.Join(home, "Pictures", "Photos Library.photoslibrary"))
 
 	stdout, stderr, code := captureRun(t, []string{"sync", "--json"})
@@ -228,8 +228,8 @@ func TestRunSyncThroughCrawlkitChildCreatesArchive(t *testing.T) {
 func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	t.Setenv("HOME", home)
-	t.Setenv("CRAWLKIT_STATE_ROOT", "")
-	t.Setenv("CRAWLKIT_RUN_ID", "")
+	t.Setenv("TRAWLKIT_STATE_ROOT", "")
+	t.Setenv("TRAWLKIT_RUN_ID", "")
 	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
 	createSyntheticLibrary(t, libraryPath)
 	archivePath := filepath.Join(home, ".opentrawl", "photos", "photos.db")
@@ -245,7 +245,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("json sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var report crawlkit.SyncReport
+	var report trawlkit.SyncReport
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("sync JSON: %v\n%s", err, stdout)
 	}
@@ -309,7 +309,7 @@ func TestClassifyLimitContractIsUsageError(t *testing.T) {
 		if err := fs.Parse(args); err != nil {
 			t.Fatal(err)
 		}
-		err := classify.Run(context.Background(), &crawlkit.Request{Out: io.Discard})
+		err := classify.Run(context.Background(), &trawlkit.Request{Out: io.Discard})
 		if !output.IsUsage(err) {
 			t.Fatalf("classify %v error = %v, want usage", args, err)
 		}
@@ -334,7 +334,7 @@ func captureRun(t *testing.T, args []string) (string, string, int) {
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
 	}()
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	if err := stdoutW.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -367,15 +367,15 @@ func commandHasFlag(command control.Command, name string) bool {
 	return false
 }
 
-func readRequest(st *store.Store, paths crawlkit.Paths) *crawlkit.Request {
-	return &crawlkit.Request{
+func readRequest(st *store.Store, paths trawlkit.Paths) *trawlkit.Request {
+	return &trawlkit.Request{
 		Store: st,
 		Paths: paths,
 		Out:   io.Discard,
 	}
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {

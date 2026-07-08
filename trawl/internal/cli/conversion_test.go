@@ -4,11 +4,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-func TestStatusEnvelopeFromControlUsesTypedCrawlkitStatus(t *testing.T) {
+func TestStatusEnvelopeFromControlUsesTypedTrawlkitStatus(t *testing.T) {
 	status := control.NewStatus("imessage", "Archive is fresh.")
 	status.State = "ok"
 	status.LastSyncAt = "2026-07-02T14:03:00Z"

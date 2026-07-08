@@ -3,7 +3,7 @@ package addressbook
 import (
 	"os"
 
-	"github.com/openclaw/crawlkit/cache"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
 )
 
 type Snapshot struct {

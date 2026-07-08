@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (r *runtime) print(value any) error {

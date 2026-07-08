@@ -3,7 +3,7 @@ package main
 import (
 	"path/filepath"
 
-	"github.com/openclaw/crawlkit/config"
+	"github.com/opentrawl/opentrawl/trawlkit/config"
 )
 
 const linearLogFileName = "linear.log"

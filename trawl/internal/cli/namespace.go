@@ -6,22 +6,22 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 // This is the progressive-discovery seam. `trawl <source>` opens one
 // crawler's own verbs as a namespace: the listing is served from its
 // manifest, and `trawl <source> <verb>` runs that crawler through the
-// same crawlkit registration trawl uses for top-level fan-out.
+// same trawlkit registration trawl uses for top-level fan-out.
 //
 // The top-level commands (status, sync, search, who, open, doctor) are a
 // separate, permanent surface: they fan a single request out across every
 // discovered source and render one typed, uniform result (a status table,
 // a merged search, a who resolution). `trawl <source> <verb>` instead
 // streams one crawler's own raw output untouched. Both read the same
-// compiled crawlkit registrations; there is no second crawler list in
+// compiled trawlkit registrations; there is no second crawler list in
 // trawl.
 
 // namespaceCandidate reports the first non-flag token when it is not a
@@ -110,7 +110,7 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	}
 	verb := firstNonFlag(rest)
 	started := r.logSourceStart(source, verb)
-	out, captureErr := runCrawlkitCaptured(runArgs, []crawlkit.Crawler{source.Crawler})
+	out, captureErr := runTrawlkitCaptured(runArgs, []trawlkit.Crawler{source.Crawler})
 	if len(out.Stdout) > 0 {
 		_, _ = r.stdout.Write(out.Stdout)
 	}
@@ -210,7 +210,7 @@ func namespaceVerbList(source Source) []namespaceVerb {
 // namespaceMatch finds the manifest command whose literal prefix the
 // request's leading tokens complete. It matches the full prefix, not just
 // the first token, so an incomplete verb — "contacts" without its "export"
-// — gets a trawl-owned error instead of reaching crawlkit.
+// — gets a trawl-owned error instead of reaching trawlkit.
 func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 	leading := leadingLiterals(rest)
 	if len(leading) == 0 {

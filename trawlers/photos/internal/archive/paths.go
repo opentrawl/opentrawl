@@ -3,7 +3,7 @@ package archive
 import (
 	"path/filepath"
 
-	crawlconfig "github.com/openclaw/crawlkit/config"
+	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 )
 
 var runtimeApp = crawlconfig.App{Name: "photos", BaseDir: "~/.opentrawl/photos"}

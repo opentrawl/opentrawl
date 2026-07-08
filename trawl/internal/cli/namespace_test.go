@@ -132,7 +132,7 @@ func TestNamespaceUnknownVerb(t *testing.T) {
 }
 
 // An incomplete multi-word verb ("threads" without "export") must not
-// reach crawlkit — trawl owns the error, no module name leaks.
+// reach trawlkit — trawl owns the error, no module name leaks.
 func TestNamespaceIncompleteMultiWordVerb(t *testing.T) {
 	setupNamespace(t)
 	stdout, stderr, code := runCLI(t, "imessage", "threads")
@@ -147,7 +147,7 @@ func TestNamespaceIncompleteMultiWordVerb(t *testing.T) {
 	}
 }
 
-// A single user -v after the verb is treated as a crawlkit global flag, not
+// A single user -v after the verb is treated as a trawlkit global flag, not
 // doubled into -vv by a separate injection.
 func TestNamespaceVerbosePassthroughNotDoubled(t *testing.T) {
 	setupNamespace(t)
@@ -160,7 +160,7 @@ func TestNamespaceVerbosePassthroughNotDoubled(t *testing.T) {
 	}
 }
 
-// Generated crawlkit manifests declare bespoke verbs as JSON-capable, so
+// Generated trawlkit manifests declare bespoke verbs as JSON-capable, so
 // the namespace path renders the fake raw verb as JSON when the global flag
 // asks for JSON.
 func TestNamespaceJSONForBespokeVerb(t *testing.T) {

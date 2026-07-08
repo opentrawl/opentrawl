@@ -8,13 +8,13 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
@@ -34,19 +34,19 @@ func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) e
 	return printOpenText(req.Out, event)
 }
 
-func (c *Crawler) resolveOpenRef(ctx context.Context, req *crawlkit.Request, ref string) (string, error) {
+func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
 	ref = strings.TrimSpace(ref)
 	if strings.Contains(ref, ":") {
 		return ref, nil
 	}
-	if !crawlkit.ValidShortRef(ref) {
+	if !trawlkit.ValidShortRef(ref) {
 		return "", commandErr(1, "unknown_short_ref", fmt.Errorf("unknown short ref %q", ref), "rerun search or use the full ref")
 	}
 	matches, err := req.ResolveShortRef(ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", commandErr(1, "unknown_short_ref", fmt.Errorf("unknown short ref %q", ref), "rerun search or use the full ref")
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", commandErr(1, "ambiguous_short_ref", fmt.Errorf("short ref %q matches %d events", ref, len(matches)), "rerun search or use the full ref")
 	}
 	if err != nil {

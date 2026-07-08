@@ -1,6 +1,6 @@
 package photoscrawl
 
-import "github.com/openclaw/crawlkit/output"
+import "github.com/opentrawl/opentrawl/trawlkit/output"
 
 type commandError struct {
 	Code    string

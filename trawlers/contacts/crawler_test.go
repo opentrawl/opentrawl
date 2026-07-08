@@ -12,15 +12,15 @@ import (
 	"testing"
 
 	"github.com/openclaw/clawdex/internal/model"
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 var runMu sync.Mutex
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
-		os.Exit(crawlkit.Run(os.Args[1:], []crawlkit.Crawler{New()}))
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
 }
@@ -70,7 +70,7 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	var search struct {
-		Results []crawlkit.Hit `json:"results"`
+		Results []trawlkit.Hit `json:"results"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &search); err != nil {
 		t.Fatalf("search JSON: %v\n%s", err, stdout)
@@ -232,7 +232,7 @@ func runContacts(t *testing.T, home string, args ...string) (int, string, string
 	}()
 	os.Stdout = stdoutW
 	os.Stderr = stderrW
-	code := crawlkit.Run(args, []crawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
 	_ = stdoutW.Close()
 	_ = stderrW.Close()
 	wg.Wait()

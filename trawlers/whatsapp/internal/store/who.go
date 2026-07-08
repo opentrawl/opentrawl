@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 func (r WhoResolution) OnlyCloseSpellingMatch() bool {

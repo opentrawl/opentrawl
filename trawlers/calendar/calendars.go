@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type calendarsOutput struct {
@@ -46,7 +46,7 @@ type calendarAnnotationOutput struct {
 	Calendar calendarRow `json:"calendar"`
 }
 
-func (c *Crawler) calendars(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) calendars(ctx context.Context, req *trawlkit.Request) error {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
@@ -62,7 +62,7 @@ func (c *Crawler) calendars(ctx context.Context, req *crawlkit.Request) error {
 	return writeCalendarsText(req.Out, result)
 }
 
-func (c *Crawler) annotateCalendar(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) annotateCalendar(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 2 {
 		return output.UsageError{Err: errors.New("calendars annotate needs CALENDAR_ID and one quoted meaning")}
 	}

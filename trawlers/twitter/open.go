@@ -7,8 +7,8 @@ import (
 	"io"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func (r *runtime) runOpen(args []string) error {
@@ -53,14 +53,14 @@ func (r *runtime) resolveOpenTweetID(ref string) (string, error) {
 		}
 		return id, nil
 	}
-	if !crawlkit.ValidShortRef(ref) {
+	if !trawlkit.ValidShortRef(ref) {
 		return "", r.unknownShortRef(ref)
 	}
 	matches, err := r.req.ResolveShortRef(r.ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return "", r.unknownShortRef(ref)
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return "", r.contractError("ambiguous_short_ref", "short ref matches more than one tweet", "Rerun trawl twitter search or use the full ref.")
 	}
 	if err != nil {

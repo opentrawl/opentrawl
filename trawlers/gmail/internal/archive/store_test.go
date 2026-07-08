@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 func TestStoreSearchOpenStatus(t *testing.T) {
@@ -408,11 +408,11 @@ func TestSharedShortRefsResolveAndFailSafely(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	records := []crawlkit.ShortRefRecord{
+	records := []trawlkit.ShortRefRecord{
 		{Ref: RefPrefix + "m1"},
 		{Ref: RefPrefix + "m2"},
 	}
-	req := &crawlkit.Request{Store: st.store}
+	req := &trawlkit.Request{Store: st.store}
 	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
@@ -448,10 +448,10 @@ values ('22222', ?, ?), ('22222', ?, ?)
 `, RefPrefix+"m1", RefPrefix+"m1", RefPrefix+"m2", RefPrefix+"m2"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.ResolveShortRef(ctx, "22222"); !errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if _, err := req.ResolveShortRef(ctx, "22222"); !errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		t.Fatalf("ambiguous error = %v", err)
 	}
-	if _, err := req.ResolveShortRef(ctx, "33333"); !errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if _, err := req.ResolveShortRef(ctx, "33333"); !errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		t.Fatalf("unknown error = %v", err)
 	}
 }

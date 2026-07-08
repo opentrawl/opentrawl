@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/shortref"
-	"github.com/openclaw/crawlkit/state"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
-	// C SQLite via cgo, matching crawlkit/store after the modernc→mattn swap
+	// C SQLite via cgo, matching trawlkit/store after the modernc→mattn swap
 	// (TRAWL-56): the pure-Go driver ran hot paths 10-100x slower. Requires
 	// -tags sqlite_fts5; the monorepo devenv sets it via GOFLAGS.
 	_ "github.com/mattn/go-sqlite3"
@@ -21,7 +21,7 @@ import (
 
 const schemaVersion = 6
 
-// Sync markers live in the canonical crawlkit state.Store (table sync_state)
+// Sync markers live in the canonical trawlkit state.Store (table sync_state)
 // under one source name and entity type; each marker is a keyed scalar value.
 const (
 	syncSource       = "telegram"
@@ -253,7 +253,7 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 		return nil, err
 	}
 	// Tombstone the pre-canonical key/value sync_state before creating the
-	// canonical crawlkit state table — the names collide. The two markers
+	// canonical trawlkit state table — the names collide. The two markers
 	// are read out of the legacy table and carried into the canonical one
 	// before the drop: status.LastSource must survive the migration, since
 	// sync.go reads it to decide whether to preserve existing media refs on
@@ -410,7 +410,7 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 }
 
 // writeSyncMarkers records the import watermark and source path as scalar
-// values in the canonical crawlkit state table.
+// values in the canonical trawlkit state table.
 func writeSyncMarkers(ctx context.Context, tx *sql.Tx, now time.Time, sourcePath string) error {
 	markers := state.New(tx)
 	if err := markers.Set(ctx, syncSource, syncEntityType, syncLastImportAt, now.Format(time.RFC3339Nano)); err != nil {

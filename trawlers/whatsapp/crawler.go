@@ -3,8 +3,8 @@ package wacrawl
 import (
 	"flag"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 type Config struct {
@@ -22,20 +22,20 @@ type Crawler struct {
 }
 
 var (
-	_ crawlkit.Crawler         = (*Crawler)(nil)
-	_ crawlkit.Syncer          = (*Crawler)(nil)
-	_ crawlkit.Searcher        = (*Crawler)(nil)
-	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
-	_ crawlkit.Opener          = (*Crawler)(nil)
-	_ crawlkit.ContactExporter = (*Crawler)(nil)
+	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Syncer          = (*Crawler)(nil)
+	_ trawlkit.Searcher        = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.Opener          = (*Crawler)(nil)
+	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          "whatsapp",
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
@@ -49,8 +49,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{
 			Name:  "chats",
 			Help:  "List archived WhatsApp chats.",

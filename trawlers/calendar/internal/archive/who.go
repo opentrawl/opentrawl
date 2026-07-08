@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 type whoRecord struct {
@@ -286,7 +286,7 @@ func (r whoRecord) identifierKeys() []string {
 	return keys
 }
 
-// Display-name picking is centralized in crawlkit; the structural rules and
+// Display-name picking is centralized in trawlkit; the structural rules and
 // the rules.md §1.5 carve-out are documented on whomatch.BestDisplayName.
 func bestWhoName(names map[string]int, identifiers []string) string {
 	if who := whomatch.BestDisplayName(names, identifiers); who != "" {

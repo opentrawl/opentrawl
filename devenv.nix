@@ -20,7 +20,7 @@
 
   enterShell = ''
     export PATH="$DEVENV_ROOT/.dev/bin:$PATH"
-    # crawlkit/store uses C SQLite (mattn/go-sqlite3); FTS5 is a build tag.
+    # trawlkit/store uses C SQLite (mattn/go-sqlite3); FTS5 is a build tag.
     export GOFLAGS="-tags=sqlite_fts5"
   '';
 }

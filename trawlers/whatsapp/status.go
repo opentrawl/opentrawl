@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/wacrawl/internal/sqlitedsn"
 	"github.com/openclaw/wacrawl/internal/store"
 	"github.com/openclaw/wacrawl/internal/whatsappdb"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus("whatsapp", "Archive has not been synced.")
 	status.State = "missing"
 	status.ConfigPath = req.Paths.Config
@@ -75,14 +75,14 @@ func statusCounts(status store.Status) []control.Count {
 	return counts
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	source, discoverErr := whatsappdb.Discover(ctx, c.cfg.Source)
 	canaryRan := source.Available && strings.TrimSpace(source.ChatDB) != ""
 	var canaryErr error
 	if canaryRan {
 		canaryErr = sourceCanary(ctx, source)
 	}
-	checks := []crawlkit.Check{
+	checks := []trawlkit.Check{
 		sourceStoreCheck(source, discoverErr, canaryErr),
 		archiveCheck(ctx, req),
 	}
@@ -91,11 +91,11 @@ func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.
 			checks = append(checks, check)
 		}
 	}
-	return &crawlkit.Doctor{Checks: checks}, nil
+	return &trawlkit.Doctor{Checks: checks}, nil
 }
 
-func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) crawlkit.Check {
-	check := crawlkit.Check{ID: "source_store"}
+func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) trawlkit.Check {
+	check := trawlkit.Check{ID: "source_store"}
 	chatDB := strings.TrimSpace(source.ChatDB)
 	var chatDBStatErr error
 	if chatDB != "" {
@@ -159,8 +159,8 @@ func probeSQLite(ctx context.Context, dbPath string) error {
 	return db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&tables)
 }
 
-func archiveCheck(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
-	check := crawlkit.Check{ID: "archive"}
+func archiveCheck(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
+	check := trawlkit.Check{ID: "archive"}
 	switch {
 	case strings.TrimSpace(req.Paths.Archive) == "":
 		check.State = "fail"
@@ -183,8 +183,8 @@ func archiveCheck(ctx context.Context, req *crawlkit.Request) crawlkit.Check {
 	return check
 }
 
-func fullDiskAccessCheck(canaryErr error) (crawlkit.Check, bool) {
-	check := crawlkit.Check{ID: "full_disk_access"}
+func fullDiskAccessCheck(canaryErr error) (trawlkit.Check, bool) {
+	check := trawlkit.Check{ID: "full_disk_access"}
 	switch {
 	case canaryErr == nil:
 		check.State = "ok"
@@ -196,7 +196,7 @@ func fullDiskAccessCheck(canaryErr error) (crawlkit.Check, bool) {
 		check.Remedy = fullDiskAccessRemedy
 		return check, true
 	default:
-		return crawlkit.Check{}, false
+		return trawlkit.Check{}, false
 	}
 }
 

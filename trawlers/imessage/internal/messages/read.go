@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type StatusReport struct {

@@ -4,8 +4,8 @@ import (
 	"errors"
 	"strings"
 
-	ckflags "github.com/openclaw/crawlkit/flags"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 type browseCommand struct {

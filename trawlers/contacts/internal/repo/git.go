@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/openclaw/crawlkit/mirror"
+	"github.com/opentrawl/opentrawl/trawlkit/mirror"
 )
 
 var ErrRemoteNotConfigured = errors.New("git remote is not configured; run trawl contacts config set git.remote URL or trawl contacts init DIR --remote URL")

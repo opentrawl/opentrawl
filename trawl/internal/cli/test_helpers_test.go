@@ -13,12 +13,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
-	ckstore "github.com/openclaw/crawlkit/store"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const fakeCrawlersEnv = "TRAWL_TEST_FAKE_CRAWLERS"
@@ -168,7 +168,7 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 }
 
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 && os.Args[1] == crawlkit.HiddenWireSubcommand {
+	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		if path := os.Getenv(fakeCrawlersEnv); path != "" {
 			crawlers, err := loadFakeCrawlers(path)
 			if err != nil {
@@ -259,10 +259,10 @@ func writeFakeCrawlers(t *testing.T, crawlers ...fakeCrawler) string {
 		normaliseFakeCrawler(&crawler)
 		normalized = append(normalized, crawler)
 	}
-	factories := make([]func() crawlkit.Crawler, 0, len(normalized))
+	factories := make([]func() trawlkit.Crawler, 0, len(normalized))
 	for _, crawler := range normalized {
 		crawler := crawler
-		factories = append(factories, func() crawlkit.Crawler { return newFakeSource(t, crawler) })
+		factories = append(factories, func() trawlkit.Crawler { return newFakeSource(t, crawler) })
 	}
 	crawlerFactories = factories
 	fakeCrawlerPath := filepath.Join(dir, "fake-crawlers.json")
@@ -292,11 +292,11 @@ func loadFakeCrawlers(path string) ([]fakeCrawler, error) {
 	return crawlers, nil
 }
 
-func fakeCrawlerFactories(crawlers []fakeCrawler) []func() crawlkit.Crawler {
-	factories := make([]func() crawlkit.Crawler, 0, len(crawlers))
+func fakeCrawlerFactories(crawlers []fakeCrawler) []func() trawlkit.Crawler {
+	factories := make([]func() trawlkit.Crawler, 0, len(crawlers))
 	for _, crawler := range crawlers {
 		crawler := crawler
-		factories = append(factories, func() crawlkit.Crawler { return newFakeSource(nil, crawler) })
+		factories = append(factories, func() trawlkit.Crawler { return newFakeSource(nil, crawler) })
 	}
 	return factories
 }
@@ -325,7 +325,7 @@ func normaliseFakeCrawler(crawler *fakeCrawler) {
 	}
 }
 
-func newFakeSource(t *testing.T, crawler fakeCrawler) crawlkit.Crawler {
+func newFakeSource(t *testing.T, crawler fakeCrawler) trawlkit.Crawler {
 	if t != nil {
 		t.Helper()
 	}
@@ -387,8 +387,8 @@ type fakeSource struct {
 	manifest control.Manifest
 }
 
-func (f *fakeSource) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (f *fakeSource) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          f.manifest.ID,
 		Surface:     sourceAlias(f.manifest.DisplayName),
 		DisplayName: f.manifest.DisplayName,
@@ -398,11 +398,11 @@ func (f *fakeSource) Info() crawlkit.Info {
 
 func (f *fakeSource) fakeCrawler() {}
 
-func (f *fakeSource) Verbs() []crawlkit.Verb {
+func (f *fakeSource) Verbs() []trawlkit.Verb {
 	if f.crawler.metadataExit != 0 || strings.TrimSpace(f.crawler.metadata) == "not-json" {
-		return []crawlkit.Verb{{Name: "status", Help: "invalid metadata"}}
+		return []trawlkit.Verb{{Name: "status", Help: "invalid metadata"}}
 	}
-	verbs := make([]crawlkit.Verb, 0, len(f.manifest.Commands))
+	verbs := make([]trawlkit.Verb, 0, len(f.manifest.Commands))
 	for _, command := range f.manifest.Commands {
 		tokens := fixedVerbTokens(command)
 		if len(tokens) == 0 {
@@ -414,14 +414,14 @@ func (f *fakeSource) Verbs() []crawlkit.Verb {
 		}
 		verbName := name
 		limit := ""
-		verbs = append(verbs, crawlkit.Verb{
+		verbs = append(verbs, trawlkit.Verb{
 			Name:  verbName,
 			Help:  command.Title,
-			Store: crawlkit.StoreNone,
+			Store: trawlkit.StoreNone,
 			Flags: func(fs *flag.FlagSet) {
 				fs.StringVar(&limit, "limit", "", "limit")
 			},
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				_ = ctx
 				args := append([]string(nil), req.Args...)
 				if args == nil {
@@ -454,7 +454,7 @@ func fakeSpineVerb(name string) bool {
 	}
 }
 
-func (f *fakeSource) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (f *fakeSource) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	_ = ctx
 	_ = req
 	if f.crawler.statusExit != 0 {
@@ -467,7 +467,7 @@ func (f *fakeSource) Status(ctx context.Context, req *crawlkit.Request) (*contro
 	return &status, nil
 }
 
-func (f *fakeSource) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (f *fakeSource) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	_ = ctx
 	_ = req
 	if f.crawler.doctorExit != 0 {
@@ -477,25 +477,25 @@ func (f *fakeSource) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlk
 	if err := decodeContractJSON([]byte(f.crawler.doctor), &envelope); err != nil {
 		return nil, err
 	}
-	checks := make([]crawlkit.Check, 0, len(envelope.Checks))
+	checks := make([]trawlkit.Check, 0, len(envelope.Checks))
 	for _, check := range envelope.Checks {
-		checks = append(checks, crawlkit.Check{
+		checks = append(checks, trawlkit.Check{
 			ID:      check.ID,
 			State:   check.State,
 			Message: check.Message,
 			Remedy:  check.Remedy,
 		})
 	}
-	return &crawlkit.Doctor{Checks: checks}, nil
+	return &trawlkit.Doctor{Checks: checks}, nil
 }
 
-func (f *fakeSource) search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	_ = req
 	if f.crawler.searchSleep != "" {
 		select {
 		case <-time.After(parseFakeSleep(f.crawler.searchSleep)):
 		case <-ctx.Done():
-			return crawlkit.SearchResult{}, ctx.Err()
+			return trawlkit.SearchResult{}, ctx.Err()
 		}
 	}
 	if f.crawler.searchStderr != "" && req.Log != nil {
@@ -506,31 +506,31 @@ func (f *fakeSource) search(ctx context.Context, req *crawlkit.Request, query cr
 		}
 	}
 	if f.crawler.searchQuery != "" && query.Text != f.crawler.searchQuery {
-		return crawlkit.SearchResult{}, fmt.Errorf("query = %q, want %q", query.Text, f.crawler.searchQuery)
+		return trawlkit.SearchResult{}, fmt.Errorf("query = %q, want %q", query.Text, f.crawler.searchQuery)
 	}
 	if f.crawler.searchNoQuery && query.Text != "" {
-		return crawlkit.SearchResult{}, fmt.Errorf("query = %q, want empty", query.Text)
+		return trawlkit.SearchResult{}, fmt.Errorf("query = %q, want empty", query.Text)
 	}
 	if f.crawler.searchLimit != "" && fmt.Sprint(query.Limit) != f.crawler.searchLimit {
-		return crawlkit.SearchResult{}, fmt.Errorf("limit = %d, want %s", query.Limit, f.crawler.searchLimit)
+		return trawlkit.SearchResult{}, fmt.Errorf("limit = %d, want %s", query.Limit, f.crawler.searchLimit)
 	}
 	if f.crawler.searchWho != "" && query.Who != f.crawler.searchWho {
-		return crawlkit.SearchResult{}, fmt.Errorf("who = %q, want %q", query.Who, f.crawler.searchWho)
+		return trawlkit.SearchResult{}, fmt.Errorf("who = %q, want %q", query.Who, f.crawler.searchWho)
 	}
 	if f.crawler.searchExit != 0 {
 		if code := fakeSearchContractErrorCode([]byte(f.crawler.search)); code != "" {
-			return crawlkit.SearchResult{}, fakeErrorBody(code)
+			return trawlkit.SearchResult{}, fakeErrorBody(code)
 		}
-		return crawlkit.SearchResult{}, errors.New("search failed")
+		return trawlkit.SearchResult{}, errors.New("search failed")
 	}
 	envelope, err := decodeFakeSearchEnvelope([]byte(f.crawler.search))
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	hits := make([]crawlkit.Hit, 0, len(envelope.Results))
+	hits := make([]trawlkit.Hit, 0, len(envelope.Results))
 	for _, row := range envelope.Results {
 		parsed, _ := time.Parse(time.RFC3339, row.Time)
-		hits = append(hits, crawlkit.Hit{
+		hits = append(hits, trawlkit.Hit{
 			Ref:          row.Ref,
 			ShortRef:     firstNonEmpty(row.ShortRef, row.Alias),
 			Time:         parsed,
@@ -542,7 +542,7 @@ func (f *fakeSource) search(ctx context.Context, req *crawlkit.Request, query cr
 			Availability: row.Availability,
 		})
 	}
-	return crawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}, nil
+	return trawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}, nil
 }
 
 type fakeSearchResult struct {
@@ -613,7 +613,7 @@ func parseFakeSleep(value string) time.Duration {
 	return duration
 }
 
-func (f *fakeSource) open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (f *fakeSource) open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	_ = ctx
 	expected := f.crawler.openRef
 	if f.crawler.shortRefAlias != "" && req.Format == ckoutput.JSON {
@@ -644,7 +644,7 @@ func (f *fakeSource) open(ctx context.Context, req *crawlkit.Request, ref string
 	return nil
 }
 
-func (f *fakeSource) sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (f *fakeSource) sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	_ = req
 	if f.crawler.syncSleep != "" {
 		select {
@@ -660,7 +660,7 @@ func (f *fakeSource) sync(ctx context.Context, req *crawlkit.Request) (*crawlkit
 	if !ok {
 		return nil, errors.New("sync did not return a final JSON outcome")
 	}
-	var report crawlkit.SyncReport
+	var report trawlkit.SyncReport
 	report.Added = jsonNumberInt64(outcome.Added)
 	report.Updated = jsonNumberInt64(outcome.Updated)
 	report.Removed = jsonNumberInt64(outcome.Removed)
@@ -678,7 +678,7 @@ func jsonNumberInt64(value json.Number) int64 {
 	return parsed
 }
 
-func (f *fakeSource) who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (f *fakeSource) who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	_ = ctx
 	_ = req
 	if f.crawler.whoQuery != "" && person != f.crawler.whoQuery {
@@ -722,49 +722,49 @@ func (e fakeError) ErrorBody() ckoutput.ErrorBody {
 
 type fakeSearch struct{ *fakeSource }
 
-func (f *fakeSearch) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (f *fakeSearch) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return f.search(ctx, req, query)
 }
 
 type fakeOpen struct{ *fakeSource }
 
-func (f *fakeOpen) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (f *fakeOpen) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	return f.open(ctx, req, ref)
 }
 
 type fakeWho struct{ *fakeSource }
 
-func (f *fakeWho) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (f *fakeWho) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	return f.who(ctx, req, person)
 }
 
 type fakeSearchOpen struct{ *fakeSource }
 
-func (f *fakeSearchOpen) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (f *fakeSearchOpen) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return f.search(ctx, req, query)
 }
 
-func (f *fakeSearchOpen) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (f *fakeSearchOpen) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	return f.open(ctx, req, ref)
 }
 
 type fakeSearchOpenSync struct{ *fakeSource }
 
-func (f *fakeSearchOpenSync) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (f *fakeSearchOpenSync) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return f.search(ctx, req, query)
 }
 
-func (f *fakeSearchOpenSync) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (f *fakeSearchOpenSync) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	return f.open(ctx, req, ref)
 }
 
-func (f *fakeSearchOpenSync) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (f *fakeSearchOpenSync) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	return f.sync(ctx, req)
 }
 
 type fakeSearchOpenSyncWho struct{ *fakeSearchOpenSync }
 
-func (f *fakeSearchOpenSyncWho) Who(ctx context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (f *fakeSearchOpenSyncWho) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	return f.who(ctx, req, person)
 }
 

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/render"
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type StatusResult struct {

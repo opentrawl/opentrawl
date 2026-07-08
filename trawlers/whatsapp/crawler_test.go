@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -25,7 +25,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	sourceRoot := t.TempDir()
 	createDesktopFixture(t, sourceRoot)
 	stateRoot := t.TempDir()
-	paths := crawlkit.Paths{
+	paths := trawlkit.Paths{
 		Archive: filepath.Join(stateRoot, "whatsapp", "whatsapp.db"),
 		Config:  filepath.Join(stateRoot, "whatsapp", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "whatsapp", "logs"),
@@ -38,16 +38,16 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	syncReq := &crawlkit.Request{
+	syncReq := &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   output.Text,
 		Out:      &bytes.Buffer{},
-		Progress: func(crawlkit.Progress) {},
+		Progress: func(trawlkit.Progress) {},
 	}
 	report, err := crawler.Sync(ctx, syncReq)
 	if err == nil {
-		var records []crawlkit.ShortRefRecord
+		var records []trawlkit.ShortRefRecord
 		records, err = crawler.ShortRefRecords(ctx, syncReq)
 		if err == nil {
 			_, err = syncReq.RebuildShortRefs(ctx, records)
@@ -75,7 +75,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	searchReq := readRequest(readStore, paths)
-	search, err := crawler.Search(ctx, searchReq, crawlkit.Query{Text: "launch", Limit: 20})
+	search, err := crawler.Search(ctx, searchReq, trawlkit.Query{Text: "launch", Limit: 20})
 	fillTestShortRefs(t, ctx, searchReq, search.Results)
 	_ = readStore.Close()
 	if err != nil {
@@ -111,7 +111,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	var openOut bytes.Buffer
-	err = crawler.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
+	err = crawler.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.JSON, Out: &openOut}, hit.ShortRef)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 
 	readStore = openReadStore(t, ctx, paths.Archive)
 	openOut.Reset()
-	err = crawler.Open(ctx, &crawlkit.Request{Store: readStore, Paths: paths, Format: output.Text, Out: &openOut}, hit.Ref)
+	err = crawler.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: output.Text, Out: &openOut}, hit.Ref)
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -169,11 +169,11 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	}
 }
 
-func readRequest(st *ckstore.Store, paths crawlkit.Paths) *crawlkit.Request {
-	return &crawlkit.Request{Store: st, Paths: paths, Format: output.Text, Out: &bytes.Buffer{}}
+func readRequest(st *ckstore.Store, paths trawlkit.Paths) *trawlkit.Request {
+	return &trawlkit.Request{Store: st, Paths: paths, Format: output.Text, Out: &bytes.Buffer{}}
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {
@@ -229,7 +229,7 @@ func captureRun(t *testing.T, args []string, crawler *Crawler) (int, string, str
 	}
 	os.Stdout = outW
 	os.Stderr = errW
-	code := crawlkit.Run(args, []crawlkit.Crawler{crawler})
+	code := trawlkit.Run(args, []trawlkit.Crawler{crawler})
 	_ = outW.Close()
 	_ = errW.Close()
 	os.Stdout = origStdout

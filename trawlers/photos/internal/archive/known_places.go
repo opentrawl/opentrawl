@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
 const (

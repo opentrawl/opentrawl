@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (s *Store) Messages(ctx context.Context, filter MessageFilter) ([]Message, error) {

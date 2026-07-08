@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestCrawlerVerbs(t *testing.T) {
 	crawler := New()
-	verbs := map[string]crawlkit.Verb{}
+	verbs := map[string]trawlkit.Verb{}
 	for _, verb := range crawler.Verbs() {
 		verbs[verb.Name] = verb
 	}
@@ -44,14 +44,14 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	defer func() { _ = rawStore.Close() }()
 
 	var out bytes.Buffer
-	req := &crawlkit.Request{
+	req := &trawlkit.Request{
 		Store:  rawStore,
-		Paths:  crawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
+		Paths:  trawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
 		Format: ckoutput.JSON,
 		Out:    &out,
 	}
 	crawler := New()
-	search, err := crawler.Search(ctx, req, crawlkit.Query{Text: "launch", Limit: 10})
+	search, err := crawler.Search(ctx, req, trawlkit.Query{Text: "launch", Limit: 10})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,9 +103,9 @@ func TestOpenGroupTranscriptShowsParticipantsAndContext(t *testing.T) {
 	defer func() { _ = rawStore.Close() }()
 
 	var out bytes.Buffer
-	req := &crawlkit.Request{
+	req := &trawlkit.Request{
 		Store:  rawStore,
-		Paths:  crawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
+		Paths:  trawlkit.Paths{Archive: archivePath, Config: t.TempDir() + "/config.toml", Logs: t.TempDir()},
 		Format: ckoutput.Text,
 		Out:    &out,
 	}
@@ -154,7 +154,7 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 	rebuildSyntheticShortRefs(t, ctx, archivePath)
 }
 
-func fillTestShortRefs(t *testing.T, ctx context.Context, req *crawlkit.Request, hits []crawlkit.Hit) {
+func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
 	t.Helper()
 	refs := make([]string, 0, len(hits))
 	for _, hit := range hits {
@@ -176,7 +176,7 @@ func rebuildSyntheticShortRefs(t *testing.T, ctx context.Context, archivePath st
 		t.Fatal(err)
 	}
 	defer func() { _ = rawStore.Close() }()
-	req := &crawlkit.Request{Store: rawStore, Paths: crawlkit.Paths{Archive: archivePath}}
+	req := &trawlkit.Request{Store: rawStore, Paths: trawlkit.Paths{Archive: archivePath}}
 	records, err := New().ShortRefRecords(ctx, req)
 	if err != nil {
 		t.Fatal(err)

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
@@ -58,7 +58,7 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if len(asset.Albums) != 1 || asset.Albums[0].AlbumTitle != "Synthetic Album" {
 		t.Fatalf("albums = %#v", asset.Albums)
 	}
-	if snapshot.Metadata["snapshot"] != "crawlkit_sqlite_copy" || snapshot.Metadata["album_join_table"] != "Z_34ASSETS" {
+	if snapshot.Metadata["snapshot"] != "trawlkit_sqlite_copy" || snapshot.Metadata["album_join_table"] != "Z_34ASSETS" {
 		t.Fatalf("metadata = %#v", snapshot.Metadata)
 	}
 }

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	ckmodel "github.com/openclaw/crawlkit/model"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	repoPrompts "github.com/openclaw/photoscrawl/prompts"
+	ckmodel "github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
 const (

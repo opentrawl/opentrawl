@@ -9,7 +9,7 @@ import (
 )
 
 // Bare `trawl` (and `trawl --help`) used to hardcode a five-source prose
-// sentence. The source list now comes from the explicit crawlkit
+// sentence. The source list now comes from the explicit trawlkit
 // registrations, so every registered crawler shows up.
 func TestSourcesLineListsEveryInstalledCrawler(t *testing.T) {
 	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}

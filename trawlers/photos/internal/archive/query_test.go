@@ -8,12 +8,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/openclaw/crawlkit/conformance"
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/conformance"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-// TestSearchHonorsLimitContract pins the one --limit contract (crawlkit/flags):
+// TestSearchHonorsLimitContract pins the one --limit contract (trawlkit/flags):
 // a positive limit is honored exactly with no hidden cap, a limit above the
 // match count returns every match without truncation, and limit 0 returns
 // everything for internal callers.

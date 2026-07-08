@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/clawdex/internal/model"
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type Adapter struct {

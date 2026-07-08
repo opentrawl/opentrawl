@@ -7,12 +7,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/flags"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
-func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error {
 	r := c.handler(ctx, req)
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("messages takes flags only"))

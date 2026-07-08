@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 var (
@@ -344,7 +344,7 @@ func senderLabel(fromMe bool, displayName, handle, chatDisplayName string, parti
 	return "them"
 }
 
-// syncMarkers reads the scalar sync markers from the one crawlkit state.Store.
+// syncMarkers reads the scalar sync markers from the one trawlkit state.Store.
 func (s *Store) syncMarkers(ctx context.Context) (map[string]string, error) {
 	syncState := state.New(s.store.DB())
 	out := map[string]string{}

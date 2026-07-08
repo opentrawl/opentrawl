@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/flags"
-	"github.com/openclaw/crawlkit/output"
 	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const (
@@ -78,8 +78,8 @@ type openMessageOutput struct {
 	Target         bool   `json:"target,omitempty"`
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		{
 			Name:  "chats",
 			Help:  "List archived iMessage chats.",
@@ -107,7 +107,7 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.messages.asc, "asc", false, "show oldest messages first")
 }
 
-func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
@@ -137,7 +137,7 @@ func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
 	return printChatsText(req.Out, out)
 }
 
-func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error {
+func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("messages takes flags only"))
 	}

@@ -13,10 +13,10 @@ import (
 	"github.com/openclaw/clawdex/internal/index"
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/clawdex/internal/repo"
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	"github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/whomatch"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
 const appID = "contacts"
@@ -26,25 +26,25 @@ type App struct{}
 type Crawler = App
 
 var (
-	_ crawlkit.Crawler         = (*App)(nil)
-	_ crawlkit.Searcher        = (*App)(nil)
-	_ crawlkit.WhoMatcher      = (*App)(nil)
-	_ crawlkit.Opener          = (*App)(nil)
-	_ crawlkit.ContactExporter = (*App)(nil)
+	_ trawlkit.Crawler         = (*App)(nil)
+	_ trawlkit.Searcher        = (*App)(nil)
+	_ trawlkit.WhoMatcher      = (*App)(nil)
+	_ trawlkit.Opener          = (*App)(nil)
+	_ trawlkit.ContactExporter = (*App)(nil)
 )
 
 func New() *App {
 	return &App{}
 }
 
-func (a *App) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (a *App) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          appID,
 		Surface:     appID,
 		Aliases:     []string{"clawdex"},
 		DisplayName: "Contacts",
 		Description: "Local-first contact identity layer.",
-		DefaultPaths: crawlkit.Paths{
+		DefaultPaths: trawlkit.Paths{
 			Archive: repo.DefaultConfig().RepoPath,
 			Config:  repo.ResolveConfigPath(""),
 			Logs:    repo.DefaultLogDir(),
@@ -55,14 +55,14 @@ func (a *App) Info() crawlkit.Info {
 	}
 }
 
-func (a *App) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
-		{Name: "status", Store: crawlkit.StoreNone},
-		{Name: "doctor", Store: crawlkit.StoreNone},
-		{Name: "search", Store: crawlkit.StoreNone},
-		{Name: "who", Store: crawlkit.StoreNone},
-		{Name: "open", Store: crawlkit.StoreNone},
-		{Name: "contacts_export", Store: crawlkit.StoreNone},
+func (a *App) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
+		{Name: "status", Store: trawlkit.StoreNone},
+		{Name: "doctor", Store: trawlkit.StoreNone},
+		{Name: "search", Store: trawlkit.StoreNone},
+		{Name: "who", Store: trawlkit.StoreNone},
+		{Name: "open", Store: trawlkit.StoreNone},
+		{Name: "contacts_export", Store: trawlkit.StoreNone},
 		initVerb(),
 		configVerb(),
 		personListVerb(),
@@ -76,7 +76,7 @@ func (a *App) Verbs() []crawlkit.Verb {
 	}
 }
 
-func (a *App) Status(_ context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (a *App) Status(_ context.Context, req *trawlkit.Request) (*control.Status, error) {
 	rt, err := newRuntime(req)
 	if err != nil {
 		return nil, err
@@ -84,27 +84,27 @@ func (a *App) Status(_ context.Context, req *crawlkit.Request) (*control.Status,
 	return rt.status(), nil
 }
 
-func (a *App) Doctor(_ context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (a *App) Doctor(_ context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	rt, err := newRuntime(req)
 	if err != nil {
-		return &crawlkit.Doctor{Checks: []crawlkit.Check{{
+		return &trawlkit.Doctor{Checks: []trawlkit.Check{{
 			ID:      "config",
 			State:   "fail",
 			Message: err.Error(),
 			Remedy:  "check the contacts config file",
 		}}}, nil
 	}
-	return &crawlkit.Doctor{Checks: []crawlkit.Check{
+	return &trawlkit.Doctor{Checks: []trawlkit.Check{
 		rt.configCheck(),
 		rt.contactsRepoCheck(),
 		rt.indexCheck(),
 	}}, nil
 }
 
-func (a *App) Search(_ context.Context, req *crawlkit.Request, q crawlkit.Query) (crawlkit.SearchResult, error) {
+func (a *App) Search(_ context.Context, req *trawlkit.Request, q trawlkit.Query) (trawlkit.SearchResult, error) {
 	rt, err := newRuntime(req)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	query := strings.Join(strings.Fields(q.Text), " ")
 	if query == "" && q.WhoResolved != nil {
@@ -114,18 +114,18 @@ func (a *App) Search(_ context.Context, req *crawlkit.Request, q crawlkit.Query)
 		query = strings.Join(strings.Fields(q.Who), " ")
 	}
 	if query == "" {
-		return crawlkit.SearchResult{Results: []crawlkit.Hit{}}, nil
+		return trawlkit.SearchResult{Results: []trawlkit.Hit{}}, nil
 	}
 	hits, err := rt.store.Search(query)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	total := len(hits)
 	if q.Limit > 0 && len(hits) > q.Limit {
 		hits = hits[:q.Limit]
 	}
-	result := crawlkit.SearchResult{
-		Results:      make([]crawlkit.Hit, 0, len(hits)),
+	result := trawlkit.SearchResult{
+		Results:      make([]trawlkit.Hit, 0, len(hits)),
 		TotalMatches: total,
 		Truncated:    total > len(hits),
 	}
@@ -137,7 +137,7 @@ func (a *App) Search(_ context.Context, req *crawlkit.Request, q crawlkit.Query)
 		if refID == "" {
 			continue
 		}
-		result.Results = append(result.Results, crawlkit.Hit{
+		result.Results = append(result.Results, trawlkit.Hit{
 			Ref:     "contacts:person/" + refID,
 			Time:    hit.Timestamp,
 			Who:     hit.Name,
@@ -150,7 +150,7 @@ func (a *App) Search(_ context.Context, req *crawlkit.Request, q crawlkit.Query)
 	return result, nil
 }
 
-func (a *App) Who(_ context.Context, req *crawlkit.Request, person string) ([]whomatch.Candidate, error) {
+func (a *App) Who(_ context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	rt, err := newRuntime(req)
 	if err != nil {
 		return nil, err
@@ -170,7 +170,7 @@ func (a *App) Who(_ context.Context, req *crawlkit.Request, person string) ([]wh
 	return out, nil
 }
 
-func (a *App) Open(_ context.Context, req *crawlkit.Request, ref string) error {
+func (a *App) Open(_ context.Context, req *trawlkit.Request, ref string) error {
 	rt, err := newRuntime(req)
 	if err != nil {
 		return err
@@ -182,7 +182,7 @@ func (a *App) Open(_ context.Context, req *crawlkit.Request, ref string) error {
 	return writePerson(req, person)
 }
 
-func (a *App) ContactExport(_ context.Context, req *crawlkit.Request) (*control.ContactExport, error) {
+func (a *App) ContactExport(_ context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
 	rt, err := newRuntime(req)
 	if err != nil {
 		return nil, err
@@ -212,8 +212,8 @@ type appRuntime struct {
 	store      index.Store
 }
 
-func newRuntime(req *crawlkit.Request) (appRuntime, error) {
-	paths := crawlkit.Paths{}
+func newRuntime(req *trawlkit.Request) (appRuntime, error) {
+	paths := trawlkit.Paths{}
 	if req != nil {
 		paths = req.Paths
 	}
@@ -286,49 +286,49 @@ func (rt appRuntime) status() *control.Status {
 	return &status
 }
 
-func (rt appRuntime) configCheck() crawlkit.Check {
+func (rt appRuntime) configCheck() trawlkit.Check {
 	if _, err := os.Stat(rt.configPath); errors.Is(err, os.ErrNotExist) {
-		return crawlkit.Check{ID: "config", State: "ok"}
+		return trawlkit.Check{ID: "config", State: "ok"}
 	} else if err != nil {
-		return crawlkit.Check{ID: "config", State: "fail", Message: "cannot read config", Remedy: "check " + rt.configPath}
+		return trawlkit.Check{ID: "config", State: "fail", Message: "cannot read config", Remedy: "check " + rt.configPath}
 	}
 	if _, err := repo.LoadConfig(rt.configPath); err != nil {
-		return crawlkit.Check{ID: "config", State: "fail", Message: err.Error(), Remedy: "check " + rt.configPath}
+		return trawlkit.Check{ID: "config", State: "fail", Message: err.Error(), Remedy: "check " + rt.configPath}
 	}
-	return crawlkit.Check{ID: "config", State: "ok"}
+	return trawlkit.Check{ID: "config", State: "ok"}
 }
 
-func (rt appRuntime) contactsRepoCheck() crawlkit.Check {
+func (rt appRuntime) contactsRepoCheck() trawlkit.Check {
 	if err := rt.repo.Require(); err != nil {
-		return crawlkit.Check{ID: "contacts_repo", State: "missing", Message: "contacts repo not initialised", Remedy: "run trawl contacts init " + rt.repo.Path}
+		return trawlkit.Check{ID: "contacts_repo", State: "missing", Message: "contacts repo not initialised", Remedy: "run trawl contacts init " + rt.repo.Path}
 	}
 	if _, err := os.Stat(filepath.Join(rt.repo.Path, ".git")); err != nil {
-		return crawlkit.Check{ID: "contacts_repo", State: "fail", Message: "contacts repo is not a git repo", Remedy: "run trawl contacts init " + rt.repo.Path}
+		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: "contacts repo is not a git repo", Remedy: "run trawl contacts init " + rt.repo.Path}
 	}
 	if _, err := rt.store.People(); err != nil {
-		return crawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
+		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
 	}
 	if problems, err := rt.personRepairProblemCount(); err != nil {
-		return crawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
+		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
 	} else if problems > 0 {
-		return crawlkit.Check{ID: "contacts_repo", State: "fail", Message: personRepairSummary(problems), Remedy: "run trawl contacts repair"}
+		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: personRepairSummary(problems), Remedy: "run trawl contacts repair"}
 	}
-	return crawlkit.Check{ID: "contacts_repo", State: "ok"}
+	return trawlkit.Check{ID: "contacts_repo", State: "ok"}
 }
 
-func (rt appRuntime) indexCheck() crawlkit.Check {
+func (rt appRuntime) indexCheck() trawlkit.Check {
 	people, err := rt.store.People()
 	if err != nil {
-		return crawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
+		return trawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
 	}
 	status, err := rt.store.IndexStatus()
 	if err != nil {
-		return crawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
+		return trawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
 	}
 	if status.People != len(people) {
-		return crawlkit.Check{ID: "index", State: "fail", Message: fmt.Sprintf("index has %s people, markdown has %s", strconv.Itoa(status.People), strconv.Itoa(len(people))), Remedy: "run trawl contacts repair"}
+		return trawlkit.Check{ID: "index", State: "fail", Message: fmt.Sprintf("index has %s people, markdown has %s", strconv.Itoa(status.People), strconv.Itoa(len(people))), Remedy: "run trawl contacts repair"}
 	}
-	return crawlkit.Check{ID: "index", State: "ok"}
+	return trawlkit.Check{ID: "index", State: "ok"}
 }
 
 func statusCounts(people []model.Person) []control.Count {

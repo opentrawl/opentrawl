@@ -7,43 +7,43 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	r := c.handler(ctx, req)
 	filter, err := c.searchFilter(query)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return crawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
+		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
 	resolved, err := r.resolveSearchWhoFilter(st, &filter)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	messages, err := st.Search(ctx, filter)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
 	total, err := st.CountSearch(ctx, filter)
 	if err != nil {
-		return crawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, err
 	}
-	return crawlkit.SearchResult{
-		WhoResolved:  crawlkitWhoResolved(query.WhoResolved, resolved),
+	return trawlkit.SearchResult{
+		WhoResolved:  trawlkitWhoResolved(query.WhoResolved, resolved),
 		Results:      searchHits(messages),
 		TotalMatches: total,
 		Truncated:    total > len(messages),
 	}, nil
 }
 
-func (c *Crawler) searchFilter(query crawlkit.Query) (store.MessageFilter, error) {
+func (c *Crawler) searchFilter(query trawlkit.Query) (store.MessageFilter, error) {
 	if c.search.FromMe && c.search.FromThem {
 		return store.MessageFilter{}, usageErr(errors.New("--from-me and --from-them conflict"))
 	}
@@ -73,11 +73,11 @@ func (c *Crawler) searchFilter(query crawlkit.Query) (store.MessageFilter, error
 	return filter, nil
 }
 
-func searchHits(messages []store.Message) []crawlkit.Hit {
-	hits := make([]crawlkit.Hit, 0, len(messages))
+func searchHits(messages []store.Message) []trawlkit.Hit {
+	hits := make([]trawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message.SourcePK)
-		hits = append(hits, crawlkit.Hit{
+		hits = append(hits, trawlkit.Hit{
 			Ref:     ref,
 			Time:    message.Timestamp.Local(),
 			Who:     outputField(messageWho(message)),
@@ -88,14 +88,14 @@ func searchHits(messages []store.Message) []crawlkit.Hit {
 	return hits
 }
 
-func crawlkitWhoResolved(queryResolved *crawlkit.WhoResolved, resolved *store.WhoCandidate) *crawlkit.WhoResolved {
+func trawlkitWhoResolved(queryResolved *trawlkit.WhoResolved, resolved *store.WhoCandidate) *trawlkit.WhoResolved {
 	if queryResolved != nil {
-		return &crawlkit.WhoResolved{Who: queryResolved.Who, Identifiers: append([]string(nil), queryResolved.Identifiers...)}
+		return &trawlkit.WhoResolved{Who: queryResolved.Who, Identifiers: append([]string(nil), queryResolved.Identifiers...)}
 	}
 	if resolved == nil {
 		return nil
 	}
-	return &crawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
+	return &trawlkit.WhoResolved{Who: resolved.Who, Identifiers: append([]string(nil), resolved.Identifiers...)}
 }
 
 func (r *runtime) resolveSearchWhoFilter(st *store.Store, filter *store.MessageFilter) (*store.WhoCandidate, error) {

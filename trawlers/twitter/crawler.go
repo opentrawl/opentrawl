@@ -8,11 +8,11 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	"github.com/openclaw/crawlkit/control"
-	cklog "github.com/openclaw/crawlkit/log"
-	ckoutput "github.com/openclaw/crawlkit/output"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
 const appID = "twitter"
@@ -32,18 +32,18 @@ type Crawler struct {
 }
 
 var (
-	_ crawlkit.Crawler  = (*Crawler)(nil)
-	_ crawlkit.Syncer   = (*Crawler)(nil)
-	_ crawlkit.Searcher = (*Crawler)(nil)
-	_ crawlkit.Opener   = (*Crawler)(nil)
+	_ trawlkit.Crawler  = (*Crawler)(nil)
+	_ trawlkit.Syncer   = (*Crawler)(nil)
+	_ trawlkit.Searcher = (*Crawler)(nil)
+	_ trawlkit.Opener   = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{cfg: Config{MonthlyBudgetUSD: "10"}}
 }
 
-func (c *Crawler) Info() crawlkit.Info {
-	return crawlkit.Info{
+func (c *Crawler) Info() trawlkit.Info {
+	return trawlkit.Info{
 		ID:          appID,
 		Surface:     "twitter",
 		Aliases:     []string{"x"},
@@ -58,8 +58,8 @@ func (c *Crawler) Info() crawlkit.Info {
 	}
 }
 
-func (c *Crawler) Verbs() []crawlkit.Verb {
-	return []crawlkit.Verb{
+func (c *Crawler) Verbs() []trawlkit.Verb {
+	return []trawlkit.Verb{
 		c.browseVerb("tweets"),
 		c.browseVerb("bookmarks"),
 		c.browseVerb("likes"),
@@ -68,14 +68,14 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Name:  "stats",
 			Help:  "Your top tweets by likes, retweets or replies",
 			Flags: c.statsFlags,
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.handler(ctx, req).runStats(req.Args)
 			},
 		},
 		{
 			Name: "spend",
 			Help: "Monthly X API spend",
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.handler(ctx, req).runSpend(req.Args)
 			},
 		},
@@ -84,49 +84,49 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 			Help:    "Import tweets.js and like.js from an X archive dump",
 			Args:    []string{"PATH"},
 			Mutates: true,
-			Run: func(ctx context.Context, req *crawlkit.Request) error {
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.handler(ctx, req).runImportArchive(req.Args)
 			},
 		},
 	}
 }
 
-func (c *Crawler) browseVerb(name string) crawlkit.Verb {
+func (c *Crawler) browseVerb(name string) trawlkit.Verb {
 	command := browseCommands[name]
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:  name,
 		Help:  command.title,
 		Flags: c.browseFlags,
-		Run: func(ctx context.Context, req *crawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			return c.handler(ctx, req).runBrowse(command, req.Args)
 		},
 	}
 }
 
-func (c *Crawler) Status(ctx context.Context, req *crawlkit.Request) (*control.Status, error) {
+func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	return c.handler(ctx, req).status(ctx)
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *crawlkit.Request) (*crawlkit.Doctor, error) {
+func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	return c.handler(ctx, req).doctor(ctx)
 }
 
-func (c *Crawler) Sync(ctx context.Context, req *crawlkit.Request) (*crawlkit.SyncReport, error) {
+func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	return c.handler(ctx, req).runSyncReport()
 }
 
-func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, query crawlkit.Query) (crawlkit.SearchResult, error) {
+func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	return c.handler(ctx, req).search(ctx, query)
 }
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	return c.handler(ctx, req).runOpen([]string{ref})
 }
 
 type runtime struct {
 	c          *Crawler
 	ctx        context.Context
-	req        *crawlkit.Request
+	req        *trawlkit.Request
 	stdout     io.Writer
 	json       bool
 	dbPath     string
@@ -134,7 +134,7 @@ type runtime struct {
 	log        *cklog.Run
 }
 
-func (c *Crawler) handler(ctx context.Context, req *crawlkit.Request) *runtime {
+func (c *Crawler) handler(ctx context.Context, req *trawlkit.Request) *runtime {
 	return &runtime{
 		ctx:        ctx,
 		req:        req,

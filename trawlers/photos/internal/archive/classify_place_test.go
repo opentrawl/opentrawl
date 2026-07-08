@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestClassifyPlacePhaseParksThrottledLocatedAssets(t *testing.T) {

@@ -21,24 +21,24 @@ import (
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/clawdex/internal/repo"
 	"github.com/openclaw/clawdex/internal/vcard"
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-func initVerb() crawlkit.Verb {
+func initVerb() trawlkit.Verb {
 	var remote string
 	var noConfig bool
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "init",
 		Help:    "Create the contacts repo",
 		Args:    []string{"DIR"},
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&remote, "remote", "", "Git remote for contacts backup")
 			fs.BoolVar(&noConfig, "no-config", false, "Do not write app config")
 		},
-		Run: func(ctx context.Context, req *crawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 1 {
 				return usageError(errors.New("init takes at most one directory"))
 			}
@@ -71,17 +71,17 @@ func initVerb() crawlkit.Verb {
 	}
 }
 
-func configVerb() crawlkit.Verb {
+func configVerb() trawlkit.Verb {
 	var dryRun bool
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "config",
 		Help:    "Show or set contacts config",
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
 		},
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			cfg, err := repo.LoadConfig(req.Paths.Config)
 			if err != nil {
 				return err
@@ -132,20 +132,20 @@ func setConfigValue(cfg *repo.Config, key, value string) error {
 	return nil
 }
 
-func personListVerb() crawlkit.Verb {
+func personListVerb() trawlkit.Verb {
 	var query string
 	var limit int
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:  "person list",
 		Help:  "List people",
-		Store: crawlkit.StoreNone,
+		Store: trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			limit = 50
 			fs.StringVar(&query, "query", "", "Filter query")
 			fs.StringVar(&query, "q", "", "Filter query")
 			fs.IntVar(&limit, "limit", 50, "Number of people to show")
 		},
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("person list takes no arguments"))
 			}
@@ -178,13 +178,13 @@ func personListVerb() crawlkit.Verb {
 	}
 }
 
-func personShowVerb() crawlkit.Verb {
-	return crawlkit.Verb{
+func personShowVerb() trawlkit.Verb {
+	return trawlkit.Verb{
 		Name:  "person show",
 		Help:  "Show a person",
 		Args:  []string{"QUERY"},
-		Store: crawlkit.StoreNone,
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Store: trawlkit.StoreNone,
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) != 1 {
 				return usageError(errors.New("person show needs one query"))
 			}
@@ -201,16 +201,16 @@ func personShowVerb() crawlkit.Verb {
 	}
 }
 
-func importVerb() crawlkit.Verb {
+func importVerb() trawlkit.Verb {
 	var input, account, dbPath string
 	var avatars, dryRun bool
 	var minMessages int
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "import",
 		Help:    "Import contacts into local markdown",
 		Args:    []string{"SOURCE"},
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			minMessages = 4
 			fs.StringVar(&input, "input", "", "JSON or NDJSON contact file")
@@ -220,7 +220,7 @@ func importVerb() crawlkit.Verb {
 			fs.IntVar(&minMessages, "min-messages", 4, "Minimum message count")
 			fs.BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
 		},
-		Run: func(ctx context.Context, req *crawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) != 1 {
 				return usageError(errors.New("import needs one source: apple, google, discrawl, or birdclaw"))
 			}
@@ -286,17 +286,17 @@ func importSourceContacts(ctx context.Context, cfg repo.Config, source string, o
 	}
 }
 
-func repairVerb() crawlkit.Verb {
+func repairVerb() trawlkit.Verb {
 	var dryRun bool
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "repair",
 		Help:    "Repair contacts markdown and rebuild the index",
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.BoolVar(&dryRun, "dry-run", false, "Preview repair without writing")
 		},
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("repair takes no arguments"))
 			}
@@ -313,12 +313,12 @@ func repairVerb() crawlkit.Verb {
 	}
 }
 
-func syncAppleVerb() crawlkit.Verb {
-	return crawlkit.Verb{
+func syncAppleVerb() trawlkit.Verb {
+	return trawlkit.Verb{
 		Name:  "sync apple",
 		Help:  "Preview Apple Contacts sync",
-		Store: crawlkit.StoreNone,
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Store: trawlkit.StoreNone,
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("sync apple takes no arguments"))
 			}
@@ -330,16 +330,16 @@ func syncAppleVerb() crawlkit.Verb {
 	}
 }
 
-func syncGoogleVerb() crawlkit.Verb {
+func syncGoogleVerb() trawlkit.Verb {
 	var account string
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:  "sync google",
 		Help:  "Preview Google Contacts sync",
-		Store: crawlkit.StoreNone,
+		Store: trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&account, "account", "", "Google account email")
 		},
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("sync google takes no arguments"))
 			}
@@ -356,21 +356,21 @@ func syncGoogleVerb() crawlkit.Verb {
 	}
 }
 
-func exportVCardVerb() crawlkit.Verb {
+func exportVCardVerb() trawlkit.Verb {
 	var person, out string
 	var includeAvatars bool
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "export vcard",
 		Help:    "Export vCard files",
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&person, "person", "", "Person query")
 			fs.BoolVar(&includeAvatars, "include-avatars", false, "Include avatar photo fields")
 			fs.StringVar(&out, "out", "", "Output .vcf path, or - for stdout")
 			fs.StringVar(&out, "o", "", "Output .vcf path, or - for stdout")
 		},
-		Run: func(_ context.Context, req *crawlkit.Request) error {
+		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("export vcard takes flags only"))
 			}
@@ -407,18 +407,18 @@ func exportVCardVerb() crawlkit.Verb {
 	}
 }
 
-func gitVerb() crawlkit.Verb {
+func gitVerb() trawlkit.Verb {
 	var message string
-	return crawlkit.Verb{
+	return trawlkit.Verb{
 		Name:    "git",
 		Help:    "Run contacts repo git helpers",
 		Mutates: true,
-		Store:   crawlkit.StoreNone,
+		Store:   trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&message, "message", "sync: update contacts", "Commit message")
 			fs.StringVar(&message, "m", "sync: update contacts", "Commit message")
 		},
-		Run: func(ctx context.Context, req *crawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			rt, err := newRuntime(req)
 			if err != nil {
 				return err
@@ -465,7 +465,7 @@ func gitVerb() crawlkit.Verb {
 	}
 }
 
-func runGitStatus(ctx context.Context, req *crawlkit.Request, repoPath string) error {
+func runGitStatus(ctx context.Context, req *trawlkit.Request, repoPath string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "status", "--short", "--branch")
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
@@ -503,9 +503,9 @@ func filterPeople(people []model.Person, query string) []model.Person {
 	return filtered
 }
 
-func (rt appRuntime) repairDoctor(dryRun bool) (*crawlkit.Doctor, error) {
+func (rt appRuntime) repairDoctor(dryRun bool) (*trawlkit.Doctor, error) {
 	if err := rt.repo.Require(); err != nil {
-		return &crawlkit.Doctor{Checks: []crawlkit.Check{rt.contactsRepoCheck()}}, nil
+		return &trawlkit.Doctor{Checks: []trawlkit.Check{rt.contactsRepoCheck()}}, nil
 	}
 	store := rt.store
 	people, err := store.People()
@@ -542,19 +542,19 @@ func (rt appRuntime) repairDoctor(dryRun bool) (*crawlkit.Doctor, error) {
 			}
 		}
 	}
-	checks := []crawlkit.Check{
+	checks := []trawlkit.Check{
 		{ID: "contacts_repo", State: "ok", Message: countNoun(len(people), "person", "people")},
 		{ID: "markdown_repair", State: repairState(repaired), Message: repairMessage("person markdown file", repaired, dryRun)},
 	}
 	if avatarRepaired > 0 {
-		checks = append(checks, crawlkit.Check{ID: "avatar_metadata", State: repairState(avatarRepaired), Message: repairMessage("avatar metadata entry", avatarRepaired, dryRun)})
+		checks = append(checks, trawlkit.Check{ID: "avatar_metadata", State: repairState(avatarRepaired), Message: repairMessage("avatar metadata entry", avatarRepaired, dryRun)})
 	}
 	if !dryRun {
 		if err := rt.store.Rebuild(); err != nil {
 			return nil, err
 		}
 	}
-	return &crawlkit.Doctor{Checks: checks}, nil
+	return &trawlkit.Doctor{Checks: checks}, nil
 }
 
 func (rt appRuntime) personRepairProblemCount() (int, error) {

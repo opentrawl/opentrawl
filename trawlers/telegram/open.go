@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -19,7 +19,7 @@ const (
 	openTranscriptMaxWhoWidth = 32
 )
 
-func (c *Crawler) Open(ctx context.Context, req *crawlkit.Request, ref string) error {
+func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	r := c.handler(ctx, req)
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
@@ -54,10 +54,10 @@ func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {
 		return sourcePK, nil
 	}
 	fullRefs, err := r.req.ResolveShortRef(r.ctx, ref)
-	if errors.Is(err, crawlkit.ErrUnknownShortRef) {
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
 		return 0, r.contractError("unknown_short_ref", "short ref was not found in this archive", "run trawl telegram search and copy the displayed short ref, or use a full ref from trawl telegram search --json.")
 	}
-	if errors.Is(err, crawlkit.ErrAmbiguousShortRef) {
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
 		return 0, r.contractError("ambiguous_short_ref", "short ref matches more than one archived message", "run trawl telegram search again and use the longer displayed ref or the full ref from trawl telegram search --json.")
 	}
 	if err != nil {

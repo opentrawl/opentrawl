@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/openclaw/crawlkit/state"
+	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
 const messageIngestHashVersion = "mail-decode-v6"

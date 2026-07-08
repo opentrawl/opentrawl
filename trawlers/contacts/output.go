@@ -7,9 +7,9 @@ import (
 
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/clawdex/internal/repo"
-	"github.com/openclaw/crawlkit"
-	ckoutput "github.com/openclaw/crawlkit/output"
-	"github.com/openclaw/crawlkit/render"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 	toml "github.com/pelletier/go-toml/v2"
 )
 
@@ -26,7 +26,7 @@ type importChangesEnvelope struct {
 	Changes []model.ImportChange `json:"changes"`
 }
 
-func writeMap(req *crawlkit.Request, value map[string]any) error {
+func writeMap(req *trawlkit.Request, value map[string]any) error {
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "result", value)
 	}
@@ -43,7 +43,7 @@ func writeMap(req *crawlkit.Request, value map[string]any) error {
 	return nil
 }
 
-func writeConfig(req *crawlkit.Request, cfg repo.Config) error {
+func writeConfig(req *trawlkit.Request, cfg repo.Config) error {
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "config", cfg)
 	}
@@ -55,7 +55,7 @@ func writeConfig(req *crawlkit.Request, cfg repo.Config) error {
 	return err
 }
 
-func writePeople(req *crawlkit.Request, value peopleEnvelope) error {
+func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 	if value.People == nil {
 		value.People = []model.Person{}
 	}
@@ -111,7 +111,7 @@ func writePeople(req *crawlkit.Request, value peopleEnvelope) error {
 	return render.WriteTable(req.Out, columns, rows)
 }
 
-func writePerson(req *crawlkit.Request, person model.Person) error {
+func writePerson(req *trawlkit.Request, person model.Person) error {
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "person", person)
 	}
@@ -130,7 +130,7 @@ func writePerson(req *crawlkit.Request, person model.Person) error {
 	})
 }
 
-func writeImportChanges(req *crawlkit.Request, value importChangesEnvelope) error {
+func writeImportChanges(req *trawlkit.Request, value importChangesEnvelope) error {
 	if value.Changes == nil {
 		value.Changes = []model.ImportChange{}
 	}
@@ -161,12 +161,12 @@ func writeImportChanges(req *crawlkit.Request, value importChangesEnvelope) erro
 	}, rows)
 }
 
-func writeDoctor(req *crawlkit.Request, doctor *crawlkit.Doctor) error {
+func writeDoctor(req *trawlkit.Request, doctor *trawlkit.Doctor) error {
 	if doctor == nil {
-		doctor = &crawlkit.Doctor{Checks: []crawlkit.Check{}}
+		doctor = &trawlkit.Doctor{Checks: []trawlkit.Check{}}
 	}
 	if doctor.Checks == nil {
-		doctor.Checks = []crawlkit.Check{}
+		doctor.Checks = []trawlkit.Check{}
 	}
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "repair", doctor)

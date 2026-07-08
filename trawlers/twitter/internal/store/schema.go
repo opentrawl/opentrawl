@@ -1,7 +1,7 @@
 package store
 
 // schemaVersion 2 replaced the hand-rolled sync_state(kind, cursor,
-// last_sync_at, last_result, coverage_note) table with crawlkit's
+// last_sync_at, last_result, coverage_note) table with trawlkit's
 // canonical state.Schema. migrateLegacySyncState copies every legacy row
 // into the canonical shape before dropping the old table — see store.go.
 const schemaVersion = 2

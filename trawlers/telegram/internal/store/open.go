@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	ckstore "github.com/openclaw/crawlkit/store"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 var ErrMessageNotFound = errors.New("message not found")
