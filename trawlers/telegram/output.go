@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 )
@@ -18,8 +17,6 @@ func (r *runtime) print(v any) error {
 	switch value := v.(type) {
 	case statusEnvelope:
 		return r.printStatus(value)
-	case control.Manifest:
-		return r.printManifest(value)
 	case doctorOutput:
 		return r.printDoctor(value)
 	case store.ImportStats:

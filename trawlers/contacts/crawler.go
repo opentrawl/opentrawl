@@ -21,6 +21,14 @@ import (
 
 type Crawler struct{}
 
+var (
+	_ crawlkit.Crawler         = (*Crawler)(nil)
+	_ crawlkit.Searcher        = (*Crawler)(nil)
+	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ crawlkit.Opener          = (*Crawler)(nil)
+	_ crawlkit.ContactExporter = (*Crawler)(nil)
+)
+
 func New() *Crawler {
 	return &Crawler{}
 }

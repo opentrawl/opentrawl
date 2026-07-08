@@ -21,7 +21,14 @@ type Crawler struct {
 	messageFlags messageFlagValues
 }
 
-var _ crawlkit.FullCrawler = (*Crawler)(nil)
+var (
+	_ crawlkit.Crawler         = (*Crawler)(nil)
+	_ crawlkit.Syncer          = (*Crawler)(nil)
+	_ crawlkit.Searcher        = (*Crawler)(nil)
+	_ crawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ crawlkit.Opener          = (*Crawler)(nil)
+	_ crawlkit.ContactExporter = (*Crawler)(nil)
+)
 
 func New() *Crawler {
 	return &Crawler{}

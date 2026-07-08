@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 )
 
@@ -19,8 +18,6 @@ func (r *runtime) print(value any) error {
 		return enc.Encode(value)
 	}
 	switch v := value.(type) {
-	case control.Manifest:
-		return r.printManifest(v)
 	case statusEnvelope:
 		return r.printStatus(v)
 	case spendEnvelope:
@@ -52,18 +49,6 @@ func (r *runtime) printSpend(value spendEnvelope) error {
 			{Label: "Remaining", Value: "$" + value.RemainingUSD},
 		},
 	})
-}
-
-func (r *runtime) printManifest(value control.Manifest) error {
-	name := strings.TrimSpace(value.DisplayName)
-	if name == "" {
-		name = value.ID
-	}
-	if _, err := fmt.Fprintf(r.stdout, "%s: %s\nversion: %s\n", name, value.Description, value.Version); err != nil {
-		return err
-	}
-	_, err := fmt.Fprintf(r.stdout, "database: %s\nlogs: %s\n", value.Paths.DefaultDatabase, value.Paths.DefaultLogs)
-	return err
 }
 
 func (r *runtime) printStatus(value statusEnvelope) error {

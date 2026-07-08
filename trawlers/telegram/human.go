@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/crawlkit/control"
 	"github.com/openclaw/crawlkit/render"
 	"github.com/openclaw/telecrawl/internal/store"
 	"github.com/openclaw/telecrawl/internal/telegramdesktop"
@@ -13,19 +12,6 @@ import (
 
 func shortLocalTime(t time.Time) string {
 	return render.ShortLocalTime(t)
-}
-
-func (r *runtime) printManifest(value control.Manifest) error {
-	return render.WriteCard(r.stdout, render.Card{
-		Title: "Telegram crawler",
-		Fields: []render.CardField{
-			{Label: "ID", Value: value.ID},
-			{Label: "Version", Value: value.Version},
-			{Label: "Database", Value: value.Paths.DefaultDatabase},
-			{Label: "Logs", Value: value.Paths.DefaultLogs},
-		},
-		Hints: []string{"JSON: trawl telegram metadata --json"},
-	})
 }
 
 func (r *runtime) printChats(value chatsEnvelope) error {
