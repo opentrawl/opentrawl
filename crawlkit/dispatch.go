@@ -246,13 +246,13 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 	}
 	switch name {
 	case "metadata":
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
 		return targetVerb{name: name, args: rest, spine: spineDeclaration(spine, name), storeMode: storeNone}, nil
 	case "status", "doctor":
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -261,7 +261,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if _, ok := source.(Syncer); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support sync")}
 		}
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -270,7 +270,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if _, ok := source.(Searcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support search")}
 		}
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -279,7 +279,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if _, ok := source.(Opener); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support open")}
 		}
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -288,7 +288,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if _, ok := source.(WhoMatcher); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support who")}
 		}
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -297,7 +297,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		if _, ok := source.(ContactExporter); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support contacts export")}
 		}
-		spine, err := supportedSpineVerbDeclarations(source)
+		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err
 		}
@@ -306,9 +306,9 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 	for _, verb := range source.Verbs() {
 		if matched, verbRest := matchBespokeVerb(verb, args); matched {
 			v := verb
-			mode := storeRead
-			if verb.Mutates {
-				mode = storeWrite
+			mode, err := storeModeForVerb(verb)
+			if err != nil {
+				return targetVerb{}, err
 			}
 			return targetVerb{name: commandKey(verb.Name), tokens: strings.Fields(verb.Name), args: verbRest, mutates: verb.Mutates, timeout: verb.Timeout, bespoke: &v, storeMode: mode}, nil
 		}
@@ -408,7 +408,7 @@ func loadConfig(info Info, stateRoot string) error {
 	if rv.Kind() != reflect.Pointer || rv.IsNil() {
 		return ConfigFieldError{Field: "config", Fix: "pass a pointer to the crawler config struct"}
 	}
-	paths, err := resolveSourcePaths(stateRoot, info.ID)
+	paths, err := resolveSourcePaths(stateRoot, info)
 	if err != nil {
 		return err
 	}

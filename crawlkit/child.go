@@ -109,7 +109,7 @@ func (r runner) runWireChild(ctx context.Context, argv []string, sources []Crawl
 }
 
 func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, globals globalOptions, format output.Format) executionResult {
-	paths, err := resolveSourcePaths(globals.stateRoot, source.Info().ID)
+	paths, err := resolveSourcePaths(globals.stateRoot, source.Info())
 	if err != nil {
 		return executionResult{err: err}
 	}

@@ -62,6 +62,9 @@ type Info struct {
 	Aliases     []string
 	DisplayName string
 	Description string
+	// ArchiveFilename declares the archive database filename. Empty uses
+	// "<ID>.db"; non-empty values must be a filename, not a path.
+	ArchiveFilename string
 	// ShortRefs declares that the generated manifest includes the
 	// "short_refs" capability. Consumers key on that manifest capability,
 	// so crawlkit can change this declaration mechanism without changing
@@ -93,9 +96,29 @@ type Verb struct {
 	Args    []string
 	Flags   func(fs *flag.FlagSet)
 	Mutates bool
+	// Store declares archive access for bespoke verbs. StoreDefault keeps
+	// the Mutates-based default.
+	Store   StoreAccess
 	Timeout time.Duration
 	Run     func(ctx context.Context, req *Request) error
 }
+
+// StoreAccess declares how a bespoke verb opens the archive store.
+type StoreAccess int
+
+const (
+	// StoreDefault maps non-mutating verbs to a required read-only store
+	// and mutating verbs to a required read-write store.
+	StoreDefault StoreAccess = iota
+	// StoreNone runs without opening or creating an archive.
+	StoreNone
+	// StoreOptional opens the archive read-only when it exists. It is only
+	// valid on non-mutating verbs.
+	StoreOptional
+	// StoreRequired opens the archive, read-only for non-mutating verbs and
+	// read-write for mutating verbs.
+	StoreRequired
+)
 
 type Query struct {
 	Text          string

@@ -12,12 +12,15 @@ import (
 
 func generateManifest(source Crawler, stateRoot, binaryName string) (control.Manifest, error) {
 	info := source.Info()
-	paths, err := resolveSourcePaths(stateRoot, info.ID)
+	paths, err := resolveSourcePaths(stateRoot, info)
 	if err != nil {
 		return control.Manifest{}, err
 	}
 	spine, err := spineVerbDeclarations(source)
 	if err != nil {
+		return control.Manifest{}, err
+	}
+	if err := validateBespokeVerbs(source); err != nil {
 		return control.Manifest{}, err
 	}
 	if strings.TrimSpace(binaryName) == "" {

@@ -16,10 +16,14 @@ type sourcePaths struct {
 	Paths
 }
 
-func resolveSourcePaths(stateRoot, sourceID string) (sourcePaths, error) {
-	sourceID = strings.TrimSpace(sourceID)
+func resolveSourcePaths(stateRoot string, info Info) (sourcePaths, error) {
+	sourceID := strings.TrimSpace(info.ID)
 	if sourceID == "" {
 		return sourcePaths{}, errors.New("source id is required")
+	}
+	archiveName, err := archiveFilename(info)
+	if err != nil {
+		return sourcePaths{}, err
 	}
 	root := strings.TrimSpace(stateRoot)
 	if root == "" {
@@ -36,7 +40,7 @@ func resolveSourcePaths(stateRoot, sourceID string) (sourcePaths, error) {
 		CrawlerID: sourceID,
 		Base:      base,
 		Paths: Paths{
-			Archive: filepath.Join(base, sourceID+".db"),
+			Archive: filepath.Join(base, archiveName),
 			Config:  filepath.Join(base, "config.toml"),
 			Logs:    filepath.Join(base, "logs"),
 		},

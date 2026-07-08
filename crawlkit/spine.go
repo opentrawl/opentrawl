@@ -147,6 +147,9 @@ func invalidSpineVerbFields(verb Verb) []string {
 	if verb.Mutates {
 		fields = append(fields, "Mutates")
 	}
+	if verb.Store != StoreDefault {
+		fields = append(fields, "Store")
+	}
 	if verb.Timeout != 0 {
 		fields = append(fields, "Timeout")
 	}
