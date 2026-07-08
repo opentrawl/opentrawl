@@ -55,17 +55,10 @@ photoscrawl-lab eval-card \
   --json
 ```
 
-Planned Gemini direct command after the provider fix:
-
-```sh
-OLLAMA_API_KEY="<gemini-api-key>" photoscrawl-lab eval-card \
-  --library "$HOME/Pictures/Photos Library.photoslibrary" \
-  --prompt prompts/photo-card-v1.md \
-  --limit 15 \
-  --models gemini-flash-latest \
-  --ollama-url https://generativelanguage.googleapis.com/v1beta/openai/v1 \
-  --json
-```
+Provider-direct calls (Gemini or any other) are prohibited: model inference
+goes through Ollama only (Josh ruling 2026-07-08, decisions.md). The Gemini
+OpenAI-compatible command shape that used to sit here is removed;
+`--ollama-url` accepts Ollama hosts only.
 
 Run details:
 
@@ -146,18 +139,11 @@ photoscrawl-lab eval-card \
   --json
 ```
 
-Baseline command shape for the Gemini OpenAI-compatible endpoint:
-
-```sh
-GEMINI_API_KEY="<from secret>" OLLAMA_API_KEY="$GEMINI_API_KEY" photoscrawl-lab eval-card \
-  --library "$HOME/Pictures/Photos Library.photoslibrary" \
-  --prompt prompts/photo-card-v1.md \
-  --limit 15 \
-  --sample latest \
-  --models gemini-flash-latest \
-  --ollama-url https://generativelanguage.googleapis.com/v1beta/openai/v1 \
-  --json
-```
+The Gemini OpenAI-compatible baseline shape that used to sit here is removed:
+provider-direct inference is prohibited (Josh ruling 2026-07-08, decisions.md).
+The `gemini-flash-latest` scores in the table below were measured through that
+now-prohibited path before the ruling; they remain as historical data only and
+are not a currently runnable configuration.
 
 Run details:
 
