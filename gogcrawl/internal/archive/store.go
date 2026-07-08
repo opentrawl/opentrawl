@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/openclaw/crawlkit/config"
@@ -27,6 +28,7 @@ var ErrSchemaMismatch = errors.New("archive schema version does not match this g
 type Store struct {
 	store *ckstore.Store
 	path  string
+	owned bool
 }
 
 // DefaultPaths is the one archive path layout, from crawlkit/config. The base
@@ -64,7 +66,7 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Store{store: st, path: path}, nil
+	return &Store{store: st, path: path, owned: true}, nil
 }
 
 func OpenExisting(ctx context.Context, path string) (*Store, error) {
@@ -87,11 +89,47 @@ func OpenExisting(ctx context.Context, path string) (*Store, error) {
 		_ = st.Close()
 		return nil, ErrSchemaMismatch
 	}
+	return &Store{store: st, path: path, owned: true}, nil
+}
+
+func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	if _, err := st.DB().ExecContext(ctx, schema+state.Schema+shortref.Schema); err != nil {
+		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
+		return nil, err
+	}
+	return &Store{store: st, path: path}, nil
+}
+
+func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
+	if st == nil {
+		return nil, errors.New("archive store is not open")
+	}
+	if strings.TrimSpace(path) == "" {
+		path = st.Path()
+	}
+	version, err := st.SchemaVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if version != schemaVersion {
+		return nil, ErrSchemaMismatch
+	}
 	return &Store{store: st, path: path}, nil
 }
 
 func (s *Store) Close() error {
 	if s == nil || s.store == nil {
+		return nil
+	}
+	if !s.owned {
 		return nil
 	}
 	return s.store.Close()
