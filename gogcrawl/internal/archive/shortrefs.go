@@ -106,9 +106,9 @@ func (s *Store) ShortRefs(ctx context.Context, fullRefs []string) (map[string]st
 	index := shortref.NewSQLiteIndex(s.store.DB())
 	out := map[string]string{}
 	// crawlkit's Aliases issues one IN clause, and SQLite caps host
-	// parameters per statement, so chunk it here: --all can resolve tens
-	// of thousands of refs in one search. Each ref is unique and lands in
-	// exactly one chunk, so merging the per-chunk alias maps is exact.
+	// parameters per statement, so chunk large result sets here. Each ref is
+	// unique and lands in exactly one chunk, so merging the per-chunk alias
+	// maps is exact.
 	const chunkSize = 900
 	for start := 0; start < len(fullRefs); start += chunkSize {
 		end := start + chunkSize

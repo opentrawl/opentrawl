@@ -25,7 +25,6 @@ const (
 
 type Crawler struct {
 	cfg           Config
-	classifyAll   bool
 	classifyLimit trackedLimit
 	classifyModel string
 }
@@ -79,10 +78,8 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 }
 
 func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
-	c.classifyAll = false
 	c.classifyLimit = trackedLimit{value: 100}
 	c.classifyModel = ""
-	fs.BoolVar(&c.classifyAll, "all", false, "classify all pending assets")
 	fs.Var(&c.classifyLimit, "limit", "max pending assets to classify")
 	fs.StringVar(&c.classifyModel, "model", "", "Ollama-API vision model for content observations; local or cloud")
 }
@@ -181,7 +178,7 @@ func (c *Crawler) runClassify(ctx context.Context, req *crawlkit.Request) error 
 	if len(req.Args) != 0 {
 		return output.UsageError{Err: fmt.Errorf("classify takes flags only")}
 	}
-	limit, err := flags.Limit(c.classifyLimit.value, c.classifyLimit.set, c.classifyAll)
+	limit, err := flags.Limit(c.classifyLimit.value, c.classifyLimit.set)
 	if err != nil {
 		return output.UsageError{Err: err}
 	}
@@ -192,7 +189,6 @@ func (c *Crawler) runClassify(ctx context.Context, req *crawlkit.Request) error 
 	}, func() error {
 		var classifyErr error
 		result, classifyErr = archive.ClassifyWithStore(ctx, req.Store, archivePaths(req), archive.ClassifyOptions{
-			All:         c.classifyAll,
 			Limit:       limit,
 			Model:       c.classifyModel,
 			ModelURL:    ollamaCloudBaseURL,

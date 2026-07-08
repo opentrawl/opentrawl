@@ -286,8 +286,7 @@ func searchHints(query string, limit int, truncated bool) []string {
 	hints := []string{"Open: trawl twitter open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: trawl twitter search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)),
-			"All: trawl twitter search "+quoteSearchQuery(query)+" --all")
+			"More: trawl twitter search "+quoteSearchQuery(query)+" --limit "+itoa(nextLimit(limit)))
 	}
 	return hints
 }
@@ -296,8 +295,7 @@ func browseHints(kind string, limit int, truncated bool) []string {
 	hints := []string{"Open: trawl twitter open REF"}
 	if truncated {
 		hints = append(hints,
-			"More: trawl twitter "+kind+" --limit "+itoa(nextLimit(limit)),
-			"All: trawl twitter "+kind+" --all")
+			"More: trawl twitter "+kind+" --limit "+itoa(nextLimit(limit)))
 	}
 	return hints
 }

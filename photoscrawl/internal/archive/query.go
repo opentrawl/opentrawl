@@ -165,8 +165,8 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if query == "" {
 		return SearchResult{}, errors.New("query is required")
 	}
-	// The --limit contract (crawlkit/flags): a positive limit is honored
-	// exactly with no hidden cap; limit 0 (from --all) returns every match.
+	// A positive limit is honored exactly with no hidden cap; limit 0 returns
+	// every match for internal callers.
 	limit := opts.Limit
 	if limit < 0 {
 		limit = 0

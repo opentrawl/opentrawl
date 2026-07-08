@@ -92,7 +92,7 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 
 	humanCommands := map[string][]string{
 		"chats":      {"chats"},
-		"messages":   {"messages", "--all", "--asc"},
+		"messages":   {"messages", "--limit", "10", "--asc"},
 		"search":     {"search", "synthetic", "--limit", "10"},
 		"open group": {"open", "whatsapp:msg/group-lid"},
 		"open dm":    {"open", "whatsapp:msg/dm-lid"},
@@ -113,7 +113,7 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 
 	jsonCommands := map[string][]string{
 		"chats":      {"--json", "chats"},
-		"messages":   {"--json", "messages", "--all", "--asc"},
+		"messages":   {"--json", "messages", "--limit", "10", "--asc"},
 		"search":     {"--json", "search", "synthetic", "--limit", "10"},
 		"open group": {"--json", "open", "whatsapp:msg/group-lid"},
 		"open dm":    {"--json", "open", "whatsapp:msg/dm-lid"},

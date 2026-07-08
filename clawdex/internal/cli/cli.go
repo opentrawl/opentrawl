@@ -273,11 +273,10 @@ func (c *ContactsExportCmd) Run(r *Runtime) error {
 type PersonListCmd struct {
 	Query string `name:"query" short:"q" help:"Filter query"`
 	Limit *int   `name:"limit" help:"Number of people to show (default 50)"`
-	All   bool   `name:"all" help:"Show every person, no limit"`
 }
 
 func (c *PersonListCmd) Run(r *Runtime) error {
-	limit, err := flags.Limit(limitOr(c.Limit, 50), c.Limit != nil, c.All)
+	limit, err := flags.Limit(limitOr(c.Limit, 50), c.Limit != nil)
 	if err != nil {
 		return usageErr{err}
 	}
@@ -326,11 +325,10 @@ func (c *PersonShowCmd) Run(r *Runtime) error {
 type SearchCmd struct {
 	Query string `arg:"" help:"Search query"`
 	Limit *int   `name:"limit" help:"Number of results to return (default 20)"`
-	All   bool   `name:"all" help:"Show every match, no limit"`
 }
 
 func (c *SearchCmd) Run(r *Runtime) error {
-	limit, err := flags.Limit(limitOr(c.Limit, 20), c.Limit != nil, c.All)
+	limit, err := flags.Limit(limitOr(c.Limit, 20), c.Limit != nil)
 	if err != nil {
 		return usageErr{err}
 	}
@@ -355,8 +353,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 }
 
 // limitOr returns the --limit value, or def when the flag was omitted. A nil
-// pointer is kong's signal that the user did not pass --limit, which lets
-// flags.Limit refuse --all combined with an explicit --limit.
+// pointer is kong's signal that the user did not pass --limit.
 func limitOr(limit *int, def int) int {
 	if limit == nil {
 		return def
@@ -825,28 +822,20 @@ type ExportCmd struct {
 
 type ExportVCardCmd struct {
 	Person         string `name:"person" help:"Person query"`
-	All            bool   `name:"all" help:"Export all people"`
 	IncludeAvatars bool   `name:"include-avatars" help:"Include avatar PHOTO fields"`
 	Out            string `name:"out" short:"o" required:"" help:"Output .vcf path, or - for stdout"`
 }
 
 func (c *ExportVCardCmd) Run(r *Runtime) error {
 	var people []model.Person
-	switch {
-	case c.All:
-		var err error
-		people, err = r.store.People()
-		if err != nil {
-			return err
-		}
-	case c.Person != "":
+	if c.Person != "" {
 		p, err := r.store.FindPerson(c.Person)
 		if err != nil {
 			return err
 		}
 		people = []model.Person{p}
-	default:
-		return usageErr{errors.New("provide --person or --all")}
+	} else {
+		return usageErr{errors.New("provide --person")}
 	}
 	if c.Out == "-" {
 		return vcard.WriteWithOptions(r.stdout, people, vcard.Options{IncludeAvatars: c.IncludeAvatars})

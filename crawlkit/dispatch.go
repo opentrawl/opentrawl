@@ -429,7 +429,7 @@ func parseQuery(args []string) (Query, error) {
 			whoSet = true
 		}
 	})
-	resolvedLimit, err := ckflags.Limit(*searchFlags.limit, limitSet, *searchFlags.all)
+	resolvedLimit, err := ckflags.Limit(*searchFlags.limit, limitSet)
 	if err != nil {
 		return Query{}, output.UsageError{Err: err}
 	}
@@ -470,14 +470,6 @@ func searchFlagArgs(args []string) ([]string, []string, error) {
 			}
 			continue
 		}
-		if name == "--all" {
-			if inline {
-				flags = append(flags, name+"="+value)
-			} else {
-				flags = append(flags, name)
-			}
-			continue
-		}
 		flags = append(flags, name)
 		if inline {
 			flags = append(flags, value)
@@ -511,7 +503,6 @@ type searchFlagSpec struct {
 }
 
 var searchFlagSpecs = []searchFlagSpec{
-	{name: "all", usage: "return every result"},
 	{name: "limit", usage: "maximum results"},
 	{name: "after", usage: "only results at or after this date"},
 	{name: "before", usage: "only results before this date"},
@@ -519,7 +510,6 @@ var searchFlagSpecs = []searchFlagSpec{
 }
 
 type searchFlagValues struct {
-	all    *bool
 	limit  *int
 	after  *string
 	before *string
@@ -533,8 +523,6 @@ func defineSearchFlags(fs *flag.FlagSet, includeWho bool) searchFlagValues {
 			continue
 		}
 		switch spec.name {
-		case "all":
-			values.all = fs.Bool(spec.name, false, spec.usage)
 		case "limit":
 			values.limit = fs.Int(spec.name, 20, spec.usage)
 		case "after":

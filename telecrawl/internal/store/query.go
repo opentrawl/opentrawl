@@ -64,7 +64,7 @@ func getStateAnySource(ctx context.Context, markers *state.Store, entityType, en
 
 func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, error) {
 	if limit <= 0 {
-		limit = -1 // --all: no row cap (SQLite LIMIT -1)
+		limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
 	where := ""
 	if unread {
@@ -128,7 +128,7 @@ order by cast(f.id as integer), f.title`)
 
 func (s *Store) ChatsInFolder(ctx context.Context, folderID string, limit int) ([]Chat, error) {
 	if limit <= 0 {
-		limit = -1 // --all: no row cap (SQLite LIMIT -1)
+		limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
 	rows, err := s.db.QueryContext(ctx, `select cast(c.id as text),c.kind,c.name,c.username,c.last_message_at,c.unread_count,c.message_count,coalesce(c.folder_id,''),c.forum
 from folder_chats fc join chats c on cast(c.id as text)=fc.chat_jid
@@ -170,7 +170,7 @@ func (s *Store) ListTopics(ctx context.Context, chatJID string, limit int) ([]To
 		return nil, errors.New("chat id required")
 	}
 	if limit <= 0 {
-		limit = -1 // --all: no row cap (SQLite LIMIT -1)
+		limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
 	rows, err := s.db.QueryContext(ctx, `select chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at
 from topics where chat_jid=?
@@ -226,7 +226,7 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 		return nil, err
 	}
 	if filter.Limit <= 0 {
-		filter.Limit = -1 // --all: no row cap (SQLite LIMIT -1)
+		filter.Limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
 	query := `select source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0),'' from messages where 1=1`
 	args := []any{}

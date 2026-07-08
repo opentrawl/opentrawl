@@ -308,10 +308,10 @@ else
 fi
 
 if [[ -n "$small_chat_id" ]]; then
-  run_step "messages-text-all-small-chat" env HOME="$synthetic_home" trawl imessage messages --chat "$small_chat_id" --all
-  run_step "messages-json-all-small-chat" env HOME="$synthetic_home" trawl --json imessage messages --chat "$small_chat_id" --all
+  run_step "messages-text-limit-small-chat" env HOME="$synthetic_home" trawl imessage messages --chat "$small_chat_id" --limit "$small_chat_count"
+  run_step "messages-json-limit-small-chat" env HOME="$synthetic_home" trawl --json imessage messages --chat "$small_chat_id" --limit "$small_chat_count"
 else
-  append_note "No chat with 1..$max_all_messages messages was available, so messages --all was skipped."
+  append_note "No chat with 1..$max_all_messages messages was available, so messages --limit was skipped."
 fi
 
 if [[ -n "$search_query" ]]; then

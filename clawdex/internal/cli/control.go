@@ -52,7 +52,6 @@ func controlManifest() control.Manifest {
 
 func clawdexSearchManifestFlags() []control.Flag {
 	return []control.Flag{
-		{Name: "all", Usage: "show every match, no limit", Default: "false"},
 		{Name: "limit", Usage: "maximum results", Default: "20"},
 	}
 }

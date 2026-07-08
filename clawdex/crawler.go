@@ -110,8 +110,6 @@ func (c *Crawler) Search(ctx context.Context, req *crawlkit.Request, q crawlkit.
 	args := []string{"search", query}
 	if q.Limit > 0 {
 		args = append(args, "--limit", strconv.Itoa(q.Limit))
-	} else {
-		args = append(args, "--all")
 	}
 	var envelope struct {
 		Results []struct {
@@ -244,7 +242,6 @@ func configVerb() crawlkit.Verb {
 func personListVerb() crawlkit.Verb {
 	var query string
 	var limit int
-	var all bool
 	return crawlkit.Verb{
 		Name:  "person list",
 		Help:  "List people",
@@ -253,7 +250,6 @@ func personListVerb() crawlkit.Verb {
 			fs.StringVar(&query, "query", "", "Filter query")
 			fs.StringVar(&query, "q", "", "Filter query")
 			fs.IntVar(&limit, "limit", 0, "Number of people to show")
-			fs.BoolVar(&all, "all", false, "Show every person")
 		},
 		Run: func(ctx context.Context, req *crawlkit.Request) error {
 			args := []string{"person", "list"}
@@ -262,9 +258,6 @@ func personListVerb() crawlkit.Verb {
 			}
 			if limit > 0 {
 				args = append(args, "--limit", strconv.Itoa(limit))
-			}
-			if all {
-				args = append(args, "--all")
 			}
 			return runText(ctx, req, args, req.Format == output.JSON)
 		},
@@ -328,7 +321,7 @@ func importVerb() crawlkit.Verb {
 
 func exportVCardVerb() crawlkit.Verb {
 	var person, out string
-	var all, includeAvatars bool
+	var includeAvatars bool
 	return crawlkit.Verb{
 		Name:    "export vcard",
 		Help:    "Export vCard files",
@@ -336,7 +329,6 @@ func exportVCardVerb() crawlkit.Verb {
 		Store:   crawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&person, "person", "", "Person query")
-			fs.BoolVar(&all, "all", false, "Export all people")
 			fs.BoolVar(&includeAvatars, "include-avatars", false, "Include avatar photo fields")
 			fs.StringVar(&out, "out", "", "Output .vcf path, or - for stdout")
 			fs.StringVar(&out, "o", "", "Output .vcf path, or - for stdout")
@@ -345,9 +337,6 @@ func exportVCardVerb() crawlkit.Verb {
 			args := []string{"export", "vcard"}
 			if person != "" {
 				args = append(args, "--person", person)
-			}
-			if all {
-				args = append(args, "--all")
 			}
 			if includeAvatars {
 				args = append(args, "--include-avatars")

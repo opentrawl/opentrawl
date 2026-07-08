@@ -14,7 +14,7 @@ func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	n, err := flags.Limit(c.chats.Limit, c.chats.LimitSet, c.chats.All)
+	n, err := flags.Limit(c.chats.Limit, c.chats.LimitSet)
 	if err != nil {
 		return usageErr(err)
 	}
@@ -73,7 +73,7 @@ func (c *Crawler) runTopics(ctx context.Context, req *crawlkit.Request) error {
 	if c.topics.ChatID == "" {
 		return usageErr(errors.New("topics requires --chat ID"))
 	}
-	n, err := flags.Limit(c.topics.Limit, c.topics.LimitSet, c.topics.All)
+	n, err := flags.Limit(c.topics.Limit, c.topics.LimitSet)
 	if err != nil {
 		return usageErr(err)
 	}

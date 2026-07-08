@@ -595,11 +595,8 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 	}()
 
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "needle", "--json", "--all"}, source, runOptions{})
-	if code != 0 {
-		t.Fatalf("all search code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if got.Text != "needle" || got.Limit != 0 {
-		t.Fatalf("all query = %#v", got)
+	if code != 2 || !strings.Contains(stdout, "flag provided but not defined: -all") || stderr != "" {
+		t.Fatalf("deleted all flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "--who", "Ada"}, source, runOptions{})
@@ -631,6 +628,32 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json"}, source, runOptions{})
 	if code != 2 || !strings.Contains(stdout, "search needs a query or filter") || stderr != "" {
 		t.Fatalf("empty search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsUnknownFlagsBeforeOpeningArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name: "messages",
+		Flags: func(fs *flag.FlagSet) {
+			fs.Int("limit", 20, "maximum messages")
+		},
+		Run: func(ctx context.Context, req *Request) error {
+			t.Fatal("bespoke verb ran despite unknown flag")
+			return nil
+		},
+	}}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "needle", "--all"}, source, runOptions{})
+	combined := stdout + stderr
+	if code != 2 || !strings.Contains(combined, "flag provided but not defined: -all") || strings.Contains(combined, "archive does not exist") {
+		t.Fatalf("search unknown flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"messages", "--all"}, source, runOptions{})
+	combined = stdout + stderr
+	if code != 2 || !strings.Contains(combined, "flag provided but not defined: -all") || strings.Contains(combined, "archive does not exist") {
+		t.Fatalf("bespoke unknown flag code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
 

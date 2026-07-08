@@ -124,7 +124,7 @@ limit ?`, args...)
 }
 
 // limitArg maps a resolved limit to SQLite's LIMIT argument: 0 means return
-// everything — the --all path (crawlkit/flags.Limit) — which SQLite spells -1.
+// everything, which SQLite spells -1.
 func limitArg(limit int) int {
 	if limit <= 0 {
 		return -1

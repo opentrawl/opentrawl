@@ -68,7 +68,7 @@ func (c *Crawler) runUnread(ctx context.Context, req *crawlkit.Request) error {
 }
 
 func (c *Crawler) listChats(ctx context.Context, req *crawlkit.Request, unread bool) error {
-	limit, err := ckflags.Limit(c.chatsLimit.value, c.chatsLimit.set, c.chatsAll)
+	limit, err := ckflags.Limit(c.chatsLimit.value, c.chatsLimit.set)
 	if err != nil {
 		return usageErr(err)
 	}
@@ -129,13 +129,7 @@ func printChats(req *crawlkit.Request, value chatsEnvelope) error {
 	if _, err := fmt.Fprintf(req.Out, "%s: showing %s of %s, newest first.\n%s\n", heading, render.FormatInteger(int64(len(value.Chats))), render.FormatInteger(int64(value.Total)), hint); err != nil {
 		return err
 	}
-	if value.Truncated {
-		if value.unread {
-			_, _ = fmt.Fprintln(req.Out, "All: trawl whatsapp unread --all")
-		} else {
-			_, _ = fmt.Fprintln(req.Out, "All: trawl whatsapp chats --all")
-		}
-	}
+
 	if _, err := fmt.Fprintln(req.Out); err != nil {
 		return err
 	}
@@ -181,7 +175,6 @@ type messageFlagValues struct {
 	chat     string
 	sender   string
 	limit    intFlag
-	all      bool
 	after    string
 	before   string
 	fromMe   bool
@@ -195,7 +188,6 @@ func (c *Crawler) bindMessageFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.messageFlags.chat, "chat", "", "only messages in this chat")
 	fs.StringVar(&c.messageFlags.sender, "sender", "", "only messages from this sender")
 	fs.Var(&c.messageFlags.limit, "limit", "maximum messages")
-	fs.BoolVar(&c.messageFlags.all, "all", false, "return every message")
 	fs.StringVar(&c.messageFlags.after, "after", "", "only messages at or after this date")
 	fs.StringVar(&c.messageFlags.before, "before", "", "only messages before this date")
 	fs.BoolVar(&c.messageFlags.fromMe, "from-me", false, "only messages sent by you")
@@ -208,7 +200,7 @@ func (f messageFlagValues) resolve() (store.MessageFilter, error) {
 	if f.fromMe && f.fromThem {
 		return store.MessageFilter{}, fmt.Errorf("--from-me and --from-them are mutually exclusive")
 	}
-	limit, err := ckflags.Limit(f.limit.value, f.limit.set, f.all)
+	limit, err := ckflags.Limit(f.limit.value, f.limit.set)
 	if err != nil {
 		return store.MessageFilter{}, err
 	}

@@ -59,7 +59,6 @@ type searchOptions struct {
 type listOptions struct {
 	Limit    int
 	LimitSet bool
-	All      bool
 	Unread   bool
 	Folder   string
 }
@@ -71,7 +70,6 @@ type messageOptions struct {
 	Who      string
 	Limit    int
 	LimitSet bool
-	All      bool
 	After    string
 	Before   string
 	FromMe   bool
@@ -85,7 +83,6 @@ type topicsOptions struct {
 	ChatID   string
 	Limit    int
 	LimitSet bool
-	All      bool
 }
 
 var _ crawlkit.FullCrawler = (*Crawler)(nil)
@@ -215,7 +212,6 @@ func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {
 func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
 	c.chats = listOptions{Limit: 50}
 	fs.Var(trackedInt{value: &c.chats.Limit, seen: &c.chats.LimitSet}, "limit", "maximum chats")
-	fs.BoolVar(&c.chats.All, "all", false, "return every chat")
 	fs.BoolVar(&c.chats.Unread, "unread", false, "only unread chats")
 	fs.StringVar(&c.chats.Folder, "folder", "", "only chats in this folder")
 }
@@ -223,14 +219,12 @@ func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
 func (c *Crawler) bindContactsFlags(fs *flag.FlagSet) {
 	c.contacts = listOptions{Limit: 100}
 	fs.Var(trackedInt{value: &c.contacts.Limit, seen: &c.contacts.LimitSet}, "limit", "maximum contacts")
-	fs.BoolVar(&c.contacts.All, "all", false, "return every contact")
 }
 
 func (c *Crawler) bindTopicsFlags(fs *flag.FlagSet) {
 	c.topics = topicsOptions{Limit: 100}
 	fs.StringVar(&c.topics.ChatID, "chat", "", "chat id")
 	fs.Var(trackedInt{value: &c.topics.Limit, seen: &c.topics.LimitSet}, "limit", "maximum topics")
-	fs.BoolVar(&c.topics.All, "all", false, "return every topic")
 }
 
 func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
@@ -240,7 +234,6 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	fs.StringVar(&c.messages.TopicID, "topic", "", "only messages in this topic")
 	fs.StringVar(&c.messages.Who, "who", "", "only messages involving this person")
 	fs.Var(trackedInt{value: &c.messages.Limit, seen: &c.messages.LimitSet}, "limit", "maximum messages")
-	fs.BoolVar(&c.messages.All, "all", false, "return every message")
 	fs.StringVar(&c.messages.After, "after", "", "only messages at or after this date")
 	fs.StringVar(&c.messages.Before, "before", "", "only messages before this date")
 	fs.BoolVar(&c.messages.FromMe, "from-me", false, "only outgoing messages")

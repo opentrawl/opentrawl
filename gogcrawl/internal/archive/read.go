@@ -52,8 +52,8 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 	if err != nil {
 		return SearchResult{}, err
 	}
-	// limit 0 means everything (crawlkit/flags contract, via --all); a
-	// positive limit caps the rows and marks the result truncated.
+	// limit 0 means everything for internal callers; a positive limit caps the
+	// rows and marks the result truncated.
 	limit := opts.Limit
 	if limit < 0 {
 		limit = 0

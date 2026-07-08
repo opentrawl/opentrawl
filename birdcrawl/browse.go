@@ -63,7 +63,7 @@ func (r *runtime) parseListArgs(args []string) (store.ListFilter, error) {
 		}
 		filter.Before = before
 	}
-	resolved, err := ckflags.Limit(r.c.browseLimit, r.c.browseLimitSet, r.c.browseAll)
+	resolved, err := ckflags.Limit(r.c.browseLimit, r.c.browseLimitSet)
 	if err != nil {
 		return filter, err
 	}

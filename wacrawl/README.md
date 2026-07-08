@@ -206,7 +206,7 @@ trawl --json wacrawl search "restaurant"
 ```
 
 Search uses message text, chat name, sender name, and media title fields. It
-accepts `--limit`, `--all`, `--after`, `--before`, and `--who`.
+accepts `--limit`, `--after`, `--before`, and `--who`.
 
 ## Sync Behavior
 

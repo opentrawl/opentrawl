@@ -42,7 +42,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error 
 }
 
 func (c *Crawler) messageFilter() (store.MessageFilter, error) {
-	n, err := flags.Limit(c.messages.Limit, c.messages.LimitSet, c.messages.All)
+	n, err := flags.Limit(c.messages.Limit, c.messages.LimitSet)
 	if err != nil {
 		return store.MessageFilter{}, usageErr(err)
 	}

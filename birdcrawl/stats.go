@@ -14,8 +14,8 @@ func (r *runtime) runStats(args []string) error {
 	}
 	// The one --limit contract (crawlkit/flags): --limit N is honored exactly,
 	// a limit below 1 is a usage error, no hidden cap. stats is a bounded
-	// top-N ranking, so it offers no --all.
-	limitN, err := ckflags.Limit(r.c.statsLimit, r.c.statsLimitSet, false)
+	// top-N ranking.
+	limitN, err := ckflags.Limit(r.c.statsLimit, r.c.statsLimitSet)
 	if err != nil {
 		return usageErr(err)
 	}

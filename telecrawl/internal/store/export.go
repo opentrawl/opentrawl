@@ -8,7 +8,7 @@ import (
 
 func (s *Store) ListContacts(ctx context.Context, limit int) ([]Contact, error) {
 	if limit <= 0 {
-		limit = -1 // --all: no row cap (SQLite LIMIT -1)
+		limit = -1 // SQLite LIMIT -1 is unbounded.
 	}
 	return s.contacts(ctx, limit)
 }
