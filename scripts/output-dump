@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+outdir="/private/tmp/trawl-197-transcripts"
+work="/private/tmp/trawl-197-output-dump-${stamp}"
+home="${work}/home"
+bin="${work}/trawl"
+fixture="${work}/trawl-output-fixture"
+refs="${work}/refs.env"
+transcript="${outdir}/output-dump-${stamp}.txt"
+export CGO_ENABLED="${CGO_ENABLED:-1}" GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" GOCACHE="${GOCACHE:-/private/tmp/trawl-197-gocache}"
+
+mkdir -p "$outdir" "$work" "$GOCACHE"
+(cd "$root/trawl" && go build -o "$bin" ./cmd/trawl && go build -o "$fixture" ./cmd/trawl-output-fixture)
+env -i HOME="$home" PATH="$PATH" TZ=UTC CGO_ENABLED="$CGO_ENABLED" GOFLAGS="$GOFLAGS" GOCACHE="$GOCACHE" "$fixture" "$home" "$root" > "$refs"
+source "$refs"
+
+dump_one() {
+  local crawler="$1" mode="$2" verb="$3"
+  shift 3
+  printf '\n===== %s | %s | %s =====\n' "$crawler" "$mode" "$verb"
+  if [[ "$mode" == "json" ]]; then
+    set -- --json "$crawler" "$@"
+  else
+    set -- "$crawler" "$@"
+  fi
+  env -i HOME="$home" PATH="$home/bin:$PATH" TZ=UTC CGO_ENABLED="$CGO_ENABLED" GOFLAGS="$GOFLAGS" GOCACHE="$GOCACHE" "$bin" "$@"
+}
+
+{
+  printf 'OpenTrawl output dump\n'
+  printf 'created_at: %s\n' "$stamp"
+  printf 'home: %s\n' "$home"
+  for crawler in imessage telegram whatsapp photos gmail calendar twitter; do
+    ref_var="OPEN_REF_$(printf '%s' "$crawler" | tr '[:lower:]' '[:upper:]')"
+    ref="${!ref_var}"
+    for mode in human json; do
+      dump_one "$crawler" "$mode" status status
+      dump_one "$crawler" "$mode" search search launch --limit 3
+      dump_one "$crawler" "$mode" open open "$ref"
+      dump_one "$crawler" "$mode" doctor doctor
+    done
+  done
+} > "$transcript"
+
+printf '%s\n' "$transcript"
