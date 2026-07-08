@@ -16,7 +16,6 @@ type Crawler struct {
 	cfg Config
 
 	chatsLimit  intFlag
-	chatsAll    bool
 	chatsUnread bool
 
 	messageFlags messageFlagValues
@@ -69,17 +68,13 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 
 func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
 	c.chatsLimit = newIntFlag(50)
-	c.chatsAll = false
 	c.chatsUnread = false
 	fs.Var(&c.chatsLimit, "limit", "maximum chats")
-	fs.BoolVar(&c.chatsAll, "all", false, "return every chat")
 	fs.BoolVar(&c.chatsUnread, "unread", false, "only unread chats")
 }
 
 func (c *Crawler) bindUnreadFlags(fs *flag.FlagSet) {
 	c.chatsLimit = newIntFlag(50)
-	c.chatsAll = false
 	c.chatsUnread = true
 	fs.Var(&c.chatsLimit, "limit", "maximum chats")
-	fs.BoolVar(&c.chatsAll, "all", false, "return every chat")
 }

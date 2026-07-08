@@ -27,8 +27,7 @@ trawl imessage contacts export
 ```
 
 List commands are bounded by default. They show how many rows were returned and
-how to ask for more. Use `--all` for chats or one chat's messages only when you
-really want complete local output.
+how to ask for more with `--limit`.
 
 ## What You See
 
@@ -85,7 +84,6 @@ a human or agent to choose the right conversation.
 ```text
 Chats: showing 3 of 4, newest first.
 More: trawl imessage chats --limit 4
-All: trawl imessage chats --all
 Open: trawl imessage messages --chat CHAT_ID
 
 chat  kind    msgs  latest            conversation
@@ -102,7 +100,6 @@ column and are not truncated; row limits control size.
 ```text
 Messages in Cabinet Group (chat 42): showing 3 of 6, newest-first.
 More: trawl imessage messages --chat 42 --limit 6
-All: trawl imessage messages --chat 42 --all
 Search: trawl imessage search QUERY
 
 date              from        text

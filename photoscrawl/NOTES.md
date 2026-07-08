@@ -19,8 +19,8 @@ What changed that affects you:
 - **Error envelope** now goes through crawlkit/output.WriteError; `--json`
   errors are `{"error":{code,message,remedy}}` (unchanged shape).
 - **`--limit` contract**: silent caps gone (search 200, classify 1000).
-  `--all` added to search; `--limit 0` and `--all --limit N` are usage errors
-  on both search and classify. classify default stays 100.
+  `--limit 0` is a usage error on both search and classify. classify default
+  stays 100.
 - **place/backfill_store.go** now uses the mattn sqlite3 driver (matches
   crawlkit/store); modernc dropped from go.mod. Read-verified on the live
   archive (24,325 backfill keys). Backpop progress is unchanged (output files

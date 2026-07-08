@@ -76,7 +76,6 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	}
 
 	classified, err := Classify(ctx, paths, ClassifyOptions{
-		All: true,
 		Now: fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {

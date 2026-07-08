@@ -18,7 +18,6 @@ const (
 )
 
 type ClassifyOptions struct {
-	All         bool
 	Limit       int
 	Model       string
 	ModelURL    string
@@ -93,14 +92,10 @@ func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts C
 	if now == nil {
 		now = func() time.Time { return time.Now().UTC() }
 	}
-	// The --limit contract (crawlkit/flags): --all classifies every queued
-	// asset, an explicit --limit is honored exactly (no hidden ceiling), and
-	// the visible default of 100 bounds a bare `classify` so a stray run does
-	// not spend the whole queue.
+	// The visible default of 100 bounds a bare `classify` so a stray run does
+	// not spend the whole queue. An explicit positive limit is honored exactly.
 	limit := opts.Limit
-	if opts.All {
-		limit = 0
-	} else if limit <= 0 {
+	if limit <= 0 {
 		limit = 100
 	}
 	if err := prepareStore(ctx, db); err != nil {

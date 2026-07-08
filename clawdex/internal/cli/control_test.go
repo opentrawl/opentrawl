@@ -80,7 +80,7 @@ func TestExecuteMetadataJSON(t *testing.T) {
 	for _, flag := range manifest.Commands["search"].Flags {
 		searchFlags[flag.Name] = true
 	}
-	for _, name := range []string{"limit", "all"} {
+	for _, name := range []string{"limit"} {
 		if !searchFlags[name] {
 			t.Fatalf("search flags = %#v, want %q", manifest.Commands["search"].Flags, name)
 		}

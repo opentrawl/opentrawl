@@ -99,7 +99,6 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	metadataOnly, err := Classify(ctx, paths, ClassifyOptions{
-		All: true,
 		Now: fixedClock("2026-05-28T10:05:00Z"),
 	})
 	if err != nil {
@@ -110,7 +109,6 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	}
 
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -364,7 +362,6 @@ func TestClassifyDownloadsOriginalsThroughBoundedCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -480,7 +477,6 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}
 	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -557,7 +553,6 @@ join asset a on a.id = q.asset_id
 	}
 
 	second, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:30:00Z"),
@@ -605,7 +600,6 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -629,7 +623,6 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 		t.Fatal(err)
 	}
 	second, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:25:00Z"),
@@ -647,7 +640,6 @@ func TestClassifyFailedDownloadSurvivesSyncUntilOperatorReset(t *testing.T) {
 
 	resetFailedDownloadsForTest(t, ctx, paths)
 	third, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:30:00Z"),
@@ -707,7 +699,6 @@ func TestClassifyLogsFailedDownloadToCrawlkitRun(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -804,7 +795,6 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	}
 	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
@@ -1716,7 +1706,6 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := Classify(ctx, paths, ClassifyOptions{
-		All:      true,
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),

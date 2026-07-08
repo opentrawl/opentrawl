@@ -65,7 +65,7 @@ func TestExecuteEndToEndLocalCommands(t *testing.T) {
 		t.Fatalf("search out = %s", out)
 	}
 	vcardPath := filepath.Join(t.TempDir(), "contacts.vcf")
-	out = run("export", "vcard", "--all", "--include-avatars", "-o", vcardPath)
+	out = run("export", "vcard", "--person", "ada@example.com", "--include-avatars", "-o", vcardPath)
 	if !strings.Contains(out, "exported: 1") {
 		t.Fatalf("export out = %s", out)
 	}
@@ -1454,7 +1454,7 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 	}
 	for _, args := range [][]string{
 		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "person", "list"},
-		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "export", "vcard", "--all", "-o", "-"},
+		{"--config", cfg, "--repo", filepath.Join(dir, "missing"), "export", "vcard", "--person", "ada@example.com", "-o", "-"},
 	} {
 		out.Reset()
 		errOut.Reset()
@@ -1485,7 +1485,6 @@ func TestExecuteErrorBranchesAndNoConfigInit(t *testing.T) {
 	for _, args := range [][]string{
 		{"--config", cfg, "search", ""},
 		{"--config", cfg, "export", "vcard", "--person", "missing", "-o", "-"},
-		{"--config", cfg, "export", "vcard", "--all", "-o", filepath.Join(dir, "nope", "x.vcf")},
 		{"--config", cfg, "import", "apple", "--input", filepath.Join(dir, "missing.ndjson")},
 	} {
 		out.Reset()
@@ -1730,18 +1729,17 @@ func TestListVerbsEmptyStatesLimitsAndJSONArrays(t *testing.T) {
 	}
 	out := run("person", "list", "--limit", "1")
 	if !strings.Contains(out, "showing 1 of 2") ||
-		!strings.Contains(out, "More: trawl contacts person list --limit 2") ||
-		!strings.Contains(out, "All: trawl contacts person list --all") {
+		!strings.Contains(out, "More: trawl contacts person list --limit 2") {
 		t.Fatalf("person list --limit 1 human = %s", out)
 	}
 
-	// --all returns everything, no hidden cap and nothing truncated.
+	// A high explicit --limit returns everything, no hidden cap and nothing truncated.
 	var everyone peopleEnvelope
-	if err := json.Unmarshal([]byte(run("--json", "person", "list", "--all")), &everyone); err != nil {
+	if err := json.Unmarshal([]byte(run("--json", "person", "list", "--limit", "10")), &everyone); err != nil {
 		t.Fatal(err)
 	}
 	if len(everyone.People) != 2 || everyone.Total != 2 || everyone.Truncated {
-		t.Fatalf("person list --all envelope = %#v", everyone)
+		t.Fatalf("person list --limit 10 envelope = %#v", everyone)
 	}
 	var search searchEnvelope
 	if err := json.Unmarshal([]byte(run("--json", "search", "example.com", "--limit", "1")), &search); err != nil {

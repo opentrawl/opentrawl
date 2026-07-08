@@ -76,7 +76,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	}
 	limitArg := options.Limit
 	if limitArg <= 0 {
-		limitArg = -1 // SQLite: no limit — the --all path (crawlkit/flags.Limit)
+		limitArg = -1 // SQLite: no limit for internal unbounded callers.
 	}
 	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, limitArg)...)
 	if err != nil {

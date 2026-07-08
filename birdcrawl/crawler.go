@@ -22,7 +22,6 @@ type Crawler struct {
 
 	browseLimit    int
 	browseLimitSet bool
-	browseAll      bool
 	browseAfter    string
 	browseBefore   string
 
@@ -170,11 +169,9 @@ func (r *runtime) withReadOnlyStore(fn func(*store.Store) error) error {
 func (c *Crawler) browseFlags(fs *flag.FlagSet) {
 	c.browseLimit = defaultSearchLimit
 	c.browseLimitSet = false
-	c.browseAll = false
 	c.browseAfter = ""
 	c.browseBefore = ""
 	fs.Var(trackedInt{value: &c.browseLimit, set: &c.browseLimitSet}, "limit", "maximum results")
-	fs.BoolVar(&c.browseAll, "all", false, "return every result")
 	fs.StringVar(&c.browseAfter, "after", "", "only results at or after this date")
 	fs.StringVar(&c.browseBefore, "before", "", "only results before this date")
 }

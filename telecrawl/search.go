@@ -140,9 +140,6 @@ func (r *runtime) printSearch(value searchEnvelope) error {
 		if more := searchMoreHint(value); more != "" {
 			hints = append(hints, more)
 		}
-		if all := searchAllHint(value); all != "" {
-			hints = append(hints, all)
-		}
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   searchHeading(value),
@@ -167,17 +164,6 @@ func searchMoreHint(value searchEnvelope) string {
 		return ""
 	}
 	return fmt.Sprintf("More: trawl telegram search %s --limit %d", strings.Join(parts, " "), nextLimit)
-}
-
-// searchAllHint mirrors searchMoreHint so the offered command is runnable:
-// it carries the query when there is one, since bare `search` without a query
-// or filter is a usage error.
-func searchAllHint(value searchEnvelope) string {
-	parts := searchCommandParts(value)
-	if len(parts) == 0 {
-		return ""
-	}
-	return fmt.Sprintf("All: trawl telegram search %s --all", strings.Join(parts, " "))
 }
 
 func searchCommandParts(value searchEnvelope) []string {

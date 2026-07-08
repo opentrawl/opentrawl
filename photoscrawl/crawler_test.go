@@ -59,7 +59,7 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	if !classify.Mutates || !classify.JSON {
 		t.Fatalf("classify command = %#v", classify)
 	}
-	for _, name := range []string{"all", "limit", "model"} {
+	for _, name := range []string{"limit", "model"} {
 		if !commandHasFlag(classify, name) {
 			t.Fatalf("classify flags missing %q: %#v", name, classify.Flags)
 		}
@@ -291,7 +291,6 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 func TestClassifyLimitContractIsUsageError(t *testing.T) {
 	for _, args := range [][]string{
 		{"--limit", "0"},
-		{"--all", "--limit", "5"},
 	} {
 		source := New()
 		classify := source.Verbs()[0]

@@ -22,7 +22,7 @@ func printChatsText(w io.Writer, value chatListOutput) error {
 		return err
 	}
 	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: trawl imessage chats --limit %d\nAll: trawl imessage chats --all\n", nextLimit(value.Limit, value.Total)); err != nil {
+		if _, err := fmt.Fprintf(w, "More: trawl imessage chats --limit %d\n", nextLimit(value.Limit, value.Total)); err != nil {
 			return err
 		}
 	}
@@ -64,7 +64,6 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 	if !value.Complete {
 		hints = append(hints,
 			fmt.Sprintf("More: trawl imessage messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
-			fmt.Sprintf("All: trawl imessage messages --chat %s --all", value.ChatID),
 		)
 	}
 	hints = append(hints, "Search: trawl imessage search QUERY")

@@ -19,7 +19,7 @@ func (c *Crawler) runContacts(ctx context.Context, req *crawlkit.Request) error 
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("contacts takes flags only"))
 	}
-	n, err := flags.Limit(c.contacts.Limit, c.contacts.LimitSet, c.contacts.All)
+	n, err := flags.Limit(c.contacts.Limit, c.contacts.LimitSet)
 	if err != nil {
 		return usageErr(err)
 	}

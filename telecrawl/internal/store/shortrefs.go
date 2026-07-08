@@ -165,9 +165,9 @@ func legacyMessageRefs(refs []string) []string {
 }
 
 // aliasesFor resolves short-ref aliases in chunks. crawlkit's Aliases issues
-// one IN clause and SQLite caps host parameters per statement, so a --all
-// result of tens of thousands of refs must be batched. Each ref is unique and
-// lands in exactly one chunk, so merging the per-chunk maps is exact.
+// one IN clause and SQLite caps host parameters per statement, so large result
+// sets must be batched. Each ref is unique and lands in exactly one chunk, so
+// merging the per-chunk maps is exact.
 func (s *Store) aliasesFor(ctx context.Context, refs []string) (map[string]string, error) {
 	const chunkSize = 900
 	index := shortref.NewSQLiteIndex(s.db)

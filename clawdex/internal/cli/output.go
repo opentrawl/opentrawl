@@ -114,8 +114,7 @@ func printSearch(r *Runtime, v searchEnvelope) error {
 	hints := []string{"Show a person: trawl contacts person show NAME"}
 	if v.Truncated {
 		hints = append(hints,
-			fmt.Sprintf("More: trawl contacts search %q --limit %d", v.Query, nextLimit(v.limit)),
-			fmt.Sprintf("All: trawl contacts search %q --all", v.Query))
+			fmt.Sprintf("More: trawl contacts search %q --limit %d", v.Query, nextLimit(v.limit)))
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Search %q: showing %s of %s, best match first.", v.Query, render.FormatInteger(int64(len(v.Results))), render.FormatInteger(int64(v.TotalMatches))),
@@ -147,15 +146,11 @@ func printPeople(r *Runtime, v peopleEnvelope) error {
 	}
 	if v.Truncated {
 		more := fmt.Sprintf("More: trawl contacts person list --limit %d", nextLimit(v.limit))
-		all := "All: trawl contacts person list --all"
 		if v.Query != "" {
 			more = fmt.Sprintf("More: trawl contacts person list --query %q --limit %d", v.Query, nextLimit(v.limit))
-			all = fmt.Sprintf("All: trawl contacts person list --query %q --all", v.Query)
+
 		}
 		if _, err := fmt.Fprintln(r.stdout, more); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintln(r.stdout, all); err != nil {
 			return err
 		}
 	}

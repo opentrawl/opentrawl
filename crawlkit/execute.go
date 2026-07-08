@@ -38,6 +38,23 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 			return executionResult{err: err}
 		}
 	}
+	if verb.bespoke != nil {
+		args, err := parseBespokeFlags(*verb.bespoke, verb.args)
+		if err != nil {
+			return executionResult{err: err}
+		}
+		verb.args = args
+	}
+	if verb.spine != nil {
+		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
+		if err != nil {
+			return executionResult{err: err}
+		}
+		verb.args = args
+	}
+	if err := validateReadFlags(verb); err != nil {
+		return executionResult{err: err}
+	}
 	var lock *runLock
 	if verb.mutates {
 		lock, err = acquireRunLock(paths.Base)
@@ -190,13 +207,6 @@ func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, 
 }
 
 func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Request, globals globalOptions, format output.Format) error {
-	if verb.spine != nil {
-		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
-		if err != nil {
-			return err
-		}
-		verb.args = args
-	}
 	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.bespoke == nil {
 		return usageError{err: fmt.Errorf("%s takes no arguments", verb.name)}
 	}
@@ -275,12 +285,16 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 	if verb.bespoke == nil || verb.bespoke.Run == nil {
 		return usageError{err: fmt.Errorf("unknown verb %q", verb.name)}
 	}
-	args, err := parseBespokeFlags(*verb.bespoke, verb.args)
-	if err != nil {
-		return err
-	}
-	req.Args = args
+	req.Args = verb.args
 	return verb.bespoke.Run(ctx, req)
+}
+
+func validateReadFlags(verb targetVerb) error {
+	if verb.name != "search" {
+		return nil
+	}
+	_, err := parseQuery(verb.args)
+	return err
 }
 
 func resolveSearchWho(ctx context.Context, source Crawler, req *Request, query Query) (Query, error) {

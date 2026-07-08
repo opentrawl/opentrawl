@@ -86,7 +86,6 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 	var filter store.SearchFilter
 	limit := defaultSearchLimit
 	limitSet := false
-	all := false
 	var positionals []string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -101,8 +100,6 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 			}
 			limit = value
 			limitSet = true
-		case "--all":
-			all = true
 		case "--after":
 			if i+1 >= len(args) {
 				return filter, errors.New("--after takes a value")
@@ -134,8 +131,8 @@ func parseSearchArgs(args []string) (store.SearchFilter, error) {
 		return filter, errors.New("search takes exactly one query")
 	}
 	// The one --limit contract (crawlkit/flags): honored exactly as given,
-	// below 1 is a usage error, --all returns everything (Limit 0).
-	resolved, err := ckflags.Limit(limit, limitSet, all)
+	// and below 1 is a usage error.
+	resolved, err := ckflags.Limit(limit, limitSet)
 	if err != nil {
 		return filter, err
 	}

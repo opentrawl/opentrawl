@@ -35,11 +35,7 @@ func (r *runtime) printChats(value chatsEnvelope) error {
 	if _, err := fmt.Fprintln(r.stdout, "Messages: trawl telegram messages --chat ID"); err != nil {
 		return err
 	}
-	if value.Total > len(value.Chats) {
-		if _, err := fmt.Fprintln(r.stdout, "All: trawl telegram chats --all"); err != nil {
-			return err
-		}
-	}
+
 	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
@@ -76,11 +72,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "Topics: showing %s of %s.\n", groupDigits(len(value.Topics)), groupDigits(value.Total)); err != nil {
 		return err
 	}
-	if value.Total > len(value.Topics) {
-		if _, err := fmt.Fprintf(r.stdout, "All: trawl telegram topics --chat %s --all\n", value.ChatID); err != nil {
-			return err
-		}
-	}
+
 	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}
@@ -104,7 +96,7 @@ func (r *runtime) printTopics(value topicsEnvelope) error {
 func (r *runtime) printMessages(value messagesEnvelope) error {
 	hints := []string{"Open: trawl telegram open REF"}
 	if value.Total > len(value.Messages) {
-		hints = append(hints, "Narrow: trawl telegram messages --chat ID --after DATE --before DATE", "All: trawl telegram messages --all")
+		hints = append(hints, "Narrow: trawl telegram messages --chat ID --after DATE --before DATE")
 	}
 	return render.WriteList(r.stdout, render.List{
 		Heading:   fmt.Sprintf("Messages: showing %s of %s, newest first.", groupDigits(len(value.Messages)), groupDigits(value.Total)),
@@ -123,11 +115,7 @@ func (r *runtime) printContacts(value contactsEnvelope) error {
 	if _, err := fmt.Fprintf(r.stdout, "Contacts: showing %s of %s, A to Z.\n", groupDigits(len(value.Contacts)), groupDigits(value.Total)); err != nil {
 		return err
 	}
-	if value.Total > len(value.Contacts) {
-		if _, err := fmt.Fprintln(r.stdout, "All: trawl telegram contacts --all"); err != nil {
-			return err
-		}
-	}
+
 	if _, err := fmt.Fprintln(r.stdout); err != nil {
 		return err
 	}

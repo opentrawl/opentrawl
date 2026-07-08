@@ -15,8 +15,8 @@ import (
 
 // TestSearchHonorsLimitContract pins the one --limit contract (crawlkit/flags):
 // a positive limit is honored exactly with no hidden cap, a limit above the
-// match count returns every match without truncation, and limit 0 (from --all)
-// returns everything.
+// match count returns every match without truncation, and limit 0 returns
+// everything for internal callers.
 func TestSearchHonorsLimitContract(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -56,7 +56,7 @@ func TestSearchHonorsLimitContract(t *testing.T) {
 		t.Fatalf("limit 500: results=%d truncated=%t, want 250/false", len(result.Results), result.Truncated)
 	}
 
-	// Limit 0 (--all) returns everything.
+	// Limit 0 returns everything for internal callers.
 	result, err = Search(ctx, paths, SearchOptions{Query: "image", Limit: 0})
 	if err != nil {
 		t.Fatal(err)

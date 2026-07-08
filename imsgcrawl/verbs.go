@@ -23,14 +23,12 @@ const (
 type chatsOptions struct {
 	limit    int
 	limitSet bool
-	all      bool
 }
 
 type messagesOptions struct {
 	chatID   string
 	limit    int
 	limitSet bool
-	all      bool
 	asc      bool
 }
 
@@ -100,14 +98,12 @@ func (c *Crawler) Verbs() []crawlkit.Verb {
 func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
 	c.chats = chatsOptions{limit: defaultChatLimit}
 	fs.Var(intFlag{value: &c.chats.limit, seen: &c.chats.limitSet}, "limit", "maximum chats")
-	fs.BoolVar(&c.chats.all, "all", false, "return every chat")
 }
 
 func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	c.messages = messagesOptions{limit: defaultMessageLimit}
 	fs.StringVar(&c.messages.chatID, "chat", "", "chat id")
 	fs.Var(intFlag{value: &c.messages.limit, seen: &c.messages.limitSet}, "limit", "maximum messages")
-	fs.BoolVar(&c.messages.all, "all", false, "return every message")
 	fs.BoolVar(&c.messages.asc, "asc", false, "show oldest messages first")
 }
 
@@ -115,7 +111,7 @@ func (c *Crawler) runChats(ctx context.Context, req *crawlkit.Request) error {
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("chats takes flags only"))
 	}
-	rows, err := flags.Limit(c.chats.limit, c.chats.limitSet, c.chats.all)
+	rows, err := flags.Limit(c.chats.limit, c.chats.limitSet)
 	if err != nil {
 		return usageErr(err)
 	}
@@ -149,7 +145,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *crawlkit.Request) error 
 	if chatID == "" {
 		return usageErr(errors.New("messages requires --chat"))
 	}
-	rows, err := flags.Limit(c.messages.limit, c.messages.limitSet, c.messages.all)
+	rows, err := flags.Limit(c.messages.limit, c.messages.limitSet)
 	if err != nil {
 		return usageErr(err)
 	}
