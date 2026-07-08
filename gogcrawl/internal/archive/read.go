@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	ckstore "github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/crawlkit/whomatch"
 )
 
@@ -188,9 +189,13 @@ func searchQueryParts(opts SearchOptions, query string, who searchWhoFilter) (st
 	var args []any
 	if strings.TrimSpace(query) != "" {
 		from = "from messages_fts join messages m on m.id = messages_fts.id"
-		clauses = append(clauses, "messages_fts match ?")
-		args = append(args, ftsQuery(query))
-		order = "order by rank, m.time_unix desc"
+		plan := ckstore.RouteFTS5Query(query)
+		ftsClause, ftsArgs := ftsSearchClause("messages_fts", []string{"messages_fts.subject", "messages_fts.body"}, plan)
+		clauses = append(clauses, ftsClause)
+		args = append(args, ftsArgs...)
+		if plan.Mode == ckstore.FTS5QueryMatch {
+			order = "order by rank, m.time_unix desc"
+		}
 	}
 	if opts.After != nil {
 		clauses = append(clauses, "m.time_unix >= ?")

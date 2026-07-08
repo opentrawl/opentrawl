@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/openclaw/clawdex/internal/model"
 	"github.com/openclaw/crawlkit/render"
+	ckstore "github.com/openclaw/crawlkit/store"
 
 	// C SQLite via cgo, matching crawlkit/store after the modernc production
 	// incidents. Requires -tags sqlite_fts5; the monorepo devenv sets GOFLAGS.
@@ -23,7 +23,7 @@ import (
 
 const (
 	indexDBName        = "index.db"
-	indexSchemaVersion = "3"
+	indexSchemaVersion = "4"
 )
 
 type IndexStatus struct {
@@ -181,7 +181,7 @@ func createIndexSchema(db *sql.DB) error {
 			primary key(kind, value, person_id)
 		)`,
 		`create index identifiers_person on identifiers(person_id)`,
-		`create virtual table person_fts using fts5(person_id unindexed, names, aliases, handles, tokenize='unicode61')`,
+		`create virtual table person_fts using fts5(person_id unindexed, names, aliases, handles, ` + ckstore.FTS5TrigramTokenizer + `)`,
 	}
 	for _, statement := range statements {
 		if _, err := db.Exec(statement); err != nil {
@@ -320,11 +320,16 @@ func personIDsBySlugOrName(db *sql.DB, query string) ([]string, error) {
 }
 
 func personIDsByFTS(db *sql.DB, query string) ([]string, error) {
-	match := ftsPrefixQuery(query)
-	if match == "" {
+	plan := ckstore.RouteFTS5Query(query)
+	if plan.Match == "" && len(plan.LikePatterns) == 0 {
 		return nil, nil
 	}
-	rows, err := db.Query(`select person_id from person_fts where person_fts match ? order by bm25(person_fts), person_id`, match)
+	ftsClause, args := ftsSearchClause("person_fts", []string{"person_fts.names", "person_fts.aliases", "person_fts.handles"}, plan)
+	order := "person_id"
+	if plan.Mode == ckstore.FTS5QueryMatch {
+		order = "bm25(person_fts), person_id"
+	}
+	rows, err := db.Query(`select person_id from person_fts where `+ftsClause+` order by `+order, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -333,8 +338,8 @@ func personIDsByFTS(db *sql.DB, query string) ([]string, error) {
 }
 
 func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
-	match := ftsPrefixQuery(query)
-	if match == "" {
+	plan := ckstore.RouteFTS5Query(query)
+	if plan.Match == "" && len(plan.LikePatterns) == 0 {
 		return nil, nil
 	}
 	db, err := sql.Open("sqlite3", s.indexPath())
@@ -342,13 +347,17 @@ func (s Store) searchPersonIndex(query string) ([]model.SearchHit, error) {
 		return nil, err
 	}
 	defer func() { _ = db.Close() }()
+	ftsClause, args := ftsSearchClause("person_fts", []string{"person_fts.names", "person_fts.aliases", "person_fts.handles"}, plan)
+	order := "p.name, p.id"
+	if plan.Mode == ckstore.FTS5QueryMatch {
+		order = "bm25(person_fts), p.name, p.id"
+	}
 	rows, err := db.Query(`
 		select p.id, p.name
 		from person_fts
 		join people p on p.id = person_fts.person_id
-		where person_fts match ?
-		order by bm25(person_fts), p.name, p.id
-	`, match)
+		where `+ftsClause+`
+		order by `+order, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -409,25 +418,21 @@ func scanPersonIDs(rows *sql.Rows) ([]string, error) {
 	return ids, rows.Err()
 }
 
-func ftsPrefixQuery(query string) string {
-	var terms []string
-	var b strings.Builder
-	flush := func() {
-		if b.Len() == 0 {
-			return
-		}
-		terms = append(terms, b.String()+"*")
-		b.Reset()
+func ftsSearchClause(tableName string, columns []string, plan ckstore.FTS5QueryPlan) (string, []any) {
+	if plan.Mode == ckstore.FTS5QueryMatch {
+		return tableName + " match ?", []any{plan.Match}
 	}
-	for _, r := range strings.ToLower(query) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
-			b.WriteRune(r)
-			continue
+	var parts []string
+	var args []any
+	for _, pattern := range plan.LikePatterns {
+		var termParts []string
+		for _, column := range columns {
+			termParts = append(termParts, column+" like ? escape '\\'")
+			args = append(args, pattern)
 		}
-		flush()
+		parts = append(parts, "("+strings.Join(termParts, " or ")+")")
 	}
-	flush()
-	return strings.Join(terms, " ")
+	return strings.Join(parts, " and "), args
 }
 
 func (s Store) markdownFingerprint() (markdownFingerprint, error) {

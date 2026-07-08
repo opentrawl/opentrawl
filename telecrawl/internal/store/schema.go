@@ -1,5 +1,7 @@
 package store
 
+import ckstore "github.com/openclaw/crawlkit/store"
+
 const schemaSQL = `
 create table if not exists chats (
 	id integer primary key,
@@ -123,5 +125,7 @@ create index if not exists idx_folder_chats_chat on folder_chats(chat_jid);
 create index if not exists idx_messages_ts on messages(ts);
 create index if not exists idx_messages_sender on messages(sender_jid);
 
-create virtual table if not exists messages_fts using fts5(text, chat, sender, media);
+` + messagesFTSSchema + `
 `
+
+const messagesFTSSchema = `create virtual table if not exists messages_fts using fts5(text, chat, sender, media, ` + ckstore.FTS5TrigramTokenizer + `);`

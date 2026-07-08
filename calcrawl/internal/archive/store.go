@@ -58,11 +58,18 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		path = DefaultPath()
 	}
 	st, err := store.Open(ctx, store.Options{
-		Path:          path,
-		Schema:        schema + shortref.Schema,
-		SchemaVersion: SchemaVersion,
+		Path:   path,
+		Schema: schema + shortref.Schema,
 	})
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
+		_ = st.Close()
 		return nil, err
 	}
 	if err := state.EnsureSchema(ctx, st.DB()); err != nil {
@@ -88,7 +95,7 @@ func OpenExistingWritable(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if version != SchemaVersion {
+	if version > SchemaVersion {
 		return nil, fmt.Errorf("%w: got %d, want %d", ErrSchemaOutdated, version, SchemaVersion)
 	}
 	return Open(ctx, path)
@@ -103,6 +110,9 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	}
 	if _, err := st.DB().ExecContext(ctx, schema+shortref.Schema); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		return nil, err
 	}
 	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
 		return nil, err

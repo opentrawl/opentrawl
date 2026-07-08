@@ -60,16 +60,12 @@ type SearchOptions struct {
 
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int64, error) {
 	query = strings.TrimSpace(query)
-	ftsQuery := ""
+	var plan store.FTS5QueryPlan
 	hasQuery := query != ""
 	if hasQuery {
-		var err error
-		ftsQuery, err = store.FTS5Terms(query, "")
-		if err != nil {
-			return nil, 0, err
-		}
+		plan = store.RouteFTS5Query(query)
 	}
-	where, args := searchWhere(ftsQuery, hasQuery, options.After, options.Before, options.Who)
+	where, args := searchWhere(plan, hasQuery, options.After, options.Before, options.Who)
 	total, err := s.countSearch(ctx, where, args, hasQuery)
 	if err != nil {
 		return nil, 0, err
@@ -78,7 +74,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	if limitArg <= 0 {
 		limitArg = -1 // SQLite: no limit — the --all path (crawlkit/flags.Limit)
 	}
-	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery), append(args, limitArg)...)
+	rows, err := s.store.DB().QueryContext(ctx, searchSQL(where, hasQuery, plan.Mode == store.FTS5QueryMatch), append(args, limitArg)...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -227,12 +223,13 @@ func (s *Store) countSearch(ctx context.Context, where string, args []any, hasQu
 	return total, err
 }
 
-func searchWhere(ftsQuery string, hasQuery bool, after, before int64, who *WhoFilter) (string, []any) {
+func searchWhere(plan store.FTS5QueryPlan, hasQuery bool, after, before int64, who *WhoFilter) (string, []any) {
 	parts := []string{}
 	args := []any{}
 	if hasQuery {
-		parts = append(parts, "events_fts match ?")
-		args = append(args, ftsQuery)
+		ftsClause, ftsArgs := ftsSearchClause("events_fts", []string{"events_fts.summary", "events_fts.description", "events_fts.location", "events_fts.participants"}, plan)
+		parts = append(parts, ftsClause)
+		args = append(args, ftsArgs...)
 	}
 	if after > 0 {
 		parts = append(parts, "e.start_unix >= ?")
@@ -344,13 +341,15 @@ func valuePlaceholders(count int) string {
 	return strings.Join(values, ", ")
 }
 
-func searchSQL(where string, hasQuery bool) string {
+func searchSQL(where string, hasQuery bool, hasMatch bool) string {
 	from := `events e`
 	order := `e.start_unix desc, e.event_uid`
 	if hasQuery {
 		from = `events_fts
 join events e on e.event_uid = events_fts.event_uid`
-		order = `rank, e.start_unix desc, e.event_uid`
+		if hasMatch {
+			order = `rank, e.start_unix desc, e.event_uid`
+		}
 	}
 	return `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title,

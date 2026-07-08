@@ -19,7 +19,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-const schemaVersion = 6
+const schemaVersion = 7
 
 // Sync markers live in the canonical crawlkit state.Store (table sync_state)
 // under one source name and entity type; each marker is a keyed scalar value.
@@ -246,6 +246,10 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 	}
 	db := st.DB()
 	s := &Store{store: st, db: db, path: path}
+	current, err := userVersion(ctx, db)
+	if err != nil {
+		return nil, err
+	}
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		return nil, err
 	}
@@ -288,6 +292,9 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 		}
 	}
 	if _, err := db.ExecContext(ctx, indexSQL); err != nil {
+		return nil, err
+	}
+	if err := ensureSearchIndex(ctx, db, current); err != nil {
 		return nil, err
 	}
 	if err := shortref.EnsureSchema(ctx, db); err != nil {

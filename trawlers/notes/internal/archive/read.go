@@ -261,11 +261,11 @@ type SearchOptions struct {
 
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int64, error) {
 	query = strings.TrimSpace(query)
-	ftsQuery := store.FTS5TokenQuery(query)
-	if ftsQuery == "" {
+	plan := store.RouteFTS5Query(query)
+	if plan.Match == "" && len(plan.LikePatterns) == 0 {
 		return nil, 0, errors.New("search query has no searchable terms")
 	}
-	where, args := searchWhere(ftsQuery, options.After, options.Before)
+	where, args := searchWhere(plan, options.After, options.Before)
 	var total int64
 	if err := s.store.DB().QueryRowContext(ctx, `
 select count(*)
@@ -287,7 +287,7 @@ from notes_fts
 join note_versions v on v.note_id = notes_fts.note_id and v.zdata_sha256 = notes_fts.zdata_sha256
 left join notes n on n.note_id = notes_fts.note_id
 `+where+`
-order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc
+order by `+searchOrder(plan)+`, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc
 limit ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
@@ -316,9 +316,9 @@ limit ?`, queryArgs...)
 	return results, total, rows.Err()
 }
 
-func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
-	parts := []string{"notes_fts match ?"}
-	args := []any{ftsQuery}
+func searchWhere(plan store.FTS5QueryPlan, after, before time.Time) (string, []any) {
+	ftsClause, args := ftsSearchClause("notes_fts", []string{"notes_fts.title", "notes_fts.body"}, plan)
+	parts := []string{ftsClause}
 	if !after.IsZero() {
 		parts = append(parts, "coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) >= ?")
 		args = append(args, notestime.Format(after))
@@ -328,6 +328,13 @@ func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
 		args = append(args, notestime.Format(before))
 	}
 	return "where " + strings.Join(parts, " and "), args
+}
+
+func searchOrder(plan store.FTS5QueryPlan) string {
+	if plan.Mode == store.FTS5QueryMatch {
+		return "rank"
+	}
+	return "notes_fts.note_id"
 }
 
 func (s *Store) SyncState(ctx context.Context) (map[string]string, error) {

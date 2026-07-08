@@ -148,7 +148,7 @@ func TestFindPersonVariantsAndErrors(t *testing.T) {
 	}
 }
 
-func TestFindPersonUsesFTSPrefixAlias(t *testing.T) {
+func TestFindPersonUsesFTSAlias(t *testing.T) {
 	r := testRepo(t)
 	s := New(r)
 	now := time.Date(2026, 5, 8, 9, 0, 0, 0, time.UTC)
@@ -162,7 +162,7 @@ func TestFindPersonUsesFTSPrefixAlias(t *testing.T) {
 	if err := s.Rebuild(); err != nil {
 		t.Fatal(err)
 	}
-	got, err := s.FindPerson("mo")
+	got, err := s.FindPerson("moh")
 	if err != nil {
 		t.Fatal(err)
 	}

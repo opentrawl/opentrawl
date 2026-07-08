@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/openclaw/crawlkit/state"
+	ckstore "github.com/openclaw/crawlkit/store"
 )
 
 var (
@@ -255,7 +256,14 @@ func searchArgs(query string, options SearchOptions) []any {
 	who := candidateSearchWho(options.Who)
 	args := whoFilterArgs(who)
 	if strings.TrimSpace(query) != "" {
-		args = append(args, ftsQuery(query))
+		plan := ckstore.RouteFTS5Query(query)
+		if plan.Mode == ckstore.FTS5QueryLike {
+			for _, pattern := range plan.LikePatterns {
+				args = append(args, pattern)
+			}
+		} else {
+			args = append(args, plan.Match)
+		}
 	}
 	if options.HasAfter {
 		args = append(args, options.After)

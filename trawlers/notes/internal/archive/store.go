@@ -37,8 +37,16 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPaths().DBPath
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema, SchemaVersion: SchemaVersion})
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema})
 	if err != nil {
+		return nil, err
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
+		_ = st.Close()
 		return nil, err
 	}
 	return &Store{store: st, path: path, owned: true}, nil
@@ -53,6 +61,9 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	}
 	if _, err := st.DB().ExecContext(ctx, schema); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	if err := ensureSearchIndex(ctx, st); err != nil {
+		return nil, err
 	}
 	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
 		return nil, err

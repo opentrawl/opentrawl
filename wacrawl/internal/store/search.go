@@ -91,12 +91,9 @@ func (s *Store) Search(ctx context.Context, filter MessageFilter) ([]Message, er
 		}
 		return s.withCanonicalSenderNames(ctx, messages)
 	}
-	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
-	if err != nil {
-		return nil, err
-	}
-	query := `select m.source_pk, m.chat_jid, m.chat_name, m.msg_id, m.sender_jid, m.sender_name, m.ts, m.from_me, m.text, m.raw_type, m.message_type, m.media_type, m.media_title, m.media_path, m.media_url, m.media_size, m.starred, '' from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
-	args := []any{ftsQuery}
+	plan := ckstore.RouteFTS5Query(filter.Query)
+	ftsClause, args := ftsSearchClause("messages_fts", []string{"f.text", "f.chat", "f.sender", "f.media"}, plan)
+	query := `select m.source_pk, m.chat_jid, m.chat_name, m.msg_id, m.sender_jid, m.sender_name, m.ts, m.from_me, m.text, m.raw_type, m.message_type, m.media_type, m.media_title, m.media_path, m.media_url, m.media_size, m.starred, '' from messages_fts f join messages m on m.rowid=f.rowid where ` + ftsClause
 	query, args = applyMessageFilters(query, args, filter, true)
 	query += " order by bm25(messages_fts) limit ?"
 	args = append(args, filter.Limit)
@@ -130,12 +127,9 @@ func (s *Store) SearchCount(ctx context.Context, filter MessageFilter) (int, err
 		}
 		return total, nil
 	}
-	ftsQuery, err := ckstore.FTS5Terms(filter.Query, "")
-	if err != nil {
-		return 0, err
-	}
-	query := `select count(*) from messages_fts f join messages m on m.rowid=f.rowid where messages_fts match ?`
-	args := []any{ftsQuery}
+	plan := ckstore.RouteFTS5Query(filter.Query)
+	ftsClause, args := ftsSearchClause("messages_fts", []string{"f.text", "f.chat", "f.sender", "f.media"}, plan)
+	query := `select count(*) from messages_fts f join messages m on m.rowid=f.rowid where ` + ftsClause
 	query, args = applyMessageFilters(query, args, filter, true)
 	var total int
 	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&total); err != nil {

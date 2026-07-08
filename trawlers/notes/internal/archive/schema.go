@@ -1,5 +1,15 @@
 package archive
 
+import "github.com/openclaw/crawlkit/store"
+
+const notesFTSSchema = `create virtual table if not exists notes_fts using fts5(
+  note_id unindexed,
+  zdata_sha256 unindexed,
+  title,
+  body,
+  ` + store.FTS5TrigramTokenizer + `
+);`
+
 const schema = `
 create table if not exists notes (
   note_id text primary key,
@@ -51,12 +61,7 @@ create table if not exists sync_state (
   value text not null
 );
 
-create virtual table if not exists notes_fts using fts5(
-  note_id unindexed,
-  zdata_sha256 unindexed,
-  title,
-  body
-);
+` + notesFTSSchema + `
 
 create index if not exists idx_note_versions_time on note_versions(note_id, source_modified_at, first_observed_at);
 create index if not exists idx_version_observations_version on version_observations(note_id, zdata_sha256, observation_id);

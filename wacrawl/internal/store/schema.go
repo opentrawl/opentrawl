@@ -1,5 +1,7 @@
 package store
 
+import ckstore "github.com/openclaw/crawlkit/store"
+
 // Runtime migration schema. Keep internal/store/sqlc/schema.sql in sync when
 // changing archive tables used by generated queries.
 const schemaSQL = `
@@ -70,5 +72,7 @@ create index if not exists idx_messages_chat_msg on messages(chat_jid, msg_id);
 create index if not exists idx_messages_ts on messages(ts);
 create index if not exists idx_messages_sender on messages(sender_jid);
 
-create virtual table if not exists messages_fts using fts5(text, chat, sender, media);
+` + messagesFTSSchema + `
 `
+
+const messagesFTSSchema = `create virtual table if not exists messages_fts using fts5(text, chat, sender, media, ` + ckstore.FTS5TrigramTokenizer + `);`

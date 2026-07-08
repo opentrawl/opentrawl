@@ -11,7 +11,7 @@ const (
 	AppID         = "calendar"
 	LegacyAppID   = "calcrawl"
 	DisplayName   = "Calendar"
-	SchemaVersion = 2
+	SchemaVersion = 3
 
 	DefaultSearchLimit = 20
 )
