@@ -101,6 +101,15 @@ from asset
 	if since.Valid && since.Int64 > 0 {
 		metrics.Counts = append(metrics.Counts, control.NewCount("since", "since", since.Int64))
 	}
+	queuedForClassify, queuedNeedsDownload, classificationQueuePending, err := readQueueCounts(ctx, db.DB())
+	if err != nil {
+		return statusMetrics{}, err
+	}
+	metrics.Counts = append(metrics.Counts,
+		control.NewCount("queued_for_classify", "queued for classify", queuedForClassify),
+		control.NewCount("queued_needs_download", "queued needs download", queuedNeedsDownload),
+		control.NewCount("classification_queue_pending", "classification queue pending", classificationQueuePending),
+	)
 	lastImportAt, err := lastImportAt(ctx, db.DB())
 	if err != nil {
 		return statusMetrics{}, err
@@ -118,6 +127,20 @@ func statusSummary(photos int64) string {
 	default:
 		return fmt.Sprintf("%d photos archived", photos)
 	}
+}
+
+func readQueueCounts(ctx context.Context, db *sql.DB) (queuedForClassify, queuedNeedsDownload, classificationQueuePending int64, err error) {
+	err = db.QueryRowContext(ctx, `
+select
+  coalesce(sum(case when state in ('pending', 'metadata_classified', 'place_pending') then 1 else 0 end), 0),
+  coalesce(sum(case when state in ('pending', 'metadata_classified', 'place_pending') and needs_download <> 0 then 1 else 0 end), 0),
+  coalesce(sum(case when state = 'pending' then 1 else 0 end), 0)
+from classification_queue
+`).Scan(&queuedForClassify, &queuedNeedsDownload, &classificationQueuePending)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("read classification queue counts: %w", err)
+	}
+	return queuedForClassify, queuedNeedsDownload, classificationQueuePending, nil
 }
 
 func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {

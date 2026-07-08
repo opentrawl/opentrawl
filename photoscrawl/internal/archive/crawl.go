@@ -14,6 +14,7 @@ import (
 
 	crawlconfig "github.com/openclaw/crawlkit/config"
 	"github.com/openclaw/crawlkit/state"
+	"github.com/openclaw/crawlkit/store"
 	"github.com/openclaw/photoscrawl/internal/photos"
 )
 
@@ -46,6 +47,25 @@ type SyncResult struct {
 }
 
 func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
+	db, err := store.Open(ctx, store.Options{
+		Path:          paths.Database,
+		Schema:        Schema,
+		SchemaVersion: SchemaVersion,
+	})
+	if err != nil {
+		return SyncResult{}, err
+	}
+	defer func() { _ = db.Close() }()
+	return SyncWithStore(ctx, db, paths, opts)
+}
+
+func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncOptions) (SyncResult, error) {
+	if db == nil {
+		return SyncResult{}, errors.New("archive store is not open")
+	}
+	if err := prepareStore(ctx, db); err != nil {
+		return SyncResult{}, err
+	}
 	if opts.Provider == nil {
 		return SyncResult{}, errors.New("photos provider is required")
 	}
@@ -77,12 +97,6 @@ func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error
 		return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
 	}
 
-	db, err := openArchive(ctx, paths.Database)
-	if err != nil {
-		return SyncResult{}, err
-	}
-	defer func() { _ = db.Close() }()
-
 	importer := syncImporter{
 		ctx:         ctx,
 		snapshot:    snapshot,
@@ -95,6 +109,19 @@ func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error
 	}
 	importer.result.Database = paths.Database
 	return importer.result, nil
+}
+
+func prepareStore(ctx context.Context, db *store.Store) error {
+	if db == nil {
+		return errors.New("archive store is not open")
+	}
+	if _, err := db.DB().ExecContext(ctx, Schema); err != nil {
+		return fmt.Errorf("apply schema: %w", err)
+	}
+	if err := ensureArchiveMigrations(ctx, db.DB()); err != nil {
+		return err
+	}
+	return db.EnsureSchemaVersion(ctx, SchemaVersion)
 }
 
 type syncImporter struct {

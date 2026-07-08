@@ -181,14 +181,12 @@ func deleteResetObservationFTS(ctx context.Context, tx *sql.Tx, assetID string) 
 delete from observation_fts
 where asset_id = ?
   and id not in (
-    select id from model_observation
-    where asset_id = ? and superseded_at is null
-    union
-    select id from place_observation
-    where asset_id = ? and superseded_at is null
+    select id from model_observation where asset_id = ?
+    union all
+    select id from place_observation where asset_id = ?
   )
 `, assetID, assetID, assetID); err != nil {
-		return fmt.Errorf("clear reset observation fts: %w", err)
+		return fmt.Errorf("clear reset observation fts for asset: %w", err)
 	}
 	return nil
 }

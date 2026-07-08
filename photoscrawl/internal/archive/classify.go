@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/openclaw/crawlkit/store"
 )
 
 const (
@@ -73,6 +75,19 @@ type ClassifyResult struct {
 }
 
 func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {
+	db, err := store.Open(ctx, store.Options{
+		Path:          paths.Database,
+		Schema:        Schema,
+		SchemaVersion: SchemaVersion,
+	})
+	if err != nil {
+		return ClassifyResult{}, err
+	}
+	defer func() { _ = db.Close() }()
+	return ClassifyWithStore(ctx, db, paths, opts)
+}
+
+func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {
 	startedAt := time.Now()
 	now := opts.Now
 	if now == nil {
@@ -88,12 +103,9 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	} else if limit <= 0 {
 		limit = 100
 	}
-
-	db, err := openArchive(ctx, paths.Database)
-	if err != nil {
+	if err := prepareStore(ctx, db); err != nil {
 		return ClassifyResult{}, err
 	}
-	defer func() { _ = db.Close() }()
 
 	result := ClassifyResult{
 		Database:     paths.Database,
@@ -122,7 +134,7 @@ func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyR
 	}
 	var inputs []classifyInput
 	loadStartedAt := time.Now()
-	err = db.WithTx(ctx, func(tx *sql.Tx) error {
+	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
 		refreshModelID := ""
 		if classifier != nil {

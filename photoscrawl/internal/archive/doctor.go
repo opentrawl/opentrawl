@@ -9,7 +9,7 @@ import (
 
 const (
 	fullDiskAccessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
-	archiveRemedy        = "run photoscrawl sync --library PATH"
+	archiveRemedy        = "run photoscrawl sync"
 )
 
 type DoctorOptions struct {

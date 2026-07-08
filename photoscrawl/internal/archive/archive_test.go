@@ -45,7 +45,11 @@ func TestSyncInitializesArchiveAndStatus(t *testing.T) {
 	if after.State != "empty" {
 		t.Fatalf("state after sync = %q, want empty", after.State)
 	}
-	if len(after.Counts) != 1 || after.Counts[0].ID != "photos" || after.Counts[0].Value != 0 {
+	if len(after.Counts) != 4 ||
+		!hasStatusCountValue(after.Counts, "photos", 0) ||
+		!hasStatusCountValue(after.Counts, "queued_for_classify", 0) ||
+		!hasStatusCountValue(after.Counts, "queued_needs_download", 0) ||
+		!hasStatusCountValue(after.Counts, "classification_queue_pending", 0) {
 		t.Fatalf("status counts after sync = %#v", after.Counts)
 	}
 	if after.Freshness == nil || after.Freshness.LastSync == "" {

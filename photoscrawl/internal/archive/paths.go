@@ -6,8 +6,6 @@ import (
 	crawlconfig "github.com/openclaw/crawlkit/config"
 )
 
-const databaseFilename = "photoscrawl.db"
-
 var runtimeApp = crawlconfig.App{Name: "photoscrawl", BaseDir: "~/.opentrawl/photoscrawl"}
 
 type Paths struct {
@@ -27,7 +25,7 @@ func DefaultPaths() (Paths, error) {
 	return Paths{
 		ConfigPath: defaults.ConfigPath,
 		DataDir:    defaults.BaseDir,
-		Database:   filepath.Join(defaults.BaseDir, databaseFilename),
+		Database:   defaults.DBPath,
 		CacheDir:   defaults.CacheDir,
 		LogDir:     defaults.LogDir,
 		ShareDir:   defaults.ShareDir,

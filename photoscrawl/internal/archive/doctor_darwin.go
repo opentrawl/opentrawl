@@ -11,6 +11,8 @@ import (
 	crawlconfig "github.com/openclaw/crawlkit/config"
 )
 
+const libraryPathRemedy = "set library_path in ~/.opentrawl/photoscrawl/config.toml"
+
 func sourceStoreChecks(libraryPath string) []DoctorCheck {
 	path, err := photosLibraryPath(libraryPath)
 	if err != nil {
@@ -18,7 +20,7 @@ func sourceStoreChecks(libraryPath string) []DoctorCheck {
 			ID:      "source_store",
 			State:   "fail",
 			Message: "cannot resolve Photos library path",
-			Remedy:  "pass --library PATH",
+			Remedy:  libraryPathRemedy,
 		}
 		return []DoctorCheck{check, checkWithID(check, "full_disk_access")}
 	}
@@ -26,6 +28,10 @@ func sourceStoreChecks(libraryPath string) []DoctorCheck {
 		sourceStoreCheck(path),
 		fullDiskAccessCheck(path),
 	}
+}
+
+func DefaultPhotosLibraryPath() (string, error) {
+	return photosLibraryPath("")
 }
 
 func photosLibraryPath(libraryPath string) (string, error) {
@@ -48,7 +54,7 @@ func sourceStoreCheck(libraryPath string) DoctorCheck {
 				ID:      "source_store",
 				State:   "missing",
 				Message: "Photos library not found",
-				Remedy:  "pass --library PATH",
+				Remedy:  libraryPathRemedy,
 			}
 		}
 		if os.IsPermission(err) {
@@ -63,7 +69,7 @@ func sourceStoreCheck(libraryPath string) DoctorCheck {
 			ID:      "source_store",
 			State:   "fail",
 			Message: "cannot inspect Photos library",
-			Remedy:  "pass --library PATH",
+			Remedy:  libraryPathRemedy,
 		}
 	}
 	if !info.IsDir() {
@@ -71,7 +77,7 @@ func sourceStoreCheck(libraryPath string) DoctorCheck {
 			ID:      "source_store",
 			State:   "fail",
 			Message: "Photos library path is not a directory",
-			Remedy:  "pass --library PATH",
+			Remedy:  libraryPathRemedy,
 		}
 	}
 	return DoctorCheck{ID: "source_store", State: "ok"}
@@ -89,7 +95,7 @@ func fullDiskAccessCheck(libraryPath string) DoctorCheck {
 			ID:      "full_disk_access",
 			State:   "missing",
 			Message: "Photos database not found",
-			Remedy:  "pass --library PATH",
+			Remedy:  libraryPathRemedy,
 		}
 	}
 	if os.IsPermission(err) || errors.Is(err, os.ErrPermission) {
@@ -104,7 +110,7 @@ func fullDiskAccessCheck(libraryPath string) DoctorCheck {
 		ID:      "full_disk_access",
 		State:   "fail",
 		Message: "cannot inspect the Photos database",
-		Remedy:  "pass --library PATH",
+		Remedy:  libraryPathRemedy,
 	}
 }
 
