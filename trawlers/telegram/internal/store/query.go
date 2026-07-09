@@ -93,18 +93,6 @@ func (s *Store) ListChats(ctx context.Context, limit int, unread bool) ([]Chat, 
 	return out, s.nameSelfChat(ctx, out)
 }
 
-func (s *Store) CountChats(ctx context.Context, unread bool) (int, error) {
-	query := `select count(*) from chats`
-	if unread {
-		query += ` where unread_count > 0`
-	}
-	var total int
-	if err := s.db.QueryRowContext(ctx, query).Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
-}
-
 func (s *Store) ListFolders(ctx context.Context) ([]Folder, error) {
 	rows, err := s.db.QueryContext(ctx, `select f.id,f.title,f.emoticon,f.color,f.flags_json,count(fc.chat_jid)
 from folders f
@@ -124,45 +112,6 @@ order by cast(f.id as integer), f.title`)
 		out = append(out, f)
 	}
 	return out, rows.Err()
-}
-
-func (s *Store) ChatsInFolder(ctx context.Context, folderID string, limit int) ([]Chat, error) {
-	if limit <= 0 {
-		limit = -1 // SQLite LIMIT -1 is unbounded.
-	}
-	rows, err := s.db.QueryContext(ctx, `select cast(c.id as text),c.kind,c.name,c.username,c.last_message_at,c.unread_count,c.message_count,coalesce(c.folder_id,''),c.forum
-from folder_chats fc join chats c on cast(c.id as text)=fc.chat_jid
-where fc.folder_id=?
-order by fc.position asc, c.last_message_at desc
-limit ?`, folderID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	out := make([]Chat, 0)
-	for rows.Next() {
-		var c Chat
-		var ts int64
-		var forum int
-		if err := rows.Scan(&c.JID, &c.Kind, &c.Name, &c.Username, &ts, &c.UnreadCount, &c.MessageCount, &c.FolderID, &forum); err != nil {
-			return nil, err
-		}
-		c.LastMessageAt = fromUnix(ts)
-		c.Forum = forum != 0
-		out = append(out, c)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return out, s.nameSelfChat(ctx, out)
-}
-
-func (s *Store) CountChatsInFolder(ctx context.Context, folderID string) (int, error) {
-	var total int
-	if err := s.db.QueryRowContext(ctx, `select count(*) from folder_chats where folder_id=?`, folderID).Scan(&total); err != nil {
-		return 0, err
-	}
-	return total, nil
 }
 
 func (s *Store) ListTopics(ctx context.Context, chatJID string, limit int) ([]Topic, error) {

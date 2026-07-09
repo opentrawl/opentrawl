@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
@@ -51,6 +52,92 @@ func TestSearchJSONUsesLocalOffsetTimestamp(t *testing.T) {
 	}
 	if got, want := payload.Results[0].Time, "2026-07-02T16:00:00+02:00"; got != want {
 		t.Fatalf("search time = %q, want %q", got, want)
+	}
+}
+
+func TestChatsListsChatsWithReadState(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	writeSyntheticArchive(t, context.Background(), archivePathForRun(stateRoot))
+
+	code, stdout, stderr := runTelecrawl(t, "--json", "chats")
+	if code != 0 {
+		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload struct {
+		Chats []struct {
+			Title  string `json:"title"`
+			Kind   string `json:"kind"`
+			Unread *int64 `json:"unread"`
+		} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("chats json = %s err=%v", stdout, err)
+	}
+	if len(payload.Chats) != 1 {
+		t.Fatalf("chats = %#v", payload.Chats)
+	}
+	chat := payload.Chats[0]
+	// The synthetic peer "100" is a one-to-one "user" chat: the kit renders it
+	// as a dm, never Telegram's own word.
+	if chat.Title != "Alice Example" || chat.Kind != "dm" {
+		t.Fatalf("chat = %#v", chat)
+	}
+	// Telegram stores read state, so unread is present (a real zero here), not
+	// dropped the way a read-state-less surface would drop it.
+	if chat.Unread == nil {
+		t.Fatalf("telegram chat must carry an unread count: %#v", chat)
+	}
+}
+
+// Telegram's store speaks "user", "group" and "channel"; only a one-to-one
+// "user" chat may render as dm. This is the tripwire for the group/dm
+// normalisation: a channel must never read as a private thread.
+func TestChatsKindNeverCallsChannelADM(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	ctx := context.Background()
+	st, err := store.Open(ctx, archivePathForRun(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 7, 2, 14, 0, 0, 0, time.UTC)
+	chats := []store.Chat{
+		{JID: "-100777", Kind: "channel", Name: "Announcements", LastMessageAt: now, MessageCount: 1},
+		{JID: "-4242", Kind: "group", Name: "Team Room", LastMessageAt: now, MessageCount: 1},
+		{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 1},
+	}
+	stats := store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: len(chats), StartedAt: now, FinishedAt: now}
+	if _, err := st.ReplaceAll(ctx, stats, nil, chats, nil, nil, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := runTelecrawl(t, "--json", "chats")
+	if code != 0 {
+		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload struct {
+		Chats []struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+		} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("chats json = %s err=%v", stdout, err)
+	}
+	want := map[string]string{
+		"-100777": "group",
+		"-4242":   "group",
+		"100":     "dm",
+	}
+	if len(payload.Chats) != len(want) {
+		t.Fatalf("chats = %#v", payload.Chats)
+	}
+	for _, chat := range payload.Chats {
+		if chat.Kind != want[chat.ID] {
+			t.Fatalf("chat %s kind = %q, want %q", chat.ID, chat.Kind, want[chat.ID])
+		}
 	}
 }
 

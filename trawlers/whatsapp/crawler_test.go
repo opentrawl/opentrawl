@@ -154,12 +154,14 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("metadata JSON: %v\n%s", err, stdout)
 	}
-	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "unread", "messages"} {
+	// chats is now the shared trawlkit capability; the old bespoke unread verb
+	// collapsed into chats --unread.
+	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "messages"} {
 		if !stringSliceContains(manifest.Capabilities, capability) {
 			t.Fatalf("capabilities = %#v, missing %s", manifest.Capabilities, capability)
 		}
 	}
-	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "unread", "messages"} {
+	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "messages"} {
 		if _, ok := manifest.Commands[command]; !ok {
 			t.Fatalf("commands = %#v, missing %s", manifest.Commands, command)
 		}

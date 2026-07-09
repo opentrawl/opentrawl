@@ -26,6 +26,10 @@ type WhoMatcher interface {
 	Who(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error)
 }
 
+type ChatLister interface {
+	Chats(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error)
+}
+
 type Opener interface {
 	Open(ctx context.Context, req *Request, shortRef string) error
 }

@@ -15,15 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
-const (
-	defaultChatLimit    = 50
-	defaultMessageLimit = 20
-)
-
-type chatsOptions struct {
-	limit    int
-	limitSet bool
-}
+const defaultMessageLimit = 20
 
 type messagesOptions struct {
 	chatID   string
@@ -40,11 +32,6 @@ type listHeader struct {
 	Total         int64  `json:"total"`
 	Limit         int    `json:"limit,omitempty"`
 	Complete      bool   `json:"complete"`
-}
-
-type chatListOutput struct {
-	listHeader
-	Items []archive.ChatSummary `json:"items"`
 }
 
 type messageListOutput struct {
@@ -81,23 +68,12 @@ type openMessageOutput struct {
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{
-			Name:  "chats",
-			Help:  "List archived iMessage chats.",
-			Flags: c.bindChatsFlags,
-			Run:   c.runChats,
-		},
-		{
 			Name:  "messages",
 			Help:  "List archived iMessage messages in one chat.",
 			Flags: c.bindMessagesFlags,
 			Run:   c.runMessages,
 		},
 	}
-}
-
-func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
-	c.chats = chatsOptions{limit: defaultChatLimit}
-	fs.Var(intFlag{value: &c.chats.limit, seen: &c.chats.limitSet}, "limit", "maximum chats")
 }
 
 func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
@@ -107,34 +83,38 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.messages.asc, "asc", false, "show oldest messages first")
 }
 
-func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return usageErr(errors.New("chats takes flags only"))
+// Chats implements trawlkit.ChatLister. The kit owns the chats verb, its
+// flags, the JSON shape and the table; this only maps one store query into the
+// shared Chat. The iMessage archive stores no read state, so an --unread
+// request is refused rather than answered with a fake zero.
+func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+	if q.Unread {
+		return nil, trawlkit.ErrChatsNoReadState
 	}
-	rows, err := flags.Limit(c.chats.limit, c.chats.limitSet)
-	if err != nil {
-		return usageErr(err)
+	limit := q.Limit
+	if q.All {
+		limit = 0
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	chats, err := st.Chats(ctx, rows)
+	summaries, err := st.Chats(ctx, limit)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	total, err := st.CountChats(ctx)
-	if err != nil {
-		return err
+	chats := make([]trawlkit.Chat, 0, len(summaries))
+	for _, summary := range summaries {
+		people := summary.ParticipantCount
+		chats = append(chats, trawlkit.Chat{
+			ID:           summary.ChatID,
+			Title:        chatConversation(summary),
+			Group:        summary.Kind == "group",
+			Participants: &people,
+			LastActivity: archive.AppleDateTime(summary.LatestMessageDate),
+		})
 	}
-	out := chatListOutput{
-		listHeader: newListHeader("chats", len(chats), total, rows),
-		Items:      chats,
-	}
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "chats", out)
-	}
-	return printChatsText(req.Out, out)
+	return chats, nil
 }
 
 func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error {

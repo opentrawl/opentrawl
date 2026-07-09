@@ -127,7 +127,11 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 		if !strings.Contains(stdout, "@lid") {
 			t.Fatalf("%s JSON output should keep LID:\n%s", name, stdout)
 		}
-		if strings.Contains(stdout, "unknown participant") {
+		// The shared chats verb carries a computed display title (the Beeper
+		// model), so a name-less privacy chat legitimately reads "unknown
+		// participant (privacy id)" in JSON while its id field keeps the real
+		// @lid. Every other JSON surface still stays raw.
+		if name != "chats" && strings.Contains(stdout, "unknown participant") {
 			t.Fatalf("%s JSON output should not use privacy placeholder:\n%s", name, stdout)
 		}
 	}
@@ -137,6 +141,57 @@ func containsHumanPrivacyPlaceholder(output string) bool {
 	// TRAWL-1 list tables can truncate the final "t"; the visible stem still
 	// proves the LID was masked instead of printed raw.
 	return strings.Contains(output, "unknown participan")
+}
+
+// The store's kind vocabulary is wider than the verb's: newsletters and the
+// status feed are broadcast surfaces, and only a one-to-one "dm" may render
+// as dm. This is the tripwire for the group/dm normalisation.
+func TestChatsKindNeverCallsBroadcastADM(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	ctx := context.Background()
+	st, err := wastore.Open(ctx, filepath.Join(stateRoot, "whatsapp", "whatsapp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	chats := []wastore.Chat{
+		{JID: "press@newsletter", Kind: "newsletter", Name: "Daily Press", LastMessageAt: now, MessageCount: 1},
+		{JID: "status@broadcast", Kind: "status", Name: "Status", LastMessageAt: now, MessageCount: 1},
+		{JID: "casey@s.whatsapp.net", Kind: "dm", Name: "Casey", LastMessageAt: now, MessageCount: 1},
+	}
+	if err := st.ReplaceAll(ctx, wastore.ImportStats{FinishedAt: now}, nil, chats, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := captureRun(t, []string{"--json", "chats"}, New())
+	if code != 0 {
+		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload struct {
+		Chats []struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+		} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("chats json = %s err=%v", stdout, err)
+	}
+	want := map[string]string{
+		"press@newsletter":     "group",
+		"status@broadcast":     "group",
+		"casey@s.whatsapp.net": "dm",
+	}
+	if len(payload.Chats) != len(want) {
+		t.Fatalf("chats = %#v", payload.Chats)
+	}
+	for _, chat := range payload.Chats {
+		if chat.Kind != want[chat.ID] {
+			t.Fatalf("chat %s kind = %q, want %q", chat.ID, chat.Kind, want[chat.ID])
+		}
+	}
 }
 
 func TestMessageWhoPrefersPhoneJIDOverLIDSuffixedName(t *testing.T) {

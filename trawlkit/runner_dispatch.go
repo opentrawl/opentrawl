@@ -109,6 +109,16 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		}
 		decl := spineDeclaration(spine, name)
 		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
+	case "chats":
+		if _, ok := source.(ChatLister); !ok {
+			return targetVerb{}, usageError{err: errors.New("source does not support chats")}
+		}
+		spine, err := supportedVerbDeclarations(source)
+		if err != nil {
+			return targetVerb{}, err
+		}
+		decl := spineDeclaration(spine, name)
+		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	case "contacts_export":
 		if _, ok := source.(ContactExporter); !ok {
 			return targetVerb{}, usageError{err: errors.New("source does not support contacts export")}

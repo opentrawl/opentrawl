@@ -207,7 +207,7 @@ func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, 
 }
 
 func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Request, globals globalOptions, format output.Format) error {
-	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.bespoke == nil {
+	if len(verb.args) > 0 && verb.name != "search" && verb.name != "open" && verb.name != "who" && verb.name != "chats" && verb.bespoke == nil {
 		return usageError{err: fmt.Errorf("%s takes no arguments", verb.name)}
 	}
 	switch verb.name {
@@ -281,6 +281,31 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 			return err
 		}
 		return writeResult(req.Out, format, "who", newWhoOutput(verb.args[0], candidates))
+	case "chats":
+		query, err := parseChatQuery(verb.args)
+		if err != nil {
+			return err
+		}
+		// Fetch one row past the page so truncation is a fact, not a guess
+		// from a full page: the extra row proves more chats exist and is
+		// never rendered. Deterministic structural choice, documented here.
+		fetch := query
+		if !query.All && query.Limit > 0 {
+			fetch.Limit = query.Limit + 1
+		}
+		chats, err := source.(ChatLister).Chats(ctx, req, fetch)
+		if err != nil {
+			if errors.Is(err, ErrChatsNoReadState) {
+				surface := firstText(source.Info().DisplayName, source.Info().Surface, source.Info().ID)
+				return output.UsageError{Err: fmt.Errorf("%s stores no read state, so --unread is not available here", surface)}
+			}
+			return err
+		}
+		truncated := !query.All && query.Limit > 0 && len(chats) > query.Limit
+		if truncated {
+			chats = chats[:query.Limit]
+		}
+		return writeResult(req.Out, format, "chats", newChatsOutput(chats, query.Unread, truncated))
 	case "contacts_export":
 		contacts, err := source.(ContactExporter).ContactExport(ctx, req)
 		if err != nil {

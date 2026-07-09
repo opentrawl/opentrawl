@@ -37,135 +37,56 @@ func (f *intFlag) String() string {
 	return strconv.Itoa(f.value)
 }
 
-type chatsEnvelope struct {
-	Chats     []chatRow `json:"chats"`
-	Total     int       `json:"total"`
-	Truncated bool      `json:"truncated"`
-	unread    bool
-}
-
-type chatRow struct {
-	ChatID        string `json:"chat_id"`
-	Kind          string `json:"kind,omitempty"`
-	Name          string `json:"name,omitempty"`
-	LastMessageAt string `json:"last_message_at,omitempty"`
-	UnreadCount   int    `json:"unread_count"`
-	MessageCount  int    `json:"message_count"`
-}
-
-func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return usageErr(fmt.Errorf("chats takes flags only"))
-	}
-	return c.listChats(ctx, req, c.chatsUnread)
-}
-
-func (c *Crawler) runUnread(ctx context.Context, req *trawlkit.Request) error {
-	if len(req.Args) != 0 {
-		return usageErr(fmt.Errorf("unread takes flags only"))
-	}
-	return c.listChats(ctx, req, true)
-}
-
-func (c *Crawler) listChats(ctx context.Context, req *trawlkit.Request, unread bool) error {
-	limit, err := ckflags.Limit(c.chatsLimit.value, c.chatsLimit.set)
-	if err != nil {
-		return usageErr(err)
+// Chats implements trawlkit.ChatLister. WhatsApp Desktop stores a real
+// unread count per chat, so both the plain list and the --unread filter are
+// answered from the store; the kit owns the verb, flags, JSON and table.
+func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+	limit := q.Limit
+	if q.All {
+		limit = 0
 	}
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return archiveErr(err)
+		return nil, archiveErr(err)
 	}
-	var chats []store.Chat
-	var total int
-	if unread {
-		chats, err = st.ListUnreadChats(ctx, limit)
-		if err == nil {
-			total, err = st.CountUnreadChats(ctx)
-		}
+	var rows []store.Chat
+	if q.Unread {
+		rows, err = st.ListUnreadChats(ctx, limit)
 	} else {
-		chats, err = st.ListChats(ctx, limit)
-		if err == nil {
-			total, err = st.CountChats(ctx)
-		}
+		rows, err = st.ListChats(ctx, limit)
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
-	result := newChatsEnvelope(chats, total, unread)
-	if req.Format == output.JSON {
-		return output.Write(req.Out, req.Format, "chats", result)
+	chats := make([]trawlkit.Chat, 0, len(rows))
+	for _, row := range rows {
+		unread := int64(row.UnreadCount)
+		chat := trawlkit.Chat{
+			// Only a one-to-one "dm" is a dm; groups, newsletters and status
+			// broadcasts are all group-shaped, never a private thread.
+			ID:           row.JID,
+			Title:        whatsappChatTitle(row),
+			Group:        row.Kind != "dm",
+			LastActivity: row.LastMessageAt,
+			Unread:       &unread,
+		}
+		// A privacy @lid is both a machine ref and privacy-sensitive, so it is
+		// masked in the human table while --json keeps the real id.
+		if privacyID(row.JID) {
+			chat.DisplayID = "privacy id"
+		}
+		chats = append(chats, chat)
 	}
-	return printChats(req, result)
+	return chats, nil
 }
 
-func newChatsEnvelope(chats []store.Chat, total int, unread bool) chatsEnvelope {
-	rows := make([]chatRow, 0, len(chats))
-	for _, chat := range chats {
-		rows = append(rows, chatRow{
-			ChatID:        chat.JID,
-			Kind:          chat.Kind,
-			Name:          outputField(chat.Name),
-			LastMessageAt: formatTime(chat.LastMessageAt),
-			UnreadCount:   chat.UnreadCount,
-			MessageCount:  chat.MessageCount,
-		})
-	}
-	return chatsEnvelope{Chats: rows, Total: total, Truncated: total > len(rows), unread: unread}
-}
-
-func printChats(req *trawlkit.Request, value chatsEnvelope) error {
-	heading := "Chats"
-	empty := "No chats."
-	hint := "Messages: trawl whatsapp messages --chat CHAT"
-	if value.unread {
-		heading = "Unread chats"
-		empty = "No unread chats."
-	}
-	if len(value.Chats) == 0 {
-		_, err := fmt.Fprintln(req.Out, empty)
-		return err
-	}
-	if _, err := fmt.Fprintf(req.Out, "%s: showing %s of %s, newest first.\n%s\n", heading, render.FormatInteger(int64(len(value.Chats))), render.FormatInteger(int64(value.Total)), hint); err != nil {
-		return err
-	}
-
-	if _, err := fmt.Fprintln(req.Out); err != nil {
-		return err
-	}
-	rows := make([][]string, 0, len(value.Chats))
-	for _, chat := range value.Chats {
-		rows = append(rows, []string{
-			render.ShortLocalTime(parseFormattedTime(chat.LastMessageAt)),
-			chatDisplayID(chat.ChatID),
-			chat.Kind,
-			render.FormatInteger(int64(chat.UnreadCount)),
-			render.FormatInteger(int64(chat.MessageCount)),
-			chatDisplayName(chat),
-		})
-	}
-	return render.WriteTable(req.Out, []render.TableColumn{
-		{Header: "last"},
-		{Header: "chat"},
-		{Header: "kind"},
-		{Header: "unread", AlignRight: true},
-		{Header: "messages", AlignRight: true},
-		{Header: "name", Wrap: true},
-	}, rows)
-}
-
-func chatDisplayID(chatID string) string {
-	if privacyID(chatID) {
-		return "privacy id"
-	}
-	return chatID
-}
-
-func chatDisplayName(chat chatRow) string {
-	if name := outputField(chat.Name); name != "" {
+func whatsappChatTitle(chat store.Chat) string {
+	// humanParticipantLabel masks a stored name that is itself a privacy
+	// @lid, so no title path can print one raw.
+	if name := humanParticipantLabel(chat.Name); name != "" {
 		return name
 	}
-	if privacyID(chat.ChatID) {
+	if privacyID(chat.JID) {
 		return unknownPrivacyParticipant
 	}
 	return "WhatsApp chat"

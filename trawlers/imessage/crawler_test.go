@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -108,6 +109,75 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 	if len(contacts.Contacts) != 2 || contacts.Contacts[0].DisplayName != "Fixture Person" || contacts.Contacts[0].PhoneNumbers[0] != "+15550103" {
 		t.Fatalf("contacts = %#v", contacts)
+	}
+}
+
+func TestChatsListsConversationsWithoutReadState(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sourcePath := filepath.Join(home, "Library", "Messages", "chat.db")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	createMessagesFixture(t, sourcePath)
+
+	stateRoot := filepath.Join(home, ".opentrawl")
+	paths := trawlkit.Paths{
+		Archive: filepath.Join(stateRoot, appID, appID+".db"),
+		Config:  filepath.Join(stateRoot, appID, "config.toml"),
+		Logs:    filepath.Join(stateRoot, appID, "logs"),
+	}
+	source := New()
+
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Sync(ctx, &trawlkit.Request{
+		Store:    writeStore,
+		Paths:    paths,
+		Format:   ckoutput.Text,
+		Out:      &bytes.Buffer{},
+		Progress: func(trawlkit.Progress) {},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	readStore := openReadStore(t, ctx, paths.Archive)
+	defer func() { _ = readStore.Close() }()
+	req := readRequest(readStore, paths)
+
+	chats, err := source.Chats(ctx, req, trawlkit.ChatQuery{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chats) != 4 {
+		t.Fatalf("chats = %d, want 4: %#v", len(chats), chats)
+	}
+	var group *trawlkit.Chat
+	for i := range chats {
+		if chats[i].Unread != nil {
+			t.Fatalf("iMessage stores no read state; unread must stay nil: %#v", chats[i])
+		}
+		if chats[i].Participants == nil {
+			t.Fatalf("iMessage counts participants; the count must be set: %#v", chats[i])
+		}
+		if chats[i].Group {
+			group = &chats[i]
+		}
+	}
+	// The fixture's room-named chat has three handles, so it is a group; the
+	// rest are one-to-one dms.
+	if group == nil || *group.Participants < 3 {
+		t.Fatalf("expected one group chat with 3+ participants: %#v", group)
+	}
+
+	if _, err := source.Chats(ctx, req, trawlkit.ChatQuery{Unread: true}); !errors.Is(err, trawlkit.ErrChatsNoReadState) {
+		t.Fatalf("--unread on a read-state-less surface must be ErrChatsNoReadState, got %v", err)
 	}
 }
 

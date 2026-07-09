@@ -6,48 +6,11 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
-	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func shortLocalTime(t time.Time) string {
 	return render.ShortLocalTime(t)
-}
-
-func (r *runtime) printChats(value chatsEnvelope) error {
-	if _, err := fmt.Fprintf(r.stdout, "Chats: showing %s of %s, newest first.\n", groupDigits(len(value.Chats)), groupDigits(value.Total)); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintln(r.stdout, "Messages: trawl telegram messages --chat ID"); err != nil {
-		return err
-	}
-
-	if _, err := fmt.Fprintln(r.stdout); err != nil {
-		return err
-	}
-	if len(value.Chats) == 0 {
-		_, err := fmt.Fprintln(r.stdout, "No chats.")
-		return err
-	}
-	rows := make([][]string, 0, len(value.Chats))
-	for _, chat := range value.Chats {
-		rows = append(rows, []string{
-			shortLocalTime(chat.LastMessageAt),
-			chat.JID,
-			chat.Kind,
-			render.FormatInteger(int64(chat.UnreadCount)),
-			chatMessageCount(chat),
-			chatName(chat),
-		})
-	}
-	return render.WriteTable(r.stdout, []render.TableColumn{
-		{Header: "last"},
-		{Header: "chat"},
-		{Header: "kind"},
-		{Header: "unread", AlignRight: true},
-		{Header: "messages", AlignRight: true},
-		{Header: "name", Wrap: true},
-	}, rows)
 }
 
 func (r *runtime) printTopics(value topicsEnvelope) error {
@@ -148,13 +111,6 @@ func chatName(chat store.Chat) string {
 		return username
 	}
 	return "Telegram chat"
-}
-
-func chatMessageCount(chat store.Chat) string {
-	if chat.MessageCount == telegramdesktop.DefaultMessagesLimit {
-		return groupDigits(chat.MessageCount) + "+"
-	}
-	return groupDigits(chat.MessageCount)
 }
 
 func messageListItems(messages []store.Message, shortRefs map[string]string) []render.ListItem {

@@ -205,12 +205,15 @@ func TestReplaceAllPreservesTelegramStructure(t *testing.T) {
 	if _, err := restored.ReplaceAll(ctx, stats, contacts, chats, folders, folderChats, topics, participants, messages); err != nil {
 		t.Fatal(err)
 	}
-	chats, err = restored.ChatsInFolder(ctx, "2", 10)
-	if err != nil {
+	var folderChatName string
+	var folderChatForum int
+	if err := restored.db.QueryRowContext(ctx, `select c.name, c.forum
+from folder_chats fc join chats c on cast(c.id as text)=fc.chat_jid
+where fc.folder_id='2'`).Scan(&folderChatName, &folderChatForum); err != nil {
 		t.Fatal(err)
 	}
-	if len(chats) != 1 || chats[0].Name != "coding" || !chats[0].Forum {
-		t.Fatalf("folder chats = %#v", chats)
+	if folderChatName != "coding" || folderChatForum == 0 {
+		t.Fatalf("folder chat = %q forum=%d", folderChatName, folderChatForum)
 	}
 	topics, err = restored.ListTopics(ctx, "-10042", 10)
 	if err != nil {
@@ -859,20 +862,14 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 		t.Fatalf("folders = %d, want 2", len(folders))
 	}
 
-	fcsA, err := st.ChatsInFolder(ctx, "1", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(fcsA) != 1 || fcsA[0].JID != "-1001" {
-		t.Fatalf("folder 1 chats = %v, want chat A preserved", fcsA)
-	}
-
-	fcs, err := st.ChatsInFolder(ctx, "2", 10)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(fcs) != 1 || fcs[0].JID != "-1002" {
-		t.Fatalf("folder 2 chats = %v, want chat B only", fcs)
+	for folderID, wantJID := range map[string]string{"1": "-1001", "2": "-1002"} {
+		var gotJID string
+		if err := st.db.QueryRowContext(ctx, `select chat_jid from folder_chats where folder_id=?`, folderID).Scan(&gotJID); err != nil {
+			t.Fatalf("folder %s chats: %v", folderID, err)
+		}
+		if gotJID != wantJID {
+			t.Fatalf("folder %s chat = %s, want %s", folderID, gotJID, wantJID)
+		}
 	}
 
 	searchA, err := st.Search(ctx, MessageFilter{Query: "updated", ChatJID: "-1001", Limit: 10})

@@ -62,6 +62,9 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	if _, ok := source.(WhoMatcher); ok {
 		caps = append(caps, "who")
 	}
+	if _, ok := source.(ChatLister); ok {
+		caps = append(caps, "chats")
+	}
 	if _, ok := source.(ContactExporter); ok {
 		caps = append(caps, "contacts_export")
 	}
@@ -95,6 +98,9 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 	if _, ok := source.(WhoMatcher); ok {
 		commands["who"] = applySpineDeclaration(spineCommand("Resolve person", binaryName, "who", "who", "NAME"), spine, "who")
 	}
+	if command, ok := chatsCommand(source, binaryName, spine); ok {
+		commands["chats"] = command
+	}
 	if _, ok := source.(Opener); ok {
 		commands["open"] = applySpineDeclaration(spineCommand("Open an item", binaryName, "open", "open", "REF"), spine, "open")
 	}
@@ -123,6 +129,15 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		}
 	}
 	return commands
+}
+
+func chatsCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
+	if _, ok := source.(ChatLister); !ok {
+		return control.Command{}, false
+	}
+	command := spineCommand("List chats", binaryName, "chats", "chats")
+	command.Flags = builtinChatFlags()
+	return applySpineDeclaration(command, spine, "chats"), true
 }
 
 func searchCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {

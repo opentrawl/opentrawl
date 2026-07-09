@@ -2,28 +2,7 @@ package telecrawl
 
 import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
-	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 )
-
-type chatsJSONEnvelope struct {
-	Chats     []chatJSON `json:"chats"`
-	Total     int        `json:"total"`
-	Truncated bool       `json:"truncated"`
-}
-
-type chatJSON struct {
-	ChatID        string `json:"chat_id"`
-	Kind          string `json:"kind"`
-	Name          string `json:"name"`
-	Username      string `json:"username"`
-	LastMessageAt string `json:"last_message_at"`
-	UnreadCount   int    `json:"unread_count"`
-	MessageCount  int    `json:"message_count"`
-	// The importer keeps at most DefaultMessagesLimit messages per chat;
-	// at the cap the true chat size is unknown and larger.
-	MessageCountCapped bool `json:"message_count_capped,omitempty"`
-	Forum              bool `json:"forum"`
-}
 
 type topicJSON struct {
 	ChatJID              string `json:"chat_jid"`
@@ -77,32 +56,6 @@ type folderJSON struct {
 	Emoticon  string `json:"emoticon,omitempty"`
 	Color     int    `json:"color,omitempty"`
 	FlagsJSON string `json:"flags_json,omitempty"`
-}
-
-func chatJSONEnvelope(chats []store.Chat, total int) chatsJSONEnvelope {
-	return chatsJSONEnvelope{
-		Chats:     chatJSONRows(chats),
-		Total:     total,
-		Truncated: total > len(chats),
-	}
-}
-
-func chatJSONRows(chats []store.Chat) []chatJSON {
-	out := make([]chatJSON, 0, len(chats))
-	for _, chat := range chats {
-		out = append(out, chatJSON{
-			ChatID:             chat.JID,
-			Kind:               chat.Kind,
-			Name:               chat.Name,
-			Username:           chat.Username,
-			LastMessageAt:      formatOptionalTime(chat.LastMessageAt),
-			UnreadCount:        chat.UnreadCount,
-			MessageCount:       chat.MessageCount,
-			MessageCountCapped: chat.MessageCount == telegramdesktop.DefaultMessagesLimit,
-			Forum:              chat.Forum,
-		})
-	}
-	return out
 }
 
 func topicJSONRows(topics []store.Topic) []topicJSON {

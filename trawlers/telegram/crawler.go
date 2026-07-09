@@ -23,7 +23,6 @@ type Crawler struct {
 	sync   syncOptions
 	search searchOptions
 
-	chats    listOptions
 	messages messageOptions
 	contacts listOptions
 	topics   topicsOptions
@@ -55,8 +54,6 @@ type searchOptions struct {
 type listOptions struct {
 	Limit    int
 	LimitSet bool
-	Unread   bool
-	Folder   string
 }
 
 type messageOptions struct {
@@ -86,6 +83,7 @@ var (
 	_ trawlkit.Syncer          = (*Crawler)(nil)
 	_ trawlkit.Searcher        = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.ChatLister      = (*Crawler)(nil)
 	_ trawlkit.Opener          = (*Crawler)(nil)
 	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
@@ -113,7 +111,6 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 		{Name: "doctor", Flags: c.bindDoctorFlags},
 		{Name: "sync", Flags: c.bindSyncFlags},
 		{Name: "search", Flags: c.bindSearchFlags},
-		{Name: "chats", Help: "List archived Telegram chats.", Flags: c.bindChatsFlags, Run: c.runChats},
 		{Name: "folders", Help: "List archived Telegram folders.", Run: c.runFolders},
 		{Name: "topics", Help: "List archived Telegram forum topics.", Flags: c.bindTopicsFlags, Run: c.runTopics},
 		{Name: "messages", Help: "List archived Telegram messages.", Flags: c.bindMessagesFlags, Run: c.runMessages},
@@ -208,13 +205,6 @@ func (c *Crawler) bindSearchFlags(fs *flag.FlagSet) {
 	fs.BoolVar(&c.search.HasMedia, "media", false, "only media messages")
 	fs.BoolVar(&c.search.Pinned, "pinned", false, "only pinned messages")
 	fs.BoolVar(&c.search.Asc, "asc", false, "oldest results first")
-}
-
-func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
-	c.chats = listOptions{Limit: 50}
-	fs.Var(trackedInt{value: &c.chats.Limit, seen: &c.chats.LimitSet}, "limit", "maximum chats")
-	fs.BoolVar(&c.chats.Unread, "unread", false, "only unread chats")
-	fs.StringVar(&c.chats.Folder, "folder", "", "only chats in this folder")
 }
 
 func (c *Crawler) bindContactsFlags(fs *flag.FlagSet) {

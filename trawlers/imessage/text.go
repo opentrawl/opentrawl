@@ -17,43 +17,6 @@ const (
 	openTranscriptMaxWhoWidth  = 32
 )
 
-func printChatsText(w io.Writer, value chatListOutput) error {
-	if _, err := fmt.Fprintf(w, "Chats: showing %s of %s, newest first.\n", render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total)); err != nil {
-		return err
-	}
-	if !value.Complete {
-		if _, err := fmt.Fprintf(w, "More: trawl imessage chats --limit %d\n", nextLimit(value.Limit, value.Total)); err != nil {
-			return err
-		}
-	}
-	if _, err := io.WriteString(w, "Open: trawl imessage messages --chat CHAT_ID\n\n"); err != nil {
-		return err
-	}
-	if len(value.Items) == 0 {
-		_, err := io.WriteString(w, "No chats yet. Remedy: run trawl imessage sync.\n")
-		return err
-	}
-	rows := make([][]string, 0, len(value.Items))
-	for _, item := range value.Items {
-		rows = append(rows, []string{
-			shortArchiveTime(archive.FormatAppleDateTime(item.LatestMessageDate)),
-			item.ChatID,
-			item.Kind,
-			"-",
-			render.FormatInteger(item.MessageCount),
-			chatConversation(item),
-		})
-	}
-	return render.WriteTable(w, []render.TableColumn{
-		{Header: "last"},
-		{Header: "chat"},
-		{Header: "kind"},
-		{Header: "unread", AlignRight: true},
-		{Header: "messages", AlignRight: true},
-		{Header: "name", Wrap: true},
-	}, rows)
-}
-
 func printMessagesText(w io.Writer, value messageListOutput) error {
 	conversation := "chat " + value.ChatID
 	if value.Chat != nil {
@@ -350,10 +313,6 @@ func parseArchiveTime(value string) time.Time {
 		return time.Time{}
 	}
 	return t
-}
-
-func shortArchiveTime(value string) string {
-	return render.ShortLocalTime(parseArchiveTime(value))
 }
 
 func formatArchiveTime(value string) string {

@@ -7,9 +7,11 @@ import (
 )
 
 // namespaceManifest is an iMessage-shaped manifest: verbs whose invocation
-// matches the user token (chats, search) plus one whose key differs from the
-// tokens the user types (thread-export -> "threads export").
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"Local-first iMessage archive crawler.","binary":{"name":"imsgcrawl"},"capabilities":["chats","search"],"commands":{"chats":{"title":"Chats","argv":["imsgcrawl","chats","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+// matches the user token (pins, search) plus one whose key differs from the
+// tokens the user types (thread-export -> "threads export"). pins stands in
+// for any bespoke single-token verb; chats is now a reserved spine verb, so a
+// bespoke command may not use that key.
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"Local-first iMessage archive crawler.","binary":{"name":"imsgcrawl"},"capabilities":["pins","search"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
@@ -26,7 +28,7 @@ func TestNamespaceListingHuman(t *testing.T) {
 	for _, want := range []string{
 		"iMessage - Local-first iMessage archive crawler.",
 		"Verbs:",
-		"chats",
+		"pins",
 		"threads export",
 		"search QUERY",
 		"Export threads",
@@ -55,7 +57,7 @@ func TestNamespaceListingJSON(t *testing.T) {
 	for _, verb := range got.Verbs {
 		verbs[verb.Verb] = true
 	}
-	for _, want := range []string{"chats", "raw", "search QUERY", "threads export"} {
+	for _, want := range []string{"pins", "raw", "search QUERY", "threads export"} {
 		if !verbs[want] {
 			t.Fatalf("verbs missing %q: %#v", want, got.Verbs)
 		}
@@ -67,11 +69,11 @@ func TestNamespaceListingJSON(t *testing.T) {
 
 func TestNamespaceVerbPassthrough(t *testing.T) {
 	setupNamespace(t)
-	stdout, stderr, code := runCLI(t, "imessage", "chats", "--limit", "5")
+	stdout, stderr, code := runCLI(t, "imessage", "pins", "--limit", "5")
 	if code != 0 {
 		t.Fatalf("code = %d stderr=%s", code, stderr)
 	}
-	if strings.TrimSpace(stdout) != "verb=chats args= limit=5" {
+	if strings.TrimSpace(stdout) != "verb=pins args= limit=5" {
 		t.Fatalf("passthrough stdout = %q", stdout)
 	}
 }
@@ -92,11 +94,11 @@ func TestNamespaceJSONInjectedBeforeSource(t *testing.T) {
 // the verb — the agent JSON path relies on it.
 func TestNamespaceGlobalFlagBeforeVerb(t *testing.T) {
 	setupNamespace(t)
-	stdout, stderr, code := runCLI(t, "imessage", "--json", "chats", "--limit", "5")
+	stdout, stderr, code := runCLI(t, "imessage", "--json", "pins", "--limit", "5")
 	if code != 0 {
 		t.Fatalf("code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	if !strings.Contains(stdout, `"verb": "chats"`) || !strings.Contains(stdout, `"limit": "5"`) {
+	if !strings.Contains(stdout, `"verb": "pins"`) || !strings.Contains(stdout, `"limit": "5"`) {
 		t.Fatalf("passthrough stdout = %q", stdout)
 	}
 }
@@ -105,14 +107,14 @@ func TestNamespaceGlobalFlagBeforeVerb(t *testing.T) {
 // the shape, never the flag's value, and never runs the crawler.
 func TestNamespaceChildFlagBeforeVerb(t *testing.T) {
 	setupNamespace(t)
-	stdout, stderr, code := runCLI(t, "imessage", "--archive", "/tmp/x", "chats")
+	stdout, stderr, code := runCLI(t, "imessage", "--archive", "/tmp/x", "pins")
 	if code == 0 {
 		t.Fatalf("crawler flag before verb should fail: stdout=%s", stdout)
 	}
 	if !strings.Contains(stderr, "needs the verb first") {
 		t.Fatalf("stderr should name the shape:\n%s", stderr)
 	}
-	if strings.Contains(stderr, "/tmp/x") || strings.Contains(stdout, "verb=chats") {
+	if strings.Contains(stderr, "/tmp/x") || strings.Contains(stdout, "verb=pins") {
 		t.Fatalf("named the flag value or ran the crawler:\nout=%s err=%s", stdout, stderr)
 	}
 }
@@ -151,11 +153,11 @@ func TestNamespaceIncompleteMultiWordVerb(t *testing.T) {
 // doubled into -vv by a separate injection.
 func TestNamespaceVerbosePassthroughNotDoubled(t *testing.T) {
 	setupNamespace(t)
-	stdout, stderr, code := runCLI(t, "imessage", "chats", "-v")
+	stdout, stderr, code := runCLI(t, "imessage", "pins", "-v")
 	if code != 0 {
 		t.Fatalf("code = %d stderr=%s", code, stderr)
 	}
-	if strings.TrimSpace(stdout) != "verb=chats args= limit=" {
+	if strings.TrimSpace(stdout) != "verb=pins args= limit=" {
 		t.Fatalf("passthrough stdout = %q", stdout)
 	}
 }

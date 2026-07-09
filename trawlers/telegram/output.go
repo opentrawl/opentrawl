@@ -48,8 +48,6 @@ func (r *runtime) print(v any) error {
 			}
 		}
 		return nil
-	case chatsEnvelope:
-		return r.printChats(value)
 	case topicsEnvelope:
 		return r.printTopics(value)
 	case messagesEnvelope:

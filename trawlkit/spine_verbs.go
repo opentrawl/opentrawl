@@ -18,6 +18,7 @@ var spineVerbKeys = map[string]struct{}{
 	"search":          {},
 	"open":            {},
 	"who":             {},
+	"chats":           {},
 	"contacts_export": {},
 }
 
@@ -186,6 +187,10 @@ func unsupportedSpineInterface(source Crawler, key string) string {
 		if _, ok := source.(WhoMatcher); !ok {
 			return "WhoMatcher"
 		}
+	case "chats":
+		if _, ok := source.(ChatLister); !ok {
+			return "ChatLister"
+		}
 	case "contacts_export":
 		if _, ok := source.(ContactExporter); !ok {
 			return "ContactExporter"
@@ -233,7 +238,7 @@ func spineDefaultStoreMode(key string) storeMode {
 		return storeOptional
 	case "sync":
 		return storeWrite
-	case "search", "open", "who", "contacts_export":
+	case "search", "open", "who", "chats", "contacts_export":
 		return storeRead
 	default:
 		return storeRead
@@ -298,6 +303,11 @@ func runnerOwnedSpineFlags(key string) map[string]struct{} {
 	owned := runnerOwnedGlobalFlagNames()
 	if key == "search" {
 		for name := range runnerOwnedSearchFlagNames() {
+			owned[name] = struct{}{}
+		}
+	}
+	if key == "chats" {
+		for name := range runnerOwnedChatFlagNames() {
 			owned[name] = struct{}{}
 		}
 	}

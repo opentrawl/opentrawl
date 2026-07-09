@@ -73,17 +73,6 @@ func (s *Store) ListUnreadChats(ctx context.Context, limit int) ([]Chat, error) 
 	return s.listChats(ctx, ChatFilter{Limit: limit, OnlyUnread: true})
 }
 
-// CountChats and CountUnreadChats give the list verbs a real total so the
-// human output reads "showing X of Y" and truncation is exact, not guessed
-// from a full page.
-func (s *Store) CountChats(ctx context.Context) (int, error) {
-	return countInt(ctx, s.q.CountChats)
-}
-
-func (s *Store) CountUnreadChats(ctx context.Context) (int, error) {
-	return countInt(ctx, s.q.CountUnreadChats)
-}
-
 func (s *Store) listChats(ctx context.Context, filter ChatFilter) ([]Chat, error) {
 	// limit <= 0 means everything; SQLite reads LIMIT -1 as no limit.
 	if filter.Limit <= 0 {

@@ -67,11 +67,6 @@ type searchEnvelope struct {
 	Truncated    bool           `json:"truncated"`
 }
 
-type chatsEnvelope struct {
-	Chats []store.Chat
-	Total int
-}
-
 type topicsEnvelope struct {
 	Topics []store.Topic
 	Total  int

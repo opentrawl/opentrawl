@@ -1,8 +1,6 @@
 package wacrawl
 
 import (
-	"flag"
-
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
@@ -15,9 +13,6 @@ type Config struct {
 type Crawler struct {
 	cfg Config
 
-	chatsLimit  intFlag
-	chatsUnread bool
-
 	messageFlags messageFlagValues
 }
 
@@ -26,6 +21,7 @@ var (
 	_ trawlkit.Syncer          = (*Crawler)(nil)
 	_ trawlkit.Searcher        = (*Crawler)(nil)
 	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
+	_ trawlkit.ChatLister      = (*Crawler)(nil)
 	_ trawlkit.Opener          = (*Crawler)(nil)
 	_ trawlkit.ContactExporter = (*Crawler)(nil)
 )
@@ -52,35 +48,10 @@ func (c *Crawler) Info() trawlkit.Info {
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{
-			Name:  "chats",
-			Help:  "List archived WhatsApp chats.",
-			Flags: c.bindChatsFlags,
-			Run:   c.runChats,
-		},
-		{
-			Name:  "unread",
-			Help:  "List archived WhatsApp chats with unread messages.",
-			Flags: c.bindUnreadFlags,
-			Run:   c.runUnread,
-		},
-		{
 			Name:  "messages",
 			Help:  "List archived WhatsApp messages.",
 			Flags: c.bindMessageFlags,
 			Run:   c.runMessages,
 		},
 	}
-}
-
-func (c *Crawler) bindChatsFlags(fs *flag.FlagSet) {
-	c.chatsLimit = newIntFlag(50)
-	c.chatsUnread = false
-	fs.Var(&c.chatsLimit, "limit", "maximum chats")
-	fs.BoolVar(&c.chatsUnread, "unread", false, "only unread chats")
-}
-
-func (c *Crawler) bindUnreadFlags(fs *flag.FlagSet) {
-	c.chatsLimit = newIntFlag(50)
-	c.chatsUnread = true
-	fs.Var(&c.chatsLimit, "limit", "maximum chats")
 }

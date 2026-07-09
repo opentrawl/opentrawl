@@ -19,7 +19,9 @@ func TestCrawlerVerbs(t *testing.T) {
 	for _, verb := range crawler.Verbs() {
 		verbs[verb.Name] = verb
 	}
-	for _, name := range []string{"doctor", "sync", "search", "chats", "folders", "topics", "messages", "contacts"} {
+	// chats is a shared trawlkit capability now (ChatLister), not a bespoke
+	// verb, so it no longer appears in Verbs(); folders and topics stay.
+	for _, name := range []string{"doctor", "sync", "search", "folders", "topics", "messages", "contacts"} {
 		if _, ok := verbs[name]; !ok {
 			t.Fatalf("missing verb %q", name)
 		}

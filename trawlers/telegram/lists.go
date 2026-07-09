@@ -9,43 +9,37 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
-func (c *Crawler) runChats(ctx context.Context, req *trawlkit.Request) error {
+// Chats implements trawlkit.ChatLister. Telegram stores a real per-chat
+// unread count, so the plain list and the --unread filter both come from the
+// store; the kit owns the verb, flags, JSON and table.
+func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
+	limit := q.Limit
+	if q.All {
+		limit = 0
+	}
 	r := c.handler(ctx, req)
-	if len(req.Args) != 0 {
-		return usageErr(errors.New("chats takes flags only"))
-	}
-	n, err := flags.Limit(c.chats.Limit, c.chats.LimitSet)
-	if err != nil {
-		return usageErr(err)
-	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
-		if c.chats.Folder != "" {
-			chats, err := st.ChatsInFolder(r.ctx, c.chats.Folder, n)
-			if err != nil {
-				return err
-			}
-			total, err := st.CountChatsInFolder(r.ctx, c.chats.Folder)
-			if err != nil {
-				return err
-			}
-			if r.json {
-				return r.print(chatJSONEnvelope(chats, total))
-			}
-			return r.print(chatsEnvelope{Chats: chats, Total: total})
-		}
-		chats, err := st.ListChats(r.ctx, n, c.chats.Unread)
+	var out []trawlkit.Chat
+	err := r.withReadOnlyStore(func(st *store.Store) error {
+		rows, err := st.ListChats(r.ctx, limit, q.Unread)
 		if err != nil {
 			return err
 		}
-		total, err := st.CountChats(r.ctx, c.chats.Unread)
-		if err != nil {
-			return err
+		out = make([]trawlkit.Chat, 0, len(rows))
+		for _, chat := range rows {
+			unread := int64(chat.UnreadCount)
+			out = append(out, trawlkit.Chat{
+				// Telegram stores "user", "group" and "channel"; only a one-to-one
+				// "user" chat is a dm, so channels and groups are both groups.
+				ID:           chat.JID,
+				Title:        chatName(chat),
+				Group:        chat.Kind != "user",
+				LastActivity: chat.LastMessageAt,
+				Unread:       &unread,
+			})
 		}
-		if r.json {
-			return r.print(chatJSONEnvelope(chats, total))
-		}
-		return r.print(chatsEnvelope{Chats: chats, Total: total})
+		return nil
 	})
+	return out, err
 }
 
 func (c *Crawler) runFolders(ctx context.Context, req *trawlkit.Request) error {
