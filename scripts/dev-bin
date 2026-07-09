@@ -40,7 +40,11 @@ while IFS= read -r go_mod; do
     fi
     rm -f "$log"
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
-done < <(find . -path ./.git -prune -o -name go.mod -print | sort)
+# Prune at any depth: .devenv holds Go module caches (root state dir, plus
+# leftover per-module state dirs from the pre-TRAWL-157 devenvs) whose
+# third-party go.mod files are not ours to build; .dev is build output;
+# .claude carries agent worktrees with full repo copies.
+done < <(find . \( -name .git -o -name .devenv -o -name .dev -o -name .claude \) -prune -o -name go.mod -print | sort)
 
 end="${EPOCHREALTIME:-$SECONDS.0}"
 elapsed="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.1f", e - s }')"
