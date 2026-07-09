@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 // buildArchive writes an archive directly through the archive package (no WAL
@@ -55,6 +58,136 @@ func testBody(t *testing.T, noteID, text string, modified time.Time) archive.Bod
 		SourceDetail:     "test",
 		SourceModifiedAt: notestime.Format(modified),
 		ObservedAt:       notestime.Format(modified),
+	}
+}
+
+func TestListDeclaresDefaultLimit(t *testing.T) {
+	c := New()
+	var listVerb *trawlkit.Verb
+	for _, verb := range c.Verbs() {
+		if verb.Name == "list" {
+			candidate := verb
+			listVerb = &candidate
+			break
+		}
+	}
+	if listVerb == nil || listVerb.Flags == nil {
+		t.Fatal("list verb has no flags")
+	}
+	fs := flag.NewFlagSet("list", flag.ContinueOnError)
+	listVerb.Flags(fs)
+	limit := fs.Lookup("limit")
+	if limit == nil || limit.DefValue != "20" {
+		t.Fatalf("list --limit default = %#v, want 20", limit)
+	}
+}
+
+func TestListDefaultIsBoundedAndJSONReportsCompleteness(t *testing.T) {
+	notesToInsert := make([]archive.Note, 0, 25)
+	bodies := make([]archive.BodyInsert, 0, 25)
+	for i := 0; i < 25; i++ {
+		id := fmt.Sprintf("note-%02d", i)
+		modified := time.Date(2026, 1, 1+i, 12, 0, 0, 0, time.UTC)
+		notesToInsert = append(notesToInsert, archive.Note{
+			ID:         id,
+			Title:      fmt.Sprintf("Note %02d", i),
+			Folder:     "Notes",
+			ModifiedAt: notestime.Format(modified),
+		})
+		bodies = append(bodies, testBody(t, id, fmt.Sprintf("body %02d", i), modified))
+	}
+	path := buildArchive(t, notesToInsert, bodies)
+	c := New()
+	var buf bytes.Buffer
+	req := testRequest(t, path, output.JSON, &buf, false)
+	if err := c.runList(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	closeStore(t, req)
+	var got listOutput
+	if err := json.Unmarshal(buf.Bytes(), &got); err != nil {
+		t.Fatalf("list JSON = %s err=%v", buf.String(), err)
+	}
+	if len(got.Notes) != defaultListLimit || got.Total != 25 || !got.Truncated {
+		t.Fatalf("list bounds = returned %d total %d truncated %t, want 20/25/true", len(got.Notes), got.Total, got.Truncated)
+	}
+	if got.Notes[0].Title != "Note 24" {
+		t.Fatalf("first note = %q, want newest note", got.Notes[0].Title)
+	}
+}
+
+func TestListTextReportsBoundsAndContinuationAtTerminalWidths(t *testing.T) {
+	out := listOutput{
+		Notes: []listNote{
+			{Ref: "abcd123", Title: "A detailed project note title that stays readable", Folder: "Projects", Modified: "2026-01-03T12:00:00Z"},
+			{Ref: "efgh456", Title: "Another detailed project note title", Folder: "Projects", Modified: "2026-01-02T12:00:00Z"},
+		},
+		Folders:   []archive.FolderCount{{Folder: "Projects", Notes: 3}},
+		Total:     3,
+		Truncated: true,
+	}
+	for _, width := range []int{72, 160} {
+		t.Run(fmt.Sprintf("columns_%d", width), func(t *testing.T) {
+			t.Setenv("COLUMNS", fmt.Sprint(width))
+			var buf bytes.Buffer
+			if err := printListText(&buf, out); err != nil {
+				t.Fatal(err)
+			}
+			text := buf.String()
+			plain := strings.Join(strings.Fields(text), " ")
+			if !strings.Contains(plain, "Notes: showing 2 of 3 across 1 folder, newest first: Projects 3.") ||
+				!strings.Contains(text, "More: trawl notes list --limit 3\n\n") {
+				t.Fatalf("list intro = %q, want honest counts, folders and a separated continuation hint", text)
+			}
+			if !strings.Contains(plain, "A detailed project note title that stays readable") {
+				t.Fatalf("list title was lost at width %d:\n%s", width, text)
+			}
+			for _, line := range strings.Split(strings.TrimSuffix(text, "\n"), "\n") {
+				if got := render.DisplayWidth(line); got > width {
+					t.Fatalf("line width = %d, want at most %d:\n%s", got, width, text)
+				}
+			}
+		})
+	}
+}
+
+func TestListRejectsNonPositiveLimit(t *testing.T) {
+	path := buildArchive(t,
+		[]archive.Note{{ID: "note-a", Title: "A", Folder: "Notes"}},
+		[]archive.BodyInsert{testBody(t, "note-a", "body a", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))})
+	c := New()
+	c.listLimit = 0
+	req := testRequest(t, path, output.JSON, nil, false)
+	err := c.runList(context.Background(), req)
+	closeStore(t, req)
+	if err == nil || output.ErrorBodyFor(err).Code != "usage" || !strings.Contains(err.Error(), "--limit must be at least 1") {
+		t.Fatalf("list --limit 0 error = %v, want a usage error", err)
+	}
+}
+
+func TestSearchCountsAndLimitsDistinctNotes(t *testing.T) {
+	path := buildArchive(t,
+		[]archive.Note{
+			{ID: "note-a", Title: "A", Folder: "Notes"},
+			{ID: "note-b", Title: "B", Folder: "Notes"},
+		},
+		[]archive.BodyInsert{
+			testBody(t, "note-a", "first needle version", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)),
+			testBody(t, "note-a", "second needle version", time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)),
+			testBody(t, "note-b", "other needle note", time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)),
+		})
+	c := New()
+	req := testRequest(t, path, output.JSON, nil, false)
+	result, err := c.Search(context.Background(), req, trawlkit.Query{Text: "needle", Limit: 1})
+	closeStore(t, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 1 || result.TotalMatches != 2 || !result.Truncated {
+		t.Fatalf("search bounds = returned %d total %d truncated %t, want 1/2/true", len(result.Results), result.TotalMatches, result.Truncated)
+	}
+	if !strings.HasPrefix(result.Results[0].Ref, "notes:note/") {
+		t.Fatalf("search ref = %q, want a note-level ref", result.Results[0].Ref)
 	}
 }
 

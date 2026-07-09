@@ -17,11 +17,14 @@ import (
 
 const staleAfter = 24 * time.Hour
 
+const defaultListLimit = 20
+
 type Crawler struct {
 	syncStorePath string
 	syncLabel     string
 	storeLabel    string
 	atTimeRaw     string
+	listLimit     int
 }
 
 var (
@@ -33,7 +36,7 @@ var (
 )
 
 func New() *Crawler {
-	return &Crawler{}
+	return &Crawler{listLimit: defaultListLimit}
 }
 
 // PrepareArchive implements trawlkit.ArchivePreparer: the harness calls it
@@ -64,6 +67,7 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Name:  "list",
 			Help:  "List notes newest first, or one folder",
 			Args:  []string{"[FOLDER]"},
+			Flags: c.listFlags,
 			Store: trawlkit.StoreRequired,
 			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runList(ctx, req)
@@ -102,6 +106,11 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			},
 		},
 	}
+}
+
+func (c *Crawler) listFlags(fs *flag.FlagSet) {
+	c.listLimit = defaultListLimit
+	fs.IntVar(&c.listLimit, "limit", defaultListLimit, "maximum notes")
 }
 
 func (c *Crawler) syncFlags(fs *flag.FlagSet) {

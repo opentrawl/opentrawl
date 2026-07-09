@@ -41,7 +41,7 @@ func TestStatusNotesExcludesRecentlyDeleted(t *testing.T) {
 	if status.Notes != 1 {
 		t.Fatalf("status.Notes = %d, want 1 (Recently Deleted excluded)", status.Notes)
 	}
-	items, err := st.ListNotes(ctx, "")
+	items, err := st.ListNotes(ctx, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +97,7 @@ func TestKnownFoldersExcludesRecentlyDeletedAndIncludesBodylessNote(t *testing.T
 	}
 	// Unfetched is known, but its only note has no recovered body, so it
 	// browses empty rather than erroring.
-	items, err := st.ListNotes(ctx, "Unfetched")
+	items, err := st.ListNotes(ctx, "Unfetched", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
