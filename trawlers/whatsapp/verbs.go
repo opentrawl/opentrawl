@@ -2,6 +2,7 @@ package wacrawl
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -74,27 +75,28 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 		if chat.Group {
 			// A group's members answer "who is in it". The store resolves them
 			// with the same privacy masking as everywhere else, so no raw @lid
-			// reaches a human. An unnamed (or privacy-named) group leads with
-			// this roster instead of a placeholder, so its Title is cleared.
+			// reaches a human. An unnamed (or privacy-named) group is named
+			// "group of N" by the kit, with this roster in the participants column.
 			names, err := st.GroupParticipants(ctx, row.JID)
 			if err != nil {
 				return nil, err
 			}
 			if len(names) > 0 {
-				// The store can fall back to a raw @lid when it resolves no name;
-				// masking drops those and leaves a single "privacy id" marker, so
-				// the preview never leaks one. The head count stays the real
-				// member total, so the "+N" remainder is honest.
+				// The head count stays the real member total; the resolved names
+				// drop any raw @lid the store could not name, so the roster never
+				// prints a placeholder person. The "+N" remainder carries the
+				// unnamed members honestly.
 				total := int64(len(names))
-				chat.ParticipantNames = humanParticipantIdentifiers(names)
+				chat.ParticipantNames = resolvedParticipantNames(names)
 				chat.Participants = &total
 			}
 			if name := strings.TrimSpace(row.Name); name == "" || privacyID(name) {
 				chat.Title = ""
 			}
 		}
-		// A privacy @lid is both a machine ref and privacy-sensitive, so it is
-		// masked in the human table while --json keeps the real id.
+		// A raw @lid jid is privacy-sensitive. The short ref masks it once the
+		// archive indexes chat refs; until then DisplayID keeps it out of the
+		// human chat column, while --json keeps the real id and ref.
 		if privacyID(row.JID) {
 			chat.DisplayID = "privacy id"
 		}
@@ -198,6 +200,18 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	filter, err := c.messageFlags.resolve()
 	if err != nil {
 		return usageErr(err)
+	}
+	// A reader pastes the chats-table short ref; an agent passes the full
+	// whatsapp:chat/<jid> ref or the raw jid. All three resolve to the same chat.
+	filter.ChatJID, err = req.ResolveChatArg(ctx, c.messageFlags.chat, store.ChatRefPrefix)
+	if errors.Is(err, trawlkit.ErrShortRefNotChat) {
+		return usageErr(fmt.Errorf("that short ref is a message, not a chat"))
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return usageErr(fmt.Errorf("short ref matches more than one chat"))
+	}
+	if err != nil {
+		return err
 	}
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {

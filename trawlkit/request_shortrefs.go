@@ -13,7 +13,54 @@ import (
 var (
 	ErrUnknownShortRef   = errors.New("unknown short ref")
 	ErrAmbiguousShortRef = errors.New("ambiguous short ref")
+	// ErrShortRefNotChat is returned by ResolveChatArg when a short ref
+	// resolves to a ref that is not a chat (a message ref, say). The alias
+	// space is shared, so a reader can paste a message short ref by mistake;
+	// the caller turns this into a clean "that is not a chat" usage error.
+	ErrShortRefNotChat = errors.New("short ref is not a chat")
 )
+
+// ResolveChatArg turns whatever a reader pasted into messages --chat into the
+// raw source chat id the store queries. It accepts three shapes, so the chats
+// table and an agent's --json both feed the one flag:
+//   - a short ref from the chats table, resolved through the same index open
+//     and search use (the value carries no ":"),
+//   - a full source ref like "telegram:chat/42139272", and
+//   - a raw source id (a rowid, a JID).
+//
+// chatPrefix is the source's chat ref prefix, e.g. "imessage:chat/". A short
+// ref that resolves to a non-chat ref returns ErrShortRefNotChat; one that is
+// not in the index falls through to the raw-id reading, so a raw id that is not
+// an indexed alias still reaches the store. The alias space is shared, so a raw
+// id that both looks like an alias (5+ chars, no 0/1/l/i/o) and equals a live
+// alias resolves as that alias first; real source ids sidestep this (an iMessage
+// rowid carries 0/1, a JID carries ":" or "@"), so it is a corner a reader hits
+// only by pasting a bare token that is not a real id.
+func (r *Request) ResolveChatArg(ctx context.Context, value, chatPrefix string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return "", nil
+	}
+	if strings.Contains(value, ":") {
+		return strings.TrimPrefix(value, chatPrefix), nil
+	}
+	if ValidShortRef(value) {
+		refs, err := r.ResolveShortRef(ctx, value)
+		switch {
+		case errors.Is(err, ErrUnknownShortRef):
+			// Not an alias in this archive; read it as a raw id below.
+		case err != nil:
+			return "", err
+		default:
+			ref := refs[0]
+			if !strings.HasPrefix(ref, chatPrefix) {
+				return "", ErrShortRefNotChat
+			}
+			return strings.TrimPrefix(ref, chatPrefix), nil
+		}
+	}
+	return value, nil
+}
 
 func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))

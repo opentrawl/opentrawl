@@ -3,9 +3,13 @@ package trawlkit
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/opentrawl/opentrawl/trawlkit/shortref"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 // testChatCrawler is a minimal ChatLister: it owns only the store-query hook so
@@ -143,7 +147,8 @@ func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Ada, Bo, Cy") {
+	// Cap is 2 names; the 3-person head count makes the remainder "+1".
+	if !strings.Contains(stdout, "Ada, Bo +1") {
 		t.Fatalf("group must show its roster:\n%s", stdout)
 	}
 	// The dm's participant cell is the "-" marker, never a fabricated roster.
@@ -156,12 +161,18 @@ func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 	if dmLine == "" || !strings.Contains(dmLine, " - ") {
 		t.Fatalf("dm row must show the empty participants marker:\n%s", stdout)
 	}
+	// Neither row has an indexed short ref or a DisplayID, so the chat column is
+	// blank rather than leaking the raw "imessage:chat/..." provider ref.
+	if strings.Contains(stdout, "imessage:chat/") {
+		t.Fatalf("chat column must not leak the provider ref when unindexed:\n%s", stdout)
+	}
 }
 
 // The name leads and the raw source key never does: a named group shows its
 // title in the name column and its roster in the participants column, while the
-// chat column carries the ref a reader pastes into messages --chat. The head
-// count collapses the roster past the cap into an honest "+N".
+// chat column carries the short pre-index handle a reader pastes into messages
+// --chat, never the long "telegram:chat/..." provider ref. The head count
+// collapses the roster past the cap into an honest "+N".
 func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -169,6 +180,7 @@ func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 		return []Chat{{
 			ID:               "-4118982174",
 			Ref:              "telegram:chat/-4118982174",
+			DisplayID:        "-4118982174",
 			Title:            "padel wankers",
 			Group:            true,
 			Participants:     int64Ptr(8),
@@ -194,25 +206,31 @@ func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 	if !strings.Contains(stdout, "padel wankers") {
 		t.Fatalf("missing chat name:\n%s", stdout)
 	}
-	// Cap is 3 names; the 8-person head count makes the remainder "+5".
-	if !strings.Contains(stdout, "Ana, Bob, Cy +5") {
+	// Cap is 2 names; the 8-person head count makes the remainder "+6".
+	if !strings.Contains(stdout, "Ana, Bob +6") {
 		t.Fatalf("participants preview wrong:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "telegram:chat/-4118982174") {
-		t.Fatalf("chat column must carry the ref handle:\n%s", stdout)
+	// The chat column shows the source's safe pre-index handle (the raw id),
+	// never the long "telegram:chat/..." provider ref.
+	if !strings.Contains(stdout, "-4118982174") {
+		t.Fatalf("chat column must show the pre-index handle:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "telegram:chat/") {
+		t.Fatalf("chat column must not show the long provider ref:\n%s", stdout)
 	}
 }
 
-// An unnamed group (common on iMessage) is named from its participants, and the
-// participants column drops out so the same roster is never printed twice. A
-// source with no read state hides the unread column.
-func TestRunChatsTextUnnamedGroupSynthesisAndHiddenUnread(t *testing.T) {
+// An unnamed group (common on iMessage) keeps a short one-line name, "group of
+// N", and shows its roster in the participants column, so the name never wraps a
+// long roster across rows. A source with no read state hides the unread column.
+func TestRunChatsTextUnnamedGroupNameAndRoster(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
 		return []Chat{{
-			ID:               "57",
-			Ref:              "imessage:chat/57",
+			ID:               "970057",
+			Ref:              "imessage:chat/970057",
+			DisplayID:        "970057",
 			Title:            "",
 			Group:            true,
 			Participants:     int64Ptr(5),
@@ -224,17 +242,23 @@ func TestRunChatsTextUnnamedGroupSynthesisAndHiddenUnread(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Alice, Bob, Carol +2") {
-		t.Fatalf("unnamed group must be named from participants:\n%s", stdout)
+	if !strings.Contains(stdout, "group of 5") {
+		t.Fatalf("unnamed group must be named 'group of N':\n%s", stdout)
 	}
-	if strings.Contains(stdout, "participants") {
-		t.Fatalf("participants column must drop out when the roster is the name:\n%s", stdout)
+	// The roster lives in the participants column, capped at 2 with an honest "+3".
+	if !strings.Contains(stdout, "participants") || !strings.Contains(stdout, "Alice, Bob +3") {
+		t.Fatalf("unnamed group must show its roster in the participants column:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "unread") {
 		t.Fatalf("unread column must be hidden when no chat carries a count:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "imessage:chat/57") {
-		t.Fatalf("chat column must carry the ref handle:\n%s", stdout)
+	// The chat column shows the source's safe pre-index handle (the raw rowid),
+	// never the long "imessage:chat/..." provider ref.
+	if !strings.Contains(stdout, "970057") {
+		t.Fatalf("chat column must show the pre-index handle:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "imessage:chat/") {
+		t.Fatalf("chat column must not show the long provider ref:\n%s", stdout)
 	}
 }
 
@@ -285,6 +309,73 @@ func TestRunChatsTextMasksDisplayIDButJSONKeepsRealID(t *testing.T) {
 	if strings.Contains(stdout, `"ref": "privacy id"`) || strings.Contains(stdout, `"id": "privacy id"`) {
 		t.Fatalf("json must not carry the human-only display mask:\n%s", stdout)
 	}
+}
+
+// Once the archive indexes a chat ref, the human chat column shows its short
+// ref, not the long provider id, so a reader copies the short ref straight into
+// messages --chat. --json still keeps the raw id and full ref.
+func TestRunChatsTextChatColumnShowsShortRef(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	ref := "whatsapp:chat/15550001111-1700000000@g.us"
+	alias := seedShortRef(t, stateRoot, ref)
+
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		return []Chat{{
+			ID:           "15550001111-1700000000@g.us",
+			Ref:          ref,
+			Title:        "Neighbourhood group",
+			Group:        true,
+			LastActivity: time.Date(2026, 7, 4, 14, 17, 0, 0, time.UTC),
+		}}, nil
+	}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, alias) {
+		t.Fatalf("chat column must show the short ref %q:\n%s", alias, stdout)
+	}
+	if strings.Contains(stdout, ref) || strings.Contains(stdout, "@g.us") {
+		t.Fatalf("chat column must not show the long provider id:\n%s", stdout)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats json code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	// --json is the agent contract: the raw id and full ref stay, the short ref
+	// (a human display alias) never leaks in.
+	if !strings.Contains(stdout, `"ref": "`+ref+`"`) || !strings.Contains(stdout, `"id": "15550001111-1700000000@g.us"`) {
+		t.Fatalf("json must keep the raw id and full ref:\n%s", stdout)
+	}
+	if strings.Contains(stdout, alias) {
+		t.Fatalf("json must not carry the display short ref:\n%s", stdout)
+	}
+}
+
+// seedShortRef indexes one ref in the archive the test source reads, the way a
+// sync would, and returns the display alias the chat column should show.
+func seedShortRef(t *testing.T, stateRoot, ref string) string {
+	t.Helper()
+	path := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	st, err := ckstore.Open(context.Background(), ckstore.Options{Path: path, Schema: shortref.Schema})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &Request{Store: st}
+	if _, err := req.RebuildShortRefs(context.Background(), []ShortRefRecord{{Ref: ref}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := shortref.BuildSlice([]string{ref})
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("build alias: %v entries=%d", err, len(entries))
+	}
+	return entries[0].Alias
 }
 
 // firstLineAfterBlank returns the table header: the first non-empty line after

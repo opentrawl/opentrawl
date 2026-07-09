@@ -25,24 +25,31 @@ type Chat struct {
 	// rowid, a Telegram peer id, a WhatsApp JID. It is machine-only; --json
 	// keeps it, the human table never leads with it.
 	ID string
-	// Ref is the source-scoped handle a reader copies from the chats table into
-	// messages --chat, e.g. "telegram:chat/42139272", built the same way a
-	// message ref is. The source fills it; it is the human table's chat column.
+	// Ref is the source-scoped handle built the same way a message ref is, e.g.
+	// "telegram:chat/42139272". The source fills it; the kit indexes it in the
+	// shared short-ref table and shows the reader its short ref in the chat
+	// column, so the reader never sees a long provider id and can paste the
+	// short ref straight into messages --chat.
 	Ref string
 	// Title is the real, clean conversation name the surface stores: the group
 	// subject, the dm partner. It is empty when the surface has no name to show
-	// (a common iMessage group), and the kit synthesises a name from the
-	// participants instead. A surface must not pass a machine id or a raw handle
-	// here; those belong in ID.
+	// (a common iMessage group), and the kit names the chat "group of N"
+	// instead, moving the roster to the participants column. A surface must not
+	// pass a machine id or a raw handle here; those belong in ID.
 	Title string
 	// Group reports whether the chat has more than two people. The kit renders
 	// the one true two-value vocabulary ("group" or "dm") from this bool, so no
 	// surface can leak its own word ("direct", "user", "channel") into the field.
 	Group bool
-	// DisplayID masks the chat column in the human table. It exists only so a
-	// surface can hide a privacy-sensitive handle (a WhatsApp @lid) from a human
-	// reader while --json keeps the real ID and Ref that messages --chat needs.
-	// Empty means show the ref unchanged.
+	// DisplayID is what the human chat column shows before the archive indexes
+	// this chat's short ref (an archive synced by an older binary). The kit never
+	// prints the raw ID or Ref to a human, so a surface whose raw ID is safe to
+	// show sets DisplayID to it (an iMessage rowid, a Telegram peer id) to keep a
+	// copyable handle in the window before indexing; a surface whose raw ID is
+	// sensitive sets a privacy marker (a WhatsApp @lid) or leaves it empty, and
+	// the column is simply blank until the next sync fills in the short ref. The
+	// kit prefers the short ref once indexed. --json always keeps the real ID and
+	// Ref, never this display value.
 	DisplayID string
 	// Participants is the total head count, nil when the surface does not store
 	// it. ParticipantNames are the resolved display names the surface could

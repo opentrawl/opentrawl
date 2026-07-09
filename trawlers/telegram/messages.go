@@ -21,6 +21,18 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	if err != nil {
 		return err
 	}
+	// A reader pastes the chats-table short ref; an agent passes the full
+	// telegram:chat/<jid> ref or the raw jid. All three resolve to the same chat.
+	filter.ChatJID, err = req.ResolveChatArg(ctx, c.messages.ChatJID, store.ChatRefPrefix)
+	if errors.Is(err, trawlkit.ErrShortRefNotChat) {
+		return usageErr(errors.New("that short ref is a message, not a chat"))
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return usageErr(errors.New("short ref matches more than one chat"))
+	}
+	if err != nil {
+		return err
+	}
 	return r.withReadOnlyStore(func(st *store.Store) error {
 		messages, err := st.Messages(r.ctx, filter)
 		if err != nil {

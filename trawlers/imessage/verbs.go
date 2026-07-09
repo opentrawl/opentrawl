@@ -110,6 +110,10 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 		chats = append(chats, trawlkit.Chat{
 			ID:  summary.ChatID,
 			Ref: archive.ChatRef(summary.ChatID),
+			// The chat.db rowid is a short, non-sensitive key messages --chat
+			// accepts, so it is the safe fallback the human chat column shows in
+			// the window before the archive indexes this chat's short ref.
+			DisplayID: summary.ChatID,
 			// An iMessage group is often unnamed. Title carries the real subject
 			// when there is one, else it is empty and the kit names the chat from
 			// these participants ("Alice, Bob +3").
@@ -128,9 +132,18 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("messages takes flags only"))
 	}
-	// A reader can paste the chats-table handle (imessage:chat/<id>) or the raw
-	// id; the prefix is stripped, both resolve to the same chat.
-	chatID := archive.ChatIDFromRef(c.messages.chatID)
+	// A reader pastes the chats-table short ref; an agent passes the full
+	// imessage:chat/<id> ref or the raw id. All three resolve to the same chat.
+	chatID, err := req.ResolveChatArg(ctx, c.messages.chatID, archive.ChatRefPrefix)
+	if errors.Is(err, trawlkit.ErrShortRefNotChat) {
+		return commandErr(1, "not_a_chat", errors.New("that short ref is a message, not a chat"), "run trawl imessage chats and copy a chat's ref")
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return commandErr(1, "ambiguous_short_ref", errors.New("short ref matches more than one chat"), "run trawl imessage chats and copy a chat's ref")
+	}
+	if err != nil {
+		return err
+	}
 	if chatID == "" {
 		return usageErr(errors.New("messages requires --chat"))
 	}

@@ -32,6 +32,10 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 				// "user" chat is a dm, so channels and groups are both groups.
 				ID:  chat.JID,
 				Ref: store.ChatRef(chat.JID),
+				// The peer id is a short, non-sensitive key messages --chat accepts,
+				// so it is the safe fallback the human chat column shows in the window
+				// before the archive indexes this chat's short ref.
+				DisplayID: chat.JID,
 				// Telegram always stores a chat name, and never a per-chat member
 				// roster, so there is no synthesised name or participants column
 				// here — Title carries the real name every time.

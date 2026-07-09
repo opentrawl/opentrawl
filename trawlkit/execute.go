@@ -305,7 +305,11 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if truncated {
 			chats = chats[:query.Limit]
 		}
-		return writeResult(req.Out, format, "chats", newChatsOutput(chats, query.Unread, truncated))
+		aliases, err := chatShortRefs(ctx, req, chats)
+		if err != nil {
+			return err
+		}
+		return writeResult(req.Out, format, "chats", newChatsOutput(chats, aliases, query.Unread, truncated))
 	case "contacts_export":
 		contacts, err := source.(ContactExporter).ContactExport(ctx, req)
 		if err != nil {
@@ -334,6 +338,27 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		return rebuildErr
 	}
 	return verb.bespoke.Run(ctx, req)
+}
+
+// chatShortRefs looks up the short ref for each chat's Ref from the shared
+// index, the same one search and open use. The human chat column shows these,
+// so a reader copies a short ref rather than a long provider id. An archive
+// whose index predates chat refs returns none; the caller falls back to the
+// full ref until the next sync indexes them.
+func chatShortRefs(ctx context.Context, req *Request, chats []Chat) (map[string]string, error) {
+	if req == nil || req.Store == nil {
+		return nil, nil
+	}
+	refs := make([]string, 0, len(chats))
+	for _, chat := range chats {
+		if ref := strings.TrimSpace(chat.Ref); ref != "" {
+			refs = append(refs, ref)
+		}
+	}
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	return req.ShortRefAliases(ctx, refs)
 }
 
 func fillSearchShortRefs(ctx context.Context, req *Request, hits []Hit) error {
