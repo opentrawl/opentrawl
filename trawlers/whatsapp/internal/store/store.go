@@ -26,7 +26,11 @@ const (
 
 	MessageRefPrefix       = "whatsapp:msg/"
 	LegacyMessageRefPrefix = "wacrawl:msg/"
-	ownerWhoKey            = "owner:me"
+	// ChatRefPrefix names a chat the same way a message ref names a message:
+	// the source-scoped handle a reader copies from the chats table into
+	// messages --chat. The raw JID keeps working; the prefix is stripped.
+	ChatRefPrefix = "whatsapp:chat/"
+	ownerWhoKey   = "owner:me"
 
 	// Sync-state lives in the one trawlkit state.Store (TRAWL-82). Scalar sync
 	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
@@ -48,6 +52,18 @@ type Store struct {
 	q     *storedb.Queries
 	path  string
 	owned bool
+}
+
+func ChatRef(jid string) string {
+	jid = strings.TrimSpace(jid)
+	if jid == "" {
+		return ""
+	}
+	return ChatRefPrefix + jid
+}
+
+func ChatIDFromRef(value string) string {
+	return strings.TrimPrefix(strings.TrimSpace(value), ChatRefPrefix)
 }
 
 type ImportStats struct {

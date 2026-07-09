@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -109,12 +108,17 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 	for _, summary := range summaries {
 		people := summary.ParticipantCount
 		chats = append(chats, trawlkit.Chat{
-			ID:           summary.ChatID,
-			Title:        chatConversation(summary),
-			Group:        summary.Kind == "group",
-			Participants: &people,
-			LastActivity: archive.AppleDateTime(summary.LatestMessageDate),
-			Unread:       summary.Unread,
+			ID:  summary.ChatID,
+			Ref: archive.ChatRef(summary.ChatID),
+			// An iMessage group is often unnamed. Title carries the real subject
+			// when there is one, else it is empty and the kit names the chat from
+			// these participants ("Alice, Bob +3").
+			Title:            chatListTitle(summary),
+			Group:            summary.Kind == "group",
+			Participants:     &people,
+			ParticipantNames: chatParticipantNames(summary),
+			LastActivity:     archive.AppleDateTime(summary.LatestMessageDate),
+			Unread:           summary.Unread,
 		})
 	}
 	return chats, nil
@@ -124,7 +128,9 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	if len(req.Args) != 0 {
 		return usageErr(errors.New("messages takes flags only"))
 	}
-	chatID := strings.TrimSpace(c.messages.chatID)
+	// A reader can paste the chats-table handle (imessage:chat/<id>) or the raw
+	// id; the prefix is stripped, both resolve to the same chat.
+	chatID := archive.ChatIDFromRef(c.messages.chatID)
 	if chatID == "" {
 		return usageErr(errors.New("messages requires --chat"))
 	}

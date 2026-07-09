@@ -47,7 +47,9 @@ func (c *Crawler) messageFilter() (store.MessageFilter, error) {
 		return store.MessageFilter{}, usageErr(err)
 	}
 	filter := store.MessageFilter{
-		ChatJID:  strings.TrimSpace(c.messages.ChatJID),
+		// A reader can paste the chats-table handle (telegram:chat/<jid>) or the
+		// raw jid; the prefix is stripped, both resolve to the same chat.
+		ChatJID:  store.ChatIDFromRef(c.messages.ChatJID),
 		Sender:   strings.TrimSpace(c.messages.Sender),
 		TopicID:  strings.TrimSpace(c.messages.TopicID),
 		Who:      normalizeWords(c.messages.Who),

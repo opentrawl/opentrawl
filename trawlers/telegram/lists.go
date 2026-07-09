@@ -30,7 +30,11 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 			out = append(out, trawlkit.Chat{
 				// Telegram stores "user", "group" and "channel"; only a one-to-one
 				// "user" chat is a dm, so channels and groups are both groups.
-				ID:           chat.JID,
+				ID:  chat.JID,
+				Ref: store.ChatRef(chat.JID),
+				// Telegram always stores a chat name, and never a per-chat member
+				// roster, so there is no synthesised name or participants column
+				// here — Title carries the real name every time.
 				Title:        chatName(chat),
 				Group:        chat.Kind != "user",
 				LastActivity: chat.LastMessageAt,

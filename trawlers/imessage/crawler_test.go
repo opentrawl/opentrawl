@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"flag"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -188,6 +189,16 @@ func TestChatsListsConversationsWithReadState(t *testing.T) {
 	if group == nil || *group.Participants < 3 {
 		t.Fatalf("expected one group chat with 3+ participants: %#v", group)
 	}
+	// The chat column is the ref (imessage:chat/<id>); it must survive a round
+	// trip into messages --chat and land on the same chat as the raw id.
+	if got := archive.ChatRef(group.ID); got != "imessage:chat/"+group.ID {
+		t.Fatalf("chat ref = %q", got)
+	}
+	rawOut := runImessageMessages(t, ctx, source, readStore, paths, group.ID)
+	refOut := runImessageMessages(t, ctx, source, readStore, paths, "imessage:chat/"+group.ID)
+	if rawOut == "" || rawOut != refOut {
+		t.Fatalf("messages --chat ref must resolve identically to the raw id:\nraw=%s\nref=%s", rawOut, refOut)
+	}
 
 	// --unread returns only the chats that have unread received messages.
 	unreadChats, err := source.Chats(ctx, req, trawlkit.ChatQuery{Unread: true})
@@ -267,6 +278,21 @@ func TestChatsDegradesHonestlyWithoutReadStateColumn(t *testing.T) {
 	if _, err := source.Chats(ctx, req, trawlkit.ChatQuery{Unread: true}); !errors.Is(err, trawlkit.ErrChatsNoReadState) {
 		t.Fatalf("--unread on a read-state-less archive must be ErrChatsNoReadState, got %v", err)
 	}
+}
+
+func runImessageMessages(t *testing.T, ctx context.Context, source *Crawler, readStore *ckstore.Store, paths trawlkit.Paths, chat string) string {
+	t.Helper()
+	fs := flag.NewFlagSet("messages", flag.ContinueOnError)
+	source.bindMessagesFlags(fs)
+	if err := fs.Parse([]string{"--chat", chat}); err != nil {
+		t.Fatalf("parse messages flags: %v", err)
+	}
+	var out bytes.Buffer
+	req := &trawlkit.Request{Store: readStore, Paths: paths, Format: ckoutput.JSON, Out: &out}
+	if err := source.runMessages(ctx, req); err != nil {
+		t.Fatalf("messages --chat %q failed: %v", chat, err)
+	}
+	return out.String()
 }
 
 func TestCrawlerSyncClassifiesArchiveUseFailureAsArchiveError(t *testing.T) {

@@ -29,12 +29,14 @@ func TestRunChatsJSONEnvelopeAndFlags(t *testing.T) {
 	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
 		got = q
 		return []Chat{{
-			ID:           "chat-1",
-			Title:        "Weekend Plans",
-			Group:        true,
-			Participants: int64Ptr(4),
-			Unread:       int64Ptr(7),
-			LastActivity: time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
+			ID:               "42139272",
+			Ref:              "telegram:chat/42139272",
+			Title:            "Weekend Plans",
+			Group:            true,
+			Participants:     int64Ptr(4),
+			ParticipantNames: []string{"Ada", "Bo", "Cy"},
+			Unread:           int64Ptr(7),
+			LastActivity:     time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
 		}}, nil
 	}}
 
@@ -48,12 +50,14 @@ func TestRunChatsJSONEnvelopeAndFlags(t *testing.T) {
 	}
 	var envelope struct {
 		Chats []struct {
-			ID           string `json:"id"`
-			Title        string `json:"title"`
-			Kind         string `json:"kind"`
-			Participants *int64 `json:"participants"`
-			LastActivity string `json:"last_activity"`
-			Unread       *int64 `json:"unread"`
+			ID               string   `json:"id"`
+			Ref              string   `json:"ref"`
+			Name             string   `json:"name"`
+			Kind             string   `json:"kind"`
+			Participants     *int64   `json:"participants"`
+			ParticipantNames []string `json:"participant_names"`
+			LastActivity     string   `json:"last_activity"`
+			Unread           *int64   `json:"unread"`
 		} `json:"chats"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
@@ -63,11 +67,19 @@ func TestRunChatsJSONEnvelopeAndFlags(t *testing.T) {
 		t.Fatalf("chats envelope = %#v", envelope)
 	}
 	row := envelope.Chats[0]
-	if row.ID != "chat-1" || row.Title != "Weekend Plans" || row.Kind != "group" {
+	// --json keeps the raw source key messages --chat accepts, and carries the
+	// ref the human table shows so an agent can act from either.
+	if row.ID != "42139272" || row.Ref != "telegram:chat/42139272" {
+		t.Fatalf("chat row handles = %#v", row)
+	}
+	if row.Name != "Weekend Plans" || row.Kind != "group" {
 		t.Fatalf("chat row identity = %#v", row)
 	}
 	if row.Participants == nil || *row.Participants != 4 || row.Unread == nil || *row.Unread != 7 {
 		t.Fatalf("chat row counts = %#v", row)
+	}
+	if len(row.ParticipantNames) != 3 || row.ParticipantNames[0] != "Ada" {
+		t.Fatalf("chat row participant_names = %#v", row.ParticipantNames)
 	}
 	if row.LastActivity != "2026-07-02T12:00:00Z" {
 		t.Fatalf("chat row last_activity = %q", row.LastActivity)
@@ -100,48 +112,143 @@ func TestRunChatsJSONEnvelopeAndFlags(t *testing.T) {
 	}
 }
 
-// The people and unread columns appear only when the surface fills them: an
-// iMessage-shaped source that counts participants but stores no read state
-// shows people and hides unread.
-func TestRunChatsTextShowsParticipantsHidesMissingUnread(t *testing.T) {
+// In a mixed list, a dm carries no group roster: the participants column shows
+// its "-" marker on the dm row while the named group beside it shows its roster,
+// so the column stays honest without inventing a dm's members.
+func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		return []Chat{
+			{
+				ID:               "g1",
+				Ref:              "imessage:chat/g1",
+				Title:            "Book Club",
+				Group:            true,
+				Participants:     int64Ptr(3),
+				ParticipantNames: []string{"Ada", "Bo", "Cy"},
+				LastActivity:     time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC),
+			},
+			{
+				ID:           "d1",
+				Ref:          "imessage:chat/d1",
+				Title:        "Ada Example",
+				Group:        false,
+				Participants: int64Ptr(2),
+				LastActivity: time.Date(2026, 7, 2, 9, 0, 0, 0, time.UTC),
+			},
+		}, nil
+	}}
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Ada, Bo, Cy") {
+		t.Fatalf("group must show its roster:\n%s", stdout)
+	}
+	// The dm's participant cell is the "-" marker, never a fabricated roster.
+	dmLine := ""
+	for _, line := range strings.Split(stdout, "\n") {
+		if strings.HasPrefix(line, "Ada Example") {
+			dmLine = line
+		}
+	}
+	if dmLine == "" || !strings.Contains(dmLine, " - ") {
+		t.Fatalf("dm row must show the empty participants marker:\n%s", stdout)
+	}
+}
+
+// The name leads and the raw source key never does: a named group shows its
+// title in the name column and its roster in the participants column, while the
+// chat column carries the ref a reader pastes into messages --chat. The head
+// count collapses the roster past the cap into an honest "+N".
+func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
 		return []Chat{{
-			ID:           "iMessage;-;+15550100",
-			Title:        "Ada Example",
-			Group:        false,
-			Participants: int64Ptr(2),
-			LastActivity: time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
+			ID:               "-4118982174",
+			Ref:              "telegram:chat/-4118982174",
+			Title:            "padel wankers",
+			Group:            true,
+			Participants:     int64Ptr(8),
+			ParticipantNames: []string{"Ana", "Bob", "Cy", "Dee"},
+			Unread:           int64Ptr(1),
+			LastActivity:     time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
 		}}, nil
 	}}
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "Chats: showing 1, newest first.") {
-		t.Fatalf("missing heading:\n%s", stdout)
+	header := firstLineAfterBlank(stdout)
+	if !strings.HasPrefix(header, "name") {
+		t.Fatalf("name must lead the table, got header %q:\n%s", header, stdout)
 	}
-	if !strings.Contains(stdout, "people") {
-		t.Fatalf("expected people column:\n%s", stdout)
+	if strings.Index(header, "chat") <= strings.Index(header, "name") {
+		t.Fatalf("chat (ref) column must trail the name, header %q", header)
+	}
+	if !strings.Contains(stdout, "participants") {
+		t.Fatalf("named group must show a participants column:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "padel wankers") {
+		t.Fatalf("missing chat name:\n%s", stdout)
+	}
+	// Cap is 3 names; the 8-person head count makes the remainder "+5".
+	if !strings.Contains(stdout, "Ana, Bob, Cy +5") {
+		t.Fatalf("participants preview wrong:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "telegram:chat/-4118982174") {
+		t.Fatalf("chat column must carry the ref handle:\n%s", stdout)
+	}
+}
+
+// An unnamed group (common on iMessage) is named from its participants, and the
+// participants column drops out so the same roster is never printed twice. A
+// source with no read state hides the unread column.
+func TestRunChatsTextUnnamedGroupSynthesisAndHiddenUnread(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		return []Chat{{
+			ID:               "57",
+			Ref:              "imessage:chat/57",
+			Title:            "",
+			Group:            true,
+			Participants:     int64Ptr(5),
+			ParticipantNames: []string{"Alice", "Bob", "Carol", "Dan"},
+			LastActivity:     time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC),
+		}}, nil
+	}}
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Alice, Bob, Carol +2") {
+		t.Fatalf("unnamed group must be named from participants:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "participants") {
+		t.Fatalf("participants column must drop out when the roster is the name:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "unread") {
 		t.Fatalf("unread column must be hidden when no chat carries a count:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "Ada Example") {
-		t.Fatalf("missing chat title:\n%s", stdout)
+	if !strings.Contains(stdout, "imessage:chat/57") {
+		t.Fatalf("chat column must carry the ref handle:\n%s", stdout)
 	}
 }
 
 // A WhatsApp-shaped source counts unread but not participants, and masks a
-// privacy id in the human table while --json keeps the real id.
+// privacy @lid in the human table's chat column while --json keeps the real id
+// and ref that messages --chat needs.
 func TestRunChatsTextMasksDisplayIDButJSONKeepsRealID(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
 		return []Chat{{
 			ID:           "155500000000002@lid",
-			Title:        "unknown participant",
+			Ref:          "whatsapp:chat/155500000000002@lid",
+			Title:        "unknown participant (privacy id)",
 			Group:        false,
 			DisplayID:    "privacy id",
 			Unread:       int64Ptr(3),
@@ -157,25 +264,43 @@ func TestRunChatsTextMasksDisplayIDButJSONKeepsRealID(t *testing.T) {
 		t.Fatalf("human table leaked the raw privacy id:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "privacy id") {
-		t.Fatalf("human table missing the display mask:\n%s", stdout)
+		t.Fatalf("human table missing the display mask in the chat column:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "unread") {
 		t.Fatalf("expected unread column:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "people") {
-		t.Fatalf("people column must be hidden when no chat carries a count:\n%s", stdout)
+	if strings.Contains(stdout, "participants") {
+		t.Fatalf("participants column must be hidden for a source with no roster:\n%s", stdout)
 	}
 
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--json"}, source, runOptions{})
 	if code != 0 {
 		t.Fatalf("chats json code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "155500000000002@lid") {
-		t.Fatalf("json must keep the real id for messages --chat:\n%s", stdout)
+	if !strings.Contains(stdout, `"id": "155500000000002@lid"`) || !strings.Contains(stdout, `"ref": "whatsapp:chat/155500000000002@lid"`) {
+		t.Fatalf("json must keep the real id and ref for messages --chat:\n%s", stdout)
 	}
-	if strings.Contains(stdout, "privacy id") {
+	// The human-only mask replaces the ref in the chat column, never the JSON
+	// handles; the id and ref above are the real ones, not "privacy id".
+	if strings.Contains(stdout, `"ref": "privacy id"`) || strings.Contains(stdout, `"id": "privacy id"`) {
 		t.Fatalf("json must not carry the human-only display mask:\n%s", stdout)
 	}
+}
+
+// firstLineAfterBlank returns the table header: the first non-empty line after
+// the blank line that follows the "Chats: showing ..." heading.
+func firstLineAfterBlank(out string) string {
+	lines := strings.Split(out, "\n")
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			for _, rest := range lines[i+1:] {
+				if strings.TrimSpace(rest) != "" {
+					return rest
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func TestRunChatsTextEmptyAndUnreadEmpty(t *testing.T) {

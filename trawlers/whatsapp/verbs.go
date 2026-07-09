@@ -65,10 +65,33 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 			// Only a one-to-one "dm" is a dm; groups, newsletters and status
 			// broadcasts are all group-shaped, never a private thread.
 			ID:           row.JID,
+			Ref:          store.ChatRef(row.JID),
 			Title:        whatsappChatTitle(row),
 			Group:        row.Kind != "dm",
 			LastActivity: row.LastMessageAt,
 			Unread:       &unread,
+		}
+		if chat.Group {
+			// A group's members answer "who is in it". The store resolves them
+			// with the same privacy masking as everywhere else, so no raw @lid
+			// reaches a human. An unnamed (or privacy-named) group leads with
+			// this roster instead of a placeholder, so its Title is cleared.
+			names, err := st.GroupParticipants(ctx, row.JID)
+			if err != nil {
+				return nil, err
+			}
+			if len(names) > 0 {
+				// The store can fall back to a raw @lid when it resolves no name;
+				// masking drops those and leaves a single "privacy id" marker, so
+				// the preview never leaks one. The head count stays the real
+				// member total, so the "+N" remainder is honest.
+				total := int64(len(names))
+				chat.ParticipantNames = humanParticipantIdentifiers(names)
+				chat.Participants = &total
+			}
+			if name := strings.TrimSpace(row.Name); name == "" || privacyID(name) {
+				chat.Title = ""
+			}
 		}
 		// A privacy @lid is both a machine ref and privacy-sensitive, so it is
 		// masked in the human table while --json keeps the real id.
@@ -126,7 +149,9 @@ func (f messageFlagValues) resolve() (store.MessageFilter, error) {
 		return store.MessageFilter{}, err
 	}
 	out := store.MessageFilter{
-		ChatJID:  f.chat,
+		// A reader can paste the chats-table handle (whatsapp:chat/<jid>) or the
+		// raw jid; the prefix is stripped, both resolve to the same chat.
+		ChatJID:  store.ChatIDFromRef(f.chat),
 		Sender:   f.sender,
 		Limit:    limit,
 		HasMedia: f.hasMedia,
