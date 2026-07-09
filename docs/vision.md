@@ -42,8 +42,8 @@ archives that agents can query through a single entry point.
 
 The layers, bottom to top:
 
-1. Source apps: Messages, Telegram, WhatsApp, Gmail, Calendar, Notes,
-   Signal, and later Photos, X and others.
+1. Source apps: iMessage, Telegram, WhatsApp, Gmail, Calendar, Contacts,
+   Photos, X and Apple Notes today, with Signal and others later.
 2. Source crawlers: one Go package per source, registered behind
    `trawl`. Each owns extraction, its own archive database, auth and
    session handling, search, status and privacy policy. Each conforms
@@ -84,9 +84,12 @@ The layers, bottom to top:
   database. The single entry point is a query surface, not a shared
   schema. Cross-source joins happen in derived layers, later, on top of
   proven per-source archives.
-- Contract first. The plugin story is the control contract. Anyone who
-  wants to add their own messaging app implements the contract in any
-  language and their crawler appears in the CLI and the app.
+- Contract first. Every crawler implements one control contract, so the
+  CLI and the app couple to that single interface, not to any crawler's
+  internals. Adding a source today means writing a Go crawler that
+  implements the contract and registering it in `trawl`, then
+  recompiling. A published, any-language plugin path is a later goal,
+  not the current build.
 - No knobs. One and only one obvious way of doing things. Defaults over
   configuration. A settings surface is a design failure until proven
   otherwise.
@@ -173,13 +176,12 @@ The bar for every line of code and every surface in this repo:
 
 ## Now, next, later
 
-- v1: iMessage, Telegram, WhatsApp, Gmail, Calendar and Contacts at the
-  golden-path bar, behind the federation CLI, with the new Mac app.
-- v1.5: Apple Notes, once the version-chain extractor matures.
-- v2: Signal (research spike first), Photos, X, daily deltas ("what
-  changed in the last 24 hours"), write capability, and a published
-  plugin API with agent surfaces (MCP or an Executor source) as thin
-  adapters over the contract.
+- Now: iMessage, Telegram, WhatsApp, Gmail, Calendar, Contacts, Photos,
+  X and Apple Notes, behind the federation CLI, with the new Mac app.
+- Next: Signal (research spike first), daily deltas ("what changed in
+  the last 24 hours"), write capability, and a published plugin API with
+  agent surfaces (MCP or an Executor source) as thin adapters over the
+  contract.
 - Horizon: cross-source inference: identity resolution, relationship
   inference, life orientation reports. This is where clustering and
   per-thing cards come in — the clawsweeper/gitcrawl pattern applied to

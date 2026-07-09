@@ -4,9 +4,12 @@ written_by: ai
 
 # Control contract v1
 
-The contract every crawler implements. This is the plugin API: a
-crawler is any binary, in any language, that speaks these commands. The
-`trawl` CLI and the Mac app couple to nothing else.
+The contract every crawler implements. A crawler is a Go package that
+speaks these commands; the `trawl` CLI and the Mac app couple to this
+contract, not to any crawler's internals. Adding a source means writing
+a Go crawler that implements the contract and registering it in `trawl`,
+then recompiling. A published, any-language plugin path is a later goal
+(see vision.md), not the current build.
 
 The Go types live in trawlkit's `control` package (manifest, status
 envelope, contact export are already there); this document is the
@@ -188,12 +191,11 @@ The `<query>` argument to `search` is optional when at least one
 filter (`--who`, `--after`, `--before`) is present: a filter-only
 search lists the newest matching items. `search` with no query and
 no filters is an error. Trawlkit owns the alias index and manifests always
-include `short_refs` (see [short-refs.md](short-refs.md)). Crawlers include the
-computed alias as `"short_ref"` on every result in their own `--json` output.
-The full `ref` stays the canonical identity; `short_ref` is display sugar so a
-federating reader (trawl) can render the short form without inventing its own
-alias length. Trawl's agent-facing
-`--json` still keeps short refs out by default (short-refs.md, JSON mode).
+include `short_refs`. Crawlers include the computed alias as `"short_ref"` on
+every result in their own `--json` output. The full `ref` stays the canonical
+identity; `short_ref` is display sugar so a federating reader (trawl) can render
+the short form without inventing its own alias length. Trawl's agent-facing
+`--json` still keeps short refs out by default.
 
 A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item

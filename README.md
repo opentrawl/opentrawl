@@ -84,9 +84,9 @@ problem: every failing check names the exact fix.
 There is one crawler per service. Each crawler extracts its source into
 its own local SQLite archive and speaks a small command contract:
 `status`, `sync`, `search`, `open`, `doctor`, each with a `--json` mode.
-That contract is the only coupling in the system, so a crawler can be any
-binary in any language. The full specification is in
-[docs/contract.md](docs/contract.md).
+That contract is the only coupling in the system: the CLI and the app
+know each crawler through it, not through its internals. The full
+specification is in [docs/contract.md](docs/contract.md).
 
 Two surfaces sit on top of the contract:
 
@@ -138,9 +138,9 @@ users.
 ## Contributing
 
 Read [AGENTS.md](AGENTS.md) first. This repo is public and its privacy
-rules are enforced in CI. To add a service, implement the crawler
-contract in [docs/contract.md](docs/contract.md) and your crawler appears
-in both the CLI and the app.
+rules are enforced in CI. To add a service, write a Go crawler that
+implements the contract in [docs/contract.md](docs/contract.md) and
+register it in `trawl`. It then appears in both the CLI and the app.
 
 ## Licence
 

@@ -70,9 +70,8 @@ the `trawl` CLI and the app are edited here too.
 ## Documentation rules
 
 All documentation — READMEs, docs/, PR text, error messages, anything a
-person reads — follows [docs/style.md](docs/style.md) (the anti-slop
-style: plain English, front-loaded, sentence case, no filler) and is
-written for end users:
+person reads — follows the anti-slop style (plain English, front-loaded,
+sentence case, no filler) and is written for end users:
 
 1. Respect the reader. Assume they are smart, busy, and new here.
 2. Be conscious of their time: front-load the point, cut what does not
@@ -83,8 +82,7 @@ written for end users:
 4. Internal working files may exist but are held to the same standard;
    good notes produce good work.
 5. Every generated document gets adversarial review against these rules
-   and docs/style.md before it merges. Reviewers are told to refute,
-   not to approve.
+   before it merges. Reviewers are told to refute, not to approve.
 
 ## Blockers are surfaced, not sat on
 
