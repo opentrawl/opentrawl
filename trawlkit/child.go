@@ -203,7 +203,7 @@ func (r runner) runChild(ctx context.Context, source Crawler, verb targetVerb, g
 	if verb.timeout > 0 {
 		watchdog = verb.timeout
 	}
-	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr)
+	result := waitForChild(ctx, cmd, stdout, stderr.String, watchdog, r.opts.killGrace, runLog, globals.verbosity, r.opts.stderr, r.opts.newWatchdogTimer)
 	if err := finishRunLog(runLog, result.err); result.err == nil && err != nil {
 		result.err = err
 	}
@@ -236,21 +236,24 @@ func setEnvValue(env []string, key, value string) []string {
 	return append(out, prefix+value)
 }
 
-func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr func() string, watchdog, grace time.Duration, runLog *cklog.Run, verbosity int, logStream io.Writer) executionResult {
+func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr func() string, watchdog, grace time.Duration, runLog *cklog.Run, verbosity int, logStream io.Writer, newTimer func(time.Duration) watchdogTimer) executionResult {
+	if newTimer == nil {
+		newTimer = newRealWatchdogTimer
+	}
 	frames := make(chan childFrame)
 	decodeErrs := make(chan error, 1)
 	go decodeChildFrames(stdout, frames, decodeErrs)
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 
-	timer := time.NewTimer(watchdog)
-	defer timer.Stop()
+	timer := newTimer(watchdog)
+	defer timer.stop()
 	for {
 		select {
 		case <-ctx.Done():
 			terminateChild(cmd, done, grace)
 			return executionResult{err: ctx.Err()}
-		case <-timer.C:
+		case <-timer.tick():
 			terminateChild(cmd, done, grace)
 			return executionResult{err: fmt.Errorf("mutating verb made no progress for %s", watchdog)}
 		case frame, ok := <-frames:
@@ -258,7 +261,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 				frames = nil
 				continue
 			}
-			resetTimer(timer, watchdog)
+			timer.reset(watchdog)
 			switch frame.kind {
 			case childFrameProgress:
 				logProgress(runLog, frame.progress)
@@ -267,7 +270,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 					_, _ = fmt.Fprintln(logStream, frame.logText)
 				}
 			case childFrameResult:
-				waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace)
+				waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
 				if frame.errorBody != nil {
 					var exitErr *exec.ExitError
 					if waitErr != nil && !errors.As(waitErr, &exitErr) {
@@ -281,7 +284,7 @@ func waitForChild(ctx context.Context, cmd *exec.Cmd, stdout io.Reader, stderr f
 				return executionResult{output: []byte(frame.output)}
 			}
 		case err := <-decodeErrs:
-			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace)
+			waitErr := waitForChildExit(ctx, cmd, done, watchdog, grace, newTimer)
 			if errors.Is(err, io.EOF) {
 				err = nil
 			}
@@ -316,14 +319,17 @@ func childProcessExitCode(err error) int {
 	return 1
 }
 
-func waitForChildExit(ctx context.Context, cmd *exec.Cmd, done <-chan error, watchdog, grace time.Duration) error {
-	timer := time.NewTimer(watchdog)
-	defer timer.Stop()
+func waitForChildExit(ctx context.Context, cmd *exec.Cmd, done <-chan error, watchdog, grace time.Duration, newTimer func(time.Duration) watchdogTimer) error {
+	if newTimer == nil {
+		newTimer = newRealWatchdogTimer
+	}
+	timer := newTimer(watchdog)
+	defer timer.stop()
 	select {
 	case <-ctx.Done():
 		terminateChild(cmd, done, grace)
 		return ctx.Err()
-	case <-timer.C:
+	case <-timer.tick():
 		terminateChild(cmd, done, grace)
 		return fmt.Errorf("mutating verb made no progress for %s", watchdog)
 	case err := <-done:
@@ -331,15 +337,39 @@ func waitForChildExit(ctx context.Context, cmd *exec.Cmd, done <-chan error, wat
 	}
 }
 
-func resetTimer(timer *time.Timer, d time.Duration) {
-	if !timer.Stop() {
+// watchdogTimer is the seam the child watchdog uses to measure the no-progress
+// window. Production runs on newRealWatchdogTimer, which is a real time.Timer.
+// Tests inject a fake so the watchdog never fires on wall-clock scheduling.
+type watchdogTimer interface {
+	// tick fires when the window elapses with no reset.
+	tick() <-chan time.Time
+	// reset restarts the window; called on every child frame.
+	reset(d time.Duration)
+	// stop releases the timer.
+	stop()
+}
+
+type realWatchdogTimer struct {
+	timer *time.Timer
+}
+
+func newRealWatchdogTimer(d time.Duration) watchdogTimer {
+	return &realWatchdogTimer{timer: time.NewTimer(d)}
+}
+
+func (t *realWatchdogTimer) tick() <-chan time.Time { return t.timer.C }
+
+func (t *realWatchdogTimer) reset(d time.Duration) {
+	if !t.timer.Stop() {
 		select {
-		case <-timer.C:
+		case <-t.timer.C:
 		default:
 		}
 	}
-	timer.Reset(d)
+	t.timer.Reset(d)
 }
+
+func (t *realWatchdogTimer) stop() { t.timer.Stop() }
 
 func terminateChild(cmd *exec.Cmd, done <-chan error, grace time.Duration) {
 	if cmd.Process == nil {

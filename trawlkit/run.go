@@ -27,6 +27,9 @@ type runOptions struct {
 	watchdog      time.Duration
 	killGrace     time.Duration
 	signalContext func(context.Context) (context.Context, context.CancelFunc)
+	// newWatchdogTimer builds the child watchdog timer. Tests inject a fake so
+	// the watchdog does not depend on wall-clock scheduling.
+	newWatchdogTimer func(time.Duration) watchdogTimer
 }
 
 type runner struct {
@@ -46,12 +49,13 @@ func Run(argv []string, sources []Crawler) int {
 func defaultRunOptions() runOptions {
 	stdout, stderr := output.StandardWriters()
 	return runOptions{
-		stdout:        stdout,
-		stderr:        stderr,
-		readTimeout:   DefaultReadTimeout,
-		watchdog:      DefaultWatchdog,
-		killGrace:     DefaultKillGrace,
-		signalContext: defaultSignalContext,
+		stdout:           stdout,
+		stderr:           stderr,
+		readTimeout:      DefaultReadTimeout,
+		watchdog:         DefaultWatchdog,
+		killGrace:        DefaultKillGrace,
+		signalContext:    defaultSignalContext,
+		newWatchdogTimer: newRealWatchdogTimer,
 	}
 }
 
@@ -149,6 +153,9 @@ func (opts runOptions) withDefaults() runOptions {
 	}
 	if opts.signalContext == nil {
 		opts.signalContext = defaults.signalContext
+	}
+	if opts.newWatchdogTimer == nil {
+		opts.newWatchdogTimer = defaults.newWatchdogTimer
 	}
 	return opts
 }

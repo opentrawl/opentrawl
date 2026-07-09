@@ -1905,18 +1905,36 @@ func TestRunChildWireOverwritesStaleParentStateRootEnv(t *testing.T) {
 	t.Log("stale TRAWLKIT_STATE_ROOT overwritten by parent state root: true")
 }
 
+// countingWatchdogTimer is a watchdogTimer that never fires. It counts how many
+// times the child watchdog is reset. The log-frame test injects it so the proof
+// rests on frame delivery, not on a real timer racing wall-clock scheduling.
+type countingWatchdogTimer struct {
+	resets int
+}
+
+func (t *countingWatchdogTimer) tick() <-chan time.Time { return nil }
+func (t *countingWatchdogTimer) reset(time.Duration)    { t.resets++ }
+func (t *countingWatchdogTimer) stop()                  {}
+
 func TestRunChildWireLogFramesResetWatchdog(t *testing.T) {
+	const logHeartbeats = 5
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	opts := childTestOptions(t, "log_heartbeat")
-	start := time.Now()
+	// The child streams logHeartbeats log frames and then a result frame. Each
+	// frame resets the watchdog. Drive the watchdog with a fake timer that never
+	// fires so the test proves the reset happens on every frame, whatever the
+	// wall-clock gaps between frames turn out to be under parallel load.
+	watchdog := &countingWatchdogTimer{}
+	opts.newWatchdogTimer = func(time.Duration) watchdogTimer { return watchdog }
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
-	elapsed := time.Since(start)
 	if code != 0 || !strings.Contains(stdout, `"added": 1`) {
 		t.Fatalf("log heartbeat child code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if elapsed < opts.watchdog {
-		t.Fatalf("log heartbeat finished before watchdog window, elapsed=%s watchdog=%s", elapsed, opts.watchdog)
+	// One reset per log frame proves every log frame reset the watchdog. The
+	// result frame resets it once more, so the count is at least logHeartbeats.
+	if watchdog.resets < logHeartbeats {
+		t.Fatalf("watchdog reset %d times, want at least %d (one per log frame)", watchdog.resets, logHeartbeats)
 	}
 	logData, err := os.ReadFile(filepath.Join(stateRoot, "testcrawl", "logs", "current.log"))
 	if err != nil {
@@ -2243,7 +2261,7 @@ func TestRunChildWatchdogCoversResultThenHang(t *testing.T) {
 		t.Fatal(err)
 	}
 	start := time.Now()
-	result := waitForChild(context.Background(), cmd, stdout, stderr.String, 30*time.Millisecond, 20*time.Millisecond, nil, 0, io.Discard)
+	result := waitForChild(context.Background(), cmd, stdout, stderr.String, 30*time.Millisecond, 20*time.Millisecond, nil, 0, io.Discard, nil)
 	if result.err == nil || !strings.Contains(result.err.Error(), "made no progress") {
 		t.Fatalf("result err = %v output=%s stderr=%s", result.err, result.output, stderr.String())
 	}
@@ -2413,10 +2431,8 @@ func TestRunnerChildHelper(t *testing.T) {
 					if err := req.Log.Info("log_heartbeat", "iteration="+strconv.Itoa(i+1)); err != nil {
 						return nil, err
 					}
-					select {
-					case <-ctx.Done():
-						return nil, ctx.Err()
-					case <-time.After(25 * time.Millisecond):
+					if err := ctx.Err(); err != nil {
+						return nil, err
 					}
 				}
 				return &SyncReport{Added: 1}, nil
