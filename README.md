@@ -99,22 +99,20 @@ The shared Go code both surfaces build on lives in `trawlkit`.
 
 ## Crawlers
 
-Nine crawlers ship today, at varying levels of polish. Most began as
-forks and keep their upstream MIT attribution:
+Nine crawlers ship today, at varying levels of polish. Several began as
+forks; where an upstream carries a licence, the directory retains it:
 
 | source | directory | origin |
 |---|---|---|
 | iMessage | trawlers/imessage | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
 | Telegram | trawlers/telegram | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
 | WhatsApp | trawlers/whatsapp | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
-| Gmail | trawlers/gmail | [openclaw/gogcrawl](https://github.com/openclaw/gogcrawl) |
-| Calendar | trawlers/calendar | [openclaw/calcrawl](https://github.com/openclaw/calcrawl) |
+| Gmail | trawlers/gmail | began as gogcrawl |
+| Calendar | trawlers/calendar | began as calcrawl |
 | Contacts | trawlers/contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
 | Apple Photos | trawlers/photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
-| X (Twitter) | trawlers/twitter | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
+| X (Twitter) | trawlers/twitter | began as birdcrawl |
 | Apple Notes | trawlers/notes | monorepo-native |
-
-A Signal crawler is in progress.
 
 ## For agents
 
@@ -146,9 +144,9 @@ in both the CLI and the app.
 
 ## Licence
 
-MIT for the monorepo (see [LICENSE](LICENSE)). Imported crawler
-directories keep their own LICENSE files and copyright notices, which
-govern those directories. OpenTrawl is derivative work: the forked
-crawlers and `trawlkit` originate in the
-[OpenClaw](https://github.com/openclaw) organisation, with thanks to the
-maintainers there.
+MIT for the monorepo (see [LICENSE](LICENSE)). Forked crawler
+directories keep their upstream LICENSE files and copyright notices,
+which govern those directories. Credit where it began: several crawlers
+originate in the [OpenClaw](https://github.com/openclaw) organisation,
+and `trawlkit` began as a hard fork of Vincent Koc's crawlkit — thanks
+to both.
