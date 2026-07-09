@@ -186,6 +186,35 @@ func chatDisplayName(chat archive.ChatSummary) string {
 	return "unknown chat"
 }
 
+// chatListTitle is the clean name the shared chats table leads with. It returns
+// the stored subject only when it is a real name; a machine title ("chat123…"),
+// a hex room name or a bare handle (a phone or email) is not a name a person
+// would say, so it returns "" and lets the kit synthesise one from the
+// participants instead.
+func chatListTitle(chat archive.ChatSummary) string {
+	title := strings.TrimSpace(chat.Title)
+	if title == "" || isMachineChatTitle(title) || isHandleLikeTitle(title) {
+		return ""
+	}
+	return title
+}
+
+// chatParticipantNames formats the stored handles into the human identities the
+// kit previews. The archive caps the stored handles; the total count travels
+// separately as Participants, so a large group still gets an honest "+N".
+func chatParticipantNames(chat archive.ChatSummary) []string {
+	if len(chat.ParticipantHandles) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(chat.ParticipantHandles))
+	for _, handle := range chat.ParticipantHandles {
+		if name := strings.TrimSpace(render.HumanIdentity(handle)); name != "" {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
 func chatConversation(item archive.ChatSummary) string {
 	title := strings.TrimSpace(item.Title)
 	if isMachineChatTitle(title) {

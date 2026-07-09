@@ -65,7 +65,9 @@ func TestChatsListsChatsWithReadState(t *testing.T) {
 	}
 	var payload struct {
 		Chats []struct {
-			Title  string `json:"title"`
+			ID     string `json:"id"`
+			Ref    string `json:"ref"`
+			Name   string `json:"name"`
 			Kind   string `json:"kind"`
 			Unread *int64 `json:"unread"`
 		} `json:"chats"`
@@ -79,13 +81,38 @@ func TestChatsListsChatsWithReadState(t *testing.T) {
 	chat := payload.Chats[0]
 	// The synthetic peer "100" is a one-to-one "user" chat: the kit renders it
 	// as a dm, never Telegram's own word.
-	if chat.Title != "Alice Example" || chat.Kind != "dm" {
+	if chat.Name != "Alice Example" || chat.Kind != "dm" {
 		t.Fatalf("chat = %#v", chat)
+	}
+	// The chat column is a ref a reader pastes into messages --chat; --json keeps
+	// the raw peer id too.
+	if chat.ID != "100" || chat.Ref != "telegram:chat/100" {
+		t.Fatalf("chat handles = %#v", chat)
 	}
 	// Telegram stores read state, so unread is present (a real zero here), not
 	// dropped the way a read-state-less surface would drop it.
 	if chat.Unread == nil {
 		t.Fatalf("telegram chat must carry an unread count: %#v", chat)
+	}
+}
+
+// The chat column is a working handle, not decoration: messages --chat resolves
+// the chats-table ref (telegram:chat/100) to the same chat as the raw peer id,
+// so a reader can copy the column straight through.
+func TestMessagesChatAcceptsChatRef(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	writeSyntheticArchive(t, context.Background(), archivePathForRun(stateRoot))
+
+	refCode, refOut, refErr := runTelecrawl(t, "--json", "messages", "--chat", "telegram:chat/100")
+	if refCode != 0 {
+		t.Fatalf("messages --chat ref code=%d out=%s err=%s", refCode, refOut, refErr)
+	}
+	if !strings.Contains(refOut, "synthetic launch note") {
+		t.Fatalf("messages --chat ref did not resolve the chat:\n%s", refOut)
+	}
+	rawCode, rawOut, _ := runTelecrawl(t, "--json", "messages", "--chat", "100")
+	if rawCode != 0 || rawOut != refOut {
+		t.Fatalf("ref and raw id must resolve identically:\nref=%s\nraw=%s", refOut, rawOut)
 	}
 }
 

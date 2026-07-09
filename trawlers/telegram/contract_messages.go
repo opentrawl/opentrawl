@@ -138,11 +138,7 @@ func openSenderFromMessage(message store.Message) openParticipant {
 }
 
 func chatRef(jid string) string {
-	jid = strings.TrimSpace(jid)
-	if jid == "" {
-		return ""
-	}
-	return "telegram:chat/" + jid
+	return store.ChatRef(jid)
 }
 
 func formatOptionalTime(t time.Time) string {

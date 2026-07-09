@@ -146,6 +146,69 @@ func containsHumanPrivacyPlaceholder(output string) bool {
 // The store's kind vocabulary is wider than the verb's: newsletters and the
 // status feed are broadcast surfaces, and only a one-to-one "dm" may render
 // as dm. This is the tripwire for the group/dm normalisation.
+// A named group exposes its resolved members in the participants column, so a
+// reader sees who is in the chat, not just its subject.
+func TestChatsGroupExposesResolvedParticipants(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	ctx := context.Background()
+	st, err := wastore.Open(ctx, filepath.Join(stateRoot, "whatsapp", "whatsapp.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC)
+	contacts := []wastore.Contact{
+		{JID: "alice@s.whatsapp.net", FullName: "Alice Example"},
+		{JID: "bob@s.whatsapp.net", FullName: "Bob Example"},
+	}
+	chats := []wastore.Chat{{JID: "crew@g.us", Kind: "group", Name: "Trail crew", LastMessageAt: now, MessageCount: 1}}
+	groups := []wastore.Group{{JID: "crew@g.us", Name: "Trail crew", OwnerJID: "alice@s.whatsapp.net", CreatedAt: now}}
+	participants := []wastore.GroupParticipant{
+		{GroupJID: "crew@g.us", UserJID: "alice@s.whatsapp.net", ContactName: "Alice", IsActive: true},
+		{GroupJID: "crew@g.us", UserJID: "bob@s.whatsapp.net", ContactName: "Bob", IsActive: true},
+	}
+	if err := st.ReplaceAll(ctx, wastore.ImportStats{FinishedAt: now}, contacts, chats, groups, participants, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := captureRun(t, []string{"chats"}, New())
+	if code != 0 {
+		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "participants") {
+		t.Fatalf("named group must show a participants column:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Alice Example") || !strings.Contains(stdout, "Bob Example") {
+		t.Fatalf("participants column must list the resolved members:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "Trail crew") {
+		t.Fatalf("group name must lead:\n%s", stdout)
+	}
+}
+
+// The chat column is a working handle: messages --chat strips the chats-table
+// ref (whatsapp:chat/<jid>) back to the raw jid, and a bare jid is untouched.
+func TestMessagesChatFlagAcceptsChatRef(t *testing.T) {
+	ref := messageFlagValues{chat: "whatsapp:chat/team@g.us", limit: newIntFlag(defaultMessageLimit)}
+	refFilter, err := ref.resolve()
+	if err != nil {
+		t.Fatalf("resolve ref: %v", err)
+	}
+	if refFilter.ChatJID != "team@g.us" {
+		t.Fatalf("chat ref not stripped: %q", refFilter.ChatJID)
+	}
+	bare := messageFlagValues{chat: "team@g.us", limit: newIntFlag(defaultMessageLimit)}
+	bareFilter, err := bare.resolve()
+	if err != nil {
+		t.Fatalf("resolve bare: %v", err)
+	}
+	if bareFilter.ChatJID != "team@g.us" {
+		t.Fatalf("bare jid mangled: %q", bareFilter.ChatJID)
+	}
+}
+
 func TestChatsKindNeverCallsBroadcastADM(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	ctx := context.Background()
