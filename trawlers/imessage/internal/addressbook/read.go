@@ -126,7 +126,7 @@ func extractStore(ctx context.Context, path string, sourceIndex int) ([]ContactN
 		}
 		return nil, err
 	}
-	snap, err := SnapshotPath(path)
+	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,7 @@ import (
 const coreDataUnixOffset = 978307200
 
 func CanaryRead(ctx context.Context, path string) error {
-	snap, err := SnapshotPath(path)
+	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func CanaryRead(ctx context.Context, path string) error {
 }
 
 func Read(ctx context.Context, path string) (Data, error) {
-	snap, err := SnapshotPath(path)
+	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
 		return Data{}, err
 	}

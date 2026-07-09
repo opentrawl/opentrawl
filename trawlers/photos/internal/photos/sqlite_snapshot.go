@@ -25,7 +25,7 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 	if _, err := os.Stat(dbPath); err != nil {
 		return LibrarySnapshot{}, fmt.Errorf("open Photos sqlite snapshot: %w", err)
 	}
-	snapshot, cleanup, err := snapshotPhotosSQLite(dbPath, p.SnapshotDir)
+	snapshot, cleanup, err := snapshotPhotosSQLite(ctx, dbPath, p.SnapshotDir)
 	if err != nil {
 		return LibrarySnapshot{}, fmt.Errorf("snapshot Photos sqlite: %w", err)
 	}
@@ -67,7 +67,7 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 	}, nil
 }
 
-func snapshotPhotosSQLite(sourcePath, destinationDir string) (cache.SQLiteSnapshot, func(), error) {
+func snapshotPhotosSQLite(ctx context.Context, sourcePath, destinationDir string) (cache.SQLiteSnapshot, func(), error) {
 	cleanup := func() {}
 	destination := strings.TrimSpace(destinationDir)
 	if destination == "" {
@@ -78,7 +78,7 @@ func snapshotPhotosSQLite(sourcePath, destinationDir string) (cache.SQLiteSnapsh
 		destination = tmpDir
 		cleanup = func() { _ = os.RemoveAll(tmpDir) }
 	}
-	snapshot, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{
+	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
 		SourcePath:     sourcePath,
 		DestinationDir: destination,
 		Name:           "Photos.sqlite",

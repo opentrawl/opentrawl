@@ -61,7 +61,7 @@ type Message struct {
 }
 
 func ExtractArchive(ctx context.Context, path string) (ArchiveData, error) {
-	snap, err := SnapshotPath(path)
+	snap, err := SnapshotPath(ctx, path)
 	if err != nil {
 		return ArchiveData{}, err
 	}

@@ -61,7 +61,7 @@ func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error
 func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, replaceNotes bool) (archive.SyncStats, error) {
 	start := time.Now().UTC()
 	sourcePath = strings.TrimSpace(sourcePath)
-	snap, err := notesdb.SnapshotPath(sourcePath)
+	snap, err := notesdb.SnapshotPath(ctx, sourcePath)
 	if err != nil {
 		return archive.SyncStats{}, sourceErr(err)
 	}

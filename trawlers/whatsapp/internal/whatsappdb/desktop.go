@@ -113,7 +113,7 @@ func Discover(ctx context.Context, path string) (Source, error) {
 			source.SupportingDBs = append(source.SupportingDBs, rel)
 		}
 	}
-	chatDB, closeChat, err := openReadOnly(source.ChatDB)
+	chatDB, closeChat, err := snapshotReadOnly(ctx, source.ChatDB)
 	if err == nil {
 		defer closeChat()
 		_ = chatDB.QueryRowContext(ctx, "select count(*) from ZWAMESSAGE").Scan(&source.MessageRows)
@@ -135,7 +135,7 @@ func Discover(ctx context.Context, path string) (Source, error) {
 			"ZWAMEDIAITEM joins both via ZWAMESSAGE.ZMEDIAITEM and ZWAMEDIAITEM.ZMESSAGE",
 		)
 	}
-	contactsDB, closeContacts, err := openReadOnly(source.ContactsDB)
+	contactsDB, closeContacts, err := snapshotReadOnly(ctx, source.ContactsDB)
 	if err == nil {
 		defer closeContacts()
 		_ = contactsDB.QueryRowContext(ctx, "select count(*) from ZWAADDRESSBOOKCONTACT").Scan(&source.ContactRows)
@@ -143,7 +143,7 @@ func Discover(ctx context.Context, path string) (Source, error) {
 	return source, nil
 }
 
-func SnapshotPath(path string) (Snapshot, error) {
+func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	path = defaultedPath(path)
 	if path == "" {
 		return Snapshot{}, errors.New("desktop path is required")
@@ -152,11 +152,11 @@ func SnapshotPath(path string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	if _, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{SourcePath: filepath.Join(path, chatDBName), DestinationDir: root, Name: chatDBName}); err != nil {
+	if _, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{SourcePath: filepath.Join(path, chatDBName), DestinationDir: root, Name: chatDBName}); err != nil {
 		_ = os.RemoveAll(root)
 		return Snapshot{}, err
 	}
-	if _, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{SourcePath: filepath.Join(path, contactsDBName), DestinationDir: root, Name: contactsDBName}); err != nil && !errors.Is(err, os.ErrNotExist) {
+	if _, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{SourcePath: filepath.Join(path, contactsDBName), DestinationDir: root, Name: contactsDBName}); err != nil && !errors.Is(err, os.ErrNotExist) {
 		_ = os.RemoveAll(root)
 		return Snapshot{}, err
 	}
@@ -186,7 +186,7 @@ func ImportWithOptions(ctx context.Context, st *store.Store, opts ImportOptions)
 	reportImportProgress(opts.Progress, 0, 5, "starting sync")
 	reportImportProgress(opts.Progress, 1, 5, "snapshotting WhatsApp databases")
 	snapshotStarted := time.Now()
-	snap, err := SnapshotPath(sourcePath)
+	snap, err := SnapshotPath(ctx, sourcePath)
 	stats.SnapshotElapsed = time.Since(snapshotStarted)
 	if err != nil {
 		return stats, err
@@ -322,7 +322,7 @@ func copyMediaFile(src, dest string) error {
 }
 
 func readContacts(ctx context.Context, path string) ([]store.Contact, map[string]string, error) {
-	db, closeFn, err := openReadOnly(path)
+	db, closeFn, err := openReadOnly(ctx, path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, map[string]string{}, nil
@@ -360,7 +360,7 @@ func readContacts(ctx context.Context, path string) ([]store.Contact, map[string
 }
 
 func readChats(ctx context.Context, path, sourceRoot string, names map[string]string) ([]store.Chat, []store.Group, []store.GroupParticipant, []store.Message, int, error) {
-	db, closeFn, err := openReadOnly(path)
+	db, closeFn, err := openReadOnly(ctx, path)
 	if err != nil {
 		return nil, nil, nil, nil, 0, err
 	}
@@ -782,7 +782,32 @@ func defaultedPath(path string) string {
 	return DefaultPath()
 }
 
-func openReadOnly(path string) (*sql.DB, func(), error) {
+func snapshotReadOnly(ctx context.Context, path string) (*sql.DB, func(), error) {
+	root, err := os.MkdirTemp("", "wacrawl-source-probe-*")
+	if err != nil {
+		return nil, nil, err
+	}
+	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
+		SourcePath:     path,
+		DestinationDir: root,
+		Name:           filepath.Base(path),
+	})
+	if err != nil {
+		_ = os.RemoveAll(root)
+		return nil, nil, err
+	}
+	db, closeDB, err := openReadOnly(ctx, snapshot.Path)
+	if err != nil {
+		_ = os.RemoveAll(root)
+		return nil, nil, err
+	}
+	return db, func() {
+		closeDB()
+		_ = os.RemoveAll(root)
+	}, nil
+}
+
+func openReadOnly(ctx context.Context, path string) (*sql.DB, func(), error) {
 	if _, err := os.Stat(path); err != nil {
 		return nil, nil, err
 	}
@@ -798,12 +823,12 @@ func openReadOnly(path string) (*sql.DB, func(), error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		_ = db.Close()
 		return nil, nil, err
 	}
 	// temp_store has no DSN form in the cgo driver; the pool holds one conn.
-	if _, err := db.ExecContext(context.Background(), "pragma temp_store = MEMORY"); err != nil {
+	if _, err := db.ExecContext(ctx, "pragma temp_store = MEMORY"); err != nil {
 		_ = db.Close()
 		return nil, nil, err
 	}

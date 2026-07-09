@@ -2,20 +2,19 @@ package wacrawl
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/sqlitedsn"
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/whatsappdb"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-
-	_ "github.com/mattn/go-sqlite3"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
@@ -144,19 +143,26 @@ func probeSQLite(ctx context.Context, dbPath string) error {
 	if strings.TrimSpace(dbPath) == "" {
 		return errors.New("db path is required")
 	}
-	dsn := sqlitedsn.File(
-		dbPath,
-		sqlitedsn.P("mode", "ro"),
-		sqlitedsn.P("_query_only", "1"),
-		sqlitedsn.P("_busy_timeout", "5000"),
-	)
-	db, err := sql.Open("sqlite3", dsn)
+	root, err := os.MkdirTemp("", "wacrawl-source-canary-*")
+	if err != nil {
+		return fmt.Errorf("create sqlite canary snapshot dir: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(root) }()
+	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
+		SourcePath:     dbPath,
+		DestinationDir: root,
+		Name:           filepath.Base(dbPath),
+	})
+	if err != nil {
+		return fmt.Errorf("snapshot sqlite: %w", err)
+	}
+	st, err := ckstore.OpenReadOnly(ctx, snapshot.Path)
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = st.Close() }()
 	var tables int
-	return db.QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&tables)
+	return st.DB().QueryRowContext(ctx, "SELECT count(*) FROM sqlite_master").Scan(&tables)
 }
 
 func archiveCheck(ctx context.Context, req *trawlkit.Request) trawlkit.Check {

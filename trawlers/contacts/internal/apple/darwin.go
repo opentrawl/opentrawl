@@ -137,7 +137,7 @@ func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error
 		return nil, addressBookAccessError{Path: path, Err: err}
 	}
 	defer func() { _ = os.RemoveAll(snapshotDir) }()
-	snapshot, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{
+	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
 		SourcePath:     path,
 		DestinationDir: snapshotDir,
 		Name:           filepath.Base(path),

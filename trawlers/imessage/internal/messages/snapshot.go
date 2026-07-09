@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"context"
 	"os"
 
 	"github.com/opentrawl/opentrawl/trawlkit/cache"
@@ -12,7 +13,7 @@ type Snapshot struct {
 	root       string
 }
 
-func SnapshotPath(path string) (Snapshot, error) {
+func SnapshotPath(ctx context.Context, path string) (Snapshot, error) {
 	if path == "" {
 		path = DefaultChatDBPath()
 	}
@@ -20,7 +21,7 @@ func SnapshotPath(path string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	result, err := cache.SnapshotSQLite(cache.SQLiteSnapshotOptions{SourcePath: path, DestinationDir: root})
+	result, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{SourcePath: path, DestinationDir: root})
 	if err != nil {
 		_ = os.RemoveAll(root)
 		return Snapshot{}, err

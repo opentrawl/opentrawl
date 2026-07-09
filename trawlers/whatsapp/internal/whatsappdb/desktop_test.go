@@ -506,7 +506,7 @@ func TestDiscoverAndHelpers(t *testing.T) {
 		t.Fatal("empty path should default")
 	}
 
-	if _, err := SnapshotPath(filepath.Join(source, "missing")); err == nil {
+	if _, err := SnapshotPath(ctx, filepath.Join(source, "missing")); err == nil {
 		t.Fatal("expected snapshot error for missing source")
 	}
 	filePath := filepath.Join(source, "file")
@@ -514,7 +514,7 @@ func TestDiscoverAndHelpers(t *testing.T) {
 	if _, err := Discover(ctx, filePath); err == nil {
 		t.Fatal("expected file source error")
 	}
-	if _, _, err := openReadOnly(filepath.Join(source, "missing.sqlite")); err == nil {
+	if _, _, err := openReadOnly(ctx, filepath.Join(source, "missing.sqlite")); err == nil {
 		t.Fatal("expected read-only open error")
 	}
 	if !appleNullTime(sql.NullFloat64{}).IsZero() {
@@ -533,7 +533,7 @@ func TestExtractWithoutContactsDB(t *testing.T) {
 	if err := os.Remove(filepath.Join(source, contactsDBName)); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := SnapshotPath(source)
+	snap, err := SnapshotPath(ctx, source)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestExtractReportsBrokenChatSchema(t *testing.T) {
 	if err := db.Close(); err != nil {
 		t.Fatal(err)
 	}
-	snap, err := SnapshotPath(source)
+	snap, err := SnapshotPath(ctx, source)
 	if err != nil {
 		t.Fatal(err)
 	}
