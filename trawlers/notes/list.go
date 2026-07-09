@@ -38,6 +38,11 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.Request) error {
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
+	if folder != "" {
+		if err := checkKnownFolder(ctx, st, folder); err != nil {
+			return err
+		}
+	}
 	items, err := st.ListNotes(ctx, folder)
 	if err != nil {
 		return err
@@ -54,6 +59,27 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.Request) error {
 		return writeJSON(req.Out, out)
 	}
 	return printListText(req.Out, out)
+}
+
+// checkKnownFolder tells an unknown folder name from a real folder that
+// simply has no notes right now. A typo in a folder name is a data error
+// (exit 1, and the error names the real folders), not an empty result: an
+// empty result and a mistyped name look identical to fmt.Fprintln unless
+// something checks first.
+func checkKnownFolder(ctx context.Context, st *archive.Store, folder string) error {
+	known, err := st.KnownFolders(ctx)
+	if err != nil {
+		return err
+	}
+	for _, name := range known {
+		if name == folder {
+			return nil
+		}
+	}
+	return commandErr("unknown_folder",
+		fmt.Sprintf("no folder named %q", folder),
+		"known folders: "+strings.Join(known, ", "),
+		nil)
 }
 
 func listNotes(items []archive.NoteListItem, shortRefs map[string]string) []listNote {

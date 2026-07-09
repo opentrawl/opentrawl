@@ -10,4 +10,4 @@ require (
 	google.golang.org/protobuf v1.36.11
 )
 
-require github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
+require github.com/clipperhouse/uax29/v2 v2.7.0

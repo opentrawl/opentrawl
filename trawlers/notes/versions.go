@@ -105,27 +105,46 @@ func refOrShort(shortRefs map[string]string, fullRef string) string {
 }
 
 func printVersionsText(w io.Writer, out versionListOutput, shortRefs map[string]string) error {
-	rows := make([][]string, 0, len(out.Versions))
-	for _, version := range out.Versions {
-		rows = append(rows, []string{
-			version.ShortSHA,
-			humanTime(version.SourceModifiedAt),
-			humanTime(version.FirstObservedAt),
-			sourceLabel(version),
-			refOrShort(shortRefs, version.Ref),
-		})
-	}
-	if len(rows) == 0 {
+	if len(out.Versions) == 0 {
 		_, err := fmt.Fprintf(w, "No recovered versions for %s.\n", noteLabel(out.Note))
 		return err
 	}
+	if _, err := fmt.Fprintln(w, versionsHeading(out)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w); err != nil {
+		return err
+	}
+	rows := make([][]string, 0, len(out.Versions))
+	for _, version := range out.Versions {
+		rows = append(rows, []string{
+			refOrShort(shortRefs, version.Ref),
+			humanTime(version.SourceModifiedAt),
+			humanTime(version.FirstObservedAt),
+			sourceLabel(version),
+		})
+	}
+	// The content hash used to live here as a "version" column, but it is not
+	// a ref a reader can type back to open — ref is, so ref leads and the raw
+	// hash is gone. It still travels in JSON (sha256, short_sha) for anyone
+	// scripting against the archive directly.
 	return render.WriteTable(w, []render.TableColumn{
-		{Header: "version"},
+		{Header: "ref"},
 		{Header: "modified"},
 		{Header: "observed"},
 		{Header: "source"},
-		{Header: "ref", Wrap: true},
 	}, rows)
+}
+
+// versionsHeading names the note and how many recovered versions it has,
+// matching the voice of the list and search headers above their tables.
+func versionsHeading(out versionListOutput) string {
+	word := "versions"
+	if len(out.Versions) == 1 {
+		word = "version"
+	}
+	return fmt.Sprintf("%s recovered %s of %s, newest first.",
+		render.FormatInteger(int64(len(out.Versions))), word, noteLabel(out.Note))
 }
 
 func printAtTimeText(w io.Writer, result archive.AtTimeResult, cardRef string) error {
@@ -134,11 +153,13 @@ func printAtTimeText(w io.Writer, result archive.AtTimeResult, cardRef string) e
 		return err
 	}
 	title := noteLabel(result.Note)
+	// Ref is already the typeable short ref for this exact recovered version
+	// (see runAtTime); the raw content hash carried no action of its own, so
+	// it does not get a second row here.
 	fields := []render.CardField{
 		{Label: "Match", Value: result.Match},
 		{Label: "Requested", Value: humanTime(result.RequestedTime)},
 		{Label: "Ref", Value: cardRef},
-		{Label: "Version", Value: result.Version.ShortSHA},
 		{Label: "Modified", Value: humanTime(result.Version.SourceModifiedAt)},
 		{Label: "Source", Value: sourceLabel(result.Version.Version)},
 	}

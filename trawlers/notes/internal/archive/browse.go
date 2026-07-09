@@ -80,6 +80,33 @@ order by count(*) desc, n.folder`, args...)
 	return out, rows.Err()
 }
 
+// KnownFolders names every folder a reader can pass to ListNotes, excluding
+// Recently Deleted. It draws from every note regardless of whether that note
+// has a recovered body, so a folder that is real but currently has no
+// browsable notes is still known — list can then tell that calm case apart
+// from a folder name that does not exist at all.
+func (s *Store) KnownFolders(ctx context.Context) ([]string, error) {
+	rows, err := s.store.DB().QueryContext(ctx, `
+select distinct folder
+from notes
+where coalesce(folder, '') <> ''
+  and folder <> '`+recentlyDeletedFolder+`'
+order by folder`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []string{}
+	for rows.Next() {
+		var folder string
+		if err := rows.Scan(&folder); err != nil {
+			return nil, err
+		}
+		out = append(out, folder)
+	}
+	return out, rows.Err()
+}
+
 // browseWhere builds the shared filter for the browse surfaces: real notes only
 // (a recovered body exists), never the Recently Deleted folder, and one folder
 // when the reader named it.

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/clipperhouse/uax29/v2/graphemes"
 	"github.com/mattn/go-runewidth"
 	"golang.org/x/sys/unix"
 )
@@ -32,6 +33,12 @@ func DisplayWidth(value string) int {
 	return runewidth.StringWidth(expandTabs(value))
 }
 
+// Truncate cuts value to width display cells, always on a grapheme-cluster
+// boundary. A family emoji or a flag is one cluster made of several runes
+// joined by zero-width joiners or variation selectors; cutting inside one
+// leaves a dangling fragment whose rendered width no terminal agrees on,
+// which is what misaligns the column after it. Clustering first keeps every
+// cut clean.
 func Truncate(value string, width int) string {
 	value = strings.TrimSpace(value)
 	if width <= 0 {
@@ -48,13 +55,15 @@ func Truncate(value string, width int) string {
 	limit := width - ellipsisWidth
 	var out strings.Builder
 	cellWidth := 0
-	for _, r := range value {
-		runeWidth := DisplayWidth(string(r))
-		if cellWidth+runeWidth > limit {
+	clusters := graphemes.FromString(value)
+	for clusters.Next() {
+		cluster := clusters.Value()
+		clusterWidth := DisplayWidth(cluster)
+		if cellWidth+clusterWidth > limit {
 			break
 		}
-		out.WriteRune(r)
-		cellWidth += runeWidth
+		out.WriteString(cluster)
+		cellWidth += clusterWidth
 	}
 	return strings.TrimRightFunc(out.String(), unicode.IsSpace) + ellipsis
 }
@@ -71,13 +80,15 @@ func clipToWidth(value string, width int) string {
 	}
 	var out strings.Builder
 	cellWidth := 0
-	for _, r := range value {
-		runeWidth := DisplayWidth(string(r))
-		if cellWidth+runeWidth > width {
+	clusters := graphemes.FromString(value)
+	for clusters.Next() {
+		cluster := clusters.Value()
+		clusterWidth := DisplayWidth(cluster)
+		if cellWidth+clusterWidth > width {
 			break
 		}
-		out.WriteRune(r)
-		cellWidth += runeWidth
+		out.WriteString(cluster)
+		cellWidth += clusterWidth
 	}
 	return strings.TrimRightFunc(out.String(), unicode.IsSpace)
 }
