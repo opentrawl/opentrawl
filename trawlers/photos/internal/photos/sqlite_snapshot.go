@@ -287,6 +287,7 @@ select m.%s,
 from %s m
 join ZGENERICALBUM g on g.Z_PK = m.%s
 where coalesce(g.ZTRASHEDSTATE, 0) = 0
+  and g.ZKIND = 2
 order by m.%s, g.ZTITLE
 `, store.QuoteIdent(join.AssetColumn), store.QuoteIdent(join.Table), store.QuoteIdent(join.AlbumColumn), store.QuoteIdent(join.AssetColumn))
 	rows, err := db.QueryContext(ctx, query)

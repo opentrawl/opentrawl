@@ -28,6 +28,37 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if err := createSyntheticPhotosDB(db.DB()); err != nil {
 		t.Fatal(err)
 	}
+	var allAlbumMemberships, userAlbumMemberships int
+	var userAlbumID string
+	if err := db.DB().QueryRow(`
+select count(*)
+from Z_34ASSETS m
+join ZGENERICALBUM g on g.Z_PK = m.Z_34ALBUMS
+where m.Z_3ASSETS = 1
+`).Scan(&allAlbumMemberships); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.DB().QueryRow(`
+select count(*)
+from Z_34ASSETS m
+join ZGENERICALBUM g on g.Z_PK = m.Z_34ALBUMS
+where m.Z_3ASSETS = 1
+  and g.ZKIND = 2
+`).Scan(&userAlbumMemberships); err != nil {
+		t.Fatal(err)
+	}
+	if allAlbumMemberships != 2 || userAlbumMemberships != 1 {
+		t.Fatalf("source album memberships = %d total, %d user; want 2 total, 1 user", allAlbumMemberships, userAlbumMemberships)
+	}
+	if err := db.DB().QueryRow(`
+select g.ZUUID
+from Z_34ASSETS m
+join ZGENERICALBUM g on g.Z_PK = m.Z_34ALBUMS
+where m.Z_3ASSETS = 1
+  and g.ZKIND = 2
+`).Scan(&userAlbumID); err != nil {
+		t.Fatal(err)
+	}
 
 	snapshot, err := SQLiteSnapshotProvider{}.Snapshot(context.Background(), libraryPath)
 	if err != nil {
@@ -55,7 +86,7 @@ func TestSQLiteSnapshotProviderReadsSyntheticLibrary(t *testing.T) {
 	if len(asset.Resources) != 1 || !asset.Resources[0].NeedsDownload || asset.Resources[0].Availability != "remote" {
 		t.Fatalf("resources = %#v", asset.Resources)
 	}
-	if len(asset.Albums) != 1 || asset.Albums[0].AlbumTitle != "Synthetic Album" {
+	if len(asset.Albums) != userAlbumMemberships || asset.Albums[0].AlbumID != userAlbumID || asset.Albums[0].AlbumTitle != "Synthetic Album" || asset.Albums[0].AlbumKind != "generic_album:2:0" {
 		t.Fatalf("albums = %#v", asset.Albums)
 	}
 	if snapshot.Metadata["snapshot"] != "trawlkit_sqlite_copy" || snapshot.Metadata["album_join_table"] != "Z_34ASSETS" {
@@ -233,7 +264,13 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 	if _, err := db.Exec(`insert into ZGENERICALBUM(Z_PK, ZUUID, ZTITLE, ZKIND, ZCLOUDALBUMSUBTYPE, ZTRASHEDSTATE) values (10, 'album-uuid-1', 'Synthetic Album', 2, 0, 0)`); err != nil {
 		return err
 	}
-	_, err := db.Exec(`insert into Z_34ASSETS(Z_PK, Z_3ASSETS, Z_34ALBUMS, Z_FOK_3ASSETS) values (100, 1, 10, 64)`)
+	if _, err := db.Exec(`insert into ZGENERICALBUM(Z_PK, ZUUID, ZTITLE, ZKIND, ZCLOUDALBUMSUBTYPE, ZTRASHEDSTATE) values (11, 'internal-album-uuid-1', '', 1510, 0, 0)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`insert into Z_34ASSETS(Z_PK, Z_3ASSETS, Z_34ALBUMS, Z_FOK_3ASSETS) values (100, 1, 10, 64)`); err != nil {
+		return err
+	}
+	_, err := db.Exec(`insert into Z_34ASSETS(Z_PK, Z_3ASSETS, Z_34ALBUMS, Z_FOK_3ASSETS) values (101, 1, 11, 65)`)
 	return err
 }
 
