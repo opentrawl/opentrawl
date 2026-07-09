@@ -10,11 +10,10 @@ import (
 
 func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, error) {
 	stats := SyncStats{
-		Notes:          len(batch.Notes),
-		BodyReads:      len(batch.Bodies),
-		ArchivePath:    s.path,
-		SyncedAt:       batch.LastSeenAt,
-		CoverageStatus: append([]Coverage(nil), batch.Coverage...),
+		Notes:       len(batch.Notes),
+		BodyReads:   len(batch.Bodies),
+		ArchivePath: s.path,
+		SyncedAt:    batch.LastSeenAt,
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
 		if batch.ReplaceNotes {
@@ -48,11 +47,6 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 		}
 		for key, value := range batch.SyncState {
 			if err := upsertSyncState(ctx, tx, key, value); err != nil {
-				return err
-			}
-		}
-		for _, item := range batch.Coverage {
-			if err := upsertCoverage(ctx, tx, item); err != nil {
 				return err
 			}
 		}
@@ -130,64 +124,12 @@ on conflict(key) do update set value = excluded.value`, key, value)
 	return err
 }
 
-func upsertCoverage(ctx context.Context, tx *sql.Tx, item Coverage) error {
-	_, err := tx.ExecContext(ctx, `
-insert into coverage
-  (source_class, status, zdata_candidates, assigned_note_versions,
-   unassigned_candidates, failure_reason, next_source, inspected_at)
-values (?, ?, ?, ?, ?, ?, ?, ?)
-on conflict(source_class) do update set
-  status = excluded.status,
-  zdata_candidates = excluded.zdata_candidates,
-  assigned_note_versions = excluded.assigned_note_versions,
-  unassigned_candidates = excluded.unassigned_candidates,
-  failure_reason = excluded.failure_reason,
-  next_source = excluded.next_source,
-  inspected_at = excluded.inspected_at`,
-		item.SourceClass, item.Status, item.Candidates, item.AssignedVersions,
-		item.UnassignedCandidates, item.FailureReason, item.NextSource, item.InspectedAt)
-	return err
-}
-
 func decodeProjection(zdata []byte) (text, status, unsupported string) {
 	text, err := projection.DecodeText(zdata)
 	if err == nil {
 		return strings.TrimSpace(text), "decoded", ""
 	}
 	return "", "unsupported", err.Error()
-}
-
-func CoverageDefaults(now string) []Coverage {
-	return []Coverage{
-		{SourceClass: "live_store", Status: "absent", InspectedAt: now, NextSource: "run sync against a copied NoteStore.sqlite triad"},
-		{SourceClass: "wal_replay", Status: "absent", InspectedAt: now, NextSource: "capture an uncheckpointed WAL"},
-		{SourceClass: "apfs_snapshots", Status: "blocked", FailureReason: "automatic APFS discovery is not implemented", NextSource: "sync a mounted or copied snapshot with sync-store", InspectedAt: now},
-		{SourceClass: "time_machine", Status: "blocked", FailureReason: "automatic Time Machine discovery is not implemented", NextSource: "sync a mounted backup NoteStore container with sync-store", InspectedAt: now},
-		{SourceClass: "old_store_copies", Status: "blocked", FailureReason: "automatic old-store discovery is not implemented", NextSource: "sync an explicit old NoteStore.sqlite copy with sync-store", InspectedAt: now},
-		{SourceClass: "legacy_storedata", Status: "deferred", FailureReason: "legacy NotesV storedata decoding is not implemented", InspectedAt: now},
-		{SourceClass: "activity_events", Status: "deferred", FailureReason: "activity events are not body versions", InspectedAt: now},
-	}
-}
-
-func CoverageForSync(counts map[string]CoverageCount, now string) []Coverage {
-	items := CoverageDefaults(now)
-	set := func(sourceClass, status string, candidateCount, assignedCount int64, failure, next string) {
-		for i := range items {
-			if items[i].SourceClass != sourceClass {
-				continue
-			}
-			items[i].Status = status
-			items[i].Candidates = candidateCount
-			items[i].AssignedVersions = assignedCount
-			items[i].FailureReason = failure
-			items[i].NextSource = next
-			items[i].InspectedAt = now
-		}
-	}
-	for sourceClass, count := range counts {
-		set(sourceClass, "inspected", count.Candidates, count.Assigned, "", "")
-	}
-	return items
 }
 
 func SourcePathHint(path string) string {

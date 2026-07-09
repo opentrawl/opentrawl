@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
@@ -133,7 +132,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	}
 	status.Databases = []control.Database{control.SQLiteDatabase("archive", "Notes archive", "archive", archiveStatus.ArchivePath, true, status.Counts)}
 	status.State, status.Summary = statusState(archiveStatus)
-	status.Warnings = coverageWarnings(archiveStatus.Coverage)
 	return &status, nil
 }
 
@@ -146,11 +144,8 @@ func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.
 }
 
 func statusState(status archive.Status) (string, string) {
-	switch {
-	case status.Versions == 0:
-		return "missing", "Not synced yet."
-	case status.LastSyncAt == "":
-		return "missing", "Not synced yet."
+	if status.Versions == 0 {
+		return "empty", "Archive has no notes yet."
 	}
 	lastSync, err := time.Parse(time.RFC3339Nano, status.LastSyncAt)
 	if err != nil {
@@ -160,16 +155,6 @@ func statusState(status archive.Status) (string, string) {
 		return "stale", "Archive is stale."
 	}
 	return "ok", "Archive is fresh."
-}
-
-func coverageWarnings(items []archive.Coverage) []string {
-	warnings := []string{}
-	for _, item := range items {
-		if item.Status == "blocked" && strings.TrimSpace(item.FailureReason) != "" {
-			warnings = append(warnings, item.SourceClass+": "+item.FailureReason)
-		}
-	}
-	return warnings
 }
 
 func checkSourceStore(path string, pathErr error) trawlkit.Check {

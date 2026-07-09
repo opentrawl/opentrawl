@@ -41,7 +41,7 @@ func Open(ctx context.Context, path string) (*sql.DB, error) {
 func ReadModificationIndex(ctx context.Context, db *sql.DB) (_ map[string]string, err error) {
 	defer func() { err = wrapMalformed(err) }()
 	rows, err := db.QueryContext(ctx, `
-select note.ZIDENTIFIER, note.ZMODIFICATIONDATE1, length(data.ZDATA)
+select note.ZIDENTIFIER, cast(note.ZMODIFICATIONDATE1 as real), length(data.ZDATA)
 from ZICCLOUDSYNCINGOBJECT note
 join ZICNOTEDATA data on note.ZNOTEDATA = data.Z_PK
 where note.ZIDENTIFIER is not null
@@ -81,7 +81,7 @@ func ReadBodies(ctx context.Context, db *sql.DB, changed map[string]bool) (_ []B
 		}
 	}
 	rows, err := db.QueryContext(ctx, `
-select note.ZIDENTIFIER, note.ZMODIFICATIONDATE1, data.ZDATA
+select note.ZIDENTIFIER, cast(note.ZMODIFICATIONDATE1 as real), data.ZDATA
 from ZICCLOUDSYNCINGOBJECT note
 join ZICNOTEDATA data on note.ZNOTEDATA = data.Z_PK
 where note.ZIDENTIFIER is not null
@@ -111,11 +111,10 @@ func ReadFinalState(ctx context.Context, db *sql.DB) (_ FinalState, err error) {
 select note.ZIDENTIFIER,
        coalesce(note.ZTITLE1, ''),
        coalesce(folder.ZTITLE2, ''),
-       note.ZCREATIONDATE1,
-       note.ZCREATIONDATE3,
-       note.ZMODIFICATIONDATE1,
-       data.ZDATA,
-       note.ZACTIVITYEVENTSDATA
+       cast(note.ZCREATIONDATE1 as real),
+       cast(note.ZCREATIONDATE3 as real),
+       cast(note.ZMODIFICATIONDATE1 as real),
+       data.ZDATA
 from ZICCLOUDSYNCINGOBJECT note
 left join ZICNOTEDATA data on note.ZNOTEDATA = data.Z_PK
 left join ZICCLOUDSYNCINGOBJECT folder on note.ZFOLDER = folder.Z_PK
@@ -131,8 +130,8 @@ order by note.ZIDENTIFIER`)
 	for rows.Next() {
 		var note Note
 		var created1, created3, modified sql.NullFloat64
-		var zdata, activity []byte
-		if err := rows.Scan(&note.ID, &note.Title, &note.Folder, &created1, &created3, &modified, &zdata, &activity); err != nil {
+		var zdata []byte
+		if err := rows.Scan(&note.ID, &note.Title, &note.Folder, &created1, &created3, &modified, &zdata); err != nil {
 			return FinalState{}, err
 		}
 		note.CreatedAt = firstAppleDate(created1, created3)
@@ -140,9 +139,6 @@ order by note.ZIDENTIFIER`)
 		state.Notes = append(state.Notes, note)
 		if len(zdata) > 0 {
 			state.Bodies = append(state.Bodies, Body{NoteID: note.ID, SourceModifiedAt: note.ModifiedAt, ZData: zdata})
-		}
-		if len(activity) > 0 {
-			state.Activities = append(state.Activities, ActivityBlob{NoteID: note.ID, Data: activity})
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -220,6 +216,10 @@ func firstAppleDate(first, second sql.NullFloat64) string {
 	return appleDate(second)
 }
 
+// appleDate reads a Core Data timestamp column. Apple declares these columns
+// TIMESTAMP, so go-sqlite3 converts any whole-second value stored as INTEGER
+// into time.Time; every query casts the column to real to keep the driver on
+// the float path, and the scan target stays sql.NullFloat64.
 func appleDate(value sql.NullFloat64) string {
 	if !value.Valid {
 		return ""

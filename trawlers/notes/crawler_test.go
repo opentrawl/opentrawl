@@ -147,6 +147,60 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	}
 }
 
+func TestSyncBuildsShortRefsAndOpenResolvesThem(t *testing.T) {
+	f := newFixture(t, false)
+	defer f.close()
+	updateBody(t, f.db, "short ref synthetic edit", 20)
+	archivePath := filepath.Join(t.TempDir(), "notes.db")
+	c := New()
+	c.syncStorePath = f.path()
+
+	req := testRequest(t, archivePath, output.JSON, nil, true)
+	if _, err := c.Sync(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	records, err := c.ShortRefRecords(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records) == 0 {
+		t.Fatal("short ref records = 0, want at least 1")
+	}
+	if _, err := req.RebuildShortRefs(context.Background(), records); err != nil {
+		t.Fatal(err)
+	}
+	closeStore(t, req)
+
+	searchReq := testRequest(t, archivePath, output.JSON, nil, false)
+	search, err := c.Search(context.Background(), searchReq, trawlkit.Query{Text: "synthetic", Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := searchReq.ShortRefAliases(context.Background(), []string{search.Results[0].Ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRef := aliases[search.Results[0].Ref]
+	closeStore(t, searchReq)
+	if !trawlkit.ValidShortRef(shortRef) {
+		t.Fatalf("search short ref = %q, want a valid short ref", shortRef)
+	}
+
+	var openBuf bytes.Buffer
+	openReq := testRequest(t, archivePath, output.JSON, &openBuf, false)
+	if err := c.Open(context.Background(), openReq, shortRef); err != nil {
+		t.Fatalf("open by short ref %q: %v", shortRef, err)
+	}
+	closeStore(t, openReq)
+	var opened openOutput
+	if err := json.Unmarshal(openBuf.Bytes(), &opened); err != nil {
+		t.Fatal(err)
+	}
+	if opened.Text != "short ref synthetic edit" {
+		t.Fatalf("open text = %q", opened.Text)
+	}
+}
+
 func TestSyncCountsOneObservationForUnchangedFinalBody(t *testing.T) {
 	f := newFixture(t, false)
 	defer f.close()
@@ -293,6 +347,10 @@ func (f fixture) close() {
 
 func createSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
+	// Apple declares the Core Data date columns TIMESTAMP, matching the real
+	// NoteStore.sqlite. go-sqlite3 converts any whole-second value stored as
+	// INTEGER in a TIMESTAMP column to time.Time, so this schema (not a plain
+	// REAL one) is what exercises the date-read path the crawler ships against.
 	_, err := db.Exec(`
 create table ZICNOTEDATA (Z_PK integer primary key, ZDATA blob);
 create table ZICCLOUDSYNCINGOBJECT (
@@ -302,10 +360,9 @@ create table ZICCLOUDSYNCINGOBJECT (
   ZTITLE1 text,
   ZTITLE2 text,
   ZFOLDER integer,
-  ZCREATIONDATE1 real,
-  ZCREATIONDATE3 real,
-  ZMODIFICATIONDATE1 real,
-  ZACTIVITYEVENTSDATA blob
+  ZCREATIONDATE1 timestamp,
+  ZCREATIONDATE3 timestamp,
+  ZMODIFICATIONDATE1 timestamp
 );`)
 	if err != nil {
 		t.Fatal(err)
@@ -317,12 +374,15 @@ func insertInitialRows(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec("insert into ZICNOTEDATA (Z_PK, ZDATA) values (100, ?)", noteBody(t, "initial synthetic text")); err != nil {
 		t.Fatal(err)
 	}
+	// ZCREATIONDATE1 and ZMODIFICATIONDATE1 are whole-second values stored as
+	// INTEGER, the storage class that triggers go-sqlite3's TIMESTAMP-to-time
+	// conversion on read.
 	_, err := db.Exec(`
 insert into ZICCLOUDSYNCINGOBJECT
-  (Z_PK, ZIDENTIFIER, ZNOTEDATA, ZTITLE1, ZTITLE2, ZFOLDER, ZCREATIONDATE1, ZCREATIONDATE3, ZMODIFICATIONDATE1, ZACTIVITYEVENTSDATA)
+  (Z_PK, ZIDENTIFIER, ZNOTEDATA, ZTITLE1, ZTITLE2, ZFOLDER, ZCREATIONDATE1, ZCREATIONDATE3, ZMODIFICATIONDATE1)
 values
-  (1, null, null, null, 'Fixture folder', null, null, null, null, null),
-  (10, 'note-alpha', 100, 'Alpha', null, 1, 1, null, 10, null)`)
+  (1, null, null, null, 'Fixture folder', null, null, null, null),
+  (10, 'note-alpha', 100, 'Alpha', null, 1, 1, null, 10)`)
 	if err != nil {
 		t.Fatal(err)
 	}

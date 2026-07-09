@@ -35,17 +35,6 @@ create table if not exists version_observations (
   observed_at text not null
 );
 
-create table if not exists coverage (
-  source_class text primary key,
-  status text not null,
-  zdata_candidates integer not null default 0,
-  assigned_note_versions integer not null default 0,
-  unassigned_candidates integer not null default 0,
-  failure_reason text not null default '',
-  next_source text not null default '',
-  inspected_at text not null default ''
-);
-
 create table if not exists sync_state (
   key text primary key,
   value text not null

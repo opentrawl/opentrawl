@@ -63,22 +63,20 @@ type SyncBatch struct {
 	Notes        []Note
 	Bodies       []BodyInsert
 	SyncState    map[string]string
-	Coverage     []Coverage
 	LastSeenAt   string
 	ReplaceNotes bool
 }
 
 type SyncStats struct {
-	Notes          int
-	BodyReads      int
-	NewVersions    int
-	Observations   int
-	WALBytes       int64
-	WALCommits     int
-	ArchivePath    string
-	SourcePath     string
-	SyncedAt       string
-	CoverageStatus []Coverage
+	Notes        int
+	BodyReads    int
+	NewVersions  int
+	Observations int
+	WALBytes     int64
+	WALCommits   int
+	ArchivePath  string
+	SourcePath   string
+	SyncedAt     string
 }
 
 type Status struct {
@@ -90,7 +88,6 @@ type Status struct {
 	Versions           int64
 	DecodedVersions    int64
 	Observations       int64
-	Coverage           []Coverage
 	SourceModifiedAt   string
 	LastSourcePathHint string
 }
@@ -111,22 +108,6 @@ type AtTimeResult struct {
 	Note          Note         `json:"note"`
 	Version       *VersionBody `json:"version,omitempty"`
 	Gap           string       `json:"gap,omitempty"`
-}
-
-type Coverage struct {
-	SourceClass          string `json:"source_class"`
-	Status               string `json:"status"`
-	Candidates           int64  `json:"zdata_candidates"`
-	AssignedVersions     int64  `json:"assigned_note_versions"`
-	UnassignedCandidates int64  `json:"unassigned_candidates"`
-	FailureReason        string `json:"failure_reason,omitempty"`
-	NextSource           string `json:"next_source,omitempty"`
-	InspectedAt          string `json:"inspected_at,omitempty"`
-}
-
-type CoverageCount struct {
-	Candidates int64
-	Assigned   int64
 }
 
 func SHA256(data []byte) string {

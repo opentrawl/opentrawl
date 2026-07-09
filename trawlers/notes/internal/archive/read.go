@@ -32,10 +32,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if out.Observations, err = countTable(ctx, db, "version_observations"); err != nil {
 		return Status{}, err
 	}
-	out.Coverage, err = s.Coverage(ctx)
-	if err != nil {
-		return Status{}, err
-	}
 	state, err := s.SyncState(ctx)
 	if err != nil {
 		return Status{}, err
@@ -44,28 +40,6 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	out.SourceModifiedAt = state["source_modified_at"]
 	out.LastSourcePathHint = state["source_path_hint"]
 	return out, nil
-}
-
-func (s *Store) Coverage(ctx context.Context) ([]Coverage, error) {
-	rows, err := s.store.DB().QueryContext(ctx, `
-select source_class, status, zdata_candidates, assigned_note_versions,
-       unassigned_candidates, failure_reason, next_source, inspected_at
-from coverage
-order by source_class`)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = rows.Close() }()
-	out := []Coverage{}
-	for rows.Next() {
-		var item Coverage
-		if err := rows.Scan(&item.SourceClass, &item.Status, &item.Candidates, &item.AssignedVersions,
-			&item.UnassignedCandidates, &item.FailureReason, &item.NextSource, &item.InspectedAt); err != nil {
-			return nil, err
-		}
-		out = append(out, item)
-	}
-	return out, rows.Err()
 }
 
 func (s *Store) ResolveNote(ctx context.Context, value string) (Note, error) {

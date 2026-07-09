@@ -2,6 +2,7 @@ package notes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -24,7 +25,11 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 	if err != nil {
 		return archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	note, body, err := resolveOpen(ctx, st, ref)
+	resolvedRef, err := resolveInputRef(ctx, req, ref)
+	if err != nil {
+		return err
+	}
+	note, body, err := resolveOpen(ctx, st, resolvedRef)
 	if err != nil {
 		return err
 	}
@@ -38,7 +43,44 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 	if req.Format == output.JSON {
 		return writeJSON(req.Out, out)
 	}
-	return printOpenText(req.Out, out)
+	return printOpenText(req.Out, out, displayRef(ctx, req, body.Ref))
+}
+
+// resolveInputRef turns a short ref from search into its full version ref.
+// Apple note IDs are uppercase UUIDs and never look like short refs, so they
+// pass through unchanged. A short-ref-shaped input that matches nothing in the
+// index also passes through so ResolveNote can try it as a title prefix; one
+// that does match resolves as a short ref — short refs take precedence over
+// title prefixes that happen to share their shape.
+func resolveInputRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if !trawlkit.ValidShortRef(ref) {
+		return ref, nil
+	}
+	matches, err := req.ResolveShortRef(ctx, ref)
+	if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+		return ref, nil
+	}
+	if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+		return "", commandErr("ambiguous_short_ref", "short ref matches more than one note version", "rerun search or use the full ref", err)
+	}
+	if err != nil {
+		return "", err
+	}
+	return matches[0], nil
+}
+
+// displayRef returns the short ref for a full version ref, falling back to the
+// full ref when the short-ref index has no alias for it.
+func displayRef(ctx context.Context, req *trawlkit.Request, fullRef string) string {
+	aliases, err := req.ShortRefAliases(ctx, []string{fullRef})
+	if err != nil {
+		return fullRef
+	}
+	if alias := aliases[fullRef]; alias != "" {
+		return alias
+	}
+	return fullRef
 }
 
 func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.Note, archive.VersionBody, error) {
@@ -59,13 +101,13 @@ func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.No
 	return note, body, err
 }
 
-func printOpenText(w io.Writer, out openOutput) error {
+func printOpenText(w io.Writer, out openOutput, cardRef string) error {
 	title := strings.TrimSpace(out.Note.Title)
 	if title == "" {
 		title = "(untitled note)"
 	}
 	fields := []render.CardField{
-		{Label: "Ref", Value: out.Ref},
+		{Label: "Ref", Value: cardRef},
 		{Label: "Note", Value: out.Note.ID},
 		{Label: "Version", Value: out.Version.ShortSHA},
 		{Label: "Modified", Value: out.Version.SourceModifiedAt},

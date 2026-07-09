@@ -158,7 +158,6 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	}
 	backfillBodyTitles(bodies, noteTitles)
 	bodyReads := len(bodies)
-	coverage := archive.CoverageForSync(coverageCounts(bodies), notestime.Format(start))
 	bodies = dedupeBodyObservations(bodies)
 	notes := archiveNotes(final.Notes)
 	state := syncState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
@@ -166,7 +165,6 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 		Notes:        notes,
 		Bodies:       bodies,
 		SyncState:    state,
-		Coverage:     coverage,
 		LastSeenAt:   notestime.Format(start),
 		ReplaceNotes: replaceNotes,
 	})
@@ -240,44 +238,6 @@ func dedupeBodyObservations(bodies []archive.BodyInsert) []archive.BodyInsert {
 		out = append(out, body)
 	}
 	return out
-}
-
-func coverageCounts(bodies []archive.BodyInsert) map[string]archive.CoverageCount {
-	candidates := map[string]int64{}
-	assigned := map[string]map[string]bool{}
-	for _, body := range bodies {
-		sourceClass := coverageSourceClass(body)
-		if sourceClass == "" {
-			continue
-		}
-		candidates[sourceClass]++
-		if assigned[sourceClass] == nil {
-			assigned[sourceClass] = map[string]bool{}
-		}
-		assigned[sourceClass][body.NoteID+"\x00"+body.ZDataSHA256] = true
-	}
-	out := map[string]archive.CoverageCount{}
-	for sourceClass, candidateCount := range candidates {
-		out[sourceClass] = archive.CoverageCount{
-			Candidates: candidateCount,
-			Assigned:   int64(len(assigned[sourceClass])),
-		}
-	}
-	return out
-}
-
-func coverageSourceClass(body archive.BodyInsert) string {
-	if body.Source == "wal_prefix" || body.SourceSequence > 0 {
-		return "wal_replay"
-	}
-	switch body.Source {
-	case "live":
-		return "live_store"
-	case "historical_store":
-		return "old_store_copies"
-	default:
-		return ""
-	}
 }
 
 func archiveNotes(input []notesdb.Note) []archive.Note {

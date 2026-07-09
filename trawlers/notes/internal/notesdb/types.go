@@ -20,13 +20,7 @@ type Body struct {
 	ZData            []byte
 }
 
-type ActivityBlob struct {
-	NoteID string
-	Data   []byte
-}
-
 type FinalState struct {
-	Notes      []Note
-	Bodies     []Body
-	Activities []ActivityBlob
+	Notes  []Note
+	Bodies []Body
 }
