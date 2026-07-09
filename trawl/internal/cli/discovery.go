@@ -21,7 +21,7 @@ type Source struct {
 	Surface      string
 	Aliases      []string
 	DisplayName  string
-	Description  string
+	Headlines    []string
 	Capabilities []string
 	LogDir       string
 	Commands     map[string]control.Command
@@ -61,7 +61,7 @@ func discoverCrawlers(ctx context.Context) []Source {
 			Surface:      info.Surface,
 			Aliases:      trimAliases(info.Aliases),
 			DisplayName:  manifest.DisplayName,
-			Description:  manifest.Description,
+			Headlines:    append([]string(nil), manifest.Headlines...),
 			Capabilities: manifest.Capabilities,
 			LogDir:       manifest.Paths.DefaultLogs,
 			Commands:     manifest.Commands,

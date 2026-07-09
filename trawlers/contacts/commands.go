@@ -25,9 +25,10 @@ func personListVerb() trawlkit.Verb {
 	var query string
 	var limit int
 	return trawlkit.Verb{
-		Name:  "person list",
-		Help:  "List people in the contacts archive.",
-		Store: trawlkit.StoreRequired,
+		Name:     "person list",
+		Help:     "List people in the contacts archive.",
+		Headline: true,
+		Store:    trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
 			limit = 50
 			fs.StringVar(&query, "query", "", "Filter query")

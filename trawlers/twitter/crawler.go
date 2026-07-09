@@ -48,7 +48,6 @@ func (c *Crawler) Info() trawlkit.Info {
 		Surface:     "x",
 		Aliases:     []string{"twitter"},
 		DisplayName: "X",
-		Description: "X posts, likes, bookmarks and mentions",
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
@@ -94,9 +93,10 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 func (c *Crawler) browseVerb(name string) trawlkit.Verb {
 	command := browseCommands[name]
 	return trawlkit.Verb{
-		Name:  name,
-		Help:  command.title,
-		Flags: c.browseFlags,
+		Name:     name,
+		Help:     command.title,
+		Headline: true,
+		Flags:    c.browseFlags,
 		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			return c.handler(ctx, req).runBrowse(command, req.Args)
 		},

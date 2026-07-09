@@ -35,7 +35,6 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          archive.AppID,
 		Surface:     "calendar",
 		DisplayName: archive.DisplayName,
-		Description: "Apple Calendar events",
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
@@ -55,10 +54,11 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Run:     c.annotateCalendar,
 		},
 		{
-			Name:  "calendars",
-			Help:  "List archived calendars.",
-			Store: trawlkit.StoreRequired,
-			Run:   c.calendars,
+			Name:     "calendars",
+			Help:     "List archived calendars.",
+			Headline: true,
+			Store:    trawlkit.StoreRequired,
+			Run:      c.calendars,
 		},
 	}
 }

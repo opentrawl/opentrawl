@@ -34,7 +34,7 @@ func writeRootHelp(w io.Writer, sources []Crawler) error {
 		info := source.Info()
 		commands = append(commands, usage.Command{
 			Name:    firstText(info.Surface, info.ID),
-			Summary: firstText(info.DisplayName, info.Description),
+			Summary: info.DisplayName,
 		})
 	}
 	sort.Slice(commands, func(i, j int) bool { return commands[i].Name < commands[j].Name })
@@ -63,8 +63,7 @@ func helpRequested(globals globalOptions) (bool, []string) {
 
 func topHelpDoc(manifest control.Manifest) usage.Doc {
 	return usage.Doc{
-		Tool:    firstText(manifest.Binary.Name, manifest.ID),
-		Tagline: manifest.Description,
+		Tool: firstText(manifest.Binary.Name, manifest.ID),
 		Groups: []usage.Group{{
 			Title:    "Commands",
 			Commands: helpCommands(manifest),

@@ -30,7 +30,6 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	manifest := control.NewManifest(info.ID, display, binaryName)
 	manifest.SchemaVersion = control.RunnerManifestVersion
 	manifest.Version = buildVersion
-	manifest.Description = strings.TrimSpace(info.Description)
 	manifest.Aliases = trimmedAliases(info.Aliases)
 	manifest.Privacy = info.Privacy
 	manifest.Paths = control.Paths{
@@ -40,6 +39,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	}
 	manifest.Capabilities = capabilitiesFor(source, info)
 	manifest.Commands = commandTable(source, binaryName, spine)
+	manifest.Headlines = headlineVerbs(source, manifest.Commands)
 	return manifest, nil
 }
 
@@ -125,11 +125,54 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 			JSON:      true,
 			Mutates:   verb.Mutates,
 			Store:     storeModeManifestValue(mode),
+			Headline:  verb.Headline,
 			Secondary: verb.Secondary,
 			Flags:     flagsForVerb(verb),
 		}
 	}
 	return commands
+}
+
+func headlineVerbs(source Crawler, commands map[string]control.Command) []string {
+	seen := map[string]struct{}{}
+	var out []string
+	for _, verb := range source.Verbs() {
+		if !verb.Headline {
+			continue
+		}
+		if !canHeadlineVerb(verb) {
+			continue
+		}
+		command, ok := commands[commandKey(verb.Name)]
+		if !ok || !command.Headline {
+			continue
+		}
+		headline := headlineVerb(command)
+		if headline == "" {
+			continue
+		}
+		if _, ok := seen[headline]; ok {
+			continue
+		}
+		seen[headline] = struct{}{}
+		out = append(out, headline)
+	}
+	return out
+}
+
+func canHeadlineVerb(verb Verb) bool {
+	key, ok := spineVerbKey(verb.Name)
+	// Chats is the one shared verb that names a source's primary corpus on the
+	// front door. Other spine verbs describe runner-wide actions and stay out.
+	return !ok || key == "chats"
+}
+
+func headlineVerb(command control.Command) string {
+	tokens := fixedCommandTokens(command)
+	if len(tokens) == 0 {
+		return ""
+	}
+	return tokens[0]
 }
 
 func chatsCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
@@ -166,6 +209,7 @@ func applySpineDeclaration(command control.Command, spine map[string]Verb, key s
 		return command
 	}
 	command.Store = storeModeManifestValue(spineStoreMode(key, &verb))
+	command.Headline = verb.Headline
 	command.Flags = append(command.Flags, flagsForVerb(verb)...)
 	sort.Slice(command.Flags, func(i, j int) bool { return command.Flags[i].Name < command.Flags[j].Name })
 	return command
@@ -210,6 +254,16 @@ func commandKey(name string) string {
 	name = strings.Join(strings.Fields(strings.TrimSpace(name)), "_")
 	name = strings.ReplaceAll(name, "-", "_")
 	return name
+}
+
+func fixedCommandTokens(command control.Command) []string {
+	for _, token := range command.Argv[1:] {
+		if strings.HasPrefix(token, "-") {
+			continue
+		}
+		return []string{token}
+	}
+	return nil
 }
 
 func uniqueStrings(values []string) []string {

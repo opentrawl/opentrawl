@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -393,7 +394,6 @@ func (f *fakeSource) Info() trawlkit.Info {
 		Surface:     sourceAlias(f.manifest.DisplayName),
 		Aliases:     f.manifest.Aliases,
 		DisplayName: f.manifest.DisplayName,
-		Description: f.manifest.Description,
 	}
 }
 
@@ -403,22 +403,25 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 	if f.crawler.metadataExit != 0 || strings.TrimSpace(f.crawler.metadata) == "not-json" {
 		return []trawlkit.Verb{{Name: "status", Help: "invalid metadata"}}
 	}
-	verbs := make([]trawlkit.Verb, 0, len(f.manifest.Commands))
-	for _, command := range f.manifest.Commands {
+	commands := orderedFakeCommands(f.manifest)
+	verbs := make([]trawlkit.Verb, 0, len(commands))
+	for _, command := range commands {
 		tokens := fixedVerbTokens(command)
 		if len(tokens) == 0 {
 			continue
 		}
 		name := strings.Join(tokens, " ")
+		headline := fakeCommandHeadline(f.manifest, command)
 		if fakeSpineVerb(name) {
 			continue
 		}
 		verbName := name
 		limit := ""
 		verbs = append(verbs, trawlkit.Verb{
-			Name:  verbName,
-			Help:  command.Title,
-			Store: trawlkit.StoreNone,
+			Name:     verbName,
+			Help:     command.Title,
+			Headline: headline,
+			Store:    trawlkit.StoreNone,
 			Flags: func(fs *flag.FlagSet) {
 				fs.StringVar(&limit, "limit", "", "limit")
 			},
@@ -444,6 +447,57 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 		})
 	}
 	return verbs
+}
+
+func orderedFakeCommands(manifest control.Manifest) []control.Command {
+	keys := make([]string, 0, len(manifest.Commands))
+	for key := range manifest.Commands {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	used := map[string]struct{}{}
+	out := make([]control.Command, 0, len(keys))
+	for _, headline := range manifest.Headlines {
+		for _, key := range keys {
+			if _, ok := used[key]; ok {
+				continue
+			}
+			command := manifest.Commands[key]
+			if fakeHeadlineVerb(command) != headline {
+				continue
+			}
+			out = append(out, command)
+			used[key] = struct{}{}
+		}
+	}
+	for _, key := range keys {
+		if _, ok := used[key]; ok {
+			continue
+		}
+		out = append(out, manifest.Commands[key])
+	}
+	return out
+}
+
+func fakeCommandHeadline(manifest control.Manifest, command control.Command) bool {
+	if command.Headline {
+		return true
+	}
+	headline := fakeHeadlineVerb(command)
+	for _, want := range manifest.Headlines {
+		if headline == want {
+			return true
+		}
+	}
+	return false
+}
+
+func fakeHeadlineVerb(command control.Command) string {
+	tokens := fixedVerbTokens(command)
+	if len(tokens) == 0 {
+		return ""
+	}
+	return tokens[0]
 }
 
 func fakeSpineVerb(name string) bool {

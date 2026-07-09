@@ -47,7 +47,6 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "gmail",
 		DisplayName: displayName,
-		Description: "Gmail archive and Google Contacts export",
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
