@@ -182,6 +182,7 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 func statusCounts(status archive.Status) []control.Count {
 	return []control.Count{
 		control.NewCount("messages", "messages", status.Messages),
+		control.NewCount("unread", "unread", status.Unread),
 		control.NewCount("senders", "senders", status.Senders),
 		control.NewCount("since", "since", status.Since),
 	}

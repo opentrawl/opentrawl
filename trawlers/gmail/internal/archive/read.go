@@ -26,6 +26,9 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	if err := db.QueryRowContext(ctx, `select count(distinct from_address) from messages where trim(from_address) <> ''`).Scan(&status.Senders); err != nil {
 		return Status{}, err
 	}
+	if err := db.QueryRowContext(ctx, `select count(*) from messages where is_unread = 1`).Scan(&status.Unread); err != nil {
+		return Status{}, err
+	}
 	var oldest sql.NullInt64
 	if err := db.QueryRowContext(ctx, `select min(time_unix) from messages`).Scan(&oldest); err != nil {
 		return Status{}, err
@@ -63,7 +66,7 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 		return SearchResult{}, err
 	}
 	querySQL := `
-select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
+select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 ` + from + `
 ` + where + `
 ` + order
@@ -79,7 +82,8 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
 	result := SearchResult{Query: query, WhoResolved: whoFilter.resolved, WhoQuery: whoFilter.query, TotalMatches: total, Truncated: limit > 0 && total > int64(limit)}
 	for rows.Next() {
 		var id, when, fromName, fromAddress, subject, body string
-		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body); err != nil {
+		var unread bool
+		if err := rows.Scan(&id, &when, &fromName, &fromAddress, &subject, &body, &unread); err != nil {
 			return SearchResult{}, err
 		}
 		ref := RefPrefix + id
@@ -89,6 +93,7 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body
 			Who:     displaySender(fromName, fromAddress, ownerEmails),
 			Where:   subject,
 			Snippet: plainSnippet(query, subject, body),
+			Unread:  unread,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -112,10 +117,10 @@ func (s *Store) OpenMessage(ctx context.Context, ref string) (OpenResult, error)
 	var out OpenResult
 	var labels string
 	err = s.store.DB().QueryRowContext(ctx, `
-select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json
+select id, thread_id, time, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
 from messages
 where id = ?
-`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.CcAddress, &out.Headers.Subject, &out.Body, &labels)
+`, id).Scan(&out.ID, &out.ThreadID, &out.Time, &out.Headers.FromName, &out.Headers.FromAddress, &out.Headers.ToAddress, &out.Headers.CcAddress, &out.Headers.Subject, &out.Body, &labels, &out.Unread)
 	if err == sql.ErrNoRows {
 		return OpenResult{}, fmt.Errorf("message not found: %s", ref)
 	}

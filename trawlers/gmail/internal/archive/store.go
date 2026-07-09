@@ -62,6 +62,10 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
 	return &Store{store: st, path: path, owned: true}, nil
 }
 
@@ -76,6 +80,9 @@ func Use(ctx context.Context, st *ckstore.Store, path string) (*Store, error) {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
 	if err := st.EnsureSchemaVersion(ctx, schemaVersion); err != nil {
+		return nil, err
+	}
+	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
 		return nil, err
 	}
 	return &Store{store: st, path: path}, nil
@@ -94,6 +101,9 @@ func UseExisting(ctx context.Context, st *ckstore.Store, path string) (*Store, e
 	}
 	if version != schemaVersion {
 		return nil, ErrSchemaMismatch
+	}
+	if err := ensureUnreadColumn(ctx, st.DB()); err != nil {
+		return nil, err
 	}
 	return &Store{store: st, path: path}, nil
 }
@@ -213,8 +223,8 @@ func insertMessageWithTiming(ctx context.Context, tx *sql.Tx, msg Message) (inse
 	}
 	_, err := tx.ExecContext(ctx, `
 insert into messages(
-  id, thread_id, history_id, internal_date_ms, time, time_unix, from_name, from_address, to_address, cc_address, subject, body, labels_json
-) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  id, thread_id, history_id, internal_date_ms, time, time_unix, from_name, from_address, to_address, cc_address, subject, body, labels_json, is_unread
+) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(id) do update set
   thread_id = excluded.thread_id,
   history_id = excluded.history_id,
@@ -227,8 +237,9 @@ on conflict(id) do update set
   cc_address = excluded.cc_address,
   subject = excluded.subject,
   body = excluded.body,
-  labels_json = excluded.labels_json
-`, msg.ID, msg.ThreadID, msg.HistoryID, msg.InternalDateMS, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.CcAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels))
+  labels_json = excluded.labels_json,
+  is_unread = excluded.is_unread
+`, msg.ID, msg.ThreadID, msg.HistoryID, msg.InternalDateMS, timeText, timeUnix, msg.FromName, msg.FromAddress, msg.ToAddress, msg.CcAddress, msg.Subject, msg.Body, labelsJSON(msg.Labels), boolToInt(isUnread(msg.Labels)))
 	if err != nil {
 		return insertMessageResult{}, fmt.Errorf("insert message: %w", err)
 	}

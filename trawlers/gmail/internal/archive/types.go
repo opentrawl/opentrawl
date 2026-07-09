@@ -46,6 +46,7 @@ type Status struct {
 	Messages     int64
 	Senders      int64
 	Since        int64
+	Unread       int64
 }
 
 type SearchOptions struct {
@@ -72,6 +73,7 @@ type SearchHit struct {
 	Where    string `json:"where,omitempty"`
 	Snippet  string `json:"snippet"`
 	ShortRef string `json:"short_ref"`
+	Unread   bool   `json:"unread"`
 }
 
 type OpenResult struct {
@@ -81,6 +83,7 @@ type OpenResult struct {
 	Time            string       `json:"time"`
 	Headers         MailHeaders  `json:"headers"`
 	Labels          []string     `json:"labels,omitempty"`
+	Unread          bool         `json:"unread"`
 	Attachments     []Attachment `json:"attachments,omitempty"`
 	Body            string       `json:"body"`
 	BodyTruncated   bool         `json:"body_truncated"`
