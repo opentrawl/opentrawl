@@ -45,6 +45,19 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 			}
 			stats.Observations++
 		}
+		for _, att := range batch.Attachments {
+			if err := upsertAttachment(ctx, tx, att, batch.LastSeenAt); err != nil {
+				return err
+			}
+			switch att.Status {
+			case AttachmentStatusCopied:
+				stats.AttachmentsCopied++
+			case AttachmentStatusMissing:
+				stats.AttachmentsMissing++
+			case AttachmentStatusNoFile:
+				stats.AttachmentsNoFile++
+			}
+		}
 		for key, value := range batch.SyncState {
 			if err := upsertSyncState(ctx, tx, key, value); err != nil {
 				return err
@@ -53,6 +66,24 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 		return nil
 	})
 	return stats, err
+}
+
+func upsertAttachment(ctx context.Context, tx *sql.Tx, att AttachmentInsert, seenAt string) error {
+	_, err := tx.ExecContext(ctx, `
+insert into attachments
+  (attachment_id, note_id, media_id, name, type, archive_path, status, source_bytes, first_observed_at, last_seen_at)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(attachment_id) do update set
+  note_id = excluded.note_id,
+  media_id = excluded.media_id,
+  name = excluded.name,
+  type = excluded.type,
+  archive_path = excluded.archive_path,
+  status = excluded.status,
+  source_bytes = excluded.source_bytes,
+  last_seen_at = excluded.last_seen_at`,
+		att.ID, att.NoteID, att.MediaID, att.Name, att.Type, att.ArchivePath, att.Status, att.SourceBytes, seenAt, seenAt)
+	return err
 }
 
 func upsertNote(ctx context.Context, tx *sql.Tx, note Note, seenAt string) error {

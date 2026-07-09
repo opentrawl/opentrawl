@@ -362,7 +362,11 @@ create table ZICCLOUDSYNCINGOBJECT (
   ZFOLDER integer,
   ZCREATIONDATE1 timestamp,
   ZCREATIONDATE3 timestamp,
-  ZMODIFICATIONDATE1 timestamp
+  ZMODIFICATIONDATE1 timestamp,
+  ZTYPEUTI text,
+  ZMEDIA integer,
+  ZNOTE integer,
+  ZFILENAME text
 );`)
 	if err != nil {
 		t.Fatal(err)
