@@ -28,17 +28,23 @@ type FolderCount struct {
 	Notes  int64  `json:"notes"`
 }
 
-// ListNotes returns real notes newest-modified first, leaving out the Recently
-// Deleted folder and any note with no recovered body (an unfetched iCloud
-// placeholder). When folder is set, the list is scoped to that one folder.
-func (s *Store) ListNotes(ctx context.Context, folder string) ([]NoteListItem, error) {
+// ListNotes returns up to limit real notes, newest-modified first, leaving out
+// the Recently Deleted folder and any note with no recovered body (an
+// unfetched iCloud placeholder). A non-positive limit returns all notes for
+// internal callers. When folder is set, the list is scoped to that one folder.
+func (s *Store) ListNotes(ctx context.Context, folder string, limit int) ([]NoteListItem, error) {
 	where, args := browseWhere(folder)
-	rows, err := s.store.DB().QueryContext(ctx, `
+	query := `
 select n.note_id, coalesce(n.title, ''), coalesce(n.folder, ''),
        coalesce(nullif(n.modified_at, ''), n.created_at)
 from notes n
-`+where+`
-order by coalesce(nullif(n.modified_at, ''), n.created_at) desc, n.note_id`, args...)
+` + where + `
+order by coalesce(nullif(n.modified_at, ''), n.created_at) desc, n.note_id`
+	if limit > 0 {
+		query += "\nlimit ?"
+		args = append(args, limit)
+	}
+	rows, err := s.store.DB().QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

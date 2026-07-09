@@ -4,10 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -21,14 +23,20 @@ type listNote struct {
 }
 
 type listOutput struct {
-	Folder  string                `json:"folder,omitempty"`
-	Notes   []listNote            `json:"notes"`
-	Folders []archive.FolderCount `json:"folders"`
+	Folder    string                `json:"folder,omitempty"`
+	Notes     []listNote            `json:"notes"`
+	Folders   []archive.FolderCount `json:"folders"`
+	Total     int64                 `json:"total"`
+	Truncated bool                  `json:"truncated"`
 }
 
 func (c *Crawler) runList(ctx context.Context, req *trawlkit.Request) error {
 	if len(req.Args) > 1 {
 		return usageError("list takes at most one folder name")
+	}
+	limit, err := ckflags.Limit(c.listLimit, true)
+	if err != nil {
+		return usageError(err.Error())
 	}
 	folder := ""
 	if len(req.Args) == 1 {
@@ -43,17 +51,24 @@ func (c *Crawler) runList(ctx context.Context, req *trawlkit.Request) error {
 			return err
 		}
 	}
-	items, err := st.ListNotes(ctx, folder)
-	if err != nil {
-		return err
-	}
 	folders, err := st.FolderCounts(ctx, folder)
 	if err != nil {
 		return err
 	}
-	out := listOutput{Folder: folder, Notes: listNotes(items, listShortRefs(ctx, req, items)), Folders: folders}
+	total := folderTotal(folders)
+	items, err := st.ListNotes(ctx, folder, limit)
+	if err != nil {
+		return err
+	}
+	out := listOutput{
+		Folder:    folder,
+		Notes:     listNotes(items, listShortRefs(ctx, req, items)),
+		Folders:   folders,
+		Total:     total,
+		Truncated: int64(len(items)) < total,
+	}
 	if req.Log != nil {
-		_ = req.Log.Info("list_complete", fmt.Sprintf("notes=%d folders=%d", len(items), len(folders)))
+		_ = req.Log.Info("list_complete", fmt.Sprintf("returned=%d total=%d folders=%d", len(items), total, len(folders)))
 	}
 	if req.Format == output.JSON {
 		return writeJSON(req.Out, out)
@@ -116,8 +131,15 @@ func printListText(w io.Writer, out listOutput) error {
 		_, err := fmt.Fprintln(w, listEmpty(out.Folder))
 		return err
 	}
-	if _, err := fmt.Fprintln(w, folderSummary(out.Folders, out.Folder)); err != nil {
-		return err
+	for _, line := range render.Wrap(listSummary(out), render.OutputWidth(w)) {
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+	if out.Truncated {
+		if _, err := fmt.Fprintln(w, listContinuation(out)); err != nil {
+			return err
+		}
 	}
 	if _, err := fmt.Fprintln(w); err != nil {
 		return err
@@ -127,15 +149,15 @@ func printListText(w io.Writer, out listOutput) error {
 		rows = append(rows, []string{
 			render.ShortLocalTime(parseContractTime(note.Modified)),
 			note.Folder,
-			listTitle(note.Title),
 			note.Ref,
+			listTitle(note.Title),
 		})
 	}
 	return render.WriteTable(w, []render.TableColumn{
 		{Header: "modified"},
-		{Header: "folder"},
-		{Header: "title"},
+		{Header: "folder", Wrap: true},
 		{Header: "ref"},
+		{Header: "title", Wrap: true},
 	}, rows)
 }
 
@@ -153,31 +175,33 @@ func listEmpty(folder string) string {
 	return "No notes yet."
 }
 
-// folderSummary is the one line above the table. Scoped to a folder it names
-// that folder's count; otherwise it names the total and the per-folder split, so
-// a reader sees where their notes live without a separate folders verb.
-func folderSummary(folders []archive.FolderCount, scoped string) string {
+func folderTotal(folders []archive.FolderCount) int64 {
 	var total int64
-	for _, f := range folders {
-		total += f.Notes
+	for _, folder := range folders {
+		total += folder.Notes
 	}
-	notesWord := "notes"
-	if total == 1 {
-		notesWord = "note"
-	}
-	if strings.TrimSpace(scoped) != "" {
-		return fmt.Sprintf("%s %s in %s, newest first.", render.FormatInteger(total), notesWord, scoped)
-	}
-	parts := make([]string, 0, len(folders))
-	for _, f := range folders {
-		parts = append(parts, fmt.Sprintf("%s %s", folderName(f.Folder), render.FormatInteger(f.Notes)))
+	return total
+}
+
+// listSummary says how many rows are present, not just how large the archive
+// is. The folder split teaches a reader which folder name they can pass back
+// to the command.
+func listSummary(out listOutput) string {
+	shown := render.FormatInteger(int64(len(out.Notes)))
+	total := render.FormatInteger(out.Total)
+	if strings.TrimSpace(out.Folder) != "" {
+		return fmt.Sprintf("Notes in %s: showing %s of %s, newest first.", out.Folder, shown, total)
 	}
 	foldersWord := "folders"
-	if len(folders) == 1 {
+	if len(out.Folders) == 1 {
 		foldersWord = "folder"
 	}
-	return fmt.Sprintf("%s %s across %d %s, newest first: %s.",
-		render.FormatInteger(total), notesWord, len(folders), foldersWord, strings.Join(parts, ", "))
+	parts := make([]string, 0, len(out.Folders))
+	for _, folder := range out.Folders {
+		parts = append(parts, fmt.Sprintf("%s %s", folderName(folder.Folder), render.FormatInteger(folder.Notes)))
+	}
+	return fmt.Sprintf("Notes: showing %s of %s across %d %s, newest first: %s.",
+		shown, total, len(out.Folders), foldersWord, strings.Join(parts, ", "))
 }
 
 func folderName(folder string) string {
@@ -185,4 +209,16 @@ func folderName(folder string) string {
 		return "(no folder)"
 	}
 	return folder
+}
+
+func listContinuation(out listOutput) string {
+	limit := len(out.Notes) * 2
+	if int64(limit) > out.Total {
+		limit = int(out.Total)
+	}
+	command := "More: trawl notes list"
+	if strings.TrimSpace(out.Folder) != "" {
+		command += " " + strconv.Quote(out.Folder)
+	}
+	return fmt.Sprintf("%s --limit %d", command, limit)
 }
