@@ -16,6 +16,7 @@ select
     )
     then 1
     else 0
-  end
+  end,
+  coalesce(m.is_read, 0)
 from message m
 order by m.rowid

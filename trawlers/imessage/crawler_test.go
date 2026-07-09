@@ -8,6 +8,8 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -112,7 +114,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 }
 
-func TestChatsListsConversationsWithoutReadState(t *testing.T) {
+func TestChatsListsConversationsWithReadState(t *testing.T) {
 	ctx := context.Background()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -158,11 +160,18 @@ func TestChatsListsConversationsWithoutReadState(t *testing.T) {
 	if len(chats) != 4 {
 		t.Fatalf("chats = %d, want 4: %#v", len(chats), chats)
 	}
+	// Every chat reports a real unread count once the archive has ingested
+	// read state. The counts prove the semantics: a read received message and
+	// an owner-sent message never count, and one unread message shared by two
+	// chats counts in both. Expected: chat-one 1, chat-two 0, chat-three 1,
+	// chat-four 2, so the sorted multiset is {0, 1, 1, 2}.
+	var unreadValues []int64
 	var group *trawlkit.Chat
 	for i := range chats {
-		if chats[i].Unread != nil {
-			t.Fatalf("iMessage stores no read state; unread must stay nil: %#v", chats[i])
+		if chats[i].Unread == nil {
+			t.Fatalf("read state was synced; unread must be set, not nil: %#v", chats[i])
 		}
+		unreadValues = append(unreadValues, *chats[i].Unread)
 		if chats[i].Participants == nil {
 			t.Fatalf("iMessage counts participants; the count must be set: %#v", chats[i])
 		}
@@ -170,14 +179,93 @@ func TestChatsListsConversationsWithoutReadState(t *testing.T) {
 			group = &chats[i]
 		}
 	}
+	sort.Slice(unreadValues, func(i, j int) bool { return unreadValues[i] < unreadValues[j] })
+	if got, want := unreadValues, []int64{0, 1, 1, 2}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("unread counts = %v, want %v", got, want)
+	}
 	// The fixture's room-named chat has three handles, so it is a group; the
 	// rest are one-to-one dms.
 	if group == nil || *group.Participants < 3 {
 		t.Fatalf("expected one group chat with 3+ participants: %#v", group)
 	}
 
+	// --unread returns only the chats that have unread received messages.
+	unreadChats, err := source.Chats(ctx, req, trawlkit.ChatQuery{Unread: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(unreadChats) != 3 {
+		t.Fatalf("--unread chats = %d, want 3: %#v", len(unreadChats), unreadChats)
+	}
+	for i := range unreadChats {
+		if unreadChats[i].Unread == nil || *unreadChats[i].Unread == 0 {
+			t.Fatalf("--unread must return only chats with a positive unread count: %#v", unreadChats[i])
+		}
+	}
+}
+
+// A pre-migration archive lacks the messages.is_read column. It must still
+// list chats, with Unread nil rather than a fake zero, and refuse --unread
+// with ErrChatsNoReadState so a stale archive degrades honestly until re-sync.
+func TestChatsDegradesHonestlyWithoutReadStateColumn(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sourcePath := filepath.Join(home, "Library", "Messages", "chat.db")
+	if err := os.MkdirAll(filepath.Dir(sourcePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	createMessagesFixture(t, sourcePath)
+
+	stateRoot := filepath.Join(home, ".opentrawl")
+	paths := trawlkit.Paths{
+		Archive: filepath.Join(stateRoot, appID, appID+".db"),
+		Config:  filepath.Join(stateRoot, appID, "config.toml"),
+		Logs:    filepath.Join(stateRoot, appID, "logs"),
+	}
+	source := New()
+
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := source.Sync(ctx, &trawlkit.Request{
+		Store:    writeStore,
+		Paths:    paths,
+		Format:   ckoutput.Text,
+		Out:      &bytes.Buffer{},
+		Progress: func(trawlkit.Progress) {},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Simulate an archive synced before read-state ingestion by removing the
+	// column the read path probes for.
+	if _, err := writeStore.DB().ExecContext(ctx, `alter table messages drop column is_read`); err != nil {
+		t.Fatalf("drop is_read column: %v", err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	readStore := openReadStore(t, ctx, paths.Archive)
+	defer func() { _ = readStore.Close() }()
+	req := readRequest(readStore, paths)
+
+	chats, err := source.Chats(ctx, req, trawlkit.ChatQuery{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chats) != 4 {
+		t.Fatalf("chats = %d, want 4: %#v", len(chats), chats)
+	}
+	for i := range chats {
+		if chats[i].Unread != nil {
+			t.Fatalf("a pre-migration archive stores no read state; unread must stay nil: %#v", chats[i])
+		}
+	}
+
 	if _, err := source.Chats(ctx, req, trawlkit.ChatQuery{Unread: true}); !errors.Is(err, trawlkit.ErrChatsNoReadState) {
-		t.Fatalf("--unread on a read-state-less surface must be ErrChatsNoReadState, got %v", err)
+		t.Fatalf("--unread on a read-state-less archive must be ErrChatsNoReadState, got %v", err)
 	}
 }
 
@@ -272,7 +360,7 @@ func createMessagesFixture(t *testing.T, path string) {
 		`create table handle (ROWID integer primary key, id text not null, service text not null, uncanonicalized_id text)`,
 		`create table chat (ROWID integer primary key, guid text not null, display_name text, chat_identifier text, service_name text, room_name text, is_archived integer)`,
 		`create table chat_handle_join (chat_id integer, handle_id integer)`,
-		`create table message (ROWID integer primary key, guid text not null, handle_id integer, date integer, service text, is_from_me integer, text text, attributedBody blob)`,
+		`create table message (ROWID integer primary key, guid text not null, handle_id integer, date integer, service text, is_from_me integer, text text, attributedBody blob, is_read integer default 0, date_read integer default 0)`,
 		`create table chat_message_join (chat_id integer, message_id integer)`,
 		`create table message_attachment_join (message_id integer, attachment_id integer)`,
 	}
@@ -296,11 +384,18 @@ func createMessagesFixture(t *testing.T, path string) {
 		`insert into chat_handle_join(chat_id, handle_id) values (4, 4)`,
 		`insert into chat_handle_join(chat_id, handle_id) values (4, 5)`,
 		`insert into chat_handle_join(chat_id, handle_id) values (4, 6)`,
-		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (1, 'message-one', 1, 100, 'iMessage', 0, 'older hello', null)`,
-		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (2, 'message-two', 2, 200, 'SMS', 0, 'earlier launch note', null)`,
-		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (3, 'message-three', 2, 250, 'SMS', 1, '` + longLaunchNote + `', null)`,
-		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (4, 'message-four', 4, 300, 'SMS', 0, 'group fallback row', null)`,
-		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody) values (5, 'message-five', 5, 350, 'SMS', 0, 'opaque sender row', null)`,
+		// is_read is set exactly as Apple sets it: 1 on a read received message,
+		// 0 on an unread one, and 1 on an owner-sent message (a delivery flag,
+		// which unread must ignore). chat-one has one unread received message,
+		// chat-two's received message is read, message-four is unread and lands
+		// in both chat-three and chat-four, and chat-four also holds an unread
+		// message-five. So unread counts are chat-one 1, chat-two 0, chat-three
+		// 1, chat-four 2.
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody, is_read) values (1, 'message-one', 1, 100, 'iMessage', 0, 'older hello', null, 0)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody, is_read) values (2, 'message-two', 2, 200, 'SMS', 0, 'earlier launch note', null, 1)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody, is_read) values (3, 'message-three', 2, 250, 'SMS', 1, '` + longLaunchNote + `', null, 1)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody, is_read) values (4, 'message-four', 4, 300, 'SMS', 0, 'group fallback row', null, 0)`,
+		`insert into message(rowid, guid, handle_id, date, service, is_from_me, text, attributedBody, is_read) values (5, 'message-five', 5, 350, 'SMS', 0, 'opaque sender row', null, 0)`,
 		`insert into chat_message_join(chat_id, message_id) values (1, 1)`,
 		`insert into chat_message_join(chat_id, message_id) values (2, 2)`,
 		`insert into chat_message_join(chat_id, message_id) values (2, 3)`,

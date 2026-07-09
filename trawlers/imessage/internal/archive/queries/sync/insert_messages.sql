@@ -7,5 +7,6 @@ insert into messages(
   account,
   is_from_me,
   text,
-  has_attachments
-) values(?, ?, ?, ?, ?, ?, ?, ?, ?)
+  has_attachments,
+  is_read
+) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

@@ -218,7 +218,7 @@ func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
 			Remedy:  "run trawl imessage sync to rebuild the archive",
 		}
 	}
-	if _, err := st.Chats(ctx, 1); errors.Is(err, archive.ErrSchemaOutdated) {
+	if _, err := st.Chats(ctx, archive.ChatListOptions{Limit: 1}); errors.Is(err, archive.ErrSchemaOutdated) {
 		return trawlkit.Check{
 			ID:      "archive",
 			State:   "fail",

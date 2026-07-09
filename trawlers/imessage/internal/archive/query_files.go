@@ -68,8 +68,21 @@ var insertMessagesSQL string
 //go:embed queries/sync/insert_messages_fts.sql
 var insertMessagesFTSSQL string
 
-func chatSummaryQuery(where string) string {
-	return strings.Replace(chatSummarySQL, "{{WHERE}}", where, 1)
+// unreadReceivedExpr counts a chat's unread received messages. It uses
+// count(distinct ...) because the participant join multiplies each message
+// row by the participant count; a plain sum would over-count. Unread means a
+// received message (is_from_me = 0) the owner has not read (is_read = 0);
+// messages the owner sent carry no "unread by me" meaning and are excluded.
+const unreadReceivedExpr = `count(distinct case when m.is_from_me = 0 and coalesce(m.is_read, 0) = 0 then cm.message_rowid end)`
+
+// chatSummaryQuery builds the chat summary read. unreadSelect is the SQL that
+// fills the unread column: the count expression when the archive stores read
+// state, or "null" when it does not, so a pre-migration archive reports a nil
+// unread rather than a fake zero. having filters to unread chats when set.
+func chatSummaryQuery(where, unreadSelect, having string) string {
+	query := strings.Replace(chatSummarySQL, "{{UNREAD_SELECT}}", unreadSelect, 1)
+	query = strings.Replace(query, "{{WHERE}}", where, 1)
+	return strings.Replace(query, "{{HAVING}}", having, 1)
 }
 
 func messagesQuery(order, tie, limitClause string) string {

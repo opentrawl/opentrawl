@@ -307,7 +307,7 @@ func (s *Store) ReplaceAll(ctx context.Context, data messages.ArchiveData, conta
 		}
 		for _, m := range data.Messages {
 			_, err := tx.ExecContext(ctx, insertMessagesSQL,
-				m.SourceRowID, m.GUID, m.HandleRowID, m.Date, m.Service, m.Account, boolInt(m.IsFromMe), m.Text, boolInt(m.HasAttachments))
+				m.SourceRowID, m.GUID, m.HandleRowID, m.Date, m.Service, m.Account, boolInt(m.IsFromMe), m.Text, boolInt(m.HasAttachments), boolInt(m.IsRead))
 			if err != nil {
 				return err
 			}
@@ -421,6 +421,15 @@ func ensureArchiveSchema(ctx context.Context, db *sql.DB) error {
 	if !hasAccount {
 		if _, err := db.ExecContext(ctx, `alter table messages add column account text`); err != nil {
 			return fmt.Errorf("add messages.account: %w", err)
+		}
+	}
+	hasIsRead, err := tableHasColumn(ctx, db, "messages", "is_read")
+	if err != nil {
+		return err
+	}
+	if !hasIsRead {
+		if _, err := db.ExecContext(ctx, `alter table messages add column is_read integer not null default 0`); err != nil {
+			return fmt.Errorf("add messages.is_read: %w", err)
 		}
 	}
 	if _, err := db.ExecContext(ctx, `create table if not exists owner_handles (

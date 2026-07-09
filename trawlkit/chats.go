@@ -37,6 +37,7 @@ type Chat struct {
 }
 
 // ErrChatsNoReadState is returned by a ChatLister when --unread is requested
-// against a surface whose archive stores no read state. The runner turns it
-// into a clean usage error that names the surface.
-var ErrChatsNoReadState = errors.New("chats: surface stores no read state")
+// against an archive that holds no read state, for example one synced before
+// the surface ingested it. The runner turns it into a clean usage error that
+// names the surface.
+var ErrChatsNoReadState = errors.New("chats: archive holds no read state")

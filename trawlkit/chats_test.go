@@ -264,7 +264,7 @@ func TestRunChatsUnreadUnsupportedIsUsageError(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("unsupported unread code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stdout, "stores no read state") || !strings.Contains(stdout, "--unread is not available") {
+	if !strings.Contains(stdout, "no read state") || !strings.Contains(stdout, "--unread is not available") {
 		t.Fatalf("usage error text = %s", stdout)
 	}
 }

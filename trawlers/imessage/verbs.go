@@ -85,12 +85,11 @@ func (c *Crawler) bindMessagesFlags(fs *flag.FlagSet) {
 
 // Chats implements trawlkit.ChatLister. The kit owns the chats verb, its
 // flags, the JSON shape and the table; this only maps one store query into the
-// shared Chat. The iMessage archive stores no read state, so an --unread
-// request is refused rather than answered with a fake zero.
+// shared Chat. Unread is the count of received messages the owner has not
+// read; it is nil, and --unread is refused, only when the archive predates
+// read-state ingestion, so a stale archive degrades honestly rather than
+// reporting fake zeros. Re-syncing fills it.
 func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
-	if q.Unread {
-		return nil, trawlkit.ErrChatsNoReadState
-	}
 	limit := q.Limit
 	if q.All {
 		limit = 0
@@ -99,7 +98,10 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	summaries, err := st.Chats(ctx, limit)
+	summaries, err := st.Chats(ctx, archive.ChatListOptions{Limit: limit, UnreadOnly: q.Unread})
+	if errors.Is(err, archive.ErrNoReadState) {
+		return nil, trawlkit.ErrChatsNoReadState
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +114,7 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 			Group:        summary.Kind == "group",
 			Participants: &people,
 			LastActivity: archive.AppleDateTime(summary.LatestMessageDate),
+			Unread:       summary.Unread,
 		})
 	}
 	return chats, nil

@@ -297,7 +297,7 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if err != nil {
 			if errors.Is(err, ErrChatsNoReadState) {
 				surface := firstText(source.Info().DisplayName, source.Info().Surface, source.Info().ID)
-				return output.UsageError{Err: fmt.Errorf("%s stores no read state, so --unread is not available here", surface)}
+				return output.UsageError{Err: fmt.Errorf("this %s archive has no read state, so --unread is not available here", surface)}
 			}
 			return err
 		}

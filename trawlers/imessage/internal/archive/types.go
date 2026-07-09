@@ -54,6 +54,10 @@ type ChatSummary struct {
 	ParticipantHandles []string `json:"participant_handles,omitempty"`
 	MessageCount       int64    `json:"message_count"`
 	LatestMessageDate  int64    `json:"latest_message_date,omitempty"`
+	// Unread is the count of received messages the owner has not read. It is
+	// nil when the archive predates read-state ingestion, so a stale archive
+	// reports "unknown" rather than a fake zero; re-syncing fills it.
+	Unread *int64 `json:"unread,omitempty"`
 }
 
 type MessageRow struct {
