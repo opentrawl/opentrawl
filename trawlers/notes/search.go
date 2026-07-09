@@ -2,6 +2,7 @@ package notes
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -82,6 +83,21 @@ func humanTime(value string) string {
 	return render.ShortLocalTime(t)
 }
 
+// archiveErr turns a failed archive.UseExisting into the one-line, truthful
+// message a read verb shows. An older-schema archive names what sync will do
+// about it (park the old file and rebuild); a newer-schema archive says this
+// build cannot touch it; anything else falls back to the generic message.
 func archiveErr(err error) error {
-	return commandErr("archive_unreadable", "Notes archive could not be read", "run trawl notes sync", err)
+	switch {
+	case errors.Is(err, archive.ErrSchemaOutdated):
+		return commandErr("archive_schema_outdated",
+			"Archive is from an older build; trawl notes sync will park it and rebuild.",
+			"run trawl notes sync", err)
+	case errors.Is(err, archive.ErrSchemaNewer):
+		return commandErr("archive_schema_newer",
+			"Archive was written by a newer build of trawl notes than this one.",
+			"update trawl notes, then run trawl notes sync", err)
+	default:
+		return commandErr("archive_unreadable", "Notes archive could not be read", "run trawl notes sync", err)
+	}
 }

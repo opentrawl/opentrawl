@@ -2,6 +2,7 @@ package notes
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -24,14 +25,23 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler  = (*Crawler)(nil)
-	_ trawlkit.Syncer   = (*Crawler)(nil)
-	_ trawlkit.Searcher = (*Crawler)(nil)
-	_ trawlkit.Opener   = (*Crawler)(nil)
+	_ trawlkit.Crawler         = (*Crawler)(nil)
+	_ trawlkit.Syncer          = (*Crawler)(nil)
+	_ trawlkit.Searcher        = (*Crawler)(nil)
+	_ trawlkit.Opener          = (*Crawler)(nil)
+	_ trawlkit.ArchivePreparer = (*Crawler)(nil)
 )
 
 func New() *Crawler {
 	return &Crawler{}
+}
+
+// PrepareArchive implements trawlkit.ArchivePreparer: the harness calls it
+// before opening the long-lived write connection for sync and sync-store, so
+// an older, versioned archive is parked aside while nobody yet holds a
+// connection to it. See archive.PrepareArchive.
+func (c *Crawler) PrepareArchive(ctx context.Context, path string) error {
+	return archive.PrepareArchive(ctx, path)
 }
 
 func (c *Crawler) Info() trawlkit.Info {
@@ -198,6 +208,18 @@ func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
+		if errors.Is(err, archive.ErrSchemaNewer) {
+			// sync refuses a newer-than-binary archive outright (never
+			// parks, never demotes it), so telling the operator to sync
+			// here would just point them at another failure. The truthful
+			// remedy is to update the binary, not to run sync again.
+			return trawlkit.Check{
+				ID:      "archive",
+				State:   "fail",
+				Message: "archive was written by a newer build of trawl notes than this binary supports",
+				Remedy:  "update trawl to a build that supports this archive",
+			}
+		}
 		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: "run trawl notes sync"}
 	}
 	if _, err := st.Status(ctx); err != nil {

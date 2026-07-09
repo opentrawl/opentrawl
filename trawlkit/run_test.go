@@ -28,15 +28,16 @@ import (
 )
 
 type testCrawler struct {
-	id       string
-	surface  string
-	cfg      *testConfig
-	verbs    []Verb
-	statusFn func(context.Context, *Request) (*control.Status, error)
-	doctorFn func(context.Context, *Request) (*Doctor, error)
-	searchFn func(context.Context, *Request, Query) (SearchResult, error)
-	whoFn    func(context.Context, *Request, string) ([]whomatch.Candidate, error)
-	syncFn   func(context.Context, *Request) (*SyncReport, error)
+	id        string
+	surface   string
+	cfg       *testConfig
+	verbs     []Verb
+	statusFn  func(context.Context, *Request) (*control.Status, error)
+	doctorFn  func(context.Context, *Request) (*Doctor, error)
+	searchFn  func(context.Context, *Request, Query) (SearchResult, error)
+	whoFn     func(context.Context, *Request, string) ([]whomatch.Candidate, error)
+	syncFn    func(context.Context, *Request) (*SyncReport, error)
+	prepareFn func(context.Context, string) error
 }
 
 type testStatusCrawler struct {
@@ -137,6 +138,16 @@ func (c *testCrawler) Sync(ctx context.Context, req *Request) (*SyncReport, erro
 		return c.syncFn(ctx, req)
 	}
 	return &SyncReport{Added: 1}, nil
+}
+
+// PrepareArchive makes testCrawler satisfy ArchivePreparer. Every existing
+// test using testCrawler for a storeWrite verb now also exercises this hook;
+// with prepareFn unset it is a true no-op, so those tests are unaffected.
+func (c *testCrawler) PrepareArchive(ctx context.Context, path string) error {
+	if c.prepareFn != nil {
+		return c.prepareFn(ctx, path)
+	}
+	return nil
 }
 
 func (c *testShortRefCrawler) ShortRefRecords(ctx context.Context, req *Request) ([]ShortRefRecord, error) {
@@ -431,6 +442,91 @@ func TestExecuteVerbLeavesExistingShortRefsWhenProviderReturnsNone(t *testing.T)
 	}
 	if len(resolved) != 1 || resolved[0] != ref {
 		t.Fatalf("ResolveShortRef(%q) = %#v, want %q", alias, resolved, ref)
+	}
+}
+
+// TestSyncPrepareArchiveRunsBeforeWriteOpen guards the placement decision
+// behind ArchivePreparer: the hook must run before openStore creates
+// req.Store, not after, so a crawler that wants to park an old archive file
+// never has to fight over a connection the harness already opened (that was
+// the F1 defect -- see trawlers/notes/harness_park_review_test.go).
+//
+// sync is a mutating verb, so the harness always runs it in a re-exec'd
+// child process (see runChild), never in this test's own process. A
+// prepareFn closure held by the test's local source value cannot observe
+// that child's call, so this test drives TestRunnerChildHelper (via
+// childTestOptions) like every other sync test in this file and reads back
+// proof of the call through a marker file instead of a captured variable.
+func TestSyncPrepareArchiveRunsBeforeWriteOpen(t *testing.T) {
+	stateRoot := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "prepare.marker")
+	opts := childTestOptions(t, "prepare_archive_ok")
+	opts.childEnv = append(opts.childEnv, "TRAWLKIT_PREPARE_MARKER="+marker)
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	proof, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("PrepareArchive marker not written: %v", err)
+	}
+	got := string(proof)
+	wantPath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
+	if !strings.Contains(got, "path="+wantPath) {
+		t.Fatalf("PrepareArchive proof = %q, want path=%s", got, wantPath)
+	}
+	if !strings.Contains(got, "existed=false") {
+		t.Fatalf("PrepareArchive proof = %q, want existed=false (archive must not exist yet when PrepareArchive runs)", got)
+	}
+	if _, err := os.Stat(wantPath); err != nil {
+		t.Fatalf("archive file missing after sync: %v", err)
+	}
+}
+
+// TestSyncPrepareArchiveErrorAbortsBeforeSync checks that a PrepareArchive
+// failure (e.g. a newer-than-supported archive) stops the verb before
+// req.Store opens and before the crawler's own Sync ever runs -- the harness
+// must not attempt a write connection, let alone a sync, once the crawler
+// has refused the file.
+//
+// As above, sync always runs in a re-exec'd child, so this drives
+// TestRunnerChildHelper's "prepare_archive_error" mode rather than a local
+// closure. That mode has no matching syncFn case, so if Sync ran anyway the
+// child would fail with "unknown child mode" instead of the expected
+// PrepareArchive error, which the assertions below would catch.
+func TestSyncPrepareArchiveErrorAbortsBeforeSync(t *testing.T) {
+	stateRoot := t.TempDir()
+	opts := childTestOptions(t, "prepare_archive_error")
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"sync", "--json"}, &testCrawler{}, opts)
+	if code == 0 {
+		t.Fatalf("code = 0, want a failure; stdout=%s stderr=%s", stdout, stderr)
+	}
+	if strings.Contains(stdout, "unknown child mode") || strings.Contains(stderr, "unknown child mode") {
+		t.Fatalf("Sync ran after PrepareArchive failed, want the harness to abort first: stdout=%s stderr=%s", stdout, stderr)
+	}
+	if !strings.Contains(stdout, "newer than this build") && !strings.Contains(stderr, "newer than this build") {
+		t.Fatalf("PrepareArchive error was not surfaced: stdout=%s stderr=%s", stdout, stderr)
+	}
+}
+
+// TestStatusDoesNotRunPrepareArchive checks that ArchivePreparer only fires
+// for storeWrite verbs: status opens the archive (if any) storeOptional and
+// must never ask a crawler to park it.
+func TestStatusDoesNotRunPrepareArchive(t *testing.T) {
+	stateRoot := t.TempDir()
+	prepareCalls := 0
+	source := &testCrawler{
+		prepareFn: func(context.Context, string) error {
+			prepareCalls++
+			return nil
+		},
+	}
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"status", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if prepareCalls != 0 {
+		t.Fatalf("PrepareArchive calls = %d, want 0 for a read-only verb", prepareCalls)
 	}
 }
 
@@ -2401,7 +2497,7 @@ func TestRunnerChildHelper(t *testing.T) {
 		verbs: verbs,
 		syncFn: func(ctx context.Context, req *Request) (*SyncReport, error) {
 			switch os.Getenv("TRAWLKIT_CHILD_MODE") {
-			case "zero_sync":
+			case "zero_sync", "prepare_archive_ok":
 				return &SyncReport{}, nil
 			case "progress":
 				req.Progress(Progress{Phase: "sync", Done: 1, Total: 1, Message: "synced one item"})
@@ -2497,6 +2593,24 @@ func TestRunnerChildHelper(t *testing.T) {
 				select {}
 			default:
 				return nil, errors.New("unknown child mode")
+			}
+		},
+		prepareFn: func(ctx context.Context, path string) error {
+			switch os.Getenv("TRAWLKIT_CHILD_MODE") {
+			case "prepare_archive_ok":
+				marker := os.Getenv("TRAWLKIT_PREPARE_MARKER")
+				if marker == "" {
+					return errors.New("missing prepare marker")
+				}
+				existed := false
+				if _, err := os.Stat(path); err == nil {
+					existed = true
+				}
+				return os.WriteFile(marker, []byte(fmt.Sprintf("path=%s existed=%v\n", path, existed)), 0o600)
+			case "prepare_archive_error":
+				return errors.New("archive schema is newer than this build supports")
+			default:
+				return nil
 			}
 		},
 	}

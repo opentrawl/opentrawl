@@ -75,6 +75,21 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
+	if verb.storeMode == storeWrite {
+		// Peek-and-park, if the crawler wants it, happens here -- before
+		// openStore ever creates the write connection req.Store will hand to
+		// the verb. Parking after req.Store is open would mean either
+		// closing a connection the harness still owns past this call (see
+		// assignSourceShortRefs below, which runs against req.Store again
+		// right after the verb returns) or applying schema DDL to a file
+		// that's about to be parked, mutating what's meant to survive
+		// untouched. See ArchivePreparer.
+		if preparer, ok := source.(ArchivePreparer); ok {
+			if err := preparer.PrepareArchive(ctx, paths.Paths.Archive); err != nil {
+				return executionResult{err: err}
+			}
+		}
+	}
 	st, err := openStore(ctx, paths.Paths, verb.storeMode)
 	if err != nil {
 		return executionResult{err: err}
