@@ -70,8 +70,8 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 }
 
 func syncImportError(err error) error {
-	if telegramdesktop.IsPostboxSessionRejected(err) {
-		return commandErr(1, "telegram_session", err, telegramdesktop.PostboxSessionRejectedRemedy)
+	if telegramdesktop.IsTDataSessionRejected(err) {
+		return commandErr(1, "telegram_session", err, telegramdesktop.TDataSessionRejectedRemedy)
 	}
 	return err
 }

@@ -67,9 +67,11 @@ when Telegram returns a downloadable file.
 search; it is not a cross-source schema and can contain private Telegram
 metadata.
 
-When no `--path` is provided on macOS, `telecrawl` checks Telegram Desktop
-`tdata` first, then the native Telegram for macOS group container. No backend
-flag is needed. To import a copied archive directly:
+When no `--path` is provided on macOS, `telecrawl` uses the native Telegram for
+macOS Postbox store when it is available. It uses Telegram Desktop `tdata`
+otherwise. This keeps the default sync local and avoids relying on a saved
+Telegram Desktop session. No backend flag is needed. To import a copied archive
+directly:
 
 ```bash
 trawl telegram sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"

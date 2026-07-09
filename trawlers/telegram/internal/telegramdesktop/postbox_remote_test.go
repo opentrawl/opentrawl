@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,6 +23,15 @@ type postboxTreeEntry struct {
 	mode os.FileMode
 	size int64
 	sum  [32]byte
+}
+
+type mediaProgress struct {
+	messages []string
+}
+
+func (p *mediaProgress) Report(_ int64, message string) error {
+	p.messages = append(p.messages, message)
+	return nil
 }
 
 func TestPostboxRemoteMediaRejectedSessionRefreshesThenSucceeds(t *testing.T) {
@@ -51,17 +59,14 @@ func TestPostboxRemoteMediaRejectedSessionRefreshesThenSucceeds(t *testing.T) {
 		}
 	}
 
-	stats, err := downloadPostboxRemoteMedia(context.Background(), postboxSessionTestMessages(sources[0].AccountID), sources, t.TempDir(), downloader, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	stats := downloadPostboxRemoteMedia(context.Background(), postboxSessionTestMessages(sources[0].AccountID), sources, t.TempDir(), downloader, nil)
 	if calls != 2 || stats.Downloaded != 1 || stats.Missing != 0 {
 		t.Fatalf("remote media = calls:%d stats:%+v", calls, stats)
 	}
 	assertPostboxTreeUnchanged(t, before, root)
 }
 
-func TestPostboxRemoteMediaDoubleRejectionFailsAfterRefresh(t *testing.T) {
+func TestPostboxRemoteMediaDoubleRejectionLeavesLocalImportAvailable(t *testing.T) {
 	root, lane, account := makePostboxFixture(t)
 	authKey := postboxSessionTestAuthKey(31)
 	writePostboxSharedData(t, lane, account, authKey)
@@ -74,20 +79,27 @@ func TestPostboxRemoteMediaDoubleRejectionFailsAfterRefresh(t *testing.T) {
 		return postboxRemoteMediaStats{}, false, tgerr.New(401, "AUTH_KEY_UNREGISTERED")
 	}
 
-	_, err := downloadPostboxRemoteMedia(context.Background(), postboxSessionTestMessages(sources[0].AccountID), sources, t.TempDir(), downloader, nil)
-	if !IsPostboxSessionRejected(err) {
-		t.Fatalf("error = %v, want Telegram session rejection", err)
-	}
-	if err.Error() != "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED) after refreshing it" {
-		t.Fatalf("error = %q", err.Error())
-	}
+	progress := &mediaProgress{}
+	messages := postboxSessionTestMessages(sources[0].AccountID)
+	stats := downloadPostboxRemoteMedia(context.Background(), messages, sources, t.TempDir(), downloader, progress)
 	if calls != 2 {
 		t.Fatalf("downloader calls = %d, want 2", calls)
 	}
+	if stats.Candidates != 1 || stats.Unavailable != 1 || stats.Downloaded != 0 || stats.Missing != 1 {
+		t.Fatalf("remote media stats = %+v, want one unavailable candidate", stats)
+	}
+	if len(messages) != 1 || messages[0].Text != "local fixture message" || messages[0].ChatID != "100" {
+		t.Fatalf("local message changed after media rejection: %#v", messages)
+	}
+	if got := strings.Join(progress.messages, "\n"); !strings.Contains(got, "AUTH_KEY_UNREGISTERED") || !strings.Contains(got, "local messages will still sync") {
+		t.Fatalf("progress = %q, want rejected-session cause and local-sync outcome", got)
+	}
+	t.Logf("remote_media candidates=%d unavailable=%d downloaded=%d missing=%d", stats.Candidates, stats.Unavailable, stats.Downloaded, stats.Missing)
+	t.Logf("progress=%q", strings.Join(progress.messages, " | "))
 	assertPostboxTreeUnchanged(t, before, root)
 }
 
-func TestPostboxRemoteMediaRefreshReadFailureCarriesCause(t *testing.T) {
+func TestPostboxRemoteMediaRefreshReadFailureLeavesLocalImportAvailable(t *testing.T) {
 	root, lane, account := makePostboxFixture(t)
 	authKey := postboxSessionTestAuthKey(47)
 	sharedData := writePostboxSharedData(t, lane, account, authKey)
@@ -107,23 +119,19 @@ func TestPostboxRemoteMediaRefreshReadFailureCarriesCause(t *testing.T) {
 		return postboxRemoteMediaStats{}, false, tgerr.New(401, "AUTH_KEY_UNREGISTERED")
 	}
 
-	_, err := downloadPostboxRemoteMedia(context.Background(), postboxSessionTestMessages(sources[0].AccountID), sources, t.TempDir(), downloader, nil)
+	progress := &mediaProgress{}
+	stats := downloadPostboxRemoteMedia(context.Background(), postboxSessionTestMessages(sources[0].AccountID), sources, t.TempDir(), downloader, progress)
 	if writeErr := os.WriteFile(sharedPath, sharedData, 0o600); writeErr != nil {
 		t.Fatal(writeErr)
 	}
-	var refreshErr PostboxSessionRefreshError
-	if !errors.As(err, &refreshErr) {
-		t.Fatalf("error = %T %v, want refresh failure", err, err)
-	}
-	if !strings.Contains(err.Error(), "refreshing it from Telegram for macOS failed") {
-		t.Fatalf("error = %q, want refresh-failed message", err.Error())
-	}
-	var pathErr *os.PathError
-	if !errors.As(err, &pathErr) {
-		t.Fatalf("error = %T %v, want wrapped file read failure", err, err)
-	}
 	if calls != 1 {
 		t.Fatalf("downloader calls = %d, want 1", calls)
+	}
+	if stats.Candidates != 1 || stats.Unavailable != 1 || stats.Downloaded != 0 {
+		t.Fatalf("remote media stats = %+v, want one unavailable candidate", stats)
+	}
+	if got := strings.Join(progress.messages, "\n"); !strings.Contains(got, "cloud media is unavailable") || !strings.Contains(got, "local messages will still sync") {
+		t.Fatalf("progress = %q, want unavailable-media and local-sync outcome", got)
 	}
 	assertPostboxTreeUnchanged(t, before, root)
 }
@@ -182,6 +190,7 @@ func postboxSessionTestMessages(accountID string) []postboxpkg.MessageRecord {
 		ChatID:             "100",
 		MessageID:          "0:1",
 		Timestamp:          "2026-01-02T03:04:05Z",
+		Text:               "local fixture message",
 		MediaType:          "photo",
 		ReferencedMediaIDs: []postboxpkg.MediaRef{{Namespace: 0, ID: 123456789}},
 	}}

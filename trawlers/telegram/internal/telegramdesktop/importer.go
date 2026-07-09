@@ -157,10 +157,7 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 	}
 	remoteMedia := postboxRemoteMediaStats{Downloaded: 0, Missing: 0}
 	if opts.FetchMedia {
-		remoteMedia, err = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, downloadPostboxRemoteMediaForSession, opts.Progress)
-		if err != nil {
-			return ImportResult{}, err
-		}
+		remoteMedia = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, downloadPostboxRemoteMediaForSession, opts.Progress)
 	}
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)
@@ -616,6 +613,9 @@ func resolveImportSource(path string) importSource {
 func resolveImportSourcePaths(path, tdesktop, postbox string) importSource {
 	if path != "" {
 		return importSource{path: path, postbox: LooksLikePostbox(path)}
+	}
+	if LooksLikePostbox(postbox) {
+		return importSource{path: postbox, postbox: true}
 	}
 	if info, err := os.Stat(tdesktop); err == nil && info.IsDir() {
 		return importSource{path: tdesktop}

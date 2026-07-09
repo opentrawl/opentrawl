@@ -20,7 +20,7 @@ import (
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
-func TestResolveImportSourcePrefersTDataDefault(t *testing.T) {
+func TestResolveImportSourcePrefersLocalPostboxWhenBothDefaultsExist(t *testing.T) {
 	root, _, _ := makePostboxFixture(t)
 	tdata := filepath.Join(t.TempDir(), "tdata")
 	if err := os.MkdirAll(tdata, 0o700); err != nil {
@@ -28,9 +28,10 @@ func TestResolveImportSourcePrefersTDataDefault(t *testing.T) {
 	}
 
 	source := resolveImportSourcePaths("", tdata, root)
-	if source.path != tdata || source.postbox {
-		t.Fatalf("source = %+v, want tdata path", source)
+	if source.path != root || !source.postbox {
+		t.Fatalf("source = %+v, want Postbox path", source)
 	}
+	t.Logf("selected_source path=%q postbox=%t tdata_present=true", source.path, source.postbox)
 }
 
 func TestResolveImportSourceFallsBackToPostboxDefault(t *testing.T) {
@@ -43,12 +44,38 @@ func TestResolveImportSourceFallsBackToPostboxDefault(t *testing.T) {
 	}
 }
 
+func TestResolveImportSourceUsesTDataWhenPostboxIsMissing(t *testing.T) {
+	tdata := filepath.Join(t.TempDir(), "tdata")
+	if err := os.MkdirAll(tdata, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	missingPostbox := filepath.Join(t.TempDir(), "missing-postbox")
+
+	source := resolveImportSourcePaths("", tdata, missingPostbox)
+	if source.path != tdata || source.postbox {
+		t.Fatalf("source = %+v, want tdata path", source)
+	}
+}
+
 func TestResolveImportSourceClassifiesExplicitPostboxPath(t *testing.T) {
 	_, _, account := makePostboxFixture(t)
 
 	source := resolveImportSourcePaths(account, "unused-tdata", "unused-postbox")
 	if source.path != account || !source.postbox {
 		t.Fatalf("source = %+v, want explicit postbox path", source)
+	}
+}
+
+func TestResolveImportSourceKeepsExplicitTDataWhenPostboxDefaultExists(t *testing.T) {
+	postbox, _, _ := makePostboxFixture(t)
+	tdata := filepath.Join(t.TempDir(), "tdata")
+	if err := os.MkdirAll(tdata, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	source := resolveImportSourcePaths(tdata, "unused-tdata", postbox)
+	if source.path != tdata || source.postbox {
+		t.Fatalf("source = %+v, want explicit tdata path", source)
 	}
 }
 

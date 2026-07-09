@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
@@ -229,6 +230,45 @@ func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
 		t.Fatalf("sync archive missing: err=%v path=%s", err, archivePath)
 	}
 	t.Logf("sync archive exists at resolved state root: path=%s", archivePath)
+}
+
+func TestRunSyncUsesPostboxWhenBothDefaultRootsExist(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	postboxPath := telegramdesktop.DefaultPostboxPath()
+	makePostboxSourceAt(t, postboxPath)
+	tdataPath := telegramdesktop.DefaultPath()
+	if err := os.MkdirAll(tdataPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tdataPath, "key_datas"), []byte("TDF$synthetic rejected session"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	code, stdout, stderr := runTelecrawl(t, "--json", "sync")
+	if code != 0 {
+		t.Fatalf("default sync code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var report syncJSONReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("sync json = %s err=%v", stdout, err)
+	}
+	if report.Added != 1 || report.Updated != 0 || report.Removed != 0 {
+		t.Fatalf("sync report = %+v, want Postbox message added", report)
+	}
+	st, err := store.Open(context.Background(), archivePathForRun(stateRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	status, err := st.Status(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.LastSource != postboxPath {
+		t.Fatalf("selected source = %q, want Postbox %q", status.LastSource, postboxPath)
+	}
+	t.Logf("default_sync_output:\n%s", stdout)
+	t.Logf("selected_source=%q tdata_present=true", status.LastSource)
 }
 
 func TestSyncRepeatedFixtureReportsOnlyChangedContent(t *testing.T) {
@@ -487,6 +527,11 @@ func assertSyncTextReport(t *testing.T, stdout string, added, updated, removed i
 func makePostboxSource(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+	return makePostboxSourceAt(t, root)
+}
+
+func makePostboxSourceAt(t *testing.T, root string) string {
+	t.Helper()
 	lane := filepath.Join(root, "stable")
 	account := filepath.Join(lane, "account-123")
 	dbDir := filepath.Join(account, "postbox", "db")

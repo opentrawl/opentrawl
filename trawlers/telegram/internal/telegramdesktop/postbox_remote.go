@@ -21,41 +21,6 @@ const (
 	telegramMacAPIHash = "3975f648bb682ee889f35483bc618d1c" // gitleaks:allow
 )
 
-const PostboxSessionRejectedRemedy = "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED). Open Telegram for macOS, let it finish syncing, then run trawl telegram sync --fetch-media again."
-
-type PostboxSessionRejectedError struct {
-	Err error
-}
-
-func (e PostboxSessionRejectedError) Error() string {
-	return "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED) after refreshing it"
-}
-
-func (e PostboxSessionRejectedError) Unwrap() error {
-	return e.Err
-}
-
-type PostboxSessionRefreshError struct {
-	Err error
-}
-
-func (e PostboxSessionRefreshError) Error() string {
-	return "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED), and refreshing it from Telegram for macOS failed"
-}
-
-func (e PostboxSessionRefreshError) Unwrap() error {
-	return e.Err
-}
-
-func IsPostboxSessionRejected(err error) bool {
-	var rejected PostboxSessionRejectedError
-	if errors.As(err, &rejected) {
-		return true
-	}
-	var refreshFailed PostboxSessionRefreshError
-	return errors.As(err, &refreshFailed)
-}
-
 type postboxRemoteMediaDownloader func(context.Context, *postboxpkg.NativeSession, []postboxpkg.MessageRecord, []int, string, ProgressReporter) (postboxRemoteMediaStats, bool, error)
 
 type postboxRemoteSession struct {
@@ -63,7 +28,7 @@ type postboxRemoteSession struct {
 	native *postboxpkg.NativeSession
 }
 
-func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) (postboxRemoteMediaStats, error) {
+func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) postboxRemoteMediaStats {
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)
 	candidates := postboxRemoteMediaCandidateIndexes(messages)
@@ -72,14 +37,14 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 		Missing:    postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages)),
 	}
 	if len(candidates) == 0 || strings.TrimSpace(mediaTempDir) == "" {
-		return stats, nil
+		return stats
 	}
 	sessions := postboxNativeSessions(sources)
 	if len(sessions) == 0 {
 		clearPostboxPlaceholderMedia(messages)
 		stats.Unavailable = len(candidates)
 		stats.Missing = postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages))
-		return stats, nil
+		return stats
 	}
 	byAccount := make(map[string][]int)
 	for _, idx := range candidates {
@@ -90,10 +55,8 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 		handled := false
 		for _, remoteSession := range ordered {
 			result, ok, err := downloadPostboxRemoteMediaForSessionWithRefresh(ctx, remoteSession, messages, indexes, mediaTempDir, downloader, progress)
-			if IsPostboxSessionRejected(err) {
-				return stats, err
-			}
 			if err != nil || !ok {
+				reportPostboxRemoteMediaUnavailable(progress, err)
 				continue
 			}
 			addPostboxRemoteMediaStats(&stats, result)
@@ -108,7 +71,18 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 	}
 	clearPostboxPlaceholderMedia(messages)
 	stats.Missing = postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages))
-	return stats, nil
+	return stats
+}
+
+func reportPostboxRemoteMediaUnavailable(progress ProgressReporter, err error) {
+	if progress == nil || err == nil {
+		return
+	}
+	message := "Telegram cloud media is unavailable; local messages will still sync"
+	if isPostboxAuthKeyUnregistered(err) {
+		message = "Telegram rejected the media session (AUTH_KEY_UNREGISTERED); local messages will still sync"
+	}
+	_ = progress.Report(0, message)
 }
 
 func postboxRemoteMediaCandidateIndexes(messages []postboxpkg.MessageRecord) []int {
@@ -167,12 +141,9 @@ func downloadPostboxRemoteMediaForSessionWithRefresh(ctx context.Context, remote
 	}
 	refreshed, refreshErr := refreshPostboxRemoteSession(remoteSession.source)
 	if refreshErr != nil {
-		return postboxRemoteMediaStats{}, false, PostboxSessionRefreshError{Err: refreshErr}
+		return postboxRemoteMediaStats{}, false, refreshErr
 	}
 	result, ok, err = downloader(ctx, refreshed.native, messages, indexes, mediaTempDir, progress)
-	if isPostboxAuthKeyUnregistered(err) {
-		return postboxRemoteMediaStats{}, false, PostboxSessionRejectedError{Err: err}
-	}
 	return result, ok, err
 }
 
@@ -182,7 +153,7 @@ func refreshPostboxRemoteSession(source postboxpkg.Source) (*postboxRemoteSessio
 		return nil, fmt.Errorf("read Telegram for macOS media session: %w", err)
 	}
 	if nativeSession == nil {
-		return nil, errors.New("Telegram for macOS media session was not found")
+		return nil, errors.New("media session from Telegram for macOS was not found")
 	}
 	return &postboxRemoteSession{source: source, native: nativeSession}, nil
 }

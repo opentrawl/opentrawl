@@ -147,15 +147,7 @@ func Probe(ctx context.Context, opts Options) Report {
 }
 
 func defaultProbePath() string {
-	tdesktop := DefaultPath()
-	if info, err := os.Stat(tdesktop); err == nil && info.IsDir() {
-		return tdesktop
-	}
-	postbox := DefaultPostboxPath()
-	if info, err := os.Stat(postbox); err == nil && info.IsDir() {
-		return postbox
-	}
-	return tdesktop
+	return resolveImportSourcePaths("", DefaultPath(), DefaultPostboxPath()).path
 }
 
 func LooksLikePostbox(path string) bool {
