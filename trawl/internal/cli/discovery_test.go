@@ -7,7 +7,10 @@ import (
 
 // discoverCrawlers projects each registered crawler manifest into a Source.
 // Here we assert the projection: a valid manifest maps to runtime id, and a
-// crawler whose manifest cannot be generated keeps that name and an error.
+// crawler whose manifest cannot be generated still surfaces the canonical
+// id and an error — never the pre-rename binary name a broken crawler might
+// self-report (TRAWL-147/194 leak: "imsgcrawl status failed" next to a
+// table row that says "iMessage").
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -23,10 +26,10 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 			wantBinary: "imessage",
 		},
 		{
-			name:       "invalid manifest keeps binary name and errors",
+			name:       "invalid manifest canonicalizes the legacy binary name and errors",
 			crawler:    fakeCrawler{name: "telecrawl", metadata: `not-json`},
-			wantID:     "telecrawl",
-			wantBinary: "telecrawl",
+			wantID:     "telegram",
+			wantBinary: "telegram",
 			wantErr:    true,
 		},
 	}
@@ -46,6 +49,36 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 			}
 			if (source.MetadataErr != nil) != tt.wantErr {
 				t.Fatalf("MetadataErr = %v, want error %v", source.MetadataErr, tt.wantErr)
+			}
+		})
+	}
+}
+
+// canonicalizeSourceID is the formatter discoverCrawlers relies on to keep
+// a broken crawler's self-reported id human-safe. Every pre-rename binary
+// name it knows about must resolve to its canonical id; anything else,
+// including an id that is already canonical, must pass through unchanged.
+func TestCanonicalizeSourceID(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{"imsgcrawl", "imessage"},
+		{"telecrawl", "telegram"},
+		{"wacrawl", "whatsapp"},
+		{"clawdex", "contacts"},
+		{"photoscrawl", "photos"},
+		{"gogcrawl", "gmail"},
+		{"calcrawl", "calendar"},
+		{"birdcrawl", "twitter"},
+		{"imessage", "imessage"},
+		{"notes", "notes"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.raw, func(t *testing.T) {
+			if got := canonicalizeSourceID(tt.raw); got != tt.want {
+				t.Fatalf("canonicalizeSourceID(%q) = %q, want %q", tt.raw, got, tt.want)
 			}
 		})
 	}

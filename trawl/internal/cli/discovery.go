@@ -31,7 +31,10 @@ type Source struct {
 
 // discoverCrawlers projects the explicit trawlkit registrations into the
 // existing trawl Source shape. A crawler whose generated metadata did not
-// parse keeps its id and carries the error so status and doctor can surface it.
+// parse keeps its canonical id and carries the error so status and doctor
+// can surface it; the id and display name still route through
+// canonicalizeSourceID so a crawler that self-reports a pre-rename binary
+// name (imsgcrawl, telecrawl, ...) never leaks it into human-facing output.
 func discoverCrawlers(ctx context.Context) []Source {
 	_ = ctx
 	crawlers := registeredCrawlers()
@@ -40,13 +43,13 @@ func discoverCrawlers(ctx context.Context) []Source {
 		info := crawler.Info()
 		manifest, err := trawlkitManifest(crawler)
 		if err != nil {
-			id := firstNonEmpty(info.ID, info.Surface)
+			id := canonicalizeSourceID(firstNonEmpty(info.ID, info.Surface))
 			sources = append(sources, Source{
 				ID:          id,
 				Binary:      id,
 				Surface:     info.Surface,
 				Aliases:     trimAliases(info.Aliases),
-				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, info.ID),
+				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, id),
 				Crawler:     crawler,
 				MetadataErr: err,
 			})
@@ -108,6 +111,30 @@ func legacyRoutingAliases(id string) []string {
 	default:
 		return nil
 	}
+}
+
+// canonicalSourceIDs lists every id legacyRoutingAliases knows a pre-rename
+// binary name for. canonicalizeSourceID walks this list, so the legacy set
+// stays declared in exactly one place.
+var canonicalSourceIDs = []string{
+	"imessage", "telegram", "whatsapp", "contacts", "photos", "gmail", "calendar", "twitter",
+}
+
+// canonicalizeSourceID translates a pre-rename binary name (imsgcrawl,
+// telecrawl, wacrawl, clawdex, photoscrawl, gogcrawl, calcrawl, birdcrawl)
+// to its canonical source id. Anything else, including an id a crawler
+// already reports correctly, passes through unchanged. discoverCrawlers
+// calls this so a crawler whose metadata failed to parse and fell back to
+// self-reporting a legacy name still surfaces the canonical id — the same
+// invariant legacyRoutingAliases already gives command routing.
+func canonicalizeSourceID(raw string) string {
+	want := strings.ToLower(strings.TrimSpace(raw))
+	for _, id := range canonicalSourceIDs {
+		if matchesAlias(legacyRoutingAliases(id), want) {
+			return id
+		}
+	}
+	return raw
 }
 
 func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {

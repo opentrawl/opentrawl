@@ -55,6 +55,10 @@ func TestStatusExitCodes(t *testing.T) {
 			wantStderr: "Telegram status failed.\n  Remedy: run trawl doctor telegram",
 		},
 		{
+			// A crawler whose metadata does not parse still surfaces the
+			// canonical id, never the pre-rename binary name it happens to
+			// self-report (TRAWL-147/194 leak: a table row saying "iMessage"
+			// next to an error line saying "imsgcrawl status failed").
 			name: "all failed",
 			crawlers: []fakeCrawler{{
 				name:     "telecrawl",
@@ -63,7 +67,7 @@ func TestStatusExitCodes(t *testing.T) {
 			args:       []string{"status"},
 			wantCode:   1,
 			wantStdout: "the crawler did not identify itself",
-			wantStderr: "telecrawl status failed.\n  Remedy: run trawl doctor telecrawl",
+			wantStderr: "telegram status failed.\n  Remedy: run trawl doctor telegram",
 		},
 	}
 
