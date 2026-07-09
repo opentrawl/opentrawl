@@ -10,6 +10,16 @@ bin_dir="$repo_root/.dev/bin"
 export CGO_ENABLED=1
 export GOFLAGS="-tags=sqlite_fts5"
 
+# Always build into the shared user cache, never an inherited one. Agent lanes
+# routinely `export GOCACHE=/private/tmp/<lane>-gocache` to isolate their own
+# builds; inheriting that here turns this warm sub-second no-op into a full
+# multi-hundred-MB rebuild on every shell entry, and dev-bin fires on every
+# devenv/direnv entry across ~two dozen worktrees. Those cold caches were the
+# disk-eater (free space oscillating GB->MB). `env -u GOCACHE go env GOCACHE`
+# reports the real default rather than echoing back any tmp override, so this
+# stays a warm no-op regardless of the ambient environment.
+export GOCACHE="$(env -u GOCACHE go env GOCACHE)"
+
 mkdir -p "$bin_dir"
 
 # Auto-pull Josh's own checkout so it stops running stale code. Agents push

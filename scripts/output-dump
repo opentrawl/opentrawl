@@ -10,7 +10,10 @@ bin="${work}/trawl"
 fixture="${work}/trawl-output-fixture"
 refs="${work}/refs.env"
 transcript="${outdir}/output-dump-${stamp}.txt"
-export CGO_ENABLED="${CGO_ENABLED:-1}" GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" GOCACHE="${GOCACHE:-/private/tmp/trawl-197-gocache}"
+# Default GOCACHE to the shared user cache, not a per-lane /private/tmp dir: the
+# build cache only affects build speed here, never the captured output, and a
+# tmp default leaves a fresh multi-hundred-MB cache behind on every run.
+export CGO_ENABLED="${CGO_ENABLED:-1}" GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" GOCACHE="${GOCACHE:-$(env -u GOCACHE go env GOCACHE)}"
 
 mkdir -p "$outdir" "$work" "$GOCACHE"
 (cd "$root/trawl" && go build -o "$bin" ./cmd/trawl && go build -o "$fixture" ./cmd/trawl-output-fixture)
