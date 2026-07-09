@@ -99,7 +99,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "telegram",
 		DisplayName: "Telegram",
-		Description: "Local-first Telegram archive crawler.",
+		Description: "Telegram Desktop archive",
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

@@ -31,6 +31,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	manifest.SchemaVersion = control.RunnerManifestVersion
 	manifest.Version = buildVersion
 	manifest.Description = strings.TrimSpace(info.Description)
+	manifest.Aliases = trimmedAliases(info.Aliases)
 	manifest.Privacy = info.Privacy
 	manifest.Paths = control.Paths{
 		DefaultConfig:   paths.Config,
@@ -221,6 +222,19 @@ func filepathBase(path string) string {
 		return path[i+1:]
 	}
 	return path
+}
+
+func trimmedAliases(aliases []string) []string {
+	out := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		if trimmed := strings.TrimSpace(alias); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func firstText(values ...string) string {

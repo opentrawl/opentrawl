@@ -40,7 +40,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          archive.AppID,
 		Surface:     archive.AppID,
 		DisplayName: archive.DisplayName,
-		Description: "Local-first Apple Notes archive crawler.",
+		Description: "Apple Notes archive",
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

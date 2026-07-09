@@ -39,7 +39,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          "whatsapp",
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
-		Description: "Local-first WhatsApp Desktop archive crawler.",
+		Description: "WhatsApp Desktop archive",
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,

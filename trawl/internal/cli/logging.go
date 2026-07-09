@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -107,6 +108,15 @@ func (r *Runtime) verbosity() int {
 func trawlHelpPrinter(options kong.HelpOptions, ctx *kong.Context) error {
 	if err := kong.DefaultHelpPrinter(options, ctx); err != nil {
 		return err
+	}
+	// Only the root help page carries the Sources block and the agents
+	// appendix; a subcommand's own --help (ctx.Selected() != nil) must not
+	// pay for discovery or repeat them. The blocks are appended here, past
+	// kong's word-wrapping, so their columns render exactly as built.
+	if ctx.Selected() == nil {
+		sources := discoverCrawlers(context.Background())
+		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", sourcesBlock(sources))
+		_, _ = fmt.Fprintf(ctx.Stdout, "\n%s\n", helpAgentsBlock)
 	}
 	_, _ = fmt.Fprintln(ctx.Stdout)
 	_, err := fmt.Fprintln(ctx.Stdout, "Diagnostics: run with -v, or read ~/.opentrawl/trawl/logs/trawl.log")

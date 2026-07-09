@@ -47,7 +47,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "gmail",
 		DisplayName: displayName,
-		Description: "Local-first Gmail archive crawler backed by the gog CLI.",
+		Description: "Gmail archive and Google Contacts export",
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

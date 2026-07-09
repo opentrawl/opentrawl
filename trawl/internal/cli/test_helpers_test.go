@@ -391,6 +391,7 @@ func (f *fakeSource) Info() trawlkit.Info {
 	return trawlkit.Info{
 		ID:          f.manifest.ID,
 		Surface:     sourceAlias(f.manifest.DisplayName),
+		Aliases:     f.manifest.Aliases,
 		DisplayName: f.manifest.DisplayName,
 		Description: f.manifest.Description,
 	}

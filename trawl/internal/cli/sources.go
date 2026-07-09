@@ -13,15 +13,19 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
+// crawlerFactories is the single source ordering authority: the front
+// door, the --help sources block and the status table all iterate this
+// slice, so its order is the order a person sees. Messaging first, then
+// mail, calendar, people, photos, X; notes trails as the newest source.
 var crawlerFactories = []func() trawlkit.Crawler{
 	func() trawlkit.Crawler { return imsgcrawl.New() },
 	func() trawlkit.Crawler { return telecrawl.New() },
 	func() trawlkit.Crawler { return wacrawl.New() },
-	func() trawlkit.Crawler { return photoscrawl.New() },
 	func() trawlkit.Crawler { return gogcrawl.New() },
 	func() trawlkit.Crawler { return calcrawl.New() },
-	func() trawlkit.Crawler { return birdcrawl.New() },
 	func() trawlkit.Crawler { return clawdex.New() },
+	func() trawlkit.Crawler { return photoscrawl.New() },
+	func() trawlkit.Crawler { return birdcrawl.New() },
 	func() trawlkit.Crawler { return notes.New() },
 }
 
