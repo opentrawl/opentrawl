@@ -8,7 +8,7 @@ import (
 
 // filterChatsWith keeps only the chats that include the --with person. The kit
 // owns this filter, not the sources: every source hands the kit the same Chat
-// fields (a group's resolved roster, a dm's partner name), so one rule matches
+// fields (a group's resolved member list, a dm's partner name), so one rule matches
 // them all and no crawler re-implements name matching. The caller fetches every
 // chat before filtering, so the survivors are the full answer to "chats with X",
 // not a filtered page.
@@ -46,7 +46,7 @@ func matchesName(query string, names []string) bool {
 }
 
 // chatWithTargets is the set of names --with matches against. It is only the
-// names a source could resolve: a group's roster and, for a dm, the partner name
+// names a source could resolve: a group's member list and, for a dm, the partner name
 // the source stores as the title. A raw handle never reaches here — WhatsApp
 // masks an unresolved @lid to a privacy label before the kit ever sees it, so
 // --with can only match a real name, never a private handle, and never prints
@@ -54,8 +54,8 @@ func matchesName(query string, names []string) bool {
 func chatWithTargets(chat Chat) []string {
 	targets := make([]string, 0, len(chat.ParticipantNames)+1)
 	targets = append(targets, chat.ParticipantNames...)
-	// A dm carries no roster on most sources; its one other person is the title
-	// (Telegram, WhatsApp) or is already in the roster above (iMessage). A group
+	// A dm carries no member list on most sources; its one other person is the title
+	// (Telegram, WhatsApp) or is already in the member list above (iMessage). A group
 	// title is a subject, not a person, so it is not a --with target.
 	if !chat.Group {
 		if title := strings.TrimSpace(chat.Title); title != "" {

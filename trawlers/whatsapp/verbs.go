@@ -76,14 +76,14 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 			// A group's members answer "who is in it". The store resolves them
 			// with the same privacy masking as everywhere else, so no raw @lid
 			// reaches a human. An unnamed (or privacy-named) group is named
-			// "group of N" by the kit, with this roster in the participants column.
+			// "group of N" by the kit, with this member list in the participants column.
 			names, err := st.GroupParticipants(ctx, row.JID)
 			if err != nil {
 				return nil, err
 			}
 			if len(names) > 0 {
 				// The head count stays the real member total; the resolved names
-				// drop any raw @lid the store could not name, so the roster never
+				// drop any raw @lid the store could not name, so the member list never
 				// prints a placeholder person. The "+N" remainder carries the
 				// unnamed members honestly.
 				total := int64(len(names))

@@ -315,7 +315,7 @@ func humanParticipantLabel(value string) string {
 
 // resolvedParticipantNames keeps only the names the store could resolve,
 // dropping empties and raw privacy @lids without leaving a placeholder. The
-// chats roster pairs it with the real head count, so unnamed members show up in
+// chats member list pairs it with the real head count, so unnamed members show up in
 // the "+N" remainder rather than as a fake "privacy id" person.
 func resolvedParticipantNames(values []string) []string {
 	out := make([]string, 0, len(values))

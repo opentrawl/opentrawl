@@ -209,20 +209,20 @@ order by lower(display_name), display_name`, chatJID)
 	return out, rows.Err()
 }
 
-// GroupRoster is one group or channel's active membership: Count is the real
+// GroupMembers is one group or channel's active membership: Count is the real
 // head count (every active row, whatever the store could resolve), Names is
 // the deduped display names it could resolve. A caller that shows fewer names
 // than Count still has an honest total to render as "+N".
-type GroupRoster struct {
+type GroupMembers struct {
 	Count int64
 	Names []string
 }
 
-// GroupRosters resolves every group and channel's active roster in one query,
-// the same name-resolution rule groupParticipants uses for a single chat. The
-// chats lister calls this once for the whole list rather than once per chat,
-// so listing N groups costs one query, not N.
-func (s *Store) GroupRosters(ctx context.Context) (map[string]GroupRoster, error) {
+// GroupMembersByChat resolves every group and channel's active members in one
+// query, the same name-resolution rule groupParticipants uses for a single
+// chat. The chats lister calls this once for the whole list rather than once
+// per chat, so listing N groups costs one query, not N.
+func (s *Store) GroupMembersByChat(ctx context.Context) (map[string]GroupMembers, error) {
 	rows, err := s.db.QueryContext(ctx, `
 select gp.group_jid, coalesce(
 	nullif(trim(c.full_name), ''),
@@ -242,15 +242,15 @@ order by gp.group_jid, lower(display_name), display_name`)
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	out := map[string]GroupRoster{}
+	out := map[string]GroupMembers{}
 	seen := map[string]map[string]struct{}{}
 	for rows.Next() {
 		var groupJID, displayName string
 		if err := rows.Scan(&groupJID, &displayName); err != nil {
 			return nil, err
 		}
-		roster := out[groupJID]
-		roster.Count++
+		members := out[groupJID]
+		members.Count++
 		displayName = normalizeDisplayName(displayName)
 		if displayName != "" {
 			key := strings.ToLower(displayName)
@@ -259,10 +259,10 @@ order by gp.group_jid, lower(display_name), display_name`)
 			}
 			if _, ok := seen[groupJID][key]; !ok {
 				seen[groupJID][key] = struct{}{}
-				roster.Names = append(roster.Names, displayName)
+				members.Names = append(members.Names, displayName)
 			}
 		}
-		out[groupJID] = roster
+		out[groupJID] = members
 	}
 	return out, rows.Err()
 }

@@ -96,10 +96,10 @@ func TestChatsListsChatsWithReadState(t *testing.T) {
 	}
 }
 
-// The archive already stores a group's roster in group_participants (open and
+// The archive already stores a group's members in group_participants (open and
 // who-search read the same table); chats must surface it too, so --with finds
 // a telegram group by a member's name, not just a dm by its title.
-func TestChatsWithFindsGroupByRoster(t *testing.T) {
+func TestChatsWithFindsGroupByMember(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	writeSyntheticGroupArchive(t, context.Background(), archivePathForRun(stateRoot))
 
@@ -118,11 +118,11 @@ func TestChatsWithFindsGroupByRoster(t *testing.T) {
 		t.Fatalf("chats json = %s err=%v", stdout, err)
 	}
 	if len(payload.Chats) != 1 || payload.Chats[0].Name != "Launch Group" {
-		t.Fatalf("chats --with alice must find the group by its roster:\n%s", stdout)
+		t.Fatalf("chats --with alice must find the group by its members:\n%s", stdout)
 	}
 	chat := payload.Chats[0]
 	if len(chat.ParticipantNames) != 1 || chat.ParticipantNames[0] != "Alice Example" {
-		t.Fatalf("chat must carry the resolved roster: %#v", chat)
+		t.Fatalf("chat must carry the resolved members: %#v", chat)
 	}
 	if chat.Participants == nil || *chat.Participants != 1 {
 		t.Fatalf("chat must carry the real head count: %#v", chat)

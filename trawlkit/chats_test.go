@@ -116,8 +116,8 @@ func TestRunChatsJSONEnvelopeAndFlags(t *testing.T) {
 	}
 }
 
-// In a mixed list, a dm carries no group roster: the participants column shows
-// its "-" marker on the dm row while the named group beside it shows its roster,
+// In a mixed list, a dm carries no group member list: the participants column shows
+// its "-" marker on the dm row while the named group beside it shows its member list,
 // so the column stays honest without inventing a dm's members.
 func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 	stateRoot := t.TempDir()
@@ -147,11 +147,11 @@ func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	// Cap is 3 names; a 3-person group shows its whole roster with no remainder.
+	// Cap is 3 names; a 3-person group shows its whole member list with no remainder.
 	if !strings.Contains(stdout, "Ada, Bo, Cy") {
-		t.Fatalf("group must show its roster:\n%s", stdout)
+		t.Fatalf("group must show its member list:\n%s", stdout)
 	}
-	// The dm's participant cell is the "-" marker, never a fabricated roster.
+	// The dm's participant cell is the "-" marker, never a fabricated member list.
 	dmLine := ""
 	for _, line := range strings.Split(stdout, "\n") {
 		if strings.HasPrefix(line, "Ada Example") {
@@ -169,10 +169,10 @@ func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 }
 
 // The name leads and the raw source key never does: a named group shows its
-// title in the name column and its roster in the participants column, while the
+// title in the name column and its member list in the participants column, while the
 // chat column carries the short pre-index handle a reader pastes into messages
 // --chat, never the long "telegram:chat/..." provider ref. The head count
-// collapses the roster past the cap into an honest "+N".
+// collapses the member list past the cap into an honest "+N".
 func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -221,9 +221,9 @@ func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 }
 
 // An unnamed group (common on iMessage) keeps a short one-line name, "group of
-// N", and shows its roster in the participants column, so the name never wraps a
-// long roster across rows. A source with no read state hides the unread column.
-func TestRunChatsTextUnnamedGroupNameAndRoster(t *testing.T) {
+// N", and shows its member list in the participants column, so the name never wraps a
+// long member list across rows. A source with no read state hides the unread column.
+func TestRunChatsTextUnnamedGroupNameAndMembers(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
 	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
@@ -245,9 +245,9 @@ func TestRunChatsTextUnnamedGroupNameAndRoster(t *testing.T) {
 	if !strings.Contains(stdout, "group of 5") {
 		t.Fatalf("unnamed group must be named 'group of N':\n%s", stdout)
 	}
-	// The roster lives in the participants column, capped at 3 with an honest "+2".
+	// The member list lives in the participants column, capped at 3 with an honest "+2".
 	if !strings.Contains(stdout, "participants") || !strings.Contains(stdout, "Alice, Bob, Carol +2") {
-		t.Fatalf("unnamed group must show its roster in the participants column:\n%s", stdout)
+		t.Fatalf("unnamed group must show its member list in the participants column:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "unread") {
 		t.Fatalf("unread column must be hidden when no chat carries a count:\n%s", stdout)
@@ -294,7 +294,7 @@ func TestRunChatsTextMasksDisplayIDButJSONKeepsRealID(t *testing.T) {
 		t.Fatalf("expected unread column:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "participants") {
-		t.Fatalf("participants column must be hidden for a source with no roster:\n%s", stdout)
+		t.Fatalf("participants column must be hidden for a source with no member list:\n%s", stdout)
 	}
 
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--json"}, source, runOptions{})
@@ -356,7 +356,7 @@ func TestRunChatsTextChatColumnShowsShortRef(t *testing.T) {
 }
 
 // --with filters to the chats a named person is in. The match spans a group's
-// resolved roster and a dm's partner name, is case-insensitive, and drops every
+// resolved member list and a dm's partner name, is case-insensitive, and drops every
 // chat that person is not in. The kit fetches every chat (--all) so a match past
 // the first page is never lost, and pages the survivors itself.
 func TestRunChatsWithFiltersByParticipant(t *testing.T) {
@@ -373,7 +373,7 @@ func TestRunChatsWithFiltersByParticipant(t *testing.T) {
 			},
 			{
 				// A dm whose partner name lives in the title (Telegram/WhatsApp shape),
-				// with no roster: --with must still find it by the title.
+				// with no member list: --with must still find it by the title.
 				ID: "d1", Ref: "telegram:chat/d1", Title: "Zoe Example", Group: false,
 				LastActivity: time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC),
 			},
@@ -458,7 +458,7 @@ func TestRunChatsWithNeverLeaksPrivacyID(t *testing.T) {
 
 // Under --with, the matched person is pulled to the front of the capped preview,
 // so a "chats with X" result shows X rather than collapsing them into "+N". The
-// JSON roster keeps its source order and full membership.
+// JSON member list keeps its source order and full membership.
 func TestRunChatsWithSurfacesMatchPastCap(t *testing.T) {
 	stateRoot := t.TempDir()
 	createArchive(t, stateRoot)
@@ -484,9 +484,9 @@ func TestRunChatsWithSurfacesMatchPastCap(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats --with --json code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	// The JSON roster is the honest full list in source order, not reordered.
+	// The JSON member list is the honest full list in source order, not reordered.
 	if !strings.Contains(stdout, `"Ada",`) || !strings.Contains(stdout, `"Zoe",`) {
-		t.Fatalf("json must keep the full roster:\n%s", stdout)
+		t.Fatalf("json must keep the full member list:\n%s", stdout)
 	}
 	var envelope struct {
 		Chats []struct {
@@ -497,7 +497,7 @@ func TestRunChatsWithSurfacesMatchPastCap(t *testing.T) {
 		t.Fatalf("json parse: %v\n%s", err, stdout)
 	}
 	if len(envelope.Chats) != 1 || len(envelope.Chats[0].ParticipantNames) != 6 || envelope.Chats[0].ParticipantNames[0] != "Ada" {
-		t.Fatalf("json roster must keep source order and full membership: %#v", envelope.Chats)
+		t.Fatalf("json member list must keep source order and full membership: %#v", envelope.Chats)
 	}
 }
 

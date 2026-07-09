@@ -40,7 +40,7 @@ type Chat struct {
 	// Title is the real, clean conversation name the surface stores: the group
 	// subject, the dm partner. It is empty when the surface has no name to show
 	// (a common iMessage group), and the kit names the chat "group of N"
-	// instead, moving the roster to the participants column. A surface must not
+	// instead, moving the member list to the participants column. A surface must not
 	// pass a machine id or a raw handle here; those belong in ID.
 	Title string
 	// Group reports whether the chat has more than two people. The kit renders

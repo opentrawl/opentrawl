@@ -77,8 +77,8 @@ func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated b
 
 // chatDisplayName is the short identifier the name column shows. A real title
 // wins; a dm with no title is named by its one other person; an unnamed group
-// is named "group of N" and leaves its roster to the participants column, so
-// the name column stays one scannable line and never wraps a long roster.
+// is named "group of N" and leaves its member list to the participants column, so
+// the name column stays one scannable line and never wraps a long member list.
 func chatDisplayName(chat Chat) string {
 	if title := strings.TrimSpace(chat.Title); title != "" {
 		return title
@@ -95,7 +95,7 @@ func chatDisplayName(chat Chat) string {
 	return "group chat"
 }
 
-// chatParticipantsCell fills the participants column with the roster of any
+// chatParticipantsCell fills the participants column with the member list of any
 // group that resolved names, named or not. A dm's one participant is already
 // its name, so the dm row leaves the cell blank. Under --with, the matched
 // person is pulled to the front so a "chats with X" result always shows X in
@@ -111,10 +111,10 @@ func chatParticipantsCell(chat Chat, with string) string {
 	return participantPreview(names, chat.Participants)
 }
 
-// surfaceMatchedName returns the roster with the first name that matches --with
+// surfaceMatchedName returns the member list with the first name that matches --with
 // moved to the front, so the capped preview shows the person the reader searched
 // for. It copies rather than reordering in place, so the JSON participant_names
-// keep their source order and stay the honest full roster.
+// keep their source order and stay the honest full member list.
 func surfaceMatchedName(names []string, with string) []string {
 	for i, name := range names {
 		if !matchesName(with, []string{name}) {
@@ -203,7 +203,7 @@ func writeChatsText(w io.Writer, value chatsOutput) error {
 		return err
 	}
 	// A column appears only when the surface fills it: the participants column
-	// shows only when a named group has a roster to list, and unread only when a
+	// shows only when a named group has members to list, and unread only when a
 	// chat carries a real count. Both are structural choices on the data in
 	// hand, so the same rows render the same table every time.
 	showParticipants := anyCell(value.Chats, func(c chatOutput) string { return c.participantsCell })
@@ -218,7 +218,7 @@ func writeChatsText(w io.Writer, value chatsOutput) error {
 	}
 	if showParticipants {
 		// Not a wrap column: the preview is capped to a few names, so it fits on
-		// one line, and a dm row with no roster shows the plain "-" marker rather
+		// one line, and a dm row with no member list shows the plain "-" marker rather
 		// than a wrapped "(empty)".
 		columns = append(columns, render.TableColumn{Header: "participants"})
 	}

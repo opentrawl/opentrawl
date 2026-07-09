@@ -24,10 +24,10 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 		if err != nil {
 			return err
 		}
-		// One query for every group/channel roster, not one per chat: the
+		// One query for every group/channel's members, not one per chat: the
 		// group_participants table already backs open's participants line and
 		// who-search, so chats reads the same table instead of re-deriving it.
-		rosters, err := st.GroupRosters(r.ctx)
+		members, err := st.GroupMembersByChat(r.ctx)
 		if err != nil {
 			return err
 		}
@@ -48,10 +48,10 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 				LastActivity: chat.LastMessageAt,
 				Unread:       &unread,
 			}
-			if roster, ok := rosters[chat.JID]; ok {
-				c.ParticipantNames = roster.Names
-				if roster.Count > 0 {
-					count := roster.Count
+			if groupMembers, ok := members[chat.JID]; ok {
+				c.ParticipantNames = groupMembers.Names
+				if groupMembers.Count > 0 {
+					count := groupMembers.Count
 					c.Participants = &count
 				}
 			}
