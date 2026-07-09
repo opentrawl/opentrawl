@@ -49,7 +49,6 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          "photos",
 		Surface:     "photos",
 		DisplayName: "Photos",
-		Description: "Apple Photos library",
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ExportsSecrets: false,

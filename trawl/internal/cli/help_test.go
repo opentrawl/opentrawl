@@ -15,14 +15,75 @@ var binaryIDs = []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcr
 
 func liveSourceFakes() []fakeCrawler {
 	return []fakeCrawler{
-		{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"iMessage chats and messages"}`},
-		{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X","description":"X posts, likes, bookmarks and mentions","aliases":["twitter"]}`},
-		{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos","description":"Apple Photos library"}`},
+		{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`},
+		{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X","aliases":["twitter"]}`},
+		{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos"}`},
 	}
 }
 
-// Bare `trawl` is the split-out front door: a short page, 25 lines or fewer,
-// that renders the live Sources block and never leaks an internal binary id.
+func TestBareFrontDoorRendersSyntheticManifestHeadlines(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{name: "alphacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"alpha","display_name":"Alpha","binary":{"name":"alphacrawl"},"capabilities":["sync","search","open"],"headlines":["zeta","alpha","middle","search","sync","status"],"commands":{"alpha":{"title":"Alpha","argv":["alphacrawl","alpha","--json"],"json":true,"headline":true},"middle":{"title":"Middle","argv":["alphacrawl","middle","--json"],"json":true,"headline":true},"zeta":{"title":"Zeta","argv":["alphacrawl","zeta","--json"],"json":true,"headline":true},"search":{"title":"Search","argv":["alphacrawl","search","QUERY","--json"],"json":true,"headline":true},"status":{"title":"Status","argv":["alphacrawl","status","--json"],"json":true,"headline":true},"sync":{"title":"Sync","argv":["alphacrawl","sync","--json"],"json":true,"headline":true}}}`},
+		fakeCrawler{name: "emptycrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"empty","display_name":"Empty","binary":{"name":"emptycrawl"}}`},
+		fakeCrawler{name: "betacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"beta","display_name":"Beta","binary":{"name":"betacrawl"},"headlines":["only"],"commands":{"only":{"title":"Only","argv":["betacrawl","only","--json"],"json":true,"headline":true}}}`},
+	)
+	t.Setenv("PATH", binDir)
+
+	stdout, _, exitCode := runCLI(t)
+
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+	sources := outputSection(stdout, "Sources:")
+	want := strings.Join([]string{
+		"Sources:",
+		"  alpha     zeta · alpha · middle",
+		"  empty",
+		"  beta      only",
+	}, "\n")
+	if sources != want {
+		t.Fatalf("sources block:\n%s\nwant:\n%s", sources, want)
+	}
+	for _, forbidden := range []string{"search", "sync", "status"} {
+		if strings.Contains(sources, forbidden) {
+			t.Errorf("sources block included universal verb %q:\n%s", forbidden, sources)
+		}
+	}
+	if !strings.Contains(stdout, "Start here:") {
+		t.Errorf("bare trawl missing Start here:\n%s", stdout)
+	}
+}
+
+func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
+	stdout, _, exitCode := runCLI(t)
+
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+	want := `Sources:
+  imessage        chats
+  whatsapp        chats
+  telegram        chats · folders · topics
+  gmail
+  calendar        calendars
+  contacts        person
+  photos
+  x (twitter)     tweets · bookmarks · likes · mentions
+  notes           versions
+
+Start here:
+  trawl status                 every source, and how fresh
+  trawl search "boat trip"     all sources at once, newest first
+  trawl chats --with anna      conversations across every messaging source
+  trawl telegram               everything telegram can do
+`
+	if stdout != want {
+		t.Fatalf("bare trawl output:\n%s\nwant:\n%s", stdout, want)
+	}
+}
+
+// Bare `trawl` is the split-out front door: a short page that renders the
+// live Sources block and never leaks an internal binary id.
 func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 	binDir := writeFakeCrawlers(t, liveSourceFakes()...)
 	t.Setenv("PATH", binDir)
@@ -33,10 +94,10 @@ func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
 	lines := strings.Count(strings.TrimRight(stdout, "\n"), "\n") + 1
-	if lines > 25 {
-		t.Errorf("bare trawl rendered %d lines, want 25 or fewer:\n%s", lines, stdout)
+	if lines > 20 {
+		t.Errorf("bare trawl rendered %d lines, want 20 or fewer:\n%s", lines, stdout)
 	}
-	for _, want := range []string{"Sources:", "Start here:", "x (twitter)", "iMessage chats and messages"} {
+	for _, want := range []string{"Sources:", "Start here:", "x (twitter)", "photos"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("bare trawl missing %q:\n%s", want, stdout)
 		}
@@ -101,7 +162,7 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 // A crawler that is not registered must simply be absent from the block: no
 // placeholder, no error line naming it.
 func TestFrontDoorOmitsUnregisteredCrawler(t *testing.T) {
-	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"iMessage chats and messages"}`}
+	imsg := fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`}
 	binDir := writeFakeCrawlers(t, imsg)
 	t.Setenv("PATH", binDir)
 
@@ -110,10 +171,10 @@ func TestFrontDoorOmitsUnregisteredCrawler(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	if strings.Contains(stdout, "Apple Photos") || strings.Contains(stdout, "X posts") {
+	if strings.Contains(stdout, "photos") || strings.Contains(stdout, "x (twitter)") {
 		t.Errorf("front door named an uninstalled crawler:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "iMessage chats and messages") {
+	if !strings.Contains(stdout, "imessage") {
 		t.Errorf("front door missing the one installed crawler:\n%s", stdout)
 	}
 }
@@ -138,6 +199,25 @@ func TestShortHelpFlagShowsSourcesBlock(t *testing.T) {
 			}
 		})
 	}
+}
+
+func outputSection(output, title string) string {
+	lines := strings.Split(strings.TrimRight(output, "\n"), "\n")
+	var out []string
+	inSection := false
+	for _, line := range lines {
+		if line == title {
+			inSection = true
+		}
+		if !inSection {
+			continue
+		}
+		if line == "" {
+			break
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 // Subcommand help must not pay the discovery cost or repeat the root

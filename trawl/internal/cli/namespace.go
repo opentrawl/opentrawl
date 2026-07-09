@@ -146,16 +146,12 @@ func (r *Runtime) renderNamespace(source Source, token string) error {
 	verbs := namespaceVerbList(source)
 	if r.root.JSON {
 		return writeJSON(r.stdout, namespaceListing{
-			Source:      source.ID,
-			Surface:     source.DisplayName,
-			Description: source.Description,
-			Verbs:       verbs,
+			Source:  source.ID,
+			Surface: source.DisplayName,
+			Verbs:   verbs,
 		})
 	}
 	header := sourceHumanName(source)
-	if desc := strings.TrimSpace(source.Description); desc != "" {
-		header = header + " - " + desc
-	}
 	if _, err := fmt.Fprintf(r.stdout, "%s\n\n", header); err != nil {
 		return err
 	}
@@ -216,10 +212,9 @@ func writeVerbGroup(w io.Writer, heading string, verbs []namespaceVerb, width in
 }
 
 type namespaceListing struct {
-	Source      string          `json:"source"`
-	Surface     string          `json:"surface"`
-	Description string          `json:"description,omitempty"`
-	Verbs       []namespaceVerb `json:"verbs"`
+	Source  string          `json:"source"`
+	Surface string          `json:"surface"`
+	Verbs   []namespaceVerb `json:"verbs"`
 }
 
 type namespaceVerb struct {

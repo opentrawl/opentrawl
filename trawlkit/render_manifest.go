@@ -16,5 +16,5 @@ func writeManifestText(w io.Writer, manifest control.Manifest) error {
 		{Label: "Database", Value: manifest.Paths.DefaultDatabase},
 		{Label: "Logs", Value: manifest.Paths.DefaultLogs},
 	}
-	return render.WriteCard(w, render.Card{Title: "Metadata", Fields: fields, Body: manifest.Description})
+	return render.WriteCard(w, render.Card{Title: "Metadata", Fields: fields})
 }

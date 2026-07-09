@@ -85,7 +85,6 @@ func (c *testCrawler) Info() Info {
 		ID:          id,
 		Surface:     firstText(c.surface, "test"),
 		DisplayName: "Test",
-		Description: "Synthetic test crawler.",
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -1058,7 +1057,7 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 		},
 	}}}
 	wantMessage := "invalid sync Verb declaration"
-	wantDetail := "spine verb declarations may only set Name, Flags, and Store"
+	wantDetail := "spine verb declarations may only set Name, Flags, Headline, and Store"
 	wantRemedy := "Remove Help, Run, Mutates, Timeout, and Args from the sync Verb declaration."
 
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
@@ -1074,6 +1073,26 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"status"}, source, runOptions{})
 	if code != 1 || stdout != "" || !strings.Contains(stderr, wantMessage) || !strings.Contains(stderr, wantDetail) || !strings.Contains(stderr, wantRemedy) {
 		t.Fatalf("status invalid declaration code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunRejectsNonChatsSpineHeadlineDeclaration(t *testing.T) {
+	stateRoot := t.TempDir()
+	source := &testCrawler{verbs: []Verb{{
+		Name:     "search",
+		Headline: true,
+	}}}
+	wantMessage := "invalid search Verb declaration: Headline is only valid on chats"
+	wantRemedy := "Remove Headline from this declaration, or declare chats; chats is the one shared verb that may headline."
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("metadata invalid Headline code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "needle"}, source, runOptions{})
+	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
+		t.Fatalf("search invalid Headline code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 }
 

@@ -19,12 +19,12 @@ type Manifest struct {
 	ID              string             `json:"id"`
 	DisplayName     string             `json:"display_name"`
 	Version         string             `json:"version"`
-	Description     string             `json:"description,omitempty"`
 	Aliases         []string           `json:"aliases,omitempty"`
 	Binary          Binary             `json:"binary"`
 	Branding        Branding           `json:"branding"`
 	Paths           Paths              `json:"paths"`
 	Commands        map[string]Command `json:"commands"`
+	Headlines       []string           `json:"headlines,omitempty"`
 	Capabilities    []string           `json:"capabilities,omitempty"`
 	Privacy         Privacy            `json:"privacy"`
 }
@@ -57,8 +57,9 @@ type Command struct {
 	Store      string   `json:"store,omitempty"`
 	Legacy     bool     `json:"legacy,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
+	Headline   bool     `json:"headline,omitempty"`
 	// Secondary marks a specialist verb the namespace listing moves under a
-	// "More verbs" heading, out of the headline list.
+	// "More verbs" heading, out of the primary namespace list.
 	Secondary bool   `json:"secondary,omitempty"`
 	Flags     []Flag `json:"flags,omitempty"`
 }

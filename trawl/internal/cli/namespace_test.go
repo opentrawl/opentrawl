@@ -11,7 +11,7 @@ import (
 // tokens the user types (thread-export -> "threads export"). pins stands in
 // for any bespoke single-token verb; chats is now a reserved spine verb, so a
 // bespoke command may not use that key.
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","description":"Local-first iMessage archive crawler.","binary":{"name":"imsgcrawl"},"capabilities":["pins","search"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
@@ -26,7 +26,7 @@ func TestNamespaceListingHuman(t *testing.T) {
 		t.Fatalf("code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 	for _, want := range []string{
-		"iMessage - Local-first iMessage archive crawler.",
+		"iMessage",
 		"Verbs:",
 		"pins",
 		"threads export",

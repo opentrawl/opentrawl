@@ -35,7 +35,6 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          "whatsapp",
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
-		Description: "WhatsApp Desktop archive",
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
@@ -47,6 +46,10 @@ func (c *Crawler) Info() trawlkit.Info {
 
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
+		{
+			Name:     "chats",
+			Headline: true,
+		},
 		{
 			Name:  "messages",
 			Help:  "List archived WhatsApp messages.",
