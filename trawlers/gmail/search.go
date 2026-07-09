@@ -16,6 +16,7 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 	if err != nil {
 		return trawlkit.Hit{}, err
 	}
+	unread := hit.Unread
 	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
@@ -23,6 +24,7 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		Who:      hit.Who,
 		Where:    hit.Where,
 		Snippet:  hit.Snippet,
+		Unread:   &unread,
 	}, nil
 }
 

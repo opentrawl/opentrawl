@@ -133,7 +133,7 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if missing.State != "missing" || len(missing.Counts) != 3 {
+	if missing.State != "missing" || len(missing.Counts) != 4 {
 		t.Fatalf("missing status = %#v", missing)
 	}
 	doctor, err := source.Doctor(ctx, &trawlkit.Request{Paths: paths})

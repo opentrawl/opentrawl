@@ -102,6 +102,7 @@ func printOpenText(w io.Writer, value openOutput) error {
 			{Label: "From", Value: senderText(value.Headers)},
 			{Label: "To", Value: value.Headers.ToAddress},
 			{Label: "Cc", Value: value.Headers.CcAddress},
+			{Label: "Status", Value: unreadStatusText(value.Unread)},
 			{Label: "Attachments", Value: attachmentsLine(value.Attachments)},
 			{Label: "Ref", Value: value.shortRef},
 		},
@@ -116,6 +117,13 @@ func parseOpenTime(value string) time.Time {
 		return time.Time{}
 	}
 	return parsed
+}
+
+func unreadStatusText(unread bool) string {
+	if unread {
+		return "Unread"
+	}
+	return "Read"
 }
 
 func attachmentsLine(attachments []archive.Attachment) string {

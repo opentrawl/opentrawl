@@ -33,4 +33,8 @@ type Hit struct {
 	Snippet      string    `json:"snippet,omitempty"`
 	AllDay       bool      `json:"all_day,omitempty"`
 	Availability *int64    `json:"availability,omitempty"`
+	// Unread is nil for a surface that stores no read state, so the field
+	// drops out of JSON rather than reporting a fake false (mirrors
+	// ChatQuery/Chat.Unread's optional-fact convention in contracts.go).
+	Unread *bool `json:"unread,omitempty"`
 }
