@@ -38,8 +38,7 @@ work.
 ## What this repo is
 
 OpenTrawl: local-first crawlers for your digital life, one `trawl` CLI,
-one Mac app. Read [docs/vision.md](docs/vision.md) first, then
-[docs/roadmap.md](docs/roadmap.md).
+one Mac app. Read [docs/vision.md](docs/vision.md) first.
 
 ## Engineering rules
 

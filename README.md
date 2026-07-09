@@ -57,7 +57,7 @@ the CLI and the app. See [docs/contract.md](docs/contract.md).
 | Apple Notes | trawlers/notes | monorepo-native |
 | shared substrate | trawlkit | monorepo-native |
 
-Signal is in progress — see the [roadmap](docs/roadmap.md).
+Signal is in progress.
 
 ## Status
 

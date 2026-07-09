@@ -10,7 +10,6 @@ then the contract — everything else hangs off those two.
 ## Start here
 
 - [vision.md](vision.md) — what OpenTrawl is and why it exists.
-- [roadmap.md](roadmap.md) — the plan: phases, what is built, what is next.
 
 ## The contract and its surfaces
 

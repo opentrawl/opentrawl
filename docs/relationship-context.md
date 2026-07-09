@@ -54,9 +54,8 @@ be per-query arguments, never persisted configuration.
 ## Why not now
 
 - It depends on clustering and per-source derived layers that are
-  scheduled after the archives themselves are proven (see
-  [roadmap.md](roadmap.md)); building interpretation on top of
-  unproven archives compounds errors.
+  scheduled after the archives themselves are proven; building
+  interpretation on top of unproven archives compounds errors.
 - v1.1's transparent columns (match quality, last seen, volume)
   already let a context-carrying agent disambiguate most cases; the
   evidence for what the briefs must contain should come from watching
