@@ -6,9 +6,9 @@ written_by: ai
 
 ## Purpose
 
-`photoscrawl` is a local-first OpenClaw/trawlkit crawler for Apple Photos. It
-builds a provenance-backed `photoscrawl.db` archive from a user's Photos library
-without uploading private media by default.
+`photoscrawl` is a local-first OpenTrawl/trawlkit crawler for Apple Photos. It
+builds a provenance-backed `photoscrawl.db` archive from a user's Photos
+library without uploading private media by default.
 
 ## Stack
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 )
 
 func newSearchEnvelope(query string, messages []store.Message, total int, limit int, whoQuery string, resolved *store.WhoCandidate, shortRefs map[string]string) searchEnvelope {

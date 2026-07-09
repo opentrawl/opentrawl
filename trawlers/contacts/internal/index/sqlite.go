@@ -14,7 +14,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )

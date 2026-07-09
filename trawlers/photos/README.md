@@ -4,7 +4,7 @@ written_by: ai
 
 # photoscrawl
 
-Local-first Apple Photos crawler for the OpenClaw crawl-family ecosystem.
+Local-first Apple Photos crawler for OpenTrawl.
 
 `photoscrawl` builds a `photos.db` archive from a user's Photos library. The
 goal is not photo backup. The goal is to help users understand their own library:

@@ -44,18 +44,18 @@ the CLI and the app. See [docs/contract.md](docs/contract.md).
 
 ## Crawlers
 
-| service | module | directory | origin |
-|---|---|---|---|
-| iMessage | imsgcrawl | trawlers/imessage | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
-| Telegram | telecrawl | trawlers/telegram | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
-| WhatsApp | wacrawl | trawlers/whatsapp | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
-| X/Twitter | birdcrawl | trawlers/twitter | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
-| Gmail | gogcrawl | trawlers/gmail | [openclaw/gogcrawl](https://github.com/openclaw/gogcrawl) |
-| Calendar | calcrawl | trawlers/calendar | [openclaw/calcrawl](https://github.com/openclaw/calcrawl) |
-| Contacts | clawdex | trawlers/contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
-| Apple Photos | photoscrawl | trawlers/photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
-| Apple Notes | notes | trawlers/notes | monorepo-native |
-| shared substrate | trawlkit | trawlkit | monorepo-native |
+| service | directory | origin |
+|---|---|---|
+| iMessage | trawlers/imessage | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
+| Telegram | trawlers/telegram | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
+| WhatsApp | trawlers/whatsapp | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
+| X/Twitter | trawlers/twitter | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
+| Gmail | trawlers/gmail | [openclaw/gogcrawl](https://github.com/openclaw/gogcrawl) |
+| Calendar | trawlers/calendar | [openclaw/calcrawl](https://github.com/openclaw/calcrawl) |
+| Contacts | trawlers/contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
+| Apple Photos | trawlers/photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
+| Apple Notes | trawlers/notes | monorepo-native |
+| shared substrate | trawlkit | monorepo-native |
 
 Signal is in progress — see the [roadmap](docs/roadmap.md).
 
@@ -73,8 +73,7 @@ source into a repo-local bin directory. No global installs. With
 [direnv](https://direnv.net), `direnv allow`
 once and every new terminal in this directory activates itself. Read
 [AGENTS.md](AGENTS.md) first (this repo is public and the privacy
-rules are enforced in CI), then [docs/sync.md](docs/sync.md) for how
-imported crawler modules sync with their upstreams.
+rules are enforced in CI).
 
 ## Kick the tires
 
@@ -95,17 +94,14 @@ scripts/smoke            # the full proof: freshness, contract,
 
 OpenTrawl is derivative work. The crawlers and trawlkit (a hard fork
 of crawlkit) originate in the [OpenClaw](https://github.com/openclaw)
-organisation,
-where much of this suite was built and is still actively improved —
-particular thanks to the maintainers there. Imported crawler modules
-keep their full subtree history and original LICENSE files, and
-changes flow back upstream as pull requests.
+organisation, where much of this suite was built and is still actively
+improved — particular thanks to the maintainers there. Imported crawler
+modules keep their full original history and LICENSE files.
 
 ## Licence
 
-MIT for the monorepo (see [LICENSE](LICENSE)). Each imported crawler
-directory keeps its own upstream licence, which governs that
-directory.
+MIT for the monorepo (see [LICENSE](LICENSE)). Each crawler directory
+keeps its own licence, which governs that directory.
 
 ---
 

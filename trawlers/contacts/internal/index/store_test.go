@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/markdown"
-	"github.com/openclaw/clawdex/internal/model"
-	"github.com/openclaw/clawdex/internal/repo"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/markdown"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 )
 
 func TestAddNoteAndSearch(t *testing.T) {

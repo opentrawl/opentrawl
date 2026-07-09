@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 type Contact struct {

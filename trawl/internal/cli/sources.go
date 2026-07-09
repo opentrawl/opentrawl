@@ -1,15 +1,15 @@
 package cli
 
 import (
-	clawdex "github.com/openclaw/clawdex"
-	imsgcrawl "github.com/openclaw/imsgcrawl"
-	photoscrawl "github.com/openclaw/photoscrawl"
-	telecrawl "github.com/openclaw/telecrawl"
-	wacrawl "github.com/openclaw/wacrawl"
 	"github.com/opentrawl/opentrawl/birdcrawl"
 	"github.com/opentrawl/opentrawl/calcrawl"
 	"github.com/opentrawl/opentrawl/gogcrawl"
+	clawdex "github.com/opentrawl/opentrawl/trawlers/contacts"
+	imsgcrawl "github.com/opentrawl/opentrawl/trawlers/imessage"
 	notes "github.com/opentrawl/opentrawl/trawlers/notes"
+	photoscrawl "github.com/opentrawl/opentrawl/trawlers/photos"
+	telecrawl "github.com/opentrawl/opentrawl/trawlers/telegram"
+	wacrawl "github.com/opentrawl/opentrawl/trawlers/whatsapp"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 

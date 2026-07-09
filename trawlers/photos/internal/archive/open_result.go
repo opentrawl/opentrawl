@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/photoscrawl/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
 )
 
 type OpenResult struct {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 )
 
 func TestImportDesktopCoreDataShape(t *testing.T) {

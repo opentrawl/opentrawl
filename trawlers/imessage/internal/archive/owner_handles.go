@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/imsgcrawl/internal/addressbook"
-	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/addressbook"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 )
 
 const ownerDisplayName = "me"

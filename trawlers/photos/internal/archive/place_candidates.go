@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/photoscrawl/internal/cardformat"
-	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 )
 
 const topPOICandidateLimit = 5

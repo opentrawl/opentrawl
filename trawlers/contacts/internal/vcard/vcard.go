@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 type Options struct {

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
 func TestSyncInitializesArchiveAndStatus(t *testing.T) {

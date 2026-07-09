@@ -17,9 +17,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/cardformat"
-	"github.com/openclaw/photoscrawl/internal/photos"
-	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )

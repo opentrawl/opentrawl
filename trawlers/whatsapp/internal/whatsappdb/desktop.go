@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/wacrawl/internal/sqlitedsn"
-	"github.com/openclaw/wacrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/sqlitedsn"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit/cache"
 
 	// C SQLite via cgo, matching trawlkit/store. Requires -tags sqlite_fts5.

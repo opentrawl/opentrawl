@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/avatar"
-	"github.com/openclaw/clawdex/internal/markdown"
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/markdown"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 type importOptions struct {

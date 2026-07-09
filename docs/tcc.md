@@ -61,7 +61,7 @@ What this requires:
    Trawl (app users) or to your terminal (CLI users), with the System
    Settings deep link (`Privacy_AllFiles` pane).
 4. App-side grant UX uses permiso's guided drag-into-Settings flow;
-   it needs a one-line upstream addition for the FDA panel.
+   it needs a one-line addition for the FDA panel.
 
 ## Idempotent permissions: the one-time setup
 

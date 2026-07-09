@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 func TestValidateAndRepairImportedAvatar(t *testing.T) {

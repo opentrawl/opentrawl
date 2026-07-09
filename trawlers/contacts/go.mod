@@ -1,4 +1,4 @@
-module github.com/openclaw/clawdex
+module github.com/opentrawl/opentrawl/trawlers/contacts
 
 go 1.26.4
 

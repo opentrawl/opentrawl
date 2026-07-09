@@ -28,7 +28,7 @@ See `AGENTS.md` for the ownership boundary.
 - `usage`: renders the shared `--help` text shape for crawler CLIs.
 - `whomatch`: the shared resolver rules a crawler's `who` verb uses to match a person or sender identity.
 
-## Downstream apps
+## Consumers
 
 - The 8 crawlers in this monorepo — `birdcrawl`, `calcrawl`, `clawdex`,
   `gogcrawl`, `imsgcrawl`, `photoscrawl`, `telecrawl`, and `wacrawl` — plus

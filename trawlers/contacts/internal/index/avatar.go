@@ -3,9 +3,9 @@ package index
 import (
 	"time"
 
-	"github.com/openclaw/clawdex/internal/avatar"
-	"github.com/openclaw/clawdex/internal/markdown"
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/markdown"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 func (s Store) RepairAvatarMetadata(person model.Person, now time.Time) (model.Person, bool, error) {

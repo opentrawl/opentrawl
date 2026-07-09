@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/telecrawl/internal/store"
-	postboxpkg "github.com/openclaw/telecrawl/internal/telegramdesktop/postbox"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
 type ImportOptions struct {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	"github.com/opentrawl/opentrawl/trawlkit/store"

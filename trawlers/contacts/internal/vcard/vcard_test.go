@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 func TestWriteVCard(t *testing.T) {

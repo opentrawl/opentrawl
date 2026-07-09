@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 )
 
 const (

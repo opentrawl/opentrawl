@@ -62,24 +62,11 @@ and the war stories behind them — lives in the private workspace at
 before writing any code or artifact; on any conflict it wins. Never
 copy its text into this public repo.
 
-## Layout and upstreams
+## Layout
 
 Crawler modules live under `trawlers/` with surface-name directory
-names. Imported modules are git subtrees synced with upstream repos. Do
-not edit a subtree without knowing where the change will land; see
-[docs/sync.md](docs/sync.md) and run `scripts/sync list`.
-
-| directory | upstream | outbound path |
-|---|---|---|
-| trawlers/imessage | openclaw/imsgcrawl | direct (admin) |
-| trawlers/photos | openclaw/photoscrawl | direct (admin) |
-| trawlers/telegram | openclaw/telecrawl | via joshp123/telecrawl fork + PR |
-| trawlers/whatsapp | openclaw/wacrawl | via joshp123/wacrawl fork + PR |
-| trawlers/contacts | openclaw/clawdex | via joshp123/clawdex fork + PR |
-
-`trawlers/gmail`, `trawlers/calendar`, `trawlers/twitter`,
-`trawlers/notes`, docs, scripts, the `trawl` CLI and the app are
-monorepo-native with no upstream.
+names. They are edited in this monorepo. `trawlkit`, docs, scripts,
+the `trawl` CLI and the app are edited here too.
 
 ## Documentation rules
 

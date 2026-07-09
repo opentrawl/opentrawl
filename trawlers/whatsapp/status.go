@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/wacrawl/internal/sqlitedsn"
-	"github.com/openclaw/wacrawl/internal/store"
-	"github.com/openclaw/wacrawl/internal/whatsappdb"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/sqlitedsn"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/whatsappdb"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 

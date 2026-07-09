@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 func (s Store) stageUnmatchedContacts(contacts []model.SourceContact, dryRun bool) ([]model.ImportChange, error) {

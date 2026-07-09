@@ -15,8 +15,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/cardformat"
-	repoPrompts "github.com/openclaw/photoscrawl/prompts"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 

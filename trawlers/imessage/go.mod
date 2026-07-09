@@ -1,4 +1,4 @@
-module github.com/openclaw/imsgcrawl
+module github.com/opentrawl/opentrawl/trawlers/imessage
 
 go 1.26.4
 

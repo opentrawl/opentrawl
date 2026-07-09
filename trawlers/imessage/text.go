@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/openclaw/imsgcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 

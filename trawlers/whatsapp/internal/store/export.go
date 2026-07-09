@@ -3,7 +3,7 @@ package store
 import (
 	"context"
 
-	"github.com/openclaw/wacrawl/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
 )
 
 func (s *Store) Contacts(ctx context.Context) ([]Contact, error) {

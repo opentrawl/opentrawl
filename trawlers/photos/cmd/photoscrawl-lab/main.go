@@ -10,10 +10,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openclaw/photoscrawl/internal/archive"
-	"github.com/openclaw/photoscrawl/internal/evalcard"
-	"github.com/openclaw/photoscrawl/internal/photos"
-	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/evalcard"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 func TestPersonRoundTrip(t *testing.T) {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"

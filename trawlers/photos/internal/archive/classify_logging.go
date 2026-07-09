@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 

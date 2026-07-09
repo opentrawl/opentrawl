@@ -1,4 +1,4 @@
-module github.com/openclaw/telecrawl
+module github.com/opentrawl/opentrawl/trawlers/telegram
 
 go 1.26.4
 

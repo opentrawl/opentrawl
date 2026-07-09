@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/photoscrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 )
 
 func TestUsageMentionsLabVerbs(t *testing.T) {

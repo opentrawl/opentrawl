@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openclaw/photoscrawl/internal/place"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 

@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"

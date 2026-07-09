@@ -10,7 +10,7 @@ crawler is any binary, in any language, that speaks these commands. The
 
 The Go types live in trawlkit's `control` package (manifest, status
 envelope, contact export are already there); this document is the
-authority for what v1 adds. Changes go upstream to trawlkit.
+authority for what v1 adds. Changes land in trawlkit.
 
 All examples use synthetic data.
 

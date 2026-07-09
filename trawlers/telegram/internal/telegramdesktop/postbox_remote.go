@@ -12,7 +12,7 @@ import (
 	"github.com/gotd/td/telegram"
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
-	postboxpkg "github.com/openclaw/telecrawl/internal/telegramdesktop/postbox"
+	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
 const (

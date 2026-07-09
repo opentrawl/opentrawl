@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/openclaw/clawdex/internal/model"
-	"github.com/openclaw/clawdex/internal/repo"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"

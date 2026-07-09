@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/index"
-	"github.com/openclaw/clawdex/internal/model"
-	"github.com/openclaw/clawdex/internal/repo"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/index"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"

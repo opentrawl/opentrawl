@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/openclaw/photoscrawl/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
 )
 
 func unnamedMapKindUseful(kind string) bool {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/imsgcrawl/internal/archive"
-	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"

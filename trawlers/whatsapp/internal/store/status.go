@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/openclaw/wacrawl/internal/store/storedb"
+	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store/storedb"
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 

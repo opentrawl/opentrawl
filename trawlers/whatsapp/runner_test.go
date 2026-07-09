@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	wastore "github.com/openclaw/wacrawl/internal/store"
+	wastore "github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"

@@ -29,11 +29,11 @@ func TestStatusAndRemoteDatabaseDefaults(t *testing.T) {
 	}
 
 	counts := []Count{NewCount("threads", "Threads", 3)}
-	db := RemoteDatabase(" cloud ", " Cloud archive ", "", "", " https://remote.example/ ", " gitcrawl/openclaw ", true, counts)
+	db := RemoteDatabase(" cloud ", " Cloud archive ", "", "", " https://remote.example/ ", " gitcrawl/cloud ", true, counts)
 	if db.ID != "cloud" || db.Label != "Cloud archive" || db.Kind != "remote" || db.Role != "archive" {
 		t.Fatalf("remote database defaults = %#v", db)
 	}
-	if db.Endpoint != "https://remote.example" || db.Archive != "gitcrawl/openclaw" || !db.IsPrimary {
+	if db.Endpoint != "https://remote.example" || db.Archive != "gitcrawl/cloud" || !db.IsPrimary {
 		t.Fatalf("remote database routing = %#v", db)
 	}
 	counts[0].Value = 99

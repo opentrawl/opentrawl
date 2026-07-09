@@ -1,4 +1,4 @@
-module github.com/openclaw/wacrawl
+module github.com/opentrawl/opentrawl/trawlers/whatsapp
 
 go 1.26.4
 

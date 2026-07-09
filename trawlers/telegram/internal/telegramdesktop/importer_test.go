@@ -16,8 +16,8 @@ import (
 
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
-	"github.com/openclaw/telecrawl/internal/store"
-	postboxpkg "github.com/openclaw/telecrawl/internal/telegramdesktop/postbox"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
 func TestResolveImportSourcePrefersTDataDefault(t *testing.T) {

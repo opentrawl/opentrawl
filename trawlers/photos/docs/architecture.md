@@ -8,7 +8,7 @@ Date: 2026-05-28
 
 ## Decision
 
-Build `photoscrawl` as a standalone OpenClaw/trawlkit Go crawler. It owns the
+Build `photoscrawl` as a standalone OpenTrawl/trawlkit Go crawler. It owns the
 Apple Photos schema, local classification policy, privacy policy, and query
 surface. `trawlkit` owns reusable mechanics only.
 

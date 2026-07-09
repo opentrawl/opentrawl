@@ -10,20 +10,15 @@ behind them.
 
 ## Decisions already made
 
-- Hybrid ownership: fork only where blocked. imsgcrawl and
-  photoscrawl sync directly with openclaw (maintainer access); telecrawl,
-  wacrawl and clawdex sync through joshp123 forks; the Gmail, Calendar,
-  Apple Notes and Signal crawlers are monorepo-native.
-- Ruled 2026-07-09: trawlkit is a hard fork of openclaw/crawlkit —
-  monorepo-native, module path under opentrawl/opentrawl, no outbound
-  sync. Upstream is credited in the README and nothing more.
+- Ruled 2026-07-09: trawlkit and the crawler modules are hard forks.
+  They are monorepo-native, use module paths under
+  `github.com/opentrawl/opentrawl`, and have no outbound sync flow.
+  Prior work is credited in the README and nothing more.
 - One monorepo under the opentrawl org, open source (MIT), with
-  attribution. Imported crawler modules live under `trawlers/` as git
-  subtrees; `scripts/sync` moves changes both ways.
+  attribution.
 - The Mac app is built from scratch in SwiftUI, minimum macOS one below
-  current. Upstream crawlbar is a cherry-pick source (its control
-  protocol doc and quality rubric are worth keeping; its settings UI is
-  not).
+  current. Crawlbar is a cherry-pick source (its control protocol doc
+  and quality rubric are worth keeping; its settings UI is not).
 - Federated architecture: per-source databases, one `trawl` CLI on top.
   No shared schema.
 - Agent first, human readable, local first, no knobs, read only in v1.
@@ -33,15 +28,15 @@ behind them.
 
 ## Phase 0: monorepo and hygiene
 
-Mostly done at creation (2026-07-02): subtree imports with full history
-for the six existing crawlers, sync script, privacy check in CI.
+Mostly done at creation (2026-07-02): crawler history imported,
+privacy check in CI.
 
 Remaining:
 
 - Gmail and Calendar crawlers restart clean in the monorepo: the
   private prototypes' logic migrates by rewrite, not by history import.
-- retire the local crawlbar PR worktrees after confirming their content
-  landed upstream.
+- retire the local crawlbar worktrees after confirming their content
+  is no longer needed.
 
 ## Phase 1: contract v1 and the trawl skeleton
 
@@ -67,8 +62,7 @@ grammars, missing metadata, unbounded dumps).
   manifests, `status` and `doctor` federation over whatever crawlers
   are installed. Thin, but real — the single entry point everything
   else plugs into and every agent tests through.
-- extend the trawlkit control contract with the missing pieces above,
-  pushed upstream as we go.
+- extend the trawlkit control contract with the missing pieces above.
 - define the golden-path bar as a checklist derived from the crawler
   quality rubric and the imsgcrawl evaluation, so "done" is mechanical
   per crawler.
@@ -82,8 +76,8 @@ grammars, missing metadata, unbounded dumps).
   talks to, or the user's terminal — and build that shape in from the
   start. [permiso](https://github.com/zats/permiso) covers the
   app-side permission UX; the terminal story needs its own answer.
-  Getting this right early is what lets everything downstream run
-  without bashing into permission walls.
+  Getting this right early is what lets later work run without bashing
+  into permission walls.
 
 ## Phase 2: per-crawler hardening to the bar
 
@@ -95,7 +89,7 @@ correctly in `trawl`. Highly parallel.
 | imsgcrawl | golden path: archive with source parity, FTS proven | trawl registration, human-shaped IDs and timestamps, attachment handling |
 | telecrawl | works: archive and media proven | metadata drift, status envelope |
 | wacrawl | archive works, readiness unproven | readiness proof, stop auto-sync on read, status envelope; watch WhatsApp passkey pairing risk |
-| gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of upstream `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |
+| gogcrawl (new) | private prototype exists | rebuild clean in monorepo on top of `gogcli`, which already owns Gmail auth, backup and export — gogcrawl adds the archive and contract layer, not another Gmail client |
 | calcrawl (new) | private scaffold exists | rebuild clean in monorepo. Primary source: the local Calendar.app store (Calendar.sqlitedb in its group container — carries iCloud, Google and local calendars; snapshot pattern per docs/tcc.md). Google-direct via `gogcli` secondary. Archive, search |
 | clawdex | contact layer works | adopt the trawlkit contact-export contract, contract compliance, import loop from all v1 crawlers; storage review: markdown-as-truth is right for human-curated identities, but verify it holds at import scale — crawler contact dumps must merge into curated people, never auto-generate thousands of person files |
 
@@ -153,12 +147,10 @@ Gated on two proofs (decided 2026-07-02): the TCC signing and
 inheritance spike is done (it is — see docs/tcc.md), and phase 2.5
 passes — the app builds on trust, so trust gets built first.
 
-Also decided 2026-07-02: upstream PRs to openclaw are held until the
-product is stable — one coherent pass per repo later instead of
-drip-feeding changes that may still move. And contract v1 is ratified:
-Josh's review of contract.md and cli.md is complete, so the command
-grammar, field names, bounds and state enum are frozen; changes now
-require a version bump, not an edit.
+Also decided 2026-07-02: contract v1 is ratified. Josh's review of
+contract.md and cli.md is complete, so the command grammar, field
+names, bounds and state enum are frozen; changes now require a version
+bump, not an edit.
 
 Goal: a consumer-grade menu bar app a human likes and trusts. Handles
 authorisation flows, runs syncs, and shows per-crawler health at a
@@ -172,9 +164,8 @@ glance. No settings maze.
   metrics framework, just declared counts.
 - from scratch, SwiftUI, SwiftPM without an Xcode project, minimum
   macOS one below current.
-- keep upstream crawlbar's quality rubric as the review contract for the
-  app, and its control protocol as the compatibility line so upstream
-  crawlers work unchanged.
+- keep crawlbar's quality rubric as the review contract for the app,
+  and its control protocol as the compatibility line.
 - every UI change ships with before and after visual proof.
 
 ## v1.5 and v2
@@ -184,8 +175,8 @@ glance. No settings maze.
   extractor lands here when it works.
 - v2: Signal spike (Signal Desktop keeps an SQLCipher database with the
   key in the OS keychain; assess a snapshot approach before committing),
-  Photos, X, daily deltas, write capability through the upstream access
-  CLIs, published plugin API, MCP or Executor adapter.
+  Photos, X, daily deltas, write capability through source-specific
+  access CLIs, published plugin API, MCP or Executor adapter.
 
 ## Way of working
 

@@ -1,8 +1,8 @@
 package telecrawl
 
 import (
-	"github.com/openclaw/telecrawl/internal/store"
-	"github.com/openclaw/telecrawl/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 )
 
 type chatsJSONEnvelope struct {

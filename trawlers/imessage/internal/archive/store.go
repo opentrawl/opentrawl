@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/imsgcrawl/internal/addressbook"
-	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/addressbook"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 	"github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/shortref"
 	"github.com/opentrawl/opentrawl/trawlkit/state"

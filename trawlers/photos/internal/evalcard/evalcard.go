@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/photoscrawl/internal/photos"
-	repoPrompts "github.com/openclaw/photoscrawl/prompts"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
 	ckmodel "github.com/opentrawl/opentrawl/trawlkit/model"
 )
 

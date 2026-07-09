@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/clawdex/internal/model"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
 const DirName = "avatars"

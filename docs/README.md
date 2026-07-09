@@ -29,6 +29,5 @@ then the contract — everything else hangs off those two.
 ## Platform and process
 
 - [tcc.md](tcc.md) — the macOS permissions (TCC) strategy.
-- [sync.md](sync.md) — syncing crawler directories with their upstreams.
 - [style.md](style.md) — the writing style for every doc and output.
 - [../assets/brand/README.md](../assets/brand/README.md) — the brand: the mark, palette, usage rules and the icon build pipeline.

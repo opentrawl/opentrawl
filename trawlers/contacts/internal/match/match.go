@@ -1,6 +1,6 @@
 package match
 
-import "github.com/openclaw/clawdex/internal/model"
+import "github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 
 type Candidate struct {
 	PersonID string `json:"person_id"`

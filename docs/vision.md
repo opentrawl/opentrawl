@@ -6,8 +6,8 @@ written_by: ai
 
 The project is called OpenTrawl: a trawl net drags the deep and brings
 everything up, and the open prefix names the open-source, plugin-first
-ambition (and the OpenClaw lineage). GitHub org `opentrawl`, one
-monorepo, one CLI (`trawl`), one Mac app shipped as Trawl.
+ambition. GitHub org `opentrawl`, one monorepo, one CLI (`trawl`), one
+Mac app shipped as Trawl.
 
 ## North star
 
@@ -62,10 +62,9 @@ The layers, bottom to top:
    cards: model prose over deterministic facts, generated through a
    classification queue behind the provider seam) and is the working
    template for the rest. Derived layers build on the substrate; they
-   never reach around it into source databases. The
-   clustering and card mechanics OpenClaw already runs on maintainer
-   data (clawsweeper, gitcrawl, discrawl) are the working prior art
-   here; see below.
+   never reach around it into source databases. The clustering and card
+   mechanics already proven on maintainer data (clawsweeper, gitcrawl,
+   discrawl) are the working prior art here; see below.
 
 ## Design principles
 
@@ -97,8 +96,7 @@ The layers, bottom to top:
   explicit indicator. Token budgets are a design axis, not an
   afterthought.
 - Read only in v1. Write capability (sending messages) comes later
-  through the existing upstream access CLIs, behind explicit
-  authorisation.
+  through source-specific access CLIs, behind explicit authorisation.
 
 ## Engineering principles
 
@@ -166,7 +164,7 @@ The bar for every line of code and every surface in this repo:
   global install; a Homebrew tap and a Nix flake cover CLI users. No
   ad-hoc global installs, and no `trawl install` package manager. State
   and config live under one root with per-crawler subdirectories, not
-  scattered dotfiles, via a trawlkit config option (no fork needed).
+  scattered dotfiles, via a shared trawlkit config option.
 - Observability for free. Structured logs, run history and doctor
   diagnostics come from trawlkit once, in one consistent, greppable,
   agent-first shape — a crawler gets debuggability by using the
@@ -189,17 +187,17 @@ The bar for every line of code and every surface in this repo:
   is to make this possible by shipping clean archives and contact
   exports; the inference layer stays out of the crawlers.
 
-## Prior art and how we relate to it
+## Prior art and how we use it
 
-- trawlkit (openclaw): the substrate. Shared SQLite, snapshot,
-  sync-state, vector and control mechanics. We build on it and push
-  contract work back upstream; we do not fork it.
-- crawlbar (openclaw): proved the control-plane idea and wrote down the
-  control protocol and a quality rubric worth keeping. Its
-  settings-driven implementation is what the new Mac app replaces.
-- imsg, wacli, gogcli, remindctl (openclaw): per-service access CLIs with
-  read and write verbs. Too specific to be the entry point, exactly right
-  as adapters under crawlers and as the later write path.
+- trawlkit: the substrate. Shared SQLite, snapshot, sync-state, vector
+  and control mechanics. It is monorepo-native and carries the shared
+  contract work.
+- crawlbar: proved the control-plane idea and wrote down the control
+  protocol and a quality rubric worth keeping. Its settings-driven
+  implementation is what the new Mac app replaces.
+- imsg, wacli, gogcli, remindctl: per-service access CLIs with read and
+  write verbs. Too specific to be the entry point, exactly right as
+  adapters under crawlers and as the later write path.
 - Executor (executor.sh, MIT): an MCP gateway that normalises every tool
   to name plus input and output schemas, with host-side credential
   resolution and aggressive token economy. Validates our contract-first
@@ -209,9 +207,9 @@ The bar for every line of code and every surface in this repo:
 
 ### Clustering and cards: the clawsweeper pattern
 
-OpenClaw already runs, in production on maintainer data, the exact
-inference pattern our horizon needs. It splits across three repos, and
-each half is reusable:
+The earlier maintainer-data system already runs the exact inference
+pattern our horizon needs. It splits across three repos, and each half
+is reusable:
 
 - gitcrawl is the clustering engine. Every issue and PR gets an
   embedding; edges combine cosine similarity with deterministic

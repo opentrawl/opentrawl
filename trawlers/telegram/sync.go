@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openclaw/telecrawl/internal/store"
-	"github.com/openclaw/telecrawl/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )

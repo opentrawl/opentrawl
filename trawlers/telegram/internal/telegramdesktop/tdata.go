@@ -23,7 +23,7 @@ import (
 	"github.com/gotd/td/telegram/query/dialogs"
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
-	"github.com/openclaw/telecrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"golang.org/x/crypto/blake2b"
 )
 

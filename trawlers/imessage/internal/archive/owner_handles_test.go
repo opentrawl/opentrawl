@@ -3,7 +3,7 @@ package archive
 import (
 	"testing"
 
-	"github.com/openclaw/imsgcrawl/internal/messages"
+	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 )
 
 // Regression: Messages accounts carry "E:"/"P:" prefixes. The raw

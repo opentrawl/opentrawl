@@ -63,29 +63,29 @@ require (
 
 require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/openclaw/clawdex v0.0.0
-	github.com/openclaw/imsgcrawl v0.0.0
-	github.com/openclaw/photoscrawl v0.0.0
-	github.com/openclaw/telecrawl v0.0.0
-	github.com/openclaw/wacrawl v0.0.0
 	github.com/opentrawl/opentrawl/birdcrawl v0.0.0
 	github.com/opentrawl/opentrawl/calcrawl v0.0.0
 	github.com/opentrawl/opentrawl/gogcrawl v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/contacts v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/imessage v0.0.0
 	github.com/opentrawl/opentrawl/trawlers/notes v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/photos v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/telegram v0.0.0
+	github.com/opentrawl/opentrawl/trawlers/whatsapp v0.0.0
 	golang.org/x/sys v0.46.0 // indirect
 )
 
 replace github.com/opentrawl/opentrawl/trawlkit => ../trawlkit
 
-replace github.com/openclaw/clawdex => ../trawlers/contacts
+replace github.com/opentrawl/opentrawl/trawlers/contacts => ../trawlers/contacts
 
-replace github.com/openclaw/imsgcrawl => ../trawlers/imessage
+replace github.com/opentrawl/opentrawl/trawlers/imessage => ../trawlers/imessage
 
-replace github.com/openclaw/telecrawl => ../trawlers/telegram
+replace github.com/opentrawl/opentrawl/trawlers/telegram => ../trawlers/telegram
 
-replace github.com/openclaw/wacrawl => ../trawlers/whatsapp
+replace github.com/opentrawl/opentrawl/trawlers/whatsapp => ../trawlers/whatsapp
 
-replace github.com/openclaw/photoscrawl => ../trawlers/photos
+replace github.com/opentrawl/opentrawl/trawlers/photos => ../trawlers/photos
 
 replace github.com/opentrawl/opentrawl/gogcrawl => ../trawlers/gmail
 

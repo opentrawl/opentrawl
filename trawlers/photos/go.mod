@@ -1,4 +1,4 @@
-module github.com/openclaw/photoscrawl
+module github.com/opentrawl/opentrawl/trawlers/photos
 
 go 1.26.4
 
