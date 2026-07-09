@@ -154,18 +154,22 @@ func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.
 	}}, nil
 }
 
+// statusState reports both the machine state and the human summary. The "ok"
+// summary matches the wording trawlkit's own text renderer already prints for
+// state "ok" (see render.WriteStatus) — one sentence, not two that can drift
+// apart between the JSON and text surfaces.
 func statusState(status archive.Status) (string, string) {
 	if status.Versions == 0 {
 		return "empty", "Archive has no notes yet."
 	}
 	lastSync, err := time.Parse(time.RFC3339Nano, status.LastSyncAt)
 	if err != nil {
-		return "error", "Archive freshness timestamp cannot be read."
+		return "error", "Archive last-sync timestamp cannot be read."
 	}
 	if time.Since(lastSync) > staleAfter {
 		return "stale", "Archive is stale."
 	}
-	return "ok", "Archive is fresh."
+	return "ok", "Recently synced."
 }
 
 func checkSourceStore(path string, pathErr error) trawlkit.Check {

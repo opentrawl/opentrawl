@@ -24,12 +24,16 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 	if err != nil {
 		return trawlkit.SearchResult{}, err
 	}
+	// Who is left unset: Apple Notes has no per-note author, every note in this
+	// archive belongs to the one device owner, so "who" would read "me" on
+	// every row. The shared list renderer already drops a column that carries
+	// no varying value, which is the honest outcome for a constant that is not
+	// really data.
 	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
 		hits = append(hits, trawlkit.Hit{
 			Ref:     result.Ref,
 			Time:    parseContractTime(result.Time),
-			Who:     "me",
 			Where:   noteWhere(result),
 			Snippet: result.Snippet,
 		})

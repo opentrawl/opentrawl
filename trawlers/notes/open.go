@@ -14,10 +14,27 @@ import (
 )
 
 type openOutput struct {
-	Ref     string              `json:"ref"`
-	Note    archive.Note        `json:"note"`
-	Version archive.VersionBody `json:"version"`
-	Text    string              `json:"text,omitempty"`
+	Ref     string       `json:"ref"`
+	Note    archive.Note `json:"note"`
+	Version openVersion  `json:"version"`
+	// Text is the note body for the version shown. VersionBody carries its
+	// own Text too, but repeating it inside "version" would hand a consumer
+	// the same bytes twice; openVersion drops that copy and this field is
+	// the one that survives.
+	Text string `json:"text,omitempty"`
+}
+
+// openVersion is the version metadata on an open card: everything about the
+// recovered version except its body text, which openOutput.Text already
+// carries once.
+type openVersion struct {
+	archive.Version
+	Title  string `json:"title,omitempty"`
+	Folder string `json:"folder,omitempty"`
+}
+
+func newOpenVersion(body archive.VersionBody) openVersion {
+	return openVersion{Version: body.Version, Title: body.Title, Folder: body.Folder}
 }
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
@@ -36,14 +53,20 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 	if body.Title == "" {
 		body.Title = note.Title
 	}
-	out := openOutput{Ref: body.Ref, Note: note, Version: body, Text: body.Text}
+	out := openOutput{Ref: body.Ref, Note: note, Version: newOpenVersion(body), Text: body.Text}
 	if req.Log != nil {
 		_ = req.Log.Info("open_complete", "result=note_version")
 	}
 	if req.Format == output.JSON {
 		return writeJSON(req.Out, out)
 	}
-	return printOpenText(req.Out, out, displayRef(ctx, req, cardRef(resolvedRef, note.ID, body.Ref)))
+	// The card always shows a typeable ref for the exact version displayed
+	// (versionRef), plus the ref the reader actually typed to get here
+	// (openRef) when that differs — reopening by note ref shows the note's
+	// current version, not necessarily the same recovered version twice.
+	openRef := displayRef(ctx, req, cardRef(resolvedRef, note.ID, body.Ref))
+	versionRef := displayRef(ctx, req, body.Ref)
+	return printOpenText(req.Out, out, openRef, versionRef)
 }
 
 // cardRef picks which ref the open card echoes. A reader who opened a note by
@@ -121,15 +144,21 @@ func noteLabel(note archive.Note) string {
 	return "(untitled note)"
 }
 
-func printOpenText(w io.Writer, out openOutput, cardRef string) error {
+// printOpenText writes the open card. openRef is what reopens what the
+// reader asked for; versionRef is what reopens this exact recovered version.
+// The two match when the reader opened a version ref directly, in which case
+// one ref line says everything and the second would only repeat it.
+func printOpenText(w io.Writer, out openOutput, openRef, versionRef string) error {
 	title := noteLabel(out.Note)
-	fields := []render.CardField{
-		{Label: "Ref", Value: cardRef},
-		{Label: "Version", Value: out.Version.ShortSHA},
-		{Label: "Modified", Value: humanTime(out.Version.SourceModifiedAt)},
-		{Label: "Observed", Value: humanTime(out.Version.FirstObservedAt)},
-		{Label: "Source", Value: sourceLabel(out.Version.Version)},
+	fields := []render.CardField{{Label: "Ref", Value: openRef}}
+	if versionRef != "" && versionRef != openRef {
+		fields = append(fields, render.CardField{Label: "Version", Value: versionRef})
 	}
+	fields = append(fields,
+		render.CardField{Label: "Modified", Value: humanTime(out.Version.SourceModifiedAt)},
+		render.CardField{Label: "Observed", Value: humanTime(out.Version.FirstObservedAt)},
+		render.CardField{Label: "Source", Value: sourceLabel(out.Version.Version)},
+	)
 	body := out.Text
 	hints := []string{}
 	if out.Version.TextStatus != "decoded" {

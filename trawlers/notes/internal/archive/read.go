@@ -21,7 +21,12 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 	}
 	out.SchemaVersion = version
 	db := s.store.DB()
-	if out.Notes, err = countTable(ctx, db, "notes"); err != nil {
+	// Notes counts the same population list and search browse: real notes
+	// with a recovered body, leaving out Recently Deleted. Counting every row
+	// in the notes table here disagreed with what list actually showed —
+	// Recently Deleted notes inflated this number but never appeared browsing.
+	where, args := browseWhere("")
+	if err = db.QueryRowContext(ctx, `select count(*) from notes n `+where, args...).Scan(&out.Notes); err != nil {
 		return Status{}, err
 	}
 	if out.Versions, err = countTable(ctx, db, "note_versions"); err != nil {
