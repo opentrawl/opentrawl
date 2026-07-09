@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -233,6 +234,12 @@ type SearchOptions struct {
 	Before time.Time
 }
 
+// Search returns one hit per matching note, not one per matching version. The
+// full-text index holds a row per note version, so a note whose word appears in
+// several recovered versions matches several times; Search collapses those to
+// the best-ranked version of each note and hands back a note-level ref, so a
+// reader browses notes, not version history. Recently Deleted notes are left
+// out here as they are everywhere a reader browses.
 func (s *Store) Search(ctx context.Context, query string, options SearchOptions) ([]SearchResult, int64, error) {
 	query = strings.TrimSpace(query)
 	ftsQuery := store.FTS5TokenQuery(query)
@@ -242,56 +249,87 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 	where, args := searchWhere(ftsQuery, options.After, options.Before)
 	var total int64
 	if err := s.store.DB().QueryRowContext(ctx, `
-select count(*)
+select count(distinct notes_fts.note_id)
 from notes_fts
 join note_versions v on v.note_id = notes_fts.note_id and v.zdata_sha256 = notes_fts.zdata_sha256
+left join notes n on n.note_id = notes_fts.note_id
 `+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
-	limitArg := options.Limit
-	if limitArg <= 0 {
-		limitArg = -1
-	}
-	queryArgs := append(args, limitArg)
 	rows, err := s.store.DB().QueryContext(ctx, `
-select notes_fts.note_id, notes_fts.zdata_sha256, substr(notes_fts.zdata_sha256, 1, 12),
+select notes_fts.note_id,
        coalesce(n.title, ''), coalesce(n.folder, ''),
        v.source_modified_at, v.first_observed_at, v.text
 from notes_fts
 join note_versions v on v.note_id = notes_fts.note_id and v.zdata_sha256 = notes_fts.zdata_sha256
 left join notes n on n.note_id = notes_fts.note_id
 `+where+`
-order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc
-limit ?`, queryArgs...)
+order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) desc`, args...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer func() { _ = rows.Close() }()
 	results := []SearchResult{}
+	seen := map[string]bool{}
 	for rows.Next() {
-		var noteID, sha, short, title, folder, modified, observed, text string
-		if err := rows.Scan(&noteID, &sha, &short, &title, &folder, &modified, &observed, &text); err != nil {
+		var noteID, title, folder, modified, observed, text string
+		if err := rows.Scan(&noteID, &title, &folder, &modified, &observed, &text); err != nil {
 			return nil, 0, err
 		}
+		if seen[noteID] {
+			continue
+		}
+		seen[noteID] = true
 		when := modified
 		if when == "" {
 			when = observed
 		}
 		results = append(results, SearchResult{
-			Ref:      RefForVersion(noteID, sha),
-			Time:     when,
-			Title:    title,
-			Folder:   folder,
-			Snippet:  store.FTS5Snippet(text, query),
-			NoteID:   noteID,
-			ShortSHA: short,
+			Ref:     RefForNote(noteID),
+			Time:    when,
+			Title:   title,
+			Folder:  folder,
+			Snippet: store.FTS5Snippet(text, query),
+			NoteID:  noteID,
 		})
 	}
-	return results, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	// Rank ordering above picks which version represents each note; the
+	// reader-facing order is newest first, exactly as the header promises.
+	sort.SliceStable(results, func(i, j int) bool {
+		return contractTime(results[i].Time).After(contractTime(results[j].Time))
+	})
+	if options.Limit > 0 && len(results) > options.Limit {
+		results = results[:options.Limit]
+	}
+	return results, total, nil
+}
+
+// contractTime parses an archive timestamp for ordering; unparseable values
+// sort last rather than failing a read.
+func contractTime(value string) time.Time {
+	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
+		if t, err := time.Parse(layout, strings.TrimSpace(value)); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 func searchWhere(ftsQuery string, after, before time.Time) (string, []any) {
-	parts := []string{"notes_fts match ?"}
+	// n.note_id is not null keeps search to notes that still exist. A note
+	// deleted from the source drops out of the notes table on the next sync but
+	// keeps its recovered versions and FTS rows; without this guard those rows
+	// would surface as blank-title hits here while list (which reads the notes
+	// table directly) never shows them. Recently Deleted is left out the same
+	// way it is everywhere a reader browses.
+	parts := []string{
+		"notes_fts match ?",
+		"n.note_id is not null",
+		"coalesce(n.folder, '') <> '" + recentlyDeletedFolder + "'",
+	}
 	args := []any{ftsQuery}
 	if !after.IsZero() {
 		parts = append(parts, "coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) >= ?")

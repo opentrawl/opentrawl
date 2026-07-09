@@ -57,7 +57,10 @@ type Command struct {
 	Store      string   `json:"store,omitempty"`
 	Legacy     bool     `json:"legacy,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
-	Flags      []Flag   `json:"flags,omitempty"`
+	// Secondary marks a specialist verb the namespace listing moves under a
+	// "More verbs" heading, out of the headline list.
+	Secondary bool   `json:"secondary,omitempty"`
+	Flags     []Flag `json:"flags,omitempty"`
 }
 
 type Flag struct {

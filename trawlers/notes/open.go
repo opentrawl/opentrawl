@@ -43,7 +43,18 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 	if req.Format == output.JSON {
 		return writeJSON(req.Out, out)
 	}
-	return printOpenText(req.Out, out, displayRef(ctx, req, body.Ref))
+	return printOpenText(req.Out, out, displayRef(ctx, req, cardRef(resolvedRef, note.ID, body.Ref)))
+}
+
+// cardRef picks which ref the open card echoes. A reader who opened a note by
+// its note ref (from list or search) sees that same note ref back; one who
+// asked for a specific version by its version ref sees the version ref, so the
+// handle on screen always reopens what they are looking at.
+func cardRef(resolvedRef, noteID, versionRef string) string {
+	if _, _, ok := archive.VersionFromRef(resolvedRef); ok {
+		return versionRef
+	}
+	return archive.RefForNote(noteID)
 }
 
 // resolveInputRef turns a short ref from search into its full version ref.
@@ -101,17 +112,22 @@ func resolveOpen(ctx context.Context, st *archive.Store, ref string) (archive.No
 	return note, body, err
 }
 
-func printOpenText(w io.Writer, out openOutput, cardRef string) error {
-	title := strings.TrimSpace(out.Note.Title)
-	if title == "" {
-		title = "(untitled note)"
+// noteLabel names a note the way a human knows it: by title, never by the
+// provider's note id.
+func noteLabel(note archive.Note) string {
+	if title := strings.TrimSpace(note.Title); title != "" {
+		return title
 	}
+	return "(untitled note)"
+}
+
+func printOpenText(w io.Writer, out openOutput, cardRef string) error {
+	title := noteLabel(out.Note)
 	fields := []render.CardField{
 		{Label: "Ref", Value: cardRef},
-		{Label: "Note", Value: out.Note.ID},
 		{Label: "Version", Value: out.Version.ShortSHA},
-		{Label: "Modified", Value: out.Version.SourceModifiedAt},
-		{Label: "Observed", Value: out.Version.FirstObservedAt},
+		{Label: "Modified", Value: humanTime(out.Version.SourceModifiedAt)},
+		{Label: "Observed", Value: humanTime(out.Version.FirstObservedAt)},
 		{Label: "Source", Value: sourceLabel(out.Version.Version)},
 	}
 	body := out.Text

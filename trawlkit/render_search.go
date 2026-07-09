@@ -26,8 +26,11 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			Who:      hit.Who,
 			Where:    hit.Where,
 			Calendar: hit.Calendar,
-			Ref:      hit.Ref,
-			Text:     hit.Snippet,
+			// The reader copies a short ref, never a long machine ref. The kit
+			// fills ShortRef from the shared index; a hit with no alias yet (a
+			// source that indexes none) falls back to the full ref.
+			Ref:  firstText(hit.ShortRef, hit.Ref),
+			Text: hit.Snippet,
 		})
 	}
 	hints := []string{}

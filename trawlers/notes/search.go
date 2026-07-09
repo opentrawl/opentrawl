@@ -8,6 +8,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
@@ -64,6 +65,17 @@ func parseContractTime(value string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// humanTime turns a stored RFC3339 timestamp into the short local form a reader
+// scans (2006-01-02 15:04), matching search output. An unparseable or empty
+// value falls back to the raw string rather than an empty cell.
+func humanTime(value string) string {
+	t := parseContractTime(value)
+	if t.IsZero() {
+		return strings.TrimSpace(value)
+	}
+	return render.ShortLocalTime(t)
 }
 
 func archiveErr(err error) error {

@@ -120,12 +120,13 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		argv = append(argv, verb.Args...)
 		argv = append(argv, "--json")
 		commands[key] = control.Command{
-			Title:   strings.TrimSpace(verb.Help),
-			Argv:    argv,
-			JSON:    true,
-			Mutates: verb.Mutates,
-			Store:   storeModeManifestValue(mode),
-			Flags:   flagsForVerb(verb),
+			Title:     strings.TrimSpace(verb.Help),
+			Argv:      argv,
+			JSON:      true,
+			Mutates:   verb.Mutates,
+			Store:     storeModeManifestValue(mode),
+			Secondary: verb.Secondary,
+			Flags:     flagsForVerb(verb),
 		}
 	}
 	return commands

@@ -114,6 +114,8 @@ select note.ZIDENTIFIER,
        cast(note.ZCREATIONDATE1 as real),
        cast(note.ZCREATIONDATE3 as real),
        cast(note.ZMODIFICATIONDATE1 as real),
+       coalesce(note.ZISPASSWORDPROTECTED, 0),
+       coalesce(note.ZNEEDSINITIALFETCHFROMCLOUD, 0),
        data.ZDATA
 from ZICCLOUDSYNCINGOBJECT note
 left join ZICNOTEDATA data on note.ZNOTEDATA = data.Z_PK
@@ -130,12 +132,15 @@ order by note.ZIDENTIFIER`)
 	for rows.Next() {
 		var note Note
 		var created1, created3, modified sql.NullFloat64
+		var passwordProtected, needsInitialFetch int64
 		var zdata []byte
-		if err := rows.Scan(&note.ID, &note.Title, &note.Folder, &created1, &created3, &modified, &zdata); err != nil {
+		if err := rows.Scan(&note.ID, &note.Title, &note.Folder, &created1, &created3, &modified, &passwordProtected, &needsInitialFetch, &zdata); err != nil {
 			return FinalState{}, err
 		}
 		note.CreatedAt = firstAppleDate(created1, created3)
 		note.ModifiedAt = appleDate(modified)
+		note.PasswordProtected = passwordProtected != 0
+		note.NeedsInitialFetch = needsInitialFetch != 0
 		state.Notes = append(state.Notes, note)
 		if len(zdata) > 0 {
 			state.Bodies = append(state.Bodies, Body{NoteID: note.ID, SourceModifiedAt: note.ModifiedAt, ZData: zdata})

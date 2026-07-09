@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"unicode"
@@ -162,22 +163,56 @@ func (r *Runtime) renderNamespace(source Source, token string) error {
 		_, err := fmt.Fprintln(r.stdout, "This crawler exposes no verbs.")
 		return err
 	}
-	if _, err := fmt.Fprintln(r.stdout, "Verbs:"); err != nil {
+	primary, secondary := splitSecondaryVerbs(verbs)
+	width := verbColumnWidth(verbs)
+	if err := writeVerbGroup(r.stdout, "Verbs:", primary, width); err != nil {
 		return err
 	}
+	if len(secondary) > 0 {
+		if _, err := fmt.Fprintln(r.stdout); err != nil {
+			return err
+		}
+		if err := writeVerbGroup(r.stdout, "More verbs:", secondary, width); err != nil {
+			return err
+		}
+	}
+	_, err := fmt.Fprintf(r.stdout, "\nRun a verb: trawl %s <verb>\n", token)
+	return err
+}
+
+// splitSecondaryVerbs keeps the headline verbs first and the specialist ones in
+// a separate group, preserving the alphabetical order within each.
+func splitSecondaryVerbs(verbs []namespaceVerb) (primary, secondary []namespaceVerb) {
+	for _, verb := range verbs {
+		if verb.Secondary {
+			secondary = append(secondary, verb)
+			continue
+		}
+		primary = append(primary, verb)
+	}
+	return primary, secondary
+}
+
+func verbColumnWidth(verbs []namespaceVerb) int {
 	width := 0
 	for _, verb := range verbs {
 		if len(verb.Verb) > width {
 			width = len(verb.Verb)
 		}
 	}
+	return width
+}
+
+func writeVerbGroup(w io.Writer, heading string, verbs []namespaceVerb, width int) error {
+	if _, err := fmt.Fprintln(w, heading); err != nil {
+		return err
+	}
 	for _, verb := range verbs {
-		if _, err := fmt.Fprintf(r.stdout, "  %-*s  %s\n", width, verb.Verb, verb.Title); err != nil {
+		if _, err := fmt.Fprintf(w, "  %-*s  %s\n", width, verb.Verb, verb.Title); err != nil {
 			return err
 		}
 	}
-	_, err := fmt.Fprintf(r.stdout, "\nRun a verb: trawl %s <verb>\n", token)
-	return err
+	return nil
 }
 
 type namespaceListing struct {
@@ -188,8 +223,9 @@ type namespaceListing struct {
 }
 
 type namespaceVerb struct {
-	Verb  string `json:"verb"`
-	Title string `json:"title,omitempty"`
+	Verb      string `json:"verb"`
+	Title     string `json:"title,omitempty"`
+	Secondary bool   `json:"secondary,omitempty"`
 }
 
 func namespaceVerbList(source Source) []namespaceVerb {
@@ -199,7 +235,7 @@ func namespaceVerbList(source Source) []namespaceVerb {
 		if invocation == "" {
 			continue
 		}
-		verbs = append(verbs, namespaceVerb{Verb: invocation, Title: command.Title})
+		verbs = append(verbs, namespaceVerb{Verb: invocation, Title: command.Title, Secondary: command.Secondary})
 	}
 	sort.Slice(verbs, func(i, j int) bool { return verbs[i].Verb < verbs[j].Verb })
 	return verbs

@@ -108,6 +108,12 @@ type SyncStats struct {
 	ArchivePath        string
 	SourcePath         string
 	SyncedAt           string
+	// SkippedNoBody counts source notes left out of the archive because they
+	// carry no readable body; SkipWarnings names why, one line per reason, so a
+	// deficient input is reported rather than archived as an empty row
+	// (engineering rules 1.15).
+	SkippedNoBody int      `json:"skipped_no_body,omitempty"`
+	SkipWarnings  []string `json:"skip_warnings,omitempty"`
 }
 
 type Status struct {
@@ -124,13 +130,12 @@ type Status struct {
 }
 
 type SearchResult struct {
-	Ref      string
-	Time     string
-	Title    string
-	Folder   string
-	Snippet  string
-	NoteID   string
-	ShortSHA string
+	Ref     string
+	Time    string
+	Title   string
+	Folder  string
+	Snippet string
+	NoteID  string
 }
 
 type AtTimeResult struct {

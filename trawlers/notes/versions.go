@@ -109,14 +109,14 @@ func printVersionsText(w io.Writer, out versionListOutput, shortRefs map[string]
 	for _, version := range out.Versions {
 		rows = append(rows, []string{
 			version.ShortSHA,
-			version.SourceModifiedAt,
-			version.FirstObservedAt,
+			humanTime(version.SourceModifiedAt),
+			humanTime(version.FirstObservedAt),
 			sourceLabel(version),
 			refOrShort(shortRefs, version.Ref),
 		})
 	}
 	if len(rows) == 0 {
-		_, err := fmt.Fprintf(w, "No recovered versions for %s.\n", out.Note.ID)
+		_, err := fmt.Fprintf(w, "No recovered versions for %s.\n", noteLabel(out.Note))
 		return err
 	}
 	return render.WriteTable(w, []render.TableColumn{
@@ -130,19 +130,16 @@ func printVersionsText(w io.Writer, out versionListOutput, shortRefs map[string]
 
 func printAtTimeText(w io.Writer, result archive.AtTimeResult, cardRef string) error {
 	if result.Version == nil {
-		_, err := fmt.Fprintf(w, "No recovered version for %s at or before %s.\n%s\n", result.Note.ID, result.RequestedTime, result.Gap)
+		_, err := fmt.Fprintf(w, "No recovered version for %s at or before %s.\n%s\n", noteLabel(result.Note), humanTime(result.RequestedTime), result.Gap)
 		return err
 	}
-	title := strings.TrimSpace(result.Note.Title)
-	if title == "" {
-		title = "(untitled note)"
-	}
+	title := noteLabel(result.Note)
 	fields := []render.CardField{
 		{Label: "Match", Value: result.Match},
-		{Label: "Requested", Value: result.RequestedTime},
+		{Label: "Requested", Value: humanTime(result.RequestedTime)},
 		{Label: "Ref", Value: cardRef},
 		{Label: "Version", Value: result.Version.ShortSHA},
-		{Label: "Modified", Value: result.Version.SourceModifiedAt},
+		{Label: "Modified", Value: humanTime(result.Version.SourceModifiedAt)},
 		{Label: "Source", Value: sourceLabel(result.Version.Version)},
 	}
 	body := result.Version.Text

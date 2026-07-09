@@ -12,6 +12,10 @@ type Verb struct {
 	Args    []string
 	Flags   func(fs *flag.FlagSet)
 	Mutates bool
+	// Secondary keeps a verb out of the headline verb list, moving it under a
+	// "More verbs" heading. It is for the specialist verbs a reader reaches for
+	// rarely, so the main list stays about the everyday ones.
+	Secondary bool
 	// Store declares archive access. StoreDefault keeps the runner default.
 	Store   StoreAccess
 	Timeout time.Duration

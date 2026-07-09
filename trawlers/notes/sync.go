@@ -17,6 +17,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 type stateSpec struct {
@@ -37,7 +38,11 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	if err != nil {
 		return nil, err
 	}
-	report := &trawlkit.SyncReport{Added: int64(stats.NewVersions), Updated: int64(stats.Observations)}
+	report := &trawlkit.SyncReport{
+		Added:    int64(stats.NewVersions),
+		Updated:  int64(stats.Observations),
+		Warnings: stats.SkipWarnings,
+	}
 	if stats.AttachmentsMissing > 0 {
 		report.Warnings = append(report.Warnings, missingAttachmentsWarning(stats.AttachmentsMissing))
 	}
@@ -66,9 +71,16 @@ func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error
 	if req.Format == "json" {
 		return writeJSON(req.Out, stats)
 	}
-	_, err = fmt.Fprintf(req.Out, "Sync complete\n\nVersions added: %d\nObservations stored: %d\nAttachments copied: %d\nAttachments missing: %d\nSource: %s\n",
-		stats.NewVersions, stats.Observations, stats.AttachmentsCopied, stats.AttachmentsMissing, label)
-	return err
+	if _, err = fmt.Fprintf(req.Out, "Sync complete\n\nVersions added: %d\nObservations stored: %d\nAttachments copied: %d\nAttachments missing: %d\nSource: %s\n",
+		stats.NewVersions, stats.Observations, stats.AttachmentsCopied, stats.AttachmentsMissing, label); err != nil {
+		return err
+	}
+	for _, warning := range stats.SkipWarnings {
+		if _, err = fmt.Fprintln(req.Out, warning); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, replaceNotes bool) (archive.SyncStats, error) {
@@ -182,7 +194,9 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	backfillBodyTitles(bodies, noteTitles)
 	bodyReads := len(bodies)
 	bodies = dedupeBodyObservations(bodies)
-	notes := archiveNotes(final.Notes)
+	withBody := noteIDsWithBody(bodies)
+	realNotes, skipped := splitBodilessNotes(final.Notes, withBody)
+	notes := archiveNotes(realNotes)
 	state := syncState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
 	groupContainerDir := filepath.Dir(snap.SourcePath)
 	archiveBaseDir := filepath.Dir(req.Paths.Archive)
@@ -203,6 +217,11 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	}
 	stats.Notes = len(notes)
 	stats.BodyReads = bodyReads
+	stats.SkippedNoBody = len(skipped)
+	stats.SkipWarnings = skipWarnings(skipped)
+	if req.Log != nil && len(skipped) > 0 {
+		_ = req.Log.Info("notes_skipped_no_body", strings.Join(skipWarnings(skipped), "; "))
+	}
 	stats.WALBytes = int64(len(walData))
 	stats.WALCommits = len(walOffsets)
 	stats.SourcePath = archive.SourcePathHint(snap.SourcePath)
@@ -280,6 +299,61 @@ func archiveNotes(input []notesdb.Note) []archive.Note {
 			CreatedAt:  note.CreatedAt,
 			ModifiedAt: note.ModifiedAt,
 		})
+	}
+	return out
+}
+
+func noteIDsWithBody(bodies []archive.BodyInsert) map[string]bool {
+	set := make(map[string]bool, len(bodies))
+	for _, body := range bodies {
+		set[body.NoteID] = true
+	}
+	return set
+}
+
+// splitBodilessNotes separates the notes worth archiving from the ones the
+// source lists without any readable body. A body-less row is not a note we can
+// show, so it is reported by reason rather than stored as an empty row
+// (engineering rules 1.15).
+func splitBodilessNotes(notes []notesdb.Note, withBody map[string]bool) (real, skipped []notesdb.Note) {
+	for _, note := range notes {
+		if withBody[note.ID] {
+			real = append(real, note)
+			continue
+		}
+		skipped = append(skipped, note)
+	}
+	return real, skipped
+}
+
+// skipWarnings names why each body-less note was left out, one line per reason.
+// Apple leaves an empty placeholder for a note still downloading from iCloud and
+// keeps an encrypted note's body locked until it is unlocked; anything else is a
+// gap we cannot explain and flag for a closer look.
+func skipWarnings(skipped []notesdb.Note) []string {
+	if len(skipped) == 0 {
+		return nil
+	}
+	var awaitingDownload, passwordProtected, unexplained int
+	for _, note := range skipped {
+		switch {
+		case note.NeedsInitialFetch:
+			awaitingDownload++
+		case note.PasswordProtected:
+			passwordProtected++
+		default:
+			unexplained++
+		}
+	}
+	var out []string
+	if awaitingDownload > 0 {
+		out = append(out, fmt.Sprintf("Skipped %s notes still downloading from iCloud, with no body yet.", render.FormatInteger(int64(awaitingDownload))))
+	}
+	if passwordProtected > 0 {
+		out = append(out, fmt.Sprintf("Skipped %s password-protected notes; unlock them in Notes, then sync again.", render.FormatInteger(int64(passwordProtected))))
+	}
+	if unexplained > 0 {
+		out = append(out, fmt.Sprintf("Skipped %s notes with no body and no known reason; check the source store.", render.FormatInteger(int64(unexplained))))
 	}
 	return out
 }

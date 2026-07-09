@@ -72,7 +72,10 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	if err := json.Unmarshal(openBuf.Bytes(), &opened); err != nil {
 		t.Fatal(err)
 	}
-	if opened.Text != "second synthetic edit" {
+	// Search returns a note-level ref, so opening it reads the note's current
+	// body. The snippet matched a historical edit ("second"); the open card
+	// shows what the note says now ("third"). History stays in versions/at-time.
+	if opened.Text != "third synthetic edit" {
 		t.Fatalf("open text = %q", opened.Text)
 	}
 
@@ -257,8 +260,14 @@ func TestSyncBackfillsCurrentTitleForHistoricalVersionSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(search.Results) != int(report.Added) {
-		t.Fatalf("title search results = %d, want %d", len(search.Results), report.Added)
+	// The current title is backfilled onto every recovered version's FTS row, so
+	// a title search matches historical versions too. Note-level dedup then
+	// collapses those matches to one hit for the note.
+	if len(search.Results) != 1 {
+		t.Fatalf("title search results = %d, want 1", len(search.Results))
+	}
+	if search.Results[0].Ref != archive.RefForNote("note-alpha") {
+		t.Fatalf("title search ref = %q, want note ref", search.Results[0].Ref)
 	}
 }
 
@@ -360,6 +369,8 @@ create table ZICCLOUDSYNCINGOBJECT (
   ZTITLE1 text,
   ZTITLE2 text,
   ZFOLDER integer,
+  ZISPASSWORDPROTECTED integer,
+  ZNEEDSINITIALFETCHFROMCLOUD integer,
   ZCREATIONDATE1 timestamp,
   ZCREATIONDATE3 timestamp,
   ZMODIFICATIONDATE1 timestamp,

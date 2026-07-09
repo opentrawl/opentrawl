@@ -52,6 +52,15 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{Name: "sync", Flags: c.syncFlags},
 		{
+			Name:  "list",
+			Help:  "List notes newest first, or one folder",
+			Args:  []string{"[FOLDER]"},
+			Store: trawlkit.StoreRequired,
+			Run: func(ctx context.Context, req *trawlkit.Request) error {
+				return c.runList(ctx, req)
+			},
+		},
+		{
 			Name:    "sync-store",
 			Help:    "Sync one copied or mounted NoteStore.sqlite",
 			Args:    []string{"PATH"},
@@ -62,20 +71,22 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			},
 		},
 		{
-			Name:  "versions",
-			Help:  "List recovered versions for one note",
-			Args:  []string{"NOTE"},
-			Store: trawlkit.StoreRequired,
+			Name:      "versions",
+			Help:      "List recovered versions for one note",
+			Args:      []string{"NOTE"},
+			Secondary: true,
+			Store:     trawlkit.StoreRequired,
 			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runVersions(ctx, req)
 			},
 		},
 		{
-			Name:  "at-time",
-			Help:  "Open the recovered version at or before a time",
-			Args:  []string{"NOTE"},
-			Flags: c.atTimeFlags,
-			Store: trawlkit.StoreRequired,
+			Name:      "at-time",
+			Help:      "Open the recovered version at or before a time",
+			Args:      []string{"NOTE"},
+			Secondary: true,
+			Flags:     c.atTimeFlags,
+			Store:     trawlkit.StoreRequired,
 			Run: func(ctx context.Context, req *trawlkit.Request) error {
 				return c.runAtTime(ctx, req)
 			},

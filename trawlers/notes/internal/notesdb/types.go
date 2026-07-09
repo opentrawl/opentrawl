@@ -12,6 +12,13 @@ type Note struct {
 	Folder     string
 	CreatedAt  string
 	ModifiedAt string
+	// PasswordProtected and NeedsInitialFetch explain why a note carries no
+	// readable body. Apple locks an encrypted note's plaintext (password
+	// protected) and leaves a placeholder row for a note whose content has not
+	// yet downloaded from iCloud (needs initial fetch). Sync reports these
+	// instead of archiving an empty row (engineering rules 1.15).
+	PasswordProtected bool
+	NeedsInitialFetch bool
 }
 
 type Body struct {
