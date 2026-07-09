@@ -12,6 +12,12 @@ export GOFLAGS="-tags=sqlite_fts5"
 
 mkdir -p "$bin_dir"
 
+# Go's build cache makes an unchanged rebuild fast (warm sequential measured
+# well under a second), so this always runs on shell entry rather than
+# tracking staleness. Quiet on success (one summary line); the per-target
+# "building..." trace only appears for the target that actually failed.
+start="${EPOCHREALTIME:-$SECONDS.0}"
+
 while IFS= read -r go_mod; do
   module_dir="$(dirname "$go_mod")"
   cmd_dir="$module_dir/cmd"
@@ -25,10 +31,17 @@ while IFS= read -r go_mod; do
     output="$bin_dir/$name"
     module_path="${module_dir#./}"
 
-    printf 'building %s from %s/cmd/%s...\n' "$name" "$module_path" "$name"
-    (
-      cd "$module_dir"
-      go build -o "$output" "./cmd/$name"
-    )
+    log="$(mktemp)"
+    if ! ( cd "$module_dir" && go build -o "$output" "./cmd/$name" ) >"$log" 2>&1; then
+      printf 'building %s from %s/cmd/%s...\n' "$name" "$module_path" "$name"
+      cat "$log"
+      rm -f "$log"
+      exit 1
+    fi
+    rm -f "$log"
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
 done < <(find . -path ./.git -prune -o -name go.mod -print | sort)
+
+end="${EPOCHREALTIME:-$SECONDS.0}"
+elapsed="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.1f", e - s }')"
+printf 'dev-bin: fresh (%ss)\n' "$elapsed"
