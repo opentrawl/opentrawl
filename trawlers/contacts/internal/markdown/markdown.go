@@ -1,14 +1,13 @@
 package markdown
 
 import (
-	"bytes"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"gopkg.in/yaml.v3"
 )
@@ -18,126 +17,75 @@ type RepairReport struct {
 	Needed            bool     `json:"needed"`
 	Problems          []string `json:"problems,omitempty"`
 	RecoveredMetadata string   `json:"recovered_metadata,omitempty"`
-}
-
-func NewPerson(name string, now time.Time) model.Person {
-	return model.Person{
-		ID:        "person_" + uuid.NewString(),
-		Name:      strings.TrimSpace(name),
-		CreatedAt: now.UTC(),
-		UpdatedAt: now.UTC(),
-	}
-}
-
-func NewNote(personID, kind, source, body string, occurredAt, now time.Time, topics []string) model.Note {
-	if occurredAt.IsZero() {
-		occurredAt = now
-	}
-	return model.Note{
-		ID:         "note_" + uuid.NewString(),
-		PersonID:   personID,
-		OccurredAt: occurredAt.UTC(),
-		CapturedAt: now.UTC(),
-		Kind:       strings.TrimSpace(kind),
-		Source:     strings.TrimSpace(source),
-		Confidence: "high",
-		Privacy:    "normal",
-		Topics:     topics,
-		Body:       body,
-	}
+	DerivedIDs        int      `json:"derived_ids,omitempty"`
 }
 
 func ReadPerson(path string) (model.Person, RepairReport, error) {
+	return ReadPersonWithStableID(path, path)
+}
+
+func ReadPersonWithStableID(path, stableIDPath string) (model.Person, RepairReport, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return model.Person{}, RepairReport{}, err
 	}
 	front, body, ok := splitFrontmatter(data)
 	report := RepairReport{Path: path}
-	var p model.Person
+	var person model.Person
+	var frontAvatar *avatarFront
 	if ok {
-		var frontmatter personFront
-		if err := yaml.Unmarshal([]byte(front), &frontmatter); err != nil {
+		var parsed personFront
+		if err := yaml.Unmarshal([]byte(front), &parsed); err != nil {
 			report.Needed = true
 			report.Problems = append(report.Problems, "invalid YAML frontmatter: "+err.Error())
 			report.RecoveredMetadata = front
-			p = salvagePerson(front)
+			person = salvagePerson(front)
 		} else {
-			p = personFromFrontmatter(frontmatter)
+			person = personFromFrontmatter(parsed)
+			frontAvatar = parsed.Avatar
 		}
 	} else {
 		report.Needed = true
 		report.Problems = append(report.Problems, "missing YAML frontmatter")
 		body = string(data)
 	}
-	p.Body = strings.TrimLeft(body, "\n")
-	p.Path = path
-	inferPerson(&p, path)
-	return p, report, nil
-}
-
-func WritePerson(path string, p model.Person) error {
-	inferPerson(&p, path)
-	p.UpdatedAt = p.UpdatedAt.UTC()
-	front, err := yaml.Marshal(personFrontmatter(p))
-	if err != nil {
-		return err
+	person.Body = strings.TrimLeft(body, "\n")
+	person.Path = path
+	report.DerivedIDs += inferPerson(&person, path, stableIDPath)
+	if err := loadLegacyAvatar(&person, frontAvatar, path); err != nil {
+		return model.Person{}, RepairReport{}, err
 	}
-	body := strings.TrimLeft(p.Body, "\n")
-	if body == "" {
-		body = "# " + p.Name + "\n"
-	}
-	return atomicWrite(path, appendFrontmatter(front, body), 0o600)
-}
-
-func RepairPerson(path, repairRoot string, p model.Person, report RepairReport, backup bool) error {
-	if !report.Needed {
-		return nil
-	}
-	if backup {
-		if err := backupOriginal(path, repairRoot); err != nil {
-			return err
-		}
-	}
-	if report.RecoveredMetadata != "" && !strings.Contains(p.Body, "## Recovered metadata") {
-		p.Body = strings.TrimRight(p.Body, "\n") + "\n\n## Recovered metadata\n\n```yaml\n" + strings.TrimSpace(report.RecoveredMetadata) + "\n```\n"
-	}
-	return WritePerson(path, p)
+	return person, report, nil
 }
 
 func ReadNote(path string) (model.Note, RepairReport, error) {
+	return ReadNoteWithStableID(path, path)
+}
+
+func ReadNoteWithStableID(path, stableIDPath string) (model.Note, RepairReport, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return model.Note{}, RepairReport{}, err
 	}
 	front, body, ok := splitFrontmatter(data)
 	report := RepairReport{Path: path}
-	var n model.Note
+	var note model.Note
 	if ok {
-		if err := yaml.Unmarshal([]byte(front), &n); err != nil {
+		if err := yaml.Unmarshal([]byte(front), &note); err != nil {
 			report.Needed = true
 			report.Problems = append(report.Problems, "invalid YAML frontmatter: "+err.Error())
 			report.RecoveredMetadata = front
-			n = salvageNote(front)
+			note = salvageNote(front)
 		}
 	} else {
 		report.Needed = true
 		report.Problems = append(report.Problems, "missing YAML frontmatter")
 		body = string(data)
 	}
-	n.Body = strings.TrimLeft(body, "\n")
-	n.Path = path
-	inferNote(&n, path)
-	return n, report, nil
-}
-
-func WriteNote(path string, n model.Note) error {
-	inferNote(&n, path)
-	front, err := yaml.Marshal(noteFrontmatter(n))
-	if err != nil {
-		return err
-	}
-	return atomicWrite(path, appendFrontmatter(front, strings.TrimLeft(n.Body, "\n")), 0o600)
+	note.Body = strings.TrimLeft(body, "\n")
+	note.Path = path
+	report.DerivedIDs += inferNote(&note, path, stableIDPath)
+	return note, report, nil
 }
 
 func splitFrontmatter(data []byte) (string, string, bool) {
@@ -157,160 +105,170 @@ func splitFrontmatter(data []byte) (string, string, bool) {
 	return front, body, true
 }
 
-func appendFrontmatter(front []byte, body string) []byte {
-	var buf bytes.Buffer
-	buf.WriteString("---\n")
-	buf.Write(bytes.TrimSpace(front))
-	buf.WriteString("\n---\n")
-	buf.WriteString(strings.TrimLeft(body, "\n"))
-	if !strings.HasSuffix(buf.String(), "\n") {
-		buf.WriteByte('\n')
+func inferPerson(person *model.Person, path, stableIDPath string) int {
+	derived := 0
+	if person.ID == "" {
+		person.ID = stableID("person", stableIDPath)
+		derived = 1
 	}
-	return buf.Bytes()
+	if strings.TrimSpace(person.Name) == "" {
+		person.Name = nameFromBody(person.Body)
+	}
+	if strings.TrimSpace(person.Name) == "" {
+		person.Name = strings.ReplaceAll(model.PathSlug(path), "-", " ")
+	}
+	if person.CreatedAt.IsZero() {
+		person.CreatedAt = fileTime(path)
+	}
+	if person.UpdatedAt.IsZero() {
+		person.UpdatedAt = fileTime(path)
+	}
+	if person.Accounts == nil {
+		person.Accounts = map[string][]string{}
+	}
+	return derived
 }
 
-func inferPerson(p *model.Person, path string) {
-	if p.ID == "" {
-		p.ID = "person_" + uuid.NewString()
+func inferNote(note *model.Note, path, stableIDPath string) int {
+	derived := 0
+	if note.ID == "" {
+		note.ID = stableID("note", stableIDPath)
+		derived = 1
 	}
-	if strings.TrimSpace(p.Name) == "" {
-		p.Name = nameFromBody(p.Body)
+	if note.OccurredAt.IsZero() {
+		note.OccurredAt = fileTime(path)
 	}
-	if strings.TrimSpace(p.Name) == "" {
-		p.Name = strings.ReplaceAll(model.PathSlug(path), "-", " ")
+	if note.CapturedAt.IsZero() {
+		note.CapturedAt = fileTime(path)
 	}
-	if p.CreatedAt.IsZero() {
-		p.CreatedAt = fileTime(path)
+	if note.Kind == "" {
+		note.Kind = "note"
 	}
-	if p.UpdatedAt.IsZero() {
-		p.UpdatedAt = fileTime(path)
+	if note.Source == "" {
+		note.Source = "manual"
 	}
-	if p.Accounts == nil {
-		p.Accounts = map[string][]string{}
+	if note.Confidence == "" {
+		note.Confidence = "medium"
 	}
-}
-
-func inferNote(n *model.Note, path string) {
-	if n.ID == "" {
-		n.ID = "note_" + uuid.NewString()
+	if note.Privacy == "" {
+		note.Privacy = "normal"
 	}
-	if n.OccurredAt.IsZero() {
-		n.OccurredAt = fileTime(path)
-	}
-	if n.CapturedAt.IsZero() {
-		n.CapturedAt = fileTime(path)
-	}
-	if n.Kind == "" {
-		n.Kind = "note"
-	}
-	if n.Source == "" {
-		n.Source = "manual"
-	}
-	if n.Confidence == "" {
-		n.Confidence = "medium"
-	}
-	if n.Privacy == "" {
-		n.Privacy = "normal"
-	}
+	return derived
 }
 
 type personFront struct {
-	ID        string                        `yaml:"id"`
-	Name      string                        `yaml:"name"`
-	SortName  string                        `yaml:"sort_name,omitempty"`
-	AKA       stringList                    `yaml:"aka,omitempty"`
-	Tags      []string                      `yaml:"tags,omitempty"`
-	Emails    []model.ContactValue          `yaml:"emails,omitempty"`
-	Phones    []model.ContactValue          `yaml:"phones,omitempty"`
-	Addresses []model.ContactValue          `yaml:"addresses,omitempty"`
-	Avatar    *model.AvatarRef              `yaml:"avatar,omitempty"`
-	Accounts  map[string][]string           `yaml:"accounts,omitempty"`
-	Sources   map[string]model.PersonSource `yaml:"sources,omitempty"`
-	Apple     *model.ExternalRef            `yaml:"apple,omitempty"`
-	Google    *model.ExternalRef            `yaml:"google,omitempty"`
-	CreatedAt time.Time                     `yaml:"created_at"`
-	UpdatedAt time.Time                     `yaml:"updated_at"`
+	ID                     string                        `yaml:"id"`
+	Name                   string                        `yaml:"name"`
+	SortName               string                        `yaml:"sort_name,omitempty"`
+	AKA                    stringList                    `yaml:"aka,omitempty"`
+	Tags                   []string                      `yaml:"tags,omitempty"`
+	Emails                 []model.ContactValue          `yaml:"emails,omitempty"`
+	Phones                 []model.ContactValue          `yaml:"phones,omitempty"`
+	Addresses              []model.ContactValue          `yaml:"addresses,omitempty"`
+	Avatar                 *avatarFront                  `yaml:"avatar,omitempty"`
+	Accounts               map[string][]string           `yaml:"accounts,omitempty"`
+	Sources                map[string]model.PersonSource `yaml:"sources,omitempty"`
+	Apple                  *model.ExternalRef            `yaml:"apple,omitempty"`
+	Google                 *model.ExternalRef            `yaml:"google,omitempty"`
+	Annotation             string                        `yaml:"annotation,omitempty"`
+	AnnotationStatedAt     string                        `yaml:"annotation_stated_at,omitempty"`
+	LegacyAnnotationStated string                        `yaml:"annotation_stated,omitempty"`
+	CreatedAt              time.Time                     `yaml:"created_at"`
+	UpdatedAt              time.Time                     `yaml:"updated_at"`
 }
 
-func personFrontmatter(p model.Person) personFront {
-	return personFront{
-		ID:        p.ID,
-		Name:      p.Name,
-		SortName:  p.SortName,
-		AKA:       stringList(p.AKA),
-		Tags:      p.Tags,
-		Emails:    p.Emails,
-		Phones:    p.Phones,
-		Addresses: p.Addresses,
-		Avatar:    nonEmptyAvatar(p.Avatar),
-		Accounts:  nonEmptyAccounts(p.Accounts),
-		Sources:   nonEmptySources(p.Sources),
-		Apple:     nonEmptyExternal(p.Apple),
-		Google:    nonEmptyExternal(p.Google),
-		CreatedAt: p.CreatedAt,
-		UpdatedAt: p.UpdatedAt,
-	}
+type avatarFront struct {
+	Path      string    `yaml:"path,omitempty"`
+	Source    string    `yaml:"source,omitempty"`
+	MIME      string    `yaml:"mime,omitempty"`
+	SHA256    string    `yaml:"sha256,omitempty"`
+	Width     int       `yaml:"width,omitempty"`
+	Height    int       `yaml:"height,omitempty"`
+	UpdatedAt time.Time `yaml:"updated_at,omitempty"`
 }
 
 func personFromFrontmatter(front personFront) model.Person {
-	p := model.Person{
-		ID:        front.ID,
-		Name:      front.Name,
-		SortName:  front.SortName,
-		AKA:       []string(front.AKA),
-		Tags:      front.Tags,
-		Emails:    front.Emails,
-		Phones:    front.Phones,
-		Addresses: front.Addresses,
-		Accounts:  front.Accounts,
-		Sources:   front.Sources,
-		CreatedAt: front.CreatedAt,
-		UpdatedAt: front.UpdatedAt,
+	person := model.Person{
+		ID:                 front.ID,
+		Name:               front.Name,
+		SortName:           front.SortName,
+		AKA:                []string(front.AKA),
+		Tags:               front.Tags,
+		Emails:             front.Emails,
+		Phones:             front.Phones,
+		Addresses:          front.Addresses,
+		Accounts:           front.Accounts,
+		Sources:            front.Sources,
+		Annotation:         front.Annotation,
+		AnnotationStatedAt: firstText(front.AnnotationStatedAt, front.LegacyAnnotationStated),
+		CreatedAt:          front.CreatedAt,
+		UpdatedAt:          front.UpdatedAt,
 	}
 	if front.Avatar != nil {
-		p.Avatar = *front.Avatar
+		person.Avatar = model.AvatarRef{
+			Source:    front.Avatar.Source,
+			MIME:      front.Avatar.MIME,
+			SHA256:    front.Avatar.SHA256,
+			Width:     front.Avatar.Width,
+			Height:    front.Avatar.Height,
+			UpdatedAt: front.Avatar.UpdatedAt,
+		}
 	}
 	if front.Apple != nil {
-		p.Apple = *front.Apple
+		person.Apple = *front.Apple
 	}
 	if front.Google != nil {
-		p.Google = *front.Google
+		person.Google = *front.Google
 	}
-	return p
+	return person
 }
 
-type noteFront struct {
-	ID         string     `yaml:"id"`
-	PersonID   string     `yaml:"person_id"`
-	OccurredAt time.Time  `yaml:"occurred_at"`
-	CapturedAt time.Time  `yaml:"captured_at"`
-	Kind       string     `yaml:"kind"`
-	Source     string     `yaml:"source"`
-	Account    string     `yaml:"account,omitempty"`
-	ExternalID string     `yaml:"external_id,omitempty"`
-	Direction  string     `yaml:"direction,omitempty"`
-	Confidence string     `yaml:"confidence,omitempty"`
-	Topics     []string   `yaml:"topics,omitempty"`
-	FollowUpAt *time.Time `yaml:"follow_up_at,omitempty"`
-	Privacy    string     `yaml:"privacy,omitempty"`
+func loadLegacyAvatar(person *model.Person, front *avatarFront, personPath string) error {
+	if front == nil || strings.TrimSpace(front.Path) == "" {
+		return nil
+	}
+	if filepath.IsAbs(front.Path) {
+		return nil
+	}
+	clean := filepath.Clean(filepath.FromSlash(front.Path))
+	if clean == "." || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return nil
+	}
+	avatarPath := filepath.Join(filepath.Dir(personPath), clean)
+	data, err := os.ReadFile(avatarPath)
+	if err != nil {
+		return err
+	}
+	inspected, err := avatar.InspectBytes(data)
+	if err != nil {
+		return err
+	}
+	person.Avatar.Data = inspected.Data
+	person.Avatar.SHA256 = inspected.SHA256
+	person.Avatar.MIME = firstText(person.Avatar.MIME, inspected.MIME)
+	person.Avatar.Source = firstText(person.Avatar.Source, "legacy")
+	if person.Avatar.UpdatedAt.IsZero() {
+		person.Avatar.UpdatedAt = fileTime(avatarPath)
+	}
+	return nil
 }
 
-func noteFrontmatter(n model.Note) noteFront {
-	return noteFront{
-		ID:         n.ID,
-		PersonID:   n.PersonID,
-		OccurredAt: n.OccurredAt,
-		CapturedAt: n.CapturedAt,
-		Kind:       n.Kind,
-		Source:     n.Source,
-		Account:    n.Account,
-		ExternalID: n.ExternalID,
-		Direction:  n.Direction,
-		Confidence: n.Confidence,
-		Topics:     n.Topics,
-		FollowUpAt: nonZeroTime(n.FollowUpAt),
-		Privacy:    n.Privacy,
+func stableID(prefix, path string) string {
+	path = filepath.ToSlash(filepath.Clean(strings.TrimSpace(path)))
+	if path == "" || path == "." {
+		path = prefix
 	}
+	id := uuid.NewSHA1(uuid.NameSpaceURL, []byte("opentrawl contacts legacy "+prefix+" "+path))
+	return prefix + "_" + id.String()
+}
+
+func firstText(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 type stringList []string
@@ -345,41 +303,6 @@ func (list *stringList) UnmarshalYAML(value *yaml.Node) error {
 	}
 }
 
-func nonEmptyAvatar(ref model.AvatarRef) *model.AvatarRef {
-	if ref.Path == "" && ref.Source == "" && ref.MIME == "" && ref.SHA256 == "" && ref.Width == 0 && ref.Height == 0 && ref.UpdatedAt.IsZero() {
-		return nil
-	}
-	return &ref
-}
-
-func nonEmptyExternal(ref model.ExternalRef) *model.ExternalRef {
-	if ref.ID == "" && ref.Resource == "" && ref.ETag == "" && ref.LastSeenAt.IsZero() {
-		return nil
-	}
-	return &ref
-}
-
-func nonEmptyAccounts(accounts map[string][]string) map[string][]string {
-	if len(accounts) == 0 {
-		return nil
-	}
-	return accounts
-}
-
-func nonEmptySources(sources map[string]model.PersonSource) map[string]model.PersonSource {
-	if len(sources) == 0 {
-		return nil
-	}
-	return sources
-}
-
-func nonZeroTime(t time.Time) *time.Time {
-	if t.IsZero() {
-		return nil
-	}
-	return &t
-}
-
 func nameFromBody(body string) string {
 	for line := range strings.SplitSeq(body, "\n") {
 		line = strings.TrimSpace(line)
@@ -398,77 +321,36 @@ func fileTime(path string) time.Time {
 	return info.ModTime().UTC()
 }
 
-func atomicWrite(path string, data []byte, perm os.FileMode) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(perm); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
-}
-
-func backupOriginal(path, repairRoot string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	rel := strings.TrimPrefix(filepath.Clean(path), string(filepath.Separator))
-	dest := filepath.Join(repairRoot, time.Now().UTC().Format("20060102T150405Z"), rel)
-	if !strings.HasPrefix(dest, filepath.Clean(repairRoot)+string(filepath.Separator)) {
-		return fmt.Errorf("repair backup escaped repair root: %s", dest)
-	}
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return err
-	}
-	// #nosec G703 -- dest is constrained to repairRoot above.
-	return os.WriteFile(dest, data, 0o600)
-}
-
 func salvagePerson(front string) model.Person {
-	var p model.Person
 	values := salvageScalars(front)
-	p.ID = values["id"]
-	p.Name = values["name"]
-	p.SortName = values["sort_name"]
-	p.AKA = splitList(values["aka"])
-	p.Tags = splitList(values["tags"])
-	p.CreatedAt = parseTime(values["created_at"])
-	p.UpdatedAt = parseTime(values["updated_at"])
-	return p
+	return model.Person{
+		ID:        values["id"],
+		Name:      values["name"],
+		SortName:  values["sort_name"],
+		AKA:       splitList(values["aka"]),
+		Tags:      splitList(values["tags"]),
+		CreatedAt: parseTime(values["created_at"]),
+		UpdatedAt: parseTime(values["updated_at"]),
+	}
 }
 
 func salvageNote(front string) model.Note {
-	var n model.Note
 	values := salvageScalars(front)
-	n.ID = values["id"]
-	n.PersonID = values["person_id"]
-	n.Kind = values["kind"]
-	n.Source = values["source"]
-	n.Account = values["account"]
-	n.ExternalID = values["external_id"]
-	n.Direction = values["direction"]
-	n.Confidence = values["confidence"]
-	n.Privacy = values["privacy"]
-	n.Topics = splitList(values["topics"])
-	n.OccurredAt = parseTime(values["occurred_at"])
-	n.CapturedAt = parseTime(values["captured_at"])
-	n.FollowUpAt = parseTime(values["follow_up_at"])
-	return n
+	return model.Note{
+		ID:         values["id"],
+		PersonID:   values["person_id"],
+		Kind:       values["kind"],
+		Source:     values["source"],
+		Account:    values["account"],
+		ExternalID: values["external_id"],
+		Direction:  values["direction"],
+		Confidence: values["confidence"],
+		Privacy:    values["privacy"],
+		Topics:     splitList(values["topics"]),
+		OccurredAt: parseTime(values["occurred_at"]),
+		CapturedAt: parseTime(values["captured_at"]),
+		FollowUpAt: parseTime(values["follow_up_at"]),
+	}
 }
 
 func salvageScalars(front string) map[string]string {
@@ -507,15 +389,6 @@ func splitList(value string) []string {
 	return out
 }
 
-// parseTime reads a frontmatter timestamp back from a person/note markdown
-// file this app already wrote (created_at, updated_at, occurred_at, ...),
-// not a live --after/--before CLI flag value. It shares the fleet's three
-// layouts by coincidence, but trawlkit/flags.Date's TRAWL-131 lift was
-// scoped to CLI date flags (calcrawl/telecrawl/wacrawl/photoscrawl):
-// switching this one to local-midnight-for-bare-dates would reinterpret
-// timestamps already committed to real files on disk, a different and
-// larger risk than a flag a user retypes every run. Left as is, on
-// purpose, not missed.
 func parseTime(value string) time.Time {
 	if strings.TrimSpace(value) == "" {
 		return time.Time{}
@@ -527,19 +400,4 @@ func parseTime(value string) time.Time {
 		}
 	}
 	return time.Time{}
-}
-
-func NoteFileName(n model.Note) string {
-	t := n.OccurredAt.UTC()
-	if t.IsZero() {
-		t = time.Now().UTC()
-	}
-	kind := "note"
-	if strings.TrimSpace(n.Kind) != "" {
-		kind = model.Slug(n.Kind)
-	}
-	if kind == "" || kind == "person" {
-		kind = "note"
-	}
-	return fmt.Sprintf("%s-%s.md", t.Format("2006-01-02T15-04-05Z"), kind)
 }

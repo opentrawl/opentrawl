@@ -342,15 +342,10 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 	}
 	req.Args = verb.args
 	if verb.mutates {
-		runErr := verb.bespoke.Run(ctx, req)
-		rebuildErr := rebuildSourceShortRefs(ctx, source, req)
-		if runErr != nil {
-			if rebuildErr != nil {
-				return errors.Join(runErr, rebuildErr)
-			}
-			return runErr
+		if err := verb.bespoke.Run(ctx, req); err != nil {
+			return err
 		}
-		return rebuildErr
+		return rebuildSourceShortRefs(ctx, source, req)
 	}
 	return verb.bespoke.Run(ctx, req)
 }

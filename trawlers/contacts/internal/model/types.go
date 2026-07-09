@@ -17,13 +17,13 @@ type ExternalRef struct {
 }
 
 type AvatarRef struct {
-	Path      string    `json:"path,omitempty" yaml:"path,omitempty"`
 	Source    string    `json:"source,omitempty" yaml:"source,omitempty"`
 	MIME      string    `json:"mime,omitempty" yaml:"mime,omitempty"`
 	SHA256    string    `json:"sha256,omitempty" yaml:"sha256,omitempty"`
 	Width     int       `json:"width,omitempty" yaml:"width,omitempty"`
 	Height    int       `json:"height,omitempty" yaml:"height,omitempty"`
 	UpdatedAt time.Time `json:"updated_at,omitzero" yaml:"updated_at,omitempty"`
+	Data      []byte    `json:"-" yaml:"-"`
 }
 
 type PersonSource struct {
@@ -36,24 +36,26 @@ type PersonSource struct {
 }
 
 type Person struct {
-	ID        string                    `json:"id" yaml:"id"`
-	Name      string                    `json:"name" yaml:"name"`
-	SortName  string                    `json:"sort_name,omitempty" yaml:"sort_name,omitempty"`
-	AKA       []string                  `json:"aka,omitempty" yaml:"aka,omitempty"`
-	Tags      []string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
-	Emails    []ContactValue            `json:"emails,omitempty" yaml:"emails,omitempty"`
-	Phones    []ContactValue            `json:"phones,omitempty" yaml:"phones,omitempty"`
-	Addresses []ContactValue            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
-	Avatar    AvatarRef                 `json:"avatar,omitzero" yaml:"avatar,omitempty"`
-	Accounts  map[string][]string       `json:"accounts,omitempty" yaml:"accounts,omitempty"`
-	Sources   map[string]PersonSource   `json:"sources,omitempty" yaml:"sources,omitempty"`
-	Apple     ExternalRef               `json:"apple,omitzero" yaml:"apple,omitempty"`
-	Google    ExternalRef               `json:"google,omitzero" yaml:"google,omitempty"`
-	CreatedAt time.Time                 `json:"created_at" yaml:"created_at"`
-	UpdatedAt time.Time                 `json:"updated_at" yaml:"updated_at"`
-	Path      string                    `json:"path,omitempty" yaml:"-"`
-	Body      string                    `json:"body,omitempty" yaml:"-"`
-	Extra     map[string]map[string]any `json:"extra,omitempty" yaml:"-"`
+	ID                 string                    `json:"id" yaml:"id"`
+	Name               string                    `json:"name" yaml:"name"`
+	SortName           string                    `json:"sort_name,omitempty" yaml:"sort_name,omitempty"`
+	AKA                []string                  `json:"aka,omitempty" yaml:"aka,omitempty"`
+	Tags               []string                  `json:"tags,omitempty" yaml:"tags,omitempty"`
+	Emails             []ContactValue            `json:"emails,omitempty" yaml:"emails,omitempty"`
+	Phones             []ContactValue            `json:"phones,omitempty" yaml:"phones,omitempty"`
+	Addresses          []ContactValue            `json:"addresses,omitempty" yaml:"addresses,omitempty"`
+	Avatar             AvatarRef                 `json:"avatar,omitzero" yaml:"avatar,omitempty"`
+	Accounts           map[string][]string       `json:"accounts,omitempty" yaml:"accounts,omitempty"`
+	Sources            map[string]PersonSource   `json:"sources,omitempty" yaml:"sources,omitempty"`
+	Apple              ExternalRef               `json:"apple,omitzero" yaml:"apple,omitempty"`
+	Google             ExternalRef               `json:"google,omitzero" yaml:"google,omitempty"`
+	Annotation         string                    `json:"annotation,omitempty" yaml:"annotation,omitempty"`
+	AnnotationStatedAt string                    `json:"annotation_stated_at,omitempty" yaml:"annotation_stated_at,omitempty"`
+	CreatedAt          time.Time                 `json:"created_at" yaml:"created_at"`
+	UpdatedAt          time.Time                 `json:"updated_at" yaml:"updated_at"`
+	Path               string                    `json:"path,omitempty" yaml:"-"`
+	Body               string                    `json:"body,omitempty" yaml:"-"`
+	Extra              map[string]map[string]any `json:"extra,omitempty" yaml:"-"`
 }
 
 type Note struct {

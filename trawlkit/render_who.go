@@ -22,7 +22,7 @@ type whoCandidateOutput struct {
 	Who         string   `json:"who"`
 	Identifiers []string `json:"identifiers"`
 	LastSeen    string   `json:"last_seen"`
-	Messages    int64    `json:"messages"`
+	Messages    int64    `json:"messages,omitempty"`
 	lastSeen    time.Time
 }
 

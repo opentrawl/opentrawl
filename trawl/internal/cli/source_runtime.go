@@ -185,13 +185,6 @@ func openSourceStore(ctx context.Context, paths trawlkit.Paths, access sourceSto
 	}
 }
 
-func sourceStoreFor(source Source, fallback sourceStoreAccess) sourceStoreAccess {
-	if source.Crawler != nil && source.Crawler.Info().ID == "contacts" {
-		return sourceStoreNone
-	}
-	return fallback
-}
-
 func pathExists(path string) (bool, error) {
 	if strings.TrimSpace(path) == "" {
 		return false, nil

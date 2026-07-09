@@ -1,162 +1,51 @@
 package clawdex
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/avatar"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/birdclaw"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/discrawl"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/google"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/markdown"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/vcard"
 	"github.com/opentrawl/opentrawl/trawlkit"
-	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 )
-
-func initVerb() trawlkit.Verb {
-	var remote string
-	var noConfig bool
-	return trawlkit.Verb{
-		Name:    "init",
-		Help:    "Create the contacts repo",
-		Args:    []string{"DIR"},
-		Mutates: true,
-		Store:   trawlkit.StoreNone,
-		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&remote, "remote", "", "Git remote for contacts backup")
-			fs.BoolVar(&noConfig, "no-config", false, "Do not write app config")
-		},
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) > 1 {
-				return usageError(errors.New("init takes at most one directory"))
-			}
-			cfg, err := repo.LoadConfig(req.Paths.Config)
-			if err != nil {
-				return err
-			}
-			if len(req.Args) == 1 {
-				cfg.RepoPath = req.Args[0]
-			}
-			if remote != "" {
-				cfg.Git.Remote = remote
-			}
-			cfg.Normalize()
-			dataRepo := repo.Open(cfg.RepoPath, cfg)
-			if err := dataRepo.Init(ctx); err != nil {
-				return err
-			}
-			if !noConfig {
-				if err := repo.WriteConfig(req.Paths.Config, cfg); err != nil {
-					return err
-				}
-			}
-			return writeMap(req, map[string]any{
-				"config_path": req.Paths.Config,
-				"remote":      cfg.Git.Remote,
-				"repo_path":   cfg.RepoPath,
-			})
-		},
-	}
-}
-
-func configVerb() trawlkit.Verb {
-	var dryRun bool
-	return trawlkit.Verb{
-		Name:    "config",
-		Help:    "Show or set contacts config",
-		Mutates: true,
-		Store:   trawlkit.StoreNone,
-		Flags: func(fs *flag.FlagSet) {
-			fs.BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
-		},
-		Run: func(_ context.Context, req *trawlkit.Request) error {
-			cfg, err := repo.LoadConfig(req.Paths.Config)
-			if err != nil {
-				return err
-			}
-			switch len(req.Args) {
-			case 0:
-				return writeConfig(req, cfg)
-			case 1:
-				if req.Args[0] != "show" {
-					return usageError(fmt.Errorf("unknown config action %q", req.Args[0]))
-				}
-				return writeConfig(req, cfg)
-			case 3:
-				if req.Args[0] != "set" {
-					return usageError(fmt.Errorf("unknown config action %q", req.Args[0]))
-				}
-				if err := setConfigValue(&cfg, req.Args[1], req.Args[2]); err != nil {
-					return err
-				}
-				if dryRun {
-					return writeConfig(req, cfg)
-				}
-				if err := repo.WriteConfig(req.Paths.Config, cfg); err != nil {
-					return err
-				}
-				return writeMap(req, map[string]any{"config_path": req.Paths.Config, "set": req.Args[1]})
-			default:
-				return usageError(errors.New("config usage: config [show] or config set KEY VALUE"))
-			}
-		},
-	}
-}
-
-func setConfigValue(cfg *repo.Config, key, value string) error {
-	switch key {
-	case "repo_path":
-		cfg.RepoPath = value
-	case "git.remote":
-		cfg.Git.Remote = value
-	case "git.branch":
-		cfg.Git.Branch = value
-	case "google.default_account":
-		cfg.Google.DefaultAccount = value
-	default:
-		return usageError(fmt.Errorf("unsupported config key %q", key))
-	}
-	cfg.Normalize()
-	return nil
-}
 
 func personListVerb() trawlkit.Verb {
 	var query string
 	var limit int
 	return trawlkit.Verb{
 		Name:  "person list",
-		Help:  "List people",
-		Store: trawlkit.StoreNone,
+		Help:  "List people in the contacts archive.",
+		Store: trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
 			limit = 50
 			fs.StringVar(&query, "query", "", "Filter query")
 			fs.StringVar(&query, "q", "", "Filter query")
 			fs.IntVar(&limit, "limit", 50, "Number of people to show")
 		},
-		Run: func(_ context.Context, req *trawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("person list takes no arguments"))
 			}
 			if limit < 1 {
 				return usageError(errors.New("--limit must be at least 1"))
 			}
-			rt, err := newRuntime(req)
+			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 			if err != nil {
-				return err
+				return archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			people, err := rt.store.People()
+			people, err := st.People(ctx)
 			if err != nil {
 				return err
 			}
@@ -181,18 +70,18 @@ func personListVerb() trawlkit.Verb {
 func personShowVerb() trawlkit.Verb {
 	return trawlkit.Verb{
 		Name:  "person show",
-		Help:  "Show a person",
+		Help:  "Show one person from the contacts archive.",
 		Args:  []string{"QUERY"},
-		Store: trawlkit.StoreNone,
-		Run: func(_ context.Context, req *trawlkit.Request) error {
+		Store: trawlkit.StoreRequired,
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) != 1 {
 				return usageError(errors.New("person show needs one query"))
 			}
-			rt, err := newRuntime(req)
+			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 			if err != nil {
-				return err
+				return archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			person, err := rt.store.FindPerson(req.Args[0])
+			person, err := st.FindPerson(ctx, req.Args[0])
 			if err != nil {
 				return err
 			}
@@ -201,20 +90,48 @@ func personShowVerb() trawlkit.Verb {
 	}
 }
 
-func importVerb() trawlkit.Verb {
+func personAnnotateVerb() trawlkit.Verb {
+	return trawlkit.Verb{
+		Name:    "person annotate",
+		Help:    "Record the user's stated correction for a person.",
+		Args:    []string{"PERSON_ID", "ANNOTATION"},
+		Mutates: true,
+		Store:   trawlkit.StoreRequired,
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
+			if len(req.Args) != 2 {
+				return usageError(errors.New("person annotate needs PERSON_ID and one quoted annotation"))
+			}
+			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+			if err != nil {
+				return archiveErr(fmt.Errorf("open archive: %w", err))
+			}
+			personID, err := st.AnnotatePerson(ctx, req.Args[0], req.Args[1], time.Now().UTC().Format("2006-01-02"))
+			if err != nil {
+				return err
+			}
+			person, err := st.Person(ctx, personID)
+			if err != nil {
+				return err
+			}
+			return writePersonAnnotation(req, person)
+		},
+	}
+}
+
+func importVerb(app *App) trawlkit.Verb {
 	var input, account, dbPath string
 	var avatars, dryRun bool
 	var minMessages int
 	return trawlkit.Verb{
 		Name:    "import",
-		Help:    "Import contacts into local markdown",
+		Help:    "Import contacts into the local archive.",
 		Args:    []string{"SOURCE"},
 		Mutates: true,
-		Store:   trawlkit.StoreNone,
+		Store:   trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
 			minMessages = 4
 			fs.StringVar(&input, "input", "", "JSON or NDJSON contact file")
-			fs.BoolVar(&avatars, "avatars", false, "Import avatar thumbnails")
+			fs.BoolVar(&avatars, "avatars", false, "Import avatar metadata")
 			fs.StringVar(&account, "account", "", "Google account email")
 			fs.StringVar(&dbPath, "db", "", "Source SQLite database path")
 			fs.IntVar(&minMessages, "min-messages", 4, "Minimum message count")
@@ -224,11 +141,7 @@ func importVerb() trawlkit.Verb {
 			if len(req.Args) != 1 {
 				return usageError(errors.New("import needs one source: apple, google, discrawl, or birdclaw"))
 			}
-			rt, err := newRuntime(req)
-			if err != nil {
-				return err
-			}
-			source, contacts, err := importSourceContacts(ctx, rt.cfg, req.Args[0], importOptions{
+			source, contacts, err := importSourceContacts(ctx, app.cfg, req.Args[0], importOptions{
 				input:       input,
 				account:     account,
 				dbPath:      dbPath,
@@ -238,7 +151,11 @@ func importVerb() trawlkit.Verb {
 			if err != nil {
 				return err
 			}
-			changes, err := rt.store.ImportContacts(source, contacts, dryRun, time.Now())
+			st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+			if err != nil {
+				return archiveErr(fmt.Errorf("open archive: %w", err))
+			}
+			changes, err := st.ImportContacts(ctx, source, contacts, dryRun, time.Now())
 			if err != nil {
 				return err
 			}
@@ -255,7 +172,7 @@ type importOptions struct {
 	minMessages int
 }
 
-func importSourceContacts(ctx context.Context, cfg repo.Config, source string, opts importOptions) (string, []model.SourceContact, error) {
+func importSourceContacts(ctx context.Context, cfg Config, source string, opts importOptions) (string, []model.SourceContact, error) {
 	switch source {
 	case "apple":
 		var contacts []apple.Contact
@@ -286,37 +203,59 @@ func importSourceContacts(ctx context.Context, cfg repo.Config, source string, o
 	}
 }
 
-func repairVerb() trawlkit.Verb {
-	var dryRun bool
+func importLegacyVerb() trawlkit.Verb {
+	var from string
 	return trawlkit.Verb{
-		Name:    "repair",
-		Help:    "Repair contacts markdown and rebuild the index",
+		Name:    "import-legacy",
+		Help:    "Import the old contacts share directory into the local archive.",
 		Mutates: true,
-		Store:   trawlkit.StoreNone,
+		Store:   trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
-			fs.BoolVar(&dryRun, "dry-run", false, "Preview repair without writing")
+			fs.StringVar(&from, "from", "", "Legacy contacts share directory")
 		},
-		Run: func(_ context.Context, req *trawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
-				return usageError(errors.New("repair takes no arguments"))
+				return usageError(errors.New("import-legacy takes no arguments"))
 			}
-			rt, err := newRuntime(req)
+			sourcePath := strings.TrimSpace(from)
+			if sourcePath == "" {
+				sourcePath = defaultLegacyPath(req.Paths.Config)
+			}
+			st, err := archive.Use(ctx, req.Store, req.Paths.Archive)
+			if err != nil {
+				return archiveErr(fmt.Errorf("open archive: %w", err))
+			}
+			summary, err := st.ImportLegacy(ctx, sourcePath)
 			if err != nil {
 				return err
 			}
-			doctor, err := rt.repairDoctor(dryRun)
-			if err != nil {
-				return err
-			}
-			return writeDoctor(req, doctor)
+			return writeLegacyImport(req, legacyImportEnvelope{From: sourcePath, Summary: summary})
 		},
 	}
+}
+
+func defaultLegacyPath(configPath string) string {
+	type legacyConfig struct {
+		RepoPath string `toml:"repo_path"`
+	}
+	var cfg legacyConfig
+	if strings.TrimSpace(configPath) != "" {
+		if err := ckconfig.LoadTOML(configPath, &cfg); err == nil && strings.TrimSpace(cfg.RepoPath) != "" {
+			return ckconfig.ExpandHome(cfg.RepoPath)
+		}
+		return filepath.Join(filepath.Dir(configPath), "share")
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return filepath.Join(".opentrawl", "contacts", "share")
+	}
+	return filepath.Join(home, ".opentrawl", "contacts", "share")
 }
 
 func syncAppleVerb() trawlkit.Verb {
 	return trawlkit.Verb{
 		Name:  "sync apple",
-		Help:  "Preview Apple Contacts sync",
+		Help:  "Preview Apple Contacts sync.",
 		Store: trawlkit.StoreNone,
 		Run: func(_ context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
@@ -324,17 +263,17 @@ func syncAppleVerb() trawlkit.Verb {
 			}
 			return writeMap(req, map[string]any{
 				"dry_run": true,
-				"status":  "remote writes not implemented yet; use import apple for local markdown projection",
+				"status":  "remote writes are not implemented; use import apple for the local archive",
 			})
 		},
 	}
 }
 
-func syncGoogleVerb() trawlkit.Verb {
+func syncGoogleVerb(app *App) trawlkit.Verb {
 	var account string
 	return trawlkit.Verb{
 		Name:  "sync google",
-		Help:  "Preview Google Contacts sync",
+		Help:  "Preview Google Contacts sync.",
 		Store: trawlkit.StoreNone,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&account, "account", "", "Google account email")
@@ -343,14 +282,10 @@ func syncGoogleVerb() trawlkit.Verb {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("sync google takes no arguments"))
 			}
-			cfg, err := repo.LoadConfig(req.Paths.Config)
-			if err != nil {
-				return err
-			}
 			return writeMap(req, map[string]any{
-				"account": firstText(account, cfg.Google.DefaultAccount),
+				"account": firstText(account, app.cfg.Google.DefaultAccount),
 				"dry_run": true,
-				"status":  "remote writes not implemented yet; use import google for local markdown projection",
+				"status":  "remote writes are not implemented; use import google for the local archive",
 			})
 		},
 	}
@@ -361,16 +296,16 @@ func exportVCardVerb() trawlkit.Verb {
 	var includeAvatars bool
 	return trawlkit.Verb{
 		Name:    "export vcard",
-		Help:    "Export vCard files",
+		Help:    "Export vCard files.",
 		Mutates: true,
-		Store:   trawlkit.StoreNone,
+		Store:   trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
 			fs.StringVar(&person, "person", "", "Person query")
 			fs.BoolVar(&includeAvatars, "include-avatars", false, "Include avatar photo fields")
 			fs.StringVar(&out, "out", "", "Output .vcf path, or - for stdout")
 			fs.StringVar(&out, "o", "", "Output .vcf path, or - for stdout")
 		},
-		Run: func(_ context.Context, req *trawlkit.Request) error {
+		Run: func(ctx context.Context, req *trawlkit.Request) error {
 			if len(req.Args) > 0 {
 				return usageError(errors.New("export vcard takes flags only"))
 			}
@@ -380,11 +315,11 @@ func exportVCardVerb() trawlkit.Verb {
 			if strings.TrimSpace(out) == "" {
 				return usageError(errors.New("provide --out"))
 			}
-			rt, err := newRuntime(req)
+			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 			if err != nil {
-				return err
+				return archiveErr(fmt.Errorf("open archive: %w", err))
 			}
-			p, err := rt.store.FindPerson(person)
+			p, err := st.FindPerson(ctx, person)
 			if err != nil {
 				return err
 			}
@@ -407,90 +342,6 @@ func exportVCardVerb() trawlkit.Verb {
 	}
 }
 
-func gitVerb() trawlkit.Verb {
-	var message string
-	return trawlkit.Verb{
-		Name:    "git",
-		Help:    "Run contacts repo git helpers",
-		Mutates: true,
-		Store:   trawlkit.StoreNone,
-		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&message, "message", "sync: update contacts", "Commit message")
-			fs.StringVar(&message, "m", "sync: update contacts", "Commit message")
-		},
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			rt, err := newRuntime(req)
-			if err != nil {
-				return err
-			}
-			action := "status"
-			if len(req.Args) > 0 {
-				action = req.Args[0]
-			}
-			switch action {
-			case "status":
-				if len(req.Args) > 1 {
-					return usageError(errors.New("git status takes no arguments"))
-				}
-				return runGitStatus(ctx, req, rt.repo.Path)
-			case "pull":
-				if len(req.Args) > 1 {
-					return usageError(errors.New("git pull takes no arguments"))
-				}
-				if err := rt.repo.Pull(ctx); err != nil {
-					return err
-				}
-				return writeMap(req, map[string]any{"pulled": true})
-			case "push":
-				if len(req.Args) > 1 {
-					return usageError(errors.New("git push takes no arguments"))
-				}
-				if err := rt.repo.Push(ctx); err != nil {
-					return err
-				}
-				return writeMap(req, map[string]any{"pushed": true})
-			case "commit":
-				if len(req.Args) > 1 {
-					return usageError(errors.New("git commit takes no arguments"))
-				}
-				committed, err := rt.repo.Commit(ctx, message)
-				if err != nil {
-					return err
-				}
-				return writeMap(req, map[string]any{"committed": committed})
-			default:
-				return usageError(fmt.Errorf("unknown git action %q", action))
-			}
-		},
-	}
-}
-
-func runGitStatus(ctx context.Context, req *trawlkit.Request, repoPath string) error {
-	cmd := exec.CommandContext(ctx, "git", "-C", repoPath, "status", "--short", "--branch")
-	var stdout bytes.Buffer
-	cmd.Stdout = &stdout
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		if msg := strings.TrimSpace(stderr.String()); msg != "" {
-			return fmt.Errorf("git status: %w: %s", err, msg)
-		}
-		return fmt.Errorf("git status: %w", err)
-	}
-	if req.Format == ckoutput.JSON {
-		lines := strings.Split(strings.TrimSpace(stdout.String()), "\n")
-		if len(lines) == 1 && lines[0] == "" {
-			lines = []string{}
-		}
-		return writeMap(req, map[string]any{"lines": lines})
-	}
-	_, err := req.Out.Write(stdout.Bytes())
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func filterPeople(people []model.Person, query string) []model.Person {
 	query = strings.ToLower(strings.Join(strings.Fields(query), " "))
 	filtered := people[:0]
@@ -503,110 +354,13 @@ func filterPeople(people []model.Person, query string) []model.Person {
 	return filtered
 }
 
-func (rt appRuntime) repairDoctor(dryRun bool) (*trawlkit.Doctor, error) {
-	if err := rt.repo.Require(); err != nil {
-		return &trawlkit.Doctor{Checks: []trawlkit.Check{rt.contactsRepoCheck()}}, nil
+func formatTime(value time.Time) string {
+	if value.IsZero() {
+		return ""
 	}
-	store := rt.store
-	people, err := store.People()
-	if err != nil {
-		return nil, err
-	}
-	var repaired int
-	var avatarRepaired int
-	for _, person := range people {
-		loaded, report, err := markdown.ReadPerson(person.Path)
-		if err != nil {
-			return nil, err
-		}
-		if report.Needed {
-			repaired++
-			if !dryRun {
-				if err := markdown.RepairPerson(person.Path, rt.repo.RepairDir(), loaded, report, rt.cfg.Repair.BackupBeforeRepair); err != nil {
-					return nil, err
-				}
-			}
-		}
-		if len(avatar.Validate(loaded)) > 0 {
-			avatarRepaired++
-			if !dryRun {
-				fixed, changed, err := avatar.RepairMetadata(loaded, time.Now())
-				if err != nil {
-					return nil, err
-				}
-				if changed {
-					if err := markdown.WritePerson(fixed.Path, fixed); err != nil {
-						return nil, err
-					}
-				}
-			}
-		}
-	}
-	checks := []trawlkit.Check{
-		{ID: "contacts_repo", State: "ok", Message: countNoun(len(people), "person", "people")},
-		{ID: "markdown_repair", State: repairState(repaired), Message: repairMessage("person markdown file", repaired, dryRun)},
-	}
-	if avatarRepaired > 0 {
-		checks = append(checks, trawlkit.Check{ID: "avatar_metadata", State: repairState(avatarRepaired), Message: repairMessage("avatar metadata entry", avatarRepaired, dryRun)})
-	}
-	if !dryRun {
-		if err := rt.store.Rebuild(); err != nil {
-			return nil, err
-		}
-	}
-	return &trawlkit.Doctor{Checks: checks}, nil
+	return value.UTC().Format(time.RFC3339)
 }
 
-func (rt appRuntime) personRepairProblemCount() (int, error) {
-	entries, err := os.ReadDir(rt.repo.PeopleDir())
-	if err != nil {
-		return 0, err
-	}
-	var problems int
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		path := filepath.Join(rt.repo.PeopleDir(), entry.Name(), "person.md")
-		if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-			continue
-		} else if err != nil {
-			return problems, err
-		}
-		if _, report, err := markdown.ReadPerson(path); err != nil {
-			return problems, err
-		} else if report.Needed {
-			problems++
-		}
-	}
-	return problems, nil
-}
-
-func personRepairSummary(count int) string {
-	return countNoun(count, "person markdown file", "person markdown files") + " need repair"
-}
-
-func repairState(count int) string {
-	if count == 0 {
-		return "empty"
-	}
-	return "ok"
-}
-
-func repairMessage(item string, count int, dryRun bool) string {
-	if count == 0 {
-		return "no " + pluralItem(item) + " needed repair"
-	}
-	action := "repaired"
-	if dryRun {
-		action = "would be repaired"
-	}
-	return countNoun(count, item, pluralItem(item)) + " " + action
-}
-
-func pluralItem(item string) string {
-	if strings.HasSuffix(item, "entry") {
-		return strings.TrimSuffix(item, "entry") + "entries"
-	}
-	return item + "s"
+func formatCount(count int) string {
+	return fmt.Sprintf("%d", count)
 }

@@ -263,7 +263,7 @@ func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 
 func (r *Runtime) statusSource(source Source) (StatusEnvelope, error) {
 	var status *control.Status
-	err := r.withSourceRequest(source, "status", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+	err := r.withSourceRequest(source, "status", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var runErr error
 		status, runErr = source.Crawler.Status(ctx, req)
 		return runErr
@@ -291,7 +291,7 @@ func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnv
 
 func (r *Runtime) doctorSource(source Source) (DoctorResult, error) {
 	var doctor *trawlkit.Doctor
-	err := r.withSourceRequest(source, "doctor", sourceStoreFor(source, sourceStoreOptional), ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+	err := r.withSourceRequest(source, "doctor", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var runErr error
 		doctor, runErr = source.Crawler.Doctor(ctx, req)
 		return runErr

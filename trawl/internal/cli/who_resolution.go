@@ -203,7 +203,7 @@ func (r *Runtime) whoSource(source Source, query string) whoSourceResult {
 		return result
 	}
 	var candidates []whomatch.Candidate
-	err := r.withSourceRequest(source, "who", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+	err := r.withSourceRequest(source, "who", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var whoErr error
 		candidates, whoErr = matcher.Who(ctx, req, query)
 		return whoErr

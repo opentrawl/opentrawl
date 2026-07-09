@@ -5,214 +5,133 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
-
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
 
-func TestPersonRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "people", "ada", "person.md")
-	now := time.Date(2026, 5, 8, 9, 15, 0, 0, time.UTC)
-	p := NewPerson("Ada Lovelace", now)
-	p.Tags = []string{"math"}
-	p.Addresses = []model.ContactValue{{Value: "12 St James's Square\nLondon", Label: "work", Source: "manual", Primary: true}}
-	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada Lovelace"}, Phones: []string{"15550100"}, Addresses: []string{"12 St James's Square\nLondon"}}}
-	p.Body = "# Ada Lovelace\n\nNotes."
-	if err := WritePerson(path, p); err != nil {
-		t.Fatal(err)
-	}
-	got, report, err := ReadPerson(path)
+func TestReadPersonFrontmatter(t *testing.T) {
+	path := writeFixture(t, "people/ada/person.md", `---
+id: person_ada
+name: Ada Example
+aka: Ada E.
+tags: [work]
+emails:
+  - value: ada@example.com
+    label: work
+    source: manual
+    primary: true
+phones:
+  - value: "+15550100"
+accounts:
+  github: [ada]
+annotation: "Ada owns billing"
+annotation_stated_at: "2026-07-09"
+created_at: 2026-07-09T10:00:00Z
+updated_at: 2026-07-09T10:00:00Z
+---
+# Ada Example
+
+Body text.
+`)
+	person, report, err := ReadPerson(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if report.Needed {
 		t.Fatalf("unexpected repair report: %#v", report)
 	}
-	if got.ID != p.ID || got.Name != p.Name || strings.TrimSpace(got.Body) != strings.TrimSpace(p.Body) {
-		t.Fatalf("roundtrip mismatch: %#v", got)
+	if person.ID != "person_ada" || person.Name != "Ada Example" || person.Emails[0].Value != "ada@example.com" || person.Accounts["github"][0] != "ada" {
+		t.Fatalf("person = %#v", person)
 	}
-	if got.Sources["telecrawl"].Phones[0] != "15550100" {
-		t.Fatalf("sources = %#v", got.Sources)
+	if person.Annotation != "Ada owns billing" || strings.TrimSpace(person.Body) != "# Ada Example\n\nBody text." {
+		t.Fatalf("annotation/body = %#v body=%q", person.Annotation, person.Body)
 	}
-	if len(got.Addresses) != 1 || got.Addresses[0].Value != "12 St James's Square\nLondon" || got.Addresses[0].Label != "work" || got.Addresses[0].Source != "manual" || !got.Addresses[0].Primary {
-		t.Fatalf("addresses = %#v", got.Addresses)
-	}
-	if got.Sources["telecrawl"].Addresses[0] != "12 St James's Square\nLondon" {
-		t.Fatalf("source addresses = %#v", got.Sources)
-	}
-}
-
-func TestPersonRepairSalvagesBrokenFrontmatter(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "people", "ada", "person.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	body := "---\nid: person_1\nname: Ada Lovelace\ntags: [math\n---\n# Ada\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	p, report, err := ReadPerson(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Needed || p.ID != "person_1" || p.Name != "Ada Lovelace" {
-		t.Fatalf("repair = %#v person = %#v", report, p)
-	}
-	if err := RepairPerson(path, filepath.Join(dir, ".clawdex", "repairs"), p, report, true); err != nil {
-		t.Fatal(err)
-	}
-	repaired, _, err := ReadPerson(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(repaired.Body, "Recovered metadata") {
-		t.Fatalf("missing recovered metadata in body: %q", repaired.Body)
+	if person.AnnotationStatedAt != "2026-07-09" {
+		t.Fatalf("annotation stated at = %q", person.AnnotationStatedAt)
 	}
 }
 
 func TestReadPersonMissingFrontmatterInfersNameFromHeading(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "people", "ada", "person.md")
+	path := writeFixture(t, "people/ada/person.md", "# Ada Heading\n\nBody")
+	person, report, err := ReadPerson(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Needed || person.Name != "Ada Heading" || person.ID == "" || report.DerivedIDs != 1 {
+		t.Fatalf("person=%#v report=%#v", person, report)
+	}
+	again, _, err := ReadPerson(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ID != person.ID {
+		t.Fatalf("stable id changed: %q then %q", person.ID, again.ID)
+	}
+}
+
+func TestReadPersonSalvagesBrokenFrontmatter(t *testing.T) {
+	path := writeFixture(t, "people/ada/person.md", "---\nid: person_1\nname: Ada Example\ntags: [one\n---\n# Ada\n")
+	person, report, err := ReadPerson(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Needed || person.ID != "person_1" || person.Name != "Ada Example" {
+		t.Fatalf("person=%#v report=%#v", person, report)
+	}
+}
+
+func TestReadNoteFrontmatter(t *testing.T) {
+	path := writeFixture(t, "people/ada/notes/note.md", `---
+id: note_1
+person_id: person_ada
+occurred_at: 2026-07-09T09:00:00Z
+captured_at: 2026-07-09T10:00:00Z
+kind: dm
+source: manual
+topics: [billing]
+privacy: normal
+---
+Follow up.
+`)
+	note, report, err := ReadNote(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Needed || note.ID != "note_1" || note.PersonID != "person_ada" || note.Topics[0] != "billing" {
+		t.Fatalf("note=%#v report=%#v", note, report)
+	}
+}
+
+func TestReadNoteMissingIDDerivesStableID(t *testing.T) {
+	path := writeFixture(t, "people/ada/notes/note.md", `---
+person_id: person_ada
+occurred_at: 2026-07-09T09:00:00Z
+captured_at: 2026-07-09T10:00:00Z
+kind: dm
+source: manual
+privacy: normal
+---
+Follow up.
+`)
+	note, report, err := ReadNoteWithStableID(path, "people/ada/notes/note.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, _, err := ReadNoteWithStableID(path, "people/ada/notes/note.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.DerivedIDs != 1 || note.ID == "" || again.ID != note.ID {
+		t.Fatalf("note=%#v again=%#v report=%#v", note, again, report)
+	}
+}
+
+func writeFixture(t *testing.T, rel, data string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), rel)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte("# Ada Heading\n\nBody"), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	p, report, err := ReadPerson(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Needed || p.Name != "Ada Heading" || p.ID == "" {
-		t.Fatalf("person=%#v report=%#v", p, report)
-	}
-}
-
-func TestReadPersonMalformedDelimiterUsesSlug(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "people", "slug-name", "person.md")
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(path, []byte("---\nname: Ada\n# Missing close"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	p, report, err := ReadPerson(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Needed || p.Name != "Missing close" {
-		t.Fatalf("person=%#v report=%#v", p, report)
-	}
-}
-
-func TestNoteRoundTrip(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "note.md")
-	now := time.Date(2026, 5, 8, 10, 0, 0, 0, time.UTC)
-	n := NewNote("person_1", "dm", "whatsapp", "hello", now, now, []string{"intro"})
-	if err := WriteNote(path, n); err != nil {
-		t.Fatal(err)
-	}
-	got, report, err := ReadNote(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if report.Needed || got.ID != n.ID || got.PersonID != "person_1" || strings.TrimSpace(got.Body) != "hello" {
-		t.Fatalf("got %#v report %#v", got, report)
-	}
-}
-
-func TestReadNoteRepairAndDefaults(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "note.md")
-	body := "---\nid: note_1\nperson_id: person_1\noccurred_at: 2026-05-08\ncaptured_at: 2026-05-08T09:00:00Z\ntopics: [one, two\n---\nBody\n"
-	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	n, report, err := ReadNote(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Needed || n.ID != "note_1" || n.Kind != "note" || n.Source != "manual" || n.Privacy != "normal" {
-		t.Fatalf("note=%#v report=%#v", n, report)
-	}
-}
-
-func TestFrontmatterHelpers(t *testing.T) {
-	front, body, ok := splitFrontmatter([]byte("---\nid: x\n---"))
-	if !ok || strings.TrimSpace(front) != "id: x" || body != "" {
-		t.Fatalf("front=%q body=%q ok=%v", front, body, ok)
-	}
-	for _, value := range []string{"2026-05-08", "2026-05-08T09:00:00Z", "bad"} {
-		_ = parseTime(value)
-	}
-	n := NewNote("p", "", "", "", time.Time{}, time.Time{}, nil)
-	if n.Kind != "" || !n.OccurredAt.IsZero() {
-		t.Fatalf("new note zero = %#v", n)
-	}
-	if got := NoteFileName(n); !strings.HasSuffix(got, "-note.md") {
-		t.Fatalf("note file = %q", got)
-	}
-}
-
-func TestWritePersonOmitsEmptyStructsButKeepsNonEmpty(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "person.md")
-	p := NewPerson("Ada", time.Now())
-	p.Accounts = map[string][]string{"github": {"ada"}}
-	p.Sources = map[string]model.PersonSource{"telecrawl": {Names: []string{"Ada"}, Phones: []string{"123"}}}
-	p.Avatar.Path = "avatars/avatar.png"
-	p.Avatar.Source = "manual"
-	p.Google.Resource = "people/c1"
-	if err := WritePerson(path, p); err != nil {
-		t.Fatal(err)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	if !strings.Contains(text, "accounts:") || !strings.Contains(text, "sources:") || !strings.Contains(text, "avatar:") || !strings.Contains(text, "google:") || strings.Contains(text, "apple:") {
-		t.Fatalf("frontmatter = %s", text)
-	}
-}
-
-func TestMoreRepairAndNoteBranches(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "note.md")
-	if err := os.WriteFile(path, []byte("body only"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	n, report, err := ReadNote(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !report.Needed || n.Kind != "note" || strings.TrimSpace(n.Body) != "body only" {
-		t.Fatalf("note=%#v report=%#v", n, report)
-	}
-	now := time.Now().UTC()
-	n.FollowUpAt = now
-	if err := WriteNote(path, n); err != nil {
-		t.Fatal(err)
-	}
-	if err := RepairPerson(path, filepath.Join(dir, "repairs"), modelPersonForTest(), RepairReport{}, true); err != nil {
-		t.Fatal(err)
-	}
-	if nameFromBody("no heading") != "" {
-		t.Fatal("expected no heading")
-	}
-	parentFile := filepath.Join(dir, "file")
-	if err := os.WriteFile(parentFile, []byte("x"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := atomicWrite(filepath.Join(parentFile, "child"), []byte("x"), 0o600); err == nil {
-		t.Fatal("expected atomic write mkdir error")
-	}
-}
-
-func modelPersonForTest() model.Person {
-	return NewPerson("Ada", time.Now())
+	return path
 }

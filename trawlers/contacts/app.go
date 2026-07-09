@@ -4,33 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
-	"time"
 
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/index"
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
-const appID = "contacts"
+const appID = archive.AppID
 
-type App struct{}
+type Config struct {
+	Google GoogleConfig `toml:"google" json:"google"`
+}
+
+type GoogleConfig struct {
+	DefaultAccount string `toml:"default_account" json:"default_account"`
+}
+
+type App struct {
+	cfg Config
+}
 
 type Crawler = App
 
 var (
-	_ trawlkit.Crawler         = (*App)(nil)
-	_ trawlkit.Searcher        = (*App)(nil)
-	_ trawlkit.WhoMatcher      = (*App)(nil)
-	_ trawlkit.Opener          = (*App)(nil)
-	_ trawlkit.ContactExporter = (*App)(nil)
+	_ trawlkit.Crawler          = (*App)(nil)
+	_ trawlkit.Searcher         = (*App)(nil)
+	_ trawlkit.WhoMatcher       = (*App)(nil)
+	_ trawlkit.Opener           = (*App)(nil)
+	_ trawlkit.ContactExporter  = (*App)(nil)
+	_ trawlkit.ShortRefProvider = (*App)(nil)
 )
 
 func New() *App {
@@ -39,71 +45,83 @@ func New() *App {
 
 func (a *App) Info() trawlkit.Info {
 	return trawlkit.Info{
-		ID:          appID,
-		Surface:     appID,
-		DisplayName: "Contacts",
+		ID:          archive.AppID,
+		Surface:     "contacts",
+		DisplayName: archive.DisplayName,
 		Description: "People merged from your other sources",
-		DefaultPaths: trawlkit.Paths{
-			Archive: repo.DefaultConfig().RepoPath,
-			Config:  repo.ResolveConfigPath(""),
-			Logs:    repo.DefaultLogDir(),
-		},
+		Config:      &a.cfg,
 		Privacy: control.Privacy{
-			LocalOnlyScopes: []string{"contacts", "markdown", "git"},
+			LocalOnlyScopes: []string{"contacts", "sqlite", "contact-search", "contact-export"},
 		},
 	}
 }
 
 func (a *App) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
-		{Name: "status", Store: trawlkit.StoreNone},
-		{Name: "doctor", Store: trawlkit.StoreNone},
-		{Name: "search", Store: trawlkit.StoreNone},
-		{Name: "who", Store: trawlkit.StoreNone},
-		{Name: "open", Store: trawlkit.StoreNone},
-		{Name: "contacts_export", Store: trawlkit.StoreNone},
-		initVerb(),
-		configVerb(),
 		personListVerb(),
 		personShowVerb(),
-		importVerb(),
-		repairVerb(),
+		personAnnotateVerb(),
+		importVerb(a),
+		importLegacyVerb(),
 		syncAppleVerb(),
-		syncGoogleVerb(),
+		syncGoogleVerb(a),
 		exportVCardVerb(),
-		gitVerb(),
 	}
 }
 
-func (a *App) Status(_ context.Context, req *trawlkit.Request) (*control.Status, error) {
-	rt, err := newRuntime(req)
-	if err != nil {
-		return nil, err
+func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
+	status := control.NewStatus(appID, "Contacts archive has not been created.")
+	status.State = "missing"
+	status.DatabasePath = req.Paths.Archive
+	status.Counts = []control.Count{control.NewCount("people", "people", 0)}
+	if req.Store == nil {
+		return &status, nil
 	}
-	return rt.status(), nil
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "Contacts archive cannot be read."
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	archiveStatus, err := st.Status(ctx)
+	if err != nil {
+		status.State = "error"
+		status.Summary = "Contacts archive cannot be inspected."
+		status.Errors = []string{err.Error()}
+		return &status, nil
+	}
+	status.DatabasePath = archiveStatus.ArchivePath
+	status.DatabaseBytes = archiveStatus.ArchiveBytes
+	status.LastSyncAt = formatTime(archiveStatus.UpdatedAt)
+	status.Counts = []control.Count{
+		control.NewCount("people", "people", archiveStatus.People),
+		control.NewCount("sources", "sources", archiveStatus.Sources),
+	}
+	if archiveStatus.Notes > 0 {
+		status.Counts = append(status.Counts, control.NewCount("notes", "notes", archiveStatus.Notes))
+	}
+	if archiveStatus.People == 0 {
+		status.State = "empty"
+		status.Summary = "Contacts archive has no people."
+		return &status, nil
+	}
+	status.State = "ok"
+	status.Summary = peopleStatusSummary(int(archiveStatus.People))
+	return &status, nil
 }
 
-func (a *App) Doctor(_ context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	rt, err := newRuntime(req)
-	if err != nil {
-		return &trawlkit.Doctor{Checks: []trawlkit.Check{{
-			ID:      "config",
-			State:   "fail",
-			Message: err.Error(),
-			Remedy:  "check the contacts config file",
-		}}}, nil
-	}
+func (a *App) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
 	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		rt.configCheck(),
-		rt.contactsRepoCheck(),
-		rt.indexCheck(),
+		checkArchivePresent(req),
+		checkArchiveSchema(ctx, req),
 	}}, nil
 }
 
-func (a *App) Search(_ context.Context, req *trawlkit.Request, q trawlkit.Query) (trawlkit.SearchResult, error) {
-	rt, err := newRuntime(req)
+func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Query) (trawlkit.SearchResult, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	query := strings.Join(strings.Fields(q.Text), " ")
 	if query == "" && q.WhoResolved != nil {
@@ -115,46 +133,33 @@ func (a *App) Search(_ context.Context, req *trawlkit.Request, q trawlkit.Query)
 	if query == "" {
 		return trawlkit.SearchResult{Results: []trawlkit.Hit{}}, nil
 	}
-	hits, err := rt.store.Search(query)
+	results, total, err := st.Search(ctx, query, archive.SearchOptions{Limit: q.Limit, After: q.After, Before: q.Before})
 	if err != nil {
 		return trawlkit.SearchResult{}, err
 	}
-	total := len(hits)
-	if q.Limit > 0 && len(hits) > q.Limit {
-		hits = hits[:q.Limit]
-	}
-	result := trawlkit.SearchResult{
-		Results:      make([]trawlkit.Hit, 0, len(hits)),
-		TotalMatches: total,
-		Truncated:    total > len(hits),
-	}
-	for _, hit := range hits {
-		if !withinRange(hit.Timestamp, q.After, q.Before) {
-			continue
-		}
-		refID := firstText(hit.PersonID, hit.ID)
-		if refID == "" {
-			continue
-		}
-		result.Results = append(result.Results, trawlkit.Hit{
-			Ref:     "contacts:person/" + refID,
-			Time:    hit.Timestamp,
-			Who:     hit.Name,
-			Snippet: hit.Snippet,
+	hits := make([]trawlkit.Hit, 0, len(results))
+	for _, result := range results {
+		hits = append(hits, trawlkit.Hit{
+			Ref:      result.Ref,
+			Time:     result.Time,
+			Who:      result.Who,
+			Snippet:  result.Snippet,
+			ShortRef: result.ShortRef,
 		})
 	}
-	if result.TotalMatches < len(result.Results) {
-		result.TotalMatches = len(result.Results)
-	}
-	return result, nil
+	return trawlkit.SearchResult{
+		Results:      hits,
+		TotalMatches: total,
+		Truncated:    q.Limit > 0 && len(results) < total,
+	}, nil
 }
 
-func (a *App) Who(_ context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
-	rt, err := newRuntime(req)
+func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return nil, err
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	candidates, err := rt.store.ResolvePeople(person)
+	candidates, err := st.ResolvePeople(ctx, person)
 	if err != nil {
 		return nil, err
 	}
@@ -163,30 +168,34 @@ func (a *App) Who(_ context.Context, req *trawlkit.Request, person string) ([]wh
 		out = append(out, whomatch.Candidate{
 			Who:         candidate.Who,
 			Identifiers: append([]string(nil), candidate.Identifiers...),
-			LastSeen:    parseTime(candidate.LastSeen),
+			LastSeen:    candidate.LastSeen,
 		})
 	}
 	return out, nil
 }
 
-func (a *App) Open(_ context.Context, req *trawlkit.Request, ref string) error {
-	rt, err := newRuntime(req)
+func (a *App) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	resolved, err := resolveOpenRef(ctx, req, ref)
 	if err != nil {
 		return err
 	}
-	person, err := rt.store.FindPerson(contactQuery(ref))
+	person, err := st.FindPerson(ctx, resolved)
 	if err != nil {
 		return err
 	}
-	return writePerson(req, person)
+	return writeOpenPerson(req, person)
 }
 
-func (a *App) ContactExport(_ context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
-	rt, err := newRuntime(req)
+func (a *App) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return nil, err
+		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
-	people, err := rt.store.People()
+	people, err := st.People(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -204,204 +213,91 @@ func (a *App) ContactExport(_ context.Context, req *trawlkit.Request) (*control.
 	return &control.ContactExport{Contacts: contacts}, nil
 }
 
-type appRuntime struct {
-	configPath string
-	cfg        repo.Config
-	repo       repo.Repo
-	store      index.Store
+func (a *App) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]trawlkit.ShortRefRecord, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if errors.Is(err, archive.ErrSchemaOutdated) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return st.ShortRefRecords(ctx)
 }
 
-func newRuntime(req *trawlkit.Request) (appRuntime, error) {
-	paths := trawlkit.Paths{}
-	if req != nil {
-		paths = req.Paths
-	}
-	if strings.TrimSpace(paths.Config) == "" {
-		paths.Config = repo.ResolveConfigPath("")
-	}
-	cfg, err := repo.LoadConfig(paths.Config)
-	if err != nil {
-		return appRuntime{}, err
-	}
-	repoPath, err := repo.ResolveRepoPath("", cfg)
-	if err != nil {
-		repoPath = cfg.RepoPath
-	}
-	if strings.TrimSpace(repoPath) == "" {
-		return appRuntime{}, errors.New("contacts repo path is required")
-	}
-	dataRepo := repo.Open(repoPath, cfg)
-	return appRuntime{
-		configPath: paths.Config,
-		cfg:        cfg,
-		repo:       dataRepo,
-		store:      index.New(dataRepo),
-	}, nil
-}
-
-func (rt appRuntime) status() *control.Status {
-	status := control.NewStatus(appID, "contacts repo not initialised")
-	status.ConfigPath = rt.configPath
-	status.DatabasePath = rt.repo.Path
-	status.Counts = []control.Count{control.NewCount("people", "people", 0)}
-	if err := rt.repo.Require(); err != nil {
-		if peopleDirMissing(rt.repo.Path) {
-			status.State = "missing"
-			return &status
+func resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+	ref = strings.TrimSpace(ref)
+	if strings.Contains(ref, ":") {
+		if id, ok := archive.PersonIDFromRef(ref); ok {
+			return id, nil
 		}
-		status.State = "error"
-		status.Summary = "contacts repo cannot be read"
-		status.Errors = []string{err.Error()}
-		return &status
+		return "", usageError(fmt.Errorf("invalid contacts ref %q", ref))
 	}
-	people, err := rt.store.People()
-	if err != nil {
-		status.State = "error"
-		status.Summary = "contacts repo has errors"
-		status.Errors = []string{err.Error()}
-		return &status
-	}
-	problems, err := rt.personRepairProblemCount()
-	if err != nil {
-		status.State = "error"
-		status.Summary = "contacts repo has errors"
-		status.Errors = []string{err.Error()}
-		return &status
-	}
-	status.Counts = statusCounts(people)
-	if problems > 0 {
-		status.State = "error"
-		status.Summary = personRepairSummary(problems)
-		status.Errors = []string{status.Summary}
-		return &status
-	}
-	if len(people) == 0 {
-		status.State = "empty"
-		status.Summary = "contacts repo has no people yet"
-		return &status
-	}
-	status.State = "ok"
-	status.Summary = peopleStatusSummary(len(people))
-	return &status
-}
-
-func (rt appRuntime) configCheck() trawlkit.Check {
-	if _, err := os.Stat(rt.configPath); errors.Is(err, os.ErrNotExist) {
-		return trawlkit.Check{ID: "config", State: "ok"}
-	} else if err != nil {
-		return trawlkit.Check{ID: "config", State: "fail", Message: "cannot read config", Remedy: "check " + rt.configPath}
-	}
-	if _, err := repo.LoadConfig(rt.configPath); err != nil {
-		return trawlkit.Check{ID: "config", State: "fail", Message: err.Error(), Remedy: "check " + rt.configPath}
-	}
-	return trawlkit.Check{ID: "config", State: "ok"}
-}
-
-func (rt appRuntime) contactsRepoCheck() trawlkit.Check {
-	if err := rt.repo.Require(); err != nil {
-		return trawlkit.Check{ID: "contacts_repo", State: "missing", Message: "contacts repo not initialised", Remedy: "run trawl contacts init " + rt.repo.Path}
-	}
-	if _, err := os.Stat(filepath.Join(rt.repo.Path, ".git")); err != nil {
-		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: "contacts repo is not a git repo", Remedy: "run trawl contacts init " + rt.repo.Path}
-	}
-	if _, err := rt.store.People(); err != nil {
-		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
-	}
-	if problems, err := rt.personRepairProblemCount(); err != nil {
-		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: err.Error(), Remedy: "run trawl contacts repair"}
-	} else if problems > 0 {
-		return trawlkit.Check{ID: "contacts_repo", State: "fail", Message: personRepairSummary(problems), Remedy: "run trawl contacts repair"}
-	}
-	return trawlkit.Check{ID: "contacts_repo", State: "ok"}
-}
-
-func (rt appRuntime) indexCheck() trawlkit.Check {
-	people, err := rt.store.People()
-	if err != nil {
-		return trawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
-	}
-	status, err := rt.store.IndexStatus()
-	if err != nil {
-		return trawlkit.Check{ID: "index", State: "fail", Message: err.Error(), Remedy: "fix contacts_repo first"}
-	}
-	if status.People != len(people) {
-		return trawlkit.Check{ID: "index", State: "fail", Message: fmt.Sprintf("index has %s people, markdown has %s", strconv.Itoa(status.People), strconv.Itoa(len(people))), Remedy: "run trawl contacts repair"}
-	}
-	return trawlkit.Check{ID: "index", State: "ok"}
-}
-
-func statusCounts(people []model.Person) []control.Count {
-	counts := []control.Count{control.NewCount("people", "people", int64(len(people)))}
-	if len(people) > 0 {
-		counts = append(counts, control.NewCount("sources", "sources", int64(distinctSourceCount(people))))
-	}
-	return counts
-}
-
-func distinctSourceCount(people []model.Person) int {
-	seen := map[string]bool{}
-	for _, person := range people {
-		for source := range person.Sources {
-			if strings.TrimSpace(source) != "" {
-				seen[source] = true
+	if trawlkit.ValidShortRef(ref) {
+		matches, err := req.ResolveShortRef(ctx, ref)
+		if errors.Is(err, trawlkit.ErrUnknownShortRef) {
+			return ref, nil
+		}
+		if errors.Is(err, trawlkit.ErrAmbiguousShortRef) {
+			return "", usageError(fmt.Errorf("short ref %q is ambiguous", ref))
+		}
+		if err != nil {
+			return "", err
+		}
+		if len(matches) == 1 {
+			if id, ok := archive.PersonIDFromRef(matches[0]); ok {
+				return id, nil
 			}
 		}
 	}
-	return len(seen)
+	return ref, nil
+}
+
+func checkArchivePresent(req *trawlkit.Request) trawlkit.Check {
+	if req.Store == nil {
+		return trawlkit.Check{
+			ID:      "archive",
+			State:   "fail",
+			Message: "contacts archive has not been created",
+			Remedy:  "run trawl contacts import-legacy or import a source",
+		}
+	}
+	return trawlkit.Check{ID: "archive", State: "ok"}
+}
+
+func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
+	if req.Store == nil {
+		return trawlkit.Check{
+			ID:      "schema",
+			State:   "fail",
+			Message: "contacts archive schema is not current",
+			Remedy:  "run trawl contacts import-legacy or import a source",
+		}
+	}
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return trawlkit.Check{
+			ID:      "schema",
+			State:   "fail",
+			Message: "contacts archive schema is not current",
+			Remedy:  "run trawl contacts import-legacy or import a source",
+		}
+	}
+	if _, err := st.Status(ctx); err != nil {
+		return trawlkit.Check{
+			ID:      "schema",
+			State:   "fail",
+			Message: "contacts archive could not be inspected",
+			Remedy:  "run trawl contacts import-legacy or import a source",
+		}
+	}
+	return trawlkit.Check{ID: "schema", State: "ok"}
 }
 
 func peopleStatusSummary(count int) string {
 	if count == 1 {
-		return "contacts repo has 1 person"
+		return "Contacts archive has 1 person."
 	}
-	return fmt.Sprintf("contacts repo has %s people", strconv.Itoa(count))
-}
-
-func peopleDirMissing(repoPath string) bool {
-	if strings.TrimSpace(repoPath) == "" {
-		return false
-	}
-	_, err := os.Stat(filepath.Join(repoPath, "people"))
-	return errors.Is(err, os.ErrNotExist)
-}
-
-func contactQuery(ref string) string {
-	ref = strings.TrimSpace(ref)
-	if _, path, ok := strings.Cut(ref, ":"); ok {
-		ref = path
-	}
-	for _, prefix := range []string{"person/", "people/"} {
-		if strings.HasPrefix(ref, prefix) {
-			return strings.TrimSpace(strings.TrimPrefix(ref, prefix))
-		}
-	}
-	return ref
-}
-
-func withinRange(t, after, before time.Time) bool {
-	if t.IsZero() {
-		return true
-	}
-	if !after.IsZero() && t.Before(after) {
-		return false
-	}
-	if !before.IsZero() && !t.Before(before) {
-		return false
-	}
-	return true
-}
-
-func parseTime(value string) time.Time {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return time.Time{}
-	}
-	for _, layout := range []string{time.RFC3339Nano, time.RFC3339} {
-		if parsed, err := time.Parse(layout, value); err == nil {
-			return parsed
-		}
-	}
-	return time.Time{}
+	return fmt.Sprintf("Contacts archive has %s people.", formatCount(count))
 }
 
 func cleanPhones(values []model.ContactValue) []string {
@@ -416,6 +312,10 @@ func cleanPhones(values []model.ContactValue) []string {
 		out = append(out, phone)
 	}
 	return out
+}
+
+func archiveErr(err error) error {
+	return err
 }
 
 func usageError(err error) error {

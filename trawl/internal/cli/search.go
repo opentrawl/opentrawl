@@ -318,7 +318,7 @@ func (r *Runtime) searchSource(source Source, query string, options searchOption
 		return result
 	}
 	var envelope trawlkit.SearchResult
-	err = r.withSourceRequest(source, "search", sourceStoreFor(source, sourceStoreRead), outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+	err = r.withSourceRequest(source, "search", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var searchErr error
 		envelope, searchErr = searcher.Search(ctx, req, crawlQuery)
 		return searchErr

@@ -41,7 +41,7 @@ func (r *Runtime) openWithSource(source Source, ref string) error {
 		return r.openFailed(ref, source)
 	}
 	started := r.logSourceStart(source, "open")
-	err := r.withSourceRequest(source, "open", sourceStoreFor(source, sourceStoreRead), outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *trawlkit.Request) error {
+	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *trawlkit.Request) error {
 		return opener.Open(ctx, req, ref)
 	})
 	r.logSourceDone(source, "open", started, err)

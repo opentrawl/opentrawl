@@ -5,12 +5,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/repo"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
-	toml "github.com/pelletier/go-toml/v2"
 )
 
 type peopleEnvelope struct {
@@ -24,6 +23,16 @@ type peopleEnvelope struct {
 
 type importChangesEnvelope struct {
 	Changes []model.ImportChange `json:"changes"`
+}
+
+type legacyImportEnvelope struct {
+	From    string                `json:"from"`
+	Summary archive.ImportSummary `json:"summary"`
+}
+
+type personOpenEnvelope struct {
+	Ref    string       `json:"ref"`
+	Person model.Person `json:"person"`
 }
 
 func writeMap(req *trawlkit.Request, value map[string]any) error {
@@ -43,18 +52,6 @@ func writeMap(req *trawlkit.Request, value map[string]any) error {
 	return nil
 }
 
-func writeConfig(req *trawlkit.Request, cfg repo.Config) error {
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "config", cfg)
-	}
-	data, err := toml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
-	_, err = req.Out.Write(data)
-	return err
-}
-
 func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 	if value.People == nil {
 		value.People = []model.Person{}
@@ -67,7 +64,7 @@ func writePeople(req *trawlkit.Request, value peopleEnvelope) error {
 			_, err := fmt.Fprintf(req.Out, "No people match %q.\n", value.Query)
 			return err
 		}
-		_, err := fmt.Fprintln(req.Out, "No people yet. Import some: trawl contacts import --help")
+		_, err := fmt.Fprintln(req.Out, "No people yet. Import contacts: trawl contacts import --help")
 		return err
 	}
 	heading := fmt.Sprintf("People: showing %s of %s, A to Z.", render.FormatInteger(int64(len(value.People))), render.FormatInteger(int64(value.Total)))
@@ -125,7 +122,32 @@ func writePerson(req *trawlkit.Request, person model.Person) error {
 			{Label: "phone", Value: joinPhoneValues(person.Phones)},
 			{Label: "address", Value: joinAddresses(person.Addresses)},
 			{Label: "sources", Value: strings.Join(sortedSourceNames(person), ", ")},
-			{Label: "file", Value: person.Path},
+			{Label: "annotation", Value: person.Annotation},
+			{Label: "stated", Value: person.AnnotationStatedAt},
+		},
+	})
+}
+
+func writeOpenPerson(req *trawlkit.Request, person model.Person) error {
+	if req.Format == ckoutput.JSON {
+		return ckoutput.Write(req.Out, req.Format, "open", personOpenEnvelope{
+			Ref:    archive.PersonRef(person.ID),
+			Person: person,
+		})
+	}
+	return writePerson(req, person)
+}
+
+func writePersonAnnotation(req *trawlkit.Request, person model.Person) error {
+	if req.Format == ckoutput.JSON {
+		return ckoutput.Write(req.Out, req.Format, "annotation", person)
+	}
+	return render.WriteCard(req.Out, render.Card{
+		Title: "Person annotation recorded",
+		Fields: []render.CardField{
+			{Label: "Person", Value: person.Name},
+			{Label: "Annotation", Value: person.Annotation},
+			{Label: "Stated", Value: person.AnnotationStatedAt},
 		},
 	})
 }
@@ -158,6 +180,26 @@ func writeImportChanges(req *trawlkit.Request, value importChangesEnvelope) erro
 		{Header: "who", Wrap: true},
 		{Header: "source"},
 		{Header: "identifier", Wrap: true},
+	}, rows)
+}
+
+func writeLegacyImport(req *trawlkit.Request, value legacyImportEnvelope) error {
+	if req.Format == ckoutput.JSON {
+		return ckoutput.Write(req.Out, req.Format, "legacy_import", value)
+	}
+	if _, err := fmt.Fprintf(req.Out, "Legacy import: %s, %s, %s.\n", countNoun(value.Summary.People, "person", "people"), countNoun(value.Summary.Notes, "note", "notes"), countNoun(value.Summary.DerivedIDs, "derived id", "derived ids")); err != nil {
+		return err
+	}
+	rows := [][]string{
+		{"from", value.From},
+		{"created", render.FormatInteger(int64(value.Summary.Created))},
+		{"updated", render.FormatInteger(int64(value.Summary.Updated))},
+		{"unchanged", render.FormatInteger(int64(value.Summary.Unchanged))},
+		{"derived ids", render.FormatInteger(int64(value.Summary.DerivedIDs))},
+	}
+	return render.WriteTable(req.Out, []render.TableColumn{
+		{Header: "field"},
+		{Header: "value", Wrap: true},
 	}, rows)
 }
 
