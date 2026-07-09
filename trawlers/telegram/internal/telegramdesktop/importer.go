@@ -157,7 +157,10 @@ func importPostboxGo(ctx context.Context, sourcePath string, opts ImportOptions,
 	}
 	remoteMedia := postboxRemoteMediaStats{Downloaded: 0, Missing: 0}
 	if opts.FetchMedia {
-		remoteMedia = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, opts.Progress)
+		remoteMedia, err = downloadPostboxRemoteMedia(ctx, messages, sources, mediaTempDir, downloadPostboxRemoteMediaForSession, opts.Progress)
+		if err != nil {
+			return ImportResult{}, err
+		}
 	}
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)

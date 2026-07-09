@@ -12,6 +12,7 @@ import (
 	"github.com/gotd/td/telegram"
 	querymessages "github.com/gotd/td/telegram/query/messages"
 	"github.com/gotd/td/tg"
+	"github.com/gotd/td/tgerr"
 	postboxpkg "github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop/postbox"
 )
 
@@ -20,7 +21,49 @@ const (
 	telegramMacAPIHash = "3975f648bb682ee889f35483bc618d1c" // gitleaks:allow
 )
 
-func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, progress ProgressReporter) postboxRemoteMediaStats {
+const PostboxSessionRejectedRemedy = "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED). Open Telegram for macOS, let it finish syncing, then run trawl telegram sync --fetch-media again."
+
+type PostboxSessionRejectedError struct {
+	Err error
+}
+
+func (e PostboxSessionRejectedError) Error() string {
+	return "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED) after refreshing it"
+}
+
+func (e PostboxSessionRejectedError) Unwrap() error {
+	return e.Err
+}
+
+type PostboxSessionRefreshError struct {
+	Err error
+}
+
+func (e PostboxSessionRefreshError) Error() string {
+	return "Telegram rejected the media session borrowed from Telegram for macOS (AUTH_KEY_UNREGISTERED), and refreshing it from Telegram for macOS failed"
+}
+
+func (e PostboxSessionRefreshError) Unwrap() error {
+	return e.Err
+}
+
+func IsPostboxSessionRejected(err error) bool {
+	var rejected PostboxSessionRejectedError
+	if errors.As(err, &rejected) {
+		return true
+	}
+	var refreshFailed PostboxSessionRefreshError
+	return errors.As(err, &refreshFailed)
+}
+
+type postboxRemoteMediaDownloader func(context.Context, *postboxpkg.NativeSession, []postboxpkg.MessageRecord, []int, string, ProgressReporter) (postboxRemoteMediaStats, bool, error)
+
+type postboxRemoteSession struct {
+	source postboxpkg.Source
+	native *postboxpkg.NativeSession
+}
+
+func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.MessageRecord, sources []postboxpkg.Source, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) (postboxRemoteMediaStats, error) {
 	sharePostboxDuplicateMedia(messages)
 	sharePostboxResourceMedia(messages)
 	candidates := postboxRemoteMediaCandidateIndexes(messages)
@@ -29,14 +72,14 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 		Missing:    postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages)),
 	}
 	if len(candidates) == 0 || strings.TrimSpace(mediaTempDir) == "" {
-		return stats
+		return stats, nil
 	}
 	sessions := postboxNativeSessions(sources)
 	if len(sessions) == 0 {
 		clearPostboxPlaceholderMedia(messages)
 		stats.Unavailable = len(candidates)
 		stats.Missing = postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages))
-		return stats
+		return stats, nil
 	}
 	byAccount := make(map[string][]int)
 	for _, idx := range candidates {
@@ -45,9 +88,12 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 	for accountID, indexes := range byAccount {
 		ordered := preferredPostboxSessions(accountID, sessions)
 		handled := false
-		for _, nativeSession := range ordered {
-			result, ok := downloadPostboxRemoteMediaForSession(ctx, nativeSession, messages, indexes, mediaTempDir, progress)
-			if !ok {
+		for _, remoteSession := range ordered {
+			result, ok, err := downloadPostboxRemoteMediaForSessionWithRefresh(ctx, remoteSession, messages, indexes, mediaTempDir, downloader, progress)
+			if IsPostboxSessionRejected(err) {
+				return stats, err
+			}
+			if err != nil || !ok {
 				continue
 			}
 			addPostboxRemoteMediaStats(&stats, result)
@@ -62,7 +108,7 @@ func downloadPostboxRemoteMedia(ctx context.Context, messages []postboxpkg.Messa
 	}
 	clearPostboxPlaceholderMedia(messages)
 	stats.Missing = postboxRemoteMediaMissingCount(postboxRemoteMediaCandidates(messages))
-	return stats
+	return stats, nil
 }
 
 func postboxRemoteMediaCandidateIndexes(messages []postboxpkg.MessageRecord) []int {
@@ -79,20 +125,23 @@ func postboxRemoteMediaCandidateIndexes(messages []postboxpkg.MessageRecord) []i
 	return indexes
 }
 
-func postboxNativeSessions(sources []postboxpkg.Source) map[string]*postboxpkg.NativeSession {
-	sessions := make(map[string]*postboxpkg.NativeSession)
+func postboxNativeSessions(sources []postboxpkg.Source) map[string]postboxRemoteSession {
+	sessions := make(map[string]postboxRemoteSession)
 	for _, source := range sources {
 		nativeSession, err := postboxpkg.NativeSessionForSource(source)
 		if err == nil && nativeSession != nil {
-			sessions[nativeSession.AccountID] = nativeSession
+			sessions[nativeSession.AccountID] = postboxRemoteSession{
+				source: source,
+				native: nativeSession,
+			}
 		}
 	}
 	return sessions
 }
 
-func preferredPostboxSessions(accountID string, sessions map[string]*postboxpkg.NativeSession) []*postboxpkg.NativeSession {
-	var ordered []*postboxpkg.NativeSession
-	if preferred := sessions[accountID]; preferred != nil {
+func preferredPostboxSessions(accountID string, sessions map[string]postboxRemoteSession) []postboxRemoteSession {
+	var ordered []postboxRemoteSession
+	if preferred, ok := sessions[accountID]; ok {
 		ordered = append(ordered, preferred)
 	}
 	keys := make([]string, 0, len(sessions))
@@ -108,10 +157,40 @@ func preferredPostboxSessions(accountID string, sessions map[string]*postboxpkg.
 	return ordered
 }
 
-func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, progress ProgressReporter) (postboxRemoteMediaStats, bool) {
+func downloadPostboxRemoteMediaForSessionWithRefresh(ctx context.Context, remoteSession postboxRemoteSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, downloader postboxRemoteMediaDownloader, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
+	result, ok, err := downloader(ctx, remoteSession.native, messages, indexes, mediaTempDir, progress)
+	if !isPostboxAuthKeyUnregistered(err) {
+		return result, ok, err
+	}
+	if progress != nil {
+		_ = progress.Report(0, "refreshing Telegram media session")
+	}
+	refreshed, refreshErr := refreshPostboxRemoteSession(remoteSession.source)
+	if refreshErr != nil {
+		return postboxRemoteMediaStats{}, false, PostboxSessionRefreshError{Err: refreshErr}
+	}
+	result, ok, err = downloader(ctx, refreshed.native, messages, indexes, mediaTempDir, progress)
+	if isPostboxAuthKeyUnregistered(err) {
+		return postboxRemoteMediaStats{}, false, PostboxSessionRejectedError{Err: err}
+	}
+	return result, ok, err
+}
+
+func refreshPostboxRemoteSession(source postboxpkg.Source) (*postboxRemoteSession, error) {
+	nativeSession, err := postboxpkg.NativeSessionForSource(source)
+	if err != nil {
+		return nil, fmt.Errorf("read Telegram for macOS media session: %w", err)
+	}
+	if nativeSession == nil {
+		return nil, errors.New("Telegram for macOS media session was not found")
+	}
+	return &postboxRemoteSession{source: source, native: nativeSession}, nil
+}
+
+func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *postboxpkg.NativeSession, messages []postboxpkg.MessageRecord, indexes []int, mediaTempDir string, progress ProgressReporter) (postboxRemoteMediaStats, bool, error) {
 	storage, err := postboxSessionStorage(ctx, nativeSession)
 	if err != nil {
-		return postboxRemoteMediaStats{}, false
+		return postboxRemoteMediaStats{}, false, err
 	}
 	client := telegram.NewClient(telegramMacAPIID, telegramMacAPIHash, telegram.Options{
 		DC:             nativeSession.DCID,
@@ -176,9 +255,13 @@ func downloadPostboxRemoteMediaForSession(ctx context.Context, nativeSession *po
 		return nil
 	})
 	if err != nil {
-		return postboxRemoteMediaStats{}, false
+		return postboxRemoteMediaStats{}, false, err
 	}
-	return stats, true
+	return stats, true, nil
+}
+
+func isPostboxAuthKeyUnregistered(err error) bool {
+	return tgerr.Is(err, "AUTH_KEY_UNREGISTERED")
 }
 
 func postboxSessionStorage(ctx context.Context, nativeSession *postboxpkg.NativeSession) (*session.StorageMemory, error) {

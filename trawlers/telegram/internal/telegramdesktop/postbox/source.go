@@ -120,13 +120,13 @@ func NativeSessionForSource(source Source) (*NativeSession, error) {
 	}
 	data, err := os.ReadFile(filepath.Join(lanePath, "accounts-shared-data"))
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
 	var shared map[string]any
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err := decoder.Decode(&shared); err != nil {
-		return nil, nil
+		return nil, err
 	}
 	accounts, _ := shared["accounts"].([]any)
 	for _, rawAccount := range accounts {

@@ -44,7 +44,7 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		}, st.Path())
 		importElapsed := time.Since(importStarted)
 		if err != nil {
-			return err
+			return syncImportError(err)
 		}
 		if err := prepareImportResultForWrite(r.ctx, st, &result); err != nil {
 			return err
@@ -67,6 +67,13 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		return &trawlkit.SyncReport{}, nil
 	}
 	return report, nil
+}
+
+func syncImportError(err error) error {
+	if telegramdesktop.IsPostboxSessionRejected(err) {
+		return commandErr(1, "telegram_session", err, telegramdesktop.PostboxSessionRejectedRemedy)
+	}
+	return err
 }
 
 // logSyncTimings uses one canonical sync event for the one canonical verb.
