@@ -50,8 +50,10 @@ func splitSourceCSV(sourceCSV string) []string {
 	return names
 }
 
-// findSource matches an id, compiled crawler name, explicit alias, or the
-// human surface name — "imessage" and "gmail" work the way people say them.
+// findSource matches an id, compiled crawler name, declared human alias
+// (birdcrawl's "twitter"), the human surface name, or a legacy binary name —
+// so "imessage", "x", "twitter" and "gmail" all resolve the way people type
+// them.
 func findSource(sources []Source, name string) (Source, bool) {
 	want := strings.ToLower(strings.TrimSpace(name))
 	for _, candidate := range sources {
@@ -61,16 +63,23 @@ func findSource(sources []Source, name string) (Source, bool) {
 		if strings.ToLower(strings.TrimSpace(candidate.Surface)) == want {
 			return candidate, true
 		}
-		for _, alias := range candidate.Aliases {
-			if strings.ToLower(strings.TrimSpace(alias)) == want {
-				return candidate, true
-			}
+		if matchesAlias(candidate.Aliases, want) || matchesAlias(legacyRoutingAliases(candidate.ID), want) {
+			return candidate, true
 		}
 		if alias := sourceAlias(candidate.DisplayName); alias != "" && alias == want {
 			return candidate, true
 		}
 	}
 	return Source{}, false
+}
+
+func matchesAlias(aliases []string, want string) bool {
+	for _, alias := range aliases {
+		if strings.ToLower(strings.TrimSpace(alias)) == want {
+			return true
+		}
+	}
+	return false
 }
 
 func sourceAlias(displayName string) string {

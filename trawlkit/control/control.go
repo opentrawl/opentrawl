@@ -20,6 +20,7 @@ type Manifest struct {
 	DisplayName     string             `json:"display_name"`
 	Version         string             `json:"version"`
 	Description     string             `json:"description,omitempty"`
+	Aliases         []string           `json:"aliases,omitempty"`
 	Binary          Binary             `json:"binary"`
 	Branding        Branding           `json:"branding"`
 	Paths           Paths              `json:"paths"`

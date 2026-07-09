@@ -125,16 +125,14 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	return err
 }
 
-// sourceTokens is the primary user-facing name for each installed crawler, so
-// an unknown-token error lists the source ids that are valid to type.
+// sourceTokens lists each installed crawler by the same canonical name the
+// front door shows — the surface with any declared alias in parentheses, e.g.
+// "x (twitter)" — so the tool's "valid sources" list never disagrees with its
+// own Sources block.
 func sourceTokens(sources []Source) []string {
 	names := make([]string, 0, len(sources))
 	for _, source := range sources {
-		if source.ID != "" {
-			names = append(names, source.ID)
-			continue
-		}
-		names = append(names, sourceCommandToken(source))
+		names = append(names, sourceBlockName(source))
 	}
 	sort.Strings(names)
 	return names

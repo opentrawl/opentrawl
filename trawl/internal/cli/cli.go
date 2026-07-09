@@ -74,10 +74,17 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 			panic(recovered)
 		}
 	}()
+	// Bare `trawl` (no flags, no arguments) is its own short front door,
+	// split from the fuller `trawl --help` page. It renders the live Sources
+	// block and three worked first steps, then returns — it never reaches
+	// kong.
+	if len(args) == 0 {
+		return writeFrontDoor(stdout)
+	}
 	var root CLI
 	parser, err := kong.New(&root,
 		kong.Name("trawl"),
-		kong.Description(trawlDescription(args)),
+		kong.Description(trawlDescription()),
 		kong.UsageOnError(),
 		kong.Writers(stdout, stderr),
 		kong.Help(trawlHelpPrinter),
@@ -464,37 +471,12 @@ Examples:
   trawl open imessage:msg/8842          # expand a ref search returned
   trawl search falafel --json           # structured output; agents, prefer this`
 
-// trawlDescription builds the root --help text. The source list in the
-// middle paragraph comes from the compiled trawlkit registrations, not a
-// literal, so root help and command dispatch see the same crawler set. It
-// only runs when this invocation is actually going to render root help;
-// every other command (including a subcommand's own --help) discovers
-// once inside its own Run and must not pay a second time here.
-func trawlDescription(args []string) string {
-	if !wantsRootHelp(args) {
-		return trawlIntro + "\n\n" + trawlOutro
-	}
-	return trawlIntro + "\n\n" + sourcesLine(context.Background()) + "\n\n" + trawlOutro
-}
-
-// wantsRootHelp reports whether these raw args resolve to kong rendering
-// the root help page (the only page carrying this Description): bare
-// invocation, `trawl help`, or --help/-h with no command (global flags
-// such as --json or -v may sit alongside it in either order — they don't
-// change which help page kong renders). kong's default help flag
-// registers short 'h', so `-h` counts too. A subcommand help request
-// (`trawl search --help`) leaves a non-flag command token behind and
-// never gets the root's Description, so it must return false here.
-func wantsRootHelp(args []string) bool {
-	rewritten := rewriteHelp(normalizeGlobalFlags(args))
-	var nonGlobal []string
-	for _, arg := range rewritten {
-		if isGlobalFlag(arg) {
-			continue
-		}
-		nonGlobal = append(nonGlobal, arg)
-	}
-	return len(nonGlobal) == 1 && (nonGlobal[0] == "--help" || nonGlobal[0] == "-h")
+// trawlDescription is the framing text at the top of `trawl --help`: the
+// tagline and the cross-source examples. The live Sources block and the
+// agents appendix are appended by trawlHelpPrinter (only for root help), so
+// their columns survive without kong re-wrapping them into the description.
+func trawlDescription() string {
+	return trawlIntro + "\n\n" + trawlOutro
 }
 
 // unknownCommandErr names both token spaces a first argument can be — a

@@ -41,9 +41,8 @@ func (a *App) Info() trawlkit.Info {
 	return trawlkit.Info{
 		ID:          appID,
 		Surface:     appID,
-		Aliases:     []string{"clawdex"},
 		DisplayName: "Contacts",
-		Description: "Local-first contact identity layer.",
+		Description: "People merged from your other sources",
 		DefaultPaths: trawlkit.Paths{
 			Archive: repo.DefaultConfig().RepoPath,
 			Config:  repo.ResolveConfigPath(""),

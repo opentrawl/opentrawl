@@ -45,7 +45,7 @@ func discoverCrawlers(ctx context.Context) []Source {
 				ID:          id,
 				Binary:      id,
 				Surface:     info.Surface,
-				Aliases:     sourceAliases(info.Aliases, id),
+				Aliases:     trimAliases(info.Aliases),
 				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, info.ID),
 				Crawler:     crawler,
 				MetadataErr: err,
@@ -56,7 +56,7 @@ func discoverCrawlers(ctx context.Context) []Source {
 			ID:           manifest.ID,
 			Binary:       firstNonEmpty(info.ID, manifest.Binary.Name),
 			Surface:      info.Surface,
-			Aliases:      sourceAliases(info.Aliases, manifest.ID),
+			Aliases:      trimAliases(info.Aliases),
 			DisplayName:  manifest.DisplayName,
 			Description:  manifest.Description,
 			Capabilities: manifest.Capabilities,
@@ -68,27 +68,25 @@ func discoverCrawlers(ctx context.Context) []Source {
 	return sources
 }
 
-func sourceAliases(current []string, id string) []string {
-	aliases := append([]string(nil), current...)
-	for _, alias := range legacyRoutingAliases(strings.TrimSpace(id)) {
-		aliases = appendUniqueAlias(aliases, alias)
-	}
-	return aliases
-}
-
-func appendUniqueAlias(aliases []string, alias string) []string {
-	alias = strings.TrimSpace(alias)
-	if alias == "" {
-		return aliases
-	}
-	for _, existing := range aliases {
-		if strings.EqualFold(strings.TrimSpace(existing), alias) {
-			return aliases
+// trimAliases keeps only the human aliases a crawler declares (birdcrawl's
+// "twitter"): the words a person types and the block renders in parentheses.
+// Legacy binary names route through legacyRoutingAliases and never display.
+func trimAliases(aliases []string) []string {
+	out := make([]string, 0, len(aliases))
+	for _, alias := range aliases {
+		if trimmed := strings.TrimSpace(alias); trimmed != "" {
+			out = append(out, trimmed)
 		}
 	}
-	return append(aliases, alias)
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
+// legacyRoutingAliases keeps the pre-rename binary names dispatchable
+// (`trawl imsgcrawl`, `trawl clawdex`) without displaying them anywhere.
+// findSource consults it; the front door and blocks never see it.
 func legacyRoutingAliases(id string) []string {
 	switch id {
 	case "imessage":
@@ -122,19 +120,6 @@ func trawlkitManifest(source trawlkit.Crawler) (control.Manifest, error) {
 	}
 	manifest.ID = strings.TrimSpace(manifest.ID)
 	return manifest, nil
-}
-
-// sourcesLine renders the compiled-in crawlers in the words people type.
-func sourcesLine(ctx context.Context) string {
-	sources := discoverCrawlers(ctx)
-	if len(sources) == 0 {
-		return "No crawlers are registered yet."
-	}
-	names := make([]string, 0, len(sources))
-	for _, source := range sources {
-		names = append(names, sourceHumanName(source))
-	}
-	return "Sources: " + strings.Join(names, ", ") + ". Run trawl status to see yours."
 }
 
 type crawlerCommandError struct {

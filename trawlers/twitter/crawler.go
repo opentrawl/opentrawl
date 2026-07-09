@@ -45,10 +45,10 @@ func New() *Crawler {
 func (c *Crawler) Info() trawlkit.Info {
 	return trawlkit.Info{
 		ID:          appID,
-		Surface:     "twitter",
-		Aliases:     []string{"x"},
+		Surface:     "x",
+		Aliases:     []string{"twitter"},
 		DisplayName: "X",
-		Description: "Local-first X archive crawler.",
+		Description: "X posts, likes, bookmarks and mentions",
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
