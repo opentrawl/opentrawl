@@ -13,6 +13,12 @@ type ChatQuery struct {
 	Limit  int
 	All    bool
 	Unread bool
+	// With is the runner-owned --with person filter. It is empty by default. A
+	// crawler never reads it: the kit filters the crawler's chats by participant
+	// name itself, so every source gets the same source-agnostic matching. It is
+	// carried on the query only so a crawler that fetches from its own store sees
+	// the same struct the kit parsed.
+	With string
 }
 
 // Chat is one conversation on any messaging surface. A surface reports the

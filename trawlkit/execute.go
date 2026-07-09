@@ -286,11 +286,19 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if err != nil {
 			return err
 		}
-		// Fetch one row past the page so truncation is a fact, not a guess
-		// from a full page: the extra row proves more chats exist and is
-		// never rendered. Deterministic structural choice, documented here.
 		fetch := query
-		if !query.All && query.Limit > 0 {
+		switch {
+		case query.With != "":
+			// --with filters in the kit, so the kit needs every chat, not a page:
+			// filtering a page would silently drop matches past the page edge. Fetch
+			// all, filter here, then page the survivors below. The source stays
+			// filter-free and never learns the --with rule.
+			fetch.All = true
+			fetch.Limit = 0
+		case !query.All && query.Limit > 0:
+			// Fetch one row past the page so truncation is a fact, not a guess
+			// from a full page: the extra row proves more chats exist and is
+			// never rendered. Deterministic structural choice, documented here.
 			fetch.Limit = query.Limit + 1
 		}
 		chats, err := source.(ChatLister).Chats(ctx, req, fetch)
@@ -301,6 +309,13 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 			}
 			return err
 		}
+		if query.With != "" {
+			chats = filterChatsWith(chats, query.With)
+		}
+		// The page cap and its one-past-the-edge truncation apply to the survivors:
+		// after --with the survivors are the full result set, so paging them is
+		// honest. --all (or the source's own --all when --with fetched everything)
+		// leaves query.All true and shows every match.
 		truncated := !query.All && query.Limit > 0 && len(chats) > query.Limit
 		if truncated {
 			chats = chats[:query.Limit]
@@ -309,7 +324,7 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if err != nil {
 			return err
 		}
-		return writeResult(req.Out, format, "chats", newChatsOutput(chats, aliases, query.Unread, truncated))
+		return writeResult(req.Out, format, "chats", newChatsOutput(chats, aliases, query.Unread, truncated, query.With))
 	case "contacts_export":
 		contacts, err := source.(ContactExporter).ContactExport(ctx, req)
 		if err != nil {

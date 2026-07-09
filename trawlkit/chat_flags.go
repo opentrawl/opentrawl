@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
@@ -22,12 +23,14 @@ var chatFlagSpecs = []chatFlagSpec{
 	{name: "limit", usage: "maximum chats"},
 	{name: "all", usage: "list every chat, ignoring --limit"},
 	{name: "unread", usage: "only chats with unread messages"},
+	{name: "with", usage: "only chats that include this person"},
 }
 
 type chatFlagValues struct {
 	limit  *int
 	all    *bool
 	unread *bool
+	with   *string
 }
 
 func defineChatFlags(fs *flag.FlagSet) chatFlagValues {
@@ -40,6 +43,8 @@ func defineChatFlags(fs *flag.FlagSet) chatFlagValues {
 			values.all = fs.Bool(spec.name, false, spec.usage)
 		case "unread":
 			values.unread = fs.Bool(spec.name, false, spec.usage)
+		case "with":
+			values.with = fs.String(spec.name, "", spec.usage)
 		}
 	}
 	return values
@@ -61,7 +66,7 @@ func parseChatQuery(args []string) (ChatQuery, error) {
 			limitSet = true
 		}
 	})
-	query := ChatQuery{All: *values.all, Unread: *values.unread}
+	query := ChatQuery{All: *values.all, Unread: *values.unread, With: strings.TrimSpace(*values.with)}
 	if query.All {
 		// --all lists everything; the store reads a zero limit as no cap.
 		return query, nil

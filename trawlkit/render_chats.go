@@ -12,8 +12,10 @@ import (
 // participantPreviewCap is how many participant names the participants column
 // shows before it collapses the rest into "+N". Kept small so the preview fits
 // one line beside the other columns without the table having to shrink and clip
-// it; the head count carries everyone past the cap as an honest "+N".
-const participantPreviewCap = 2
+// it; the head count carries everyone past the cap as an honest "+N". Three
+// names, not two: a two-name preview felt too hidden for scanning who is in a
+// group, and three still fits one line beside the other columns.
+const participantPreviewCap = 3
 
 type chatsOutput struct {
 	Chats []chatOutput `json:"chats"`
@@ -50,7 +52,7 @@ type chatOutput struct {
 // source's DisplayID: a safe, copyable raw id where the source vouches for one,
 // a privacy marker, or empty when the source has no handle safe to show. The
 // raw Ref and ID never reach the human column; --json keeps both for agents.
-func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated bool) chatsOutput {
+func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated bool, with string) chatsOutput {
 	rows := make([]chatOutput, 0, len(chats))
 	for _, chat := range chats {
 		rows = append(rows, chatOutput{
@@ -62,7 +64,7 @@ func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated b
 			ParticipantNames: append([]string(nil), chat.ParticipantNames...),
 			LastActivity:     formatContractTime(chat.LastActivity),
 			Unread:           copyCount(chat.Unread),
-			participantsCell: chatParticipantsCell(chat),
+			participantsCell: chatParticipantsCell(chat, with),
 			// Short ref first; else the source's pre-index DisplayID (a safe raw id
 			// or a privacy marker, empty when none). The raw Ref and ID stay in
 			// --json only, never the human chat column.
@@ -95,12 +97,39 @@ func chatDisplayName(chat Chat) string {
 
 // chatParticipantsCell fills the participants column with the roster of any
 // group that resolved names, named or not. A dm's one participant is already
-// its name, so the dm row leaves the cell blank.
-func chatParticipantsCell(chat Chat) string {
+// its name, so the dm row leaves the cell blank. Under --with, the matched
+// person is pulled to the front so a "chats with X" result always shows X in
+// the preview rather than collapsing them into "+N".
+func chatParticipantsCell(chat Chat, with string) string {
 	if !chat.Group {
 		return ""
 	}
-	return participantPreview(chat.ParticipantNames, chat.Participants)
+	names := chat.ParticipantNames
+	if strings.TrimSpace(with) != "" {
+		names = surfaceMatchedName(names, with)
+	}
+	return participantPreview(names, chat.Participants)
+}
+
+// surfaceMatchedName returns the roster with the first name that matches --with
+// moved to the front, so the capped preview shows the person the reader searched
+// for. It copies rather than reordering in place, so the JSON participant_names
+// keep their source order and stay the honest full roster.
+func surfaceMatchedName(names []string, with string) []string {
+	for i, name := range names {
+		if !matchesName(with, []string{name}) {
+			continue
+		}
+		if i == 0 {
+			return names
+		}
+		reordered := make([]string, 0, len(names))
+		reordered = append(reordered, name)
+		reordered = append(reordered, names[:i]...)
+		reordered = append(reordered, names[i+1:]...)
+		return reordered
+	}
+	return names
 }
 
 // participantPreview joins up to participantPreviewCap names and collapses the

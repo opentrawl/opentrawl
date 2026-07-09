@@ -147,8 +147,8 @@ func TestRunChatsTextMixedDMAndGroupParticipants(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	// Cap is 2 names; the 3-person head count makes the remainder "+1".
-	if !strings.Contains(stdout, "Ada, Bo +1") {
+	// Cap is 3 names; a 3-person group shows its whole roster with no remainder.
+	if !strings.Contains(stdout, "Ada, Bo, Cy") {
 		t.Fatalf("group must show its roster:\n%s", stdout)
 	}
 	// The dm's participant cell is the "-" marker, never a fabricated roster.
@@ -206,8 +206,8 @@ func TestRunChatsTextNameLeadsAndParticipantsColumn(t *testing.T) {
 	if !strings.Contains(stdout, "padel wankers") {
 		t.Fatalf("missing chat name:\n%s", stdout)
 	}
-	// Cap is 2 names; the 8-person head count makes the remainder "+6".
-	if !strings.Contains(stdout, "Ana, Bob +6") {
+	// Cap is 3 names; the 8-person head count makes the remainder "+5".
+	if !strings.Contains(stdout, "Ana, Bob, Cy +5") {
 		t.Fatalf("participants preview wrong:\n%s", stdout)
 	}
 	// The chat column shows the source's safe pre-index handle (the raw id),
@@ -245,8 +245,8 @@ func TestRunChatsTextUnnamedGroupNameAndRoster(t *testing.T) {
 	if !strings.Contains(stdout, "group of 5") {
 		t.Fatalf("unnamed group must be named 'group of N':\n%s", stdout)
 	}
-	// The roster lives in the participants column, capped at 2 with an honest "+3".
-	if !strings.Contains(stdout, "participants") || !strings.Contains(stdout, "Alice, Bob +3") {
+	// The roster lives in the participants column, capped at 3 with an honest "+2".
+	if !strings.Contains(stdout, "participants") || !strings.Contains(stdout, "Alice, Bob, Carol +2") {
 		t.Fatalf("unnamed group must show its roster in the participants column:\n%s", stdout)
 	}
 	if strings.Contains(stdout, "unread") {
@@ -352,6 +352,152 @@ func TestRunChatsTextChatColumnShowsShortRef(t *testing.T) {
 	}
 	if strings.Contains(stdout, alias) {
 		t.Fatalf("json must not carry the display short ref:\n%s", stdout)
+	}
+}
+
+// --with filters to the chats a named person is in. The match spans a group's
+// resolved roster and a dm's partner name, is case-insensitive, and drops every
+// chat that person is not in. The kit fetches every chat (--all) so a match past
+// the first page is never lost, and pages the survivors itself.
+func TestRunChatsWithFiltersByParticipant(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	var got ChatQuery
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		got = q
+		return []Chat{
+			{
+				ID: "g1", Ref: "imessage:chat/g1", Title: "Book Club", Group: true,
+				Participants: int64Ptr(3), ParticipantNames: []string{"Ada", "Zoe", "Bo"},
+				LastActivity: time.Date(2026, 7, 4, 9, 0, 0, 0, time.UTC),
+			},
+			{
+				// A dm whose partner name lives in the title (Telegram/WhatsApp shape),
+				// with no roster: --with must still find it by the title.
+				ID: "d1", Ref: "telegram:chat/d1", Title: "Zoe Example", Group: false,
+				LastActivity: time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC),
+			},
+			{
+				ID: "g2", Ref: "imessage:chat/g2", Title: "Padel", Group: true,
+				Participants: int64Ptr(2), ParticipantNames: []string{"Ada", "Bo"},
+				LastActivity: time.Date(2026, 7, 2, 9, 0, 0, 0, time.UTC),
+			},
+		}, nil
+	}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats", "--with", "zoe"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	// The kit asks the source for every chat, then filters in the kit.
+	if !got.All || got.Limit != 0 || got.With != "zoe" {
+		t.Fatalf("with query must fetch all and carry the person: %#v", got)
+	}
+	if !strings.Contains(stdout, "Book Club") || !strings.Contains(stdout, "Zoe Example") {
+		t.Fatalf("both chats with Zoe must appear:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "Padel") {
+		t.Fatalf("a chat without Zoe must be dropped:\n%s", stdout)
+	}
+
+	// A discovery filter stays literal: a close-spelled query must not pull in a
+	// different person. "Zoa" is one edit from "Zoe" (the resolver would treat it
+	// as a close-spelling match), but it is nobody in this list, so --with drops it.
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--with", "Zoa"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with Zoa code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "No chats") {
+		t.Fatalf("close-spelled query must not match a different name:\n%s", stdout)
+	}
+}
+
+// --with never matches or prints a raw privacy handle. A WhatsApp @lid chat with
+// no resolved name is not findable by its handle digits and never leaks the raw
+// id, while a real name in the same list still matches.
+func TestRunChatsWithNeverLeaksPrivacyID(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		return []Chat{
+			{
+				// Masked dm: the raw @lid is machine-only; the human title is a mask.
+				ID: "155500000000002@lid", Ref: "whatsapp:chat/155500000000002@lid",
+				Title: "unknown participant (privacy id)", Group: false, DisplayID: "privacy id",
+				LastActivity: time.Date(2026, 7, 4, 9, 0, 0, 0, time.UTC),
+			},
+			{
+				ID: "g1", Ref: "whatsapp:chat/g1", Title: "Padel", Group: true,
+				Participants: int64Ptr(2), ParticipantNames: []string{"Ada", "Bo"},
+				LastActivity: time.Date(2026, 7, 3, 9, 0, 0, 0, time.UTC),
+			},
+		}, nil
+	}}
+
+	// The raw handle digits find nothing and never surface the @lid.
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats", "--with", "155500000000002"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if strings.Contains(stdout, "@lid") {
+		t.Fatalf("--with must never print a raw privacy id:\n%s", stdout)
+	}
+	if !strings.Contains(stdout, "No chats") {
+		t.Fatalf("a privacy handle must match nothing:\n%s", stdout)
+	}
+
+	// A real name still matches by name in the same archive.
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--with", "ada"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with ada code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Padel") || strings.Contains(stdout, "@lid") {
+		t.Fatalf("a named participant must match without leaking a handle:\n%s", stdout)
+	}
+}
+
+// Under --with, the matched person is pulled to the front of the capped preview,
+// so a "chats with X" result shows X rather than collapsing them into "+N". The
+// JSON roster keeps its source order and full membership.
+func TestRunChatsWithSurfacesMatchPastCap(t *testing.T) {
+	stateRoot := t.TempDir()
+	createArchive(t, stateRoot)
+	source := &testChatCrawler{chatsFn: func(ctx context.Context, req *Request, q ChatQuery) ([]Chat, error) {
+		return []Chat{{
+			ID: "g1", Ref: "imessage:chat/g1", Title: "Big Group", Group: true,
+			Participants:     int64Ptr(6),
+			ParticipantNames: []string{"Ada", "Bo", "Cy", "Dee", "Zoe", "El"},
+			LastActivity:     time.Date(2026, 7, 4, 9, 0, 0, 0, time.UTC),
+		}}, nil
+	}}
+
+	code, stdout, stderr := runForTestAt(stateRoot, []string{"chats", "--with", "zoe"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	// Zoe is the 5th name, past the 3-name cap; the match surfaces her first.
+	if !strings.Contains(stdout, "Zoe, Ada, Bo +3") {
+		t.Fatalf("matched person must lead the preview:\n%s", stdout)
+	}
+
+	code, stdout, stderr = runForTestAt(stateRoot, []string{"chats", "--with", "zoe", "--json"}, source, runOptions{})
+	if code != 0 {
+		t.Fatalf("chats --with --json code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	// The JSON roster is the honest full list in source order, not reordered.
+	if !strings.Contains(stdout, `"Ada",`) || !strings.Contains(stdout, `"Zoe",`) {
+		t.Fatalf("json must keep the full roster:\n%s", stdout)
+	}
+	var envelope struct {
+		Chats []struct {
+			ParticipantNames []string `json:"participant_names"`
+		} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("json parse: %v\n%s", err, stdout)
+	}
+	if len(envelope.Chats) != 1 || len(envelope.Chats[0].ParticipantNames) != 6 || envelope.Chats[0].ParticipantNames[0] != "Ada" {
+		t.Fatalf("json roster must keep source order and full membership: %#v", envelope.Chats)
 	}
 }
 
