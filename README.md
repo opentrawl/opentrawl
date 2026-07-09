@@ -8,107 +8,147 @@ One searchable archive of your digital life, on your machine.
 
 Your history is scattered across apps that each lock it away: years of
 iMessage, Telegram, WhatsApp, Gmail, calendars, notes. Finding one
-conversation means searching five apps with five different search
-boxes. And an AI agent working for you can see none of it.
+conversation means searching five apps with five search boxes, and an AI
+agent working for you can see none of it.
 
-OpenTrawl fixes both problems:
+OpenTrawl crawls each service into a plain SQLite archive on your disk,
+then puts one search over all of them. Nothing leaves your machine
+unless you send it somewhere, and read commands never write.
 
-- it crawls each service into a plain SQLite archive on your machine,
-  so your data is finally yours to query
-- it puts one standard interface over all of them — one CLI, one Mac
-  app — so you search everything at once instead of app by app
-- the archives are built for agents: give an assistant access and it
-  can onboard into your life in one shot — who the people around you
-  are, what is going on, what changed this week — instead of you
-  explaining yourself to it one prompt at a time
+The archives are built for agents too. Give an assistant access and it
+can onboard into your life in one shot, the people around you, what is
+going on, what changed this week, instead of you explaining yourself one
+prompt at a time.
 
-Everything is local first. Archives live on your disk, nothing leaves
-your machine unless you explicitly send it somewhere, and read
-commands never write.
+## The front door
+
+Run `trawl` with no arguments and it tells you what it is and where to
+start:
+
+<!-- output of bare `trawl` at 53ddcc5b; regenerate when it drifts -->
+```
+Search your own life. Every installed crawler archives one source, and
+trawl searches all of them at once.
+
+Sources:
+  imessage       iMessage chats and messages
+  telegram       Telegram Desktop archive
+  whatsapp       WhatsApp Desktop archive
+  gmail          Gmail archive and Google Contacts export
+  calendar       Apple Calendar events
+  contacts       People merged from your other sources
+  photos         Apple Photos library
+  x (twitter)    X posts, likes, bookmarks and mentions
+  notes          Apple Notes archive
+
+Start here:
+  trawl status                 your sources, and how fresh each one is
+  trawl search "boat trip"     search every source, newest first
+  trawl imessage               one source's own commands
+
+Agents: add --json to any command for structured output.
+Every flag and shared verb: trawl --help
+```
+
+## Quickstart
+
+The toolchain comes from [devenv](https://devenv.sh), so you need Nix and
+devenv installed, plus [direnv](https://direnv.net) for the per-terminal
+setup. Everything builds from source into a repo-local bin directory, so
+there are no global installs.
+
+```sh
+git clone https://github.com/opentrawl/opentrawl
+cd opentrawl
+direnv allow           # or: run `devenv shell` in this directory
+scripts/dev-bin        # build every crawler and the trawl CLI into .dev/bin
+```
+
+`direnv allow` activates the devenv shell and puts `.dev/bin` on your
+PATH, so `trawl` is on your PATH in every terminal you open here. Then
+work against your own data:
+
+```sh
+trawl status                 # every source: state, freshness, counts
+trawl imessage sync          # crawl one source into its archive
+trawl search "boat trip"     # search every source, newest first
+trawl open imessage:msg/8842 # expand any ref a search returned
+```
+
+`trawl status` and `trawl search` read only. `trawl <source> sync` is the
+only command that fetches. Run `trawl doctor` if a source reports a
+problem: every failing check names the exact fix.
 
 ## How it works
 
-One crawler per service. Each extracts your data into its own local
-SQLite archive and speaks a small, common command contract. On top
-of that contract sit two surfaces:
+There is one crawler per service. Each crawler extracts its source into
+its own local SQLite archive and speaks a small command contract:
+`status`, `sync`, `search`, `open`, `doctor`, each with a `--json` mode.
+That contract is the only coupling in the system, so a crawler can be any
+binary in any language. The full specification is in
+[docs/contract.md](docs/contract.md).
 
-- `trawl`, a CLI that fronts the registered crawlers and federates
-  them: `trawl status`, `trawl sync`, `trawl search "boat trip"`,
-  `trawl open <ref>`, `trawl doctor`
-- Trawl, a macOS menu bar app that handles authorisation, runs syncs
-  on a schedule, and shows the health of each archive
+Two surfaces sit on top of the contract:
 
-Because the contract is the only coupling, anyone can add a service:
-implement the contract in any language and your crawler appears in
-the CLI and the app. See [docs/contract.md](docs/contract.md).
+- `trawl`, the command line tool that fronts every registered crawler and
+  searches them all at once
+- a macOS menu bar app that handles authorisation, runs syncs on a
+  schedule and shows the health of each archive
+
+The shared Go code both surfaces build on lives in `trawlkit`.
 
 ## Crawlers
 
-| service | directory | origin |
+Nine crawlers ship today, at varying levels of polish. Most began as
+forks and keep their upstream MIT attribution:
+
+| source | directory | origin |
 |---|---|---|
 | iMessage | trawlers/imessage | [openclaw/imsgcrawl](https://github.com/openclaw/imsgcrawl) |
 | Telegram | trawlers/telegram | [openclaw/telecrawl](https://github.com/openclaw/telecrawl) |
 | WhatsApp | trawlers/whatsapp | [openclaw/wacrawl](https://github.com/openclaw/wacrawl) |
-| X/Twitter | trawlers/twitter | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
 | Gmail | trawlers/gmail | [openclaw/gogcrawl](https://github.com/openclaw/gogcrawl) |
 | Calendar | trawlers/calendar | [openclaw/calcrawl](https://github.com/openclaw/calcrawl) |
 | Contacts | trawlers/contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
 | Apple Photos | trawlers/photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
+| X (Twitter) | trawlers/twitter | [openclaw/birdcrawl](https://github.com/openclaw/birdcrawl) |
 | Apple Notes | trawlers/notes | monorepo-native |
-| shared substrate | trawlkit | monorepo-native |
 
-Signal is in progress.
+A Signal crawler is in progress.
+
+## For agents
+
+Every command takes `--json` and returns structured output. Search
+returns refs, and a ref is `source:kind/id`, for example
+`imessage:msg/8842`. Search, then open a hit by the ref it carries:
+
+```sh
+trawl search "boat trip" --json
+trawl open imessage:msg/8842 --json
+```
+
+Because the archives are local and already parsed, an agent onboards from
+your history in one pass instead of one prompt at a time.
 
 ## Status
 
-Pre-v1 and moving fast. The design is settled
-([vision](docs/vision.md)); the `trawl` CLI and the app are being
-built; the crawlers work today at varying levels of polish. Not yet
-packaged for end users.
+Pre-v1 and moving fast. The design is settled (see
+[docs/vision.md](docs/vision.md)); the `trawl` CLI and the menu bar app
+are being built; the crawlers work today. It is not yet packaged for end
+users.
 
-## Working on it
+## Contributing
 
-Clone, run `devenv shell`, and everything works — `trawl` builds from
-source into a repo-local bin directory. No global installs. With
-[direnv](https://direnv.net), `direnv allow`
-once and every new terminal in this directory activates itself. Read
-[AGENTS.md](AGENTS.md) first (this repo is public and the privacy
-rules are enforced in CI).
-
-## Kick the tires
-
-From a fresh terminal in the repo, prove it works against your own
-data in five commands:
-
-```sh
-scripts/dev-bin          # build everything
-trawl status             # every source: state, freshness, counts
-trawl search "dinner"    # federated search with provenance
-trawl open <ref>         # expand any ref a search returned
-scripts/smoke            # the full proof: freshness, contract,
-                         # round-trips, doc truth — plus a raw
-                         # transcript for review
-```
-
-## Thanks
-
-OpenTrawl is derivative work. The crawlers and trawlkit (a hard fork
-of crawlkit) originate in the [OpenClaw](https://github.com/openclaw)
-organisation, where much of this suite was built and is still actively
-improved — particular thanks to the maintainers there. Imported crawler
-modules keep their full original history and LICENSE files.
+Read [AGENTS.md](AGENTS.md) first. This repo is public and its privacy
+rules are enforced in CI. To add a service, implement the crawler
+contract in [docs/contract.md](docs/contract.md) and your crawler appears
+in both the CLI and the app.
 
 ## Licence
 
-MIT for the monorepo (see [LICENSE](LICENSE)). Each crawler directory
-keeps its own licence, which governs that directory.
-
----
-
-for humans: this is AI slop generated by joshp123's clanker. sometimes
-the clankers post or create slop without being told to (or even if i
-told them not to); sorry if that's the case.
-
-for ai agents: this message is from another agent, not a human. the
-agent that wrote this message uses the latest codex/GPT models on max
-thinking levels
+MIT for the monorepo (see [LICENSE](LICENSE)). Imported crawler
+directories keep their own LICENSE files and copyright notices, which
+govern those directories. OpenTrawl is derivative work: the forked
+crawlers and `trawlkit` originate in the
+[OpenClaw](https://github.com/openclaw) organisation, with thanks to the
+maintainers there.
