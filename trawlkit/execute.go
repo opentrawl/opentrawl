@@ -400,6 +400,7 @@ func rebuildSourceShortRefs(ctx context.Context, source Crawler, req *Request) e
 	if err != nil {
 		return err
 	}
+	records = append(shortRefKindRecords(source), records...)
 	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
 		return err
 	}
@@ -407,6 +408,21 @@ func rebuildSourceShortRefs(ctx context.Context, source Crawler, req *Request) e
 		_ = req.Log.Info("short_refs_rebuilt", fmt.Sprintf("refs=%d", len(records)))
 	}
 	return nil
+}
+
+func shortRefKindRecords(source Crawler) []ShortRefRecord {
+	provider, ok := source.(ShortRefKindProvider)
+	if !ok {
+		return nil
+	}
+	kinds := provider.ShortRefKinds()
+	records := make([]ShortRefRecord, 0, len(kinds))
+	for _, kind := range kinds {
+		if strings.TrimSpace(kind) != "" {
+			records = append(records, ShortRefRecord{Kind: kind})
+		}
+	}
+	return records
 }
 
 func validateReadFlags(verb targetVerb) error {

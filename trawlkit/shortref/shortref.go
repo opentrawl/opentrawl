@@ -98,6 +98,12 @@ func BuildSlice(fullRefs []string) ([]Entry, error) {
 	})
 }
 
+// BuildSliceAvoidingAliases builds display entries whose aliases do not collide
+// with reservedAliases.
+func BuildSliceAvoidingAliases(fullRefs []string, reservedAliases map[string]struct{}) ([]Entry, error) {
+	return buildWithAliasAvoidingAliases(fullRefs, 0, Alias, reservedAliases)
+}
+
 func LookupEntries(displayEntries []Entry) []Entry {
 	seen := make(map[Entry]struct{})
 	lookupEntries := make([]Entry, 0, len(displayEntries))
@@ -121,6 +127,10 @@ func LookupEntries(displayEntries []Entry) []Entry {
 }
 
 func buildWithAlias(fullRefs []string, startLength int, alias aliasFunc) ([]Entry, error) {
+	return buildWithAliasAvoidingAliases(fullRefs, startLength, alias, nil)
+}
+
+func buildWithAliasAvoidingAliases(fullRefs []string, startLength int, alias aliasFunc, reservedAliases map[string]struct{}) ([]Entry, error) {
 	refs := uniqueSorted(fullRefs)
 	if len(refs) == 0 {
 		return nil, nil
@@ -148,8 +158,9 @@ func buildWithAlias(fullRefs []string, startLength int, alias aliasFunc) ([]Entr
 		}
 
 		extended := false
-		for _, group := range groups {
-			if len(group) < 2 {
+		for currentAlias, group := range groups {
+			_, reserved := reservedAliases[currentAlias]
+			if len(group) < 2 && !reserved {
 				continue
 			}
 			for _, ref := range group {

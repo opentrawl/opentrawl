@@ -31,12 +31,13 @@ type App struct {
 type Crawler = App
 
 var (
-	_ trawlkit.Crawler          = (*App)(nil)
-	_ trawlkit.Searcher         = (*App)(nil)
-	_ trawlkit.WhoMatcher       = (*App)(nil)
-	_ trawlkit.Opener           = (*App)(nil)
-	_ trawlkit.ContactExporter  = (*App)(nil)
-	_ trawlkit.ShortRefProvider = (*App)(nil)
+	_ trawlkit.Crawler              = (*App)(nil)
+	_ trawlkit.Searcher             = (*App)(nil)
+	_ trawlkit.WhoMatcher           = (*App)(nil)
+	_ trawlkit.Opener               = (*App)(nil)
+	_ trawlkit.ContactExporter      = (*App)(nil)
+	_ trawlkit.ShortRefProvider     = (*App)(nil)
+	_ trawlkit.ShortRefKindProvider = (*App)(nil)
 )
 
 func New() *App {
@@ -222,6 +223,10 @@ func (a *App) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]tra
 		return nil, err
 	}
 	return st.ShortRefRecords(ctx)
+}
+
+func (a *App) ShortRefKinds() []string {
+	return []string{archive.PersonRefPrefix}
 }
 
 func resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

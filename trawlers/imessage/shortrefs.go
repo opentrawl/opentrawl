@@ -11,6 +11,11 @@ import (
 )
 
 var _ trawlkit.ShortRefProvider = (*Crawler)(nil)
+var _ trawlkit.ShortRefKindProvider = (*Crawler)(nil)
+
+func (c *Crawler) ShortRefKinds() []string {
+	return []string{archive.MessageRefPrefix, archive.ChatRefPrefix}
+}
 
 func (c *Crawler) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]trawlkit.ShortRefRecord, error) {
 	if req == nil || req.Store == nil {

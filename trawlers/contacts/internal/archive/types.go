@@ -9,9 +9,10 @@ import (
 )
 
 const (
-	AppID         = "contacts"
-	DisplayName   = "Contacts"
-	SchemaVersion = 1
+	AppID           = "contacts"
+	DisplayName     = "Contacts"
+	SchemaVersion   = 1
+	PersonRefPrefix = AppID + ":person/"
 )
 
 type Store struct {
@@ -55,12 +56,12 @@ type ImportSummary struct {
 }
 
 func PersonRef(id string) string {
-	return AppID + ":person/" + strings.TrimSpace(id)
+	return PersonRefPrefix + strings.TrimSpace(id)
 }
 
 func PersonIDFromRef(ref string) (string, bool) {
 	value := strings.TrimSpace(ref)
-	for _, prefix := range []string{AppID + ":person/", "person/", "people/"} {
+	for _, prefix := range []string{PersonRefPrefix, "person/", "people/"} {
 		if strings.HasPrefix(value, prefix) {
 			id := strings.TrimSpace(strings.TrimPrefix(value, prefix))
 			return id, id != "" && !strings.ContainsAny(id, "\r\n\t")

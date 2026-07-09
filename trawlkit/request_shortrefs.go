@@ -66,12 +66,19 @@ func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))
 }
 
+// RebuildShortRefs deletes and rebuilds exactly the kinds named by records.
+//
+// Each record Ref implies its <source>:<kind>/ prefix, and Kind records declare
+// kinds that must be cleared even when the crawler emits no refs for that kind.
+// This protects archives when the running binary knows fewer kinds than a
+// previous binary wrote. It cannot protect binaries built before kind-scoped
+// clearing existed: their compiled code still clears the whole table.
 func (r *Request) RebuildShortRefs(ctx context.Context, records []ShortRefRecord) (int, error) {
 	if r == nil || r.Store == nil {
 		return 0, errors.New("archive store is not open")
 	}
 	refs := shortRefIndexRefs(records)
-	entries, err := shortref.BuildSlice(refs)
+	kinds, err := shortRefIndexKinds(records)
 	if err != nil {
 		return 0, err
 	}
@@ -80,10 +87,18 @@ func (r *Request) RebuildShortRefs(ctx context.Context, records []ShortRefRecord
 			return err
 		}
 		index := shortref.NewSQLiteIndex(tx)
-		if err := index.Clear(ctx); err != nil {
+		survivingAliases, err := index.SurvivingAliases(ctx, kinds)
+		if err != nil {
 			return err
 		}
-		return index.UpsertEntries(ctx, shortref.LookupEntries(entries))
+		entries, err := shortref.BuildSliceAvoidingAliases(refs, survivingAliases)
+		if err != nil {
+			return err
+		}
+		if err := index.ClearKinds(ctx, kinds); err != nil {
+			return err
+		}
+		return index.UpsertEntries(ctx, shortRefLookupEntries(entries, survivingAliases))
 	})
 	if err != nil {
 		return 0, fmt.Errorf("rebuild short refs: %w", err)
@@ -169,6 +184,21 @@ func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []st
 	return out, nil
 }
 
+func shortRefLookupEntries(entries []shortref.Entry, reservedAliases map[string]struct{}) []shortref.Entry {
+	lookupEntries := shortref.LookupEntries(entries)
+	if len(reservedAliases) == 0 {
+		return lookupEntries
+	}
+	filtered := lookupEntries[:0]
+	for _, entry := range lookupEntries {
+		if _, reserved := reservedAliases[entry.Alias]; reserved {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	return filtered
+}
+
 func shortRefIndexRefs(records []ShortRefRecord) []string {
 	refs := make([]string, 0, len(records))
 	for _, record := range records {
@@ -177,6 +207,48 @@ func shortRefIndexRefs(records []ShortRefRecord) []string {
 		}
 	}
 	return uniqueStrings(refs)
+}
+
+func shortRefIndexKinds(records []ShortRefRecord) ([]string, error) {
+	kinds := make([]string, 0, len(records))
+	for _, record := range records {
+		if kind := strings.TrimSpace(record.Kind); kind != "" {
+			normalized, err := normalizeShortRefKind(kind)
+			if err != nil {
+				return nil, err
+			}
+			kinds = append(kinds, normalized)
+		}
+		if ref := strings.TrimSpace(record.Ref); ref != "" {
+			kind, ok := parseShortRefKind(ref)
+			if !ok || len(ref) == len(kind) {
+				return nil, fmt.Errorf("short ref %q must look like <source>:<kind>/<id>", ref)
+			}
+			kinds = append(kinds, kind)
+		}
+	}
+	return uniqueStrings(kinds), nil
+}
+
+func normalizeShortRefKind(kind string) (string, error) {
+	parsed, ok := parseShortRefKind(kind)
+	if !ok || parsed != kind {
+		return "", fmt.Errorf("short ref kind %q must look like <source>:<kind>/", kind)
+	}
+	return parsed, nil
+}
+
+func parseShortRefKind(value string) (string, bool) {
+	colon := strings.IndexByte(value, ':')
+	slash := strings.IndexByte(value, '/')
+	if colon <= 0 || slash <= colon+1 {
+		return "", false
+	}
+	kind := value[:slash+1]
+	if strings.ContainsAny(kind, " \t\r\n") {
+		return "", false
+	}
+	return kind, true
 }
 
 func isMissingShortRefTable(err error) bool {
