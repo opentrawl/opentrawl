@@ -9,10 +9,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-// participantPreviewCap is how many participant names a preview shows before it
-// collapses the rest into "+N". One value, used for both the synthesised name
-// of an unnamed group and the participants column, so a reader learns one shape.
-const participantPreviewCap = 3
+// participantPreviewCap is how many participant names the participants column
+// shows before it collapses the rest into "+N". Kept small so the preview fits
+// one line beside the other columns without the table having to shrink and clip
+// it; the head count carries everyone past the cap as an honest "+N".
+const participantPreviewCap = 2
 
 type chatsOutput struct {
 	Chats []chatOutput `json:"chats"`
@@ -42,57 +43,61 @@ type chatOutput struct {
 	lastActivity     time.Time
 }
 
-func newChatsOutput(chats []Chat, unread, truncated bool) chatsOutput {
+// newChatsOutput builds the rendered rows. aliases maps each chat Ref to its
+// short ref from the shared index; the human chat column shows that short ref,
+// so a long provider id never reaches a reader. Before the archive indexes a
+// chat ref (an archive synced by an older binary), the column falls back to the
+// source's DisplayID: a safe, copyable raw id where the source vouches for one,
+// a privacy marker, or empty when the source has no handle safe to show. The
+// raw Ref and ID never reach the human column; --json keeps both for agents.
+func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated bool) chatsOutput {
 	rows := make([]chatOutput, 0, len(chats))
 	for _, chat := range chats {
-		name := chatDisplayName(chat)
 		rows = append(rows, chatOutput{
 			ID:               chat.ID,
 			Ref:              chat.Ref,
-			Name:             name,
+			Name:             chatDisplayName(chat),
 			Kind:             kindLabel(chat.Group),
 			Participants:     copyCount(chat.Participants),
 			ParticipantNames: append([]string(nil), chat.ParticipantNames...),
 			LastActivity:     formatContractTime(chat.LastActivity),
 			Unread:           copyCount(chat.Unread),
 			participantsCell: chatParticipantsCell(chat),
-			handleCell:       firstText(chat.DisplayID, chat.Ref, chat.ID),
-			lastActivity:     chat.LastActivity,
+			// Short ref first; else the source's pre-index DisplayID (a safe raw id
+			// or a privacy marker, empty when none). The raw Ref and ID stay in
+			// --json only, never the human chat column.
+			handleCell:   firstText(aliases[chat.Ref], chat.DisplayID),
+			lastActivity: chat.LastActivity,
 		})
 	}
 	return chatsOutput{Chats: rows, Truncated: truncated, unread: unread}
 }
 
-// chatDisplayName is the name the human table and --json both show. It leads
-// with the real title; an unnamed group falls back to a preview of its
-// participants ("Alice, Bob +3"), which is how a person names such a chat when
-// the app does not.
+// chatDisplayName is the short identifier the name column shows. A real title
+// wins; a dm with no title is named by its one other person; an unnamed group
+// is named "group of N" and leaves its roster to the participants column, so
+// the name column stays one scannable line and never wraps a long roster.
 func chatDisplayName(chat Chat) string {
 	if title := strings.TrimSpace(chat.Title); title != "" {
 		return title
 	}
-	// No stored name: the participants name the chat. For a dm that is the other
-	// person; for a group it is the roster preview.
-	if preview := participantPreview(chat.ParticipantNames, chat.Participants); preview != "" {
-		return preview
-	}
-	if chat.Group {
-		// A group whose members did not resolve to names still knows how many
-		// there are, which beats an anonymous "group chat".
-		if chat.Participants != nil && *chat.Participants > 0 {
-			return "group of " + render.FormatInteger(*chat.Participants)
+	if !chat.Group {
+		if preview := participantPreview(chat.ParticipantNames, chat.Participants); preview != "" {
+			return preview
 		}
-		return "group chat"
+		return "chat"
 	}
-	return "chat"
+	if chat.Participants != nil && *chat.Participants > 0 {
+		return "group of " + render.FormatInteger(*chat.Participants)
+	}
+	return "group chat"
 }
 
-// chatParticipantsCell fills the participants column. It shows the roster only
-// for a named group, where the name does not already carry it; an unnamed group
-// puts its roster in the name, so repeating it here would be noise, and a dm's
-// participant is its name.
+// chatParticipantsCell fills the participants column with the roster of any
+// group that resolved names, named or not. A dm's one participant is already
+// its name, so the dm row leaves the cell blank.
 func chatParticipantsCell(chat Chat) string {
-	if !chat.Group || strings.TrimSpace(chat.Title) == "" {
+	if !chat.Group {
 		return ""
 	}
 	return participantPreview(chat.ParticipantNames, chat.Participants)
@@ -176,7 +181,10 @@ func writeChatsText(w io.Writer, value chatsOutput) error {
 	showUnread := anyCount(value.Chats, func(c chatOutput) *int64 { return c.Unread })
 
 	columns := []render.TableColumn{
-		{Header: "name", Wrap: true},
+		// A name is an identifier, not prose: it stays on one line and clips with
+		// an ellipsis under pressure, the way a chat list does, rather than
+		// wrapping a title across rows mid-list.
+		{Header: "name"},
 		{Header: "kind"},
 	}
 	if showParticipants {

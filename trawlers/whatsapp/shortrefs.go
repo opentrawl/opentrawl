@@ -31,6 +31,26 @@ func (c *Crawler) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("read message refs for short refs: %w", err)
 	}
+	// Chat refs join the same index so the chats table can show a short ref and
+	// messages --chat can resolve it, exactly as search and open do for messages.
+	// A short ref also masks a privacy @lid jid, which a raw provider id would leak.
+	chatRows, err := req.Store.DB().QueryContext(ctx, `select jid from chats where trim(jid) <> '' order by jid`)
+	if err != nil {
+		return nil, fmt.Errorf("read chat refs for short refs: %w", err)
+	}
+	defer func() { _ = chatRows.Close() }()
+	for chatRows.Next() {
+		var jid string
+		if err := chatRows.Scan(&jid); err != nil {
+			return nil, fmt.Errorf("scan chat ref for short refs: %w", err)
+		}
+		if ref := store.ChatRef(jid); ref != "" {
+			records = append(records, trawlkit.ShortRefRecord{Ref: ref})
+		}
+	}
+	if err := chatRows.Err(); err != nil {
+		return nil, fmt.Errorf("read chat refs for short refs: %w", err)
+	}
 	return records, nil
 }
 
