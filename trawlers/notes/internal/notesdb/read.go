@@ -190,6 +190,40 @@ order by att.ZIDENTIFIER`)
 	return out, rows.Err()
 }
 
+// ReadTableData fetches the table CRDT blob (ZMERGEABLEDATA1) for each table
+// attachment UUID. Table cell content lives in these companion rows, not in the
+// note's own ZDATA, so it must be captured alongside the body. UUIDs with no
+// blob are silently absent from the result.
+func ReadTableData(ctx context.Context, db *sql.DB, uuids []string) (_ []TableData, err error) {
+	defer func() { err = wrapMalformed(err) }()
+	if len(uuids) == 0 {
+		return nil, nil
+	}
+	args := make([]any, 0, len(uuids))
+	for _, uuid := range uuids {
+		args = append(args, uuid)
+	}
+	rows, err := db.QueryContext(ctx, `
+select ZIDENTIFIER, ZMERGEABLEDATA1
+from ZICCLOUDSYNCINGOBJECT
+where ZIDENTIFIER in (`+placeholders(len(uuids))+`)
+  and ZMERGEABLEDATA1 is not null
+order by ZIDENTIFIER`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []TableData{}
+	for rows.Next() {
+		var td TableData
+		if err := rows.Scan(&td.AttachmentUUID, &td.ZData); err != nil {
+			return nil, err
+		}
+		out = append(out, td)
+	}
+	return out, rows.Err()
+}
+
 func integrityProbe(ctx context.Context, db *sql.DB) error {
 	var count int
 	return db.QueryRowContext(ctx, "select count(*) from ZICNOTEDATA").Scan(&count)

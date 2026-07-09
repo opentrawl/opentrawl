@@ -2,6 +2,7 @@ package notes
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notestime"
+	"github.com/opentrawl/opentrawl/trawlers/notes/internal/projection"
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/wal"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
@@ -126,6 +128,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	bodies := []archive.BodyInsert{}
 	var final notesdb.FinalState
 	var attachments []notesdb.Attachment
+	var tableData []notesdb.TableData
 	for i, spec := range specs {
 		if req.Progress != nil {
 			req.Progress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
@@ -171,6 +174,12 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 				_ = state.Close()
 				return archive.SyncStats{}, err
 			}
+			tableData, err = readTableData(ctx, db, final.Bodies)
+			if err != nil {
+				_ = db.Close()
+				_ = state.Close()
+				return archive.SyncStats{}, err
+			}
 		} else {
 			stateBodies, err = notesdb.ReadBodies(ctx, db, changed)
 			if err != nil {
@@ -208,6 +217,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 		Notes:        notes,
 		Bodies:       bodies,
 		Attachments:  attachmentInserts,
+		TableData:    tableInserts(tableData, start),
 		SyncState:    state,
 		LastSeenAt:   notestime.Format(start),
 		ReplaceNotes: replaceNotes,
@@ -285,6 +295,39 @@ func dedupeBodyObservations(bodies []archive.BodyInsert) []archive.BodyInsert {
 		}
 		seen[key] = len(out)
 		out = append(out, body)
+	}
+	return out
+}
+
+// readTableData captures the companion table CRDT blob for every table
+// embedded in the final-state bodies. Bodies that fail to decode (e.g. legacy
+// binary-plist bodies) are skipped; they carry no decodable table references.
+func readTableData(ctx context.Context, db *sql.DB, bodies []notesdb.Body) ([]notesdb.TableData, error) {
+	seen := map[string]bool{}
+	uuids := []string{}
+	for _, body := range bodies {
+		ids, err := projection.TableAttachmentUUIDs(body.ZData)
+		if err != nil {
+			continue
+		}
+		for _, id := range ids {
+			if !seen[id] {
+				seen[id] = true
+				uuids = append(uuids, id)
+			}
+		}
+	}
+	return notesdb.ReadTableData(ctx, db, uuids)
+}
+
+func tableInserts(data []notesdb.TableData, observed time.Time) []archive.TableDataInsert {
+	out := make([]archive.TableDataInsert, 0, len(data))
+	for _, td := range data {
+		out = append(out, archive.TableDataInsert{
+			AttachmentUUID: td.AttachmentUUID,
+			ZData:          td.ZData,
+			ObservedAt:     notestime.Format(observed),
+		})
 	}
 	return out
 }

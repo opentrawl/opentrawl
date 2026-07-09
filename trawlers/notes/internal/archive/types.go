@@ -10,10 +10,13 @@ import (
 const (
 	AppID       = "notes"
 	DisplayName = "Notes"
-	// SchemaVersion 2 adds the attachments table: attachment files
+	// SchemaVersion 2 added the attachments table: attachment files
 	// referenced by Apple Notes, copied into the archive at sync time and
-	// keyed by attachment UUID.
-	SchemaVersion = 2
+	// keyed by attachment UUID. SchemaVersion 3 adds note_table_data (table
+	// CRDT blobs) and re-projects every stored body to markdown. Opening an
+	// older archive triggers the one-shot migration (see migrate.go), which
+	// ensures the full current schema and then re-projects.
+	SchemaVersion = 3
 
 	NoteRefPrefix    = AppID + ":note/"
 	VersionRefPrefix = AppID + ":version/"
@@ -35,6 +38,12 @@ type Note struct {
 	ModifiedAt   string `json:"modified_at,omitempty"`
 	LastSeenAt   string `json:"last_seen_at,omitempty"`
 	VersionCount int64  `json:"version_count,omitempty"`
+}
+
+type TableDataInsert struct {
+	AttachmentUUID string
+	ZData          []byte
+	ObservedAt     string
 }
 
 type BodyInsert struct {
@@ -90,6 +99,7 @@ type SyncBatch struct {
 	Notes        []Note
 	Bodies       []BodyInsert
 	Attachments  []AttachmentInsert
+	TableData    []TableDataInsert
 	SyncState    map[string]string
 	LastSeenAt   string
 	ReplaceNotes bool

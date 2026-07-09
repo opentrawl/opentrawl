@@ -46,3 +46,10 @@ type Attachment struct {
 	HasMedia bool
 	MediaID  string
 }
+
+// TableData is the gzip'd MergableDataProto (table CRDT) for one embedded
+// table, keyed by the table attachment's UUID (ZICCLOUDSYNCINGOBJECT.ZIDENTIFIER).
+type TableData struct {
+	AttachmentUUID string
+	ZData          []byte
+}

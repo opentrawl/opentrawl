@@ -32,6 +32,11 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 				return err
 			}
 		}
+		for _, table := range batch.TableData {
+			if err := insertTableData(ctx, tx, table); err != nil {
+				return err
+			}
+		}
 		for _, body := range batch.Bodies {
 			inserted, err := insertVersion(ctx, tx, body)
 			if err != nil {
@@ -108,8 +113,19 @@ values (?, ?, ?, ?, ?, ?)`,
 	return err
 }
 
+func insertTableData(ctx context.Context, tx *sql.Tx, table TableDataInsert) error {
+	_, err := tx.ExecContext(ctx, `
+insert into note_table_data (attachment_uuid, zdata, zdata_bytes, first_observed_at)
+values (?, ?, ?, ?)
+on conflict(attachment_uuid) do update set
+  zdata = excluded.zdata,
+  zdata_bytes = excluded.zdata_bytes`,
+		table.AttachmentUUID, table.ZData, len(table.ZData), table.ObservedAt)
+	return err
+}
+
 func insertVersion(ctx context.Context, tx *sql.Tx, body BodyInsert) (bool, error) {
-	text, status, unsupported := decodeProjection(body.ZData)
+	text, status, unsupported := decodeProjection(ctx, tx, body.ZData)
 	res, err := tx.ExecContext(ctx, `
 insert or ignore into note_versions
   (note_id, zdata_sha256, zdata, zdata_bytes, text, text_status, unsupported_reason,
@@ -155,12 +171,28 @@ on conflict(key) do update set value = excluded.value`, key, value)
 	return err
 }
 
-func decodeProjection(zdata []byte) (text, status, unsupported string) {
-	text, err := projection.DecodeText(zdata)
+func decodeProjection(ctx context.Context, tx *sql.Tx, zdata []byte) (text, status, unsupported string) {
+	text, err := projection.DecodeMarkdown(zdata, tableResolver(ctx, tx))
 	if err == nil {
 		return strings.TrimSpace(text), "decoded", ""
 	}
 	return "", "unsupported", err.Error()
+}
+
+// tableResolver fetches a table's companion CRDT blob from note_table_data
+// within the current transaction. A miss (no bytes captured for that UUID)
+// returns ok=false, and the projector renders the "not captured" marker — not
+// a decode failure.
+func tableResolver(ctx context.Context, tx *sql.Tx) projection.TableResolver {
+	return func(attachmentUUID string) ([]byte, bool) {
+		var zdata []byte
+		err := tx.QueryRowContext(ctx,
+			`select zdata from note_table_data where attachment_uuid = ?`, attachmentUUID).Scan(&zdata)
+		if err != nil {
+			return nil, false
+		}
+		return zdata, true
+	}
 }
 
 func SourcePathHint(path string) string {

@@ -37,11 +37,22 @@ func Open(ctx context.Context, path string) (*Store, error) {
 	if path == "" {
 		path = DefaultPaths().DBPath
 	}
-	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema, SchemaVersion: SchemaVersion})
+	// Open without a version so the re-projection migration can run against
+	// the old data before EnsureSchemaVersion records the new version.
+	st, err := store.Open(ctx, store.Options{Path: path, Schema: schema})
 	if err != nil {
 		return nil, err
 	}
-	return &Store{store: st, path: path, owned: true}, nil
+	s := &Store{store: st, path: path, owned: true}
+	if err := s.migrate(ctx); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
+		_ = st.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
@@ -54,10 +65,14 @@ func Use(ctx context.Context, st *store.Store, path string) (*Store, error) {
 	if _, err := st.DB().ExecContext(ctx, schema); err != nil {
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	s := &Store{store: st, path: path}
+	if err := s.migrate(ctx); err != nil {
+		return nil, err
+	}
 	if err := st.EnsureSchemaVersion(ctx, SchemaVersion); err != nil {
 		return nil, err
 	}
-	return &Store{store: st, path: path}, nil
+	return s, nil
 }
 
 func UseExisting(ctx context.Context, st *store.Store, path string) (*Store, error) {

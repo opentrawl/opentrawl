@@ -53,6 +53,13 @@ create table if not exists attachments (
   last_seen_at text not null default ''
 );
 
+create table if not exists note_table_data (
+  attachment_uuid text primary key,
+  zdata blob not null,
+  zdata_bytes integer not null,
+  first_observed_at text not null
+);
+
 create virtual table if not exists notes_fts using fts5(
   note_id unindexed,
   zdata_sha256 unindexed,

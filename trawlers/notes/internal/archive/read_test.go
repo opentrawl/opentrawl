@@ -138,7 +138,7 @@ func bodyInsert(noteID, text, modified string) archive.BodyInsert {
 	}
 }
 
-// fixtureZData wraps text in the minimal gzip protobuf shape DecodeText
+// fixtureZData wraps text in the minimal gzip protobuf shape the decoder
 // accepts, so fixture bodies project to text and land in the FTS index the
 // way real synced bodies do.
 func fixtureZData(text string) []byte {
