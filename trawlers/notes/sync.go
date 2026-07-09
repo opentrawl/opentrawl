@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +37,18 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 	if err != nil {
 		return nil, err
 	}
-	return &trawlkit.SyncReport{Added: int64(stats.NewVersions), Updated: int64(stats.Observations)}, nil
+	report := &trawlkit.SyncReport{Added: int64(stats.NewVersions), Updated: int64(stats.Observations)}
+	if stats.AttachmentsMissing > 0 {
+		report.Warnings = append(report.Warnings, missingAttachmentsWarning(stats.AttachmentsMissing))
+	}
+	return report, nil
+}
+
+func missingAttachmentsWarning(count int) string {
+	if count == 1 {
+		return "1 referenced attachment file is missing on disk"
+	}
+	return fmt.Sprintf("%d referenced attachment files are missing on disk", count)
 }
 
 func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error {
@@ -54,7 +66,8 @@ func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error
 	if req.Format == "json" {
 		return writeJSON(req.Out, stats)
 	}
-	_, err = fmt.Fprintf(req.Out, "Sync complete\n\nVersions added: %d\nObservations stored: %d\nSource: %s\n", stats.NewVersions, stats.Observations, label)
+	_, err = fmt.Fprintf(req.Out, "Sync complete\n\nVersions added: %d\nObservations stored: %d\nAttachments copied: %d\nAttachments missing: %d\nSource: %s\n",
+		stats.NewVersions, stats.Observations, stats.AttachmentsCopied, stats.AttachmentsMissing, label)
 	return err
 }
 
@@ -100,6 +113,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	noteTitles := map[string]string{}
 	bodies := []archive.BodyInsert{}
 	var final notesdb.FinalState
+	var attachments []notesdb.Attachment
 	for i, spec := range specs {
 		if req.Progress != nil {
 			req.Progress(trawlkit.Progress{Phase: "source", Done: int64(i), Total: int64(len(specs)), Message: "reading Notes store state"})
@@ -124,7 +138,7 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 		if i == 0 {
 			changed = allChanged(index)
 		}
-		stateBodies := []notesdb.Body{}
+		var stateBodies []notesdb.Body
 		if i == len(specs)-1 {
 			final, err = notesdb.ReadFinalState(ctx, db)
 			if err != nil {
@@ -136,6 +150,15 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 				noteTitles[note.ID] = note.Title
 			}
 			stateBodies = final.Bodies
+			// Attachments are not versioned the way note bodies are: they are
+			// read once from the final state, alongside ReadFinalState, not
+			// once per WAL-replay step.
+			attachments, err = notesdb.ReadAttachments(ctx, db)
+			if err != nil {
+				_ = db.Close()
+				_ = state.Close()
+				return archive.SyncStats{}, err
+			}
 		} else {
 			stateBodies, err = notesdb.ReadBodies(ctx, db, changed)
 			if err != nil {
@@ -161,9 +184,16 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 	bodies = dedupeBodyObservations(bodies)
 	notes := archiveNotes(final.Notes)
 	state := syncState(snap.SourcePath, source, detail, len(walData), len(walOffsets), start)
+	groupContainerDir := filepath.Dir(snap.SourcePath)
+	archiveBaseDir := filepath.Dir(req.Paths.Archive)
+	attachmentInserts, err := resolveAttachments(attachments, groupContainerDir, archiveBaseDir)
+	if err != nil {
+		return archive.SyncStats{}, err
+	}
 	stats, err := st.ApplySync(ctx, archive.SyncBatch{
 		Notes:        notes,
 		Bodies:       bodies,
+		Attachments:  attachmentInserts,
 		SyncState:    state,
 		LastSeenAt:   notestime.Format(start),
 		ReplaceNotes: replaceNotes,

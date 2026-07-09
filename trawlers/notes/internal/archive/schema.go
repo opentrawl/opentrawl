@@ -40,6 +40,19 @@ create table if not exists sync_state (
   value text not null
 );
 
+create table if not exists attachments (
+  attachment_id text primary key,
+  note_id text not null default '',
+  media_id text not null default '',
+  name text not null default '',
+  type text not null default '',
+  archive_path text not null default '',
+  status text not null default '',
+  source_bytes integer not null default 0,
+  first_observed_at text not null default '',
+  last_seen_at text not null default ''
+);
+
 create virtual table if not exists notes_fts using fts5(
   note_id unindexed,
   zdata_sha256 unindexed,
@@ -49,4 +62,5 @@ create virtual table if not exists notes_fts using fts5(
 
 create index if not exists idx_note_versions_time on note_versions(note_id, source_modified_at, first_observed_at);
 create index if not exists idx_version_observations_version on version_observations(note_id, zdata_sha256, observation_id);
+create index if not exists idx_attachments_note on attachments(note_id);
 `

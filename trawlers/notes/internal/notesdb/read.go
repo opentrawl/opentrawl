@@ -147,6 +147,44 @@ order by note.ZIDENTIFIER`)
 	return state, nil
 }
 
+// ReadAttachments reads every attachment row from the final database state.
+// An attachment row is exactly a row where ZTYPEUTI is not null; Z_ENT is not
+// used to identify them because Core Data entity ids are assigned per schema
+// generation, not a stable public contract (the note queries above never
+// reference Z_ENT for the same reason). ZNOTE is populated directly on every
+// attachment row, including gallery members, so no parent-chain walk is
+// needed to find the owning note.
+func ReadAttachments(ctx context.Context, db *sql.DB) (_ []Attachment, err error) {
+	defer func() { err = wrapMalformed(err) }()
+	rows, err := db.QueryContext(ctx, `
+select att.ZIDENTIFIER,
+       coalesce(note.ZIDENTIFIER, ''),
+       coalesce(media.ZFILENAME, ''),
+       att.ZTYPEUTI,
+       att.ZMEDIA is not null,
+       coalesce(media.ZIDENTIFIER, '')
+from ZICCLOUDSYNCINGOBJECT att
+left join ZICCLOUDSYNCINGOBJECT note on att.ZNOTE = note.Z_PK
+left join ZICCLOUDSYNCINGOBJECT media on att.ZMEDIA = media.Z_PK
+where att.ZTYPEUTI is not null
+  and att.ZIDENTIFIER is not null
+  and trim(att.ZIDENTIFIER) <> ''
+order by att.ZIDENTIFIER`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := []Attachment{}
+	for rows.Next() {
+		var att Attachment
+		if err := rows.Scan(&att.ID, &att.NoteID, &att.Name, &att.Type, &att.HasMedia, &att.MediaID); err != nil {
+			return nil, err
+		}
+		out = append(out, att)
+	}
+	return out, rows.Err()
+}
+
 func integrityProbe(ctx context.Context, db *sql.DB) error {
 	var count int
 	return db.QueryRowContext(ctx, "select count(*) from ZICNOTEDATA").Scan(&count)

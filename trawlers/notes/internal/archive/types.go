@@ -8,9 +8,20 @@ import (
 )
 
 const (
-	AppID         = "notes"
-	DisplayName   = "Notes"
-	SchemaVersion = 1
+	AppID       = "notes"
+	DisplayName = "Notes"
+	// SchemaVersion 2 adds the attachments table: attachment files
+	// referenced by Apple Notes, copied into the archive at sync time and
+	// keyed by attachment UUID.
+	SchemaVersion = 2
+)
+
+// Attachment row status values. Every attachment ends up in exactly one of
+// these three states -- see AttachmentInsert.
+const (
+	AttachmentStatusCopied  = "copied"
+	AttachmentStatusMissing = "missing"
+	AttachmentStatusNoFile  = "no_file"
 )
 
 type Note struct {
@@ -59,24 +70,41 @@ type VersionBody struct {
 	ZData  []byte `json:"-"`
 }
 
+// AttachmentInsert is one attachment row for the write path. ArchivePath and
+// SourceBytes are only meaningful when Status is AttachmentStatusCopied.
+type AttachmentInsert struct {
+	ID          string
+	NoteID      string
+	MediaID     string
+	Name        string
+	Type        string
+	ArchivePath string
+	Status      string
+	SourceBytes int64
+}
+
 type SyncBatch struct {
 	Notes        []Note
 	Bodies       []BodyInsert
+	Attachments  []AttachmentInsert
 	SyncState    map[string]string
 	LastSeenAt   string
 	ReplaceNotes bool
 }
 
 type SyncStats struct {
-	Notes        int
-	BodyReads    int
-	NewVersions  int
-	Observations int
-	WALBytes     int64
-	WALCommits   int
-	ArchivePath  string
-	SourcePath   string
-	SyncedAt     string
+	Notes              int
+	BodyReads          int
+	NewVersions        int
+	Observations       int
+	AttachmentsCopied  int
+	AttachmentsMissing int
+	AttachmentsNoFile  int
+	WALBytes           int64
+	WALCommits         int
+	ArchivePath        string
+	SourcePath         string
+	SyncedAt           string
 }
 
 type Status struct {
