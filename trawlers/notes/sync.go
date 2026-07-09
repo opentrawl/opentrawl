@@ -97,6 +97,10 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 	if err != nil {
 		return archive.SyncStats{}, err
 	}
+	// Use only ever borrows req.Store (parking happens in PrepareArchive,
+	// before that connection opens), so this Close is always a no-op; it
+	// stays as insurance in case Use ever hands back an owned connection.
+	defer func() { _ = st.Close() }()
 	stats, err := syncSnapshot(ctx, req, st, snap, source, label, replaceNotes, start)
 	if err != nil {
 		return archive.SyncStats{}, err

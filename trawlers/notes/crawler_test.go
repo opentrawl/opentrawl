@@ -458,11 +458,20 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 	return buf.Bytes()
 }
 
+// testRequest mirrors the trawlkit harness's own write-open path
+// (trawlkit/execute.go runInProcess): for a write request it runs
+// archive.PrepareArchive -- the same peek-and-park step the harness runs via
+// the Crawler.PrepareArchive hook -- before opening the long-lived store, so
+// tests built on this helper exercise the real harness-lifecycle ordering
+// rather than a shortcut that skips straight to store.Open.
 func testRequest(t *testing.T, path string, format output.Format, out *bytes.Buffer, write bool) *trawlkit.Request {
 	t.Helper()
 	var st *ckstore.Store
 	var err error
 	if write {
+		if err := archive.PrepareArchive(context.Background(), path); err != nil {
+			t.Fatal(err)
+		}
 		st, err = ckstore.Open(context.Background(), ckstore.Options{Path: path})
 	} else {
 		st, err = ckstore.OpenReadOnly(context.Background(), path)
