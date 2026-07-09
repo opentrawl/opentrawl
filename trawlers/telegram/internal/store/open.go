@@ -208,3 +208,61 @@ order by lower(display_name), display_name`, chatJID)
 	}
 	return out, rows.Err()
 }
+
+// GroupRoster is one group or channel's active membership: Count is the real
+// head count (every active row, whatever the store could resolve), Names is
+// the deduped display names it could resolve. A caller that shows fewer names
+// than Count still has an honest total to render as "+N".
+type GroupRoster struct {
+	Count int64
+	Names []string
+}
+
+// GroupRosters resolves every group and channel's active roster in one query,
+// the same name-resolution rule groupParticipants uses for a single chat. The
+// chats lister calls this once for the whole list rather than once per chat,
+// so listing N groups costs one query, not N.
+func (s *Store) GroupRosters(ctx context.Context) (map[string]GroupRoster, error) {
+	rows, err := s.db.QueryContext(ctx, `
+select gp.group_jid, coalesce(
+	nullif(trim(c.full_name), ''),
+	nullif(trim(gp.contact_name), ''),
+	nullif(trim(c.business_name), ''),
+	nullif(trim(c.first_name || ' ' || c.last_name), ''),
+	nullif(trim(gp.first_name), ''),
+	nullif(trim(c.username), ''),
+	nullif(trim(gp.user_jid), '')
+) as display_name
+from group_participants gp
+join chats ch on cast(ch.id as text) = gp.group_jid and ch.kind in ('group','channel')
+left join contacts c on c.jid = gp.user_jid
+where gp.is_active != 0
+order by gp.group_jid, lower(display_name), display_name`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]GroupRoster{}
+	seen := map[string]map[string]struct{}{}
+	for rows.Next() {
+		var groupJID, displayName string
+		if err := rows.Scan(&groupJID, &displayName); err != nil {
+			return nil, err
+		}
+		roster := out[groupJID]
+		roster.Count++
+		displayName = normalizeDisplayName(displayName)
+		if displayName != "" {
+			key := strings.ToLower(displayName)
+			if seen[groupJID] == nil {
+				seen[groupJID] = map[string]struct{}{}
+			}
+			if _, ok := seen[groupJID][key]; !ok {
+				seen[groupJID][key] = struct{}{}
+				roster.Names = append(roster.Names, displayName)
+			}
+		}
+		out[groupJID] = roster
+	}
+	return out, rows.Err()
+}

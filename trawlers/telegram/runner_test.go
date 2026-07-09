@@ -96,6 +96,54 @@ func TestChatsListsChatsWithReadState(t *testing.T) {
 	}
 }
 
+// The archive already stores a group's roster in group_participants (open and
+// who-search read the same table); chats must surface it too, so --with finds
+// a telegram group by a member's name, not just a dm by its title.
+func TestChatsWithFindsGroupByRoster(t *testing.T) {
+	stateRoot := stateRootForRun(t)
+	writeSyntheticGroupArchive(t, context.Background(), archivePathForRun(stateRoot))
+
+	code, stdout, stderr := runTelecrawl(t, "--json", "chats", "--with", "alice")
+	if code != 0 {
+		t.Fatalf("chats --with code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var payload struct {
+		Chats []struct {
+			Name             string   `json:"name"`
+			Participants     *int64   `json:"participants"`
+			ParticipantNames []string `json:"participant_names"`
+		} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+		t.Fatalf("chats json = %s err=%v", stdout, err)
+	}
+	if len(payload.Chats) != 1 || payload.Chats[0].Name != "Launch Group" {
+		t.Fatalf("chats --with alice must find the group by its roster:\n%s", stdout)
+	}
+	chat := payload.Chats[0]
+	if len(chat.ParticipantNames) != 1 || chat.ParticipantNames[0] != "Alice Example" {
+		t.Fatalf("chat must carry the resolved roster: %#v", chat)
+	}
+	if chat.Participants == nil || *chat.Participants != 1 {
+		t.Fatalf("chat must carry the real head count: %#v", chat)
+	}
+
+	// A name nobody in the archive holds must not match.
+	code, stdout, stderr = runTelecrawl(t, "--json", "chats", "--with", "nobody")
+	if code != 0 {
+		t.Fatalf("chats --with nobody code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var empty struct {
+		Chats []struct{} `json:"chats"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &empty); err != nil {
+		t.Fatalf("chats json = %s err=%v", stdout, err)
+	}
+	if len(empty.Chats) != 0 {
+		t.Fatalf("chats --with nobody must find nothing:\n%s", stdout)
+	}
+}
+
 // The chat column is a working handle, not decoration: messages --chat resolves
 // the chats-table ref (telegram:chat/100) to the same chat as the raw peer id,
 // so a reader can copy the column straight through.

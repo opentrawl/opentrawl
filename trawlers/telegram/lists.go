@@ -24,10 +24,17 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 		if err != nil {
 			return err
 		}
+		// One query for every group/channel roster, not one per chat: the
+		// group_participants table already backs open's participants line and
+		// who-search, so chats reads the same table instead of re-deriving it.
+		rosters, err := st.GroupRosters(r.ctx)
+		if err != nil {
+			return err
+		}
 		out = make([]trawlkit.Chat, 0, len(rows))
 		for _, chat := range rows {
 			unread := int64(chat.UnreadCount)
-			out = append(out, trawlkit.Chat{
+			c := trawlkit.Chat{
 				// Telegram stores "user", "group" and "channel"; only a one-to-one
 				// "user" chat is a dm, so channels and groups are both groups.
 				ID:  chat.JID,
@@ -35,15 +42,20 @@ func (c *Crawler) Chats(ctx context.Context, req *trawlkit.Request, q trawlkit.C
 				// The peer id is a short, non-sensitive key messages --chat accepts,
 				// so it is the safe fallback the human chat column shows in the window
 				// before the archive indexes this chat's short ref.
-				DisplayID: chat.JID,
-				// Telegram always stores a chat name, and never a per-chat member
-				// roster, so there is no synthesised name or participants column
-				// here — Title carries the real name every time.
+				DisplayID:    chat.JID,
 				Title:        chatName(chat),
 				Group:        chat.Kind != "user",
 				LastActivity: chat.LastMessageAt,
 				Unread:       &unread,
-			})
+			}
+			if roster, ok := rosters[chat.JID]; ok {
+				c.ParticipantNames = roster.Names
+				if roster.Count > 0 {
+					count := roster.Count
+					c.Participants = &count
+				}
+			}
+			out = append(out, c)
 		}
 		return nil
 	})
