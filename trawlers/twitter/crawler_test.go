@@ -145,7 +145,7 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	search, err := crawler.Search(ctx, req, trawlkit.Query{Text: "needle", Limit: 10})

@@ -169,7 +169,7 @@ func TestSyncBuildsShortRefsAndOpenResolvesThem(t *testing.T) {
 	if len(records) == 0 {
 		t.Fatal("short ref records = 0, want at least 1")
 	}
-	if _, err := req.RebuildShortRefs(context.Background(), records); err != nil {
+	if _, err := req.AssignShortRefs(context.Background(), records); err != nil {
 		t.Fatal(err)
 	}
 	closeStore(t, req)

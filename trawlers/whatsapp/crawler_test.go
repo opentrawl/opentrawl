@@ -50,7 +50,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 		var records []trawlkit.ShortRefRecord
 		records, err = crawler.ShortRefRecords(ctx, syncReq)
 		if err == nil {
-			_, err = syncReq.RebuildShortRefs(ctx, records)
+			_, err = syncReq.AssignShortRefs(ctx, records)
 		}
 	}
 	if closeErr := writeStore.Close(); closeErr != nil {

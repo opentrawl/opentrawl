@@ -323,7 +323,7 @@ func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
 // the last-import marker, source path and short-ref fingerprint — is re-derived
 // by one sync, so we drop, never map (rules §1.17). The drop only fires on a
 // pre-migration archive (no source_name column), so a canonical archive keeps
-// its live state across the writable opens that read and rebuild short refs.
+// its live state across the writable opens that read and assign short refs.
 func (s *Store) migrateSyncState(ctx context.Context) error {
 	canonical, err := tableHasColumn(ctx, s.db, "sync_state", "source_name")
 	if err != nil {

@@ -55,8 +55,8 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 		records, recordsErr := source.ShortRefRecords(ctx, syncReq)
 		if recordsErr != nil {
 			err = recordsErr
-		} else if _, rebuildErr := syncReq.RebuildShortRefs(ctx, records); rebuildErr != nil {
-			err = rebuildErr
+		} else if _, assignErr := syncReq.AssignShortRefs(ctx, records); assignErr != nil {
+			err = assignErr
 		}
 	}
 	if closeErr := writeStore.Close(); closeErr != nil {

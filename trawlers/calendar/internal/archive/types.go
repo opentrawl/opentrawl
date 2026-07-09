@@ -8,12 +8,10 @@ import (
 )
 
 const (
-	AppID                = "calendar"
-	LegacyAppID          = "calcrawl"
-	DisplayName          = "Calendar"
-	SchemaVersion        = 3
-	EventRefPrefix       = AppID + ":event/"
-	LegacyEventRefPrefix = LegacyAppID + ":event/"
+	AppID         = "calendar"
+	LegacyAppID   = "calcrawl"
+	DisplayName   = "Calendar"
+	SchemaVersion = 3
 
 	DefaultSearchLimit = 20
 )
@@ -222,14 +220,14 @@ func (e Event) Fingerprint() string {
 }
 
 func RefForUID(uid string) string {
-	return EventRefPrefix + strings.TrimSpace(uid)
+	return AppID + ":event/" + strings.TrimSpace(uid)
 }
 
 func UIDFromRef(ref string) (string, bool) {
 	value := strings.TrimSpace(ref)
-	prefix := EventRefPrefix
+	prefix := AppID + ":event/"
 	if !strings.HasPrefix(value, prefix) {
-		legacyPrefix := LegacyEventRefPrefix
+		legacyPrefix := LegacyAppID + ":event/"
 		if !strings.HasPrefix(value, legacyPrefix) {
 			return "", false
 		}

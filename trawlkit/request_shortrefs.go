@@ -66,44 +66,55 @@ func ValidShortRef(alias string) bool {
 	return shortref.ValidAlias(strings.TrimSpace(alias))
 }
 
-// RebuildShortRefs deletes and rebuilds exactly the kinds named by records.
+// AssignShortRefs extends the short-ref index without deleting rows.
 //
-// Each record Ref implies its <source>:<kind>/ prefix, and Kind records declare
-// kinds that must be cleared even when the crawler emits no refs for that kind.
-// This protects archives when the running binary knows fewer kinds than a
-// previous binary wrote. It cannot protect binaries built before kind-scoped
-// clearing existed: their compiled code still clears the whole table.
-func (r *Request) RebuildShortRefs(ctx context.Context, records []ShortRefRecord) (int, error) {
+// Existing aliases are permanent: sync updates canonical refs for matching full
+// refs and assigns aliases only to refs not already indexed. Rows for deleted
+// source items intentionally persist, so opening one reports not found, and
+// aliases never re-shorten after a collision has made them longer.
+//
+// This guarantee holds once every binary writing the archive runs this code.
+// Older binaries can still clear aliases during sync: kind-scoped in the
+// immediately prior generation, and whole-table before that. A later sync
+// preserves whatever state the old binary left; it cannot recover deleted
+// aliases for refs no longer emitted.
+func (r *Request) AssignShortRefs(ctx context.Context, records []ShortRefRecord) (int, error) {
 	if r == nil || r.Store == nil {
 		return 0, errors.New("archive store is not open")
 	}
-	refs := shortRefIndexRefs(records)
-	kinds, err := shortRefIndexKinds(records)
+	indexRecords, err := shortRefIndexRecords(records)
 	if err != nil {
 		return 0, err
 	}
+	fullRefs := shortRefRecordFullRefs(indexRecords)
+	canonicalRefs := shortRefRecordCanonicalRefs(indexRecords)
 	err = r.Store.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := shortref.EnsureSchema(ctx, tx); err != nil {
 			return err
 		}
 		index := shortref.NewSQLiteIndex(tx)
-		survivingAliases, err := index.SurvivingAliases(ctx, kinds)
+		if err := index.UpdateCanonicalRefs(ctx, canonicalRefs); err != nil {
+			return err
+		}
+		indexedRefs, err := index.IndexedFullRefs(ctx, fullRefs)
 		if err != nil {
 			return err
 		}
-		entries, err := shortref.BuildSliceAvoidingAliases(refs, survivingAliases)
+		newRefs := shortRefNewFullRefs(indexRecords, indexedRefs)
+		aliases, err := index.AllAliases(ctx)
 		if err != nil {
 			return err
 		}
-		if err := index.ClearKinds(ctx, kinds); err != nil {
+		entries, err := shortref.BuildSliceAvoidingAliases(newRefs, aliases)
+		if err != nil {
 			return err
 		}
-		return index.UpsertEntries(ctx, shortRefLookupEntries(entries, survivingAliases))
+		return index.UpsertCanonicalEntries(ctx, shortRefLookupEntries(entries, aliases), canonicalRefs)
 	})
 	if err != nil {
-		return 0, fmt.Errorf("rebuild short refs: %w", err)
+		return 0, fmt.Errorf("assign short refs: %w", err)
 	}
-	return len(refs), nil
+	return len(indexRecords), nil
 }
 
 func (r *Request) ResolveShortRef(ctx context.Context, alias string) ([]string, error) {
@@ -166,22 +177,7 @@ func shortRefAliases(ctx context.Context, index *shortref.SQLiteIndex, refs []st
 	if len(refs) == 0 {
 		return nil, nil
 	}
-	const chunkSize = 900
-	out := make(map[string]string, len(refs))
-	for start := 0; start < len(refs); start += chunkSize {
-		end := start + chunkSize
-		if end > len(refs) {
-			end = len(refs)
-		}
-		aliases, err := index.Aliases(ctx, refs[start:end])
-		if err != nil {
-			return nil, err
-		}
-		for ref, alias := range aliases {
-			out[ref] = alias
-		}
-	}
-	return out, nil
+	return index.Aliases(ctx, refs)
 }
 
 func shortRefLookupEntries(entries []shortref.Entry, reservedAliases map[string]struct{}) []shortref.Entry {
@@ -199,56 +195,61 @@ func shortRefLookupEntries(entries []shortref.Entry, reservedAliases map[string]
 	return filtered
 }
 
-func shortRefIndexRefs(records []ShortRefRecord) []string {
+type shortRefIndexRecord struct {
+	fullRef      string
+	canonicalRef string
+}
+
+func shortRefIndexRecords(records []ShortRefRecord) ([]shortRefIndexRecord, error) {
+	out := make([]shortRefIndexRecord, 0, len(records))
+	seen := make(map[string]int, len(records))
+	for _, record := range records {
+		// The alias index is ref-shape-agnostic; crawlers own their ref grammar.
+		fullRef := strings.TrimSpace(record.Ref)
+		if fullRef == "" {
+			continue
+		}
+		canonicalRef := strings.TrimSpace(record.CanonicalRef)
+		if canonicalRef == "" {
+			canonicalRef = fullRef
+		}
+		if existing, ok := seen[fullRef]; ok {
+			if out[existing].canonicalRef != canonicalRef {
+				return nil, fmt.Errorf("short ref %q has conflicting canonical refs", fullRef)
+			}
+			continue
+		}
+		seen[fullRef] = len(out)
+		out = append(out, shortRefIndexRecord{fullRef: fullRef, canonicalRef: canonicalRef})
+	}
+	return out, nil
+}
+
+func shortRefRecordFullRefs(records []shortRefIndexRecord) []string {
 	refs := make([]string, 0, len(records))
 	for _, record := range records {
-		if ref := strings.TrimSpace(record.Ref); ref != "" {
-			refs = append(refs, ref)
-		}
+		refs = append(refs, record.fullRef)
 	}
-	return uniqueStrings(refs)
+	return refs
 }
 
-func shortRefIndexKinds(records []ShortRefRecord) ([]string, error) {
-	kinds := make([]string, 0, len(records))
+func shortRefRecordCanonicalRefs(records []shortRefIndexRecord) map[string]string {
+	refs := make(map[string]string, len(records))
 	for _, record := range records {
-		if kind := strings.TrimSpace(record.Kind); kind != "" {
-			normalized, err := normalizeShortRefKind(kind)
-			if err != nil {
-				return nil, err
-			}
-			kinds = append(kinds, normalized)
-		}
-		if ref := strings.TrimSpace(record.Ref); ref != "" {
-			kind, ok := parseShortRefKind(ref)
-			if !ok || len(ref) == len(kind) {
-				return nil, fmt.Errorf("short ref %q must look like <source>:<kind>/<id>", ref)
-			}
-			kinds = append(kinds, kind)
-		}
+		refs[record.fullRef] = record.canonicalRef
 	}
-	return uniqueStrings(kinds), nil
+	return refs
 }
 
-func normalizeShortRefKind(kind string) (string, error) {
-	parsed, ok := parseShortRefKind(kind)
-	if !ok || parsed != kind {
-		return "", fmt.Errorf("short ref kind %q must look like <source>:<kind>/", kind)
+func shortRefNewFullRefs(records []shortRefIndexRecord, indexedRefs map[string]struct{}) []string {
+	refs := make([]string, 0, len(records))
+	for _, record := range records {
+		if _, indexed := indexedRefs[record.fullRef]; indexed {
+			continue
+		}
+		refs = append(refs, record.fullRef)
 	}
-	return parsed, nil
-}
-
-func parseShortRefKind(value string) (string, bool) {
-	colon := strings.IndexByte(value, ':')
-	slash := strings.IndexByte(value, '/')
-	if colon <= 0 || slash <= colon+1 {
-		return "", false
-	}
-	kind := value[:slash+1]
-	if strings.ContainsAny(kind, " \t\r\n") {
-		return "", false
-	}
-	return kind, true
+	return refs
 }
 
 func isMissingShortRefTable(err error) bool {

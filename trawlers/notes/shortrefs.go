@@ -10,11 +10,6 @@ import (
 )
 
 var _ trawlkit.ShortRefProvider = (*Crawler)(nil)
-var _ trawlkit.ShortRefKindProvider = (*Crawler)(nil)
-
-func (c *Crawler) ShortRefKinds() []string {
-	return []string{archive.VersionRefPrefix}
-}
 
 // ShortRefRecords indexes a short ref for every note and every recovered
 // version. Browse and search hand back note-level refs, so each note needs a

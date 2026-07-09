@@ -17,9 +17,6 @@ const (
 	// older archive triggers the one-shot migration (see migrate.go), which
 	// ensures the full current schema and then re-projects.
 	SchemaVersion = 3
-
-	NoteRefPrefix    = AppID + ":note/"
-	VersionRefPrefix = AppID + ":version/"
 )
 
 // Attachment row status values. Every attachment ends up in exactly one of
@@ -162,19 +159,20 @@ func SHA256(data []byte) string {
 }
 
 func RefForNote(noteID string) string {
-	return NoteRefPrefix + url.PathEscape(strings.TrimSpace(noteID))
+	return AppID + ":note/" + url.PathEscape(strings.TrimSpace(noteID))
 }
 
 func RefForVersion(noteID, sha string) string {
-	return VersionRefPrefix + url.PathEscape(strings.TrimSpace(noteID)) + "/" + strings.TrimSpace(sha)
+	return AppID + ":version/" + url.PathEscape(strings.TrimSpace(noteID)) + "/" + strings.TrimSpace(sha)
 }
 
 func NoteIDFromRef(ref string) (string, bool) {
+	const prefix = AppID + ":note/"
 	value := strings.TrimSpace(ref)
-	if !strings.HasPrefix(value, NoteRefPrefix) {
+	if !strings.HasPrefix(value, prefix) {
 		return "", false
 	}
-	id, err := url.PathUnescape(strings.TrimPrefix(value, NoteRefPrefix))
+	id, err := url.PathUnescape(strings.TrimPrefix(value, prefix))
 	if err != nil || strings.TrimSpace(id) == "" {
 		return "", false
 	}
@@ -182,11 +180,12 @@ func NoteIDFromRef(ref string) (string, bool) {
 }
 
 func VersionFromRef(ref string) (noteID, sha string, ok bool) {
+	const prefix = AppID + ":version/"
 	value := strings.TrimSpace(ref)
-	if !strings.HasPrefix(value, VersionRefPrefix) {
+	if !strings.HasPrefix(value, prefix) {
 		return "", "", false
 	}
-	rest := strings.TrimPrefix(value, VersionRefPrefix)
+	rest := strings.TrimPrefix(value, prefix)
 	before, after, found := strings.Cut(rest, "/")
 	if !found {
 		return "", "", false

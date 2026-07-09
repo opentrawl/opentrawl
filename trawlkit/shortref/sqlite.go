@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -21,6 +22,8 @@ create index if not exists idx_short_refs_alias on short_refs(alias);
 create index if not exists idx_short_refs_full_ref on short_refs(full_ref);
 create index if not exists idx_short_refs_canonical_ref on short_refs(canonical_ref);
 `
+
+const sqliteParameterChunkSize = 900
 
 type SQLiteDB interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
@@ -80,6 +83,19 @@ func (i *SQLiteIndex) UpsertEntries(ctx context.Context, entries []Entry) error 
 	return nil
 }
 
+func (i *SQLiteIndex) UpsertCanonicalEntries(ctx context.Context, entries []Entry, canonicalRefs map[string]string) error {
+	for _, entry := range entries {
+		canonicalRef := strings.TrimSpace(canonicalRefs[entry.FullRef])
+		if canonicalRef == "" {
+			canonicalRef = entry.FullRef
+		}
+		if err := i.UpsertCanonical(ctx, entry.Alias, entry.FullRef, canonicalRef); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (i *SQLiteIndex) Lookup(ctx context.Context, alias string) ([]string, error) {
 	fullRefs, err := i.lookup(ctx, alias, "coalesce(nullif(canonical_ref, ''), full_ref)")
 	if err != nil && isMissingCanonicalColumn(err) {
@@ -114,64 +130,120 @@ order by full_ref
 	return fullRefs, nil
 }
 
-func (i *SQLiteIndex) ClearKinds(ctx context.Context, kinds []string) error {
-	for _, kind := range kinds {
-		if _, err := i.db.ExecContext(ctx, `
-delete from short_refs
-where substr(full_ref, 1, length(?)) = ?
-   or substr(coalesce(nullif(canonical_ref, ''), full_ref), 1, length(?)) = ?
-`, kind, kind, kind, kind); err != nil {
-			return fmt.Errorf("clear short refs for kind %q: %w", kind, err)
-		}
-	}
-	return nil
-}
-
-// SurvivingAliases returns aliases for rows ClearKinds would leave in place.
-func (i *SQLiteIndex) SurvivingAliases(ctx context.Context, clearedKinds []string) (map[string]struct{}, error) {
-	aliases, err := i.survivingAliases(ctx, clearedKinds, "coalesce(nullif(canonical_ref, ''), full_ref)")
-	if err != nil && isMissingCanonicalColumn(err) {
-		return i.survivingAliases(ctx, clearedKinds, "full_ref")
-	}
-	return aliases, err
-}
-
-func (i *SQLiteIndex) survivingAliases(ctx context.Context, clearedKinds []string, canonicalExpr string) (map[string]struct{}, error) {
+func (i *SQLiteIndex) AllAliases(ctx context.Context) (map[string]struct{}, error) {
 	rows, err := i.db.QueryContext(ctx, `
-select alias, full_ref, `+canonicalExpr+` as canonical_ref
+select distinct alias
 from short_refs
 `)
 	if err != nil {
-		return nil, fmt.Errorf("read surviving short ref aliases: %w", err)
+		return nil, fmt.Errorf("read short ref aliases: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
 	aliases := make(map[string]struct{})
 	for rows.Next() {
-		var alias, fullRef, canonicalRef string
-		if err := rows.Scan(&alias, &fullRef, &canonicalRef); err != nil {
-			return nil, fmt.Errorf("scan surviving short ref alias: %w", err)
-		}
-		if shortRefHasAnyKind(fullRef, clearedKinds) || shortRefHasAnyKind(canonicalRef, clearedKinds) {
-			continue
+		var alias string
+		if err := rows.Scan(&alias); err != nil {
+			return nil, fmt.Errorf("scan short ref alias: %w", err)
 		}
 		aliases[alias] = struct{}{}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("read surviving short ref aliases: %w", err)
+		return nil, fmt.Errorf("read short ref aliases: %w", err)
 	}
 	return aliases, nil
+}
+
+func (i *SQLiteIndex) IndexedFullRefs(ctx context.Context, fullRefs []string) (map[string]struct{}, error) {
+	indexed := make(map[string]struct{})
+	for start := 0; start < len(fullRefs); start += sqliteParameterChunkSize {
+		end := start + sqliteParameterChunkSize
+		if end > len(fullRefs) {
+			end = len(fullRefs)
+		}
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", end-start), ",")
+		args := make([]any, 0, end-start)
+		for _, ref := range fullRefs[start:end] {
+			args = append(args, ref)
+		}
+		rows, err := i.db.QueryContext(ctx, `
+select distinct full_ref
+from short_refs
+where full_ref in (`+placeholders+`)
+`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("read indexed short refs: %w", err)
+		}
+		for rows.Next() {
+			var fullRef string
+			if err := rows.Scan(&fullRef); err != nil {
+				_ = rows.Close()
+				return nil, fmt.Errorf("scan indexed short ref: %w", err)
+			}
+			indexed[fullRef] = struct{}{}
+		}
+		if err := rows.Err(); err != nil {
+			_ = rows.Close()
+			return nil, fmt.Errorf("read indexed short refs: %w", err)
+		}
+		_ = rows.Close()
+	}
+	return indexed, nil
+}
+
+func (i *SQLiteIndex) UpdateCanonicalRefs(ctx context.Context, canonicalRefs map[string]string) error {
+	fullRefs := make([]string, 0, len(canonicalRefs))
+	for fullRef := range canonicalRefs {
+		fullRefs = append(fullRefs, fullRef)
+	}
+	sort.Strings(fullRefs)
+	for _, fullRef := range fullRefs {
+		canonicalRef := strings.TrimSpace(canonicalRefs[fullRef])
+		if canonicalRef == "" {
+			canonicalRef = fullRef
+		}
+		if _, err := i.db.ExecContext(ctx, `
+update short_refs
+set canonical_ref = ?
+where full_ref = ?
+  and coalesce(canonical_ref, '') <> ?
+`, canonicalRef, fullRef, canonicalRef); err != nil {
+			return fmt.Errorf("update short ref canonical ref: %w", err)
+		}
+	}
+	return nil
 }
 
 // Aliases returns the display alias for each of fullRefs that has index
 // entries. A ref can hold several rows (a shorter prefix plus collision
 // extensions); the longest stored alias is the unambiguous display form.
 func (i *SQLiteIndex) Aliases(ctx context.Context, fullRefs []string) (map[string]string, error) {
-	aliases, err := i.aliases(ctx, fullRefs, "coalesce(nullif(canonical_ref, ''), full_ref)")
+	aliases, err := i.aliasesChunked(ctx, fullRefs, "coalesce(nullif(canonical_ref, ''), full_ref)")
 	if err != nil && isMissingCanonicalColumn(err) {
-		return i.aliases(ctx, fullRefs, "full_ref")
+		return i.aliasesChunked(ctx, fullRefs, "full_ref")
 	}
 	return aliases, err
+}
+
+func (i *SQLiteIndex) aliasesChunked(ctx context.Context, fullRefs []string, refExpr string) (map[string]string, error) {
+	if len(fullRefs) == 0 {
+		return nil, nil
+	}
+	out := make(map[string]string, len(fullRefs))
+	for start := 0; start < len(fullRefs); start += sqliteParameterChunkSize {
+		end := start + sqliteParameterChunkSize
+		if end > len(fullRefs) {
+			end = len(fullRefs)
+		}
+		aliases, err := i.aliases(ctx, fullRefs[start:end], refExpr)
+		if err != nil {
+			return nil, err
+		}
+		for ref, alias := range aliases {
+			out[ref] = alias
+		}
+	}
+	return out, nil
 }
 
 func (i *SQLiteIndex) aliases(ctx context.Context, fullRefs []string, refExpr string) (map[string]string, error) {
@@ -249,15 +321,6 @@ func hasShortRefColumn(ctx context.Context, db SQLiteDB, name string) (bool, err
 		return false, fmt.Errorf("read short ref schema: %w", err)
 	}
 	return false, nil
-}
-
-func shortRefHasAnyKind(ref string, kinds []string) bool {
-	for _, kind := range kinds {
-		if strings.HasPrefix(ref, kind) {
-			return true
-		}
-	}
-	return false
 }
 
 func isMissingCanonicalColumn(err error) bool {

@@ -413,7 +413,7 @@ func TestSharedShortRefsResolveAndFailSafely(t *testing.T) {
 		{Ref: RefPrefix + "m2"},
 	}
 	req := &trawlkit.Request{Store: st.store}
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	search, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 1})

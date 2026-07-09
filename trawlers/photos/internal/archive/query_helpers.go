@@ -10,8 +10,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
 
-const AssetRefPrefix = "photos:asset/"
-
 func AssetRef(id string) string {
 	return photoscrawlRef(id)
 }

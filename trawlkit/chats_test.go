@@ -511,7 +511,7 @@ func seedShortRef(t *testing.T, stateRoot, ref string) string {
 		t.Fatal(err)
 	}
 	req := &Request{Store: st}
-	if _, err := req.RebuildShortRefs(context.Background(), []ShortRefRecord{{Ref: ref}}); err != nil {
+	if _, err := req.AssignShortRefs(context.Background(), []ShortRefRecord{{Ref: ref}}); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Close(); err != nil {

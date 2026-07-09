@@ -231,15 +231,15 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		return writeResult(req.Out, format, "doctor", doctor)
 	case "sync":
 		report, syncErr := source.(Syncer).Sync(ctx, req)
-		rebuildErr := rebuildSourceShortRefs(ctx, source, req)
+		assignErr := assignSourceShortRefs(ctx, source, req)
 		if syncErr != nil {
-			if rebuildErr != nil {
-				return errors.Join(syncErr, rebuildErr)
+			if assignErr != nil {
+				return errors.Join(syncErr, assignErr)
 			}
 			return syncErr
 		}
-		if rebuildErr != nil {
-			return rebuildErr
+		if assignErr != nil {
+			return assignErr
 		}
 		return writeResult(req.Out, format, "sync", report)
 	case "search":
@@ -345,7 +345,7 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		if err := verb.bespoke.Run(ctx, req); err != nil {
 			return err
 		}
-		return rebuildSourceShortRefs(ctx, source, req)
+		return assignSourceShortRefs(ctx, source, req)
 	}
 	return verb.bespoke.Run(ctx, req)
 }
@@ -391,7 +391,7 @@ func fillSearchShortRefs(ctx context.Context, req *Request, hits []Hit) error {
 	return nil
 }
 
-func rebuildSourceShortRefs(ctx context.Context, source Crawler, req *Request) error {
+func assignSourceShortRefs(ctx context.Context, source Crawler, req *Request) error {
 	provider, ok := source.(ShortRefProvider)
 	if !ok || req.Store == nil {
 		return nil
@@ -400,29 +400,13 @@ func rebuildSourceShortRefs(ctx context.Context, source Crawler, req *Request) e
 	if err != nil {
 		return err
 	}
-	records = append(shortRefKindRecords(source), records...)
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		return err
 	}
 	if req.Log != nil {
-		_ = req.Log.Info("short_refs_rebuilt", fmt.Sprintf("refs=%d", len(records)))
+		_ = req.Log.Info("short_refs_assigned", fmt.Sprintf("refs=%d", len(records)))
 	}
 	return nil
-}
-
-func shortRefKindRecords(source Crawler) []ShortRefRecord {
-	provider, ok := source.(ShortRefKindProvider)
-	if !ok {
-		return nil
-	}
-	kinds := provider.ShortRefKinds()
-	records := make([]ShortRefRecord, 0, len(kinds))
-	for _, kind := range kinds {
-		if strings.TrimSpace(kind) != "" {
-			records = append(records, ShortRefRecord{Kind: kind})
-		}
-	}
-	return records
 }
 
 func validateReadFlags(verb targetVerb) error {

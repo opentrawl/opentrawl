@@ -153,7 +153,7 @@ func writeSyntheticArchive(t *testing.T, ctx context.Context, archivePath string
 	if _, err := st.ReplaceAll(ctx, stats, contacts, chats, nil, nil, nil, nil, messages); err != nil {
 		t.Fatal(err)
 	}
-	rebuildSyntheticShortRefs(t, ctx, archivePath)
+	assignSyntheticShortRefs(t, ctx, archivePath)
 }
 
 func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request, hits []trawlkit.Hit) {
@@ -171,7 +171,7 @@ func fillTestShortRefs(t *testing.T, ctx context.Context, req *trawlkit.Request,
 	}
 }
 
-func rebuildSyntheticShortRefs(t *testing.T, ctx context.Context, archivePath string) {
+func assignSyntheticShortRefs(t *testing.T, ctx context.Context, archivePath string) {
 	t.Helper()
 	rawStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
 	if err != nil {
@@ -183,7 +183,7 @@ func rebuildSyntheticShortRefs(t *testing.T, ctx context.Context, archivePath st
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 }

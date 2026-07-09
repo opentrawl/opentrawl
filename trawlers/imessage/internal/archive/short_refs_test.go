@@ -57,7 +57,7 @@ func TestSharedShortRefResolverUsesStoredLegacyRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	records := []trawlkit.ShortRefRecord{{Ref: MessageRef("1")}}
-	if _, err := (&trawlkit.Request{Store: st.store}).RebuildShortRefs(ctx, records); err != nil {
+	if _, err := (&trawlkit.Request{Store: st.store}).AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 

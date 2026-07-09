@@ -190,12 +190,26 @@ identity logic.
 The `<query>` argument to `search` is optional when at least one
 filter (`--who`, `--after`, `--before`) is present: a filter-only
 search lists the newest matching items. `search` with no query and
-no filters is an error. Trawlkit owns the alias index and manifests always
-include `short_refs`. Crawlers include the computed alias as `"short_ref"` on
-every result in their own `--json` output. The full `ref` stays the canonical
-identity; `short_ref` is display sugar so a federating reader (trawl) can render
-the short form without inventing its own alias length. Trawl's agent-facing
-`--json` still keeps short refs out by default.
+no filters is an error.
+
+Trawlkit owns the alias index and manifests always include
+`short_refs`. Aliases are assigned once and never deleted. On
+collision, new refs extend past every stored alias instead of moving
+an existing alias. The accepted costs are explicit: rows for deleted
+source items persist (opening one reports not found), and aliases
+never re-shorten after a collision has made them longer.
+
+That guarantee holds once every binary writing the archive runs this code.
+Older binaries still clear aliases during sync (kind-scoped in the immediately
+prior generation, whole-table before that) and can delete or reassign aliases.
+A later sync preserves whatever state the old binary left; it does not recover
+deleted aliases for refs no longer emitted.
+
+Crawlers include the computed alias as `"short_ref"` on every result in their
+own `--json` output. The full `ref` stays the canonical identity; `short_ref` is
+display sugar so a federating reader (trawl) can render the short form without
+inventing its own alias length. Trawl's agent-facing `--json` still keeps short
+refs out by default.
 
 A snippet is a plain text fragment: single line, whitespace
 collapsed, no highlight or match markers of any kind. The full item

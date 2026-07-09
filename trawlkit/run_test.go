@@ -59,7 +59,6 @@ type testOpenContactCrawler struct {
 type testShortRefCrawler struct {
 	*testCrawler
 	records []ShortRefRecord
-	kinds   []string
 }
 
 type testConfig struct {
@@ -143,10 +142,6 @@ func (c *testCrawler) Sync(ctx context.Context, req *Request) (*SyncReport, erro
 
 func (c *testShortRefCrawler) ShortRefRecords(ctx context.Context, req *Request) ([]ShortRefRecord, error) {
 	return append([]ShortRefRecord(nil), c.records...), nil
-}
-
-func (c *testShortRefCrawler) ShortRefKinds() []string {
-	return append([]string(nil), c.kinds...)
 }
 
 func (c *testStatusCrawler) Info() Info {
@@ -380,7 +375,7 @@ func TestRunMetadataAdvertisesShortRefs(t *testing.T) {
 	}
 }
 
-func TestExecuteVerbRebuildsShortRefsAfterFailedSync(t *testing.T) {
+func TestExecuteVerbAssignsShortRefsAfterFailedSync(t *testing.T) {
 	ctx := context.Background()
 	ref := "testcrawl:item/partial"
 	source := &testShortRefCrawler{
@@ -410,15 +405,11 @@ func TestExecuteVerbRebuildsShortRefsAfterFailedSync(t *testing.T) {
 	}
 }
 
-func TestExecuteVerbClearsEmptyDeclaredShortRefKind(t *testing.T) {
+func TestExecuteVerbLeavesExistingShortRefsWhenProviderReturnsNone(t *testing.T) {
 	ctx := context.Background()
-	const (
-		kind = "testcrawl:item/"
-		ref  = "testcrawl:item/gone"
-	)
+	const ref = "testcrawl:item/gone"
 	source := &testShortRefCrawler{
 		testCrawler: &testCrawler{},
-		kinds:       []string{kind},
 	}
 	st, err := ckstore.Open(ctx, ckstore.Options{Path: filepath.Join(t.TempDir(), "testcrawl.db")})
 	if err != nil {
@@ -426,7 +417,7 @@ func TestExecuteVerbClearsEmptyDeclaredShortRefKind(t *testing.T) {
 	}
 	defer func() { _ = st.Close() }()
 	req := &Request{Store: st, Format: ckoutput.JSON, Out: &bytes.Buffer{}}
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: kind}, {Ref: ref}}); err != nil {
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: ref}}); err != nil {
 		t.Fatal(err)
 	}
 	alias := shortref.Alias(ref, shortref.MinLength)
@@ -435,8 +426,12 @@ func TestExecuteVerbClearsEmptyDeclaredShortRefKind(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.ResolveShortRef(ctx, alias); !errors.Is(err, ErrUnknownShortRef) {
-		t.Fatalf("ResolveShortRef(%q) err = %v, want ErrUnknownShortRef", alias, err)
+	resolved, err := req.ResolveShortRef(ctx, alias)
+	if err != nil {
+		t.Fatalf("ResolveShortRef(%q): %v", alias, err)
+	}
+	if len(resolved) != 1 || resolved[0] != ref {
+		t.Fatalf("ResolveShortRef(%q) = %#v, want %q", alias, resolved, ref)
 	}
 }
 

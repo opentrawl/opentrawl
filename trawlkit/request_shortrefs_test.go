@@ -2,7 +2,6 @@ package trawlkit
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -13,7 +12,7 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-func TestShortRefsSurviveReducedKindRebuild(t *testing.T) {
+func TestShortRefsSurviveReducedSync(t *testing.T) {
 	ctx := context.Background()
 	_, req := openShortRefTestRequest(t, ctx)
 
@@ -22,12 +21,10 @@ func TestShortRefsSurviveReducedKindRebuild(t *testing.T) {
 		chatRef    = "source:chat/1"
 	)
 	records := []ShortRefRecord{
-		{Kind: "source:msg/"},
-		{Kind: "source:chat/"},
 		{Ref: messageRef},
 		{Ref: chatRef},
 	}
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	aliases, err := req.ShortRefAliases(ctx, []string{messageRef, chatRef})
@@ -39,151 +36,84 @@ func TestShortRefsSurviveReducedKindRebuild(t *testing.T) {
 		t.Fatalf("chat alias missing: %#v", aliases)
 	}
 
-	reducedRecords := []ShortRefRecord{{Ref: messageRef}}
-	if _, err := req.RebuildShortRefs(ctx, reducedRecords); err != nil {
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: messageRef}}); err != nil {
 		t.Fatal(err)
 	}
-	resolved, err := req.ResolveShortRef(ctx, chatAlias)
-	if err != nil {
-		t.Fatalf("ResolveShortRef(%q): %v", chatAlias, err)
-	}
-	if len(resolved) != 1 || resolved[0] != chatRef {
-		t.Fatalf("ResolveShortRef(%q) = %#v, want %q", chatAlias, resolved, chatRef)
-	}
+	assertShortRefResolves(t, ctx, req, chatAlias, chatRef)
 	after, err := req.ShortRefAliases(ctx, []string{messageRef, chatRef})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if after[chatRef] != chatAlias {
-		t.Fatalf("chat alias changed after reduced rebuild: got %q want %q", after[chatRef], chatAlias)
+		t.Fatalf("chat alias changed after reduced sync: got %q want %q", after[chatRef], chatAlias)
 	}
-	if after[messageRef] == "" {
-		t.Fatalf("message alias missing after reduced rebuild: %#v", after)
+	if after[messageRef] != aliases[messageRef] {
+		t.Fatalf("message alias changed after reduced sync: got %q want %q", after[messageRef], aliases[messageRef])
 	}
 }
 
-func TestShortRefsFreshSyncClearsRegeneratedKind(t *testing.T) {
+func TestShortRefsEmptySyncDeletesNothing(t *testing.T) {
 	ctx := context.Background()
-	_, req := openShortRefTestRequest(t, ctx)
+	st, req := openShortRefTestRequest(t, ctx)
 
-	const (
-		kind      = "source:item/"
-		firstRef  = "source:item/first"
-		secondRef = "source:item/second"
-	)
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: kind}, {Ref: firstRef}}); err != nil {
+	const ref = "source:item/deleted"
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: ref}}); err != nil {
 		t.Fatal(err)
 	}
-	aliases, err := req.ShortRefAliases(ctx, []string{firstRef})
+	aliases, err := req.ShortRefAliases(ctx, []string{ref})
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstAlias := aliases[firstRef]
-	if firstAlias == "" {
-		t.Fatalf("first alias missing: %#v", aliases)
+	alias := aliases[ref]
+	if alias == "" {
+		t.Fatalf("alias missing: %#v", aliases)
 	}
+	rowsBefore := countShortRefRows(t, ctx, st)
 
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: kind}}); err != nil {
+	if _, err := req.AssignShortRefs(ctx, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := req.ResolveShortRef(ctx, firstAlias); !errors.Is(err, ErrUnknownShortRef) {
-		t.Fatalf("ResolveShortRef(%q) err = %v, want ErrUnknownShortRef", firstAlias, err)
-	}
-
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: kind}, {Ref: secondRef}}); err != nil {
-		t.Fatal(err)
-	}
-	aliases, err = req.ShortRefAliases(ctx, []string{secondRef})
-	if err != nil {
-		t.Fatal(err)
-	}
-	secondAlias := aliases[secondRef]
-	if secondAlias == "" {
-		t.Fatalf("second alias missing: %#v", aliases)
-	}
-	resolved, err := req.ResolveShortRef(ctx, secondAlias)
-	if err != nil {
-		t.Fatalf("ResolveShortRef(%q): %v", secondAlias, err)
-	}
-	if len(resolved) != 1 || resolved[0] != secondRef {
-		t.Fatalf("ResolveShortRef(%q) = %#v, want %q", secondAlias, resolved, secondRef)
+	assertShortRefResolves(t, ctx, req, alias, ref)
+	if rowsAfter := countShortRefRows(t, ctx, st); rowsAfter != rowsBefore {
+		t.Fatalf("short_refs rows changed after empty sync: got %d want %d", rowsAfter, rowsBefore)
 	}
 }
 
-func TestShortRefsExtendRegeneratedAliasPastSurvivingAlias(t *testing.T) {
+func TestShortRefsExtendNewAliasPastStoredAlias(t *testing.T) {
 	ctx := context.Background()
 	st, req := openShortRefTestRequest(t, ctx)
 
 	const (
-		messageKind  = "source:msg/"
-		messageRef   = "source:msg/1"
-		survivingRef = "source:foreign/1"
+		olderRef = "source:item/older"
+		newerRef = "source:item/newer"
 	)
-	survivingAlias := shortref.Alias(messageRef, shortref.MinLength)
+	storedAlias := shortref.Alias(newerRef, shortref.MinLength)
 	if err := shortref.EnsureSchema(ctx, st.DB()); err != nil {
 		t.Fatal(err)
 	}
-	if err := shortref.NewSQLiteIndex(st.DB()).Upsert(ctx, survivingAlias, survivingRef); err != nil {
+	if err := shortref.NewSQLiteIndex(st.DB()).Upsert(ctx, storedAlias, olderRef); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: messageKind}, {Ref: messageRef}}); err != nil {
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: newerRef}}); err != nil {
 		t.Fatal(err)
 	}
-
-	aliases, err := req.ShortRefAliases(ctx, []string{messageRef, survivingRef})
+	aliases, err := req.ShortRefAliases(ctx, []string{olderRef, newerRef})
 	if err != nil {
 		t.Fatal(err)
 	}
-	messageAlias := aliases[messageRef]
-	if messageAlias == "" {
-		t.Fatalf("message alias missing: %#v", aliases)
+	newAlias := aliases[newerRef]
+	if newAlias == "" {
+		t.Fatalf("newer alias missing: %#v", aliases)
 	}
-	if messageAlias == survivingAlias || !strings.HasPrefix(messageAlias, survivingAlias) {
-		t.Fatalf("message alias = %q, want extension of surviving alias %q", messageAlias, survivingAlias)
+	if newAlias == storedAlias || !strings.HasPrefix(newAlias, storedAlias) || len(newAlias) != len(storedAlias)+1 {
+		t.Fatalf("newer alias = %q, want one-character extension of stored alias %q", newAlias, storedAlias)
 	}
-	if aliases[survivingRef] != survivingAlias {
-		t.Fatalf("surviving alias = %q, want %q", aliases[survivingRef], survivingAlias)
+	if aliases[olderRef] != storedAlias {
+		t.Fatalf("older alias = %q, want %q", aliases[olderRef], storedAlias)
 	}
-	assertShortRefResolves(t, ctx, req, messageAlias, messageRef)
-	assertShortRefResolves(t, ctx, req, survivingAlias, survivingRef)
-}
-
-func TestShortRefsClearKindHonorsPrefixTerminator(t *testing.T) {
-	ctx := context.Background()
-	_, req := openShortRefTestRequest(t, ctx)
-
-	const (
-		messageKind     = "source:msg/"
-		messageExtraRef = "source:msgextra/1"
-		messageRef      = "source:msg/1"
-	)
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{
-		{Kind: messageKind},
-		{Kind: "source:msgextra/"},
-		{Ref: messageRef},
-		{Ref: messageExtraRef},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	aliases, err := req.ShortRefAliases(ctx, []string{messageRef, messageExtraRef})
-	if err != nil {
-		t.Fatal(err)
-	}
-	messageAlias := aliases[messageRef]
-	messageExtraAlias := aliases[messageExtraRef]
-	if messageAlias == "" || messageExtraAlias == "" {
-		t.Fatalf("aliases missing: %#v", aliases)
-	}
-
-	if _, err := req.RebuildShortRefs(ctx, []ShortRefRecord{{Kind: messageKind}}); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := req.ResolveShortRef(ctx, messageAlias); !errors.Is(err, ErrUnknownShortRef) {
-		t.Fatalf("ResolveShortRef(%q) err = %v, want ErrUnknownShortRef", messageAlias, err)
-	}
-	assertShortRefResolves(t, ctx, req, messageExtraAlias, messageExtraRef)
+	assertShortRefResolves(t, ctx, req, storedAlias, olderRef)
+	assertShortRefResolves(t, ctx, req, newAlias, newerRef)
 }
 
 func TestShortRefsIdempotentResync(t *testing.T) {
@@ -192,13 +122,11 @@ func TestShortRefsIdempotentResync(t *testing.T) {
 
 	refs := []string{"source:msg/1", "source:msg/2", "source:chat/1"}
 	records := []ShortRefRecord{
-		{Kind: "source:msg/"},
-		{Kind: "source:chat/"},
 		{Ref: refs[0]},
 		{Ref: refs[1]},
 		{Ref: refs[2]},
 	}
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	aliasesBefore, err := req.ShortRefAliases(ctx, refs)
@@ -207,7 +135,7 @@ func TestShortRefsIdempotentResync(t *testing.T) {
 	}
 	rowsBefore := countShortRefRows(t, ctx, st)
 
-	if _, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if _, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	aliasesAfter, err := req.ShortRefAliases(ctx, refs)
@@ -221,6 +149,66 @@ func TestShortRefsIdempotentResync(t *testing.T) {
 	}
 	if rowsAfter != rowsBefore {
 		t.Fatalf("short_refs rows changed after idempotent resync: got %d want %d", rowsAfter, rowsBefore)
+	}
+}
+
+func TestShortRefsUpdateCanonicalRefInPlace(t *testing.T) {
+	ctx := context.Background()
+	st, req := openShortRefTestRequest(t, ctx)
+
+	const (
+		fullRef         = "legacy:item/1"
+		firstCanonical  = "canonical:item/1"
+		secondCanonical = "canonical:item/renamed"
+	)
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: fullRef, CanonicalRef: firstCanonical}}); err != nil {
+		t.Fatal(err)
+	}
+	firstAliases, err := req.ShortRefAliases(ctx, []string{firstCanonical})
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias := firstAliases[firstCanonical]
+	if alias == "" {
+		t.Fatalf("first canonical alias missing: %#v", firstAliases)
+	}
+	rowsBefore := countShortRefRows(t, ctx, st)
+
+	if _, err := req.AssignShortRefs(ctx, []ShortRefRecord{{Ref: fullRef, CanonicalRef: secondCanonical}}); err != nil {
+		t.Fatal(err)
+	}
+	secondAliases, err := req.ShortRefAliases(ctx, []string{secondCanonical})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secondAliases[secondCanonical] != alias {
+		t.Fatalf("canonical alias moved: got %q want %q", secondAliases[secondCanonical], alias)
+	}
+	oldAliases, err := req.ShortRefAliases(ctx, []string{firstCanonical})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldAliases[firstCanonical] != "" {
+		t.Fatalf("old canonical still has alias: %#v", oldAliases)
+	}
+	assertShortRefResolves(t, ctx, req, alias, secondCanonical)
+	if rowsAfter := countShortRefRows(t, ctx, st); rowsAfter != rowsBefore {
+		t.Fatalf("short_refs rows changed after canonical update: got %d want %d", rowsAfter, rowsBefore)
+	}
+}
+
+func TestShortRefsRejectConflictingCanonicalRefs(t *testing.T) {
+	ctx := context.Background()
+	_, req := openShortRefTestRequest(t, ctx)
+
+	const fullRef = "legacy:item/1"
+	records := []ShortRefRecord{
+		{Ref: fullRef, CanonicalRef: "canonical:item/1"},
+		{Ref: fullRef, CanonicalRef: "canonical:item/renamed"},
+	}
+	_, err := req.AssignShortRefs(ctx, records)
+	if err == nil || !strings.Contains(err.Error(), `short ref "legacy:item/1" has conflicting canonical refs`) {
+		t.Fatalf("AssignShortRefs err = %v, want conflicting canonical refs", err)
 	}
 }
 
@@ -246,10 +234,10 @@ func TestShortRefsPreserveCanonicalAliasSemanticsAtScale(t *testing.T) {
 		oldAliases[entry.FullRef] = entry.Alias
 	}
 
-	if rebuilt, err := req.RebuildShortRefs(ctx, records); err != nil {
+	if assigned, err := req.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
-	} else if rebuilt != refCount {
-		t.Fatalf("rebuilt %d refs, want %d", rebuilt, refCount)
+	} else if assigned != refCount {
+		t.Fatalf("assigned %d refs, want %d", assigned, refCount)
 	}
 
 	aliases, err := req.ShortRefAliases(ctx, refs)
@@ -264,13 +252,7 @@ func TestShortRefsPreserveCanonicalAliasSemanticsAtScale(t *testing.T) {
 		if aliases[ref] != alias {
 			t.Fatalf("alias for %q changed: got %q want %q", ref, aliases[ref], alias)
 		}
-		resolved, err := req.ResolveShortRef(ctx, alias)
-		if err != nil {
-			t.Fatalf("ResolveShortRef(%q) for %q: %v", alias, ref, err)
-		}
-		if len(resolved) != 1 || resolved[0] != ref {
-			t.Fatalf("ResolveShortRef(%q) = %#v, want %q", alias, resolved, ref)
-		}
+		assertShortRefResolves(t, ctx, req, alias, ref)
 	}
 }
 
