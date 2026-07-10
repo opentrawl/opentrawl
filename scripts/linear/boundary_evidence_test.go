@@ -113,9 +113,14 @@ func evidenceAPI(graph graphDoer) (*LinearAPI, *recordingGraph) {
 
 func captureCLI(t *testing.T, dir, name string, args []string, wantOutput string, api *LinearAPI) {
 	t.Helper()
-	oldFactory := newLinearAPI
+	oldReadFactory := newLinearAPI
+	oldWriteFactory := newLinearWriteAPI
 	newLinearAPI = func(io.Writer, int) (*LinearAPI, error) { return api, nil }
-	t.Cleanup(func() { newLinearAPI = oldFactory })
+	newLinearWriteAPI = func(io.Writer, int) (*LinearAPI, error) { return api, nil }
+	t.Cleanup(func() {
+		newLinearAPI = oldReadFactory
+		newLinearWriteAPI = oldWriteFactory
+	})
 	var stdout, stderr bytes.Buffer
 	err := execute(args, bytes.NewReader(nil), &stdout, &stderr)
 	if err != nil {

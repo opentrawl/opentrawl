@@ -150,11 +150,26 @@ type UpdatedIssue struct {
 	Changes []IssueChange
 }
 
+var requestLoggerFactory = newRequestLogger
+
 func NewLinearAPI(stderr io.Writer, verbosity int) (*LinearAPI, error) {
-	logger, err := newRequestLogger(stderr, verbosity)
+	logger, err := requestLoggerFactory(stderr, verbosity)
 	if err != nil {
-		return nil, err
+		logger = &requestLogger{stderr: stderr, verbosity: verbosity}
+		logger.Warn("request logging is unavailable for this read: " + err.Error())
 	}
+	return newLinearAPIWithLogger(stderr, logger)
+}
+
+func NewLinearWriteAPI(stderr io.Writer, verbosity int) (*LinearAPI, error) {
+	logger, err := requestLoggerFactory(stderr, verbosity)
+	if err != nil {
+		return nil, fmt.Errorf("open required Linear write audit: %w", err)
+	}
+	return newLinearAPIWithLogger(stderr, logger)
+}
+
+func newLinearAPIWithLogger(stderr io.Writer, logger *requestLogger) (*LinearAPI, error) {
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 	tokens, err := NewTokenStore(httpClient, logger)
 	if err != nil {

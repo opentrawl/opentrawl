@@ -34,6 +34,11 @@ export LINEAR_CLIENT_SECRET=...
 The CLI caches the app token at `~/.opentrawl/linear/token.json` with
 file mode `0600`.
 
+A refreshed token remains usable when the token cache is not writable. Read
+commands also continue when the request log is not writable. The CLI prints one
+warning for either condition. Write commands refuse to call Linear unless
+`~/.opentrawl/linear/linear.log` is writable.
+
 ## Use
 
 ```sh

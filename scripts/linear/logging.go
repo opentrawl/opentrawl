@@ -81,7 +81,9 @@ func (l *requestLogger) LogAPICall(entry apiLogEntry) {
 	if err != nil {
 		return
 	}
-	_, _ = fmt.Fprintln(l.file, string(line))
+	if l.file != nil {
+		_, _ = fmt.Fprintln(l.file, string(line))
+	}
 	if l.verbosity > 0 && l.stderr != nil {
 		_, _ = fmt.Fprintln(l.stderr, string(line))
 	}
@@ -116,7 +118,9 @@ func (l *requestLogger) logDiagnostic(level, message string) {
 	if err != nil {
 		return
 	}
-	_, _ = fmt.Fprintln(l.file, string(line))
+	if l.file != nil {
+		_, _ = fmt.Fprintln(l.file, string(line))
+	}
 }
 
 func bodyForLog(body []byte) string {
