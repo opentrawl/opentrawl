@@ -64,6 +64,9 @@ func Execute(args []string, stdout, stderr io.Writer) (err error) {
 // real timeout path against a slow crawler without a 30s wait. It is
 // the same seam as Runtime.now; production always passes the const.
 func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (err error) {
+	if isAppWireCommand(args) {
+		return executeAppWire(args, stdout, stderr, timeout)
+	}
 	jsonOut := hasJSONFlag(args)
 	defer func() {
 		if recovered := recover(); recovered != nil {
