@@ -4,11 +4,113 @@ package apple
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestCheckSourceAtUsesOnlyAddressBookSchema(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, addressBookDBName)
+	createAddressBookFixture(t, path, []fixtureContact{{
+		PK:         1,
+		Identifier: "synthetic-contact:ABPerson",
+		FirstName:  "Synthetic",
+		LastName:   "Example",
+	}})
+
+	state, err := checkSourceAt(t.Context(), dir)
+	t.Logf("raw source result: state=%q err=%q", state, err)
+	if err != nil || state != SourceReady {
+		t.Fatalf("state = %q, err = %v", state, err)
+	}
+}
+
+func TestCheckSourceAtReportsUnavailableAndInvalidSourceStates(t *testing.T) {
+	tests := []struct {
+		name      string
+		wantState SourceState
+		make      func(t *testing.T, dir string)
+	}{
+		{
+			name:      "missing directory",
+			wantState: SourceUnavailable,
+			make: func(t *testing.T, dir string) {
+				t.Helper()
+				_ = dir
+			},
+		},
+		{
+			name:      "invalid database",
+			wantState: SourceInvalid,
+			make: func(t *testing.T, dir string) {
+				t.Helper()
+				path := filepath.Join(dir, addressBookDBName)
+				if err := os.WriteFile(path, []byte("not sqlite"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "AddressBook")
+			if tt.name != "missing directory" {
+				if err := os.MkdirAll(dir, 0o700); err != nil {
+					t.Fatal(err)
+				}
+			}
+			tt.make(t, dir)
+			state, err := checkSourceAt(t.Context(), dir)
+			t.Logf("raw source result: state=%q err=%q", state, err)
+			if state != tt.wantState || err == nil {
+				t.Fatalf("state = %q, err = %v", state, err)
+			}
+		})
+	}
+}
+
+func TestCheckAddressBookDatabasePreservesDisappearingPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), addressBookDBName)
+	err := checkAddressBookDatabase(t.Context(), path)
+	state := sourceStateForError(err)
+	t.Logf("raw source input: path=%q", path)
+	t.Logf("raw source result: state=%q err=%q", state, err)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("err = %v, want not-exist", err)
+	}
+	if state != SourceUnavailable {
+		t.Fatalf("state = %q, want %q", state, SourceUnavailable)
+	}
+}
+
+func TestCheckSourceAtClassifiesPermissionErrors(t *testing.T) {
+	if got := sourceStateForError(errors.New("operation not permitted")); got != SourceNeedsFullDiskAccess {
+		t.Fatalf("state = %q, want %q", got, SourceNeedsFullDiskAccess)
+	}
+}
+
+func TestCheckSourceAtReportsUnreadableDirectory(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-zero fixture")
+	}
+	dir := filepath.Join(t.TempDir(), "AddressBook")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	state, err := checkSourceAt(t.Context(), dir)
+	t.Logf("raw source result: state=%q err=%q", state, err)
+	if state != SourceNeedsFullDiskAccess || err == nil {
+		t.Fatalf("state = %q, err = %v", state, err)
+	}
+}
 
 func TestReadAddressBookDirReadsRootAndSourceDatabases(t *testing.T) {
 	dir := t.TempDir()

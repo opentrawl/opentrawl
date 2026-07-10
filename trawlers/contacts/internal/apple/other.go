@@ -10,3 +10,7 @@ import (
 func ReadSystem(context.Context) ([]Contact, error) {
 	return nil, errors.New("apple contacts are only supported on macOS; use vCard import/export fallback on this platform")
 }
+
+func CheckSource(context.Context) (SourceState, error) {
+	return SourceUnavailable, errors.New("apple contacts are only supported on macOS")
+}
