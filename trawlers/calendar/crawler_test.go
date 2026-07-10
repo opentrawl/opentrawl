@@ -435,7 +435,13 @@ func setupCalendarFixture(t *testing.T) string {
 
 func createCalendarSchema(t *testing.T, db *sql.DB) {
 	t.Helper()
-	for _, stmt := range []string{
+	for _, stmt := range calendarSchemaStatements() {
+		mustExec(t, db, stmt)
+	}
+}
+
+func calendarSchemaStatements() []string {
+	return []string{
 		`create table Store (ROWID integer primary key, name text, type integer, disabled integer)`,
 		`create table Calendar (ROWID integer primary key, store_id integer, title text, type integer, external_id text)`,
 		`create table CalendarItem (
@@ -451,63 +457,178 @@ func createCalendarSchema(t *testing.T, db *sql.DB) {
 		)`,
 		`create table Identity (ROWID integer primary key, display_name text, address text, first_name text, last_name text)`,
 		`create table Location (ROWID integer primary key, title text, address text, item_owner_id integer)`,
-	} {
-		mustExec(t, db, stmt)
 	}
 }
 
 func insertCalendarRows(t *testing.T, db *sql.DB) {
 	t.Helper()
-	mustExec(t, db, `insert into Store(ROWID, name, type, disabled) values
-		(1, 'iCloud', 1, 0),
-		(2, 'Subscribed Calendars', 4, 0),
-		(3, 'Reminders', 3, 0)`)
-	mustExec(t, db, `insert into Calendar(ROWID, store_id, title, type, external_id) values
-		(10, 1, 'Work', 1, 'work-calendar'),
-		(11, 2, 'Holidays', 3, 'holidays-calendar'),
-		(12, 3, 'Reminders list', 3, 'reminders-calendar')`)
-	insertEvent(t, db, 100, "11111111-1111-1111-1111-111111111111", "event-planning", "Planning meeting", "Discuss launch with Alice.", time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC), time.Date(2026, 3, 4, 9, 30, 0, 0, time.UTC), false, 10, 1000, 1, "https://example.com/event", true, 900, 2)
-	insertEvent(t, db, 101, "22222222-2222-2222-2222-222222222222", "event-holiday", "Public holiday", "Subscribed holiday.", time.Date(2026, 5, 4, 22, 0, 0, 0, time.UTC), time.Date(2026, 5, 5, 22, 0, 0, 0, time.UTC), true, 11, 0, 0, "", false, 901, 1)
-	mustExec(t, db, `insert into CalendarItem(
-		ROWID, summary, description, start_date, end_date, start_tz, end_tz, all_day,
-		calendar_id, organizer_id, status, url, has_recurrences, has_attendees,
-		UUID, unique_identifier, entity_type, location_id, availability
-	) values (103, 'Task row', '', 0, 0, 'UTC', 'UTC', 0, 10, 0, 1, '', 0, 0,
-		'44444444-4444-4444-4444-444444444444', 'task-row', 1, 0, 0)`)
-	mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values
-		(500, 'Alice Example', 'alice@example.com', 'Alice', 'Example'),
-		(501, 'Bob Example', 'bob@example.com', 'Bob', 'Example'),
-		(502, 'Holiday Bot', 'holidays@example.com', 'Holiday', 'Bot')`)
-	mustExec(t, db, `insert into Participant(
-		ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment
-	) values
-		(1000, 2, 1, 2, 3, 500, 100, 'alice@example.com', '+15550100', 1, ''),
-		(1001, 2, 1, 4, 1, 501, 100, 'bob@example.com', '+15550101', 0, ''),
-		(1002, 2, 1, 2, 1, 502, 101, 'holidays@example.com', '', 0, '')`)
-	mustExec(t, db, `insert into Location(ROWID, title, address, item_owner_id) values
-		(900, 'Room 1', '1 Example Street', 100),
-		(901, 'Netherlands', '', 101)`)
+	data := calendarFixtureData()
+	for _, row := range data.Stores {
+		mustExec(t, db, `insert into Store(ROWID, name, type, disabled) values (?, ?, ?, ?)`, row.RowID, row.Name, row.Type, row.Disabled)
+	}
+	for _, row := range data.Calendars {
+		mustExec(t, db, `insert into Calendar(ROWID, store_id, title, type, external_id) values (?, ?, ?, ?, ?)`, row.RowID, row.StoreID, row.Title, row.Type, row.ExternalID)
+	}
+	for _, row := range data.Events {
+		insertCalendarItem(t, db, row)
+	}
+	for _, row := range data.Tasks {
+		insertCalendarItem(t, db, row)
+	}
+	for _, row := range data.Identities {
+		mustExec(t, db, `insert into Identity(ROWID, display_name, address, first_name, last_name) values (?, ?, ?, ?, ?)`, row.RowID, row.DisplayName, row.Address, row.FirstName, row.LastName)
+	}
+	for _, row := range data.Participants {
+		mustExec(t, db, `insert into Participant(ROWID, entity_type, type, status, role, identity_id, owner_id, email, phone_number, is_self, comment) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, row.RowID, row.EntityType, row.Type, row.Status, row.Role, row.IdentityID, row.OwnerID, row.Email, row.PhoneNumber, row.IsSelf, row.Comment)
+	}
+	for _, row := range data.Locations {
+		mustExec(t, db, `insert into Location(ROWID, title, address, item_owner_id) values (?, ?, ?, ?)`, row.RowID, row.Title, row.Address, row.ItemOwnerID)
+	}
 }
 
-func insertEvent(t *testing.T, db *sql.DB, rowID int, uuid, uniqueID, summary, description string, start, end time.Time, allDay bool, calendarID, organizerID, status int, url string, recurs bool, locationID int, availability int) {
+type calendarFixtureDataSet struct {
+	Stores       []calendarStoreFixture
+	Calendars    []calendarFixtureCalendar
+	Events       []calendarFixtureCalendarItem
+	Tasks        []calendarFixtureCalendarItem
+	Identities   []calendarFixtureIdentity
+	Participants []calendarFixtureParticipant
+	Locations    []calendarFixtureLocation
+}
+
+type calendarStoreFixture struct {
+	RowID    int
+	Name     string
+	Type     int
+	Disabled int
+}
+
+type calendarFixtureCalendar struct {
+	RowID      int
+	StoreID    int
+	Title      string
+	Type       int
+	ExternalID string
+}
+
+type calendarFixtureCalendarItem struct {
+	RowID            int
+	Summary          string
+	Description      string
+	StartCore        float64
+	EndCore          float64
+	StartTZ          string
+	EndTZ            string
+	AllDay           int
+	CalendarID       int
+	OrganizerID      int
+	Status           int
+	URL              string
+	HasRecurrences   int
+	HasAttendees     int
+	UUID             string
+	UniqueIdentifier string
+	EntityType       int
+	LocationID       int
+	Availability     int
+}
+
+type calendarFixtureIdentity struct {
+	RowID       int
+	DisplayName string
+	Address     string
+	FirstName   string
+	LastName    string
+}
+
+type calendarFixtureParticipant struct {
+	RowID       int
+	EntityType  int
+	Type        int
+	Status      int
+	Role        int
+	IdentityID  int
+	OwnerID     int
+	Email       string
+	PhoneNumber string
+	IsSelf      int
+	Comment     string
+}
+
+type calendarFixtureLocation struct {
+	RowID       int
+	Title       string
+	Address     string
+	ItemOwnerID int
+}
+
+func calendarFixtureData() calendarFixtureDataSet {
+	return calendarFixtureDataSet{
+		Stores: []calendarStoreFixture{
+			{RowID: 1, Name: "iCloud", Type: 1, Disabled: 0},
+			{RowID: 2, Name: "Subscribed Calendars", Type: 4, Disabled: 0},
+			{RowID: 3, Name: "Reminders", Type: 3, Disabled: 0},
+		},
+		Calendars: []calendarFixtureCalendar{
+			{RowID: 10, StoreID: 1, Title: "Work", Type: 1, ExternalID: "work-calendar"},
+			{RowID: 11, StoreID: 2, Title: "Holidays", Type: 3, ExternalID: "holidays-calendar"},
+			{RowID: 12, StoreID: 3, Title: "Reminders list", Type: 3, ExternalID: "reminders-calendar"},
+		},
+		Events: []calendarFixtureCalendarItem{
+			{
+				RowID: 100, Summary: "Planning meeting", Description: "Discuss launch with Alice.",
+				StartCore: coreDate(time.Date(2026, 3, 4, 9, 0, 0, 0, time.UTC)), EndCore: coreDate(time.Date(2026, 3, 4, 9, 30, 0, 0, time.UTC)),
+				StartTZ: "Europe/Amsterdam", EndTZ: "Europe/Amsterdam", AllDay: 0, CalendarID: 10, OrganizerID: 1000,
+				Status: 1, URL: "https://example.com/event", HasRecurrences: 1, HasAttendees: 1,
+				UUID: "11111111-1111-1111-1111-111111111111", UniqueIdentifier: "event-planning", EntityType: 2, LocationID: 900, Availability: 2,
+			},
+			{
+				RowID: 101, Summary: "Public holiday", Description: "Subscribed holiday.",
+				StartCore: coreDate(time.Date(2026, 5, 4, 22, 0, 0, 0, time.UTC)), EndCore: coreDate(time.Date(2026, 5, 5, 22, 0, 0, 0, time.UTC)),
+				StartTZ: "Europe/Amsterdam", EndTZ: "Europe/Amsterdam", AllDay: 1, CalendarID: 11, OrganizerID: 0,
+				Status: 0, URL: "", HasRecurrences: 0, HasAttendees: 1,
+				UUID: "22222222-2222-2222-2222-222222222222", UniqueIdentifier: "event-holiday", EntityType: 2, LocationID: 901, Availability: 1,
+			},
+		},
+		Tasks: []calendarFixtureCalendarItem{
+			{
+				RowID: 103, Summary: "Task row", Description: "", StartCore: 0, EndCore: 0,
+				StartTZ: "UTC", EndTZ: "UTC", AllDay: 0, CalendarID: 10, OrganizerID: 0,
+				Status: 1, URL: "", HasRecurrences: 0, HasAttendees: 0,
+				UUID: "44444444-4444-4444-4444-444444444444", UniqueIdentifier: "task-row", EntityType: 1, LocationID: 0, Availability: 0,
+			},
+		},
+		Identities: []calendarFixtureIdentity{
+			{RowID: 500, DisplayName: "Alice Example", Address: "alice@example.com", FirstName: "Alice", LastName: "Example"},
+			{RowID: 501, DisplayName: "Bob Example", Address: "bob@example.com", FirstName: "Bob", LastName: "Example"},
+			{RowID: 502, DisplayName: "Holiday Bot", Address: "holidays@example.com", FirstName: "Holiday", LastName: "Bot"},
+		},
+		Participants: []calendarFixtureParticipant{
+			{RowID: 1000, EntityType: 2, Type: 1, Status: 2, Role: 3, IdentityID: 500, OwnerID: 100, Email: "alice@example.com", PhoneNumber: "+15550100", IsSelf: 1, Comment: ""},
+			{RowID: 1001, EntityType: 2, Type: 1, Status: 4, Role: 1, IdentityID: 501, OwnerID: 100, Email: "bob@example.com", PhoneNumber: "+15550101", IsSelf: 0, Comment: ""},
+			{RowID: 1002, EntityType: 2, Type: 1, Status: 2, Role: 1, IdentityID: 502, OwnerID: 101, Email: "holidays@example.com", PhoneNumber: "", IsSelf: 0, Comment: ""},
+		},
+		Locations: []calendarFixtureLocation{
+			{RowID: 900, Title: "Room 1", Address: "1 Example Street", ItemOwnerID: 100},
+			{RowID: 901, Title: "Netherlands", Address: "", ItemOwnerID: 101},
+		},
+	}
+}
+
+func insertCalendarItem(t *testing.T, db *sql.DB, row calendarFixtureCalendarItem) {
 	t.Helper()
 	mustExec(t, db, `insert into CalendarItem(
 		ROWID, summary, description, start_date, end_date, start_tz, end_tz, all_day,
 		calendar_id, organizer_id, status, url, has_recurrences, has_attendees,
 		UUID, unique_identifier, entity_type, location_id, availability
-	) values (?, ?, ?, ?, ?, 'Europe/Amsterdam', 'Europe/Amsterdam', ?, ?, ?, ?, ?, ?, 1, ?, ?, 2, ?, ?)`,
-		rowID, summary, description, coreDate(start), coreDate(end), boolInt(allDay), calendarID, organizerID, status, url, boolInt(recurs), uuid, uniqueID, locationID, availability)
+	) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		row.RowID, row.Summary, row.Description, row.StartCore, row.EndCore, row.StartTZ, row.EndTZ, row.AllDay,
+		row.CalendarID, row.OrganizerID, row.Status, row.URL, row.HasRecurrences, row.HasAttendees,
+		row.UUID, row.UniqueIdentifier, row.EntityType, row.LocationID, row.Availability)
 }
 
 func coreDate(t time.Time) float64 {
 	return float64(t.Unix() - coreDataUnixOffset)
-}
-
-func boolInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
 }
 
 func mustExec(t *testing.T, db *sql.DB, query string, args ...any) {
