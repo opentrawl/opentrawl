@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package trawl.app.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1;appv1";
+
+message Count {
+  string id = 1;
+  string display = 2;
+}
+
+message SourceStatus {
+  string app_id = 1;
+  string surface = 2;
+  string state = 3;
+  string summary = 4;
+  repeated Count counts = 5;
+  string last_synced_display = 6;
+  int64 archive_bytes = 7;
+}
+
+message SearchHit {
+  string open_ref = 1;
+  string app_id = 2;
+  string title = 3;
+  string snippet = 4;
+  string when_display = 5;
+}
