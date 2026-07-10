@@ -26,3 +26,64 @@ message SearchHit {
   string snippet = 4;
   string when_display = 5;
 }
+
+enum OperationOutcome {
+  OPERATION_OUTCOME_UNSPECIFIED = 0;
+  OPERATION_OUTCOME_COMPLETE = 1;
+  OPERATION_OUTCOME_PARTIAL = 2;
+  OPERATION_OUTCOME_FAILED = 3;
+}
+
+enum FailureCode {
+  FAILURE_CODE_UNSPECIFIED = 0;
+  FAILURE_CODE_UNAVAILABLE = 1;
+  FAILURE_CODE_PERMISSION = 2;
+  FAILURE_CODE_AUTHENTICATION = 3;
+  FAILURE_CODE_INVALID_INPUT = 4;
+  FAILURE_CODE_NOT_FOUND = 5;
+  FAILURE_CODE_TIMEOUT = 6;
+  FAILURE_CODE_INTERNAL = 7;
+}
+
+message SourceFailure {
+  string app_id = 1;
+  string surface = 2;
+  FailureCode code = 3;
+  string message = 4;
+  string remedy = 5;
+}
+
+message StatusResponse {
+  OperationOutcome outcome = 1;
+  repeated SourceStatus sources = 2;
+  repeated SourceFailure failures = 3;
+}
+
+message SearchResponse {
+  OperationOutcome outcome = 1;
+  repeated SearchHit hits = 2;
+  repeated SourceFailure failures = 3;
+  uint32 result_limit = 4;
+  bool truncated = 5;
+}
+
+message SyncSourceResult {
+  string app_id = 1;
+  string surface = 2;
+  OperationOutcome outcome = 3;
+  SourceFailure failure = 4;
+}
+
+message SyncResponse {
+  OperationOutcome outcome = 1;
+  repeated SyncSourceResult sources = 2;
+  repeated SourceFailure failures = 3;
+}
+
+message OpenResponse {
+  OperationOutcome outcome = 1;
+  string app_id = 2;
+  string open_ref = 3;
+  bytes output = 4;
+  SourceFailure failure = 5;
+}
