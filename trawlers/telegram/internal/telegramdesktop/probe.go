@@ -6,6 +6,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -13,12 +14,16 @@ import (
 
 const maxProbeBytes = 16
 
+const nativeTelegramBundleID = "ru.keepcoder.Telegram"
+
 type Options struct {
 	Path string
 }
 
 type Report struct {
 	Path          string   `json:"path"`
+	Product       string   `json:"product"`
+	Explicit      bool     `json:"explicit"`
 	Exists        bool     `json:"exists"`
 	Accessible    bool     `json:"accessible"`
 	Store         string   `json:"store"`
@@ -65,10 +70,14 @@ func DefaultPostboxPath() string {
 }
 
 func Probe(ctx context.Context, opts Options) Report {
-	path := strings.TrimSpace(opts.Path)
-	if path == "" {
-		path = defaultProbePath()
-	}
+	source := resolveImportSource(ctx, strings.TrimSpace(opts.Path))
+	report := probePath(ctx, source.path)
+	report.Product = string(source.product)
+	report.Explicit = source.explicit
+	return report
+}
+
+func probePath(ctx context.Context, path string) Report {
 	report := Report{Path: path, Store: "missing"}
 	info, err := os.Stat(path)
 	if err != nil {
@@ -146,8 +155,37 @@ func Probe(ctx context.Context, opts Options) Report {
 	return report
 }
 
-func defaultProbePath() string {
-	return resolveImportSourcePaths("", DefaultPath(), DefaultPostboxPath()).path
+func nativeTelegramInstalled() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	return nativeTelegramInstalledAt([]string{
+		"/Applications/Telegram.app",
+		filepath.Join(home, "Applications", "Telegram.app"),
+	}, nativeTelegramBundleIDAt)
+}
+
+func nativeTelegramInstalledAt(appPaths []string, bundleIDAt func(string) (string, error)) bool {
+	for _, appPath := range appPaths {
+		bundleID, err := bundleIDAt(appPath)
+		if err == nil && strings.TrimSpace(bundleID) == nativeTelegramBundleID {
+			return true
+		}
+	}
+	return false
+}
+
+func nativeTelegramBundleIDAt(appPath string) (string, error) {
+	infoPath := filepath.Join(appPath, "Contents", "Info.plist")
+	output, err := exec.Command("/usr/bin/plutil", "-extract", "CFBundleIdentifier", "raw", "-o", "-", infoPath).Output()
+	if err != nil {
+		return "", err
+	}
+	return string(output), nil
 }
 
 func LooksLikePostbox(path string) bool {

@@ -52,7 +52,10 @@ type ImportResult struct {
 }
 
 func Import(ctx context.Context, opts ImportOptions, dbPath string) (ImportResult, error) {
-	source := resolveImportSource(strings.TrimSpace(opts.Path))
+	source := resolveImportSource(ctx, strings.TrimSpace(opts.Path))
+	if source.unavailable != nil {
+		return ImportResult{}, source.unavailable
+	}
 	var mediaTempDir string
 	if opts.FetchMedia {
 		var err error
@@ -602,28 +605,66 @@ func firstNonEmpty(values ...string) string {
 }
 
 type importSource struct {
-	path    string
-	postbox bool
+	path        string
+	postbox     bool
+	product     sourceProduct
+	explicit    bool
+	unavailable error
 }
 
-func resolveImportSource(path string) importSource {
-	return resolveImportSourcePaths(path, DefaultPath(), DefaultPostboxPath())
+type sourceProduct string
+
+const (
+	sourceProductNative  sourceProduct = "telegram-macos"
+	sourceProductDesktop sourceProduct = "telegram-desktop"
+)
+
+// SourceUnavailableError means the selected installed Telegram product has no
+// usable local store. It intentionally does not include a local filesystem path.
+type SourceUnavailableError struct {
+	Product string
+	State   string
 }
 
-func resolveImportSourcePaths(path, tdesktop, postbox string) importSource {
+func (e *SourceUnavailableError) Error() string {
+	return "Telegram for macOS is installed, but its local data store is " + e.State
+}
+
+func resolveImportSource(ctx context.Context, path string) importSource {
+	return resolveImportSourcePaths(ctx, path, DefaultPath(), DefaultPostboxPath(), nativeTelegramInstalled())
+}
+
+func resolveImportSourcePaths(ctx context.Context, path, tdesktop, postbox string, nativeInstalled bool) importSource {
 	if path != "" {
-		return importSource{path: path, postbox: LooksLikePostbox(path)}
+		if LooksLikePostbox(path) {
+			return importSource{path: path, postbox: true, product: sourceProductNative, explicit: true}
+		}
+		return importSource{path: path, product: sourceProductDesktop, explicit: true}
 	}
-	if LooksLikePostbox(postbox) {
-		return importSource{path: postbox, postbox: true}
+	if nativeInstalled {
+		report := probePath(ctx, postbox)
+		return importSource{
+			path:        postbox,
+			postbox:     true,
+			product:     sourceProductNative,
+			unavailable: nativeSourceUnavailable(report),
+		}
 	}
 	if info, err := os.Stat(tdesktop); err == nil && info.IsDir() {
-		return importSource{path: tdesktop}
+		return importSource{path: tdesktop, product: sourceProductDesktop}
 	}
-	if info, err := os.Stat(postbox); err == nil && info.IsDir() {
-		return importSource{path: postbox, postbox: true}
+	return importSource{path: tdesktop, product: sourceProductDesktop}
+}
+
+func nativeSourceUnavailable(report Report) error {
+	if report.Exists && report.Accessible && report.Error == "" && report.Store == "telegram-macos-postbox" {
+		return nil
 	}
-	return importSource{path: tdesktop}
+	state := "unreadable"
+	if !report.Exists || report.Store == "empty" {
+		state = "missing"
+	}
+	return &SourceUnavailableError{Product: string(sourceProductNative), State: state}
 }
 
 func sameImportSourcePath(left, right string) bool {
