@@ -1,0 +1,7 @@
+version: v1
+plugins:
+  - plugin: swift
+    out: ../../app/Sources/TrawlClient/Generated
+    opt:
+      - Visibility=Public
+      - FileNaming=DropPath

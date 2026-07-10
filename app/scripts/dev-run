@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$app_dir/.." && pwd)"
+build_root="$app_dir/build"
+app="$build_root/OpenTrawl.app"
+contents="$app/Contents"
+identity="OpenTrawl Dev Signing"
+keychain="opentrawl-dev.keychain"
+pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
+launch=1
+fixture_helper=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --build-only)
+      launch=0
+      shift
+      ;;
+    --fixture-helper)
+      [[ $# -ge 2 ]] || { echo "--fixture-helper needs a path" >&2; exit 2; }
+      fixture_helper="$2"
+      shift 2
+      ;;
+    *)
+      echo "usage: app/scripts/dev-run [--build-only] [--fixture-helper PATH]" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$fixture_helper" ]]; then
+  echo "Building the embedded helper"
+  (cd "$repo_root" && devenv shell -- true)
+else
+  [[ -x "$fixture_helper" ]] || { echo "fixture helper is not executable" >&2; exit 2; }
+fi
+
+echo "Building the Mac app"
+host_swift() {
+  env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
+}
+host_swift build --package-path "$app_dir" --configuration debug
+swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
+
+rm -rf "$app"
+mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
+cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
+if [[ -n "$fixture_helper" ]]; then
+  cp "$fixture_helper" "$contents/Helpers/trawl"
+else
+  cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
+fi
+chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
+
+# The Nix Go toolchain may record its own resolver path. The shipped helper
+# uses the equivalent macOS platform library so it runs outside the dev shell.
+if file "$contents/Helpers/trawl" | grep -q 'Mach-O'; then
+  nix_resolver="$(otool -L "$contents/Helpers/trawl" \
+    | sed -n 's#^[[:space:]]*\(/nix/store/[^ ]*/libresolv\.9\.dylib\).*#\1#p' \
+    | head -1)"
+  if [[ -n "$nix_resolver" ]]; then
+    install_name_tool -change "$nix_resolver" /usr/lib/libresolv.9.dylib \
+      "$contents/Helpers/trawl"
+  fi
+fi
+
+echo "Compiling the app icon"
+xcrun actool \
+  --output-format human-readable-text \
+  --notices \
+  --warnings \
+  --platform macosx \
+  --minimum-deployment-target 26.0 \
+  --target-device mac \
+  --app-icon OpenTrawl \
+  --output-partial-info-plist "$build_root/icon-info.plist" \
+  --compile "$contents/Resources" \
+  "$repo_root/assets/brand/OpenTrawl.icon"
+
+info="$contents/Info.plist"
+plutil -create xml1 "$info"
+plutil -insert CFBundleDevelopmentRegion -string en "$info"
+plutil -insert CFBundleDisplayName -string OpenTrawl "$info"
+plutil -insert CFBundleExecutable -string Trawl "$info"
+plutil -insert CFBundleIconName -string OpenTrawl "$info"
+plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
+plutil -insert CFBundleName -string OpenTrawl "$info"
+plutil -insert CFBundlePackageType -string APPL "$info"
+plutil -insert CFBundleShortVersionString -string 0.1.0 "$info"
+plutil -insert CFBundleVersion -string 1 "$info"
+plutil -insert GitCommit -string "$(git -C "$repo_root" rev-parse --short HEAD)" "$info"
+plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
+plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
+plutil -insert NSHighResolutionCapable -bool true "$info"
+
+echo "Signing the local app"
+"$repo_root/scripts/dev-cert"
+security unlock-keychain -p "$(<"$pass_file")" "$keychain"
+xattr -cr "$app"
+codesign --force --options runtime --timestamp=none \
+  --keychain "$keychain" --sign "$identity" "$contents/Helpers/trawl"
+codesign --force --options runtime --timestamp=none \
+  --keychain "$keychain" --sign "$identity" "$contents/MacOS/Trawl"
+codesign --force --options runtime --timestamp=none \
+  --keychain "$keychain" --sign "$identity" "$app"
+codesign --verify --deep --strict "$app"
+
+echo "Built $app"
+if [[ "$launch" -eq 1 ]]; then
+  open -n "$app"
+fi
