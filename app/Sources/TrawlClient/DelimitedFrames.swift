@@ -1,4 +1,5 @@
 import Foundation
+import SwiftProtobuf
 
 public enum DelimitedFrames {
   public static let maximumFrameBytes = 16 * 1024 * 1024
@@ -20,6 +21,26 @@ public enum DelimitedFrames {
       offset = end
     }
     return frames
+  }
+
+  public static func encode<Message: SwiftProtobuf.Message>(_ message: Message) throws -> Data {
+    let payload = try message.serializedData()
+    guard payload.count <= maximumFrameBytes else {
+      throw TrawlClientError.frameTooLarge
+    }
+    return encodeLength(payload.count) + payload
+  }
+
+  private static func encodeLength(_ length: Int) -> Data {
+    var value = length
+    var bytes: [UInt8] = []
+    repeat {
+      var byte = UInt8(value & 0x7f)
+      value >>= 7
+      if value > 0 { byte |= 0x80 }
+      bytes.append(byte)
+    } while value > 0
+    return Data(bytes)
   }
 
   private static func decodeLength(in data: Data, offset: inout Data.Index) throws -> Int {

@@ -91,6 +91,17 @@ import TrawlClient
   #expect(await recorder.count == 1)
 }
 
+@Test func artworkDownloadRejectsCrossHostAndInsecureRedirects() throws {
+  let initial = try #require(URL(string: "https://is1-ssl.mzstatic.com/icon.png"))
+  let sameHost = try #require(URL(string: "https://is2-ssl.mzstatic.com/icon.png"))
+  let unapproved = try #require(URL(string: "https://example.com/icon.png"))
+  let insecure = try #require(URL(string: "http://is1-ssl.mzstatic.com/icon.png"))
+
+  #expect(AppStoreArtwork.allowsRedirect(from: initial, to: sameHost))
+  #expect(!AppStoreArtwork.allowsRedirect(from: initial, to: unapproved))
+  #expect(!AppStoreArtwork.allowsRedirect(from: initial, to: insecure))
+}
+
 @Test func artworkRequestsCarryTheExactTransferCaps() async {
   let cache = FileManager.default.temporaryDirectory
     .appendingPathComponent(UUID().uuidString, isDirectory: true)
