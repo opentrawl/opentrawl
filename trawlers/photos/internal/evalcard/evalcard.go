@@ -17,6 +17,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
+	crawlconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	ckmodel "github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
@@ -148,7 +149,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 		filepath.Join(outputDir, "raw"),
 		cacheDir,
 	} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return Result{}, err
+		}
+		if err := os.Chmod(dir, 0o700); err != nil {
 			return Result{}, err
 		}
 	}
@@ -163,7 +167,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	}
 	promptSum := sha256.Sum256(promptBytes)
 
-	libraryPath, err := filepath.Abs(opts.LibraryPath)
+	libraryPath, err := filepath.Abs(crawlconfig.ExpandHome(strings.TrimSpace(opts.LibraryPath)))
 	if err != nil {
 		return Result{}, err
 	}
@@ -177,6 +181,10 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	localMedia, err := photos.BuildLocalMediaIndex(libraryPath)
 	if err != nil {
 		return Result{}, fmt.Errorf("index local media: %w", err)
+	}
+	resolver, err := photos.NewOriginalResolver(cacheDir, exportOriginalResource)
+	if err != nil {
+		return Result{}, err
 	}
 
 	result := Result{
@@ -197,7 +205,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 
 	assets := imageAssets(snapshot.Assets, sample, opts.Seed)
 	result.AssetsSeen = len(assets)
-	manifest, err := os.Create(result.ManifestPath)
+	manifest, err := os.OpenFile(result.ManifestPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		return Result{}, err
 	}
@@ -211,11 +219,8 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			break
 		}
 		id := fmt.Sprintf("E%03d", len(inputs)+1)
-		input, row, err := prepareInput(ctx, localMedia, outputDir, cacheDir, id, asset, opts.AllowICloudDownloads)
+		input, row, err := prepareInput(ctx, resolver, localMedia, libraryPath, outputDir, id, asset, opts.AllowICloudDownloads)
 		if err != nil {
-			if errors.Is(err, photos.ErrExportAlreadyRunning) {
-				return Result{}, err
-			}
 			result.AssetsSkipped[classifySkip(err)]++
 			continue
 		}
@@ -241,20 +246,28 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	if err := os.WriteFile(result.SummaryPath, append(summary, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(result.SummaryPath, append(summary, '\n'), 0o600); err != nil {
 		return Result{}, err
 	}
 	return result, nil
 }
 
-func prepareInput(ctx context.Context, localMedia photos.LocalMediaIndex, outputDir, cacheDir, id string, asset photos.Asset, allowICloud bool) (preparedInput, manifestRow, error) {
-	originalPath, source, err := resolveOriginal(ctx, localMedia, cacheDir, asset, allowICloud)
+func prepareInput(ctx context.Context, resolver *photos.OriginalResolver, localMedia photos.LocalMediaIndex, libraryPath, outputDir, id string, asset photos.Asset, allowICloud bool) (preparedInput, manifestRow, error) {
+	resolved, err := resolver.Resolve(ctx, originalRequest(localMedia, libraryPath, asset, allowICloud))
 	if err != nil {
 		return preparedInput{}, manifestRow{}, err
 	}
+	if resolved.Lease != nil {
+		defer resolved.Lease.Close()
+	}
+	originalPath := resolved.Path
+	source := resolved.Source
 	imagePath := filepath.Join(outputDir, "images", id+".jpg")
 	if err := photos.RenderCanonicalJPEG(ctx, originalPath, imagePath, 0.92); err != nil {
 		return preparedInput{}, manifestRow{}, fmt.Errorf("canonical_render")
+	}
+	if err := os.Chmod(imagePath, 0o600); err != nil {
+		return preparedInput{}, manifestRow{}, fmt.Errorf("protect canonical image: %w", err)
 	}
 	imageMeta, err := photos.ImageMetadata(ctx, originalPath)
 	if err != nil {
@@ -292,32 +305,6 @@ func prepareInput(ctx context.Context, localMedia photos.LocalMediaIndex, output
 		}, nil
 }
 
-func resolveOriginal(ctx context.Context, localMedia photos.LocalMediaIndex, cacheDir string, asset photos.Asset, allowICloud bool) (string, string, error) {
-	if candidate, ok := photos.UniquePackageOriginal(localMedia.Candidates(asset.LocalIdentifier)); ok {
-		if _, _, err := photos.InspectOriginalFile(candidate.Path); err == nil {
-			return candidate.Path, "photos_package_original", nil
-		}
-	}
-	query := originalExportQuery(asset)
-	cachePath := photos.OriginalCachePath(cacheDir, asset.ModificationDate, query)
-	if _, _, err := photos.InspectOriginalFile(cachePath); err == nil {
-		return cachePath, "cached_photokit_original", nil
-	}
-	if !allowICloud {
-		return "", "", fmt.Errorf("missing_original")
-	}
-	if err := exportOriginalResource(ctx, query, cachePath, true); err != nil {
-		if errors.Is(err, photos.ErrExportAlreadyRunning) {
-			return "", "", err
-		}
-		return "", "", fmt.Errorf("export_original")
-	}
-	if _, _, err := photos.InspectOriginalFile(cachePath); err != nil {
-		return "", "", fmt.Errorf("export_original")
-	}
-	return cachePath, "photokit_original_export", nil
-}
-
 func imageAssets(assets []photos.Asset, sample string, seed uint64) []photos.Asset {
 	out := []photos.Asset{}
 	for _, asset := range assets {
@@ -341,30 +328,22 @@ func imageAssets(assets []photos.Asset, sample string, seed uint64) []photos.Ass
 	return out
 }
 
-func originalExportQuery(asset photos.Asset) photos.OriginalExportQuery {
-	resource := preferredOriginalResource(asset)
-	return photos.OriginalExportQuery{
-		LocalIdentifier:  asset.LocalIdentifier,
-		CreationDate:     asset.CreationDate,
-		Width:            asset.Width,
-		Height:           asset.Height,
-		OriginalFilename: resource.OriginalFilename,
-		OriginalUTI:      resource.UTI,
+func originalRequest(localMedia photos.LocalMediaIndex, libraryPath string, asset photos.Asset, allowNetwork bool) photos.OriginalRequest {
+	resource, _ := photos.PreferredOriginalResource(asset.Resources)
+	return photos.OriginalRequest{
+		SourceLibraryID:   photos.SourceLibraryID(libraryPath),
+		ModificationDate:  asset.ModificationDate,
+		PackageCandidates: localMedia.Candidates(asset.LocalIdentifier),
+		AllowNetwork:      allowNetwork,
+		Query: photos.OriginalExportQuery{
+			LocalIdentifier:  asset.LocalIdentifier,
+			CreationDate:     asset.CreationDate,
+			Width:            asset.Width,
+			Height:           asset.Height,
+			OriginalFilename: resource.OriginalFilename,
+			OriginalUTI:      resource.UTI,
+		},
 	}
-}
-
-func preferredOriginalResource(asset photos.Asset) photos.Resource {
-	for _, resource := range asset.Resources {
-		if resource.NeedsDownload && (photos.IsOriginalExtension(filepath.Ext(resource.OriginalFilename)) || photos.IsOriginalUTI(resource.UTI)) {
-			return resource
-		}
-	}
-	for _, resource := range asset.Resources {
-		if photos.IsOriginalExtension(filepath.Ext(resource.OriginalFilename)) || photos.IsOriginalUTI(resource.UTI) {
-			return resource
-		}
-	}
-	return photos.Resource{}
 }
 
 func classifySkip(err error) string {

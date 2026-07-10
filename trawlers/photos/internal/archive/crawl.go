@@ -136,7 +136,7 @@ type syncImporter struct {
 
 func (c *syncImporter) run(tx *sql.Tx) error {
 	ctx := c.ctx
-	sourceID := stableID("source_library", c.libraryPath)
+	sourceID := photos.SourceLibraryID(c.libraryPath)
 	snapshotID := stableID("crawl_snapshot", sourceID, c.completedAt.Format(time.RFC3339Nano), c.sourceFingerprint())
 
 	resourceCount, albumCount, locationCount := snapshotCounts(c.snapshot)

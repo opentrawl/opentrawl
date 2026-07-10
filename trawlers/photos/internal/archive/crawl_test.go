@@ -33,6 +33,9 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if result.SourceLibraryID != photos.SourceLibraryID(libraryPath) {
+		t.Fatalf("source library ID = %q, want %q", result.SourceLibraryID, photos.SourceLibraryID(libraryPath))
+	}
 	if result.AssetsSeen != 2 || result.AssetsNew != 2 || result.AssetsChanged != 0 || result.AssetsUnchanged != 0 {
 		t.Fatalf("first sync delta = new %d changed %d unchanged %d seen %d", result.AssetsNew, result.AssetsChanged, result.AssetsUnchanged, result.AssetsSeen)
 	}

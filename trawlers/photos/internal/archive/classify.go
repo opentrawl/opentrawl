@@ -59,9 +59,9 @@ type ClassifyResult struct {
 	PlaceProviderFailures          int    `json:"place_provider_failures,omitempty"`
 	PlaceObservationsWritten       int    `json:"place_observations_written,omitempty"`
 	ContentClassificationFailures  int    `json:"content_classification_failures"`
-	OriginalsDownloaded            int    `json:"originals_downloaded"`
-	OriginalDownloadFailures       int    `json:"original_download_failures"`
-	OriginalDownloadMillis         int64  `json:"original_download_millis"`
+	PhotoKitExports                int    `json:"photokit_exports"`
+	OriginalResolutionFailures     int    `json:"original_resolution_failures"`
+	OriginalResolutionMillis       int64  `json:"original_resolution_millis"`
 	ModelCallAttempts              int    `json:"model_call_attempts"`
 	ModelCallMillis                int64  `json:"model_call_millis"`
 	ModelConcurrencyPeak           int    `json:"model_concurrency_peak,omitempty"`
@@ -70,7 +70,7 @@ type ClassifyResult struct {
 	RateLimitRequeued              int    `json:"rate_limit_requeued,omitempty"`
 	RateLimitAborted               bool   `json:"rate_limit_aborted,omitempty"`
 	ModelTransientErrorEvents      int    `json:"model_transient_error_events"`
-	BytesDownloaded                int64  `json:"bytes_downloaded"`
+	PhotoKitExportBytes            int64  `json:"photokit_export_bytes"`
 }
 
 func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {

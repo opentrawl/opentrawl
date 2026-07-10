@@ -240,8 +240,6 @@ func normaliseError(err error) commandError {
 	switch {
 	case output.IsUsage(err):
 		return commandError{Code: "usage", Message: message, Remedy: "use photoscrawl-lab <verb> [arguments] [flags]"}
-	case strings.Contains(message, "photokit export already running"):
-		return commandError{Code: "export_already_running", Message: message, Remedy: "wait for the other eval-card run to finish, then rerun the command"}
 	default:
 		return commandError{Code: "command_failed", Message: message, Remedy: "fix the reported problem and rerun the command"}
 	}

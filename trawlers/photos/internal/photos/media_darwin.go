@@ -6,7 +6,7 @@ package photos
 #cgo darwin LDFLAGS: -framework Foundation -framework AppKit -framework Photos -framework CoreLocation -framework CoreImage -framework CoreGraphics -framework ImageIO
 #include <stdlib.h>
 
-int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut);
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut, char **errorDomainOut, long long *errorCodeOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut);
@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -38,7 +37,7 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return err
 	}
-	lock, err := acquireExportLock(destinationPath)
+	lock, err := acquireExportLock(ctx, destinationPath)
 	if err != nil {
 		return err
 	}
@@ -58,6 +57,8 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 	defer C.free(unsafe.Pointer(cDestination))
 
 	var cErr *C.char
+	var cErrorDomain *C.char
+	var cErrorCode C.longlong
 	timeout := defaultPhotoKitFetchTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
@@ -65,7 +66,18 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 			return context.DeadlineExceeded
 		}
 	}
-	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), C.longlong(timeout.Milliseconds()), &cErr)
+	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), C.longlong(timeout.Milliseconds()), &cErr, &cErrorDomain, &cErrorCode)
+	if cErrorDomain != nil {
+		defer C.free(unsafe.Pointer(cErrorDomain))
+		reason := ""
+		if cErr != nil {
+			reason = C.GoString(cErr)
+		}
+		if cErr != nil {
+			defer C.free(unsafe.Pointer(cErr))
+		}
+		return NewPhotoKitExportError(C.GoString(cErrorDomain), int64(cErrorCode), reason)
+	}
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return photoKitError(C.GoString(cErr))
@@ -122,35 +134,25 @@ type exportLock struct {
 	file *os.File
 }
 
-func acquireExportLock(destinationPath string) (*exportLock, error) {
+func acquireExportLock(ctx context.Context, destinationPath string) (*exportLock, error) {
 	lockPath := filepath.Join(filepath.Dir(destinationPath), ".photokit-export.lock")
-	removedStale := false
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
 	for {
-		file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
-		if err != nil {
-			return nil, err
-		}
 		if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-			_ = file.Close()
-			if exportLockWouldBlock(err) {
-				if !removedStale {
-					removed, removeErr := removeDeadExportLock(lockPath)
-					if removeErr != nil {
-						return nil, removeErr
-					}
-					if removed {
-						removedStale = true
-						continue
-					}
-				}
-				return nil, ErrExportAlreadyRunning
+			if !exportLockWouldBlock(err) {
+				_ = file.Close()
+				return nil, err
 			}
-			return nil, err
-		}
-		if err := writeExportLockOwner(file); err != nil {
-			_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
-			_ = file.Close()
-			return nil, err
+			select {
+			case <-ctx.Done():
+				_ = file.Close()
+				return nil, ctx.Err()
+			case <-time.After(25 * time.Millisecond):
+			}
+			continue
 		}
 		return &exportLock{file: file}, nil
 	}
@@ -159,73 +161,6 @@ func acquireExportLock(destinationPath string) (*exportLock, error) {
 func exportLockWouldBlock(err error) bool {
 	errno, ok := err.(syscall.Errno)
 	return ok && (errno == syscall.EWOULDBLOCK || errno == syscall.EAGAIN)
-}
-
-func writeExportLockOwner(file *os.File) error {
-	if err := file.Truncate(0); err != nil {
-		return err
-	}
-	if _, err := file.Seek(0, 0); err != nil {
-		return err
-	}
-	if _, err := fmt.Fprintf(file, "%d\n", os.Getpid()); err != nil {
-		return err
-	}
-	return file.Sync()
-}
-
-func removeDeadExportLock(lockPath string) (bool, error) {
-	pid, ok, err := readExportLockOwner(lockPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-		return false, err
-	}
-	if !ok || processAlive(pid) {
-		return false, nil
-	}
-	currentPID, currentOK, err := readExportLockOwner(lockPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-		return false, err
-	}
-	if !currentOK || currentPID != pid || processAlive(currentPID) {
-		return false, nil
-	}
-	if err := os.Remove(lockPath); err != nil {
-		if os.IsNotExist(err) {
-			return true, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func readExportLockOwner(lockPath string) (int, bool, error) {
-	data, err := os.ReadFile(lockPath)
-	if err != nil {
-		return 0, false, err
-	}
-	text := strings.TrimSpace(string(data))
-	if text == "" {
-		return 0, false, nil
-	}
-	pid, err := strconv.Atoi(text)
-	if err != nil || pid <= 0 {
-		return 0, false, nil
-	}
-	return pid, true, nil
-}
-
-func processAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	return err == nil || err == syscall.EPERM
 }
 
 func (l *exportLock) Close() {

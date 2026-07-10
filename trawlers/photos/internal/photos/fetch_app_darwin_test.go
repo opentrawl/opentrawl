@@ -6,9 +6,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire"
 	"google.golang.org/protobuf/proto"
@@ -65,11 +68,40 @@ func TestExportOriginalResourceThroughAppChecksWireInputAndOutput(t *testing.T) 
 	}
 }
 
+func TestPhotoKitFetchLaunchUsesVerifiedAppPath(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldRun := runPhotoKitFetchOpen
+	defer func() {
+		resolvePhotoKitFetchApp = oldResolve
+		runPhotoKitFetchOpen = oldRun
+	}()
+
+	const appPath = "/synthetic/Applications/Photoscrawl Fetch.app"
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		return appPath, nil
+	}
+	var gotApp, gotRequest, gotResponse string
+	runPhotoKitFetchOpen = func(_ context.Context, app, request, response string) error {
+		gotApp, gotRequest, gotResponse = app, request, response
+		return nil
+	}
+	if err := launchPhotoKitFetchApp(context.Background(), "request.pb", "response.pb"); err != nil {
+		t.Fatal(err)
+	}
+	if gotApp != appPath || gotRequest != "request.pb" || gotResponse != "response.pb" {
+		t.Fatalf("launch target = %q %q %q", gotApp, gotRequest, gotResponse)
+	}
+	wantArgs := []string{"-W", "-n", "-g", appPath, "--args", "run", "--request", "request.pb", "--response", "response.pb"}
+	if got := photoKitFetchOpenArgs(appPath, "request.pb", "response.pb"); !reflect.DeepEqual(got, wantArgs) {
+		t.Fatalf("open args = %#v, want %#v", got, wantArgs)
+	}
+}
+
 func TestExportOriginalResourceThroughAppReturnsTypedAccessFailure(t *testing.T) {
 	oldLaunch := launchPhotoKitFetchApp
 	launchPhotoKitFetchApp = func(_ context.Context, _, responsePath string) error {
 		data, err := proto.Marshal(&fetchwire.OriginalFetchResponse{
-			ErrorCode:          "photos_access",
+			FailureKind:        "photos_access",
 			ErrorMessage:       "Photos access is denied",
 			PhotosAccessStatus: "denied",
 		})
@@ -84,6 +116,19 @@ func TestExportOriginalResourceThroughAppReturnsTypedAccessFailure(t *testing.T)
 	var accessErr *PhotoLibraryAccessError
 	if !errors.As(err, &accessErr) || accessErr.Status != "denied" {
 		t.Fatalf("error = %T %v", err, err)
+	}
+}
+
+func TestPhotoKitAppFailurePreservesTypedExportError(t *testing.T) {
+	err := photoKitAppFailure(&fetchwire.OriginalFetchResponse{
+		FailureKind:  "photokit_export",
+		ErrorMessage: "PhotoKit could not export the selected camera original",
+		ErrorDomain:  "PHPhotosErrorDomain",
+		ErrorCode:    3303,
+	})
+	var exportErr *PhotoKitExportError
+	if !errors.As(err, &exportErr) || exportErr.Domain != "PHPhotosErrorDomain" || exportErr.Code != 3303 {
+		t.Fatalf("error = %T %#v", err, err)
 	}
 }
 
@@ -116,5 +161,60 @@ func TestExportOriginalResourceThroughAppDeletesMismatchedOutput(t *testing.T) {
 	}
 	if _, statErr := os.Stat(destination); !os.IsNotExist(statErr) {
 		t.Fatalf("mismatched output remains: %v", statErr)
+	}
+}
+
+func TestExportOriginalResourceThroughAppWaitsForDetachedAppAfterCancellation(t *testing.T) {
+	oldLaunch := launchPhotoKitFetchApp
+	started := make(chan struct{})
+	finish := make(chan struct{})
+	launchPhotoKitFetchApp = func(launchCtx context.Context, requestPath, _ string) error {
+		requestData, err := os.ReadFile(requestPath)
+		if err != nil {
+			return err
+		}
+		var request fetchwire.OriginalFetchRequest
+		if err := proto.Unmarshal(requestData, &request); err != nil {
+			return err
+		}
+		close(started)
+		select {
+		case <-launchCtx.Done():
+			return fmt.Errorf("signed app lifecycle ended before its request: %w", launchCtx.Err())
+		case <-finish:
+		}
+		return os.WriteFile(request.DestinationPath, []byte("late detached output"), 0o600)
+	}
+	defer func() { launchPhotoKitFetchApp = oldLaunch }()
+
+	root := t.TempDir()
+	destination := filepath.Join(root, "original.heic")
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- ExportOriginalResourceThroughApp(ctx, OriginalExportQuery{LocalIdentifier: "synthetic-asset"}, destination, false)
+	}()
+	<-started
+	cancel()
+	select {
+	case err := <-result:
+		t.Fatalf("export returned before the detached app finished: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(finish)
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("export error = %v, want context canceled", err)
+	}
+	for _, path := range []string{destination, destination + ".exporting"} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("cancelled export left output %q: %v", filepath.Base(path), err)
+		}
+	}
+	matches, err := filepath.Glob(filepath.Join(root, ".photokit-request-*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(matches) != 0 {
+		t.Fatalf("cancelled export left %d wire directories", len(matches))
 	}
 }

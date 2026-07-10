@@ -20,10 +20,10 @@ type classifyWrite struct {
 	contentErr         error
 	imagePath          string
 	pathClass          string
-	downloaded         bool
-	downloadErr        error
-	downloadDuration   time.Duration
-	downloadBytes      int64
+	exported           bool
+	resolutionErr      error
+	resolutionDuration time.Duration
+	exportBytes        int64
 	modelAttempts      int
 	modelDuration      time.Duration
 	writeDuration      time.Duration
@@ -48,16 +48,15 @@ const (
 // contentItem is one asset headed for the model, plus everything prepare
 // learns about it on the way that commit needs afterwards.
 type contentItem struct {
-	input         classifyInput
-	imagePath     string
-	pathClass     string
-	needsDownload bool
+	input     classifyInput
+	imagePath string
+	pathClass string
 
-	meta             imageMeta
-	downloaded       bool
-	downloadErr      error
-	downloadDuration time.Duration
-	downloadBytes    int64
+	meta               imageMeta
+	exported           bool
+	resolutionErr      error
+	resolutionDuration time.Duration
+	exportBytes        int64
 }
 
 // classifyContentInputs drives model classification through trawlkit's
@@ -67,7 +66,7 @@ type contentItem struct {
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
-	cache, err := newOriginalsCache(paths.OriginalsCacheDir())
+	resolver, err := photos.NewOriginalResolver(paths.OriginalsCacheDir(), exportOriginalResource)
 	if err != nil {
 		return err
 	}
@@ -75,12 +74,8 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	// Pre-pass: items that never reach the model resolve immediately.
 	items := make([]*contentItem, 0, len(inputs))
 	for _, input := range inputs {
-		if imagePath, ok := input.contentImagePath(); ok {
-			items = append(items, &contentItem{input: input, imagePath: imagePath, pathClass: input.localPathClass(imagePath)})
-			continue
-		}
 		if input.MediaType == "image" {
-			items = append(items, &contentItem{input: input, needsDownload: true})
+			items = append(items, &contentItem{input: input})
 			continue
 		}
 		write := classifyWrite{input: input, outcome: missingContentOutcome(input)}
@@ -94,26 +89,27 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 
 	prepare := func(ctx context.Context, index int) (model.Request, error) {
 		item := items[index]
-		if item.needsDownload {
-			exported := cache.export(ctx, item.input)
-			item.downloadDuration = exported.duration
-			item.downloadBytes = exported.bytes
-			if exported.err != nil {
-				item.downloadErr = exported.err
-				return model.Request{}, exported.err
-			}
-			item.downloaded = exported.downloaded
-			item.imagePath = exported.path
-			item.pathClass = exported.pathClass
-			// The request owns its image bytes after buildRequest returns.
-			// Release the cache lease then so later exports may evict this
-			// file under the fixed byte budget.
-			defer func() {
-				if exported.lease != nil {
-					exported.lease.Close()
-				}
-			}()
+		startedAt := time.Now()
+		resolved, err := resolver.Resolve(ctx, item.input.originalRequest())
+		item.resolutionDuration = time.Since(startedAt)
+		if err != nil {
+			item.resolutionErr = err
+			return model.Request{}, err
 		}
+		item.exported = resolved.Exported
+		if resolved.Exported {
+			item.exportBytes = resolved.Size
+		}
+		item.imagePath = resolved.Path
+		item.pathClass = resolved.Source
+		logger.logOriginalResolved(item.input, resolved)
+		// The request owns its image bytes after buildRequest returns.
+		// Hold the cache lease until then so another process cannot evict it.
+		defer func() {
+			if resolved.Lease != nil {
+				resolved.Lease.Close()
+			}
+		}()
 		request, meta, err := classifier.buildRequest(item.input, item.imagePath)
 		if err != nil {
 			return model.Request{}, err
@@ -129,10 +125,10 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			hasContent:         true,
 			imagePath:          item.imagePath,
 			pathClass:          item.pathClass,
-			downloaded:         item.downloaded,
-			downloadErr:        item.downloadErr,
-			downloadDuration:   item.downloadDuration,
-			downloadBytes:      item.downloadBytes,
+			exported:           item.exported,
+			resolutionErr:      item.resolutionErr,
+			resolutionDuration: item.resolutionDuration,
+			exportBytes:        item.exportBytes,
 			modelAttempts:      res.Attempts,
 			modelDuration:      res.Duration,
 			rateLimitEvents:    res.RateLimitEvents,
@@ -154,9 +150,9 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			write.outcome = contentOutcomeRateLimited
 		case model.OutcomeFailed:
 			write.contentErr = res.Err
-			if item.downloadErr != nil {
+			if item.resolutionErr != nil {
 				write.hasContent = false
-				write.outcome = downloadFailureOutcome(item.downloadErr)
+				write.outcome = downloadFailureOutcome(item.resolutionErr)
 			} else {
 				write.outcome = modelFailureOutcome(res.Err)
 			}
@@ -240,14 +236,14 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 		result.ContentObservationsWritten += contentWritten
 		result.PlaceObservationsWritten += placeWritten
 	}
-	if write.downloadErr != nil {
-		result.OriginalDownloadFailures++
+	if write.resolutionErr != nil {
+		result.OriginalResolutionFailures++
 	}
-	if write.downloaded {
-		result.OriginalsDownloaded++
-		result.BytesDownloaded += write.downloadBytes
+	if write.exported {
+		result.PhotoKitExports++
+		result.PhotoKitExportBytes += write.exportBytes
 	}
-	result.OriginalDownloadMillis += write.downloadDuration.Milliseconds()
+	result.OriginalResolutionMillis += write.resolutionDuration.Milliseconds()
 	result.ModelCallAttempts += write.modelAttempts
 	result.ModelCallMillis += write.modelDuration.Milliseconds()
 	result.ModelRateLimitEvents += write.rateLimitEvents
@@ -290,7 +286,7 @@ func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
 	case contentOutcomeRateLimited:
 		return "metadata_classified", "requeued: model rate limited (429)"
 	case contentOutcomeFailedDownload:
-		return "failed_download", "failed_download: " + classifyFailureReason(write.downloadErr)
+		return "failed_download", "failed_download: " + classifyFailureReason(write.resolutionErr)
 	case contentOutcomeNotInPhotoKit:
 		return "content_not_in_photokit", "PhotoKit asset not found"
 	case contentOutcomeNoContentAvailable:
