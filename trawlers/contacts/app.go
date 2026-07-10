@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -111,9 +112,11 @@ func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Statu
 }
 
 func (a *App) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
+	sourceState, _ := apple.CheckSource(ctx)
 	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		checkArchivePresent(req),
-		checkArchiveSchema(ctx, req),
+		appleSourceCheck(sourceState, req.Store == nil),
+		checkArchivePresent(req, sourceState),
+		checkArchiveSchema(ctx, req, sourceState),
 	}}, nil
 }
 
@@ -251,25 +254,56 @@ func resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (str
 	return ref, nil
 }
 
-func checkArchivePresent(req *trawlkit.Request) trawlkit.Check {
+func checkArchivePresent(req *trawlkit.Request, sourceState apple.SourceState) trawlkit.Check {
 	if req.Store == nil {
 		return trawlkit.Check{
 			ID:      "archive",
 			State:   "fail",
 			Message: "contacts archive has not been created",
-			Remedy:  "run trawl contacts import-legacy or import a source",
+			Remedy:  archiveImportRemedy(sourceState),
 		}
 	}
 	return trawlkit.Check{ID: "archive", State: "ok"}
 }
 
-func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
+func archiveImportRemedy(sourceState apple.SourceState) string {
+	if sourceState == apple.SourceReady {
+		return "trawl contacts import apple"
+	}
+	return ""
+}
+
+func appleSourceCheck(state apple.SourceState, archiveMissing bool) trawlkit.Check {
+	check := trawlkit.Check{ID: "apple_source"}
+	switch state {
+	case apple.SourceReady:
+		check.State = "ok"
+		check.Message = "Apple Contacts source is readable"
+		if archiveMissing {
+			check.Message = "Apple Contacts source is ready for first import"
+			check.Remedy = "trawl contacts import apple"
+		}
+	case apple.SourceNeedsFullDiskAccess:
+		check.State = "fail"
+		check.Message = "Apple Contacts needs Full Disk Access"
+		check.Remedy = "grant Full Disk Access to Trawl or the terminal running it in System Settings > Privacy & Security > Full Disk Access"
+	case apple.SourceInvalid:
+		check.State = "invalid"
+		check.Message = "Apple Contacts source is invalid"
+	default:
+		check.State = "missing"
+		check.Message = "Apple Contacts source is unavailable"
+	}
+	return check
+}
+
+func checkArchiveSchema(ctx context.Context, req *trawlkit.Request, sourceState apple.SourceState) trawlkit.Check {
 	if req.Store == nil {
 		return trawlkit.Check{
 			ID:      "schema",
 			State:   "fail",
 			Message: "contacts archive schema is not current",
-			Remedy:  "run trawl contacts import-legacy or import a source",
+			Remedy:  archiveImportRemedy(sourceState),
 		}
 	}
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
@@ -278,7 +312,7 @@ func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Che
 			ID:      "schema",
 			State:   "fail",
 			Message: "contacts archive schema is not current",
-			Remedy:  "run trawl contacts import-legacy or import a source",
+			Remedy:  archiveImportRemedy(sourceState),
 		}
 	}
 	if _, err := st.Status(ctx); err != nil {
@@ -286,7 +320,7 @@ func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Che
 			ID:      "schema",
 			State:   "fail",
 			Message: "contacts archive could not be inspected",
-			Remedy:  "run trawl contacts import-legacy or import a source",
+			Remedy:  archiveImportRemedy(sourceState),
 		}
 	}
 	return trawlkit.Check{ID: "schema", State: "ok"}

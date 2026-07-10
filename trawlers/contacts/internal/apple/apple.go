@@ -3,12 +3,63 @@ package apple
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
+
+type SourceState string
+
+const (
+	SourceReady               SourceState = "ready"
+	SourceNeedsFullDiskAccess SourceState = "needs_full_disk_access"
+	SourceUnavailable         SourceState = "unavailable"
+	SourceInvalid             SourceState = "invalid"
+)
+
+type invalidSourceError struct {
+	Path string
+	Err  error
+}
+
+func (e invalidSourceError) Error() string {
+	return "invalid Apple AddressBook source " + e.Path + ": " + e.Err.Error()
+}
+
+func (e invalidSourceError) Unwrap() error {
+	return e.Err
+}
+
+func isSourcePermissionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return true
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "operation not permitted") ||
+		strings.Contains(message, "not authorized") ||
+		strings.Contains(message, "authorization denied")
+}
+
+func sourceStateForError(err error) SourceState {
+	if err == nil {
+		return SourceReady
+	}
+	var invalidErr invalidSourceError
+	if errors.As(err, &invalidErr) {
+		return SourceInvalid
+	}
+	if isSourcePermissionError(err) {
+		return SourceNeedsFullDiskAccess
+	}
+	return SourceUnavailable
+}
 
 type Contact struct {
 	Identifier string          `json:"identifier"`

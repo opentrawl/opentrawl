@@ -5,12 +5,14 @@ package apple
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 
+	sqlite3 "github.com/mattn/go-sqlite3"
 	"github.com/opentrawl/opentrawl/trawlkit/cache"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -20,6 +22,22 @@ const addressBookDBName = "AddressBook-v22.abcddb"
 type addressBookAccessError struct {
 	Path string
 	Err  error
+}
+
+type invalidSchemaError struct {
+	Err error
+}
+
+func (e invalidSchemaError) Error() string {
+	return e.Err.Error()
+}
+
+func (e invalidSchemaError) Unwrap() error {
+	return e.Err
+}
+
+func invalidSchema(err error) error {
+	return invalidSchemaError{Err: err}
 }
 
 func (e addressBookAccessError) Error() string {
@@ -58,6 +76,36 @@ func ReadSystem(ctx context.Context) ([]Contact, error) {
 		return nil, err
 	}
 	return readAddressBookDir(ctx, dir)
+}
+
+func CheckSource(ctx context.Context) (SourceState, error) {
+	dir, err := addressBookDir()
+	if err != nil {
+		return sourceStateForError(err), err
+	}
+	paths, err := addressBookDatabasePaths(dir)
+	if err != nil {
+		return sourceStateForError(err), err
+	}
+	for _, path := range paths {
+		if err := checkAddressBookDatabase(ctx, path); err != nil {
+			return sourceStateForError(err), err
+		}
+	}
+	return SourceReady, nil
+}
+
+func checkSourceAt(ctx context.Context, dir string) (SourceState, error) {
+	paths, err := addressBookDatabasePaths(dir)
+	if err != nil {
+		return sourceStateForError(err), err
+	}
+	for _, path := range paths {
+		if err := checkAddressBookDatabase(ctx, path); err != nil {
+			return sourceStateForError(err), err
+		}
+	}
+	return SourceReady, nil
 }
 
 func addressBookDir() (string, error) {
@@ -191,6 +239,51 @@ func readAddressBookDatabase(ctx context.Context, path string) ([]Contact, error
 	return contacts, nil
 }
 
+func checkAddressBookDatabase(ctx context.Context, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		if isSourcePermissionError(err) {
+			return addressBookAccessError{Path: path, Err: err}
+		}
+		return err
+	}
+	_ = file.Close()
+
+	st, err := ckstore.OpenForeignReadOnly(ctx, path)
+	if err != nil {
+		if isSourcePermissionError(err) {
+			return addressBookAccessError{Path: path, Err: err}
+		}
+		if isMalformedSQLiteError(err) {
+			return invalidSourceError{Path: path, Err: err}
+		}
+		return err
+	}
+	defer func() { _ = st.Close() }()
+	_, err = inspectAddressBookSchema(ctx, st.DB(), path)
+	if err != nil {
+		var schemaErr invalidSchemaError
+		if errors.As(err, &schemaErr) {
+			return invalidSourceError{Path: path, Err: err}
+		}
+		return err
+	}
+	return err
+}
+
+func isMalformedSQLiteError(err error) bool {
+	var sqliteErr sqlite3.Error
+	if !errors.As(err, &sqliteErr) {
+		return false
+	}
+	switch sqliteErr.Code {
+	case sqlite3.ErrNotADB, sqlite3.ErrCorrupt, sqlite3.ErrFormat:
+		return true
+	default:
+		return false
+	}
+}
+
 func inspectAddressBookSchema(ctx context.Context, db *sql.DB, path string) (addressBookSchema, error) {
 	schema := addressBookSchema{}
 	var err error
@@ -225,7 +318,7 @@ func inspectAddressBookSchema(ctx context.Context, db *sql.DB, path string) (add
 		}
 	}
 	if !schema.recordColumns["ZUNIQUEID"] && !schema.recordColumns["ZEXTERNALUUID"] && !schema.recordColumns["ZEXTERNALIDENTIFIER"] {
-		return schema, fmt.Errorf("unrecognised AddressBook database layout in %s: missing identifier column in ZABCDRECORD", path)
+		return schema, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing identifier column in ZABCDRECORD", path))
 	}
 	for _, table := range []struct {
 		name    string
@@ -239,18 +332,21 @@ func inspectAddressBookSchema(ctx context.Context, db *sql.DB, path string) (add
 			return schema, unrecognisedAddressBookLayout(path, table.name, table.value)
 		}
 		if _, err := ownerExpression(table.columns); err != nil {
-			return schema, fmt.Errorf("unrecognised AddressBook database layout in %s: missing owner column in %s", path, table.name)
+			return schema, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing owner column in %s", path, table.name))
 		}
 	}
 	if _, err := ownerExpression(schema.postalColumns); err != nil {
-		return schema, fmt.Errorf("unrecognised AddressBook database layout in %s: missing owner column in ZABCDPOSTALADDRESS", path)
+		return schema, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing owner column in ZABCDPOSTALADDRESS", path))
 	}
 	if !hasAnyColumn(schema.postalColumns, "ZSTREET", "ZCITY", "ZZIPCODE", "ZCOUNTRYNAME", "ZCOUNTRYCODE") {
-		return schema, fmt.Errorf("unrecognised AddressBook database layout in %s: missing postal address columns in ZABCDPOSTALADDRESS", path)
+		return schema, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing postal address columns in ZABCDPOSTALADDRESS", path))
 	}
 
 	if err := db.QueryRowContext(ctx, `select Z_ENT from Z_PRIMARYKEY where Z_NAME = 'ABCDContact'`).Scan(&schema.contactEntity); err != nil {
-		return schema, fmt.Errorf("unrecognised AddressBook database layout in %s: missing ABCDContact entity in Z_PRIMARYKEY", path)
+		if errors.Is(err, sql.ErrNoRows) {
+			return schema, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing ABCDContact entity in Z_PRIMARYKEY", path))
+		}
+		return schema, err
 	}
 	return schema, nil
 }
@@ -276,13 +372,13 @@ func tableColumns(ctx context.Context, db *sql.DB, table string) (map[string]boo
 		return nil, err
 	}
 	if len(columns) == 0 {
-		return nil, fmt.Errorf("unrecognised AddressBook database layout: missing table %s", table)
+		return nil, invalidSchema(fmt.Errorf("unrecognised AddressBook database layout: missing table %s", table))
 	}
 	return columns, nil
 }
 
 func unrecognisedAddressBookLayout(path, table, column string) error {
-	return fmt.Errorf("unrecognised AddressBook database layout in %s: missing column %s.%s", path, table, column)
+	return invalidSchema(fmt.Errorf("unrecognised AddressBook database layout in %s: missing column %s.%s", path, table, column))
 }
 
 func readAddressBookRecords(ctx context.Context, db *sql.DB, schema addressBookSchema) (map[int64]*addressBookRecord, []int64, error) {
