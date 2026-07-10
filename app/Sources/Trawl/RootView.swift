@@ -16,17 +16,23 @@ struct RootView: View {
     ZStack {
       CanvasBackground()
       home
+        .opacity(isSearching ? TrawlDesign.backgroundContentOpacity : 1)
+        .blur(radius: isSearching ? TrawlDesign.backgroundContentBlur : 0)
+        .disabled(isSearching)
         .allowsHitTesting(!isSearching)
         .accessibilityHidden(isSearching)
 
       if isSearching {
-        Color.black.opacity(0.12)
+        Color.white.opacity(0.52)
           .ignoresSafeArea()
+          .contentShape(.rect)
           .onTapGesture { isSearching = false }
+          .accessibilityHidden(true)
         SearchOverlay(client: client, initialScope: searchScope) {
           isSearching = false
         }
         .padding(40)
+        .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
       }
@@ -45,7 +51,7 @@ struct RootView: View {
             Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
           }
         }
-        .disabled(model.isSyncing)
+        .disabled(model.isSyncing || isSearching)
         .help("Sync now")
       }
     }

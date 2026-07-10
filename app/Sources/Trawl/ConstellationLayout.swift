@@ -2,6 +2,28 @@ import CoreGraphics
 import Foundation
 import TrawlClient
 
+enum ConstellationGeometry {
+  static let sourceContentWidth: CGFloat = 154
+  static let sourceLabelAllowance: CGFloat = 58
+  static let sourceHostSize = CGSize(width: 194, height: 164)
+  static let horizontalMotion = CGFloat(12)...CGFloat(20)
+  static let verticalMotion = CGFloat(8)...CGFloat(14)
+
+  static var horizontalClearance: CGFloat {
+    sourceHostSize.width / 2 + horizontalMotion.upperBound
+  }
+
+  static var topClearance: CGFloat {
+    sourceHostSize.height / 2 - TrawlDesign.sourceGraphAnchorOffset
+      + verticalMotion.upperBound
+  }
+
+  static var bottomClearance: CGFloat {
+    sourceHostSize.height / 2 + TrawlDesign.sourceGraphAnchorOffset
+      + verticalMotion.upperBound
+  }
+}
+
 struct MovingSource: Identifiable {
   let source: SourceStatus
   let anchor: CGPoint
@@ -17,22 +39,55 @@ struct ConstellationSnapshot {
   let segments: [NetworkSegment]
 }
 
-struct NetworkSegment {
-  enum Kind {
+struct NetworkEndpoint: Equatable {
+  let anchor: CGPoint
+  let trimRadius: CGFloat
+  let sourceID: String?
+
+  func point(offset: CGVector = .zero) -> CGPoint {
+    CGPoint(x: anchor.x + offset.dx, y: anchor.y + offset.dy)
+  }
+}
+
+struct NetworkSegment: Equatable {
+  enum Kind: Equatable {
     case context
     case source
     case centre
   }
 
-  let start: CGPoint
-  let end: CGPoint
+  let startEndpoint: NetworkEndpoint
+  let endEndpoint: NetworkEndpoint
   let kind: Kind
 
-  func point(at progress: Double) -> CGPoint {
-    let progress = CGFloat(progress)
-    return CGPoint(
-      x: start.x + (end.x - start.x) * progress,
-      y: start.y + (end.y - start.y) * progress
+  var movingSourceID: String? {
+    switch (startEndpoint.sourceID, endEndpoint.sourceID) {
+    case (.some(let sourceID), nil), (nil, .some(let sourceID)):
+      sourceID
+    default:
+      nil
+    }
+  }
+
+  func points(sourceOffset: CGVector = .zero) -> (start: CGPoint, end: CGPoint) {
+    let startOffset = startEndpoint.sourceID == movingSourceID ? sourceOffset : .zero
+    let endOffset = endEndpoint.sourceID == movingSourceID ? sourceOffset : .zero
+    let startAnchor = startEndpoint.point(offset: startOffset)
+    let endAnchor = endEndpoint.point(offset: endOffset)
+    let length = max(hypot(endAnchor.x - startAnchor.x, endAnchor.y - startAnchor.y), 1)
+    let unit = CGVector(
+      dx: (endAnchor.x - startAnchor.x) / length,
+      dy: (endAnchor.y - startAnchor.y) / length
+    )
+    return (
+      start: CGPoint(
+        x: startAnchor.x + unit.dx * startEndpoint.trimRadius,
+        y: startAnchor.y + unit.dy * startEndpoint.trimRadius
+      ),
+      end: CGPoint(
+        x: endAnchor.x - unit.dx * endEndpoint.trimRadius,
+        y: endAnchor.y - unit.dy * endEndpoint.trimRadius
+      )
     )
   }
 }
@@ -76,16 +131,15 @@ struct ConstellationLayout {
 
   init(size: CGSize, sources: [SourceStatus], meshSeed: UInt64) {
     self.sources = sources
-    let verticalOffset = -min(22, size.height * 0.03)
+    let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
-    sourceBases = Self.makeSourceBases(sources: sources, size: size).map {
-      CGPoint(x: $0.x, y: $0.y + verticalOffset)
-    }
+    sourceBases = Self.makeSourceBases(sources: sources, size: size, centre: centreBase)
     contextBases = Self.makeContextBases(
       count: max(10, min(18, sources.count + 3)),
       size: size,
+      centre: centreBase,
       seed: meshSeed
-    ).map { CGPoint(x: $0.x, y: $0.y + verticalOffset) }
+    )
     graphEdges = Self.makeGraphEdges(
       points: sourceBases + [centreBase] + contextBases,
       sourceCount: sources.count
@@ -99,10 +153,23 @@ struct ConstellationLayout {
   func snapshot() -> ConstellationSnapshot {
     let diameters = sources.map(diameter)
     let points = sourceBases + [centreBase] + contextBases
-    let radii =
-      Array(repeating: CGFloat(0), count: diameters.count)
-      + [TrawlDesign.centreSize / 2 + 2]
-      + Array(repeating: CGFloat(2), count: contextBases.count)
+    let endpoints = zip(points.indices, points).map { index, point in
+      if index < sources.count {
+        return NetworkEndpoint(
+          anchor: point,
+          trimRadius: diameters[index] / 2,
+          sourceID: sources[index].id
+        )
+      }
+      if index == sources.count {
+        return NetworkEndpoint(
+          anchor: point,
+          trimRadius: TrawlDesign.centreSize / 2 + 2,
+          sourceID: nil
+        )
+      }
+      return NetworkEndpoint(anchor: point, trimRadius: 2, sourceID: nil)
+    }
 
     let centreIndex = sources.count
     let segments = graphEdges.map { edge in
@@ -114,11 +181,9 @@ struct ConstellationLayout {
       } else {
         kind = .context
       }
-      return Self.trimmedSegment(
-        from: points[edge.start],
-        startRadius: radii[edge.start],
-        to: points[edge.end],
-        endRadius: radii[edge.end],
+      return NetworkSegment(
+        startEndpoint: endpoints[edge.start],
+        endEndpoint: endpoints[edge.end],
         kind: kind
       )
     }
@@ -149,14 +214,19 @@ struct ConstellationLayout {
       + CGFloat(normalised) * (TrawlDesign.sourceMaximum - TrawlDesign.sourceMinimum)
   }
 
-  private static func makeSourceBases(sources: [SourceStatus], size: CGSize) -> [CGPoint] {
+  private static func makeSourceBases(
+    sources: [SourceStatus],
+    size: CGSize,
+    centre: CGPoint
+  ) -> [CGPoint] {
     guard !sources.isEmpty else { return [] }
     if sources.count <= 12 {
       return ringPoints(
         sources: sources,
         size: size,
-        radiusX: 0.36,
-        radiusY: 0.34,
+        centre: centre,
+        radiusX: 0.38,
+        radiusY: 0.39,
         angleOffset: -.pi / 2
       )
     }
@@ -165,16 +235,18 @@ struct ConstellationLayout {
     let outer = ringPoints(
       sources: Array(sources.prefix(outerCount)),
       size: size,
+      centre: centre,
       radiusX: 0.39,
-      radiusY: 0.37,
+      radiusY: 0.40,
       angleOffset: -.pi / 2
     )
     let innerSources = Array(sources.dropFirst(outerCount))
     let inner = ringPoints(
       sources: innerSources,
       size: size,
+      centre: centre,
       radiusX: 0.27,
-      radiusY: 0.25,
+      radiusY: 0.28,
       angleOffset: -.pi / 2 + .pi / Double(max(innerSources.count, 1))
     )
     return outer + inner
@@ -183,20 +255,38 @@ struct ConstellationLayout {
   private static func ringPoints(
     sources: [SourceStatus],
     size: CGSize,
+    centre: CGPoint,
     radiusX: CGFloat,
     radiusY: CGFloat,
     angleOffset: Double
   ) -> [CGPoint] {
-    sources.enumerated().map { index, source in
+    let horizontalCapacity = max(
+      0,
+      min(
+        centre.x - ConstellationGeometry.horizontalClearance,
+        size.width - ConstellationGeometry.horizontalClearance - centre.x
+      )
+    )
+    let verticalCapacity = max(
+      0,
+      min(
+        centre.y - ConstellationGeometry.topClearance,
+        size.height - ConstellationGeometry.bottomClearance - centre.y
+      )
+    )
+    let horizontalRadius = min(size.width * radiusX, horizontalCapacity)
+    let verticalRadius = min(size.height * radiusY, verticalCapacity)
+
+    return sources.enumerated().map { index, source in
       let angleJitter = (stableUnit(source.id, salt: 1) - 0.5) * 0.19
-      let radiusJitter = CGFloat(stableUnit(source.id, salt: 2) - 0.5) * 0.06
+      let radiusScale = CGFloat(0.94 + stableUnit(source.id, salt: 2) * 0.06)
       let angle =
         angleOffset
         + 2 * .pi * Double(index) / Double(sources.count)
         + angleJitter
       return CGPoint(
-        x: size.width / 2 + cos(angle) * size.width * (radiusX + radiusJitter),
-        y: size.height / 2 + sin(angle) * size.height * (radiusY + radiusJitter * 0.8)
+        x: centre.x + cos(angle) * horizontalRadius * radiusScale,
+        y: centre.y + sin(angle) * verticalRadius * radiusScale
       )
     }
   }
@@ -204,6 +294,7 @@ struct ConstellationLayout {
   private static func makeContextBases(
     count: Int,
     size: CGSize,
+    centre: CGPoint,
     seed: UInt64
   ) -> [CGPoint] {
     var random = SplitMix64(seed: seed)
@@ -216,8 +307,8 @@ struct ConstellationLayout {
       let angularJitter = Double(random.unit() - 0.5) * 0.28
       let angle = rotation + Double(index) * goldenAngle + angularJitter
       return CGPoint(
-        x: size.width / 2 + CGFloat(cos(angle)) * (radius + radialJitter) * size.width,
-        y: size.height / 2
+        x: centre.x + CGFloat(cos(angle)) * (radius + radialJitter) * size.width,
+        y: centre.y
           + CGFloat(sin(angle)) * (radius + radialJitter) * size.height * 0.94
       )
     }
@@ -325,22 +416,6 @@ struct ConstellationLayout {
     )
     let radiusSquared = squaredDistance(centre, a)
     return squaredDistance(centre, point) <= radiusSquared + 0.01
-  }
-
-  private static func trimmedSegment(
-    from start: CGPoint,
-    startRadius: CGFloat,
-    to end: CGPoint,
-    endRadius: CGFloat,
-    kind: NetworkSegment.Kind
-  ) -> NetworkSegment {
-    let length = max(distance(start, end), 1)
-    let unit = CGVector(dx: (end.x - start.x) / length, dy: (end.y - start.y) / length)
-    return NetworkSegment(
-      start: CGPoint(x: start.x + unit.dx * startRadius, y: start.y + unit.dy * startRadius),
-      end: CGPoint(x: end.x - unit.dx * endRadius, y: end.y - unit.dy * endRadius),
-      kind: kind
-    )
   }
 
   private static func stableUnit(_ value: String, salt: UInt64) -> Double {

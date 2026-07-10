@@ -21,11 +21,8 @@ struct ConstellationView: View {
       let snapshot = layout.snapshot()
 
       ZStack(alignment: .topLeading) {
-        DynamicNetwork(
+        CoreAnimationNetwork(
           contextNodes: snapshot.contextNodes,
-          segments: snapshot.segments
-        )
-        CoreAnimationNetworkSignals(
           segments: snapshot.segments,
           reduceMotion: reduceMotion
         )
@@ -40,47 +37,6 @@ struct ConstellationView: View {
       }
       .frame(width: size.width, height: size.height)
     }
-  }
-}
-
-private struct DynamicNetwork: View {
-  let contextNodes: [CGPoint]
-  let segments: [NetworkSegment]
-
-  var body: some View {
-    Canvas { context, _ in
-      for segment in segments {
-        var path = Path()
-        path.move(to: segment.start)
-        path.addLine(to: segment.end)
-        context.stroke(
-          path,
-          with: .color(segment.colour),
-          style: StrokeStyle(
-            lineWidth: segment.kind == .context ? 0.85 : 1.15,
-            lineCap: .round
-          )
-        )
-      }
-
-      for (index, point) in contextNodes.enumerated() {
-        let diameter: CGFloat = index.isMultiple(of: 5) ? 5 : 3.5
-        context.fill(
-          Path(
-            ellipseIn: CGRect(
-              x: point.x - diameter / 2,
-              y: point.y - diameter / 2,
-              width: diameter,
-              height: diameter
-            )
-          ),
-          with: .color(Color.primary.opacity(index.isMultiple(of: 5) ? 0.18 : 0.11))
-        )
-      }
-
-    }
-    .allowsHitTesting(false)
-    .accessibilityHidden(true)
   }
 }
 
@@ -102,11 +58,17 @@ private struct OrbitingSourceNode: View {
         )
         .environment(iconStore)
       ),
-      contentSize: CGSize(width: 154, height: placement.diameter + 58),
+      contentSize: CGSize(
+        width: ConstellationGeometry.sourceContentWidth,
+        height: placement.diameter + ConstellationGeometry.sourceLabelAllowance
+      ),
       motion: motion,
       reduceMotion: reduceMotion
     )
-    .frame(width: 194, height: 164)
+    .frame(
+      width: ConstellationGeometry.sourceHostSize.width,
+      height: ConstellationGeometry.sourceHostSize.height
+    )
     .position(
       x: placement.anchor.x,
       y: placement.anchor.y + TrawlDesign.sourceGraphAnchorOffset
@@ -125,19 +87,21 @@ struct OrbitMotion: Sendable, Equatable {
       (partial ^ UInt64(byte)) &* 0x100_0000_01b3
     }
     phaseOffset = Double(hash & 0xffff) / Double(UInt16.max)
-    horizontal = 12 + CGFloat((hash >> 16) & 0xff) / 255 * 8
-    vertical = 8 + CGFloat((hash >> 24) & 0xff) / 255 * 6
+    horizontal = Self.value(in: ConstellationGeometry.horizontalMotion, byte: hash >> 16)
+    vertical = Self.value(in: ConstellationGeometry.verticalMotion, byte: hash >> 24)
     duration = 10 + Double((hash >> 32) & 0xff) / 255 * 4
   }
-}
 
-extension NetworkSegment {
-  fileprivate var colour: Color {
-    switch kind {
-    case .context: TrawlDesign.net
-    case .source: TrawlDesign.spoke
-    case .centre: TrawlDesign.brandRed.opacity(0.24)
-    }
+  func translation(at progress: Double) -> CGVector {
+    let angle = (progress + phaseOffset) * 2 * Double.pi
+    return CGVector(
+      dx: CGFloat(cos(angle)) * horizontal,
+      dy: CGFloat(sin(angle)) * vertical
+    )
+  }
+
+  private static func value(in range: ClosedRange<CGFloat>, byte: UInt64) -> CGFloat {
+    range.lowerBound + CGFloat(byte & 0xff) / 255 * (range.upperBound - range.lowerBound)
   }
 }
 
@@ -196,7 +160,7 @@ private struct SourceNode: View {
           lastSynced: source.lastSyncedDisplay
         )
       }
-      .frame(width: 154)
+      .frame(width: ConstellationGeometry.sourceContentWidth)
       .contentShape(.rect)
     }
     .buttonStyle(.plain)

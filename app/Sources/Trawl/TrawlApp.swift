@@ -37,7 +37,9 @@ struct TrawlApp: App {
       .preferredColorScheme(.light)
       .frame(
         minWidth: TrawlDesign.minimumWindow.width,
-        minHeight: TrawlDesign.minimumWindow.height
+        idealWidth: TrawlDesign.defaultWindow.width,
+        minHeight: TrawlDesign.minimumWindow.height,
+        idealHeight: TrawlDesign.defaultWindow.height
       )
     }
     .defaultSize(

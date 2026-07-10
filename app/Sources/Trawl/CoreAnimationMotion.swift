@@ -2,6 +2,19 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
+private enum CoreAnimationTimeline {
+  static let epoch = CACurrentMediaTime()
+  static let sampleCount = 720
+
+  static func beginTime(for layer: CALayer) -> CFTimeInterval {
+    layer.convertTime(epoch, from: nil)
+  }
+
+  static var frameRateRange: CAFrameRateRange {
+    CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+  }
+}
+
 struct CoreAnimationOrbitHost: NSViewRepresentable {
   let rootView: AnyView
   let contentSize: CGSize
@@ -136,14 +149,13 @@ final class OrbitLayerView: NSView {
     CATransaction.commit()
     guard !reduceMotion else { return }
 
-    let sampleCount = 720
-    let values = (0...sampleCount).map { sample in
-      let progress = Double(sample) / Double(sampleCount)
-      let angle = (progress + motion.phaseOffset) * 2 * Double.pi
+    let values = (0...CoreAnimationTimeline.sampleCount).map { sample in
+      let progress = Double(sample) / Double(CoreAnimationTimeline.sampleCount)
+      let translation = motion.translation(at: progress)
       return NSValue(
         caTransform3D: CATransform3DMakeTranslation(
-          CGFloat(cos(angle)) * motion.horizontal,
-          CGFloat(sin(angle)) * motion.vertical,
+          translation.dx,
+          translation.dy,
           0
         )
       )
@@ -152,41 +164,50 @@ final class OrbitLayerView: NSView {
     animation.values = values
     animation.calculationMode = .linear
     animation.timingFunction = CAMediaTimingFunction(name: .linear)
-    animation.preferredFrameRateRange = CAFrameRateRange(
-      minimum: 60,
-      maximum: 120,
-      preferred: 120
-    )
+    animation.preferredFrameRateRange = CoreAnimationTimeline.frameRateRange
     animation.duration = motion.duration
     animation.repeatCount = .infinity
     animation.isRemovedOnCompletion = false
     animation.fillMode = .both
-    animation.beginTime = target.convertTime(CACurrentMediaTime(), from: nil)
+    animation.beginTime = CoreAnimationTimeline.beginTime(for: target)
     target.add(animation, forKey: "opentrawl.orbit")
   }
 }
 
-struct CoreAnimationNetworkSignals: NSViewRepresentable {
+struct CoreAnimationNetwork: NSViewRepresentable {
+  let contextNodes: [CGPoint]
   let segments: [NetworkSegment]
   let reduceMotion: Bool
 
-  func makeNSView(context: Context) -> NetworkSignalLayerView {
-    let view = NetworkSignalLayerView()
-    view.update(segments: segments, reduceMotion: reduceMotion)
+  func makeNSView(context: Context) -> NetworkLayerView {
+    let view = NetworkLayerView()
+    view.update(
+      contextNodes: contextNodes,
+      segments: segments,
+      reduceMotion: reduceMotion
+    )
     return view
   }
 
-  func updateNSView(_ view: NetworkSignalLayerView, context: Context) {
-    view.update(segments: segments, reduceMotion: reduceMotion)
+  func updateNSView(_ view: NetworkLayerView, context: Context) {
+    view.update(
+      contextNodes: contextNodes,
+      segments: segments,
+      reduceMotion: reduceMotion
+    )
   }
 }
 
 @MainActor
-final class NetworkSignalLayerView: NSView {
+final class NetworkLayerView: NSView {
+  private var contextNodes: [CGPoint] = []
   private var segments: [NetworkSegment] = []
   private var reduceMotion = false
-  private var animationConfiguration: String?
-  private var signalLayers: [CALayer] = []
+  private var renderedContextNodes: [CGPoint] = []
+  private var renderedSegments: [NetworkSegment] = []
+  private var renderedReduceMotion: Bool?
+  private var renderedSize = CGSize.zero
+  private var renderedScale: CGFloat = 0
 
   override var isFlipped: Bool { true }
 
@@ -203,68 +224,129 @@ final class NetworkSignalLayerView: NSView {
     return nil
   }
 
-  func update(segments: [NetworkSegment], reduceMotion: Bool) {
+  func update(
+    contextNodes: [CGPoint],
+    segments: [NetworkSegment],
+    reduceMotion: Bool
+  ) {
+    self.contextNodes = contextNodes
     self.segments = segments
     self.reduceMotion = reduceMotion
-    animationConfiguration = nil
     needsLayout = true
   }
 
   override func layout() {
     super.layout()
-    configureSignals()
+    configureNetwork()
+  }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    renderedScale = 0
+    needsLayout = true
   }
 
   override func hitTest(_ point: NSPoint) -> NSView? {
     nil
   }
 
-  private func configureSignals() {
+  private func configureNetwork() {
     guard bounds.width > 0, bounds.height > 0, let rootLayer = layer else { return }
-    let geometry = segments.map {
-      "\(Int($0.start.x * 10)),\(Int($0.start.y * 10)),\(Int($0.end.x * 10)),\(Int($0.end.y * 10))"
-    }.joined(separator: ";")
-    let configuration = "\(bounds.width):\(bounds.height):\(reduceMotion):\(geometry)"
-    guard animationConfiguration != configuration else { return }
-    animationConfiguration = configuration
+    let scale = window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+    guard
+      renderedSize != bounds.size
+        || renderedScale != scale
+        || renderedReduceMotion != reduceMotion
+        || renderedContextNodes != contextNodes
+        || renderedSegments != segments
+    else { return }
 
-    signalLayers.forEach { $0.removeFromSuperlayer() }
-    signalLayers.removeAll()
-    let selected = segments.enumerated().filter { $0.offset % 13 == 5 }.prefix(4)
-    for (sequence, entry) in selected.enumerated() {
-      let signal = CALayer()
-      signal.bounds = CGRect(x: 0, y: 0, width: 4.4, height: 4.4)
-      signal.cornerRadius = 2.2
-      signal.backgroundColor =
-        NSColor(
-          red: 0.902,
-          green: 0.2,
-          blue: 0.137,
-          alpha: 0.48
-        ).cgColor
-      signal.position = entry.element.point(at: 0.44)
-      rootLayer.addSublayer(signal)
-      signalLayers.append(signal)
-      guard !reduceMotion else { continue }
+    renderedSize = bounds.size
+    renderedScale = scale
+    renderedReduceMotion = reduceMotion
+    renderedContextNodes = contextNodes
+    renderedSegments = segments
 
-      let path = CGMutablePath()
-      path.move(to: entry.element.start)
-      path.addLine(to: entry.element.end)
-      let animation = CAKeyframeAnimation(keyPath: "position")
-      animation.path = path
-      animation.calculationMode = .paced
-      animation.preferredFrameRateRange = CAFrameRateRange(
-        minimum: 60,
-        maximum: 120,
-        preferred: 120
+    rootLayer.sublayers?.forEach { $0.removeFromSuperlayer() }
+    for segment in segments {
+      rootLayer.addSublayer(makeLineLayer(for: segment, scale: scale))
+    }
+    for (index, point) in contextNodes.enumerated() {
+      rootLayer.addSublayer(makeNodeLayer(at: point, index: index, scale: scale))
+    }
+  }
+
+  private func makeLineLayer(for segment: NetworkSegment, scale: CGFloat) -> CAShapeLayer {
+    let line = CAShapeLayer()
+    line.contentsScale = scale
+    line.fillColor = nil
+    line.strokeColor = strokeColour(for: segment.kind)
+    line.lineWidth = segment.kind == .context ? 0.85 : 1.15
+    line.lineCap = .round
+    line.path = makePath(for: segment)
+
+    guard !reduceMotion, let sourceID = segment.movingSourceID else { return line }
+    let motion = OrbitMotion(sourceID: sourceID)
+    let values: [CGPath] = (0...CoreAnimationTimeline.sampleCount).map { sample in
+      let progress = Double(sample) / Double(CoreAnimationTimeline.sampleCount)
+      return makePath(
+        for: segment,
+        sourceOffset: motion.translation(at: progress)
       )
-      animation.duration = 4.8 + Double(sequence) * 0.75
-      animation.repeatCount = .infinity
-      animation.isRemovedOnCompletion = false
-      animation.fillMode = .both
-      animation.beginTime =
-        signal.convertTime(CACurrentMediaTime(), from: nil) - Double(sequence) * 1.1
-      signal.add(animation, forKey: "opentrawl.signal")
+    }
+    line.path = values[0]
+
+    let animation = CAKeyframeAnimation(keyPath: "path")
+    animation.values = values
+    animation.calculationMode = .linear
+    animation.timingFunction = CAMediaTimingFunction(name: .linear)
+    animation.preferredFrameRateRange = CoreAnimationTimeline.frameRateRange
+    animation.duration = motion.duration
+    animation.repeatCount = .infinity
+    animation.isRemovedOnCompletion = false
+    animation.fillMode = .both
+    animation.beginTime = CoreAnimationTimeline.beginTime(for: line)
+    line.add(animation, forKey: "opentrawl.attached-edge")
+    return line
+  }
+
+  private func makeNodeLayer(at point: CGPoint, index: Int, scale: CGFloat) -> CALayer {
+    let diameter: CGFloat = index.isMultiple(of: 5) ? 5 : 3.5
+    let node = CALayer()
+    node.contentsScale = scale
+    node.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+    node.cornerRadius = diameter / 2
+    node.position = point
+    node.backgroundColor = NSColor.labelColor.withAlphaComponent(
+      index.isMultiple(of: 5) ? 0.18 : 0.11
+    ).cgColor
+    return node
+  }
+
+  private func makePath(
+    for segment: NetworkSegment,
+    sourceOffset: CGVector = .zero
+  ) -> CGPath {
+    let points = segment.points(sourceOffset: sourceOffset)
+    let path = CGMutablePath()
+    path.move(to: points.start)
+    path.addLine(to: points.end)
+    return path
+  }
+
+  private func strokeColour(for kind: NetworkSegment.Kind) -> CGColor {
+    switch kind {
+    case .context:
+      NSColor.labelColor.withAlphaComponent(0.10).cgColor
+    case .source:
+      NSColor.labelColor.withAlphaComponent(0.18).cgColor
+    case .centre:
+      NSColor(
+        red: 0.902,
+        green: 0.2,
+        blue: 0.137,
+        alpha: 0.24
+      ).cgColor
     }
   }
 }
