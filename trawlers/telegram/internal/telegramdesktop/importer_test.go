@@ -27,31 +27,33 @@ func TestResolveImportSourcePrefersLocalPostboxWhenBothDefaultsExist(t *testing.
 		t.Fatal(err)
 	}
 
-	source := resolveImportSourcePaths("", tdata, root)
+	source := resolveImportSourcePaths(context.Background(), "", tdata, root, true)
 	if source.path != root || !source.postbox {
 		t.Fatalf("source = %+v, want Postbox path", source)
 	}
 	t.Logf("selected_source path=%q postbox=%t tdata_present=true", source.path, source.postbox)
 }
 
-func TestResolveImportSourceFallsBackToPostboxDefault(t *testing.T) {
+func TestResolveImportSourceUsesNativePostboxWhenNativeTelegramIsInstalled(t *testing.T) {
 	root, _, _ := makePostboxFixture(t)
 	missingTData := filepath.Join(t.TempDir(), "missing-tdata")
 
-	source := resolveImportSourcePaths("", missingTData, root)
+	source := resolveImportSourcePaths(context.Background(), "", missingTData, root, true)
 	if source.path != root || !source.postbox {
 		t.Fatalf("source = %+v, want postbox path", source)
 	}
+	t.Logf("resolver input native_installed=true desktop=%q postbox=%q", missingTData, root)
+	t.Logf("resolver output product=%q path=%q postbox=%t unavailable=%v", source.product, source.path, source.postbox, source.unavailable)
 }
 
-func TestResolveImportSourceUsesTDataWhenPostboxIsMissing(t *testing.T) {
+func TestResolveImportSourceUsesTDataWhenNativeTelegramIsNotInstalled(t *testing.T) {
 	tdata := filepath.Join(t.TempDir(), "tdata")
 	if err := os.MkdirAll(tdata, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	missingPostbox := filepath.Join(t.TempDir(), "missing-postbox")
 
-	source := resolveImportSourcePaths("", tdata, missingPostbox)
+	source := resolveImportSourcePaths(context.Background(), "", tdata, missingPostbox, false)
 	if source.path != tdata || source.postbox {
 		t.Fatalf("source = %+v, want tdata path", source)
 	}
@@ -60,7 +62,7 @@ func TestResolveImportSourceUsesTDataWhenPostboxIsMissing(t *testing.T) {
 func TestResolveImportSourceClassifiesExplicitPostboxPath(t *testing.T) {
 	_, _, account := makePostboxFixture(t)
 
-	source := resolveImportSourcePaths(account, "unused-tdata", "unused-postbox")
+	source := resolveImportSourcePaths(context.Background(), account, "unused-tdata", "unused-postbox", true)
 	if source.path != account || !source.postbox {
 		t.Fatalf("source = %+v, want explicit postbox path", source)
 	}
@@ -73,10 +75,12 @@ func TestResolveImportSourceKeepsExplicitTDataWhenPostboxDefaultExists(t *testin
 		t.Fatal(err)
 	}
 
-	source := resolveImportSourcePaths(tdata, "unused-tdata", postbox)
-	if source.path != tdata || source.postbox {
+	source := resolveImportSourcePaths(context.Background(), tdata, "unused-tdata", postbox, true)
+	if source.path != tdata || source.postbox || !source.explicit {
 		t.Fatalf("source = %+v, want explicit tdata path", source)
 	}
+	t.Logf("resolver input explicit_path=%q native_installed=true postbox=%q", tdata, postbox)
+	t.Logf("resolver output product=%q path=%q postbox=%t explicit=%t unavailable=%v", source.product, source.path, source.postbox, source.explicit, source.unavailable)
 }
 
 func TestPostboxParserSanitizedFixture(t *testing.T) {

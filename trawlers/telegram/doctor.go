@@ -23,23 +23,55 @@ func (r *runtime) printDoctor(value doctorOutput) error {
 }
 
 func sourceStoreCheck(report telegramdesktop.Report) trawlkit.Check {
-	if report.Exists && report.Accessible && report.Error == "" {
-		return trawlkit.Check{ID: "source_store", State: "ok", Message: "Telegram source data is readable."}
+	if selectedSourceReadable(report) {
+		return trawlkit.Check{ID: "source_store", State: "ok", Message: selectedSourceReadableMessage(report)}
 	}
 	check := trawlkit.Check{
 		ID:     "source_store",
 		State:  "missing",
-		Remedy: "Install or open Telegram Desktop, or pass --path to a readable Telegram data directory.",
+		Remedy: "Open the selected Telegram app, then run trawl telegram sync. OpenTrawl reuses its existing local session.",
 	}
 	switch {
-	case !report.Exists:
-		check.Message = "Telegram source data was not found."
+	case !report.Exists || report.Store == "empty":
+		check.Message = selectedSourceMessagePrefix(report) + ", but its local data store was not found."
 	case report.Error != "":
-		check.Message = "Telegram source data could not be read."
+		check.Message = selectedSourceMessagePrefix(report) + ", but its local data store cannot be read."
 	default:
-		check.Message = "Telegram source data is not readable."
+		check.Message = selectedSourceMessagePrefix(report) + ", but its local data store is not readable."
 	}
 	return check
+}
+
+func selectedSourceReadable(report telegramdesktop.Report) bool {
+	if !report.Exists || !report.Accessible || report.Error != "" {
+		return false
+	}
+	switch report.Product {
+	case "telegram-macos":
+		return report.Store == "telegram-macos-postbox"
+	case "telegram-desktop":
+		return report.Store == "tdesktop-binary"
+	default:
+		return true
+	}
+}
+
+func selectedSourceReadableMessage(report telegramdesktop.Report) string {
+	return selectedSourceMessagePrefix(report) + ". Its local data is readable."
+}
+
+func selectedSourceMessagePrefix(report telegramdesktop.Report) string {
+	product := "Telegram Desktop"
+	if report.Product == "telegram-macos" {
+		product = "Telegram for macOS"
+	}
+	if report.Explicit {
+		return product + " is selected from --path"
+	}
+	if report.Product == "telegram-macos" {
+		return product + " is selected"
+	}
+	return product + " is selected because Telegram for macOS is not installed"
 }
 
 func archiveChecks(ctx context.Context, req *trawlkit.Request) []trawlkit.Check {
