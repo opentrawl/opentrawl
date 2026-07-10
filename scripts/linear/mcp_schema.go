@@ -5,6 +5,26 @@ import (
 	"fmt"
 )
 
+type toolAccess int
+
+const (
+	toolRead toolAccess = iota
+	toolWrite
+)
+
+var mcpToolAccess = map[string]toolAccess{
+	"inbox":                    toolRead,
+	"ack_comment":              toolWrite,
+	"create_comment":           toolWrite,
+	"create_issue":             toolWrite,
+	"get_issue":                toolRead,
+	"update_issue":             toolWrite,
+	"get_project":              toolRead,
+	"update_project":           toolWrite,
+	"ensure_project_milestone": toolWrite,
+	"list_issues":              toolRead,
+}
+
 func mcpTools() []map[string]any {
 	return []map[string]any{
 		{

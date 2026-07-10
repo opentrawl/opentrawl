@@ -28,6 +28,7 @@ type TokenStore struct {
 	mu           sync.Mutex
 	loaded       bool
 	cached       tokenCache
+	warnedSave   bool
 }
 
 type tokenCache struct {
@@ -92,11 +93,14 @@ func (s *TokenStore) refreshLocked(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if err := s.save(token); err != nil {
-		return "", err
-	}
 	s.cached = token
 	s.loaded = true
+	if err := s.save(token); err != nil {
+		if !s.warnedSave {
+			s.logger.Warn("token cache could not be saved; using the refreshed token for this process: " + err.Error())
+			s.warnedSave = true
+		}
+	}
 	return token.AccessToken, nil
 }
 

@@ -18,6 +18,7 @@ type commandOptions struct {
 }
 
 var newLinearAPI = NewLinearAPI
+var newLinearWriteAPI = NewLinearWriteAPI
 
 func (s *stringList) String() string {
 	return strings.Join(*s, ", ")
@@ -92,7 +93,7 @@ func runInbox(args []string, stdout io.Writer, opts commandOptions) error {
 	if _, err := parseInboxWindow(inboxOpts); err != nil {
 		return usageError{message: err.Error()}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ func runAck(args []string, stdout io.Writer, opts commandOptions) error {
 	if len(args) > 1 {
 		return usageError{message: "linear ack takes one comment id\n\nRun `linear ack --help`."}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -160,7 +161,7 @@ func runComment(args []string, stdin io.Reader, stdout io.Writer, opts commandOp
 	if strings.TrimSpace(body) == "" {
 		return usageError{message: "comment body is required"}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -197,7 +198,7 @@ func runIssue(args []string, stdout io.Writer, opts commandOptions) error {
 	if len(args) > 1 {
 		return usageError{message: "linear issue takes one issue identifier\n\nRun `linear issue --help`."}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -235,7 +236,7 @@ func runIssueNew(args []string, stdout io.Writer, opts commandOptions) error {
 	if strings.TrimSpace(*actor) == "" {
 		return usageError{message: "--as is required for write commands"}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -269,7 +270,7 @@ func runIssueState(args []string, stdout io.Writer, opts commandOptions) error {
 	if strings.TrimSpace(*actor) == "" {
 		return usageError{message: "--as is required for write commands"}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -324,7 +325,7 @@ func runIssueUpdate(args []string, stdout io.Writer, opts commandOptions) error 
 	if options.empty() {
 		return usageError{message: "set at least one of --description-file, --priority, --project, --milestone or --title"}
 	}
-	api, err := newLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -349,7 +350,7 @@ func runIssues(args []string, stdout io.Writer, opts commandOptions) error {
 	if len(positionals) > 0 {
 		return usageError{message: "linear issues does not take positional arguments\n\nRun `linear issues --help`."}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}

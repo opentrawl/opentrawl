@@ -75,7 +75,7 @@ func runProjectUpdate(args []string, stdout io.Writer, opts commandOptions) erro
 	if options.empty() {
 		return usageError{message: "set at least one of --summary, --description-file, --status or --priority"}
 	}
-	api, err := newLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func runProjectMilestone(args []string, stdout io.Writer, opts commandOptions) e
 		description := string(data)
 		options.Description = &description
 	}
-	api, err := newLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearWriteAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}

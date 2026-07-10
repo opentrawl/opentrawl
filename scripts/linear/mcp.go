@@ -13,10 +13,13 @@ import (
 const mcpProtocolVersion = "2025-06-18"
 
 type MCPServer struct {
-	stdin  io.Reader
-	stdout io.Writer
-	stderr io.Writer
-	api    *LinearAPI
+	stdin      io.Reader
+	stdout     io.Writer
+	stderr     io.Writer
+	api        *LinearAPI
+	access     toolAccess
+	managedAPI bool
+	newAPI     func(io.Writer, int, toolAccess) (*LinearAPI, error)
 }
 
 type rpcRequest struct {
@@ -147,6 +150,14 @@ func (s *MCPServer) callTool(params json.RawMessage) (toolResult, error) {
 
 func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (string, error) {
 	ctx := context.Background()
+	access, ok := mcpToolAccess[name]
+	if !ok {
+		return "", fmt.Errorf("unknown tool %q", name)
+	}
+	api, err := s.linear(access)
+	if err != nil {
+		return "", err
+	}
 	switch name {
 	case "inbox":
 		team, err := optionalString(args, "team")
@@ -161,10 +172,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		result, err := api.ListInbox(ctx, InboxOptions{Team: team, Since: since, All: all})
 		if err != nil {
 			return "", err
@@ -172,10 +179,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		return renderString(func(w io.Writer) error { return RenderInbox(w, result) })
 	case "ack_comment":
 		commentID, err := requiredString(args, "comment_id")
-		if err != nil {
-			return "", err
-		}
-		api, err := s.linear()
 		if err != nil {
 			return "", err
 		}
@@ -194,10 +197,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 			return "", err
 		}
 		body, err := requiredString(args, "body")
-		if err != nil {
-			return "", err
-		}
-		api, err := s.linear()
 		if err != nil {
 			return "", err
 		}
@@ -227,10 +226,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		created, err := api.CreateIssue(ctx, team, title, actor, description, labels)
 		if err != nil {
 			return "", err
@@ -238,10 +233,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		return renderString(func(w io.Writer) error { return RenderCreatedIssue(w, created) })
 	case "get_issue":
 		issueID, err := requiredString(args, "issue")
-		if err != nil {
-			return "", err
-		}
-		api, err := s.linear()
 		if err != nil {
 			return "", err
 		}
@@ -279,10 +270,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		updated, err := api.UpdateIssue(ctx, issueID, actor, IssueUpdateOptions{
 			Description: description,
 			Priority:    priority,
@@ -296,10 +283,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
 	case "get_project":
 		project, err := requiredString(args, "project")
-		if err != nil {
-			return "", err
-		}
-		api, err := s.linear()
 		if err != nil {
 			return "", err
 		}
@@ -333,10 +316,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		result, err := api.UpdateProject(ctx, project, actor, ProjectUpdateOptions{Summary: summary, Description: description, Status: status, Priority: priority})
 		if err != nil {
 			return "", err
@@ -359,10 +338,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		result, err := api.EnsureProjectMilestone(ctx, project, actor, ProjectMilestoneOptions{Name: name, Description: description})
 		if err != nil {
 			return "", err
@@ -377,10 +352,6 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		api, err := s.linear()
-		if err != nil {
-			return "", err
-		}
 		result, err := api.ListIssues(ctx, team, state)
 		if err != nil {
 			return "", err
@@ -391,15 +362,30 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 	}
 }
 
-func (s *MCPServer) linear() (*LinearAPI, error) {
-	if s.api != nil {
+func (s *MCPServer) linear(access toolAccess) (*LinearAPI, error) {
+	if s.api != nil && (!s.managedAPI || s.access >= access) {
 		return s.api, nil
 	}
-	api, err := NewLinearAPI(s.stderr, 0)
+	if s.api != nil {
+		_ = s.api.Close()
+		s.api = nil
+	}
+	factory := s.newAPI
+	if factory == nil {
+		factory = func(stderr io.Writer, verbosity int, access toolAccess) (*LinearAPI, error) {
+			if access == toolWrite {
+				return NewLinearWriteAPI(stderr, verbosity)
+			}
+			return NewLinearAPI(stderr, verbosity)
+		}
+	}
+	api, err := factory(s.stderr, 0, access)
 	if err != nil {
 		return nil, err
 	}
 	s.api = api
+	s.access = access
+	s.managedAPI = true
 	return api, nil
 }
 
