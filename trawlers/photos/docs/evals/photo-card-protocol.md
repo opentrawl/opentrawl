@@ -2,86 +2,134 @@
 written_by: ai
 ---
 
-# Photo Card Eval Protocol
+# Photo card eval protocol
 
-This protocol evaluates whether a vision model can turn a user's own Apple
-Photos images into useful photo cards. It is for local, opt-in experiments. Real
-images, metadata, OCR, barcodes, model outputs, and reports stay outside the
-repo.
+This protocol chooses a Photos card model, prompt and evidence shape without
+paying to classify the library more than once. It evaluates the real product
+boundary, not a parallel lab pipeline.
 
-## Goal
+Photos image-model calls use frontier models through Ollama Cloud. Gemini served
+through Ollama Cloud is eligible. Direct Gemini API calls are not. Terra is an
+agent-runtime choice, not a Photos model provider.
 
-Pick one model and one prompt that produce high-quality photo cards:
+## Entry gate
 
-- accurate one-line summary;
-- rich visual prose that says what is actually in the image;
-- useful location context without overclaiming;
-- complete OCR/document extraction when visible;
-- clear uncertainty;
-- no raw metadata dumps or repo-leaking private paths.
+Do not run card-model comparisons until representative raw checks have proved:
 
-## Input
+- current asset and upstream-deleted state
+- exact camera original and its hash
+- current rendered still requested through PhotoKit version `.current`
+- full camera-original metadata and readable EXIF projection
+- complete cached place evidence for located assets
+- exact rendered request persistence
+- raw response retention
 
-Run the harness against a real Photos library:
+An eval that bypasses any of these boundaries cannot select the production
+model. If the research harness and product do not use the same resolver,
+metadata projection, place evidence and request renderer, the run is a harness
+test only.
 
-```sh
-photoscrawl-lab eval-card \
-  --library "$HOME/Pictures/Photos Library.photoslibrary" \
-  --allow-icloud-downloads \
-  --limit 15 \
-  --models gemma4:31b-cloud \
-  --json
-```
+## Image input
 
-The harness uses originals only. It first looks for a local original inside the
-Photos package. If `--allow-icloud-downloads` is set and the original is not
-local, it asks PhotoKit to download/export the original into a private cache
-under `~/.opentrawl/photos/cache/originals`. Normal sync behavior remains
-read-only/local-first and does not force iCloud downloads.
+The accepted card input uses the largest current rendition returned by
+`PHImageManager.requestImageDataAndOrientation` with request version `.current`.
+This includes all edits. The camera original separately supplies the exact
+provenance hash and full metadata. Even for an unedited asset, do not assume the
+2 byte streams are identical. The saved request records the role, type, size
+and hash of the image actually sent.
 
-For each asset, the harness writes a canonical full-resolution JPEG to the
-private eval directory. The JPEG has display-upright pixels and does not copy the
-original EXIF block. Full asset, resource, and ImageIO metadata are written as a
-separate private JSON sidecar and passed to the prompt.
+Do not silently canonicalise, resize or substitute a derivative. If a model
+requires another representation, evaluate that change explicitly against the
+same assets and record the transform in the request.
 
-## Output
+## Representative corpus
 
-Default run output is:
+Build the corpus dynamically from the current library. Use both targeted hard
+cases and naïve random sampling so repeated testing does not overfit a frozen
+set. Keep a small group of continuity examples for regression, including photos
+the user has already selected as meaningful.
 
-```text
-~/.opentrawl/photos/evals/<run-id>/
-  images/E001.jpg
-  metadata/E001.json
-  raw/E001__ollama__<model>__photo-card-v3.json
-  manifest.jsonl
-  summary.json
-```
+Sparse and failure-prone boundaries get extra weight. The corpus should cover:
 
-Nothing in that directory is commit-safe.
+- screenshots and dense interfaces
+- receipts, tickets and documents
+- menus, signs, handwriting and CJK text
+- travel photos, landmarks, parks and trails
+- a depicted place offset from the camera coordinate
+- food, people, interiors, technical objects and low light
+- edited and unedited assets
+- package-local and iCloud-backed originals
+- assets with sparse or apparently missing metadata
 
-Tracked repo artifacts are only:
+Start with a small canary. Expand only after reading every input and output.
+Roughly 400 inspected assets is a useful guide before a full backfill, not a
+fixed target or permission to skip sparse categories.
 
-- the current prompt text in `prompts/`;
-- protocol docs in `docs/evals/`;
-- Go harness code;
-- tests that use synthetic provider stubs and do not touch Photos.
+## One expensive card call
 
-## Scoring
+The default hypothesis is one card-model call per asset. It must produce a rich,
+long description, useful visible-text extraction and clear uncertainty from the
+complete evidence supplied.
 
-Review outputs manually against these questions:
+OCR, composition and the final output shape remain eval-gated. Do not add a
+second OCR or composition call by default. A bounded comparison may test extra
+OCR evidence, but it wins only if the complete card improves without adding
+confident transcription errors, unnecessary exposure or another carding pass.
 
-- Did the one-line summary identify the main point of the image?
-- Did the description include the concrete visual details a human would care
-  about?
-- Did the model use visible text, document fields, and OCR instead of ignoring
-  them?
-- Did metadata improve the answer without making the model echo raw filenames,
-  UUIDs, paths, or EXIF?
-- Did location context stay useful and calibrated?
-- Did the model invent a venue, airport, monument, route, person, or event?
-- Did the card avoid tags, PR-review evidence sections, and generic usefulness
-  commentary?
+The bounded 10 July 2026 comparison found no default OCR pre-pass worth adding.
+The card model reading the image itself was the most reliable overall. Apple
+Vision did not improve a card, while a separate Ollama Cloud OCR model helped a
+dense CJK case but introduced confident errors and exposed more private text in
+other cases. Keep one card call as the default. Repeat the comparison on the
+chosen successor card model and representative corpus before the backfill.
 
-The current baseline prompt is `prompts/photo-card-v3.md`. The product tree
-ships one photo-card prompt file. Record future prompt trials, hashes, and
-scores in `docs/evals/runs.md`; only promote the winner into `prompts/`.
+## Required private evidence
+
+For each call, retain outside the repository:
+
+- corpus category and selection reason
+- exact image role, size, type and hash
+- complete rendered request after all formatting and truncation
+- exact raw model response and telemetry
+- parsed stored card
+- elapsed time, retries and model-call count
+- every upstream cache hit, miss and restart result that affected the request
+
+Read the rendered request before accepting the response. Read the raw response
+before accepting the parse. Confirm that the stored card corresponds to both.
+
+Nothing from a real image, metadata record, location, request or response is
+commit-safe.
+
+## Review questions
+
+Reviewers inspect the private evidence and ask:
+
+- Does the request contain the right image and complete readable context?
+- Does the summary identify the main point of the image?
+- Is the description specific and long enough to preserve what matters?
+- Does OCR capture important visible text without inventing characters?
+- Does place reasoning distinguish the camera position from what is depicted?
+- Does the model avoid inventing a venue, route, person or event?
+- Does uncertainty identify real ambiguity without padding?
+- Can the stored card be reconstructed from the retained provenance?
+
+Use a capable Sol/OpenAI agent or a human for adversarial review. Ollama Cloud
+models are the classification candidates, not the code, protocol or evidence
+reviewers.
+
+## Decision rule
+
+No aggregate mean overrides a serious raw failure. A candidate loses if it
+hallucinates places, drops important text, ignores supplied context, leaks
+machine metadata into prose or produces output that the labelled parser cannot
+store safely.
+
+Test every current image-capable Ollama Cloud model against the same corpus, or
+record a hard technical incompatibility that prevents a candidate from taking
+the product request. Choose a model only after the representative corpus proves
+quality and measured Ollama Cloud usage fits the planned backfill with
+headroom. Model eval work and decisions are tracked in live
+[TRAWL-107](https://linear.app/joshpalmer/issue/TRAWL-107). This protocol does
+not mirror its work state. Historical runs in [eval runs](runs.md) are context,
+not the answer.

@@ -57,14 +57,14 @@ The layers, bottom to top:
    sources. One Mac app that shows the key per-crawler metrics and
    handles authorisation. No knobs.
 5. Derived layers: daily deltas, cross-source identity joins,
-   clustering and per-thing cards, life orientation. The per-thing
-   card is no longer hypothetical — photoscrawl ships it (photo
-   cards: model prose over deterministic facts, generated through a
-   classification queue behind the provider seam) and is the working
-   template for the rest. Derived layers build on the substrate; they
-   never reach around it into source databases. The clustering and card
+   clustering and per-thing cards, life orientation. Photos is the
+   proving ground for a card built from deterministic source facts and
+   model prose. That pipeline is not a template for other sources until
+   one complete, inspectable card passes its input, output, restart and
+   provenance gates. Derived layers build on the substrate; they never
+   reach around it into source databases. The clustering and card
    mechanics already proven on maintainer data (clawsweeper, gitcrawl,
-   discrawl) are the working prior art here; see below.
+   discrawl) are useful prior art, not a contract for every surface.
 
 ## Design principles
 
@@ -74,12 +74,14 @@ The layers, bottom to top:
   semantically make sense — real timestamps, human names, properly
   named keys. No machine row IDs, no raw epoch timestamps, no unbounded
   dumps.
-- Local first, privacy by design. Archives live on your machine.
-  Nothing leaves it unless you explicitly opt in. Sending content to
-  remote frontier models gives the best inference results today and is
-  supported, but it is never the default; the default is local and
-  private. Model access goes through one pluggable provider seam — not
-  a new integration surface per model.
+- Local first, privacy by design. Archives, caches, source access and
+  user control stay on your machine. Local first does not mean local
+  models are preferred. A feature may send an explicit, bounded input
+  to its configured frontier model service when the user invokes that
+  feature. Photos image classification and its image-model evals use
+  Ollama Cloud; they do not call paid model APIs directly. Model access
+  goes through one provider seam, not a new integration surface per
+  model.
 - Federated, not unified. Each source keeps its own source-native
   database. The single entry point is a query surface, not a shared
   schema. Cross-source joins happen in derived layers, later, on top of
@@ -248,13 +250,12 @@ One caution: what works for clawsweeper's units (one issue, one PR,
 one verdict) will not automatically fit other surfaces — a person or a
 relationship is not a pull request. Each surface's unit of clustering
 and carding gets evaluated and tested on real archives before we adopt
-it. The Photos classification evals set the honest baseline here:
-card quality currently needs a frontier-tier hosted vision model
-(Gemini flash class won; cheap models hallucinated places and leaked
-metadata and were dropped). Local-first stays the default posture,
-but it trades card quality until local models pass the same
-grounding bar — measured by the eval harness, not assumed. All model
-access stays behind the single provider seam.
+it. Photos card quality needs a frontier hosted vision model. Image
+classification and classification evals run through Ollama Cloud,
+behind the single provider seam. A small historical run favoured a
+Gemini-class model, but it predates the current input-integrity and
+representative-sampling gates and does not choose the production model.
+Local models are not the preferred product path.
 
 ## Non-goals for v1
 

@@ -1,362 +1,293 @@
 ---
 written_by: ai
-status: contract — the authoritative statement of what flows from a synced photo to the classification prompt and back; code change that alters any shape here updates this doc in the same commit (TRAWL-170)
 ---
 
-# Data contract: photo → location → model context
+# Photos pipeline data contract
 
-This document states the exact contract from a synced Photos asset to the
-classification prompt and back into stored observations. It exists so that
-provider work (TRAWL-171), sync fixes (TRAWL-172), download work (TRAWL-173)
-and any future trips/backfill design change this pipeline deliberately instead
-of rediscovering it. Everything here was verified against the code on
-2026-07-07; file references are the proof path.
+This is the accepted contract from a current Apple Photos snapshot to a stored
+photo card. It states the target boundary even where implementation is still
+missing. The status table below prevents an accepted design from being mistaken
+for shipped code.
 
-## The pipeline in one paragraph
+The dependency graph lives in [architecture](architecture.md). Historical eval
+results live under `docs/evals/` and do not override this contract.
 
-`sync` snapshots Apple's Photos.sqlite by plain file copy and upserts assets,
-resources, album memberships and GPS into the archive, fingerprinting each
-asset and queueing new or changed assets for classification. `classify` drains
-that queue: it loads each asset's metadata, matches known places, resolves GPS
-to place context (cache → backfill → Apple, the only provider), renders one
-prompt per asset with a JSON metadata sidecar plus the best local image, and
-sends it to the configured vision model. The response is parsed into card
-observations (summary, description, OCR, uncertainty) and place observations
-(address, POI candidates, at most one venue line), all written in one
-transaction per asset. The search index rebuilds from asset, resource and
-membership rows plus these observations; the open card reads both.
+## Boundary rules
 
-## Stage 1 — what sync stores
+Every stage has an exact input and output. Before downstream work starts, the
+operator or development agent reads representative raw inputs after selection,
+filtering and formatting, then reads the raw outputs before parsing or
+transformation.
 
-Provider: `SQLiteSnapshotProvider` (`internal/photos/sqlite_snapshot.go:23`;
-`provider_darwin.go` only constructs it) copies
-`<library>/database/Photos.sqlite` (with its WAL and SHM sidecars) and reads
-the copy. Plain file access
-under Full Disk Access; PhotoKit is never touched by sync.
+A count, schema, successful exit code or plausible summary is not boundary
+proof. An empty or malformed output stops that asset. The stage must distinguish
+a proved source absence from an extractor, provider or selection failure.
 
-Per asset, sync writes:
+Private source identifiers, paths, image content, metadata, coordinates,
+requests and responses stay in private runtime storage. Public tests and docs
+use synthetic examples only.
 
-- `asset` — identity, media kind/subtypes, creation/modification/added dates,
-  timezone name as Photos recorded it, dimensions, duration, favourite,
-  hidden, burst, camera fields, raw `metadata_json`.
-- `asset_resource` — one row per resource: type, UTI, original filename,
-  local path when the file is on disk, size, `available_locally`,
-  `needs_download`.
-- `album_membership` — album title and kind per membership. This feeds the
-  prompt (stage 4), which is why membership truth matters beyond display;
-  the join defect and its fix live in TRAWL-172.
-- `location_observation` — latitude, longitude, horizontal accuracy, straight
-  from the snapshot. Coordinates are stored exactly as Photos holds them
-  (phone photos in mainland China are GCJ-02; see the provider seam rules).
-- `crawl_seen_asset` — the asset fingerprint: sha256 over the entire
-  marshalled asset JSON (`internal/archive/crawl.go:299`), including albums
-  and favourite.
+## Current implementation status
 
-Change detection: an asset whose fingerprint changed is re-upserted.
-`resetAssetDerivedRows` (`internal/archive/crawl_writes.go`) deletes only
-the rows that sync re-imports losslessly: resources, memberships,
-locations, local metadata, OCR/text, faces, edges, and `asset_fts`.
-It does not delete `model_observation` or `place_observation`. Instead,
-it marks their active rows with `stale_since` and `stale_reason`, keeps
-their search entries, and re-enters the asset in `classification_queue`.
-A queue row in `failed_download` keeps its failure evidence across an unchanged
-sync. A later model-backed `classify` run selects it again, so recovery needs no
-operator-only reset.
+This status was inspected at `94a2496221fc7761f5a997fafec9ae769c123e00`.
+Refresh it against code whenever the implementation changes.
 
-## Stage 2 — the classification queue
+| boundary | status at inspected main | accepted outcome |
+|---|---|---|
+| Photos snapshot | implemented | read a consistent SQLite snapshot without changing Photos |
+| normalised asset | partial | preserve current or upstream-deleted state and source provenance |
+| camera original | implemented | resolve exact `photo` bytes through package, checked cache or signed PhotoKit |
+| current rendered still | not implemented | request the largest current rendition through `PHImageManager` with version `.current` |
+| full metadata and EXIF | partial | keep lossless exact-original metadata and a readable projection |
+| place evidence | partial | cache configured Apple and OSM-derived map and POI evidence |
+| rendered model request | not persisted | save the exact request before transmission |
+| raw model response | not persisted | retain the response before parsing |
+| labelled-prose parser and card rows | implemented in part | parse the declared sections and store the complete card |
+| stale and superseded history | implemented | keep stale cards readable and retain replaced cards |
 
-`classification_queue` success states: `pending` → (`metadata_classified`)
-→ `content_classified`, with `place_pending` as a side-parking state for
-assets whose GPS could not be resolved (stage 3). Failure and skip states,
-all set by the classify pipeline (`internal/archive/classify_pipeline.go`):
-`content_failed` (model or parse failure), `failed_download` (the last original
-export failed and the next model-backed run will retry it),
-`content_not_in_photokit`, `content_no_content_available`, and
-`content_skipped` (unsupported media). Batches load newest first, with GPS
-presence breaking timestamp ties (`internal/archive/classify_inputs.go:106`). A `--refresh-model` run
-additionally re-selects `content_classified` assets that lack a
-`card_summary` from the requested model id at the current prompt version —
-that is how a model or prompt migration re-cards the corpus without touching
-the queue states.
+Partial means code exists but does not yet satisfy the full accepted outcome.
 
-## Stage 3 — location and place resolution
+## Work tracking
 
-Input per asset: the first `location_observation` row (ordered by id) plus
-the creation date. No location means no place phase and no location block in
-the prompt; that is a normal card, not an error.
+Linear is the only source of truth for work state, priority, ownership and
+decisions. This document records inspected code and the accepted product
+boundary. It never substitutes for, mirrors or instructs changes to the board.
 
-### Known places
+## Boundary 1: source snapshot
 
-`known_place` rows carry kind (`home`, `former_home`, `work`), display name,
-coordinate, radius (default 75 m), and an optional validity window.
-`matchKnownPlace` (`internal/archive/known_places.go:214`) picks the best
-in-radius match: photos inside the validity window match normally; photos
-taken after the window match with `After` set — "former home" — because that
-relationship explains the visit better than whichever business is registered
-nearby. Photos before the window never match. Selection prefers an in-window
-match over an after-window match regardless of distance; within the same
-phase, ties break by distance, then kind rank (home, former home, work),
-then name.
+Input:
 
-A known-place match suppresses venue machinery on purpose: the prompt gets
-`known_place` and no `venue_candidates` (address and area context still go
-in), and storage writes a `known_place` place observation instead of POI
-candidates (stage 5). Nobody needs "Sushi Bar, 40 m" on a photo taken at
-home.
+- the configured Photos library
+- `database/Photos.sqlite` and its SQLite sidecars
 
-### The resolver
+Output:
 
-`place.NewResolver` (`internal/place/resolver.go`), driven by
-`internal/archive/classify_place_phase.go` with radius 150 m. Resolution
-order per coordinate key:
+- one internally identified source library
+- one snapshot identity, completion time and explicit completeness proof
+- raw current asset, resource, album and location rows selected from that
+  snapshot
 
-1. **Cache** — `~/.opentrawl/photos/cache/place-context/<key>.json`.
-   The key is the coordinate rounded with the radius; nearby photos share
-   one lookup. Lookup also accepts the legacy hashed key format, so old
-   cache entries stay valid.
-2. **Backfill** — a manifest-indexed directory of prior bulk runs
-   (`Paths.PlaceBackfillDir`), read-only legacy artifacts.
-3. **Provider** — Apple CoreLocation reverse geocode plus MapKit POI search
-   (`internal/place/apple_darwin.go`), the only provider wired today.
-   Provider starts are spaced 250 ms. Throttling retries with 2 s then 10 s
-   backoffs; a third consecutive throttle stops live geocoding for the whole
-   run, and so does a single timeout (Apple tarpits rather than
-   fast-rejects) — in both cases the remaining assets park. "No placemark
-   for this coordinate" is a cached empty result, not a failure — the photo
-   cards with GPS but no address, and the coordinate is never re-geocoded.
+## Boundary 2: normalised asset
 
-   Seam obligations for any new provider (TRAWL-171). First, the provider
-   plug-in point does not exist yet: `ResolveProvider` hardcodes the Apple
-   call (`internal/place/resolver.go:106`), dispatched by build tags — there
-   is no Provider interface. TRAWL-171's first deliverable is designing that
-   seam, not implementing against one. Second, map throttle and timeout
-   conditions onto the `place.ErrProviderThrottled` and
-   `place.ErrProviderTimeout` sentinels (`internal/place/types.go:102`); the
-   parking and whole-run-stop logic is `errors.Is` on exactly those values,
-   so a provider returning bare errors silently breaks invariant 6. Third,
-   provider output must round-trip the cache: a stored `place.Result` is
-   re-validated on load (`loadResolvedResult` → `validateComplete`) and
-   candidate distances are recomputed (`calibrateCandidates`,
-   `internal/place/resolver.go:248`) — a result that only works in memory
-   is not a passing result.
+Input: all selected source rows for one Photos asset.
 
-Assets whose key could not be resolved park as `place_pending` and unpark
-automatically on a later run once their key resolves — from cache or from a
-successful live lookup (up to 200 pending keys re-checked per run). Parking is the designed behaviour under provider
-failure: never block the batch, never fabricate place context.
+Accepted output:
 
-### The result shape and tiers
+- stable private asset identity
+- explicit current or `deleted upstream` state
+- the complete snapshot that established the state
+- first-observed-missing time and optional source deletion time
+- capture, modification and added times with their source timezone
+- media kind, dimensions and duration
+- favourite, hidden, burst and album state
+- resource descriptors
+- GPS and accuracy when the source contains them
+- a fingerprint of the source projection used downstream
 
-Providers produce `place.Result` (`internal/place/types.go`): `area` levels,
-`address`, `map_features` (no wired provider fills this today — the OSM gap
-that motivates TRAWL-171), `poi_status`/`poi_reason`/`poi_total`,
-`poi_candidates`, plus provider/source/cache provenance.
+Only a proved-complete snapshot may transition a current asset to `deleted
+upstream`. Missing assets must remain explainable; they must not silently
+disappear from the archive or trigger paid reclassification. Deletion and
+restoration update source state, eligibility and provenance outside the
+model-generation key. A valid card remains available with its upstream-deleted
+flag.
 
-The tiers, and where each is assigned (four candidate/context tiers plus
-one storage-only tier):
+## Boundary 3: image roles
 
-- `venue_candidate` — assigned by geometry (`internal/place/tier.go`):
-  within `max(accuracy, 25 m)` of the photo and no same-distance candidate
-  of a different category competes.
-- `nearby_poi` — assigned by geometry: every other candidate, including
-  candidates with no usable distance.
-- `area_context` — not a candidate tier; assigned at storage time to the
-  address/area observation (stage 5).
-- `known_place` — storage-only tier on the known-place observation row
-  (stage 5), never a provider candidate tier.
-- `confirmed_venue` — **never assigned by geometry.** Only the model can
-  promote a candidate to confirmed, by corroborating it against the image,
-  and the promotion happens at storage time (stage 5). Distance is not
-  confidence; this is the rule that keeps "Versace, 80 m" off a temple
-  photo.
+Apple exposes the 2 required roles through different PhotoKit contracts:
 
-## Stage 4 — exactly what the model receives
+- `PHAssetResourceType.photo` is the camera original
+- [`PHImageManager.requestImageDataAndOrientation`](https://developer.apple.com/documentation/photos/phimagemanager/requestimagedataandorientation%28for%3Aoptions%3Aresulthandler%3A%29)
+  with request version [`.current`](https://developer.apple.com/documentation/photos/phimagerequestoptionsversion/current)
+  returns the most recent rendered still, including all edits, at the largest
+  available size
 
-One request per asset: the prompt template `prompts/photo-card-v3.md`
-(version `photo-card-v3.2`) rendered with a single `MetadataJSON` value, plus
-one image and temperature 0.1. Image selection: the first classifiable
-local resource path (jpg/jpeg/png/heic) in stored resource order — no
-quality preference between derivative, render and original. When no local
-path exists and the original is in iCloud, classify exports it through
-PhotoKit into a per-run scratch cache and sends that file, deleting it after
-use (`internal/archive/classify_originals.go`); TRAWL-173 owns hardening
-this export path.
+`PHAssetResourceType.fullSizePhoto` is a modified resource. It is neither a
+higher-quality original nor the canonical selector for the current rendition.
 
-The sidecar (`photoCardMetadataJSON`, `internal/archive/model_classifier.go:109`):
+Accepted output:
 
-```json
-{
-  "capture":  { "local_time": "...", "timezone": "..." },
-  "media":    { "kind": "...", "width": 0, "height": 0,
-                "subtypes": ["screenshot", "..."], "duration_seconds": 0 },
-  "library_context": {
-    "original": { "availability": "local|in_icloud", "bytes": 0, "filename": "..." },
-    "albums":   [ { "title": "...", "kind": "generic_album:2:0" } ],
-    "favorite": true, "hidden": true, "burst_member": true
-  },
-  "location": {
-    "gps": { "latitude": 0, "longitude": 0, "horizontal_accuracy_meters": 0 },
-    "place_context": {
-      "address_line": "...",
-      "area": [ { "level": "country|...", "name": "..." } ],
-      "venue_candidates": [ { "candidate_id": "venue_candidate_1", "name": "...",
-                              "distance_meters": 0, "tier": "venue_candidate|nearby_poi",
-                              "category": "..." } ],
-      "poi_status": "found|none|provider_error"
-    },
-    "known_place": { "name": "...", "relationship": "the user's home" }
-  },
-  "camera": { "display": "...", "make": "...", "model": "...", "...": "..." }
-}
-```
+- exact camera-original bytes, byte count, media type and SHA-256
+- current-rendered bytes, byte count, media type, orientation and SHA-256 for
+  every image asset
+- the exact request version, quality and network policy used to obtain that
+  rendition
+- resolution source and cache provenance for each role
 
-Rules the sidecar enforces:
+The camera original supplies provenance and metadata. Classification always
+uses the current rendition. An unedited asset may render identically to its
+camera original, but byte equality is proved rather than assumed. The model
+request records the exact image hash it sent.
 
-- Empty blocks are omitted rather than sent as empty strings — with one
-  known exception: `library_context.original` is always present when the
-  asset has resources, and its `availability` is `""` when the selected
-  resource is neither local nor marked for download
-  (`internal/archive/model_classifier.go:297`). A place resolved to nothing
-  sends no `place_context` at all.
-- At most 5 venue candidates (`topPOICandidates`), nearest first, confirmed
-  and candidate tiers always included, deduplicated by name+tier, each with
-  a stable `candidate_id` the model must echo back.
-- `venue_candidates` and `known_place` are mutually exclusive (known place
-  wins).
-- `known_place.relationship` is plain words ("the user's former workplace"),
-  never a kind enum.
-- Capture time renders in the asset's own timezone; when Photos recorded no
-  usable zone it renders UTC — the machine's timezone is a fact about the
-  reviewer, not the photo.
-- Coordinates and meters pass through `cardformat` rounding; the raw stored
-  values stay in the archive.
+The camera-original resolver follows one order:
 
-What the model must return (the prompt's own contract): Summary,
-Description, Venue plausibility (`candidate_id`, `verdict` ∈ `corroborated`
-| `plausible` | `inconsistent`, one-sentence `reason` — judged for the top
-candidate only, and required by the parser only when venue candidates were
-actually sent), OCR, Uncertainty. The prompt forbids echoing metadata,
-paths, ids, or coordinates into prose, and instructs the model to trust the
-image over place context when they conflict.
+1. one unambiguous, non-empty file in the Photos package
+2. one persistent cache entry tied to the asset version and proved by stored
+   size and SHA-256 after restart
+3. the signed, authorised PhotoKit app
 
-## Stage 5 — what gets stored back
+Media resolution never uses the network except for an explicit PhotoKit request
+for an uncached role. Exports install atomically and leave no partial cache
+entry after failure. Concurrent requests for the same key share one completed
+export. The fixed product cache never evicts a file while a request is reading
+it.
 
-Per asset, in one transaction (`internal/archive/model_write.go`,
-`internal/archive/classify_place.go`):
+The shared resolver work is tracked in
+[TRAWL-173](https://linear.app/joshpalmer/issue/TRAWL-173). Read the live ticket
+before acting; the implementation table above is the docs-side status inventory.
 
-- `model_run` — one row per batch: model id, prompt version, input count,
-  and run metadata (no per-call timings; `started_at` and `completed_at`
-  carry the same commit timestamp today).
-- `model_observation` — `card_summary`, `card_description`, `card_ocr`
-  (when text exists), one `card_uncertainty` per bullet. Each row carries
-  source `photo_card`, the model id and prompt version; `evidence_id` is
-  written empty today, so the raw model response is not addressable from
-  the observation row.
-- `place_observation` — cleared and rewritten per classify:
-  - `address` (tier `area_context`) — the formatted address line.
-  - `known_place` — the plain-words label, when matched (and then nothing
-    else venue-shaped is written).
-  - `poi_candidate` — candidates in nearest-first order, up to and
-    including the first venue-eligible one: the write loop stops once it
-    writes the venue line, so a corroborated top candidate persists only
-    itself and the later candidates are dropped. Only when no venue line is
-    written does every sent candidate persist. These rows are selection
-    provenance, deliberately excluded from the search index so a nearby
-    "Meadow Grill" cannot outrank a card that is actually about grilling.
-  - `venue` — at most one row, the product's "Venue:" line. Written only
-    when the model's verdict allows it: `corroborated` promotes the
-    candidate to `confirmed_venue`; `plausible` keeps a geometric
-    `venue_candidate` as the venue line; `inconsistent` or no verdict means
-    no venue line, whatever the geometry said. This is the code gate that
-    makes venue claims image-corroborated end to end.
+## Boundary 4: full metadata and EXIF
 
-## Contract invariants
+Input: the exact camera-original bytes from boundary 3 plus source asset facts
+from boundary 2.
 
-These are the rules a change must not break, each enforced by the shapes
-above:
+Accepted output has 2 forms:
 
-1. **No provider selector in the prompt path.** New providers (Geoapify,
-   Amap) produce `place.Result` behind the resolver — TRAWL-171 designs the
-   plug-in seam, which does not exist yet (stage 3). The classify pipeline
-   and prompt shape do not know provider names
-   (`docs/evals/geocoding-context.md`, ratified).
-2. **Coordinate datum is a provider concern.** The archive stores
-   coordinates exactly as Photos holds them (GCJ-02 in mainland China from
-   phones, WGS-84 from DSLRs). Any provider that consumes WGS-84 converts
-   behind the seam; nothing upstream shifts stored data. (TRAWL-171
-   productizes the conversion.)
-3. **Geometry caps at `venue_candidate`; only image corroboration confirms.**
-4. **Unselected candidates never reach the search index.**
-5. **Known place suppresses venue machinery**, in prompt and in storage.
-6. **Deficient resolution parks; it never blocks a batch and never
-   fabricates.** An empty Apple result is a cached fact, not an error.
-7. **No machine facts in prose.** Raw coordinates, paths, ids and EXIF stay
-   in the archive as evidence; the prompt bans them from card text and the
-   renderer owns coordinate display.
-8. **Unknown timezone renders UTC**, never the reviewing machine's zone.
-9. **Album titles and favourite flags are model inputs**, so their truth is
-   part of this contract — membership pollution (TRAWL-172) is a card
-   quality bug, not just a display bug.
+- a lossless private record of all metadata and EXIF the extractor can read
+- a field-aware human projection for the card request
 
-## What this gates
+The projection converts machine values into useful evidence. It uses real local
+capture times, standard shutter-speed notation, sensible units and precision,
+and descriptive names instead of raw enums. It preserves every source value in
+the private record, even when that value does not earn a line in the prompt.
 
-- **TRAWL-171 (one lookup seam)** implements invariants 1–2, honours the
-  error-sentinel seam obligation (stage 3), and fills `map_features` and
-  better `poi_candidates`. Two requirements: candidate ranking must prefer
-  venues, parks and landmarks over accommodation and sanitation
-  infrastructure at comparable distances (evidence, 2026-07-07: Sanyue
-  Teahouse lost to a hotel at 126 m; Big Trees Trail lost to "Toilets");
-  and the ranking work should consider letting the model judge plausibility
-  across all sent candidates instead of only the top one — the sidecar
-  already ships ids for all five, so that is a prompt-version change gated
-  on an eval run, not a schema change.
-- **TRAWL-172 (album join)** repairs invariant 9's inputs. Fixing
-  memberships changes fingerprints at scale, so its archive-level
-  acceptance sync runs as measured, cleared spend (see "Invalidation").
-- **TRAWL-173 (downloads)** feeds stage 4's image selection: its output is
-  the guarantee that a classifiable local image path exists (or a truthful
-  `in_icloud` availability), never a silent 360 px thumbnail.
-- **Trips (TRAWL-174, parked)** starts from the known-place semantics in
-  stage 3, which this doc now states; the spike designs the
-  known-places-versus-trips split from here.
+Missing, malformed or contradictory metadata is a stopped boundary until the
+agent checks the source bytes and extractor output. A proved source absence may
+be recorded explicitly. Silence is not proof of absence.
 
-## Invalidation — ruled (TRAWL-176)
+## Boundary 5: place evidence
 
-Cards are **context-maximal by design**. Josh's ruling (2026-07-08): "the
-key product feature here imo is that we feed ALL the metadata (including
-enriched location stuff, and trip info later on) → into the LLM so that it
-knows this when it is classifying the image. thats the whole point."
+Input:
 
-Josh's rework ruling on 2026-07-08 supersedes deletion semantics for
-model and place products: changed inputs mark cards stale, and successful
-re-card runs retain history.
+- source coordinate, datum, horizontal accuracy and capture time
+- known private place context when configured
+- valid cached evidence from the same normalised input
 
-Consequences:
+Accepted output:
 
-- The fingerprint stays whole-asset. A metadata edit (album, favourite —
-  and later, enriched context such as trips) genuinely stales the card's
-  inputs, so it legitimately marks stale and re-cards. This is invariant 9
-  extended: everything the model consumes is change-tracked.
-- Sync deletes only Apple-derived rows it can rebuild from the same
-  snapshot. It marks active `model_observation` and `place_observation`
-  rows stale with `stale_since` and `stale_reason`, for example
-  `asset metadata changed in sync (fingerprint drift)`.
-- Stale active cards stay usable. Search keeps them findable and marks
-  hits with `[STALE]`. `open` renders the full card with a debug banner:
-  `DEBUG INFO: THIS CARD IS STALE - generated before the latest metadata
-  sync (...) PLEASE FIX.`
-- A successful re-card does not delete the previous card. It sets
-  `superseded_at` on prior active model and place rows, writes fresh rows,
-  and removes superseded rows from default search/open results. The old
-  rows stay in SQLite as history.
-- The sync summary, `--json` output, and log line report
-  `marked_stale_model_assets`, `marked_stale_model_rows`,
-  `marked_stale_place_assets`, `marked_stale_place_rows`, and
-  `classification_queue_pending`.
-- The rejected alternative (content-only cards, metadata joined at display
-  time) is recorded here so it is not re-proposed: it was rejected because
-  it guts the product's core idea, not on cost grounds.
+- address and administrative areas
+- OSM-derived trails, parks, landmarks and other map features
+- nearby venue and POI candidates with source, relation and distance
+- provider, query, cache and coordinate-conversion provenance
+- an explicit complete or failed status
 
-Sync against an enriched archive now reports the stale count and pending
-queue depth in the run output. The operator can see the cost before deciding
-whether to drain the queue with `classify`.
+Provider code returns candidates, not semantic truth. The photo coordinate says
+where the photographer stood; a depicted cathedral, trail or landmark may be
+elsewhere. The classification model may infer the depicted place from image and
+provider evidence. Geometry alone does not confirm it.
+
+Provider choice and China coordinate handling remain eval-gated.
+
+An empty provider response does not complete this boundary during development.
+The agent checks the input, datum conversion, query, radius, categories and an
+alternative source before deciding whether the source genuinely has no useful
+mapped evidence.
+
+## Boundary 6: complete card input
+
+The model step is ready only when these inputs are complete or explicitly proved
+absent:
+
+- normalised asset facts consumed by the card prompt
+- camera-original identity and hash
+- current rendered still
+- full metadata record and human projection
+- place evidence for an asset with source location
+- album, favourite, hidden and other selected library context
+
+Unknown or unexamined missing evidence blocks carding. It enters an explicit
+failure state for investigation rather than becoming an empty prompt field.
+Upstream deletion state is stored alongside the card for eligibility and
+provenance. It is not rendered into the prompt and does not create a new model
+generation.
+
+## Boundary 7: rendered model request
+
+Input: the complete card input and the selected prompt version.
+
+Accepted output: the exact, fully rendered request that will be transmitted,
+including:
+
+- Ollama Cloud model identity
+- prompt version
+- classified image role, media type, size and hash
+- readable labelled metadata and place context
+- all selection and truncation decisions
+
+The request is persisted in private runtime storage before the call. A person or
+agent can read it exactly as sent. The product does not call paid Gemini APIs
+directly. Ollama Cloud serves Photos image classification and classification
+evals only; it is not the engineering reviewer.
+
+The final model remains eval-gated.
+
+## Boundary 8: raw model response
+
+Input: the persisted rendered request.
+
+Output: the exact Ollama Cloud response text, provider telemetry, timing and
+request relation. The raw response is retained before parsing. A retry cannot
+overwrite or masquerade as the first attempt.
+
+## Boundary 9: labelled prose and stored card
+
+Input: the retained raw response.
+
+The response uses labelled prose sections rather than a JSON object. The parser
+checks declared headings and required content mechanically. It does not judge
+meaning, repair unsupported claims or treat syntactic validity as truth.
+
+The card requires a useful summary and long visual description. Important text
+must be captured for OCR and search. The exact OCR and composition strategy
+remains eval-gated; this contract does not assume a second model call.
+
+Accepted stored output:
+
+- parsed card fields
+- retained raw response relation
+- model and prompt identity
+- source, original and classified-image hashes
+- metadata and place-evidence relations
+- parser version and write time
+- stale and superseded state
+
+Search indexes the stored card and checked mechanical facts. It does not infer a
+second answer at query time.
+
+## Provenance and privacy
+
+One private provenance chain must reconstruct a card from:
+
+1. source snapshot and asset selection
+2. camera-original and current-rendered-still selection
+3. exact byte sizes, types and hashes
+4. metadata extraction and human projection
+5. coordinate and cached provider evidence
+6. fully rendered model request
+7. raw model response
+8. parser version and stored card rows
+
+Private identifiers, paths, coordinates, metadata, image content and model
+output never enter commits, public docs or public test fixtures.
+
+## Failure, restart and staleness
+
+Accepted restart behaviour: every stage records enough input and output identity
+to resume without repeating valid work. A restart may reuse a proved cache
+entry, provider result, rendered request, raw response or stored card only when
+its complete input identity still matches.
+
+Transient failures retry with a bounded policy. Permanent failures retain a
+safe reason. No partial output becomes complete state.
+
+When any input consumed by card generation changes, the active card becomes
+visibly stale and re-enters the dependency graph. It remains readable. Source
+deletion or restoration alone does not stale or regenerate the card. A
+successful replacement supersedes rather than deletes the previous card.
+Reclassification is batched and deliberate because model calls are expensive.
+
+## Backfill gate
+
+The full-library card run remains parked. It starts only after one real asset
+reaches a stored card through this contract, each boundary has raw proof,
+focused regressions pass, representative sampling finds no unresolved upstream
+integrity defect, and the measured model cost is justified.

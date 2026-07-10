@@ -2,117 +2,179 @@
 written_by: ai
 ---
 
-# photoscrawl Architecture
+# Photos architecture
 
-Date: 2026-05-28
+photoscrawl is a read-only Apple Photos crawler. It owns its source schema,
+archive, classification pipeline and query surface. `trawlkit` owns shared
+crawler, storage, model-call and output mechanics.
 
-## Decision
+This document states the stable structure and accepted direction. It does not
+inventory current-main behaviour. The [data contract](data-contract.md) is the
+only Photos document that records implementation status.
 
-Build `photoscrawl` as a standalone OpenTrawl/trawlkit Go crawler. It owns the
-Apple Photos schema, local classification policy, privacy policy, and query
-surface. `trawlkit` owns reusable mechanics only.
+## Model boundary
 
-## Source Strategy
+Local first means local archives, caches, source access and user control. It
+does not mean local image models are preferred.
 
-Use the safest source available for each job:
+Photos image classification and image-model evals use frontier vision models
+through Ollama Cloud. Direct paid Gemini API calls are not part of the product
+path. No current document chooses the final card model.
 
-1. A trawlkit SQLite snapshot of `database/Photos.sqlite` for headless asset,
-   resource, album, and location enumeration.
-2. PhotoKit only for explicit media export flows, such as original export when
-   the user allows iCloud downloads.
-3. Apple's existing Photos analysis as evidence when it is extractable and good.
-4. Local Vision/Core ML classification to fill gaps or improve signal.
-5. Local multimodal models for higher-signal image understanding when the user
-   opts into local content classification.
+Ollama Cloud is not used for code review or general agent reasoning. Those jobs
+use a capable Sol/OpenAI agent or a human. Terra may be an agent-runtime choice;
+it is not a Photos provider.
 
-Treat private Photos SQLite tables as source evidence with schema-version checks
-and evidence labels. Do not promote them into durable truth tables.
+## Asset-parallel dependency graph
 
-## Ingestion Model
+The accepted pipeline is a resumable dependency graph, not one sequential loop:
 
-The crawler has two stages:
+```mermaid
+flowchart LR
+    source["Current Photos snapshot"] --> asset["Normalised asset and deletion state"]
+    asset --> media["Camera original and current rendered still"]
+    media --> metadata["Full metadata and EXIF"]
+    asset --> place["Cached map and POI evidence"]
+    media --> ready["Complete card input"]
+    metadata --> ready
+    place --> ready
+    ready --> request["Persisted rendered request"]
+    request --> model["Ollama Cloud card call"]
+    model --> response["Retained raw response"]
+    response --> parse["Labelled-prose parse"]
+    parse --> card["Stored card and provenance"]
+```
 
-- `sync`: enumerate assets and cheap metadata for all assets.
-- `classify`: process image/video content through a resumable queue.
+Different assets may occupy different stages at the same time. Place evidence
+for one asset may be filling while another waits for PhotoKit and a third is
+sent to the model. Dependencies remain strict within one asset: the expensive
+card call starts only after every required upstream boundary is complete.
 
-`sync` may record paths to files that already exist inside the Photos library
-package, such as derivatives, renders, or originals. It must not export media,
-write to Photos, or trigger iCloud downloads.
+## Source and asset boundary
 
-Originals may be downloaded for classification, but downloads must be bounded:
+The crawler reads a consistent snapshot of the configured Photos library. It
+does not change Photos, its albums, metadata, media or iCloud state.
 
-- keep a local cache budget;
-- process batches;
-- evict originals/thumbnails after observations and hashes are recorded;
-- resume from cursor state;
-- record `needs_download` when the original is not local.
+One normalised asset carries the source identity and facts consumed downstream.
+Only a proved-complete snapshot may establish that a previously current asset
+is missing. The archive records the explicit source state, the snapshot that
+established it, when absence was first observed and any deletion time supplied
+by Photos. A verified source absence is distinct from an extractor, provider or
+selection failure. Deletion and restoration update source state and provenance;
+they do not by themselves change the model-generation key or spend another card
+call. A valid existing card remains readable with its upstream-deleted flag.
 
-CPU is allowed. Disk blowups are not.
+## Image roles and cache
 
-## Classification Policy
+Apple exposes 2 different image roles:
 
-Classify for signal, not uniform checklist compliance.
+- `PHAssetResourceType.photo` is the camera original. Its exact bytes, size,
+  hash and full metadata are provenance
+- [`PHImageManager.requestImageDataAndOrientation`](https://developer.apple.com/documentation/photos/phimagemanager/requestimagedataandorientation%28for%3Aoptions%3Aresulthandler%3A%29)
+  with request version [`.current`](https://developer.apple.com/documentation/photos/phimagerequestoptionsversion/current)
+  supplies the most recent rendered still, including edits, at the largest
+  available size
 
-Always consider:
+`PHAssetResourceType.fullSizePhoto` is a modified resource, not the canonical
+way to obtain that current rendition and not a better original. The pipeline
+acquires and identifies both roles. Classification always sees the current
+rendered still; metadata and provenance come from the camera original. For an
+unedited asset the 2 representations may be visually equivalent, but the
+pipeline does not assume their bytes are identical. The rendered request
+records exactly which bytes it sent.
 
-- scene/object labels;
-- OCR;
-- face count and boxes;
-- barcode/QR detection;
-- screenshot/document/receipt markers;
-- image quality and visual similarity.
-- local photo cards with summaries, visual descriptions, calibrated place
-  phrases, and uncertainty notes.
+Downloaded media uses a bounded local least-recently-used cache. A valid cache
+hit is tied to the complete source version and proves its stored size and
+SHA-256 after restart. Partial exports never become cache entries. A request
+holding a cached file prevents eviction until it has copied the bytes.
 
-But store observations only when they have useful provenance. Carry confidence
-only when the source or model actually emitted a calibrated value. A cat photo
-does not need barcode output; a receipt/screenshot/document probably does need
-OCR; a drone-looking burst probably needs camera/device/resource metadata and
-location precision.
+## Metadata boundary
 
-Photo-card output is candidate observation data. It belongs in generic model
-observation rows with the model id, prompt version, and internal provenance;
-search indexes the raw card text directly. Promotion into trips, places,
-people, relationships, or durable events belongs in a later user-reviewed
-layer.
+The product extracts the full metadata and EXIF record from the exact camera
+original. Private runtime storage keeps the lossless source record. The card
+request receives a field-aware, human-readable projection: sensible dates,
+standard shutter-speed notation, useful units and no meaningless float
+precision.
 
-## Location Policy
+Unknown, malformed or contradictory values remain explicit. They do not become
+plausible-looking prose or silently disappear.
 
-Store raw GPS observations first. Reverse geocoding is a separate derived layer.
+## Place evidence boundary
 
-Reason: GPS can be off by enough to imply the wrong business or home. A raw
-coordinate is source provenance; "barber shop" versus "pizza place" is a
-fallible derived claim and must carry an internal method and provenance record.
-It carries confidence only when the provider or model actually emits one.
+One configured provider seam combines cached, resumable address, map-feature
+and POI evidence from explicit sources. The evidence can cover venues,
+landmarks, trails, parks and difficult coordinates, including mainland China.
+Provider endpoints and credentials come only from explicit application
+configuration.
 
-## Identity Policy
+The camera coordinate is where the photographer stood. It is not necessarily
+the depicted place. Provider code returns evidence; the card model may compare
+the image with useful candidates to infer what is depicted. Provider distance
+alone never confirms a venue or landmark.
 
-Use Apple's People/faces data if available, but label it as source provenance.
-Also run local face detection/embedding where useful because user annotations are
-sparse and biased toward important people.
+An empty provider response is not automatically a completed stage. During
+development it blocks carding until the input, coordinate handling, query and
+provider coverage have been investigated. A genuine, proved absence may then be
+stored explicitly.
 
-Do not create canonical people in v1. Store anonymous face observations, Apple
-person labels, and candidate links. Promotion to people belongs in a later
-user-reviewed identity layer.
+## Card boundary
 
-## Query Model
+The complete card input joins the selected image with readable mechanical
+context. The exact rendered request is persisted before transmission. The exact
+raw response is retained before parsing.
 
-The first query layer is asset traversal:
+The Photos response contract uses labelled prose sections. Deterministic code
+checks declared structure without making a semantic judgement or treating valid
+syntax as true content. The stored card includes a useful summary, a long visual
+description, important visible text and explicit uncertainty.
 
-- `metadata`: crawler contract and capabilities.
-- `status`: archive health and counts.
-- `doctor`: local readiness checks.
-- `sync`: initialise or refresh the archive.
-- `classify`: write local metadata, place, and model observations.
-- `search`: FTS over asset metadata, albums, place observations, and photo-card
-  terms.
-- `open`: card-first asset detail with mechanical metadata, place context,
-  summary, description, and uncertainty. It does not expose evidence refs.
+One private provenance record links the source asset, camera-original hash,
+classified-image hash, metadata projection, place evidence, model request, raw
+response, parser version and stored card.
 
-Human search output may show a derived short ref for local copy and paste.
-JSON keeps the canonical `photos:asset/<32-hex>` ref. `open` accepts
-either form when the alias resolves to exactly one asset.
+## Missing evidence and restart behaviour
 
-Higher concepts like trips, recurring places, drone flights, or named places are
-later hypotheses built from archive facts such as album ids, burst ids,
-timestamps, and GPS.
+An unexamined missing field is a pipeline failure, not permission to card. Each
+stage distinguishes:
+
+- verified source absence
+- unsupported source shape
+- transient failure
+- permanent failure with evidence
+- complete output
+
+Only a complete output or proved source absence satisfies a dependency. A
+provider or extractor returning an empty payload does not prove absence.
+
+Every completed stage is idempotent. It records enough input identity, output
+identity and private provenance to reuse valid work after restart. A retry does
+not repeat a valid download, provider call or model call. Drift in an input
+actually consumed by card generation marks the card stale; successful
+reclassification retains the old card as history rather than deleting it.
+Source deletion or restoration alone changes eligibility and provenance, not
+the generation key.
+
+## Query and research boundaries
+
+`search` is a projection of stored source facts and cards. It does not perform a
+second semantic inference pass. `open` presents the current card and readable
+mechanical facts without exposing private evidence identifiers.
+
+Research tooling may test providers, prompts and models, but it does not become
+a second product pipeline. Reusable acquisition, metadata, place and request
+logic belongs in the product path. A lab result proves the product only when it
+uses those same boundaries.
+
+## Unresolved decisions
+
+Current documentation must not settle these before evidence exists:
+
+- the final OSM-backed provider and ranking policy
+- the production Ollama Cloud vision model
+- whether auxiliary OCR evidence improves the single expensive card call
+- the composition output shape
+- later use of Live Photo motion frames
+- a large developer-only external cache and prefetch policy
+
+Historical research may inform these decisions. It never decides them by
+incumbency.

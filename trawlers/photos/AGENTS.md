@@ -7,8 +7,9 @@ written_by: ai
 ## Purpose
 
 `photoscrawl` is a local-first OpenTrawl/trawlkit crawler for Apple Photos. It
-builds a provenance-backed `photoscrawl.db` archive from a user's Photos
-library without uploading private media by default.
+builds a provenance-backed `photos.db` archive from a user's Photos library.
+Local first means local storage, read-only source access and user control. It
+does not mean local image models are preferred.
 
 ## Stack
 
@@ -24,9 +25,10 @@ library without uploading private media by default.
   path shims. Migrate old photoscrawl path handling to current trawlkit
   semantics instead of preserving `~/.photoscrawl` or `PHOTOSCRAWL_HOME` as
   product behavior.
-- Darwin-only cgo bridges to Apple frameworks are allowed when PhotoKit, Vision,
-  CoreLocation, or Core ML require them. Keep the bridge narrow and expose a Go
-  interface.
+- Darwin-only cgo bridges to Apple frameworks are allowed when PhotoKit,
+  CoreLocation or ImageIO requires them. Keep the bridge narrow and expose a Go
+  interface. Do not introduce local Vision or Core ML classification without a
+  current, evidence-backed ticket.
 - Do not add Swift, Python, Node, shell pipelines, or ad-hoc scripts to the
   product path.
 - Tests must not touch the live Photos library. Use temp SQLite files and small
@@ -34,20 +36,21 @@ library without uploading private media by default.
 - Boy Scout rule: every touched path should be simpler, more consistent, or
   better aligned with trawlkit than before. Small cleanup beats TODO drift.
 
-## Product Boundaries
+## Product boundaries
 
 - NO PRIVATE DATA IN THE REPO. Do not commit, stage, copy, or write private
-  Photos data into this checkout: Photos libraries, `photoscrawl.db`, snapshots,
+  Photos data into this checkout: Photos libraries, `photos.db`, snapshots,
   thumbnails, originals, exported media, extracted metadata dumps, GPS dumps,
   face data, OCR text, classifier output, logs containing asset metadata, or
   any other user-derived archive material.
 - Keep private crawl artifacts outside the repo under the current trawlkit
   runtime data/cache/state dirs, or `/tmp/` for short-lived fixtures. Existing
   local dotdir artifacts are migration inputs, not product-path conventions.
-- If verification needs real Photos access, run it read-only and report counts
-  or synthetic examples only. Do not paste or save private asset identifiers,
-  filenames, locations, OCR text, people labels, or media-derived content into
-  tracked files.
+- If verification needs real Photos access, run it read-only. Keep real archive
+  counts and examples in private runtime evidence or an explicitly requested
+  private conversation; use synthetic examples in tracked files. Do not paste
+  or save private asset identifiers, filenames, locations, OCR text, people
+  labels, or media-derived content into tracked files.
 - If Josh explicitly asks to see real example inputs/outputs in the chat, use
   real user-supplied/local data and reproduce the tool/provider output
   verbatim. Do not summarize, redact, paraphrase, normalize, or "clean up" those
@@ -60,14 +63,20 @@ library without uploading private media by default.
   This is open source software for users to understand their own Photos data.
 - Read from Apple Photos only through explicit read-only/snapshot flows.
 - Never mutate Photos, albums, metadata, faces, or iCloud state.
-- Cloud model calls are opt-in only and must identify exactly which assets or
-  derived thumbnails leave the machine.
+- Photos image classification and classification evals use frontier cloud
+  vision models through Ollama Cloud. Direct paid Gemini API calls are not part
+  of the product path. Record exactly which image bytes and rendered context
+  cross that boundary.
+- Ollama Cloud is not a code-review or general agent-reasoning service.
+  Development and adversarial review use a capable Sol/OpenAI agent or a human.
+  Terra may be an agent-runtime choice when suitable; it is not a Photos model
+  provider and must not appear in product configuration or architecture.
 - Store observations, internal provenance, and candidate signals. Do not create
   durable person, place, trip, relationship, or life-event truth tables in v1.
-- CPU is acceptable when it buys signal quality. Disk pressure is not; classify
-  originals through a bounded local cache/ringbuffer when downloads are needed.
+- CPU is acceptable when it buys signal quality. Disk pressure is not; resolve
+  media through a bounded local cache or ring buffer when downloads are needed.
 
-## File Storage And Eval Artifacts
+## File storage and eval artifacts
 
 - Do not hide product/design work in random private state dirs. Private media,
   raw model outputs, OCR dumps, GPS dumps, and live-library eval results stay
@@ -93,7 +102,7 @@ library without uploading private media by default.
   temporary shell/Python snippets are acceptable only during exploration and
   should be promoted to Go or removed once the shape is known.
 
-## Docs And Decisions
+## Docs and decisions
 
 - Docs must stay current with the latest verified decision. If code, provider
   output, command output, or Josh's correction conflicts with docs, treat the
@@ -106,19 +115,12 @@ library without uploading private media by default.
 - Do not document legacy paths, old env vars, or temporary compatibility
   behavior as supported architecture. If docs mention behavior the code should
   not keep, fix the code and docs in the same slice.
+- [Architecture](docs/architecture.md) is current product direction.
+  [Data contract](docs/data-contract.md) distinguishes implemented boundaries
+  from accepted but unimplemented ones. Files labelled historical are evidence
+  about old runs, never current policy.
 
-## Codex Goal Workflow
-
-- When Josh asks to set, rewrite, or improve a goal, use the
-  `session-goal-writer` skill from the Codex skills tree.
-- Goals should preserve Josh's vision first, then state the current slice,
-  constraints, deliverable, review proof, and completion proof. A plan,
-  scaffold, or budget-limited answer is not completion.
-- If a goal budget ends before the work is actually handled, do not shrink the
-  task into a partial handoff. Re-align the goal with Josh and continue or state
-  the exact blocker.
-
-## Query Surface
+## Query surface
 
 Keep crawl-family commands:
 
@@ -132,37 +134,41 @@ Keep crawl-family commands:
 
 Research-only `photoscrawl-lab` verbs are not part of this query surface.
 
-Provenance tables, evidence refs, raw provider responses, and model responses
-are machine-internal pipeline storage. Do not expose an `evidence` command or
-evidence refs/counts in `open`.
+The target pipeline keeps raw provider evidence, the rendered model request,
+the raw model response and card provenance in private runtime storage. Some of
+that persistence is not implemented yet; do not document it as shipped. Do not
+expose private evidence refs or counts in `open`.
 
-## Output Review Protocol (mandatory, all agents including subagents)
+## Output review protocol
 
-The gate for any change that touches what a command emits is a MODEL REVIEW,
-never a script. ZFC: deterministic checks own structure; quality judgment
-belongs to a model. Before committing any output-shape change:
+The gate for any change that touches what a command emits is an independent
+Sol/OpenAI or human review, never a script and never the Ollama Cloud
+classification service. ZFC: deterministic checks own structure; quality
+judgement belongs to a capable reviewer. Before committing an output-shape
+change:
 
 1. Generate RAW transcripts of every permutation the change touches: every
    affected verb, JSON and human mode, photoscrawl-direct AND trawl-rendered
    (`trawl open`/`trawl search` render our JSON — that is the surface users
-   and agents actually see). Include the model-input sidecar when the change
+   and agents actually see). Include the rendered model request when the change
    touches classification. Raw means raw: full, untruncated, uncensored — a
    review over summarized output reviews nothing.
-2. Have a model that did not write the change review those transcripts
-   adversarially (refute, not approve) against the blind-person test below.
+2. Have a capable Sol/OpenAI agent that did not write the change, or a human,
+   review those transcripts adversarially against the blind-person test below.
 3. The contract regexes are tripwires that remember past defects. They are
    never sufficient and passing them proves nothing new. When the model
    review finds a defect class, add a tripwire so it cannot regress — but the
    review itself is the gate.
 
-The blind-person test: both the card we SEND to the model (mechanical
-context) and the card we STORE from it must let a blind person understand
-the scene perfectly and exhaustively — what, where, when, with what device,
-in what context, with what certainty. Anything a blind person could not
-parse (raw enums, float noise, machine ids, cache accounting, provenance
-strings) is slop; anything they would still have to ask about is missing.
+The blind-reader test has 2 sides. The request sent to the model must expose the
+exact image identity and readable mechanical context so a reviewer can verify
+the input; it is not expected to describe a scene the model has not interpreted
+yet. The stored card must let a reader understand the scene completely — what,
+where, when, with what device, in what context and with what certainty. Raw
+enums, float noise, machine ids, cache accounting and provenance strings are not
+readable context. Missing scene detail in the stored card is missing output.
 
-## No invented label ontologies (ZFC)
+## No invented label ontologies
 
 Never mint new deterministic label kinds/enums to carry meaning a model
 should express (ruled 2026-07-04, the "family home" case). Deterministic
@@ -172,24 +178,17 @@ that is meaning, not gating — whose house, what relationship, why a
 place matters — flows to the model as plain-language phrases and to
 readers as prose, never as new enum vocabulary.
 
-## Standing principles pass (recurring, not optional)
+## Standing principles pass
 
-Slop compounds. After every few landed slices — and always before a
-milestone claim — run a deslopify/ZFC/engineering-principles review
-over the recent diff range (not the whole tree): a non-authoring model
-reads the changes against this file, ../docs/vision.md's engineering
-principles, and the no-ontologies rule, and files defects. Workers
-drift (sandbox reverts, invented heuristics, knob creep) even with
-good prompts; only a recurring pass catches the drift before failures
-compound. Review evidence is RAW or it is not review: full unpiped,
-untruncated, unmodified inputs and outputs — no greps, no head/tail,
-no summaries between the artifact and the reviewer. Benchmark truth
-commands are themselves audited the same way: run the check raw, open
-every truth ref raw, confirm it is the real event before the truth is
-frozen. Coordinate diff ranges with the crawlers session so passes
-cover everything once and nothing twice.
+Slop compounds. After every few landed slices, and before a milestone claim,
+run an engineering-principles review over the recent diff range. A capable
+non-authoring Sol/OpenAI agent or human reads the changes against this file,
+`docs/vision.md` and the no-ontologies rule. Ollama Cloud is not the reviewer.
+Review evidence is raw: full, untruncated inputs and outputs with no summary
+inserted between the artifact and reviewer. Benchmark truth commands get the
+same treatment. Read every truth ref before freezing it.
 
-## Observability Rule (ratified 2026-07-04)
+## Observability rule
 
 Every pipeline phase and every per-item outcome logs one structured line with
 its duration — successes included, not just failures. Silence is a defect: any
