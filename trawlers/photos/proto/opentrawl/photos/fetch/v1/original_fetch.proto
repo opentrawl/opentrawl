@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package opentrawl.photos.fetch.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwire";
+
+message OriginalFetchRequest {
+  string local_identifier = 1;
+  string creation_date = 2;
+  int64 width = 3;
+  int64 height = 4;
+  string original_filename = 5;
+  string destination_path = 6;
+  bool allow_network = 7;
+  int64 timeout_milliseconds = 8;
+}
+
+message OriginalFetchResponse {
+  bool success = 1;
+  int64 size_bytes = 2;
+  bytes sha256 = 3;
+  string error_code = 4;
+  string error_message = 5;
+  string photos_access_status = 6;
+}

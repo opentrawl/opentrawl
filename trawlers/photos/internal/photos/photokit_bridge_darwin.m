@@ -1,4 +1,5 @@
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 #import <Photos/Photos.h>
 #import <CoreLocation/CoreLocation.h>
 #import <CoreImage/CoreImage.h>
@@ -9,7 +10,7 @@
 #include <string.h>
 #include <math.h>
 
-int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut);
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut);
 
 static NSString *pcString(NSString *value) {
   return value == nil ? @"" : value;
@@ -147,33 +148,51 @@ static id pcJSONSafe(id value) {
   return [value description];
 }
 
-static PHAuthorizationStatus pcEnsureAuthorized(void) {
-  __block PHAuthorizationStatus status;
+static PHAuthorizationStatus pcCurrentAuthorizationStatus(void) {
   if (@available(macOS 11.0, *)) {
     // macOS Photos exposes asset fetch access through ReadWrite; AddOnly cannot
     // enumerate the library. This bridge still only calls fetch/read APIs.
-    status = [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
-    if (status == PHAuthorizationStatusNotDetermined) {
-      dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-      [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite handler:^(PHAuthorizationStatus requestedStatus) {
-        status = requestedStatus;
-        dispatch_semaphore_signal(semaphore);
-      }];
-      dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    }
+    return [PHPhotoLibrary authorizationStatusForAccessLevel:PHAccessLevelReadWrite];
+  }
+
+  return [PHPhotoLibrary authorizationStatus];
+}
+
+static PHAuthorizationStatus pcRequestAuthorization(void) {
+  __block PHAuthorizationStatus status = pcCurrentAuthorizationStatus();
+  if (status != PHAuthorizationStatusNotDetermined) {
     return status;
   }
 
-  status = [PHPhotoLibrary authorizationStatus];
-  if (status == PHAuthorizationStatusNotDetermined) {
-    dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
-    [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus requestedStatus) {
+  NSApplication *application = [NSApplication sharedApplication];
+  [application setActivationPolicy:NSApplicationActivationPolicyRegular];
+  [application activateIgnoringOtherApps:YES];
+
+  void (^completeRequest)(PHAuthorizationStatus) = ^(PHAuthorizationStatus requestedStatus) {
+    dispatch_async(dispatch_get_main_queue(), ^{
       status = requestedStatus;
-      dispatch_semaphore_signal(semaphore);
+      [application stop:nil];
+    });
+  };
+  if (@available(macOS 11.0, *)) {
+    [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite handler:^(PHAuthorizationStatus requestedStatus) {
+      completeRequest(requestedStatus);
     }];
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+  } else {
+    [PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus requestedStatus) {
+      completeRequest(requestedStatus);
+    }];
   }
+  [application run];
   return status;
+}
+
+static BOOL pcRequireAuthorization(PHAuthorizationStatus status, char **errorOut) {
+  if (status == PHAuthorizationStatusAuthorized || status == PHAuthorizationStatusLimited) {
+    return YES;
+  }
+  pcSetError(errorOut, [NSString stringWithFormat:@"photos_access:%@", pcAuthorizationStatus(status)]);
+  return NO;
 }
 
 static NSDictionary *pcLocationDictionary(CLLocation *location) {
@@ -371,7 +390,7 @@ static PHAsset *pcFetchAssetByMetadata(NSString *creationDate, long long width, 
   return nil;
 }
 
-static int pcWriteOriginalResource(PHAsset *asset, NSString *path, int allowNetwork, char **errorOut) {
+static int pcWriteOriginalResource(PHAsset *asset, NSString *path, int allowNetwork, long long timeoutMilliseconds, char **errorOut) {
   if (asset == nil) {
     pcSetError(errorOut, @"PhotoKit asset not found");
     return 0;
@@ -397,7 +416,15 @@ static int pcWriteOriginalResource(PHAsset *asset, NSString *path, int allowNetw
     writeError = error;
     dispatch_semaphore_signal(semaphore);
   }];
-  dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
+  if (timeoutMilliseconds <= 0) {
+    pcSetError(errorOut, @"PhotoKit original export timed out");
+    return 0;
+  }
+  dispatch_time_t deadline = dispatch_time(DISPATCH_TIME_NOW, timeoutMilliseconds * NSEC_PER_MSEC);
+  if (dispatch_semaphore_wait(semaphore, deadline) != 0) {
+    pcSetError(errorOut, @"PhotoKit original export timed out");
+    return 0;
+  }
 
   if (writeError != nil) {
     pcSetError(errorOut, [NSString stringWithFormat:@"export original resource: %@", writeError.localizedDescription]);
@@ -453,6 +480,19 @@ static NSDictionary *pcAssetDictionary(PHAsset *asset) {
   return entry;
 }
 
+char *photoscrawl_request_photokit_authorization(char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    if (!@available(macOS 10.15, *)) {
+      pcSetError(errorOut, @"PhotoKit authorization requests require macOS 10.15 or newer");
+      return NULL;
+    }
+    return pcCopyCString(pcAuthorizationStatus(pcRequestAuthorization()));
+  }
+}
+
 char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {
@@ -470,9 +510,8 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
       return NULL;
     }
 
-    PHAuthorizationStatus status = pcEnsureAuthorized();
-    if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) {
-      pcSetError(errorOut, [NSString stringWithFormat:@"Photos access is %@ for this process", pcAuthorizationStatus(status)]);
+    PHAuthorizationStatus status = pcCurrentAuthorizationStatus();
+    if (!pcRequireAuthorization(status, errorOut)) {
       return NULL;
     }
 
@@ -518,11 +557,7 @@ char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
   }
 }
 
-int photoscrawl_export_original_resource(const char *localIdentifier, const char *destinationPath, int allowNetwork, char **errorOut) {
-  return photoscrawl_export_original_resource_matching(localIdentifier, "", 0, 0, "", destinationPath, allowNetwork, errorOut);
-}
-
-int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut) {
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {
       *errorOut = NULL;
@@ -541,9 +576,8 @@ int photoscrawl_export_original_resource_matching(const char *localIdentifier, c
       return 0;
     }
 
-    PHAuthorizationStatus status = pcEnsureAuthorized();
-    if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) {
-      pcSetError(errorOut, [NSString stringWithFormat:@"Photos access is %@ for this process", pcAuthorizationStatus(status)]);
+    PHAuthorizationStatus status = pcCurrentAuthorizationStatus();
+    if (!pcRequireAuthorization(status, errorOut)) {
       return 0;
     }
 
@@ -551,7 +585,7 @@ int photoscrawl_export_original_resource_matching(const char *localIdentifier, c
     if (asset == nil) {
       asset = pcFetchAssetByMetadata(created, width, height, filename);
     }
-    return pcWriteOriginalResource(asset, path, allowNetwork, errorOut);
+    return pcWriteOriginalResource(asset, path, allowNetwork, timeoutMilliseconds, errorOut);
   }
 }
 

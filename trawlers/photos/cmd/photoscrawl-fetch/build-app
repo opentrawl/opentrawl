@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Build and register the signed PhotoKit app used by the internal original
+# resolver. Release packaging supplies the production signing identity.
+set -euo pipefail
+
+if [[ $# -ne 0 ]]; then
+  echo "usage: build-app" >&2
+  exit 2
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+identity="OpenTrawl Dev Signing"
+keychain="opentrawl-dev.keychain"
+app="$HOME/Applications/Photoscrawl Fetch.app"
+contents="$app/Contents"
+binary="$contents/MacOS/photoscrawl-fetch"
+entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+
+"$repo_root/scripts/dev-cert"
+rm -rf "$app"
+mkdir -p "$contents/MacOS"
+cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$contents/Info.plist"
+(
+  cd "$repo_root/trawlers/photos"
+  go build -o "$binary" ./cmd/photoscrawl-fetch
+)
+codesign --force --options runtime \
+  --identifier org.opentrawl.photoscrawl.fetch \
+  --entitlements "$entitlements" \
+  --keychain "$keychain" \
+  --sign "$identity" \
+  "$app"
+codesign --verify --deep --strict --verbose=2 "$app"
+"$lsregister" -f "$app"

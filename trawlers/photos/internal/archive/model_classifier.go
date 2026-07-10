@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
@@ -411,14 +412,28 @@ func (input classifyInput) contentImagePath() (string, bool) {
 	if input.MediaType != "image" {
 		return "", false
 	}
+	path := ""
 	for _, resource := range input.Resources {
-		path := strings.TrimSpace(resource.LocalPath)
-		if path == "" || !classifiableImagePath(path) {
+		if resource.ResourceType != "local_original" {
 			continue
 		}
-		return path, true
+		candidate := strings.TrimSpace(resource.LocalPath)
+		if candidate == "" || !classifiableImagePath(candidate) {
+			continue
+		}
+		if path != "" {
+			return "", false
+		}
+		path = candidate
 	}
-	return "", false
+	if path == "" {
+		return "", false
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
+		return "", false
+	}
+	return path, true
 }
 
 func (input classifyInput) localPathClass(path string) string {
@@ -442,12 +457,7 @@ func (input classifyInput) localPathClass(path string) string {
 }
 
 func classifiableImagePath(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jpg", ".jpeg", ".png", ".heic":
-		return true
-	default:
-		return false
-	}
+	return photos.IsOriginalExtension(filepath.Ext(path))
 }
 
 func mimeTypeForPath(path string) string {
@@ -458,6 +468,12 @@ func mimeTypeForPath(path string) string {
 		return "image/png"
 	case ".heic":
 		return "image/heic"
+	case ".heif":
+		return "image/heif"
+	case ".tif", ".tiff":
+		return "image/tiff"
+	case ".dng":
+		return "image/x-adobe-dng"
 	default:
 		return "image/jpeg"
 	}

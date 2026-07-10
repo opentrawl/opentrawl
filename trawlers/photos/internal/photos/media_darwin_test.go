@@ -23,6 +23,41 @@ const (
 	exportLockHelperSleep = 10 * time.Minute
 )
 
+func TestPhotoKitAccessErrorsGiveExactRemedy(t *testing.T) {
+	tests := []struct {
+		status string
+		want   string
+	}{
+		{
+			status: "not_determined",
+			want:   "Photos access has not been granted to Photoscrawl Fetch; open Photoscrawl Fetch in Applications, approve the macOS prompt, then retry",
+		},
+		{
+			status: "denied",
+			want:   "Photos access is denied for Photoscrawl Fetch; enable Photoscrawl Fetch in System Settings > Privacy & Security > Photos, then retry",
+		},
+		{
+			status: "restricted",
+			want:   "Photos access is restricted by macOS for Photoscrawl Fetch",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.status, func(t *testing.T) {
+			err := photoKitError(photoLibraryAccessErrorPrefix + test.status)
+			if !IsPhotoLibraryAccessError(err) {
+				t.Fatalf("error type = %T, want PhotoLibraryAccessError", err)
+			}
+			var accessErr *PhotoLibraryAccessError
+			if !errors.As(err, &accessErr) || accessErr.Status != test.status {
+				t.Fatalf("access error = %#v", accessErr)
+			}
+			if err.Error() != test.want {
+				t.Fatalf("error = %q, want %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestAcquireExportLockWritesOwnerPID(t *testing.T) {
 	destinationPath := filepath.Join(t.TempDir(), "original.jpeg")
 	lock, err := acquireExportLock(destinationPath)

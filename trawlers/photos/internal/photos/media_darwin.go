@@ -3,11 +3,11 @@
 package photos
 
 /*
-#cgo darwin LDFLAGS: -framework Foundation -framework Photos -framework CoreLocation -framework CoreImage -framework CoreGraphics -framework ImageIO
+#cgo darwin LDFLAGS: -framework Foundation -framework AppKit -framework Photos -framework CoreLocation -framework CoreImage -framework CoreGraphics -framework ImageIO
 #include <stdlib.h>
 
-int photoscrawl_export_original_resource(const char *localIdentifier, const char *destinationPath, int allowNetwork, char **errorOut);
-int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, char **errorOut);
+int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut);
+char *photoscrawl_request_photokit_authorization(char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut);
 */
@@ -23,12 +23,11 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 	"unsafe"
 )
 
-func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPath string, allowNetwork bool) error {
-	return ExportOriginalResourceMatching(ctx, OriginalExportQuery{LocalIdentifier: localIdentifier}, destinationPath, allowNetwork)
-}
+const photoLibraryAccessErrorPrefix = "photos_access:"
 
 func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQuery, destinationPath string, allowNetwork bool) error {
 	select {
@@ -59,10 +58,17 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 	defer C.free(unsafe.Pointer(cDestination))
 
 	var cErr *C.char
-	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), &cErr)
+	timeout := defaultPhotoKitFetchTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+		if timeout <= 0 {
+			return context.DeadlineExceeded
+		}
+	}
+	ok := C.photoscrawl_export_original_resource_matching(cIdentifier, cCreationDate, C.longlong(query.Width), C.longlong(query.Height), cOriginalFilename, cDestination, boolInt(allowNetwork), C.longlong(timeout.Milliseconds()), &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
-		return originalExportError(C.GoString(cErr))
+		return photoKitError(C.GoString(cErr))
 	}
 	if ok == 0 {
 		return errors.New("export original resource failed")
@@ -73,15 +79,43 @@ func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQue
 	return nil
 }
 
-func originalExportError(message string) error {
+func photoKitError(message string) error {
 	trimmed := strings.TrimSpace(message)
+	if status, ok := strings.CutPrefix(trimmed, photoLibraryAccessErrorPrefix); ok {
+		return &PhotoLibraryAccessError{Status: strings.TrimSpace(status)}
+	}
 	if strings.Contains(strings.ToLower(trimmed), "photokit asset not found") {
 		if trimmed == "" || strings.EqualFold(trimmed, ErrPhotoKitAssetNotFound.Error()) {
 			return ErrPhotoKitAssetNotFound
 		}
 		return fmt.Errorf("%w: %s", ErrPhotoKitAssetNotFound, trimmed)
 	}
+	if strings.Contains(strings.ToLower(trimmed), "photokit original export timed out") {
+		return ErrPhotoKitExportTimedOut
+	}
 	return errors.New(trimmed)
+}
+
+// RequestPhotoLibraryAuthorization may show the macOS Photos permission
+// prompt. Only the signed app's first-run entrypoint calls it.
+func RequestPhotoLibraryAuthorization(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	var cErr *C.char
+	cStatus := C.photoscrawl_request_photokit_authorization(&cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return "", photoKitError(C.GoString(cErr))
+	}
+	if cStatus == nil {
+		return "", errors.New("PhotoKit returned no authorization status")
+	}
+	defer C.free(unsafe.Pointer(cStatus))
+	return C.GoString(cStatus), nil
 }
 
 type exportLock struct {

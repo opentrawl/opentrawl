@@ -33,7 +33,7 @@ func (PhotoKitProvider) Snapshot(ctx context.Context, libraryPath string) (Libra
 	cJSON := C.photoscrawl_photokit_snapshot(cPath, &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
-		return LibrarySnapshot{}, errors.New(C.GoString(cErr))
+		return LibrarySnapshot{}, photoKitError(C.GoString(cErr))
 	}
 	if cJSON == nil {
 		return LibrarySnapshot{}, errors.New("PhotoKit returned no snapshot")

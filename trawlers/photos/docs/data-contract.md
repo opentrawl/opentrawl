@@ -59,9 +59,9 @@ locations, local metadata, OCR/text, faces, edges, and `asset_fts`.
 It does not delete `model_observation` or `place_observation`. Instead,
 it marks their active rows with `stale_since` and `stale_reason`, keeps
 their search entries, and re-enters the asset in `classification_queue`.
-A queue row already in `failed_download` still keeps its state and reason
-on upsert (`internal/archive/crawl_statements.go:76`), so download
-failures are not silently reset by a sync.
+A queue row in `failed_download` keeps its failure evidence across an unchanged
+sync. A later model-backed `classify` run selects it again, so recovery needs no
+operator-only reset.
 
 ## Stage 2 — the classification queue
 
@@ -69,8 +69,8 @@ failures are not silently reset by a sync.
 → `content_classified`, with `place_pending` as a side-parking state for
 assets whose GPS could not be resolved (stage 3). Failure and skip states,
 all set by the classify pipeline (`internal/archive/classify_pipeline.go`):
-`content_failed` (model or parse failure), `failed_download` (original
-export failed; preserved across syncs, see stage 1),
+`content_failed` (model or parse failure), `failed_download` (the last original
+export failed and the next model-backed run will retry it),
 `content_not_in_photokit`, `content_no_content_available`, and
 `content_skipped` (unsupported media). Batches load newest first, with GPS
 presence breaking timestamp ties (`internal/archive/classify_inputs.go:106`). A `--refresh-model` run

@@ -56,6 +56,7 @@ type OriginalExportQuery struct {
 	Width            int64
 	Height           int64
 	OriginalFilename string
+	OriginalUTI      string
 }
 
 type AlbumMembership struct {
