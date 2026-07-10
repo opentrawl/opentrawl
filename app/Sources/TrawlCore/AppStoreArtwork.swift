@@ -70,9 +70,18 @@ public actor AppStoreArtwork {
   }
 
   public static func download(_ url: URL, maximumBytes: Int) async throws -> Data {
-    let (bytes, response) = try await URLSession.shared.bytes(from: url)
+    let policy = try ArtworkRedirectPolicy(initialURL: url)
+    let session = URLSession(
+      configuration: .ephemeral,
+      delegate: policy,
+      delegateQueue: nil
+    )
+    defer { session.invalidateAndCancel() }
+
+    let (bytes, response) = try await session.bytes(from: url)
     guard let response = response as? HTTPURLResponse,
-      (200..<300).contains(response.statusCode)
+      (200..<300).contains(response.statusCode),
+      policy.allows(response.url)
     else {
       throw URLError(.badServerResponse)
     }
@@ -88,9 +97,50 @@ public actor AppStoreArtwork {
     return data
   }
 
+  static func allowsRedirect(from initialURL: URL, to destinationURL: URL) -> Bool {
+    guard let policy = try? ArtworkRedirectPolicy(initialURL: initialURL) else {
+      return false
+    }
+    return policy.allows(destinationURL)
+  }
+
   private static var defaultCacheDirectory: URL {
     FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
       .appendingPathComponent("org.opentrawl.trawl/AppStoreArtwork", isDirectory: true)
+  }
+}
+
+private final class ArtworkRedirectPolicy: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
+  private let allowedHost: (String) -> Bool
+
+  init(initialURL: URL) throws {
+    guard initialURL.scheme == "https", let initialHost = initialURL.host?.lowercased() else {
+      throw URLError(.unsupportedURL)
+    }
+    if initialHost == "itunes.apple.com" {
+      allowedHost = { $0 == "itunes.apple.com" }
+    } else if initialHost == "mzstatic.com" || initialHost.hasSuffix(".mzstatic.com") {
+      allowedHost = { $0 == "mzstatic.com" || $0.hasSuffix(".mzstatic.com") }
+    } else {
+      throw URLError(.unsupportedURL)
+    }
+  }
+
+  func allows(_ url: URL?) -> Bool {
+    guard let url, url.scheme == "https", let host = url.host?.lowercased() else {
+      return false
+    }
+    return allowedHost(host)
+  }
+
+  func urlSession(
+    _ session: URLSession,
+    task: URLSessionTask,
+    willPerformHTTPRedirection response: HTTPURLResponse,
+    newRequest request: URLRequest,
+    completionHandler: @escaping (URLRequest?) -> Void
+  ) {
+    completionHandler(allows(request.url) ? request : nil)
   }
 }
 

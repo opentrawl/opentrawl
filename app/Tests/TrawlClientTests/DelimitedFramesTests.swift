@@ -13,6 +13,18 @@ import Testing
   #expect(frames == [first, second])
 }
 
+@Test func generatedMessageRoundTripsThroughDelimitedFrame() throws {
+  var hit = Trawl_App_V1_SearchHit()
+  hit.openRef = "gmail:message:example-1"
+  hit.appID = "gmail"
+  hit.title = "Synthetic sender"
+
+  let frames = try DelimitedFrames.decode(DelimitedFrames.encode(hit))
+  let decoded = try Trawl_App_V1_SearchHit(serializedBytes: #require(frames.first))
+
+  #expect(decoded == hit)
+}
+
 @Test func rejectsTruncatedAndOversizedFrames() throws {
   #expect(throws: TrawlClientError.invalidFrame) {
     try DelimitedFrames.decode(Data([3, 1]))

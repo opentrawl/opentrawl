@@ -7,6 +7,7 @@ let package = Package(
     platforms: [.macOS("26.0")],
     products: [
         .executable(name: "Trawl", targets: ["Trawl"]),
+        .executable(name: "TrawlSynthetic", targets: ["TrawlSynthetic"]),
     ],
     dependencies: [
         .package(
@@ -29,6 +30,13 @@ let package = Package(
         .executableTarget(
             name: "Trawl",
             dependencies: ["PermissionGuide", "TrawlClient", "TrawlCore"]
+        ),
+        .executableTarget(
+            name: "TrawlSynthetic",
+            dependencies: [
+                "TrawlClient",
+                .product(name: "SwiftProtobuf", package: "swift-protobuf"),
+            ]
         ),
         .testTarget(
             name: "TrawlClientTests",

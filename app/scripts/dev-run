@@ -11,6 +11,7 @@ keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 launch=1
 fixture_helper=""
+synthetic_helper=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -23,18 +24,22 @@ while [[ $# -gt 0 ]]; do
       fixture_helper="$2"
       shift 2
       ;;
+    --synthetic)
+      synthetic_helper=1
+      shift
+      ;;
     *)
-      echo "usage: app/scripts/dev-run [--build-only] [--fixture-helper PATH]" >&2
+      echo "usage: app/scripts/dev-run [--build-only] [--fixture-helper PATH] [--synthetic]" >&2
       exit 2
       ;;
   esac
 done
 
-if [[ -z "$fixture_helper" ]]; then
+if [[ -n "$fixture_helper" ]]; then
+  [[ -x "$fixture_helper" ]] || { echo "fixture helper is not executable" >&2; exit 2; }
+elif [[ "$synthetic_helper" -eq 0 ]]; then
   echo "Building the embedded helper"
   (cd "$repo_root" && devenv shell -- true)
-else
-  [[ -x "$fixture_helper" ]] || { echo "fixture helper is not executable" >&2; exit 2; }
 fi
 
 echo "Building the Mac app"
@@ -43,6 +48,9 @@ host_swift() {
 }
 host_swift build --package-path "$app_dir" --configuration debug
 swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
+if [[ "$synthetic_helper" -eq 1 ]]; then
+  fixture_helper="$swift_bin/TrawlSynthetic"
+fi
 
 rm -rf "$app"
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
