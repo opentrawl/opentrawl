@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 )
 
@@ -183,6 +184,9 @@ func runIssue(args []string, stdout io.Writer, opts commandOptions) error {
 	if args[0] == "state" {
 		return runIssueState(args[1:], stdout, opts)
 	}
+	if args[0] == "update" {
+		return runIssueUpdate(args[1:], stdout, opts)
+	}
 	if strings.HasPrefix(args[0], "-") {
 		return usageError{message: "linear issue needs an issue identifier\n\nRun `linear issue --help`."}
 	}
@@ -275,6 +279,57 @@ func runIssueState(args []string, stdout io.Writer, opts commandOptions) error {
 	return RenderUpdatedIssue(stdout, updated)
 }
 
+func runIssueUpdate(args []string, stdout io.Writer, opts commandOptions) error {
+	fs := newFlagSet("linear issue update")
+	actor := fs.String("as", "", "Actor name to record in the request log")
+	descriptionFile := fs.String("description-file", "", "File containing the replacement issue description")
+	priority := fs.String("priority", "", "Replacement issue priority")
+	project := fs.String("project", "", "Replacement issue project")
+	positionals, err := parseFlags(args, fs)
+	if err != nil {
+		return helpOrUsage(err, stdout, issueUpdateHelp)
+	}
+	if len(positionals) < 1 {
+		return usageError{message: "linear issue update needs an issue identifier\n\nRun `linear issue update --help`."}
+	}
+	if len(positionals) > 1 {
+		return usageError{message: "linear issue update takes one issue identifier\n\nRun `linear issue update --help`."}
+	}
+	if strings.TrimSpace(*actor) == "" {
+		return usageError{message: "--as is required for write commands"}
+	}
+	options := IssueUpdateOptions{
+		Priority: setStringFlag(fs, "priority", *priority),
+		Project:  setStringFlag(fs, "project", *project),
+	}
+	if path := setStringFlag(fs, "description-file", *descriptionFile); path != nil {
+		if strings.TrimSpace(*path) == "" {
+			return usageError{message: "--description-file needs a path"}
+		}
+		data, err := os.ReadFile(*path)
+		if err != nil {
+			return fmt.Errorf("read issue description: %w", err)
+		}
+		description := string(data)
+		options.Description = &description
+	}
+	if options.empty() {
+		return usageError{message: "set at least one of --description-file, --priority or --project"}
+	}
+	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = api.Close()
+	}()
+	updated, err := api.UpdateIssue(context.Background(), positionals[0], *actor, options)
+	if err != nil {
+		return err
+	}
+	return RenderUpdatedIssue(stdout, updated)
+}
+
 func runIssues(args []string, stdout io.Writer, opts commandOptions) error {
 	fs := newFlagSet("linear issues")
 	team := fs.String("team", "", "Linear team key")
@@ -306,14 +361,15 @@ func showHelp(args []string, stdout io.Writer) error {
 		return err
 	}
 	text := map[string]string{
-		"ack":         ackHelp,
-		"comment":     commentHelp,
-		"inbox":       inboxHelp,
-		"issue":       issueHelp,
-		"issue new":   issueNewHelp,
-		"issue state": issueStateHelp,
-		"issues":      issuesHelp,
-		"mcp":         mcpHelp,
+		"ack":          ackHelp,
+		"comment":      commentHelp,
+		"inbox":        inboxHelp,
+		"issue":        issueHelp,
+		"issue new":    issueNewHelp,
+		"issue state":  issueStateHelp,
+		"issue update": issueUpdateHelp,
+		"issues":       issuesHelp,
+		"mcp":          mcpHelp,
 	}
 	key := strings.Join(args, " ")
 	if help, ok := text[key]; ok {
@@ -321,6 +377,19 @@ func showHelp(args []string, stdout io.Writer) error {
 		return err
 	}
 	return usageError{message: fmt.Sprintf("unknown help topic %q", key)}
+}
+
+func setStringFlag(fs *flag.FlagSet, name, value string) *string {
+	set := false
+	fs.Visit(func(flag *flag.Flag) {
+		if flag.Name == name {
+			set = true
+		}
+	})
+	if !set {
+		return nil
+	}
+	return &value
 }
 
 func newFlagSet(name string) *flag.FlagSet {

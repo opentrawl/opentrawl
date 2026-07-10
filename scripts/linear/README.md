@@ -7,8 +7,9 @@ written_by: ai
 `linear` posts to Linear as an OAuth app actor. Write commands require
 `--as`, so every agent-created issue or comment carries an explicit
 display name instead of posting as the human OAuth user. Linear state
-changes carry no display name, so `issue state` records the actor in
-the request log instead.
+and field changes carry no display name, so `issue state` and `issue
+update` record the actor in the request log instead. They do not add a
+comment.
 
 ## Build
 
@@ -41,10 +42,17 @@ linear ack 00000000-0000-4000-8000-000000000000
 linear comment TRAWL-99 --as coordinator "Ready for review."
 linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
 linear issue state TRAWL-99 --state Done --as coordinator
+linear issue update TRAWL-99 --as coordinator --description-file issue.md --priority high
+linear issue update TRAWL-99 --as coordinator --project OpenTrawl
 linear issue TRAWL-99
 linear issues --team TRAWL
 linear mcp
 ```
+
+`linear issue` shows the full description, priority, project and
+assignee. `issue update` replaces only the fields named on the command.
+Use `--project none` or `--priority none` to clear those fields. An
+empty description file clears the description.
 
 ## Directive queue
 

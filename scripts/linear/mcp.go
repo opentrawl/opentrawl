@@ -250,6 +250,40 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 			return "", err
 		}
 		return renderString(func(w io.Writer) error { return RenderIssue(w, issue) })
+	case "update_issue":
+		issueID, err := requiredString(args, "issue")
+		if err != nil {
+			return "", err
+		}
+		actor, err := requiredString(args, "actor")
+		if err != nil {
+			return "", err
+		}
+		description, err := optionalStringPointer(args, "description")
+		if err != nil {
+			return "", err
+		}
+		priority, err := optionalStringPointer(args, "priority")
+		if err != nil {
+			return "", err
+		}
+		project, err := optionalStringPointer(args, "project")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		updated, err := api.UpdateIssue(ctx, issueID, actor, IssueUpdateOptions{
+			Description: description,
+			Priority:    priority,
+			Project:     project,
+		})
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
 	case "list_issues":
 		team, err := requiredString(args, "team")
 		if err != nil {

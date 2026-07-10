@@ -17,6 +17,7 @@ Usage:
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
   linear issue <ISSUE>
   linear issues --team <KEY> [--state <name>]
   linear mcp
@@ -25,7 +26,10 @@ Environment:
   LINEAR_CLIENT_ID      Linear OAuth app client id
   LINEAR_CLIENT_SECRET  Linear OAuth app client secret
 
-Issue and comment write commands require --as. The value becomes Linear's createAsUser display name.
+Issue and comment creation require --as. The value becomes Linear's
+createAsUser display name. Issue state and field updates also require --as;
+Linear records that actor only in the local request log, and these updates do
+not add comments.
 Ack writes an eyes reaction as the app user and does not take --as.
 
 Examples:
@@ -34,6 +38,7 @@ Examples:
   linear comment TRAWL-99 --as coordinator "Ready for review."
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
   linear issue state TRAWL-99 --state Done --as coordinator
+  linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
   linear issue TRAWL-99
   linear issues --team TRAWL
   linear mcp
@@ -91,6 +96,7 @@ Usage:
   linear issue <ISSUE>
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
@@ -99,6 +105,7 @@ Examples:
   linear issue TRAWL-99
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer
   linear issue state TRAWL-99 --state Done --as coordinator
+  linear issue update TRAWL-99 --as coordinator --description-file issue.md --priority high
 ` + commonHelp
 
 const issueNewHelp = `Create a Linear issue as an app actor display name.
@@ -135,6 +142,30 @@ Example:
   linear issue state TRAWL-99 --state Done --as coordinator
 ` + commonHelp
 
+const issueUpdateHelp = `Replace selected Linear issue fields.
+
+Usage:
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
+
+Arguments:
+  ISSUE  Linear issue identifier, for example TRAWL-99
+
+Flags:
+  --as <actor>               Required. Actor name recorded in the local request log.
+  --description-file <path>  Optional file containing the full replacement description.
+                             An empty file clears the description.
+  --priority <priority>      Optional. One of none, urgent, high, medium or low.
+  --project <project>        Optional project name or slug. Use none to clear it.
+
+Linear attributes the change to the OpenTrawl app. Issue updates do not
+support createAsUser. The --as value records the responsible agent locally
+without adding a comment.
+
+Examples:
+  linear issue update TRAWL-99 --as coordinator --description-file issue.md
+  linear issue update TRAWL-99 --as "lane mac app" --priority high --project OpenTrawl
+` + commonHelp
+
 const issuesHelp = `List Linear issues for a team.
 
 Usage:
@@ -159,5 +190,6 @@ Tools:
   create_comment  Create a comment. Requires issue, actor and body.
   create_issue    Create an issue. Requires team, title and actor.
   get_issue       Show one issue and its comments.
+  update_issue    Replace selected issue fields. Requires issue and actor.
   list_issues     List team issues.
 ` + commonHelp

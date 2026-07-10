@@ -4,8 +4,11 @@ const issueCoreFields = `
       id
       identifier
       title
+      description
       url
+      priorityLabel
       state { name type }
+      project { id name slugId }
       assignee { displayName name }
       labels(first: 50) { nodes { id name } pageInfo { hasNextPage } }`
 
@@ -23,10 +26,10 @@ const inboxCommentFields = commentFields + `
         issue { identifier title }`
 
 const issueDetailFields = issueCoreFields + `
-      comments(first: 100) {
+      comments(first: 100, after: $commentsAfter, orderBy: createdAt) {
         nodes {` + commentFields + `
         }
-        pageInfo { hasNextPage }
+        pageInfo { hasNextPage endCursor }
       }`
 
 const issueListFields = `
@@ -46,7 +49,7 @@ query ResolveIssueID($team: String!, $number: Float!) {
 }`
 
 const issueByIdentifierQuery = `
-query IssueByIdentifier($team: String!, $number: Float!) {
+query IssueByIdentifier($team: String!, $number: Float!, $commentsAfter: String) {
   issues(first: 2, filter: {team: {key: {eq: $team}}, number: {eq: $number}}) {
     nodes {` + issueDetailFields + `
     }
@@ -91,6 +94,17 @@ query ResolveTeam($key: String!) {
   }
 }`
 
+const resolveProjectQuery = `
+query ResolveProject($reference: String!) {
+  projects(first: 10, filter: {or: [
+    {name: {eq: $reference}},
+    {slugId: {eq: $reference}}
+  ]}) {
+    nodes { id name slugId }
+    pageInfo { hasNextPage }
+  }
+}`
+
 const resolveLabelsQuery = `
 query ResolveLabels($names: [String!]!) {
   issueLabels(first: 100, filter: {name: {in: $names}}) {
@@ -113,8 +127,8 @@ mutation CreateComment($input: CommentCreateInput!) {
   }
 }`
 
-const updateIssueStateMutation = `
-mutation UpdateIssueState($id: String!, $input: IssueUpdateInput!) {
+const updateIssueMutation = `
+mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
   issueUpdate(id: $id, input: $input) {
     success
     issue {` + issueCoreFields + `

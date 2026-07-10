@@ -19,12 +19,20 @@ func RenderIssue(w io.Writer, issue Issue) error {
 		Fields: []crender.CardField{
 			{Label: "title", Value: issue.Title},
 			{Label: "state", Value: issue.State.Name},
+			{Label: "priority", Value: issue.PriorityLabel},
+			{Label: "project", Value: projectName(issue.Project)},
 			{Label: "assignee", Value: personName(issue.Assignee, "Unassigned")},
 			{Label: "labels", Value: labelList(issue.Labels.Nodes)},
 			{Label: "url", Value: issue.URL},
 		},
 		Hints: hints,
 	}); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprint(w, "\nDescription\n\n"); err != nil {
+		return err
+	}
+	if err := writeIssueDescription(w, issueDescription(issue.Description)); err != nil {
 		return err
 	}
 	if len(issue.Comments.Nodes) == 0 {
@@ -46,10 +54,6 @@ func RenderIssue(w io.Writer, issue Issue) error {
 		if err := writeIndentedBody(w, comment.Body); err != nil {
 			return err
 		}
-	}
-	if issue.Comments.PageInfo.HasNextPage {
-		_, err := fmt.Fprintln(w, "\nShowing first 100 comments.")
-		return err
 	}
 	return nil
 }
@@ -128,13 +132,14 @@ func RenderCreatedIssue(w io.Writer, created CreatedIssue) error {
 }
 
 func RenderUpdatedIssue(w io.Writer, updated UpdatedIssue) error {
+	fields := []crender.CardField{{Label: "actor", Value: updated.Actor}}
+	for _, change := range updated.Changes {
+		fields = append(fields, crender.CardField{Label: change.Field, Value: change.Value})
+	}
+	fields = append(fields, crender.CardField{Label: "url", Value: updated.Issue.URL})
 	return crender.WriteCard(w, crender.Card{
-		Title: "Updated " + updated.Issue.Identifier,
-		Fields: []crender.CardField{
-			{Label: "actor", Value: updated.Actor},
-			{Label: "state", Value: updated.Issue.State.Name},
-			{Label: "url", Value: updated.Issue.URL},
-		},
+		Title:  "Updated " + updated.Issue.Identifier,
+		Fields: fields,
 	})
 }
 
@@ -180,6 +185,11 @@ func writeIndentedBody(w io.Writer, body string) error {
 	return nil
 }
 
+func writeIssueDescription(w io.Writer, body string) error {
+	_, err := fmt.Fprint(w, body)
+	return err
+}
+
 func personName(person *Person, empty string) string {
 	if person == nil {
 		return empty
@@ -191,6 +201,20 @@ func personName(person *Person, empty string) string {
 		return person.Name
 	}
 	return empty
+}
+
+func issueDescription(description string) string {
+	if description == "" {
+		return "None"
+	}
+	return description
+}
+
+func projectName(project *Project) string {
+	if project == nil || strings.TrimSpace(project.Name) == "" {
+		return "None"
+	}
+	return project.Name
 }
 
 func commentAuthor(comment Comment) string {

@@ -29,6 +29,45 @@ func (api *LinearAPI) ResolveTeam(ctx context.Context, key string) (Team, error)
 	return out.Teams.Nodes[0], nil
 }
 
+func (api *LinearAPI) ResolveProject(ctx context.Context, reference string) (Project, error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return Project{}, fmt.Errorf("--project needs a value")
+	}
+	var out struct {
+		Projects struct {
+			Nodes    []Project `json:"nodes"`
+			PageInfo PageInfo  `json:"pageInfo"`
+		} `json:"projects"`
+	}
+	if err := api.graph.Do(ctx, resolveProjectQuery, map[string]any{"reference": reference}, &out); err != nil {
+		return Project{}, err
+	}
+	if out.Projects.PageInfo.HasNextPage || len(out.Projects.Nodes) > 1 {
+		return Project{}, fmt.Errorf("project %q is ambiguous: %s", reference, projectChoices(out.Projects.Nodes))
+	}
+	if len(out.Projects.Nodes) == 0 {
+		return Project{}, fmt.Errorf("project %q was not found", reference)
+	}
+	return out.Projects.Nodes[0], nil
+}
+
+func projectChoices(projects []Project) string {
+	choices := make([]string, 0, len(projects))
+	for _, project := range projects {
+		choice := project.Name
+		if strings.TrimSpace(project.SlugID) != "" {
+			choice += " (" + project.SlugID + ")"
+		}
+		choices = append(choices, choice)
+	}
+	sort.Strings(choices)
+	if len(choices) == 0 {
+		return "more than 10 matches"
+	}
+	return strings.Join(choices, ", ")
+}
+
 func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []string) ([]string, error) {
 	names = cleanLabelNames(names)
 	if len(names) == 0 {

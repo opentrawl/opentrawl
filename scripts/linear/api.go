@@ -24,6 +24,12 @@ type Team struct {
 	Name string `json:"name"`
 }
 
+type Project struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	SlugID string `json:"slugId"`
+}
+
 type Person struct {
 	ID          string `json:"id"`
 	DisplayName string `json:"displayName"`
@@ -51,13 +57,16 @@ type IssueLabel struct {
 }
 
 type Issue struct {
-	ID         string     `json:"id"`
-	Identifier string     `json:"identifier"`
-	Title      string     `json:"title"`
-	URL        string     `json:"url"`
-	State      IssueState `json:"state"`
-	Assignee   *Person    `json:"assignee"`
-	Labels     struct {
+	ID            string     `json:"id"`
+	Identifier    string     `json:"identifier"`
+	Title         string     `json:"title"`
+	Description   string     `json:"description"`
+	URL           string     `json:"url"`
+	PriorityLabel string     `json:"priorityLabel"`
+	State         IssueState `json:"state"`
+	Project       *Project   `json:"project"`
+	Assignee      *Person    `json:"assignee"`
+	Labels        struct {
 		Nodes    []IssueLabel `json:"nodes"`
 		PageInfo PageInfo     `json:"pageInfo"`
 	} `json:"labels"`
@@ -108,8 +117,9 @@ type CreatedComment struct {
 }
 
 type UpdatedIssue struct {
-	Issue Issue
-	Actor string
+	Issue   Issue
+	Actor   string
+	Changes []IssueChange
 }
 
 func NewLinearAPI(stderr io.Writer, verbosity int) (*LinearAPI, error) {
@@ -167,24 +177,45 @@ func (api *LinearAPI) GetIssue(ctx context.Context, raw string) (Issue, error) {
 	if err != nil {
 		return Issue{}, err
 	}
-	var out struct {
-		Issues struct {
-			Nodes []Issue `json:"nodes"`
-		} `json:"issues"`
+	var issue Issue
+	commentsAfter := ""
+	for page := 0; ; page++ {
+		var out struct {
+			Issues struct {
+				Nodes []Issue `json:"nodes"`
+			} `json:"issues"`
+		}
+		variables := map[string]any{
+			"team":   id.TeamKey,
+			"number": float64(id.Number),
+		}
+		if commentsAfter != "" {
+			variables["commentsAfter"] = commentsAfter
+		}
+		if err := api.graph.Do(ctx, issueByIdentifierQuery, variables, &out); err != nil {
+			return Issue{}, err
+		}
+		if len(out.Issues.Nodes) == 0 {
+			return Issue{}, fmt.Errorf("issue %s was not found", id.String())
+		}
+		if len(out.Issues.Nodes) > 1 {
+			return Issue{}, fmt.Errorf("issue %s matched more than one Linear issue", id.String())
+		}
+		pageIssue := out.Issues.Nodes[0]
+		if page == 0 {
+			issue = pageIssue
+		} else {
+			issue.Comments.Nodes = append(issue.Comments.Nodes, pageIssue.Comments.Nodes...)
+			issue.Comments.PageInfo = pageIssue.Comments.PageInfo
+		}
+		if !pageIssue.Comments.PageInfo.HasNextPage {
+			return issue, nil
+		}
+		commentsAfter = pageIssue.Comments.PageInfo.EndCursor
+		if commentsAfter == "" {
+			return Issue{}, fmt.Errorf("linear did not return a cursor for the next issue comment page")
+		}
 	}
-	if err := api.graph.Do(ctx, issueByIdentifierQuery, map[string]any{
-		"team":   id.TeamKey,
-		"number": float64(id.Number),
-	}, &out); err != nil {
-		return Issue{}, err
-	}
-	if len(out.Issues.Nodes) == 0 {
-		return Issue{}, fmt.Errorf("issue %s was not found", id.String())
-	}
-	if len(out.Issues.Nodes) > 1 {
-		return Issue{}, fmt.Errorf("issue %s matched more than one Linear issue", id.String())
-	}
-	return out.Issues.Nodes[0], nil
 }
 
 func (api *LinearAPI) ListIssues(ctx context.Context, team, state string) (ListIssuesResult, error) {
@@ -306,13 +337,19 @@ func (api *LinearAPI) UpdateIssueState(ctx context.Context, rawIssue, state, act
 		} `json:"issueUpdate"`
 	}
 	input := map[string]any{"stateId": resolved.ID}
-	if err := api.graph.Do(ctx, updateIssueStateMutation, map[string]any{"id": issue.ID, "input": input}, &out); err != nil {
+	if err := api.graph.Do(ctx, updateIssueMutation, map[string]any{"id": issue.ID, "input": input}, &out); err != nil {
 		return UpdatedIssue{}, err
 	}
 	if !out.IssueUpdate.Success {
 		return UpdatedIssue{}, fmt.Errorf("linear did not update the issue")
 	}
-	return UpdatedIssue{Issue: out.IssueUpdate.Issue, Actor: actor}, nil
+	return UpdatedIssue{
+		Issue: out.IssueUpdate.Issue,
+		Actor: actor,
+		Changes: []IssueChange{
+			{Field: "state", Value: out.IssueUpdate.Issue.State.Name},
+		},
+	}, nil
 }
 
 func openIssueFilter(team string) map[string]any {

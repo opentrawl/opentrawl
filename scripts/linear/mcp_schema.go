@@ -49,10 +49,25 @@ func mcpTools() []map[string]any {
 		},
 		{
 			"name":        "get_issue",
-			"description": "Show one Linear issue and its comments.",
+			"description": "Show one Linear issue, its full description, priority, project, assignee and comments.",
 			"inputSchema": objectSchema(map[string]any{
 				"issue": stringSchema("Linear issue identifier, for example TRAWL-99."),
 			}, []string{"issue"}),
+		},
+		{
+			"name":        "update_issue",
+			"description": "Update selected issue fields as the OpenTrawl app. The actor is recorded in the local request log.",
+			"inputSchema": objectSchema(map[string]any{
+				"issue":       stringSchema("Linear issue identifier, for example TRAWL-99."),
+				"actor":       stringSchema("Required actor name for the local request log."),
+				"description": stringSchema("Optional replacement description. An empty string clears it."),
+				"priority": map[string]any{
+					"type":        "string",
+					"description": "Optional replacement priority.",
+					"enum":        []string{"none", "urgent", "high", "medium", "low"},
+				},
+				"project": stringSchema("Optional project name or slug. Use none to clear it."),
+			}, []string{"issue", "actor"}),
 		},
 		{
 			"name":        "list_issues",
@@ -103,6 +118,18 @@ func optionalString(args map[string]json.RawMessage, name string) (string, error
 		return "", fmt.Errorf("%s must be a string", name)
 	}
 	return value, nil
+}
+
+func optionalStringPointer(args map[string]json.RawMessage, name string) (*string, error) {
+	raw, ok := args[name]
+	if !ok || len(raw) == 0 || string(raw) == "null" {
+		return nil, nil
+	}
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, fmt.Errorf("%s must be a string", name)
+	}
+	return &value, nil
 }
 
 func optionalBool(args map[string]json.RawMessage, name string) (bool, error) {
