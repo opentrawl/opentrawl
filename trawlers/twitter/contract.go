@@ -16,6 +16,9 @@ import (
 const (
 	defaultSearchLimit = 20
 	defaultStatsLimit  = 10
+
+	archiveSchemaUpgradeMessage = "archive schema needs one sync to finish upgrading"
+	archiveSchemaUpgradeRemedy  = "run trawl twitter sync."
 )
 
 type statusEnvelope struct {
@@ -188,13 +191,12 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
 	}
 	if r.req.Store == nil {
-		return r.newStatusEnvelope("missing", "archive database is missing", "archive database is missing", store.Status{}, cfg)
+		return r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", "archive is missing; import an X archive dump", store.Status{}, cfg)
 	}
 	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
 	if err != nil {
 		if errors.Is(err, store.ErrSchemaOutdated) {
-			msg := "archive schema needs one sync to finish upgrading"
-			return r.newStatusEnvelope("error", msg, msg+"; run trawl twitter sync", store.Status{}, cfg)
+			return r.newStatusEnvelope("error", archiveSchemaUpgradeMessage, archiveSchemaUpgradeMessage+"; "+strings.TrimSuffix(archiveSchemaUpgradeRemedy, "."), store.Status{}, cfg)
 		}
 		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
 	}
@@ -274,19 +276,18 @@ func (e statusEnvelope) humanSummary() string {
 }
 
 func statusState(status store.Status) string {
-	switch {
-	case status.Tweets == 0:
+	if !archiveReady(status) {
 		return "empty"
-	case status.LastImportAt.IsZero():
-		return "stale"
-	default:
-		return "ok"
 	}
+	return "ok"
 }
 
 func statusSummary(status store.Status, formatTime func(time.Time) string) string {
 	if status.Tweets == 0 {
 		return "archive is empty; import an X archive dump"
+	}
+	if status.LastImportAt.IsZero() {
+		return "local X data exists; import an X archive dump to establish archive readiness"
 	}
 	live := ""
 	switch {
@@ -301,6 +302,10 @@ func statusSummary(status store.Status, formatTime func(time.Time) string) strin
 		return "archive dump imported through " + formatTime(status.CoverageThrough) + "; " + live
 	}
 	return "archive has local X data; " + live
+}
+
+func archiveReady(status store.Status) bool {
+	return status.Tweets > 0 && !status.LastImportAt.IsZero()
 }
 
 func newSearchEnvelope(query string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) searchEnvelope {

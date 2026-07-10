@@ -6,18 +6,13 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
-	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
 func (r *runtime) doctor(ctx context.Context) (*trawlkit.Doctor, error) {
 	checks := []doctorCheck{}
-	cfg, err := loadBirdConfig(r.configPath)
-	if err != nil {
-		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
-	}
 	var status store.Status
-	err = r.withReadOnlyStore(func(st *store.Store) error {
+	err := r.withReadOnlyStore(func(st *store.Store) error {
 		checks = append(checks, r.dbIntegrityCheck(st))
 		checks = append(checks, r.ftsParityCheck(st))
 		var err error
@@ -25,14 +20,14 @@ func (r *runtime) doctor(ctx context.Context) (*trawlkit.Doctor, error) {
 		if err != nil {
 			return err
 		}
-		checks = append(checks, dumpImportedCheck(status))
-		checks = append(checks, stalenessCheck(status))
+		checks = append(checks, archiveReadinessCheck(status))
 		return nil
 	})
 	if err != nil {
+		schemaOutdated := errors.Is(err, store.ErrSchemaOutdated)
 		integrityMessage, indexMessage, remedy := "archive database cannot be opened", "search index cannot be checked", "run trawl twitter import archive PATH."
-		if errors.Is(err, store.ErrSchemaOutdated) {
-			integrityMessage, indexMessage, remedy = "archive schema needs one sync to finish upgrading", "search index cannot be checked until the archive upgrades", "run trawl twitter sync."
+		if schemaOutdated {
+			integrityMessage, indexMessage, remedy = archiveSchemaUpgradeMessage, "search index cannot be checked until the archive upgrades", archiveSchemaUpgradeRemedy
 		}
 		checks = append(checks, doctorCheck{
 			ID:      "database_integrity",
@@ -46,12 +41,12 @@ func (r *runtime) doctor(ctx context.Context) (*trawlkit.Doctor, error) {
 			Message: indexMessage,
 			Remedy:  remedy,
 		})
-		checks = append(checks, dumpImportedCheck(store.Status{}))
-		checks = append(checks, stalenessCheck(store.Status{}))
+		if schemaOutdated {
+			checks = append(checks, archiveSchemaUpgradeCheck())
+		} else {
+			checks = append(checks, archiveReadinessCheck(store.Status{}))
+		}
 	}
-	checks = append(checks, credentialsPresentCheck())
-	checks = append(checks, budgetHeadroomCheck(status, cfg))
-	checks = append(checks, r.xAPIUserProbeCheck(cfg, status))
 	return &trawlkit.Doctor{Checks: trawlkitChecks(punctuateDoctorChecks(checks))}, nil
 }
 
@@ -74,54 +69,15 @@ func (r *runtime) ftsParityCheck(st *store.Store) doctorCheck {
 	return doctorCheck{ID: "search_index", State: "ok", Message: "search index covers every tweet"}
 }
 
-func dumpImportedCheck(status store.Status) doctorCheck {
-	if status.LastImportAt.IsZero() {
-		return doctorCheck{ID: "dump_imported", State: "missing", Message: "no X archive dump has been imported", Remedy: "run trawl twitter import archive PATH."}
+func archiveReadinessCheck(status store.Status) doctorCheck {
+	if !archiveReady(status) {
+		return doctorCheck{ID: "archive_ready", State: "missing", Message: "no valid local X archive has been imported", Remedy: "run trawl twitter import archive PATH."}
 	}
-	return doctorCheck{ID: "dump_imported", State: "ok", Message: "X archive dump has been imported"}
+	return doctorCheck{ID: "archive_ready", State: "ok", Message: "local X archive is ready"}
 }
 
-func stalenessCheck(status store.Status) doctorCheck {
-	if status.Tweets == 0 {
-		return doctorCheck{ID: "sync_recency", State: "missing", Message: "archive is empty", Remedy: "run trawl twitter import archive PATH."}
-	}
-	if status.LastLiveSync.IsZero() {
-		return doctorCheck{ID: "sync_recency", State: "stale", Message: "live X API sync has not run", Remedy: "Set up X API credentials and run trawl twitter sync."}
-	}
-	return doctorCheck{ID: "sync_recency", State: "ok", Message: "live sync has run"}
-}
-
-func credentialsPresentCheck() doctorCheck {
-	if xapi.CredentialsPresent(xapi.DefaultCredentialsPath()) {
-		return doctorCheck{ID: "credentials_present", State: "ok", Message: "OAuth credentials file is present"}
-	}
-	return doctorCheck{ID: "credentials_present", State: "missing", Message: "OAuth credentials file is missing or incomplete", Remedy: "Create ~/.opentrawl/twitter/credentials.toml with OAuth user tokens and 0600 permissions."}
-}
-
-func budgetHeadroomCheck(status store.Status, cfg birdConfig) doctorCheck {
-	remaining := cfg.MonthlyBudgetMicros - status.SpendMicros
-	if remaining <= 0 {
-		return doctorCheck{ID: "monthly_budget", State: "warn", Message: monthlyBudgetSpentMessage(status.SpendMonth), Remedy: "Raise monthly_budget_usd in config or wait for next month."}
-	}
-	return doctorCheck{ID: "monthly_budget", State: "ok", Message: "monthly X API budget has headroom"}
-}
-
-func (r *runtime) xAPIUserProbeCheck(cfg birdConfig, status store.Status) doctorCheck {
-	if !xapi.CredentialsPresent(xapi.DefaultCredentialsPath()) {
-		return doctorCheck{ID: "x_account_reachable", State: "skipped", Message: "skipped: credentials are missing (this is the one networked check)"}
-	}
-	if cfg.MonthlyBudgetMicros-status.SpendMicros <= xapi.PriceUserMicros {
-		return doctorCheck{ID: "x_account_reachable", State: "skipped", Message: "skipped: monthly X API budget is spent", Remedy: "Raise monthly_budget_usd in config or wait for next month."}
-	}
-	client, err := xapi.New(xapi.Options{BaseURL: xapiBaseURL, HTTPClient: xapiHTTPClient})
-	if err != nil {
-		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "could not load OAuth credentials for the networked check", Remedy: "Check ~/.opentrawl/twitter/credentials.toml."}
-	}
-	_, _, err = client.Me(r.ctx)
-	if err != nil {
-		return doctorCheck{ID: "x_account_reachable", State: "fail", Message: "X did not accept the account probe (the one networked check)", Remedy: "Refresh the OAuth credentials and re-run trawl twitter doctor."}
-	}
-	return doctorCheck{ID: "x_account_reachable", State: "ok", Message: "X account is reachable (the one networked check)"}
+func archiveSchemaUpgradeCheck() doctorCheck {
+	return doctorCheck{ID: "archive_ready", State: "missing", Message: archiveSchemaUpgradeMessage, Remedy: archiveSchemaUpgradeRemedy}
 }
 
 func punctuateDoctorChecks(checks []doctorCheck) []doctorCheck {
