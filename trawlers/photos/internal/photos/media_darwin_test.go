@@ -3,12 +3,13 @@
 package photos
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
+	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -17,9 +18,7 @@ import (
 const (
 	exportLockHelperEnv   = "PHOTOSCRAWL_EXPORT_LOCK_HELPER"
 	exportLockPathEnv     = "PHOTOSCRAWL_EXPORT_LOCK_PATH"
-	exportLockOwnerEnv    = "PHOTOSCRAWL_EXPORT_LOCK_OWNER"
 	exportLockReadyEnv    = "PHOTOSCRAWL_EXPORT_LOCK_READY"
-	exportLockLiveOwner   = "live"
 	exportLockHelperSleep = 10 * time.Minute
 )
 
@@ -58,87 +57,64 @@ func TestPhotoKitAccessErrorsGiveExactRemedy(t *testing.T) {
 	}
 }
 
-func TestAcquireExportLockWritesOwnerPID(t *testing.T) {
-	destinationPath := filepath.Join(t.TempDir(), "original.jpeg")
-	lock, err := acquireExportLock(destinationPath)
-	if err != nil {
-		t.Fatal(err)
+func TestPhotoKitExportErrorPreservesSafeDomainAndCode(t *testing.T) {
+	exportErr := NewPhotoKitExportError("PHPhotosErrorDomain", 3303, "")
+	if exportErr.Domain != "PHPhotosErrorDomain" || exportErr.Code != 3303 {
+		t.Fatalf("PhotoKit error = %#v", exportErr)
 	}
-	defer lock.Close()
-
-	pid, ok, err := readExportLockOwner(exportLockPath(destinationPath))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok || pid != os.Getpid() {
-		t.Fatalf("lock owner pid = %d ok=%t, want %d", pid, ok, os.Getpid())
+	if strings.ContainsAny(exportErr.Error(), "/\\\r\n") {
+		t.Fatalf("PhotoKit error is not safe for logs: %q", exportErr.Error())
 	}
 }
 
-func TestAcquireExportLockReplacesDeadPIDFile(t *testing.T) {
+func TestAcquireExportLockWaitsForCurrentExport(t *testing.T) {
 	destinationPath := filepath.Join(t.TempDir(), "original.jpeg")
 	lockPath := exportLockPath(destinationPath)
-	deadPID := deadPID(t)
-	if err := os.WriteFile(lockPath, []byte(fmt.Sprintf("%d\n", deadPID)), 0o600); err != nil {
-		t.Fatal(err)
-	}
+	_, release := startExportLockHelper(t, lockPath)
 
-	lock, err := acquireExportLock(destinationPath)
-	if err != nil {
-		t.Fatal(err)
+	type result struct {
+		lock *exportLock
+		err  error
 	}
-	defer lock.Close()
-
-	pid, ok, err := readExportLockOwner(lockPath)
-	if err != nil {
-		t.Fatal(err)
+	done := make(chan result, 1)
+	go func() {
+		lock, err := acquireExportLock(context.Background(), destinationPath)
+		done <- result{lock: lock, err: err}
+	}()
+	select {
+	case got := <-done:
+		if got.lock != nil {
+			got.lock.Close()
+		}
+		release()
+		t.Fatalf("lock returned before current export ended: %v", got.err)
+	case <-time.After(75 * time.Millisecond):
 	}
-	if !ok || pid != os.Getpid() {
-		t.Fatalf("lock owner pid = %d ok=%t, want %d", pid, ok, os.Getpid())
+	release()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatal(got.err)
+		}
+		got.lock.Close()
+	case <-time.After(2 * time.Second):
+		t.Fatal("waiting export did not acquire the released lock")
 	}
 }
 
-func TestAcquireExportLockLeavesLivePIDConflict(t *testing.T) {
+func TestAcquireExportLockHonoursContext(t *testing.T) {
 	destinationPath := filepath.Join(t.TempDir(), "original.jpeg")
-	lockPath := exportLockPath(destinationPath)
-	cmd, cleanup := startExportLockHelper(t, lockPath, exportLockLiveOwner)
-	defer cleanup()
+	_, release := startExportLockHelper(t, exportLockPath(destinationPath))
+	defer release()
 
-	lock, err := acquireExportLock(destinationPath)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	lock, err := acquireExportLock(ctx, destinationPath)
 	if lock != nil {
-		defer lock.Close()
+		lock.Close()
 	}
-	if !errors.Is(err, ErrExportAlreadyRunning) {
-		t.Fatalf("acquire error = %v, want %v", err, ErrExportAlreadyRunning)
-	}
-
-	pid, ok, err := readExportLockOwner(lockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok || pid != cmd.Process.Pid {
-		t.Fatalf("lock owner pid = %d ok=%t, want helper pid %d", pid, ok, cmd.Process.Pid)
-	}
-}
-
-func TestAcquireExportLockRemovesDeadPIDConflict(t *testing.T) {
-	destinationPath := filepath.Join(t.TempDir(), "original.jpeg")
-	lockPath := exportLockPath(destinationPath)
-	cmd, cleanup := startExportLockHelper(t, lockPath, strconv.Itoa(deadPID(t)))
-	defer cleanup()
-
-	lock, err := acquireExportLock(destinationPath)
-	if err != nil {
-		t.Fatalf("acquire with stale owner held by helper pid %d: %v", cmd.Process.Pid, err)
-	}
-	defer lock.Close()
-
-	pid, ok, err := readExportLockOwner(lockPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok || pid != os.Getpid() {
-		t.Fatalf("lock owner pid = %d ok=%t, want %d", pid, ok, os.Getpid())
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("acquire error = %v, want context deadline", err)
 	}
 }
 
@@ -147,25 +123,15 @@ func TestExportLockHelperProcess(t *testing.T) {
 		return
 	}
 	lockPath := os.Getenv(exportLockPathEnv)
-	owner := os.Getenv(exportLockOwnerEnv)
 	readyPath := os.Getenv(exportLockReadyEnv)
-	if lockPath == "" || owner == "" || readyPath == "" {
+	if lockPath == "" || readyPath == "" {
 		t.Fatal("lock helper env is incomplete")
 	}
-	if owner == exportLockLiveOwner {
-		owner = strconv.Itoa(os.Getpid())
-	}
-	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR|os.O_TRUNC, 0o600)
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = file.Close() }()
-	if _, err := fmt.Fprintln(file, owner); err != nil {
-		t.Fatal(err)
-	}
-	if err := file.Sync(); err != nil {
-		t.Fatal(err)
-	}
 	if err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX); err != nil {
 		t.Fatal(err)
 	}
@@ -180,33 +146,24 @@ func exportLockPath(destinationPath string) string {
 	return filepath.Join(filepath.Dir(destinationPath), ".photokit-export.lock")
 }
 
-func deadPID(t *testing.T) int {
-	t.Helper()
-	for pid := 999999; pid >= 900000; pid-- {
-		if !processAlive(pid) {
-			return pid
-		}
-	}
-	t.Fatal("no dead pid found")
-	return 0
-}
-
-func startExportLockHelper(t *testing.T, lockPath, owner string) (*exec.Cmd, func()) {
+func startExportLockHelper(t *testing.T, lockPath string) (*exec.Cmd, func()) {
 	t.Helper()
 	readyPath := lockPath + ".ready"
 	cmd := exec.Command(os.Args[0], "-test.run=TestExportLockHelperProcess")
 	cmd.Env = append(os.Environ(),
 		exportLockHelperEnv+"=1",
 		exportLockPathEnv+"="+lockPath,
-		exportLockOwnerEnv+"="+owner,
 		exportLockReadyEnv+"="+readyPath,
 	)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
+	var once sync.Once
 	cleanup := func() {
-		_ = cmd.Process.Kill()
-		_ = cmd.Wait()
+		once.Do(func() {
+			_ = cmd.Process.Kill()
+			_ = cmd.Wait()
+		})
 	}
 	deadline := time.Now().Add(2 * time.Second)
 	for {

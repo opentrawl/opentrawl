@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -16,17 +17,22 @@ type classifyLogger struct {
 	sink ClassifyLogSink
 }
 
+func (logger classifyLogger) logOriginalResolved(input classifyInput, resolved photos.OriginalResolution) {
+	logger.info("original_resolved",
+		logTokenField("asset_ref", AssetRef(input.AssetID)),
+		logTokenField("source", resolved.Source),
+		logInt64Field("bytes", resolved.Size),
+		logTokenField("sha256", resolved.SHA256),
+	)
+}
+
 func (logger classifyLogger) logOutcome(write classifyWrite) {
 	switch write.outcome {
 	case contentOutcomeFailedDownload:
-		fields := []string{
+		logger.warn("failed_download",
 			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
-			logStringField("reason", publicClassifyErrorReason(write.downloadErr, "original export failed")),
-		}
-		if errors.Is(write.downloadErr, photos.ErrExportAlreadyRunning) {
-			fields = append(fields, "lock_conflict=true")
-		}
-		logger.warn("failed_download", fields...)
+			logStringField("reason", publicClassifyErrorReason(write.resolutionErr, "original export failed")),
+		)
 	case contentOutcomeNotInPhotoKit:
 		logger.warn("not_in_photokit",
 			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
@@ -47,7 +53,7 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 		// answer to "where does the time go" — silence hides bottlenecks.
 		logger.info("card_written",
 			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
-			logInt64Field("download_ms", write.downloadDuration.Milliseconds()),
+			logInt64Field("original_ms", write.resolutionDuration.Milliseconds()),
 			logInt64Field("model_ms", write.modelDuration.Milliseconds()),
 			logIntField("model_attempts", write.modelAttempts),
 			logInt64Field("write_ms", write.writeDuration.Milliseconds()),
@@ -133,13 +139,14 @@ func logInt64Field(key string, value int64) string {
 }
 
 func publicClassifyErrorReason(err error, fallback string) string {
+	var photoKitErr *photos.PhotoKitExportError
 	switch {
 	case err == nil:
 		return fallback
 	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
 		return "photokit asset not found"
-	case errors.Is(err, photos.ErrExportAlreadyRunning):
-		return "photokit export already running"
+	case errors.As(err, &photoKitErr):
+		return fmt.Sprintf("photokit export failed: domain=%s code=%d", photoKitErr.Domain, photoKitErr.Code)
 	case errors.Is(err, context.Canceled):
 		return "context canceled"
 	case errors.Is(err, context.DeadlineExceeded):

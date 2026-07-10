@@ -131,6 +131,7 @@ func readWireRequest(path string) ([]byte, error) {
 
 func wireErrorResponse(err error) *fetchwire.OriginalFetchResponse {
 	var accessErr *photos.PhotoLibraryAccessError
+	var exportErr *photos.PhotoKitExportError
 	switch {
 	case errors.As(err, &accessErr):
 		return failedWireResponse("photos_access", accessErr.Error(), accessErr)
@@ -138,15 +139,19 @@ func wireErrorResponse(err error) *fetchwire.OriginalFetchResponse {
 		return failedWireResponse("asset_not_found", "PhotoKit could not find the selected asset", nil)
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, photos.ErrPhotoKitExportTimedOut):
 		return failedWireResponse("timeout", "PhotoKit original export timed out", nil)
-	case errors.Is(err, photos.ErrExportAlreadyRunning):
-		return failedWireResponse("export_busy", "another PhotoKit original export is running", nil)
+	case errors.As(err, &exportErr):
+		safeError := photos.NewPhotoKitExportError(exportErr.Domain, exportErr.Code, exportErr.Reason)
+		response := failedWireResponse("photokit_export", safeError.Reason, nil)
+		response.ErrorDomain = safeError.Domain
+		response.ErrorCode = safeError.Code
+		return response
 	default:
 		return failedWireResponse("export_failed", "PhotoKit original export failed", nil)
 	}
 }
 
-func failedWireResponse(code, message string, accessErr *photos.PhotoLibraryAccessError) *fetchwire.OriginalFetchResponse {
-	response := &fetchwire.OriginalFetchResponse{ErrorCode: code, ErrorMessage: message}
+func failedWireResponse(kind, message string, accessErr *photos.PhotoLibraryAccessError) *fetchwire.OriginalFetchResponse {
+	response := &fetchwire.OriginalFetchResponse{FailureKind: kind, ErrorMessage: message}
 	if accessErr != nil {
 		response.PhotosAccessStatus = accessErr.Status
 	}

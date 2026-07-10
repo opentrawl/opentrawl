@@ -75,12 +75,12 @@ func AttachLocalMediaPaths(snapshot *LibrarySnapshot, libraryPath string) error 
 }
 
 // UniquePackageOriginal returns a package original only when the UUID maps to
-// one non-empty file. Ambiguous package matches fall through to PhotoKit,
-// which can select the preferred asset resource without guessing.
+// one path. The resolver inspects the real file instead of trusting the
+// archive's recorded size. Ambiguous matches fall through to PhotoKit.
 func UniquePackageOriginal(candidates []LocalMediaCandidate) (LocalMediaCandidate, bool) {
 	var original LocalMediaCandidate
 	for _, candidate := range candidates {
-		if candidate.Class != "original" || candidate.Size <= 0 {
+		if candidate.Class != "original" || strings.TrimSpace(candidate.Path) == "" {
 			continue
 		}
 		if original.Path != "" {

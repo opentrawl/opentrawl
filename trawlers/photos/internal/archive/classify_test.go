@@ -313,7 +313,7 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(destinationPath, []byte("downloaded fixture image bytes"), 0o644)
+		return os.WriteFile(destinationPath, []byte("exported fixture image bytes"), 0o644)
 	}
 	defer func() { exportOriginalResource = oldExport }()
 
@@ -361,175 +361,37 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
+		LogSink:  logs,
 		Now:      fixedClock("2026-05-28T10:15:00Z"),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentClassified != 1 || result.OriginalsDownloaded != 1 || result.OriginalDownloadFailures != 0 || result.WaitingForLocalContent != 0 {
+	if result.ContentClassified != 1 || result.PhotoKitExports != 1 || result.OriginalResolutionFailures != 0 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.BytesDownloaded != int64(len("downloaded fixture image bytes")) {
-		t.Fatalf("bytes downloaded = %d", result.BytesDownloaded)
+	if result.PhotoKitExportBytes != int64(len("exported fixture image bytes")) {
+		t.Fatalf("PhotoKit export bytes = %d", result.PhotoKitExportBytes)
 	}
-	if files := countFiles(t, paths.OriginalsCacheDir()); files != 1 {
+	if files := countOriginalCacheMedia(t, paths.OriginalsCacheDir()); files != 1 {
 		t.Fatalf("originals cache files after classify = %d", files)
 	}
-}
-
-func TestOriginalsCacheExportsOncePerInvocation(t *testing.T) {
-	cache, err := newOriginalsCache(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	var exportCalls int
-	oldExport := exportOriginalResource
-	exportOriginalResource = func(context.Context, photos.OriginalExportQuery, string, bool) error {
-		exportCalls++
-		return &photos.PhotoLibraryAccessError{Status: "denied"}
-	}
-	defer func() { exportOriginalResource = oldExport }()
-
-	result := cache.export(context.Background(), classifyInput{
-		AssetID:         "synthetic-permission-asset",
-		LocalIdentifier: "synthetic-permission-asset",
-		Resources: []classifyResource{{
-			ResourceType:     "photo",
-			UTI:              "public.jpeg",
-			OriginalFilename: "synthetic.jpeg",
-			NeedsDownload:    true,
-		}},
-	})
-	if exportCalls != 1 {
-		t.Fatalf("export calls = %d, want 1", exportCalls)
-	}
-	if !photos.IsPhotoLibraryAccessError(result.err) {
-		t.Fatalf("export error = %T %v", result.err, result.err)
-	}
-	if got := result.err.Error(); !strings.Contains(got, "System Settings > Privacy & Security > Photos") {
-		t.Fatalf("export remedy = %q", got)
-	}
-}
-
-func TestOriginalsCacheReusesExactFileAcrossInstances(t *testing.T) {
-	root := t.TempDir()
-	input := classifyInput{
-		AssetID:          "synthetic-cache-asset",
-		LocalIdentifier:  "synthetic-cache-asset",
-		ModificationDate: "2026-07-10T12:00:00Z",
-		Resources: []classifyResource{{
-			ResourceType:     "photo",
-			UTI:              "public.jpeg",
-			OriginalFilename: "synthetic.jpeg",
-			NeedsDownload:    true,
-		}},
-	}
-	oldExport := exportOriginalResource
-	exportCalls := 0
-	exportOriginalResource = func(_ context.Context, _ photos.OriginalExportQuery, destination string, allowNetwork bool) error {
-		exportCalls++
-		if !allowNetwork {
-			t.Fatal("PhotoKit export did not allow the required iCloud fetch")
+	foundOriginal := false
+	for _, event := range logs.events {
+		if event.event == "original_resolved" &&
+			strings.Contains(event.message, "source=photokit_original_export") &&
+			strings.Contains(event.message, "bytes=28") &&
+			strings.Contains(event.message, "sha256=") {
+			foundOriginal = true
 		}
-		return os.WriteFile(destination, []byte("exact cached original"), 0o600)
 	}
-	defer func() { exportOriginalResource = oldExport }()
-
-	firstCache, err := newOriginalsCache(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first := firstCache.export(context.Background(), input)
-	if first.err != nil {
-		t.Fatal(first.err)
-	}
-	firstInfo, firstDigest, err := photos.InspectOriginalFile(first.path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	first.lease.Close()
-
-	secondCache, err := newOriginalsCache(root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second := secondCache.export(context.Background(), input)
-	if second.err != nil {
-		t.Fatal(second.err)
-	}
-	defer second.lease.Close()
-	if exportCalls != 1 || second.downloaded || second.pathClass != "cached_photokit_original" {
-		t.Fatalf("exports = %d second = %#v", exportCalls, second)
-	}
-	secondInfo, secondDigest, err := photos.InspectOriginalFile(second.path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if firstInfo.Size() != secondInfo.Size() || firstDigest != secondDigest {
-		t.Fatalf("cache restart changed the exact original")
-	}
-}
-
-func TestOriginalsCacheEvictsLeastRecentlyUsedInactiveFile(t *testing.T) {
-	cache, err := newOriginalsCache(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	cache.maxBytes = 30
-
-	oldExport := exportOriginalResource
-	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destination string, _ bool) error {
-		return os.WriteFile(destination, []byte("original bytes for "+query.LocalIdentifier), 0o600)
-	}
-	defer func() { exportOriginalResource = oldExport }()
-
-	first := cache.export(context.Background(), classifyInput{
-		AssetID:         "first",
-		LocalIdentifier: "first",
-		Resources:       []classifyResource{{ResourceType: "photo", OriginalFilename: "first.jpeg"}},
-	})
-	if first.err != nil {
-		t.Fatal(first.err)
-	}
-	first.lease.Close()
-	second := cache.export(context.Background(), classifyInput{
-		AssetID:         "second",
-		LocalIdentifier: "second",
-		Resources:       []classifyResource{{ResourceType: "photo", OriginalFilename: "second.jpeg"}},
-	})
-	if second.err != nil {
-		t.Fatal(second.err)
-	}
-	defer second.lease.Close()
-	if _, err := os.Stat(first.path); !os.IsNotExist(err) {
-		t.Fatalf("least-recently-used original remains: %v", err)
-	}
-	if _, err := os.Stat(second.path); err != nil {
-		t.Fatalf("active original was evicted: %v", err)
-	}
-}
-
-func TestContentImagePathRejectsDerivativeAndMissingOriginal(t *testing.T) {
-	dir := t.TempDir()
-	derivative := filepath.Join(dir, "derivative.jpeg")
-	if err := os.WriteFile(derivative, []byte("synthetic derivative"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	input := classifyInput{MediaType: "image", Resources: []classifyResource{{
-		ResourceType: "local_derivative",
-		LocalPath:    derivative,
-	}}}
-	if path, ok := input.contentImagePath(); ok || path != "" {
-		t.Fatalf("derivative accepted as original: %q", path)
-	}
-	input.Resources = []classifyResource{{ResourceType: "local_original", LocalPath: filepath.Join(dir, "missing.heic")}}
-	if path, ok := input.contentImagePath(); ok || path != "" {
-		t.Fatalf("missing package original accepted: %q", path)
+	if !foundOriginal {
+		t.Fatalf("privacy-safe original proof missing from logs: %#v", logs.events)
 	}
 }
 
@@ -552,7 +414,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	oldExport := exportOriginalResource
 	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destinationPath string, allowNetwork bool) error {
 		switch query.LocalIdentifier {
-		case "not-in-photokit", "no-content":
+		case "not-in-photokit":
 			return photos.ErrPhotoKitAssetNotFound
 		case "download-fails":
 			return errors.New("synthetic download unavailable")
@@ -639,14 +501,14 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}
 	if result.Processed != 5 ||
 		result.ContentFailedParse != 1 ||
-		result.ContentFailedDownload != 1 ||
-		result.ContentNotInPhotoKit != 2 ||
+		result.ContentFailedDownload != 2 ||
+		result.ContentNotInPhotoKit != 1 ||
 		result.ContentNoContentAvailable != 0 ||
 		result.ContentSkippedUnsupportedMedia != 1 {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.ContentClassificationFailures != 1 || result.OriginalDownloadFailures != 3 || result.WaitingForLocalContent != 0 {
+	if result.ContentClassificationFailures != 1 || result.OriginalResolutionFailures != 3 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("aggregate counters = %#v", result)
 	}
 	assertRecordedLogEvent(t, logs, "failed_parse")
@@ -697,7 +559,7 @@ join asset a on a.id = q.asset_id
 		"parse-fails":     "content_failed",
 		"not-in-photokit": "content_not_in_photokit",
 		"download-fails":  "failed_download",
-		"no-content":      "content_not_in_photokit",
+		"no-content":      "failed_download",
 		"video-skipped":   "content_skipped",
 	}
 	if !reflect.DeepEqual(states, wantStates) {
@@ -712,7 +574,7 @@ join asset a on a.id = q.asset_id
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Processed != 1 || second.ContentFailedDownload != 1 || second.OriginalDownloadFailures != 1 {
+	if second.Processed != 2 || second.ContentFailedDownload != 2 || second.OriginalResolutionFailures != 2 {
 		t.Fatalf("failed download did not resume on the next run: %#v", second)
 	}
 	assertContentOutcomesSumToProcessed(t, second)
@@ -759,7 +621,7 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Processed != 1 || first.ContentFailedDownload != 1 || first.OriginalDownloadFailures != 1 {
+	if first.Processed != 1 || first.ContentFailedDownload != 1 || first.OriginalResolutionFailures != 1 {
 		t.Fatalf("first classify result = %#v", first)
 	}
 	assertContentOutcomesSumToProcessed(t, first)
@@ -782,7 +644,7 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Processed != 1 || second.ContentFailedDownload != 1 || second.OriginalDownloadFailures != 1 {
+	if second.Processed != 1 || second.ContentFailedDownload != 1 || second.OriginalResolutionFailures != 1 {
 		t.Fatalf("failed download did not resume: %#v", second)
 	}
 	if calls := exportCalls.Load(); calls != 2 {
@@ -800,7 +662,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	}
 	oldExport := exportOriginalResource
 	exportOriginalResource = func(context.Context, photos.OriginalExportQuery, string, bool) error {
-		return errors.New("synthetic original export failed")
+		return photos.NewPhotoKitExportError("PHPhotosErrorDomain", 3303, "")
 	}
 	defer func() { exportOriginalResource = oldExport }()
 
@@ -845,7 +707,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentFailedDownload != 1 || result.OriginalDownloadFailures != 1 {
+	if result.ContentFailedDownload != 1 || result.OriginalResolutionFailures != 1 {
 		t.Fatalf("classify result = %#v", result)
 	}
 
@@ -862,7 +724,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 			continue
 		}
 		t.Logf("log line: %s", line.Raw)
-		if !strings.Contains(line.Message, "asset_ref=photos:asset/") || !strings.Contains(line.Message, `reason="original export failed"`) {
+		if !strings.Contains(line.Message, "asset_ref=photos:asset/") || !strings.Contains(line.Message, `reason="photokit export failed: domain=PHPhotosErrorDomain code=3303"`) {
 			t.Fatalf("failed_download message = %q", line.Message)
 		}
 		return
@@ -1733,6 +1595,22 @@ func countFiles(t *testing.T, root string) int {
 	}
 	if err != nil {
 		t.Fatal(err)
+	}
+	return count
+}
+
+func countOriginalCacheMedia(t *testing.T, root string) int {
+	t.Helper()
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || strings.HasSuffix(entry.Name(), ".proof.json") {
+			continue
+		}
+		count++
 	}
 	return count
 }

@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
@@ -406,58 +405,6 @@ func (c modelClassifier) remote() bool {
 	}
 	ip := net.ParseIP(host)
 	return ip == nil || !ip.IsLoopback()
-}
-
-func (input classifyInput) contentImagePath() (string, bool) {
-	if input.MediaType != "image" {
-		return "", false
-	}
-	path := ""
-	for _, resource := range input.Resources {
-		if resource.ResourceType != "local_original" {
-			continue
-		}
-		candidate := strings.TrimSpace(resource.LocalPath)
-		if candidate == "" || !classifiableImagePath(candidate) {
-			continue
-		}
-		if path != "" {
-			return "", false
-		}
-		path = candidate
-	}
-	if path == "" {
-		return "", false
-	}
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
-		return "", false
-	}
-	return path, true
-}
-
-func (input classifyInput) localPathClass(path string) string {
-	for _, resource := range input.Resources {
-		if resource.LocalPath != path {
-			continue
-		}
-		value := strings.ToLower(strings.Join([]string{resource.ResourceType, resource.LocalPath}, " "))
-		switch {
-		case strings.Contains(value, "derivative"):
-			return "derivative"
-		case strings.Contains(value, "render"):
-			return "render"
-		case strings.Contains(value, "original"):
-			return "original"
-		default:
-			return "local_media"
-		}
-	}
-	return "unknown"
-}
-
-func classifiableImagePath(path string) bool {
-	return photos.IsOriginalExtension(filepath.Ext(path))
 }
 
 func mimeTypeForPath(path string) string {

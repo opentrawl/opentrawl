@@ -121,7 +121,17 @@ func TestRunWireRequestReturnsTypedPhotosAccessFailure(t *testing.T) {
 	if err := proto.Unmarshal(responseData, &response); err != nil {
 		t.Fatal(err)
 	}
-	if response.ErrorCode != "photos_access" || response.PhotosAccessStatus != "denied" {
+	if response.FailureKind != "photos_access" || response.PhotosAccessStatus != "denied" {
 		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestWireErrorResponsePreservesTypedPhotoKitFailure(t *testing.T) {
+	response := wireErrorResponse(&photos.PhotoKitExportError{Domain: "PHPhotosErrorDomain", Code: 3303})
+	if response.FailureKind != "photokit_export" || response.ErrorDomain != "PHPhotosErrorDomain" || response.ErrorCode != 3303 {
+		t.Fatalf("response = %#v", response)
+	}
+	if response.ErrorMessage == "" {
+		t.Fatal("typed PhotoKit failure lost its safe message")
 	}
 }

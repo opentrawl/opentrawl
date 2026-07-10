@@ -7,8 +7,12 @@ import (
 	"strings"
 )
 
-func OriginalCachePath(root, modificationDate string, query OriginalExportQuery) string {
+const originalCacheKeyVersion = "photos-camera-original-v3"
+
+func OriginalCachePath(root, sourceLibraryID, modificationDate string, query OriginalExportQuery) string {
 	key := strings.Join([]string{
+		originalCacheKeyVersion,
+		sourceLibraryID,
 		query.LocalIdentifier,
 		modificationDate,
 		query.OriginalFilename,
