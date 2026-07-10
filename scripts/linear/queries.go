@@ -9,6 +9,7 @@ const issueCoreFields = `
       priorityLabel
       state { name type }
       project { id name slugId }
+      projectMilestone { id name }
       assignee { displayName name }
       labels(first: 50) { nodes { id name } pageInfo { hasNextPage } }`
 
@@ -44,6 +45,7 @@ query ResolveIssueID($team: String!, $number: Float!) {
     nodes {
       id
       identifier
+      project { id name slugId }
     }
   }
 }`
@@ -105,6 +107,40 @@ query ResolveProject($reference: String!) {
   }
 }`
 
+const projectCoreFields = `
+      id
+      name
+      slugId
+      description
+      content
+      status { id name }
+      priority
+      priorityLabel
+      health
+      lead { displayName name }`
+
+const projectByIDQuery = `
+query ProjectByID($id: String!, $milestonesAfter: String, $issuesAfter: String, $readMilestones: Boolean!, $readIssues: Boolean!) {
+  project(id: $id) {` + projectCoreFields + `
+    projectMilestones(first: 100, after: $milestonesAfter) @include(if: $readMilestones) {
+      nodes { id name description project { id name slugId } }
+      pageInfo { hasNextPage endCursor }
+    }
+    issues(first: 100, after: $issuesAfter) @include(if: $readIssues) {
+      nodes { id state { type } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`
+
+const projectStatusesQuery = `
+query ProjectStatuses($after: String) {
+  projectStatuses(first: 100, after: $after) {
+    nodes { id name }
+    pageInfo { hasNextPage endCursor }
+  }
+}`
+
 const resolveLabelsQuery = `
 query ResolveLabels($names: [String!]!) {
   issueLabels(first: 100, filter: {name: {in: $names}}) {
@@ -133,6 +169,27 @@ mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
     success
     issue {` + issueCoreFields + `
     }
+  }
+}`
+
+const updateProjectMutation = `
+mutation UpdateProject($id: String!, $input: ProjectUpdateInput!) {
+  projectUpdate(id: $id, input: $input) {
+    success
+  }
+}`
+
+const createProjectMilestoneMutation = `
+mutation CreateProjectMilestone($input: ProjectMilestoneCreateInput!) {
+  projectMilestoneCreate(input: $input) {
+    success
+  }
+}`
+
+const updateProjectMilestoneMutation = `
+mutation UpdateProjectMilestone($id: String!, $input: ProjectMilestoneUpdateInput!) {
+  projectMilestoneUpdate(id: $id, input: $input) {
+    success
   }
 }`
 

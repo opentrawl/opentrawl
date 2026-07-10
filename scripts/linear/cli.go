@@ -17,6 +17,8 @@ type commandOptions struct {
 	verbosity int
 }
 
+var newLinearAPI = NewLinearAPI
+
 func (s *stringList) String() string {
 	return strings.Join(*s, ", ")
 }
@@ -53,6 +55,8 @@ func execute(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runInbox(args[1:], stdout, opts)
 	case "issue":
 		return runIssue(args[1:], stdout, opts)
+	case "project":
+		return runProject(args[1:], stdout, opts)
 	case "issues":
 		return runIssues(args[1:], stdout, opts)
 	case "mcp":
@@ -285,6 +289,8 @@ func runIssueUpdate(args []string, stdout io.Writer, opts commandOptions) error 
 	descriptionFile := fs.String("description-file", "", "File containing the replacement issue description")
 	priority := fs.String("priority", "", "Replacement issue priority")
 	project := fs.String("project", "", "Replacement issue project")
+	milestone := fs.String("milestone", "", "Replacement issue milestone")
+	title := fs.String("title", "", "Replacement issue title")
 	positionals, err := parseFlags(args, fs)
 	if err != nil {
 		return helpOrUsage(err, stdout, issueUpdateHelp)
@@ -299,8 +305,10 @@ func runIssueUpdate(args []string, stdout io.Writer, opts commandOptions) error 
 		return usageError{message: "--as is required for write commands"}
 	}
 	options := IssueUpdateOptions{
-		Priority: setStringFlag(fs, "priority", *priority),
-		Project:  setStringFlag(fs, "project", *project),
+		Priority:  setStringFlag(fs, "priority", *priority),
+		Project:   setStringFlag(fs, "project", *project),
+		Milestone: setStringFlag(fs, "milestone", *milestone),
+		Title:     setStringFlag(fs, "title", *title),
 	}
 	if path := setStringFlag(fs, "description-file", *descriptionFile); path != nil {
 		if strings.TrimSpace(*path) == "" {
@@ -314,9 +322,9 @@ func runIssueUpdate(args []string, stdout io.Writer, opts commandOptions) error 
 		options.Description = &description
 	}
 	if options.empty() {
-		return usageError{message: "set at least one of --description-file, --priority or --project"}
+		return usageError{message: "set at least one of --description-file, --priority, --project, --milestone or --title"}
 	}
-	api, err := NewLinearAPI(opts.stderr, opts.verbosity)
+	api, err := newLinearAPI(opts.stderr, opts.verbosity)
 	if err != nil {
 		return err
 	}
@@ -361,15 +369,19 @@ func showHelp(args []string, stdout io.Writer) error {
 		return err
 	}
 	text := map[string]string{
-		"ack":          ackHelp,
-		"comment":      commentHelp,
-		"inbox":        inboxHelp,
-		"issue":        issueHelp,
-		"issue new":    issueNewHelp,
-		"issue state":  issueStateHelp,
-		"issue update": issueUpdateHelp,
-		"issues":       issuesHelp,
-		"mcp":          mcpHelp,
+		"ack":                      ackHelp,
+		"comment":                  commentHelp,
+		"inbox":                    inboxHelp,
+		"issue":                    issueHelp,
+		"issue new":                issueNewHelp,
+		"issue state":              issueStateHelp,
+		"issue update":             issueUpdateHelp,
+		"project":                  projectHelp,
+		"project update":           projectUpdateHelp,
+		"project milestone":        projectMilestoneHelp,
+		"project milestone ensure": projectMilestoneEnsureHelp,
+		"issues":                   issuesHelp,
+		"mcp":                      mcpHelp,
 	}
 	key := strings.Join(args, " ")
 	if help, ok := text[key]; ok {

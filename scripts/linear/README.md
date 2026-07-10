@@ -44,15 +44,30 @@ linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label ag
 linear issue state TRAWL-99 --state Done --as coordinator
 linear issue update TRAWL-99 --as coordinator --description-file issue.md --priority high
 linear issue update TRAWL-99 --as coordinator --project OpenTrawl
+linear issue update TRAWL-99 --as coordinator --milestone "Foundations complete"
+linear issue update TRAWL-99 --as coordinator --title "Clarify the project wrapper"
 linear issue TRAWL-99
 linear issues --team TRAWL
+linear project OpenTrawl
+linear project update OpenTrawl --as coordinator --summary "One clear outcome" --description-file project.md --status "In Progress" --priority high
+linear project milestone ensure OpenTrawl --name "Foundations complete" --as coordinator --description-file milestone.md
 linear mcp
 ```
 
-`linear issue` shows the full description, priority, project and
+`linear issue` shows the full description, priority, project, milestone and
 assignee. `issue update` replaces only the fields named on the command.
 Use `--project none` or `--priority none` to clear those fields. An
-empty description file clears the description.
+empty description file clears the description. Use `--milestone none` to clear
+an issue milestone.
+
+`linear project` reads the full Markdown brief, current status and priority,
+read-only health, lead, milestones and issue totals. It reads every milestone
+and issue page. `project update` replaces only the named summary, Markdown
+brief, status or priority fields and then reads the project back. `--summary
+none` clears the summary. `project milestone ensure` creates a named milestone
+when absent, or updates only the supplied fields when exactly one exists. It
+refuses duplicate names. All project and issue field writes require `--as`, use
+the OpenTrawl OAuth app and add no Linear comment.
 
 ## Directive queue
 

@@ -271,6 +271,14 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
+		milestone, err := optionalStringPointer(args, "milestone")
+		if err != nil {
+			return "", err
+		}
+		title, err := optionalStringPointer(args, "title")
+		if err != nil {
+			return "", err
+		}
 		api, err := s.linear()
 		if err != nil {
 			return "", err
@@ -279,11 +287,87 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 			Description: description,
 			Priority:    priority,
 			Project:     project,
+			Milestone:   milestone,
+			Title:       title,
 		})
 		if err != nil {
 			return "", err
 		}
 		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
+	case "get_project":
+		project, err := requiredString(args, "project")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		result, err := api.GetProject(ctx, project)
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderProject(w, result) })
+	case "update_project":
+		project, err := requiredString(args, "project")
+		if err != nil {
+			return "", err
+		}
+		actor, err := requiredString(args, "actor")
+		if err != nil {
+			return "", err
+		}
+		summary, err := optionalStringPointer(args, "summary")
+		if err != nil {
+			return "", err
+		}
+		description, err := optionalStringPointer(args, "description")
+		if err != nil {
+			return "", err
+		}
+		status, err := optionalStringPointer(args, "status")
+		if err != nil {
+			return "", err
+		}
+		priority, err := optionalStringPointer(args, "priority")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		result, err := api.UpdateProject(ctx, project, actor, ProjectUpdateOptions{Summary: summary, Description: description, Status: status, Priority: priority})
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderProject(w, result) })
+	case "ensure_project_milestone":
+		project, err := requiredString(args, "project")
+		if err != nil {
+			return "", err
+		}
+		name, err := requiredString(args, "name")
+		if err != nil {
+			return "", err
+		}
+		actor, err := requiredString(args, "actor")
+		if err != nil {
+			return "", err
+		}
+		description, err := optionalStringPointer(args, "description")
+		if err != nil {
+			return "", err
+		}
+		api, err := s.linear()
+		if err != nil {
+			return "", err
+		}
+		result, err := api.EnsureProjectMilestone(ctx, project, actor, ProjectMilestoneOptions{Name: name, Description: description})
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderEnsuredProjectMilestone(w, result) })
 	case "list_issues":
 		team, err := requiredString(args, "team")
 		if err != nil {

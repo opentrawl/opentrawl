@@ -87,6 +87,21 @@ func TestUpdateIssueCanClearDescriptionProjectAndPriority(t *testing.T) {
 	}
 }
 
+func TestUpdateIssueReportsReadBackValues(t *testing.T) {
+	graph := &issueUpdateGraph{
+		updated:  Issue{ID: "issue-1", Identifier: "TRAWL-1", PriorityLabel: "Urgent"},
+		readBack: Issue{ID: "issue-1", Identifier: "TRAWL-1", PriorityLabel: "High"},
+	}
+	priority := "high"
+	updated, err := (&LinearAPI{graph: graph}).UpdateIssue(context.Background(), "TRAWL-1", "lane cli", IssueUpdateOptions{Priority: &priority})
+	if err != nil {
+		t.Fatalf("UpdateIssue returned error: %v", err)
+	}
+	if got, want := updated.Changes, []IssueChange{{Field: "priority", Value: "High"}}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("changes = %#v, want %#v", got, want)
+	}
+}
+
 func TestUpdateIssueRefusesMissingFieldsBeforeGraphQL(t *testing.T) {
 	graph := &issueUpdateGraph{}
 	api := &LinearAPI{graph: graph}
@@ -244,7 +259,7 @@ func TestMCPToolsExposeTheSameIssueUpdateFields(t *testing.T) {
 func TestIssueUpdateCLIRequiresAFieldBeforeAPI(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := execute([]string{"issue", "update", "TRAWL-1", "--as", "coordinator"}, strings.NewReader(""), &stdout, &stderr)
-	if err == nil || err.Error() != "set at least one of --description-file, --priority or --project" {
+	if err == nil || err.Error() != "set at least one of --description-file, --priority, --project, --milestone or --title" {
 		t.Fatalf("error = %v, want missing fields error", err)
 	}
 }
@@ -272,6 +287,7 @@ type issueUpdateGraph struct {
 	project     Project
 	projects    []Project
 	updated     Issue
+	readBack    Issue
 	updateInput map[string]any
 	updateCalls int
 }
@@ -311,7 +327,7 @@ func (graph *issueUpdateGraph) Do(_ context.Context, query string, variables map
 	switch query {
 	case resolveIssueIDQuery:
 		return setGraphOut(out, map[string]any{
-			"issues": map[string]any{"nodes": []Issue{{ID: "issue-1", Identifier: "TRAWL-1"}}},
+			"issues": map[string]any{"nodes": []Issue{{ID: "issue-1", Identifier: "TRAWL-1", Project: &Project{ID: "project-1", Name: "OpenTrawl", SlugID: "opentrawl"}}}},
 		})
 	case resolveProjectQuery:
 		projects := graph.projects
@@ -330,6 +346,14 @@ func (graph *issueUpdateGraph) Do(_ context.Context, query string, variables map
 		graph.updateCalls++
 		return setGraphOut(out, map[string]any{
 			"issueUpdate": map[string]any{"success": true, "issue": graph.updated},
+		})
+	case issueByIdentifierQuery:
+		readBack := graph.readBack
+		if readBack.ID == "" {
+			readBack = graph.updated
+		}
+		return setGraphOut(out, map[string]any{
+			"issues": map[string]any{"nodes": []Issue{readBack}},
 		})
 	default:
 		return errors.New("unexpected query")

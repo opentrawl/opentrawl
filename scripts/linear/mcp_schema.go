@@ -66,8 +66,43 @@ func mcpTools() []map[string]any {
 					"description": "Optional replacement priority.",
 					"enum":        []string{"none", "urgent", "high", "medium", "low"},
 				},
-				"project": stringSchema("Optional project name or slug. Use none to clear it."),
+				"project":   stringSchema("Optional project name or slug. Use none to clear it."),
+				"milestone": stringSchema("Optional milestone in the issue's current project. Use none to clear it."),
+				"title":     stringSchema("Optional replacement issue title."),
 			}, []string{"issue", "actor"}),
+		},
+		{
+			"name":        "get_project",
+			"description": "Show one Linear project, its full Markdown brief, status, priority, health, lead, milestones and issue totals.",
+			"inputSchema": objectSchema(map[string]any{
+				"project": stringSchema("Project name or slug."),
+			}, []string{"project"}),
+		},
+		{
+			"name":        "update_project",
+			"description": "Update selected project fields as the OpenTrawl app. The actor is recorded in the local request log.",
+			"inputSchema": objectSchema(map[string]any{
+				"project":     stringSchema("Project name or slug."),
+				"actor":       stringSchema("Required actor name for the local request log."),
+				"summary":     stringSchema("Optional replacement summary. Use none to clear it."),
+				"description": stringSchema("Optional replacement Markdown brief. An empty string clears it."),
+				"status":      stringSchema("Optional current Linear project status name."),
+				"priority": map[string]any{
+					"type":        "string",
+					"description": "Optional replacement priority.",
+					"enum":        []string{"none", "urgent", "high", "medium", "low"},
+				},
+			}, []string{"project", "actor"}),
+		},
+		{
+			"name":        "ensure_project_milestone",
+			"description": "Create a named project milestone when absent, or update its supplied fields when exactly one exists.",
+			"inputSchema": objectSchema(map[string]any{
+				"project":     stringSchema("Project name or slug."),
+				"name":        stringSchema("Milestone name."),
+				"actor":       stringSchema("Required actor name for the local request log."),
+				"description": stringSchema("Optional replacement Markdown description. An empty string clears it."),
+			}, []string{"project", "name", "actor"}),
 		},
 		{
 			"name":        "list_issues",

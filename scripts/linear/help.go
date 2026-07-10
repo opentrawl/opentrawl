@@ -17,9 +17,12 @@ Usage:
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
   linear issue <ISSUE>
   linear issues --team <KEY> [--state <name>]
+  linear project <PROJECT>
+  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+  linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
   linear mcp
 
 Environment:
@@ -39,6 +42,7 @@ Examples:
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
   linear issue state TRAWL-99 --state Done --as coordinator
   linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
+  linear project Photos
   linear issue TRAWL-99
   linear issues --team TRAWL
   linear mcp
@@ -96,7 +100,7 @@ Usage:
   linear issue <ISSUE>
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
@@ -145,7 +149,7 @@ Example:
 const issueUpdateHelp = `Replace selected Linear issue fields.
 
 Usage:
-  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>]
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
@@ -156,6 +160,8 @@ Flags:
                              An empty file clears the description.
   --priority <priority>      Optional. One of none, urgent, high, medium or low.
   --project <project>        Optional project name or slug. Use none to clear it.
+  --milestone <milestone>    Optional milestone in the issue's current project. Use none to clear it.
+  --title <title>            Optional replacement issue title.
 
 Linear attributes the change to the OpenTrawl app. Issue updates do not
 support createAsUser. The --as value records the responsible agent locally
@@ -164,6 +170,75 @@ without adding a comment.
 Examples:
   linear issue update TRAWL-99 --as coordinator --description-file issue.md
   linear issue update TRAWL-99 --as "lane mac app" --priority high --project OpenTrawl
+` + commonHelp
+
+const projectHelp = `Show one Linear project and its milestones.
+
+Usage:
+  linear project <PROJECT>
+  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+  linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
+
+Arguments:
+  PROJECT  Project name or slug.
+
+Examples:
+  linear project Photos
+  linear project update Photos --as lane-photos --status "In Progress" --priority high
+  linear project milestone ensure Photos --name "Foundations complete" --as lane-photos
+` + commonHelp
+
+const projectUpdateHelp = `Replace selected Linear project fields.
+
+Usage:
+  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+
+Arguments:
+  PROJECT  Project name or slug.
+
+Flags:
+  --as <actor>               Required. Actor name recorded in the local request log.
+  --summary <text>           Optional replacement summary. Use none to clear it.
+  --description-file <path>  Optional file containing the full replacement Markdown description.
+                             An empty file clears it.
+  --status <status>          Optional current Linear project status name.
+  --priority <priority>      Optional. One of none, urgent, high, medium or low.
+
+Linear attributes the change to the OpenTrawl app. Project updates do not
+support createAsUser. The --as value records the responsible agent locally
+without adding a comment.
+
+Example:
+  linear project update Photos --as lane-photos --summary "One clear outcome" --description-file project.md --status "In Progress" --priority high
+` + commonHelp
+
+const projectMilestoneHelp = `Manage Linear project milestones.
+
+Usage:
+  linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
+
+Run ` + "`linear project milestone ensure --help`" + ` for details.
+` + commonHelp
+
+const projectMilestoneEnsureHelp = `Create or update one Linear project milestone.
+
+Usage:
+  linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
+
+Arguments:
+  PROJECT  Project name or slug.
+
+Flags:
+  --name <name>              Required milestone name.
+  --as <actor>               Required actor name recorded in the local request log.
+  --description-file <path>  Optional file containing the full replacement Markdown description.
+                             An empty file clears it.
+
+If exactly one milestone has this name, linear updates only the supplied fields.
+If none has it, linear creates it. More than one is refused.
+
+Example:
+  linear project milestone ensure Photos --name "Foundations complete" --as lane-photos --description-file milestone.md
 ` + commonHelp
 
 const issuesHelp = `List Linear issues for a team.
@@ -191,5 +266,8 @@ Tools:
   create_issue    Create an issue. Requires team, title and actor.
   get_issue       Show one issue and its comments.
   update_issue    Replace selected issue fields. Requires issue and actor.
-  list_issues     List team issues.
+  list_issues                 List team issues.
+  get_project                 Show one project and its milestones.
+  update_project              Replace selected project fields. Requires project and actor.
+  ensure_project_milestone    Create or update one project milestone. Requires project, name and actor.
 ` + commonHelp

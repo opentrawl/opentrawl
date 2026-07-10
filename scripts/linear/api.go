@@ -25,9 +25,36 @@ type Team struct {
 }
 
 type Project struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	SlugID string `json:"slugId"`
+	ID            string        `json:"id"`
+	Name          string        `json:"name"`
+	SlugID        string        `json:"slugId"`
+	Description   string        `json:"description"`
+	Content       string        `json:"content"`
+	Status        ProjectStatus `json:"status"`
+	Priority      int           `json:"priority"`
+	PriorityLabel string        `json:"priorityLabel"`
+	Health        string        `json:"health"`
+	Lead          *Person       `json:"lead"`
+	Milestones    struct {
+		Nodes    []ProjectMilestone `json:"nodes"`
+		PageInfo PageInfo           `json:"pageInfo"`
+	} `json:"projectMilestones"`
+	Issues struct {
+		Nodes    []Issue  `json:"nodes"`
+		PageInfo PageInfo `json:"pageInfo"`
+	} `json:"issues"`
+}
+
+type ProjectStatus struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type ProjectMilestone struct {
+	ID          string   `json:"id"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Project     *Project `json:"project"`
 }
 
 type Person struct {
@@ -57,15 +84,16 @@ type IssueLabel struct {
 }
 
 type Issue struct {
-	ID            string     `json:"id"`
-	Identifier    string     `json:"identifier"`
-	Title         string     `json:"title"`
-	Description   string     `json:"description"`
-	URL           string     `json:"url"`
-	PriorityLabel string     `json:"priorityLabel"`
-	State         IssueState `json:"state"`
-	Project       *Project   `json:"project"`
-	Assignee      *Person    `json:"assignee"`
+	ID            string            `json:"id"`
+	Identifier    string            `json:"identifier"`
+	Title         string            `json:"title"`
+	Description   string            `json:"description"`
+	URL           string            `json:"url"`
+	PriorityLabel string            `json:"priorityLabel"`
+	State         IssueState        `json:"state"`
+	Project       *Project          `json:"project"`
+	Milestone     *ProjectMilestone `json:"projectMilestone"`
+	Assignee      *Person           `json:"assignee"`
 	Labels        struct {
 		Nodes    []IssueLabel `json:"nodes"`
 		PageInfo PageInfo     `json:"pageInfo"`
@@ -140,7 +168,7 @@ func NewLinearAPI(stderr io.Writer, verbosity int) (*LinearAPI, error) {
 }
 
 func (api *LinearAPI) Close() error {
-	if api == nil {
+	if api == nil || api.logger == nil {
 		return nil
 	}
 	return api.logger.Close()

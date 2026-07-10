@@ -21,6 +21,7 @@ func RenderIssue(w io.Writer, issue Issue) error {
 			{Label: "state", Value: issue.State.Name},
 			{Label: "priority", Value: issue.PriorityLabel},
 			{Label: "project", Value: projectName(issue.Project)},
+			{Label: "milestone", Value: milestoneName(issue.Milestone)},
 			{Label: "assignee", Value: personName(issue.Assignee, "Unassigned")},
 			{Label: "labels", Value: labelList(issue.Labels.Nodes)},
 			{Label: "url", Value: issue.URL},
@@ -56,6 +57,52 @@ func RenderIssue(w io.Writer, issue Issue) error {
 		}
 	}
 	return nil
+}
+
+func RenderProject(w io.Writer, project Project) error {
+	if _, err := fmt.Fprintf(w, "%s\nStatus: %s\nPriority: %s\nHealth: %s\nLead: %s\nIssues: %d open, %d total\n\n", project.Name, project.Status.Name, projectPriority(project), projectHealth(project.Health), personName(project.Lead, "Unassigned"), projectOpenIssues(project), len(project.Issues.Nodes)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Summary"); err != nil {
+		return err
+	}
+	if err := writeProjectText(w, project.Description); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "\nMilestones"); err != nil {
+		return err
+	}
+	if len(project.Milestones.Nodes) == 0 {
+		if _, err := fmt.Fprintln(w, "None"); err != nil {
+			return err
+		}
+	} else {
+		for _, milestone := range project.Milestones.Nodes {
+			if _, err := fmt.Fprintf(w, "- %s\n", milestone.Name); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := fmt.Fprintln(w, "\nDescription"); err != nil {
+		return err
+	}
+	return writeProjectText(w, project.Content)
+}
+
+func RenderEnsuredProjectMilestone(w io.Writer, result EnsuredProjectMilestone) error {
+	verb := "Ensured"
+	if result.Created {
+		verb = "Created"
+	} else if result.Changed {
+		verb = "Updated"
+	}
+	return crender.WriteCard(w, crender.Card{
+		Title: verb + " milestone " + result.Milestone.Name,
+		Fields: []crender.CardField{
+			{Label: "project", Value: result.Project.Name},
+			{Label: "actor", Value: result.Actor},
+		},
+	})
 }
 
 func RenderIssues(w io.Writer, result ListIssuesResult) error {
@@ -215,6 +262,77 @@ func projectName(project *Project) string {
 		return "None"
 	}
 	return project.Name
+}
+
+func milestoneName(milestone *ProjectMilestone) string {
+	if milestone == nil || strings.TrimSpace(milestone.Name) == "" {
+		return "None"
+	}
+	return milestone.Name
+}
+
+func projectPriority(project Project) string {
+	if strings.TrimSpace(project.PriorityLabel) != "" {
+		return project.PriorityLabel
+	}
+	switch project.Priority {
+	case 1:
+		return "Urgent"
+	case 2:
+		return "High"
+	case 3:
+		return "Medium"
+	case 4:
+		return "Low"
+	default:
+		return "No priority"
+	}
+}
+
+func projectHealth(health string) string {
+	health = strings.TrimSpace(health)
+	if health == "" {
+		return "Not set"
+	}
+	var words []string
+	for _, rune := range health {
+		if rune == '_' || rune == '-' {
+			words = append(words, " ")
+			continue
+		}
+		if rune >= 'A' && rune <= 'Z' && len(words) > 0 && words[len(words)-1] != " " {
+			words = append(words, " ")
+		}
+		words = append(words, string(rune))
+	}
+	return strings.Title(strings.ToLower(strings.Join(words, "")))
+}
+
+func projectOpenIssues(project Project) int {
+	open := 0
+	for _, issue := range project.Issues.Nodes {
+		switch strings.ToLower(issue.State.Type) {
+		case "completed", "canceled", "duplicate":
+		default:
+			open++
+		}
+	}
+	return open
+}
+
+func writeProjectText(w io.Writer, text string) error {
+	if text == "" {
+		_, err := fmt.Fprintln(w, "None")
+		return err
+	}
+	if _, err := fmt.Fprint(w, text); err != nil {
+		return err
+	}
+	if !strings.HasSuffix(text, "\n") {
+		_, err := fmt.Fprintln(w)
+		return err
+	}
+	return nil
 }
 
 func commentAuthor(comment Comment) string {

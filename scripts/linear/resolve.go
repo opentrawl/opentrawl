@@ -68,6 +68,68 @@ func projectChoices(projects []Project) string {
 	return strings.Join(choices, ", ")
 }
 
+func (api *LinearAPI) ProjectStatuses(ctx context.Context) ([]ProjectStatus, error) {
+	var statuses []ProjectStatus
+	after := ""
+	for {
+		var out struct {
+			ProjectStatuses struct {
+				Nodes    []ProjectStatus `json:"nodes"`
+				PageInfo PageInfo        `json:"pageInfo"`
+			} `json:"projectStatuses"`
+		}
+		variables := map[string]any{}
+		if after != "" {
+			variables["after"] = after
+		}
+		if err := api.graph.Do(ctx, projectStatusesQuery, variables, &out); err != nil {
+			return nil, err
+		}
+		statuses = append(statuses, out.ProjectStatuses.Nodes...)
+		if !out.ProjectStatuses.PageInfo.HasNextPage {
+			return statuses, nil
+		}
+		after = out.ProjectStatuses.PageInfo.EndCursor
+		if after == "" {
+			return nil, fmt.Errorf("linear did not return a cursor for the next project status page")
+		}
+	}
+}
+
+func (api *LinearAPI) ResolveProjectStatus(ctx context.Context, name string) (ProjectStatus, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return ProjectStatus{}, fmt.Errorf("--status needs a value")
+	}
+	statuses, err := api.ProjectStatuses(ctx)
+	if err != nil {
+		return ProjectStatus{}, err
+	}
+	var matches []ProjectStatus
+	for _, status := range statuses {
+		if strings.EqualFold(status.Name, name) {
+			matches = append(matches, status)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	names := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		if strings.TrimSpace(status.Name) != "" {
+			names = append(names, status.Name)
+		}
+	}
+	sort.Strings(names)
+	if len(matches) > 1 {
+		return ProjectStatus{}, fmt.Errorf("project status %q is ambiguous. Valid statuses: %s", name, strings.Join(names, ", "))
+	}
+	if len(names) == 0 {
+		return ProjectStatus{}, fmt.Errorf("Linear has no project statuses")
+	}
+	return ProjectStatus{}, fmt.Errorf("project status %q was not found. Valid statuses: %s", name, strings.Join(names, ", "))
+}
+
 func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []string) ([]string, error) {
 	names = cleanLabelNames(names)
 	if len(names) == 0 {
