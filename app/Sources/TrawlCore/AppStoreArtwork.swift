@@ -1,7 +1,7 @@
 @preconcurrency import Foundation
 
 public actor AppStoreArtwork {
-  public typealias FetchData = @Sendable (URL) async throws -> Data
+  public typealias FetchData = @Sendable (URL, Int) async throws -> Data
 
   public static let bundleIDs = [
     "gmail": "com.google.Gmail",
@@ -43,7 +43,7 @@ public actor AppStoreArtwork {
     }
 
     do {
-      let lookupData = try await fetchData(lookupURL)
+      let lookupData = try await fetchData(lookupURL, Self.maximumLookupBytes)
       guard lookupData.count <= Self.maximumLookupBytes else { return nil }
       let response = try JSONDecoder().decode(LookupResponse.self, from: lookupData)
       guard let artworkURL = response.results.first?.artworkURL,
@@ -54,7 +54,7 @@ public actor AppStoreArtwork {
       else {
         return nil
       }
-      let artwork = try await fetchData(url)
+      let artwork = try await fetchData(url, Self.maximumArtworkBytes)
       guard !artwork.isEmpty, artwork.count <= Self.maximumArtworkBytes else {
         return nil
       }
@@ -69,12 +69,21 @@ public actor AppStoreArtwork {
     }
   }
 
-  public static func download(_ url: URL) async throws -> Data {
-    let (data, response) = try await URLSession.shared.data(from: url)
+  public static func download(_ url: URL, maximumBytes: Int) async throws -> Data {
+    let (bytes, response) = try await URLSession.shared.bytes(from: url)
     guard let response = response as? HTTPURLResponse,
       (200..<300).contains(response.statusCode)
     else {
       throw URLError(.badServerResponse)
+    }
+
+    var data = Data()
+    data.reserveCapacity(min(maximumBytes, 64 * 1024))
+    for try await byte in bytes {
+      guard data.count < maximumBytes else {
+        throw URLError(.dataLengthExceedsMaximum)
+      }
+      data.append(byte)
     }
     return data
   }

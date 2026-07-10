@@ -57,8 +57,8 @@ import TrawlClient
   defer { try? FileManager.default.removeItem(at: cache) }
   let recorder = URLRecorder()
   let artworkBytes = Data([0x89, 0x50, 0x4e, 0x47])
-  let store = AppStoreArtwork(cacheDirectory: cache) { url in
-    await recorder.record(url)
+  let store = AppStoreArtwork(cacheDirectory: cache) { url, maximumBytes in
+    await recorder.record(url, maximumBytes: maximumBytes)
     if url.host == "itunes.apple.com" {
       return Data(
         "{\"results\":[{\"artworkUrl512\":\"https://is1-ssl.mzstatic.com/icon.png\"}]}".utf8
@@ -80,8 +80,8 @@ import TrawlClient
     .appendingPathComponent(UUID().uuidString, isDirectory: true)
   defer { try? FileManager.default.removeItem(at: cache) }
   let recorder = URLRecorder()
-  let store = AppStoreArtwork(cacheDirectory: cache) { url in
-    await recorder.record(url)
+  let store = AppStoreArtwork(cacheDirectory: cache) { url, maximumBytes in
+    await recorder.record(url, maximumBytes: maximumBytes)
     return Data(
       "{\"results\":[{\"artworkUrl512\":\"https://example.com/icon.png\"}]}".utf8
     )
@@ -89,6 +89,25 @@ import TrawlClient
 
   #expect(await store.data(for: "gmail") == nil)
   #expect(await recorder.count == 1)
+}
+
+@Test func artworkRequestsCarryTheExactTransferCaps() async {
+  let cache = FileManager.default.temporaryDirectory
+    .appendingPathComponent(UUID().uuidString, isDirectory: true)
+  defer { try? FileManager.default.removeItem(at: cache) }
+  let recorder = URLRecorder()
+  let store = AppStoreArtwork(cacheDirectory: cache) { url, maximumBytes in
+    await recorder.record(url, maximumBytes: maximumBytes)
+    if url.host == "itunes.apple.com" {
+      return Data(
+        "{\"results\":[{\"artworkUrl512\":\"https://is1-ssl.mzstatic.com/icon.png\"}]}".utf8
+      )
+    }
+    return Data([0x89, 0x50, 0x4e, 0x47])
+  }
+
+  #expect(await store.data(for: "gmail") == Data([0x89, 0x50, 0x4e, 0x47]))
+  #expect(await recorder.maximumBytes == [1_048_576, 5_242_880])
 }
 
 private final class StatusClient: TrawlClient, @unchecked Sendable {
@@ -108,10 +127,13 @@ private final class StatusClient: TrawlClient, @unchecked Sendable {
 
 private actor URLRecorder {
   private var urls: [URL] = []
+  private var limits: [Int] = []
 
   var count: Int { urls.count }
+  var maximumBytes: [Int] { limits }
 
-  func record(_ url: URL) {
+  func record(_ url: URL, maximumBytes: Int) {
     urls.append(url)
+    limits.append(maximumBytes)
   }
 }
