@@ -7,12 +7,12 @@ import (
 	"errors"
 )
 
-func ExportOriginalResource(ctx context.Context, localIdentifier, destinationPath string, allowNetwork bool) error {
+func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQuery, destinationPath string, allowNetwork bool) error {
 	return errors.New("PhotoKit original export requires macOS")
 }
 
-func ExportOriginalResourceMatching(ctx context.Context, query OriginalExportQuery, destinationPath string, allowNetwork bool) error {
-	return errors.New("PhotoKit original export requires macOS")
+func RequestPhotoLibraryAuthorization(ctx context.Context) (string, error) {
+	return "", errors.New("Photos authorization requests require macOS")
 }
 
 func RenderCanonicalJPEG(ctx context.Context, sourcePath, destinationPath string, quality float64) error {

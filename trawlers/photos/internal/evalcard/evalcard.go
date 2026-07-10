@@ -26,6 +26,8 @@ const (
 
 const PromptVersion = repoPrompts.PhotoCardVersion
 
+var exportOriginalResource = photos.ExportOriginalResourceThroughApp
+
 type Options struct {
 	LibraryPath          string
 	OutputDir            string
@@ -291,23 +293,26 @@ func prepareInput(ctx context.Context, localMedia photos.LocalMediaIndex, output
 }
 
 func resolveOriginal(ctx context.Context, localMedia photos.LocalMediaIndex, cacheDir string, asset photos.Asset, allowICloud bool) (string, string, error) {
-	candidates := localMedia.Candidates(asset.LocalIdentifier)
-	for _, candidate := range candidates {
-		if candidate.Class == "original" {
+	if candidate, ok := photos.UniquePackageOriginal(localMedia.Candidates(asset.LocalIdentifier)); ok {
+		if _, _, err := photos.InspectOriginalFile(candidate.Path); err == nil {
 			return candidate.Path, "photos_package_original", nil
 		}
 	}
-	cachePath := filepath.Join(cacheDir, cacheName(asset))
-	if info, err := os.Stat(cachePath); err == nil && info.Size() > 0 {
+	query := originalExportQuery(asset)
+	cachePath := photos.OriginalCachePath(cacheDir, asset.ModificationDate, query)
+	if _, _, err := photos.InspectOriginalFile(cachePath); err == nil {
 		return cachePath, "cached_photokit_original", nil
 	}
 	if !allowICloud {
 		return "", "", fmt.Errorf("missing_original")
 	}
-	if err := photos.ExportOriginalResource(ctx, asset.LocalIdentifier, cachePath, true); err != nil {
+	if err := exportOriginalResource(ctx, query, cachePath, true); err != nil {
 		if errors.Is(err, photos.ErrExportAlreadyRunning) {
 			return "", "", err
 		}
+		return "", "", fmt.Errorf("export_original")
+	}
+	if _, _, err := photos.InspectOriginalFile(cachePath); err != nil {
 		return "", "", fmt.Errorf("export_original")
 	}
 	return cachePath, "photokit_original_export", nil
@@ -336,47 +341,30 @@ func imageAssets(assets []photos.Asset, sample string, seed uint64) []photos.Ass
 	return out
 }
 
-func cacheName(asset photos.Asset) string {
-	sum := sha256.Sum256([]byte(asset.LocalIdentifier))
-	return hex.EncodeToString(sum[:]) + originalExtension(asset)
+func originalExportQuery(asset photos.Asset) photos.OriginalExportQuery {
+	resource := preferredOriginalResource(asset)
+	return photos.OriginalExportQuery{
+		LocalIdentifier:  asset.LocalIdentifier,
+		CreationDate:     asset.CreationDate,
+		Width:            asset.Width,
+		Height:           asset.Height,
+		OriginalFilename: resource.OriginalFilename,
+		OriginalUTI:      resource.UTI,
+	}
 }
 
-func originalExtension(asset photos.Asset) string {
+func preferredOriginalResource(asset photos.Asset) photos.Resource {
 	for _, resource := range asset.Resources {
-		if ext := strings.ToLower(filepath.Ext(resource.OriginalFilename)); classifiableExtension(ext) {
-			return ext
-		}
-		if ext := extensionForUTI(resource.UTI); ext != "" {
-			return ext
+		if resource.NeedsDownload && (photos.IsOriginalExtension(filepath.Ext(resource.OriginalFilename)) || photos.IsOriginalUTI(resource.UTI)) {
+			return resource
 		}
 	}
-	return ".heic"
-}
-
-func classifiableExtension(ext string) bool {
-	switch ext {
-	case ".heic", ".heif", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".dng":
-		return true
-	default:
-		return false
+	for _, resource := range asset.Resources {
+		if photos.IsOriginalExtension(filepath.Ext(resource.OriginalFilename)) || photos.IsOriginalUTI(resource.UTI) {
+			return resource
+		}
 	}
-}
-
-func extensionForUTI(uti string) string {
-	switch strings.ToLower(uti) {
-	case "public.heic", "public.heif":
-		return ".heic"
-	case "public.jpeg", "public.jpg":
-		return ".jpg"
-	case "public.png":
-		return ".png"
-	case "public.tiff":
-		return ".tiff"
-	case "com.adobe.raw-image", "com.adobe.raw":
-		return ".dng"
-	default:
-		return ""
-	}
+	return photos.Resource{}
 }
 
 func classifySkip(err error) string {

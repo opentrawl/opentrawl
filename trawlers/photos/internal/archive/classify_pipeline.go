@@ -67,11 +67,10 @@ type contentItem struct {
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
-	cache, err := newOriginalsCache(paths.OriginalsCacheDir(), result.ModelRunID)
+	cache, err := newOriginalsCache(paths.OriginalsCacheDir())
 	if err != nil {
 		return err
 	}
-	defer cache.Close()
 
 	// Pre-pass: items that never reach the model resolve immediately.
 	items := make([]*contentItem, 0, len(inputs))
@@ -80,7 +79,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			items = append(items, &contentItem{input: input, imagePath: imagePath, pathClass: input.localPathClass(imagePath)})
 			continue
 		}
-		if input.NeedsDownload && input.MediaType == "image" {
+		if input.MediaType == "image" {
 			items = append(items, &contentItem{input: input, needsDownload: true})
 			continue
 		}
@@ -103,12 +102,12 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 				item.downloadErr = exported.err
 				return model.Request{}, exported.err
 			}
-			item.downloaded = true
+			item.downloaded = exported.downloaded
 			item.imagePath = exported.path
 			item.pathClass = exported.pathClass
-			// The image bytes land in the request below; the exported file
-			// is not needed after that, so the lease closes here and disk
-			// use stays bounded by one export at a time.
+			// The request owns its image bytes after buildRequest returns.
+			// Release the cache lease then so later exports may evict this
+			// file under the fixed byte budget.
 			defer func() {
 				if exported.lease != nil {
 					exported.lease.Close()

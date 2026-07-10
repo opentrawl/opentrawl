@@ -4,7 +4,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 )
 
@@ -43,143 +42,94 @@ func AttachLocalMediaPaths(snapshot *LibrarySnapshot, libraryPath string) error 
 		if uuid == "" {
 			continue
 		}
-		candidates := index[uuid]
-		if len(candidates) == 0 {
+		candidate, ok := UniquePackageOriginal(index[uuid])
+		if !ok {
 			continue
 		}
-		candidate := candidates[0]
-		assigned := false
-		for resourceIndex := range asset.Resources {
-			resource := &asset.Resources[resourceIndex]
-			if assigned || !classifiableResource(*resource) {
-				continue
+		alreadyAttached := false
+		for _, resource := range asset.Resources {
+			if resource.LocalPath == candidate.Path {
+				alreadyAttached = true
+				break
 			}
-			resource.LocalPath = candidate.Path
-			resource.Availability = "local"
-			resource.AvailableLocally = true
-			resource.NeedsDownload = false
-			if resource.FileSize == 0 {
-				resource.FileSize = candidate.Size
-			}
-			if resource.Metadata == nil {
-				resource.Metadata = map[string]any{}
-			}
-			resource.Metadata["local_path_class"] = candidate.Class
-			resource.Metadata["local_path_source"] = "photos_library_package"
-			assigned = true
 		}
-		if !assigned && asset.MediaType == "image" {
-			asset.Resources = append(asset.Resources, Resource{
-				Type:             "local_" + candidate.Class,
-				UTI:              utiForPath(candidate.Path),
-				OriginalFilename: filepath.Base(candidate.Path),
-				LocalPath:        candidate.Path,
-				Availability:     "local",
-				FileSize:         candidate.Size,
-				AvailableLocally: true,
-				NeedsDownload:    false,
-				Metadata: map[string]any{
-					"local_path_class":  candidate.Class,
-					"local_path_source": "photos_library_package",
-				},
-			})
+		if alreadyAttached || asset.MediaType != "image" {
+			continue
 		}
+		asset.Resources = append(asset.Resources, Resource{
+			Type:             "local_original",
+			UTI:              utiForPath(candidate.Path),
+			OriginalFilename: filepath.Base(candidate.Path),
+			LocalPath:        candidate.Path,
+			Availability:     "local",
+			FileSize:         candidate.Size,
+			AvailableLocally: true,
+			NeedsDownload:    false,
+			Metadata: map[string]any{
+				"local_path_class":  "original",
+				"local_path_source": "photos_library_package",
+			},
+		})
 	}
 	return nil
 }
 
+// UniquePackageOriginal returns a package original only when the UUID maps to
+// one non-empty file. Ambiguous package matches fall through to PhotoKit,
+// which can select the preferred asset resource without guessing.
+func UniquePackageOriginal(candidates []LocalMediaCandidate) (LocalMediaCandidate, bool) {
+	var original LocalMediaCandidate
+	for _, candidate := range candidates {
+		if candidate.Class != "original" || candidate.Size <= 0 {
+			continue
+		}
+		if original.Path != "" {
+			return LocalMediaCandidate{}, false
+		}
+		original = candidate
+	}
+	return original, original.Path != ""
+}
+
 func localMediaIndex(libraryPath string) (LocalMediaIndex, error) {
-	roots := []struct {
-		path  string
-		class string
-	}{
-		{filepath.Join(libraryPath, "resources", "derivatives"), "derivative"},
-		{filepath.Join(libraryPath, "resources", "renders"), "render"},
-		{filepath.Join(libraryPath, "originals"), "original"},
-	}
+	root := filepath.Join(libraryPath, "originals")
 	out := LocalMediaIndex{}
-	for _, root := range roots {
-		if _, err := os.Stat(root.path); err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return nil, err
+	if _, err := os.Stat(root); err != nil {
+		if os.IsNotExist(err) {
+			return out, nil
 		}
-		err := filepath.WalkDir(root.path, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() || !classifiablePath(path) {
-				return nil
-			}
-			uuid := mediaUUID(filepath.Base(path))
-			if uuid == "" {
-				return nil
-			}
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			out[uuid] = append(out[uuid], LocalMediaCandidate{
-				Path:  path,
-				Class: root.class,
-				Size:  info.Size(),
-			})
-			return nil
-		})
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
-	for uuid := range out {
-		sort.Slice(out[uuid], func(i, j int) bool {
-			if localMediaPriority(out[uuid][i]) != localMediaPriority(out[uuid][j]) {
-				return localMediaPriority(out[uuid][i]) < localMediaPriority(out[uuid][j])
-			}
-			if out[uuid][i].Size != out[uuid][j].Size {
-				return out[uuid][i].Size < out[uuid][j].Size
-			}
-			return out[uuid][i].Path < out[uuid][j].Path
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !classifiablePath(path) {
+			return nil
+		}
+		uuid := mediaUUID(filepath.Base(path))
+		if uuid == "" {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		out[uuid] = append(out[uuid], LocalMediaCandidate{
+			Path:  path,
+			Class: "original",
+			Size:  info.Size(),
 		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 	return out, nil
 }
 
-func localMediaPriority(candidate LocalMediaCandidate) int {
-	switch candidate.Class {
-	case "derivative":
-		return 1
-	case "render":
-		return 2
-	case "original":
-		return 3
-	default:
-		return 10
-	}
-}
-
-func classifiableResource(resource Resource) bool {
-	value := strings.ToLower(strings.Join([]string{
-		resource.Type,
-		resource.UTI,
-		resource.OriginalFilename,
-		resource.LocalPath,
-	}, " "))
-	return strings.Contains(value, "image") ||
-		strings.Contains(value, "photo") ||
-		strings.Contains(value, "heic") ||
-		strings.Contains(value, "jpeg") ||
-		strings.Contains(value, "jpg") ||
-		strings.Contains(value, "png")
-}
-
 func classifiablePath(path string) bool {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jpg", ".jpeg", ".png", ".heic":
-		return true
-	default:
-		return false
-	}
+	return IsOriginalExtension(filepath.Ext(path))
 }
 
 func mediaUUID(value string) string {

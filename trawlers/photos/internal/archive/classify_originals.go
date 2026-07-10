@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -13,41 +14,62 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-var exportOriginalResource = photos.ExportOriginalResourceMatching
+const defaultOriginalsCacheMaxBytes int64 = 4 * 1024 * 1024 * 1024
 
-// originalsCache is a per-run scratch directory. Disk usage is bounded by the
-// pipeline shape itself: downloads are serial, every file is deleted as soon
-// as its card is written, and the whole run directory is removed on Close.
+var exportOriginalResource = photos.ExportOriginalResourceThroughApp
+
+// originalsCache keeps recent PhotoKit originals across runs. Exports are
+// serial, active files cannot be evicted, and least-recently-used inactive
+// files are removed after the fixed byte budget is exceeded.
 type originalsCache struct {
-	root   string
-	runDir string
+	root     string
+	maxBytes int64
+	mu       sync.Mutex
+	active   map[string]int
 }
 
 type originalLease struct {
-	path string
-	once sync.Once
+	cache *originalsCache
+	path  string
+	once  sync.Once
 }
 
 type originalExportResult struct {
-	path      string
-	pathClass string
-	bytes     int64
-	duration  time.Duration
-	lease     *originalLease
-	attempts  int
-	err       error
+	path       string
+	pathClass  string
+	bytes      int64
+	duration   time.Duration
+	lease      *originalLease
+	downloaded bool
+	err        error
 }
 
-func newOriginalsCache(root, runID string) (*originalsCache, error) {
+type originalCacheEntry struct {
+	path    string
+	size    int64
+	modTime time.Time
+}
+
+func newOriginalsCache(root string) (*originalsCache, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return nil, errors.New("originals cache path is required")
 	}
-	runDir := filepath.Join(root, safePathComponent(runID))
-	if err := os.MkdirAll(runDir, 0o755); err != nil {
+	if err := os.MkdirAll(root, 0o755); err != nil {
 		return nil, fmt.Errorf("create originals cache: %w", err)
 	}
-	return &originalsCache{root: root, runDir: runDir}, nil
+	cache := &originalsCache{
+		root:     root,
+		maxBytes: defaultOriginalsCacheMaxBytes,
+		active:   map[string]int{},
+	}
+	cache.mu.Lock()
+	err := cache.pruneLocked()
+	cache.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	return cache, nil
 }
 
 func (c *originalsCache) export(ctx context.Context, input classifyInput) originalExportResult {
@@ -55,125 +77,151 @@ func (c *originalsCache) export(ctx context.Context, input classifyInput) origin
 	if strings.TrimSpace(input.LocalIdentifier) == "" {
 		return originalExportResult{err: errors.New("asset local identifier is required for original export"), duration: time.Since(startedAt)}
 	}
-	path := filepath.Join(c.runDir, safePathComponent(input.AssetID)+originalExtension(input))
-	lease := &originalLease{path: path}
-	result := originalExportResult{path: path, pathClass: "downloaded_original", lease: lease}
-	var err error
-	for attempt := 1; attempt <= 2; attempt++ {
-		result.attempts = attempt
-		err = exportOriginalResource(ctx, input.originalExportQuery(), path, true)
-		if err == nil {
-			break
-		}
-		if attempt == 1 {
-			select {
-			case <-ctx.Done():
-				err = ctx.Err()
-			case <-time.After(500 * time.Millisecond):
-			}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	path := c.path(input)
+	if info, _, err := photos.InspectOriginalFile(path); err == nil {
+		_ = os.Chtimes(path, time.Now(), time.Now())
+		return originalExportResult{
+			path:      path,
+			pathClass: "cached_photokit_original",
+			bytes:     info.Size(),
+			duration:  time.Since(startedAt),
+			lease:     c.acquireLocked(path),
 		}
 	}
+	_ = os.Remove(path)
+	result := originalExportResult{path: path, pathClass: "photokit_original_export"}
+	err := exportOriginalResource(ctx, input.originalExportQuery(), path, true)
 	result.duration = time.Since(startedAt)
 	if err != nil {
 		result.err = err
-		lease.Close()
+		_ = os.Remove(path)
+		_ = os.Remove(path + ".exporting")
 		return result
 	}
-	info, err := os.Stat(path)
+	info, _, err := photos.InspectOriginalFile(path)
 	if err != nil {
-		result.err = fmt.Errorf("stat exported original: %w", err)
-		lease.Close()
+		result.err = fmt.Errorf("inspect exported original: %w", err)
+		_ = os.Remove(path)
+		return result
+	}
+	if info.Size() > c.maxBytes {
+		result.err = fmt.Errorf("exported original exceeds cache budget: %d bytes", info.Size())
+		_ = os.Remove(path)
 		return result
 	}
 	result.bytes = info.Size()
+	result.downloaded = true
+	result.lease = c.acquireLocked(path)
+	if err := c.pruneLocked(); err != nil {
+		c.releaseLocked(path)
+		result.lease = nil
+		_ = os.Remove(path)
+		result.err = err
+		return result
+	}
 	return result
 }
 
-func (c *originalsCache) Close() {
-	_ = os.RemoveAll(c.runDir)
-}
-
 func (l *originalLease) Close() {
-	if l == nil {
+	if l == nil || l.cache == nil {
 		return
 	}
 	l.once.Do(func() {
-		_ = os.Remove(l.path)
+		l.cache.mu.Lock()
+		defer l.cache.mu.Unlock()
+		l.cache.releaseLocked(l.path)
+		_ = l.cache.pruneLocked()
 	})
 }
 
+func (c *originalsCache) path(input classifyInput) string {
+	return photos.OriginalCachePath(c.root, input.ModificationDate, input.originalExportQuery())
+}
+
+func (c *originalsCache) acquireLocked(path string) *originalLease {
+	c.active[path]++
+	return &originalLease{cache: c, path: path}
+}
+
+func (c *originalsCache) releaseLocked(path string) {
+	if c.active[path] <= 1 {
+		delete(c.active, path)
+		return
+	}
+	c.active[path]--
+}
+
+func (c *originalsCache) pruneLocked() error {
+	entries, err := os.ReadDir(c.root)
+	if err != nil {
+		return fmt.Errorf("read originals cache: %w", err)
+	}
+	files := make([]originalCacheEntry, 0, len(entries))
+	var total int64
+	for _, entry := range entries {
+		if entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return fmt.Errorf("inspect originals cache: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		path := filepath.Join(c.root, entry.Name())
+		files = append(files, originalCacheEntry{path: path, size: info.Size(), modTime: info.ModTime()})
+		total += info.Size()
+	}
+	sort.Slice(files, func(i, j int) bool {
+		if !files[i].modTime.Equal(files[j].modTime) {
+			return files[i].modTime.Before(files[j].modTime)
+		}
+		return files[i].path < files[j].path
+	})
+	for _, file := range files {
+		if total <= c.maxBytes {
+			break
+		}
+		if c.active[file.path] > 0 {
+			continue
+		}
+		if err := os.Remove(file.path); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("evict cached original: %w", err)
+		}
+		total -= file.size
+	}
+	return nil
+}
+
 func (input classifyInput) originalExportQuery() photos.OriginalExportQuery {
+	resource := input.preferredOriginalResource()
 	return photos.OriginalExportQuery{
 		LocalIdentifier:  input.LocalIdentifier,
 		CreationDate:     input.CreationDate,
 		Width:            input.Width,
 		Height:           input.Height,
-		OriginalFilename: input.preferredOriginalFilename(),
+		OriginalFilename: resource.OriginalFilename,
+		OriginalUTI:      resource.UTI,
 	}
 }
 
-func (input classifyInput) preferredOriginalFilename() string {
+func (input classifyInput) preferredOriginalResource() classifyResource {
 	for _, resource := range input.Resources {
-		if resource.NeedsDownload && classifiableResourceText(resource) {
-			return resource.OriginalFilename
+		if resource.NeedsDownload && isOriginalResource(resource) {
+			return resource
 		}
 	}
 	for _, resource := range input.Resources {
-		if classifiableResourceText(resource) {
-			return resource.OriginalFilename
+		if isOriginalResource(resource) {
+			return resource
 		}
 	}
-	return ""
+	return classifyResource{}
 }
 
-func originalExtension(input classifyInput) string {
-	for _, resource := range input.Resources {
-		if !classifiableResourceText(resource) {
-			continue
-		}
-		if ext := strings.ToLower(filepath.Ext(resource.OriginalFilename)); classifiableImagePath("x" + ext) {
-			return ext
-		}
-		switch strings.ToLower(resource.UTI) {
-		case "public.jpeg", "jpeg", "jpg":
-			return ".jpg"
-		case "public.png", "png":
-			return ".png"
-		case "public.heic", "heic":
-			return ".heic"
-		}
-	}
-	return ".jpg"
-}
-
-func classifiableResourceText(resource classifyResource) bool {
-	value := strings.ToLower(strings.Join([]string{resource.ResourceType, resource.UTI, resource.OriginalFilename}, " "))
-	return strings.Contains(value, "image") ||
-		strings.Contains(value, "photo") ||
-		strings.Contains(value, "jpeg") ||
-		strings.Contains(value, "jpg") ||
-		strings.Contains(value, "png") ||
-		strings.Contains(value, "heic")
-}
-
-func safePathComponent(value string) string {
-	value = strings.TrimSpace(value)
-	var builder strings.Builder
-	for _, r := range value {
-		switch {
-		case r >= 'a' && r <= 'z':
-			builder.WriteRune(r)
-		case r >= 'A' && r <= 'Z':
-			builder.WriteRune(r)
-		case r >= '0' && r <= '9':
-			builder.WriteRune(r)
-		default:
-			builder.WriteByte('_')
-		}
-	}
-	out := strings.Trim(builder.String(), "_")
-	if out == "" {
-		return "run"
-	}
-	return out
+func isOriginalResource(resource classifyResource) bool {
+	return photos.IsOriginalExtension(filepath.Ext(resource.OriginalFilename)) || photos.IsOriginalUTI(resource.UTI)
 }

@@ -50,30 +50,33 @@ yet.
 
 `sync` snapshots `database/Photos.sqlite` with trawlkit's SQLite snapshot helper
 and reads the copy. This is the headless path: it needs Full Disk Access for the
-terminal or app, not a recurring Photos TCC prompt. PhotoKit remains available
-only for explicit original export flows such as
-`photoscrawl-lab eval-card --allow-icloud-downloads`.
+terminal or app. Original exports run through the signed Photoscrawl Fetch app,
+which owns its Photos permission independently of the launching terminal.
 
 `sync` does not export originals or force iCloud downloads. It records already
-local package media paths for derivatives/renders/originals when they exist, so
-content classification can use local files without changing Photos or iCloud
-state. Every imported asset is queued for `classify`.
+local package originals only when one non-empty file matches the asset. It does
+not treat a derivative, render or private SQLite availability flag as proof of
+an original. Every imported asset is queued for `classify`.
 
 `classify` drains that queue into local metadata observations. With
-`--model <ollama-model>`, it also resolves place context cache-first, sends
-already-local image bytes to an Ollama-API vision model, and stores one photo
-card per asset: a one-line summary, rich visual description, OCR text, and
-uncertainty list. Search indexes that card text and mechanical place
-observations directly. It does not store rendered tag rows, object lists, or
-derived term lists.
+`--model <ollama-model>`, it resolves the exact original in one order: a unique
+package original, a valid persistent cache file, then a signed PhotoKit export
+with network access because the original is otherwise unavailable. Recent
+PhotoKit exports stay in a fixed 4GB least-recently-used cache, so restarts do
+not redownload the same originals and disk use stays bounded. Classification
+also resolves place context cache-first, sends the original image bytes to an
+Ollama-API vision model, and stores one photo card per asset: a one-line
+summary, rich visual description, OCR text, and uncertainty list. Search
+indexes that card text and mechanical place observations directly. It does not
+store rendered tag rows, object lists, or derived term lists.
 
 If Apple place geocoding is throttled, located photos move to `place_pending`
 instead of being carded without place context. Later `classify` runs retry
 parked photos and unpark them once the place cache covers their location.
 
-If an original download fails, `classify` marks that asset as `failed_download`.
-It will not try that download again until an operator resets it:
-`sqlite3 ~/.opentrawl/photos/photos.db "update classification_queue set state='metadata_classified', reason='operator reset failed_download', updated_at=strftime('%Y-%m-%dT%H:%M:%fZ','now') where state='failed_download';"`.
+If an original export fails, `classify` records `failed_download` for that run.
+The next `classify` invocation retries that asset. It does not need an operator
+reset or repeat a completed export already present in the cache.
 
 ## photoscrawl-lab
 
@@ -106,8 +109,9 @@ the tracked prompt file in `prompts/`, prepares canonical full-resolution JPEGs
 from originals, passes full metadata as a sidecar prompt input, and writes all
 private images, metadata, and model responses under
 `~/.opentrawl/photos/evals`. If `--allow-icloud-downloads` is set, PhotoKit
-may download missing originals into `~/.opentrawl/photos/cache/originals`;
-normal sync/classify commands do not force iCloud downloads.
+may download missing originals through Photoscrawl Fetch into
+`~/.opentrawl/photos/cache/originals`. `sync` never downloads originals;
+model-backed `classify` may fetch one when neither the package nor cache has it.
 
 There is no standalone place backfill command. Library-scale place caching is
 handled by classify's cache-first resolver, which can read legacy backfill
@@ -159,8 +163,8 @@ without pretending GPS, face labels, or classifier labels are perfect facts.
 Build `photos.db` with:
 
 - assets and resource metadata from Apple Photos;
-- local original-download queue; disk use is bounded by serial downloads and
-  delete-after-classify, not a size ledger;
+- local original-download queue with a persistent 4GB least-recently-used
+  cache and serial PhotoKit exports;
 - GPS observations as raw coordinates only;
 - album membership;
 - file/resource hashes when originals are available;

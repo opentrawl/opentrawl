@@ -1,0 +1,175 @@
+//go:build darwin
+
+// Command photoscrawl-fetch is the signed internal PhotoKit boundary for one
+// original export. It is not part of the trawl command surface.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"runtime"
+	"time"
+
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire"
+	"google.golang.org/protobuf/proto"
+)
+
+var (
+	requestAuthorization   = photos.RequestPhotoLibraryAuthorization
+	exportOriginalMatching = photos.ExportOriginalResourceMatching
+)
+
+func main() {
+	if len(os.Args) == 1 {
+		runtime.LockOSThread()
+		os.Exit(requestAccess(context.Background()))
+	}
+	os.Exit(run(context.Background(), os.Args[1:], os.Stderr))
+}
+
+// requestAccess is the LaunchServices first-run entrypoint. It may show the
+// Photos permission prompt, but it never reads or exports an asset.
+func requestAccess(ctx context.Context) int {
+	status, err := requestAuthorization(ctx)
+	if err != nil {
+		return 1
+	}
+	if status == "authorized" || status == "limited" {
+		return 0
+	}
+	return 1
+}
+
+func run(ctx context.Context, args []string, stderr io.Writer) int {
+	if len(args) != 5 || args[0] != "run" {
+		writeln(stderr, "photoscrawl-fetch is an internal app and accepts no direct commands")
+		return 2
+	}
+	return runWireRequest(ctx, args[1:], stderr)
+}
+
+func runWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
+	flags := flag.NewFlagSet("run", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	requestPath := flags.String("request", "", "protobuf request path")
+	responsePath := flags.String("response", "", "protobuf response path")
+	if err := flags.Parse(args); err != nil {
+		return 2
+	}
+	if flags.NArg() != 0 || *requestPath == "" || *responsePath == "" {
+		writeln(stderr, "photoscrawl-fetch run: --request and --response are required; positional arguments are not accepted")
+		return 2
+	}
+	data, err := readWireRequest(*requestPath)
+	if err != nil {
+		_ = writeWireResponse(*responsePath, failedWireResponse("invalid_request", "PhotoKit request could not be read", nil))
+		return 1
+	}
+	var request fetchwire.OriginalFetchRequest
+	if err := proto.Unmarshal(data, &request); err != nil || request.LocalIdentifier == "" || request.DestinationPath == "" {
+		_ = writeWireResponse(*responsePath, failedWireResponse("invalid_request", "PhotoKit request is invalid", nil))
+		return 1
+	}
+	timeout := time.Duration(request.TimeoutMilliseconds) * time.Millisecond
+	if timeout <= 0 || timeout > 10*time.Minute {
+		_ = writeWireResponse(*responsePath, failedWireResponse("invalid_request", "PhotoKit request timeout is invalid", nil))
+		return 1
+	}
+	exportCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	err = exportOriginalMatching(exportCtx, photos.OriginalExportQuery{
+		LocalIdentifier:  request.LocalIdentifier,
+		CreationDate:     request.CreationDate,
+		Width:            request.Width,
+		Height:           request.Height,
+		OriginalFilename: request.OriginalFilename,
+	}, request.DestinationPath, request.AllowNetwork)
+	if err != nil {
+		_ = os.Remove(request.DestinationPath)
+		_ = os.Remove(request.DestinationPath + ".exporting")
+		_ = writeWireResponse(*responsePath, wireErrorResponse(err))
+		return 1
+	}
+	info, digest, err := photos.InspectOriginalFile(request.DestinationPath)
+	if err != nil {
+		_ = os.Remove(request.DestinationPath)
+		_ = writeWireResponse(*responsePath, failedWireResponse("invalid_output", "PhotoKit returned an invalid original", nil))
+		return 1
+	}
+	if err := writeWireResponse(*responsePath, &fetchwire.OriginalFetchResponse{
+		Success:   true,
+		SizeBytes: info.Size(),
+		Sha256:    digest[:],
+	}); err != nil {
+		_ = os.Remove(request.DestinationPath)
+		return 1
+	}
+	return 0
+}
+
+func readWireRequest(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(io.LimitReader(file, 64*1024+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > 64*1024 {
+		return nil, errors.New("PhotoKit request exceeds 64KB")
+	}
+	return data, nil
+}
+
+func wireErrorResponse(err error) *fetchwire.OriginalFetchResponse {
+	var accessErr *photos.PhotoLibraryAccessError
+	switch {
+	case errors.As(err, &accessErr):
+		return failedWireResponse("photos_access", accessErr.Error(), accessErr)
+	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
+		return failedWireResponse("asset_not_found", "PhotoKit could not find the selected asset", nil)
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, photos.ErrPhotoKitExportTimedOut):
+		return failedWireResponse("timeout", "PhotoKit original export timed out", nil)
+	case errors.Is(err, photos.ErrExportAlreadyRunning):
+		return failedWireResponse("export_busy", "another PhotoKit original export is running", nil)
+	default:
+		return failedWireResponse("export_failed", "PhotoKit original export failed", nil)
+	}
+}
+
+func failedWireResponse(code, message string, accessErr *photos.PhotoLibraryAccessError) *fetchwire.OriginalFetchResponse {
+	response := &fetchwire.OriginalFetchResponse{ErrorCode: code, ErrorMessage: message}
+	if accessErr != nil {
+		response.PhotosAccessStatus = accessErr.Status
+	}
+	return response
+}
+
+func writeWireResponse(path string, response *fetchwire.OriginalFetchResponse) error {
+	data, err := proto.Marshal(response)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tempPath := path + ".writing"
+	_ = os.Remove(tempPath)
+	defer func() { _ = os.Remove(tempPath) }()
+	if err := os.WriteFile(tempPath, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
+}
+
+func writeln(w io.Writer, args ...any) {
+	_, _ = fmt.Fprintln(w, args...)
+}

@@ -39,7 +39,7 @@ func TestClassifyPlacePhaseParksThrottledLocatedAssets(t *testing.T) {
 				HorizontalAccuracy: &accuracy,
 			},
 			Resources: []photos.Resource{{
-				Type:             "photo",
+				Type:             "local_original",
 				UTI:              "public.jpeg",
 				OriginalFilename: "located.jpeg",
 				LocalPath:        imagePath,
@@ -55,7 +55,7 @@ func TestClassifyPlacePhaseParksThrottledLocatedAssets(t *testing.T) {
 			Width:           100,
 			Height:          80,
 			Resources: []photos.Resource{{
-				Type:             "photo",
+				Type:             "local_original",
 				UTI:              "public.jpeg",
 				OriginalFilename: "no-gps.jpeg",
 				LocalPath:        imagePath,
@@ -474,7 +474,7 @@ func TestClassifyPlacePhaseTimeoutStopsLiveGeocoding(t *testing.T) {
 				HorizontalAccuracy: &accuracy,
 			},
 			Resources: []photos.Resource{{
-				Type:             "photo",
+				Type:             "local_original",
 				UTI:              "public.jpeg",
 				OriginalFilename: "located.jpeg",
 				LocalPath:        imagePath,
