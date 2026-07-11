@@ -327,13 +327,17 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		}
 		capturedAt = parsed
 	}
+	snippet := hit.Snippet
+	if hit.Stale {
+		snippet = "Stale · " + snippet
+	}
 	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     capturedAt,
 		Who:      hit.Who,
 		Where:    hit.Where,
-		Snippet:  hit.Snippet,
+		Snippet:  snippet,
 	}, nil
 }
 

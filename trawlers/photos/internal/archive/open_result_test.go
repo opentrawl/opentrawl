@@ -111,3 +111,51 @@ func TestOpenPlaceIsJSONVisible(t *testing.T) {
 		}
 	}
 }
+
+func TestOpenResultProjectsStalenessAndAlbumsWithoutStorageTokens(t *testing.T) {
+	asset := map[string]any{"id": "fixture"}
+	locations := []map[string]any{{"latitude": 52.3676, "longitude": 4.9041, "horizontal_accuracy": 8.0}}
+	albums := []map[string]any{{"album_title": "Synthetic Album", "album_kind": "generic_album:2:0"}}
+	modelObservations := []map[string]any{{"stale_since": "2026-07-10T12:00:00Z", "stale_reason": "asset metadata changed in sync (fingerprint drift)"}}
+	input, err := json.Marshal(map[string]any{
+		"asset":              asset,
+		"locations":          locations,
+		"albums":             albums,
+		"model_observations": modelObservations,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=archive_open_projection input=%s", input)
+	result := newOpenResult(
+		asset,
+		nil,
+		locations,
+		albums,
+		modelObservations,
+		nil,
+	)
+	data, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=archive_open_projection output=%s", data)
+	got := string(data)
+	for _, want := range []string{
+		`"schema_version":5`,
+		`"since":"2026-07-10T12:00:00Z"`,
+		`"reason":"source details changed after this card was created"`,
+		`"banner":"Card status: Stale · source details changed after this card was created · since 10 July 2026"`,
+		`"albums":[{"title":"Synthetic Album"}]`,
+		`"gps":{"latitude":52.3676,"longitude":4.9041,"horizontal_accuracy_meters":8}`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("open JSON missing %s: %s", want, got)
+		}
+	}
+	for _, forbidden := range []string{"generic_album:2:0", `"address"`} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("open JSON leaked %s: %s", forbidden, got)
+		}
+	}
+}

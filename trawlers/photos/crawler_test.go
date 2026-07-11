@@ -604,7 +604,7 @@ func seedStaleObservationRows(t *testing.T, archivePath, suffix string) {
 	}
 	for _, row := range []struct{ id, observationType, text string }{
 		{"fixture-card-summary-" + suffix, "card_summary", "Synthetic beach scene."},
-		{"fixture-card-description-" + suffix, "card_description", "A synthetic beach fixture with visible album context."},
+		{"fixture-card-description-" + suffix, "card_description", ""},
 	} {
 		if _, err := db.DB().Exec(`
 insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
