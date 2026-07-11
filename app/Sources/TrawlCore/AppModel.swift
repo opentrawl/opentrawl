@@ -57,7 +57,11 @@ public final class AppModel {
     guard !isSyncing else { return }
     isSyncing = true
     let previousSyncMessage = syncMessage
+    let previousSyncResults = syncResults
+    let previousSyncFailures = syncFailures
     syncMessage = nil
+    syncResults = []
+    syncFailures = []
     defer { isSyncing = false }
 
     do {
@@ -75,9 +79,13 @@ public final class AppModel {
       await refresh()
     } catch is CancellationError {
       syncMessage = previousSyncMessage
+      syncResults = previousSyncResults
+      syncFailures = previousSyncFailures
       return
     } catch TrawlClientError.cancelled {
       syncMessage = previousSyncMessage
+      syncResults = previousSyncResults
+      syncFailures = previousSyncFailures
       return
     } catch {
       syncMessage = error.localizedDescription

@@ -70,6 +70,8 @@ import TrawlClient
   client.partialSync = true
   await model.syncNow()
   #expect(model.syncMessage == "Some sources could not sync.")
+  #expect(model.syncResults.count == 1)
+  #expect(model.syncFailures.count == 1)
 
   client.partialSync = false
   client.cancelled = true
@@ -80,7 +82,17 @@ import TrawlClient
   #expect(model.sources == [source])
   #expect(model.statusFailures.isEmpty)
   #expect(model.syncMessage == "Some sources could not sync.")
+  #expect(model.syncResults.count == 1)
+  #expect(model.syncFailures.count == 1)
   #expect(!model.isSyncing)
+
+  client.cancelled = false
+  client.syncFails = true
+  await model.syncNow()
+
+  #expect(model.syncResults.isEmpty)
+  #expect(model.syncFailures.isEmpty)
+  #expect(model.syncMessage == TrawlClientError.launchFailed.localizedDescription)
 }
 
 @Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
@@ -187,6 +199,7 @@ private final class CancellationClient: TrawlClient, @unchecked Sendable {
   private let lock = NSLock()
   private var isCancelled = false
   private var returnsPartialSync = false
+  private var returnsSyncFailure = false
 
   init(response: StatusResponse) {
     self.response = response
@@ -202,6 +215,11 @@ private final class CancellationClient: TrawlClient, @unchecked Sendable {
     set { lock.withLock { returnsPartialSync = newValue } }
   }
 
+  var syncFails: Bool {
+    get { lock.withLock { returnsSyncFailure } }
+    set { lock.withLock { returnsSyncFailure = newValue } }
+  }
+
   func status() async throws -> StatusResponse {
     if cancelled { throw TrawlClientError.cancelled }
     return response
@@ -209,9 +227,26 @@ private final class CancellationClient: TrawlClient, @unchecked Sendable {
 
   func sync() async throws -> SyncResponse {
     if cancelled { throw TrawlClientError.cancelled }
+    if syncFails { throw TrawlClientError.launchFailed }
+    let failure = SourceFailure(
+      sourceID: "gmail",
+      sourceName: "Gmail",
+      code: .unavailable,
+      message: "Synthetic sync failed.",
+      remedy: "Try again."
+    )
     return SyncResponse(
-      sources: [],
-      failures: [],
+      sources: partialSync
+        ? [
+          SyncSourceResult(
+            sourceID: "gmail",
+            sourceName: "Gmail",
+            outcome: .partial,
+            failure: failure
+          )
+        ]
+        : [],
+      failures: partialSync ? [failure] : [],
       outcome: partialSync ? .partial : .complete
     )
   }
