@@ -16,13 +16,15 @@ import (
 )
 
 type sourceStateRow struct {
-	State           string `json:"state"`
-	FirstMissingAt  string `json:"first_missing_at"`
-	SourceDeletedAt string `json:"source_deleted_at"`
-	StateSnapshotID string `json:"state_snapshot_id"`
-	QueueState      string `json:"queue_state"`
-	ModelRows       int    `json:"model_rows"`
-	ModelRuns       int    `json:"model_runs"`
+	State                      string `json:"state"`
+	FirstMissingAt             string `json:"first_missing_at"`
+	SourceDeletedAt            string `json:"source_deleted_at"`
+	StateSnapshotID            string `json:"state_snapshot_id"`
+	FirstCardBlockedAt         string `json:"first_card_blocked_at"`
+	FirstCardBlockedSnapshotID string `json:"first_card_blocked_snapshot_id"`
+	QueueState                 string `json:"queue_state"`
+	ModelRows                  int    `json:"model_rows"`
+	ModelRuns                  int    `json:"model_runs"`
 }
 
 type rawSourceStateProvider struct {
@@ -50,7 +52,7 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 	seedExistingCard(t, ctx, paths, assetID)
 	current := readSourceStateRow(t, ctx, paths, assetID)
 	logBoundary(t, "archive_current", current)
-	if current.State != sourceStateCurrent || current.StateSnapshotID != first.SnapshotID || current.FirstMissingAt != "" || current.QueueState != classifyQueueStateContentClassified {
+	if current.State != sourceStateCurrent || current.StateSnapshotID != first.SnapshotID || current.FirstMissingAt != "" || current.FirstCardBlockedAt != "" || current.QueueState != classifyQueueStateContentClassified {
 		t.Fatalf("current row = %#v", current)
 	}
 	assertOpenAndSearchSourceState(t, ctx, paths, assetID, sourceStateCurrent, "", "")
@@ -65,8 +67,11 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 	}
 	uncardedDeleted := readSourceStateRow(t, ctx, paths, uncardedAssetID)
 	logBoundary(t, "archive_uncarded_deleted", uncardedDeleted)
-	if uncardedDeleted.State != sourceStateDeletedUpstream || uncardedDeleted.QueueState != queueStateSourceDeleted || uncardedDeleted.ModelRows != 0 || uncardedDeleted.ModelRuns != 0 {
+	if uncardedDeleted.State != sourceStateDeletedUpstream || uncardedDeleted.FirstCardBlockedAt != "2026-07-11T11:00:00Z" || uncardedDeleted.FirstCardBlockedSnapshotID != missing.SnapshotID || uncardedDeleted.QueueState != queueStateSourceDeleted || uncardedDeleted.ModelRows != 0 || uncardedDeleted.ModelRuns != 0 {
 		t.Fatalf("uncarded deleted row = %#v", uncardedDeleted)
+	}
+	if deleted.FirstCardBlockedAt != "" || deleted.FirstCardBlockedSnapshotID != "" {
+		t.Fatalf("existing card was prohibited after deletion: %#v", deleted)
 	}
 	assertNoSourceDeletedClassifyInputs(t, ctx, paths)
 	assertOpenAndSearchSourceState(t, ctx, paths, assetID, sourceStateDeletedUpstream, deleted.FirstMissingAt, "Deleted upstream · ")
@@ -76,6 +81,11 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 	logBoundary(t, "archive_repeated_absence", repeated)
 	if repeated.FirstMissingAt != deleted.FirstMissingAt || repeated.StateSnapshotID != deleted.StateSnapshotID || repeated.ModelRows != 1 || repeated.ModelRuns != 0 {
 		t.Fatalf("repeated absence = %#v, want first missing interval %#v", repeated, deleted)
+	}
+	repeatedUncarded := readSourceStateRow(t, ctx, paths, uncardedAssetID)
+	logBoundary(t, "archive_uncarded_repeated_absence", repeatedUncarded)
+	if repeatedUncarded.FirstCardBlockedAt != uncardedDeleted.FirstCardBlockedAt || repeatedUncarded.FirstCardBlockedSnapshotID != uncardedDeleted.FirstCardBlockedSnapshotID {
+		t.Fatalf("repeated absence changed uncarded first-card facts: got %#v want %#v", repeatedUncarded, uncardedDeleted)
 	}
 	successfulCursor := readSourceCursor(t, ctx, paths, first.SourceLibraryID)
 	successfulFreshness := readSourceFreshness(t, ctx, paths)
@@ -101,6 +111,11 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 		logBoundary(t, "archive_incomplete_"+string(state), unchanged)
 		if unchanged != repeated {
 			t.Fatalf("%s snapshot changed source state: got %#v want %#v", state, unchanged, repeated)
+		}
+		unchangedUncarded := readSourceStateRow(t, ctx, paths, uncardedAssetID)
+		logBoundary(t, "archive_uncarded_incomplete_"+string(state), unchangedUncarded)
+		if unchangedUncarded != repeatedUncarded {
+			t.Fatalf("%s snapshot changed uncarded first-card facts: got %#v want %#v", state, unchangedUncarded, repeatedUncarded)
 		}
 		if cursor := readSourceCursor(t, ctx, paths, first.SourceLibraryID); cursor != successfulCursor {
 			t.Fatalf("%s snapshot advanced cursor: got %#v want %#v", state, cursor, successfulCursor)
@@ -132,7 +147,7 @@ func TestSourceStateLifecycleUsesOnlyCompleteSameLibrarySnapshots(t *testing.T) 
 	}
 	uncardedRestored := readSourceStateRow(t, ctx, paths, uncardedAssetID)
 	logBoundary(t, "archive_uncarded_restored", uncardedRestored)
-	if uncardedRestored.State != sourceStateCurrent || uncardedRestored.QueueState != classifyQueueStatePending || uncardedRestored.ModelRows != 0 || uncardedRestored.ModelRuns != 0 {
+	if uncardedRestored.State != sourceStateCurrent || uncardedRestored.FirstCardBlockedAt != uncardedDeleted.FirstCardBlockedAt || uncardedRestored.FirstCardBlockedSnapshotID != uncardedDeleted.FirstCardBlockedSnapshotID || uncardedRestored.QueueState != classifyQueueStateFirstCardProhibited || uncardedRestored.ModelRows != 0 || uncardedRestored.ModelRuns != 0 {
 		t.Fatalf("uncarded restored row = %#v", uncardedRestored)
 	}
 	assertOpenAndSearchSourceState(t, ctx, paths, assetID, sourceStateCurrent, "", "")
@@ -351,13 +366,15 @@ select a.source_state,
        coalesce(a.first_missing_at, ''),
        coalesce(a.source_deleted_at, ''),
        a.source_state_snapshot_id,
+       coalesce(a.first_card_blocked_at, ''),
+       coalesce(a.first_card_blocked_snapshot_id, ''),
        q.state,
        (select count(*) from model_observation where asset_id = a.id),
        (select count(*) from model_run)
 from asset a
 join classification_queue q on q.asset_id = a.id
 where a.id = ?
-`, assetID).Scan(&row.State, &row.FirstMissingAt, &row.SourceDeletedAt, &row.StateSnapshotID, &row.QueueState, &row.ModelRows, &row.ModelRuns); err != nil {
+`, assetID).Scan(&row.State, &row.FirstMissingAt, &row.SourceDeletedAt, &row.StateSnapshotID, &row.FirstCardBlockedAt, &row.FirstCardBlockedSnapshotID, &row.QueueState, &row.ModelRows, &row.ModelRuns); err != nil {
 		t.Fatal(err)
 	}
 	return row

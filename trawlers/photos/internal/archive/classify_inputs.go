@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 )
@@ -88,6 +89,17 @@ from classification_queue q
 join asset a on a.id = q.asset_id
 `
 	query := selectColumns + `where q.state in (` + classifyQueueStates(refreshModelID != "") + `)`
+	if refreshModelID == "" {
+		query += ` and (
+  q.state <> '` + classifyQueueStateFirstCardProhibited + `'
+  or not exists (
+    select 1 from metadata_observation mo
+    where mo.asset_id = a.id
+      and mo.source = '` + metadataClassifierSource + `'
+      and mo.classifier_id = '` + metadataClassifierModelID + `'
+  )
+)`
+	}
 	args := []any{}
 	if refreshModelID != "" {
 		query += `
@@ -155,29 +167,55 @@ order by creation_date desc, has_location desc, queue_id
 		input.Favorite = favorite != 0
 		input.Hidden = hidden != 0
 		input.HasLocation = hasLocation != 0
-		if input.HasLocation {
-			if err := loadClassifyLocation(ctx, tx, &input); err != nil {
+		inputs = append(inputs, input)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if refreshModelID != "" {
+		eligibleInputs := make([]classifyInput, 0, len(inputs))
+		for _, input := range inputs {
+			eligibility, err := firstCardEligibilityForAsset(ctx, tx, input.AssetID)
+			if err != nil {
+				return nil, err
+			}
+			if eligibility == firstCardProhibitedDeletedBeforeCard {
+				if err := updateClassificationQueue(ctx, tx, input.QueueID, classifyQueueStateFirstCardProhibited, "deleted_before_first_card", time.Now().UTC()); err != nil {
+					return nil, err
+				}
+				continue
+			}
+			eligibleInputs = append(eligibleInputs, input)
+		}
+		inputs = eligibleInputs
+	}
+	for i := range inputs {
+		if inputs[i].HasLocation {
+			if err := loadClassifyLocation(ctx, tx, &inputs[i]); err != nil {
 				return nil, err
 			}
 		}
-		input.Resources, err = loadClassifyResources(ctx, tx, input.AssetID)
+		var err error
+		inputs[i].Resources, err = loadClassifyResources(ctx, tx, inputs[i].AssetID)
 		if err != nil {
 			return nil, err
 		}
-		input.Albums, err = loadClassifyAlbums(ctx, tx, input.AssetID)
+		inputs[i].Albums, err = loadClassifyAlbums(ctx, tx, inputs[i].AssetID)
 		if err != nil {
 			return nil, err
 		}
-		inputs = append(inputs, input)
 	}
-	return inputs, rows.Err()
+	return inputs, nil
 }
 
 func classifyQueueStates(includeMetadataClassified bool) string {
 	if includeMetadataClassified {
 		return "'" + classifyQueueStatePending + "', '" + classifyQueueStateMetadataClassified + "', '" + classifyQueueStateFailedDownload + "'"
 	}
-	return "'" + classifyQueueStatePending + "'"
+	return "'" + classifyQueueStatePending + "', '" + classifyQueueStateFirstCardProhibited + "'"
 }
 
 func loadClassifyResources(ctx context.Context, tx *sql.Tx, assetID string) ([]classifyResource, error) {

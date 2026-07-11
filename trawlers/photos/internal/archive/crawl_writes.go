@@ -91,6 +91,16 @@ func (c *syncImporter) upsertClassifyQueue(ctx context.Context, tx *sql.Tx, sour
 	if _, err := c.stmts.queue.ExecContext(ctx, queueID, assetID, sourceID, "pending", "metadata_ingested", boolInt(needsDownload), c.completedAt.Format(time.RFC3339Nano)); err != nil {
 		return fmt.Errorf("upsert classification queue: %w", err)
 	}
+	eligibility, err := firstCardEligibilityForAsset(ctx, tx, assetID)
+	if err != nil {
+		return err
+	}
+	if eligibility == firstCardProhibitedDeletedBeforeCard {
+		if err := updateClassificationQueue(ctx, tx, queueID, classifyQueueStateFirstCardProhibited, "deleted_before_first_card", c.completedAt); err != nil {
+			return err
+		}
+		return nil
+	}
 	c.result.QueuedForClassify++
 	if needsDownload {
 		c.result.QueuedNeedsDownload++

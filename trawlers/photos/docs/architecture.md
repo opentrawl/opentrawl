@@ -64,6 +64,12 @@ selection failure. Deletion and restoration update source state and provenance;
 they do not by themselves change the model-generation key or spend another card
 call. A valid existing card remains readable with its upstream-deleted flag.
 
+An asset first observed missing before it has a stored card can never receive
+its first paid card. The archive records that fact permanently, including after
+restoration. Metadata-only processing may still run once. Existing cards stay
+outside this first-card prohibition, including stale or superseded history.
+Normal reuse and refresh rules decide whether an old card can be reused.
+
 ## Image roles and cache
 
 Apple exposes 2 different image roles:

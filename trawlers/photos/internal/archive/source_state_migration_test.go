@@ -2,6 +2,7 @@ package archive
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 	"testing"
 
@@ -44,16 +45,18 @@ values ('asset:fixture', 'fixture', 'image', '0', '2026-07-11T10:00:00Z', '2026-
 	}
 	defer func() { _ = migrated.Close() }()
 	var sourceState, stateSnapshotID, completenessState, completenessEvidence string
+	var firstCardBlockedAt, firstCardBlockedSnapshotID sql.NullString
 	if err := migrated.DB().QueryRowContext(ctx, `
-select a.source_state, a.source_state_snapshot_id, s.completeness_state, s.completeness_evidence_json
+select a.source_state, a.source_state_snapshot_id, a.first_card_blocked_at, a.first_card_blocked_snapshot_id,
+       s.completeness_state, s.completeness_evidence_json
 from asset a
 join crawl_snapshot s on s.id = 'snapshot:fixture'
 where a.id = 'asset:fixture'
-`).Scan(&sourceState, &stateSnapshotID, &completenessState, &completenessEvidence); err != nil {
+`).Scan(&sourceState, &stateSnapshotID, &firstCardBlockedAt, &firstCardBlockedSnapshotID, &completenessState, &completenessEvidence); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("boundary=archive_migration output={\"source_state\":%q,\"state_snapshot_id\":%q,\"completeness_state\":%q,\"completeness_evidence\":%s}", sourceState, stateSnapshotID, completenessState, completenessEvidence)
-	if sourceState != sourceStateCurrent || stateSnapshotID != "" || completenessState != "legacy_unknown" || completenessEvidence != "{}" {
+	t.Logf("boundary=archive_migration output={\"source_state\":%q,\"state_snapshot_id\":%q,\"first_card_blocked_at\":%q,\"first_card_blocked_snapshot_id\":%q,\"completeness_state\":%q,\"completeness_evidence\":%s}", sourceState, stateSnapshotID, firstCardBlockedAt.String, firstCardBlockedSnapshotID.String, completenessState, completenessEvidence)
+	if sourceState != sourceStateCurrent || stateSnapshotID != "" || firstCardBlockedAt.Valid || firstCardBlockedSnapshotID.Valid || completenessState != "legacy_unknown" || completenessEvidence != "{}" {
 		t.Fatalf("migrated state = %q %q %q %q", sourceState, stateSnapshotID, completenessState, completenessEvidence)
 	}
 	status, err := Status(ctx, paths)
@@ -76,6 +79,8 @@ func legacySourceStateSchema(t *testing.T) string {
 		"  first_missing_at text,\n",
 		"  source_deleted_at text,\n",
 		"  source_state_snapshot_id text not null default '',\n",
+		"  first_card_blocked_at text,\n",
+		"  first_card_blocked_snapshot_id text,\n",
 	} {
 		legacy = strings.Replace(legacy, line, "", 1)
 	}

@@ -85,6 +85,14 @@ values (?, ?, ?, ?)
 	if !input.hasLocalContent() {
 		reason = "local_metadata_observations_waiting_for_content"
 	}
+	eligibility, err := firstCardEligibilityForAsset(ctx, tx, input.AssetID)
+	if err != nil {
+		return written, err
+	}
+	if eligibility == firstCardProhibitedDeletedBeforeCard {
+		state = classifyQueueStateFirstCardProhibited
+		reason = "deleted_before_first_card"
+	}
 	if _, err := tx.ExecContext(ctx, `
 update classification_queue
 set state = ?, reason = ?, updated_at = ?

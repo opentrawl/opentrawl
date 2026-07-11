@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 11
+const SchemaVersion = 12
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -92,6 +92,8 @@ create table if not exists asset (
   first_missing_at text,
   source_deleted_at text,
   source_state_snapshot_id text not null default '',
+  first_card_blocked_at text,
+  first_card_blocked_snapshot_id text,
   metadata_json text not null
 );
 

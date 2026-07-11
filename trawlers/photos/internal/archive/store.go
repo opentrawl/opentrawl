@@ -22,6 +22,8 @@ var archiveColumnMigrations = []archiveColumnMigration{
 	{table: "asset", column: "first_missing_at", definition: "text"},
 	{table: "asset", column: "source_deleted_at", definition: "text"},
 	{table: "asset", column: "source_state_snapshot_id", definition: "text not null default ''"},
+	{table: "asset", column: "first_card_blocked_at", definition: "text"},
+	{table: "asset", column: "first_card_blocked_snapshot_id", definition: "text"},
 	{table: "model_observation", column: "stale_since", definition: "text"},
 	{table: "model_observation", column: "stale_reason", definition: "text"},
 	{table: "model_observation", column: "superseded_at", definition: "text"},
@@ -93,7 +95,7 @@ func ensureArchiveMigrationsBeforeAlter(ctx context.Context, db *sql.DB, beforeA
 			return err
 		}
 	}
-	return nil
+	return migrateFirstCardEligibility(ctx, db)
 }
 
 func archiveMigrationsRequired(ctx context.Context, db *sql.DB) (bool, error) {
@@ -106,7 +108,7 @@ func archiveMigrationsRequired(ctx context.Context, db *sql.DB) (bool, error) {
 			return true, nil
 		}
 	}
-	return false, nil
+	return firstCardEligibilityMigrationRequired(ctx, db)
 }
 
 func alterArchiveColumn(ctx context.Context, db *sql.DB, migration archiveColumnMigration) error {

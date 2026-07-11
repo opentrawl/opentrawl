@@ -91,6 +91,12 @@ restoration update source state, eligibility and provenance outside the
 model-generation key. A valid card remains available with its upstream-deleted
 flag.
 
+If the archive first observes an asset missing before any card has been stored,
+it permanently prohibits that asset's first paid card. Restoration does not
+clear the prohibition. Metadata-only processing may run once without changing
+it. Stale or superseded card history means a later card is not the first.
+Normal reuse and refresh rules decide whether an old card can be reused.
+
 ## Boundary 3: image roles
 
 Apple exposes the 2 required roles through different PhotoKit contracts:
