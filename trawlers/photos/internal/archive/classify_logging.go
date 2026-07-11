@@ -48,6 +48,11 @@ func (logger classifyLogger) logOutcome(write classifyWrite) {
 			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
 			logStringField("reason", publicClassifyErrorReason(write.contentErr, "model request failed")),
 		)
+	case contentOutcomeStoppedUncertain:
+		logger.warn("stopped_uncertain",
+			logTokenField("asset_ref", AssetRef(write.input.AssetID)),
+			logStringField("reason", "model attempt has no retained result"),
+		)
 	case contentOutcomeClassified:
 		// Successes log too: stage durations per card are the structural
 		// answer to "where does the time go" — silence hides bottlenecks.

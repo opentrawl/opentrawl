@@ -9,39 +9,50 @@ import (
 	"time"
 )
 
-func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, _, _ string) (int, int, error) {
-	if err := supersedeModelObservations(ctx, tx, input.AssetID, classifiedAt); err != nil {
+func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, generationID string) (int, int, error) {
+	if strings.TrimSpace(generationID) == "" {
+		return 0, 0, errors.New("model generation id is required")
+	}
+	if err := supersedeModelObservations(ctx, tx, input.AssetID, generationID, classifiedAt); err != nil {
 		return 0, 0, err
 	}
 
-	placeWritten, err := writePlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, classifiedAt)
+	placeWritten, err := writeModelPlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, generationID, classifiedAt)
 	if err != nil {
 		return 0, placeWritten, err
 	}
 	written := 0
 	cardFTSID := ""
 	cardTexts := []string{}
-	generationID := classifiedAt.UTC().Format(time.RFC3339Nano)
 	for _, observation := range result.Observations {
 		valueJSON, err := jsonText(observation.Value)
 		if err != nil {
 			return written, placeWritten, err
 		}
 		observationID := stableID("model_observation", input.AssetID, modelClassifierSource, classifier.modelID, classifier.promptVersion, generationID, observation.ObservationType, observation.ValueText)
-		if _, err := tx.ExecContext(ctx, `
-insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, input.AssetID, observation.ObservationType, observation.ValueText, valueJSON, observation.Confidence, modelClassifierSource, classifier.modelID, classifier.promptVersion, ""); err != nil {
+		inserted, err := tx.ExecContext(ctx, `
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, generation_id, evidence_id)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(id) do nothing
+		`, observationID, input.AssetID, observation.ObservationType, observation.ValueText, valueJSON, observation.Confidence, modelClassifierSource, classifier.modelID, classifier.promptVersion, generationID, "")
+		if err != nil {
 			return written, placeWritten, fmt.Errorf("write model observation: %w", err)
+		}
+		count, err := inserted.RowsAffected()
+		if err != nil {
+			return written, placeWritten, fmt.Errorf("read model observation insert count: %w", err)
 		}
 		if observation.ObservationType == modelObservationCardSummary {
 			cardFTSID = observationID
 		}
 		cardTexts = append(cardTexts, observation.ValueText)
-		written++
+		written += int(count)
 	}
 	if cardFTSID == "" {
 		return written, placeWritten, errors.New("photo card summary observation was not written")
+	}
+	if _, err := tx.ExecContext(ctx, `delete from observation_fts where id = ?`, cardFTSID); err != nil {
+		return written, placeWritten, fmt.Errorf("clear existing model card fts: %w", err)
 	}
 	// Raw card prose, not a deduped term list: bm25 needs real term
 	// frequency to rank an asset that is about grilling above one that
@@ -63,6 +74,7 @@ func writeModelRun(ctx context.Context, tx *sql.Tx, runID string, classifier mod
 		"content_classified":                result.ContentClassified,
 		"content_failed_parse":              result.ContentFailedParse,
 		"content_failed_model":              result.ContentFailedModel,
+		"content_stopped_uncertain":         result.ContentStoppedUncertain,
 		"content_failed_download":           result.ContentFailedDownload,
 		"content_not_in_photokit":           result.ContentNotInPhotoKit,
 		"content_no_content_available":      result.ContentNoContentAvailable,
@@ -87,7 +99,7 @@ on conflict(id) do update set
 	return nil
 }
 
-func supersedeModelObservations(ctx context.Context, tx *sql.Tx, assetID string, supersededAt time.Time) error {
+func supersedeModelObservations(ctx context.Context, tx *sql.Tx, assetID, generationID string, supersededAt time.Time) error {
 	if strings.TrimSpace(assetID) == "" {
 		return errors.New("asset id is required")
 	}
@@ -98,15 +110,17 @@ where asset_id = ?
   and id in (
     select id from model_observation
     where asset_id = ? and source in (?, ?) and superseded_at is null
+      and coalesce(generation_id, '') <> ?
   )
-`, assetID, assetID, modelClassifierSource, "local_multimodal"); err != nil {
+`, assetID, assetID, modelClassifierSource, "local_multimodal", generationID); err != nil {
 		return fmt.Errorf("clear superseded model observation fts: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 update model_observation
 set superseded_at = ?
 where asset_id = ? and source in (?, ?) and superseded_at is null
-`, timestamp, assetID, modelClassifierSource, "local_multimodal"); err != nil {
+  and coalesce(generation_id, '') <> ?
+`, timestamp, assetID, modelClassifierSource, "local_multimodal", generationID); err != nil {
 		return fmt.Errorf("supersede model observations: %w", err)
 	}
 	return nil

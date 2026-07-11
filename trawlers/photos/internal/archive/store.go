@@ -25,9 +25,11 @@ var archiveColumnMigrations = []archiveColumnMigration{
 	{table: "model_observation", column: "stale_since", definition: "text"},
 	{table: "model_observation", column: "stale_reason", definition: "text"},
 	{table: "model_observation", column: "superseded_at", definition: "text"},
+	{table: "model_observation", column: "generation_id", definition: "text references model_generation(id)"},
 	{table: "place_observation", column: "stale_since", definition: "text"},
 	{table: "place_observation", column: "stale_reason", definition: "text"},
 	{table: "place_observation", column: "superseded_at", definition: "text"},
+	{table: "place_observation", column: "generation_id", definition: "text references model_generation(id)"},
 }
 
 func openArchive(ctx context.Context, path string) (*store.Store, error) {

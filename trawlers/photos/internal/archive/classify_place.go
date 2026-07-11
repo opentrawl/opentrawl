@@ -18,29 +18,44 @@ func writePlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 }
 
 func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, classifiedAt time.Time) (int, error) {
-	if input.Place == nil && input.KnownPlace == nil {
-		return 0, supersedePlaceObservations(ctx, tx, input.AssetID, classifiedAt)
+	return writePlaceClassificationForGeneration(ctx, tx, input, plausibility, "", classifiedAt)
+}
+
+func writeModelPlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, generationID string, classifiedAt time.Time) (int, error) {
+	if strings.TrimSpace(generationID) == "" {
+		return 0, fmt.Errorf("model generation id is required")
 	}
-	if err := supersedePlaceObservations(ctx, tx, input.AssetID, classifiedAt); err != nil {
-		return 0, err
-	}
+	return writePlaceClassificationForGeneration(ctx, tx, input, plausibility, generationID, classifiedAt)
+}
+
+func writePlaceClassificationForGeneration(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, modelGenerationID string, classifiedAt time.Time) (int, error) {
 	written := 0
-	generationID := classifiedAt.UTC().Format(time.RFC3339Nano)
+	identity := classifiedAt.UTC().Format(time.RFC3339Nano)
+	if modelGenerationID != "" {
+		identity = modelGenerationID
+	}
+	preserveIDs := []string{}
 	if input.KnownPlace != nil {
-		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, generationID, *input.KnownPlace)
+		if label := KnownPlaceWhereLabel(input.KnownPlace.Kind, input.KnownPlace.Name, input.KnownPlace.After); label != "" {
+			preserveIDs = append(preserveIDs, knownPlaceObservationID(input.AssetID, identity, *input.KnownPlace))
+		}
+		// A known-place match comes from the local place set, not the card.
+		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, identity, *input.KnownPlace)
 		if err != nil {
 			return written, err
 		}
 		written += n
 	}
 	if input.Place == nil {
-		return written, nil
+		return written, supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt)
 	}
 	result := input.Place.Result
 	place.NormalizeResult(&result)
 	candidates := applyVenuePlausibility(result.POICandidates, plausibility)
 	if address := addressLine(result.Address); address != "" {
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, generationID, "address", address, map[string]any{
+		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "address", address, place.TierAreaContext))
+		// An address is provider context, even when it accompanies a model card.
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, identity, "", "address", address, map[string]any{
 			"address": result.Address,
 			"area":    result.Area,
 		}, result.Provider, input.Place.CacheStatus, place.TierAreaContext, 0)
@@ -50,7 +65,7 @@ func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyI
 		written += n
 	}
 	if input.KnownPlace != nil {
-		return written, nil
+		return written, supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt)
 	}
 	seenCandidates := map[string]bool{}
 	for _, candidate := range candidates {
@@ -65,7 +80,14 @@ func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyI
 		}
 		seenCandidates[key] = true
 		value := placeCandidateValue(candidate)
-		n, err := insertPlaceObservation(ctx, tx, input.AssetID, generationID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
+		candidateGenerationID := ""
+		if modelGenerationID != "" && candidate.Plausibility.Verdict != "" {
+			// The provider supplied the candidate. The card's verdict enriches
+			// this one candidate, so only that row gets model provenance.
+			candidateGenerationID = modelGenerationID
+		}
+		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "poi_candidate", candidate.Name, candidate.Tier))
+		n, err := insertPlaceObservation(ctx, tx, input.AssetID, identity, candidateGenerationID, "poi_candidate", candidate.Name, value, result.Provider, input.Place.CacheStatus, candidate.Tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
@@ -75,17 +97,21 @@ func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyI
 			continue
 		}
 		value["tier"] = tier
-		n, err = insertPlaceObservation(ctx, tx, input.AssetID, generationID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
+		preserveIDs = append(preserveIDs, placeObservationID(input.AssetID, identity, "venue", candidate.Name, tier))
+		n, err = insertPlaceObservation(ctx, tx, input.AssetID, identity, candidateGenerationID, "venue", candidate.Name, value, result.Provider, input.Place.CacheStatus, tier, candidate.DistanceM)
 		if err != nil {
 			return written, err
 		}
 		written += n
 		break
 	}
+	if err := supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt); err != nil {
+		return written, err
+	}
 	return written, nil
 }
 
-func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, generationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
+func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity, modelGenerationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, nil
@@ -98,12 +124,23 @@ func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, generation
 	if distance > 0 {
 		distanceValue = distance
 	}
-	observationID := stableID("place_observation", assetID, generationID, kind, text, tier)
-	if _, err := tx.ExecContext(ctx, `
-insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, assetID, kind, text, valueJSON, placeObservationSource, provider, cacheStatus, tier, distanceValue, ""); err != nil {
+	observationID := placeObservationID(assetID, identity, kind, text, tier)
+	if kind != "poi_candidate" {
+		if _, err := tx.ExecContext(ctx, `delete from observation_fts where id = ?`, observationID); err != nil {
+			return 0, fmt.Errorf("clear existing place fts: %w", err)
+		}
+	}
+	result, err := tx.ExecContext(ctx, `
+insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, generation_id, evidence_id)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+on conflict(id) do nothing
+`, observationID, assetID, kind, text, valueJSON, placeObservationSource, provider, cacheStatus, tier, distanceValue, nullableGenerationID(modelGenerationID), "")
+	if err != nil {
 		return 0, fmt.Errorf("write place observation: %w", err)
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read place observation insert count: %w", err)
 	}
 	// Unselected POI candidates are selection provenance, not claims about
 	// the photo. They stay out of the search index so a nearby "Meadow
@@ -116,10 +153,10 @@ values (?, ?, ?, ?)
 			return 0, fmt.Errorf("write place fts: %w", err)
 		}
 	}
-	return 1, nil
+	return int(inserted), nil
 }
 
-func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, generationID string, match KnownPlaceMatch) (int, error) {
+func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity string, match KnownPlaceMatch) (int, error) {
 	label := KnownPlaceWhereLabel(match.Kind, match.Name, match.After)
 	if label == "" {
 		return 0, nil
@@ -133,12 +170,21 @@ func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, gener
 	if err != nil {
 		return 0, err
 	}
-	observationID := stableID("place_observation", assetID, generationID, knownPlaceObservationType, match.Kind, match.Name)
-	if _, err := tx.ExecContext(ctx, `
-insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, evidence_id)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, ""); err != nil {
+	observationID := knownPlaceObservationID(assetID, identity, match)
+	if _, err := tx.ExecContext(ctx, `delete from observation_fts where id = ?`, observationID); err != nil {
+		return 0, fmt.Errorf("clear existing known place fts: %w", err)
+	}
+	result, err := tx.ExecContext(ctx, `
+insert into place_observation(id, asset_id, observation_type, value_text, value_json, source, provider, cache_status, tier, distance_meters, generation_id, evidence_id)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, null, ?)
+on conflict(id) do nothing
+`, observationID, assetID, knownPlaceObservationType, label, valueJSON, knownPlaceSource, knownPlaceSource, "match", knownPlaceTier, match.DistanceMeters, "")
+	if err != nil {
 		return 0, fmt.Errorf("write known place observation: %w", err)
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("read known place observation insert count: %w", err)
 	}
 	body := strings.Join(uniqueNonEmpty([]string{label, match.Kind, match.Name, KnownPlaceCardLine(match.Kind, match.Name, match.After)}), " ")
 	if _, err := tx.ExecContext(ctx, `
@@ -147,32 +193,56 @@ values (?, ?, ?, ?)
 `, observationID, assetID, "", body); err != nil {
 		return 0, fmt.Errorf("write known place fts: %w", err)
 	}
-	return 1, nil
+	return int(inserted), nil
 }
 
-func supersedePlaceObservations(ctx context.Context, tx *sql.Tx, assetID string, supersededAt time.Time) error {
+func supersedePlaceObservations(ctx context.Context, tx *sql.Tx, assetID string, preserveIDs []string, supersededAt time.Time) error {
 	if strings.TrimSpace(assetID) == "" {
 		return nil
 	}
 	timestamp := supersededAt.UTC().Format(time.RFC3339Nano)
+	preserveClause := ""
+	if len(preserveIDs) > 0 {
+		preserveClause = " and id not in (" + strings.TrimRight(strings.Repeat("?,", len(preserveIDs)), ",") + ")"
+	}
+	args := []any{assetID}
+	for _, id := range preserveIDs {
+		args = append(args, id)
+	}
 	if _, err := tx.ExecContext(ctx, `
 delete from observation_fts
 where asset_id = ?
   and id in (
     select id from place_observation
-    where asset_id = ? and superseded_at is null
+    where asset_id = ? and superseded_at is null`+preserveClause+`
   )
-`, assetID, assetID); err != nil {
+`, append([]any{assetID}, args...)...); err != nil {
 		return fmt.Errorf("clear superseded place observation fts: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 update place_observation
 set superseded_at = ?
 where asset_id = ? and superseded_at is null
-`, timestamp, assetID); err != nil {
+  `+preserveClause+`
+`, append([]any{timestamp}, args...)...); err != nil {
 		return fmt.Errorf("supersede place observations: %w", err)
 	}
 	return nil
+}
+
+func placeObservationID(assetID, identity, kind, text, tier string) string {
+	return stableID("place_observation", assetID, identity, kind, strings.TrimSpace(text), tier)
+}
+
+func knownPlaceObservationID(assetID, identity string, match KnownPlaceMatch) string {
+	return stableID("place_observation", assetID, identity, knownPlaceObservationType, match.Kind, match.Name)
+}
+
+func nullableGenerationID(value string) any {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	return value
 }
 
 func addressLine(address *place.Address) string {
