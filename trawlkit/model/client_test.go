@@ -1,8 +1,11 @@
 package model
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -201,5 +204,81 @@ func TestGenerateChatUsesOpenAICompatibleEndpoint(t *testing.T) {
 	}
 	if sawPath != "/v1/chat/completions" || response.Text != "synthetic answer" {
 		t.Fatalf("path/response = %q %#v", sawPath, response)
+	}
+}
+
+func TestRenderIdentityAndRawProviderBoundary(t *testing.T) {
+	t.Setenv("MODEL_TEST_KEY", "synthetic-secret")
+	var fixtureBody []byte
+	server := sandboxSafeServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		fixtureBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read fixture request: %v", err)
+		}
+		w.Header().Set("X-Request-ID", "request-synthetic-1")
+		_, _ = w.Write([]byte(`{"response":"synthetic answer","done":true}`))
+	}))
+	client := newTestClient(t, Config{BaseURL: server.URL, Model: "fixture-model", BearerKeyEnv: "MODEL_TEST_KEY"})
+	logical := Request{Prompt: "describe synthetic pixels", Images: []Image{{Data: []byte("synthetic-image")}}, Temperature: 0.1}
+	first, err := client.Render(logical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := client.Render(logical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed, err := client.Render(Request{Prompt: "describe changed synthetic pixels"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Digest() != second.Digest() || first.Digest() == changed.Digest() {
+		t.Fatal("provider request identity was not stable and content-sensitive")
+	}
+	bodyCopy := first.Body()
+	bodyCopy[0] = 'x'
+	if bytes.Equal(bodyCopy, first.Body()) {
+		t.Fatal("provider request body was mutable through Body")
+	}
+	if bytes.Contains(first.Body(), []byte("synthetic-secret")) {
+		t.Fatal("credential entered persisted provider bytes")
+	}
+	raw, err := client.Send(context.Background(), first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(fixtureBody, first.Body()) {
+		t.Fatalf("fixture body differs from rendered body\nrendered: %s\nfixture: %s", first.Body(), fixtureBody)
+	}
+	if string(raw.Response) != `{"response":"synthetic answer","done":true}` || raw.ProviderRequestID != "request-synthetic-1" {
+		t.Fatalf("raw result = %#v", raw)
+	}
+	parsed, err := Parse(first, raw)
+	if err != nil || parsed.Text != "synthetic answer" {
+		t.Fatalf("parsed = %#v, err = %v", parsed, err)
+	}
+	t.Logf("RAW rendered provider request: route=%s model=%s body=%s", first.Route(), first.Model(), first.Body())
+	t.Logf("RAW fixture request body: %s", fixtureBody)
+	t.Logf("RAW provider response before parsing: status=%s request_id=%s body=%s", raw.Status, raw.ProviderRequestID, raw.Response)
+}
+
+func TestSendReturnsRawHTTPErrorBeforeParsing(t *testing.T) {
+	server := sandboxSafeServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Request-ID", "request-synthetic-503")
+		http.Error(w, "synthetic overload", http.StatusServiceUnavailable)
+	}))
+	client := newTestClient(t, Config{BaseURL: server.URL, Model: "fixture-model"})
+	request, err := client.Render(Request{Prompt: "synthetic failure"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := client.Send(context.Background(), request)
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("error = %T %v", err, err)
+	}
+	if string(raw.Response) != "synthetic overload\n" || raw.ProviderRequestID != "request-synthetic-503" {
+		t.Fatalf("raw result = %#v", raw)
 	}
 }

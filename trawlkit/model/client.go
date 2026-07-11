@@ -3,14 +3,19 @@ package model
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,6 +52,57 @@ type Image struct {
 type Response struct {
 	Text      string
 	Telemetry map[string]any
+}
+
+// ProviderRequest is the complete credential-free request identity. Body is
+// the exact JSON sent on the wire; Render creates it once and Send does not
+// marshal it again.
+type ProviderRequest struct {
+	route string
+	model string
+	body  []byte
+}
+
+func RestoreProviderRequest(route, model string, body []byte) (ProviderRequest, error) {
+	if err := validateProviderRoute(route); err != nil {
+		return ProviderRequest{}, err
+	}
+	if strings.TrimSpace(model) == "" {
+		return ProviderRequest{}, errors.New("model request model is required")
+	}
+	if len(body) == 0 || !json.Valid(body) {
+		return ProviderRequest{}, errors.New("model request body must be valid JSON")
+	}
+	return ProviderRequest{route: route, model: model, body: bytes.Clone(body)}, nil
+}
+
+func (r ProviderRequest) Route() string { return r.route }
+func (r ProviderRequest) Model() string { return r.model }
+func (r ProviderRequest) Body() []byte  { return bytes.Clone(r.body) }
+
+// Digest covers the route, model and exact body without relying on delimiter
+// characters that may also occur in the body.
+func (r ProviderRequest) Digest() [sha256.Size]byte {
+	hash := sha256.New()
+	for _, part := range [][]byte{[]byte(r.route), []byte(r.model), r.body} {
+		var size [8]byte
+		binary.BigEndian.PutUint64(size[:], uint64(len(part)))
+		_, _ = hash.Write(size[:])
+		_, _ = hash.Write(part)
+	}
+	var digest [sha256.Size]byte
+	copy(digest[:], hash.Sum(nil))
+	return digest
+}
+
+// RawResult retains the provider boundary before any response decoding.
+type RawResult struct {
+	Response            []byte
+	Failure             []byte
+	Status              string
+	StatusCode          int
+	ProviderRequestID   string
+	TransmissionStarted bool
 }
 
 type HTTPError struct {
@@ -124,14 +180,22 @@ func validateBaseURL(value string) error {
 	if parsed.Host == "" || parsed.Hostname() == "" {
 		return fmt.Errorf("model base URL %q must include a host", value)
 	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("model base URL %q must not contain credentials, a query or a fragment", value)
+	}
 	return nil
 }
 
 func (c *Client) Generate(ctx context.Context, request Request) (Response, error) {
-	if strings.HasSuffix(c.baseURL, "/v1") {
-		return c.generateChat(ctx, request)
+	providerRequest, err := c.Render(request)
+	if err != nil {
+		return Response{}, err
 	}
-	return c.generateNative(ctx, request)
+	raw, err := c.Send(ctx, providerRequest)
+	if err != nil {
+		return Response{}, err
+	}
+	return Parse(providerRequest, raw)
 }
 
 type nativeGenerateRequest struct {
@@ -156,7 +220,7 @@ type nativeGenerateResponse struct {
 	EvalDuration       int64  `json:"eval_duration,omitempty"`
 }
 
-func (c *Client) generateNative(ctx context.Context, request Request) (Response, error) {
+func (c *Client) renderNative(request Request) (ProviderRequest, error) {
 	payload := nativeGenerateRequest{
 		Model:  c.model,
 		Prompt: request.Prompt,
@@ -166,28 +230,11 @@ func (c *Client) generateNative(ctx context.Context, request Request) (Response,
 			"temperature": request.Temperature,
 		},
 	}
-	var response nativeGenerateResponse
 	endpoint, err := GenerateEndpoint(c.baseURL)
 	if err != nil {
-		return Response{}, err
+		return ProviderRequest{}, err
 	}
-	if err := c.post(ctx, endpoint, payload, &response); err != nil {
-		return Response{}, err
-	}
-	if strings.TrimSpace(response.Error) != "" {
-		return Response{}, fmt.Errorf("%s", response.Error)
-	}
-	return Response{
-		Text: strings.TrimSpace(response.Response),
-		Telemetry: map[string]any{
-			"total_duration":       response.TotalDuration,
-			"load_duration":        response.LoadDuration,
-			"prompt_eval_count":    response.PromptEvalCount,
-			"prompt_eval_duration": response.PromptEvalDuration,
-			"eval_count":           response.EvalCount,
-			"eval_duration":        response.EvalDuration,
-		},
-	}, nil
+	return marshalProviderRequest(endpoint, c.model, payload)
 }
 
 type chatRequest struct {
@@ -223,7 +270,7 @@ type chatResponse struct {
 	} `json:"error,omitempty"`
 }
 
-func (c *Client) generateChat(ctx context.Context, request Request) (Response, error) {
+func (c *Client) renderChat(request Request) (ProviderRequest, error) {
 	content := []chatContentPart{{Type: "text", Text: request.Prompt}}
 	for _, image := range request.Images {
 		mimeType := strings.TrimSpace(image.MIMEType)
@@ -241,31 +288,54 @@ func (c *Client) generateChat(ctx context.Context, request Request) (Response, e
 		Temperature: request.Temperature,
 		Stream:      false,
 	}
-	var response chatResponse
 	endpoint, err := GenerateEndpoint(c.baseURL)
 	if err != nil {
-		return Response{}, err
+		return ProviderRequest{}, err
 	}
-	if err := c.post(ctx, endpoint, payload, &response); err != nil {
-		return Response{}, err
-	}
-	if response.Error != nil && strings.TrimSpace(response.Error.Message) != "" {
-		return Response{}, fmt.Errorf("%s", response.Error.Message)
-	}
-	if len(response.Choices) == 0 {
-		return Response{}, fmt.Errorf("model response contained no choices")
-	}
-	return Response{Text: strings.TrimSpace(response.Choices[0].Message.Content)}, nil
+	return marshalProviderRequest(endpoint, c.model, payload)
 }
 
-func (c *Client) post(ctx context.Context, endpoint string, payload any, target any) error {
+func (c *Client) Render(request Request) (ProviderRequest, error) {
+	if strings.HasSuffix(c.baseURL, "/v1") {
+		return c.renderChat(request)
+	}
+	return c.renderNative(request)
+}
+
+func marshalProviderRequest(route, model string, payload any) (ProviderRequest, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return fmt.Errorf("marshal model request: %w", err)
+		return ProviderRequest{}, fmt.Errorf("marshal model request: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	return RestoreProviderRequest(route, model, body)
+}
+
+func validateProviderRoute(route string) error {
+	parsed, err := url.Parse(strings.TrimSpace(route))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("model request route %q is invalid", route)
+	}
+	if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("model request route %q must not contain credentials, a query or a fragment", route)
+	}
+	return nil
+}
+
+// Send transmits the exact body held by request. It returns response or
+// failure bytes before provider JSON or card prose is parsed.
+func (c *Client) Send(ctx context.Context, request ProviderRequest) (RawResult, error) {
+	if err := validateProviderRoute(request.route); err != nil {
+		return RawResult{}, err
+	}
+	var started atomic.Bool
+	trace := &httptrace.ClientTrace{
+		WroteHeaders: func() { started.Store(true) },
+		WroteRequest: func(httptrace.WroteRequestInfo) { started.Store(true) },
+	}
+	ctx = httptrace.WithClientTrace(ctx, trace)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, request.route, bytes.NewReader(request.body))
 	if err != nil {
-		return fmt.Errorf("build model request: %w", err)
+		return RawResult{Failure: []byte(err.Error())}, fmt.Errorf("build model request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -274,20 +344,79 @@ func (c *Client) post(ctx context.Context, endpoint string, payload any, target 
 	}
 	resp, err := c.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("model request failed: %w", err)
+		return RawResult{Failure: []byte(err.Error()), TransmissionStarted: started.Load()}, fmt.Errorf("model request failed: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("read model response: %w", err)
+		return RawResult{
+			Failure:             []byte(err.Error()),
+			Status:              resp.Status,
+			StatusCode:          resp.StatusCode,
+			ProviderRequestID:   providerRequestID(resp.Header),
+			TransmissionStarted: true,
+		}, fmt.Errorf("read model response: %w", err)
+	}
+	raw := RawResult{
+		Response:            bodyBytes,
+		Status:              resp.Status,
+		StatusCode:          resp.StatusCode,
+		ProviderRequestID:   providerRequestID(resp.Header),
+		TransmissionStarted: true,
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &HTTPError{Status: resp.Status, StatusCode: resp.StatusCode, Body: string(bodyBytes)}
+		return raw, &HTTPError{Status: resp.Status, StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
-	if err := json.Unmarshal(bodyBytes, target); err != nil {
-		return fmt.Errorf("decode model response: %w", err)
+	return raw, nil
+}
+
+func providerRequestID(header http.Header) string {
+	for _, name := range []string{"X-Request-ID", "Request-ID"} {
+		if value := strings.TrimSpace(header.Get(name)); value != "" {
+			return value
+		}
 	}
-	return nil
+	return ""
+}
+
+func Parse(request ProviderRequest, raw RawResult) (Response, error) {
+	if len(raw.Failure) > 0 {
+		return Response{}, fmt.Errorf("model request failed: %s", raw.Failure)
+	}
+	if raw.StatusCode < 200 || raw.StatusCode >= 300 {
+		return Response{}, &HTTPError{Status: raw.Status, StatusCode: raw.StatusCode, Body: string(raw.Response)}
+	}
+	if strings.HasSuffix(request.route, "/chat/completions") {
+		var response chatResponse
+		if err := json.Unmarshal(raw.Response, &response); err != nil {
+			return Response{}, fmt.Errorf("decode model response: %w", err)
+		}
+		if response.Error != nil && strings.TrimSpace(response.Error.Message) != "" {
+			return Response{}, fmt.Errorf("%s", response.Error.Message)
+		}
+		if len(response.Choices) == 0 {
+			return Response{}, fmt.Errorf("model response contained no choices")
+		}
+		return Response{Text: strings.TrimSpace(response.Choices[0].Message.Content)}, nil
+	}
+	var response nativeGenerateResponse
+	if err := json.Unmarshal(raw.Response, &response); err != nil {
+		return Response{}, fmt.Errorf("decode model response: %w", err)
+	}
+	if strings.TrimSpace(response.Error) != "" {
+		return Response{}, fmt.Errorf("%s", response.Error)
+	}
+	return Response{
+		Text: strings.TrimSpace(response.Response),
+		Telemetry: map[string]any{
+			"total_duration":       response.TotalDuration,
+			"load_duration":        response.LoadDuration,
+			"prompt_eval_count":    response.PromptEvalCount,
+			"prompt_eval_duration": response.PromptEvalDuration,
+			"eval_count":           response.EvalCount,
+			"eval_duration":        response.EvalDuration,
+		},
+	}, nil
 }
 
 func encodedImages(images []Image) []string {

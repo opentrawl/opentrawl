@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -39,6 +41,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	}
 	imagePath := filepath.Join(t.TempDir(), "fixture.jpeg")
 	writeSyntheticImage(t, imagePath)
+	var fixtureRequestBody []byte
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/generate" {
 			t.Fatalf("path = %q", r.URL.Path)
@@ -49,7 +52,12 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 			Stream  bool           `json:"stream"`
 			Options map[string]any `json:"options"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		var err error
+		fixtureRequestBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("read request: %v", err)
+		}
+		if err := json.Unmarshal(fixtureRequestBody, &request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
 		if request.Model != "fixture-vision" || len(request.Images) != 1 {
@@ -123,6 +131,47 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	}
 	assertContentOutcomesSumToProcessed(t, result)
 
+	proofDB, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = proofDB.Close() }()
+	var generationID string
+	var persistedRequest, retainedResponse []byte
+	if err := proofDB.DB().QueryRowContext(ctx, `
+select g.id, g.request_body, a.response_body
+from model_generation g
+join model_generation_asset ga on ga.generation_id = g.id
+join model_generation_attempt a on a.generation_id = g.id
+where ga.asset_id = ?
+`, stableID("asset", stableID("source_library", libraryPath), "fixture-model-asset")).Scan(&generationID, &persistedRequest, &retainedResponse); err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(persistedRequest, fixtureRequestBody) {
+		t.Fatalf("persisted request differs from fixture request\npersisted: %s\nfixture: %s", persistedRequest, fixtureRequestBody)
+	}
+	var observations, linkedObservations int
+	var summary string
+	if err := proofDB.DB().QueryRowContext(ctx, `
+select count(*), count(generation_id), max(case when observation_type = 'card_summary' then value_text else '' end)
+from model_observation
+where asset_id = ? and superseded_at is null
+`, stableID("asset", stableID("source_library", libraryPath), "fixture-model-asset")).Scan(&observations, &linkedObservations, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if observations == 0 || linkedObservations != observations || summary == "" {
+		t.Fatalf("observation provenance: rows=%d linked=%d summary=%q generation=%s", observations, linkedObservations, summary, generationID)
+	}
+	selectedImage, err := os.ReadFile(imagePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("RAW selected Photos image input: %s", base64.StdEncoding.EncodeToString(selectedImage))
+	t.Logf("RAW final and persisted provider request: %s", persistedRequest)
+	t.Logf("RAW fixture request body: %s", fixtureRequestBody)
+	t.Logf("RAW retained provider response before parser: %s", retainedResponse)
+	t.Logf("RAW parser result to stored observation: generation_id=%s summary=%s", generationID, summary)
+
 	search, err := Search(ctx, paths, SearchOptions{Query: "satay", Limit: 5})
 	if err != nil {
 		t.Fatal(err)
@@ -165,11 +214,15 @@ func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
 	firstInput := loadTestClassifyInputs(t, ctx, db, "")[0]
 	firstInput.Place = recardPlaceContext("Old Synthetic Pier")
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
-		_, _, err := writeModelClassification(ctx, tx, firstInput, firstClassifier, recardModelResult(
+		generationID, err := insertRecardGeneration(ctx, tx, firstInput.AssetID, "old")
+		if err != nil {
+			return err
+		}
+		_, _, err = writeModelClassification(ctx, tx, firstInput, firstClassifier, recardModelResult(
 			"Old oldcardterm synthetic card.",
 			"Old oldcardterm description for the retained history row.",
 			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "old synthetic place"},
-		), fixedClock("2026-05-28T10:15:00Z")(), "", "")
+		), fixedClock("2026-05-28T10:15:00Z")(), generationID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -189,11 +242,15 @@ func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
 	secondInput.Place = recardPlaceContext("New Synthetic Pier")
 	secondClassifier := modelClassifier{modelID: "fixture-vision-v2", promptVersion: modelPromptVersion}
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
-		_, _, err := writeModelClassification(ctx, tx, secondInput, secondClassifier, recardModelResult(
+		generationID, err := insertRecardGeneration(ctx, tx, secondInput.AssetID, "new")
+		if err != nil {
+			return err
+		}
+		_, _, err = writeModelClassification(ctx, tx, secondInput, secondClassifier, recardModelResult(
 			"New newcardterm synthetic card.",
 			"New newcardterm description for the active row.",
 			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "new synthetic place"},
-		), fixedClock("2026-05-28T10:45:00Z")(), "", "")
+		), fixedClock("2026-05-28T10:45:00Z")(), generationID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -280,6 +337,23 @@ func recardModelResult(summary, description string, plausibility venuePlausibili
 			},
 		},
 	}
+}
+
+func insertRecardGeneration(ctx context.Context, tx *sql.Tx, assetID, label string) (string, error) {
+	generationID := stableID("model_generation", "recard", label)
+	if _, err := tx.ExecContext(ctx, `
+insert into model_generation(id, request_sha256, request_route, model_id, request_body, created_at)
+values (?, ?, 'https://models.example.com/api/generate', 'fixture-vision', '{}', '2026-05-28T10:00:00Z')
+`, generationID, stableID("request", "recard", label)); err != nil {
+		return "", err
+	}
+	if _, err := tx.ExecContext(ctx, `
+insert into model_generation_asset(generation_id, asset_id, prompt_version, parser_version)
+values (?, ?, ?, ?)
+`, generationID, assetID, modelPromptVersion, modelParserVersion); err != nil {
+		return "", err
+	}
+	return generationID, nil
 }
 
 func recardPlaceContext(name string) *classifyPlaceContext {
@@ -643,7 +717,7 @@ where state in ('pending', 'metadata_classified')
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if nonTerminal != 0 {
+	if nonTerminal != 1 {
 		t.Fatalf("non-terminal classified rows = %d", nonTerminal)
 	}
 	states := map[string]string{}
@@ -669,7 +743,7 @@ join asset a on a.id = q.asset_id
 		t.Fatal(err)
 	}
 	wantStates := map[string]string{
-		"parse-fails":     "content_failed",
+		"parse-fails":     "metadata_classified",
 		"not-in-photokit": "content_not_in_photokit",
 		"download-fails":  "failed_download",
 		"no-content":      "failed_download",
@@ -687,7 +761,7 @@ join asset a on a.id = q.asset_id
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Processed != 2 || second.ContentFailedDownload != 2 || second.OriginalResolutionFailures != 2 {
+	if second.Processed != 3 || second.ContentFailedParse != 1 || second.ContentFailedDownload != 2 || second.OriginalResolutionFailures != 2 || second.ModelCallAttempts != 0 {
 		t.Fatalf("failed download did not resume on the next run: %#v", second)
 	}
 	assertContentOutcomesSumToProcessed(t, second)
@@ -845,7 +919,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	t.Fatalf("failed_download log line missing: %#v", lines)
 }
 
-func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
+func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -856,20 +930,8 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	writeSyntheticImage(t, imagePath)
 	var calls atomic.Int32
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if calls.Add(1) == 1 {
-			http.Error(w, "slow down", http.StatusTooManyRequests)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": fixtureCardResponse(
-				"A synthetic retry fixture image.",
-				"The synthetic image is used to prove retry handling. It contains a retry marker and no identifiable people.",
-				"",
-				"",
-				"synthetic fixture",
-			),
-			"done": true,
-		})
+		calls.Add(1)
+		http.Error(w, "slow down", http.StatusTooManyRequests)
 	}))
 	defer restoreTransport()
 
@@ -911,22 +973,40 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentClassified != 1 || result.ModelCallAttempts != 2 || result.ModelRateLimitEvents != 1 || result.ContentClassificationFailures != 0 {
+	if result.ContentClassified != 0 || result.ModelCallAttempts != 1 || result.ModelRateLimitEvents != 1 || result.RateLimitRequeued != 1 || result.ContentClassificationFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
-	// Retry lines are trawlkit model.Run's phase now: they identify the item
-	// by batch index; asset refs stay on the outcome lines.
-	foundRetry := false
-	for _, got := range logs.events {
-		if got.event == "model_retry" && strings.Contains(got.message, "rate_limited=true") {
-			foundRetry = true
-			break
-		}
+	if calls.Load() != 1 {
+		t.Fatalf("provider calls = %d, want 1", calls.Load())
 	}
-	if !foundRetry {
-		t.Fatalf("missing model_retry log event in %#v", logs.events)
+	restarted, err := Classify(ctx, paths, ClassifyOptions{
+		Model:    "fixture-vision",
+		ModelURL: fixtureModelURL,
+		Now:      fixedClock("2026-05-28T10:20:00Z"),
+		LogSink:  logs,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	assertContentOutcomesSumToProcessed(t, result)
+	if calls.Load() != 1 || restarted.ModelCallAttempts != 0 || restarted.RateLimitRequeued != 1 {
+		t.Fatalf("restart calls = %d, result = %#v", calls.Load(), restarted)
+	}
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var attempts, status int
+	var raw []byte
+	if err := db.DB().QueryRowContext(ctx, `
+select count(*), max(http_status), max(response_body)
+from model_generation_attempt
+`).Scan(&attempts, &status, &raw); err != nil {
+		t.Fatal(err)
+	}
+	if attempts != 1 || status != http.StatusTooManyRequests || string(raw) != "slow down\n" {
+		t.Fatalf("retained rate limit: attempts=%d status=%d raw=%q", attempts, status, raw)
+	}
 }
 
 func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
@@ -934,6 +1014,7 @@ func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
 	sum := result.ContentClassified +
 		result.ContentFailedParse +
 		result.ContentFailedModel +
+		result.ContentStoppedUncertain +
 		result.ContentFailedDownload +
 		result.ContentNotInPhotoKit +
 		result.ContentNoContentAvailable +

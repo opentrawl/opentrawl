@@ -47,6 +47,7 @@ type ClassifyResult struct {
 	ContentClassified              int    `json:"content_classified"`
 	ContentFailedParse             int    `json:"content_failed_parse"`
 	ContentFailedModel             int    `json:"content_failed_model"`
+	ContentStoppedUncertain        int    `json:"content_stopped_uncertain"`
 	ContentFailedDownload          int    `json:"content_failed_download"`
 	ContentNotInPhotoKit           int    `json:"content_not_in_photokit"`
 	ContentNoContentAvailable      int    `json:"content_no_content_available"`

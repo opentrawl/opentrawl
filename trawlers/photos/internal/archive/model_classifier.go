@@ -24,6 +24,7 @@ import (
 const (
 	modelClassifierSource = "photo_card"
 	modelPromptVersion    = repoPrompts.PhotoCardVersion
+	modelParserVersion    = "photo-card-sections.v1"
 )
 
 type modelClassifier struct {

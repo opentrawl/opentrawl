@@ -16,22 +16,25 @@ import (
 )
 
 type classifyWrite struct {
-	input              classifyInput
-	hasContent         bool
-	contentResult      *modelResult
-	contentErr         error
-	imagePath          string
-	pathClass          string
-	exported           bool
-	resolutionErr      error
-	resolutionDuration time.Duration
-	exportBytes        int64
-	modelAttempts      int
-	modelDuration      time.Duration
-	writeDuration      time.Duration
-	rateLimitEvents    int
-	transientErrEvents int
-	outcome            contentOutcome
+	input               classifyInput
+	hasContent          bool
+	contentResult       *modelResult
+	contentErr          error
+	imagePath           string
+	pathClass           string
+	exported            bool
+	resolutionErr       error
+	resolutionDuration  time.Duration
+	exportBytes         int64
+	modelAttempts       int
+	modelDuration       time.Duration
+	writeDuration       time.Duration
+	rateLimitEvents     int
+	transientErrEvents  int
+	outcome             contentOutcome
+	generationID        string
+	generationReused    bool
+	transmissionStarted bool
 }
 
 type contentOutcome string
@@ -42,6 +45,7 @@ const (
 	contentOutcomeClassified              contentOutcome = "classified"
 	contentOutcomeFailedParse             contentOutcome = "failed_parse"
 	contentOutcomeFailedModel             contentOutcome = "failed_model"
+	contentOutcomeStoppedUncertain        contentOutcome = "stopped_uncertain"
 	contentOutcomeRateLimited             contentOutcome = "rate_limited"
 	contentOutcomeFailedDownload          contentOutcome = "failed_download"
 	contentOutcomeNotInPhotoKit           contentOutcome = "not_in_photokit"
@@ -57,6 +61,7 @@ type contentItem struct {
 	pathClass string
 
 	meta               imageMeta
+	generationID       string
 	exported           bool
 	resolutionErr      error
 	resolutionDuration time.Duration
@@ -64,8 +69,8 @@ type contentItem struct {
 }
 
 // classifyContentInputs drives model classification through trawlkit's
-// model.Run, which owns the loop guardrails: bounded retries, adaptive
-// concurrency, 429-requeue-never-fail, and the rule-1.15 quota abort.
+// model.Run, which owns the loop guardrails: one send, adaptive concurrency,
+// 429 accounting, and the rule-1.15 quota abort.
 // photoscrawl keeps what is photoscrawl's: originals export inside prepare,
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
@@ -95,14 +100,14 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		return nil
 	}
 
-	prepare := func(ctx context.Context, index int) (model.Request, error) {
+	prepare := func(ctx context.Context, index int) (model.Call, error) {
 		item := items[index]
 		startedAt := time.Now()
 		resolved, err := resolver.Resolve(ctx, item.input.originalRequest())
 		item.resolutionDuration = time.Since(startedAt)
 		if err != nil {
 			item.resolutionErr = err
-			return model.Request{}, err
+			return model.Call{}, err
 		}
 		item.exported = resolved.Exported
 		if resolved.Exported {
@@ -125,7 +130,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 				logInt64Field("duration_ms", metadataDuration.Milliseconds()),
 				logStringField("reason", "exact-original metadata unavailable"),
 			)
-			return model.Request{}, fmt.Errorf("prepare exact-original metadata: %w", err)
+			return model.Call{}, fmt.Errorf("prepare exact-original metadata: %w", err)
 		}
 		cacheStatus := "extracted"
 		if metadata.CacheHit {
@@ -140,10 +145,22 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		)
 		request, meta, err := classifier.buildRequest(item.input, item.imagePath, metadata.Projection)
 		if err != nil {
-			return model.Request{}, err
+			return model.Call{}, err
 		}
 		item.meta = meta
-		return request, nil
+		providerRequest, err := classifier.client.Render(request)
+		if err != nil {
+			return model.Call{}, err
+		}
+		decision, err := prepareModelGeneration(ctx, db, item.input.AssetID, classifier.promptVersion, modelParserVersion, providerRequest, now().UTC())
+		item.generationID = decision.GenerationID
+		if err != nil {
+			return model.Call{}, err
+		}
+		if err := modelGenerationFault(modelGenerationFaultBeforeSend, model.RawResult{}); err != nil {
+			return model.Call{}, fmt.Errorf("%w: %v", errModelGenerationStoppedUncertain, err)
+		}
+		return decision.Call, nil
 	}
 
 	commit := func(res model.Result) error {
@@ -161,10 +178,43 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			modelDuration:      res.Duration,
 			rateLimitEvents:    res.RateLimitEvents,
 			transientErrEvents: res.TransientEvents,
+			generationID:       item.generationID,
+		}
+		if errors.Is(res.Err, errModelGenerationUncertain) || errors.Is(res.Err, errModelGenerationStoppedUncertain) {
+			write.contentErr = errModelGenerationStoppedUncertain
+			write.outcome = contentOutcomeStoppedUncertain
+			return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
+		}
+		if res.Attempts > 0 {
+			if err := modelGenerationFault(modelGenerationFaultAfterSend, res.Raw); err != nil {
+				write.contentErr = fmt.Errorf("%w: %v", errModelGenerationStoppedUncertain, err)
+				write.outcome = contentOutcomeStoppedUncertain
+				write.transmissionStarted = res.Raw.TransmissionStarted
+				return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
+			}
+			persistCtx := ctx
+			if ctx.Err() != nil {
+				persistCtx = context.WithoutCancel(ctx)
+			}
+			if err := retainModelGenerationResult(persistCtx, db, item.generationID, res.Raw, now().UTC()); err != nil {
+				return err
+			}
+			if ctx.Err() != nil {
+				return nil
+			}
+			if err := modelGenerationFault(modelGenerationFaultAfterRetain, res.Raw); err != nil {
+				return err
+			}
 		}
 		switch res.Outcome {
 		case model.OutcomeOK:
-			parsed, err := classifier.parseResult(res.Response.Text, item.input, item.meta)
+			response, err := model.Parse(res.Request, res.Raw)
+			if err != nil {
+				write.contentErr = err
+				write.outcome = contentOutcomeFailedParse
+				break
+			}
+			parsed, err := classifier.parseResult(response.Text, item.input, item.meta)
 			if err != nil {
 				write.contentErr = err
 				write.outcome = modelFailureOutcome(err)
@@ -184,6 +234,9 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			} else {
 				write.outcome = modelFailureOutcome(res.Err)
 			}
+		case model.OutcomeReused:
+			write.generationReused = true
+			write.outcome = contentOutcomeClassified
 		}
 		return writeClassifyResult(ctx, db, classifier, write, now, result, logger)
 	}
@@ -225,9 +278,25 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	writeStartedAt := time.Now()
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		switch write.outcome {
-		case contentOutcomeFailedParse, contentOutcomeFailedModel:
+		case contentOutcomeFailedParse:
+			if write.generationID != "" {
+				if err := recordModelGenerationParseFailure(ctx, tx, write.generationID, write.input.AssetID, write.contentErr, classifiedAt); err != nil {
+					return err
+				}
+			}
 			state, reason := contentOutcomeQueueStateReason(write)
 			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
+		case contentOutcomeFailedModel:
+			state, reason := contentOutcomeQueueStateReason(write)
+			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
+		case contentOutcomeStoppedUncertain:
+			if write.transmissionStarted {
+				if err := markModelGenerationTransmissionStarted(ctx, tx, write.generationID); err != nil {
+					return err
+				}
+			}
+			_, err := stopModelGenerationUncertain(ctx, tx, write.input.QueueID, write.generationID, classifiedAt)
+			return err
 		}
 		observations := classifyFromMetadata(write.input)
 		written, err := writeMetadataClassification(ctx, tx, write.input, observations, classifiedAt, true)
@@ -237,14 +306,20 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 		metadataWritten = written
 		switch write.outcome {
 		case contentOutcomeClassified:
+			if write.generationReused {
+				return updateClassificationQueue(ctx, tx, write.input.QueueID, classifyQueueStateContentClassified, "model_observations", classifiedAt)
+			}
 			if !write.hasContent || write.contentResult == nil {
 				return updateClassificationQueue(ctx, tx, write.input.QueueID, "content_failed", "classified outcome missing model result", classifiedAt)
 			}
-			written, placeWritten, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, classifiedAt, write.imagePath, write.pathClass)
+			written, placeWritten, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, classifiedAt, write.generationID)
 			if err != nil {
 				return err
 			}
 			contentWritten = written
+			if err := completeModelGeneration(ctx, tx, write.generationID, write.input.AssetID, classifiedAt); err != nil {
+				return err
+			}
 		default:
 			state, reason := contentOutcomeQueueStateReason(write)
 			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
@@ -308,9 +383,11 @@ func isModelParseFailure(err error) bool {
 func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
 	switch write.outcome {
 	case contentOutcomeFailedParse:
-		return "content_failed", "failed_parse: " + classifyFailureReason(write.contentErr)
+		return classifyQueueStateMetadataClassified, "retained_response_failed_parse: " + classifyFailureReason(write.contentErr)
 	case contentOutcomeFailedModel:
 		return "content_failed", "failed_model: " + classifyFailureReason(write.contentErr)
+	case contentOutcomeStoppedUncertain:
+		return "content_failed", "stopped_uncertain: model attempt has no retained result"
 	case contentOutcomeRateLimited:
 		return "metadata_classified", "requeued: model rate limited (429)"
 	case contentOutcomeFailedDownload:
@@ -340,6 +417,8 @@ func (result *ClassifyResult) addContentOutcome(outcome contentOutcome) {
 	case contentOutcomeFailedModel:
 		result.ContentFailedModel++
 		result.ContentClassificationFailures++
+	case contentOutcomeStoppedUncertain:
+		result.ContentStoppedUncertain++
 	case contentOutcomeRateLimited:
 		result.RateLimitRequeued++
 	case contentOutcomeFailedDownload:

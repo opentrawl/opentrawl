@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 9
+const SchemaVersion = 11
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -170,6 +170,38 @@ create table if not exists model_run (
   metadata_json text not null
 );
 
+create table if not exists model_generation (
+  id text primary key,
+  request_sha256 text not null unique,
+  request_route text not null,
+  model_id text not null,
+  request_body blob not null,
+  created_at text not null
+);
+
+create table if not exists model_generation_asset (
+  generation_id text not null references model_generation(id),
+  asset_id text not null references asset(id),
+  prompt_version text not null,
+  parser_version text not null,
+  completed_at text,
+  parse_failure blob,
+  parse_failed_at text,
+  primary key (generation_id, asset_id)
+);
+
+create table if not exists model_generation_attempt (
+  generation_id text primary key references model_generation(id),
+  started_at text not null,
+  response_body blob,
+  failure_body blob,
+  http_status integer not null default 0,
+  http_status_text text not null default '',
+  provider_request_id text not null default '',
+  transmission_started integer not null default 0,
+  retained_at text
+);
+
 create table if not exists model_observation (
   id text primary key,
   asset_id text not null references asset(id),
@@ -180,6 +212,7 @@ create table if not exists model_observation (
   source text not null,
   model_id text not null,
   prompt_version text not null,
+  generation_id text references model_generation(id),
   evidence_id text not null,
   stale_since text,
   stale_reason text,
@@ -197,6 +230,7 @@ create table if not exists place_observation (
   cache_status text not null,
   tier text not null,
   distance_meters real,
+  generation_id text references model_generation(id),
   evidence_id text not null,
   stale_since text,
   stale_reason text,
@@ -252,6 +286,7 @@ create index if not exists text_asset_idx on text_observation(asset_id);
 create index if not exists face_asset_idx on face_observation(asset_id);
 create index if not exists model_observation_asset_idx on model_observation(asset_id);
 create index if not exists model_observation_type_idx on model_observation(observation_type);
+create index if not exists model_generation_asset_idx on model_generation_asset(asset_id, completed_at);
 create index if not exists place_observation_asset_idx on place_observation(asset_id);
 create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);

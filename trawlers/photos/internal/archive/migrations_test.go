@@ -68,6 +68,16 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 			}
 		}
 	}
+	if exists, err := tableColumnExists(ctx, migrated.DB(), "model_observation", "generation_id"); err != nil {
+		t.Fatal(err)
+	} else if !exists {
+		t.Fatal("missing migrated column model_observation.generation_id")
+	}
+	if exists, err := tableColumnExists(ctx, migrated.DB(), "place_observation", "generation_id"); err != nil {
+		t.Fatal(err)
+	} else if !exists {
+		t.Fatal("missing migrated column place_observation.generation_id")
+	}
 
 	opened, err := Open(ctx, paths, "asset:old-schema")
 	if err != nil {
@@ -149,6 +159,15 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 				}
 			}
 		}
+		for _, table := range []string{"model_observation", "place_observation"} {
+			exists, err := tableColumnExists(ctx, db.DB(), table, "generation_id")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !exists {
+				t.Fatalf("missing migrated column %s.generation_id", table)
+			}
+		}
 	}
 
 	t.Run("open", func(t *testing.T) {
@@ -217,6 +236,15 @@ alter table "model_observation" add column "stale_since" text
 			}
 		}
 	}
+	for _, table := range []string{"model_observation", "place_observation"} {
+		exists, err := tableColumnExists(ctx, db.DB(), table, "generation_id")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !exists {
+			t.Fatalf("missing migrated column %s.generation_id", table)
+		}
+	}
 }
 
 func TestOpenAndSearchUseReadOnlyPathWhenArchiveIsMigrated(t *testing.T) {
@@ -267,6 +295,8 @@ func oldObservationSchema(t *testing.T) string {
   stale_since text,
   stale_reason text,
   superseded_at text`, "")
+	old = strings.ReplaceAll(old, `,
+  generation_id text references model_generation(id)`, "")
 	if old == Schema {
 		t.Fatal("old schema fixture did not remove observation columns")
 	}
