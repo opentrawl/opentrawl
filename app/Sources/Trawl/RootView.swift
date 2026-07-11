@@ -122,13 +122,13 @@ struct RootView: View {
   }
 
   private func dismissSearch() {
-    presentTraffic(.idle, nil)
+    presentTraffic(activity: .idle, event: nil)
     isSearching = false
   }
 
   private func syncNow() async {
     let requestedSourceIDs = Set(model.sources.map(\.id))
-    presentTraffic(.syncing(sourceIDs: requestedSourceIDs), nil)
+    presentTraffic(activity: .syncing(sourceIDs: requestedSourceIDs), event: nil)
     await model.syncNow()
     let failedSourceIDs = Set(model.syncFailures.map(\.sourceID))
     let usefulSourceIDs = Set(
@@ -137,8 +137,8 @@ struct RootView: View {
         .map(\.sourceID)
     )
     presentTraffic(
-      failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
-      ConstellationTrafficEvent(
+      activity: failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
+      event: ConstellationTrafficEvent(
         requestedSourceIDs: requestedSourceIDs,
         usefulSourceIDs: usefulSourceIDs,
         failedSourceIDs: failedSourceIDs
