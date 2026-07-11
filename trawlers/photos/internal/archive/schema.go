@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 8
+const SchemaVersion = 9
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -29,6 +29,8 @@ create table if not exists crawl_snapshot (
   resource_count integer not null,
   album_membership_count integer not null,
   location_count integer not null,
+  completeness_state text not null,
+  completeness_evidence_json text not null,
   metadata_json text not null
 );
 
@@ -86,6 +88,10 @@ create table if not exists asset (
   shutter_speed real,
   iso integer,
   source_library_id text not null references source_library(id),
+  source_state text not null default 'current',
+  first_missing_at text,
+  source_deleted_at text,
+  source_state_snapshot_id text not null default '',
   metadata_json text not null
 );
 

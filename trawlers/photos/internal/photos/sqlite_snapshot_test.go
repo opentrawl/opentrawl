@@ -67,6 +67,9 @@ where m.Z_3ASSETS = 1
 	if snapshot.Provider != "photos_sqlite_snapshot" {
 		t.Fatalf("provider = %q", snapshot.Provider)
 	}
+	if !snapshot.Completeness.Complete() || snapshot.Completeness.Evidence["database_copy"] != "completed" || snapshot.Completeness.Evidence["asset_query"] != "completed" {
+		t.Fatalf("completeness = %#v", snapshot.Completeness)
+	}
 	if len(snapshot.Assets) != 1 {
 		t.Fatalf("assets = %d, want 1", len(snapshot.Assets))
 	}

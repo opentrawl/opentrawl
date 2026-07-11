@@ -709,6 +709,14 @@ func (f *fakeSource) sync(ctx context.Context, req *trawlkit.Request) (*trawlkit
 		}
 	}
 	if f.crawler.syncExit != 0 {
+		var envelope ErrorEnvelope
+		if err := decodeContractJSON([]byte(f.crawler.sync), &envelope); err == nil && strings.TrimSpace(envelope.Error.Code) != "" {
+			return nil, fakeError{body: ckoutput.ErrorBody{
+				Code:    envelope.Error.Code,
+				Message: envelope.Error.Message,
+				Remedy:  envelope.Error.Remedy,
+			}}
+		}
 		return nil, errors.New("sync failed")
 	}
 	outcome, ok := lastSyncOutcome([]byte(f.crawler.sync))

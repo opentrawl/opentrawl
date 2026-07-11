@@ -29,6 +29,7 @@ type SyncResult struct {
 	Provider                   string `json:"provider"`
 	SnapshotID                 string `json:"snapshot_id"`
 	SourceLibraryID            string `json:"source_library_id"`
+	SnapshotCompleteness       string `json:"snapshot_completeness"`
 	AssetsSeen                 int    `json:"assets_seen"`
 	AssetsNew                  int    `json:"assets_new"`
 	AssetsChanged              int    `json:"assets_changed"`
@@ -93,8 +94,13 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 	if snapshot.LibraryPath == "" {
 		snapshot.LibraryPath = absLibraryPath
 	}
-	if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
-		return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
+	if err := snapshot.Completeness.Validate(); err != nil {
+		return SyncResult{}, fmt.Errorf("validate snapshot completeness: %w", err)
+	}
+	if snapshot.Completeness.Complete() {
+		if err := photos.AttachLocalMediaPaths(&snapshot, absLibraryPath); err != nil {
+			return SyncResult{}, fmt.Errorf("resolve local Photos media paths: %w", err)
+		}
 	}
 
 	importer := syncImporter{
@@ -108,6 +114,9 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 		return SyncResult{}, err
 	}
 	importer.result.Database = paths.Database
+	if !snapshot.Completeness.Complete() {
+		return importer.result, &SnapshotIncompleteError{State: string(snapshot.Completeness.State)}
+	}
 	return importer.result, nil
 }
 
@@ -148,23 +157,31 @@ func (c *syncImporter) run(tx *sql.Tx) error {
 	if err != nil {
 		return err
 	}
+	completenessEvidenceJSON, err := jsonText(c.snapshot.Completeness.Evidence)
+	if err != nil {
+		return err
+	}
 
+	complete := 0
+	if c.snapshot.Completeness.Complete() {
+		complete = 1
+	}
 	if _, err := tx.ExecContext(ctx, `
 insert into source_library(id, library_path, snapshot_path, snapshot_created_at, photos_version, metadata_json)
 values (?, ?, ?, ?, ?, ?)
 on conflict(id) do update set
   library_path = excluded.library_path,
-  snapshot_path = excluded.snapshot_path,
-  snapshot_created_at = excluded.snapshot_created_at,
-  photos_version = excluded.photos_version,
-  metadata_json = excluded.metadata_json
-`, sourceID, c.libraryPath, "sqlite:crawl_snapshot/"+snapshotID, c.completedAt.Format(time.RFC3339Nano), c.snapshot.PhotosVersion, metadataJSON); err != nil {
+  snapshot_path = case when ? <> 0 then excluded.snapshot_path else source_library.snapshot_path end,
+  snapshot_created_at = case when ? <> 0 then excluded.snapshot_created_at else source_library.snapshot_created_at end,
+  photos_version = case when ? <> 0 then excluded.photos_version else source_library.photos_version end,
+  metadata_json = case when ? <> 0 then excluded.metadata_json else source_library.metadata_json end
+`, sourceID, c.libraryPath, "sqlite:crawl_snapshot/"+snapshotID, c.completedAt.Format(time.RFC3339Nano), c.snapshot.PhotosVersion, metadataJSON, complete, complete, complete, complete); err != nil {
 		return fmt.Errorf("upsert source library: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
-insert into crawl_snapshot(id, source_library_id, started_at, completed_at, provider, asset_count, resource_count, album_membership_count, location_count, metadata_json)
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, snapshotID, sourceID, c.startedAt.Format(time.RFC3339Nano), c.completedAt.Format(time.RFC3339Nano), c.snapshot.Provider, len(c.snapshot.Assets), resourceCount, albumCount, locationCount, metadataJSON); err != nil {
+insert into crawl_snapshot(id, source_library_id, started_at, completed_at, provider, asset_count, resource_count, album_membership_count, location_count, completeness_state, completeness_evidence_json, metadata_json)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, snapshotID, sourceID, c.startedAt.Format(time.RFC3339Nano), c.completedAt.Format(time.RFC3339Nano), c.snapshot.Provider, len(c.snapshot.Assets), resourceCount, albumCount, locationCount, c.snapshot.Completeness.State, completenessEvidenceJSON, metadataJSON); err != nil {
 		return fmt.Errorf("insert sync snapshot: %w", err)
 	}
 
@@ -172,10 +189,14 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		Provider:             c.snapshot.Provider,
 		SnapshotID:           snapshotID,
 		SourceLibraryID:      sourceID,
+		SnapshotCompleteness: string(c.snapshot.Completeness.State),
 		AssetsSeen:           len(c.snapshot.Assets),
 		ResourcesSeen:        resourceCount,
 		AlbumMembershipsSeen: albumCount,
 		LocationsSeen:        locationCount,
+	}
+	if !c.snapshot.Completeness.Complete() {
+		return c.finishIncompleteRun(ctx, tx)
 	}
 	stmts, err := prepareCrawlStatements(ctx, tx)
 	if err != nil {
@@ -207,22 +228,40 @@ values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			if err := c.upsertSeenAsset(ctx, sourceID, assetID, snapshotID, fingerprint); err != nil {
 				return err
 			}
+			if err := markAssetPresent(ctx, tx, assetID, snapshotID, c.completedAt); err != nil {
+				return err
+			}
 			continue
 		}
 		if err := c.upsertAsset(ctx, tx, sourceID, snapshotID, assetID, fingerprint, seenBefore, asset); err != nil {
 			return err
 		}
+		if err := markAssetPresent(ctx, tx, assetID, snapshotID, c.completedAt); err != nil {
+			return err
+		}
 	}
 
-	var missing int
-	if err := tx.QueryRowContext(ctx, `
-select count(*) from crawl_seen_asset
-where source_library_id = ? and last_seen_snapshot_id <> ?
-`, sourceID, snapshotID).Scan(&missing); err != nil {
-		return fmt.Errorf("count missing seen assets: %w", err)
+	missing, err := markMissingAssetsDeleted(ctx, tx, sourceID, snapshotID, c.completedAt)
+	if err != nil {
+		return err
 	}
 	c.result.PreviouslySeenMissing = missing
+	return c.finishCompleteRun(ctx, tx, sourceID, snapshotID)
+}
 
+func (c *syncImporter) finishIncompleteRun(ctx context.Context, tx *sql.Tx) error {
+	return c.setPendingCount(ctx, tx)
+}
+
+func (c *syncImporter) finishCompleteRun(ctx context.Context, tx *sql.Tx, sourceID, snapshotID string) error {
+	if err := c.setPendingCount(ctx, tx); err != nil {
+		return err
+	}
+	cursor := state.NewCursor(tx)
+	return cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID)
+}
+
+func (c *syncImporter) setPendingCount(ctx context.Context, tx *sql.Tx) error {
 	var pending int
 	if err := tx.QueryRowContext(ctx, `
 select count(*) from classification_queue
@@ -231,11 +270,6 @@ where state = 'pending'
 		return fmt.Errorf("count pending classification queue: %w", err)
 	}
 	c.result.ClassificationQueuePending = pending
-
-	cursor := state.NewCursor(tx)
-	if err := cursor.Set(ctx, c.snapshot.Provider, "source_library", sourceID, snapshotID); err != nil {
-		return err
-	}
 	return nil
 }
 

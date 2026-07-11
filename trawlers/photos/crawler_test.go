@@ -23,7 +23,11 @@ import (
 
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
-		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
+		source := New()
+		if provider := testSnapshotProviderFromEnv(); provider != nil {
+			source.snapshotProvider = provider
+		}
+		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{source}))
 	}
 	os.Exit(m.Run())
 }
@@ -293,7 +297,7 @@ func TestSyncWarningsAndStatusQueueCounts(t *testing.T) {
 	}
 
 	assertSyncWrittenLog(t, filepath.Join(home, ".opentrawl", "photos", "logs", "current.log"),
-		"provider=photos_sqlite_snapshot assets=1 new=0 changed=1 unchanged=0 missing=0 "+
+		"provider=photos_sqlite_snapshot completeness=complete assets=1 new=0 changed=1 unchanged=0 missing=0 "+
 			"queued_for_classify=1 queued_needs_download=1 classification_queue_pending=1 "+
 			"marked_stale_model_assets=1 marked_stale_model_rows=2 "+
 			"marked_stale_place_assets=1 marked_stale_place_rows=1")
@@ -349,6 +353,10 @@ func TestClassifyLimitContractIsUsageError(t *testing.T) {
 }
 
 func captureRun(t *testing.T, args []string) (string, string, int) {
+	return captureRunWithCrawler(t, args, New())
+}
+
+func captureRunWithCrawler(t *testing.T, args []string, source trawlkit.Crawler) (string, string, int) {
 	t.Helper()
 	oldStdout := os.Stdout
 	oldStderr := os.Stderr
@@ -366,7 +374,7 @@ func captureRun(t *testing.T, args []string) (string, string, int) {
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
 	}()
-	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
+	code := trawlkit.Run(args, []trawlkit.Crawler{source})
 	if err := stdoutW.Close(); err != nil {
 		t.Fatal(err)
 	}

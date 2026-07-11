@@ -237,7 +237,8 @@ select asset.id, asset.media_type, asset.creation_date, asset.timezone_name,
        `+searchCardSummarySQL+` as card_summary,
        `+searchCardDescriptionSQL+` as card_description,
        `+searchStaleSinceSQL+` as stale_since,
-       `+searchStaleReasonSQL+` as stale_reason
+       `+searchStaleReasonSQL+` as stale_reason,
+       asset.source_state
 from matched_assets
 join asset on asset.id = matched_assets.id
 order by matched_assets.hit_rank, asset.creation_date desc, asset.id
@@ -256,8 +257,8 @@ limit ?
 	}
 	for rows.Next() {
 		var hit SearchHit
-		var assetBody, cardSummary, cardDescription, timezoneName string
-		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription, &hit.StaleSince, &hit.StaleReason); err != nil {
+		var assetBody, cardSummary, cardDescription, timezoneName, sourceState string
+		if err := rows.Scan(&hit.ID, &hit.MediaType, &hit.CreationDate, &timezoneName, &hit.Title, &assetBody, &hit.Who, &hit.Where, &cardSummary, &cardDescription, &hit.StaleSince, &hit.StaleReason, &sourceState); err != nil {
 			return SearchResult{}, err
 		}
 		hit.HitType = "asset"
@@ -267,6 +268,9 @@ limit ?
 			hit.Where = cleanPlacePhrase(hit.Where)
 		}
 		hit.Snippet = searchSnippet(query, cardSummary, cardDescription, hit.Title, assetBody)
+		if sourceState == sourceStateDeletedUpstream {
+			hit.Snippet = "Deleted upstream · " + hit.Snippet
+		}
 		hit.Stale = strings.TrimSpace(hit.StaleSince) != ""
 		result.Results = append(result.Results, hit)
 	}

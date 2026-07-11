@@ -7,12 +7,13 @@ type Provider interface {
 }
 
 type LibrarySnapshot struct {
-	LibraryPath         string         `json:"library_path"`
-	Provider            string         `json:"provider"`
-	PhotosVersion       string         `json:"photos_version"`
-	AuthorizationStatus string         `json:"authorization_status,omitempty"`
-	Metadata            map[string]any `json:"metadata,omitempty"`
-	Assets              []Asset        `json:"assets"`
+	LibraryPath         string               `json:"library_path"`
+	Provider            string               `json:"provider"`
+	PhotosVersion       string               `json:"photos_version"`
+	AuthorizationStatus string               `json:"authorization_status,omitempty"`
+	Completeness        SnapshotCompleteness `json:"completeness"`
+	Metadata            map[string]any       `json:"metadata,omitempty"`
+	Assets              []Asset              `json:"assets"`
 }
 
 type Asset struct {

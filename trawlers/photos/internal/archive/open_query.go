@@ -20,7 +20,8 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 
 	asset, err := oneRow(ctx, db.DB(), `
 select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
-       camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso
+       camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,
+       source_state, coalesce(first_missing_at, '') as first_missing_at, coalesce(source_deleted_at, '') as source_deleted_at
 from asset
 where id = ?
 `, rowID)

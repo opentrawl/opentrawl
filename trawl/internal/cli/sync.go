@@ -85,6 +85,9 @@ func syncSource(r *Runtime, source Source) SyncResult {
 	}
 	if err != nil {
 		r.logSourceDone(source, "sync", started, err)
+		if outcome, ok := incompleteSyncOutcome(data); ok {
+			return normalizeSyncOutcome(source, outcome)
+		}
 		return syncFailureResult(source, "sync failed")
 	}
 	outcome, ok := lastSyncOutcome(data)
@@ -120,6 +123,14 @@ func lastSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
 		found = true
 	}
 	return last, found
+}
+
+func incompleteSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
+	outcome, ok := lastSyncOutcome(data)
+	if !ok || outcome.Error == nil || strings.TrimSpace(outcome.Error.Code) != "snapshot_incomplete" {
+		return syncCrawlerOutcome{}, false
+	}
+	return outcome, true
 }
 
 func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult {
@@ -279,6 +290,10 @@ func (r *Runtime) reportSyncFailure(result SyncResult) {
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}
-	_, _ = fmt.Fprintf(r.stderr, "%s sync failed.\n", firstNonEmpty(result.displaySource, result.Source))
+	failure := "sync failed"
+	if result.Error != nil && result.Error.Code == "snapshot_incomplete" {
+		failure = fmt.Sprintf("sync failed (%s)", result.Error.Code)
+	}
+	_, _ = fmt.Fprintf(r.stderr, "%s %s.\n", firstNonEmpty(result.displaySource, result.Source), failure)
 	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 }

@@ -26,6 +26,7 @@ type OpenStale struct {
 }
 
 type OpenMechanical struct {
+	Source          OpenSource           `json:"source"`
 	Captured        *OpenCaptured        `json:"captured,omitempty"`
 	Media           *OpenMedia           `json:"media,omitempty"`
 	Place           *OpenPlace           `json:"place,omitempty"`
@@ -38,6 +39,12 @@ type OpenMechanical struct {
 	Albums          []OpenAlbum          `json:"albums,omitempty"`
 	Original        *OpenOriginal        `json:"original,omitempty"`
 	Flags           []string             `json:"flags,omitempty"`
+}
+
+type OpenSource struct {
+	State           string `json:"state"`
+	FirstMissingAt  string `json:"first_missing_at,omitempty"`
+	SourceDeletedAt string `json:"source_deleted_at,omitempty"`
 }
 
 type OpenCaptured struct {
@@ -125,10 +132,11 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		venueCandidates = nil
 	}
 	return OpenResult{
-		SchemaVersion: 3,
+		SchemaVersion: 4,
 		Ref:           AssetRef(rowString(asset, "id")),
 		Stale:         openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
+			Source:          openSource(asset),
 			Captured:        openCaptured(asset),
 			Media:           openMedia(asset),
 			Place:           openPlace(placeObservations, locations),
@@ -143,6 +151,18 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 			Flags:           openFlags(asset),
 		},
 		Model: openModel(modelObservations),
+	}
+}
+
+func openSource(asset map[string]any) OpenSource {
+	state := strings.TrimSpace(rowString(asset, "source_state"))
+	if state == "" {
+		state = sourceStateCurrent
+	}
+	return OpenSource{
+		State:           state,
+		FirstMissingAt:  strings.TrimSpace(rowString(asset, "first_missing_at")),
+		SourceDeletedAt: strings.TrimSpace(rowString(asset, "source_deleted_at")),
 	}
 }
 

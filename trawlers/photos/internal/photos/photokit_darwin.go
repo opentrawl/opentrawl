@@ -31,6 +31,15 @@ func (PhotoKitProvider) Snapshot(ctx context.Context, libraryPath string) (Libra
 
 	var cErr *C.char
 	cJSON := C.photoscrawl_photokit_snapshot(cPath, &cErr)
+	if err := ctx.Err(); err != nil {
+		if cErr != nil {
+			C.free(unsafe.Pointer(cErr))
+		}
+		if cJSON != nil {
+			C.free(unsafe.Pointer(cJSON))
+		}
+		return LibrarySnapshot{}, err
+	}
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return LibrarySnapshot{}, photoKitError(C.GoString(cErr))
@@ -40,9 +49,36 @@ func (PhotoKitProvider) Snapshot(ctx context.Context, libraryPath string) (Libra
 	}
 	defer C.free(unsafe.Pointer(cJSON))
 
-	var snapshot LibrarySnapshot
-	if err := json.Unmarshal([]byte(C.GoString(cJSON)), &snapshot); err != nil {
+	return decodePhotoKitSnapshot(ctx, []byte(C.GoString(cJSON)))
+}
+
+func decodePhotoKitSnapshot(ctx context.Context, snapshotJSON []byte) (LibrarySnapshot, error) {
+	if err := ctx.Err(); err != nil {
 		return LibrarySnapshot{}, err
 	}
+	var snapshot LibrarySnapshot
+	if err := json.Unmarshal(snapshotJSON, &snapshot); err != nil {
+		return LibrarySnapshot{}, err
+	}
+	if err := ctx.Err(); err != nil {
+		return LibrarySnapshot{}, err
+	}
+	snapshot.Completeness = photoKitSnapshotCompleteness(snapshot.AuthorizationStatus)
 	return snapshot, nil
+}
+
+func photoKitSnapshotCompleteness(authorizationStatus string) SnapshotCompleteness {
+	state := SnapshotPartial
+	if authorizationStatus == "authorized" {
+		state = SnapshotComplete
+	} else if authorizationStatus == "limited" {
+		state = SnapshotLimited
+	}
+	return SnapshotCompleteness{
+		State: state,
+		Evidence: map[string]string{
+			"authorization_status": authorizationStatus,
+			"asset_enumeration":    "completed",
+		},
+	}
 }

@@ -72,6 +72,68 @@ func TestSyncJSONWritesOneEventPerSource(t *testing.T) {
 	}
 }
 
+func TestSyncPreservesIncompleteSnapshotFailure(t *testing.T) {
+	const childError = `{"error":{"code":"snapshot_incomplete","message":"Photos snapshot was limited; audit was recorded but source state was not changed","remedy":"restore complete Photos access or wait for the snapshot to finish, then rerun sync"}}`
+	const message = "Photos snapshot was limited; audit was recorded but source state was not changed"
+	const remedy = "restore complete Photos access or wait for the snapshot to finish, then rerun sync"
+	newCrawler := func() fakeCrawler {
+		return fakeCrawler{
+			name:     "photoscrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			sync:     childError,
+			syncExit: 1,
+		}
+	}
+
+	t.Run("human", func(t *testing.T) {
+		binDir := writeFakeCrawlers(t, newCrawler())
+		t.Setenv("PATH", binDir)
+		t.Setenv("HOME", syntheticHome(t))
+		t.Logf("boundary=child_sync_error input=%s", childError)
+
+		stdout, stderr, code := runCLI(t, "sync", "photos")
+		t.Logf("boundary=root_sync_human output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", stdout, stderr, code)
+		if code != 1 {
+			t.Fatalf("code = %d, want 1", code)
+		}
+		wantStdout := "Photos  error  " + message + "\n"
+		if stdout != wantStdout {
+			t.Fatalf("stdout = %q, want %q", stdout, wantStdout)
+		}
+		wantStderr := "Photos syncing…\nPhotos sync failed (snapshot_incomplete).\n  Remedy: " + remedy + "\n"
+		if stderr != wantStderr {
+			t.Fatalf("stderr = %q, want %q", stderr, wantStderr)
+		}
+	})
+
+	t.Run("JSON", func(t *testing.T) {
+		binDir := writeFakeCrawlers(t, newCrawler())
+		t.Setenv("PATH", binDir)
+		t.Setenv("HOME", syntheticHome(t))
+		t.Logf("boundary=child_sync_error input=%s", childError)
+
+		stdout, stderr, code := runCLI(t, "--json", "sync", "photos")
+		t.Logf("boundary=root_sync_json output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", stdout, stderr, code)
+		if code != 1 {
+			t.Fatalf("code = %d, want 1", code)
+		}
+		var result SyncResult
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+			t.Fatalf("stdout is not a sync result: %v\n%s", err, stdout)
+		}
+		if result.Event != "sync" || result.Source != "photos" || result.State != "error" || result.Message != message {
+			t.Fatalf("sync result = %#v", result)
+		}
+		if result.Error == nil || result.Error.Code != "snapshot_incomplete" || result.Error.Message != message || result.Error.Remedy != remedy {
+			t.Fatalf("sync error = %#v", result.Error)
+		}
+		wantStderr := "Photos syncing…\nPhotos sync failed (snapshot_incomplete).\n  Remedy: " + remedy + "\n"
+		if stderr != wantStderr {
+			t.Fatalf("stderr = %q, want %q", stderr, wantStderr)
+		}
+	})
+}
+
 func TestSyncPartialAndTotalFailures(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -146,7 +146,11 @@ from classification_queue
 
 func lastImportAt(ctx context.Context, db *sql.DB) (string, error) {
 	var last sql.NullString
-	if err := db.QueryRowContext(ctx, `select max(completed_at) from crawl_snapshot`).Scan(&last); err != nil {
+	if err := db.QueryRowContext(ctx, `
+select max(completed_at)
+from crawl_snapshot
+where completeness_state = 'complete'
+`).Scan(&last); err != nil {
 		return "", err
 	}
 	if last.Valid {

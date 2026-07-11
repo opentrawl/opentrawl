@@ -74,8 +74,8 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(openedJSON), `"source"`) {
-		t.Fatalf("open JSON leaked provenance source: %s", openedJSON)
+	if opened.Mechanical.Source.State != sourceStateCurrent {
+		t.Fatalf("open JSON source state = %#v", opened.Mechanical.Source)
 	}
 
 	classified, err := Classify(ctx, paths, ClassifyOptions{
@@ -233,6 +233,12 @@ type fakeProvider struct {
 }
 
 func (f fakeProvider) Snapshot(context.Context, string) (photos.LibrarySnapshot, error) {
+	if f.snapshot.Completeness.State == "" {
+		f.snapshot.Completeness = photos.SnapshotCompleteness{
+			State:    photos.SnapshotComplete,
+			Evidence: map[string]string{"fixture": "complete"},
+		}
+	}
 	return f.snapshot, nil
 }
 
@@ -266,6 +272,10 @@ func fakeSnapshot(changed, includeSecond bool) photos.LibrarySnapshot {
 		Provider:            "fake",
 		PhotosVersion:       "fixture",
 		AuthorizationStatus: "authorized",
+		Completeness: photos.SnapshotCompleteness{
+			State:    photos.SnapshotComplete,
+			Evidence: map[string]string{"fixture": "complete"},
+		},
 		Metadata: map[string]any{
 			"fixture": true,
 		},

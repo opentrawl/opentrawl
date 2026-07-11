@@ -90,6 +90,13 @@ func openFallbackTitle(result archive.OpenResult) string {
 
 func openMechanicalFields(mechanical archive.OpenMechanical) []render.CardField {
 	fields := []render.CardField{}
+	if mechanical.Source.State == "deleted_upstream" {
+		value := "Deleted upstream"
+		if mechanical.Source.FirstMissingAt != "" {
+			value += " since " + openTextTime(mechanical.Source.FirstMissingAt)
+		}
+		fields = append(fields, render.CardField{Label: "Source", Value: value})
+	}
 	if captured := mechanical.Captured; captured != nil {
 		value := openTextTime(captured.Local)
 		if captured.Timezone != "" {

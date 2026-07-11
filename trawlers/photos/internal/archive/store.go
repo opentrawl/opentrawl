@@ -16,6 +16,12 @@ type archiveColumnMigration struct {
 }
 
 var archiveColumnMigrations = []archiveColumnMigration{
+	{table: "crawl_snapshot", column: "completeness_state", definition: "text not null default 'legacy_unknown'"},
+	{table: "crawl_snapshot", column: "completeness_evidence_json", definition: "text not null default '{}'"},
+	{table: "asset", column: "source_state", definition: "text not null default 'current'"},
+	{table: "asset", column: "first_missing_at", definition: "text"},
+	{table: "asset", column: "source_deleted_at", definition: "text"},
+	{table: "asset", column: "source_state_snapshot_id", definition: "text not null default ''"},
 	{table: "model_observation", column: "stale_since", definition: "text"},
 	{table: "model_observation", column: "stale_reason", definition: "text"},
 	{table: "model_observation", column: "superseded_at", definition: "text"},

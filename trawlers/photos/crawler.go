@@ -27,9 +27,10 @@ const (
 )
 
 type Crawler struct {
-	cfg           Config
-	classifyLimit trackedLimit
-	classifyModel string
+	cfg              Config
+	snapshotProvider photos.Provider
+	classifyLimit    trackedLimit
+	classifyModel    string
 }
 
 type Config struct {
@@ -187,12 +188,12 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		var syncErr error
 		result, syncErr = archive.SyncWithStore(ctx, req.Store, archivePaths(req), archive.SyncOptions{
 			LibraryPath: libraryPath,
-			Provider:    photos.NewProvider(),
+			Provider:    c.provider(),
 		})
 		return syncErr
 	})
 	if err != nil {
-		return nil, err
+		return nil, syncCommandError(err)
 	}
 	reportProgress(req, "sync", int64(result.AssetsSeen), int64(result.AssetsSeen), "synced Photos library")
 	if req.Log != nil {
@@ -204,6 +205,25 @@ func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.Sy
 		Removed:  int64(result.PreviouslySeenMissing),
 		Warnings: syncWarnings(result),
 	}, nil
+}
+
+func (c *Crawler) provider() photos.Provider {
+	if c.snapshotProvider != nil {
+		return c.snapshotProvider
+	}
+	return photos.NewProvider()
+}
+
+func syncCommandError(err error) error {
+	var incomplete *archive.SnapshotIncompleteError
+	if !errors.As(err, &incomplete) {
+		return err
+	}
+	return commandError{
+		Code:    "snapshot_incomplete",
+		Message: incomplete.Error(),
+		Remedy:  "restore complete Photos access or wait for the snapshot to finish, then rerun sync",
+	}
 }
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
@@ -367,11 +387,12 @@ func addStaleWarning(warnings []string, field string, value int) []string {
 
 func syncLogMessage(result archive.SyncResult) string {
 	return fmt.Sprintf(
-		"provider=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
+		"provider=%s completeness=%s assets=%d new=%d changed=%d unchanged=%d missing=%d "+
 			"queued_for_classify=%d queued_needs_download=%d classification_queue_pending=%d "+
 			"marked_stale_model_assets=%d marked_stale_model_rows=%d "+
 			"marked_stale_place_assets=%d marked_stale_place_rows=%d",
 		result.Provider,
+		result.SnapshotCompleteness,
 		result.AssetsSeen,
 		result.AssetsNew,
 		result.AssetsChanged,

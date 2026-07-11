@@ -54,6 +54,15 @@ func (p SQLiteSnapshotProvider) Snapshot(ctx context.Context, libraryPath string
 		LibraryPath:   libraryPath,
 		Provider:      "photos_sqlite_snapshot",
 		PhotosVersion: "unknown",
+		Completeness: SnapshotCompleteness{
+			State: SnapshotComplete,
+			Evidence: map[string]string{
+				"database_copy":  "completed",
+				"resource_query": "completed",
+				"album_query":    "completed",
+				"asset_query":    "completed",
+			},
+		},
 		Metadata: map[string]any{
 			"source":           "Photos.sqlite",
 			"snapshot":         "trawlkit_sqlite_copy",
