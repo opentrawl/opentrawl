@@ -22,37 +22,21 @@ import (
 
 func TestSetupRequirementMapping(t *testing.T) {
 	requirements := whatsappSetupRequirements(context.Background(), filepath.Join(t.TempDir(), "missing-whatsapp"))
-	if len(requirements) != 2 {
-		t.Fatalf("requirements = %#v", requirements)
-	}
-	pairing, access := requirements[0], requirements[1]
-	if pairing.ID != "pairing" || pairing.Kind != control.SetupKindPairing || pairing.State != control.SetupStateNeedsAction || pairing.Action != control.SetupActionRunCommand {
-		t.Fatalf("pairing = %#v", pairing)
-	}
-	if got := pairing.Command; len(got) != 3 || got[0] != "/usr/bin/open" || got[1] != "-b" || got[2] != "net.whatsapp.WhatsApp" {
-		t.Fatalf("pairing command = %#v", got)
-	}
-	if access.ID != "full_disk_access" || access.Kind != control.SetupKindFullDiskAccess || access.State != control.SetupStateNeedsAction || access.Action != control.SetupActionOpenFullDiskAccess || len(access.Command) != 0 {
-		t.Fatalf("full disk access = %#v", access)
+	if len(requirements) != 0 {
+		t.Fatalf("missing source requirements = %#v", requirements)
 	}
 	invalidPath := filepath.Join(t.TempDir(), "invalid-whatsapp")
 	if err := os.WriteFile(invalidPath, []byte("not a directory"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	invalid := whatsappSetupRequirements(context.Background(), invalidPath)
-	for _, requirement := range invalid {
-		if requirement.State != control.SetupStateUnavailable || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
-			t.Fatalf("invalid source requirement = %#v", requirement)
-		}
+	if len(invalid) != 0 {
+		t.Fatalf("invalid source requirements = %#v", invalid)
 	}
 	readyRoot := t.TempDir()
 	createDesktopFixture(t, readyRoot)
 	ready := whatsappSetupRequirements(context.Background(), readyRoot)
-	for _, requirement := range ready {
-		if requirement.State != control.SetupStateReady || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
-			t.Fatalf("ready source requirement = %#v", requirement)
-		}
-	}
+	assertFullDiskAccessRequirement(t, "readable source", ready, control.SetupStateReady)
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a mode-zero fixture")
 	}
@@ -64,12 +48,91 @@ func TestSetupRequirementMapping(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(chatPath, 0o600) })
 	denied := whatsappSetupRequirements(context.Background(), deniedRoot)
-	if denied[0].ID != "pairing" || denied[0].Kind != control.SetupKindPairing || denied[0].State != control.SetupStateReady || denied[0].Action != control.SetupActionNone || len(denied[0].Command) != 0 {
-		t.Fatalf("permission-denied pairing requirement = %#v", denied[0])
+	assertFullDiskAccessRequirement(t, "permission-denied source", denied, control.SetupStateNeedsAction)
+}
+
+func assertFullDiskAccessRequirement(t *testing.T, name string, requirements []control.SetupRequirement, state control.SetupState) {
+	t.Helper()
+	if len(requirements) != 1 {
+		t.Fatalf("%s requirements = %#v", name, requirements)
 	}
-	if denied[1].ID != "full_disk_access" || denied[1].Kind != control.SetupKindFullDiskAccess || denied[1].State != control.SetupStateNeedsAction || denied[1].Action != control.SetupActionOpenFullDiskAccess || len(denied[1].Command) != 0 {
-		t.Fatalf("permission-denied access requirement = %#v", denied[1])
+	requirement := requirements[0]
+	action := control.SetupActionNone
+	if state == control.SetupStateNeedsAction {
+		action = control.SetupActionOpenFullDiskAccess
 	}
+	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != state || requirement.Action != action || len(requirement.Command) != 0 {
+		t.Fatalf("%s requirement = %#v", name, requirement)
+	}
+}
+
+func TestStatusReadinessTranscript(t *testing.T) {
+	ctx := context.Background()
+	archive := filepath.Join(t.TempDir(), "whatsapp.db")
+	missingSource := filepath.Join(t.TempDir(), "missing-whatsapp")
+	missing := statusForSource(t, ctx, missingSource, archive)
+	t.Logf("missing input source=%q archive=%q", missingSource, archive)
+	t.Logf("missing output status=%#v", missing)
+	if missing.State != "missing" || len(missing.SetupRequirements) != 0 {
+		t.Fatalf("missing status = %#v", missing)
+	}
+
+	readableSource := t.TempDir()
+	createDesktopFixture(t, readableSource)
+	readable := statusForSource(t, ctx, readableSource, archive)
+	t.Logf("readable input source=%q archive=%q", readableSource, archive)
+	t.Logf("readable output status=%#v", readable)
+	if readable.State != "missing" {
+		t.Fatalf("readable status = %#v", readable)
+	}
+	assertFullDiskAccessRequirement(t, "readable status", readable.SetupRequirements, control.SetupStateReady)
+
+	if os.Geteuid() == 0 {
+		t.Log("permission-denied input skipped because UID 0 can read a mode-zero fixture")
+		return
+	}
+	discoveryParent := t.TempDir()
+	discoverySource := filepath.Join(discoveryParent, "whatsapp")
+	if err := os.Mkdir(discoverySource, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(discoveryParent, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(discoveryParent, 0o700) })
+	discoveryDenied := statusForSource(t, ctx, discoverySource, archive)
+	t.Logf("discovery permission-denied input source=%q archive=%q parent-mode=000", discoverySource, archive)
+	t.Logf("discovery permission-denied output status=%#v", discoveryDenied)
+	if discoveryDenied.State != "missing" {
+		t.Fatalf("discovery permission-denied status = %#v", discoveryDenied)
+	}
+	assertFullDiskAccessRequirement(t, "discovery permission-denied status", discoveryDenied.SetupRequirements, control.SetupStateNeedsAction)
+
+	deniedSource := t.TempDir()
+	createDesktopFixture(t, deniedSource)
+	chatPath := filepath.Join(deniedSource, "ChatStorage.sqlite")
+	if err := os.Chmod(chatPath, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(chatPath, 0o600) })
+	denied := statusForSource(t, ctx, deniedSource, archive)
+	t.Logf("permission-denied input source=%q archive=%q chat=%q mode=000", deniedSource, archive, chatPath)
+	t.Logf("permission-denied output status=%#v", denied)
+	if denied.State != "missing" {
+		t.Fatalf("permission-denied status = %#v", denied)
+	}
+	assertFullDiskAccessRequirement(t, "permission-denied status", denied.SetupRequirements, control.SetupStateNeedsAction)
+}
+
+func statusForSource(t *testing.T, ctx context.Context, source, archive string) *control.Status {
+	t.Helper()
+	crawler := New()
+	crawler.cfg.Source = source
+	status, err := crawler.Status(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: archive}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return status
 }
 
 func TestCrawlerCoreMethods(t *testing.T) {

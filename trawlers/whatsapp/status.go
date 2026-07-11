@@ -59,64 +59,40 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 }
 
 func whatsappSetupRequirements(ctx context.Context, configuredPath string) []control.SetupRequirement {
-	const (
-		pairingID = "pairing"
-		accessID  = "full_disk_access"
-	)
-	openWhatsApp := []string{"/usr/bin/open", "-b", "net.whatsapp.WhatsApp"}
 	source, discoverErr := whatsappdb.Discover(ctx, configuredPath)
-	state := control.SetupStateUnavailable
-	accessState := control.SetupStateUnavailable
-	var canaryErr error
-	if discoverErr == nil && source.Available && strings.TrimSpace(source.ChatDB) != "" {
-		if _, err := os.Stat(source.ChatDB); err == nil {
-			canaryErr = sourceCanary(ctx, source)
-			switch {
-			case canaryErr == nil:
-				state = control.SetupStateReady
-				accessState = control.SetupStateReady
-			case isPermissionError(canaryErr):
-				state = control.SetupStateReady
-				accessState = control.SetupStateNeedsAction
-			default:
-				state = control.SetupStateUnavailable
-				accessState = control.SetupStateUnavailable
-			}
-		} else if isPermissionError(err) {
-			state = control.SetupStateReady
-			accessState = control.SetupStateNeedsAction
-		} else if !os.IsNotExist(err) {
-			state = control.SetupStateUnavailable
-			accessState = control.SetupStateUnavailable
-		} else {
-			state = control.SetupStateNeedsAction
-			accessState = control.SetupStateNeedsAction
+	if discoverErr != nil {
+		if isPermissionError(discoverErr) {
+			return fullDiskAccessRequirement(control.SetupStateNeedsAction)
 		}
-	} else if discoverErr != nil && !isPermissionError(discoverErr) {
-		state = control.SetupStateUnavailable
-		accessState = control.SetupStateUnavailable
-	} else {
-		state = control.SetupStateNeedsAction
-		accessState = control.SetupStateNeedsAction
+		return nil
 	}
-	return []control.SetupRequirement{
-		control.NewSetupRequirement(
-			pairingID,
-			control.SetupKindPairing,
-			state,
-			"Open WhatsApp once so OpenTrawl can reuse its local session.",
-			control.SetupActionRunCommand,
-			openWhatsApp,
-		),
-		control.NewSetupRequirement(
-			accessID,
-			control.SetupKindFullDiskAccess,
-			accessState,
-			"OpenTrawl reads the local WhatsApp database.",
-			control.SetupActionOpenFullDiskAccess,
-			nil,
-		),
+	if !source.Available || strings.TrimSpace(source.ChatDB) == "" {
+		return nil
 	}
+	if _, err := os.Stat(source.ChatDB); err != nil {
+		if !isPermissionError(err) {
+			return nil
+		}
+		return fullDiskAccessRequirement(control.SetupStateNeedsAction)
+	}
+	if err := sourceCanary(ctx, source); err != nil {
+		if !isPermissionError(err) {
+			return nil
+		}
+		return fullDiskAccessRequirement(control.SetupStateNeedsAction)
+	}
+	return fullDiskAccessRequirement(control.SetupStateReady)
+}
+
+func fullDiskAccessRequirement(state control.SetupState) []control.SetupRequirement {
+	return []control.SetupRequirement{control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		state,
+		"OpenTrawl reads the local WhatsApp database.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)}
 }
 
 func statusCounts(status store.Status) []control.Count {
@@ -165,34 +141,34 @@ func sourceStoreCheck(source whatsappdb.Source, discoverErr, canaryErr error) tr
 	switch {
 	case discoverErr != nil && isPermissionError(discoverErr):
 		check.State = "ok"
-		check.Message = "WhatsApp Desktop store path found"
+		check.Message = "WhatsApp store path found"
 	case discoverErr != nil:
 		check.State = "fail"
 		check.Message = discoverErr.Error()
-		check.Remedy = "install WhatsApp Desktop, open it once, or set source in config.toml"
+		check.Remedy = "install WhatsApp, open it once, or set source in config.toml"
 	case !source.Available:
 		check.State = "missing"
-		check.Message = "WhatsApp Desktop store was not found"
-		check.Remedy = "install WhatsApp Desktop, open it once, or set source in config.toml"
+		check.Message = "WhatsApp store was not found"
+		check.Remedy = "install WhatsApp, open it once, or set source in config.toml"
 	case chatDB == "":
 		check.State = "missing"
-		check.Message = "WhatsApp Desktop chat database was not found"
-		check.Remedy = "open WhatsApp Desktop once, then run trawl whatsapp sync"
+		check.Message = "WhatsApp chat database was not found"
+		check.Remedy = "open WhatsApp once, then run trawl whatsapp sync"
 	case errors.Is(chatDBStatErr, os.ErrNotExist):
 		check.State = "missing"
-		check.Message = "WhatsApp Desktop chat database was not found"
-		check.Remedy = "open WhatsApp Desktop once, then run trawl whatsapp sync"
+		check.Message = "WhatsApp chat database was not found"
+		check.Remedy = "open WhatsApp once, then run trawl whatsapp sync"
 	case chatDBStatErr != nil && !isPermissionError(chatDBStatErr):
 		check.State = "fail"
 		check.Message = chatDBStatErr.Error()
-		check.Remedy = "check the WhatsApp Desktop store path, then run trawl whatsapp doctor again"
+		check.Remedy = "check the WhatsApp store path, then run trawl whatsapp doctor again"
 	case canaryErr != nil && !isPermissionError(canaryErr):
 		check.State = "fail"
-		check.Message = "cannot read WhatsApp Desktop database: " + canaryErr.Error()
-		check.Remedy = "close WhatsApp Desktop if it is busy, then run trawl whatsapp doctor again"
+		check.Message = "cannot read WhatsApp database: " + canaryErr.Error()
+		check.Remedy = "close WhatsApp if it is busy, then run trawl whatsapp doctor again"
 	default:
 		check.State = "ok"
-		check.Message = "WhatsApp Desktop store found"
+		check.Message = "WhatsApp store found"
 	}
 	return check
 }
@@ -260,7 +236,7 @@ func fullDiskAccessCheck(canaryErr error) (trawlkit.Check, bool) {
 		return check, true
 	case isPermissionError(canaryErr):
 		check.State = "fail"
-		check.Message = "cannot read the WhatsApp Desktop database"
+		check.Message = "cannot read the WhatsApp database"
 		check.Remedy = fullDiskAccessRemedy
 		return check, true
 	default:
