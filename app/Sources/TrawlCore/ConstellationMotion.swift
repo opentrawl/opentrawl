@@ -1,10 +1,16 @@
 import Foundation
 
-public struct ConstellationResponseEvent: Sendable, Equatable {
+public struct ConstellationTrafficEvent: Sendable, Equatable {
+  public let requestedSourceIDs: Set<String>
   public let usefulSourceIDs: Set<String>
   public let failedSourceIDs: Set<String>
 
-  public init(usefulSourceIDs: Set<String>, failedSourceIDs: Set<String>) {
+  public init(
+    requestedSourceIDs: Set<String>,
+    usefulSourceIDs: Set<String>,
+    failedSourceIDs: Set<String>
+  ) {
+    self.requestedSourceIDs = requestedSourceIDs
     self.usefulSourceIDs = usefulSourceIDs
     self.failedSourceIDs = failedSourceIDs
   }
@@ -12,35 +18,27 @@ public struct ConstellationResponseEvent: Sendable, Equatable {
 
 public enum ConstellationActivity: Sendable, Equatable {
   case idle
-  case searching(sourceID: String?, response: ConstellationResponseEvent?)
-  case syncing(sourceIDs: Set<String>, response: ConstellationResponseEvent?)
+  case searching(sourceID: String?)
+  case syncing(sourceIDs: Set<String>)
+  case failed(sourceIDs: Set<String>)
 
   public func requestedSourceIDs(allSourceIDs: Set<String>) -> Set<String> {
     switch self {
     case .idle:
       []
-    case .searching(let sourceID, _):
+    case .searching(let sourceID):
       sourceID.map { [$0] } ?? allSourceIDs
-    case .syncing(let sourceIDs, _):
+    case .syncing(let sourceIDs), .failed(let sourceIDs):
       sourceIDs
-    }
-  }
-
-  public var response: ConstellationResponseEvent? {
-    switch self {
-    case .idle:
-      nil
-    case .searching(_, let response), .syncing(_, let response):
-      response
     }
   }
 
   public var isWorkInProgress: Bool {
     switch self {
-    case .idle:
+    case .idle, .failed:
       false
-    case .searching(_, let response), .syncing(_, let response):
-      response == nil
+    case .searching, .syncing:
+      true
     }
   }
 }
@@ -51,17 +49,39 @@ public struct ConstellationTrafficPlan: Sendable, Equatable {
   public let failedSourceIDs: Set<String>
 
   public init(activity: ConstellationActivity, allSourceIDs: Set<String>) {
-    outboundSourceIDs = activity.requestedSourceIDs(allSourceIDs: allSourceIDs)
-    if let response = activity.response {
-      let failed = response.failedSourceIDs.intersection(outboundSourceIDs)
-      failedSourceIDs = failed
-      returningSourceIDs = response.usefulSourceIDs
-        .intersection(outboundSourceIDs)
-        .subtracting(failed)
+    outboundSourceIDs = activity.isWorkInProgress
+      ? activity.requestedSourceIDs(allSourceIDs: allSourceIDs)
+      : []
+    returningSourceIDs = []
+    if case .failed(let sourceIDs) = activity {
+      failedSourceIDs = sourceIDs.intersection(allSourceIDs)
     } else {
       failedSourceIDs = []
-      returningSourceIDs = []
     }
+  }
+
+  public init(event: ConstellationTrafficEvent, allSourceIDs: Set<String>) {
+    outboundSourceIDs = []
+    let requested = event.requestedSourceIDs.intersection(allSourceIDs)
+    let failed = event.failedSourceIDs.intersection(requested)
+    failedSourceIDs = failed
+    returningSourceIDs = event.usefulSourceIDs.intersection(requested).subtracting(failed)
+  }
+
+  public var affectedSourceIDs: Set<String> {
+    outboundSourceIDs.union(returningSourceIDs).union(failedSourceIDs)
+  }
+}
+
+public struct ConstellationPulseTiming: Sendable, Equatable {
+  public let delay: TimeInterval
+
+  public init(delay: TimeInterval) {
+    self.delay = delay
+  }
+
+  public func isVisible(elapsed: TimeInterval) -> Bool {
+    elapsed >= delay
   }
 }
 
@@ -179,13 +199,13 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   public static func forSourceCount(_ count: Int) -> Self {
     if count <= 12 {
       return Self(
-        hostSize: ConstellationPoint(x: 180, y: 164),
+        hostSize: ConstellationPoint(x: 156, y: 148),
         hostCentreYOffset: 29,
-        labelWidth: 140,
-        labelTop: 32,
-        labelHeight: 63,
-        minimumIconDiameter: 50,
-        maximumIconDiameter: 74,
+        labelWidth: 128,
+        labelTop: 30,
+        labelHeight: 59,
+        minimumIconDiameter: 48,
+        maximumIconDiameter: 68,
         diamondClearanceRadius: 66,
         spacing: 6
       )
@@ -204,15 +224,15 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
       )
     }
     return Self(
-      hostSize: ConstellationPoint(x: 120, y: 132),
-      hostCentreYOffset: 29,
-      labelWidth: 80,
-      labelTop: 27,
-      labelHeight: 54,
-      minimumIconDiameter: 40,
-      maximumIconDiameter: 46,
+      hostSize: ConstellationPoint(x: 104, y: 112),
+      hostCentreYOffset: 25,
+      labelWidth: 72,
+      labelTop: 24,
+      labelHeight: 47,
+      minimumIconDiameter: 38,
+      maximumIconDiameter: 44,
       diamondClearanceRadius: 66,
-      spacing: 6
+      spacing: 4
     )
   }
 
@@ -242,6 +262,16 @@ public struct ConstellationPlacement: Sendable, Equatable, Identifiable {
   public let labelRect: ConstellationRect
 }
 
+public enum ConstellationLayoutResult: Sendable, Equatable {
+  case placements([ConstellationPlacement])
+  case unsupported(sourceCount: Int, size: ConstellationPoint)
+
+  public var placements: [ConstellationPlacement] {
+    guard case .placements(let placements) = self else { return [] }
+    return placements
+  }
+}
+
 public struct ConstellationOrbitLayout: Sendable {
   public let sourceIDs: [String]
   public let size: ConstellationPoint
@@ -260,21 +290,21 @@ public struct ConstellationOrbitLayout: Sendable {
     self.metrics = metrics
   }
 
-  public func placements() -> [ConstellationPlacement] {
-    guard !sourceIDs.isEmpty else { return [] }
+  public func placementResult() -> ConstellationLayoutResult {
+    guard !sourceIDs.isEmpty else { return .placements([]) }
     let orderedIDs = sourceIDs.sorted()
     var available = candidates()
     guard available.count >= orderedIDs.count else {
-      let placements = fallbackPlacements(for: orderedIDs)
-      let placementsByID = Dictionary(uniqueKeysWithValues: placements.map { ($0.id, $0) })
-      return sourceIDs.compactMap { placementsByID[$0] }
+      return .unsupported(sourceCount: sourceIDs.count, size: size)
     }
 
     var selected: [(id: String, anchor: ConstellationPoint)] = []
     for sourceID in orderedIDs {
-      let anchor = available.max { lhs, rhs in
+      guard let anchor = available.max(by: { lhs, rhs in
         score(lhs, sourceID: sourceID, selected: selected) < score(rhs, sourceID: sourceID, selected: selected)
-      }!
+      }) else {
+        return .unsupported(sourceCount: sourceIDs.count, size: size)
+      }
       selected.append((sourceID, anchor))
       available.removeAll { metrics.hostRect(at: $0).expanded(by: metrics.spacing).intersects(metrics.hostRect(at: anchor)) }
     }
@@ -290,7 +320,15 @@ public struct ConstellationOrbitLayout: Sendable {
         )
       )
     })
-    return sourceIDs.compactMap { placementsByID[$0] }
+    let placements = sourceIDs.compactMap { placementsByID[$0] }
+    guard placements.count == sourceIDs.count else {
+      return .unsupported(sourceCount: sourceIDs.count, size: size)
+    }
+    return .placements(placements)
+  }
+
+  public func placements() -> [ConstellationPlacement] {
+    placementResult().placements
   }
 
   private var canvas: ConstellationRect {
@@ -409,34 +447,6 @@ public struct ConstellationOrbitLayout: Sendable {
     let orbitScore = 1 - abs(radius - preferredRadius)
     let tieBreak = unit("\(sourceID):\(candidate.x):\(candidate.y)", salt: 19)
     return minimumDistance + radialNovelty + orbitScore * 80 + tieBreak * 8
-  }
-
-  private func fallbackPlacements(for ids: [String]) -> [ConstellationPlacement] {
-    let minimumX = metrics.hostSize.x / 2
-    let maximumX = max(minimumX, size.x - metrics.hostSize.x / 2)
-    let minimumY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
-    let maximumY = max(minimumY, size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset)
-    return ids.map { id in
-      let candidate = ConstellationPoint(
-        x: minimumX + unit(id, salt: 23) * (maximumX - minimumX),
-        y: minimumY + unit(id, salt: 29) * (maximumY - minimumY)
-      )
-      let anchor: ConstellationPoint
-      if metrics.hostRect(at: candidate).intersects(diamond) {
-        let x = candidate.x < centre.x
-          ? max(minimumX, diamond.x - metrics.hostSize.x / 2 - metrics.spacing)
-          : min(maximumX, diamond.maxX + metrics.hostSize.x / 2 + metrics.spacing)
-        anchor = ConstellationPoint(x: x, y: candidate.y)
-      } else {
-        anchor = candidate
-      }
-      return ConstellationPlacement(
-        id: id,
-        anchor: anchor,
-        hostRect: metrics.hostRect(at: anchor),
-        labelRect: metrics.labelRect(at: anchor)
-      )
-    }
   }
 
   private func unit(_ value: String, salt: UInt64) -> Double {

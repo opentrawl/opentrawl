@@ -60,8 +60,7 @@ import Testing
 @Test func layoutsStayBalancedAndInsideSafeBoundsForEverySupportedCount() {
   let counts = [6, 9, 12, 16, 20]
   let sizes = [
-    ConstellationPoint(x: 800, y: 700),
-    ConstellationPoint(x: 900, y: 720),
+    ConstellationPoint(x: 744, y: 644),
   ]
 
   for size in sizes {
@@ -76,8 +75,9 @@ import Testing
         centre: centre,
         metrics: metrics
       )
-      let placements = layout.placements()
-      print("CONSTELLATION_OUTPUT size=\(size) count=\(count) placements=\(placements)")
+      let result = layout.placementResult()
+      let placements = result.placements
+      print("CONSTELLATION_OUTPUT size=\(size) count=\(count) result=\(result)")
 
       let canvas = ConstellationRect(x: 0, y: 0, width: size.x, height: size.y)
       let diamond = ConstellationRect(
@@ -118,49 +118,74 @@ import Testing
 
 @Test func activityPreservesTheCompleteUntouchedInputMeaning() {
   let allSources: Set<String> = ["calendar", "gmail", "photos"]
-  let usefulGmail = ConstellationResponseEvent(
+  let usefulGmail = ConstellationTrafficEvent(
+    requestedSourceIDs: ["gmail"],
     usefulSourceIDs: ["gmail"],
     failedSourceIDs: []
   )
-  let mixedSync = ConstellationResponseEvent(
+  let mixedSync = ConstellationTrafficEvent(
+    requestedSourceIDs: allSources,
     usefulSourceIDs: ["calendar", "gmail", "photos"],
     failedSourceIDs: ["photos"]
   )
   let inputs: [ConstellationActivity] = [
     .idle,
-    .searching(sourceID: nil, response: nil),
-    .searching(sourceID: "gmail", response: usefulGmail),
-    .syncing(sourceIDs: allSources, response: nil),
-    .syncing(sourceIDs: allSources, response: mixedSync),
+    .searching(sourceID: nil),
+    .searching(sourceID: "gmail"),
+    .syncing(sourceIDs: allSources),
+    .failed(sourceIDs: ["photos"]),
   ]
-  let outputs = inputs.map {
-    (
-      plan: ConstellationTrafficPlan(activity: $0, allSourceIDs: allSources),
-      isWorkInProgress: $0.isWorkInProgress,
-      response: $0.response
-    )
-  }
+  let outputs = inputs.map { ConstellationTrafficPlan(activity: $0, allSourceIDs: allSources) }
+  let usefulPlan = ConstellationTrafficPlan(event: usefulGmail, allSourceIDs: allSources)
+  let mixedPlan = ConstellationTrafficPlan(event: mixedSync, allSourceIDs: allSources)
 
-  print("CONSTELLATION_INPUT activities=\(inputs)")
-  print("CONSTELLATION_OUTPUT activitySemantics=\(outputs)")
+  print("CONSTELLATION_INPUT activities=\(inputs) events=\([usefulGmail, mixedSync])")
+  print("CONSTELLATION_OUTPUT activityPlans=\(outputs) eventPlans=\([usefulPlan, mixedPlan])")
 
-  #expect(outputs[0].plan == ConstellationTrafficPlan(activity: .idle, allSourceIDs: allSources))
-  #expect(outputs[0].plan.outboundSourceIDs.isEmpty)
-  #expect(outputs[1].plan.outboundSourceIDs == allSources)
-  #expect(outputs[1].plan.returningSourceIDs.isEmpty)
-  #expect(outputs[2].plan.outboundSourceIDs == Set(["gmail"]))
-  #expect(outputs[2].plan.returningSourceIDs == Set(["gmail"]))
-  #expect(outputs[3].plan.outboundSourceIDs == allSources)
-  #expect(outputs[3].plan.returningSourceIDs.isEmpty)
-  #expect(outputs[4].plan.outboundSourceIDs == allSources)
-  #expect(outputs[4].plan.returningSourceIDs == Set(["calendar", "gmail"]))
-  #expect(outputs[4].plan.failedSourceIDs == Set(["photos"]))
-  #expect(outputs[4].response == mixedSync)
+  #expect(outputs[0].outboundSourceIDs.isEmpty)
+  #expect(outputs[1].outboundSourceIDs == allSources)
+  #expect(outputs[2].outboundSourceIDs == Set(["gmail"]))
+  #expect(outputs[3].outboundSourceIDs == allSources)
+  #expect(outputs[4].failedSourceIDs == Set(["photos"]))
+  #expect(usefulPlan.outboundSourceIDs.isEmpty)
+  #expect(usefulPlan.returningSourceIDs == Set(["gmail"]))
+  #expect(mixedPlan.outboundSourceIDs.isEmpty)
+  #expect(mixedPlan.returningSourceIDs == Set(["calendar", "gmail"]))
+  #expect(mixedPlan.failedSourceIDs == Set(["photos"]))
   #expect(!inputs[0].isWorkInProgress)
   #expect(inputs[1].isWorkInProgress)
-  #expect(!inputs[2].isWorkInProgress)
+  #expect(inputs[2].isWorkInProgress)
   #expect(inputs[3].isWorkInProgress)
   #expect(!inputs[4].isWorkInProgress)
+}
+
+@Test func responseFailureWinsAndReducedMotionAffectsOnlyEventSources() {
+  let allSources: Set<String> = ["calendar", "gmail", "photos"]
+  let event = ConstellationTrafficEvent(
+    requestedSourceIDs: ["gmail", "photos"],
+    usefulSourceIDs: ["calendar", "gmail", "photos"],
+    failedSourceIDs: ["photos"]
+  )
+  let plan = ConstellationTrafficPlan(event: event, allSourceIDs: allSources)
+
+  print("CONSTELLATION_INPUT allSources=\(allSources) event=\(event)")
+  print("CONSTELLATION_OUTPUT responsePlan=\(plan) affected=\(plan.affectedSourceIDs)")
+
+  #expect(plan.outboundSourceIDs.isEmpty)
+  #expect(plan.returningSourceIDs == Set(["gmail"]))
+  #expect(plan.failedSourceIDs == Set(["photos"]))
+  #expect(plan.affectedSourceIDs == Set(["gmail", "photos"]))
+}
+
+@Test func delayedResponsePulseIsHiddenUntilItsBeginTime() {
+  let timing = ConstellationPulseTiming(delay: 0.12)
+  let samples: [TimeInterval] = [0, 0.119, 0.12, 0.5]
+  let output = samples.map { timing.isVisible(elapsed: $0) }
+
+  print("CONSTELLATION_INPUT timing=\(timing) elapsed=\(samples)")
+  print("CONSTELLATION_OUTPUT visible=\(output)")
+
+  #expect(output == [false, false, true, true])
 }
 
 @Test func reduceMotionKeepsTheCompleteStaticPosition() {
