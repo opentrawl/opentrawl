@@ -8,29 +8,47 @@ import (
 	"testing"
 )
 
-// A no-placemark resolution must survive the cache round trip: written by
-// ResolveProvider, accepted by validateComplete, served by ResolveCached.
-// The first version of this fix wrote entries the read path rejected, so
-// every run silently re-geocoded the same dead coordinate.
-func TestNoPlacemarkResultCacheRoundTrip(t *testing.T) {
+func TestNoPlacemarkStopsWithoutSuccessfulCache(t *testing.T) {
 	cacheDir := t.TempDir()
-	resolver := NewResolver(ResolverOptions{CacheDir: cacheDir, RadiusMeters: 150})
+	resolver := newResolver(ResolverOptions{CacheDir: cacheDir, RadiusMeters: 150}, func(context.Context, Input, float64) (Result, error) {
+		return Result{}, ErrProviderNoResult
+	})
 	input := Input{
 		AssetID:  "asset:no-placemark",
 		TakenAt:  "2025-10-06T12:00:00Z",
 		Location: Coordinate{Latitude: 0.00001, Longitude: -30.00001},
 	}
 
-	empty := emptyResult(input, 150)
-	if err := validateComplete(empty); err != nil {
-		t.Fatalf("validateComplete rejects the empty result: %v", err)
+	resolved := resolver.ResolveProvider(context.Background(), input)
+	if resolved.Result != nil || !errors.Is(resolved.ProviderErr, ErrProviderNoResult) {
+		t.Fatalf("no-result resolution = %+v", resolved)
 	}
-
 	path, err := cachePath(cacheDir, input, 150)
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := json.MarshalIndent(empty, "", "  ")
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("no-result cache file error = %v", err)
+	}
+}
+
+func TestLegacyNoPlacemarkCacheIsRejected(t *testing.T) {
+	cacheDir := t.TempDir()
+	resolver := NewResolver(ResolverOptions{CacheDir: cacheDir, RadiusMeters: 150})
+	input := Input{Location: Coordinate{Latitude: 0.00001, Longitude: -30.00001}}
+	legacy := Result{
+		Input:        input,
+		Provider:     "apple",
+		Source:       "apple_corelocation_mapkit",
+		RadiusMeters: 150,
+		POIStatus:    POIStatusNone,
+		POIReason:    NoPlacemarkReason,
+	}
+	path, err := cachePath(cacheDir, input, 150)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := json.MarshalIndent(legacy, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,11 +57,8 @@ func TestNoPlacemarkResultCacheRoundTrip(t *testing.T) {
 	}
 
 	resolved := resolver.ResolveCached(context.Background(), input)
-	if resolved.Result == nil || resolved.CacheStatus != "hit" {
-		t.Fatalf("cached no-placemark result not served: %+v", resolved)
-	}
-	if resolved.Result.Address != nil || resolved.Result.POIReason != NoPlacemarkReason {
-		t.Fatalf("round-tripped result = %+v", resolved.Result)
+	if resolved.Result != nil || resolved.CacheStatus != "miss" {
+		t.Fatalf("legacy no-placemark cache = %+v", resolved)
 	}
 }
 

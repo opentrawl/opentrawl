@@ -27,6 +27,9 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 			cached.RadiusMeters = radius
 		}
 		NormalizeResult(cached)
+		if err := validateComplete(*cached); err != nil {
+			return Result{}, err
+		}
 		cached.Cached = true
 		cached.CacheStatus = "hit"
 		return *cached, nil
@@ -117,7 +120,7 @@ func rawAppleResult(ctx context.Context, input Input, radius float64) (Result, e
 }
 
 func validateComplete(result Result) error {
-	if result.Address == nil && result.POIReason != NoPlacemarkReason {
+	if result.Address == nil {
 		return errors.New("apple place context incomplete: missing reverse-geocoded address")
 	}
 	if err := validatePOIStatus(result.POIStatus); err != nil {

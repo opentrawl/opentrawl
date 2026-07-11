@@ -13,9 +13,8 @@ const (
 	POIStatusNone          = "none"
 	POIStatusProviderError = "provider_error"
 
-	// NoPlacemarkReason marks a cached result where Apple completed the
-	// reverse geocode and has no placemark for the coordinate. It is the
-	// mechanical marker that lets cache validation accept a nil address.
+	// NoPlacemarkReason is retained for reading legacy records. A record with
+	// this marker is incomplete and must never enter or satisfy the cache.
 	NoPlacemarkReason = "apple_reverse_geocode_no_placemark"
 )
 

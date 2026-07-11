@@ -34,7 +34,8 @@ type Crawler struct {
 }
 
 type Config struct {
-	LibraryPath string `toml:"library_path"`
+	LibraryPath   string              `toml:"library_path"`
+	PlaceEvidence PlaceEvidenceConfig `toml:"place_evidence"`
 }
 
 var (

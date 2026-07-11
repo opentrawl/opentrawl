@@ -3,7 +3,6 @@ package place
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,6 +28,7 @@ type Resolver struct {
 	manifestOnce  sync.Once
 	manifest      map[string]backfillManifestEntry
 	manifestError error
+	resolveApple  func(context.Context, Input, float64) (Result, error)
 }
 
 type ResolveResult struct {
@@ -49,6 +49,10 @@ type backfillManifestEntry struct {
 }
 
 func NewResolver(opts ResolverOptions) *Resolver {
+	return newResolver(opts, rawAppleResult)
+}
+
+func newResolver(opts ResolverOptions, resolveApple func(context.Context, Input, float64) (Result, error)) *Resolver {
 	radius := opts.RadiusMeters
 	if radius <= 0 {
 		radius = defaultRadiusMeters
@@ -58,10 +62,11 @@ func NewResolver(opts ResolverOptions) *Resolver {
 		startEvery = time.Second
 	}
 	return &Resolver{
-		cacheDir:    strings.TrimSpace(opts.CacheDir),
-		backfillDir: strings.TrimSpace(opts.BackfillDir),
-		radius:      radius,
-		startEvery:  startEvery,
+		cacheDir:     strings.TrimSpace(opts.CacheDir),
+		backfillDir:  strings.TrimSpace(opts.BackfillDir),
+		radius:       radius,
+		startEvery:   startEvery,
+		resolveApple: resolveApple,
 	}
 }
 
@@ -103,14 +108,7 @@ func (r *Resolver) ResolveProvider(ctx context.Context, input Input) ResolveResu
 	if err := r.waitProvider(ctx); err != nil {
 		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error()}
 	}
-	result, err := rawAppleResult(ctx, input, r.radius)
-	if errors.Is(err, ErrProviderNoResult) {
-		// Apple resolved the coordinate to nothing. Cache the empty result
-		// so the coordinate is never re-geocoded and the photo cards with
-		// GPS but no address.
-		result = emptyResult(input, r.radius)
-		err = nil
-	}
+	result, err := r.resolveApple(ctx, input, r.radius)
 	if err != nil {
 		return ResolveResult{CacheStatus: "miss", ProviderAttempt: true, ProviderError: err.Error(), ProviderErr: err}
 	}
@@ -247,18 +245,4 @@ func loadResolvedResult(path string, input Input, radius float64) (Result, bool)
 	}
 	result.POICandidates = calibrateCandidates(input, radius, result.POICandidates)
 	return result, validateComplete(result) == nil
-}
-
-func emptyResult(input Input, radius float64) Result {
-	result := Result{
-		Input:        input,
-		Provider:     "apple",
-		Source:       "apple_corelocation_mapkit",
-		RadiusMeters: radius,
-		GeneratedAt:  time.Now().UTC(),
-		POIStatus:    POIStatusNone,
-		POIReason:    NoPlacemarkReason,
-	}
-	NormalizeResult(&result)
-	return result
 }

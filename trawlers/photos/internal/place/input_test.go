@@ -94,6 +94,24 @@ func TestRunAcceptsCachedResultInputWithoutProvider(t *testing.T) {
 	}
 }
 
+func TestRunRejectsLegacyNoPlacemarkResultInput(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "place.json")
+	data := []byte(`{
+	  "input": {"location": {"latitude": 52.379189, "longitude": 4.899431}},
+	  "provider": "apple",
+	  "source": "apple_corelocation_mapkit",
+	  "radius_meters": 150,
+	  "poi_status": "none",
+	  "poi_reason": "apple_reverse_geocode_no_placemark"
+	}`)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Run(context.Background(), Options{InputPath: path}); err == nil {
+		t.Fatal("legacy no-placemark result was accepted as a cache hit")
+	}
+}
+
 func TestRenderCardKeepsAddressAndCapsPOIs(t *testing.T) {
 	card := RenderCard(Result{
 		RadiusMeters: 150,

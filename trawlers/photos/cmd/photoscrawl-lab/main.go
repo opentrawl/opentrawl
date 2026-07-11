@@ -7,13 +7,18 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
+	photoscrawl "github.com/opentrawl/opentrawl/trawlers/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/evalcard"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
+	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -39,6 +44,8 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	switch args[0] {
+	case "place-evidence":
+		return runPlaceEvidence(ctx, paths, args[1:])
 	case "place-context":
 		fs := flag.NewFlagSet("place-context", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -114,7 +121,88 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-context|eval-card|known-places>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-context|eval-card|known-places>")}
+}
+
+func runPlaceEvidence(ctx context.Context, paths archive.Paths, args []string) error {
+	return runPlaceEvidenceWith(ctx, paths, args, os.Stdout, place.RunEvidence)
+}
+
+func runPlaceEvidenceWith(ctx context.Context, paths archive.Paths, args []string, writer io.Writer, runner func(context.Context, place.EvidenceOptions) (place.EvidenceResult, error)) error {
+	fs := flag.NewFlagSet("place-evidence", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	inputPath := fs.String("input", "-", "JSON place input path, or stdin")
+	coordinateVariant := fs.String("coordinate-variant", "", "explicit coordinate provenance label")
+	radius := fs.Float64("radius", 0, "exact nearby search radius in metres")
+	outputDir := fs.String("out", "", "private evidence output directory")
+	jsonFlag := fs.Bool("json", false, "write JSON")
+	formatFlag := fs.String("format", "", "output format")
+	if err := fs.Parse(args); err != nil {
+		return output.UsageError{Err: err}
+	}
+	format, err := output.Resolve(*formatFlag, *jsonFlag)
+	if err != nil {
+		return err
+	}
+	config, err := loadPhotosLabConfig(paths.ConfigPath)
+	if err != nil {
+		return err
+	}
+	configured, err := config.ConfiguredGeoapifyEvidence()
+	if err != nil {
+		return err
+	}
+	credential := strings.TrimSpace(os.Getenv(configured.CredentialEnv))
+	if credential == "" {
+		return fmt.Errorf("configured place evidence credential %s is unavailable", configured.CredentialEnv)
+	}
+	input, err := place.LoadEvidenceInput(*inputPath)
+	if err != nil {
+		return err
+	}
+	out := strings.TrimSpace(*outputDir)
+	if out == "" {
+		out = filepath.Join(paths.EvalRootDir(), "place-evidence", time.Now().UTC().Format("20060102T150405.000000000Z"))
+	}
+	result, err := runner(ctx, place.EvidenceOptions{
+		Input:             input,
+		CoordinateVariant: *coordinateVariant,
+		RadiusMeters:      *radius,
+		OutputDir:         out,
+		CacheDir:          filepath.Join(paths.CacheDir, "place-evidence-canary"),
+		Geoapify: place.ConfiguredGeoapifyEvidence{
+			ProviderIdentity:    configured.ProviderIdentity,
+			ReverseEndpoint:     configured.ReverseEndpoint,
+			NearbyEndpoint:      configured.NearbyEndpoint,
+			CredentialReference: configured.CredentialEnv,
+			CredentialParameter: configured.CredentialParameter,
+			Credential:          credential,
+			NearbyCategories:    append([]string(nil), configured.NearbyCategories...),
+			ReverseLimit:        configured.ReverseLimit,
+			NearbyLimit:         configured.NearbyLimit,
+			HTTPClient: &http.Client{
+				Timeout: 30 * time.Second,
+				CheckRedirect: func(*http.Request, []*http.Request) error {
+					return http.ErrUseLastResponse
+				},
+			},
+		},
+	})
+	if err != nil {
+		return err
+	}
+	return output.Write(writer, format, "place_evidence", result)
+}
+
+func loadPhotosLabConfig(path string) (photoscrawl.Config, error) {
+	var config photoscrawl.Config
+	if err := ckconfig.LoadTOML(path, &config); err != nil {
+		return photoscrawl.Config{}, fmt.Errorf("load Photos config: %w", err)
+	}
+	if err := config.Validate(); err != nil {
+		return photoscrawl.Config{}, err
+	}
+	return config, nil
 }
 
 func runKnownPlaces(ctx context.Context, paths archive.Paths, args []string) error {
