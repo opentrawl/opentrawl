@@ -5,7 +5,7 @@ import TrawlCore
 struct SearchResultsList: View {
   let phase: SearchPhase
   let results: [SearchHit]
-  let sourceDisplayNames: [String: String]
+  let sourceResolver: SearchSourceResolver
   let failureGuidance: String?
   @Binding var selectedResultID: SearchHit.ID?
   @FocusState.Binding var focus: SearchFocus?
@@ -18,7 +18,7 @@ struct SearchResultsList: View {
         List(results, selection: $selectedResultID) { hit in
           SearchResultRow(
             hit: hit,
-            sourceDisplayName: sourceDisplayNames[hit.sourceID] ?? "Unknown source"
+            sourceDisplayName: sourceResolver.displayNameOrUnavailable(for: hit.sourceID)
           )
             .tag(hit.id)
         }

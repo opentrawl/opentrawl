@@ -32,9 +32,7 @@ struct RootView: View {
         SearchOverlay(
           client: client,
           initialScope: searchScope,
-          sourceDisplayNames: Dictionary(
-            uniqueKeysWithValues: model.sources.map { ($0.id, $0.name) }
-          ),
+          sourceStatuses: model.sources,
           onActivityChange: { searchActivity = $0 },
           onDismiss: dismissSearch
         )
