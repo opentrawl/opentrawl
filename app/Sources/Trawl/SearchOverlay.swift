@@ -4,6 +4,7 @@ import TrawlCore
 
 struct SearchOverlay: View {
   let onDismiss: () -> Void
+  let onActivityChange: (ConstellationActivity) -> Void
   private let sourceDisplayNames: [String: String]
 
   @State private var scope: SourceStatus?
@@ -15,6 +16,7 @@ struct SearchOverlay: View {
     client: any TrawlClient,
     initialScope: SourceStatus?,
     sourceDisplayNames: [String: String] = [:],
+    onActivityChange: @escaping (ConstellationActivity) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
     let model = SearchModel(client: client)
@@ -23,6 +25,7 @@ struct SearchOverlay: View {
       names[initialScope.id] = initialScope.name
     }
     self.onDismiss = onDismiss
+    self.onActivityChange = onActivityChange
     self.sourceDisplayNames = names
     _scope = State(initialValue: initialScope)
     _model = State(initialValue: model)
@@ -57,12 +60,18 @@ struct SearchOverlay: View {
       guard let hit = model.results.first(where: { $0.id == resultID }) else { return }
       Task { await model.open(hit) }
     }
+    .onChange(of: model.phase) { _, _ in
+      reportActivity()
+    }
     .onKeyPress(.escape) {
       onDismiss()
       return .handled
     }
     .task(id: SearchKey(query: interaction.query, sourceID: interaction.sourceID)) {
       await model.search(interaction.query, source: interaction.sourceID)
+    }
+    .onDisappear {
+      onActivityChange(.idle)
     }
   }
 
@@ -82,5 +91,19 @@ struct SearchOverlay: View {
   private func openSelectedResult() {
     guard let hit = interaction.resultForReturn() else { return }
     Task { await model.open(hit) }
+  }
+
+  private func reportActivity() {
+    switch model.phase {
+    case .loading:
+      onActivityChange(.searching(sourceID: interaction.sourceID))
+    case .partial, .failed:
+      let failedSourceIDs = Set(model.failures.map(\.sourceID))
+      onActivityChange(
+        failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs)
+      )
+    case .idle, .complete, .timedOut:
+      onActivityChange(.idle)
+    }
   }
 }

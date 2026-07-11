@@ -11,6 +11,7 @@ struct RootView: View {
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: SourceStatus?
   @State private var isSearching = false
+  @State private var searchActivity: ConstellationActivity = .idle
 
   var body: some View {
     ZStack {
@@ -28,9 +29,15 @@ struct RootView: View {
           .contentShape(.rect)
           .onTapGesture(perform: dismissSearch)
           .accessibilityHidden(true)
-        SearchOverlay(client: client, initialScope: searchScope) {
-          dismissSearch()
-        }
+        SearchOverlay(
+          client: client,
+          initialScope: searchScope,
+          sourceDisplayNames: Dictionary(
+            uniqueKeysWithValues: model.sources.map { ($0.id, $0.name) }
+          ),
+          onActivityChange: { searchActivity = $0 },
+          onDismiss: dismissSearch
+        )
         .padding(TrawlDesign.contentInset)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
@@ -73,7 +80,7 @@ struct RootView: View {
       ZStack(alignment: .top) {
         ConstellationView(
           sources: model.sources,
-          isSyncing: model.isSyncing,
+          activity: constellationActivity,
           onSelectEverything: { showSearch(scope: nil) },
           onSelectSource: { showSearch(scope: $0) }
         )
@@ -114,7 +121,15 @@ struct RootView: View {
   }
 
   private func dismissSearch() {
+    searchActivity = .idle
     isSearching = false
+  }
+
+  private var constellationActivity: ConstellationActivity {
+    if model.isSyncing {
+      return .syncing(sourceIDs: Set(model.sources.map(\.id)))
+    }
+    return searchActivity
   }
 }
 
