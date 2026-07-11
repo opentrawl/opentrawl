@@ -1,11 +1,15 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/color"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,9 +38,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	imagePath := filepath.Join(t.TempDir(), "fixture.jpeg")
-	if err := os.WriteFile(imagePath, []byte("fixture image bytes"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSyntheticImage(t, imagePath)
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/api/generate" {
 			t.Fatalf("path = %q", r.URL.Path)
@@ -306,6 +308,7 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldExport := exportOriginalResource
+	exportedImageBytes := syntheticImageBytes(t)
 	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destinationPath string, allowNetwork bool) error {
 		if query.LocalIdentifier != "remote-original-asset" || query.OriginalFilename != "synthetic-menu.jpeg" || !allowNetwork {
 			t.Fatalf("export args = %#v %t", query, allowNetwork)
@@ -313,7 +316,7 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 			return err
 		}
-		return os.WriteFile(destinationPath, []byte("exported fixture image bytes"), 0o644)
+		return os.WriteFile(destinationPath, exportedImageBytes, 0o600)
 	}
 	defer func() { exportOriginalResource = oldExport }()
 
@@ -375,24 +378,136 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.PhotoKitExportBytes != int64(len("exported fixture image bytes")) {
+	if result.PhotoKitExportBytes != int64(len(exportedImageBytes)) {
 		t.Fatalf("PhotoKit export bytes = %d", result.PhotoKitExportBytes)
 	}
 	if files := countOriginalCacheMedia(t, paths.OriginalsCacheDir()); files != 1 {
 		t.Fatalf("originals cache files after classify = %d", files)
 	}
 	foundOriginal := false
+	foundMetadata := false
 	for _, event := range logs.events {
 		if event.event == "original_resolved" &&
 			strings.Contains(event.message, "source=photokit_original_export") &&
-			strings.Contains(event.message, "bytes=28") &&
+			strings.Contains(event.message, fmt.Sprintf("bytes=%d", len(exportedImageBytes))) &&
 			strings.Contains(event.message, "sha256=") {
 			foundOriginal = true
+		}
+		if event.event == "image_metadata_ready" &&
+			strings.Contains(event.message, "cache=extracted") &&
+			strings.Contains(event.message, "fields=") &&
+			strings.Contains(event.message, "excluded=") {
+			foundMetadata = true
 		}
 	}
 	if !foundOriginal {
 		t.Fatalf("privacy-safe original proof missing from logs: %#v", logs.events)
 	}
+	if !foundMetadata {
+		t.Fatalf("privacy-safe metadata proof missing from logs: %#v", logs.events)
+	}
+}
+
+func TestClassifyReleasesOriginalLeaseWhenMetadataExtractionFails(t *testing.T) {
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+
+	originalBytes := syntheticImageBytes(t)
+	oldExport := exportOriginalResource
+	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destinationPath string, allowNetwork bool) error {
+		if query.LocalIdentifier != "metadata-extractor-failure" || !allowNetwork {
+			t.Fatalf("export args = %#v %t", query, allowNetwork)
+		}
+		return os.WriteFile(destinationPath, originalBytes, 0o600)
+	}
+	t.Cleanup(func() { exportOriginalResource = oldExport })
+
+	oldExtract := extractImageMetadata
+	extractImageMetadata = func(context.Context, string) ([]byte, error) {
+		return nil, errors.New("synthetic ImageIO failure")
+	}
+	t.Cleanup(func() { extractImageMetadata = oldExtract })
+
+	const modificationDate = "2026-05-27T12:01:00Z"
+	provider := fakeProvider{snapshot: photos.LibrarySnapshot{
+		Provider:            "fake",
+		PhotosVersion:       "fixture",
+		AuthorizationStatus: "authorized",
+		Assets: []photos.Asset{{
+			LocalIdentifier:  "metadata-extractor-failure",
+			MediaType:        "image",
+			MediaSubtypes:    "0",
+			CreationDate:     "2026-05-27T12:00:00Z",
+			ModificationDate: modificationDate,
+			Width:            100,
+			Height:           80,
+			Resources: []photos.Resource{{
+				Type:             "photo",
+				UTI:              "public.jpeg",
+				OriginalFilename: "metadata-extractor-failure.jpeg",
+				Availability:     "remote",
+				NeedsDownload:    true,
+			}},
+		}},
+	}}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    provider,
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	logs := &recordingClassifyLogSink{}
+	result, err := Classify(ctx, paths, ClassifyOptions{
+		Model:    "fixture-vision",
+		ModelURL: fixtureModelURL,
+		LogSink:  logs,
+		Now:      fixedClock("2026-05-28T10:15:00Z"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ContentFailedModel != 1 || result.PhotoKitExports != 1 || result.Processed != 1 {
+		t.Fatalf("classify result = %#v", result)
+	}
+	assertRecordedLogEvent(t, logs, "image_metadata_failed")
+
+	// A failed extractor must not retain the resolver's shared cache lease.
+	// Resolving the same original in a fresh resolver would time out here if
+	// prepare deferred release only after successful metadata extraction.
+	resolver, err := photos.NewOriginalResolver(paths.OriginalsCacheDir(), func(context.Context, photos.OriginalExportQuery, string, bool) error {
+		t.Fatal("checked original cache reached exporter after metadata failure")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	reacquireContext, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	resolved, err := resolver.Resolve(reacquireContext, photos.OriginalRequest{
+		SourceLibraryID:  photos.SourceLibraryID(libraryPath),
+		ModificationDate: modificationDate,
+		AllowNetwork:     true,
+		Query: photos.OriginalExportQuery{
+			LocalIdentifier:  "metadata-extractor-failure",
+			CreationDate:     "2026-05-27T12:00:00Z",
+			Width:            100,
+			Height:           80,
+			OriginalFilename: "metadata-extractor-failure.jpeg",
+			OriginalUTI:      "public.jpeg",
+		},
+	})
+	if err != nil {
+		t.Fatalf("reacquire checked original cache: %v", err)
+	}
+	if resolved.Source != photos.OriginalSourceCache || resolved.Lease == nil {
+		t.Fatalf("reacquired original = %#v", resolved)
+	}
+	resolved.Lease.Close()
 }
 
 func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
@@ -403,9 +518,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 		t.Fatal(err)
 	}
 	parseImagePath := filepath.Join(t.TempDir(), "parse.jpeg")
-	if err := os.WriteFile(parseImagePath, []byte("parse fixture image bytes"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSyntheticImage(t, parseImagePath)
 	videoPath := filepath.Join(t.TempDir(), "clip.mov")
 	if err := os.WriteFile(videoPath, []byte("video fixture bytes"), 0o644); err != nil {
 		t.Fatal(err)
@@ -740,9 +853,7 @@ func TestClassifyModelRetriesRateLimitOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	imagePath := filepath.Join(t.TempDir(), "fixture.jpeg")
-	if err := os.WriteFile(imagePath, []byte("fixture image bytes"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSyntheticImage(t, imagePath)
 	var calls atomic.Int32
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if calls.Add(1) == 1 {
@@ -1664,9 +1775,7 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	assets := make([]photos.Asset, 0, 12)
 	for i := 0; i < 12; i++ {
 		imagePath := filepath.Join(t.TempDir(), fmt.Sprintf("fixture-%d.jpeg", i))
-		if err := os.WriteFile(imagePath, []byte("fixture image bytes"), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		writeSyntheticImage(t, imagePath)
 		assets = append(assets, photos.Asset{
 			LocalIdentifier: fmt.Sprintf("quota-asset-%d", i),
 			MediaType:       "image",
@@ -1734,4 +1843,33 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	if failed != 0 || queued != 12 {
 		t.Fatalf("queue after quota exhaustion: failed=%d retryable=%d, want failed=0 retryable=12", failed, queued)
 	}
+}
+
+func writeSyntheticImage(t *testing.T, path string) {
+	t.Helper()
+	if err := os.WriteFile(path, syntheticImageBytes(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func syntheticImageBytes(t *testing.T) []byte {
+	t.Helper()
+	return syntheticImageBytesWithAccent(t, color.NRGBA{R: 240, G: 192, B: 48, A: 255})
+}
+
+func syntheticAlternateImageBytes(t *testing.T) []byte {
+	t.Helper()
+	return syntheticImageBytesWithAccent(t, color.NRGBA{R: 72, G: 184, B: 120, A: 255})
+}
+
+func syntheticImageBytesWithAccent(t *testing.T, accent color.NRGBA) []byte {
+	t.Helper()
+	fixture := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	fixture.Set(0, 0, color.NRGBA{R: 24, G: 48, B: 96, A: 255})
+	fixture.Set(1, 1, accent)
+	var encoded bytes.Buffer
+	if err := jpeg.Encode(&encoded, fixture, &jpeg.Options{Quality: 90}); err != nil {
+		t.Fatal(err)
+	}
+	return encoded.Bytes()
 }

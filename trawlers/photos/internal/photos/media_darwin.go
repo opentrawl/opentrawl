@@ -9,7 +9,9 @@ package photos
 int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut, char **errorDomainOut, long long *errorCodeOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
-char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut);
+char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut);
+char *photoscrawl_image_metadata_typed_fixture_json(char **errorOut);
+int photoscrawl_write_image_metadata_fixture(const char *destinationPath, char **errorOut);
 */
 import "C"
 
@@ -197,7 +199,7 @@ func RenderCanonicalJPEG(ctx context.Context, sourcePath, destinationPath string
 	return nil
 }
 
-func ImageMetadata(ctx context.Context, sourcePath string) (map[string]any, error) {
+func ImageMetadataRecord(ctx context.Context, sourcePath string) ([]byte, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -207,7 +209,7 @@ func ImageMetadata(ctx context.Context, sourcePath string) (map[string]any, erro
 	defer C.free(unsafe.Pointer(cSource))
 
 	var cErr *C.char
-	cJSON := C.photoscrawl_image_metadata_json(cSource, &cErr)
+	cJSON := C.photoscrawl_image_metadata_record_json(cSource, &cErr)
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 		return nil, errors.New(C.GoString(cErr))
@@ -217,8 +219,46 @@ func ImageMetadata(ctx context.Context, sourcePath string) (map[string]any, erro
 	}
 	defer C.free(unsafe.Pointer(cJSON))
 
+	return []byte(C.GoString(cJSON)), nil
+}
+
+func writeImageMetadataFixtureForTest(destinationPath string) error {
+	cDestination := C.CString(destinationPath)
+	defer C.free(unsafe.Pointer(cDestination))
+	var cErr *C.char
+	if C.photoscrawl_write_image_metadata_fixture(cDestination, &cErr) == 0 {
+		if cErr != nil {
+			defer C.free(unsafe.Pointer(cErr))
+			return errors.New(C.GoString(cErr))
+		}
+		return errors.New("write synthetic ImageIO metadata fixture")
+	}
+	return nil
+}
+
+func imageMetadataTypedFixtureForTest() ([]byte, error) {
+	var cErr *C.char
+	cJSON := C.photoscrawl_image_metadata_typed_fixture_json(&cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return nil, errors.New(C.GoString(cErr))
+	}
+	if cJSON == nil {
+		return nil, errors.New("typed ImageIO metadata fixture returned no JSON")
+	}
+	defer C.free(unsafe.Pointer(cJSON))
+	return []byte(C.GoString(cJSON)), nil
+}
+
+// ImageMetadata keeps the research harness on the same complete extractor as
+// production while it still accepts generic JSON.
+func ImageMetadata(ctx context.Context, sourcePath string) (map[string]any, error) {
+	record, err := ImageMetadataRecord(ctx, sourcePath)
+	if err != nil {
+		return nil, err
+	}
 	var out map[string]any
-	if err := json.Unmarshal([]byte(C.GoString(cJSON)), &out); err != nil {
+	if err := json.Unmarshal(record, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
