@@ -102,13 +102,18 @@ struct SearchOverlay: View {
   private func reportActivity() {
     switch model.phase {
     case .loading:
-      onActivityChange(.searching(sourceID: interaction.sourceID))
-    case .partial, .failed:
-      let failedSourceIDs = Set(model.failures.map(\.sourceID))
+      onActivityChange(.searching(sourceID: interaction.sourceID, response: nil))
+    case .complete, .partial, .failed:
       onActivityChange(
-        failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs)
+        .searching(
+          sourceID: interaction.sourceID,
+          response: ConstellationResponseEvent(
+            usefulSourceIDs: Set(model.results.map(\.sourceID)),
+            failedSourceIDs: Set(model.failures.map(\.sourceID))
+          )
+        )
       )
-    case .idle, .complete, .timedOut:
+    case .idle, .timedOut:
       onActivityChange(.idle)
     }
   }

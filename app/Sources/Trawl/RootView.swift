@@ -125,7 +125,22 @@ struct RootView: View {
 
   private var constellationActivity: ConstellationActivity {
     if model.isSyncing {
-      return .syncing(sourceIDs: Set(model.sources.map(\.id)))
+      return .syncing(sourceIDs: Set(model.sources.map(\.id)), response: nil)
+    }
+    if !model.syncResults.isEmpty || !model.syncFailures.isEmpty {
+      let failedSourceIDs = Set(model.syncFailures.map(\.sourceID))
+      let usefulSourceIDs = Set(
+        model.syncResults.lazy
+          .filter { $0.outcome != .failed }
+          .map(\.sourceID)
+      )
+      return .syncing(
+        sourceIDs: Set(model.sources.map(\.id)),
+        response: ConstellationResponseEvent(
+          usefulSourceIDs: usefulSourceIDs,
+          failedSourceIDs: failedSourceIDs
+        )
+      )
     }
     return searchActivity
   }
