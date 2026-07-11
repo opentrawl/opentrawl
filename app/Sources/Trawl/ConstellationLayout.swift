@@ -1,11 +1,13 @@
 import CoreGraphics
 import Foundation
 import TrawlClient
+import TrawlCore
 
 enum ConstellationGeometry {
   static let sourceContentWidth: CGFloat = 154
   static let sourceLabelAllowance: CGFloat = 58
   static let sourceHostSize = CGSize(width: 194, height: 164)
+  static let iconAnchorOffset = sourceLabelAllowance / 2
   static let horizontalMotion = CGFloat(12)...CGFloat(20)
   static let verticalMotion = CGFloat(8)...CGFloat(14)
 
@@ -14,12 +16,12 @@ enum ConstellationGeometry {
   }
 
   static var topClearance: CGFloat {
-    sourceHostSize.height / 2 - TrawlDesign.sourceGraphAnchorOffset
+    sourceHostSize.height / 2 - iconAnchorOffset
       + verticalMotion.upperBound
   }
 
   static var bottomClearance: CGFloat {
-    sourceHostSize.height / 2 + TrawlDesign.sourceGraphAnchorOffset
+    sourceHostSize.height / 2 + iconAnchorOffset
       + verticalMotion.upperBound
   }
 }
@@ -30,6 +32,8 @@ struct MovingSource: Identifiable {
   let diameter: CGFloat
 
   var id: String { source.id }
+
+  var motion: ConstellationMotion { ConstellationMotion(sourceID: source.id) }
 }
 
 struct ConstellationSnapshot {
@@ -220,75 +224,15 @@ struct ConstellationLayout {
     centre: CGPoint
   ) -> [CGPoint] {
     guard !sources.isEmpty else { return [] }
-    if sources.count <= 12 {
-      return ringPoints(
-        sources: sources,
-        size: size,
-        centre: centre,
-        radiusX: 0.38,
-        radiusY: 0.39,
-        angleOffset: -.pi / 2
-      )
-    }
-
-    let outerCount = Int(ceil(Double(sources.count) * 0.64))
-    let outer = ringPoints(
-      sources: Array(sources.prefix(outerCount)),
-      size: size,
-      centre: centre,
-      radiusX: 0.39,
-      radiusY: 0.40,
-      angleOffset: -.pi / 2
+    let layout = ConstellationOrbitLayout(
+      sourceIDs: sources.map(\.id),
+      size: ConstellationPoint(x: Double(size.width), y: Double(size.height)),
+      centre: ConstellationPoint(x: Double(centre.x), y: Double(centre.y)),
+      horizontalClearance: Double(ConstellationGeometry.horizontalClearance),
+      topClearance: Double(ConstellationGeometry.topClearance),
+      bottomClearance: Double(ConstellationGeometry.bottomClearance)
     )
-    let innerSources = Array(sources.dropFirst(outerCount))
-    let inner = ringPoints(
-      sources: innerSources,
-      size: size,
-      centre: centre,
-      radiusX: 0.27,
-      radiusY: 0.28,
-      angleOffset: -.pi / 2 + .pi / Double(max(innerSources.count, 1))
-    )
-    return outer + inner
-  }
-
-  private static func ringPoints(
-    sources: [SourceStatus],
-    size: CGSize,
-    centre: CGPoint,
-    radiusX: CGFloat,
-    radiusY: CGFloat,
-    angleOffset: Double
-  ) -> [CGPoint] {
-    let horizontalCapacity = max(
-      0,
-      min(
-        centre.x - ConstellationGeometry.horizontalClearance,
-        size.width - ConstellationGeometry.horizontalClearance - centre.x
-      )
-    )
-    let verticalCapacity = max(
-      0,
-      min(
-        centre.y - ConstellationGeometry.topClearance,
-        size.height - ConstellationGeometry.bottomClearance - centre.y
-      )
-    )
-    let horizontalRadius = min(size.width * radiusX, horizontalCapacity)
-    let verticalRadius = min(size.height * radiusY, verticalCapacity)
-
-    return sources.enumerated().map { index, source in
-      let angleJitter = (stableUnit(source.id, salt: 1) - 0.5) * 0.19
-      let radiusScale = CGFloat(0.94 + stableUnit(source.id, salt: 2) * 0.06)
-      let angle =
-        angleOffset
-        + 2 * .pi * Double(index) / Double(sources.count)
-        + angleJitter
-      return CGPoint(
-        x: centre.x + cos(angle) * horizontalRadius * radiusScale,
-        y: centre.y + sin(angle) * verticalRadius * radiusScale
-      )
-    }
+    return layout.positions().map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
   }
 
   private static func makeContextBases(
@@ -416,13 +360,6 @@ struct ConstellationLayout {
     )
     let radiusSquared = squaredDistance(centre, a)
     return squaredDistance(centre, point) <= radiusSquared + 0.01
-  }
-
-  private static func stableUnit(_ value: String, salt: UInt64) -> Double {
-    let hash = value.utf8.reduce(0xcbf2_9ce4_8422_2325 ^ salt) { partial, byte in
-      (partial ^ UInt64(byte)) &* 0x100_0000_01b3
-    }
-    return Double(hash) / Double(UInt64.max)
   }
 
   private static func distance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
