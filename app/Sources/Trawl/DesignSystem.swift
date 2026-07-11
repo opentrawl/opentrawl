@@ -6,8 +6,9 @@ enum TrawlDesign {
   static let defaultWindow = CGSize(width: 900, height: 720)
   static let contentInset: CGFloat = 28
   static let panelCornerRadius: CGFloat = 22
-  static let backgroundContentOpacity = 0.34
-  static let backgroundContentBlur: CGFloat = 7
+  static let backgroundContentOpacity = 0.42
+  static let backgroundContentBlur: CGFloat = 4
+  static let modalVeilOpacity = 0.68
   static let sourceMinimum: CGFloat = 50
   static let sourceMaximum: CGFloat = 74
   static let centreSize: CGFloat = 104

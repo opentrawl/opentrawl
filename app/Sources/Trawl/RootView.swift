@@ -23,15 +23,15 @@ struct RootView: View {
         .accessibilityHidden(isSearching)
 
       if isSearching {
-        Color.white.opacity(0.52)
+        Color.white.opacity(TrawlDesign.modalVeilOpacity)
           .ignoresSafeArea()
           .contentShape(.rect)
-          .onTapGesture { isSearching = false }
+          .onTapGesture(perform: dismissSearch)
           .accessibilityHidden(true)
         SearchOverlay(client: client, initialScope: searchScope) {
-          isSearching = false
+          dismissSearch()
         }
-        .padding(40)
+        .padding(TrawlDesign.contentInset)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isModal)
         .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -41,18 +41,20 @@ struct RootView: View {
     .animation(.easeOut(duration: 0.16), value: isSearching)
     .toolbar {
       ToolbarItem {
-        Button {
-          Task { await model.syncNow() }
-        } label: {
-          if model.isSyncing {
-            ProgressView()
-              .controlSize(.small)
-          } else {
-            Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
+        if !isSearching {
+          Button {
+            Task { await model.syncNow() }
+          } label: {
+            if model.isSyncing {
+              ProgressView()
+                .controlSize(.small)
+            } else {
+              Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
+            }
           }
+          .disabled(model.isSyncing)
+          .help("Sync now")
         }
-        .disabled(model.isSyncing || isSearching)
-        .help("Sync now")
       }
     }
   }
@@ -75,6 +77,7 @@ struct RootView: View {
           onSelectEverything: { showSearch(scope: nil) },
           onSelectSource: { showSearch(scope: $0) }
         )
+        .padding(TrawlDesign.contentInset)
         VStack(spacing: 8) {
           if let message = statusMessage {
             StatusBanner(message: message)
@@ -108,6 +111,10 @@ struct RootView: View {
   private func showSearch(scope: SourceStatus?) {
     searchScope = scope
     isSearching = true
+  }
+
+  private func dismissSearch() {
+    isSearching = false
   }
 }
 
