@@ -87,6 +87,70 @@ func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
 	}
 }
 
+func TestStaleOpenAndSearchProjectClearly(t *testing.T) {
+	t.Parallel()
+	openInput := archive.OpenResult{
+		Ref: "photos:asset/stale-fixture",
+		Stale: &archive.OpenStale{
+			Since:  "2026-07-10T12:00:00Z",
+			Reason: "source details changed after this card was created",
+			Banner: "Card status: Stale · source details changed after this card was created · since 10 July 2026",
+		},
+		Mechanical: archive.OpenMechanical{
+			GPS:      &archive.OpenGPS{Latitude: 52.3676, Longitude: 4.9041, HorizontalAccuracyMeters: 8},
+			Albums:   []archive.OpenAlbum{{Title: "Synthetic Album"}},
+			Original: &archive.OpenOriginal{Filename: "stale.heic", Availability: "local", Bytes: 1024},
+		},
+		Model: archive.OpenModel{Summary: "Synthetic beach scene."},
+	}
+	openInputJSON, err := json.Marshal(openInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=open_renderer input=%s", openInputJSON)
+	var openOutput bytes.Buffer
+	if err := printOpenText(&openOutput, openInput); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=open_renderer output=%q", openOutput.String())
+	for _, want := range []string{
+		"Card status: Stale · source details changed after this card was created · since 10 July 2026\n\n",
+		"GPS: 52.36760, 4.90410, +/-8m",
+		"Albums: Synthetic Album",
+	} {
+		if !strings.Contains(openOutput.String(), want) {
+			t.Fatalf("human open missing %q:\n%s", want, openOutput.String())
+		}
+	}
+	if strings.Contains(openOutput.String(), "Address:") {
+		t.Fatalf("human open invented an address:\n%s", openOutput.String())
+	}
+
+	searchInput := archive.SearchHit{
+		Ref:     "photos:asset/stale-fixture",
+		Time:    "2026-07-10T12:00:00Z",
+		Snippet: "Synthetic beach scene.",
+		Stale:   true,
+	}
+	searchInputJSON, err := json.Marshal(searchInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=search_renderer input=%s", searchInputJSON)
+	searchOutput, err := searchHit(searchInput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	searchOutputJSON, err := json.Marshal(searchOutput)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=search_renderer output=%s", searchOutputJSON)
+	if searchOutput.Snippet != "Stale · Synthetic beach scene." {
+		t.Fatalf("search snippet = %q", searchOutput.Snippet)
+	}
+}
+
 func TestIncompleteSnapshotBecomesCommandFailure(t *testing.T) {
 	t.Parallel()
 	input := &archive.SnapshotIncompleteError{State: "limited"}

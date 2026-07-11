@@ -62,6 +62,11 @@ func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.Request, re
 }
 
 func printOpenText(w io.Writer, result archive.OpenResult) error {
+	if result.Stale != nil {
+		if _, err := fmt.Fprintf(w, "%s\n\n", result.Stale.Banner); err != nil {
+			return err
+		}
+	}
 	title := strings.TrimSpace(result.Model.Summary)
 	if title == "" {
 		title = openFallbackTitle(result)

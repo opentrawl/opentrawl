@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
 )
@@ -105,7 +106,6 @@ type OpenCamera struct {
 
 type OpenAlbum struct {
 	Title string `json:"title"`
-	Kind  string `json:"kind,omitempty"`
 }
 
 type OpenOriginal struct {
@@ -132,7 +132,7 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		venueCandidates = nil
 	}
 	return OpenResult{
-		SchemaVersion: 4,
+		SchemaVersion: 5,
 		Ref:           AssetRef(rowString(asset, "id")),
 		Stale:         openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
@@ -187,19 +187,25 @@ func openStale(groups ...[]map[string]any) *OpenStale {
 	}
 	return &OpenStale{
 		Since:  since,
-		Reason: reason,
+		Reason: staleCardReason(reason),
 		Banner: StaleCardBanner(since, reason),
 	}
 }
 
 func StaleCardBanner(since, reason string) string {
-	since = strings.TrimSpace(since)
-	reason = strings.TrimSpace(reason)
-	if reason == "" {
-		reason = "unknown reason"
+	return "Card status: Stale · " + staleCardReason(reason) + " · since " + staleCardSince(since)
+}
+
+func staleCardReason(string) string {
+	return "source details changed after this card was created"
+}
+
+func staleCardSince(value string) string {
+	parsed, err := time.Parse(time.RFC3339, strings.TrimSpace(value))
+	if err != nil {
+		return strings.TrimSpace(value)
 	}
-	return "DEBUG INFO: THIS CARD IS STALE - generated before the latest metadata sync (stale since " +
-		since + ": " + reason + "). It will be regenerated on the next classify run. PLEASE FIX."
+	return parsed.Format("2 January 2006")
 }
 
 func openPlace(rows, locations []map[string]any) *OpenPlace {
@@ -494,7 +500,7 @@ func openAlbums(rows []map[string]any) []OpenAlbum {
 			continue
 		}
 		seen[title] = true
-		out = append(out, OpenAlbum{Title: title, Kind: rowString(row, "album_kind")})
+		out = append(out, OpenAlbum{Title: title})
 	}
 	return out
 }
