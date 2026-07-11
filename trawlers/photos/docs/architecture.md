@@ -129,6 +129,22 @@ The complete card input joins the selected image with readable mechanical
 context. The exact rendered request is persisted before transmission. The exact
 raw response is retained before parsing.
 
+Every paid Photos call also belongs to one immutable archive stage. The stage
+copies the approved purpose, receipt digest, fixed ordered item list and call cap
+into the canonical Photos archive. Membership follows the approved position,
+not invocation order.
+
+The claim transaction takes the SQLite writer lock before it reads the asset's
+source state or first-card eligibility. A committed claim is the authorisation
+point. The network send starts only after that commit. A crash after commit but
+before a retained result consumes the slot and stops the item as uncertain; it
+does not trigger an automatic retry.
+
+Screening claims never create or satisfy a stored-card generation. Canary and
+backfill claims join the existing persisted request, asset relation and attempt
+in the same archive transaction. Private approval files, media and raw screening
+results remain outside the claim authority.
+
 The Photos response contract uses labelled prose sections. Deterministic code
 checks declared structure without making a semantic judgement or treating valid
 syntax as true content. The stored card includes a useful summary, a long visual

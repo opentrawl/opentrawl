@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 12
+const SchemaVersion = 13
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -204,6 +204,63 @@ create table if not exists model_generation_attempt (
   retained_at text
 );
 
+create table if not exists paid_call_stage (
+  id text primary key,
+  purpose text not null check (purpose in ('screening', 'canary', 'backfill')),
+  approval_receipt_sha256 text not null,
+  approved_call_cap integer not null check (approved_call_cap > 0),
+  item_count integer not null check (item_count > 0 and approved_call_cap <= item_count),
+  claim_serial integer not null default 0,
+  created_at text not null
+);
+
+create table if not exists paid_call_stage_item (
+  stage_id text not null references paid_call_stage(id),
+  item_id text not null,
+  position integer not null check (position > 0),
+  asset_id text not null references asset(id),
+  card_input_id text not null,
+  full_current_sha256 text not null,
+  request_route text not null,
+  model_id text not null,
+  request_sha256 text not null,
+  prompt_version text not null,
+  parser_version text not null,
+  primary key (stage_id, item_id),
+  unique (stage_id, position),
+  unique (
+    stage_id,
+    asset_id,
+    card_input_id,
+    full_current_sha256,
+    request_route,
+    model_id,
+    request_sha256,
+    prompt_version,
+    parser_version
+  )
+);
+
+create table if not exists paid_call_claim (
+  stage_id text not null,
+  item_id text not null,
+  purpose text not null check (purpose in ('screening', 'canary', 'backfill')),
+  asset_id text not null references asset(id),
+  card_input_id text not null,
+  full_current_sha256 text not null,
+  request_sha256 text not null,
+  prompt_version text not null,
+  parser_version text not null,
+  generation_id text unique references model_generation(id),
+  claimed_at text not null,
+  primary key (stage_id, item_id),
+  foreign key (stage_id, item_id) references paid_call_stage_item(stage_id, item_id),
+  check (
+    (purpose = 'screening' and generation_id is null) or
+    (purpose in ('canary', 'backfill') and generation_id is not null)
+  )
+);
+
 create table if not exists model_observation (
   id text primary key,
   asset_id text not null references asset(id),
@@ -289,6 +346,7 @@ create index if not exists face_asset_idx on face_observation(asset_id);
 create index if not exists model_observation_asset_idx on model_observation(asset_id);
 create index if not exists model_observation_type_idx on model_observation(observation_type);
 create index if not exists model_generation_asset_idx on model_generation_asset(asset_id, completed_at);
+create index if not exists paid_call_stage_item_asset_idx on paid_call_stage_item(asset_id, stage_id);
 create index if not exists place_observation_asset_idx on place_observation(asset_id);
 create index if not exists place_observation_type_idx on place_observation(observation_type);
 create index if not exists known_place_kind_name_idx on known_place(label_kind, display_name);
