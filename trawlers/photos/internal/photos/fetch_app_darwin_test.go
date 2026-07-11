@@ -94,6 +94,33 @@ func TestPhotoKitFetchLaunchUsesVerifiedAppPath(t *testing.T) {
 	wantArgs := []string{"-W", "-n", "-g", appPath, "--args", "run", "--request", "request.pb", "--response", "response.pb"}
 	if got := photoKitFetchOpenArgs(appPath, "request.pb", "response.pb"); !reflect.DeepEqual(got, wantArgs) {
 		t.Fatalf("open args = %#v, want %#v", got, wantArgs)
+	} else {
+		t.Logf("boundary=launch_argument_vector raw_argv=%q", got)
+	}
+}
+
+func TestPhotoKitFetchLaunchStopsBeforeOpenWhenVerificationFails(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldRun := runPhotoKitFetchOpen
+	defer func() {
+		resolvePhotoKitFetchApp = oldResolve
+		runPhotoKitFetchOpen = oldRun
+	}()
+
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		return "", errors.New("synthetic signature mismatch")
+	}
+	opened := false
+	runPhotoKitFetchOpen = func(context.Context, string, string, string) error {
+		opened = true
+		return nil
+	}
+	err := launchPhotoKitFetchApp(context.Background(), "request.pb", "response.pb")
+	if err == nil || err.Error() != "synthetic signature mismatch" {
+		t.Fatalf("launch error = %v", err)
+	}
+	if opened {
+		t.Fatal("LaunchServices was invoked after helper verification failed")
 	}
 }
 

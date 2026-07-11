@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"os"
 	"path/filepath"
 	"testing"
@@ -44,6 +45,26 @@ func TestDirectCommandsAreRejected(t *testing.T) {
 }
 
 func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
+	const capturedRequestHex = "0a0f73796e7468657469632d61737365742a0e73796e7468657469632e68656963320d6f726967696e616c2e68656963380140c0a907"
+	const capturedResponseHex = "0801101e1a2046aaee4914ea18f1c75caf43585122c198f09291000416caa8aa743ce102ab72"
+	const capturedDestination = "original.heic"
+	workingDirectory := t.TempDir()
+	t.Chdir(workingDirectory)
+	requestData, err := hex.DecodeString(capturedRequestHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantResponse, err := hex.DecodeString(capturedResponseHex)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var capturedRequest fetchwire.OriginalFetchRequest
+	if err := proto.Unmarshal(requestData, &capturedRequest); err != nil {
+		t.Fatal(err)
+	}
+	if capturedRequest.DestinationPath != capturedDestination {
+		t.Fatalf("captured destination = %q, want %q", capturedRequest.DestinationPath, capturedDestination)
+	}
 	oldExport := exportOriginalMatching
 	exportOriginalMatching = func(_ context.Context, query photos.OriginalExportQuery, destination string, allowNetwork bool) error {
 		if query.LocalIdentifier != "synthetic-asset" || query.OriginalFilename != "synthetic.heic" || !allowNetwork {
@@ -53,20 +74,10 @@ func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	}
 	defer func() { exportOriginalMatching = oldExport }()
 
-	dir := t.TempDir()
-	requestPath := filepath.Join(dir, "request.pb")
-	responsePath := filepath.Join(dir, "response.pb")
-	destination := filepath.Join(dir, "original.heic")
-	requestData, err := proto.Marshal(&fetchwire.OriginalFetchRequest{
-		LocalIdentifier:     "synthetic-asset",
-		OriginalFilename:    "synthetic.heic",
-		DestinationPath:     destination,
-		AllowNetwork:        true,
-		TimeoutMilliseconds: (2 * time.Minute).Milliseconds(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	requestPath := filepath.Join(workingDirectory, "request.pb")
+	responsePath := filepath.Join(workingDirectory, "response.pb")
+	destination := filepath.Join(workingDirectory, capturedDestination)
+	t.Logf("boundary=synthetic_original_request raw_hex=%x", requestData)
 	if err := os.WriteFile(requestPath, requestData, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +89,10 @@ func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("boundary=synthetic_original_response raw_hex=%x", responseData)
+	if !bytes.Equal(responseData, wantResponse) {
+		t.Fatalf("raw response = %x, want captured %x", responseData, wantResponse)
+	}
 	var response fetchwire.OriginalFetchResponse
 	if err := proto.Unmarshal(responseData, &response); err != nil {
 		t.Fatal(err)
@@ -86,6 +101,11 @@ func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	if !response.Success || response.SizeBytes != 30 || !bytes.Equal(response.Sha256, digest[:]) {
 		t.Fatalf("response = %#v", response)
 	}
+	media, err := os.ReadFile(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=synthetic_original_media raw_bytes=%q", media)
 }
 
 func TestRunWireRequestReturnsTypedPhotosAccessFailure(t *testing.T) {

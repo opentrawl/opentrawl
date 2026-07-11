@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Build one signed standalone trawl at the requested path.
+set -euo pipefail
+
+usage() {
+  echo "usage: scripts/build-signed-trawl --output OUTPUT" >&2
+  exit 2
+}
+
+if [[ $# -ne 2 || "$1" != "--output" || -z "$2" ]]; then
+  usage
+fi
+
+output="${2%/}"
+if [[ -e "$output" || -L "$output" ]]; then
+  echo "build-signed-trawl: output already exists: $output" >&2
+  exit 1
+fi
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+identity="OpenTrawl Dev Signing"
+keychain="opentrawl-dev.keychain"
+
+mkdir -p "$(dirname "$output")"
+"$repo_root/scripts/dev-cert"
+(
+  cd "$repo_root/trawl"
+  go build -o "$output" ./cmd/trawl
+)
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none \
+  "$output"
+codesign --verify --strict --verbose=2 "$output"
