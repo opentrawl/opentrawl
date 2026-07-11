@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package trawl.source.gmail.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open/v1;gmailopenv1";
+
+message GmailRecord {
+  string ref = 1;
+  string id = 2;
+  string thread_id = 3;
+  string time = 4;
+  Headers headers = 5;
+  repeated string labels = 6;
+  bool unread = 7;
+  repeated Attachment attachments = 8;
+  string body = 9;
+  bool body_truncated = 10;
+  optional int64 body_elided_chars = 11;
+}
+
+message Headers {
+  optional string from_name = 1;
+  optional string from_address = 2;
+  string to_address = 3;
+  optional string cc_address = 4;
+  string subject = 5;
+}
+
+message Attachment {
+  string filename = 1;
+  string mime_type = 2;
+  int64 size = 3;
+}

@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package trawl.source.twitter.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1;twitteropenv1";
+
+message TwitterRecord {
+  string ref = 1;
+  Tweet tweet = 2;
+  repeated Tweet ancestors = 3;
+  repeated Tweet replies = 4;
+  bool ancestors_truncated = 5;
+  bool replies_truncated = 6;
+}
+
+message Tweet {
+  string ref = 1;
+  optional string time = 2;
+  optional string who = 3;
+  string text = 4;
+  optional string in_reply_to = 5;
+  optional int64 like_count = 6;
+  optional int64 retweet_count = 7;
+  optional int64 reply_count = 8;
+  optional string counts_as_of = 9;
+  optional string note = 10;
+  optional bool unavailable = 11;
+  optional string conversation_id = 12;
+  optional string quoted_tweet_id = 13;
+}

@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package trawl.source.contacts.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/contacts/open/v1;contactsopenv1";
+
+message ContactsRecord {
+  string ref = 1;
+  string name = 2;
+  optional string sort_name = 3;
+  repeated string aka = 4;
+  repeated string tags = 5;
+  repeated ContactValue emails = 6;
+  repeated ContactValue phones = 7;
+  repeated ContactValue addresses = 8;
+  map<string, IdentifierList> accounts = 9;
+  optional string annotation = 10;
+  optional string annotation_stated_at = 11;
+}
+
+message ContactValue {
+  string value = 1;
+  optional string label = 2;
+  optional bool primary = 3;
+}
+
+message IdentifierList {
+  repeated string values = 1;
+}
