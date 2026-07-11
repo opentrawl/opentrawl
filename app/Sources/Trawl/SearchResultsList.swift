@@ -15,17 +15,32 @@ struct SearchResultsList: View {
       if results.isEmpty {
         SearchStatePlaceholder(phase: phase, failureGuidance: failureGuidance)
       } else {
-        List(results, selection: $selectedResultID) { hit in
-          SearchResultRow(
-            hit: hit,
-            sourceDisplayName: sourceResolver.displayNameOrUnavailable(for: hit.sourceID)
-          )
-            .tag(hit.id)
+        ScrollView {
+          LazyVStack(spacing: 0) {
+            ForEach(results) { hit in
+              Button {
+                selectedResultID = hit.id
+              } label: {
+                SearchResultRow(
+                  hit: hit,
+                  sourceDisplayName: sourceResolver.displayNameOrUnavailable(for: hit.sourceID),
+                  isSelected: selectedResultID == hit.id
+                )
+              }
+              .buttonStyle(.plain)
+              Divider()
+            }
+          }
         }
-        .listStyle(.plain)
-        .scrollContentBackground(.hidden)
         .focused($focus, equals: .results)
-        .tint(TrawlDesign.brandRed)
+        .onKeyPress(.upArrow) {
+          moveSelection(by: -1)
+          return .handled
+        }
+        .onKeyPress(.downArrow) {
+          moveSelection(by: 1)
+          return .handled
+        }
         .overlay {
           RoundedRectangle(cornerRadius: 9)
             .stroke(
@@ -38,6 +53,15 @@ struct SearchResultsList: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+  }
+
+  private func moveSelection(by offset: Int) {
+    guard !results.isEmpty else { return }
+    let currentIndex = selectedResultID.flatMap { selectedID in
+      results.firstIndex(where: { $0.id == selectedID })
+    } ?? (offset > 0 ? -1 : results.count)
+    let nextIndex = min(max(currentIndex + offset, 0), results.count - 1)
+    selectedResultID = results[nextIndex].id
   }
 }
 
@@ -96,6 +120,7 @@ private struct SearchStatePlaceholder: View {
 private struct SearchResultRow: View {
   let hit: SearchHit
   let sourceDisplayName: String
+  let isSelected: Bool
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
@@ -117,6 +142,12 @@ private struct SearchResultRow: View {
       }
     }
     .padding(.vertical, 7)
+    .padding(.horizontal, 10)
+    .background(
+      isSelected ? TrawlDesign.brandRed.opacity(0.08) : .clear,
+      in: RoundedRectangle(cornerRadius: 8)
+    )
+    .padding(.horizontal, 5)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(sourceDisplayName), \(hit.title.isEmpty ? "Untitled result" : hit.title)")
