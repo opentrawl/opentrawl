@@ -7,6 +7,7 @@ import (
 )
 
 var exportOriginalResource = photos.ExportOriginalResourceThroughApp
+var exportCurrentStillResource = photos.ExportCurrentStillThroughApp
 
 func (input classifyInput) originalRequest() photos.OriginalRequest {
 	resources := make([]photos.Resource, 0, len(input.Resources))
@@ -39,5 +40,14 @@ func (input classifyInput) originalRequest() photos.OriginalRequest {
 			OriginalFilename: preferred.OriginalFilename,
 			OriginalUTI:      preferred.UTI,
 		},
+	}
+}
+
+func (input classifyInput) currentStillRequest() photos.CurrentStillRequest {
+	return photos.CurrentStillRequest{
+		SourceLibraryID:  input.SourceLibraryID,
+		AssetUUID:        input.LocalIdentifier,
+		ModificationDate: input.ModificationDate,
+		AllowNetwork:     false,
 	}
 }

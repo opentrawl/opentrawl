@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+package opentrawl.photos.fetch.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwire";
+
+// CurrentStillFetchRequest asks the signed helper for the full-resolution
+// rendition a person currently sees in Photos. It is intentionally distinct
+// from an immutable-original request.
+message CurrentStillFetchRequest {
+  string source_library_id = 1;
+  string asset_uuid = 2;
+  string modification_date = 3;
+  string destination_path = 4;
+  bool allow_network = 5;
+  int64 timeout_milliseconds = 6;
+}
+
+message CurrentStillFetchResponse {
+  bool success = 1;
+  int64 size_bytes = 2;
+  bytes sha256 = 3;
+  string media_type = 4;
+  int32 orientation = 5;
+  int64 pixel_width = 6;
+  int64 pixel_height = 7;
+  string failure_kind = 8;
+  string error_message = 9;
+  string photos_access_status = 10;
+  string error_domain = 11;
+  int64 error_code = 12;
+}

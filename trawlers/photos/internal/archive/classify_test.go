@@ -33,6 +33,7 @@ import (
 const fixtureModelURL = "http://127.0.0.1:11434/api/generate"
 
 func TestClassifyModelWritesTypedObservations(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -189,6 +190,7 @@ where asset_id = ? and superseded_at is null
 }
 
 func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -375,6 +377,7 @@ func recardPlaceContext(name string) *classifyPlaceContext {
 }
 
 func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -483,6 +486,7 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 }
 
 func TestClassifyReleasesOriginalLeaseWhenMetadataExtractionFails(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -585,6 +589,7 @@ func TestClassifyReleasesOriginalLeaseWhenMetadataExtractionFails(t *testing.T) 
 }
 
 func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -768,6 +773,7 @@ join asset a on a.id = q.asset_id
 }
 
 func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -841,6 +847,7 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 }
 
 func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -920,6 +927,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 }
 
 func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
@@ -1842,6 +1850,7 @@ func TestCaptureTimeUsesAssetTimezone(t *testing.T) {
 // asset goes back to metadata_classified, and a run of consecutive refusals
 // stops the batch instead of churning through it.
 func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")

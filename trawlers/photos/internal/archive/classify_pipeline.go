@@ -41,6 +41,16 @@ type contentOutcome string
 
 var extractImageMetadata = photos.ImageMetadataRecord
 
+var errUnknownCurrentStillMIMEType = errors.New("current-still media type is unknown")
+
+type currentStillResolver interface {
+	Resolve(context.Context, photos.CurrentStillRequest) (photos.CurrentStillResolution, error)
+}
+
+var newCurrentStillResolver = func(root string, exporter photos.CurrentStillExporter) (currentStillResolver, error) {
+	return photos.NewCurrentStillResolver(root, exporter)
+}
+
 const (
 	contentOutcomeClassified              contentOutcome = "classified"
 	contentOutcomeFailedParse             contentOutcome = "failed_parse"
@@ -76,6 +86,10 @@ type contentItem struct {
 // mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
 	resolver, err := photos.NewOriginalResolver(paths.OriginalsCacheDir(), exportOriginalResource)
+	if err != nil {
+		return err
+	}
+	currentStillResolver, err := newCurrentStillResolver(paths.OriginalsCacheDir(), exportCurrentStillResource)
 	if err != nil {
 		return err
 	}
@@ -143,10 +157,24 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			logIntField("fields", metadata.Proof.FieldCount),
 			logIntField("excluded", metadata.Proof.ExclusionCount),
 		)
-		request, meta, err := classifier.buildRequest(item.input, item.imagePath, metadata.Projection)
+		currentStill, err := currentStillResolver.Resolve(ctx, item.input.currentStillRequest())
+		if err != nil {
+			return model.Call{}, fmt.Errorf("prepare full current still: %w", err)
+		}
+		if currentStill.Lease != nil {
+			defer currentStill.Lease.Close()
+		}
+		item.imagePath = currentStill.Path
+		item.pathClass = currentStill.Source
+		request, meta, err := classifier.buildRequest(item.input, currentStill.Path, metadata.Projection)
 		if err != nil {
 			return model.Call{}, err
 		}
+		mimeType, err := currentStillMIMEType(currentStill.Fact.MediaType)
+		if err != nil {
+			return model.Call{}, err
+		}
+		request.Images[0].MIMEType = mimeType
 		item.meta = meta
 		providerRequest, err := classifier.client.Render(request)
 		if err != nil {
@@ -246,6 +274,23 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	result.ModelConcurrencyPeak = stats.ConcurrencyPeak
 	result.ModelConcurrencyFinal = stats.ConcurrencyEnd
 	return err
+}
+
+func currentStillMIMEType(mediaType string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "public.heic":
+		return "image/heic", nil
+	case "public.heif":
+		return "image/heif", nil
+	case "public.jpeg", "public.jpg":
+		return "image/jpeg", nil
+	case "public.png":
+		return "image/png", nil
+	case "public.tiff":
+		return "image/tiff", nil
+	default:
+		return "", errUnknownCurrentStillMIMEType
+	}
 }
 
 // runLogger hands trawlkit's model.Run events to the classify log.

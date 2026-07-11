@@ -17,6 +17,6 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>OpenTrawl reads a selected original only when you explicitly run a Photos original export.</string>
+	<string>OpenTrawl reads selected Photos media to prepare a card.</string>
 </dict>
 </plist>

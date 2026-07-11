@@ -18,6 +18,7 @@ import (
 )
 
 func TestPhotosStopsUncertainGenerationBeforeAndAfterSend(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	tests := []struct {
 		name      string
 		afterSend bool
@@ -111,6 +112,7 @@ func TestPhotosStopsUncertainGenerationBeforeAndAfterSend(t *testing.T) {
 }
 
 func TestPhotosResumesAfterRawResponseRetentionBeforeParse(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := syntheticGenerationClassifyFixture(t)
 	var calls atomic.Int64
@@ -156,6 +158,7 @@ func TestPhotosResumesAfterRawResponseRetentionBeforeParse(t *testing.T) {
 }
 
 func TestPhotosRetainsHTTPTraceTimeoutAndConnectionFailures(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	tests := []struct {
 		name     string
 		handler  func(*testing.T, http.ResponseWriter, *http.Request)

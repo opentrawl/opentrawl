@@ -7,6 +7,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -153,5 +154,48 @@ func TestWireErrorResponsePreservesTypedPhotoKitFailure(t *testing.T) {
 	}
 	if response.ErrorMessage == "" {
 		t.Fatal("typed PhotoKit failure lost its safe message")
+	}
+}
+
+func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T) {
+	oldExport := exportCurrentStill
+	defer func() { exportCurrentStill = oldExport }()
+	exportCurrentStill = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
+		if request.SourceLibraryID != "synthetic-library" || request.AssetUUID != "synthetic-asset" || request.ModificationDate != "2026-07-11T12:00:00.125Z" || request.AllowNetwork {
+			t.Fatalf("request = %#v", request)
+		}
+		data := []byte("exact synthetic current-still bytes")
+		if err := os.WriteFile(destination, data, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		return photos.CurrentStillFact{MediaType: "public.heic", Orientation: 1, PixelWidth: 4032, PixelHeight: 3024, Size: int64(len(data)), SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}, nil
+	}
+	dir := t.TempDir()
+	requestPath := filepath.Join(dir, "request.pb")
+	responsePath := filepath.Join(dir, "response.pb")
+	destination := filepath.Join(dir, "current.heic")
+	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationDate: "2026-07-11T12:00:00.125Z", DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=synthetic_current_still_request raw_hex=%x", data)
+	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var stderr bytes.Buffer
+	if code := run(context.Background(), []string{"run-current-still", "--request", requestPath, "--response", responsePath}, &stderr); code != 0 {
+		t.Fatalf("exit = %d stderr=%q", code, stderr.String())
+	}
+	responseData, err := os.ReadFile(responsePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=synthetic_current_still_response raw_hex=%x", responseData)
+	var response fetchwire.CurrentStillFetchResponse
+	if err := proto.Unmarshal(responseData, &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Success || response.MediaType != "public.heic" || response.PixelWidth != 4032 || response.PixelHeight != 3024 {
+		t.Fatalf("response = %#v", response)
 	}
 }

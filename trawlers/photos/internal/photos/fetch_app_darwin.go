@@ -50,6 +50,24 @@ var launchPhotoKitFetchApp = func(ctx context.Context, requestPath, responsePath
 	return runPhotoKitFetchOpen(ctx, appPath, requestPath, responsePath)
 }
 
+var launchPhotoKitCurrentStillApp = func(ctx context.Context, requestPath, responsePath string) error {
+	appPath, err := resolvePhotoKitFetchApp(ctx)
+	if err != nil {
+		return err
+	}
+	command := exec.CommandContext(ctx, "/usr/bin/open", photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath)...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		message := bytes.TrimSpace(stderr.Bytes())
+		if len(message) > 0 {
+			return fmt.Errorf("launch signed Photos current-still fetch app: %w: %s", err, message)
+		}
+		return fmt.Errorf("launch signed Photos current-still fetch app: %w", err)
+	}
+	return nil
+}
+
 func verifiedPhotoKitFetchAppPath(ctx context.Context) (string, error) {
 	callerPath, err := os.Executable()
 	if err != nil {
@@ -240,6 +258,13 @@ func photoKitFetchOpenArgs(appPath, requestPath, responsePath string) []string {
 	}
 }
 
+func photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath string) []string {
+	return []string{
+		"-W", "-n", "-g", appPath,
+		"--args", "run-current-still", "--request", requestPath, "--response", responsePath,
+	}
+}
+
 // ExportOriginalResourceThroughApp exports one preferred original through the
 // signed LaunchServices app that owns the Photos permission grant.
 func ExportOriginalResourceThroughApp(ctx context.Context, query OriginalExportQuery, destinationPath string, allowNetwork bool) error {
@@ -326,6 +351,102 @@ func ExportOriginalResourceThroughApp(ctx context.Context, query OriginalExportQ
 		return errors.New("signed Photos original fetch app returned mismatched output proof")
 	}
 	return nil
+}
+
+// ExportCurrentStillThroughApp uses the same verified helper identity as the
+// original path, but sends a distinct protobuf and helper mode. Network use is
+// represented only by request.AllowNetwork.
+func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillRequest, destinationPath string) (CurrentStillFact, error) {
+	if err := ctx.Err(); err != nil {
+		return CurrentStillFact{}, err
+	}
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
+		return CurrentStillFact{}, err
+	}
+	timeout := defaultPhotoKitFetchTimeout
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+		if timeout <= 0 {
+			return CurrentStillFact{}, context.DeadlineExceeded
+		}
+	}
+	wireDir, err := os.MkdirTemp(filepath.Dir(destinationPath), ".photokit-current-still-request-*")
+	if err != nil {
+		return CurrentStillFact{}, fmt.Errorf("create current-still request directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(wireDir) }()
+	requestPath := filepath.Join(wireDir, "request.pb")
+	responsePath := filepath.Join(wireDir, "response.pb")
+	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{
+		SourceLibraryId: request.SourceLibraryID, AssetUuid: request.AssetUUID,
+		ModificationDate: request.ModificationDate, DestinationPath: destinationPath,
+		AllowNetwork: request.AllowNetwork, TimeoutMilliseconds: timeout.Milliseconds(),
+	})
+	if err != nil {
+		return CurrentStillFact{}, fmt.Errorf("encode current-still request: %w", err)
+	}
+	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
+		return CurrentStillFact{}, fmt.Errorf("write current-still request: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return CurrentStillFact{}, err
+	}
+	launchCtx, cancel := context.WithTimeout(context.Background(), timeout+10*time.Second)
+	defer cancel()
+	if err := launchPhotoKitCurrentStillApp(launchCtx, requestPath, responsePath); err != nil {
+		removeOriginalOutput(destinationPath)
+		if ctx.Err() != nil {
+			return CurrentStillFact{}, ctx.Err()
+		}
+		return CurrentStillFact{}, err
+	}
+	if ctx.Err() != nil {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, ctx.Err()
+	}
+	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
+	if err != nil {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, fmt.Errorf("read current-still response: %w", err)
+	}
+	var response fetchwire.CurrentStillFetchResponse
+	if err := proto.Unmarshal(responseData, &response); err != nil {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, fmt.Errorf("decode current-still response: %w", err)
+	}
+	if !response.Success {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, currentStillAppFailure(&response)
+	}
+	info, digest, err := InspectOriginalFile(destinationPath)
+	if err != nil {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, fmt.Errorf("inspect current-still output: %w", err)
+	}
+	fact := CurrentStillFact{MediaType: response.MediaType, Orientation: response.Orientation, PixelWidth: response.PixelWidth, PixelHeight: response.PixelHeight, Size: response.SizeBytes, SHA256: fmt.Sprintf("%x", response.Sha256)}
+	if fact.Size != info.Size() || !bytes.Equal(response.Sha256, digest[:]) || fact.MediaType == "" || fact.PixelWidth <= 0 || fact.PixelHeight <= 0 {
+		removeOriginalOutput(destinationPath)
+		return CurrentStillFact{}, errors.New("signed Photos current-still fetch app returned mismatched output proof")
+	}
+	return fact, nil
+}
+
+func currentStillAppFailure(response *fetchwire.CurrentStillFetchResponse) error {
+	switch response.GetFailureKind() {
+	case "photos_access":
+		return &PhotoLibraryAccessError{Status: response.GetPhotosAccessStatus()}
+	case "asset_not_found":
+		return ErrPhotoKitAssetNotFound
+	case "timeout":
+		return ErrPhotoKitExportTimedOut
+	case "photokit_export":
+		return NewPhotoKitExportError(response.GetErrorDomain(), response.GetErrorCode(), response.GetErrorMessage())
+	default:
+		if response.GetErrorMessage() == "" {
+			return errors.New("signed Photos current-still fetch app failed")
+		}
+		return errors.New(response.GetErrorMessage())
+	}
 }
 
 func photoKitAppFailure(response *fetchwire.OriginalFetchResponse) error {

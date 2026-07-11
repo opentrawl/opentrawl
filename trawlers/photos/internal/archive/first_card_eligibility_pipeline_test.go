@@ -15,6 +15,7 @@ import (
 )
 
 func TestFirstCardEligibilityLifecycleStopsPaidCallBeforeMedia(t *testing.T) {
+	withSyntheticCurrentStill(t)
 	ctx := context.Background()
 	paths := testPaths(t)
 	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")

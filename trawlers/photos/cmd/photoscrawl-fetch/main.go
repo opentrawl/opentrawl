@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -23,6 +24,7 @@ import (
 var (
 	requestAuthorization   = photos.RequestPhotoLibraryAuthorization
 	exportOriginalMatching = photos.ExportOriginalResourceMatching
+	exportCurrentStill     = photos.ExportCurrentStillMatching
 )
 
 func main() {
@@ -47,11 +49,16 @@ func requestAccess(ctx context.Context) int {
 }
 
 func run(ctx context.Context, args []string, stderr io.Writer) int {
-	if len(args) != 5 || args[0] != "run" {
+	if len(args) == 5 && args[0] == "run" {
+		return runWireRequest(ctx, args[1:], stderr)
+	}
+	if len(args) == 5 && args[0] == "run-current-still" {
+		return runCurrentStillWireRequest(ctx, args[1:], stderr)
+	}
+	{
 		writeln(stderr, "photoscrawl-fetch is an internal app and accepts no direct commands")
 		return 2
 	}
-	return runWireRequest(ctx, args[1:], stderr)
 }
 
 func runWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
@@ -111,6 +118,105 @@ func runWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
+	requestPath, responsePath, ok := wirePaths(args, stderr)
+	if !ok {
+		return 2
+	}
+	data, err := readWireRequest(requestPath)
+	if err != nil {
+		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request could not be read", nil))
+		return 1
+	}
+	var request fetchwire.CurrentStillFetchRequest
+	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.ModificationDate == "" || request.DestinationPath == "" {
+		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request is invalid", nil))
+		return 1
+	}
+	timeout := time.Duration(request.TimeoutMilliseconds) * time.Millisecond
+	if timeout <= 0 || timeout > 10*time.Minute {
+		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request timeout is invalid", nil))
+		return 1
+	}
+	exportCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	fact, err := exportCurrentStill(exportCtx, photos.CurrentStillRequest{SourceLibraryID: request.SourceLibraryId, AssetUUID: request.AssetUuid, ModificationDate: request.ModificationDate, AllowNetwork: request.AllowNetwork}, request.DestinationPath)
+	if err != nil {
+		_ = os.Remove(request.DestinationPath)
+		_ = os.Remove(request.DestinationPath + ".exporting")
+		_ = writeCurrentStillWireResponse(responsePath, currentStillWireErrorResponse(err))
+		return 1
+	}
+	if err := writeCurrentStillWireResponse(responsePath, &fetchwire.CurrentStillFetchResponse{Success: true, SizeBytes: fact.Size, Sha256: mustDecodeDigest(fact.SHA256), MediaType: fact.MediaType, Orientation: fact.Orientation, PixelWidth: fact.PixelWidth, PixelHeight: fact.PixelHeight}); err != nil {
+		_ = os.Remove(request.DestinationPath)
+		return 1
+	}
+	return 0
+}
+
+func wirePaths(args []string, stderr io.Writer) (string, string, bool) {
+	flags := flag.NewFlagSet("run", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	requestPath := flags.String("request", "", "protobuf request path")
+	responsePath := flags.String("response", "", "protobuf response path")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 || *requestPath == "" || *responsePath == "" {
+		writeln(stderr, "photoscrawl-fetch run: --request and --response are required; positional arguments are not accepted")
+		return "", "", false
+	}
+	return *requestPath, *responsePath, true
+}
+
+func mustDecodeDigest(hexDigest string) []byte {
+	data, _ := hex.DecodeString(hexDigest)
+	return data
+}
+
+func currentStillWireErrorResponse(err error) *fetchwire.CurrentStillFetchResponse {
+	var accessErr *photos.PhotoLibraryAccessError
+	var exportErr *photos.PhotoKitExportError
+	switch {
+	case errors.As(err, &accessErr):
+		return failedCurrentStillResponse("photos_access", accessErr.Error(), accessErr)
+	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
+		return failedCurrentStillResponse("asset_not_found", "PhotoKit could not find the selected asset", nil)
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, photos.ErrPhotoKitExportTimedOut):
+		return failedCurrentStillResponse("timeout", "PhotoKit current-still request timed out", nil)
+	case errors.As(err, &exportErr):
+		safe := photos.NewPhotoKitExportError(exportErr.Domain, exportErr.Code, exportErr.Reason)
+		response := failedCurrentStillResponse("photokit_export", safe.Reason, nil)
+		response.ErrorDomain = safe.Domain
+		response.ErrorCode = safe.Code
+		return response
+	default:
+		return failedCurrentStillResponse("export_failed", "PhotoKit current-still request failed", nil)
+	}
+}
+
+func failedCurrentStillResponse(kind, message string, accessErr *photos.PhotoLibraryAccessError) *fetchwire.CurrentStillFetchResponse {
+	response := &fetchwire.CurrentStillFetchResponse{FailureKind: kind, ErrorMessage: message}
+	if accessErr != nil {
+		response.PhotosAccessStatus = accessErr.Status
+	}
+	return response
+}
+
+func writeCurrentStillWireResponse(path string, response *fetchwire.CurrentStillFetchResponse) error {
+	data, err := proto.Marshal(response)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	temporary := path + ".writing"
+	_ = os.Remove(temporary)
+	defer func() { _ = os.Remove(temporary) }()
+	if err := os.WriteFile(temporary, data, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(temporary, path)
 }
 
 func readWireRequest(path string) ([]byte, error) {
