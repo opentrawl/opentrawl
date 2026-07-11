@@ -9,17 +9,20 @@ struct ConstellationView: View {
 
   let sources: [SourceStatus]
   let activity: ConstellationActivity
+  let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
   let onSelectSource: @MainActor @Sendable (SourceStatus) -> Void
 
   init(
     sources: [SourceStatus],
     activity: ConstellationActivity = .idle,
+    trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
     onSelectSource: @escaping @MainActor @Sendable (SourceStatus) -> Void
   ) {
     self.sources = sources
     self.activity = activity
+    self.trafficEvent = trafficEvent
     self.onSelectEverything = onSelectEverything
     self.onSelectSource = onSelectSource
   }
@@ -33,7 +36,7 @@ struct ConstellationView: View {
     self.init(
       sources: sources,
       activity: isSyncing
-        ? .syncing(sourceIDs: Set(sources.map(\.id)), response: nil)
+        ? .syncing(sourceIDs: Set(sources.map(\.id)))
         : .idle,
       onSelectEverything: onSelectEverything,
       onSelectSource: onSelectSource
@@ -56,6 +59,7 @@ struct ConstellationView: View {
           contextNodes: snapshot.contextNodes,
           segments: snapshot.segments,
           activity: activity,
+          trafficEvent: trafficEvent,
           reduceMotion: reduceMotion
         )
         CentreButton(isWorking: activity.isWorkInProgress, action: onSelectEverything)
