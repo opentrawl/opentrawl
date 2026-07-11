@@ -439,6 +439,138 @@ func TestDevelopmentCacheCoalescesSameKeyThroughExistingLock(t *testing.T) {
 	}
 }
 
+func TestDevelopmentCacheLookupAndUsageCountOnlyCheckedEntries(t *testing.T) {
+	root, source, inspectVolume := syntheticDevelopmentRoots(t)
+	packagePath := filepath.Join(source, "checked-lookup.heic")
+	packageBytes := []byte("synthetic checked lookup original")
+	if err := os.WriteFile(packagePath, packageBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var helperCalls atomic.Int32
+	resolver, err := newDevelopmentOriginalResolver(root, source, inspectVolume, func(context.Context, OriginalExportQuery, string, bool) error {
+		helperCalls.Add(1)
+		return errors.New("synthetic helper must not run")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := syntheticOriginalRequest("checked-lookup")
+	request.AllowNetwork = false
+	request.PackageCandidates = []LocalMediaCandidate{{Path: packagePath, Class: "original", Size: int64(len(packageBytes))}}
+
+	miss, found, err := resolver.Lookup(context.Background(), request)
+	if err != nil || found {
+		t.Fatalf("initial Lookup = %#v, %t, %v; want checked miss", miss, found, err)
+	}
+	installed, err := resolver.Resolve(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	installed.Lease.Close()
+	if err := os.WriteFile(filepath.Join(root, "unchecked.heic"), []byte("unchecked synthetic bytes"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	hit, found, err := resolver.Lookup(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !found {
+		t.Fatal("checked cache entry was not found")
+	}
+	defer hit.Lease.Close()
+	usage, err := resolver.Usage(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("boundary=checked_lookup input=%#v output=%#v helper_calls=%d", request, hit, helperCalls.Load())
+	t.Logf("boundary=cache_usage input_root=%q output=%#v", root, usage)
+	if hit.Source != OriginalSourceDevelopmentCache || hit.Path != installed.Path || hit.Size != int64(len(packageBytes)) {
+		t.Fatalf("Lookup hit = %#v, installed = %#v", hit, installed)
+	}
+	if usage.Files != 1 || usage.Bytes != int64(len(packageBytes)) {
+		t.Fatalf("Usage = %#v, want one checked entry", usage)
+	}
+	if helperCalls.Load() != 0 {
+		t.Fatalf("helper calls = %d, want 0", helperCalls.Load())
+	}
+}
+
+func TestDevelopmentCacheMissSizeUsesStatCheckedPackageFile(t *testing.T) {
+	root, source, inspectVolume := syntheticDevelopmentRoots(t)
+	packagePath := filepath.Join(source, "underestimated.heic")
+	packageBytes := []byte("synthetic package original exceeds archived estimate")
+	if err := os.WriteFile(packagePath, packageBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	resolver, err := newDevelopmentOriginalResolver(root, source, inspectVolume, unexpectedOriginalExporter(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := syntheticOriginalRequest("underestimated")
+	request.PackageCandidates = []LocalMediaCandidate{{Path: packagePath, Class: "original", Size: 1}}
+	size, found, err := resolver.MissSize(request)
+	t.Logf("boundary=checked_miss_size input={archive_reported_bytes:%d,path:%q} output={found:%t,size_bytes:%d,error:%v}", request.PackageCandidates[0].Size, packagePath, found, size, err)
+	if err != nil || !found || size != int64(len(packageBytes)) {
+		t.Fatalf("MissSize = %d, %t, %v; want actual synthetic file size %d", size, found, err, len(packageBytes))
+	}
+}
+
+func TestDevelopmentCachePackageOnlyResolveRejectsChangedReservationWithoutHelperOrInstall(t *testing.T) {
+	for _, test := range []struct {
+		name   string
+		change func(string) error
+	}{
+		{name: "deleted", change: os.Remove},
+		{name: "grown", change: func(path string) error {
+			return os.WriteFile(path, []byte("synthetic package original grew after its reservation"), 0o600)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root, source, inspectVolume := syntheticDevelopmentRoots(t)
+			packagePath := filepath.Join(source, "reserved.heic")
+			if err := os.WriteFile(packagePath, []byte("reserved synthetic bytes"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			var helperCalls atomic.Int32
+			resolver, err := newDevelopmentOriginalResolver(root, source, inspectVolume, func(context.Context, OriginalExportQuery, string, bool) error {
+				helperCalls.Add(1)
+				return errors.New("synthetic helper must not run")
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			request := syntheticOriginalRequest("reservation-" + test.name)
+			request.AllowNetwork = true
+			request.PackageCandidates = []LocalMediaCandidate{{Path: packagePath, Class: "original", Size: 1}}
+			reservedSize, found, err := resolver.MissSize(request)
+			if err != nil || !found {
+				t.Fatalf("MissSize = %d, %t, %v", reservedSize, found, err)
+			}
+			if err := test.change(packagePath); err != nil {
+				t.Fatal(err)
+			}
+			resolved, err := resolver.ResolvePackage(context.Background(), request, reservedSize)
+			finalPath := OriginalCachePath(resolver.cache.root, request.SourceLibraryID, request.ModificationDate, request.Query)
+			finalExists := false
+			if _, statErr := os.Lstat(finalPath); statErr == nil {
+				finalExists = true
+			} else if !os.IsNotExist(statErr) {
+				t.Fatal(statErr)
+			}
+			t.Logf("boundary=package_reservation_%s input={reserved_bytes:%d,allow_network:%t} output={resolution:%#v,error:%q,helper_calls:%d,installed:%t}", test.name, reservedSize, request.AllowNetwork, resolved, err, helperCalls.Load(), finalExists)
+			if !errors.Is(err, ErrDevelopmentOriginalSizeUnknown) || resolved.Path != "" || helperCalls.Load() != 0 || finalExists {
+				t.Fatalf("ResolvePackage = %#v, %v helper calls = %d installed = %t", resolved, err, helperCalls.Load(), finalExists)
+			}
+			for _, path := range []string{originalCacheTemporaryPath(finalPath), originalCacheProofPath(finalPath)} {
+				if _, statErr := os.Lstat(path); !os.IsNotExist(statErr) {
+					t.Fatalf("reservation change left artifact at %q: %v", path, statErr)
+				}
+			}
+		})
+	}
+}
+
 func syntheticDevelopmentRoots(t *testing.T) (root string, source string, inspectVolume developmentVolumeInspector) {
 	t.Helper()
 	parent := t.TempDir()
