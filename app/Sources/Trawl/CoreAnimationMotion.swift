@@ -212,8 +212,12 @@ final class NetworkLayerView: NSView {
     Array(Set(segments.compactMap(\.movingSourceID))).sorted()
   }
 
-  private var activitySourceIDs: [String] {
-    Array(activity.activeSourceIDs ?? Set(sourceIDs)).sorted()
+  private var trafficPlan: ConstellationTrafficPlan {
+    ConstellationTrafficPlan(activity: activity, allSourceIDs: Set(sourceIDs))
+  }
+
+  private var requestedSourceIDs: [String] {
+    trafficPlan.outboundSourceIDs.sorted()
   }
 
   private func addActivityLayers(to rootLayer: CALayer, scale: CGFloat) {
@@ -232,48 +236,66 @@ final class NetworkLayerView: NSView {
           glow: 4,
           duration: ambientDuration(index: index),
           repeats: true,
+          delay: 0,
           startElapsed: 0,
           scale: scale
         )
       )
     }
 
-    switch activity {
-    case .idle:
-      break
-    case .searching, .syncing:
-      for sourceID in activitySourceIDs {
-        guard let route = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
-        rootLayer.addSublayer(
-          makePulseLayer(
-            route: route,
-            diameter: 5,
-            opacity: 0.78,
-            glow: 8,
-            duration: 1.2 * Double(route.count),
-            repeats: false,
-            startElapsed: CoreAnimationTimeline.elapsed,
-            scale: scale
-          )
+    guard case .idle = activity else {
+      addWorkLayers(to: rootLayer, scale: scale)
+      return
+    }
+  }
+
+  private func addWorkLayers(to rootLayer: CALayer, scale: CGFloat) {
+    let elapsed = CoreAnimationTimeline.elapsed
+    var outboundDurations: [String: TimeInterval] = [:]
+    for sourceID in requestedSourceIDs {
+      guard let route = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
+      let duration = 1.2 * Double(route.count)
+      outboundDurations[sourceID] = duration
+      rootLayer.addSublayer(
+        makePulseLayer(
+          route: route,
+          diameter: 5,
+          opacity: 0.78,
+          glow: 8,
+          duration: duration,
+          repeats: false,
+          delay: 0,
+          startElapsed: elapsed,
+          scale: scale
         )
-      }
-    case .failed:
-      for sourceID in activitySourceIDs {
-        guard let route = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
-        rootLayer.addSublayer(
-          makePulseLayer(
-            route: route,
-            diameter: 5,
-            opacity: 0.78,
-            glow: 8,
-            duration: 1.2 * Double(route.count),
-            repeats: false,
-            startElapsed: CoreAnimationTimeline.elapsed,
-            scale: scale
-          )
+      )
+    }
+
+    for sourceID in trafficPlan.returningSourceIDs.sorted() {
+      guard let route = route(from: sourceKey(sourceID), to: centreKey) else { continue }
+      let delay = outboundDurations[sourceID] ?? 0
+      rootLayer.addSublayer(
+        makePulseLayer(
+          route: route,
+          diameter: 5,
+          opacity: 0.78,
+          glow: 8,
+          duration: 1.2 * Double(route.count),
+          repeats: false,
+          delay: delay,
+          startElapsed: elapsed + delay,
+          scale: scale
         )
-        rootLayer.addSublayer(makeFailedEndpoint(for: sourceID, scale: scale))
-      }
+      )
+    }
+    for sourceID in trafficPlan.failedSourceIDs.sorted() {
+      rootLayer.addSublayer(
+        makeFailedEndpoint(
+          for: sourceID,
+          delay: outboundDurations[sourceID] ?? 0,
+          scale: scale
+        )
+      )
     }
   }
 
@@ -347,6 +369,7 @@ final class NetworkLayerView: NSView {
     glow: CGFloat,
     duration: TimeInterval,
     repeats: Bool,
+    delay: TimeInterval,
     startElapsed: TimeInterval,
     scale: CGFloat
   ) -> CALayer {
@@ -373,7 +396,7 @@ final class NetworkLayerView: NSView {
     animation.fillMode = .both
     animation.beginTime = repeats
       ? CoreAnimationTimeline.beginTime(for: pulse)
-      : pulse.convertTime(CACurrentMediaTime(), from: nil)
+      : pulse.convertTime(CACurrentMediaTime() + delay, from: nil)
     pulse.add(animation, forKey: repeats ? "opentrawl.ambient-photon" : "opentrawl.work-photon")
     return pulse
   }
@@ -414,7 +437,7 @@ final class NetworkLayerView: NSView {
   private func addReducedMotionWorkState(to rootLayer: CALayer, scale: CGFloat) {
     guard case .idle = activity else {
       rootLayer.addSublayer(makeWorkOutline(at: centre, radius: TrawlDesign.centreSize / 2 + 5, scale: scale))
-      for sourceID in activitySourceIDs {
+      for sourceID in requestedSourceIDs {
         guard let endpoint = sourceEndpoint(for: sourceID) else { continue }
         rootLayer.addSublayer(makeWorkOutline(at: endpoint.anchor, radius: endpoint.trimRadius + 5, scale: scale))
       }
@@ -441,7 +464,11 @@ final class NetworkLayerView: NSView {
     return outline
   }
 
-  private func makeFailedEndpoint(for sourceID: String, scale: CGFloat) -> CALayer {
+  private func makeFailedEndpoint(
+    for sourceID: String,
+    delay: TimeInterval,
+    scale: CGFloat
+  ) -> CALayer {
     let endpoint = sourceEndpoint(for: sourceID) ?? NetworkEndpoint(anchor: centre, trimRadius: 0, sourceID: nil)
     let node = CALayer()
     node.contentsScale = scale
@@ -456,12 +483,12 @@ final class NetworkLayerView: NSView {
     fade.keyTimes = [0, 0.08, 0.92, 1]
     fade.duration = 2
     fade.isRemovedOnCompletion = true
-    fade.beginTime = node.convertTime(CACurrentMediaTime(), from: nil)
+    fade.beginTime = node.convertTime(CACurrentMediaTime() + delay, from: nil)
     node.add(fade, forKey: "opentrawl.failed-endpoint")
 
     if endpoint.sourceID != nil {
       let motion = ConstellationMotion(sourceID: sourceID)
-      let elapsed = CoreAnimationTimeline.elapsed
+      let elapsed = CoreAnimationTimeline.elapsed + delay
       let positions = (0...120).map { sample in
         let progress = Double(sample) / 120
         let offset = vector(motion.translation(elapsed: elapsed + 2 * progress))
@@ -473,7 +500,7 @@ final class NetworkLayerView: NSView {
       position.timingFunction = CAMediaTimingFunction(name: .linear)
       position.preferredFrameRateRange = CoreAnimationTimeline.frameRateRange
       position.duration = 2
-      position.beginTime = node.convertTime(CACurrentMediaTime(), from: nil)
+      position.beginTime = node.convertTime(CACurrentMediaTime() + delay, from: nil)
       node.add(position, forKey: "opentrawl.failed-endpoint-position")
     }
     return node

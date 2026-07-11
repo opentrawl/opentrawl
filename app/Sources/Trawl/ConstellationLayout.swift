@@ -4,32 +4,14 @@ import TrawlClient
 import TrawlCore
 
 enum ConstellationGeometry {
-  static let sourceContentWidth: CGFloat = 154
   static let sourceLabelAllowance: CGFloat = 58
-  static let sourceHostSize = CGSize(width: 194, height: 164)
-  static let iconAnchorOffset = sourceLabelAllowance / 2
-  static let horizontalMotion = CGFloat(12)...CGFloat(20)
-  static let verticalMotion = CGFloat(8)...CGFloat(14)
-
-  static var horizontalClearance: CGFloat {
-    sourceHostSize.width / 2 + horizontalMotion.upperBound
-  }
-
-  static var topClearance: CGFloat {
-    sourceHostSize.height / 2 - iconAnchorOffset
-      + verticalMotion.upperBound
-  }
-
-  static var bottomClearance: CGFloat {
-    sourceHostSize.height / 2 + iconAnchorOffset
-      + verticalMotion.upperBound
-  }
 }
 
 struct MovingSource: Identifiable {
   let source: SourceStatus
   let anchor: CGPoint
   let diameter: CGFloat
+  let metrics: ConstellationLayoutMetrics
 
   var id: String { source.id }
 
@@ -127,6 +109,7 @@ private struct Triangle {
 struct ConstellationLayout {
   private let sources: [SourceStatus]
   private let sourceBases: [CGPoint]
+  private let metrics: ConstellationLayoutMetrics
   private let contextBases: [CGPoint]
   private let centreBase: CGPoint
   private let graphEdges: [GraphEdge]
@@ -135,9 +118,16 @@ struct ConstellationLayout {
 
   init(size: CGSize, sources: [SourceStatus], meshSeed: UInt64) {
     self.sources = sources
+    let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(sources.count)
+    metrics = layoutMetrics
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
-    sourceBases = Self.makeSourceBases(sources: sources, size: size, centre: centreBase)
+    sourceBases = Self.makeSourceBases(
+      sources: sources,
+      size: size,
+      centre: centreBase,
+      metrics: layoutMetrics
+    )
     contextBases = Self.makeContextBases(
       count: max(10, min(18, sources.count + 3)),
       size: size,
@@ -198,7 +188,8 @@ struct ConstellationLayout {
         MovingSource(
           source: source,
           anchor: sourceBases[index],
-          diameter: diameters[index]
+          diameter: diameters[index],
+          metrics: metrics
         )
       },
       contextNodes: contextBases,
@@ -208,31 +199,33 @@ struct ConstellationLayout {
 
   private func diameter(for source: SourceStatus) -> CGFloat {
     guard source.archiveBytes > 0, maximumBytes > minimumBytes else {
-      return TrawlDesign.sourceMinimum
+      return CGFloat(metrics.minimumIconDiameter)
     }
     let value = log1p(Double(source.archiveBytes))
     let lower = log1p(minimumBytes)
     let upper = log1p(maximumBytes)
     let normalised = (value - lower) / (upper - lower)
-    return TrawlDesign.sourceMinimum
-      + CGFloat(normalised) * (TrawlDesign.sourceMaximum - TrawlDesign.sourceMinimum)
+    return CGFloat(metrics.minimumIconDiameter)
+      + CGFloat(normalised)
+        * CGFloat(metrics.maximumIconDiameter - metrics.minimumIconDiameter)
   }
 
   private static func makeSourceBases(
     sources: [SourceStatus],
     size: CGSize,
-    centre: CGPoint
+    centre: CGPoint,
+    metrics: ConstellationLayoutMetrics
   ) -> [CGPoint] {
     guard !sources.isEmpty else { return [] }
     let layout = ConstellationOrbitLayout(
       sourceIDs: sources.map(\.id),
       size: ConstellationPoint(x: Double(size.width), y: Double(size.height)),
       centre: ConstellationPoint(x: Double(centre.x), y: Double(centre.y)),
-      horizontalClearance: Double(ConstellationGeometry.horizontalClearance),
-      topClearance: Double(ConstellationGeometry.topClearance),
-      bottomClearance: Double(ConstellationGeometry.bottomClearance)
+      metrics: metrics
     )
-    return layout.positions().map { CGPoint(x: CGFloat($0.x), y: CGFloat($0.y)) }
+    return layout.placements().map {
+      CGPoint(x: CGFloat($0.anchor.x), y: CGFloat($0.anchor.y))
+    }
   }
 
   private static func makeContextBases(

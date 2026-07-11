@@ -32,7 +32,9 @@ struct ConstellationView: View {
   ) {
     self.init(
       sources: sources,
-      activity: isSyncing ? .syncing(sourceIDs: Set(sources.map(\.id))) : .idle,
+      activity: isSyncing
+        ? .syncing(sourceIDs: Set(sources.map(\.id)), response: nil)
+        : .idle,
       onSelectEverything: onSelectEverything,
       onSelectSource: onSelectSource
     )
@@ -83,24 +85,25 @@ private struct OrbitingSourceNode: View {
         SourceNode(
           source: placement.source,
           diameter: placement.diameter,
+          contentWidth: CGFloat(placement.metrics.labelWidth),
           action: action
         )
         .environment(iconStore)
       ),
       contentSize: CGSize(
-        width: ConstellationGeometry.sourceContentWidth,
+        width: CGFloat(placement.metrics.labelWidth),
         height: placement.diameter + ConstellationGeometry.sourceLabelAllowance
       ),
       motion: placement.motion,
       reduceMotion: reduceMotion
     )
     .frame(
-      width: ConstellationGeometry.sourceHostSize.width,
-      height: ConstellationGeometry.sourceHostSize.height
+      width: CGFloat(placement.metrics.hostSize.x),
+      height: CGFloat(placement.metrics.hostSize.y)
     )
     .position(
       x: placement.anchor.x,
-      y: placement.anchor.y + ConstellationGeometry.iconAnchorOffset
+      y: placement.anchor.y + CGFloat(placement.metrics.hostCentreYOffset)
     )
   }
 }
@@ -295,15 +298,18 @@ private struct SourceNode: View {
 
   let source: SourceStatus
   let diameter: CGFloat
+  let contentWidth: CGFloat
   let action: @MainActor @Sendable () -> Void
 
   nonisolated init(
     source: SourceStatus,
     diameter: CGFloat,
+    contentWidth: CGFloat,
     action: @MainActor @escaping @Sendable () -> Void
   ) {
     self.source = source
     self.diameter = diameter
+    self.contentWidth = contentWidth
     self.action = action
   }
 
@@ -318,7 +324,7 @@ private struct SourceNode: View {
           )
         }
         .frame(
-          width: ConstellationGeometry.sourceContentWidth,
+          width: contentWidth,
           height: diameter + ConstellationGeometry.sourceLabelAllowance,
           alignment: .top
         )
@@ -329,7 +335,7 @@ private struct SourceNode: View {
           .allowsHitTesting(false)
       }
       .frame(
-        width: ConstellationGeometry.sourceContentWidth,
+        width: contentWidth,
         height: diameter + ConstellationGeometry.sourceLabelAllowance,
         alignment: .top
       )
