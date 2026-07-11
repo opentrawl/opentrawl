@@ -123,29 +123,202 @@ static BOOL pcEnsureParentDirectory(NSURL *url, char **errorOut) {
   return YES;
 }
 
-static id pcJSONSafe(id value) {
+static NSDictionary *pcTypedMetadataValue(id value, NSString **errorOut) {
   if (value == nil || value == (id)kCFNull) {
-    return [NSNull null];
+    return @{ @"type": @"null" };
   }
-  if ([value isKindOfClass:[NSString class]] || [value isKindOfClass:[NSNumber class]] || [value isKindOfClass:[NSNull class]]) {
-    return value;
+  if ([value isKindOfClass:[NSString class]]) {
+    return @{ @"type": @"string", @"string": value };
+  }
+  if ([value isKindOfClass:[NSDate class]]) {
+    return @{ @"type": @"date", @"date": pcDate(value) };
+  }
+  if ([value isKindOfClass:[NSData class]]) {
+    return @{ @"type": @"data", @"data": [(NSData *)value base64EncodedStringWithOptions:0] };
+  }
+  if ([value isKindOfClass:[NSNumber class]]) {
+    if (CFGetTypeID((__bridge CFTypeRef)value) == CFBooleanGetTypeID()) {
+      return @{ @"type": @"boolean", @"boolean": value };
+    }
+    const char *numberType = [(NSNumber *)value objCType];
+    if (strcmp(numberType, @encode(float)) == 0 || strcmp(numberType, @encode(double)) == 0 || strcmp(numberType, @encode(long double)) == 0) {
+      return @{ @"type": @"decimal", @"decimal": [(NSNumber *)value stringValue] };
+    }
+    if (strcmp(numberType, @encode(unsigned char)) == 0 || strcmp(numberType, @encode(unsigned short)) == 0 ||
+        strcmp(numberType, @encode(unsigned int)) == 0 || strcmp(numberType, @encode(unsigned long)) == 0 ||
+        strcmp(numberType, @encode(unsigned long long)) == 0) {
+      return @{ @"type": @"unsigned_integer", @"unsigned_integer": [(NSNumber *)value stringValue] };
+    }
+    if (strcmp(numberType, @encode(char)) == 0 || strcmp(numberType, @encode(short)) == 0 ||
+        strcmp(numberType, @encode(int)) == 0 || strcmp(numberType, @encode(long)) == 0 ||
+        strcmp(numberType, @encode(long long)) == 0) {
+      return @{ @"type": @"signed_integer", @"signed_integer": [(NSNumber *)value stringValue] };
+    }
+    if (errorOut != NULL) {
+      *errorOut = [NSString stringWithFormat:@"unsupported ImageIO number type %s", numberType];
+    }
+    return nil;
   }
   if ([value isKindOfClass:[NSArray class]]) {
-    NSMutableArray *out = [NSMutableArray array];
+    NSMutableArray *items = [NSMutableArray arrayWithCapacity:[(NSArray *)value count]];
     for (id item in (NSArray *)value) {
-      [out addObject:pcJSONSafe(item)];
+      NSDictionary *typed = pcTypedMetadataValue(item, errorOut);
+      if (typed == nil) {
+        return nil;
+      }
+      [items addObject:typed];
     }
-    return out;
+    return @{ @"type": @"array", @"array": items };
   }
   if ([value isKindOfClass:[NSDictionary class]]) {
-    NSMutableDictionary *out = [NSMutableDictionary dictionary];
+    NSMutableDictionary *items = [NSMutableDictionary dictionaryWithCapacity:[(NSDictionary *)value count]];
     for (id key in (NSDictionary *)value) {
-      NSString *stringKey = [key isKindOfClass:[NSString class]] ? key : [key description];
-      out[stringKey] = pcJSONSafe([(NSDictionary *)value objectForKey:key]);
+      if (![key isKindOfClass:[NSString class]] || [(NSString *)key length] == 0) {
+        if (errorOut != NULL) {
+          *errorOut = @"ImageIO metadata contains a non-string or empty dictionary key";
+        }
+        return nil;
+      }
+      NSDictionary *typed = pcTypedMetadataValue([(NSDictionary *)value objectForKey:key], errorOut);
+      if (typed == nil) {
+        return nil;
+      }
+      items[key] = typed;
     }
-    return out;
+    return @{ @"type": @"dictionary", @"dictionary": items };
   }
-  return [value description];
+  if (errorOut != NULL) {
+    *errorOut = [NSString stringWithFormat:@"unsupported ImageIO metadata class %@", NSStringFromClass([value class])];
+  }
+  return nil;
+}
+
+static char *pcTypedMetadataFixtureJSON(char **errorOut) {
+  NSString *typingError = nil;
+  NSDictionary *fixture = @{
+    @"string": @"synthetic text",
+    @"boolean": @YES,
+    @"signed": @(-2),
+    @"unsigned": [NSNumber numberWithUnsignedLongLong:18446744073709551615ULL],
+    @"decimal": @1.25,
+    @"date": [NSDate dateWithTimeIntervalSince1970:0],
+    @"binary": [NSData dataWithBytes:"synthetic bytes" length:15],
+    @"array": @[@1, @"two", [NSNull null]],
+    @"dictionary": @{@"nested": [NSNull null]}
+  };
+  NSDictionary *typed = pcTypedMetadataValue(fixture, &typingError);
+  if (typed == nil) {
+    pcSetError(errorOut, [NSString stringWithFormat:@"type synthetic metadata fixture: %@", pcString(typingError)]);
+    return NULL;
+  }
+  NSError *jsonError = nil;
+  NSData *data = [NSJSONSerialization dataWithJSONObject:typed options:0 error:&jsonError];
+  if (data == nil) {
+    pcSetError(errorOut, [NSString stringWithFormat:@"encode synthetic metadata fixture: %@", jsonError.localizedDescription]);
+    return NULL;
+  }
+  char *json = malloc(data.length + 1);
+  if (json == NULL) {
+    pcSetError(errorOut, @"allocate synthetic metadata fixture JSON");
+    return NULL;
+  }
+  memcpy(json, data.bytes, data.length);
+  json[data.length] = '\0';
+  return json;
+}
+
+char *photoscrawl_image_metadata_typed_fixture_json(char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    return pcTypedMetadataFixtureJSON(errorOut);
+  }
+}
+
+int photoscrawl_write_image_metadata_fixture(const char *destinationPath, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    NSString *destination = destinationPath == NULL ? @"" : [NSString stringWithUTF8String:destinationPath];
+    if (destination.length == 0) {
+      pcSetError(errorOut, @"fixture destination path is required");
+      return 0;
+    }
+    NSURL *destinationURL = [NSURL fileURLWithPath:destination];
+    if (!pcEnsureParentDirectory(destinationURL, errorOut)) {
+      return 0;
+    }
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    if (colorSpace == NULL) {
+      pcSetError(errorOut, @"create synthetic fixture colour space");
+      return 0;
+    }
+    CGContextRef context = CGBitmapContextCreate(NULL, 2, 2, 8, 0, colorSpace, kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    CGColorSpaceRelease(colorSpace);
+    if (context == NULL) {
+      pcSetError(errorOut, @"create synthetic fixture bitmap");
+      return 0;
+    }
+    CGContextSetRGBFillColor(context, 0.2, 0.4, 0.8, 1.0);
+    CGContextFillRect(context, CGRectMake(0, 0, 2, 2));
+    CGImageRef image = CGBitmapContextCreateImage(context);
+    CGContextRelease(context);
+    if (image == NULL) {
+      pcSetError(errorOut, @"create synthetic fixture image");
+      return 0;
+    }
+
+    NSDictionary *exif = @{
+      (NSString *)kCGImagePropertyExifExposureTime: @0.008333333333333333,
+      (NSString *)kCGImagePropertyExifFNumber: @1.8,
+      (NSString *)kCGImagePropertyExifFocalLength: @6.86,
+      (NSString *)kCGImagePropertyExifISOSpeedRatings: @[@64],
+      (NSString *)kCGImagePropertyExifDateTimeOriginal: @"2026:07:10 12:34:56",
+      (NSString *)kCGImagePropertyExifOffsetTimeOriginal: @"+02:00",
+      (NSString *)kCGImagePropertyExifUserComment: [NSData dataWithBytes:"synthetic comment" length:17]
+    };
+    NSDictionary *gps = @{
+      (NSString *)kCGImagePropertyGPSLatitude: @52.367612345678,
+      (NSString *)kCGImagePropertyGPSLatitudeRef: @"N",
+      (NSString *)kCGImagePropertyGPSLongitude: @4.904112345678,
+      (NSString *)kCGImagePropertyGPSLongitudeRef: @"E",
+      (NSString *)kCGImagePropertyGPSHPositioningError: @8.25,
+      (NSString *)kCGImagePropertyGPSDateStamp: @"2026:07:10",
+      (NSString *)kCGImagePropertyGPSTimeStamp: @[@10, @34, @56]
+    };
+    NSDictionary *tiff = @{
+      (NSString *)kCGImagePropertyTIFFMake: @"Synthetic Camera",
+      (NSString *)kCGImagePropertyTIFFModel: @"Synthetic Model",
+      (NSString *)kCGImagePropertyTIFFOrientation: @6
+    };
+    NSDictionary *iptc = @{
+      (NSString *)kCGImagePropertyIPTCCaptionAbstract: @"Synthetic caption"
+    };
+    NSDictionary *properties = @{
+      (NSString *)kCGImagePropertyExifDictionary: exif,
+      (NSString *)kCGImagePropertyGPSDictionary: gps,
+      (NSString *)kCGImagePropertyTIFFDictionary: tiff,
+      (NSString *)kCGImagePropertyIPTCDictionary: iptc
+    };
+    [[NSFileManager defaultManager] removeItemAtURL:destinationURL error:nil];
+    CGImageDestinationRef imageDestination = CGImageDestinationCreateWithURL((__bridge CFURLRef)destinationURL, CFSTR("public.jpeg"), 1, NULL);
+    if (imageDestination == NULL) {
+      CGImageRelease(image);
+      pcSetError(errorOut, @"create synthetic fixture destination");
+      return 0;
+    }
+    CGImageDestinationAddImage(imageDestination, image, (__bridge CFDictionaryRef)properties);
+    BOOL ok = CGImageDestinationFinalize(imageDestination);
+    CFRelease(imageDestination);
+    CGImageRelease(image);
+    if (!ok) {
+      pcSetError(errorOut, @"write synthetic ImageIO metadata fixture");
+      return 0;
+    }
+    return 1;
+  }
 }
 
 static PHAuthorizationStatus pcCurrentAuthorizationStatus(void) {
@@ -582,7 +755,7 @@ int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destin
   }
 }
 
-char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut) {
+char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {
       *errorOut = NULL;
@@ -598,14 +771,37 @@ char *photoscrawl_image_metadata_json(const char *sourcePath, char **errorOut) {
       pcSetError(errorOut, @"open source image metadata");
       return NULL;
     }
-    NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(imageSource, 0, NULL));
-    CFRelease(imageSource);
-    if (properties == nil) {
-      properties = @{};
+    NSDictionary *containerProperties = CFBridgingRelease(CGImageSourceCopyProperties(imageSource, NULL));
+    if (containerProperties == nil) {
+      containerProperties = @{};
     }
-    id safe = pcJSONSafe(properties);
+    NSString *typingError = nil;
+    NSDictionary *container = pcTypedMetadataValue(containerProperties, &typingError);
+    if (container == nil) {
+      CFRelease(imageSource);
+      pcSetError(errorOut, [NSString stringWithFormat:@"type container metadata: %@", pcString(typingError)]);
+      return NULL;
+    }
+    size_t imageCount = CGImageSourceGetCount(imageSource);
+    NSMutableArray *images = [NSMutableArray arrayWithCapacity:imageCount];
+    for (size_t index = 0; index < imageCount; index++) {
+      NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(imageSource, index, NULL));
+      if (properties == nil) {
+        properties = @{};
+      }
+      typingError = nil;
+      NSDictionary *typed = pcTypedMetadataValue(properties, &typingError);
+      if (typed == nil) {
+        CFRelease(imageSource);
+        pcSetError(errorOut, [NSString stringWithFormat:@"type image metadata at index %zu: %@", index, pcString(typingError)]);
+        return NULL;
+      }
+      [images addObject:@{ @"index": @(index), @"properties": typed }];
+    }
+    CFRelease(imageSource);
+    NSDictionary *record = @{ @"container": container, @"images": images };
     NSError *jsonError = nil;
-    NSData *data = [NSJSONSerialization dataWithJSONObject:safe options:0 error:&jsonError];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:0 error:&jsonError];
     if (data == nil) {
       pcSetError(errorOut, [NSString stringWithFormat:@"encode image metadata: %@", jsonError.localizedDescription]);
       return NULL;

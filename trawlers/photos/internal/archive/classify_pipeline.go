@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -33,6 +35,8 @@ type classifyWrite struct {
 }
 
 type contentOutcome string
+
+var extractImageMetadata = photos.ImageMetadataRecord
 
 const (
 	contentOutcomeClassified              contentOutcome = "classified"
@@ -70,6 +74,10 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	if err != nil {
 		return err
 	}
+	metadataStore, err := imagemetadata.NewStore(filepath.Join(paths.CacheDir, "image-metadata"), extractImageMetadata)
+	if err != nil {
+		return err
+	}
 
 	// Pre-pass: items that never reach the model resolve immediately.
 	items := make([]*contentItem, 0, len(inputs))
@@ -103,14 +111,34 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		item.imagePath = resolved.Path
 		item.pathClass = resolved.Source
 		logger.logOriginalResolved(item.input, resolved)
-		// The request owns its image bytes after buildRequest returns.
-		// Hold the cache lease until then so another process cannot evict it.
-		defer func() {
-			if resolved.Lease != nil {
-				resolved.Lease.Close()
-			}
-		}()
-		request, meta, err := classifier.buildRequest(item.input, item.imagePath)
+		// Register release before the first metadata operation so a failed
+		// extractor cannot leave a cache entry leased until process exit.
+		if resolved.Lease != nil {
+			defer resolved.Lease.Close()
+		}
+		metadataStartedAt := time.Now()
+		metadata, err := metadataStore.Load(ctx, item.imagePath, resolved.SHA256)
+		metadataDuration := time.Since(metadataStartedAt)
+		if err != nil {
+			logger.warn("image_metadata_failed",
+				logTokenField("asset_ref", AssetRef(item.input.AssetID)),
+				logInt64Field("duration_ms", metadataDuration.Milliseconds()),
+				logStringField("reason", "exact-original metadata unavailable"),
+			)
+			return model.Request{}, fmt.Errorf("prepare exact-original metadata: %w", err)
+		}
+		cacheStatus := "extracted"
+		if metadata.CacheHit {
+			cacheStatus = "hit"
+		}
+		logger.info("image_metadata_ready",
+			logTokenField("asset_ref", AssetRef(item.input.AssetID)),
+			logTokenField("cache", cacheStatus),
+			logInt64Field("duration_ms", metadataDuration.Milliseconds()),
+			logIntField("fields", metadata.Proof.FieldCount),
+			logIntField("excluded", metadata.Proof.ExclusionCount),
+		)
+		request, meta, err := classifier.buildRequest(item.input, item.imagePath, metadata.Projection)
 		if err != nil {
 			return model.Request{}, err
 		}

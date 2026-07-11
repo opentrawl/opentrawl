@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	repoPrompts "github.com/opentrawl/opentrawl/trawlers/photos/prompts"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
@@ -49,20 +50,21 @@ func newModelClassifier(modelID, baseURL, bearerKeyEnv string) (modelClassifier,
 	}, nil
 }
 
-// imageMeta is what buildRequest learns about the image on the prepare side;
-// parseResult folds it into the stored modelResult on the commit side.
+// imageMeta identifies the visual image sent to the model. The immutable
+// original has separate metadata provenance and need not be the same image.
 type imageMeta struct {
 	Bytes  int64
 	SHA256 string
 }
 
-func (c modelClassifier) buildRequest(input classifyInput, imagePath string) (model.Request, imageMeta, error) {
+func (c modelClassifier) buildRequest(input classifyInput, imagePath string, originalMetadata imagemetadata.Projection) (model.Request, imageMeta, error) {
 	data, err := os.ReadFile(imagePath)
 	if err != nil {
 		return model.Request{}, imageMeta{}, fmt.Errorf("read image: %w", err)
 	}
 	sum := sha256.Sum256(data)
-	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV3, input)
+	imageSHA256 := hex.EncodeToString(sum[:])
+	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV3, input, originalMetadata)
 	if err != nil {
 		return model.Request{}, imageMeta{}, fmt.Errorf("render photo card prompt: %w", err)
 	}
@@ -75,7 +77,7 @@ func (c modelClassifier) buildRequest(input classifyInput, imagePath string) (mo
 			Temperature: 0.1,
 		}, imageMeta{
 			Bytes:  int64(len(data)),
-			SHA256: hex.EncodeToString(sum[:]),
+			SHA256: imageSHA256,
 		}, nil
 }
 
@@ -94,8 +96,8 @@ func (c modelClassifier) parseResult(responseText string, input classifyInput, m
 	}, nil
 }
 
-func renderPhotoCardPrompt(promptText string, input classifyInput) (string, error) {
-	metadataJSON, err := photoCardMetadataJSON(input)
+func renderPhotoCardPrompt(promptText string, input classifyInput, originalMetadata imagemetadata.Projection) (string, error) {
+	metadataJSON, err := photoCardMetadataJSONWithProjection(input, originalMetadata)
 	if err != nil {
 		return "", err
 	}
@@ -111,6 +113,10 @@ func renderPhotoCardPrompt(promptText string, input classifyInput) (string, erro
 }
 
 func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
+	return photoCardMetadataJSONWithProjection(input, imagemetadata.Projection{})
+}
+
+func photoCardMetadataJSONWithProjection(input classifyInput, originalMetadata imagemetadata.Projection) ([]byte, error) {
 	albums := make([]map[string]any, 0, len(input.Albums))
 	for _, album := range input.Albums {
 		albums = append(albums, map[string]any{
@@ -170,6 +176,9 @@ func photoCardMetadataJSON(input classifyInput) ([]byte, error) {
 	}
 	if camera := input.cameraContext(); len(camera) > 0 {
 		payload["camera"] = camera
+	}
+	if len(originalMetadata.Lines) > 0 {
+		payload["exact_original_metadata"] = originalMetadata.Lines
 	}
 	return json.MarshalIndent(payload, "", "  ")
 }
