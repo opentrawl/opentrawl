@@ -68,6 +68,22 @@ func TestExportOriginalResourceThroughAppChecksWireInputAndOutput(t *testing.T) 
 	}
 }
 
+func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testing.T) {
+	oldLaunch := launchPhotoKitCurrentStillApp
+	defer func() { launchPhotoKitCurrentStillApp = oldLaunch }()
+	launched := false
+	launchPhotoKitCurrentStillApp = func(context.Context, string, string) error { launched = true; return nil }
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := ExportCurrentStillThroughApp(ctx, CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", ModificationDate: "2026-07-11T12:00:00.125Z"}, filepath.Join(t.TempDir(), "current.heic"))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	if launched {
+		t.Fatal("cancelled current-still request launched the helper")
+	}
+}
+
 func TestPhotoKitFetchLaunchUsesVerifiedAppPath(t *testing.T) {
 	oldResolve := resolvePhotoKitFetchApp
 	oldRun := runPhotoKitFetchOpen

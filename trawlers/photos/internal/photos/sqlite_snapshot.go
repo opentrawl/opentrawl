@@ -552,5 +552,7 @@ func coreDataTime(value sql.NullFloat64) string {
 	if !value.Valid {
 		return ""
 	}
-	return time.Unix(978307200+int64(value.Float64), 0).UTC().Format(time.RFC3339)
+	seconds := int64(value.Float64)
+	nanoseconds := int64((value.Float64 - float64(seconds)) * float64(time.Second))
+	return time.Unix(978307200+seconds, nanoseconds).UTC().Format(time.RFC3339Nano)
 }

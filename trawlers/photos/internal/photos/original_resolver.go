@@ -250,6 +250,12 @@ func writeOriginalCacheProof(path string, size int64, digest []byte) error {
 	if err != nil {
 		return fmt.Errorf("encode original cache proof: %w", err)
 	}
+	return writeOriginalCacheProofData(path, append(data, '\n'))
+}
+
+// writeOriginalCacheProofData is shared by the two media roles. Both use the
+// same private root, atomic proof installation and entry locks.
+func writeOriginalCacheProofData(path string, data []byte) error {
 	proofPath := originalCacheProofPath(path)
 	temporary, err := os.CreateTemp(filepath.Dir(proofPath), ".original-proof-*")
 	if err != nil {
@@ -261,7 +267,7 @@ func writeOriginalCacheProof(path string, size int64, digest []byte) error {
 		_ = temporary.Close()
 		return fmt.Errorf("protect original cache proof: %w", err)
 	}
-	if _, err := temporary.Write(append(data, '\n')); err != nil {
+	if _, err := temporary.Write(data); err != nil {
 		_ = temporary.Close()
 		return fmt.Errorf("write original cache proof: %w", err)
 	}
