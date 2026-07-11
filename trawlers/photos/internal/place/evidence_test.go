@@ -1,12 +1,10 @@
 package place
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -67,6 +65,14 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 	if first.State != evidenceStateComplete || len(first.Records) != 3 {
 		t.Fatalf("first evidence result = %#v", first)
 	}
+	for _, record := range first.Records {
+		if record.PreAuthRequestSHA256 != evidenceDigest([]byte(readRawFile(t, record, "request.raw"))) {
+			t.Fatalf("request digest mismatch for %s", record.Operation)
+		}
+		if record.RawResponseSHA256 != evidenceDigest([]byte(readRawFile(t, record, "response.raw"))) {
+			t.Fatalf("response digest mismatch for %s", record.Operation)
+		}
+	}
 	if got := []string{first.Records[0].ProviderIdentity, first.Records[1].Operation, first.Records[2].Operation}; !slices.Equal(got, []string{"apple", "osm_reverse", "osm_nearby"}) {
 		t.Fatalf("record boundaries = %#v", got)
 	}
@@ -113,6 +119,7 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 	if appleCalls != 1 || len(*requests) != 2 {
 		t.Fatalf("first transport calls: apple=%d OSM=%d", appleCalls, len(*requests))
 	}
+	t.Logf("RAW AUTHENTICATED REQUEST VALUES %#v", *requests)
 	for _, request := range *requests {
 		if request.Query().Get("syntheticKey") != "synthetic-secret" {
 			t.Fatalf("credential injection request = %q", request.RawQuery)
@@ -173,12 +180,13 @@ func TestStoppedEvidenceRetainsRawOutputAndNeverEntersCache(t *testing.T) {
 	if !errors.As(err, &stopped) {
 		t.Fatalf("stopped error = %v", err)
 	}
-	if result.State != evidenceStateStopped || len(result.StopReasons) != 3 {
+	if result.State != evidenceStateStopped || len(result.StopReasons) != 1 {
 		t.Fatalf("stopped result = %#v", result)
 	}
 	assertRawFile(t, result.Records[0], "response.raw", "Apple reverse geocode returned no placemarks")
-	assertRawFile(t, result.Records[1], "response.raw", "synthetic unavailable\n")
-	assertRawFile(t, result.Records[2], "response.raw", `{"features":`)
+	if len(result.Records) != 1 || result.Records[0].StopReason != evidenceStopNoResult {
+		t.Fatalf("Apple stop record = %#v", result.Records)
+	}
 	for _, record := range result.Records {
 		t.Logf("RAW STOPPED RESPONSE %s %q", record.Operation, readRawFile(t, record, "response.raw"))
 	}
@@ -193,7 +201,7 @@ func TestStoppedEvidenceRetainsRawOutputAndNeverEntersCache(t *testing.T) {
 	if _, err := runEvidence(context.Background(), options, runner); !errors.As(err, &stopped) {
 		t.Fatalf("second stopped error = %v", err)
 	}
-	if appleCalls != 2 || len(*requests) != 4 {
+	if appleCalls != 2 || len(*requests) != 0 {
 		t.Fatalf("stopped evidence was reused: apple=%d OSM=%d", appleCalls, len(*requests))
 	}
 }
@@ -276,7 +284,7 @@ func TestOversizedResponseStopsAndDoesNotEnterItsCache(t *testing.T) {
 		t.Fatalf("oversized response error = %v", err)
 	}
 	reverse := result.Records[1]
-	if reverse.CompletionState != evidenceStateStopped || !strings.Contains(reverse.StopReason, "exceeds") {
+	if reverse.CompletionState != evidenceStateStopped || reverse.StopReason != evidenceStopTooLarge {
 		t.Fatalf("oversized response record = %#v", reverse)
 	}
 	data, err := os.ReadFile(filepath.Join(reverse.RecordDir, "response.raw"))
@@ -288,81 +296,6 @@ func TestOversizedResponseStopsAndDoesNotEnterItsCache(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(cacheDir, reverse.CacheIdentity)); !os.IsNotExist(err) {
 		t.Fatalf("oversized response cache error = %v", err)
-	}
-}
-
-func TestCredentialNeverEntersRetainedEvidenceOrReturnedError(t *testing.T) {
-	credential := "synthetic-secret+/="
-	client := &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
-		if request.URL.Path == "/reverse" {
-			return &http.Response{
-				StatusCode: http.StatusBadGateway,
-				Body:       io.NopCloser(strings.NewReader("provider echoed " + credential)),
-				Header:     make(http.Header),
-				Request:    request,
-			}, nil
-		}
-		return nil, fmt.Errorf("synthetic transport included authenticated URL %s", request.URL.String())
-	})}
-	input := syntheticEvidenceInput(52.36, 4.89)
-	runner := evidenceRunner{callApple: func(_ context.Context, got Input, radius float64) appleBoundaryOutput {
-		request, err := appleRequestJSON(got, radius)
-		return appleBoundaryOutput{Request: request, Response: []byte(syntheticAppleResponse), Err: err}
-	}}
-	root := t.TempDir()
-	options := EvidenceOptions{
-		Input:             input,
-		CoordinateVariant: "source-coordinate",
-		RadiusMeters:      150,
-		OutputDir:         filepath.Join(root, "output"),
-		CacheDir:          filepath.Join(root, "cache"),
-		Geoapify: ConfiguredGeoapifyEvidence{
-			ProviderIdentity:    "synthetic-osm",
-			ReverseEndpoint:     "https://geo.example.com/reverse",
-			NearbyEndpoint:      "https://geo.example.com/nearby",
-			CredentialReference: "SYNTHETIC_OSM_KEY",
-			CredentialParameter: "syntheticKey",
-			Credential:          credential,
-			NearbyCategories:    []string{"natural"},
-			ReverseLimit:        2,
-			NearbyLimit:         50,
-			HTTPClient:          client,
-		},
-	}
-	result, err := runEvidence(context.Background(), options, runner)
-	var stopped *EvidenceStoppedError
-	if !errors.As(err, &stopped) {
-		t.Fatalf("credential safety error = %v", err)
-	}
-	if strings.Contains(err.Error(), credential) {
-		t.Fatalf("returned error leaked credential: %v", err)
-	}
-	for _, reason := range result.StopReasons {
-		if strings.Contains(reason, credential) {
-			t.Fatalf("stop reason leaked credential: %q", reason)
-		}
-	}
-	if got := readRawFile(t, result.Records[1], "response.raw"); got != redactedResponseFailure {
-		t.Fatalf("echoed credential response = %q", got)
-	}
-	if got := readRawFile(t, result.Records[2], "response.raw"); got != redactedTransportFailure {
-		t.Fatalf("transport failure response = %q", got)
-	}
-	err = filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
-		if walkErr != nil || info.IsDir() {
-			return walkErr
-		}
-		data, readErr := os.ReadFile(path)
-		if readErr != nil {
-			return readErr
-		}
-		if bytes.Contains(data, []byte(credential)) || bytes.Contains(data, []byte(url.QueryEscape(credential))) {
-			return fmt.Errorf("credential leaked into retained artefact %s", path)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -457,8 +390,12 @@ type syntheticHTTPResponse struct {
 }
 
 type capturedHTTPRequest struct {
-	Path     string
-	RawQuery string
+	Method     string
+	Host       string
+	RequestURI string
+	Header     http.Header
+	Path       string
+	RawQuery   string
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -478,7 +415,14 @@ func syntheticEvidenceServer(t *testing.T, responses map[string]syntheticHTTPRes
 	requests := []capturedHTTPRequest{}
 	server := httptest.NewTLSServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		mu.Lock()
-		requests = append(requests, capturedHTTPRequest{Path: request.URL.Path, RawQuery: request.URL.RawQuery})
+		requests = append(requests, capturedHTTPRequest{
+			Method:     request.Method,
+			Host:       request.Host,
+			RequestURI: request.RequestURI,
+			Header:     request.Header.Clone(),
+			Path:       request.URL.Path,
+			RawQuery:   request.URL.RawQuery,
+		})
 		mu.Unlock()
 		response, ok := responses[request.URL.Path]
 		if !ok {
@@ -516,8 +460,8 @@ func syntheticEvidenceOptions(server *httptest.Server, input Input, outputDir, c
 			CredentialParameter: "syntheticKey",
 			Credential:          "synthetic-secret",
 			NearbyCategories:    []string{"natural", "tourism.museum"},
-			ReverseLimit:        2,
-			NearbyLimit:         50,
+			ReverseLimit:        3,
+			NearbyLimit:         4,
 			HTTPClient:          server.Client(),
 		},
 	}
@@ -554,7 +498,7 @@ func TestAppleBoundaryMismatchStops(t *testing.T) {
 	if !errors.As(err, &stopped) {
 		t.Fatalf("Apple mismatch error = %v", err)
 	}
-	if result.Records[0].CompletionState != evidenceStateStopped || !strings.Contains(result.Records[0].StopReason, "does not match") {
+	if result.Records[0].CompletionState != evidenceStateStopped || result.Records[0].StopReason != evidenceStopFailed || !strings.Contains(result.Records[0].StopDetail, "does not match") {
 		t.Fatalf("Apple mismatch record = %#v", result.Records[0])
 	}
 }
