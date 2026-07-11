@@ -10,10 +10,6 @@ import (
 )
 
 func RenderIssue(w io.Writer, issue Issue) error {
-	hints := []string{}
-	if issue.Labels.PageInfo.HasNextPage {
-		hints = append(hints, "Showing first 50 labels.")
-	}
 	if err := crender.WriteCard(w, crender.Card{
 		Title: issue.Identifier,
 		Fields: []crender.CardField{
@@ -24,9 +20,10 @@ func RenderIssue(w io.Writer, issue Issue) error {
 			{Label: "milestone", Value: milestoneName(issue.Milestone)},
 			{Label: "assignee", Value: personName(issue.Assignee, "Unassigned")},
 			{Label: "labels", Value: labelList(issue.Labels.Nodes)},
+			{Label: "blocks", Value: relationTargets(issue, RelationBlocks)},
+			{Label: "blocked by", Value: relationTargets(issue, RelationBlockedBy)},
 			{Label: "url", Value: issue.URL},
 		},
-		Hints: hints,
 	}); err != nil {
 		return err
 	}
@@ -112,20 +109,63 @@ func RenderIssues(w io.Writer, result ListIssuesResult) error {
 	}
 	rows := make([][]string, 0, len(result.Issues))
 	for _, issue := range result.Issues {
-		rows = append(rows, []string{issue.Identifier, issue.State.Name, issue.Title})
+		rows = append(rows, []string{
+			issue.Identifier,
+			issue.State.Name,
+			issue.PriorityLabel,
+			projectName(issue.Project),
+			milestoneName(issue.Milestone),
+			labelList(issue.Labels.Nodes),
+			relationTargets(issue, RelationBlocks),
+			relationTargets(issue, RelationBlockedBy),
+			issue.Title,
+		})
 	}
 	if err := crender.WriteTable(w, []crender.TableColumn{
 		{Header: "issue"},
 		{Header: "state"},
+		{Header: "priority"},
+		{Header: "project", Wrap: true},
+		{Header: "milestone", Wrap: true},
+		{Header: "labels", Wrap: true},
+		{Header: "blocks", Wrap: true},
+		{Header: "blocked by", Wrap: true},
 		{Header: "title", Wrap: true},
 	}, rows); err != nil {
 		return err
 	}
-	if result.HasNextPage {
-		_, err := fmt.Fprintln(w, "\nShowing first 50 issues.")
-		return err
-	}
 	return nil
+}
+
+func relationTargets(issue Issue, direction RelationDirection) string {
+	var targets []string
+	for _, relation := range issue.Relations.Nodes {
+		if strings.EqualFold(relation.Type, "blocks") {
+			if direction == RelationBlocks && relation.Issue.ID == issue.ID {
+				targets = append(targets, relation.RelatedIssue.Identifier)
+			}
+			if direction == RelationBlockedBy && relation.RelatedIssue.ID == issue.ID {
+				targets = append(targets, relation.Issue.Identifier)
+			}
+		}
+		if strings.EqualFold(strings.ReplaceAll(relation.Type, "_", "-"), "blocked-by") {
+			if direction == RelationBlockedBy && relation.Issue.ID == issue.ID {
+				targets = append(targets, relation.RelatedIssue.Identifier)
+			}
+			if direction == RelationBlocks && relation.RelatedIssue.ID == issue.ID {
+				targets = append(targets, relation.Issue.Identifier)
+			}
+		}
+	}
+	for _, relation := range issue.InverseRelations.Nodes {
+		if strings.EqualFold(relation.Type, "blocks") && direction == RelationBlockedBy && relation.RelatedIssue.ID == issue.ID {
+			targets = append(targets, relation.Issue.Identifier)
+		}
+	}
+	if len(targets) == 0 {
+		return "None"
+	}
+	return strings.Join(targets, ", ")
 }
 
 func RenderInbox(w io.Writer, result InboxResult) error {

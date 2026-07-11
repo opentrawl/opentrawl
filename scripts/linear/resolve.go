@@ -131,25 +131,50 @@ func (api *LinearAPI) ResolveProjectStatus(ctx context.Context, name string) (Pr
 }
 
 func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []string) ([]string, error) {
+	labels, err := api.ResolveLabelRecords(ctx, team, names)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, 0, len(labels))
+	for _, label := range labels {
+		ids = append(ids, label.ID)
+	}
+	return ids, nil
+}
+
+func (api *LinearAPI) ResolveLabelRecords(ctx context.Context, team string, names []string) ([]IssueLabel, error) {
 	names = cleanLabelNames(names)
 	if len(names) == 0 {
 		return nil, nil
 	}
-	var out struct {
-		IssueLabels struct {
-			Nodes    []IssueLabel `json:"nodes"`
-			PageInfo PageInfo     `json:"pageInfo"`
-		} `json:"issueLabels"`
+	var all []IssueLabel
+	after := ""
+	for {
+		var out struct {
+			IssueLabels struct {
+				Nodes    []IssueLabel `json:"nodes"`
+				PageInfo PageInfo     `json:"pageInfo"`
+			} `json:"issueLabels"`
+		}
+		variables := map[string]any{"names": names}
+		if after != "" {
+			variables["after"] = after
+		}
+		if err := api.graph.Do(ctx, resolveLabelsQuery, variables, &out); err != nil {
+			return nil, err
+		}
+		all = append(all, out.IssueLabels.Nodes...)
+		if !out.IssueLabels.PageInfo.HasNextPage {
+			break
+		}
+		after = out.IssueLabels.PageInfo.EndCursor
+		if after == "" {
+			return nil, fmt.Errorf("linear did not return a cursor for the next label page")
+		}
 	}
-	if err := api.graph.Do(ctx, resolveLabelsQuery, map[string]any{"names": names}, &out); err != nil {
-		return nil, err
-	}
-	if out.IssueLabels.PageInfo.HasNextPage {
-		return nil, fmt.Errorf("linear returned more than 100 matching labels. Narrow the label names and try again")
-	}
-	ids := make([]string, 0, len(names))
+	labels := make([]IssueLabel, 0, len(names))
 	for _, name := range names {
-		matches := matchingLabels(out.IssueLabels.Nodes, team, name)
+		matches := matchingLabels(all, team, name)
 		if len(matches) == 0 {
 			return nil, fmt.Errorf("label %q was not found for team %s", name, team)
 		}
@@ -159,9 +184,9 @@ func (api *LinearAPI) ResolveLabels(ctx context.Context, team string, names []st
 		if matches[0].IsGroup {
 			return nil, fmt.Errorf("label %q is a group and cannot be applied", name)
 		}
-		ids = append(ids, matches[0].ID)
+		labels = append(labels, matches[0])
 	}
-	return ids, nil
+	return labels, nil
 }
 
 func (api *LinearAPI) ResolveState(ctx context.Context, team, state string) (IssueState, error) {
