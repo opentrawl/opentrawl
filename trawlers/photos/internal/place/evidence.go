@@ -17,13 +17,26 @@ import (
 )
 
 const (
-	evidenceParserVersion = "photos-place-evidence-v1"
+	evidenceParserVersion = "photos-place-evidence-v2"
 	evidenceStateComplete = "complete"
 	evidenceStateStopped  = "stopped"
+	evidenceStopEmpty     = "empty"
+	evidenceStopFailed    = "failed"
+	evidenceStopMalformed = "malformed"
+	evidenceStopNoResult  = "no_result"
+	evidenceStopSaturated = "limit_saturated"
+	evidenceStopTooLarge  = "response_too_large"
+	appleEmptyResponse    = "Apple returned an empty response"
 	maxRawEvidenceBytes   = 4 << 20
 )
 
-var errRawEvidenceTooLarge = fmt.Errorf("provider response exceeds %d bytes", maxRawEvidenceBytes)
+var (
+	errEvidenceEmpty       = errors.New(evidenceStopEmpty)
+	errEvidenceFailed      = errors.New(evidenceStopFailed)
+	errEvidenceMalformed   = errors.New(evidenceStopMalformed)
+	errEvidenceSaturated   = errors.New(evidenceStopSaturated)
+	errRawEvidenceTooLarge = fmt.Errorf("provider response exceeds %d bytes", maxRawEvidenceBytes)
+)
 
 type EvidenceOptions struct {
 	Input             Input
@@ -68,22 +81,25 @@ func (e *EvidenceStoppedError) Error() string {
 }
 
 type EvidenceRecord struct {
-	Input               Input               `json:"input"`
-	ProviderIdentity    string              `json:"provider_identity"`
-	Operation           string              `json:"operation"`
-	CoordinateVariant   string              `json:"coordinate_variant"`
-	ParserVersion       string              `json:"parser_version"`
-	PreAuthRequestFile  string              `json:"pre_auth_request_file"`
-	RawResponseFile     string              `json:"raw_response_file"`
-	HTTPStatus          int                 `json:"http_status,omitempty"`
-	Address             *Address            `json:"address,omitempty"`
-	Candidates          []EvidenceCandidate `json:"candidates"`
-	CompletionState     string              `json:"completion_state"`
-	StopReason          string              `json:"stop_reason,omitempty"`
-	CacheIdentity       string              `json:"cache_identity"`
-	Cached              bool                `json:"cached,omitempty"`
-	RecordDir           string              `json:"record_dir,omitempty"`
-	CredentialReference string              `json:"credential_reference,omitempty"`
+	Input                Input               `json:"input"`
+	ProviderIdentity     string              `json:"provider_identity"`
+	Operation            string              `json:"operation"`
+	CoordinateVariant    string              `json:"coordinate_variant"`
+	ParserVersion        string              `json:"parser_version"`
+	PreAuthRequestFile   string              `json:"pre_auth_request_file"`
+	PreAuthRequestSHA256 string              `json:"pre_auth_request_sha256"`
+	RawResponseFile      string              `json:"raw_response_file"`
+	RawResponseSHA256    string              `json:"raw_response_sha256"`
+	HTTPStatus           int                 `json:"http_status,omitempty"`
+	Address              *Address            `json:"address,omitempty"`
+	Candidates           []EvidenceCandidate `json:"candidates"`
+	CompletionState      string              `json:"completion_state"`
+	StopReason           string              `json:"stop_reason,omitempty"`
+	StopDetail           string              `json:"stop_detail,omitempty"`
+	CacheIdentity        string              `json:"cache_identity"`
+	Cached               bool                `json:"cached,omitempty"`
+	RecordDir            string              `json:"record_dir,omitempty"`
+	CredentialReference  string              `json:"credential_reference,omitempty"`
 }
 
 type EvidenceCandidate struct {
@@ -152,32 +168,36 @@ func runEvidence(ctx context.Context, opts EvidenceOptions, runner evidenceRunne
 		return EvidenceResult{}, err
 	}
 
-	apple := captureAppleEvidence(ctx, opts, runner)
-	reverse := captureGeoapifyReverse(ctx, opts)
-	nearby := captureGeoapifyNearby(ctx, opts)
-	captures := []*evidenceCapture{&apple, &reverse, &nearby}
+	operations := []func() evidenceCapture{
+		func() evidenceCapture { return captureAppleEvidence(ctx, opts, runner) },
+		func() evidenceCapture { return captureGeoapifyReverse(ctx, opts) },
+		func() evidenceCapture { return captureGeoapifyNearby(ctx, opts) },
+	}
+	captures := make([]evidenceCapture, 0, len(operations))
 	result := EvidenceResult{State: evidenceStateComplete, CoordinateVariant: variant}
-	for index, capture := range captures {
+	for index, operation := range operations {
+		capture := operation()
 		dirName := fmt.Sprintf("%02d-%s-%s-%s", index+1, safePathPart(capture.record.ProviderIdentity), safePathPart(capture.record.Operation), capture.record.CacheIdentity[:12])
-		if err := writeEvidenceCapture(filepath.Join(opts.OutputDir, dirName), capture); err != nil {
+		if err := writeEvidenceCapture(filepath.Join(opts.OutputDir, dirName), &capture); err != nil {
 			return EvidenceResult{}, err
 		}
 		result.Records = append(result.Records, capture.record)
 		if capture.record.CompletionState == evidenceStateStopped {
 			result.State = evidenceStateStopped
 			result.StopReasons = append(result.StopReasons, capture.record.ProviderIdentity+" "+capture.record.Operation+": "+capture.record.StopReason)
+			return result, &EvidenceStoppedError{OutputDir: opts.OutputDir, StopReasons: append([]string(nil), result.StopReasons...)}
+		}
+		captures = append(captures, capture)
+	}
+	for _, capture := range captures {
+		if capture.record.Cached {
 			continue
 		}
-		if !capture.record.Cached {
-			cacheCapture := *capture
-			cacheCapture.record.RecordDir = ""
-			if err := writeEvidenceCapture(filepath.Join(opts.CacheDir, capture.record.CacheIdentity), &cacheCapture); err != nil {
-				return EvidenceResult{}, err
-			}
+		cacheCapture := capture
+		cacheCapture.record.RecordDir = ""
+		if err := writeEvidenceCapture(filepath.Join(opts.CacheDir, capture.record.CacheIdentity), &cacheCapture); err != nil {
+			return EvidenceResult{}, err
 		}
-	}
-	if result.State == evidenceStateStopped {
-		return result, &EvidenceStoppedError{OutputDir: opts.OutputDir, StopReasons: append([]string(nil), result.StopReasons...)}
 	}
 	return result, nil
 }
@@ -185,19 +205,21 @@ func runEvidence(ctx context.Context, opts EvidenceOptions, runner evidenceRunne
 func completeCapture(input Input, provider, operation, variant, credentialReference string, request, response []byte, status int, parsed parsedEvidence) evidenceCapture {
 	return evidenceCapture{
 		record: EvidenceRecord{
-			Input:               input,
-			ProviderIdentity:    provider,
-			Operation:           operation,
-			CoordinateVariant:   variant,
-			ParserVersion:       evidenceParserVersion,
-			PreAuthRequestFile:  "request.raw",
-			RawResponseFile:     "response.raw",
-			HTTPStatus:          status,
-			Address:             parsed.address,
-			Candidates:          parsed.candidates,
-			CompletionState:     evidenceStateComplete,
-			CacheIdentity:       evidenceCacheIdentity(input, provider, operation, variant, credentialReference, request),
-			CredentialReference: credentialReference,
+			Input:                input,
+			ProviderIdentity:     provider,
+			Operation:            operation,
+			CoordinateVariant:    variant,
+			ParserVersion:        evidenceParserVersion,
+			PreAuthRequestFile:   "request.raw",
+			PreAuthRequestSHA256: evidenceDigest(request),
+			RawResponseFile:      "response.raw",
+			RawResponseSHA256:    evidenceDigest(response),
+			HTTPStatus:           status,
+			Address:              parsed.address,
+			Candidates:           parsed.candidates,
+			CompletionState:      evidenceStateComplete,
+			CacheIdentity:        evidenceCacheIdentity(input, provider, operation, variant, credentialReference, request),
+			CredentialReference:  credentialReference,
 		},
 		request:  append([]byte(nil), request...),
 		response: append([]byte(nil), response...),
@@ -207,10 +229,42 @@ func completeCapture(input Input, provider, operation, variant, credentialRefere
 func stoppedCapture(input Input, provider, operation, variant, credentialReference string, request, response []byte, status int, parsed parsedEvidence, err error) evidenceCapture {
 	capture := completeCapture(input, provider, operation, variant, credentialReference, request, response, status, parsed)
 	capture.record.CompletionState = evidenceStateStopped
-	if err != nil {
-		capture.record.StopReason = err.Error()
+	capture.record.StopReason = namedEvidenceStop(response, err)
+	if err != nil && err.Error() != capture.record.StopReason {
+		capture.record.StopDetail = err.Error()
 	}
 	return capture
+}
+
+func namedEvidenceStop(response []byte, err error) string {
+	switch {
+	case errors.Is(err, errEvidenceSaturated):
+		return evidenceStopSaturated
+	case errors.Is(err, ErrProviderNoResult):
+		return evidenceStopNoResult
+	case errors.Is(err, errRawEvidenceTooLarge):
+		return evidenceStopTooLarge
+	case errors.Is(err, errEvidenceMalformed):
+		return evidenceStopMalformed
+	case errors.Is(err, errEvidenceEmpty):
+		return evidenceStopEmpty
+	case err != nil && err.Error() == appleEmptyResponse:
+		return evidenceStopEmpty
+	case errors.Is(err, errEvidenceFailed):
+		return evidenceStopFailed
+	}
+	var syntaxError *json.SyntaxError
+	var typeError *json.UnmarshalTypeError
+	if errors.As(err, &syntaxError) || errors.As(err, &typeError) {
+		return evidenceStopMalformed
+	}
+	if err != nil {
+		return evidenceStopFailed
+	}
+	if len(response) == 0 {
+		return evidenceStopEmpty
+	}
+	return evidenceStopFailed
 }
 
 func cachedCapture(cacheDir, provider, operation, variant, credentialReference string, request []byte, input Input, parser evidenceParser) (evidenceCapture, bool) {
@@ -233,6 +287,8 @@ func cachedCapture(cacheDir, provider, operation, variant, credentialReference s
 		record.CompletionState != evidenceStateComplete ||
 		record.CacheIdentity != identity ||
 		record.ParserVersion != evidenceParserVersion ||
+		record.PreAuthRequestSHA256 != evidenceDigest(storedRequest) ||
+		record.RawResponseSHA256 != evidenceDigest(response) ||
 		record.ProviderIdentity != provider ||
 		record.Operation != operation ||
 		record.CoordinateVariant != variant ||
@@ -247,6 +303,11 @@ func cachedCapture(cacheDir, provider, operation, variant, credentialReference s
 	record.Cached = true
 	record.CredentialReference = credentialReference
 	return evidenceCapture{record: record, request: storedRequest, response: response}, true
+}
+
+func evidenceDigest(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
 }
 
 func readBoundedEvidenceFile(path string) ([]byte, error) {

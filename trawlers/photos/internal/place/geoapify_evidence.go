@@ -79,7 +79,7 @@ func captureGeoapifyReverse(ctx context.Context, opts EvidenceOptions) evidenceC
 		"limit":  {strconv.Itoa(opts.Geoapify.ReverseLimit)},
 		"lon":    {formatEvidenceCoordinate(opts.Input.Location.Longitude)},
 	}
-	return captureGeoapify(ctx, opts, geoapifyReverseOperation, opts.Geoapify.ReverseEndpoint, query)
+	return captureGeoapify(ctx, opts, geoapifyReverseOperation, opts.Geoapify.ReverseEndpoint, query, opts.Geoapify.ReverseLimit)
 }
 
 func captureGeoapifyNearby(ctx context.Context, opts EvidenceOptions) evidenceCapture {
@@ -94,17 +94,19 @@ func captureGeoapifyNearby(ctx context.Context, opts EvidenceOptions) evidenceCa
 		"filter":     {"circle:" + centre + "," + strconv.FormatFloat(opts.RadiusMeters, 'f', -1, 64)},
 		"limit":      {strconv.Itoa(opts.Geoapify.NearbyLimit)},
 	}
-	return captureGeoapify(ctx, opts, geoapifyNearbyOperation, opts.Geoapify.NearbyEndpoint, query)
+	return captureGeoapify(ctx, opts, geoapifyNearbyOperation, opts.Geoapify.NearbyEndpoint, query, opts.Geoapify.NearbyLimit)
 }
 
-func captureGeoapify(ctx context.Context, opts EvidenceOptions, operation, endpoint string, query url.Values) evidenceCapture {
+func captureGeoapify(ctx context.Context, opts EvidenceOptions, operation, endpoint string, query url.Values, requestedLimit int) evidenceCapture {
 	provider := strings.TrimSpace(opts.Geoapify.ProviderIdentity)
 	credentialReference := strings.TrimSpace(opts.Geoapify.CredentialReference)
+	parser := parseGeoapifyEvidenceAtLimit(requestedLimit)
 	request, preAuth, err := geoapifyRequest(ctx, endpoint, query)
 	if err != nil {
-		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, nil, []byte(err.Error()), 0, parsedEvidence{}, err)
+		failed := fmt.Errorf("%w: %v", errEvidenceFailed, err)
+		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, nil, []byte(err.Error()), 0, parsedEvidence{}, failed)
 	}
-	if cached, ok := cachedCapture(opts.CacheDir, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, opts.Input, parseGeoapifyEvidence); ok {
+	if cached, ok := cachedCapture(opts.CacheDir, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, opts.Input, parser); ok {
 		return cached
 	}
 	authenticated := request.Clone(ctx)
@@ -117,30 +119,43 @@ func captureGeoapify(ctx context.Context, opts EvidenceOptions, operation, endpo
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
 		}
-		err := errors.New(redactedTransportFailure)
+		err := fmt.Errorf("%w: %s", errEvidenceFailed, redactedTransportFailure)
 		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, []byte(redactedTransportFailure), 0, parsedEvidence{}, err)
 	}
 	raw, readErr := readBoundedResponse(response)
 	if responseContainsCredential(raw, opts.Geoapify.Credential) {
-		err := errors.New(redactedResponseFailure)
+		err := fmt.Errorf("%w: %s", errEvidenceFailed, redactedResponseFailure)
 		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, []byte(redactedResponseFailure), response.StatusCode, parsedEvidence{}, err)
 	}
 	if readErr != nil {
-		err := errors.New("configured OSM provider response read failed")
+		err := fmt.Errorf("%w: configured OSM provider response read failed", errEvidenceFailed)
 		if errors.Is(readErr, errRawEvidenceTooLarge) {
 			err = errRawEvidenceTooLarge
 		}
 		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, err)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		err := fmt.Errorf("configured OSM provider returned HTTP %d", response.StatusCode)
+		err := fmt.Errorf("%w: configured OSM provider returned HTTP %d", errEvidenceFailed, response.StatusCode)
 		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, err)
 	}
-	parsed, parseErr := parseGeoapifyEvidence(raw, response.StatusCode, opts.Input)
+	parsed, parseErr := parser(raw, response.StatusCode, opts.Input)
 	if parseErr != nil {
 		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsed, parseErr)
 	}
 	return completeCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsed)
+}
+
+func parseGeoapifyEvidenceAtLimit(requestedLimit int) evidenceParser {
+	return func(raw []byte, status int, input Input) (parsedEvidence, error) {
+		parsed, err := parseGeoapifyEvidence(raw, status, input)
+		if err != nil {
+			return parsed, err
+		}
+		if len(parsed.candidates) >= requestedLimit {
+			return parsed, errEvidenceSaturated
+		}
+		return parsed, nil
+	}
 }
 
 func geoapifyRequest(ctx context.Context, endpoint string, query url.Values) (*http.Request, []byte, error) {
@@ -246,11 +261,11 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 		return parsedEvidence{}, fmt.Errorf("configured OSM provider returned HTTP %d", status)
 	}
 	if len(raw) == 0 {
-		return parsedEvidence{}, errors.New("configured OSM provider returned an empty response")
+		return parsedEvidence{}, fmt.Errorf("%w: configured OSM provider returned an empty response", errEvidenceEmpty)
 	}
 	var collection geoapifyEvidenceCollection
 	if err := json.Unmarshal(raw, &collection); err != nil {
-		return parsedEvidence{}, fmt.Errorf("parse raw configured OSM response: %w", err)
+		return parsedEvidence{}, fmt.Errorf("%w: parse raw configured OSM response: %v", errEvidenceMalformed, err)
 	}
 	if len(collection.Features) == 0 {
 		return parsedEvidence{}, ErrProviderNoResult
@@ -260,7 +275,7 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 	for index, feature := range collection.Features {
 		candidate, err := geoapifyEvidenceCandidate(index, feature, input)
 		if err != nil {
-			return parsed, err
+			return parsed, fmt.Errorf("%w: %v", errEvidenceMalformed, err)
 		}
 		if strings.TrimSpace(candidate.Name) != "" || candidate.Address != nil && strings.TrimSpace(candidate.Address.Formatted) != "" {
 			useful++
@@ -269,7 +284,7 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 	}
 	sortEvidenceCandidates(parsed.candidates)
 	if useful == 0 {
-		return parsed, errors.New("configured OSM provider returned no named or formatted candidates")
+		return parsed, fmt.Errorf("%w: configured OSM provider returned no named or formatted candidates", errEvidenceMalformed)
 	}
 	return parsed, nil
 }
