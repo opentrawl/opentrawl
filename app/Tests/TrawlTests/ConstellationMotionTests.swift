@@ -58,69 +58,107 @@ import Testing
 }
 
 @Test func layoutsStayBalancedAndInsideSafeBoundsForEverySupportedCount() {
-  let counts = [6, 9, 12, 16]
+  let counts = [6, 9, 12, 16, 20]
   let sizes = [
     ConstellationPoint(x: 800, y: 700),
     ConstellationPoint(x: 900, y: 720),
   ]
-  let horizontalClearance = 117.0
-  let topClearance = 67.0
-  let bottomClearance = 125.0
 
   for size in sizes {
     let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
     for count in counts {
       let sourceIDs = (1...count).map { String(format: "synthetic-%02d", $0) }
-      print("CONSTELLATION_INPUT size=\(size) centre=\(centre) sourceIDs=\(sourceIDs) clearances=[\(horizontalClearance), \(topClearance), \(bottomClearance)]")
+      let metrics = ConstellationLayoutMetrics.forSourceCount(count)
+      print("CONSTELLATION_INPUT size=\(size) centre=\(centre) sourceIDs=\(sourceIDs) metrics=\(metrics)")
       let layout = ConstellationOrbitLayout(
         sourceIDs: sourceIDs,
         size: size,
         centre: centre,
-        horizontalClearance: horizontalClearance,
-        topClearance: topClearance,
-        bottomClearance: bottomClearance
+        metrics: metrics
       )
-      let positions = layout.positions()
-      print("CONSTELLATION_OUTPUT size=\(size) count=\(count) positions=\(positions)")
+      let placements = layout.placements()
+      print("CONSTELLATION_OUTPUT size=\(size) count=\(count) placements=\(placements)")
 
-      #expect(positions.count == count)
-      #expect(Set(positions).count == count)
-      for position in positions {
-        #expect(position.x >= horizontalClearance)
-        #expect(position.x <= size.x - horizontalClearance)
-        #expect(position.y >= topClearance)
-        #expect(position.y <= size.y - bottomClearance)
+      let canvas = ConstellationRect(x: 0, y: 0, width: size.x, height: size.y)
+      let diamond = ConstellationRect(
+        x: centre.x - metrics.diamondClearanceRadius,
+        y: centre.y - metrics.diamondClearanceRadius,
+        width: metrics.diamondClearanceRadius * 2,
+        height: metrics.diamondClearanceRadius * 2
+      )
+      #expect(placements.count == count)
+      #expect(Set(placements.map(\.anchor)).count == count)
+      for placement in placements {
+        #expect(canvas.contains(placement.hostRect))
+        #expect(canvas.contains(placement.labelRect))
+        #expect(!placement.hostRect.expanded(by: metrics.spacing).intersects(diamond))
+        #expect(placement.hostRect.contains(placement.labelRect))
       }
-      for left in positions.indices {
-        for right in positions.indices.dropFirst(left + 1) {
-          #expect(positions[left].distance(to: positions[right]) >= 88)
+      for left in placements.indices {
+        for right in placements.indices.dropFirst(left + 1) {
+          #expect(
+            !placements[left].hostRect.expanded(by: metrics.spacing / 2)
+              .intersects(placements[right].hostRect.expanded(by: metrics.spacing / 2))
+          )
+          #expect(!placements[left].labelRect.intersects(placements[right].labelRect))
         }
       }
+
+      let radii = placements.map { $0.anchor.distance(to: centre) }
+      let angles = placements.map { atan2($0.anchor.y - centre.y, $0.anchor.x - centre.x) }
+        .sorted()
+      let wrappedAngles = Array(angles.dropFirst()) + [angles[0] + 2 * .pi]
+      let angleGaps = zip(angles, wrappedAngles).map { $1 - $0 }
+      #expect(Set(radii.map { Int($0 / 20) }).count >= 3)
+      #expect((radii.max() ?? 0) - (radii.min() ?? 0) >= 80)
+      #expect((angleGaps.max() ?? 0) - (angleGaps.min() ?? 0) >= 0.08)
     }
   }
 }
 
 @Test func activityPreservesTheCompleteUntouchedInputMeaning() {
   let allSources: Set<String> = ["calendar", "gmail", "photos"]
+  let usefulGmail = ConstellationResponseEvent(
+    usefulSourceIDs: ["gmail"],
+    failedSourceIDs: []
+  )
+  let mixedSync = ConstellationResponseEvent(
+    usefulSourceIDs: ["calendar", "gmail", "photos"],
+    failedSourceIDs: ["photos"]
+  )
   let inputs: [ConstellationActivity] = [
     .idle,
-    .searching(sourceID: nil),
-    .searching(sourceID: "gmail"),
-    .syncing(sourceIDs: allSources),
-    .failed(sourceIDs: ["photos"]),
+    .searching(sourceID: nil, response: nil),
+    .searching(sourceID: "gmail", response: usefulGmail),
+    .syncing(sourceIDs: allSources, response: nil),
+    .syncing(sourceIDs: allSources, response: mixedSync),
   ]
-  let outputs = inputs.map { ($0.activeSourceIDs, $0.isWorkInProgress) }
+  let outputs = inputs.map {
+    (
+      plan: ConstellationTrafficPlan(activity: $0, allSourceIDs: allSources),
+      isWorkInProgress: $0.isWorkInProgress,
+      response: $0.response
+    )
+  }
 
   print("CONSTELLATION_INPUT activities=\(inputs)")
   print("CONSTELLATION_OUTPUT activitySemantics=\(outputs)")
 
-  #expect(inputs[0].activeSourceIDs == nil)
-  #expect(inputs[1].activeSourceIDs == nil)
-  #expect(inputs[2].activeSourceIDs == Set(["gmail"]))
-  #expect(inputs[3].activeSourceIDs == allSources)
-  #expect(inputs[4].activeSourceIDs == Set(["photos"]))
+  #expect(outputs[0].plan == ConstellationTrafficPlan(activity: .idle, allSourceIDs: allSources))
+  #expect(outputs[0].plan.outboundSourceIDs.isEmpty)
+  #expect(outputs[1].plan.outboundSourceIDs == allSources)
+  #expect(outputs[1].plan.returningSourceIDs.isEmpty)
+  #expect(outputs[2].plan.outboundSourceIDs == Set(["gmail"]))
+  #expect(outputs[2].plan.returningSourceIDs == Set(["gmail"]))
+  #expect(outputs[3].plan.outboundSourceIDs == allSources)
+  #expect(outputs[3].plan.returningSourceIDs.isEmpty)
+  #expect(outputs[4].plan.outboundSourceIDs == allSources)
+  #expect(outputs[4].plan.returningSourceIDs == Set(["calendar", "gmail"]))
+  #expect(outputs[4].plan.failedSourceIDs == Set(["photos"]))
+  #expect(outputs[4].response == mixedSync)
   #expect(!inputs[0].isWorkInProgress)
   #expect(inputs[1].isWorkInProgress)
+  #expect(!inputs[2].isWorkInProgress)
   #expect(inputs[3].isWorkInProgress)
   #expect(!inputs[4].isWorkInProgress)
 }
