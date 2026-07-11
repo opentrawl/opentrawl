@@ -29,6 +29,10 @@ const PromptVersion = repoPrompts.PhotoCardVersion
 
 var exportOriginalResource = photos.ExportOriginalResourceThroughApp
 
+type originalResolver interface {
+	Resolve(context.Context, photos.OriginalRequest) (photos.OriginalResolution, error)
+}
+
 type Options struct {
 	LibraryPath          string
 	OutputDir            string
@@ -136,19 +140,34 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
+	libraryPath, err := filepath.Abs(crawlconfig.ExpandHome(strings.TrimSpace(opts.LibraryPath)))
+	if err != nil {
+		return Result{}, err
+	}
 	if err := rejectRepoPath(outputDir); err != nil {
 		return Result{}, fmt.Errorf("output dir: %w", err)
 	}
 	if err := rejectRepoPath(cacheDir); err != nil {
 		return Result{}, fmt.Errorf("cache dir: %w", err)
 	}
-	for _, dir := range []string{
+	var resolver originalResolver
+	externalDevelopmentCache := strings.TrimSpace(opts.CacheDir) != ""
+	if externalDevelopmentCache {
+		resolver, err = photos.NewDevelopmentOriginalResolver(cacheDir, libraryPath, exportOriginalResource)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	directories := []string{
 		outputDir,
 		filepath.Join(outputDir, "images"),
 		filepath.Join(outputDir, "metadata"),
 		filepath.Join(outputDir, "raw"),
-		cacheDir,
-	} {
+	}
+	if !externalDevelopmentCache {
+		directories = append(directories, cacheDir)
+	}
+	for _, dir := range directories {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return Result{}, err
 		}
@@ -167,10 +186,6 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	}
 	promptSum := sha256.Sum256(promptBytes)
 
-	libraryPath, err := filepath.Abs(crawlconfig.ExpandHome(strings.TrimSpace(opts.LibraryPath)))
-	if err != nil {
-		return Result{}, err
-	}
 	snapshot, err := opts.Provider.Snapshot(ctx, libraryPath)
 	if err != nil {
 		return Result{}, err
@@ -182,11 +197,12 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("index local media: %w", err)
 	}
-	resolver, err := photos.NewOriginalResolver(cacheDir, exportOriginalResource)
-	if err != nil {
-		return Result{}, err
+	if !externalDevelopmentCache {
+		resolver, err = photos.NewOriginalResolver(cacheDir, exportOriginalResource)
+		if err != nil {
+			return Result{}, err
+		}
 	}
-
 	result := Result{
 		OutputDir:             outputDir,
 		CacheDir:              cacheDir,
@@ -252,7 +268,7 @@ func Run(ctx context.Context, opts Options) (Result, error) {
 	return result, nil
 }
 
-func prepareInput(ctx context.Context, resolver *photos.OriginalResolver, localMedia photos.LocalMediaIndex, libraryPath, outputDir, id string, asset photos.Asset, allowICloud bool) (preparedInput, manifestRow, error) {
+func prepareInput(ctx context.Context, resolver originalResolver, localMedia photos.LocalMediaIndex, libraryPath, outputDir, id string, asset photos.Asset, allowICloud bool) (preparedInput, manifestRow, error) {
 	resolved, err := resolver.Resolve(ctx, originalRequest(localMedia, libraryPath, asset, allowICloud))
 	if err != nil {
 		return preparedInput{}, manifestRow{}, err

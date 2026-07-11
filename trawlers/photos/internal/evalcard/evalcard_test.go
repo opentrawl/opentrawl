@@ -1,13 +1,25 @@
 package evalcard
 
 import (
+	"context"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
+
+type countingProvider struct {
+	calls atomic.Int32
+}
+
+func (p *countingProvider) Snapshot(context.Context, string) (photos.LibrarySnapshot, error) {
+	p.calls.Add(1)
+	return photos.LibrarySnapshot{}, nil
+}
 
 func TestNormalizeOllamaGenerateURL(t *testing.T) {
 	tests := map[string]string{
@@ -60,6 +72,35 @@ func TestRejectRepoPath(t *testing.T) {
 	}
 	if err := rejectRepoPath(filepath.Join(t.TempDir(), "evals")); err != nil {
 		t.Fatalf("rejectRepoPath rejected external output dir: %v", err)
+	}
+}
+
+func TestRunRejectsMissingExplicitCacheRootBeforeSourceAccessOrDirectoryCreation(t *testing.T) {
+	parent := t.TempDir()
+	cacheDir := filepath.Join(parent, "unmounted-external-cache")
+	outputDir := filepath.Join(parent, "eval-output")
+	libraryPath := filepath.Join(parent, "Fixture Photos Library.photoslibrary")
+	if err := os.Mkdir(libraryPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider := &countingProvider{}
+	_, err := Run(context.Background(), Options{
+		LibraryPath: libraryPath,
+		OutputDir:   outputDir,
+		CacheDir:    cacheDir,
+		Provider:    provider,
+	})
+	t.Logf("boundary eval_cache_argument input=%q output=%q provider_calls=%d", cacheDir, err, provider.calls.Load())
+	if err == nil || !strings.Contains(err.Error(), "already be mounted and created") {
+		t.Fatalf("Run error = %v, want missing mounted root", err)
+	}
+	if provider.calls.Load() != 0 {
+		t.Fatalf("provider calls = %d, want 0", provider.calls.Load())
+	}
+	for _, path := range []string{cacheDir, outputDir} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("unsafe path was created at %q: %v", path, statErr)
+		}
 	}
 }
 
