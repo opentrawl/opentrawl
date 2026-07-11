@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package trawl.source.telegram.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/telegram/open/v1;telegramopenv1";
+
+message TelegramRecord {
+  string ref = 1;
+  Chat chat = 2;
+  repeated string participants = 3;
+  Message message = 4;
+  repeated Message context = 5;
+  ContextWindow context_window = 6;
+  int32 target_position = 7;
+}
+
+message ContextWindow {
+  int32 before = 1;
+  int32 after = 2;
+  bool before_truncated = 3;
+  bool after_truncated = 4;
+}
+
+message Chat {
+  string ref = 1;
+  string name = 2;
+}
+
+enum SenderState {
+  SENDER_STATE_UNSPECIFIED = 0;
+  SENDER_STATE_AVAILABLE = 1;
+  SENDER_STATE_UNAVAILABLE = 2;
+}
+
+message Sender {
+  optional string ref = 1;
+  optional string display_name = 2;
+  SenderState state = 3;
+}
+
+message Media {
+  optional string type = 1;
+  optional string title = 2;
+  optional string url = 3;
+  optional int64 size_bytes = 4;
+}
+
+message Metadata {
+  optional string type = 1;
+  optional string title = 2;
+  optional string url = 3;
+}
+
+message Message {
+  string ref = 1;
+  optional bool is_target = 2;
+  string time = 3;
+  optional string edit_time = 4;
+  Chat chat = 5;
+  Sender sender = 6;
+  bool from_me = 7;
+  optional string text = 8;
+  optional string message_type = 9;
+  Media media = 10;
+  Metadata metadata = 11;
+  optional bool starred = 12;
+  optional string reply_to_message_ref = 13;
+  optional string reply_to_chat_ref = 14;
+  optional int32 views = 15;
+  optional int32 forwards = 16;
+  optional int32 replies_count = 17;
+  optional bool pinned = 18;
+}

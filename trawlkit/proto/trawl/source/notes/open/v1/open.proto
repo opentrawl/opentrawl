@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package trawl.source.notes.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/notes/open/v1;notesopenv1";
+
+enum TextState {
+  TEXT_STATE_UNSPECIFIED = 0;
+  TEXT_STATE_DECODED = 1;
+  TEXT_STATE_UNAVAILABLE = 2;
+}
+
+message NotesRecord {
+  string ref = 1;
+  string version_ref = 2;
+  string title = 3;
+  optional string folder = 4;
+  optional string created_at = 5;
+  optional string modified_at = 6;
+  int64 version_count = 7;
+  TextState text_state = 8;
+  optional string unsupported = 9;
+  optional string text = 10;
+}

@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package trawl.source.imessage.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/imessage/open/v1;imessageopenv1";
+
+message IMessageRecord {
+  string ref = 1;
+  Chat chat = 2;
+  Message message = 3;
+  repeated Message context = 4;
+}
+
+message Chat {
+  string name = 1;
+  repeated string participants = 2;
+}
+
+message Message {
+  string ref = 1;
+  string time = 2;
+  string who = 3;
+  string where = 4;
+  string text = 5;
+  bool from_me = 6;
+  optional bool has_attachments = 7;
+  optional bool target = 8;
+}

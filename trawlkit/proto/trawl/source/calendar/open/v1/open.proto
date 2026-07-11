@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package trawl.source.calendar.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/calendar/open/v1;calendaropenv1";
+
+message CalendarRecord {
+  string ref = 1;
+  string uuid = 2;
+  optional string unique_identifier = 3;
+  string title = 4;
+  optional string description = 5;
+  optional bool description_truncated = 6;
+  string start = 7;
+  string end = 8;
+  bool all_day = 9;
+  string calendar = 10;
+  string account = 11;
+  optional int64 availability = 12;
+  Location location = 13;
+  Person organizer = 14;
+  repeated Attendee attendees = 15;
+  optional string url = 16;
+  optional string status = 17;
+  bool has_recurrences = 18;
+}
+
+message Location {
+  optional string title = 1;
+  optional string address = 2;
+}
+
+message Person {
+  optional string display_name = 1;
+  optional string email = 2;
+  optional string phone_number = 3;
+}
+
+message Attendee {
+  optional string display_name = 1;
+  optional string email = 2;
+  optional string phone_number = 3;
+  optional string address = 4;
+  optional string rsvp_status = 5;
+  optional string role = 6;
+  optional bool self = 7;
+  optional string comment = 8;
+}

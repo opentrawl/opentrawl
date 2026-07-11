@@ -1,0 +1,37 @@
+syntax = "proto3";
+
+package trawl.source.whatsapp.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/whatsapp/open/v1;whatsappopenv1";
+
+message WhatsAppRecord {
+  string ref = 1;
+  string chat = 2;
+  repeated string participants = 3;
+  Message message = 4;
+  repeated Message context = 5;
+  Window window = 6;
+}
+
+message Window {
+  int32 before = 1;
+  int32 after = 2;
+}
+
+message Message {
+  string ref = 1;
+  string time = 2;
+  string who = 3;
+  string where = 4;
+  string text = 5;
+  optional string type = 6;
+  Media media = 7;
+  optional bool starred = 8;
+  optional bool current = 9;
+}
+
+message Media {
+  optional string type = 1;
+  optional string title = 2;
+  optional int64 size_bytes = 3;
+}

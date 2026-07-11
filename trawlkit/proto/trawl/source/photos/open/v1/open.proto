@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package trawl.source.photos.open.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1;photosopenv1";
+
+message PhotosRecord {
+  uint32 schema_version = 1;
+  string ref = 2;
+  Stale stale = 3;
+  Mechanical mechanical = 4;
+  Model model = 5;
+}
+
+message Stale {
+  string since = 1;
+  string reason = 2;
+  string banner = 3;
+}
+
+message Mechanical {
+  Source source = 1;
+  Captured captured = 2;
+  Media media = 3;
+  Place place = 4;
+  GPS gps = 5;
+  optional string address = 6;
+  KnownPlace known_place = 7;
+  Venue venue = 8;
+  repeated VenueCandidate venue_candidates = 9;
+  Camera camera = 10;
+  repeated Album albums = 11;
+  Original original = 12;
+  repeated string flags = 13;
+}
+
+message Source {
+  string state = 1;
+  optional string first_missing_at = 2;
+  optional string source_deleted_at = 3;
+}
+
+message Captured {
+  string local = 1;
+  optional string timezone = 2;
+}
+
+message Media {
+  optional string kind = 1;
+  optional int64 width = 2;
+  optional int64 height = 3;
+  optional double duration_seconds = 4;
+}
+
+message Place {
+  optional string name = 1;
+  optional double latitude = 2;
+  optional double longitude = 3;
+}
+
+message GPS {
+  double latitude = 1;
+  double longitude = 2;
+  optional double horizontal_accuracy_meters = 3;
+}
+
+message KnownPlace {
+  string kind = 1;
+  string name = 2;
+  optional bool after = 3;
+}
+
+message Venue {
+  string name = 1;
+  optional string category = 2;
+  string tier = 3;
+  optional double distance_meters = 4;
+}
+
+message VenueCandidate {
+  string name = 1;
+  optional string category = 2;
+  optional string tier = 3;
+  optional double distance_meters = 4;
+}
+
+message Camera {
+  optional string display = 1;
+  optional string make = 2;
+  optional string model = 3;
+  optional string lens_model = 4;
+  optional double focal_length_mm = 5;
+  optional double focal_length_35mm = 6;
+  optional double aperture = 7;
+  optional string shutter_speed = 8;
+  optional int64 iso = 9;
+}
+
+message Album {
+  string title = 1;
+}
+
+message Original {
+  optional string filename = 1;
+  optional int64 bytes = 2;
+  optional string availability = 3;
+}
+
+message Model {
+  optional string prompt_version = 1;
+  optional string model_id = 2;
+  optional string summary = 3;
+  optional string description = 4;
+  optional string ocr_text = 5;
+  repeated string uncertainties = 6;
+}
