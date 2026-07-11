@@ -83,6 +83,13 @@ public struct ConstellationPulseTiming: Sendable, Equatable {
   public func isVisible(elapsed: TimeInterval) -> Bool {
     elapsed >= delay
   }
+
+  public func routeSampleStartElapsed(
+    currentElapsed: TimeInterval,
+    repeatsFromSharedEpoch: Bool
+  ) -> TimeInterval {
+    repeatsFromSharedEpoch ? 0 : currentElapsed + delay
+  }
 }
 
 public struct ConstellationVector: Sendable, Equatable {

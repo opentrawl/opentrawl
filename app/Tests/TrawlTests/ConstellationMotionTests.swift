@@ -188,6 +188,25 @@ import Testing
   #expect(output == [false, false, true, true])
 }
 
+@Test func ambientPulseAndMovingRouteShareTheEpochElapsedSample() {
+  let timing = ConstellationPulseTiming(delay: 0)
+  let currentElapsed: TimeInterval = 37.25
+  let ambientStart = timing.routeSampleStartElapsed(
+    currentElapsed: currentElapsed,
+    repeatsFromSharedEpoch: true
+  )
+  let workStart = timing.routeSampleStartElapsed(
+    currentElapsed: currentElapsed,
+    repeatsFromSharedEpoch: false
+  )
+
+  print("CONSTELLATION_INPUT timing=\(timing) currentElapsed=\(currentElapsed)")
+  print("CONSTELLATION_OUTPUT ambientStart=\(ambientStart) workStart=\(workStart)")
+
+  #expect(ambientStart == 0)
+  #expect(workStart == currentElapsed)
+}
+
 @Test func reduceMotionKeepsTheCompleteStaticPosition() {
   let sourceID = "photos"
   let phases: [Double] = [0, 0.25, 0.5, 0.75, 1]

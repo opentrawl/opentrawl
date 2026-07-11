@@ -102,9 +102,13 @@ struct ConstellationTrafficRenderer {
     pulse.shadowOffset = .zero
 
     let now = CoreAnimationTimeline.elapsed
-    let points = routePositions(route: route, startElapsed: now + delay, duration: duration)
-    pulse.position = points.last ?? centre
     let timing = ConstellationPulseTiming(delay: delay)
+    let sampleStart = timing.routeSampleStartElapsed(
+      currentElapsed: now,
+      repeatsFromSharedEpoch: repeats
+    )
+    let points = routePositions(route: route, startElapsed: sampleStart, duration: duration)
+    pulse.position = points.last ?? centre
     pulse.opacity = repeats ? opacity : 0
 
     let position = CAKeyframeAnimation(keyPath: "position")
