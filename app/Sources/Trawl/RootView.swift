@@ -11,7 +11,9 @@ struct RootView: View {
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: SourceStatus?
   @State private var isSearching = false
-  @State private var searchActivity: ConstellationActivity = .idle
+  @State private var constellationActivity: ConstellationActivity = .idle
+  @State private var constellationTrafficEvent: ConstellationTrafficEvent?
+  @State private var trafficClearTask: Task<Void, Never>?
 
   var body: some View {
     ZStack {
@@ -33,7 +35,7 @@ struct RootView: View {
           client: client,
           initialScope: searchScope,
           sourceStatuses: model.sources,
-          onActivityChange: { searchActivity = $0 },
+          onTrafficChange: presentTraffic,
           onDismiss: dismissSearch
         )
         .padding(TrawlDesign.contentInset)
@@ -48,7 +50,7 @@ struct RootView: View {
       ToolbarItem {
         if !isSearching {
           Button {
-            Task { await model.syncNow() }
+            Task { await syncNow() }
           } label: {
             if model.isSyncing {
               ProgressView()
@@ -79,6 +81,7 @@ struct RootView: View {
         ConstellationView(
           sources: model.sources,
           activity: constellationActivity,
+          trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
           onSelectSource: { showSearch(scope: $0) }
         )
@@ -119,30 +122,44 @@ struct RootView: View {
   }
 
   private func dismissSearch() {
-    searchActivity = .idle
+    presentTraffic(.idle, nil)
     isSearching = false
   }
 
-  private var constellationActivity: ConstellationActivity {
-    if model.isSyncing {
-      return .syncing(sourceIDs: Set(model.sources.map(\.id)), response: nil)
-    }
-    if !model.syncResults.isEmpty || !model.syncFailures.isEmpty {
-      let failedSourceIDs = Set(model.syncFailures.map(\.sourceID))
-      let usefulSourceIDs = Set(
-        model.syncResults.lazy
-          .filter { $0.outcome != .failed }
-          .map(\.sourceID)
+  private func syncNow() async {
+    let requestedSourceIDs = Set(model.sources.map(\.id))
+    presentTraffic(.syncing(sourceIDs: requestedSourceIDs), nil)
+    await model.syncNow()
+    let failedSourceIDs = Set(model.syncFailures.map(\.sourceID))
+    let usefulSourceIDs = Set(
+      model.syncResults.lazy
+        .filter { $0.outcome != .failed }
+        .map(\.sourceID)
+    )
+    presentTraffic(
+      failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
+      ConstellationTrafficEvent(
+        requestedSourceIDs: requestedSourceIDs,
+        usefulSourceIDs: usefulSourceIDs,
+        failedSourceIDs: failedSourceIDs
       )
-      return .syncing(
-        sourceIDs: Set(model.sources.map(\.id)),
-        response: ConstellationResponseEvent(
-          usefulSourceIDs: usefulSourceIDs,
-          failedSourceIDs: failedSourceIDs
-        )
-      )
+    )
+  }
+
+  private func presentTraffic(
+    activity: ConstellationActivity,
+    event: ConstellationTrafficEvent?
+  ) {
+    trafficClearTask?.cancel()
+    constellationActivity = activity
+    constellationTrafficEvent = event
+    guard event != nil else { return }
+    trafficClearTask = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(4))
+      guard !Task.isCancelled else { return }
+      constellationActivity = .idle
+      constellationTrafficEvent = nil
     }
-    return searchActivity
   }
 }
 

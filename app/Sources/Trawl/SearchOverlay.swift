@@ -4,7 +4,7 @@ import TrawlCore
 
 struct SearchOverlay: View {
   let onDismiss: () -> Void
-  let onActivityChange: (ConstellationActivity) -> Void
+  let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
   private let sourceStatuses: [SourceStatus]
 
   @State private var scope: SourceStatus?
@@ -17,12 +17,12 @@ struct SearchOverlay: View {
     client: any TrawlClient,
     initialScope: SourceStatus?,
     sourceStatuses: [SourceStatus] = [],
-    onActivityChange: @escaping (ConstellationActivity) -> Void = { _ in },
+    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
     onDismiss: @escaping () -> Void
   ) {
     let model = SearchModel(client: client)
     self.onDismiss = onDismiss
-    self.onActivityChange = onActivityChange
+    self.onTrafficChange = onTrafficChange
     self.sourceStatuses = sourceStatuses
     _scope = State(initialValue: initialScope)
     _model = State(initialValue: model)
@@ -77,7 +77,7 @@ struct SearchOverlay: View {
       await model.search(interaction.query, source: interaction.sourceID)
     }
     .onDisappear {
-      onActivityChange(.idle)
+      onTrafficChange(.idle, nil)
     }
   }
 
@@ -102,19 +102,21 @@ struct SearchOverlay: View {
   private func reportActivity() {
     switch model.phase {
     case .loading:
-      onActivityChange(.searching(sourceID: interaction.sourceID, response: nil))
+      onTrafficChange(.searching(sourceID: interaction.sourceID), nil)
     case .complete, .partial, .failed:
-      onActivityChange(
-        .searching(
-          sourceID: interaction.sourceID,
-          response: ConstellationResponseEvent(
-            usefulSourceIDs: Set(model.results.map(\.sourceID)),
-            failedSourceIDs: Set(model.failures.map(\.sourceID))
-          )
+      let failedSourceIDs = Set(model.failures.map(\.sourceID))
+      let requestedSourceIDs = interaction.sourceID.map { Set([$0]) }
+        ?? Set(sourceStatuses.map(\.id))
+      onTrafficChange(
+        failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
+        ConstellationTrafficEvent(
+          requestedSourceIDs: requestedSourceIDs,
+          usefulSourceIDs: Set(model.results.map(\.sourceID)),
+          failedSourceIDs: failedSourceIDs
         )
       )
     case .idle, .timedOut:
-      onActivityChange(.idle)
+      onTrafficChange(.idle, nil)
     }
   }
 }
