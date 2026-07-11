@@ -29,19 +29,20 @@ use synthetic examples only.
 
 ## Current implementation status
 
-This status was inspected at `94a2496221fc7761f5a997fafec9ae769c123e00`.
-Refresh it against code whenever the implementation changes.
+This status was inspected against the repository code on 11 July 2026. Refresh
+it against code whenever the implementation changes.
 
 | boundary | status at inspected main | accepted outcome |
 |---|---|---|
 | Photos snapshot | implemented | read a consistent SQLite snapshot without changing Photos |
-| normalised asset | partial | preserve current or upstream-deleted state and source provenance |
+| normalised asset | implemented | preserve current or upstream-deleted state and source provenance |
 | camera original | implemented | resolve exact `photo` bytes through package, checked cache or signed PhotoKit |
 | current rendered still | not implemented | request the largest current rendition through `PHImageManager` with version `.current` |
-| full metadata and EXIF | partial | keep lossless exact-original metadata and a readable projection |
+| full metadata and EXIF | implemented | keep lossless exact-original metadata and a readable projection |
 | place evidence | partial | cache configured Apple and OSM-derived map and POI evidence |
-| rendered model request | not persisted | save the exact request before transmission |
-| raw model response | not persisted | retain the response before parsing |
+| rendered model request | implemented | save the exact request before transmission |
+| paid-call authorisation | archive contract implemented | claim approved screening, canary and backfill calls in the canonical archive; downstream commands still need to adopt it |
+| raw model response | implemented | retain the response before parsing |
 | labelled-prose parser and card rows | implemented in part | parse the declared sections and store the complete card |
 | stale and superseded history | implemented | keep stale cards readable and retain replaced cards |
 
@@ -225,6 +226,38 @@ directly. Ollama Cloud serves Photos image classification and classification
 evals only; it is not the engineering reviewer.
 
 The final model remains eval-gated.
+
+## Paid-call authorisation boundary
+
+Input:
+
+- exact purpose: `screening`, `canary` or `backfill`
+- approval receipt digest and approved call cap
+- one fixed ordered item list with asset, CardInput, full-current image, request,
+  model, prompt and parser identities
+- the exact credential-free provider request for the claimed item
+
+The canonical Photos archive stores the immutable stage and item list before a
+claim starts. Only positions within the approved cap can claim. Invocation order
+cannot move an item into or out of the cap.
+
+The claim's first SQL statement updates the stage's internal serial. That write
+takes SQLite's writer lock before the transaction reads item membership, source
+state or first-card eligibility. A rejected transaction creates no claim or
+stored-card generation. A committed fresh claim permanently consumes the stage
+item and authorises one send after commit.
+
+Screening stores only its generic claim. Its request, media and raw result stay
+in private evaluation evidence and cannot satisfy a later card generation. A
+canary or backfill claim creates or reuses the existing request, asset relation
+and attempt in the same transaction. Completed work is reused. Retained output
+resumes parsing. An attempt without retained output remains stopped as uncertain.
+None of those restart states authorises another send.
+
+The transaction covers only the canonical SQLite archive. It cannot be atomic
+with a receipt file, media file, another database or the network. A crash after
+claim commit and before result retention therefore consumes the slot and stops;
+the product never infers that no request left the process.
 
 ## Boundary 8: raw model response
 

@@ -41,6 +41,7 @@ func modelGenerationFault(stage modelGenerationFaultStage, raw model.RawResult) 
 type modelGenerationDecision struct {
 	GenerationID string
 	Call         model.Call
+	Fresh        bool
 }
 
 func prepareModelGeneration(
@@ -50,80 +51,94 @@ func prepareModelGeneration(
 	request model.ProviderRequest,
 	now time.Time,
 ) (modelGenerationDecision, error) {
+	var decision modelGenerationDecision
+	err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		decision, err = prepareModelGenerationTx(ctx, tx, assetID, promptVersion, parserVersion, request, now)
+		return err
+	})
+	return decision, err
+}
+
+func prepareModelGenerationTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	assetID, promptVersion, parserVersion string,
+	request model.ProviderRequest,
+	now time.Time,
+) (modelGenerationDecision, error) {
 	digest := request.Digest()
 	digestText := hex.EncodeToString(digest[:])
 	generationID := "model_generation:" + digestText[:32]
 	timestamp := now.UTC().Format(time.RFC3339Nano)
 	decision := modelGenerationDecision{GenerationID: generationID}
-	err := db.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 insert into model_generation(id, request_sha256, request_route, model_id, request_body, created_at)
 values (?, ?, ?, ?, ?, ?)
 on conflict(id) do nothing
 `, generationID, digestText, request.Route(), request.Model(), request.Body(), timestamp); err != nil {
-			return fmt.Errorf("persist model generation request: %w", err)
-		}
-		storedRequest, storedDigest, err := readModelGenerationRequest(ctx, tx, generationID)
-		if err != nil {
-			return err
-		}
-		if storedDigest != digestText || storedRequest.Route() != request.Route() ||
-			storedRequest.Model() != request.Model() || !bytes.Equal(storedRequest.Body(), request.Body()) {
-			return errors.New("model generation identity does not match its persisted request")
-		}
-		decision.Call.Request = storedRequest
+		return decision, fmt.Errorf("persist model generation request: %w", err)
+	}
+	storedRequest, storedDigest, err := readModelGenerationRequest(ctx, tx, generationID)
+	if err != nil {
+		return decision, err
+	}
+	if storedDigest != digestText || storedRequest.Route() != request.Route() ||
+		storedRequest.Model() != request.Model() || !bytes.Equal(storedRequest.Body(), request.Body()) {
+		return decision, errors.New("model generation identity does not match its persisted request")
+	}
+	decision.Call.Request = storedRequest
 
-		if _, err := tx.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 insert into model_generation_asset(generation_id, asset_id, prompt_version, parser_version)
 values (?, ?, ?, ?)
 on conflict(generation_id, asset_id) do nothing
 `, generationID, assetID, promptVersion, parserVersion); err != nil {
-			return fmt.Errorf("persist model generation asset relation: %w", err)
-		}
-		var storedPromptVersion, storedParserVersion string
-		var completedAt sql.NullString
-		if err := tx.QueryRowContext(ctx, `
+		return decision, fmt.Errorf("persist model generation asset relation: %w", err)
+	}
+	var storedPromptVersion, storedParserVersion string
+	var completedAt sql.NullString
+	if err := tx.QueryRowContext(ctx, `
 select prompt_version, parser_version, completed_at
 from model_generation_asset
 where generation_id = ? and asset_id = ?
 `, generationID, assetID).Scan(&storedPromptVersion, &storedParserVersion, &completedAt); err != nil {
-			return fmt.Errorf("read model generation asset relation: %w", err)
-		}
-		if storedPromptVersion != promptVersion || storedParserVersion != parserVersion {
-			return errors.New("model generation versions do not match their persisted asset relation")
-		}
-		if completedAt.Valid {
-			decision.Call.Reused = true
-			return nil
-		}
+		return decision, fmt.Errorf("read model generation asset relation: %w", err)
+	}
+	if storedPromptVersion != promptVersion || storedParserVersion != parserVersion {
+		return decision, errors.New("model generation versions do not match their persisted asset relation")
+	}
+	if completedAt.Valid {
+		decision.Call.Reused = true
+		return decision, nil
+	}
 
-		result, err := tx.ExecContext(ctx, `
+	result, err := tx.ExecContext(ctx, `
 insert into model_generation_attempt(generation_id, started_at)
 values (?, ?)
 on conflict(generation_id) do nothing
 `, generationID, timestamp)
-		if err != nil {
-			return fmt.Errorf("persist model generation attempt: %w", err)
-		}
-		inserted, err := result.RowsAffected()
-		if err != nil {
-			return fmt.Errorf("read model generation attempt claim: %w", err)
-		}
-		if inserted == 1 {
-			return nil
-		}
+	if err != nil {
+		return decision, fmt.Errorf("persist model generation attempt: %w", err)
+	}
+	inserted, err := result.RowsAffected()
+	if err != nil {
+		return decision, fmt.Errorf("read model generation attempt claim: %w", err)
+	}
+	if inserted == 1 {
+		decision.Fresh = true
+		return decision, nil
+	}
 
-		raw, retained, err := readModelGenerationAttempt(ctx, tx, generationID)
-		if err != nil {
-			return err
-		}
-		if retained {
-			decision.Call.Retained = &raw
-			return nil
-		}
-		return errModelGenerationUncertain
-	})
-	return decision, err
+	raw, retained, err := readModelGenerationAttempt(ctx, tx, generationID)
+	if err != nil {
+		return decision, err
+	}
+	if retained {
+		decision.Call.Retained = &raw
+		return decision, nil
+	}
+	return decision, errModelGenerationUncertain
 }
 
 func readModelGenerationRequest(ctx context.Context, tx *sql.Tx, generationID string) (model.ProviderRequest, string, error) {
