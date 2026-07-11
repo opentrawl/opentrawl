@@ -17,9 +17,9 @@ Usage:
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-	  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
-	  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
-	  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
+  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
+  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
 	  linear issue <ISSUE>
 	  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
   linear project <PROJECT>
@@ -43,9 +43,9 @@ Examples:
   linear comment TRAWL-99 --as coordinator "Ready for review."
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
   linear issue state TRAWL-99 --state Done --as coordinator
-	  linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
-	  linear issue label add TRAWL-99 --label agent-filed --as coordinator
-	  linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
+  linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
+  linear issue label add TRAWL-99 --label agent-filed --as coordinator
+  linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
   linear project Photos
   linear issue TRAWL-99
   linear issues --team TRAWL
@@ -104,9 +104,9 @@ Usage:
   linear issue <ISSUE>
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-	  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
-	  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
-	  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
+  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
+  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
+  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
