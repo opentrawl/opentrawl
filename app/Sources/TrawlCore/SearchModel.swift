@@ -30,7 +30,11 @@ public final class SearchModel {
 
   public private(set) var phase: SearchPhase = .idle
   public private(set) var results: [SearchHit] = []
+  public private(set) var failures: [SourceFailure] = []
+  public private(set) var resultLimit: UInt32 = 0
+  public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
+  public private(set) var openResult: OpenResponse?
 
   public init(
     client: any TrawlClient,
@@ -45,8 +49,12 @@ public final class SearchModel {
   public func reset() {
     generation &+= 1
     results = []
+    failures = []
+    resultLimit = 0
+    isTruncated = false
     phase = .idle
     openPhase = .idle
+    openResult = nil
   }
 
   public func search(_ rawQuery: String, source: String?) async {
@@ -55,14 +63,22 @@ public final class SearchModel {
     let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !query.isEmpty else {
       results = []
+      failures = []
+      resultLimit = 0
+      isTruncated = false
       phase = .idle
       openPhase = .idle
+      openResult = nil
       return
     }
 
     results = []
+    failures = []
+    resultLimit = 0
+    isTruncated = false
     phase = .loading
     openPhase = .idle
+    openResult = nil
 
     do {
       try await Task.sleep(for: debounce)
@@ -72,7 +88,10 @@ public final class SearchModel {
       guard token == generation else { return }
 
       results = response.hits
-      switch response.completion {
+      failures = response.failures
+      resultLimit = response.resultLimit
+      isTruncated = response.truncated
+      switch response.outcome {
       case .complete:
         phase = .complete
       case .partial:
@@ -86,6 +105,13 @@ public final class SearchModel {
       guard token == generation else { return }
       results = []
       phase = .timedOut
+    } catch TrawlClientError.timedOut {
+      guard token == generation else { return }
+      results = []
+      failures = []
+      phase = .timedOut
+    } catch TrawlClientError.cancelled {
+      return
     } catch {
       guard token == generation else { return }
       results = []
@@ -97,12 +123,21 @@ public final class SearchModel {
     guard results.contains(where: { $0.id == hit.id }) else { return }
     let token = generation
     openPhase = .loading
+    openResult = nil
     do {
-      let output = try await client.open(hit.id)
+      let response = try await client.open(hit.id)
       try Task.checkCancellation()
       guard token == generation else { return }
-      openPhase = .output(output)
+      openResult = response
+      switch response.outcome {
+      case .complete, .partial:
+        openPhase = .output(String(decoding: response.output, as: UTF8.self))
+      case .failed:
+        openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.")
+      }
     } catch is CancellationError {
+      return
+    } catch TrawlClientError.cancelled {
       return
     } catch {
       guard token == generation else { return }

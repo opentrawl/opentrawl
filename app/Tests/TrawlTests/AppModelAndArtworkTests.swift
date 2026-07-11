@@ -25,8 +25,15 @@ import TrawlClient
     lastSyncedDisplay: "1h ago",
     archiveBytes: 64
   )
+  let failure = SourceFailure(
+    sourceID: "notes",
+    sourceName: "Notes",
+    code: .permission,
+    message: "Allow notes access.",
+    remedy: "Open System Settings."
+  )
   let client = StatusClient(
-    response: StatusResponse(sources: [source, second], completion: .partial)
+    response: StatusResponse(sources: [source, second], failures: [failure], outcome: .partial)
   )
   let model = AppModel(
     client: client,
@@ -36,9 +43,44 @@ import TrawlClient
   await model.refresh()
 
   #expect(model.sources == [source, second])
+  #expect(model.statusFailures == [failure])
   #expect(model.completion == .partial)
   #expect(model.phase == .ready)
   #expect(model.diskAccess == .undetermined)
+}
+
+@MainActor
+@Test func appModelLeavesVisibleStateAloneWhenTypedWorkIsCancelled() async {
+  let source = SourceStatus(
+    id: "gmail",
+    name: "Gmail",
+    state: "ok",
+    summary: "Recently synced.",
+    counts: [SourceCount(id: "messages", display: "3 messages")],
+    lastSyncedDisplay: "just now",
+    archiveBytes: 128
+  )
+  let client = CancellationClient(response: StatusResponse(sources: [source], outcome: .complete))
+  let model = AppModel(
+    client: client,
+    permissionProbe: FullDiskAccessProbe(canaries: [], probePath: { _ in .missing })
+  )
+  await model.refresh()
+
+  client.partialSync = true
+  await model.syncNow()
+  #expect(model.syncMessage == "Some sources could not sync.")
+
+  client.partialSync = false
+  client.cancelled = true
+  await model.refresh()
+  await model.syncNow()
+
+  #expect(model.phase == .ready)
+  #expect(model.sources == [source])
+  #expect(model.statusFailures.isEmpty)
+  #expect(model.syncMessage == "Some sources could not sync.")
+  #expect(!model.isSyncing)
 }
 
 @Test func artworkLookupIsExplicitAndLimitedToApprovedSources() throws {
@@ -129,11 +171,58 @@ private final class StatusClient: TrawlClient, @unchecked Sendable {
   }
 
   func status() async throws -> StatusResponse { response }
-  func sync() async throws -> FanoutCompletion { .complete }
-  func search(_ query: String, source: String?) async throws -> SearchResponse {
-    SearchResponse(hits: [], completion: .complete)
+  func sync() async throws -> SyncResponse {
+    SyncResponse(sources: [], failures: [], outcome: .complete)
   }
-  func open(_ ref: String) async throws -> String { "" }
+  func search(_ query: String, source: String?) async throws -> SearchResponse {
+    SearchResponse(hits: [], outcome: .complete, resultLimit: 20, truncated: false)
+  }
+  func open(_ ref: String) async throws -> OpenResponse {
+    OpenResponse(outcome: .complete, sourceID: "", openRef: ref, output: Data(), failure: nil)
+  }
+}
+
+private final class CancellationClient: TrawlClient, @unchecked Sendable {
+  let response: StatusResponse
+  private let lock = NSLock()
+  private var isCancelled = false
+  private var returnsPartialSync = false
+
+  init(response: StatusResponse) {
+    self.response = response
+  }
+
+  var cancelled: Bool {
+    get { lock.withLock { isCancelled } }
+    set { lock.withLock { isCancelled = newValue } }
+  }
+
+  var partialSync: Bool {
+    get { lock.withLock { returnsPartialSync } }
+    set { lock.withLock { returnsPartialSync = newValue } }
+  }
+
+  func status() async throws -> StatusResponse {
+    if cancelled { throw TrawlClientError.cancelled }
+    return response
+  }
+
+  func sync() async throws -> SyncResponse {
+    if cancelled { throw TrawlClientError.cancelled }
+    return SyncResponse(
+      sources: [],
+      failures: [],
+      outcome: partialSync ? .partial : .complete
+    )
+  }
+
+  func search(_ query: String, source: String?) async throws -> SearchResponse {
+    SearchResponse(hits: [], outcome: .complete, resultLimit: 20, truncated: false)
+  }
+
+  func open(_ ref: String) async throws -> OpenResponse {
+    OpenResponse(outcome: .complete, sourceID: "", openRef: ref, output: Data(), failure: nil)
+  }
 }
 
 private actor URLRecorder {

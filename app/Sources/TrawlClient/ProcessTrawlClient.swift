@@ -1,14 +1,35 @@
 @preconcurrency import Foundation
+import Darwin
 import OSLog
 import SwiftProtobuf
 
 public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
+  static let defaultSearchDeadline: Duration = .seconds(10)
+  static let defaultOperationDeadline: Duration = .seconds(30)
 
   private let binaryURL: URL
+  private let searchDeadline: Duration
+  private let operationDeadline: Duration
+  private let receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
 
   public init(binaryURL: URL = ProcessTrawlClient.embeddedBinary) {
     self.binaryURL = binaryURL
+    searchDeadline = Self.defaultSearchDeadline
+    operationDeadline = Self.defaultOperationDeadline
+    receiveReceipt = nil
+  }
+
+  init(
+    binaryURL: URL,
+    searchDeadline: Duration = ProcessTrawlClient.defaultSearchDeadline,
+    operationDeadline: Duration = ProcessTrawlClient.defaultOperationDeadline,
+    receiveReceipt: @escaping @Sendable (ProcessBoundaryReceipt) -> Void
+  ) {
+    self.binaryURL = binaryURL
+    self.searchDeadline = searchDeadline
+    self.operationDeadline = operationDeadline
+    self.receiveReceipt = receiveReceipt
   }
 
   public static var embeddedBinary: URL {
@@ -17,17 +38,19 @@ public struct ProcessTrawlClient: TrawlClient {
   }
 
   public func status() async throws -> StatusResponse {
-    let result = try await run(arguments: ["__app", "status"])
-    let messages: [Trawl_App_V1_SourceStatus] = try decodeMessages(result.stdout)
-    return StatusResponse(
-      sources: messages.map(\.model),
-      completion: try completion(for: result)
-    )
+    try await response(
+      arguments: ["__app", "status"],
+      deadline: operationDeadline,
+      as: Trawl_App_V1_StatusResponse.self
+    ).model()
   }
 
-  public func sync() async throws -> FanoutCompletion {
-    let result = try await run(arguments: ["__app", "sync"])
-    return try completion(for: result)
+  public func sync() async throws -> SyncResponse {
+    try await response(
+      arguments: ["__app", "sync"],
+      deadline: operationDeadline,
+      as: Trawl_App_V1_SyncResponse.self
+    ).model()
   }
 
   public func search(_ query: String, source: String?) async throws -> SearchResponse {
@@ -36,120 +59,274 @@ public struct ProcessTrawlClient: TrawlClient {
       arguments += ["--source", source]
     }
     arguments.append(query)
-
-    let result = try await run(arguments: arguments)
-    let messages: [Trawl_App_V1_SearchHit] = try decodeMessages(result.stdout)
-    return SearchResponse(
-      hits: messages.map(\.model),
-      completion: try completion(for: result)
-    )
+    return try await response(
+      arguments: arguments,
+      deadline: searchDeadline,
+      as: Trawl_App_V1_SearchResponse.self
+    ).model()
   }
 
-  public func open(_ ref: String) async throws -> String {
-    let result = try await run(arguments: ["open", ref])
-    try checkProcess(result)
-    guard result.exitCode == 0 else {
-      throw TrawlClientError.processFailed(exitCode: result.exitCode)
-    }
-    return String(decoding: result.stdout, as: UTF8.self)
+  public func open(_ ref: String) async throws -> OpenResponse {
+    try await response(
+      arguments: ["__app", "open", ref],
+      deadline: operationDeadline,
+      as: Trawl_App_V1_OpenResponse.self
+    ).model()
   }
 
-  private func decodeMessages<Message: SwiftProtobuf.Message>(_ data: Data) throws -> [Message] {
-    do {
-      return try DelimitedFrames.decode(data).map { try Message(serializedBytes: $0) }
-    } catch let error as TrawlClientError {
-      throw error
-    } catch {
-      throw TrawlClientError.invalidMessage
-    }
-  }
-
-  private func completion(for result: ProcessResult) throws -> FanoutCompletion {
-    try checkProcess(result)
-    return switch result.exitCode {
-    case 0: .complete
-    case 3: .partial
-    case 1: .failed
-    default: throw TrawlClientError.processFailed(exitCode: result.exitCode)
-    }
-  }
-
-  private func checkProcess(_ result: ProcessResult) throws {
-    if result.terminatedBySignal {
-      throw TrawlClientError.processDied(signal: result.exitCode)
-    }
+  private func response<Message>(
+    arguments: [String],
+    deadline: Duration,
+    as messageType: Message.Type
+  ) async throws -> Message where Message: SwiftProtobuf.Message {
+    let result = try await run(arguments: arguments, deadline: deadline)
     if !result.stderr.isEmpty {
       Self.logger.error("Helper diagnostic: \(result.stderr, privacy: .private)")
     }
+    if let framingError = result.framingError {
+      if result.exitCode != 0, result.stdout.isEmpty {
+        throw TrawlClientError.nonZeroExitBeforeFrame(result.exitCode)
+      }
+      throw framingError
+    }
+    if result.exitCode != 0, result.stdout.isEmpty {
+      throw TrawlClientError.nonZeroExitBeforeFrame(result.exitCode)
+    }
+    guard let payload = result.payload else {
+      throw TrawlClientError.invalidFrame
+    }
+    do {
+      return try Message(serializedBytes: payload)
+    } catch {
+      throw TrawlClientError.invalidProtobuf
+    }
   }
 
-  private func run(arguments: [String]) async throws -> ProcessResult {
+  private func run(arguments: [String], deadline: Duration) async throws -> ProcessResult {
     guard FileManager.default.isExecutableFile(atPath: binaryURL.path) else {
-      throw TrawlClientError.binaryMissing
+      throw TrawlClientError.helperMissing
     }
-    try Task.checkCancellation()
+    do {
+      try Task.checkCancellation()
+    } catch {
+      throw TrawlClientError.cancelled
+    }
 
-    let invocation = ProcessInvocation(binaryURL: binaryURL, arguments: arguments)
+    let invocation = ProcessInvocation(
+      binaryURL: binaryURL,
+      arguments: arguments,
+      receiveReceipt: receiveReceipt
+    )
     do {
       try invocation.process.run()
     } catch {
       throw TrawlClientError.launchFailed
     }
 
-    return try await withTaskCancellationHandler {
-      let stdoutTask = Task.detached {
-        invocation.stdout.fileHandleForReading.readDataToEndOfFile()
+    do {
+      let result = try await withTaskCancellationHandler {
+        try await waitForResult(invocation, deadline: deadline)
+      } onCancel: {
+        invocation.terminateAfterGrace()
       }
-      let stderrTask = Task.detached {
-        invocation.stderr.fileHandleForReading.readDataToEndOfFile()
-      }
-      let exitTask = Task.detached {
-        invocation.process.waitUntilExit()
-        return (
-          invocation.process.terminationReason == .uncaughtSignal,
-          invocation.process.terminationStatus
-        )
-      }
-
-      let (terminatedBySignal, exitCode) = await exitTask.value
-      let stdout = await stdoutTask.value
-      let stderr = await stderrTask.value
       try Task.checkCancellation()
-      return ProcessResult(
-        stdout: stdout,
-        stderr: String(decoding: stderr, as: UTF8.self),
-        terminatedBySignal: terminatedBySignal,
-        exitCode: exitCode
-      )
-    } onCancel: {
-      invocation.terminate()
+      return result
+    } catch is CancellationError {
+      invocation.terminateAfterGrace()
+      throw TrawlClientError.cancelled
+    }
+  }
+
+  private func waitForResult(
+    _ invocation: ProcessInvocation,
+    deadline: Duration
+  ) async throws -> ProcessResult {
+    try await withThrowingTaskGroup(of: ProcessWaitOutcome.self) { group in
+      group.addTask {
+        .processResult(await invocation.waitForResult())
+      }
+      group.addTask {
+        try await Task.sleep(for: deadline)
+        return .deadlineReached
+      }
+      defer { group.cancelAll() }
+
+      guard let first = try await group.next() else {
+        throw TrawlClientError.timedOut
+      }
+      switch first {
+      case let .processResult(result):
+        if result.terminatedBySignal, !invocation.terminationWasRequested {
+          throw TrawlClientError.terminatedBySignal(result.exitCode)
+        }
+        return result
+      case .deadlineReached:
+        invocation.terminateAfterGrace()
+        while let next = try await group.next() {
+          if case .processResult = next {
+            throw TrawlClientError.timedOut
+          }
+        }
+        throw TrawlClientError.timedOut
+      }
     }
   }
 }
 
+private enum ProcessWaitOutcome: Sendable {
+  case processResult(ProcessResult)
+  case deadlineReached
+}
+
 private struct ProcessResult: Sendable {
   let stdout: Data
-  let stderr: String
+  let payload: Data?
+  let framingError: TrawlClientError?
+  let stderr: Data
+  let terminatedBySignal: Bool
+  let exitCode: Int32
+}
+
+struct ProcessBoundaryReceipt: Sendable, Equatable {
+  let executableURL: URL
+  let arguments: [String]
+  let stdin: Data
+  let stdout: Data
+  let stderr: Data
   let terminatedBySignal: Bool
   let exitCode: Int32
 }
 
 private final class ProcessInvocation: @unchecked Sendable {
+  private let binaryURL: URL
+  private let arguments: [String]
+  private let receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
+  private let terminationLock = NSLock()
+  private var requestedTermination = false
+
   let process = Process()
   let stdout = Pipe()
   let stderr = Pipe()
 
-  init(binaryURL: URL, arguments: [String]) {
+  init(
+    binaryURL: URL,
+    arguments: [String],
+    receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
+  ) {
+    self.binaryURL = binaryURL
+    self.arguments = arguments
+    self.receiveReceipt = receiveReceipt
     process.executableURL = binaryURL
     process.arguments = arguments
-    process.environment = ["HOME": NSHomeDirectory()]
+    process.standardInput = FileHandle.nullDevice
     process.standardOutput = stdout
     process.standardError = stderr
   }
 
-  func terminate() {
-    if process.isRunning {
-      process.terminate()
+  var terminationWasRequested: Bool {
+    terminationLock.withLock { requestedTermination }
+  }
+
+  func waitForResult() async -> ProcessResult {
+    let stdoutTask = Task.detached {
+      self.readOneFrame()
+    }
+    let stderrTask = Task.detached {
+      self.stderr.fileHandleForReading.readDataToEndOfFile()
+    }
+    let exitTask = Task.detached {
+      self.process.waitUntilExit()
+      return (
+        self.process.terminationReason == .uncaughtSignal,
+        self.process.terminationStatus
+      )
+    }
+
+    let frame = await stdoutTask.value
+    if frame.error != nil, process.isRunning {
+      terminateAfterGrace()
+    }
+    let (terminatedBySignal, exitCode) = await exitTask.value
+    let result = ProcessResult(
+      stdout: frame.bytes,
+      payload: frame.payload,
+      framingError: frame.error,
+      stderr: await stderrTask.value,
+      terminatedBySignal: terminatedBySignal,
+      exitCode: exitCode
+    )
+    receiveReceipt?(
+      ProcessBoundaryReceipt(
+        executableURL: binaryURL,
+        arguments: arguments,
+        stdin: Data(),
+        stdout: result.stdout,
+        stderr: result.stderr,
+        terminatedBySignal: result.terminatedBySignal,
+        exitCode: result.exitCode
+      )
+    )
+    return result
+  }
+
+  func terminateAfterGrace() {
+    terminationLock.withLock { requestedTermination = true }
+    guard process.isRunning else { return }
+    process.terminate()
+    Task.detached {
+      try? await Task.sleep(for: .seconds(2))
+      guard self.process.isRunning else { return }
+      _ = Darwin.kill(self.process.processIdentifier, SIGKILL)
     }
   }
+
+  private func readOneFrame() -> FrameRead {
+    var bytes = Data()
+    guard let header = readExactly(MemoryLayout<UInt32>.size, into: &bytes) else {
+      return FrameRead(
+        bytes: bytes,
+        payload: nil,
+        error: bytes.isEmpty ? .missingFrame : .invalidFrame
+      )
+    }
+    let payloadLength = header.withUnsafeBytes { raw in
+      Int(UInt32(littleEndian: raw.loadUnaligned(as: UInt32.self)))
+    }
+    guard payloadLength <= DelimitedFrames.maximumFrameBytes else {
+      return FrameRead(bytes: bytes, payload: nil, error: .oversizedFrame)
+    }
+    guard let payload = readExactly(payloadLength, into: &bytes) else {
+      return FrameRead(bytes: bytes, payload: nil, error: .invalidFrame)
+    }
+    do {
+      let extra = try stdout.fileHandleForReading.read(upToCount: 1) ?? Data()
+      guard extra.isEmpty else {
+        bytes.append(extra)
+        return FrameRead(bytes: bytes, payload: nil, error: .extraFrame)
+      }
+      return FrameRead(bytes: bytes, payload: payload, error: nil)
+    } catch {
+      return FrameRead(bytes: bytes, payload: nil, error: .invalidFrame)
+    }
+  }
+
+  private func readExactly(_ count: Int, into bytes: inout Data) -> Data? {
+    let start = bytes.count
+    while bytes.count - start < count {
+      do {
+        let chunk = try stdout.fileHandleForReading.read(upToCount: count - (bytes.count - start)) ?? Data()
+        guard !chunk.isEmpty else { return nil }
+        bytes.append(chunk)
+      } catch {
+        return nil
+      }
+    }
+    return bytes.suffix(count)
+  }
+}
+
+private struct FrameRead: Sendable {
+  let bytes: Data
+  let payload: Data?
+  let error: TrawlClientError?
 }

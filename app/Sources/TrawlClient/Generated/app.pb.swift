@@ -8,6 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -20,6 +25,248 @@ fileprivate nonisolated struct _GeneratedWithProtocGenSwiftVersion: SwiftProtobu
   typealias Version = _2
 }
 
+public nonisolated enum Trawl_App_V1_SetupKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case fullDiskAccess // = 1
+  case photosPermission // = 2
+  case account // = 3
+  case pairing // = 4
+  case archiveImport // = 5
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .fullDiskAccess
+    case 2: self = .photosPermission
+    case 3: self = .account
+    case 4: self = .pairing
+    case 5: self = .archiveImport
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .fullDiskAccess: return 1
+    case .photosPermission: return 2
+    case .account: return 3
+    case .pairing: return 4
+    case .archiveImport: return 5
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_SetupKind] = [
+    .unspecified,
+    .fullDiskAccess,
+    .photosPermission,
+    .account,
+    .pairing,
+    .archiveImport,
+  ]
+
+}
+
+public nonisolated enum Trawl_App_V1_SetupState: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case ready // = 1
+  case needsAction // = 2
+  case unavailable // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .ready
+    case 2: self = .needsAction
+    case 3: self = .unavailable
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .ready: return 1
+    case .needsAction: return 2
+    case .unavailable: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_SetupState] = [
+    .unspecified,
+    .ready,
+    .needsAction,
+    .unavailable,
+  ]
+
+}
+
+public nonisolated enum Trawl_App_V1_SetupActionKind: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case none // = 1
+  case openFullDiskAccess // = 2
+  case requestPhotos // = 3
+  case runCommand // = 4
+  case chooseArchive // = 5
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .none
+    case 2: self = .openFullDiskAccess
+    case 3: self = .requestPhotos
+    case 4: self = .runCommand
+    case 5: self = .chooseArchive
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .none: return 1
+    case .openFullDiskAccess: return 2
+    case .requestPhotos: return 3
+    case .runCommand: return 4
+    case .chooseArchive: return 5
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_SetupActionKind] = [
+    .unspecified,
+    .none,
+    .openFullDiskAccess,
+    .requestPhotos,
+    .runCommand,
+    .chooseArchive,
+  ]
+
+}
+
+public nonisolated enum Trawl_App_V1_OperationOutcome: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case complete // = 1
+  case partial // = 2
+  case failed // = 3
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .complete
+    case 2: self = .partial
+    case 3: self = .failed
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .complete: return 1
+    case .partial: return 2
+    case .failed: return 3
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_OperationOutcome] = [
+    .unspecified,
+    .complete,
+    .partial,
+    .failed,
+  ]
+
+}
+
+public nonisolated enum Trawl_App_V1_FailureCode: SwiftProtobuf.Enum, Swift.CaseIterable {
+  public typealias RawValue = Int
+  case unspecified // = 0
+  case unavailable // = 1
+  case permission // = 2
+  case authentication // = 3
+  case invalidInput // = 4
+  case notFound // = 5
+  case timeout // = 6
+  case `internal` // = 7
+  case UNRECOGNIZED(Int)
+
+  public init() {
+    self = .unspecified
+  }
+
+  public init?(rawValue: Int) {
+    switch rawValue {
+    case 0: self = .unspecified
+    case 1: self = .unavailable
+    case 2: self = .permission
+    case 3: self = .authentication
+    case 4: self = .invalidInput
+    case 5: self = .notFound
+    case 6: self = .timeout
+    case 7: self = .internal
+    default: self = .UNRECOGNIZED(rawValue)
+    }
+  }
+
+  public var rawValue: Int {
+    switch self {
+    case .unspecified: return 0
+    case .unavailable: return 1
+    case .permission: return 2
+    case .authentication: return 3
+    case .invalidInput: return 4
+    case .notFound: return 5
+    case .timeout: return 6
+    case .internal: return 7
+    case .UNRECOGNIZED(let i): return i
+    }
+  }
+
+  // The compiler won't synthesize support with the UNRECOGNIZED case.
+  public static let allCases: [Trawl_App_V1_FailureCode] = [
+    .unspecified,
+    .unavailable,
+    .permission,
+    .authentication,
+    .invalidInput,
+    .notFound,
+    .timeout,
+    .internal,
+  ]
+
+}
+
 public nonisolated struct Trawl_App_V1_Count: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -28,6 +275,28 @@ public nonisolated struct Trawl_App_V1_Count: Sendable {
   public var id: String = String()
 
   public var display: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_SetupRequirement: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var kind: Trawl_App_V1_SetupKind = .unspecified
+
+  public var state: Trawl_App_V1_SetupState = .unspecified
+
+  public var explanation: String = String()
+
+  public var action: Trawl_App_V1_SetupActionKind = .unspecified
+
+  public var command: [String] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -52,6 +321,8 @@ public nonisolated struct Trawl_App_V1_SourceStatus: Sendable {
   public var lastSyncedDisplay: String = String()
 
   public var archiveBytes: Int64 = 0
+
+  public var setupRequirements: [Trawl_App_V1_SetupRequirement] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -78,9 +349,157 @@ public nonisolated struct Trawl_App_V1_SearchHit: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_App_V1_SourceFailure: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var appID: String = String()
+
+  public var surface: String = String()
+
+  public var code: Trawl_App_V1_FailureCode = .unspecified
+
+  public var message: String = String()
+
+  public var remedy: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_StatusResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outcome: Trawl_App_V1_OperationOutcome = .unspecified
+
+  public var sources: [Trawl_App_V1_SourceStatus] = []
+
+  public var failures: [Trawl_App_V1_SourceFailure] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_SearchResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outcome: Trawl_App_V1_OperationOutcome = .unspecified
+
+  public var hits: [Trawl_App_V1_SearchHit] = []
+
+  public var failures: [Trawl_App_V1_SourceFailure] = []
+
+  public var resultLimit: UInt32 = 0
+
+  public var truncated: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_SyncSourceResult: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var appID: String = String()
+
+  public var surface: String = String()
+
+  public var outcome: Trawl_App_V1_OperationOutcome = .unspecified
+
+  public var failure: Trawl_App_V1_SourceFailure {
+    get {_failure ?? Trawl_App_V1_SourceFailure()}
+    set {_failure = newValue}
+  }
+  /// Returns true if `failure` has been explicitly set.
+  public var hasFailure: Bool {self._failure != nil}
+  /// Clears the value of `failure`. Subsequent reads from it will return its default value.
+  public mutating func clearFailure() {self._failure = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _failure: Trawl_App_V1_SourceFailure? = nil
+}
+
+public nonisolated struct Trawl_App_V1_SyncResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outcome: Trawl_App_V1_OperationOutcome = .unspecified
+
+  public var sources: [Trawl_App_V1_SyncSourceResult] = []
+
+  public var failures: [Trawl_App_V1_SourceFailure] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_App_V1_OpenResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var outcome: Trawl_App_V1_OperationOutcome = .unspecified
+
+  public var appID: String = String()
+
+  public var openRef: String = String()
+
+  public var output: Data = Data()
+
+  public var failure: Trawl_App_V1_SourceFailure {
+    get {_failure ?? Trawl_App_V1_SourceFailure()}
+    set {_failure = newValue}
+  }
+  /// Returns true if `failure` has been explicitly set.
+  public var hasFailure: Bool {self._failure != nil}
+  /// Clears the value of `failure`. Subsequent reads from it will return its default value.
+  public mutating func clearFailure() {self._failure = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _failure: Trawl_App_V1_SourceFailure? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.app.v1"
+
+nonisolated extension Trawl_App_V1_SetupKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SETUP_KIND_UNSPECIFIED\0\u{1}SETUP_KIND_FULL_DISK_ACCESS\0\u{1}SETUP_KIND_PHOTOS_PERMISSION\0\u{1}SETUP_KIND_ACCOUNT\0\u{1}SETUP_KIND_PAIRING\0\u{1}SETUP_KIND_ARCHIVE_IMPORT\0")
+}
+
+nonisolated extension Trawl_App_V1_SetupState: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SETUP_STATE_UNSPECIFIED\0\u{1}SETUP_STATE_READY\0\u{1}SETUP_STATE_NEEDS_ACTION\0\u{1}SETUP_STATE_UNAVAILABLE\0")
+}
+
+nonisolated extension Trawl_App_V1_SetupActionKind: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0SETUP_ACTION_KIND_UNSPECIFIED\0\u{1}SETUP_ACTION_KIND_NONE\0\u{1}SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS\0\u{1}SETUP_ACTION_KIND_REQUEST_PHOTOS\0\u{1}SETUP_ACTION_KIND_RUN_COMMAND\0\u{1}SETUP_ACTION_KIND_CHOOSE_ARCHIVE\0")
+}
+
+nonisolated extension Trawl_App_V1_OperationOutcome: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0OPERATION_OUTCOME_UNSPECIFIED\0\u{1}OPERATION_OUTCOME_COMPLETE\0\u{1}OPERATION_OUTCOME_PARTIAL\0\u{1}OPERATION_OUTCOME_FAILED\0")
+}
+
+nonisolated extension Trawl_App_V1_FailureCode: SwiftProtobuf._ProtoNameProviding {
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0FAILURE_CODE_UNSPECIFIED\0\u{1}FAILURE_CODE_UNAVAILABLE\0\u{1}FAILURE_CODE_PERMISSION\0\u{1}FAILURE_CODE_AUTHENTICATION\0\u{1}FAILURE_CODE_INVALID_INPUT\0\u{1}FAILURE_CODE_NOT_FOUND\0\u{1}FAILURE_CODE_TIMEOUT\0\u{1}FAILURE_CODE_INTERNAL\0")
+}
 
 nonisolated extension Trawl_App_V1_Count: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Count"
@@ -117,9 +536,64 @@ nonisolated extension Trawl_App_V1_Count: SwiftProtobuf.Message, SwiftProtobuf._
   }
 }
 
+nonisolated extension Trawl_App_V1_SetupRequirement: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SetupRequirement"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}kind\0\u{1}state\0\u{1}explanation\0\u{1}action\0\u{1}command\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularEnumField(value: &self.kind) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.state) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.explanation) }()
+      case 5: try { try decoder.decodeSingularEnumField(value: &self.action) }()
+      case 6: try { try decoder.decodeRepeatedStringField(value: &self.command) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if self.kind != .unspecified {
+      try visitor.visitSingularEnumField(value: self.kind, fieldNumber: 2)
+    }
+    if self.state != .unspecified {
+      try visitor.visitSingularEnumField(value: self.state, fieldNumber: 3)
+    }
+    if !self.explanation.isEmpty {
+      try visitor.visitSingularStringField(value: self.explanation, fieldNumber: 4)
+    }
+    if self.action != .unspecified {
+      try visitor.visitSingularEnumField(value: self.action, fieldNumber: 5)
+    }
+    if !self.command.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.command, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SetupRequirement, rhs: Trawl_App_V1_SetupRequirement) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.explanation != rhs.explanation {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.command != rhs.command {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_App_V1_SourceStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SourceStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}app_id\0\u{1}surface\0\u{1}state\0\u{1}summary\0\u{1}counts\0\u{3}last_synced_display\0\u{3}archive_bytes\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}app_id\0\u{1}surface\0\u{1}state\0\u{1}summary\0\u{1}counts\0\u{3}last_synced_display\0\u{3}archive_bytes\0\u{3}setup_requirements\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -134,6 +608,7 @@ nonisolated extension Trawl_App_V1_SourceStatus: SwiftProtobuf.Message, SwiftPro
       case 5: try { try decoder.decodeRepeatedMessageField(value: &self.counts) }()
       case 6: try { try decoder.decodeSingularStringField(value: &self.lastSyncedDisplay) }()
       case 7: try { try decoder.decodeSingularInt64Field(value: &self.archiveBytes) }()
+      case 8: try { try decoder.decodeRepeatedMessageField(value: &self.setupRequirements) }()
       default: break
       }
     }
@@ -161,6 +636,9 @@ nonisolated extension Trawl_App_V1_SourceStatus: SwiftProtobuf.Message, SwiftPro
     if self.archiveBytes != 0 {
       try visitor.visitSingularInt64Field(value: self.archiveBytes, fieldNumber: 7)
     }
+    if !self.setupRequirements.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.setupRequirements, fieldNumber: 8)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -172,6 +650,7 @@ nonisolated extension Trawl_App_V1_SourceStatus: SwiftProtobuf.Message, SwiftPro
     if lhs.counts != rhs.counts {return false}
     if lhs.lastSyncedDisplay != rhs.lastSyncedDisplay {return false}
     if lhs.archiveBytes != rhs.archiveBytes {return false}
+    if lhs.setupRequirements != rhs.setupRequirements {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -222,6 +701,289 @@ nonisolated extension Trawl_App_V1_SearchHit: SwiftProtobuf.Message, SwiftProtob
     if lhs.title != rhs.title {return false}
     if lhs.snippet != rhs.snippet {return false}
     if lhs.whenDisplay != rhs.whenDisplay {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SourceFailure: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SourceFailure"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}app_id\0\u{1}surface\0\u{1}code\0\u{1}message\0\u{1}remedy\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.appID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.surface) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.code) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.remedy) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.appID.isEmpty {
+      try visitor.visitSingularStringField(value: self.appID, fieldNumber: 1)
+    }
+    if !self.surface.isEmpty {
+      try visitor.visitSingularStringField(value: self.surface, fieldNumber: 2)
+    }
+    if self.code != .unspecified {
+      try visitor.visitSingularEnumField(value: self.code, fieldNumber: 3)
+    }
+    if !self.message.isEmpty {
+      try visitor.visitSingularStringField(value: self.message, fieldNumber: 4)
+    }
+    if !self.remedy.isEmpty {
+      try visitor.visitSingularStringField(value: self.remedy, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SourceFailure, rhs: Trawl_App_V1_SourceFailure) -> Bool {
+    if lhs.appID != rhs.appID {return false}
+    if lhs.surface != rhs.surface {return false}
+    if lhs.code != rhs.code {return false}
+    if lhs.message != rhs.message {return false}
+    if lhs.remedy != rhs.remedy {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_StatusResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".StatusResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}sources\0\u{1}failures\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.failures) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.outcome != .unspecified {
+      try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 1)
+    }
+    if !self.sources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 2)
+    }
+    if !self.failures.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.failures, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_StatusResponse, rhs: Trawl_App_V1_StatusResponse) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs.sources != rhs.sources {return false}
+    if lhs.failures != rhs.failures {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SearchResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SearchResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}hits\0\u{1}failures\0\u{3}result_limit\0\u{1}truncated\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.hits) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.failures) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.resultLimit) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.truncated) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.outcome != .unspecified {
+      try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 1)
+    }
+    if !self.hits.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.hits, fieldNumber: 2)
+    }
+    if !self.failures.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.failures, fieldNumber: 3)
+    }
+    if self.resultLimit != 0 {
+      try visitor.visitSingularUInt32Field(value: self.resultLimit, fieldNumber: 4)
+    }
+    if self.truncated != false {
+      try visitor.visitSingularBoolField(value: self.truncated, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SearchResponse, rhs: Trawl_App_V1_SearchResponse) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs.hits != rhs.hits {return false}
+    if lhs.failures != rhs.failures {return false}
+    if lhs.resultLimit != rhs.resultLimit {return false}
+    if lhs.truncated != rhs.truncated {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SyncSourceResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SyncSourceResult"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}app_id\0\u{1}surface\0\u{1}outcome\0\u{1}failure\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.appID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.surface) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
+      case 4: try { try decoder.decodeSingularMessageField(value: &self._failure) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.appID.isEmpty {
+      try visitor.visitSingularStringField(value: self.appID, fieldNumber: 1)
+    }
+    if !self.surface.isEmpty {
+      try visitor.visitSingularStringField(value: self.surface, fieldNumber: 2)
+    }
+    if self.outcome != .unspecified {
+      try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 3)
+    }
+    try { if let v = self._failure {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SyncSourceResult, rhs: Trawl_App_V1_SyncSourceResult) -> Bool {
+    if lhs.appID != rhs.appID {return false}
+    if lhs.surface != rhs.surface {return false}
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs._failure != rhs._failure {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_SyncResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SyncResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}sources\0\u{1}failures\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.sources) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.failures) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.outcome != .unspecified {
+      try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 1)
+    }
+    if !self.sources.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.sources, fieldNumber: 2)
+    }
+    if !self.failures.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.failures, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_SyncResponse, rhs: Trawl_App_V1_SyncResponse) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs.sources != rhs.sources {return false}
+    if lhs.failures != rhs.failures {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_App_V1_OpenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OpenResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{3}app_id\0\u{3}open_ref\0\u{1}output\0\u{1}failure\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularEnumField(value: &self.outcome) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.appID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.openRef) }()
+      case 4: try { try decoder.decodeSingularBytesField(value: &self.output) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._failure) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if self.outcome != .unspecified {
+      try visitor.visitSingularEnumField(value: self.outcome, fieldNumber: 1)
+    }
+    if !self.appID.isEmpty {
+      try visitor.visitSingularStringField(value: self.appID, fieldNumber: 2)
+    }
+    if !self.openRef.isEmpty {
+      try visitor.visitSingularStringField(value: self.openRef, fieldNumber: 3)
+    }
+    if !self.output.isEmpty {
+      try visitor.visitSingularBytesField(value: self.output, fieldNumber: 4)
+    }
+    try { if let v = self._failure {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_App_V1_OpenResponse, rhs: Trawl_App_V1_OpenResponse) -> Bool {
+    if lhs.outcome != rhs.outcome {return false}
+    if lhs.appID != rhs.appID {return false}
+    if lhs.openRef != rhs.openRef {return false}
+    if lhs.output != rhs.output {return false}
+    if lhs._failure != rhs._failure {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

@@ -15,7 +15,21 @@ import TrawlClient
     whenDisplay: "10 Jul"
   )
   let client = ScriptedClient(search: { _, _ in
-    SearchResponse(hits: [hit], completion: .partial)
+    SearchResponse(
+      hits: [hit],
+      failures: [
+        SourceFailure(
+          sourceID: "calendar",
+          sourceName: "Calendar",
+          code: .permission,
+          message: "Allow calendar access.",
+          remedy: "Open System Settings."
+        )
+      ],
+      outcome: .partial,
+      resultLimit: 20,
+      truncated: true
+    )
   })
   let model = SearchModel(client: client, debounce: .zero, waitLimit: .seconds(1))
 
@@ -23,6 +37,9 @@ import TrawlClient
 
   #expect(model.results == [hit])
   #expect(model.phase == .partial)
+  #expect(model.failures.map(\.sourceID) == ["calendar"])
+  #expect(model.resultLimit == 20)
+  #expect(model.isTruncated)
 }
 
 @MainActor
@@ -39,7 +56,9 @@ import TrawlClient
           whenDisplay: ""
         )
       ],
-      completion: .complete
+      outcome: .complete,
+      resultLimit: 20,
+      truncated: false
     )
   })
   let model = SearchModel(client: client, debounce: .zero, waitLimit: .seconds(1))
@@ -58,7 +77,7 @@ import TrawlClient
 @Test func searchDistinguishesEmptyFailureAndTimeout() async {
   let empty = SearchModel(
     client: ScriptedClient(search: { _, _ in
-      SearchResponse(hits: [], completion: .complete)
+      SearchResponse(hits: [], outcome: .complete, resultLimit: 20, truncated: false)
     }),
     debounce: .zero,
     waitLimit: .seconds(1)
@@ -69,7 +88,7 @@ import TrawlClient
 
   let failed = SearchModel(
     client: ScriptedClient(search: { _, _ in
-      SearchResponse(hits: [], completion: .failed)
+      SearchResponse(hits: [], outcome: .failed, resultLimit: 20, truncated: false)
     }),
     debounce: .zero,
     waitLimit: .seconds(1)
@@ -80,7 +99,7 @@ import TrawlClient
   let timedOut = SearchModel(
     client: ScriptedClient(search: { _, _ in
       await ignoreCancellation(for: .milliseconds(100))
-      return SearchResponse(hits: [], completion: .complete)
+      return SearchResponse(hits: [], outcome: .complete, resultLimit: 20, truncated: false)
     }),
     debounce: .zero,
     waitLimit: .milliseconds(10)
@@ -99,8 +118,18 @@ import TrawlClient
     whenDisplay: ""
   )
   let client = ScriptedClient(
-    search: { _, _ in SearchResponse(hits: [hit], completion: .complete) },
-    open: { _ in "first line\nsecond line\n" }
+    search: { _, _ in
+      SearchResponse(hits: [hit], outcome: .complete, resultLimit: 20, truncated: false)
+    },
+    open: { _ in
+      OpenResponse(
+        outcome: .complete,
+        sourceID: "gmail",
+        openRef: "gmail:message:example-1",
+        output: Data("first line\nsecond line\n".utf8),
+        failure: nil
+      )
+    }
   )
   let model = SearchModel(client: client, debounce: .zero, waitLimit: .seconds(1))
   await model.search("synthetic", source: nil)
@@ -108,32 +137,37 @@ import TrawlClient
   await model.open(hit)
 
   #expect(model.openPhase == .output("first line\nsecond line\n"))
+  #expect(model.openResult?.output == Data("first line\nsecond line\n".utf8))
   #expect(model.results == [hit])
 }
 
 private final class ScriptedClient: TrawlClient, @unchecked Sendable {
   let searchAction: @Sendable (String, String?) async throws -> SearchResponse
-  let openAction: @Sendable (String) async throws -> String
+  let openAction: @Sendable (String) async throws -> OpenResponse
 
   init(
     search: @escaping @Sendable (String, String?) async throws -> SearchResponse,
-    open: @escaping @Sendable (String) async throws -> String = { _ in "" }
+    open: @escaping @Sendable (String) async throws -> OpenResponse = { ref in
+      OpenResponse(outcome: .complete, sourceID: "", openRef: ref, output: Data(), failure: nil)
+    }
   ) {
     searchAction = search
     openAction = open
   }
 
   func status() async throws -> StatusResponse {
-    StatusResponse(sources: [], completion: .complete)
+    StatusResponse(sources: [], outcome: .complete)
   }
 
-  func sync() async throws -> FanoutCompletion { .complete }
+  func sync() async throws -> SyncResponse {
+    SyncResponse(sources: [], failures: [], outcome: .complete)
+  }
 
   func search(_ query: String, source: String?) async throws -> SearchResponse {
     try await searchAction(query, source)
   }
 
-  func open(_ ref: String) async throws -> String {
+  func open(_ ref: String) async throws -> OpenResponse {
     try await openAction(ref)
   }
 }

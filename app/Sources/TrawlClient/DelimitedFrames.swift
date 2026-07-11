@@ -3,66 +3,39 @@ import SwiftProtobuf
 
 public enum DelimitedFrames {
   public static let maximumFrameBytes = 16 * 1024 * 1024
+  private static let headerBytes = MemoryLayout<UInt32>.size
 
-  public static func decode(_ data: Data) throws -> [Data] {
-    var offset = data.startIndex
-    var frames: [Data] = []
-
-    while offset < data.endIndex {
-      let length = try decodeLength(in: data, offset: &offset)
-      guard length <= maximumFrameBytes else {
-        throw TrawlClientError.frameTooLarge
-      }
-      guard length <= data.distance(from: offset, to: data.endIndex) else {
-        throw TrawlClientError.invalidFrame
-      }
-      let end = data.index(offset, offsetBy: length)
-      frames.append(data[offset..<end])
-      offset = end
+  public static func decodeExactlyOne(_ data: Data) throws -> Data {
+    guard !data.isEmpty else {
+      throw TrawlClientError.missingFrame
     }
-    return frames
+    guard data.count >= headerBytes else {
+      throw TrawlClientError.invalidFrame
+    }
+
+    let payloadLength = data.prefix(headerBytes).withUnsafeBytes { bytes in
+      Int(UInt32(littleEndian: bytes.loadUnaligned(as: UInt32.self)))
+    }
+    guard payloadLength <= maximumFrameBytes else {
+      throw TrawlClientError.oversizedFrame
+    }
+
+    let frameEnd = headerBytes + payloadLength
+    guard data.count >= frameEnd else {
+      throw TrawlClientError.invalidFrame
+    }
+    guard data.count == frameEnd else {
+      throw TrawlClientError.extraFrame
+    }
+    return data.dropFirst(headerBytes)
   }
 
   public static func encode<Message: SwiftProtobuf.Message>(_ message: Message) throws -> Data {
     let payload = try message.serializedData()
     guard payload.count <= maximumFrameBytes else {
-      throw TrawlClientError.frameTooLarge
+      throw TrawlClientError.oversizedFrame
     }
-    return encodeLength(payload.count) + payload
-  }
-
-  private static func encodeLength(_ length: Int) -> Data {
-    var value = length
-    var bytes: [UInt8] = []
-    repeat {
-      var byte = UInt8(value & 0x7f)
-      value >>= 7
-      if value > 0 { byte |= 0x80 }
-      bytes.append(byte)
-    } while value > 0
-    return Data(bytes)
-  }
-
-  private static func decodeLength(in data: Data, offset: inout Data.Index) throws -> Int {
-    var value: UInt64 = 0
-    for shift in stride(from: 0, through: 63, by: 7) {
-      guard offset < data.endIndex else {
-        throw TrawlClientError.invalidFrame
-      }
-      let byte = data[offset]
-      offset = data.index(after: offset)
-
-      if shift == 63, byte > 1 {
-        throw TrawlClientError.invalidFrame
-      }
-      value |= UInt64(byte & 0x7f) << UInt64(shift)
-      if byte & 0x80 == 0 {
-        guard value <= UInt64(Int.max) else {
-          throw TrawlClientError.frameTooLarge
-        }
-        return Int(value)
-      }
-    }
-    throw TrawlClientError.invalidFrame
+    var length = UInt32(payload.count).littleEndian
+    return withUnsafeBytes(of: &length) { Data($0) } + payload
   }
 }

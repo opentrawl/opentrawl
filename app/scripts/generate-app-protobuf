@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+app_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repo_root="$(cd "$app_dir/.." && pwd)"
+output_dir="$app_dir/Sources/TrawlClient/Generated"
+check=0
+
+if [[ "${1:-}" == "--check" ]]; then
+  check=1
+elif [[ $# -ne 0 ]]; then
+  echo "usage: generate-app-protobuf [--check]" >&2
+  exit 2
+fi
+
+host_swift() {
+  env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
+}
+
+host_swift package --package-path "$app_dir" resolve
+protobuf_checkout="$app_dir/.build/checkouts/swift-protobuf"
+if [[ ! -d "$protobuf_checkout" ]]; then
+  echo "SwiftProtobuf checkout is missing after package resolution." >&2
+  exit 1
+fi
+
+host_swift build \
+  --package-path "$protobuf_checkout" \
+  --configuration release \
+  --product protoc-gen-swift
+plugin="$protobuf_checkout/.build/release/protoc-gen-swift"
+if [[ ! -x "$plugin" ]]; then
+  echo "protoc-gen-swift was not built." >&2
+  exit 1
+fi
+
+template="$(mktemp "${TMPDIR:-/tmp}/opentrawl-swift-protobuf.XXXXXX.yaml")"
+trap 'rm -f "$template"' EXIT
+cat >"$template" <<EOF
+version: v1
+plugins:
+  - name: swift
+    path: $plugin
+    out: $output_dir
+    opt:
+      - Visibility=Public
+      - FileNaming=DropPath
+EOF
+
+mkdir -p "$output_dir"
+(
+  cd "$repo_root/trawlkit/proto"
+  buf generate --template "$template" --path trawl/app/v1/app.proto
+)
+
+if [[ "$check" -eq 1 ]]; then
+  git -C "$repo_root" diff --exit-code -- "$output_dir/app.pb.swift"
+fi
