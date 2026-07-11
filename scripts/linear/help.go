@@ -20,8 +20,8 @@ Usage:
   linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
   linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
   linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
-	  linear issue <ISSUE>
-	  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
+  linear issue <ISSUE>
+  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
   linear project <PROJECT>
   linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
   linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]

@@ -35,7 +35,7 @@ func TestIssueHelpAlignsEveryUsageCommand(t *testing.T) {
 	}
 }
 
-func TestRootHelpAlignsIssueMaintenanceExamples(t *testing.T) {
+func TestRootHelpAlignsUsageAndExamples(t *testing.T) {
 	var stdout, stderr bytes.Buffer
 	err := execute([]string{"--help"}, strings.NewReader(""), &stdout, &stderr)
 	if _, ok := err.(helpShown); !ok {
@@ -46,6 +46,8 @@ func TestRootHelpAlignsIssueMaintenanceExamples(t *testing.T) {
 	}
 
 	for _, command := range []string{
+		"  linear issue <ISSUE>",
+		"  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]",
 		"  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]",
 		"  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>",
 		"  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>",
@@ -57,9 +59,12 @@ func TestRootHelpAlignsIssueMaintenanceExamples(t *testing.T) {
 			t.Errorf("root help does not contain aligned example %q:\n%s", command, stdout.String())
 		}
 	}
-	if strings.Contains(stdout.String(), "\n\t  linear issue update") ||
-		strings.Contains(stdout.String(), "\n\t  linear issue label") ||
-		strings.Contains(stdout.String(), "\n\t  linear issue relation") {
-		t.Fatalf("root help contains tab-indented maintenance command:\n%s", stdout.String())
+	usageStart := strings.Index(stdout.String(), "Usage:\n")
+	usageEnd := strings.Index(stdout.String(), "\nEnvironment:\n")
+	if usageStart == -1 || usageEnd == -1 || usageEnd <= usageStart {
+		t.Fatalf("root help does not contain a complete usage block:\n%s", stdout.String())
+	}
+	if strings.Contains(stdout.String()[usageStart:usageEnd], "\t") {
+		t.Fatalf("root help usage contains a tab-indented command:\n%s", stdout.String())
 	}
 }
