@@ -18,6 +18,75 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
+func TestSetupRequirementMapping(t *testing.T) {
+	installFakeGog(t)
+	t.Setenv("GOG_FAKE_AUTH_VALID", "false")
+	crawler := New()
+	requirement := crawler.gmailSetupRequirement(context.Background())
+	if requirement.ID != "account" || requirement.Kind != control.SetupKindAccount || requirement.State != control.SetupStateNeedsAction || requirement.Action != control.SetupActionRunCommand {
+		t.Fatalf("requirement = %#v", requirement)
+	}
+	if got := requirement.Command; len(got) != 3 || got[0] != "gog" || got[1] != "login" || got[2] != "<email>" {
+		t.Fatalf("command = %#v", got)
+	}
+	t.Setenv("GOG_FAKE_AUTH_VALID", "true")
+	ready := New().gmailSetupRequirement(context.Background())
+	if ready.ID != "account" || ready.Kind != control.SetupKindAccount || ready.State != control.SetupStateReady || ready.Action != control.SetupActionNone || len(ready.Command) != 0 {
+		t.Fatalf("ready requirement = %#v", ready)
+	}
+	unavailableCrawler := New()
+	unavailableCrawler.gog.Binary = filepath.Join(t.TempDir(), "missing-gog")
+	unavailable := unavailableCrawler.gmailSetupRequirement(context.Background())
+	if unavailable.ID != "account" || unavailable.Kind != control.SetupKindAccount || unavailable.State != control.SetupStateUnavailable || unavailable.Action != control.SetupActionNone || len(unavailable.Command) != 0 {
+		t.Fatalf("unavailable requirement = %#v", unavailable)
+	}
+}
+
+func TestStatusSetupRequirementBoundary(t *testing.T) {
+	cases := []struct {
+		name       string
+		authValid  string
+		binaryPath string
+		state      control.SetupState
+	}{
+		{name: "needs action", authValid: "false", state: control.SetupStateNeedsAction},
+		{name: "ready", authValid: "true", state: control.SetupStateReady},
+		{name: "unavailable", authValid: "true", binaryPath: "missing", state: control.SetupStateUnavailable},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			installFakeGog(t)
+			t.Setenv("GOG_FAKE_AUTH_VALID", test.authValid)
+			crawler := New()
+			if test.binaryPath == "missing" {
+				crawler.gog.Binary = filepath.Join(t.TempDir(), "missing-gog")
+			}
+			request := &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "gmail.db")}}
+			status, err := crawler.Status(context.Background(), request)
+			t.Logf("synthetic status boundary request=%#v status=%#v error=%v", request, status, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.State != "missing" || len(status.SetupRequirements) != 1 {
+				t.Fatalf("status = %#v, want missing with one setup requirement", status)
+			}
+			requirement := status.SetupRequirements[0]
+			if requirement.ID != "account" || requirement.Kind != control.SetupKindAccount || requirement.State != test.state {
+				t.Fatalf("requirement = %#v, want state %q", requirement, test.state)
+			}
+			wantAction := control.SetupActionNone
+			var wantCommand []string
+			if test.state == control.SetupStateNeedsAction {
+				wantAction = control.SetupActionRunCommand
+				wantCommand = []string{"gog", "login", "<email>"}
+			}
+			if requirement.Action != wantAction || !equalStrings(requirement.Command, wantCommand) {
+				t.Fatalf("requirement action/command = %q/%#v, want %q/%#v", requirement.Action, requirement.Command, wantAction, wantCommand)
+			}
+		})
+	}
+}
+
 func TestMain(m *testing.M) {
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))

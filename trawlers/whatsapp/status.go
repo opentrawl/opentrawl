@@ -20,6 +20,7 @@ import (
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus("whatsapp", "Archive has not been synced.")
 	status.State = "missing"
+	status.SetupRequirements = whatsappSetupRequirements(ctx, c.cfg.Source)
 	status.ConfigPath = req.Paths.Config
 	status.DatabasePath = req.Paths.Archive
 	if req.Store == nil {
@@ -55,6 +56,67 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 		status.Summary = "Recently synced."
 	}
 	return &status, nil
+}
+
+func whatsappSetupRequirements(ctx context.Context, configuredPath string) []control.SetupRequirement {
+	const (
+		pairingID = "pairing"
+		accessID  = "full_disk_access"
+	)
+	openWhatsApp := []string{"/usr/bin/open", "-b", "net.whatsapp.WhatsApp"}
+	source, discoverErr := whatsappdb.Discover(ctx, configuredPath)
+	state := control.SetupStateUnavailable
+	accessState := control.SetupStateUnavailable
+	var canaryErr error
+	if discoverErr == nil && source.Available && strings.TrimSpace(source.ChatDB) != "" {
+		if _, err := os.Stat(source.ChatDB); err == nil {
+			canaryErr = sourceCanary(ctx, source)
+			switch {
+			case canaryErr == nil:
+				state = control.SetupStateReady
+				accessState = control.SetupStateReady
+			case isPermissionError(canaryErr):
+				state = control.SetupStateReady
+				accessState = control.SetupStateNeedsAction
+			default:
+				state = control.SetupStateUnavailable
+				accessState = control.SetupStateUnavailable
+			}
+		} else if isPermissionError(err) {
+			state = control.SetupStateReady
+			accessState = control.SetupStateNeedsAction
+		} else if !os.IsNotExist(err) {
+			state = control.SetupStateUnavailable
+			accessState = control.SetupStateUnavailable
+		} else {
+			state = control.SetupStateNeedsAction
+			accessState = control.SetupStateNeedsAction
+		}
+	} else if discoverErr != nil && !isPermissionError(discoverErr) {
+		state = control.SetupStateUnavailable
+		accessState = control.SetupStateUnavailable
+	} else {
+		state = control.SetupStateNeedsAction
+		accessState = control.SetupStateNeedsAction
+	}
+	return []control.SetupRequirement{
+		control.NewSetupRequirement(
+			pairingID,
+			control.SetupKindPairing,
+			state,
+			"Open WhatsApp once so OpenTrawl can reuse its local session.",
+			control.SetupActionRunCommand,
+			openWhatsApp,
+		),
+		control.NewSetupRequirement(
+			accessID,
+			control.SetupKindFullDiskAccess,
+			accessState,
+			"OpenTrawl reads the local WhatsApp database.",
+			control.SetupActionOpenFullDiskAccess,
+			nil,
+		),
+	}
 }
 
 func statusCounts(status store.Status) []control.Count {

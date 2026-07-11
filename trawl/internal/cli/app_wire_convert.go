@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 	appv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/app/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -19,6 +20,72 @@ func appStatusMessage(source Source, status StatusEnvelope, now time.Time) *appv
 		AppId: status.AppID, Surface: status.Surface, State: status.State,
 		Summary: status.Summary, Counts: counts,
 		LastSyncedDisplay: freshnessText(status, now), ArchiveBytes: appArchiveBytes(source),
+		SetupRequirements: appSetupRequirements(status.SetupRequirements),
+	}
+}
+
+func appSetupRequirements(requirements []control.SetupRequirement) []*appv1.SetupRequirement {
+	if len(requirements) == 0 {
+		return nil
+	}
+	out := make([]*appv1.SetupRequirement, 0, len(requirements))
+	for _, requirement := range requirements {
+		out = append(out, &appv1.SetupRequirement{
+			Id:          requirement.ID,
+			Kind:        appSetupKind(requirement.Kind),
+			State:       appSetupState(requirement.State),
+			Explanation: requirement.Explanation,
+			Action:      appSetupAction(requirement.Action),
+			Command:     append([]string(nil), requirement.Command...),
+		})
+	}
+	return out
+}
+
+func appSetupKind(kind control.SetupKind) appv1.SetupKind {
+	switch kind {
+	case control.SetupKindFullDiskAccess:
+		return appv1.SetupKind_SETUP_KIND_FULL_DISK_ACCESS
+	case control.SetupKindPhotosPermission:
+		return appv1.SetupKind_SETUP_KIND_PHOTOS_PERMISSION
+	case control.SetupKindAccount:
+		return appv1.SetupKind_SETUP_KIND_ACCOUNT
+	case control.SetupKindPairing:
+		return appv1.SetupKind_SETUP_KIND_PAIRING
+	case control.SetupKindArchiveImport:
+		return appv1.SetupKind_SETUP_KIND_ARCHIVE_IMPORT
+	default:
+		return appv1.SetupKind_SETUP_KIND_UNSPECIFIED
+	}
+}
+
+func appSetupState(state control.SetupState) appv1.SetupState {
+	switch state {
+	case control.SetupStateReady:
+		return appv1.SetupState_SETUP_STATE_READY
+	case control.SetupStateNeedsAction:
+		return appv1.SetupState_SETUP_STATE_NEEDS_ACTION
+	case control.SetupStateUnavailable:
+		return appv1.SetupState_SETUP_STATE_UNAVAILABLE
+	default:
+		return appv1.SetupState_SETUP_STATE_UNSPECIFIED
+	}
+}
+
+func appSetupAction(action control.SetupActionKind) appv1.SetupActionKind {
+	switch action {
+	case control.SetupActionNone:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_NONE
+	case control.SetupActionOpenFullDiskAccess:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS
+	case control.SetupActionRequestPhotos:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_REQUEST_PHOTOS
+	case control.SetupActionRunCommand:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_RUN_COMMAND
+	case control.SetupActionChooseArchive:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_CHOOSE_ARCHIVE
+	default:
+		return appv1.SetupActionKind_SETUP_ACTION_KIND_UNSPECIFIED
 	}
 }
 
@@ -60,14 +127,20 @@ func appSearchDate(row SearchRow) string {
 
 func appStatusResponse(results []appStatusResult, now time.Time) *appv1.StatusResponse {
 	response := &appv1.StatusResponse{}
+	successes := 0
 	for _, result := range results {
-		if result.Err != nil || statusFailed(result.Status) {
+		if result.Err != nil {
 			response.Failures = append(response.Failures, appStatusFailure(result.Source, result.Err))
 			continue
 		}
 		response.Sources = append(response.Sources, appStatusMessage(result.Source, result.Status, now))
+		if statusFailed(result.Status) {
+			response.Failures = append(response.Failures, appStatusFailure(result.Source, nil))
+			continue
+		}
+		successes++
 	}
-	response.Outcome = appOutcome(len(response.Sources), len(response.Failures))
+	response.Outcome = appOutcome(successes, len(response.Failures))
 	return response
 }
 

@@ -20,6 +20,58 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+func TestSetupRequirementMapping(t *testing.T) {
+	requirements := whatsappSetupRequirements(context.Background(), filepath.Join(t.TempDir(), "missing-whatsapp"))
+	if len(requirements) != 2 {
+		t.Fatalf("requirements = %#v", requirements)
+	}
+	pairing, access := requirements[0], requirements[1]
+	if pairing.ID != "pairing" || pairing.Kind != control.SetupKindPairing || pairing.State != control.SetupStateNeedsAction || pairing.Action != control.SetupActionRunCommand {
+		t.Fatalf("pairing = %#v", pairing)
+	}
+	if got := pairing.Command; len(got) != 3 || got[0] != "/usr/bin/open" || got[1] != "-b" || got[2] != "net.whatsapp.WhatsApp" {
+		t.Fatalf("pairing command = %#v", got)
+	}
+	if access.ID != "full_disk_access" || access.Kind != control.SetupKindFullDiskAccess || access.State != control.SetupStateNeedsAction || access.Action != control.SetupActionOpenFullDiskAccess || len(access.Command) != 0 {
+		t.Fatalf("full disk access = %#v", access)
+	}
+	invalidPath := filepath.Join(t.TempDir(), "invalid-whatsapp")
+	if err := os.WriteFile(invalidPath, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	invalid := whatsappSetupRequirements(context.Background(), invalidPath)
+	for _, requirement := range invalid {
+		if requirement.State != control.SetupStateUnavailable || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
+			t.Fatalf("invalid source requirement = %#v", requirement)
+		}
+	}
+	readyRoot := t.TempDir()
+	createDesktopFixture(t, readyRoot)
+	ready := whatsappSetupRequirements(context.Background(), readyRoot)
+	for _, requirement := range ready {
+		if requirement.State != control.SetupStateReady || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
+			t.Fatalf("ready source requirement = %#v", requirement)
+		}
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a mode-zero fixture")
+	}
+	deniedRoot := t.TempDir()
+	createDesktopFixture(t, deniedRoot)
+	chatPath := filepath.Join(deniedRoot, "ChatStorage.sqlite")
+	if err := os.Chmod(chatPath, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(chatPath, 0o600) })
+	denied := whatsappSetupRequirements(context.Background(), deniedRoot)
+	if denied[0].ID != "pairing" || denied[0].Kind != control.SetupKindPairing || denied[0].State != control.SetupStateReady || denied[0].Action != control.SetupActionNone || len(denied[0].Command) != 0 {
+		t.Fatalf("permission-denied pairing requirement = %#v", denied[0])
+	}
+	if denied[1].ID != "full_disk_access" || denied[1].Kind != control.SetupKindFullDiskAccess || denied[1].State != control.SetupStateNeedsAction || denied[1].Action != control.SetupActionOpenFullDiskAccess || len(denied[1].Command) != 0 {
+		t.Fatalf("permission-denied access requirement = %#v", denied[1])
+	}
+}
+
 func TestCrawlerCoreMethods(t *testing.T) {
 	ctx := context.Background()
 	sourceRoot := t.TempDir()

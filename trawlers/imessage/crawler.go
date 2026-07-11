@@ -57,6 +57,7 @@ func (c *Crawler) Info() trawlkit.Info {
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(appID, "Archive has not been synced.")
 	status.State = "missing"
+	status.SetupRequirements = []control.SetupRequirement{imessageSetupRequirement(ctx)}
 	if req.Store == nil {
 		return &status, nil
 	}
@@ -90,6 +91,23 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 		status.Summary = "Recently synced."
 	}
 	return &status, nil
+}
+
+func imessageSetupRequirement(ctx context.Context) control.SetupRequirement {
+	_, err := messages.Status(ctx, messages.DefaultChatDBPath())
+	return imessageSetupRequirementForError(err)
+}
+
+func imessageSetupRequirementForError(err error) control.SetupRequirement {
+	state := control.SetupStateForError(err)
+	return control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		state,
+		"OpenTrawl reads the local Messages database.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)
 }
 
 func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {

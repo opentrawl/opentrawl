@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -179,6 +180,108 @@ func TestAppStatusReturnsOneTypedResult(t *testing.T) {
 	status := response.GetSources()[0]
 	if status.GetAppId() != "imessage" || status.GetSurface() != "iMessage" || status.GetArchiveBytes() <= 0 {
 		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestAppStatusCarriesTypedSetupRequirements(t *testing.T) {
+	message := appStatusMessage(Source{ID: "gmail", DisplayName: "Gmail"}, StatusEnvelope{
+		AppID:   "gmail",
+		Surface: "Gmail",
+		State:   "missing",
+		SetupRequirements: []control.SetupRequirement{
+			control.NewSetupRequirement("account", control.SetupKindAccount, control.SetupStateNeedsAction, "Gmail uses the local gog account.", control.SetupActionRunCommand, []string{"gog", "login", "<email>"}),
+		},
+	}, time.Now())
+	if len(message.GetSetupRequirements()) != 1 {
+		t.Fatalf("setup requirements = %#v", message.GetSetupRequirements())
+	}
+	requirement := message.GetSetupRequirements()[0]
+	if requirement.GetId() != "account" || requirement.GetKind() != appv1.SetupKind_SETUP_KIND_ACCOUNT || requirement.GetState() != appv1.SetupState_SETUP_STATE_NEEDS_ACTION || requirement.GetAction() != appv1.SetupActionKind_SETUP_ACTION_KIND_RUN_COMMAND {
+		t.Fatalf("requirement = %#v", requirement)
+	}
+	if got := requirement.GetCommand(); len(got) != 3 || got[0] != "gog" || got[1] != "login" || got[2] != "<email>" {
+		t.Fatalf("command = %#v", got)
+	}
+}
+
+func TestAppStatusKeepsSetupRequirementsOnMissingArchive(t *testing.T) {
+	response := appStatusResponse([]appStatusResult{{
+		Source: Source{ID: "gmail", DisplayName: "Gmail"},
+		Status: StatusEnvelope{
+			AppID:   "gmail",
+			Surface: "Gmail",
+			State:   "missing",
+			SetupRequirements: []control.SetupRequirement{
+				control.NewSetupRequirement("account", control.SetupKindAccount, control.SetupStateNeedsAction, "Gmail uses the local gog account.", control.SetupActionRunCommand, []string{"gog", "login", "<email>"}),
+			},
+		},
+	}}, time.Now())
+	if response.GetOutcome() != appv1.OperationOutcome_OPERATION_OUTCOME_FAILED || len(response.GetFailures()) != 1 || len(response.GetSources()) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+	if len(response.GetSources()[0].GetSetupRequirements()) != 1 {
+		t.Fatalf("setup requirements = %#v", response.GetSources()[0].GetSetupRequirements())
+	}
+}
+
+func TestRegisteredCrawlersDeclareTypedSetup(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	seen := map[string]bool{}
+	for _, crawler := range registeredCrawlers() {
+		id := crawler.Info().ID
+		seen[id] = true
+		request := &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), id+".db"), Config: filepath.Join(t.TempDir(), "config.toml")}}
+		status, err := crawler.Status(context.Background(), request)
+		if err != nil {
+			t.Fatalf("%s status: %v", id, err)
+		}
+		source := Source{ID: id, DisplayName: crawler.Info().DisplayName}
+		envelope, err := statusEnvelopeFromControl(source, status)
+		if err != nil {
+			t.Fatalf("%s status envelope: %v", id, err)
+		}
+		wire, err := proto.Marshal(appStatusMessage(source, envelope, time.Now()))
+		if err != nil {
+			t.Fatalf("%s app status: %v", id, err)
+		}
+		t.Logf("%s raw boundary request=%#v control.Status=%#v app-status-protobuf=%x", id, request, status, wire)
+		if id == "telegram" {
+			if len(status.SetupRequirements) != 0 {
+				t.Fatalf("telegram setup requirements = %#v, want none", status.SetupRequirements)
+			}
+			continue
+		}
+		if len(status.SetupRequirements) == 0 {
+			t.Fatalf("%s has no typed setup declaration", id)
+		}
+		ids := map[string]bool{}
+		for _, requirement := range status.SetupRequirements {
+			if requirement.ID == "" || requirement.Kind == "" || requirement.State == "" || requirement.Explanation == "" || requirement.Action == "" {
+				t.Fatalf("%s has incomplete setup requirement %#v", id, requirement)
+			}
+			if ids[requirement.ID] {
+				t.Fatalf("%s repeats setup requirement id %q", id, requirement.ID)
+			}
+			ids[requirement.ID] = true
+			if requirement.State == control.SetupStateReady && (requirement.Action != control.SetupActionNone || len(requirement.Command) != 0) {
+				t.Fatalf("%s ready requirement must have no action: %#v", id, requirement)
+			}
+			if requirement.Action == control.SetupActionRunCommand && len(requirement.Command) == 0 {
+				t.Fatalf("%s run-command requirement has no argv: %#v", id, requirement)
+			}
+			if requirement.Action != control.SetupActionRunCommand && len(requirement.Command) != 0 {
+				t.Fatalf("%s non-command requirement has argv: %#v", id, requirement)
+			}
+		}
+	}
+	want := []string{"imessage", "whatsapp", "telegram", "gmail", "calendar", "contacts", "photos", "twitter", "notes"}
+	for _, id := range want {
+		if !seen[id] {
+			t.Fatalf("registered source %q was not covered", id)
+		}
+	}
+	if len(seen) != len(want) {
+		t.Fatalf("registered source ids = %#v, want exactly %#v", seen, want)
 	}
 }
 

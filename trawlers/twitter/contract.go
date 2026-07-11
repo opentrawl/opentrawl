@@ -30,7 +30,17 @@ type statusEnvelope struct {
 	Spend        spendEnvelope     `json:"spend"`
 	Auth         authEnvelope      `json:"auth"`
 	summaryHuman string            `json:"-"`
+	readiness    archiveReadiness  `json:"-"`
 }
+
+type archiveReadiness string
+
+const (
+	archiveReadinessMissing   archiveReadiness = "missing"
+	archiveReadinessReady     archiveReadiness = "ready"
+	archiveReadinessNeedsSync archiveReadiness = "needs_sync"
+	archiveReadinessInvalid   archiveReadiness = "invalid"
+)
 
 type freshnessEnvelope struct {
 	LastSync       string    `json:"last_sync,omitempty"`
@@ -191,21 +201,35 @@ func (r *runtime) statusEnvelope() statusEnvelope {
 		cfg = birdConfig{MonthlyBudgetMicros: defaultMonthlyBudgetUSDMicros}
 	}
 	if r.req.Store == nil {
-		return r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", "archive is missing; import an X archive dump", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("missing", "archive is missing; import an X archive dump", "archive is missing; import an X archive dump", store.Status{}, cfg)
+		envelope.readiness = archiveReadinessMissing
+		return envelope
 	}
 	st, err := store.UseExisting(r.ctx, r.req.Store, r.req.Log)
 	if err != nil {
 		if errors.Is(err, store.ErrSchemaOutdated) {
-			return r.newStatusEnvelope("error", archiveSchemaUpgradeMessage, archiveSchemaUpgradeMessage+"; "+strings.TrimSuffix(archiveSchemaUpgradeRemedy, "."), store.Status{}, cfg)
+			envelope := r.newStatusEnvelope("error", archiveSchemaUpgradeMessage, archiveSchemaUpgradeMessage+"; "+strings.TrimSuffix(archiveSchemaUpgradeRemedy, "."), store.Status{}, cfg)
+			envelope.readiness = archiveReadinessNeedsSync
+			return envelope
 		}
-		return r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("error", "archive database cannot be read", "archive database cannot be read", store.Status{}, cfg)
+		envelope.readiness = archiveReadinessInvalid
+		return envelope
 	}
 	defer func() { _ = st.Close() }()
 	status, err := st.Status(r.ctx)
 	if err != nil {
-		return r.newStatusEnvelope("error", "archive status cannot be read", "archive status cannot be read", store.Status{}, cfg)
+		envelope := r.newStatusEnvelope("error", "archive status cannot be read", "archive status cannot be read", store.Status{}, cfg)
+		envelope.readiness = archiveReadinessInvalid
+		return envelope
 	}
-	return r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), statusSummary(status, formatHumanLocalTime), status, cfg)
+	envelope := r.newStatusEnvelope(statusState(status), statusSummary(status, formatLocalTime), statusSummary(status, formatHumanLocalTime), status, cfg)
+	if archiveReady(status) {
+		envelope.readiness = archiveReadinessReady
+	} else {
+		envelope.readiness = archiveReadinessMissing
+	}
+	return envelope
 }
 
 func (r *runtime) status(ctx context.Context) (*control.Status, error) {
@@ -213,6 +237,7 @@ func (r *runtime) status(ctx context.Context) (*control.Status, error) {
 	envelope := r.statusEnvelope()
 	status := control.NewStatus(appID, envelope.humanSummary())
 	status.State = envelope.State
+	status.SetupRequirements = []control.SetupRequirement{xSetupRequirement(envelope.readiness)}
 	status.ConfigPath = r.configPath
 	status.DatabasePath = r.dbPath
 	status.LastSyncAt = envelope.Freshness.LastSync
@@ -221,6 +246,30 @@ func (r *runtime) status(ctx context.Context) (*control.Status, error) {
 		status.Counts = append(status.Counts, control.NewCount(count.ID, count.Label, count.Value))
 	}
 	return &status, nil
+}
+
+func xSetupRequirement(readiness archiveReadiness) control.SetupRequirement {
+	setupState := control.SetupStateUnavailable
+	action := control.SetupActionNone
+	command := []string(nil)
+	explanation := "The local X archive is not readable."
+	switch readiness {
+	case archiveReadinessMissing:
+		setupState = control.SetupStateNeedsAction
+		action = control.SetupActionChooseArchive
+		explanation = "Version 1 uses a local X export without the paid API."
+	case archiveReadinessReady, archiveReadinessNeedsSync:
+		setupState = control.SetupStateReady
+		explanation = "Version 1 uses a local X export without the paid API."
+	}
+	return control.NewSetupRequirement(
+		"archive_import",
+		control.SetupKindArchiveImport,
+		setupState,
+		explanation,
+		action,
+		command,
+	)
 }
 
 func (r *runtime) newStatusEnvelope(state, summary, summaryHuman string, status store.Status, cfg birdConfig) statusEnvelope {

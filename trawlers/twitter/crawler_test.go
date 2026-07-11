@@ -26,6 +26,25 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestSetupRequirementMapping(t *testing.T) {
+	ready := xSetupRequirement(archiveReadinessReady)
+	if ready.ID != "archive_import" || ready.Kind != control.SetupKindArchiveImport || ready.State != control.SetupStateReady || ready.Action != control.SetupActionNone || len(ready.Command) != 0 {
+		t.Fatalf("ready requirement = %#v", ready)
+	}
+	missing := xSetupRequirement(archiveReadinessMissing)
+	if missing.State != control.SetupStateNeedsAction || missing.Action != control.SetupActionChooseArchive || len(missing.Command) != 0 {
+		t.Fatalf("missing requirement = %#v", missing)
+	}
+	schema := xSetupRequirement(archiveReadinessNeedsSync)
+	if schema.State != control.SetupStateReady || schema.Action != control.SetupActionNone || len(schema.Command) != 0 {
+		t.Fatalf("schema requirement = %#v", schema)
+	}
+	invalid := xSetupRequirement(archiveReadinessInvalid)
+	if invalid.State != control.SetupStateUnavailable || invalid.Action != control.SetupActionNone || len(invalid.Command) != 0 {
+		t.Fatalf("invalid requirement = %#v", invalid)
+	}
+}
+
 func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	out := runBirdcrawl(t, stateRoot, "metadata", "--json")

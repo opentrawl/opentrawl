@@ -1,6 +1,7 @@
 package control
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"time"
@@ -77,25 +78,104 @@ type Privacy struct {
 }
 
 type Status struct {
-	SchemaVersion string     `json:"schema_version"`
-	AppID         string     `json:"app_id"`
-	GeneratedAt   string     `json:"generated_at"`
-	State         string     `json:"state"`
-	Summary       string     `json:"summary"`
-	ConfigPath    string     `json:"config_path,omitempty"`
-	DatabasePath  string     `json:"database_path,omitempty"`
-	DatabaseBytes int64      `json:"database_bytes,omitempty"`
-	WALBytes      int64      `json:"wal_bytes,omitempty"`
-	LastSyncAt    string     `json:"last_sync_at,omitempty"`
-	LastImportAt  string     `json:"last_import_at,omitempty"`
-	LastExportAt  string     `json:"last_export_at,omitempty"`
-	Counts        []Count    `json:"counts,omitempty"`
-	Freshness     *Freshness `json:"freshness,omitempty"`
-	Share         *Share     `json:"share,omitempty"`
-	Remote        *Remote    `json:"remote,omitempty"`
-	Databases     []Database `json:"databases,omitempty"`
-	Warnings      []string   `json:"warnings,omitempty"`
-	Errors        []string   `json:"errors,omitempty"`
+	SchemaVersion     string             `json:"schema_version"`
+	AppID             string             `json:"app_id"`
+	GeneratedAt       string             `json:"generated_at"`
+	State             string             `json:"state"`
+	Summary           string             `json:"summary"`
+	ConfigPath        string             `json:"config_path,omitempty"`
+	DatabasePath      string             `json:"database_path,omitempty"`
+	DatabaseBytes     int64              `json:"database_bytes,omitempty"`
+	WALBytes          int64              `json:"wal_bytes,omitempty"`
+	LastSyncAt        string             `json:"last_sync_at,omitempty"`
+	LastImportAt      string             `json:"last_import_at,omitempty"`
+	LastExportAt      string             `json:"last_export_at,omitempty"`
+	Counts            []Count            `json:"counts,omitempty"`
+	Freshness         *Freshness         `json:"freshness,omitempty"`
+	Share             *Share             `json:"share,omitempty"`
+	Remote            *Remote            `json:"remote,omitempty"`
+	Databases         []Database         `json:"databases,omitempty"`
+	SetupRequirements []SetupRequirement `json:"setup_requirements,omitempty"`
+	Warnings          []string           `json:"warnings,omitempty"`
+	Errors            []string           `json:"errors,omitempty"`
+}
+
+// SetupKind identifies the prerequisite a source needs before it can sync.
+// The values are part of the app and crawler contract; keep them stable.
+type SetupKind string
+
+const (
+	SetupKindFullDiskAccess   SetupKind = "full_disk_access"
+	SetupKindPhotosPermission SetupKind = "photos_permission"
+	SetupKindAccount          SetupKind = "account"
+	SetupKindPairing          SetupKind = "pairing"
+	SetupKindArchiveImport    SetupKind = "archive_import"
+)
+
+// SetupState describes the current state of one independent prerequisite.
+type SetupState string
+
+const (
+	SetupStateReady       SetupState = "ready"
+	SetupStateNeedsAction SetupState = "needs_action"
+	SetupStateUnavailable SetupState = "unavailable"
+)
+
+// SetupActionKind identifies the supported remedy for a setup requirement.
+type SetupActionKind string
+
+const (
+	SetupActionNone               SetupActionKind = "none"
+	SetupActionOpenFullDiskAccess SetupActionKind = "open_full_disk_access"
+	SetupActionRequestPhotos      SetupActionKind = "request_photos"
+	SetupActionRunCommand         SetupActionKind = "run_command"
+	SetupActionChooseArchive      SetupActionKind = "choose_archive"
+)
+
+// SetupRequirement is source-owned typed setup information. Command is an
+// argument vector, never a shell string.
+type SetupRequirement struct {
+	ID          string          `json:"id"`
+	Kind        SetupKind       `json:"kind"`
+	State       SetupState      `json:"state"`
+	Explanation string          `json:"explanation"`
+	Action      SetupActionKind `json:"action"`
+	Command     []string        `json:"command,omitempty"`
+}
+
+func NewSetupRequirement(id string, kind SetupKind, state SetupState, explanation string, action SetupActionKind, command []string) SetupRequirement {
+	if state == SetupStateReady || state == SetupStateUnavailable {
+		action = SetupActionNone
+		command = nil
+	}
+	return SetupRequirement{
+		ID:          strings.TrimSpace(id),
+		Kind:        kind,
+		State:       state,
+		Explanation: strings.TrimSpace(explanation),
+		Action:      action,
+		Command:     append([]string(nil), command...),
+	}
+}
+
+// SetupStateForError maps a source read failure to the setup state the app
+// can show without parsing an error sentence.
+func SetupStateForError(err error) SetupState {
+	if err == nil {
+		return SetupStateReady
+	}
+	if errors.Is(err, os.ErrPermission) {
+		return SetupStateNeedsAction
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "permission denied") ||
+		strings.Contains(message, "operation not permitted") ||
+		strings.Contains(message, "not authorised") ||
+		strings.Contains(message, "not authorized") ||
+		strings.Contains(message, "authorization denied") {
+		return SetupStateNeedsAction
+	}
+	return SetupStateUnavailable
 }
 
 type Count struct {

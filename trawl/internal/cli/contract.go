@@ -8,22 +8,24 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const unknownFreshness = "not synced yet"
 
 type StatusEnvelope struct {
-	AppID        string     `json:"app_id"`
-	Surface      string     `json:"surface,omitempty"`
-	State        string     `json:"state"`
-	Summary      string     `json:"summary,omitempty"`
-	Freshness    *Freshness `json:"freshness,omitempty"`
-	Counts       []Count    `json:"counts,omitempty"`
-	DatabasePath string     `json:"database_path,omitempty"`
-	Databases    []Database `json:"databases,omitempty"`
-	LastSyncAt   string     `json:"last_sync_at,omitempty"`
-	LastImportAt string     `json:"last_import_at,omitempty"`
+	AppID             string                     `json:"app_id"`
+	Surface           string                     `json:"surface,omitempty"`
+	State             string                     `json:"state"`
+	Summary           string                     `json:"summary,omitempty"`
+	Freshness         *Freshness                 `json:"freshness,omitempty"`
+	Counts            []Count                    `json:"counts,omitempty"`
+	DatabasePath      string                     `json:"database_path,omitempty"`
+	Databases         []Database                 `json:"databases,omitempty"`
+	LastSyncAt        string                     `json:"last_sync_at,omitempty"`
+	LastImportAt      string                     `json:"last_import_at,omitempty"`
+	SetupRequirements []control.SetupRequirement `json:"setup_requirements,omitempty"`
 }
 
 type Freshness struct {

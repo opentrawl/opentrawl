@@ -66,6 +66,7 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(archive.AppID, "Archive has not been synced.")
 	status.State = "missing"
+	status.SetupRequirements = []control.SetupRequirement{calendarSetupRequirement(ctx)}
 	if req.Store == nil {
 		return &status, nil
 	}
@@ -102,6 +103,22 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 		status.Summary = "Recently synced."
 	}
 	return &status, nil
+}
+
+func calendarSetupRequirement(ctx context.Context) control.SetupRequirement {
+	err := calendarstore.CanaryRead(ctx, calendarstore.DefaultPath())
+	return calendarSetupRequirementForError(err)
+}
+
+func calendarSetupRequirementForError(err error) control.SetupRequirement {
+	return control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		control.SetupStateForError(err),
+		"OpenTrawl reads the local Calendar database.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)
 }
 
 func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {

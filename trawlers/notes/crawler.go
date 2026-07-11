@@ -133,6 +133,7 @@ func (c *Crawler) atTimeFlags(fs *flag.FlagSet) {
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(archive.AppID, "Not synced yet.")
 	status.State = "missing"
+	status.SetupRequirements = []control.SetupRequirement{notesSetupRequirement()}
 	status.DatabasePath = req.Paths.Archive
 	status.ConfigPath = req.Paths.Config
 	if req.Store == nil {
@@ -163,6 +164,31 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	status.Databases = []control.Database{control.SQLiteDatabase("archive", "Notes archive", "archive", archiveStatus.ArchivePath, true, status.Counts)}
 	status.State, status.Summary = statusState(archiveStatus)
 	return &status, nil
+}
+
+func notesSetupRequirement() control.SetupRequirement {
+	path, pathErr := notesdb.DefaultStorePath()
+	if pathErr == nil {
+		if _, pathErr = os.Stat(path); pathErr == nil {
+			var source *os.File
+			source, pathErr = os.Open(path)
+			if pathErr == nil {
+				_ = source.Close()
+			}
+		}
+	}
+	return notesSetupRequirementForError(pathErr)
+}
+
+func notesSetupRequirementForError(pathErr error) control.SetupRequirement {
+	return control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		control.SetupStateForError(pathErr),
+		"OpenTrawl reads the local Apple Notes database.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)
 }
 
 func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {

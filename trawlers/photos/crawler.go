@@ -2,8 +2,10 @@ package photoscrawl
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -86,9 +89,68 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	paths := archivePaths(req)
 	status, err := archive.Status(ctx, paths)
 	if err != nil {
-		return nil, err
+		out := control.NewStatus("photos", "Photos archive status cannot be read.")
+		out.State = "error"
+		out.ConfigPath = req.Paths.Config
+		out.DatabasePath = req.Paths.Archive
+		out.Errors = []string{err.Error()}
+		out.SetupRequirements = []control.SetupRequirement{c.photosSetupRequirement()}
+		return &out, nil
 	}
-	return controlStatus(status, req.Paths.Config), nil
+	out := controlStatus(status, req.Paths.Config)
+	out.SetupRequirements = []control.SetupRequirement{c.photosSetupRequirement()}
+	return out, nil
+}
+
+func (c *Crawler) photosSetupRequirement() control.SetupRequirement {
+	state := photosLibrarySetupState(c.cfg.LibraryPath)
+	return control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		state,
+		"OpenTrawl reads the local Photos library for source sync.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)
+}
+
+func photosLibrarySetupState(libraryPath string) control.SetupState {
+	libraryPath = ckconfig.ExpandHome(strings.TrimSpace(libraryPath))
+	if libraryPath == "" {
+		var err error
+		libraryPath, err = archive.DefaultPhotosLibraryPath()
+		if err != nil {
+			return control.SetupStateUnavailable
+		}
+	}
+	info, err := os.Stat(libraryPath)
+	if err != nil {
+		return photosSetupStateFromErrors(err, nil, false)
+	}
+	db, err := os.Open(filepath.Join(libraryPath, "database", "Photos.sqlite"))
+	if err == nil {
+		_ = db.Close()
+	}
+	return photosSetupStateFromErrors(nil, err, info.IsDir())
+}
+
+func photosSetupStateFromErrors(libraryErr, databaseErr error, libraryIsDir bool) control.SetupState {
+	if libraryErr != nil {
+		if errors.Is(libraryErr, os.ErrPermission) || os.IsPermission(libraryErr) {
+			return control.SetupStateNeedsAction
+		}
+		return control.SetupStateUnavailable
+	}
+	if !libraryIsDir {
+		return control.SetupStateUnavailable
+	}
+	if databaseErr == nil {
+		return control.SetupStateReady
+	}
+	if errors.Is(databaseErr, os.ErrPermission) || os.IsPermission(databaseErr) {
+		return control.SetupStateNeedsAction
+	}
+	return control.SetupStateUnavailable
 }
 
 func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {

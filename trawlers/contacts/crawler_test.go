@@ -2,6 +2,8 @@ package clawdex
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/base64"
 	"encoding/json"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"sync"
 	"testing"
 
+	_ "github.com/mattn/go-sqlite3"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
@@ -27,6 +30,75 @@ func TestMain(m *testing.M) {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
+}
+
+func TestSetupRequirementMapping(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	requirement := contactsSetupRequirement(context.Background())
+	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != control.SetupStateUnavailable || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
+		t.Fatalf("requirement = %#v", requirement)
+	}
+	ready := contactsSetupRequirementForState(apple.SourceReady)
+	if ready.ID != "full_disk_access" || ready.Kind != control.SetupKindFullDiskAccess || ready.State != control.SetupStateReady || ready.Action != control.SetupActionNone || len(ready.Command) != 0 {
+		t.Fatalf("ready requirement = %#v", ready)
+	}
+	needsAction := contactsSetupRequirementForState(apple.SourceNeedsFullDiskAccess)
+	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
+		t.Fatalf("needs-action requirement = %#v", needsAction)
+	}
+}
+
+func TestStatusSetupRequirementBoundary(t *testing.T) {
+	cases := []struct {
+		name  string
+		state control.SetupState
+		setup func(*testing.T, string)
+	}{
+		{name: "ready", state: control.SetupStateReady},
+		{name: "needs action", state: control.SetupStateNeedsAction, setup: func(t *testing.T, sourcePath string) {
+			if os.Geteuid() == 0 {
+				t.Skip("root can read a mode-zero fixture")
+			}
+			if err := os.Chmod(sourcePath, 0); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(sourcePath, 0o600) })
+		}},
+		{name: "unavailable", state: control.SetupStateUnavailable},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			sourcePath := filepath.Join(home, "Library", "Application Support", "AddressBook", "AddressBook-v22.abcddb")
+			if test.name != "unavailable" {
+				writeContactsSourceFixture(t, sourcePath)
+			}
+			if test.setup != nil {
+				test.setup(t, sourcePath)
+			}
+			request := &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "contacts.db")}}
+			status, err := New().Status(context.Background(), request)
+			t.Logf("synthetic status boundary request=%#v status=%#v error=%v", request, status, err)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if status.State != "missing" || len(status.SetupRequirements) != 1 {
+				t.Fatalf("status = %#v, want missing with one setup requirement", status)
+			}
+			requirement := status.SetupRequirements[0]
+			if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != test.state {
+				t.Fatalf("requirement = %#v, want state %q", requirement, test.state)
+			}
+			wantAction := control.SetupActionNone
+			if test.state == control.SetupStateNeedsAction {
+				wantAction = control.SetupActionOpenFullDiskAccess
+			}
+			if requirement.Action != wantAction || len(requirement.Command) != 0 {
+				t.Fatalf("requirement action/command = %q/%#v, want %q/empty", requirement.Action, requirement.Command, wantAction)
+			}
+		})
+	}
 }
 
 func TestMetadataManifestGeneratedByRunner(t *testing.T) {
@@ -438,6 +510,31 @@ updated_at: 2026-07-02T10:00:00Z
 ---
 # Grace Legacy
 `)
+}
+
+func writeContactsSourceFixture(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, statement := range []string{
+		`create table Z_PRIMARYKEY (Z_ENT integer, Z_NAME varchar, Z_SUPER integer)`,
+		`insert into Z_PRIMARYKEY (Z_ENT, Z_NAME, Z_SUPER) values (22, 'ABCDContact', 17)`,
+		`create table ZABCDRECORD (Z_PK integer primary key, Z_ENT integer, ZFIRSTNAME varchar, ZMIDDLENAME varchar, ZLASTNAME varchar, ZORGANIZATION varchar, ZUNIQUEID varchar, ZEXTERNALUUID varchar, ZTHUMBNAILIMAGEDATA blob)`,
+		`create table ZABCDPHONENUMBER (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZFULLNUMBER varchar, ZLABEL varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
+		`create table ZABCDEMAILADDRESS (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZADDRESS varchar, ZLABEL varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
+		`create table ZABCDPOSTALADDRESS (Z_PK integer primary key, ZOWNER integer, Z22_OWNER integer, ZLABEL varchar, ZSTREET varchar, ZCITY varchar, ZSTATE varchar, ZZIPCODE varchar, ZCOUNTRYNAME varchar, ZCOUNTRYCODE varchar, ZISPRIMARY integer, ZORDERINGINDEX integer)`,
+		`insert into ZABCDRECORD (Z_PK, Z_ENT, ZFIRSTNAME, ZLASTNAME, ZUNIQUEID) values (1, 22, 'Ada', 'Example', 'synthetic-contact')`,
+	} {
+		if _, err := db.Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func writePersonFile(t *testing.T, root, slug, data string) {

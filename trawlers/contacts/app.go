@@ -72,6 +72,7 @@ func (a *App) Verbs() []trawlkit.Verb {
 func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(appID, "Contacts archive has not been created.")
 	status.State = "missing"
+	status.SetupRequirements = []control.SetupRequirement{contactsSetupRequirement(ctx)}
 	status.DatabasePath = req.Paths.Archive
 	status.Counts = []control.Count{control.NewCount("people", "people", 0)}
 	if req.Store == nil {
@@ -109,6 +110,29 @@ func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Statu
 	status.State = "ok"
 	status.Summary = peopleStatusSummary(int(archiveStatus.People))
 	return &status, nil
+}
+
+func contactsSetupRequirement(ctx context.Context) control.SetupRequirement {
+	state, _ := apple.CheckSource(ctx)
+	return contactsSetupRequirementForState(state)
+}
+
+func contactsSetupRequirementForState(state apple.SourceState) control.SetupRequirement {
+	setupState := control.SetupStateUnavailable
+	switch state {
+	case apple.SourceReady:
+		setupState = control.SetupStateReady
+	case apple.SourceNeedsFullDiskAccess:
+		setupState = control.SetupStateNeedsAction
+	}
+	return control.NewSetupRequirement(
+		"full_disk_access",
+		control.SetupKindFullDiskAccess,
+		setupState,
+		"OpenTrawl checks the local Apple Contacts source before importing it.",
+		control.SetupActionOpenFullDiskAccess,
+		nil,
+	)
 }
 
 func (a *App) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {

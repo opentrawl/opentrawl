@@ -1,6 +1,7 @@
 package control
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -75,5 +76,30 @@ func TestValidateContactExport(t *testing.T) {
 		if err := ValidateContactExport(value); err == nil {
 			t.Fatalf("expected invalid contact export: %+v", value)
 		}
+	}
+}
+
+func TestSetupRequirementCopiesCommandAndClassifiesErrors(t *testing.T) {
+	command := []string{"gog", "login", "<email>"}
+	requirement := NewSetupRequirement("account", SetupKindAccount, SetupStateNeedsAction, "log in", SetupActionRunCommand, command)
+	command[0] = "changed"
+	if requirement.ID != "account" || requirement.Kind != SetupKindAccount || requirement.State != SetupStateNeedsAction || requirement.Explanation != "log in" || requirement.Action != SetupActionRunCommand {
+		t.Fatalf("requirement = %#v", requirement)
+	}
+	if requirement.Command[0] != "gog" {
+		t.Fatalf("command was not copied: %#v", requirement.Command)
+	}
+	if SetupStateForError(nil) != SetupStateReady {
+		t.Fatal("nil error should be ready")
+	}
+	if SetupStateForError(errors.New("permission denied")) != SetupStateNeedsAction {
+		t.Fatal("permission error should need action")
+	}
+	if SetupStateForError(errors.New("source is unavailable")) != SetupStateUnavailable {
+		t.Fatal("other errors should be unavailable")
+	}
+	unavailable := NewSetupRequirement("source", SetupKindFullDiskAccess, SetupStateUnavailable, "unavailable", SetupActionOpenFullDiskAccess, []string{"open"})
+	if unavailable.Action != SetupActionNone || len(unavailable.Command) != 0 {
+		t.Fatalf("unavailable requirement should not offer an action: %#v", unavailable)
 	}
 }

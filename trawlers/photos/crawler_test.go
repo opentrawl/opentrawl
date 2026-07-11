@@ -28,6 +28,38 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+func TestSetupRequirementMapping(t *testing.T) {
+	if got := photosSetupStateFromErrors(os.ErrPermission, nil, false); got != control.SetupStateNeedsAction {
+		t.Fatalf("library permission state = %q", got)
+	}
+	if got := photosSetupStateFromErrors(nil, os.ErrPermission, true); got != control.SetupStateNeedsAction {
+		t.Fatalf("database permission state = %q", got)
+	}
+	missingPath := filepath.Join(t.TempDir(), "missing-library")
+	if got := photosLibrarySetupState(missingPath); got != control.SetupStateUnavailable {
+		t.Fatalf("missing library state = %q", got)
+	}
+	missingCrawler := New()
+	missingCrawler.cfg.LibraryPath = missingPath
+	missing := missingCrawler.photosSetupRequirement()
+	if missing.State != control.SetupStateUnavailable || missing.Action != control.SetupActionNone || len(missing.Command) != 0 {
+		t.Fatalf("missing requirement = %#v", missing)
+	}
+	library := filepath.Join(t.TempDir(), "Photos Library.photoslibrary")
+	if err := os.MkdirAll(filepath.Join(library, "database"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(library, "database", "Photos.sqlite"), []byte("synthetic"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	crawler := New()
+	crawler.cfg.LibraryPath = library
+	requirement := crawler.photosSetupRequirement()
+	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != control.SetupStateReady || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
+		t.Fatalf("requirement = %#v", requirement)
+	}
+}
+
 func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	home := filepath.Join(t.TempDir(), "home")
 	t.Setenv("HOME", home)

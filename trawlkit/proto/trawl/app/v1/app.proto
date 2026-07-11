@@ -9,6 +9,40 @@ message Count {
   string display = 2;
 }
 
+enum SetupKind {
+  SETUP_KIND_UNSPECIFIED = 0;
+  SETUP_KIND_FULL_DISK_ACCESS = 1;
+  SETUP_KIND_PHOTOS_PERMISSION = 2;
+  SETUP_KIND_ACCOUNT = 3;
+  SETUP_KIND_PAIRING = 4;
+  SETUP_KIND_ARCHIVE_IMPORT = 5;
+}
+
+enum SetupState {
+  SETUP_STATE_UNSPECIFIED = 0;
+  SETUP_STATE_READY = 1;
+  SETUP_STATE_NEEDS_ACTION = 2;
+  SETUP_STATE_UNAVAILABLE = 3;
+}
+
+enum SetupActionKind {
+  SETUP_ACTION_KIND_UNSPECIFIED = 0;
+  SETUP_ACTION_KIND_NONE = 1;
+  SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS = 2;
+  SETUP_ACTION_KIND_REQUEST_PHOTOS = 3;
+  SETUP_ACTION_KIND_RUN_COMMAND = 4;
+  SETUP_ACTION_KIND_CHOOSE_ARCHIVE = 5;
+}
+
+message SetupRequirement {
+  string id = 1;
+  SetupKind kind = 2;
+  SetupState state = 3;
+  string explanation = 4;
+  SetupActionKind action = 5;
+  repeated string command = 6;
+}
+
 message SourceStatus {
   string app_id = 1;
   string surface = 2;
@@ -17,6 +51,7 @@ message SourceStatus {
   repeated Count counts = 5;
   string last_synced_display = 6;
   int64 archive_bytes = 7;
+  repeated SetupRequirement setup_requirements = 8;
 }
 
 message SearchHit {

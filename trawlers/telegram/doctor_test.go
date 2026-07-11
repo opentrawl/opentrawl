@@ -1,10 +1,32 @@
 package telecrawl
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
+
+func TestSetupRequirementMappingIsExplicitlyEmpty(t *testing.T) {
+	status, err := New().Status(context.Background(), &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "telegram.db")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.SetupRequirements) != 0 {
+		t.Fatalf("telegram requirements = %#v", status.SetupRequirements)
+	}
+	forbidden := []control.SetupKind{control.SetupKindAccount, control.SetupKindPairing}
+	for _, requirement := range status.SetupRequirements {
+		for _, kind := range forbidden {
+			if requirement.Kind == kind {
+				t.Fatalf("telegram requirement = %#v", requirement)
+			}
+		}
+	}
+}
 
 func TestSourceStoreCheckExplainsSelectedTelegramProduct(t *testing.T) {
 	const remedy = "Open the selected Telegram app, then run trawl telegram sync. OpenTrawl reuses its existing local session."

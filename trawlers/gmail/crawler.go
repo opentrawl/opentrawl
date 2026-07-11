@@ -75,6 +75,7 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus(appID, "Archive has not been synced.")
 	status.State = "missing"
+	status.SetupRequirements = []control.SetupRequirement{c.gmailSetupRequirement(ctx)}
 	status.DatabasePath = req.Paths.Archive
 	status.Counts = statusCounts(archive.Status{})
 	if req.Store == nil {
@@ -100,6 +101,25 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	status.Counts = statusCounts(archiveStatus)
 	status.State, status.Summary = statusState(archiveStatus)
 	return &status, nil
+}
+
+func (c *Crawler) gmailSetupRequirement(ctx context.Context) control.SetupRequirement {
+	state := control.SetupStateReady
+	if check := c.checkGogBinary(); check.State != "ok" {
+		state = control.SetupStateUnavailable
+	} else if check := c.checkGogVersion(ctx); check.State != "ok" {
+		state = control.SetupStateUnavailable
+	} else if check := c.checkGogAuth(ctx); check.State != "ok" {
+		state = control.SetupStateNeedsAction
+	}
+	return control.NewSetupRequirement(
+		"account",
+		control.SetupKindAccount,
+		state,
+		"Gmail uses the local gog account.",
+		control.SetupActionRunCommand,
+		[]string{"gog", "login", "<email>"},
+	)
 }
 
 func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
