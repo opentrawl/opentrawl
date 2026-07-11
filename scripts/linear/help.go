@@ -17,9 +17,11 @@ Usage:
   linear comment <ISSUE> --as <actor> [body]
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
-  linear issue <ISSUE>
-  linear issues --team <KEY> [--state <name>]
+	  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
+	  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
+	  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
+	  linear issue <ISSUE>
+	  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
   linear project <PROJECT>
   linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
   linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
@@ -41,7 +43,9 @@ Examples:
   linear comment TRAWL-99 --as coordinator "Ready for review."
   linear issue new --team TRAWL --title "Fix sync output" --as reviewer --label agent-filed
   linear issue state TRAWL-99 --state Done --as coordinator
-  linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
+	  linear issue update TRAWL-99 --as coordinator --priority high --project OpenTrawl
+	  linear issue label add TRAWL-99 --label agent-filed --as coordinator
+	  linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
   linear project Photos
   linear issue TRAWL-99
   linear issues --team TRAWL
@@ -100,7 +104,9 @@ Usage:
   linear issue <ISSUE>
   linear issue new --team <KEY> --title <title> --as <actor> [--description <text>] [--label <name> ...]
   linear issue state <ISSUE> --state <name> --as <actor>
-  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
+	  linear issue update <ISSUE> --as <actor> [--description-file <path>] [--priority <priority>] [--project <project>] [--milestone <milestone>] [--title <title>]
+	  linear issue label add|remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
+	  linear issue relation add|remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
 
 Arguments:
   ISSUE  Linear issue identifier, for example TRAWL-99
@@ -170,6 +176,47 @@ without adding a comment.
 Examples:
   linear issue update TRAWL-99 --as coordinator --description-file issue.md
   linear issue update TRAWL-99 --as "lane mac app" --priority high --project OpenTrawl
+` + commonHelp
+
+const issueLabelHelp = `Add or remove existing labels on one Linear issue.
+
+Usage:
+  linear issue label add <ISSUE> --label <name> [--label <name> ...] --as <actor>
+  linear issue label remove <ISSUE> --label <name> [--label <name> ...] --as <actor>
+
+Arguments:
+  ISSUE  Linear issue identifier, for example TRAWL-99.
+
+Flags:
+  --label <name>  Required existing label name. Repeat for more labels.
+  --as <actor>    Required actor name recorded in the local request log.
+
+The command changes only the named labels, preserves every other label and
+reads the issue back before reporting success.
+
+Example:
+  linear issue label add TRAWL-99 --label agent-filed --as coordinator
+` + commonHelp
+
+const issueRelationHelp = `Add or remove one blocking relation between two Linear issues.
+
+Usage:
+  linear issue relation add <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
+  linear issue relation remove <ISSUE> (--blocks <OTHER> | --blocked-by <OTHER>) --as <actor>
+
+Arguments:
+  ISSUE  Linear issue identifier, for example TRAWL-99.
+
+Flags:
+  --blocks <OTHER>      This issue blocks OTHER.
+  --blocked-by <OTHER>  OTHER blocks this issue.
+  --as <actor>          Required actor name recorded in the local request log.
+
+The command rejects self-relations and reads both issues back before reporting
+success. Repeating an add or remove is safe.
+
+Example:
+  linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
 ` + commonHelp
 
 const projectHelp = `Show one Linear project and its milestones.
@@ -244,11 +291,12 @@ Example:
 const issuesHelp = `List Linear issues for a team.
 
 Usage:
-  linear issues --team <KEY> [--state <name>]
+  linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
 
 Flags:
-  --team <KEY>    Required. Linear team key, for example TRAWL.
-  --state <name>  Optional state name. Without this, linear lists open issues.
+	--team <KEY>          Required. Linear team key, for example TRAWL.
+	--project <PROJECT>   Optional exact project name or slug.
+	--state <name>        Optional state name. Without this, linear lists open issues.
 
 Example:
   linear issues --team TRAWL --state "In Progress"
@@ -265,8 +313,12 @@ Tools:
   create_comment  Create a comment. Requires issue, actor and body.
   create_issue    Create an issue. Requires team, title and actor.
   get_issue       Show one issue and its comments.
-  update_issue    Replace selected issue fields. Requires issue and actor.
-  list_issues                 List team issues.
+	  update_issue          Replace selected issue fields. Requires issue and actor.
+	  add_issue_labels      Add existing labels to an issue.
+	  remove_issue_labels   Remove named labels from an issue.
+	  add_issue_relation    Add one blocking relation.
+	  remove_issue_relation Remove one blocking relation.
+	  list_issues           List team issues.
   get_project                 Show one project and its milestones.
   update_project              Replace selected project fields. Requires project and actor.
   ensure_project_milestone    Create or update one project milestone. Requires project, name and actor.

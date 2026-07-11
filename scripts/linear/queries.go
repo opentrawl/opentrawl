@@ -10,8 +10,33 @@ const issueCoreFields = `
       state { name type }
       project { id name slugId }
       projectMilestone { id name }
-      assignee { displayName name }
-      labels(first: 50) { nodes { id name } pageInfo { hasNextPage } }`
+      assignee { displayName name }`
+
+const issueConnectionFields = `
+      labels(first: 100, after: $labelsAfter) @include(if: $readLabels) {
+        nodes { id name isGroup team { id key name } }
+        pageInfo { hasNextPage endCursor }
+      }
+      relations(first: 100, after: $relationsAfter) @include(if: $readRelations) {
+        nodes { id type issue { id identifier title } relatedIssue { id identifier title } }
+        pageInfo { hasNextPage endCursor }
+      }
+      inverseRelations(first: 100, after: $inverseRelationsAfter) @include(if: $readInverseRelations) {
+        nodes { id type issue { id identifier title } relatedIssue { id identifier title } }
+        pageInfo { hasNextPage endCursor }
+      }`
+
+const issueWriteFields = `
+      id
+      identifier
+      title
+      description
+      url
+      priorityLabel
+      state { name type }
+      project { id name slugId }
+      projectMilestone { id name }
+      assignee { displayName name }`
 
 const commentFields = `
         id
@@ -26,8 +51,8 @@ const inboxCommentFields = commentFields + `
         reactions { emoji user { id } }
         issue { identifier title }`
 
-const issueDetailFields = issueCoreFields + `
-      comments(first: 100, after: $commentsAfter, orderBy: createdAt) {
+const issueDetailFields = issueCoreFields + issueConnectionFields + `
+      comments(first: 100, after: $commentsAfter, orderBy: createdAt) @include(if: $readComments) {
         nodes {` + commentFields + `
         }
         pageInfo { hasNextPage endCursor }
@@ -37,7 +62,22 @@ const issueListFields = `
       id
       identifier
       title
-      state { name type }`
+      priorityLabel
+      state { name type }
+      project { id name slugId }
+      projectMilestone { id name }
+      labels(first: 100) {
+        nodes { id name isGroup team { id key name } }
+        pageInfo { hasNextPage endCursor }
+      }
+      relations(first: 100) {
+        nodes { id type issue { id identifier title } relatedIssue { id identifier title } }
+        pageInfo { hasNextPage endCursor }
+      }
+      inverseRelations(first: 100) {
+        nodes { id type issue { id identifier title } relatedIssue { id identifier title } }
+        pageInfo { hasNextPage endCursor }
+      }`
 
 const resolveIssueIDQuery = `
 query ResolveIssueID($team: String!, $number: Float!) {
@@ -51,7 +91,7 @@ query ResolveIssueID($team: String!, $number: Float!) {
 }`
 
 const issueByIdentifierQuery = `
-query IssueByIdentifier($team: String!, $number: Float!, $commentsAfter: String) {
+query IssueByIdentifier($team: String!, $number: Float!, $commentsAfter: String, $labelsAfter: String, $relationsAfter: String, $inverseRelationsAfter: String, $readComments: Boolean!, $readLabels: Boolean!, $readRelations: Boolean!, $readInverseRelations: Boolean!) {
   issues(first: 2, filter: {team: {key: {eq: $team}}, number: {eq: $number}}) {
     nodes {` + issueDetailFields + `
     }
@@ -59,11 +99,11 @@ query IssueByIdentifier($team: String!, $number: Float!, $commentsAfter: String)
 }`
 
 const listIssuesQuery = `
-query ListIssues($filter: IssueFilter!) {
-  issues(first: 50, filter: $filter) {
+query ListIssues($filter: IssueFilter!, $after: String) {
+  issues(first: 100, after: $after, filter: $filter) {
     nodes {` + issueListFields + `
     }
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -142,15 +182,15 @@ query ProjectStatuses($after: String) {
 }`
 
 const resolveLabelsQuery = `
-query ResolveLabels($names: [String!]!) {
-  issueLabels(first: 100, filter: {name: {in: $names}}) {
+query ResolveLabels($names: [String!]!, $after: String) {
+  issueLabels(first: 100, after: $after, filter: {name: {in: $names}}) {
     nodes {
       id
       name
       isGroup
       team { id key name }
     }
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -167,9 +207,22 @@ const updateIssueMutation = `
 mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
   issueUpdate(id: $id, input: $input) {
     success
-    issue {` + issueCoreFields + `
+    issue {` + issueWriteFields + `
     }
   }
+}`
+
+const createIssueRelationMutation = `
+mutation CreateIssueRelation($input: IssueRelationCreateInput!) {
+  issueRelationCreate(input: $input) {
+    success
+    issueRelation { id type issue { id identifier title } relatedIssue { id identifier title } }
+  }
+}`
+
+const deleteIssueRelationMutation = `
+mutation DeleteIssueRelation($id: String!) {
+  issueRelationDelete(id: $id) { success }
 }`
 
 const updateProjectMutation = `
@@ -197,7 +250,7 @@ const createIssueMutation = `
 mutation CreateIssue($input: IssueCreateInput!) {
   issueCreate(input: $input) {
     success
-    issue {` + issueCoreFields + `
+    issue {` + issueWriteFields + `
     }
   }
 }`

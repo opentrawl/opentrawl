@@ -59,6 +59,8 @@ func TestEveryCLIWriteRequiresAuditBeforeAPIConstruction(t *testing.T) {
 		{"issue", "new", "--team", "TRAWL", "--title", "Synthetic issue", "--as", "test actor"},
 		{"issue", "state", "TRAWL-1", "--state", "Done", "--as", "test actor"},
 		{"issue", "update", "TRAWL-1", "--priority", "high", "--as", "test actor"},
+		{"issue", "label", "add", "TRAWL-1", "--label", "synthetic", "--as", "test actor"},
+		{"issue", "relation", "add", "TRAWL-1", "--blocks", "TRAWL-2", "--as", "test actor"},
 		{"project", "update", "Synthetic project", "--summary", "Synthetic summary", "--as", "test actor"},
 		{"project", "milestone", "ensure", "Synthetic project", "--name", "Synthetic milestone", "--as", "test actor"},
 	}
@@ -118,7 +120,7 @@ func TestEveryMCPToolHasOneAccessClassification(t *testing.T) {
 			t.Errorf("classification exists for unexposed tool %q", name)
 		}
 	}
-	writes := []string{"ack_comment", "create_comment", "create_issue", "ensure_project_milestone", "update_issue", "update_project"}
+	writes := []string{"ack_comment", "create_comment", "create_issue", "ensure_project_milestone", "update_issue", "update_project", "add_issue_labels", "remove_issue_labels", "add_issue_relation", "remove_issue_relation"}
 	for name, access := range mcpToolAccess {
 		want := toolRead
 		if containsString(writes, name) {

@@ -281,6 +281,58 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 			return "", err
 		}
 		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
+	case "add_issue_labels", "remove_issue_labels":
+		issueID, err := requiredString(args, "issue")
+		if err != nil {
+			return "", err
+		}
+		actor, err := requiredString(args, "actor")
+		if err != nil {
+			return "", err
+		}
+		labels, err := optionalStringList(args, "labels")
+		if err != nil {
+			return "", err
+		}
+		operation := "add"
+		if name == "remove_issue_labels" {
+			operation = "remove"
+		}
+		updated, err := api.ChangeIssueLabels(ctx, issueID, actor, operation, labels)
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
+	case "add_issue_relation", "remove_issue_relation":
+		issueID, err := requiredString(args, "issue")
+		if err != nil {
+			return "", err
+		}
+		otherIssue, err := requiredString(args, "other_issue")
+		if err != nil {
+			return "", err
+		}
+		actor, err := requiredString(args, "actor")
+		if err != nil {
+			return "", err
+		}
+		directionText, err := requiredString(args, "direction")
+		if err != nil {
+			return "", err
+		}
+		direction, err := parseRelationDirection(directionText)
+		if err != nil {
+			return "", err
+		}
+		operation := "add"
+		if name == "remove_issue_relation" {
+			operation = "remove"
+		}
+		updated, err := api.ChangeIssueRelation(ctx, issueID, otherIssue, actor, operation, direction)
+		if err != nil {
+			return "", err
+		}
+		return renderString(func(w io.Writer) error { return RenderUpdatedIssue(w, updated) })
 	case "get_project":
 		project, err := requiredString(args, "project")
 		if err != nil {
@@ -352,7 +404,11 @@ func (s *MCPServer) runTool(name string, args map[string]json.RawMessage) (strin
 		if err != nil {
 			return "", err
 		}
-		result, err := api.ListIssues(ctx, team, state)
+		project, err := optionalString(args, "project")
+		if err != nil {
+			return "", err
+		}
+		result, err := api.ListIssues(ctx, team, state, project)
 		if err != nil {
 			return "", err
 		}

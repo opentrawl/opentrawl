@@ -51,8 +51,12 @@ linear issue update TRAWL-99 --as coordinator --description-file issue.md --prio
 linear issue update TRAWL-99 --as coordinator --project OpenTrawl
 linear issue update TRAWL-99 --as coordinator --milestone "Foundations complete"
 linear issue update TRAWL-99 --as coordinator --title "Clarify the project wrapper"
+linear issue label add TRAWL-99 --label agent-filed --as coordinator
+linear issue label remove TRAWL-99 --label agent-filed --as coordinator
+linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
+linear issue relation remove TRAWL-99 --blocked-by TRAWL-98 --as coordinator
 linear issue TRAWL-99
-linear issues --team TRAWL
+linear issues --team TRAWL --project OpenTrawl
 linear project OpenTrawl
 linear project update OpenTrawl --as coordinator --summary "One clear outcome" --description-file project.md --status "In Progress" --priority high
 linear project milestone ensure OpenTrawl --name "Foundations complete" --as coordinator --description-file milestone.md
@@ -60,7 +64,7 @@ linear mcp
 ```
 
 `linear issue` shows the full description, priority, project, milestone and
-assignee. `issue update` replaces only the fields named on the command.
+assignee, labels, blocking and blocked-by relations. `issue update` replaces only the fields named on the command.
 Use `--project none` or `--priority none` to clear those fields. An
 empty description file clears the description. Use `--milestone none` to clear
 an issue milestone.
@@ -73,6 +77,13 @@ none` clears the summary. `project milestone ensure` creates a named milestone
 when absent, or updates only the supplied fields when exactly one exists. It
 refuses duplicate names. All project and issue field writes require `--as`, use
 the OpenTrawl OAuth app and add no Linear comment.
+
+`linear issues` accepts an optional exact project name or slug and prints every
+matching page. Each row includes its project, milestone, labels, blocking and
+blocked-by relations. `issue label add` and `issue label remove` change only
+the named existing labels. `issue relation add` and `issue relation remove`
+manage one directed blocking relation at a time. Each write reads Linear back
+before it reports success.
 
 ## Directive queue
 

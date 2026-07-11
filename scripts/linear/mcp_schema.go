@@ -19,6 +19,10 @@ var mcpToolAccess = map[string]toolAccess{
 	"create_issue":             toolWrite,
 	"get_issue":                toolRead,
 	"update_issue":             toolWrite,
+	"add_issue_labels":         toolWrite,
+	"remove_issue_labels":      toolWrite,
+	"add_issue_relation":       toolWrite,
+	"remove_issue_relation":    toolWrite,
 	"get_project":              toolRead,
 	"update_project":           toolWrite,
 	"ensure_project_milestone": toolWrite,
@@ -92,6 +96,34 @@ func mcpTools() []map[string]any {
 			}, []string{"issue", "actor"}),
 		},
 		{
+			"name":        "add_issue_labels",
+			"description": "Add existing labels to an issue without removing any other label.",
+			"inputSchema": objectSchema(map[string]any{
+				"issue":  stringSchema("Linear issue identifier, for example TRAWL-99."),
+				"actor":  stringSchema("Required actor name for the local request log."),
+				"labels": map[string]any{"type": "array", "description": "Existing label names to add.", "items": map[string]any{"type": "string"}},
+			}, []string{"issue", "actor", "labels"}),
+		},
+		{
+			"name":        "remove_issue_labels",
+			"description": "Remove named labels from an issue without changing any other label.",
+			"inputSchema": objectSchema(map[string]any{
+				"issue":  stringSchema("Linear issue identifier, for example TRAWL-99."),
+				"actor":  stringSchema("Required actor name for the local request log."),
+				"labels": map[string]any{"type": "array", "description": "Existing label names to remove.", "items": map[string]any{"type": "string"}},
+			}, []string{"issue", "actor", "labels"}),
+		},
+		{
+			"name":        "add_issue_relation",
+			"description": "Add one blocking relation and read both issues back.",
+			"inputSchema": relationSchema(),
+		},
+		{
+			"name":        "remove_issue_relation",
+			"description": "Remove one blocking relation and read both issues back.",
+			"inputSchema": relationSchema(),
+		},
+		{
 			"name":        "get_project",
 			"description": "Show one Linear project, its full Markdown brief, status, priority, health, lead, milestones and issue totals.",
 			"inputSchema": objectSchema(map[string]any{
@@ -128,11 +160,25 @@ func mcpTools() []map[string]any {
 			"name":        "list_issues",
 			"description": "List Linear issues for a team. Without state, this lists open issues.",
 			"inputSchema": objectSchema(map[string]any{
-				"team":  stringSchema("Linear team key, for example TRAWL."),
-				"state": stringSchema("Optional state name."),
+				"team":    stringSchema("Linear team key, for example TRAWL."),
+				"state":   stringSchema("Optional state name."),
+				"project": stringSchema("Optional project name or slug."),
 			}, []string{"team"}),
 		},
 	}
+}
+
+func relationSchema() map[string]any {
+	return objectSchema(map[string]any{
+		"issue":       stringSchema("Linear issue identifier, for example TRAWL-99."),
+		"other_issue": stringSchema("The other Linear issue identifier."),
+		"actor":       stringSchema("Required actor name for the local request log."),
+		"direction": map[string]any{
+			"type":        "string",
+			"description": "Whether issue blocks other_issue or is blocked by it.",
+			"enum":        []string{"blocks", "blocked-by"},
+		},
+	}, []string{"issue", "other_issue", "actor", "direction"})
 }
 
 func objectSchema(properties map[string]any, required []string) map[string]any {

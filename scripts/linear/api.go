@@ -98,10 +98,31 @@ type Issue struct {
 		Nodes    []IssueLabel `json:"nodes"`
 		PageInfo PageInfo     `json:"pageInfo"`
 	} `json:"labels"`
+	Relations struct {
+		Nodes    []IssueRelation `json:"nodes"`
+		PageInfo PageInfo        `json:"pageInfo"`
+	} `json:"relations"`
+	InverseRelations struct {
+		Nodes    []IssueRelation `json:"nodes"`
+		PageInfo PageInfo        `json:"pageInfo"`
+	} `json:"inverseRelations"`
 	Comments struct {
 		Nodes    []Comment `json:"nodes"`
 		PageInfo PageInfo  `json:"pageInfo"`
 	} `json:"comments"`
+}
+
+type IssueRelation struct {
+	ID           string         `json:"id"`
+	Type         string         `json:"type"`
+	Issue        IssueReference `json:"issue"`
+	RelatedIssue IssueReference `json:"relatedIssue"`
+}
+
+type IssueReference struct {
+	ID         string `json:"id"`
+	Identifier string `json:"identifier"`
+	Title      string `json:"title"`
 }
 
 type Comment struct {
@@ -221,19 +242,33 @@ func (api *LinearAPI) GetIssue(ctx context.Context, raw string) (Issue, error) {
 		return Issue{}, err
 	}
 	var issue Issue
-	commentsAfter := ""
-	for page := 0; ; page++ {
+	commentsAfter, labelsAfter, relationsAfter, inverseRelationsAfter := "", "", "", ""
+	readComments, readLabels, readRelations, readInverseRelations := true, true, true, true
+	for page := 0; readComments || readLabels || readRelations || readInverseRelations; page++ {
 		var out struct {
 			Issues struct {
 				Nodes []Issue `json:"nodes"`
 			} `json:"issues"`
 		}
 		variables := map[string]any{
-			"team":   id.TeamKey,
-			"number": float64(id.Number),
+			"team":                 id.TeamKey,
+			"number":               float64(id.Number),
+			"readComments":         readComments,
+			"readLabels":           readLabels,
+			"readRelations":        readRelations,
+			"readInverseRelations": readInverseRelations,
 		}
 		if commentsAfter != "" {
 			variables["commentsAfter"] = commentsAfter
+		}
+		if labelsAfter != "" {
+			variables["labelsAfter"] = labelsAfter
+		}
+		if relationsAfter != "" {
+			variables["relationsAfter"] = relationsAfter
+		}
+		if inverseRelationsAfter != "" {
+			variables["inverseRelationsAfter"] = inverseRelationsAfter
 		}
 		if err := api.graph.Do(ctx, issueByIdentifierQuery, variables, &out); err != nil {
 			return Issue{}, err
@@ -248,20 +283,42 @@ func (api *LinearAPI) GetIssue(ctx context.Context, raw string) (Issue, error) {
 		if page == 0 {
 			issue = pageIssue
 		} else {
-			issue.Comments.Nodes = append(issue.Comments.Nodes, pageIssue.Comments.Nodes...)
-			issue.Comments.PageInfo = pageIssue.Comments.PageInfo
+			if readComments {
+				issue.Comments.Nodes = append(issue.Comments.Nodes, pageIssue.Comments.Nodes...)
+				issue.Comments.PageInfo = pageIssue.Comments.PageInfo
+			}
+			if readLabels {
+				issue.Labels.Nodes = append(issue.Labels.Nodes, pageIssue.Labels.Nodes...)
+				issue.Labels.PageInfo = pageIssue.Labels.PageInfo
+			}
+			if readRelations {
+				issue.Relations.Nodes = append(issue.Relations.Nodes, pageIssue.Relations.Nodes...)
+				issue.Relations.PageInfo = pageIssue.Relations.PageInfo
+			}
+			if readInverseRelations {
+				issue.InverseRelations.Nodes = append(issue.InverseRelations.Nodes, pageIssue.InverseRelations.Nodes...)
+				issue.InverseRelations.PageInfo = pageIssue.InverseRelations.PageInfo
+			}
 		}
-		if !pageIssue.Comments.PageInfo.HasNextPage {
-			return issue, nil
-		}
-		commentsAfter = pageIssue.Comments.PageInfo.EndCursor
-		if commentsAfter == "" {
-			return Issue{}, fmt.Errorf("linear did not return a cursor for the next issue comment page")
+		readComments, commentsAfter = nextIssuePage(readComments, pageIssue.Comments.PageInfo, "comment")
+		readLabels, labelsAfter = nextIssuePage(readLabels, pageIssue.Labels.PageInfo, "label")
+		readRelations, relationsAfter = nextIssuePage(readRelations, pageIssue.Relations.PageInfo, "relation")
+		readInverseRelations, inverseRelationsAfter = nextIssuePage(readInverseRelations, pageIssue.InverseRelations.PageInfo, "inverse relation")
+		if (readComments && commentsAfter == "") || (readLabels && labelsAfter == "") || (readRelations && relationsAfter == "") || (readInverseRelations && inverseRelationsAfter == "") {
+			return Issue{}, fmt.Errorf("linear did not return a cursor for the next issue page")
 		}
 	}
+	return issue, nil
 }
 
-func (api *LinearAPI) ListIssues(ctx context.Context, team, state string) (ListIssuesResult, error) {
+func nextIssuePage(read bool, pageInfo PageInfo, _ string) (bool, string) {
+	if !read || !pageInfo.HasNextPage {
+		return false, ""
+	}
+	return true, pageInfo.EndCursor
+}
+
+func (api *LinearAPI) ListIssues(ctx context.Context, team, state, projectReference string) (ListIssuesResult, error) {
 	team = strings.ToUpper(strings.TrimSpace(team))
 	if team == "" {
 		return ListIssuesResult{}, fmt.Errorf("--team is required")
@@ -274,16 +331,47 @@ func (api *LinearAPI) ListIssues(ctx context.Context, team, state string) (ListI
 		}
 		filter = stateIssueFilter(team, resolved.Name)
 	}
-	var out struct {
-		Issues struct {
-			Nodes    []Issue  `json:"nodes"`
-			PageInfo PageInfo `json:"pageInfo"`
-		} `json:"issues"`
+	if strings.TrimSpace(projectReference) != "" {
+		project, err := api.ResolveProject(ctx, projectReference)
+		if err != nil {
+			return ListIssuesResult{}, err
+		}
+		filter["project"] = map[string]any{"id": map[string]any{"eq": project.ID}}
 	}
-	if err := api.graph.Do(ctx, listIssuesQuery, map[string]any{"filter": filter}, &out); err != nil {
-		return ListIssuesResult{}, err
+	var issues []Issue
+	after := ""
+	for {
+		var out struct {
+			Issues struct {
+				Nodes    []Issue  `json:"nodes"`
+				PageInfo PageInfo `json:"pageInfo"`
+			} `json:"issues"`
+		}
+		variables := map[string]any{"filter": filter}
+		if after != "" {
+			variables["after"] = after
+		}
+		if err := api.graph.Do(ctx, listIssuesQuery, variables, &out); err != nil {
+			return ListIssuesResult{}, err
+		}
+		for _, candidate := range out.Issues.Nodes {
+			if candidate.Labels.PageInfo.HasNextPage || candidate.Relations.PageInfo.HasNextPage || candidate.InverseRelations.PageInfo.HasNextPage {
+				full, err := api.GetIssue(ctx, candidate.Identifier)
+				if err != nil {
+					return ListIssuesResult{}, err
+				}
+				candidate = full
+			}
+			issues = append(issues, candidate)
+		}
+		if !out.Issues.PageInfo.HasNextPage {
+			return ListIssuesResult{Issues: issues}, nil
+		}
+		after = out.Issues.PageInfo.EndCursor
+		if after == "" {
+			return ListIssuesResult{}, fmt.Errorf("linear did not return a cursor for the next issue list page")
+		}
 	}
-	return ListIssuesResult{Issues: out.Issues.Nodes, HasNextPage: out.Issues.PageInfo.HasNextPage}, nil
 }
 
 func (api *LinearAPI) CreateComment(ctx context.Context, rawIssue, actor, body string) (CreatedComment, error) {

@@ -192,6 +192,12 @@ func runIssue(args []string, stdout io.Writer, opts commandOptions) error {
 	if args[0] == "update" {
 		return runIssueUpdate(args[1:], stdout, opts)
 	}
+	if args[0] == "label" {
+		return runIssueLabel(args[1:], stdout, opts)
+	}
+	if args[0] == "relation" {
+		return runIssueRelation(args[1:], stdout, opts)
+	}
 	if strings.HasPrefix(args[0], "-") {
 		return usageError{message: "linear issue needs an issue identifier\n\nRun `linear issue --help`."}
 	}
@@ -343,6 +349,7 @@ func runIssues(args []string, stdout io.Writer, opts commandOptions) error {
 	fs := newFlagSet("linear issues")
 	team := fs.String("team", "", "Linear team key")
 	state := fs.String("state", "", "State name")
+	project := fs.String("project", "", "Project name or slug")
 	positionals, err := parseFlags(args, fs)
 	if err != nil {
 		return helpOrUsage(err, stdout, issuesHelp)
@@ -357,7 +364,7 @@ func runIssues(args []string, stdout io.Writer, opts commandOptions) error {
 	defer func() {
 		_ = api.Close()
 	}()
-	result, err := api.ListIssues(context.Background(), *team, *state)
+	result, err := api.ListIssues(context.Background(), *team, *state, *project)
 	if err != nil {
 		return err
 	}
@@ -377,6 +384,8 @@ func showHelp(args []string, stdout io.Writer) error {
 		"issue new":                issueNewHelp,
 		"issue state":              issueStateHelp,
 		"issue update":             issueUpdateHelp,
+		"issue label":              issueLabelHelp,
+		"issue relation":           issueRelationHelp,
 		"project":                  projectHelp,
 		"project update":           projectUpdateHelp,
 		"project milestone":        projectMilestoneHelp,
