@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire"
@@ -18,7 +19,9 @@ import (
 )
 
 const (
-	photoKitFetchSigningRule    = `=identifier "org.opentrawl.photoscrawl.fetch" and certificate leaf[subject.CN] = "OpenTrawl Dev Signing"`
+	photoKitFetchBundleID       = "org.opentrawl.photoscrawl.fetch"
+	photoKitFetchExecutable     = "photoscrawl-fetch"
+	photoKitPhotosEntitlement   = "com.apple.security.personal-information.photos-library"
 	defaultPhotoKitFetchTimeout = 2 * time.Minute
 	maxPhotoKitWireBytes        = 64 * 1024
 )
@@ -48,29 +51,186 @@ var launchPhotoKitFetchApp = func(ctx context.Context, requestPath, responsePath
 }
 
 func verifiedPhotoKitFetchAppPath(ctx context.Context) (string, error) {
+	callerPath, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("resolve Photos helper caller: %w", err)
+	}
+	callerPath, err = filepath.EvalSymlinks(callerPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve Photos helper caller path: %w", err)
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("resolve home directory for Photos original fetch app: %w", err)
 	}
-	appPath := filepath.Join(home, "Applications", "Photoscrawl Fetch.app")
+	return verifiedPhotoKitFetchAppPathForCaller(ctx, callerPath, home)
+}
+
+func verifiedPhotoKitFetchAppPathForCaller(ctx context.Context, callerPath, home string) (string, error) {
+	appPath, err := photoKitFetchAppPath(callerPath, home)
+	if err != nil {
+		return "", err
+	}
+	if err := verifyPhotoKitFetchApp(ctx, callerPath, appPath); err != nil {
+		return "", err
+	}
+	return appPath, nil
+}
+
+func photoKitFetchAppPath(callerPath, home string) (string, error) {
+	callerPath = filepath.Clean(callerPath)
+	callerName := filepath.Base(callerPath)
+	callerDir := filepath.Dir(callerPath)
+	contentsDir := filepath.Dir(callerDir)
+	appDir := filepath.Dir(contentsDir)
+	isOpenTrawlBundle := filepath.Base(contentsDir) == "Contents" && filepath.Base(appDir) == "OpenTrawl.app"
+
+	switch {
+	case callerName == "Trawl" && filepath.Base(callerDir) == "MacOS" && isOpenTrawlBundle:
+		return filepath.Join(contentsDir, "Helpers", "Photoscrawl Fetch.app"), nil
+	case callerName == "trawl" && filepath.Base(callerDir) == "Helpers" && isOpenTrawlBundle:
+		return filepath.Join(contentsDir, "Helpers", "Photoscrawl Fetch.app"), nil
+	case callerName == "Trawl":
+		return "", errors.New("Photos helper caller is not the OpenTrawl Mac app executable")
+	case callerName == "trawl" && filepath.Base(callerDir) == "Helpers" && filepath.Base(contentsDir) == "Contents":
+		return "", errors.New("Photos helper caller is not bundled in OpenTrawl.app")
+	case callerName == "trawl":
+		return filepath.Join(home, "Applications", "Photoscrawl Fetch.app"), nil
+	default:
+		return "", errors.New("Photos helper caller is not a supported OpenTrawl executable")
+	}
+}
+
+func verifyPhotoKitFetchApp(ctx context.Context, callerPath, appPath string) error {
 	info, err := os.Stat(appPath)
 	if err != nil {
-		return "", fmt.Errorf("find signed Photos original fetch app: %w", err)
+		return fmt.Errorf("find signed Photos original fetch app: %w", err)
 	}
 	if !info.IsDir() {
-		return "", errors.New("signed Photos original fetch app is not an app bundle")
+		return errors.New("signed Photos original fetch app is not an app bundle")
 	}
-	command := exec.CommandContext(ctx, "/usr/bin/codesign", "--verify", "--deep", "--strict", "-R", photoKitFetchSigningRule, appPath)
+	helperExecutable := filepath.Join(appPath, "Contents", "MacOS", photoKitFetchExecutable)
+	executableInfo, err := os.Stat(helperExecutable)
+	if err != nil {
+		return fmt.Errorf("find signed Photos helper executable: %w", err)
+	}
+	if !executableInfo.Mode().IsRegular() || executableInfo.Mode().Perm()&0o111 == 0 {
+		return errors.New("signed Photos helper executable is not executable")
+	}
+
+	identifier, err := photoKitFetchPlistValue(ctx, appPath, "CFBundleIdentifier")
+	if err != nil {
+		return err
+	}
+	if identifier != photoKitFetchBundleID {
+		return fmt.Errorf("signed Photos helper bundle identifier is %q, want %q", identifier, photoKitFetchBundleID)
+	}
+	executable, err := photoKitFetchPlistValue(ctx, appPath, "CFBundleExecutable")
+	if err != nil {
+		return err
+	}
+	if executable != photoKitFetchExecutable {
+		return fmt.Errorf("signed Photos helper executable is %q, want %q", executable, photoKitFetchExecutable)
+	}
+
+	callerLeafHash, err := codeSigningLeafDigest(callerPath)
+	if err != nil {
+		return fmt.Errorf("read Photos helper caller leaf certificate identity: %w", err)
+	}
+	helperLeafHash, err := codeSigningLeafDigest(appPath)
+	if err != nil {
+		return fmt.Errorf("read signed Photos helper leaf certificate identity: %w", err)
+	}
+	if callerLeafHash != helperLeafHash {
+		return errors.New("signed Photos helper leaf certificate does not match its caller")
+	}
+	if err := verifyPhotoKitCodeSignature(ctx, callerPath, false); err != nil {
+		return fmt.Errorf("verify Photos helper caller signature: %w", err)
+	}
+	if err := verifyPhotoKitCodeSignature(ctx, appPath, true); err != nil {
+		return fmt.Errorf("verify signed Photos helper signature and identity: %w", err)
+	}
+	if err := verifyPhotoKitFetchEntitlement(ctx, appPath); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyPhotoKitFetchEntitlement(ctx context.Context, appPath string) error {
+	output, err := runPhotoKitFetchCombinedCommand(ctx, "/usr/bin/codesign", "--display", "--entitlements", "-", appPath)
+	if err != nil {
+		return fmt.Errorf("read signed Photos helper entitlements: %w", err)
+	}
+	lines := strings.Split(string(output), "\n")
+	keyLine := "[Key] " + photoKitPhotosEntitlement
+	found := 0
+	for index, line := range lines {
+		if strings.TrimSpace(line) != keyLine {
+			continue
+		}
+		found++
+		if index+2 >= len(lines) || strings.TrimSpace(lines[index+1]) != "[Value]" || strings.TrimSpace(lines[index+2]) != "[Bool] true" {
+			return errors.New("signed Photos helper Photos entitlement is not true")
+		}
+	}
+	if found != 1 {
+		return errors.New("signed Photos helper must contain exactly one true Photos entitlement")
+	}
+	return nil
+}
+
+func photoKitFetchPlistValue(ctx context.Context, appPath, key string) (string, error) {
+	infoPath := filepath.Join(appPath, "Contents", "Info.plist")
+	output, err := runPhotoKitFetchCommand(ctx, "/usr/bin/plutil", "-extract", key, "raw", "-o", "-", infoPath)
+	if err != nil {
+		return "", fmt.Errorf("read signed Photos helper %s: %w", key, err)
+	}
+	return string(bytes.TrimSpace(output)), nil
+}
+
+func verifyPhotoKitCodeSignature(ctx context.Context, path string, deep bool) error {
+	args := []string{"--verify", "--strict"}
+	if deep {
+		args = append(args, "--deep")
+	}
+	args = append(args, path)
+	output, err := runPhotoKitFetchCombinedCommand(ctx, "/usr/bin/codesign", args...)
+	if err == nil {
+		return nil
+	}
+	if bytes.Contains(output, []byte("CSSMERR_TP_NOT_TRUSTED")) {
+		return nil
+	}
+	return err
+}
+
+func runPhotoKitFetchCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
+	command := exec.CommandContext(ctx, name, args...)
+	var stdout bytes.Buffer
 	var stderr bytes.Buffer
+	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
 		message := bytes.TrimSpace(stderr.Bytes())
 		if len(message) > 0 {
-			return "", fmt.Errorf("verify signed Photos original fetch app: %w: %s", err, message)
+			return nil, fmt.Errorf("%w: %s", err, message)
 		}
-		return "", fmt.Errorf("verify signed Photos original fetch app: %w", err)
+		return nil, err
 	}
-	return appPath, nil
+	return stdout.Bytes(), nil
+}
+
+func runPhotoKitFetchCombinedCommand(ctx context.Context, name string, args ...string) ([]byte, error) {
+	command := exec.CommandContext(ctx, name, args...)
+	output, err := command.CombinedOutput()
+	if err != nil {
+		message := bytes.TrimSpace(output)
+		if len(message) > 0 {
+			return output, fmt.Errorf("%w: %s", err, message)
+		}
+		return output, err
+	}
+	return output, nil
 }
 
 func photoKitFetchOpenArgs(appPath, requestPath, responsePath string) []string {

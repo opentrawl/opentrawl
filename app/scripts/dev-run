@@ -62,6 +62,10 @@ else
 fi
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
+echo "Building the signed Photos helper"
+"$repo_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
+  --output "$contents/Helpers/Photoscrawl Fetch.app"
+
 # The Nix Go toolchain may record its own resolver path. The shipped helper
 # uses the equivalent macOS platform library so it runs outside the dev shell.
 if file "$contents/Helpers/trawl" | grep -q 'Mach-O'; then
@@ -107,12 +111,12 @@ echo "Signing the local app"
 "$repo_root/scripts/dev-cert"
 security unlock-keychain -p "$(<"$pass_file")" "$keychain"
 xattr -cr "$app"
-codesign --force --options runtime --timestamp=none \
-  --keychain "$keychain" --sign "$identity" "$contents/Helpers/trawl"
-codesign --force --options runtime --timestamp=none \
-  --keychain "$keychain" --sign "$identity" "$contents/MacOS/Trawl"
-codesign --force --options runtime --timestamp=none \
-  --keychain "$keychain" --sign "$identity" "$app"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$contents/Helpers/trawl"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$contents/MacOS/Trawl"
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none "$app"
 codesign --verify --deep --strict "$app"
 
 echo "Built $app"

@@ -1,35 +1,46 @@
 #!/usr/bin/env bash
-# Build and register the signed PhotoKit app used by the internal original
-# resolver. Release packaging supplies the production signing identity.
+# Build one signed PhotoKit app at the requested path.
 set -euo pipefail
 
-if [[ $# -ne 0 ]]; then
-  echo "usage: build-app" >&2
+usage() {
+  echo "usage: build-app --output OUTPUT.app" >&2
   exit 2
+}
+
+if [[ $# -ne 2 || "$1" != "--output" || -z "$2" ]]; then
+  usage
 fi
 
-repo_root="$(git rev-parse --show-toplevel)"
+app="${2%/}"
+if [[ "$app" != *.app ]]; then
+  usage
+fi
+if [[ -e "$app" || -L "$app" ]]; then
+  echo "build-app: output already exists: $app" >&2
+  exit 1
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+repo_root="$(cd "$script_dir/../../../.." && pwd)"
 identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
-app="$HOME/Applications/Photoscrawl Fetch.app"
 contents="$app/Contents"
 binary="$contents/MacOS/photoscrawl-fetch"
 entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
-lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
+signing_entitlements="$(mktemp "${TMPDIR:-/tmp}/photoscrawl-fetch-entitlements.XXXXXX")"
+trap 'rm -f "$signing_entitlements"' EXIT
 
 "$repo_root/scripts/dev-cert"
-rm -rf "$app"
+plutil -convert xml1 -o "$signing_entitlements" "$entitlements"
 mkdir -p "$contents/MacOS"
 cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$contents/Info.plist"
 (
   cd "$repo_root/trawlers/photos"
   go build -o "$binary" ./cmd/photoscrawl-fetch
 )
-codesign --force --options runtime \
+codesign --force --sign "$identity" --keychain "$keychain" \
+  --options runtime --timestamp=none \
   --identifier org.opentrawl.photoscrawl.fetch \
-  --entitlements "$entitlements" \
-  --keychain "$keychain" \
-  --sign "$identity" \
+  --entitlements "$signing_entitlements" \
   "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
-"$lsregister" -f "$app"
