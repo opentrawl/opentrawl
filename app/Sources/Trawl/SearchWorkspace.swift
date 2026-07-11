@@ -10,7 +10,7 @@ enum SearchFocus: Hashable {
 struct SearchWorkspace: View {
   @Bindable var interaction: SearchInteraction
   let scope: SourceStatus?
-  let sourceDisplayNames: [String: String]
+  let sourceResolver: SearchSourceResolver
   let isCompact: Bool
   let model: SearchModel
   @FocusState.Binding var focus: SearchFocus?
@@ -54,7 +54,7 @@ struct SearchWorkspace: View {
         SearchResultsList(
           phase: model.phase,
           results: model.results,
-          sourceDisplayNames: sourceDisplayNames,
+          sourceResolver: sourceResolver,
           failureGuidance: model.failureGuidance,
           selectedResultID: $interaction.selectedResultID,
           focus: $focus
@@ -63,7 +63,7 @@ struct SearchWorkspace: View {
         Divider()
         ResultPreview(
           hit: selectedHit,
-          sourceDisplayName: selectedSourceDisplayName,
+          sourceResolver: sourceResolver,
           phase: model.openPhase,
           response: model.openResult
         )
@@ -73,7 +73,7 @@ struct SearchWorkspace: View {
         SearchResultsList(
           phase: model.phase,
           results: model.results,
-          sourceDisplayNames: sourceDisplayNames,
+          sourceResolver: sourceResolver,
           failureGuidance: model.failureGuidance,
           selectedResultID: $interaction.selectedResultID,
           focus: $focus
@@ -82,7 +82,7 @@ struct SearchWorkspace: View {
         Divider()
         ResultPreview(
           hit: selectedHit,
-          sourceDisplayName: selectedSourceDisplayName,
+          sourceResolver: sourceResolver,
           phase: model.openPhase,
           response: model.openResult
         )
@@ -92,11 +92,6 @@ struct SearchWorkspace: View {
 
   private var selectedHit: SearchHit? {
     model.results.first(where: { $0.id == interaction.selectedResultID })
-  }
-
-  private var selectedSourceDisplayName: String {
-    guard let selectedHit else { return "Unknown source" }
-    return sourceDisplayNames[selectedHit.sourceID] ?? "Unknown source"
   }
 }
 

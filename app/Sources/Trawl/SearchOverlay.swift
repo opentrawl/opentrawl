@@ -5,32 +5,35 @@ import TrawlCore
 struct SearchOverlay: View {
   let onDismiss: () -> Void
   let onActivityChange: (ConstellationActivity) -> Void
-  private let sourceDisplayNames: [String: String]
+  private let sourceStatuses: [SourceStatus]
 
   @State private var scope: SourceStatus?
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
+  @State private var sourceResolver: SearchSourceResolver
   @FocusState private var focus: SearchFocus?
 
   init(
     client: any TrawlClient,
     initialScope: SourceStatus?,
-    sourceDisplayNames: [String: String] = [:],
+    sourceStatuses: [SourceStatus] = [],
     onActivityChange: @escaping (ConstellationActivity) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
     let model = SearchModel(client: client)
-    var names = sourceDisplayNames
-    if let initialScope {
-      names[initialScope.id] = initialScope.name
-    }
     self.onDismiss = onDismiss
     self.onActivityChange = onActivityChange
-    self.sourceDisplayNames = names
+    self.sourceStatuses = sourceStatuses
     _scope = State(initialValue: initialScope)
     _model = State(initialValue: model)
     _interaction = State(
       initialValue: SearchInteraction(model: model, sourceID: initialScope?.id)
+    )
+    _sourceResolver = State(
+      initialValue: SearchSourceResolver(
+        statuses: sourceStatuses,
+        scopedStatus: initialScope
+      )
     )
   }
 
@@ -43,7 +46,7 @@ struct SearchOverlay: View {
       SearchWorkspace(
         interaction: interaction,
         scope: scope,
-        sourceDisplayNames: sourceDisplayNames,
+        sourceResolver: sourceResolver,
         isCompact: size.width < 680,
         model: model,
         focus: $focus,
@@ -62,6 +65,9 @@ struct SearchOverlay: View {
     }
     .onChange(of: model.phase) { _, _ in
       reportActivity()
+    }
+    .onChange(of: sourceStatuses) { _, statuses in
+      sourceResolver.replace(with: statuses, scopedStatus: scope)
     }
     .onKeyPress(.escape) {
       onDismiss()

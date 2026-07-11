@@ -78,6 +78,38 @@ import TrawlClient
 }
 
 @MainActor
+@Test func sourceResolverUsesCurrentTypedStatusAndNamesMissingStateExplicitly() {
+  let scoped = SourceStatus(
+    id: "gmail",
+    name: "Gmail",
+    state: "ready",
+    summary: "Synthetic Gmail archive",
+    counts: [],
+    lastSyncedDisplay: "just now",
+    archiveBytes: 128
+  )
+  let resolver = SearchSourceResolver(statuses: [], scopedStatus: scoped)
+
+  #expect(resolver.displayName(for: "gmail") == "Gmail")
+
+  resolver.replace(with: [
+    SourceStatus(
+      id: "gmail",
+      name: "Google Mail",
+      state: "ready",
+      summary: "Renamed synthetic source",
+      counts: [],
+      lastSyncedDisplay: "just now",
+      archiveBytes: 256
+    )
+  ])
+
+  #expect(resolver.displayName(for: "gmail") == "Google Mail")
+  #expect(resolver.displayName(for: "notes") == nil)
+  #expect(resolver.displayNameOrUnavailable(for: "notes") == "Source name unavailable")
+}
+
+@MainActor
 @Test func newerQueryCannotBeOverwrittenByAStaleReply() async {
   let client = ScriptedClient(search: { query, _ in
     await ignoreCancellation(for: query == "old" ? .milliseconds(150) : .milliseconds(15))

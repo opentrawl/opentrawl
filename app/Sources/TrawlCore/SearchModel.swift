@@ -24,6 +24,40 @@ public enum SearchStateEvent: Sendable, Equatable {
   case openFailed(String, String)
 }
 
+@MainActor
+@Observable
+public final class SearchSourceResolver {
+  public static let unavailableDisplayName = "Source name unavailable"
+
+  public private(set) var statuses: [SourceStatus]
+
+  public init(statuses: [SourceStatus], scopedStatus: SourceStatus? = nil) {
+    self.statuses = Self.includingScopedStatus(scopedStatus, in: statuses)
+  }
+
+  public func replace(with statuses: [SourceStatus], scopedStatus: SourceStatus? = nil) {
+    self.statuses = Self.includingScopedStatus(scopedStatus, in: statuses)
+  }
+
+  public func displayName(for sourceID: String) -> String? {
+    statuses.first(where: { $0.id == sourceID })?.name
+  }
+
+  public func displayNameOrUnavailable(for sourceID: String) -> String {
+    displayName(for: sourceID) ?? Self.unavailableDisplayName
+  }
+
+  private static func includingScopedStatus(
+    _ scopedStatus: SourceStatus?,
+    in statuses: [SourceStatus]
+  ) -> [SourceStatus] {
+    guard let scopedStatus, !statuses.contains(where: { $0.id == scopedStatus.id }) else {
+      return statuses
+    }
+    return statuses + [scopedStatus]
+  }
+}
+
 public enum SearchPhase: Sendable, Equatable {
   case idle
   case loading

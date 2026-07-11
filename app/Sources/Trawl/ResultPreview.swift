@@ -4,7 +4,7 @@ import TrawlCore
 
 struct ResultPreview: View {
   let hit: SearchHit?
-  let sourceDisplayName: String
+  let sourceResolver: SearchSourceResolver
   let phase: SearchOpenPhase
   let response: OpenResponse?
 
@@ -31,7 +31,9 @@ struct ResultPreview: View {
         if let response {
           OpenedResultView(
             hit: hit,
-            sourceDisplayName: sourceDisplayName,
+            sourceDisplayName: sourceResolver.displayNameOrUnavailable(
+              for: response.sourceID
+            ),
             result: OpenedResult(rawOutput: response.output)
           )
             .id(response.openRef)
