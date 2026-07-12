@@ -7,6 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -19,6 +22,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -36,6 +40,39 @@ func TestSetupRequirementMapping(t *testing.T) {
 	needsAction := imessageSetupRequirementForError(os.ErrPermission)
 	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
 		t.Fatalf("needs-action requirement = %#v", needsAction)
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -177,6 +214,84 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 	if opened.Ref != hit.Ref || opened.Chat.Name != "Most Recent Name" || !strings.Contains(opened.Message.Text, "launch") {
 		t.Fatalf("opened message = %#v", opened)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	shortRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.ShortRef)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != hit.Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.imessage.open.v1.IMessageRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	load := func(ref string) archive.MessageContext {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		value, loadErr := source.loadOpenMessage(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		return value
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "7a6c387f1953fc4415195f3481ca1251392ed28f73e71b078bc45b273d4c762f", "text": "faba23b43d2cdea1b7f116389ff20a157b6b1c9f984c683bc7880b860cf92d76"}
+		for _, format := range []struct {
+			name  string
+			value ckoutput.Format
+		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
+			readStore = openReadStore(t, ctx, paths.Archive)
+			var stdout bytes.Buffer
+			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
+			_ = readStore.Close()
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "full", hit.Ref, load(hit.Ref), fullRecord)
+	writeRuntimeOpenEvidence(t, "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
+	captureLegacy("full", hit.Ref)
+	captureLegacy("short", hit.ShortRef)
+	assertOpenRecordError := func(ref, want string) {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		var typed commandError
+		if !errors.As(err, &typed) || typed.name != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	assertOpenRecordError("zzzzz", "unknown_short_ref")
+	assertOpenRecordError("photos:asset/example", "foreign_ref")
+	assertOpenRecordError("imessage:msg/not-a-number", "invalid_ref")
+	assertOpenRecordError("imessage:msg/999999999", "not_found")
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", hit.Ref, hit.Ref, "zzzzz", "imessage:msg/999999999", "imessage:msg/999999999"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: writeStore, Paths: paths}, "zzzzz")
+	_ = writeStore.Close()
+	var ambiguous commandError
+	if !errors.As(err, &ambiguous) || ambiguous.name != "ambiguous_short_ref" {
+		t.Fatalf("ambiguous short ref error = %#v", err)
+	}
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: paths.Archive + ".missing"}}, hit.Ref)
+	var archiveFailure commandError
+	if !errors.As(err, &archiveFailure) || archiveFailure.name != "archive" {
+		t.Fatalf("missing archive error = %#v", err)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)

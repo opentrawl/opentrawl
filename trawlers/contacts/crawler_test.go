@@ -6,6 +6,10 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -21,6 +25,9 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 var runMu sync.Mutex
@@ -45,6 +52,39 @@ func TestSetupRequirementMapping(t *testing.T) {
 	needsAction := contactsSetupRequirementForState(apple.SourceNeedsFullDiskAccess)
 	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
 		t.Fatalf("needs-action requirement = %#v", needsAction)
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenPerson")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -361,7 +401,8 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 	if second.Summary.People != 2 || second.Summary.Unchanged != 2 {
 		t.Fatalf("second summary = %#v", second.Summary)
 	}
-	st, err := archive.Open(t.Context(), filepath.Join(home, ".opentrawl", "contacts", "contacts.db"))
+	archivePath := filepath.Join(home, ".opentrawl", "contacts", "contacts.db")
+	st, err := archive.Open(t.Context(), archivePath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,6 +414,98 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 	if len(people) != 2 {
 		t.Fatalf("people = %#v", people)
 	}
+	readStore, err := ckstore.Open(t.Context(), ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := &trawlkit.Request{Store: readStore, Paths: trawlkit.Paths{Archive: archivePath}}
+	app := New()
+	records, err := app.ShortRefRecords(t.Context(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.AssignShortRefs(t.Context(), records); err != nil {
+		t.Fatal(err)
+	}
+	fullRef := archive.PersonRef(people[0].ID)
+	aliases, err := req.ShortRefAliases(t.Context(), []string{fullRef})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fullRecord, err := app.OpenRecord(t.Context(), req, fullRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRecord, err := app.OpenRecord(t.Context(), req, aliases[fullRef])
+	if err != nil {
+		_ = readStore.Close()
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != fullRef || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.contacts.open.v1.ContactsRecord" || shortRecord.Presentation == nil {
+		_ = readStore.Close()
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	fullValue, err := app.loadOpenPerson(t.Context(), req, fullRef)
+	if err != nil {
+		_ = readStore.Close()
+		t.Fatal(err)
+	}
+	shortValue, err := app.loadOpenPerson(t.Context(), req, aliases[fullRef])
+	if err != nil {
+		_ = readStore.Close()
+		t.Fatal(err)
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "f3e70150b4077553248159eeed11c1f34519c92b2cdd7560e9c7fc7f34e4fcfe", "text": "219b5fa7efa35288edd82aff50a9a9e2277dc22a85ba81b5c22dc533f9304676"}
+		for _, format := range []struct {
+			name  string
+			value output.Format
+		}{{"json", output.JSON}, {"text", output.Text}} {
+			var stdout bytes.Buffer
+			legacyReq := *req
+			legacyReq.Format, legacyReq.Out = format.value, &stdout
+			openErr := app.Open(t.Context(), &legacyReq, ref)
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "contacts", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				_ = readStore.Close()
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "contacts", "full", fullRef, map[string]any{"ref": fullValue.ref, "person": fullValue.person}, fullRecord)
+	writeRuntimeOpenEvidence(t, "contacts", "short", aliases[fullRef], map[string]any{"ref": shortValue.ref, "person": shortValue.person}, shortRecord)
+	captureLegacy("full", fullRef)
+	captureLegacy("short", aliases[fullRef])
+	if _, err := app.OpenRecord(t.Context(), req, "zzzzz"); err == nil || err.Error() != `no person matched "zzzzz"` {
+		_ = readStore.Close()
+		t.Fatalf("unknown short-like contact query error = %#v", err)
+	}
+	secondRef := archive.PersonRef(people[1].ID)
+	if _, err := readStore.DB().ExecContext(t.Context(), `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", fullRef, fullRef, "zzzzz", secondRef, secondRef); err != nil {
+		_ = readStore.Close()
+		t.Fatal(err)
+	}
+	_, err = app.OpenRecord(t.Context(), req, "zzzzz")
+	var ambiguous output.UsageError
+	if !errors.As(err, &ambiguous) {
+		_ = readStore.Close()
+		t.Fatalf("ambiguous short ref error = %#v", err)
+	}
+	if _, err := app.OpenRecord(t.Context(), req, "contacts:person/missing"); err == nil || err.Error() != `no person matched "missing"` {
+		_ = readStore.Close()
+		t.Fatalf("missing contact ref error = %#v", err)
+	}
+	if _, err := app.OpenRecord(t.Context(), req, "photos:asset/example"); err == nil || err.Error() != `no person matched "photos:asset/example"` {
+		_ = readStore.Close()
+		t.Fatalf("foreign contact ref error = %#v", err)
+	}
+	_, err = app.OpenRecord(t.Context(), &trawlkit.Request{Paths: trawlkit.Paths{Archive: archivePath + ".missing"}}, fullRef)
+	if err == nil {
+		_ = readStore.Close()
+		t.Fatalf("missing archive error = %#v", err)
+	}
+	_ = readStore.Close()
 }
 
 func TestSyncPreviewVerbsPreserveOutput(t *testing.T) {

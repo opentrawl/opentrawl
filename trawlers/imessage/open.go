@@ -25,18 +25,7 @@ var (
 )
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	messageID, err := c.resolveOpenRef(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
-	if errors.Is(err, archive.ErrMessageNotFound) {
-		return commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imessage search --json again and use a current ref")
-	}
+	result, err := c.loadOpenMessage(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -44,6 +33,25 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 		return output.Write(req.Out, req.Format, "open", newOpenOutput(result))
 	}
 	return printOpenText(req.Out, newOpenOutput(result))
+}
+
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.MessageContext, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archive.MessageContext{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	messageID, err := c.resolveOpenRef(ctx, req, ref)
+	if err != nil {
+		return archive.MessageContext{}, err
+	}
+	result, err := st.OpenMessage(ctx, messageID, defaultOpenWindow)
+	if errors.Is(err, archive.ErrMessageNotFound) {
+		return archive.MessageContext{}, commandErr(1, "not_found", errors.New("message ref was not found"), "run trawl imessage search --json again and use a current ref")
+	}
+	if err != nil {
+		return archive.MessageContext{}, err
+	}
+	return result, nil
 }
 
 func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

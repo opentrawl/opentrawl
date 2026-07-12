@@ -6,6 +6,10 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,6 +21,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -34,6 +39,39 @@ func TestSetupRequirementMapping(t *testing.T) {
 	needsAction := calendarSetupRequirementForError(os.ErrPermission)
 	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
 		t.Fatalf("needs-action requirement = %#v", needsAction)
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenEvent")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -173,6 +211,90 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 	if opened.Availability == nil || *opened.Availability != 2 {
 		t.Fatalf("opened availability = %#v, want raw 2", opened.Availability)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	shortRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.ShortRef)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != hit.Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.calendar.open.v1.CalendarRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	load := func(ref string) archive.EventDetail {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		value, loadErr := source.loadOpenEvent(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		return value
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "6c6fab2a519fd4ef531916cdcf3e31d3ed8c3c2e489c3c6c06c87ed39e924a01", "text": "81320b22b77fd67d7fd23189283a0edb1b66ceff978621f46353b87e60543b8b"}
+		for _, format := range []struct {
+			name  string
+			value ckoutput.Format
+		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
+			readStore = openReadStore(t, ctx, paths.Archive)
+			var stdout bytes.Buffer
+			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
+			_ = readStore.Close()
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "calendar", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "calendar", "full", hit.Ref, load(hit.Ref), fullRecord)
+	writeRuntimeOpenEvidence(t, "calendar", "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
+	captureLegacy("full", hit.Ref)
+	captureLegacy("short", hit.ShortRef)
+	assertOpenRecordError := func(ref, want string) {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		var typed commandError
+		if !errors.As(err, &typed) || typed.name != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	assertOpenRecordError("zzzzz", "unknown_short_ref")
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", hit.Ref, hit.Ref, "zzzzz", "calendar:event/22222222-2222-2222-2222-222222222222", "calendar:event/22222222-2222-2222-2222-222222222222"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertOpenRecordError("zzzzz", "ambiguous_short_ref")
+	for ref, want := range map[string]string{
+		"photos:asset/example": "invalid calendar event ref \"photos:asset/example\"",
+		"calendar:event/":      "invalid calendar event ref \"calendar:event/\"",
+	} {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if err == nil || err.Error() != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: paths.Archive + ".missing"}}, hit.Ref)
+	var archiveFailure commandError
+	if !errors.As(err, &archiveFailure) || archiveFailure.name != "archive" {
+		t.Fatalf("missing archive error = %#v", err)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)

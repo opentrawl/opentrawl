@@ -12,7 +12,10 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 const appID = "twitter"
@@ -32,10 +35,11 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler  = (*Crawler)(nil)
-	_ trawlkit.Syncer   = (*Crawler)(nil)
-	_ trawlkit.Searcher = (*Crawler)(nil)
-	_ trawlkit.Opener   = (*Crawler)(nil)
+	_ trawlkit.Crawler      = (*Crawler)(nil)
+	_ trawlkit.Syncer       = (*Crawler)(nil)
+	_ trawlkit.Searcher     = (*Crawler)(nil)
+	_ trawlkit.Opener       = (*Crawler)(nil)
+	_ trawlkit.RecordOpener = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -121,6 +125,23 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
 	return c.handler(ctx, req).runOpen([]string{ref})
+}
+
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	value, err := c.handler(ctx, req).loadOpenPost(ref)
+	if err != nil {
+		return nil, err
+	}
+	machine := projectOpenRecord(value)
+	data, err := anypb.New(machine)
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	if err := openrecord.Validate(record); err != nil {
+		return nil, err
+	}
+	return record, nil
 }
 
 type runtime struct {

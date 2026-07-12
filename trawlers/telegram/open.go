@@ -20,28 +20,37 @@ const (
 )
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
+	window, err := c.loadOpenMessage(ctx, req, ref)
+	if err != nil {
+		return err
+	}
 	r := c.handler(ctx, req)
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	defer func() { _ = st.Close() }()
-	sourcePK, err := r.resolveOpenMessageRef(ref)
-	if err != nil {
-		return err
-	}
-	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
-	if errors.Is(err, store.ErrMessageNotFound) {
-		return r.contractError("not_found", "message was not found in this archive", "run trawl telegram search --json again and use one of the returned refs.")
-	}
-	if err != nil {
-		return err
-	}
 	envelope := newOpenEnvelope(window)
 	if req.Format == ckoutput.JSON {
 		return ckoutput.Write(req.Out, req.Format, "open", envelope)
 	}
 	return r.printOpen(envelope)
+}
+
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (store.MessageWindow, error) {
+	r := c.handler(ctx, req)
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return store.MessageWindow{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	defer func() { _ = st.Close() }()
+	sourcePK, err := r.resolveOpenMessageRef(ref)
+	if err != nil {
+		return store.MessageWindow{}, err
+	}
+	window, err := st.OpenMessageWindow(ctx, sourcePK, openContextRadius)
+	if errors.Is(err, store.ErrMessageNotFound) {
+		return store.MessageWindow{}, r.contractError("not_found", "message was not found in this archive", "run trawl telegram search --json again and use one of the returned refs.")
+	}
+	if err != nil {
+		return store.MessageWindow{}, err
+	}
+	return window, nil
 }
 
 func (r *runtime) resolveOpenMessageRef(ref string) (int64, error) {

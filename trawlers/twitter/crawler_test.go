@@ -4,6 +4,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,6 +21,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMain(m *testing.M) {
@@ -24,6 +29,39 @@ func TestMain(m *testing.M) {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
 	os.Exit(m.Run())
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "crawler.go", "loadOpenPost")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
+	}
 }
 
 func TestSetupRequirementMapping(t *testing.T) {
@@ -181,6 +219,74 @@ func TestSharedShortRefsRoundTrip(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "needle tweet for shared short refs") {
 		t.Fatalf("open output = %s", out.String())
+	}
+
+	fullRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].ShortRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != search.Results[0].Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.twitter.open.v1.TwitterRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	fullValue, err := crawler.handler(ctx, req).loadOpenPost(search.Results[0].Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortValue, err := crawler.handler(ctx, req).loadOpenPost(search.Results[0].ShortRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "315396663e7f92386dad0338d890835a7b60eca866ba55f1e5deb90c783f68c9", "text": "5cf48e9bf39e27151b3e2e1d9dd5e09c2dd63820d13b20df8b895793e848a91d"}
+		for _, format := range []struct {
+			name  string
+			value output.Format
+		}{{"json", output.JSON}, {"text", output.Text}} {
+			var stdout bytes.Buffer
+			legacyReq := *req
+			legacyReq.Format, legacyReq.Out = format.value, &stdout
+			openErr := crawler.Open(ctx, &legacyReq, ref)
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "twitter", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "twitter", "full", search.Results[0].Ref, map[string]any{"result": fullValue.result, "aliases": fullValue.aliases, "owner_author_id": fullValue.ownerAuthorID}, fullRecord)
+	writeRuntimeOpenEvidence(t, "twitter", "short", search.Results[0].ShortRef, map[string]any{"result": shortValue.result, "aliases": shortValue.aliases, "owner_author_id": shortValue.ownerAuthorID}, shortRecord)
+	captureLegacy("full", search.Results[0].Ref)
+	captureLegacy("short", search.Results[0].ShortRef)
+	_, err = crawler.OpenRecord(ctx, req, "zzzzz")
+	var unknown *cliError
+	if !errors.As(err, &unknown) || unknown.name != "unknown_short_ref" {
+		t.Fatalf("unknown short ref error = %#v", err)
+	}
+	if _, err := rawStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", search.Results[0].Ref, search.Results[0].Ref, "zzzzz", "twitter:tweet/missing", "twitter:tweet/missing"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = crawler.OpenRecord(ctx, req, "zzzzz")
+	var ambiguous *cliError
+	if !errors.As(err, &ambiguous) || ambiguous.name != "ambiguous_short_ref" {
+		t.Fatalf("ambiguous short ref error = %#v", err)
+	}
+	_, err = crawler.OpenRecord(ctx, req, "photos:asset/example")
+	var invalid *cliError
+	if !errors.As(err, &invalid) || invalid.name != "invalid_ref" {
+		t.Fatalf("foreign ref error = %#v", err)
+	}
+	_, err = crawler.OpenRecord(ctx, req, "twitter:tweet/missing")
+	var missing *cliError
+	if !errors.As(err, &missing) || missing.name != "not_found" {
+		t.Fatalf("missing tweet error = %#v", err)
+	}
+	_, err = crawler.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: archivePath + ".missing"}}, search.Results[0].Ref)
+	if err == nil {
+		t.Fatal("missing archive open succeeded")
 	}
 }
 

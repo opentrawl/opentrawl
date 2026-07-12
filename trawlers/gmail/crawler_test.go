@@ -4,7 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,6 +20,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSetupRequirementMapping(t *testing.T) {
@@ -39,6 +44,39 @@ func TestSetupRequirementMapping(t *testing.T) {
 	unavailable := unavailableCrawler.gmailSetupRequirement(context.Background())
 	if unavailable.ID != "account" || unavailable.Kind != control.SetupKindAccount || unavailable.State != control.SetupStateUnavailable || unavailable.Action != control.SetupActionNone || len(unavailable.Command) != 0 {
 		t.Fatalf("unavailable requirement = %#v", unavailable)
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -176,6 +214,82 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	}
 	if opened.ID != "m3" || opened.Headers.ToAddress == "" || opened.Headers.CcAddress == "" {
 		t.Fatalf("opened message = %#v", opened)
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, search.Results[0].Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	shortRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, search.Results[0].ShortRef)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != search.Results[0].Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.gmail.open.v1.GmailRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	load := func(ref string) archive.OpenResult {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		value, loadErr := source.loadOpenMessage(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		return value
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "e60f0336ff1674d0973d371d58c9336df023a99033c40799af322a3f04eef94d", "text": "f7511db26391841b66969110bc676096a71bf3add0cda0f5e0e6143ae2e3c997"}
+		for _, format := range []struct {
+			name  string
+			value ckoutput.Format
+		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
+			readStore = openReadStore(t, ctx, paths.Archive)
+			var stdout bytes.Buffer
+			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
+			_ = readStore.Close()
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "gmail", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "gmail", "full", search.Results[0].Ref, load(search.Results[0].Ref), fullRecord)
+	writeRuntimeOpenEvidence(t, "gmail", "short", search.Results[0].ShortRef, load(search.Results[0].ShortRef), shortRecord)
+	captureLegacy("full", search.Results[0].Ref)
+	captureLegacy("short", search.Results[0].ShortRef)
+	assertOpenRecordError := func(ref, want string) {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		var typed commandError
+		if !errors.As(err, &typed) || typed.name != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	assertOpenRecordError("zzzzz", "unknown_short_ref")
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", search.Results[0].Ref, search.Results[0].Ref, "zzzzz", archive.RefPrefix+"missing", archive.RefPrefix+"missing"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertOpenRecordError("zzzzz", "ambiguous_short_ref")
+	assertOpenRecordError("calendar:event/example", "message_not_found")
+	assertOpenRecordError("gmail:msg/", "message_not_found")
+	assertOpenRecordError("gmail:msg/missing", "message_not_found")
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: paths.Archive + ".missing"}}, search.Results[0].Ref)
+	var archiveFailure commandError
+	if !errors.As(err, &archiveFailure) || archiveFailure.name != "archive_missing" {
+		t.Fatalf("missing archive error = %#v", err)
 	}
 
 	contacts, err := source.ContactExport(ctx, &trawlkit.Request{Paths: paths})

@@ -23,24 +23,31 @@ type openOutput struct {
 }
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(err)
-	}
-	resolved, err := c.resolveOpenRef(ctx, req, ref)
+	result, err := c.loadOpenMessage(ctx, req, ref)
 	if err != nil {
 		return err
 	}
-	result, err := st.OpenMessage(ctx, resolved)
-	if err != nil {
-		return commandErr("message_not_found", "message could not be opened", "search again and pass a gmail:msg ref", err)
-	}
-	result = boundOpenResult(result)
 	_ = logInfo(req, "open_complete", "result=message")
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "open", result)
 	}
 	return printOpenText(req.Out, openOutput{OpenResult: result, shortRef: openShortRef(ctx, req, result.Ref)})
+}
+
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (archive.OpenResult, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archive.OpenResult{}, archiveErr(err)
+	}
+	resolved, err := c.resolveOpenRef(ctx, req, ref)
+	if err != nil {
+		return archive.OpenResult{}, err
+	}
+	result, err := st.OpenMessage(ctx, resolved)
+	if err != nil {
+		return archive.OpenResult{}, commandErr("message_not_found", "message could not be opened", "search again and pass a gmail:msg ref", err)
+	}
+	return boundOpenResult(result), nil
 }
 
 func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

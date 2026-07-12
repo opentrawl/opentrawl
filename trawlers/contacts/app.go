@@ -201,19 +201,27 @@ func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]
 }
 
 func (a *App) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
+	value, err := a.loadOpenPerson(ctx, req, ref)
+	if err != nil {
+		return err
+	}
+	return writeOpenPerson(req, value.person)
+}
+
+func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
+		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	resolved, err := resolveOpenRef(ctx, req, ref)
 	if err != nil {
-		return err
+		return openValue{}, err
 	}
 	person, err := st.FindPerson(ctx, resolved)
 	if err != nil {
-		return err
+		return openValue{}, err
 	}
-	return writeOpenPerson(req, person)
+	return openValue{ref: archive.PersonRef(person.ID), person: person}, nil
 }
 
 func (a *App) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {

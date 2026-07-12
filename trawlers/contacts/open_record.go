@@ -1,35 +1,65 @@
 package clawdex
 
 import (
+	"context"
 	"sort"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	contactsopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/contacts/open/v1"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func projectOpenRecord(ref string, value model.Person) *contactsopenv1.ContactsRecord {
+type openValue struct {
+	ref    string
+	person model.Person
+}
+
+var _ trawlkit.RecordOpener = (*App)(nil)
+
+func (a *App) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	value, err := a.loadOpenPerson(ctx, req, ref)
+	if err != nil {
+		return nil, err
+	}
+	machine := projectOpenRecord(value)
+	data, err := anypb.New(machine)
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: a.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	if err := openrecord.Validate(record); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func projectOpenRecord(value openValue) *contactsopenv1.ContactsRecord {
+	ref, person := value.ref, value.person
 	record := &contactsopenv1.ContactsRecord{
 		Ref:       ref,
-		Name:      value.Name,
-		Aka:       append([]string(nil), value.AKA...),
-		Tags:      append([]string(nil), value.Tags...),
-		Emails:    projectContactValues(value.Emails),
-		Phones:    projectContactValues(value.Phones),
-		Addresses: projectContactValues(value.Addresses),
-		Accounts:  make(map[string]*contactsopenv1.IdentifierList, len(value.Accounts)),
+		Name:      person.Name,
+		Aka:       append([]string(nil), person.AKA...),
+		Tags:      append([]string(nil), person.Tags...),
+		Emails:    projectContactValues(person.Emails),
+		Phones:    projectContactValues(person.Phones),
+		Addresses: projectContactValues(person.Addresses),
+		Accounts:  make(map[string]*contactsopenv1.IdentifierList, len(person.Accounts)),
 	}
 	if record.Ref == "" {
-		record.Ref = archive.PersonRef(value.ID)
+		record.Ref = archive.PersonRef(person.ID)
 	}
-	setOptionalString(&record.SortName, value.SortName)
-	for name, identifiers := range value.Accounts {
+	setOptionalString(&record.SortName, person.SortName)
+	for name, identifiers := range person.Accounts {
 		record.Accounts[name] = &contactsopenv1.IdentifierList{Values: append([]string(nil), identifiers...)}
 	}
-	setOptionalString(&record.Annotation, value.Annotation)
-	setOptionalString(&record.AnnotationStatedAt, value.AnnotationStatedAt)
+	setOptionalString(&record.Annotation, person.Annotation)
+	setOptionalString(&record.AnnotationStatedAt, person.AnnotationStatedAt)
 	return record
 }
 
@@ -54,8 +84,8 @@ func setOptionalString(target **string, value string) {
 
 func recordBool(value bool) *bool { return &value }
 
-func projectOpenPresentation(ref string, value model.Person) *presentationv1.PresentationDocument {
-	record := projectOpenRecord(ref, value)
+func projectOpenPresentation(value openValue) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Name)
 	if title == "" {
 		title = "Contact"

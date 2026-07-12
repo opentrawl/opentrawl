@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -32,6 +33,10 @@ type ChatLister interface {
 
 type Opener interface {
 	Open(ctx context.Context, req *Request, shortRef string) error
+}
+
+type RecordOpener interface {
+	OpenRecord(ctx context.Context, req *Request, ref string) (*openv1.OpenRecord, error)
 }
 
 type ContactExporter interface {

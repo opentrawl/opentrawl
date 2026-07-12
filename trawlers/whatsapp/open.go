@@ -47,34 +47,42 @@ type openMedia struct {
 }
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	messageID, err := c.resolveOpenMessageID(ctx, req, ref)
+	value, err := c.loadOpenMessage(ctx, req, ref)
 	if err != nil {
 		return err
 	}
-	target, err := st.MessageByID(ctx, messageID)
-	if err != nil {
-		if errorsIsNoRows(err) {
-			return commandErr(1, "not_found", "message was not found", "run trawl whatsapp search again and pass one of its refs")
-		}
-		return err
-	}
-	window, err := st.MessageWindow(ctx, target, openWindowEachSide)
-	if err != nil {
-		return err
-	}
-	participants, err := st.GroupParticipants(ctx, target.ChatJID)
-	if err != nil {
-		return err
-	}
-	result := newOpenEnvelope(target, window, participants, req.Format)
+	result := newOpenEnvelope(value.target, value.context, value.participants, req.Format)
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "open", result)
 	}
 	return printOpen(req, result)
+}
+
+func (c *Crawler) loadOpenMessage(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
+	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	messageID, err := c.resolveOpenMessageID(ctx, req, ref)
+	if err != nil {
+		return openValue{}, err
+	}
+	target, err := st.MessageByID(ctx, messageID)
+	if err != nil {
+		if errorsIsNoRows(err) {
+			return openValue{}, commandErr(1, "not_found", "message was not found", "run trawl whatsapp search again and pass one of its refs")
+		}
+		return openValue{}, err
+	}
+	window, err := st.MessageWindow(ctx, target, openWindowEachSide)
+	if err != nil {
+		return openValue{}, err
+	}
+	participants, err := st.GroupParticipants(ctx, target.ChatJID)
+	if err != nil {
+		return openValue{}, err
+	}
+	return openValue{target: target, context: window, participants: participants}, nil
 }
 
 func (c *Crawler) resolveOpenMessageID(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
