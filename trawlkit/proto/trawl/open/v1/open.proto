@@ -5,6 +5,7 @@ package trawl.open.v1;
 option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1";
 
 import "google/protobuf/any.proto";
+import "trawl/federation/v1/federation.proto";
 import "trawl/presentation/v1/presentation.proto";
 
 message OpenRecord {
@@ -12,4 +13,11 @@ message OpenRecord {
   string open_ref = 2;
   google.protobuf.Any data = 3;
   trawl.presentation.v1.PresentationDocument presentation = 4;
+}
+
+message OpenResponse {
+  trawl.federation.v1.OperationOutcome outcome = 1;
+  OpenRecord record = 2;
+  trawl.federation.v1.SourceFailure failure = 3;
+  string requested_ref = 4;
 }

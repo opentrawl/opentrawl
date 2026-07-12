@@ -16,6 +16,7 @@ const crawlerCommandTimeout = trawlkit.DefaultReadTimeout
 // the surface name a person says out loud, the verbs it exposes, and the
 // typed crawler value trawl calls in-process.
 type Source struct {
+	Manifest     control.Manifest
 	ID           string
 	Binary       string
 	Surface      string
@@ -44,27 +45,31 @@ func discoverCrawlers(ctx context.Context) []Source {
 		manifest, err := trawlkitManifest(crawler)
 		if err != nil {
 			id := canonicalizeSourceID(firstNonEmpty(info.ID, info.Surface))
+			manifest := control.NewManifest(id, firstNonEmpty(info.DisplayName, info.Surface, id), "")
 			sources = append(sources, Source{
-				ID:          id,
-				Binary:      id,
+				Manifest:    manifest,
+				ID:          manifest.ID,
+				Binary:      manifest.Binary.Name,
 				Surface:     info.Surface,
-				Aliases:     trimAliases(info.Aliases),
-				DisplayName: firstNonEmpty(info.DisplayName, info.Surface, id),
+				Aliases:     append([]string(nil), manifest.Aliases...),
+				DisplayName: manifest.DisplayName,
 				Crawler:     crawler,
 				MetadataErr: err,
 			})
 			continue
 		}
+		manifest = cloneManifest(manifest)
 		sources = append(sources, Source{
+			Manifest:     manifest,
 			ID:           manifest.ID,
-			Binary:       firstNonEmpty(info.ID, manifest.Binary.Name),
+			Binary:       manifest.Binary.Name,
 			Surface:      info.Surface,
-			Aliases:      trimAliases(info.Aliases),
+			Aliases:      append([]string(nil), manifest.Aliases...),
 			DisplayName:  manifest.DisplayName,
 			Headlines:    append([]string(nil), manifest.Headlines...),
-			Capabilities: manifest.Capabilities,
+			Capabilities: append([]string(nil), manifest.Capabilities...),
 			LogDir:       manifest.Paths.DefaultLogs,
-			Commands:     manifest.Commands,
+			Commands:     cloneCommands(manifest.Commands),
 			Crawler:      crawler,
 		})
 	}

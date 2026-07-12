@@ -7,6 +7,7 @@
 package openv1
 
 import (
+	v11 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	v1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -91,17 +92,90 @@ func (x *OpenRecord) GetPresentation() *v1.PresentationDocument {
 	return nil
 }
 
+type OpenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Outcome       v11.OperationOutcome   `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
+	Record        *OpenRecord            `protobuf:"bytes,2,opt,name=record,proto3" json:"record,omitempty"`
+	Failure       *v11.SourceFailure     `protobuf:"bytes,3,opt,name=failure,proto3" json:"failure,omitempty"`
+	RequestedRef  string                 `protobuf:"bytes,4,opt,name=requested_ref,json=requestedRef,proto3" json:"requested_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OpenResponse) Reset() {
+	*x = OpenResponse{}
+	mi := &file_trawl_open_v1_open_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OpenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OpenResponse) ProtoMessage() {}
+
+func (x *OpenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_open_v1_open_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OpenResponse.ProtoReflect.Descriptor instead.
+func (*OpenResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_open_v1_open_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *OpenResponse) GetOutcome() v11.OperationOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return v11.OperationOutcome(0)
+}
+
+func (x *OpenResponse) GetRecord() *OpenRecord {
+	if x != nil {
+		return x.Record
+	}
+	return nil
+}
+
+func (x *OpenResponse) GetFailure() *v11.SourceFailure {
+	if x != nil {
+		return x.Failure
+	}
+	return nil
+}
+
+func (x *OpenResponse) GetRequestedRef() string {
+	if x != nil {
+		return x.RequestedRef
+	}
+	return ""
+}
+
 var File_trawl_open_v1_open_proto protoreflect.FileDescriptor
 
 const file_trawl_open_v1_open_proto_rawDesc = "" +
 	"\n" +
-	"\x18trawl/open/v1/open.proto\x12\rtrawl.open.v1\x1a\x19google/protobuf/any.proto\x1a(trawl/presentation/v1/presentation.proto\"\xbf\x01\n" +
+	"\x18trawl/open/v1/open.proto\x12\rtrawl.open.v1\x1a\x19google/protobuf/any.proto\x1a$trawl/federation/v1/federation.proto\x1a(trawl/presentation/v1/presentation.proto\"\xbf\x01\n" +
 	"\n" +
 	"OpenRecord\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x19\n" +
 	"\bopen_ref\x18\x02 \x01(\tR\aopenRef\x12(\n" +
 	"\x04data\x18\x03 \x01(\v2\x14.google.protobuf.AnyR\x04data\x12O\n" +
-	"\fpresentation\x18\x04 \x01(\v2+.trawl.presentation.v1.PresentationDocumentR\fpresentationBDZBgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1b\x06proto3"
+	"\fpresentation\x18\x04 \x01(\v2+.trawl.presentation.v1.PresentationDocumentR\fpresentation\"\xe5\x01\n" +
+	"\fOpenResponse\x12?\n" +
+	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x121\n" +
+	"\x06record\x18\x02 \x01(\v2\x19.trawl.open.v1.OpenRecordR\x06record\x12<\n" +
+	"\afailure\x18\x03 \x01(\v2\".trawl.federation.v1.SourceFailureR\afailure\x12#\n" +
+	"\rrequested_ref\x18\x04 \x01(\tR\frequestedRefBDZBgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1b\x06proto3"
 
 var (
 	file_trawl_open_v1_open_proto_rawDescOnce sync.Once
@@ -115,20 +189,26 @@ func file_trawl_open_v1_open_proto_rawDescGZIP() []byte {
 	return file_trawl_open_v1_open_proto_rawDescData
 }
 
-var file_trawl_open_v1_open_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_trawl_open_v1_open_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_trawl_open_v1_open_proto_goTypes = []any{
 	(*OpenRecord)(nil),              // 0: trawl.open.v1.OpenRecord
-	(*anypb.Any)(nil),               // 1: google.protobuf.Any
-	(*v1.PresentationDocument)(nil), // 2: trawl.presentation.v1.PresentationDocument
+	(*OpenResponse)(nil),            // 1: trawl.open.v1.OpenResponse
+	(*anypb.Any)(nil),               // 2: google.protobuf.Any
+	(*v1.PresentationDocument)(nil), // 3: trawl.presentation.v1.PresentationDocument
+	(v11.OperationOutcome)(0),       // 4: trawl.federation.v1.OperationOutcome
+	(*v11.SourceFailure)(nil),       // 5: trawl.federation.v1.SourceFailure
 }
 var file_trawl_open_v1_open_proto_depIdxs = []int32{
-	1, // 0: trawl.open.v1.OpenRecord.data:type_name -> google.protobuf.Any
-	2, // 1: trawl.open.v1.OpenRecord.presentation:type_name -> trawl.presentation.v1.PresentationDocument
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	2, // 0: trawl.open.v1.OpenRecord.data:type_name -> google.protobuf.Any
+	3, // 1: trawl.open.v1.OpenRecord.presentation:type_name -> trawl.presentation.v1.PresentationDocument
+	4, // 2: trawl.open.v1.OpenResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	0, // 3: trawl.open.v1.OpenResponse.record:type_name -> trawl.open.v1.OpenRecord
+	5, // 4: trawl.open.v1.OpenResponse.failure:type_name -> trawl.federation.v1.SourceFailure
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_trawl_open_v1_open_proto_init() }
@@ -142,7 +222,7 @@ func file_trawl_open_v1_open_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_open_v1_open_proto_rawDesc), len(file_trawl_open_v1_open_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

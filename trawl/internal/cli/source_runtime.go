@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -31,7 +32,18 @@ type resolvedSourcePaths struct {
 	paths     trawlkit.Paths
 }
 
-func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sourceStoreAccess, format ckoutput.Format, out io.Writer, fn func(context.Context, *trawlkit.Request) error) (err error) {
+func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sourceStoreAccess, format ckoutput.Format, out io.Writer, fn func(context.Context, *trawlkit.Request) error) error {
+	err := r.withSourceRequestContext(r.ctx, source, verb, storeAccess, format, out, fn)
+	if errors.Is(err, context.DeadlineExceeded) {
+		return sourceTimeout(verb)
+	}
+	return err
+}
+
+func (r *Runtime) withSourceRequestContext(parent context.Context, source Source, verb string, storeAccess sourceStoreAccess, format ckoutput.Format, out io.Writer, fn func(context.Context, *trawlkit.Request) error) (err error) {
+	if err := parent.Err(); err != nil {
+		return err
+	}
 	if source.Crawler == nil {
 		return errorsForMetadata(source)
 	}
@@ -59,7 +71,7 @@ func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sour
 	if err := loadSourceConfig(source, paths); err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(r.ctx, r.timeout)
+	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
 	st, err := openSourceStore(ctx, paths.paths, storeAccess)
 	if err != nil {
@@ -80,7 +92,7 @@ func (r *Runtime) withSourceRequest(source Source, verb string, storeAccess sour
 	}
 	err = fn(ctx, req)
 	if ctx.Err() != nil {
-		return sourceTimeout(verb)
+		return ctx.Err()
 	}
 	return err
 }

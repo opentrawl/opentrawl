@@ -1,0 +1,182 @@
+package cli
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/types/known/anypb"
+)
+
+func TestFederationAdaptersPreserveOrderAndCopyStoredManifest(t *testing.T) {
+	manifest := control.NewManifest("notes", "Notes", "notescrawl")
+	manifest.Aliases = []string{"journal"}
+	manifest.Headlines = []string{"notes"}
+	manifest.Commands["status"] = control.Command{Argv: []string{"notescrawl", "status"}}
+	manifest.Commands["search"] = control.Command{Argv: []string{"notescrawl", "search"}}
+	manifest.Commands["open"] = control.Command{Argv: []string{"notescrawl", "open"}}
+	sources := []Source{
+		{Manifest: manifest, ID: "notes", Surface: "Notes"},
+		{Manifest: control.NewManifest("photos", "Photos", "photoscrawl"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("metadata is malformed")},
+	}
+	runtime := &Runtime{}
+	status := runtime.federationStatusSources(sources)
+	search := runtime.federationSearchSources(sources)
+	open := runtime.federationOpenSources(sources)
+	if status[0].Manifest.ID != "notes" || status[1].Manifest.ID != "photos" || search[0].Manifest.Binary.Name != "notescrawl" || open[0].Manifest.Headlines[0] != "notes" {
+		t.Fatalf("adapters lost manifest facts: %#v %#v %#v", status, search, open)
+	}
+	sources[0].Manifest.Headlines[0] = "changed"
+	sources[0].Manifest.Commands["open"] = control.Command{}
+	if open[0].Manifest.Headlines[0] != "notes" || len(open[0].Manifest.Commands["open"].Argv) == 0 {
+		t.Fatalf("adapter aliases source manifest: %#v", open[0].Manifest)
+	}
+	if _, failure := status[1].Run(context.Background()); failure == nil {
+		t.Fatal("metadata error callback returned no failure")
+	}
+	if _, failure := search[0].Run(context.Background(), trawlkit.Query{}); failure == nil || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_INTERNAL {
+		t.Fatalf("declared search without interface = %#v", failure)
+	}
+	if _, failure := open[0].Run(context.Background(), "n:7"); failure == nil || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_INTERNAL {
+		t.Fatalf("declared open without interface = %#v", failure)
+	}
+	if status[0].SkipReason != "" || search[1].SkipReason != "" || open[1].SkipReason != "" {
+		t.Fatalf("metadata error must win over command declaration")
+	}
+}
+
+func TestFederationAdaptersProjectMixedResponses(t *testing.T) {
+	ensureSyntheticHome(t)
+	archive := filepath.Join(t.TempDir(), "notes.db")
+	store, err := ckstore.Open(context.Background(), ckstore.Options{Path: archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest := control.NewManifest("notes", "Notes", "notescrawl")
+	manifest.Branding.SymbolName = "note.text"
+	manifest.Headlines = []string{"Search notes"}
+	manifest.Commands["status"] = control.Command{}
+	manifest.Commands["search"] = control.Command{}
+	manifest.Commands["open"] = control.Command{}
+	crawler := &adapterCrawler{id: "notes", archive: archive}
+	sources := []Source{
+		{Manifest: manifest, ID: "notes", Surface: "Notes", Crawler: crawler},
+		{Manifest: control.NewManifest("calendar", "Calendar", "calcrawl"), ID: "calendar", Surface: "Calendar"},
+		{Manifest: control.NewManifest("photos", "Photos", "photoscrawl"), ID: "photos", Surface: "Photos", MetadataErr: errors.New("synthetic metadata error")},
+	}
+	runtime := &Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}
+
+	status := federation.Status(context.Background(), runtime.federationStatusSources(sources))
+	if status.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL || len(status.GetSources()) != 1 || len(status.GetFailures()) != 1 || len(status.GetSkippedSources()) != 1 {
+		t.Fatalf("status = %#v", status)
+	}
+	query := trawlkit.Query{Text: "synthetic", Limit: 2}
+	search := federation.Search(context.Background(), runtime.federationSearchSources(sources), query, federationv1.SearchOrder_SEARCH_ORDER_RECENCY, 2)
+	if search.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL || len(search.GetHits()) != 1 || len(search.GetFailures()) != 1 || len(search.GetSkippedSources()) != 1 {
+		t.Fatalf("search = %#v", search)
+	}
+	open := federation.Open(context.Background(), runtime.federationOpenSources(sources), "notes", " short-7 ")
+	if open.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || open.GetRequestedRef() != " short-7 " || crawler.statusCalls != 1 || crawler.searchCalls != 1 || crawler.openCalls != 1 {
+		t.Fatalf("open = %#v, calls = %#v", open, crawler)
+	}
+	unsupported := federation.Open(context.Background(), runtime.federationOpenSources(sources), "calendar", "short-7")
+	if unsupported.GetFailure().GetMessage() != "Open is not supported." {
+		t.Fatalf("unsupported = %#v", unsupported)
+	}
+
+	input, err := json.MarshalIndent([]any{sources[0].Manifest, sources[1].Manifest, sources[2].Manifest}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeRuntimeEvidence(t, "status-adapter-input.json", append(input, '\n'))
+	writeRuntimeEvidence(t, "status-response.pbtxt", []byte(prototext.Format(status)))
+	writeRuntimeEvidence(t, "search-adapter-input.json", append(input, '\n'))
+	writeRuntimeEvidence(t, "search-response.pbtxt", []byte(prototext.Format(search)))
+	openInput, err := json.MarshalIndent(map[string]any{
+		"manifest":      sources[0].Manifest,
+		"requested_ref": " short-7 ",
+		"callback_ref":  "short-7",
+	}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeRuntimeEvidence(t, "open-adapter-input.json", append(openInput, '\n'))
+	writeRuntimeEvidence(t, "open-response.pbtxt", []byte(prototext.Format(open)))
+}
+
+type adapterCrawler struct {
+	id          string
+	archive     string
+	statusCalls int
+	searchCalls int
+	openCalls   int
+}
+
+func (c *adapterCrawler) Info() trawlkit.Info {
+	return trawlkit.Info{ID: c.id, Surface: "Notes", DisplayName: "Notes", DefaultPaths: trawlkit.Paths{Archive: c.archive}}
+}
+
+func (c *adapterCrawler) Verbs() []trawlkit.Verb { return nil }
+
+func (c *adapterCrawler) Status(context.Context, *trawlkit.Request) (*control.Status, error) {
+	c.statusCalls++
+	return &control.Status{AppID: c.id, State: "ok", Summary: "Synthetic archive is ready."}, nil
+}
+
+func (c *adapterCrawler) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
+	return nil, nil
+}
+
+func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
+	c.searchCalls++
+	if query.Text != "synthetic" || query.Limit != 2 {
+		return trawlkit.SearchResult{}, errors.New("query did not preserve its text and limit")
+	}
+	return trawlkit.SearchResult{Results: []trawlkit.Hit{{Source: c.id, Ref: "notes:note/1", ShortRef: "short-7", Snippet: "Synthetic note"}}, TotalMatches: 1}, nil
+}
+
+func (c *adapterCrawler) OpenRecord(_ context.Context, _ *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	c.openCalls++
+	if ref != "short-7" {
+		return nil, errors.New("open ref was not trimmed")
+	}
+	return &openv1.OpenRecord{SourceId: c.id, OpenRef: "notes:note/1", Data: &anypb.Any{TypeUrl: "type.example/Open"}, Presentation: &presentationv1.PresentationDocument{Title: "Synthetic note"}}, nil
+}
+
+func writeRuntimeEvidence(t *testing.T, name string, content []byte) {
+	t.Helper()
+	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
+	if directory == "" {
+		return
+	}
+	if len(content) == 0 {
+		t.Fatalf("evidence %s is empty", name)
+	}
+	path := filepath.Join(directory, name)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(stored) != string(content) {
+		t.Fatalf("evidence %s changed on write", name)
+	}
+}
