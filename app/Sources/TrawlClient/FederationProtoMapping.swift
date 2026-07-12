@@ -4,8 +4,64 @@ private func required<T>(_ value: T?, _ hasValue: Bool) throws -> T {
   guard hasValue, let value else { throw TrawlClientError.invalidProtobuf }
   return value
 }
+
+private func isDigit(_ byte: UInt8) -> Bool {
+  byte >= 48 && byte <= 57
+}
+
+private func number(_ bytes: [UInt8], at index: Int, digits: Int) -> Int {
+  bytes[index..<(index + digits)].reduce(0) { $0 * 10 + Int($1 - 48) }
+}
+
+private func parseRFC3339(_ value: String) -> Date? {
+  let bytes = Array(value.utf8)
+  guard bytes.count >= 20,
+    bytes[4] == 45, bytes[7] == 45, bytes[10] == 84,
+    bytes[13] == 58, bytes[16] == 58,
+    [0, 1, 2, 3, 5, 6, 8, 9, 11, 12, 14, 15, 17, 18].allSatisfy({ isDigit(bytes[$0]) })
+  else { return nil }
+
+  var suffix = 19
+  if bytes[suffix] == 46 {
+    suffix += 1
+    let fractionStart = suffix
+    while suffix < bytes.count, isDigit(bytes[suffix]) {
+      suffix += 1
+    }
+    guard suffix > fractionStart else { return nil }
+  }
+  guard suffix < bytes.count else { return nil }
+  if bytes[suffix] == 90 {
+    guard suffix + 1 == bytes.count else { return nil }
+  } else {
+    guard (bytes[suffix] == 43 || bytes[suffix] == 45), suffix + 6 == bytes.count,
+      isDigit(bytes[suffix + 1]), isDigit(bytes[suffix + 2]), bytes[suffix + 3] == 58,
+      isDigit(bytes[suffix + 4]), isDigit(bytes[suffix + 5])
+    else { return nil }
+  }
+  let offsetHour = bytes[suffix] == 90 ? 0 : number(bytes, at: suffix + 1, digits: 2)
+  let offsetMinute = bytes[suffix] == 90 ? 0 : number(bytes, at: suffix + 4, digits: 2)
+  guard offsetHour <= 23, offsetMinute <= 59 else { return nil }
+  let offset = offsetHour * 3_600 + offsetMinute * 60
+  let localTimestamp = String(decoding: Array(bytes[..<suffix]) + [90], as: UTF8.self)
+  guard let localDate = try? Date(localTimestamp, strategy: .iso8601) else { return nil }
+  let date = localDate.addingTimeInterval(TimeInterval(bytes[suffix] == 45 ? offset : -offset))
+  var calendar = Calendar(identifier: .gregorian)
+  calendar.timeZone = .gmt
+  let components = calendar.dateComponents([.era, .year, .month, .day, .hour, .minute, .second], from: localDate)
+  let year = number(bytes, at: 0, digits: 4)
+  let hasExpectedYear = (year == 0 && components.era == 0 && components.year == 1)
+    || (year > 0 && components.era == 1 && components.year == year)
+  guard hasExpectedYear,
+    components.month == number(bytes, at: 5, digits: 2), components.day == number(bytes, at: 8, digits: 2),
+    components.hour == number(bytes, at: 11, digits: 2), components.minute == number(bytes, at: 14, digits: 2),
+    components.second == number(bytes, at: 17, digits: 2)
+  else { return nil }
+  return date
+}
+
 private func validateRFC3339(_ value: String) throws {
-  guard value.isEmpty || ISO8601DateFormatter().date(from: value) != nil else {
+  guard value.isEmpty || parseRFC3339(value) != nil else {
     throw TrawlClientError.invalidProtobuf
   }
 }
@@ -180,7 +236,7 @@ extension Trawl_Federation_V1_SearchHit {
     let date: Date?
     if timeRfc3339.isEmpty {
       date = nil
-    } else if let parsed = ISO8601DateFormatter().date(from: timeRfc3339) {
+    } else if let parsed = parseRFC3339(timeRfc3339) {
       date = parsed
     } else {
       throw TrawlClientError.invalidProtobuf

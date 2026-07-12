@@ -23,26 +23,91 @@ import Testing
   #expect(model.hits.first?.timeRFC3339 == "2026-07-12T09:30:00Z")
 }
 
-@Test func canonicalStatusRejectsEveryInvalidTimestamp() {
-  let mutations: [(inout Trawl_Federation_V1_SourceStatus) -> Void] = [
-    { $0.generatedRfc3339 = "not-a-time" },
-    { $0.lastSyncRfc3339 = "not-a-time" },
-    { $0.lastImportRfc3339 = "not-a-time" },
-    { $0.lastExportRfc3339 = "not-a-time" },
-    { $0.remote = .with { $0.lastIngestRfc3339 = "not-a-time" } },
-    { $0.remote = .with { $0.lastSyncRfc3339 = "not-a-time" } },
-    { $0.databases = [.with { $0.modifiedRfc3339 = "not-a-time" }] },
+@Test func canonicalMappingsAcceptOptionalAndFractionalRFC3339Timestamps() throws {
+  let timestamps = [
+    "", "2026-07-12T21:51:13Z", "2026-07-12T21:51:13.123Z",
+    "2026-07-12T21:51:13.123456789Z", "2026-07-12T21:51:13+01:30",
+    "2026-07-12T21:51:13.123-01:30", "2026-07-12T21:51:13+23:00",
+    "2026-07-12T21:51:13.123-23:59", "0000-01-01T00:00:00Z",
   ]
-  for mutate in mutations {
+  for timestamp in timestamps {
     var source = Trawl_Federation_V1_SourceStatus()
     source.manifest = .with {
       $0.sourceID = "synthetic"
       $0.surface = "Synthetic"
     }
-    mutate(&source)
-    var response = Trawl_Federation_V1_StatusResponse()
+    source.generatedRfc3339 = timestamp
+    source.lastSyncRfc3339 = timestamp
+    source.lastImportRfc3339 = timestamp
+    source.lastExportRfc3339 = timestamp
+    source.remote = .with {
+      $0.lastIngestRfc3339 = timestamp
+      $0.lastSyncRfc3339 = timestamp
+    }
+    source.databases = [.with { $0.modifiedRfc3339 = timestamp }]
+    var status = Trawl_Federation_V1_StatusResponse()
+    status.outcome = .complete
+    status.sources = [source]
+    let mappedStatus = try status.model().sources[0]
+    #expect(mappedStatus.generatedRFC3339 == timestamp)
+    #expect(mappedStatus.remote?.lastIngestRFC3339 == timestamp)
+    #expect(mappedStatus.databases[0].modifiedRFC3339 == timestamp)
+
+    var hit = Trawl_Federation_V1_SearchHit()
+    hit.sourceID = "synthetic"
+    hit.openRef = "synthetic:record/full"
+    hit.timeRfc3339 = timestamp
+    var search = Trawl_Federation_V1_SearchResponse()
+    search.outcome = .complete
+    search.order = .recency
+    search.hits = [hit]
+    let mappedHit = try search.model().hits[0]
+    #expect(mappedHit.timeRFC3339 == timestamp)
+    #expect((timestamp.isEmpty && mappedHit.time == nil) || (!timestamp.isEmpty && mappedHit.time != nil))
+  }
+}
+
+@Test func canonicalStatusRejectsEveryInvalidTimestamp() {
+  let invalidTimestamps = [
+    "not-a-time", "2026-07-12T21:51:13", "2026-07-12T21:51:13Z trailing",
+    "2026-02-30T21:51:13Z", "2026-07-12T21:51:13.Z", "2026-07-12T21:51:13.1",
+  ]
+  let mutations: [(inout Trawl_Federation_V1_SourceStatus, String) -> Void] = [
+    { $0.generatedRfc3339 = $1 }, { $0.lastSyncRfc3339 = $1 }, { $0.lastImportRfc3339 = $1 },
+    { $0.lastExportRfc3339 = $1 },
+    { source, timestamp in source.remote = .with { $0.lastIngestRfc3339 = timestamp } },
+    { source, timestamp in source.remote = .with { $0.lastSyncRfc3339 = timestamp } },
+    { source, timestamp in source.databases = [.with { $0.modifiedRfc3339 = timestamp }] },
+  ]
+  for timestamp in invalidTimestamps {
+    for mutate in mutations {
+      var source = Trawl_Federation_V1_SourceStatus()
+      source.manifest = .with {
+        $0.sourceID = "synthetic"
+        $0.surface = "Synthetic"
+      }
+      mutate(&source, timestamp)
+      var response = Trawl_Federation_V1_StatusResponse()
+      response.outcome = .complete
+      response.sources = [source]
+      #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
+    }
+  }
+}
+
+@Test func canonicalSearchRejectsEveryInvalidTimestamp() {
+  for timestamp in [
+    "not-a-time", "2026-07-12T21:51:13", "2026-07-12T21:51:13Z trailing",
+    "2026-02-30T21:51:13Z", "2026-07-12T21:51:13.Z", "2026-07-12T21:51:13.1",
+  ] {
+    var hit = Trawl_Federation_V1_SearchHit()
+    hit.sourceID = "synthetic"
+    hit.openRef = "synthetic:record/full"
+    hit.timeRfc3339 = timestamp
+    var response = Trawl_Federation_V1_SearchResponse()
     response.outcome = .complete
-    response.sources = [source]
+    response.order = .recency
+    response.hits = [hit]
     #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
   }
 }
