@@ -1,0 +1,207 @@
+syntax = "proto3";
+
+package trawl.federation.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1;federationv1";
+
+enum OperationOutcome {
+  OPERATION_OUTCOME_UNSPECIFIED = 0;
+  OPERATION_OUTCOME_COMPLETE = 1;
+  OPERATION_OUTCOME_PARTIAL = 2;
+  OPERATION_OUTCOME_FAILED = 3;
+}
+
+enum FailureCode {
+  FAILURE_CODE_UNSPECIFIED = 0;
+  FAILURE_CODE_UNAVAILABLE = 1;
+  FAILURE_CODE_PERMISSION = 2;
+  FAILURE_CODE_AUTHENTICATION = 3;
+  FAILURE_CODE_INVALID_INPUT = 4;
+  FAILURE_CODE_NOT_FOUND = 5;
+  FAILURE_CODE_TIMEOUT = 6;
+  FAILURE_CODE_INTERNAL = 7;
+  FAILURE_CODE_CANCELLED = 8;
+}
+
+enum SearchOrder {
+  SEARCH_ORDER_UNSPECIFIED = 0;
+  SEARCH_ORDER_RECENCY = 1;
+  SEARCH_ORDER_RELEVANCE = 2;
+}
+
+message SourceFailure {
+  string source_id = 1;
+  string surface = 2;
+  FailureCode code = 3;
+  string message = 4;
+  string remedy = 5;
+}
+
+message SkippedSource {
+  string source_id = 1;
+  string surface = 2;
+  string reason = 3;
+}
+
+enum SetupKind {
+  SETUP_KIND_UNSPECIFIED = 0;
+  SETUP_KIND_FULL_DISK_ACCESS = 1;
+  SETUP_KIND_PHOTOS_PERMISSION = 2;
+  SETUP_KIND_ACCOUNT = 3;
+  SETUP_KIND_PAIRING = 4;
+  SETUP_KIND_ARCHIVE_IMPORT = 5;
+}
+
+enum SetupState {
+  SETUP_STATE_UNSPECIFIED = 0;
+  SETUP_STATE_READY = 1;
+  SETUP_STATE_NEEDS_ACTION = 2;
+  SETUP_STATE_UNAVAILABLE = 3;
+}
+
+enum SetupActionKind {
+  SETUP_ACTION_KIND_UNSPECIFIED = 0;
+  SETUP_ACTION_KIND_NONE = 1;
+  SETUP_ACTION_KIND_OPEN_FULL_DISK_ACCESS = 2;
+  SETUP_ACTION_KIND_REQUEST_PHOTOS = 3;
+  SETUP_ACTION_KIND_RUN_COMMAND = 4;
+  SETUP_ACTION_KIND_CHOOSE_ARCHIVE = 5;
+}
+
+message Branding {
+  string symbol_name = 1;
+  string accent_color = 2;
+  string icon_path = 3;
+  string bundle_identifier = 4;
+}
+
+message SourceManifest {
+  string source_id = 1;
+  string surface = 2;
+  Branding branding = 3;
+  repeated string headlines = 4;
+  repeated string capabilities = 5;
+}
+
+message Count {
+  string id = 1;
+  string label = 2;
+  int64 value = 3;
+}
+
+message Freshness {
+  string status = 1;
+  int64 age_seconds = 2;
+  int64 stale_after_seconds = 3;
+}
+
+message SetupRequirement {
+  string id = 1;
+  SetupKind kind = 2;
+  SetupState state = 3;
+  string explanation = 4;
+  SetupActionKind action = 5;
+  repeated string command = 6;
+}
+
+message Database {
+  string id = 1;
+  string label = 2;
+  string kind = 3;
+  string role = 4;
+  string path = 5;
+  string endpoint = 6;
+  string archive = 7;
+  bool is_primary = 8;
+  int64 bytes = 9;
+  string modified_rfc3339 = 10;
+  repeated Count counts = 11;
+}
+
+message Share {
+  bool enabled = 1;
+  string repo_path = 2;
+  string remote = 3;
+  string branch = 4;
+  bool needs_update = 5;
+}
+
+message Remote {
+  bool enabled = 1;
+  string mode = 2;
+  string endpoint = 3;
+  string archive = 4;
+  string last_ingest_rfc3339 = 5;
+  string last_sync_rfc3339 = 6;
+  bool needs_update = 7;
+}
+
+message SourceStatus {
+  SourceManifest manifest = 1;
+  string app_id = 2;
+  string schema_version = 3;
+  string generated_rfc3339 = 4;
+  string state = 5;
+  string summary = 6;
+  string config_path = 7;
+  string database_path = 8;
+  int64 database_bytes = 9;
+  int64 wal_bytes = 10;
+  string last_sync_rfc3339 = 11;
+  string last_import_rfc3339 = 12;
+  string last_export_rfc3339 = 13;
+  repeated Count counts = 14;
+  Freshness freshness = 15;
+  Share share = 16;
+  Remote remote = 17;
+  repeated Database databases = 18;
+  repeated SetupRequirement setup_requirements = 19;
+  repeated string warnings = 20;
+  repeated string errors = 21;
+}
+
+message WhoResolved {
+  string who = 1;
+  repeated string identifiers = 2;
+}
+
+message SearchHit {
+  string source_id = 1;
+  string open_ref = 2;
+  string short_ref = 3;
+  string time_rfc3339 = 4;
+  string who = 5;
+  string where = 6;
+  string calendar = 7;
+  string snippet = 8;
+  bool all_day = 9;
+  optional int64 availability = 10;
+  optional bool unread = 11;
+}
+
+message SearchSourceResult {
+  string source_id = 1;
+  string surface = 2;
+  WhoResolved who_resolved = 3;
+  repeated SearchHit hits = 4;
+  uint64 total_matches = 5;
+  bool truncated = 6;
+}
+
+message StatusResponse {
+  OperationOutcome outcome = 1;
+  repeated SourceStatus sources = 2;
+  repeated SourceFailure failures = 3;
+  repeated SkippedSource skipped_sources = 4;
+}
+
+message SearchResponse {
+  OperationOutcome outcome = 1;
+  SearchOrder order = 2;
+  repeated SearchSourceResult sources = 3;
+  repeated SearchHit hits = 4;
+  repeated SourceFailure failures = 5;
+  repeated SkippedSource skipped_sources = 6;
+  uint32 result_limit = 7;
+  bool truncated = 8;
+}
