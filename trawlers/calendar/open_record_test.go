@@ -65,7 +65,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Synthetic planning"
-blocks: { fields: { fields: { label: "Ref" display: "calendar:event/event-1" } fields: { label: "Start" display: "2026-07-10T14:00:00+02:00" } fields: { label: "End" display: "2026-07-10T15:00:00+02:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "1" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
+blocks: { fields: { fields: { label: "Start" display: "2026-07-10T14:00:00+02:00" } fields: { label: "End" display: "2026-07-10T15:00:00+02:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
 blocks: { prose: { text: "Review the fixture." } }
 actions: { label: "Open event link" url: "https://example.com/event" }
 facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
@@ -82,6 +82,32 @@ facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
 		trimmed.URL = " https://example.com/event "
 		if got := projectOpenPresentation(trimmed).Actions[0].GetUrl(); got != "https://example.com/event" {
 			t.Fatalf("action URL = %q", got)
+		}
+	})
+	t.Run("renders_EventKit_availability_labels", func(t *testing.T) {
+		for _, tc := range []struct {
+			raw   int64
+			label string
+		}{
+			{raw: -1, label: "Not supported"},
+			{raw: 0, label: "Busy"},
+			{raw: 1, label: "Free"},
+			{raw: 2, label: "Tentative"},
+			{raw: 3, label: "Unavailable"},
+			{raw: 99, label: "Unknown"},
+		} {
+			t.Run(tc.label, func(t *testing.T) {
+				fixture := input
+				fixture.Availability = &tc.raw
+				if got := projectOpenRecord(fixture).GetAvailability(); got != tc.raw {
+					t.Fatalf("typed availability = %d, want %d", got, tc.raw)
+				}
+				for _, field := range projectOpenPresentation(fixture).Blocks[0].GetFields().GetFields() {
+					if field.GetLabel() == "Availability" && field.GetDisplay() != tc.label {
+						t.Fatalf("availability display = %q, want %q", field.GetDisplay(), tc.label)
+					}
+				}
+			})
 		}
 	})
 }
@@ -113,13 +139,16 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

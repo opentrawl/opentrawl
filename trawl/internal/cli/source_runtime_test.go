@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"io"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -32,5 +34,21 @@ func TestWithSourceRequestKeepsLegacyTimeoutError(t *testing.T) {
 	err := runtime.withSourceRequest(Source{}, "search", sourceStoreRead, ckoutput.JSON, io.Discard, func(context.Context, *trawlkit.Request) error { return nil })
 	if err == nil || !isTimeoutError(err) {
 		t.Fatalf("legacy err = %v", err)
+	}
+}
+
+func TestOpenSourceStoreMissingArchiveUsesSharedSafeError(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "synthetic-missing.db")
+	_, err := openSourceStore(context.Background(), trawlkit.Paths{Archive: archive}, sourceStoreRead)
+	if err == nil {
+		t.Fatal("openSourceStore returned nil error")
+	}
+	var missing trawlkit.MissingArchiveError
+	if !errors.As(err, &missing) {
+		t.Fatalf("error type = %T, want MissingArchiveError", err)
+	}
+	body := sourceErrorBody(err)
+	if err.Error() != "This source is not ready yet." || body.Code != "unavailable" || body.Message != "This source is not ready yet." || body.Remedy != "" || strings.Contains(err.Error(), archive) || strings.Contains(body.Message, archive) || strings.Contains(body.Remedy, archive) {
+		t.Fatalf("missing archive error=%q body=%#v", err, body)
 	}
 }

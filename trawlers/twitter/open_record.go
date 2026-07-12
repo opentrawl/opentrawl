@@ -89,7 +89,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	if title == "" {
 		title = "Post"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 5)
 	appendPresentationField(&fields, "Time", record.Tweet.GetTime())
 	if record.Tweet.LikeCount != nil {
 		fields = append(fields, &presentationv1.Field{Label: "Likes", Display: strconv.FormatInt(*record.Tweet.LikeCount, 10)})
@@ -101,7 +101,10 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		fields = append(fields, &presentationv1.Field{Label: "Replies", Display: strconv.FormatInt(*record.Tweet.ReplyCount, 10)})
 	}
 	appendPresentationField(&fields, "Counts as of", record.Tweet.GetCountsAsOf())
-	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	blocks := make([]*presentationv1.Block, 0, 6)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
 	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
 	}

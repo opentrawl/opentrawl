@@ -2,7 +2,6 @@ package calcrawl
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
@@ -108,14 +107,14 @@ func projectOpenPresentation(value archive.EventDetail) *presentationv1.Presenta
 	if title == "" {
 		title = "Calendar event"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 12)
 	appendPresentationField(&fields, "Start", record.Start)
 	appendPresentationField(&fields, "End", record.End)
 	fields = append(fields, &presentationv1.Field{Label: "All day", Display: formatPresentationBool(record.AllDay)})
 	appendPresentationField(&fields, "Calendar", record.Calendar)
 	appendPresentationField(&fields, "Account", record.Account)
 	if record.Availability != nil {
-		fields = append(fields, &presentationv1.Field{Label: "Availability", Display: fmt.Sprintf("%d", *record.Availability)})
+		fields = append(fields, &presentationv1.Field{Label: "Availability", Display: formatPresentationAvailability(*record.Availability)})
 	}
 	if location := formatPresentationLocation(record.Location); location != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Location", Display: location})
@@ -132,7 +131,10 @@ func projectOpenPresentation(value archive.EventDetail) *presentationv1.Presenta
 	}
 	appendPresentationField(&fields, "Status", record.GetStatus())
 	fields = append(fields, &presentationv1.Field{Label: "Recurring", Display: formatPresentationBool(record.HasRecurrences)})
-	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	blocks := make([]*presentationv1.Block, 0, 2)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
 	if description := strings.TrimSpace(record.GetDescription()); description != "" {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
 	}
@@ -157,6 +159,23 @@ func formatPresentationBool(value bool) string {
 		return "Yes"
 	}
 	return "No"
+}
+
+func formatPresentationAvailability(value int64) string {
+	switch value {
+	case -1:
+		return "Not supported"
+	case 0:
+		return "Busy"
+	case 1:
+		return "Free"
+	case 2:
+		return "Tentative"
+	case 3:
+		return "Unavailable"
+	default:
+		return "Unknown"
+	}
 }
 
 func formatPresentationLocation(value *calendaropenv1.Location) string {

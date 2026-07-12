@@ -103,7 +103,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertOpenPresentation(t, "photos", input, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Synthetic square."
-blocks: { fields: { fields: { label: "Ref" display: "photos:asset/fixture-1" } fields: { label: "Captured" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4096 bytes" } fields: { label: "Availability" display: "local" } } }
+blocks: { fields: { fields: { label: "Captured" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4096 bytes" } fields: { label: "Availability" display: "local" } } }
 blocks: { prose: { text: "A synthetic scene." } }
 blocks: { prose: { text: "EXAMPLE" } }
 facts: { kind: KIND_WARNING message: "Card status: Stale · source details changed after this card was created · since 10 July 2026" }
@@ -144,13 +144,16 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

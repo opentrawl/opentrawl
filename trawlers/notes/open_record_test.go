@@ -91,7 +91,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	evidenceInput.Body.Text, evidenceInput.Body.Unsupported = body.Text, body.Unsupported
 	assertOpenPresentation(t, "notes", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Packing list"
-blocks: { fields: { fields: { label: "Ref" display: "notes:version/NOTE-FIXTURE/abc123" } fields: { label: "Version ref" display: "notes:version/NOTE-FIXTURE/abc123" } fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "2026-07-08T10:00:00Z" } fields: { label: "Modified" display: "2026-07-10T14:00:00Z" } fields: { label: "Versions" display: "3" } } }
+blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "2026-07-08T10:00:00Z" } fields: { label: "Modified" display: "2026-07-10T14:00:00Z" } fields: { label: "Versions" display: "3" } } }
 blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := body
@@ -131,13 +131,16 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

@@ -41,6 +41,27 @@ type partialError struct {
 	err error
 }
 
+// MissingArchiveError keeps the absent archive path for diagnostics without
+// exposing it through any human or federated error surface.
+type MissingArchiveError struct {
+	path string
+}
+
+func NewMissingArchiveError(path string) MissingArchiveError {
+	return MissingArchiveError{path: path}
+}
+
+func (e MissingArchiveError) Error() string {
+	return "This source is not ready yet."
+}
+
+func (e MissingArchiveError) ErrorBody() output.ErrorBody {
+	return output.ErrorBody{
+		Code:    "unavailable",
+		Message: e.Error(),
+	}
+}
+
 func (e partialError) Error() string {
 	if e.err == nil {
 		return "partial failure"

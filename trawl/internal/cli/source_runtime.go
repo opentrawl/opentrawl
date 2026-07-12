@@ -187,7 +187,7 @@ func openSourceStore(ctx context.Context, paths trawlkit.Paths, access sourceSto
 			return nil, fmt.Errorf("stat archive: %w", err)
 		}
 		if !exists {
-			return nil, ckoutput.UsageError{Err: fmt.Errorf("archive does not exist at %s", paths.Archive)}
+			return nil, trawlkit.NewMissingArchiveError(paths.Archive)
 		}
 		return ckstore.OpenReadOnly(ctx, paths.Archive)
 	case sourceStoreWrite:

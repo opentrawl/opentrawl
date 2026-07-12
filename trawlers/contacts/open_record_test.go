@@ -68,7 +68,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertExactRecord(t, record, &contactsopenv1.ContactsRecord{}, `{"ref":"contacts:person/person_storage_fixture","name":"Avery Example","sort_name":"Example, Avery","aka":["Avery E."],"tags":["project"],"emails":[{"value":"avery@example.com","label":"work","primary":true}],"phones":[{"value":"+15550001111","label":"mobile"}],"addresses":[{"value":"1 Example Street","label":"work"}],"accounts":{"telegram":{"values":["avery_example"]}},"annotation":"Synthetic collaborator.","annotation_stated_at":"2026-07-10"}`)
 	presentation := projectOpenPresentation(value)
-	if presentation.Title != "Avery Example" || len(presentation.Blocks) != 1 || len(presentation.Blocks[0].GetFields().Fields) != 8 {
+	if presentation.Title != "Avery Example" || len(presentation.Blocks) != 1 || len(presentation.Blocks[0].GetFields().Fields) != 7 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	type evidenceContactValue struct {
@@ -98,7 +98,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}{archive.PersonRef(input.ID), input.Name, input.SortName, input.AKA, input.Tags, projectedValues(input.Emails), projectedValues(input.Phones), projectedValues(input.Addresses), input.Accounts, input.Annotation, input.AnnotationStatedAt}
 	assertOpenPresentation(t, "contacts", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Avery Example"
-blocks: { fields: { fields: { label: "Ref" display: "contacts:person/person_storage_fixture" } fields: { label: "Also known as" display: "Avery E." } fields: { label: "Tags" display: "project" } fields: { label: "Emails" display: "avery@example.com (work) [primary]" } fields: { label: "Phones" display: "+15550001111 (mobile)" } fields: { label: "Addresses" display: "1 Example Street (work)" } fields: { label: "Accounts" display: "telegram: avery_example" } fields: { label: "Annotation" display: "Synthetic collaborator." } } }`)
+blocks: { fields: { fields: { label: "Also known as" display: "Avery E." } fields: { label: "Tags" display: "project" } fields: { label: "Emails" display: "avery@example.com (work) [primary]" } fields: { label: "Phones" display: "+15550001111 (mobile)" } fields: { label: "Addresses" display: "1 Example Street (work)" } fields: { label: "Accounts" display: "telegram: avery_example" } fields: { label: "Annotation" display: "Synthetic collaborator." } } }`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Name = ""
@@ -135,13 +135,16 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

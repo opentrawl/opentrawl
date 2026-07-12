@@ -79,7 +79,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}{input, ownerAuthorID}
 	assertOpenPresentation(t, "twitter", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "me (@avery)"
-blocks: { fields: { fields: { label: "Ref" display: "twitter:tweet/tweet-2" } fields: { label: "Time" display: "2026-07-10T14:00:00Z" } fields: { label: "Likes" display: "4" } fields: { label: "Reposts" display: "2" } fields: { label: "Replies" display: "1" } fields: { label: "Counts as of" display: "2026-07-10T15:00:00Z" } } }
+blocks: { fields: { fields: { label: "Time" display: "2026-07-10T14:00:00Z" } fields: { label: "Likes" display: "4" } fields: { label: "Reposts" display: "2" } fields: { label: "Replies" display: "1" } fields: { label: "Counts as of" display: "2026-07-10T15:00:00Z" } } }
 blocks: { prose: { text: "RT @example synthetic text" } }
 blocks: { heading: { text: "Ancestors" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: {} cells: {} cells: { display: "unavailable (not in archive)" } } } }
@@ -124,13 +124,16 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}
