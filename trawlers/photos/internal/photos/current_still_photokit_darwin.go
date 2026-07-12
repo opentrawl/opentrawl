@@ -5,7 +5,7 @@ package photos
 /*
 #cgo darwin LDFLAGS: -framework Foundation -framework Photos -framework ImageIO
 #include <stdlib.h>
-int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut);
+int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut);
 int photoscrawl_prepare_current_still_main_loop(void);
 void photoscrawl_run_current_still_main_loop(void);
 void photoscrawl_stop_current_still_main_loop(void);
@@ -62,10 +62,10 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	cDestination := C.CString(temporary)
 	defer C.free(unsafe.Pointer(cDestination))
 	var mediaType *C.char
-	var orientation, width, height C.longlong
+	var orientation, width, height, callbackMicros, validationMicros C.longlong
 	var cErr, domain, stage *C.char
 	var code C.longlong
-	var cancelled, degraded, inCloud, callbackReturned C.int
+	var cancelled, degraded, inCloud, callbackReturned, photoKitCalls C.int
 	nativeDone := make(chan struct{})
 	go func() {
 		select {
@@ -74,7 +74,7 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 		case <-nativeDone:
 		}
 	}()
-	ok := C.photoscrawl_export_current_still_matching(cUUID, C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage)
+	ok := C.photoscrawl_export_current_still_matching(cUUID, C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage, &callbackMicros, &validationMicros, &photoKitCalls)
 	close(nativeDone)
 	if mediaType != nil {
 		defer C.free(unsafe.Pointer(mediaType))
@@ -88,8 +88,9 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	if stage != nil {
 		defer C.free(unsafe.Pointer(stage))
 	}
+	timings := CurrentStillPhaseTimings{PhotoKitCallbackMicros: int64(callbackMicros), ValidationHashMicros: int64(validationMicros)}
 	if err := ctx.Err(); err != nil {
-		return CurrentStillFact{}, err
+		return failedCurrentStillFactWithCalls(err, timings, int(photoKitCalls))
 	}
 	domainText := ""
 	if domain != nil {
@@ -107,16 +108,20 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 		if reason == "" {
 			reason = "PhotoKit current-still callback did not produce a final image"
 		}
-		return CurrentStillFact{}, currentStillBridgeError(domainText, int64(code), reason, cancelled != 0, degraded != 0, inCloud != 0, callbackReturned != 0, stageText)
+		return failedCurrentStillFactWithCalls(currentStillBridgeError(domainText, int64(code), reason, cancelled != 0, degraded != 0, inCloud != 0, callbackReturned != 0, stageText), timings, int(photoKitCalls))
 	}
+	validationStartedAt := time.Now()
 	if err := os.Rename(temporary, destinationPath); err != nil {
-		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStageRenameOutput, err)
+		timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
+		return failedCurrentStillFactWithCalls(NewCurrentStillStageError(CurrentStillStageRenameOutput, err), timings, int(photoKitCalls))
 	}
 	info, digest, err := InspectOriginalFile(destinationPath)
 	if err != nil {
-		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStageInspectOutput, err)
+		timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
+		return failedCurrentStillFactWithCalls(NewCurrentStillStageError(CurrentStillStageInspectOutput, err), timings, int(photoKitCalls))
 	}
-	return CurrentStillFact{MediaType: C.GoString(mediaType), Orientation: int32(orientation), PixelWidth: int64(width), PixelHeight: int64(height), Size: info.Size(), SHA256: fmt.Sprintf("%x", digest)}, nil
+	timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
+	return CurrentStillFact{MediaType: C.GoString(mediaType), Orientation: int32(orientation), PixelWidth: int64(width), PixelHeight: int64(height), Size: info.Size(), SHA256: fmt.Sprintf("%x", digest), Timings: timings, PhotoKitCalls: int(photoKitCalls)}, nil
 }
 
 func currentStillBridgeError(domain string, code int64, reason string, cancelled, degraded, inCloud, callbackReturned bool, stage string) error {

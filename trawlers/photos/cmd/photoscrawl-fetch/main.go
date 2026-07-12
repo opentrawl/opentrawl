@@ -144,23 +144,24 @@ func runWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
 }
 
 func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
+	helperStartedAt := time.Now()
 	requestPath, responsePath, ok := wirePaths(args, stderr)
 	if !ok {
 		return 2
 	}
 	data, err := readWireRequest(requestPath)
 	if err != nil {
-		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request could not be read", nil))
+		_ = writeCurrentStillWireResponse(responsePath, startedCurrentStillFailure(helperStartedAt, "invalid_request", "PhotoKit current-still request could not be read"))
 		return 1
 	}
 	var request fetchwire.CurrentStillFetchRequest
 	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.ModificationUnixSeconds <= 0 || request.ModificationMicroseconds < 0 || request.ModificationMicroseconds >= 1_000_000 || request.DestinationPath == "" {
-		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request is invalid", nil))
+		_ = writeCurrentStillWireResponse(responsePath, startedCurrentStillFailure(helperStartedAt, "invalid_request", "PhotoKit current-still request is invalid"))
 		return 1
 	}
 	timeout := time.Duration(request.TimeoutMilliseconds) * time.Millisecond
 	if timeout <= 0 || timeout > 10*time.Minute {
-		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request timeout is invalid", nil))
+		_ = writeCurrentStillWireResponse(responsePath, startedCurrentStillFailure(helperStartedAt, "invalid_request", "PhotoKit current-still request timeout is invalid"))
 		return 1
 	}
 	exportCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -169,14 +170,33 @@ func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Wr
 	if err != nil {
 		_ = os.Remove(request.DestinationPath)
 		_ = os.Remove(request.DestinationPath + ".exporting")
-		_ = writeCurrentStillWireResponse(responsePath, currentStillWireErrorResponse(err))
+		response := currentStillWireErrorResponse(err)
+		response.HelperStartedUnixNanos = helperStartedAt.UnixNano()
+		applyCurrentStillErrorTimings(response, err)
+		_ = writeCurrentStillWireResponse(responsePath, response)
 		return 1
 	}
-	if err := writeCurrentStillWireResponse(responsePath, &fetchwire.CurrentStillFetchResponse{Success: true, SizeBytes: fact.Size, Sha256: mustDecodeDigest(fact.SHA256), MediaType: fact.MediaType, Orientation: fact.Orientation, PixelWidth: fact.PixelWidth, PixelHeight: fact.PixelHeight}); err != nil {
+	if err := writeCurrentStillWireResponse(responsePath, &fetchwire.CurrentStillFetchResponse{Success: true, SizeBytes: fact.Size, Sha256: mustDecodeDigest(fact.SHA256), MediaType: fact.MediaType, Orientation: fact.Orientation, PixelWidth: fact.PixelWidth, PixelHeight: fact.PixelHeight, HelperStartedUnixNanos: helperStartedAt.UnixNano(), PhotokitCallbackMicros: fact.Timings.PhotoKitCallbackMicros, ValidationHashMicros: fact.Timings.ValidationHashMicros, PhotokitCalls: int32(fact.PhotoKitCalls)}); err != nil {
 		_ = os.Remove(request.DestinationPath)
 		return 1
 	}
 	return 0
+}
+
+func startedCurrentStillFailure(startedAt time.Time, kind, message string) *fetchwire.CurrentStillFetchResponse {
+	response := failedCurrentStillResponse(kind, message, nil)
+	response.HelperStartedUnixNanos = startedAt.UnixNano()
+	return response
+}
+
+func applyCurrentStillErrorTimings(response *fetchwire.CurrentStillFetchResponse, err error) {
+	var measured *photos.CurrentStillMeasuredError
+	if !errors.As(err, &measured) {
+		return
+	}
+	response.PhotokitCallbackMicros = measured.Timings.PhotoKitCallbackMicros
+	response.ValidationHashMicros = measured.Timings.ValidationHashMicros
+	response.PhotokitCalls = int32(measured.PhotoKitCalls)
 }
 
 func wirePaths(args []string, stderr io.Writer) (string, string, bool) {

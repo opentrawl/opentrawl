@@ -55,6 +55,8 @@ void photoscrawl_stop_current_still_main_loop(void) {
 @property(nonatomic) BOOL cancelled;
 @property(nonatomic) BOOL sawDegraded;
 @property(nonatomic) BOOL sawInCloud;
+@property(nonatomic) CFAbsoluteTime callbackStartedAt;
+@property(nonatomic) CFAbsoluteTime callbackFinishedAt;
 @end
 
 @implementation CSCurrentStillState
@@ -70,6 +72,7 @@ static BOOL csFinishCurrentStill(CSCurrentStillState *state, BOOL timedOut, BOOL
   state.finished = YES;
   state.timedOut = timedOut;
   state.cancelled = cancelled;
+  state.callbackFinishedAt = CFAbsoluteTimeGetCurrent();
   [state.condition unlock];
   return YES;
 }
@@ -144,6 +147,11 @@ static void csStage(char **out, NSString *stage) {
   csError(out, stage);
 }
 
+static void csRecordElapsedMicros(long long *out, CFAbsoluteTime start) {
+  if (out == NULL) return;
+  *out = MAX(1, (long long)ceil((CFAbsoluteTimeGetCurrent() - start) * 1000000.0));
+}
+
 static NSString *csUUID(NSString *identifier) {
   return [[identifier componentsSeparatedByString:@"/"] firstObject].lowercaseString;
 }
@@ -153,7 +161,7 @@ static PHAuthorizationStatus csStatus(void) {
   return [PHPhotoLibrary authorizationStatus];
 }
 
-int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut) {
+int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut) {
   @autoreleasepool {
     if (mediaTypeOut) *mediaTypeOut = NULL;
     if (errorOut) *errorOut = NULL;
@@ -164,6 +172,9 @@ int photoscrawl_export_current_still_matching(const char *assetUUID, long long m
     if (callbackInCloudOut) *callbackInCloudOut = 0;
     if (callbackReturnedOut) *callbackReturnedOut = 0;
     if (stageOut) *stageOut = NULL;
+    if (callbackMicrosOut) *callbackMicrosOut = 0;
+    if (validationMicrosOut) *validationMicrosOut = 0;
+    if (photoKitCallsOut) *photoKitCallsOut = 0;
     NSString *uuid = assetUUID ? [NSString stringWithUTF8String:assetUUID] : @"";
     NSString *path = destinationPath ? [NSString stringWithUTF8String:destinationPath] : @"";
     if (uuid.length == 0 || modificationUnixSeconds <= 0 || modificationMicroseconds < 0 || modificationMicroseconds >= 1000000 || path.length == 0) { csError(errorOut, @"asset UUID, canonical modification instant and destination path are required"); return 0; }
@@ -191,6 +202,8 @@ int photoscrawl_export_current_still_matching(const char *assetUUID, long long m
       [state.condition unlock];
       PHImageRequestOptions *options = [[PHImageRequestOptions alloc] init]; options.version = PHImageRequestOptionsVersionCurrent; options.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat; options.resizeMode = PHImageRequestOptionsResizeModeNone; options.networkAccessAllowed = allowNetwork != 0; options.synchronous = NO;
       PHImageManager *manager = [PHImageManager defaultManager];
+      state.callbackStartedAt = CFAbsoluteTimeGetCurrent();
+      if (photoKitCallsOut) *photoKitCallsOut = 1;
       PHImageRequestID requestID = [manager requestImageDataAndOrientationForAsset:asset options:options resultHandler:^(NSData *result, NSString *resultUTI, CGImagePropertyOrientation resultOrientation, NSDictionary *resultInfo) {
         [state.condition lock];
         if (state.finished) { [state.condition unlock]; return; }
@@ -240,7 +253,10 @@ currentStillFinished:
     NSDictionary *info = state.info;
     BOOL sawDegraded = state.sawDegraded;
     BOOL sawInCloud = state.sawInCloud;
+    CFAbsoluteTime callbackStartedAt = state.callbackStartedAt;
+    CFAbsoluteTime callbackFinishedAt = state.callbackFinishedAt;
     [state.condition unlock];
+    if (callbackMicrosOut && callbackStartedAt > 0 && callbackFinishedAt >= callbackStartedAt) *callbackMicrosOut = MAX(1, (long long)ceil((callbackFinishedAt - callbackStartedAt) * 1000000.0));
     [csCommandCondition lock];
     if (csActiveState == state) csActiveState = nil;
     [csCommandCondition unlock];
@@ -265,9 +281,31 @@ currentStillFinished:
       csError(errorOut, @"PhotoKit current-still callback did not return a final image");
       return 0;
     }
-    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL); if (source == NULL) { csStage(stageOut, @"image_decode"); csError(errorOut, @"PhotoKit current-still bytes are not an image"); return 0; }
-    NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, 0, NULL)); CFRelease(source); NSNumber *width = properties[(NSString *)kCGImagePropertyPixelWidth]; NSNumber *height = properties[(NSString *)kCGImagePropertyPixelHeight]; if (width == nil || height == nil || width.longLongValue <= 0 || height.longLongValue <= 0) { csStage(stageOut, @"image_dimensions"); csError(errorOut, @"PhotoKit current-still image dimensions are invalid"); return 0; }
-    if (![data writeToFile:path options:NSDataWritingAtomic error:nil]) { csStage(stageOut, @"output_write"); csError(errorOut, @"write PhotoKit current-still bytes"); return 0; }
+    CFAbsoluteTime validationStartedAt = CFAbsoluteTimeGetCurrent();
+    CGImageSourceRef source = CGImageSourceCreateWithData((__bridge CFDataRef)data, NULL);
+    if (source == NULL) {
+      csRecordElapsedMicros(validationMicrosOut, validationStartedAt);
+      csStage(stageOut, @"image_decode");
+      csError(errorOut, @"PhotoKit current-still bytes are not an image");
+      return 0;
+    }
+    NSDictionary *properties = CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(source, 0, NULL));
+    CFRelease(source);
+    NSNumber *width = properties[(NSString *)kCGImagePropertyPixelWidth];
+    NSNumber *height = properties[(NSString *)kCGImagePropertyPixelHeight];
+    if (width == nil || height == nil || width.longLongValue <= 0 || height.longLongValue <= 0) {
+      csRecordElapsedMicros(validationMicrosOut, validationStartedAt);
+      csStage(stageOut, @"image_dimensions");
+      csError(errorOut, @"PhotoKit current-still image dimensions are invalid");
+      return 0;
+    }
+    if (![data writeToFile:path options:NSDataWritingAtomic error:nil]) {
+      csRecordElapsedMicros(validationMicrosOut, validationStartedAt);
+      csStage(stageOut, @"output_write");
+      csError(errorOut, @"write PhotoKit current-still bytes");
+      return 0;
+    }
+    csRecordElapsedMicros(validationMicrosOut, validationStartedAt);
     if (mediaTypeOut) csError(mediaTypeOut, uti ?: @"public.image"); if (orientationOut) *orientationOut = orientation; if (pixelWidthOut) *pixelWidthOut = width.longLongValue; if (pixelHeightOut) *pixelHeightOut = height.longLongValue; return 1;
   }
 }
