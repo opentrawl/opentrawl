@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"flag"
@@ -47,39 +46,7 @@ func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Durati
 }
 
 func (r *Runtime) runAppStatus() error {
-	results := r.collectAppStatus(discoverCrawlers(r.ctx))
-	return writeAppResponse(r.stdout, appStatusResponse(results, r.now()))
-}
-
-type appStatusResult struct {
-	Source Source
-	Status StatusEnvelope
-	Err    error
-}
-
-func (r *Runtime) collectAppStatus(sources []Source) []appStatusResult {
-	results := make([]appStatusResult, 0, len(sources))
-	for _, source := range sources {
-		if source.MetadataErr != nil {
-			results = append(results, appStatusResult{
-				Source: source,
-				Status: errorStatus(source, "the crawler did not identify itself"),
-				Err:    source.MetadataErr,
-			})
-			continue
-		}
-		status, err := r.statusSource(source)
-		if err != nil {
-			results = append(results, appStatusResult{
-				Source: source,
-				Status: errorStatus(source, "the crawler did not report its status"),
-				Err:    err,
-			})
-			continue
-		}
-		results = append(results, appStatusResult{Source: source, Status: normalizeStatus(source, status)})
-	}
-	return results
+	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx))
 }
 
 func (r *Runtime) runAppSync() error {
@@ -156,51 +123,20 @@ func (r *Runtime) runAppSearch(args []string) error {
 	if query == "" {
 		return fmt.Errorf("usage: trawl %s search [--source ID] QUERY", appWireCommand)
 	}
-	sources := searchable(discoverCrawlers(r.ctx))
+	sources := discoverCrawlers(r.ctx)
 	if id := strings.TrimSpace(*sourceID); id != "" {
 		selected, ok := findSource(sources, id)
-		if !ok {
-			return writeAppResponse(r.stdout, appInvalidSourceSearchResponse(id))
-		}
+		if !ok { return fmt.Errorf("source %q was not found", id) }
 		sources = []Source{selected}
 	}
-	results := collectSearch(r, sources, query, searchOptions{limit: appSearchLimit})
-	merged := mergedSearchRows(results, appSearchLimit, searchQueryDefaultSort)
-	return writeAppResponse(r.stdout, appSearchResponse(results, merged))
+	return writeAppResponse(r.stdout, r.appSearchResponse(r.ctx, sources, query))
 }
 
 func (r *Runtime) runAppOpen(args []string) error {
-	if len(args) != 1 || strings.TrimSpace(args[0]) == "" {
-		return fmt.Errorf("usage: trawl %s open REF", appWireCommand)
+	if len(args) != 2 {
+		return fmt.Errorf("usage: trawl %s open SOURCE_ID REF", appWireCommand)
 	}
-	ref := strings.TrimSpace(args[0])
-	if sourceID, _, ok := splitOpenRef(ref); ok {
-		source, found := findSource(discoverCrawlers(r.ctx), sourceID)
-		if !found {
-			return writeAppResponse(r.stdout, appUnknownOpenResponse(sourceID, ref))
-		}
-		output, err := r.appOpen(source, ref)
-		return writeAppResponse(r.stdout, appOpenResponse(source, ref, output.Bytes(), err))
-	}
-	if strings.Contains(ref, ":") {
-		return writeAppResponse(r.stdout, appInvalidOpenResponse(ref))
-	}
-	return writeAppResponse(r.stdout, appInvalidOpenResponse(ref))
-}
-
-func (r *Runtime) appOpen(source Source, ref string) (*bytes.Buffer, error) {
-	var output bytes.Buffer
-	if source.MetadataErr != nil {
-		return &output, source.MetadataErr
-	}
-	opener, ok := source.Crawler.(trawlkit.Opener)
-	if !ok {
-		return &output, fmt.Errorf("source does not support open")
-	}
-	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(false), &output, func(ctx context.Context, req *trawlkit.Request) error {
-		return opener.Open(ctx, req, ref)
-	})
-	return &output, err
+	return writeAppResponse(r.stdout, r.appOpenResponse(r.ctx, args[0], args[1]))
 }
 
 func writeAppResponse(w io.Writer, message proto.Message) error {

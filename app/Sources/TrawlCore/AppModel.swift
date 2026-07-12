@@ -6,6 +6,8 @@ import TrawlClient
 public enum HomePhase: Sendable, Equatable {
   case loading
   case ready
+  case partial
+  case timedOut
   case failed(String)
 }
 
@@ -18,6 +20,7 @@ public final class AppModel {
   public private(set) var phase: HomePhase = .loading
   public private(set) var sources: [SourceStatus] = []
   public private(set) var statusFailures: [SourceFailure] = []
+  public private(set) var skippedSources: [SkippedSource] = []
   public private(set) var completion: FanoutCompletion = .complete
   public private(set) var isSyncing = false
   public private(set) var syncMessage: String?
@@ -42,12 +45,23 @@ public final class AppModel {
       let response = try await client.status()
       sources = response.sources
       statusFailures = response.failures
+      skippedSources = response.skippedSources
       completion = response.outcome
-      phase = .ready
+      if response.outcome == .failed, !response.failures.isEmpty, response.failures.allSatisfy({ $0.code == .timeout }) {
+        phase = .timedOut
+      } else if response.outcome == .failed {
+        phase = .failed(response.failures.first?.message ?? "No source status check succeeded.")
+      } else if response.outcome == .partial {
+        phase = .partial
+      } else {
+        phase = .ready
+      }
     } catch is CancellationError {
       return
     } catch TrawlClientError.cancelled {
       return
+    } catch TrawlClientError.timedOut {
+      phase = .timedOut
     } catch {
       phase = .failed(error.localizedDescription)
     }

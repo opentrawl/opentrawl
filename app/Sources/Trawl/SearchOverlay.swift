@@ -103,7 +103,7 @@ struct SearchOverlay: View {
     switch model.phase {
     case .loading:
       onTrafficChange(.searching(sourceID: interaction.sourceID), nil)
-    case .complete, .partial, .failed:
+    case .complete, .partial, .skipped, .failed:
       let failedSourceIDs = Set(model.failures.map(\.sourceID))
       let requestedSourceIDs = interaction.sourceID.map { Set([$0]) }
         ?? Set(sourceStatuses.map(\.id))

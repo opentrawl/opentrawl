@@ -40,7 +40,7 @@ public final class SearchSourceResolver {
   }
 
   public func displayName(for sourceID: String) -> String? {
-    statuses.first(where: { $0.id == sourceID })?.name
+    statuses.first(where: { $0.id == sourceID })?.manifest.surface
   }
 
   public func displayNameOrUnavailable(for sourceID: String) -> String {
@@ -63,6 +63,7 @@ public enum SearchPhase: Sendable, Equatable {
   case loading
   case complete
   case partial
+  case skipped
   case failed(String)
   case timedOut
 }
@@ -72,6 +73,7 @@ public enum SearchOpenPhase: Sendable, Equatable {
   case loading
   case output
   case failed(String)
+  case timedOut(String)
 }
 
 @MainActor
@@ -89,6 +91,10 @@ public final class SearchModel {
   public private(set) var phase: SearchPhase = .idle
   public private(set) var results: [SearchHit] = []
   public private(set) var failures: [SourceFailure] = []
+  public private(set) var skippedSources: [SkippedSource] = []
+  public private(set) var sourceResults: [SearchSourceResult] = []
+  public private(set) var order: SearchOrder = .recency
+  public private(set) var sourceSurfaces: [String: String] = [:]
   public private(set) var resultLimit: UInt32 = 0
   public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
@@ -117,6 +123,8 @@ public final class SearchModel {
     openGeneration &+= 1
     results = []
     failures = []
+    skippedSources = []
+    sourceResults = []
     resultLimit = 0
     isTruncated = false
     phase = .idle
@@ -132,6 +140,8 @@ public final class SearchModel {
     guard !query.isEmpty else {
       results = []
       failures = []
+      skippedSources = []
+      sourceResults = []
       resultLimit = 0
       isTruncated = false
       phase = .idle
@@ -142,6 +152,8 @@ public final class SearchModel {
 
     results = []
     failures = []
+    skippedSources = []
+    sourceResults = []
     resultLimit = 0
     isTruncated = false
     phase = .loading
@@ -164,15 +176,19 @@ public final class SearchModel {
 
       results = response.hits
       failures = response.failures
+      skippedSources = response.skippedSources
+      sourceResults = response.sources
+      sourceSurfaces = Dictionary(uniqueKeysWithValues: response.sources.map { ($0.sourceID, $0.surface) })
+      order = response.order
       resultLimit = response.resultLimit
       isTruncated = response.truncated
       switch response.outcome {
       case .complete:
         phase = .complete
       case .partial:
-        phase = .partial
+        phase = response.hits.isEmpty && response.failures.isEmpty && !response.skippedSources.isEmpty ? .skipped : .partial
       case .failed:
-        phase = .failed(failureGuidance ?? "No source returned search results.")
+        phase = response.hits.isEmpty && !response.failures.isEmpty && response.failures.allSatisfy({ $0.code == .timeout }) ? .timedOut : .failed(failureGuidance ?? "No source returned search results.")
       }
     } catch is CancellationError {
       return
@@ -205,16 +221,20 @@ public final class SearchModel {
     openResult = nil
     observe(.opening(hit.id))
     do {
-      let response = try await client.open(hit.id)
+      let ref = hit.shortRef.isEmpty ? hit.openRef : hit.shortRef
+      let response = try await client.open(sourceID: hit.sourceID, ref: ref)
       observe(.openResponse(hit.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
       openResult = response
       switch response.outcome {
-      case .complete, .partial:
+      case .complete:
         openPhase = .output
+      case .partial:
+        openPhase = .failed(TrawlClientError.invalidProtobuf.localizedDescription)
       case .failed:
-        openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.")
+        if response.failure?.code == .timeout { openPhase = .timedOut(response.failure?.message ?? "Opening this result timed out.") }
+        else { openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.") }
       }
     } catch is CancellationError {
       return
@@ -223,16 +243,32 @@ public final class SearchModel {
     } catch {
       guard token == openGeneration else { return }
       observe(.openFailed(hit.id, error.localizedDescription))
-      openPhase = .failed(error.localizedDescription)
+      if let clientError = error as? TrawlClientError, clientError == .timedOut {
+        openPhase = .timedOut(error.localizedDescription)
+      } else {
+        openPhase = .failed(error.localizedDescription)
+      }
     }
   }
 
   public var failureGuidance: String? {
     guard let first = failures.first else { return nil }
-    let source = first.sourceName.isEmpty ? "A source" : first.sourceName
+    let source = first.sourceName.isEmpty ? (sourceSurfaces[first.sourceID] ?? "A source") : first.sourceName
     let remedy = first.remedy.isEmpty ? "" : " \(first.remedy)"
     let more = failures.count > 1 ? " \(failures.count - 1) more source failures." : ""
     return "\(source): \(first.message)\(remedy)\(more)"
+  }
+
+  public var hasTimeoutFailure: Bool {
+    failures.contains(where: { $0.code == .timeout })
+  }
+
+  public func sourceDisplayName(for sourceID: String, resolvedName: String?) -> String {
+    resolvedName ?? sourceSurfaces[sourceID] ?? SearchSourceResolver.unavailableDisplayName
+  }
+
+  public func displayTitle(for hit: SearchHit) -> String {
+    [hit.who, hit.where, hit.calendar, sourceSurfaces[hit.sourceID] ?? ""].first(where: { !$0.isEmpty }) ?? "Untitled result"
   }
 
   private func searchWithinLimit(_ query: String, source: String?) async throws -> SearchResponse {

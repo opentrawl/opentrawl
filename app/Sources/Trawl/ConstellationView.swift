@@ -323,8 +323,8 @@ private struct SourceNode: View {
         VStack(spacing: 7) {
           SourceIconBadge(sourceID: source.id, diameter: diameter, state: source.state)
           SourceLabel(
-            primary: source.counts.first?.display ?? source.name,
-            lastSynced: source.lastSyncedDisplay
+            title: SourceRestingCopy.title(for: source),
+            detail: SourceRestingCopy.detail(for: source)
           )
         }
         .frame(
@@ -349,8 +349,8 @@ private struct SourceNode: View {
     .focusable()
     .focused($isFocused)
     .focusEffectDisabled()
-    .help("Search \(source.name)")
-    .accessibilityLabel("Search \(source.name), \(source.summary)")
+    .help("Search \(source.manifest.surface)")
+    .accessibilityLabel("Search \(source.manifest.surface), \(source.summary)")
   }
 }
 
@@ -363,16 +363,17 @@ private struct SourceIconBadge: View {
     ZStack(alignment: .bottomTrailing) {
       SourceIconView(sourceID: sourceID, size: diameter)
         .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
-      Circle()
-        .fill(statusColour)
-        .frame(width: 12, height: 12)
-        .overlay(Circle().stroke(.white, lineWidth: 2))
+      if state != "ok" {
+        Circle()
+          .fill(statusColour)
+          .frame(width: 12, height: 12)
+          .overlay(Circle().stroke(.white, lineWidth: 2))
+      }
     }
   }
 
   private var statusColour: Color {
     switch state {
-    case "ok": .green
     case "stale": .orange
     default: TrawlDesign.brandRed
     }
@@ -380,32 +381,27 @@ private struct SourceIconBadge: View {
 }
 
 private struct SourceLabel: View {
-  let primary: String
-  let lastSynced: String
+  let title: String
+  let detail: String?
 
   var body: some View {
     VStack(spacing: 2) {
-      Text(primary)
+      Text(title)
         .font(.body.weight(.semibold))
         .foregroundStyle(.primary)
         .lineLimit(1)
         .minimumScaleFactor(0.88)
-      Text(syncText)
-        .font(.callout)
-        .foregroundStyle(.primary.opacity(0.78))
-        .lineLimit(1)
-        .minimumScaleFactor(0.88)
+      if let detail {
+        Text(detail)
+          .font(.callout)
+          .foregroundStyle(.primary.opacity(0.78))
+          .lineLimit(1)
+          .minimumScaleFactor(0.88)
+      }
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 5)
     .background(.thinMaterial, in: .rect(cornerRadius: 9))
     .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
-  }
-
-  private var syncText: LocalizedStringKey {
-    if lastSynced == "not synced yet" || lastSynced.isEmpty {
-      return "Not synced yet"
-    }
-    return "Last synced \(lastSynced)"
   }
 }

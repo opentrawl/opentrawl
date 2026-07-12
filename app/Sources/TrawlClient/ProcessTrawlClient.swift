@@ -41,7 +41,7 @@ public struct ProcessTrawlClient: TrawlClient {
     try await response(
       arguments: ["__app", "status"],
       deadline: operationDeadline,
-      as: Trawl_App_V1_StatusResponse.self
+      as: Trawl_Federation_V1_StatusResponse.self
     ).model()
   }
 
@@ -62,15 +62,15 @@ public struct ProcessTrawlClient: TrawlClient {
     return try await response(
       arguments: arguments,
       deadline: searchDeadline,
-      as: Trawl_App_V1_SearchResponse.self
+      as: Trawl_Federation_V1_SearchResponse.self
     ).model()
   }
 
-  public func open(_ ref: String) async throws -> OpenResponse {
+  public func open(sourceID: String, ref: String) async throws -> OpenResponse {
     try await response(
-      arguments: ["__app", "open", ref],
+      arguments: ["__app", "open", sourceID, ref],
       deadline: operationDeadline,
-      as: Trawl_App_V1_OpenResponse.self
+      as: Trawl_Open_V1_OpenResponse.self
     ).model()
   }
 
@@ -156,8 +156,12 @@ public struct ProcessTrawlClient: TrawlClient {
       }
       switch first {
       case let .processResult(result):
-        if result.terminatedBySignal, !invocation.terminationWasRequested {
-          throw TrawlClientError.terminatedBySignal(result.exitCode)
+        if let error = Self.unexpectedTerminationError(
+          terminatedBySignal: result.terminatedBySignal,
+          exitCode: result.exitCode,
+          terminationWasRequested: invocation.terminationWasRequested
+        ) {
+          throw error
         }
         return result
       case .deadlineReached:
@@ -170,6 +174,15 @@ public struct ProcessTrawlClient: TrawlClient {
         throw TrawlClientError.timedOut
       }
     }
+  }
+
+  static func unexpectedTerminationError(
+    terminatedBySignal: Bool,
+    exitCode: Int32,
+    terminationWasRequested: Bool
+  ) -> TrawlClientError? {
+    guard terminatedBySignal, !terminationWasRequested else { return nil }
+    return .terminatedBySignal(exitCode)
   }
 }
 
