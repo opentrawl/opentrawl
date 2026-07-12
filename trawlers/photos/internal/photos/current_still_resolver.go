@@ -19,10 +19,37 @@ const (
 )
 
 type CurrentStillRequest struct {
-	SourceLibraryID  string
-	AssetUUID        string
-	ModificationDate string
-	AllowNetwork     bool
+	SourceLibraryID string
+	AssetUUID       string
+	Modification    CurrentStillModification
+	AllowNetwork    bool
+}
+
+type CurrentStillModification struct {
+	UnixSeconds  int64
+	Microseconds int32
+}
+
+func ParseCurrentStillModification(value string) (CurrentStillModification, error) {
+	parsed, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
+	if err != nil {
+		return CurrentStillModification{}, fmt.Errorf("parse current-still modification date: %w", err)
+	}
+	seconds := parsed.Unix()
+	microseconds := int32((parsed.Nanosecond() + 500) / 1000)
+	if microseconds == 1_000_000 {
+		seconds++
+		microseconds = 0
+	}
+	modification := CurrentStillModification{UnixSeconds: seconds, Microseconds: microseconds}
+	if !modification.valid() {
+		return CurrentStillModification{}, errors.New("current-still modification date is outside the supported range")
+	}
+	return modification, nil
+}
+
+func (m CurrentStillModification) valid() bool {
+	return m.UnixSeconds > 0 && m.Microseconds >= 0 && m.Microseconds < 1_000_000
 }
 
 type CurrentStillFact struct {
@@ -79,11 +106,10 @@ func (r *CurrentStillResolver) Resolve(ctx context.Context, request CurrentStill
 	}
 	request.SourceLibraryID = strings.TrimSpace(request.SourceLibraryID)
 	request.AssetUUID = strings.ToLower(strings.TrimSpace(request.AssetUUID))
-	request.ModificationDate = strings.TrimSpace(request.ModificationDate)
-	if request.SourceLibraryID == "" || request.AssetUUID == "" || request.ModificationDate == "" {
-		return CurrentStillResolution{}, errors.New("source library ID, asset UUID and modification date are required for current-still resolution")
+	if request.SourceLibraryID == "" || request.AssetUUID == "" || !request.Modification.valid() {
+		return CurrentStillResolution{}, errors.New("source library ID, asset UUID and canonical modification instant are required for current-still resolution")
 	}
-	path := CurrentStillCachePath(r.cache.root, request.SourceLibraryID, request.AssetUUID, request.ModificationDate)
+	path := CurrentStillCachePath(r.cache.root, request.SourceLibraryID, request.AssetUUID, request.Modification)
 	lock, err := r.cache.lock(ctx, path, syscall.LOCK_EX)
 	if err != nil {
 		return CurrentStillResolution{}, fmt.Errorf("lock current-still cache entry: %w", err)

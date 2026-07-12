@@ -7,9 +7,11 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,11 +159,67 @@ func TestWireErrorResponsePreservesTypedPhotoKitFailure(t *testing.T) {
 	}
 }
 
+func TestCurrentStillWireErrorResponsePreservesCallbackFacts(t *testing.T) {
+	response := currentStillWireErrorResponse(photos.NewPhotoKitCallbackError("PHPhotosErrorDomain", 3303, "callback /private/source", true, true, false, true))
+	if response.FailureKind != "photokit_export" || response.ErrorDomain != "PHPhotosErrorDomain" || response.ErrorCode != 3303 {
+		t.Fatalf("response = %#v", response)
+	}
+	if strings.Contains(response.ErrorMessage, "/private/source") {
+		t.Fatalf("response leaked callback detail: %q", response.ErrorMessage)
+	}
+	for _, want := range []string{"cancelled=true", "degraded=true", "in_cloud=false", "callback_returned=true"} {
+		if !strings.Contains(response.ErrorMessage, want) {
+			t.Fatalf("response message = %q, missing %q", response.ErrorMessage, want)
+		}
+	}
+}
+
+func TestCurrentStillWireErrorResponsePreservesTimeoutFacts(t *testing.T) {
+	err := photos.NewPhotoKitCallbackTimeoutError("", 0, "photokit original export timed out", false, true, true)
+	if !errors.Is(err, photos.ErrPhotoKitExportTimedOut) {
+		t.Fatalf("error = %v, want timeout", err)
+	}
+	response := currentStillWireErrorResponse(err)
+	if response.FailureKind != "timeout" {
+		t.Fatalf("response = %#v", response)
+	}
+	for _, want := range []string{"degraded=true", "in_cloud=true", "timed_out=true"} {
+		if !strings.Contains(response.ErrorMessage, want) {
+			t.Fatalf("response message = %q, missing %q", response.ErrorMessage, want)
+		}
+	}
+}
+
+func TestCurrentStillWireErrorResponseUsesFixedStageTokensWithoutLeakage(t *testing.T) {
+	for _, stage := range []string{
+		photos.CurrentStillStageSelectionValidation,
+		photos.CurrentStillStageImageDecode,
+		photos.CurrentStillStageImageDimensions,
+		photos.CurrentStillStageOutputWrite,
+		photos.CurrentStillStagePrepareDestination,
+		photos.CurrentStillStageRenameOutput,
+		photos.CurrentStillStageInspectOutput,
+	} {
+		err := photos.NewCurrentStillStageError(stage, errors.New("synthetic failure at /private/runtime/asset-uuid"))
+		response := currentStillWireErrorResponse(err)
+		if response.FailureKind != "export_failed" {
+			t.Fatalf("stage=%q response=%#v", stage, response)
+		}
+		want := fmt.Sprintf("PhotoKit current-still request failed (stage=%s)", stage)
+		if response.ErrorMessage != want {
+			t.Fatalf("stage=%q message=%q want=%q", stage, response.ErrorMessage, want)
+		}
+		if strings.Contains(response.ErrorMessage, "/private/runtime") || strings.Contains(response.ErrorMessage, "asset-uuid") {
+			t.Fatalf("stage=%q response leaked input: %q", stage, response.ErrorMessage)
+		}
+	}
+}
+
 func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T) {
 	oldExport := exportCurrentStill
 	defer func() { exportCurrentStill = oldExport }()
 	exportCurrentStill = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
-		if request.SourceLibraryID != "synthetic-library" || request.AssetUUID != "synthetic-asset" || request.ModificationDate != "2026-07-11T12:00:00.125Z" || request.AllowNetwork {
+		if request.SourceLibraryID != "synthetic-library" || request.AssetUUID != "synthetic-asset" || request.Modification.UnixSeconds != 1783771200 || request.Modification.Microseconds != 125000 || request.AllowNetwork {
 			t.Fatalf("request = %#v", request)
 		}
 		data := []byte("exact synthetic current-still bytes")
@@ -174,7 +232,7 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 	requestPath := filepath.Join(dir, "request.pb")
 	responsePath := filepath.Join(dir, "response.pb")
 	destination := filepath.Join(dir, "current.heic")
-	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationDate: "2026-07-11T12:00:00.125Z", DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
+	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
 	if err != nil {
 		t.Fatal(err)
 	}

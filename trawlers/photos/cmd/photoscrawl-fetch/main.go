@@ -131,7 +131,7 @@ func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Wr
 		return 1
 	}
 	var request fetchwire.CurrentStillFetchRequest
-	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.ModificationDate == "" || request.DestinationPath == "" {
+	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.ModificationUnixSeconds <= 0 || request.ModificationMicroseconds < 0 || request.ModificationMicroseconds >= 1_000_000 || request.DestinationPath == "" {
 		_ = writeCurrentStillWireResponse(responsePath, failedCurrentStillResponse("invalid_request", "PhotoKit current-still request is invalid", nil))
 		return 1
 	}
@@ -142,7 +142,7 @@ func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Wr
 	}
 	exportCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	fact, err := exportCurrentStill(exportCtx, photos.CurrentStillRequest{SourceLibraryID: request.SourceLibraryId, AssetUUID: request.AssetUuid, ModificationDate: request.ModificationDate, AllowNetwork: request.AllowNetwork}, request.DestinationPath)
+	fact, err := exportCurrentStill(exportCtx, photos.CurrentStillRequest{SourceLibraryID: request.SourceLibraryId, AssetUUID: request.AssetUuid, Modification: photos.CurrentStillModification{UnixSeconds: request.ModificationUnixSeconds, Microseconds: request.ModificationMicroseconds}, AllowNetwork: request.AllowNetwork}, request.DestinationPath)
 	if err != nil {
 		_ = os.Remove(request.DestinationPath)
 		_ = os.Remove(request.DestinationPath + ".exporting")
@@ -176,19 +176,27 @@ func mustDecodeDigest(hexDigest string) []byte {
 func currentStillWireErrorResponse(err error) *fetchwire.CurrentStillFetchResponse {
 	var accessErr *photos.PhotoLibraryAccessError
 	var exportErr *photos.PhotoKitExportError
+	var stageErr *photos.CurrentStillStageError
 	switch {
 	case errors.As(err, &accessErr):
 		return failedCurrentStillResponse("photos_access", accessErr.Error(), accessErr)
 	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
 		return failedCurrentStillResponse("asset_not_found", "PhotoKit could not find the selected asset", nil)
-	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, photos.ErrPhotoKitExportTimedOut):
-		return failedCurrentStillResponse("timeout", "PhotoKit current-still request timed out", nil)
 	case errors.As(err, &exportErr):
-		safe := photos.NewPhotoKitExportError(exportErr.Domain, exportErr.Code, exportErr.Reason)
-		response := failedCurrentStillResponse("photokit_export", safe.Reason, nil)
+		safe := photos.NewPhotoKitCallbackError(exportErr.Domain, exportErr.Code, exportErr.Reason, exportErr.CallbackCancelled, exportErr.CallbackDegraded, exportErr.CallbackInCloud, exportErr.CallbackReturned)
+		safe.CallbackTimedOut = exportErr.CallbackTimedOut
+		kind := "photokit_export"
+		if safe.CallbackTimedOut {
+			kind = "timeout"
+		}
+		response := failedCurrentStillResponse(kind, safe.Reason+" ("+safe.CallbackFacts()+")", nil)
 		response.ErrorDomain = safe.Domain
 		response.ErrorCode = safe.Code
 		return response
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, photos.ErrPhotoKitExportTimedOut):
+		return failedCurrentStillResponse("timeout", "PhotoKit current-still request timed out", nil)
+	case errors.As(err, &stageErr):
+		return failedCurrentStillResponse("export_failed", fmt.Sprintf("PhotoKit current-still request failed (stage=%s)", stageErr.Stage()), nil)
 	default:
 		return failedCurrentStillResponse("export_failed", "PhotoKit current-still request failed", nil)
 	}

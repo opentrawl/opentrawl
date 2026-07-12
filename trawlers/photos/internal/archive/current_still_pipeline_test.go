@@ -43,3 +43,18 @@ func TestCurrentStillMIMEType(t *testing.T) {
 		t.Fatalf("unknown type error = %v", err)
 	}
 }
+
+func TestCurrentStillRequestCanonicalizesFloatDerivedFraction(t *testing.T) {
+	input := classifyInput{
+		SourceLibraryID:  "source-library:synthetic",
+		LocalIdentifier:  "synthetic-asset",
+		ModificationDate: "2023-03-24T05:18:11.797890305Z",
+	}
+	request, err := input.currentStillRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Modification.UnixSeconds != 1679635091 || request.Modification.Microseconds != 797890 {
+		t.Fatalf("request modification = %#v", request.Modification)
+	}
+}

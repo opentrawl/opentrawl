@@ -75,7 +75,7 @@ func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testi
 	launchPhotoKitCurrentStillApp = func(context.Context, string, string) error { launched = true; return nil }
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := ExportCurrentStillThroughApp(ctx, CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", ModificationDate: "2026-07-11T12:00:00.125Z"}, filepath.Join(t.TempDir(), "current.heic"))
+	_, err := ExportCurrentStillThroughApp(ctx, CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}, filepath.Join(t.TempDir(), "current.heic"))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v", err)
 	}

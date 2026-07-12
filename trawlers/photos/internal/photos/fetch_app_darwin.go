@@ -379,8 +379,8 @@ func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillReque
 	responsePath := filepath.Join(wireDir, "response.pb")
 	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{
 		SourceLibraryId: request.SourceLibraryID, AssetUuid: request.AssetUUID,
-		ModificationDate: request.ModificationDate, DestinationPath: destinationPath,
-		AllowNetwork: request.AllowNetwork, TimeoutMilliseconds: timeout.Milliseconds(),
+		ModificationUnixSeconds: request.Modification.UnixSeconds, DestinationPath: destinationPath,
+		AllowNetwork: request.AllowNetwork, TimeoutMilliseconds: timeout.Milliseconds(), ModificationMicroseconds: request.Modification.Microseconds,
 	})
 	if err != nil {
 		return CurrentStillFact{}, fmt.Errorf("encode current-still request: %w", err)

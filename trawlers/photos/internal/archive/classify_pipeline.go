@@ -157,7 +157,11 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			logIntField("fields", metadata.Proof.FieldCount),
 			logIntField("excluded", metadata.Proof.ExclusionCount),
 		)
-		currentStill, err := currentStillResolver.Resolve(ctx, item.input.currentStillRequest())
+		currentStillRequest, err := item.input.currentStillRequest()
+		if err != nil {
+			return model.Call{}, err
+		}
+		currentStill, err := currentStillResolver.Resolve(ctx, currentStillRequest)
 		if err != nil {
 			return model.Call{}, fmt.Errorf("prepare full current still: %w", err)
 		}

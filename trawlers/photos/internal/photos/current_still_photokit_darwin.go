@@ -5,12 +5,13 @@ package photos
 /*
 #cgo darwin LDFLAGS: -framework Foundation -framework Photos -framework ImageIO
 #include <stdlib.h>
-int photoscrawl_export_current_still_matching(const char *assetUUID, const char *modificationDate, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut);
+int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut);
 */
 import "C"
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -22,7 +23,7 @@ import (
 // from PhotoKit. The callback does not install a file after timeout.
 func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest, destinationPath string) (CurrentStillFact, error) {
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
-		return CurrentStillFact{}, err
+		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStagePrepareDestination, err)
 	}
 	timeout := defaultPhotoKitFetchTimeout
 	if deadline, ok := ctx.Deadline(); ok {
@@ -36,15 +37,14 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	defer func() { _ = os.Remove(temporary) }()
 	cUUID := C.CString(request.AssetUUID)
 	defer C.free(unsafe.Pointer(cUUID))
-	cModification := C.CString(request.ModificationDate)
-	defer C.free(unsafe.Pointer(cModification))
 	cDestination := C.CString(temporary)
 	defer C.free(unsafe.Pointer(cDestination))
 	var mediaType *C.char
 	var orientation, width, height C.longlong
-	var cErr, domain *C.char
+	var cErr, domain, stage *C.char
 	var code C.longlong
-	ok := C.photoscrawl_export_current_still_matching(cUUID, cModification, cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code)
+	var cancelled, degraded, inCloud, callbackReturned C.int
+	ok := C.photoscrawl_export_current_still_matching(cUUID, C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage)
 	if mediaType != nil {
 		defer C.free(unsafe.Pointer(mediaType))
 	}
@@ -54,21 +54,54 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	if cErr != nil {
 		defer C.free(unsafe.Pointer(cErr))
 	}
-	if domain != nil {
-		return CurrentStillFact{}, NewPhotoKitExportError(C.GoString(domain), int64(code), C.GoString(cErr))
+	if stage != nil {
+		defer C.free(unsafe.Pointer(stage))
 	}
+	domainText := ""
+	if domain != nil {
+		domainText = C.GoString(domain)
+	}
+	reason := ""
 	if cErr != nil {
-		return CurrentStillFact{}, photoKitError(C.GoString(cErr))
+		reason = C.GoString(cErr)
+	}
+	stageText := ""
+	if stage != nil {
+		stageText = C.GoString(stage)
 	}
 	if ok == 0 {
-		return CurrentStillFact{}, fmt.Errorf("PhotoKit current-still request failed")
+		if reason == "" {
+			reason = "PhotoKit current-still callback did not produce a final image"
+		}
+		return CurrentStillFact{}, currentStillBridgeError(domainText, int64(code), reason, cancelled != 0, degraded != 0, inCloud != 0, callbackReturned != 0, stageText)
 	}
 	if err := os.Rename(temporary, destinationPath); err != nil {
-		return CurrentStillFact{}, err
+		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStageRenameOutput, err)
 	}
 	info, digest, err := InspectOriginalFile(destinationPath)
 	if err != nil {
-		return CurrentStillFact{}, err
+		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStageInspectOutput, err)
 	}
 	return CurrentStillFact{MediaType: C.GoString(mediaType), Orientation: int32(orientation), PixelWidth: int64(width), PixelHeight: int64(height), Size: info.Size(), SHA256: fmt.Sprintf("%x", digest)}, nil
+}
+
+func currentStillBridgeError(domain string, code int64, reason string, cancelled, degraded, inCloud, callbackReturned bool, stage string) error {
+	typed := photoKitError(reason)
+	if IsPhotoLibraryAccessError(typed) || errors.Is(typed, ErrPhotoKitAssetNotFound) {
+		return typed
+	}
+	hasCallbackFacts := domain != "" || code != 0 || cancelled || degraded || inCloud || callbackReturned
+	if errors.Is(typed, ErrPhotoKitExportTimedOut) {
+		if hasCallbackFacts {
+			return NewPhotoKitCallbackTimeoutError(domain, code, reason, cancelled, degraded, inCloud)
+		}
+		return typed
+	}
+	if hasCallbackFacts {
+		return NewPhotoKitCallbackError(domain, code, reason, cancelled, degraded, inCloud, callbackReturned)
+	}
+	if isCurrentStillStage(stage) {
+		return NewCurrentStillStageError(stage, typed)
+	}
+	return typed
 }

@@ -10,10 +10,11 @@ option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/internal/pho
 message CurrentStillFetchRequest {
   string source_library_id = 1;
   string asset_uuid = 2;
-  string modification_date = 3;
+  int64 modification_unix_seconds = 3;
   string destination_path = 4;
   bool allow_network = 5;
   int64 timeout_milliseconds = 6;
+  int32 modification_microseconds = 7;
 }
 
 message CurrentStillFetchResponse {

@@ -2,6 +2,7 @@ package photos
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,7 +13,7 @@ func TestCurrentStillResolverUsesRoleSpecificFractionalVersionAndReopens(t *test
 	calls := 0
 	exporter := func(_ context.Context, request CurrentStillRequest, destination string) (CurrentStillFact, error) {
 		calls++
-		bytes := []byte("synthetic current still " + request.ModificationDate)
+		bytes := []byte(fmt.Sprintf("synthetic current still %d.%06d", request.Modification.UnixSeconds, request.Modification.Microseconds))
 		if err := os.WriteFile(destination, bytes, 0o600); err != nil {
 			return CurrentStillFact{}, err
 		}
@@ -22,7 +23,8 @@ func TestCurrentStillResolverUsesRoleSpecificFractionalVersionAndReopens(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	firstRequest := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "A1B2", ModificationDate: "2026-07-11T12:00:00.100Z"}
+	firstModification := mustParseCurrentStillModification(t, "2026-07-11T12:00:00.100000305Z")
+	firstRequest := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "A1B2", Modification: firstModification}
 	t.Logf("boundary=synthetic_current_still_cache_request raw_input=%#v", firstRequest)
 	first, err := resolver.Resolve(context.Background(), firstRequest)
 	if err != nil {
@@ -43,7 +45,7 @@ func TestCurrentStillResolverUsesRoleSpecificFractionalVersionAndReopens(t *test
 		t.Fatal(err)
 	}
 	t.Logf("boundary=synthetic_current_still_cache_install raw_media=%q raw_proof=%s", media, proof)
-	if got, want := filepath.Base(first.Path), filepath.Base(CurrentStillCachePath(root, firstRequest.SourceLibraryID, firstRequest.AssetUUID, firstRequest.ModificationDate)); got != want {
+	if got, want := filepath.Base(first.Path), filepath.Base(CurrentStillCachePath(root, firstRequest.SourceLibraryID, firstRequest.AssetUUID, firstRequest.Modification)); got != want {
 		t.Fatalf("cache key = %q, want %q", got, want)
 	}
 	restarted, err := NewCurrentStillResolver(root, func(context.Context, CurrentStillRequest, string) (CurrentStillFact, error) {
@@ -64,9 +66,9 @@ func TestCurrentStillResolverUsesRoleSpecificFractionalVersionAndReopens(t *test
 		hit.Lease.Close()
 	}
 	secondRequest := firstRequest
-	secondRequest.ModificationDate = "2026-07-11T12:00:00.200Z"
-	if CurrentStillCachePath(root, firstRequest.SourceLibraryID, firstRequest.AssetUUID, firstRequest.ModificationDate) == CurrentStillCachePath(root, secondRequest.SourceLibraryID, secondRequest.AssetUUID, secondRequest.ModificationDate) {
-		t.Fatal("fractional modification instant reused a current-still key")
+	secondRequest.Modification.Microseconds++
+	if CurrentStillCachePath(root, firstRequest.SourceLibraryID, firstRequest.AssetUUID, firstRequest.Modification) == CurrentStillCachePath(root, secondRequest.SourceLibraryID, secondRequest.AssetUUID, secondRequest.Modification) {
+		t.Fatal("microsecond modification instant reused a current-still key")
 	}
 	if _, err := resolver.Resolve(context.Background(), secondRequest); err != nil {
 		t.Fatal(err)
@@ -78,8 +80,8 @@ func TestCurrentStillResolverUsesRoleSpecificFractionalVersionAndReopens(t *test
 
 func TestCurrentStillResolverRejectsMismatchedProofAndRemovesEntry(t *testing.T) {
 	root := t.TempDir()
-	request := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "asset", ModificationDate: "2026-07-11T12:00:00.123Z"}
-	path := CurrentStillCachePath(root, request.SourceLibraryID, request.AssetUUID, request.ModificationDate)
+	request := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "asset", Modification: mustParseCurrentStillModification(t, "2026-07-11T12:00:00.123Z")}
+	path := CurrentStillCachePath(root, request.SourceLibraryID, request.AssetUUID, request.Modification)
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -109,4 +111,31 @@ func TestCurrentStillResolverRejectsMismatchedProofAndRemovesEntry(t *testing.T)
 	if resolution.Lease != nil {
 		resolution.Lease.Close()
 	}
+}
+
+func TestParseCurrentStillModificationRoundsFloatDerivedNanoseconds(t *testing.T) {
+	modification, err := ParseCurrentStillModification("2023-03-24T05:18:11.797890305Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if modification.Microseconds != 797890 {
+		t.Fatalf("modification = %#v", modification)
+	}
+	carried, err := ParseCurrentStillModification("2026-07-11T12:00:00.999999600Z")
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := mustParseCurrentStillModification(t, "2026-07-11T12:00:00Z")
+	if carried.UnixSeconds != base.UnixSeconds+1 || carried.Microseconds != 0 {
+		t.Fatalf("carried modification = %#v", carried)
+	}
+}
+
+func mustParseCurrentStillModification(t *testing.T, value string) CurrentStillModification {
+	t.Helper()
+	modification, err := ParseCurrentStillModification(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return modification
 }

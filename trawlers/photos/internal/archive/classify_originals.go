@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
@@ -43,11 +44,15 @@ func (input classifyInput) originalRequest() photos.OriginalRequest {
 	}
 }
 
-func (input classifyInput) currentStillRequest() photos.CurrentStillRequest {
-	return photos.CurrentStillRequest{
-		SourceLibraryID:  input.SourceLibraryID,
-		AssetUUID:        input.LocalIdentifier,
-		ModificationDate: input.ModificationDate,
-		AllowNetwork:     false,
+func (input classifyInput) currentStillRequest() (photos.CurrentStillRequest, error) {
+	request := photos.CurrentStillRequest{SourceLibraryID: input.SourceLibraryID, AssetUUID: input.LocalIdentifier, AllowNetwork: false}
+	if strings.TrimSpace(input.ModificationDate) == "" {
+		return request, nil
 	}
+	modification, err := photos.ParseCurrentStillModification(input.ModificationDate)
+	if err != nil {
+		return photos.CurrentStillRequest{}, fmt.Errorf("canonicalize current-still modification instant: %w", err)
+	}
+	request.Modification = modification
+	return request, nil
 }
