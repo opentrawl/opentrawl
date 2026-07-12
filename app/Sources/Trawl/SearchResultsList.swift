@@ -5,8 +5,9 @@ import TrawlCore
 struct SearchResultsList: View {
   let phase: SearchPhase
   let results: [SearchHit]
-  let sourceResolver: SearchSourceResolver
+  let sourceDisplayName: (String) -> String
   let failureGuidance: String?
+  let title: (SearchHit) -> String
   @Binding var selectedResultID: SearchHit.ID?
   @FocusState.Binding var focus: SearchFocus?
 
@@ -23,7 +24,8 @@ struct SearchResultsList: View {
               } label: {
                 SearchResultRow(
                   hit: hit,
-                  sourceDisplayName: sourceResolver.displayNameOrUnavailable(for: hit.sourceID),
+                  title: title(hit),
+                  sourceDisplayName: sourceDisplayName(hit.sourceID),
                   isSelected: selectedResultID == hit.id
                 )
               }
@@ -91,7 +93,7 @@ private struct SearchStatePlaceholder: View {
 
   private var shouldShowFailure: Bool {
     switch phase {
-    case .partial, .failed: true
+    case .partial, .skipped, .failed: true
     case .idle, .loading, .complete, .timedOut: false
     }
   }
@@ -102,6 +104,7 @@ private struct SearchStatePlaceholder: View {
     case .loading: "Searching"
     case .complete: "No matches"
     case .partial: "No matches from available sources"
+    case .skipped: "The selected sources do not support search"
     case .failed: "Search failed"
     case .timedOut: "Search timed out"
     }
@@ -111,6 +114,7 @@ private struct SearchStatePlaceholder: View {
     switch phase {
     case .idle, .complete, .loading: "magnifyingglass"
     case .partial: "exclamationmark.triangle"
+    case .skipped: "exclamationmark.triangle"
     case .failed: "exclamationmark.circle"
     case .timedOut: "clock.badge.exclamationmark"
     }
@@ -119,6 +123,7 @@ private struct SearchStatePlaceholder: View {
 
 private struct SearchResultRow: View {
   let hit: SearchHit
+  let title: String
   let sourceDisplayName: String
   let isSelected: Bool
 
@@ -127,13 +132,15 @@ private struct SearchResultRow: View {
       SourceIconView(sourceID: hit.sourceID, size: 24)
       VStack(alignment: .leading, spacing: 3) {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text(hit.title.isEmpty ? "Untitled result" : hit.title)
+          Text(title)
             .font(.body.weight(.semibold))
             .lineLimit(1)
           Spacer(minLength: 4)
-          Text(hit.whenDisplay)
-            .font(.caption)
-            .foregroundStyle(.tertiary)
+          if let time = hit.time {
+            Text(time, format: hit.allDay ? .dateTime.year().month().day() : .dateTime.month().day().hour().minute())
+              .font(.caption)
+              .foregroundStyle(.tertiary)
+          }
         }
         Text(hit.snippet)
           .font(.callout)
@@ -150,6 +157,6 @@ private struct SearchResultRow: View {
     .padding(.horizontal, 5)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(sourceDisplayName), \(hit.title.isEmpty ? "Untitled result" : hit.title)")
+    .accessibilityLabel("\(sourceDisplayName), \(title)")
   }
 }

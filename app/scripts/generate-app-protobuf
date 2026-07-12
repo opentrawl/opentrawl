@@ -13,6 +13,13 @@ elif [[ $# -ne 0 ]]; then
   exit 2
 fi
 
+generated_dir="$output_dir"
+check_dir=""
+if [[ "$check" -eq 1 ]]; then
+  check_dir="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-swift-protobuf-check.XXXXXX")"
+  generated_dir="$check_dir"
+fi
+
 host_swift() {
   env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
 }
@@ -35,24 +42,38 @@ if [[ ! -x "$plugin" ]]; then
 fi
 
 template="$(mktemp "${TMPDIR:-/tmp}/opentrawl-swift-protobuf.XXXXXX.yaml")"
-trap 'rm -f "$template"' EXIT
+trap 'rm -f "$template"; [[ -z "$check_dir" ]] || rm -rf "$check_dir"' EXIT
 cat >"$template" <<EOF
 version: v1
 plugins:
   - name: swift
     path: $plugin
-    out: $output_dir
+    out: $generated_dir
     opt:
       - Visibility=Public
       - FileNaming=DropPath
 EOF
 
-mkdir -p "$output_dir"
+mkdir -p "$generated_dir"
 (
   cd "$repo_root/trawlkit/proto"
-  buf generate --template "$template" --path trawl/app/v1/app.proto
+  buf generate --template "$template" \
+    --path trawl/app/v1/app.proto \
+    --path trawl/federation/v1/federation.proto \
+    --path trawl/open/v1/open.proto \
+    --path trawl/presentation/v1/presentation.proto
 )
 
 if [[ "$check" -eq 1 ]]; then
-  git -C "$repo_root" diff --exit-code -- "$output_dir/app.pb.swift"
+  expected=(app.pb.swift federation.pb.swift open.pb.swift presentation.pb.swift)
+  actual=("$output_dir"/*.pb.swift)
+  [[ ${#actual[@]} -eq ${#expected[@]} ]] || { echo "unexpected generated protobuf files" >&2; exit 1; }
+  for name in "${expected[@]}"; do
+    [[ -f "$output_dir/$name" ]] || { echo "missing generated protobuf file: $name" >&2; exit 1; }
+  done
+  for path in "${actual[@]}"; do
+    name="$(basename "$path")"
+    [[ " ${expected[*]} " == *" $name "* ]] || { echo "unexpected generated protobuf file: $name" >&2; exit 1; }
+  done
+  diff -qr "$generated_dir" "$output_dir"
 fi

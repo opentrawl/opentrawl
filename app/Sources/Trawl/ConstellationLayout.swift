@@ -139,7 +139,7 @@ struct ConstellationLayout {
       sourceCount: sources.count
     )
 
-    let positive = sources.map(\.archiveBytes).filter { $0 > 0 }.map(Double.init)
+    let positive = sources.map(\.databaseBytes).filter { $0 > 0 }.map(Double.init)
     minimumBytes = positive.min() ?? 0
     maximumBytes = positive.max() ?? 0
   }
@@ -198,10 +198,10 @@ struct ConstellationLayout {
   }
 
   private func diameter(for source: SourceStatus) -> CGFloat {
-    guard source.archiveBytes > 0, maximumBytes > minimumBytes else {
+    guard source.databaseBytes > 0, maximumBytes > minimumBytes else {
       return CGFloat(metrics.minimumIconDiameter)
     }
-    let value = log1p(Double(source.archiveBytes))
+    let value = log1p(Double(source.databaseBytes))
     let lower = log1p(minimumBytes)
     let upper = log1p(maximumBytes)
     let normalised = (value - lower) / (upper - lower)

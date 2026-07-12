@@ -76,7 +76,7 @@ struct RootView: View {
       FailureView(message: message) {
         Task { await model.refresh() }
       }
-    case .loading, .ready, .failed:
+    case .loading, .ready, .partial, .timedOut, .failed:
       ZStack(alignment: .top) {
         ConstellationView(
           sources: model.sources,
@@ -108,6 +108,10 @@ struct RootView: View {
       return message
     case .loading, .ready:
       break
+    case .partial:
+      return model.skippedSources.isEmpty ? "Some source status checks failed." : "Some sources were skipped."
+    case .timedOut:
+      return "Source status checks timed out."
     }
     switch model.completion {
     case .complete: return nil

@@ -38,9 +38,10 @@ struct SearchWorkspace: View {
       SearchStatus(
         phase: model.phase,
         count: model.results.count,
-        scopeName: scope?.name,
+        scopeName: scope?.manifest.surface,
         resultLimit: model.resultLimit,
-        failureGuidance: model.failureGuidance
+        failureGuidance: model.failureGuidance,
+        hasTimeoutFailure: model.hasTimeoutFailure
       )
       .padding(.horizontal, 16)
       .frame(minHeight: 48)
@@ -54,16 +55,15 @@ struct SearchWorkspace: View {
         SearchResultsList(
           phase: model.phase,
           results: model.results,
-          sourceResolver: sourceResolver,
+          sourceDisplayName: sourceDisplayName(for:),
           failureGuidance: model.failureGuidance,
+          title: model.displayTitle(for:),
           selectedResultID: $interaction.selectedResultID,
           focus: $focus
         )
         .frame(height: 188)
         Divider()
         ResultPreview(
-          hit: selectedHit,
-          sourceResolver: sourceResolver,
           phase: model.openPhase,
           response: model.openResult
         )
@@ -73,16 +73,15 @@ struct SearchWorkspace: View {
         SearchResultsList(
           phase: model.phase,
           results: model.results,
-          sourceResolver: sourceResolver,
+          sourceDisplayName: sourceDisplayName(for:),
           failureGuidance: model.failureGuidance,
+          title: model.displayTitle(for:),
           selectedResultID: $interaction.selectedResultID,
           focus: $focus
         )
         .frame(width: 306)
         Divider()
         ResultPreview(
-          hit: selectedHit,
-          sourceResolver: sourceResolver,
           phase: model.openPhase,
           response: model.openResult
         )
@@ -92,6 +91,10 @@ struct SearchWorkspace: View {
 
   private var selectedHit: SearchHit? {
     model.results.first(where: { $0.id == interaction.selectedResultID })
+  }
+
+  private func sourceDisplayName(for sourceID: String) -> String {
+    model.sourceDisplayName(for: sourceID, resolvedName: sourceResolver.displayName(for: sourceID))
   }
 }
 
@@ -111,7 +114,7 @@ private struct SearchField: View {
       if let scope {
         HStack(spacing: 5) {
           SourceIconView(sourceID: scope.id, size: 18)
-          Text(scope.name)
+          Text(scope.manifest.surface)
             .font(.caption.weight(.medium))
             .lineLimit(1)
           Button {
@@ -154,6 +157,7 @@ private struct SearchStatus: View {
   let scopeName: String?
   let resultLimit: UInt32
   let failureGuidance: String?
+  let hasTimeoutFailure: Bool
 
   var body: some View {
     ViewThatFits(in: .horizontal) {
@@ -197,6 +201,8 @@ private struct SearchStatus: View {
         partialMessage,
         systemImage: "exclamationmark.triangle"
       )
+    case .skipped:
+      Label("Some sources were skipped.", systemImage: "exclamationmark.triangle")
     case .failed(let message):
       Label(message, systemImage: "exclamationmark.circle")
     case .timedOut:
@@ -209,6 +215,7 @@ private struct SearchStatus: View {
 
   private var partialMessage: String {
     let result = "Showing \(count) useful results."
+    if hasTimeoutFailure { return "Some sources timed out. \(result)" }
     guard let failureGuidance else { return "Some sources failed. \(result)" }
     return "\(result) \(failureGuidance)"
   }
