@@ -3,14 +3,20 @@ package notes
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	notesopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/notes/open/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func TestOpenRecordProjection(t *testing.T) {
@@ -54,6 +60,45 @@ func TestOpenRecordProjection(t *testing.T) {
 	if noteRecord.Ref != "notes:note/NOTE-FIXTURE" || noteRecord.VersionRef != "notes:version/NOTE-FIXTURE/abc123" {
 		t.Fatalf("note open refs = %q %q", noteRecord.Ref, noteRecord.VersionRef)
 	}
+	presentation := projectOpenPresentation(input.RequestedRef, note, body)
+	if presentation.Title != "Packing list" || len(presentation.Blocks) != 2 || len(presentation.Facts) != 0 {
+		t.Fatalf("presentation = %s", prototext.Format(presentation))
+	}
+	evidenceInput := struct {
+		RequestedRef string `json:"requested_ref"`
+		Note         struct {
+			ID           string `json:"id"`
+			Title        string `json:"title"`
+			Folder       string `json:"folder"`
+			CreatedAt    string `json:"created_at"`
+			ModifiedAt   string `json:"modified_at"`
+			VersionCount int64  `json:"version_count"`
+		} `json:"note"`
+		Body struct {
+			Ref         string `json:"ref"`
+			TextStatus  string `json:"text_status"`
+			Title       string `json:"title"`
+			Text        string `json:"text"`
+			Unsupported string `json:"unsupported"`
+		} `json:"body"`
+	}{RequestedRef: input.RequestedRef}
+	evidenceInput.Note.ID, evidenceInput.Note.Title, evidenceInput.Note.Folder = note.ID, note.Title, note.Folder
+	evidenceInput.Note.CreatedAt, evidenceInput.Note.ModifiedAt, evidenceInput.Note.VersionCount = note.CreatedAt, note.ModifiedAt, note.VersionCount
+	evidenceInput.Body.Ref, evidenceInput.Body.TextStatus, evidenceInput.Body.Title = body.Ref, body.TextStatus, body.Title
+	evidenceInput.Body.Text, evidenceInput.Body.Unsupported = body.Text, body.Unsupported
+	assertOpenPresentation(t, "notes", evidenceInput, record, presentation)
+	assertExactPresentation(t, presentation, `title: "Packing list"
+blocks: { fields: { fields: { label: "Ref" display: "notes:version/NOTE-FIXTURE/abc123" } fields: { label: "Version ref" display: "notes:version/NOTE-FIXTURE/abc123" } fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "2026-07-08T10:00:00Z" } fields: { label: "Modified" display: "2026-07-10T14:00:00Z" } fields: { label: "Versions" display: "3" } } }
+blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
+	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
+		blank := body
+		blank.Title = ""
+		noteBlank := note
+		noteBlank.Title = ""
+		if got := projectOpenPresentation(input.RequestedRef, noteBlank, blank).Title; got != "Note" {
+			t.Fatalf("title = %q", got)
+		}
+	})
 }
 
 func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
@@ -80,5 +125,59 @@ func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
 	}
 	if actualCompact.String() != wantCompact.String() {
 		t.Fatalf("ProtoJSON = %s\nwant = %s", data, wantJSON)
+	}
+}
+
+func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+	t.Helper()
+	packed, err := anypb.New(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	if err := openrecord.Validate(open); err != nil {
+		t.Fatal(err)
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEvidence(t, source, "input.json", inputJSON)
+	writeEvidence(t, source, "record.pbtxt", []byte(prototext.Format(machine)))
+	writeEvidence(t, source, "presentation.pbtxt", []byte(prototext.Format(presentation)))
+	writeEvidence(t, source, "validated-open.pbtxt", []byte(prototext.Format(open)))
+}
+
+func writeEvidence(t *testing.T, source, name string, content []byte) {
+	t.Helper()
+	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
+	if directory == "" {
+		return
+	}
+	if len(content) == 0 {
+		t.Fatalf("evidence %s is empty", name)
+	}
+	directory = filepath.Join(directory, source)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, name)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	readBack, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(readBack, content) {
+		t.Fatalf("evidence %s changed on write", name)
+	}
+}
+
+func assertExactPresentation(t *testing.T, got *presentationv1.PresentationDocument, wantText string) {
+	t.Helper()
+	want := &presentationv1.PresentationDocument{}
+	if err := prototext.Unmarshal([]byte(wantText), want); err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(got, want) || prototext.Format(got) != prototext.Format(want) {
+		t.Fatalf("presentation = %s\nwant = %s", prototext.Format(got), prototext.Format(want))
 	}
 }

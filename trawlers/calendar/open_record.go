@@ -1,7 +1,12 @@
 package calcrawl
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	calendaropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/calendar/open/v1"
 )
 
@@ -73,3 +78,111 @@ func setOptionalString(target **string, value string) {
 }
 
 func recordBool(value bool) *bool { return &value }
+
+func projectOpenPresentation(value archive.EventDetail) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
+	title := strings.TrimSpace(record.Title)
+	if title == "" {
+		title = "Calendar event"
+	}
+	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	appendPresentationField(&fields, "Start", record.Start)
+	appendPresentationField(&fields, "End", record.End)
+	fields = append(fields, &presentationv1.Field{Label: "All day", Display: formatPresentationBool(record.AllDay)})
+	appendPresentationField(&fields, "Calendar", record.Calendar)
+	appendPresentationField(&fields, "Account", record.Account)
+	if record.Availability != nil {
+		fields = append(fields, &presentationv1.Field{Label: "Availability", Display: fmt.Sprintf("%d", *record.Availability)})
+	}
+	if location := formatPresentationLocation(record.Location); location != "" {
+		fields = append(fields, &presentationv1.Field{Label: "Location", Display: location})
+	}
+	if organizer := formatPresentationPerson(record.Organizer); organizer != "" {
+		fields = append(fields, &presentationv1.Field{Label: "Organizer", Display: organizer})
+	}
+	if attendees := formatPresentationAttendees(record.Attendees); attendees != "" {
+		fields = append(fields, &presentationv1.Field{Label: "Attendees", Display: attendees})
+	}
+	url := strings.TrimSpace(record.GetUrl())
+	if url != "" {
+		fields = append(fields, &presentationv1.Field{Label: "URL", Display: url})
+	}
+	appendPresentationField(&fields, "Status", record.GetStatus())
+	fields = append(fields, &presentationv1.Field{Label: "Recurring", Display: formatPresentationBool(record.HasRecurrences)})
+	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	if description := strings.TrimSpace(record.GetDescription()); description != "" {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if openrecord.ValidHTTPSURL(url) {
+		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open event link", Target: &presentationv1.Action_Url{Url: url}})
+	}
+	if record.GetDescriptionTruncated() {
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Event description is truncated."})
+	}
+	return document
+}
+
+func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
+	if value = strings.TrimSpace(value); value != "" {
+		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
+	}
+}
+
+func formatPresentationBool(value bool) string {
+	if value {
+		return "Yes"
+	}
+	return "No"
+}
+
+func formatPresentationLocation(value *calendaropenv1.Location) string {
+	if value == nil {
+		return ""
+	}
+	title := strings.TrimSpace(value.GetTitle())
+	address := strings.TrimSpace(value.GetAddress())
+	if title != "" && address != "" && title != address {
+		return title + ", " + address
+	}
+	if title != "" {
+		return title
+	}
+	return address
+}
+
+func formatPresentationPerson(value *calendaropenv1.Person) string {
+	if value == nil {
+		return ""
+	}
+	for _, candidate := range []string{value.GetDisplayName(), value.GetEmail(), value.GetPhoneNumber()} {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func formatPresentationAttendees(values []*calendaropenv1.Attendee) string {
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		name := ""
+		for _, candidate := range []string{value.GetDisplayName(), value.GetEmail(), value.GetPhoneNumber(), value.GetAddress()} {
+			if candidate = strings.TrimSpace(candidate); candidate != "" {
+				name = candidate
+				break
+			}
+		}
+		if name == "" {
+			continue
+		}
+		if status := strings.TrimSpace(value.GetRsvpStatus()); status != "" {
+			name += " (" + status + ")"
+		}
+		items = append(items, name)
+	}
+	return strings.Join(items, ", ")
+}

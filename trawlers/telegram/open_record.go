@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	telegramopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/telegram/open/v1"
 )
 
@@ -123,3 +125,56 @@ func recordString(value string) *string { return &value }
 func recordInt64(value int64) *int64    { return &value }
 func recordInt32(value int32) *int32    { return &value }
 func recordBool(value bool) *bool       { return &value }
+
+func projectOpenPresentation(value store.MessageWindow) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
+	title := strings.TrimSpace(record.Chat.Name)
+	if title == "" || title == "Telegram chat" {
+		title = "Telegram conversation"
+	}
+	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	if participants := joinPresentationStrings(record.Participants); participants != "" {
+		fields = append(fields, &presentationv1.Field{Label: "Participants", Display: participants})
+	}
+	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	if text := strings.TrimSpace(record.Message.GetText()); text != "" {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
+	}
+	rows := make([]*presentationv1.Row, 0, len(record.Context))
+	for _, message := range record.Context {
+		role := presentationv1.Row_ROLE_NORMAL
+		if message.GetIsTarget() {
+			role = presentationv1.Row_ROLE_TARGET
+		}
+		who := "Unavailable"
+		if message.Sender != nil && message.Sender.State == telegramopenv1.SenderState_SENDER_STATE_AVAILABLE {
+			who = message.Sender.GetDisplayName()
+		}
+		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: message.Time}, {Display: who}, {Display: message.GetText()}}})
+	}
+	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if media := record.Message.Media; media != nil && openrecord.ValidHTTPSURL(media.GetUrl()) {
+		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open media link", Target: &presentationv1.Action_Url{Url: media.GetUrl()}})
+	}
+	if metadata := record.Message.Metadata; metadata != nil && openrecord.ValidHTTPSURL(metadata.GetUrl()) {
+		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open metadata link", Target: &presentationv1.Action_Url{Url: metadata.GetUrl()}})
+	}
+	if record.ContextWindow.BeforeTruncated {
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Earlier context is truncated."})
+	}
+	if record.ContextWindow.AfterTruncated {
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Later context is truncated."})
+	}
+	return document
+}
+
+func joinPresentationStrings(values []string) string {
+	items := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			items = append(items, value)
+		}
+	}
+	return strings.Join(items, ", ")
+}

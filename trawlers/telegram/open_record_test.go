@@ -3,15 +3,21 @@ package telecrawl
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	telegramopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/telegram/open/v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 func TestOpenRecordProjection(t *testing.T) {
@@ -34,6 +40,25 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("direct chat without exported sender = %#v", got.Context[3].Sender)
 	}
 	assertOpenRecord(t, input, got, "trawl.source.telegram.open.v1.TelegramRecord", `{"ref":"telegram:msg/41","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"participants":["Avery Example","Morgan Example"],"message":{"ref":"telegram:msg/41","is_target":true,"time":"2026-07-10T14:00:00Z","edit_time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-2","display_name":"Avery Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Target","message_type":"photo","media":{"type":"image","title":"fixture","url":"https://example.com/fixture","size_bytes":"2048"},"metadata":{"type":"link","title":"Example","url":"https://example.com"},"starred":true,"reply_to_message_ref":"telegram:msg/40","reply_to_chat_ref":"telegram:chat/chat-7","views":12,"forwards":2,"replies_count":1,"pinned":true},"context":[{"ref":"telegram:msg/40","time":"2026-07-10T13:59:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-1","display_name":"Morgan Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Before"},{"ref":"telegram:msg/41","is_target":true,"time":"2026-07-10T14:00:00Z","edit_time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/peer-2","display_name":"Avery Example","state":"SENDER_STATE_AVAILABLE"},"from_me":false,"text":"Target","message_type":"photo","media":{"type":"image","title":"fixture","url":"https://example.com/fixture","size_bytes":"2048"},"metadata":{"type":"link","title":"Example","url":"https://example.com"},"starred":true,"reply_to_message_ref":"telegram:msg/40","reply_to_chat_ref":"telegram:chat/chat-7","views":12,"forwards":2,"replies_count":1,"pinned":true},{"ref":"telegram:msg/42","time":"2026-07-10T14:01:00Z","chat":{"ref":"telegram:chat/chat-7","name":"Lantern"},"sender":{"ref":"telegram:chat/opaque-peer","state":"SENDER_STATE_UNAVAILABLE"},"from_me":false,"text":"After"},{"ref":"telegram:msg/43","time":"2026-07-10T14:02:00Z","chat":{"ref":"telegram:chat/direct-7","name":"Direct chat"},"sender":{"ref":"telegram:chat/direct-7","state":"SENDER_STATE_UNAVAILABLE"},"from_me":false,"text":"No exported sender"}],"context_window":{"before":1,"after":2,"before_truncated":true,"after_truncated":false},"target_position":1}`, []string{"source_pk", "message_id", "raw_type", "media_path", "metadata_json", "forward_json", "reactions_json"})
+	presentation := projectOpenPresentation(input)
+	if presentation.Title != "Lantern" || len(presentation.Blocks) != 3 || len(presentation.Actions) != 2 || len(presentation.Facts) != 1 {
+		t.Fatalf("presentation = %s", prototext.Format(presentation))
+	}
+	assertExactPresentation(t, presentation, `title: "Lantern"
+blocks: { fields: { fields: { label: "Ref" display: "telegram:msg/41" } fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
+blocks: { prose: { text: "Target" } }
+blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T13:59:00Z" } cells: { display: "Morgan Example" } cells: { display: "Before" } } rows: { role: ROLE_TARGET cells: { display: "2026-07-10T14:00:00Z" } cells: { display: "Avery Example" } cells: { display: "Target" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:01:00Z" } cells: { display: "Unavailable" } cells: { display: "After" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:02:00Z" } cells: { display: "Unavailable" } cells: { display: "No exported sender" } } } }
+actions: { label: "Open media link" url: "https://example.com/fixture" }
+actions: { label: "Open metadata link" url: "https://example.com" }
+facts: { kind: KIND_TRUNCATION message: "Earlier context is truncated." }`)
+	assertOpenPresentation(t, "telegram", input, got, presentation)
+	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
+		blank := input
+		blank.Target.ChatName = ""
+		if got := projectOpenPresentation(blank).Title; got != "Telegram conversation" {
+			t.Fatalf("title = %q", got)
+		}
+	})
 }
 
 func assertOpenRecord(t *testing.T, input any, got proto.Message, wantName, wantJSON string, forbidden []string) {
@@ -84,5 +109,59 @@ func assertOpenRecord(t *testing.T, input any, got proto.Message, wantName, want
 	}
 	if "type.opentrawl.org/"+name != "type.opentrawl.org/"+wantName {
 		t.Fatal("type URL changed")
+	}
+}
+
+func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+	t.Helper()
+	packed, err := anypb.New(machine)
+	if err != nil {
+		t.Fatal(err)
+	}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	if err := openrecord.Validate(open); err != nil {
+		t.Fatal(err)
+	}
+	inputJSON, err := json.Marshal(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEvidence(t, source, "input.json", inputJSON)
+	writeEvidence(t, source, "record.pbtxt", []byte(prototext.Format(machine)))
+	writeEvidence(t, source, "presentation.pbtxt", []byte(prototext.Format(presentation)))
+	writeEvidence(t, source, "validated-open.pbtxt", []byte(prototext.Format(open)))
+}
+
+func writeEvidence(t *testing.T, source, name string, content []byte) {
+	t.Helper()
+	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
+	if directory == "" {
+		return
+	}
+	if len(content) == 0 {
+		t.Fatalf("evidence %s is empty", name)
+	}
+	directory = filepath.Join(directory, source)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, name)
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	readBack, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(readBack, content) {
+		t.Fatalf("evidence %s changed on write", name)
+	}
+}
+
+func assertExactPresentation(t *testing.T, got *presentationv1.PresentationDocument, wantText string) {
+	t.Helper()
+	want := &presentationv1.PresentationDocument{}
+	if err := prototext.Unmarshal([]byte(wantText), want); err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(got, want) || prototext.Format(got) != prototext.Format(want) {
+		t.Fatalf("presentation = %s\nwant = %s", prototext.Format(got), prototext.Format(want))
 	}
 }

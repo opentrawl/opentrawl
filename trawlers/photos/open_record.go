@@ -1,10 +1,13 @@
 package photoscrawl
 
 import (
+	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	photosopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1"
 )
 
@@ -220,3 +223,168 @@ func setOptionalString(target **string, value string) {
 func recordInt64(value int64) *int64       { return &value }
 func recordFloat64(value float64) *float64 { return &value }
 func recordBool(value bool) *bool          { return &value }
+
+func projectOpenPresentation(value archive.OpenResult) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
+	title := strings.TrimSpace(record.Model.GetSummary())
+	if title == "" {
+		title = "Photo"
+	}
+	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	mechanical := record.Mechanical
+	if mechanical != nil {
+		if captured := mechanical.Captured; captured != nil {
+			appendPresentationField(&fields, "Captured", captured.Local)
+		}
+		appendPresentationField(&fields, "Media", formatPresentationMedia(mechanical.Media))
+		appendPresentationField(&fields, "Place", formatPresentationPlace(mechanical.Place))
+		appendPresentationField(&fields, "GPS", formatPresentationGPS(mechanical.Gps))
+		appendPresentationField(&fields, "Address", mechanical.GetAddress())
+		appendPresentationField(&fields, "Known place", formatPresentationKnownPlace(mechanical.KnownPlace))
+		appendPresentationField(&fields, "Venue", formatPresentationVenue(mechanical.Venue))
+		appendPresentationField(&fields, "Camera", formatPresentationCamera(mechanical.Camera))
+		albumTitles := make([]string, 0, len(mechanical.Albums))
+		for _, album := range mechanical.Albums {
+			if album != nil && strings.TrimSpace(album.Title) != "" {
+				albumTitles = append(albumTitles, strings.TrimSpace(album.Title))
+			}
+		}
+		appendPresentationField(&fields, "Albums", strings.Join(albumTitles, ", "))
+		if original := mechanical.Original; original != nil {
+			appendPresentationField(&fields, "Original filename", original.GetFilename())
+			if original.Bytes != nil {
+				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: fmt.Sprintf("%d bytes", *original.Bytes)})
+			}
+			appendPresentationField(&fields, "Availability", original.GetAvailability())
+		}
+	}
+	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
+	}
+	if ocr := strings.TrimSpace(record.Model.GetOcrText()); ocr != "" {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if banner := strings.TrimSpace(record.Stale.GetBanner()); banner != "" {
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: banner})
+	}
+	for _, uncertainty := range record.Model.Uncertainties {
+		if uncertainty = strings.TrimSpace(uncertainty); uncertainty != "" {
+			document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: uncertainty})
+		}
+	}
+	return document
+}
+
+func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
+	if value = strings.TrimSpace(value); value != "" {
+		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
+	}
+}
+
+func formatPresentationMedia(value *photosopenv1.Media) string {
+	if value == nil {
+		return ""
+	}
+	parts := make([]string, 0, 3)
+	if kind := strings.TrimSpace(value.GetKind()); kind != "" {
+		parts = append(parts, kind)
+	}
+	if value.Width != nil && value.Height != nil {
+		parts = append(parts, fmt.Sprintf("%d x %d", *value.Width, *value.Height))
+	}
+	if value.DurationSeconds != nil {
+		parts = append(parts, formatPresentationFloat(*value.DurationSeconds)+"s")
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatPresentationPlace(value *photosopenv1.Place) string {
+	if value == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(value.GetName()); name != "" {
+		return name
+	}
+	if value.Latitude != nil && value.Longitude != nil {
+		return formatPresentationFloat(*value.Latitude) + ", " + formatPresentationFloat(*value.Longitude)
+	}
+	return ""
+}
+
+func formatPresentationGPS(value *photosopenv1.GPS) string {
+	if value == nil {
+		return ""
+	}
+	text := formatPresentationFloat(value.Latitude) + ", " + formatPresentationFloat(value.Longitude)
+	if value.HorizontalAccuracyMeters != nil {
+		text += " (accuracy: " + formatPresentationFloat(*value.HorizontalAccuracyMeters) + " m)"
+	}
+	return text
+}
+
+func formatPresentationKnownPlace(value *photosopenv1.KnownPlace) string {
+	if value == nil {
+		return ""
+	}
+	name := strings.TrimSpace(value.Name)
+	kind := strings.TrimSpace(value.Kind)
+	if name == "" || kind == "" {
+		return ""
+	}
+	text := name + " (" + kind + ")"
+	if value.GetAfter() {
+		text += ", after capture"
+	}
+	return text
+}
+
+func formatPresentationVenue(value *photosopenv1.Venue) string {
+	if value == nil {
+		return ""
+	}
+	parts := make([]string, 0, 4)
+	for _, part := range []string{value.Name, value.GetCategory(), value.Tier} {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if value.DistanceMeters != nil {
+		parts = append(parts, formatPresentationFloat(*value.DistanceMeters)+" m away")
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatPresentationCamera(value *photosopenv1.Camera) string {
+	if value == nil {
+		return ""
+	}
+	if display := strings.TrimSpace(value.GetDisplay()); display != "" {
+		return display
+	}
+	parts := make([]string, 0, 8)
+	for _, part := range []string{value.GetMake(), value.GetModel(), value.GetLensModel()} {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
+		}
+	}
+	if value.FocalLengthMm != nil {
+		parts = append(parts, formatPresentationFloat(*value.FocalLengthMm)+" mm")
+	}
+	if value.FocalLength_35Mm != nil {
+		parts = append(parts, formatPresentationFloat(*value.FocalLength_35Mm)+" mm equivalent")
+	}
+	if value.Aperture != nil {
+		parts = append(parts, "f/"+formatPresentationFloat(*value.Aperture))
+	}
+	if shutter := strings.TrimSpace(value.GetShutterSpeed()); shutter != "" {
+		parts = append(parts, shutter)
+	}
+	if value.Iso != nil {
+		parts = append(parts, fmt.Sprintf("ISO %d", *value.Iso))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatPresentationFloat(value float64) string { return strconv.FormatFloat(value, 'f', -1, 64) }
