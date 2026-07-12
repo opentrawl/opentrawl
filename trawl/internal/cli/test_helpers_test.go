@@ -11,15 +11,22 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const fakeCrawlersEnv = "TRAWL_TEST_FAKE_CRAWLERS"
@@ -36,97 +43,185 @@ func shortLocalTestTime(t *testing.T, value string) string {
 }
 
 type fakeCrawler struct {
-	name          string
-	metadata      string
-	metadataExit  int
-	status        string
-	statusExit    int
-	doctor        string
-	doctorExit    int
-	search        string
-	searchExit    int
-	searchSleep   string
-	searchStderr  string
-	searchLimit   string
-	searchQuery   string
-	searchNoQuery bool
-	searchWho     string
-	who           string
-	whoExit       int
-	whoQuery      string
-	shortRefAlias string
-	open          string
-	openExit      int
-	openRef       string
-	openHuman     string
-	openHumanExit int
-	openStderr    string
-	sync          string
-	syncExit      int
-	syncSleep     string
+	name                  string
+	metadata              string
+	metadataExit          int
+	status                string
+	statusExit            int
+	statusCalls           *int
+	doctor                string
+	doctorExit            int
+	search                string
+	searchExit            int
+	searchCalls           *int
+	searchSleep           string
+	searchStderr          string
+	searchLimit           string
+	searchQuery           string
+	searchNoQuery         bool
+	searchWho             string
+	who                   string
+	whoExit               int
+	whoQuery              string
+	shortRefAlias         string
+	open                  string
+	openExit              int
+	openCalls             *int
+	openRef               string
+	openRecord            *openv1.OpenRecord
+	openHuman             string
+	openHumanExit         int
+	openStderr            string
+	openUnknownShortRef   bool
+	openAmbiguousShortRef bool
+	evidence              *fakeCrawlerEvidence
+	sync                  string
+	syncExit              int
+	syncSleep             string
+}
+
+// fakeCrawlerEvidence is deliberately test-only. It records the typed
+// boundary values that the CLI adapters receive and return for
+// TestCanonicalConsumerBoundaries.
+type fakeCrawlerEvidence struct {
+	mu              sync.Mutex
+	Inputs          []string
+	StatusResponses []*federationv1.SourceStatus
+	SearchResponses []*federationv1.SearchSourceResult
+	OpenRecords     []*openv1.OpenRecord
+	StatusCalls     int
+	SearchCalls     int
+	OpenCalls       int
+}
+
+func (e *fakeCrawlerEvidence) input(value string) {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.Inputs = append(e.Inputs, value)
+}
+
+func (e *fakeCrawlerEvidence) status(value *federationv1.SourceStatus) {
+	if e == nil || value == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.StatusResponses = append(e.StatusResponses, value)
+}
+
+func (e *fakeCrawlerEvidence) statusCall() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.StatusCalls++
+}
+
+func (e *fakeCrawlerEvidence) search(value *federationv1.SearchSourceResult) {
+	if e == nil || value == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.SearchResponses = append(e.SearchResponses, value)
+}
+
+func (e *fakeCrawlerEvidence) searchCall() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.SearchCalls++
+}
+
+func (e *fakeCrawlerEvidence) open(value *openv1.OpenRecord) {
+	if e == nil || value == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.OpenRecords = append(e.OpenRecords, value)
+}
+
+func (e *fakeCrawlerEvidence) openCall() {
+	if e == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.OpenCalls++
 }
 
 type fakeCrawlerWire struct {
-	Name          string `json:"name"`
-	Metadata      string `json:"metadata"`
-	MetadataExit  int    `json:"metadata_exit"`
-	Status        string `json:"status"`
-	StatusExit    int    `json:"status_exit"`
-	Doctor        string `json:"doctor"`
-	DoctorExit    int    `json:"doctor_exit"`
-	Search        string `json:"search"`
-	SearchExit    int    `json:"search_exit"`
-	SearchSleep   string `json:"search_sleep"`
-	SearchStderr  string `json:"search_stderr"`
-	SearchLimit   string `json:"search_limit"`
-	SearchQuery   string `json:"search_query"`
-	SearchNoQuery bool   `json:"search_no_query"`
-	SearchWho     string `json:"search_who"`
-	Who           string `json:"who"`
-	WhoExit       int    `json:"who_exit"`
-	WhoQuery      string `json:"who_query"`
-	ShortRefAlias string `json:"short_ref_alias"`
-	Open          string `json:"open"`
-	OpenExit      int    `json:"open_exit"`
-	OpenRef       string `json:"open_ref"`
-	OpenHuman     string `json:"open_human"`
-	OpenHumanExit int    `json:"open_human_exit"`
-	OpenStderr    string `json:"open_stderr"`
-	Sync          string `json:"sync"`
-	SyncExit      int    `json:"sync_exit"`
-	SyncSleep     string `json:"sync_sleep"`
+	Name                  string `json:"name"`
+	Metadata              string `json:"metadata"`
+	MetadataExit          int    `json:"metadata_exit"`
+	Status                string `json:"status"`
+	StatusExit            int    `json:"status_exit"`
+	Doctor                string `json:"doctor"`
+	DoctorExit            int    `json:"doctor_exit"`
+	Search                string `json:"search"`
+	SearchExit            int    `json:"search_exit"`
+	SearchSleep           string `json:"search_sleep"`
+	SearchStderr          string `json:"search_stderr"`
+	SearchLimit           string `json:"search_limit"`
+	SearchQuery           string `json:"search_query"`
+	SearchNoQuery         bool   `json:"search_no_query"`
+	SearchWho             string `json:"search_who"`
+	Who                   string `json:"who"`
+	WhoExit               int    `json:"who_exit"`
+	WhoQuery              string `json:"who_query"`
+	ShortRefAlias         string `json:"short_ref_alias"`
+	Open                  string `json:"open"`
+	OpenExit              int    `json:"open_exit"`
+	OpenRef               string `json:"open_ref"`
+	OpenHuman             string `json:"open_human"`
+	OpenHumanExit         int    `json:"open_human_exit"`
+	OpenStderr            string `json:"open_stderr"`
+	OpenUnknownShortRef   bool   `json:"open_unknown_short_ref"`
+	OpenAmbiguousShortRef bool   `json:"open_ambiguous_short_ref"`
+	Sync                  string `json:"sync"`
+	SyncExit              int    `json:"sync_exit"`
+	SyncSleep             string `json:"sync_sleep"`
 }
 
 func (f fakeCrawler) MarshalJSON() ([]byte, error) {
 	return json.Marshal(fakeCrawlerWire{
-		Name:          f.name,
-		Metadata:      f.metadata,
-		MetadataExit:  f.metadataExit,
-		Status:        f.status,
-		StatusExit:    f.statusExit,
-		Doctor:        f.doctor,
-		DoctorExit:    f.doctorExit,
-		Search:        f.search,
-		SearchExit:    f.searchExit,
-		SearchSleep:   f.searchSleep,
-		SearchStderr:  f.searchStderr,
-		SearchLimit:   f.searchLimit,
-		SearchQuery:   f.searchQuery,
-		SearchNoQuery: f.searchNoQuery,
-		SearchWho:     f.searchWho,
-		Who:           f.who,
-		WhoExit:       f.whoExit,
-		WhoQuery:      f.whoQuery,
-		ShortRefAlias: f.shortRefAlias,
-		Open:          f.open,
-		OpenExit:      f.openExit,
-		OpenRef:       f.openRef,
-		OpenHuman:     f.openHuman,
-		OpenHumanExit: f.openHumanExit,
-		OpenStderr:    f.openStderr,
-		Sync:          f.sync,
-		SyncExit:      f.syncExit,
-		SyncSleep:     f.syncSleep,
+		Name:                  f.name,
+		Metadata:              f.metadata,
+		MetadataExit:          f.metadataExit,
+		Status:                f.status,
+		StatusExit:            f.statusExit,
+		Doctor:                f.doctor,
+		DoctorExit:            f.doctorExit,
+		Search:                f.search,
+		SearchExit:            f.searchExit,
+		SearchSleep:           f.searchSleep,
+		SearchStderr:          f.searchStderr,
+		SearchLimit:           f.searchLimit,
+		SearchQuery:           f.searchQuery,
+		SearchNoQuery:         f.searchNoQuery,
+		SearchWho:             f.searchWho,
+		Who:                   f.who,
+		WhoExit:               f.whoExit,
+		WhoQuery:              f.whoQuery,
+		ShortRefAlias:         f.shortRefAlias,
+		Open:                  f.open,
+		OpenExit:              f.openExit,
+		OpenRef:               f.openRef,
+		OpenHuman:             f.openHuman,
+		OpenHumanExit:         f.openHumanExit,
+		OpenStderr:            f.openStderr,
+		OpenUnknownShortRef:   f.openUnknownShortRef,
+		OpenAmbiguousShortRef: f.openAmbiguousShortRef,
+		Sync:                  f.sync,
+		SyncExit:              f.syncExit,
+		SyncSleep:             f.syncSleep,
 	})
 }
 
@@ -136,34 +231,36 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	*f = fakeCrawler{
-		name:          wire.Name,
-		metadata:      wire.Metadata,
-		metadataExit:  wire.MetadataExit,
-		status:        wire.Status,
-		statusExit:    wire.StatusExit,
-		doctor:        wire.Doctor,
-		doctorExit:    wire.DoctorExit,
-		search:        wire.Search,
-		searchExit:    wire.SearchExit,
-		searchSleep:   wire.SearchSleep,
-		searchStderr:  wire.SearchStderr,
-		searchLimit:   wire.SearchLimit,
-		searchQuery:   wire.SearchQuery,
-		searchNoQuery: wire.SearchNoQuery,
-		searchWho:     wire.SearchWho,
-		who:           wire.Who,
-		whoExit:       wire.WhoExit,
-		whoQuery:      wire.WhoQuery,
-		shortRefAlias: wire.ShortRefAlias,
-		open:          wire.Open,
-		openExit:      wire.OpenExit,
-		openRef:       wire.OpenRef,
-		openHuman:     wire.OpenHuman,
-		openHumanExit: wire.OpenHumanExit,
-		openStderr:    wire.OpenStderr,
-		sync:          wire.Sync,
-		syncExit:      wire.SyncExit,
-		syncSleep:     wire.SyncSleep,
+		name:                  wire.Name,
+		metadata:              wire.Metadata,
+		metadataExit:          wire.MetadataExit,
+		status:                wire.Status,
+		statusExit:            wire.StatusExit,
+		doctor:                wire.Doctor,
+		doctorExit:            wire.DoctorExit,
+		search:                wire.Search,
+		searchExit:            wire.SearchExit,
+		searchSleep:           wire.SearchSleep,
+		searchStderr:          wire.SearchStderr,
+		searchLimit:           wire.SearchLimit,
+		searchQuery:           wire.SearchQuery,
+		searchNoQuery:         wire.SearchNoQuery,
+		searchWho:             wire.SearchWho,
+		who:                   wire.Who,
+		whoExit:               wire.WhoExit,
+		whoQuery:              wire.WhoQuery,
+		shortRefAlias:         wire.ShortRefAlias,
+		open:                  wire.Open,
+		openExit:              wire.OpenExit,
+		openRef:               wire.OpenRef,
+		openHuman:             wire.OpenHuman,
+		openHumanExit:         wire.OpenHumanExit,
+		openStderr:            wire.OpenStderr,
+		openUnknownShortRef:   wire.OpenUnknownShortRef,
+		openAmbiguousShortRef: wire.OpenAmbiguousShortRef,
+		sync:                  wire.Sync,
+		syncExit:              wire.SyncExit,
+		syncSleep:             wire.SyncSleep,
 	}
 	return nil
 }
@@ -511,13 +608,22 @@ func fakeSpineVerb(name string) bool {
 
 func (f *fakeSource) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	_ = ctx
-	_ = req
+	if req != nil {
+		f.crawler.evidence.input(fmt.Sprintf("status source=%s format=%s", f.manifest.ID, req.Format))
+	}
+	f.crawler.evidence.statusCall()
+	if f.crawler.statusCalls != nil {
+		*f.crawler.statusCalls++
+	}
 	if f.crawler.statusExit != 0 {
 		return nil, errors.New("status failed")
 	}
 	var status control.Status
 	if err := decodeContractJSON([]byte(f.crawler.status), &status); err != nil {
 		return nil, err
+	}
+	if projected, err := federation.ProjectStatus(f.manifest, &status); err == nil {
+		f.crawler.evidence.status(projected)
 	}
 	return &status, nil
 }
@@ -545,6 +651,13 @@ func (f *fakeSource) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlk
 }
 
 func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
+	if req != nil {
+		f.crawler.evidence.input(fmt.Sprintf("search source=%s format=%s text=%q who=%q limit=%d after=%q before=%q", f.manifest.ID, req.Format, query.Text, query.Who, query.Limit, query.After.Format(time.RFC3339), query.Before.Format(time.RFC3339)))
+	}
+	f.crawler.evidence.searchCall()
+	if f.crawler.searchCalls != nil {
+		*f.crawler.searchCalls++
+	}
 	_ = req
 	if f.crawler.searchSleep != "" {
 		select {
@@ -597,7 +710,11 @@ func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query tr
 			Availability: row.Availability,
 		})
 	}
-	return trawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}, nil
+	result := trawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}
+	if projected, err := federation.ProjectSearch(f.manifest, result); err == nil {
+		f.crawler.evidence.search(projected)
+	}
+	return result, nil
 }
 
 type fakeSearchResult struct {
@@ -683,7 +800,7 @@ func (f *fakeSource) open(ctx context.Context, req *trawlkit.Request, ref string
 	if req.Format == ckoutput.JSON {
 		_, _ = fmt.Fprintln(req.Out, f.crawler.open)
 		if f.crawler.openExit != 0 {
-			if envelope, ok := shortRefErrorEnvelope([]byte(f.crawler.open)); ok {
+			if envelope, ok := fakeOpenErrorEnvelope([]byte(f.crawler.open)); ok {
 				return fakeErrorBody(envelope.Error.Code)
 			}
 			return errors.New("open failed")
@@ -697,6 +814,76 @@ func (f *fakeSource) open(ctx context.Context, req *trawlkit.Request, ref string
 		return errors.New("open failed")
 	}
 	return nil
+}
+
+func fakeOpenErrorEnvelope(data []byte) (ErrorEnvelope, bool) {
+	var envelope ErrorEnvelope
+	if err := decodeContractJSON(data, &envelope); err != nil || strings.TrimSpace(envelope.Error.Code) == "" {
+		return ErrorEnvelope{}, false
+	}
+	return envelope, true
+}
+
+func (f *fakeSource) OpenRecord(_ context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	format := ckoutput.JSON
+	if req != nil {
+		format = req.Format
+	}
+	f.crawler.evidence.input(fmt.Sprintf("open source=%s format=%s ref=%q", f.manifest.ID, format, ref))
+	f.crawler.evidence.openCall()
+	if f.crawler.openCalls != nil {
+		*f.crawler.openCalls++
+	}
+	expected := f.crawler.openRef
+	if alias := f.crawler.shortRefAlias; alias != "" && ref != alias && ref != expected && !f.crawler.openUnknownShortRef && !f.crawler.openAmbiguousShortRef {
+		return nil, fmt.Errorf("open ref = %q, want %q or %q", ref, alias, expected)
+	}
+	if f.crawler.shortRefAlias == "" && expected != "" && ref != expected {
+		return nil, fmt.Errorf("open ref = %q, want %q", ref, expected)
+	}
+	if f.crawler.shortRefAlias != "" && ref != expected {
+		if f.crawler.openAmbiguousShortRef {
+			return nil, fakeErrorBody("ambiguous_short_ref")
+		}
+		if f.crawler.openUnknownShortRef || ref != f.crawler.shortRefAlias {
+			return nil, fakeErrorBody("unknown_short_ref")
+		}
+	}
+	if f.crawler.openExit != 0 {
+		return nil, errors.New("open failed")
+	}
+	if envelope, ok := fakeOpenErrorEnvelope([]byte(f.crawler.open)); ok {
+		return nil, fakeErrorBody(envelope.Error.Code)
+	}
+	if f.crawler.openHumanExit != 0 {
+		return nil, errors.New("open failed")
+	}
+	if f.crawler.openRecord != nil {
+		f.crawler.evidence.open(f.crawler.openRecord)
+		return f.crawler.openRecord, nil
+	}
+	openRef := f.crawler.openRef
+	if openRef == "" {
+		openRef = f.manifest.ID + ":item/example-1"
+	}
+	record := &openv1.OpenRecord{
+		SourceId: f.manifest.ID,
+		OpenRef:  openRef,
+		Data:     fakeOpenData(),
+		Presentation: &presentationv1.PresentationDocument{
+			Title: firstNonEmpty(f.crawler.openHuman, "Synthetic record"),
+		},
+	}
+	f.crawler.evidence.open(record)
+	return record, nil
+}
+
+func fakeOpenData() *anypb.Any {
+	value, err := anypb.New(&emptypb.Empty{})
+	if err != nil {
+		panic(err)
+	}
+	return value
 }
 
 func (f *fakeSource) sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
@@ -743,7 +930,11 @@ func jsonNumberInt64(value json.Number) int64 {
 
 func (f *fakeSource) who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
 	_ = ctx
-	_ = req
+	format := ckoutput.JSON
+	if req != nil {
+		format = req.Format
+	}
+	f.crawler.evidence.input(fmt.Sprintf("who source=%s format=%s person=%q", f.manifest.ID, format, person))
 	if f.crawler.whoQuery != "" && person != f.crawler.whoQuery {
 		return nil, fmt.Errorf("who query = %q, want %q", person, f.crawler.whoQuery)
 	}

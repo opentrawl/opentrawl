@@ -121,9 +121,11 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 	if len(sources) == 0 {
 		if r.root.JSON {
-			if err := writeJSON(r.stdout, emptySearchEnvelope(query)); err != nil {
+			response := r.canonicalSearch(nil, trawlkit.Query{Text: strings.TrimSpace(query), Limit: limit}, federationOrder(sortMode), limit)
+			if err := writeCanonicalJSON(r.stdout, response); err != nil {
 				return err
 			}
+			return outcomeExit(response.GetOutcome())
 		} else if _, err := fmt.Fprintln(r.stdout, "No crawlers found."); err != nil {
 			return err
 		}
@@ -131,7 +133,7 @@ func (c *SearchCmd) Run(r *Runtime) error {
 	}
 
 	var whoResolved *WhoCandidate
-	whoBySource := map[string]string(nil)
+	var whoBySource map[string]string
 	if whoInput != "" {
 		skippedWho := skippedWhoSources(sources)
 		resolution := collectFederatedWho(r, searchResolverSources(installed, sources), whoInput)
@@ -148,37 +150,38 @@ func (c *SearchCmd) Run(r *Runtime) error {
 			}
 			candidate := resolution.Candidates[0]
 			whoResolved = &candidate
-			whoBySource = searchWhoFilters(candidate, sources)
-			sources = searchSourcesForResolvedWho(sources, whoBySource)
+			whoBySource = make(map[string]string, len(candidate.sourceFilters))
+			for sourceID, identifier := range candidate.sourceFilters {
+				if containsWhoIdentifier(candidate.Identifiers, identifier) {
+					whoBySource[sourceID] = identifier
+				}
+			}
 		default:
 			return r.writeAmbiguousWho(query, whoInput, resolution, skippedWho, surfaceNames(installed))
 		}
 	}
 
-	results := collectSearch(r, sources, query, searchOptions{
-		limit:       limit,
-		after:       c.After,
-		before:      c.Before,
-		who:         whoInput,
-		whoBySource: whoBySource,
-	})
-	merged := mergedSearchRows(results, limit, sortMode)
-	r.reportSearchFailures(results)
+	crawlQuery, err := trawlkitSearchQuery(query, searchOptions{
+		limit:  limit,
+		after:  c.After,
+		before: c.Before,
+	}, "")
+	if err != nil {
+		return err
+	}
+	adapters := r.federationSearchSources(sources)
+	if whoResolved != nil {
+		adapters = wrapWhoSearchSources(adapters, whoBySource)
+	}
+	response := r.canonicalSearch(adapters, crawlQuery, federationOrder(sortMode), limit)
 	if r.root.JSON {
-		if err := writeJSON(r.stdout, federatedSearchEnvelope{
-			Query:          query,
-			WhoResolved:    whoResolved,
-			Results:        merged.Rows,
-			TotalMatches:   merged.TotalMatches,
-			Truncated:      merged.Truncated,
-			FailedSources:  failedSearchSources(results),
-			SkippedSources: skippedSearchSources(results),
-		}); err != nil {
+		if err := writeCanonicalJSON(r.stdout, response); err != nil {
 			return err
 		}
-		return searchExit(results)
+		return outcomeExit(response.GetOutcome())
 	}
-	if len(merged.Rows) > 0 || searchSuccesses(results) > 0 {
+	merged := searchRowsFromResponse(sources, response)
+	if len(merged.Rows) > 0 || len(response.GetSources()) > 0 {
 		if whoResolved != nil {
 			if err := renderWhoResolutionLine(r.stdout, whoInput, *whoResolved, surfaceNames(installed)); err != nil {
 				return err
@@ -192,11 +195,19 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		}); err != nil {
 			return err
 		}
-		if err := renderSearchPartialNote(r.stdout, results); err != nil {
-			return err
+	}
+	r.reportFederationOutcomes(response.GetFailures(), response.GetSkippedSources(), "search")
+	return outcomeExit(response.GetOutcome())
+}
+
+func containsWhoIdentifier(identifiers []string, value string) bool {
+	value = strings.TrimSpace(value)
+	for _, identifier := range identifiers {
+		if strings.EqualFold(strings.TrimSpace(identifier), value) {
+			return true
 		}
 	}
-	return searchExit(results)
+	return false
 }
 
 // resolveSearchTarget joins the query words, honouring one convenience:
@@ -215,7 +226,7 @@ func (r *Runtime) resolveSearchTarget(installed []Source, words []string, source
 		}
 	}
 	if sourceCSV == "" {
-		return strings.Join(words, " "), searchable(installed), "", nil
+		return strings.Join(words, " "), installed, "", nil
 	}
 	sources, err := r.selectSources(installed, splitSourceCSV(sourceCSV))
 	if err != nil {

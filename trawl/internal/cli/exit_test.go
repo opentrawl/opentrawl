@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestStatusExitCodes(t *testing.T) {
@@ -52,7 +54,7 @@ func TestStatusExitCodes(t *testing.T) {
 			args:       []string{"status"},
 			wantCode:   3,
 			wantStdout: "Telegram  error",
-			wantStderr: "Telegram status failed.\n  Remedy: run trawl doctor telegram",
+			wantStderr: "Telegram status failed:",
 		},
 		{
 			// A crawler whose metadata does not parse still surfaces the
@@ -66,8 +68,8 @@ func TestStatusExitCodes(t *testing.T) {
 			}},
 			args:       []string{"status"},
 			wantCode:   1,
-			wantStdout: "the crawler did not identify itself",
-			wantStderr: "telegram status failed.\n  Remedy: run trawl doctor telegram",
+			wantStdout: "telegram  error",
+			wantStderr: "telegram status failed:",
 		},
 	}
 
@@ -197,39 +199,26 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("status --json code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var statuses []StatusEnvelope
-	if err := json.Unmarshal([]byte(stdout), &statuses); err != nil {
+	var response federationv1.StatusResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
 		t.Fatalf("status JSON = %s err=%v", stdout, err)
 	}
-	if len(statuses) != 1 {
-		t.Fatalf("statuses = %#v", statuses)
+	if len(response.GetSources()) != 1 {
+		t.Fatalf("sources = %#v", response.GetSources())
 	}
-	got := statuses[0]
-	if got.AppID != "imessage" || got.State != "ok" || got.Summary != "Recently synced." {
+	got := response.GetSources()[0]
+	if got.GetAppId() != "imessage" || got.GetState() != "ok" || got.GetSummary() != "Archive is fresh." {
 		t.Fatalf("status = %#v", got)
 	}
-	if got.LastSyncAt != "2026-07-02T14:03:00Z" || got.Freshness == nil || got.Freshness.Status != "fresh" || got.Freshness.AgeSeconds != 120 {
+	if got.GetLastSyncRfc3339() != "2026-07-02T14:03:00Z" || got.GetFreshness().GetStatus() != "fresh" || got.GetFreshness().GetAgeSeconds() != 120 {
 		t.Fatalf("freshness fields = %#v", got)
 	}
-	if len(got.Counts) != 1 || got.Counts[0].ID != "messages" || got.Counts[0].Value.text("messages", "messages") != "42" {
+	if len(got.GetCounts()) != 1 || got.GetCounts()[0].GetId() != "messages" || got.GetCounts()[0].GetValue() != 42 {
 		t.Fatalf("counts = %#v", got.Counts)
 	}
-	var raw []map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
-		t.Fatal(err)
-	}
-	wantKeys := map[string]bool{
-		"app_id":       true,
-		"state":        true,
-		"surface":      true,
-		"summary":      true,
-		"freshness":    true,
-		"counts":       true,
-		"last_sync_at": true,
-	}
-	for key := range raw[0] {
-		if !wantKeys[key] {
-			t.Fatalf("status JSON carried unexpected field %q in %s", key, stdout)
+	for _, want := range []string{`"failures":[]`, `"skipped_sources":[]`, `"databases":[]`, `"warnings":[]`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("canonical JSON omitted %s: %s", want, stdout)
 		}
 	}
 
@@ -241,11 +230,11 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	if stderr != "" {
 		t.Fatalf("JSON error wrote stderr: %s", stderr)
 	}
-	var payload ErrorEnvelope
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
+	var payload federationv1.StatusResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &payload); err != nil {
 		t.Fatalf("error JSON = %s err=%v", stdout, err)
 	}
-	if payload.Error.Code != "source_not_found" {
-		t.Fatalf("error code = %q", payload.Error.Code)
+	if payload.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED || len(payload.GetFailures()) != 1 || payload.GetFailures()[0].GetCode() != federationv1.FailureCode_FAILURE_CODE_NOT_FOUND {
+		t.Fatalf("failure response = %#v", payload)
 	}
 }

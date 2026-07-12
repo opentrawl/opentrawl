@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +9,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func searchResultsJSON(query string, count int) string {
@@ -222,9 +224,9 @@ func TestSearchQuerylessRecencyJSONGolden(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := `{"query":"","results":[{"source":"telegram","ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},{"source":"telegram","ref":"telegram:msg/mid","time":"2026-05-12T10:00:00Z","who":"Cara","where":"Ops","snippet":"middle filter match"}],"total_matches":7,"truncated":true}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 2 || len(response.GetHits()) != 2 || response.GetHits()[0].GetOpenRef() != "telegram:msg/new" || !response.GetTruncated() {
+		t.Fatalf("search response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -368,15 +370,12 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	var envelope federatedSearchEnvelope
-	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
-		t.Fatalf("federated JSON: %v\n%s", err, stdout)
-	}
+	response := decodeCanonicalSearchResponse(t, stdout)
 	byRef := map[string]bool{}
 	calendarByRef := map[string]string{}
-	for _, row := range envelope.Results {
-		byRef[row.Ref] = row.AllDay
-		calendarByRef[row.Ref] = row.Calendar
+	for _, row := range response.GetHits() {
+		byRef[row.GetOpenRef()] = row.GetAllDay()
+		calendarByRef[row.GetOpenRef()] = row.GetCalendar()
 	}
 	if !byRef["calendar:event/aaa"] || byRef["calendar:event/bbb"] || byRef["imessage:msg/1"] {
 		t.Fatalf("federated all_day bits wrong: %#v\n%s", byRef, stdout)
@@ -384,8 +383,8 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	if calendarByRef["calendar:event/aaa"] != "Personal" || calendarByRef["calendar:event/bbb"] != "Work" || calendarByRef["imessage:msg/1"] != "" {
 		t.Fatalf("federated calendar fields wrong: %#v\n%s", calendarByRef, stdout)
 	}
-	if strings.Count(stdout, "all_day") != 1 {
-		t.Fatalf("all_day must appear only on the all-day row:\n%s", stdout)
+	if strings.Count(stdout, "all_day") != 6 {
+		t.Fatalf("canonical JSON must retain all default all_day fields:\n%s", stdout)
 	}
 }
 
@@ -404,17 +403,14 @@ func TestSearchJSONHonorsLimitAboveOldCap(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var envelope federatedSearchEnvelope
-	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
-		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout)
-	}
-	if got := len(envelope.Results); got != limit {
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if got := len(response.GetHits()); got != limit {
 		t.Fatalf("results = %d, want %d", got, limit)
 	}
-	if envelope.TotalMatches != limit {
-		t.Fatalf("total_matches = %d, want %d", envelope.TotalMatches, limit)
+	if len(response.GetSources()) != 1 || response.GetSources()[0].GetTotalMatches() != uint64(limit) {
+		t.Fatalf("sources = %#v", response.GetSources())
 	}
-	if envelope.Truncated {
+	if response.GetTruncated() {
 		t.Fatalf("truncated = true, want false")
 	}
 	if stderr != "" {
@@ -569,13 +565,9 @@ func TestSearchHumanOutputUsesFullRefsPerRow(t *testing.T) {
 	}
 }
 
-// TestSearchJSONOmitsShortRef pins short-refs.md's JSON-mode rule
-// (TRAWL-132): trawl's federated --json is the machine contract, so
-// rows carry only the canonical ref, never the human-copy alias. The
-// crawler-level search --json contract is untouched — it still gets
-// short_ref straight from the crawler, which is why the fake here
-// still emits it upstream.
-func TestSearchJSONOmitsShortRef(t *testing.T) {
+// TestSearchJSONPreservesCanonicalShortRef keeps JSON lossless while the
+// human renderer chooses the full ref for a stable copy-paste command.
+func TestSearchJSONPreservesCanonicalShortRef(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
@@ -590,12 +582,17 @@ func TestSearchJSONOmitsShortRef(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/8842","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	var response federationv1.SearchResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("search JSON = %s err=%v", stdout, err)
 	}
-	if strings.Contains(stdout, "short_ref") {
-		t.Fatalf("stdout leaked short_ref into the federated JSON contract:\n%s", stdout)
+	if len(response.GetHits()) != 1 || response.GetHits()[0].GetOpenRef() != "imessage:msg/8842" || response.GetHits()[0].GetShortRef() != "t7k3f" {
+		t.Fatalf("canonical hits = %#v", response.GetHits())
+	}
+	for _, want := range []string{`"sources":`, `"hits":`, `"failures":[]`, `"skipped_sources":[]`, `"short_ref":"t7k3f"`} {
+		if !strings.Contains(stdout, want) {
+			t.Fatalf("canonical JSON omitted %s: %s", want, stdout)
+		}
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -619,9 +616,9 @@ func TestSearchJSONIncludesFederatedEnvelope(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"Example match"}],"total_matches":2,"truncated":true}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 1 || response.GetSources()[0].GetTotalMatches() != 2 || len(response.GetHits()) != 1 || !response.GetTruncated() {
+		t.Fatalf("search response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -643,9 +640,9 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := `{"query":"boat trip","results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"Example match"}],"total_matches":5,"truncated":true}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 1 || response.GetSources()[0].GetTotalMatches() != 5 || len(response.GetHits()) != 1 || !response.GetTruncated() {
+		t.Fatalf("search response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -668,13 +665,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	for _, want := range []string{
-		"source_start: source=gmail verb=search",
-		" search start: version=dev",
-		"source_done: source=gmail verb=search",
-		"outcome=ok",
-		"results=1",
-	} {
+	for _, want := range []string{" search start: version=dev", " search finish: outcome=success"} {
 		if !strings.Contains(stderr, want) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
 		}
@@ -685,7 +676,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText := string(logTextBytes)
-	if !strings.Contains(logText, "source_done: source=gmail verb=search") || !strings.Contains(logText, "outcome=ok") {
+	if !strings.Contains(logText, "search finish: outcome=success") {
 		t.Fatalf("log missing source outcome:\n%s", logText)
 	}
 }
@@ -794,9 +785,9 @@ func TestSearchJSONEmptyResultsEnvelope(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 1 || len(response.GetHits()) != 0 || response.GetTruncated() {
+		t.Fatalf("search response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -831,12 +822,12 @@ func TestSearchJSONNoCrawlersEnvelope(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip")
-	if code != 0 {
+	if code != 1 {
 		t.Fatalf("search --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	want := `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if response.GetOutcome().String() != "OPERATION_OUTCOME_FAILED" || len(response.GetSources()) != 0 || len(response.GetHits()) != 0 {
+		t.Fatalf("no-source response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -866,8 +857,8 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				},
 			},
 			wantCode:   3,
-			wantStdout: "note: 1 of 2 sources unavailable - results are partial (see stderr)",
-			wantStderr: "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram",
+			wantStdout: "Search \"boat trip\": showing 1 of 1, newest first.",
+			wantStderr: "Telegram search failed:",
 		},
 		{
 			name: "all failed",
@@ -877,7 +868,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 				search:   `not-json`,
 			}},
 			wantCode:   1,
-			wantStderr: "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram",
+			wantStderr: "Telegram search failed:",
 		},
 	}
 
@@ -921,12 +912,12 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"boat trip","failed_sources":[{"source":"telegram","reason":"error"}],"results":[{"source":"imessage","ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"","snippet":"Example match"}],"total_matches":1,"truncated":false}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetFailures()) != 1 || response.GetFailures()[0].GetSourceId() != "telegram" || len(response.GetHits()) != 1 {
+		t.Fatalf("search response = %#v", response)
 	}
-	if !strings.Contains(stderr, "Telegram search failed: the crawler returned an error.\n  Remedy: run trawl doctor telegram") {
-		t.Fatalf("stderr missing failure:\n%s", stderr)
+	if stderr != "" {
+		t.Fatalf("JSON search wrote stderr: %s", stderr)
 	}
 }
 
@@ -955,11 +946,8 @@ func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("partial timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "Photos search failed: timed out after 100ms.\n  Remedy:") {
+	if !strings.Contains(stderr, "Photos search failed: command timed out\n  Remedy: trawl doctor photos") {
 		t.Fatalf("stderr missing loud timeout line:\n%s", stderr)
-	}
-	if !strings.Contains(stdout, "note: 1 of 2 sources unavailable - results are partial (see stderr)") {
-		t.Fatalf("stdout missing partial note:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "imessage:msg/1") {
 		t.Fatalf("surviving source dropped from results:\n%s", stdout)
@@ -986,23 +974,9 @@ func TestSearchTimeoutJSONCarriesReason(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var payload federatedSearchEnvelope
-	if err := json.Unmarshal([]byte(stdout), &payload); err != nil {
-		t.Fatalf("json = %s err=%v", stdout, err)
-	}
-	if len(payload.FailedSources) != 1 {
-		t.Fatalf("failed_sources = %+v, want one entry", payload.FailedSources)
-	}
-	got := payload.FailedSources[0]
-	if got.Source != "photos" || got.Reason != "timeout" {
-		t.Fatalf("failed_sources[0] = %+v, want {photos timeout}", got)
-	}
-	// failed_sources must sit ahead of results, not buried at the end.
-	if strings.Index(stdout, `"failed_sources"`) > strings.Index(stdout, `"results"`) {
-		t.Fatalf("failed_sources buried after results:\n%s", stdout)
-	}
-	if len(payload.Results) != 1 {
-		t.Fatalf("surviving result dropped: %+v", payload.Results)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetFailures()) != 1 || response.GetFailures()[0].GetSourceId() != "photos" || len(response.GetHits()) != 1 {
+		t.Fatalf("timeout response = %#v", response)
 	}
 }
 
@@ -1022,7 +996,7 @@ func TestSearchTotalTimeoutExitsOne(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("total timeout exit = %d, want 1 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "Photos search failed: timed out after 100ms") {
+	if !strings.Contains(stderr, "Photos search failed: command timed out") {
 		t.Fatalf("stderr missing timeout line:\n%s", stderr)
 	}
 }

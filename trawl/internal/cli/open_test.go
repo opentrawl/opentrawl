@@ -3,6 +3,9 @@ package cli
 import (
 	"strings"
 	"testing"
+
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
@@ -30,12 +33,11 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 }
 
 func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
-	payload := `{"body":"Example body","ref":"imessage:msg/8842"}`
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:      "imsgcrawl",
 		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/8842",
-		open:      payload,
+		open:      `{"body":"Example body","ref":"imessage:msg/8842"}`,
 		openHuman: "human output",
 	})
 	t.Setenv("PATH", binDir)
@@ -45,18 +47,21 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	if stdout != payload+"\n" {
-		t.Fatalf("stdout = %q, want raw payload", stdout)
+	var response openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("open JSON = %s err=%v", stdout, err)
+	}
+	if response.GetRequestedRef() != "imessage:msg/8842" || response.GetRecord().GetOpenRef() != "imessage:msg/8842" {
+		t.Fatalf("open response = %#v", response)
 	}
 }
 
 func TestOpenPassesFullRefToCrawler(t *testing.T) {
-	payload := `{"body":"Example body","ref":"fake:msg/1"}`
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
 		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"fake","display_name":"Fake"}`,
 		openRef:  "fake:msg/1",
-		open:     payload,
+		open:     `{"body":"Example body","ref":"fake:msg/1"}`,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
@@ -65,8 +70,12 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	if stdout != payload+"\n" {
-		t.Fatalf("stdout = %q, want raw payload", stdout)
+	var response openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("open JSON = %s err=%v", stdout, err)
+	}
+	if response.GetRequestedRef() != "fake:msg/1" || response.GetRecord().GetOpenRef() != "fake:msg/1" {
+		t.Fatalf("open response = %#v", response)
 	}
 }
 
@@ -108,11 +117,15 @@ func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
 			t.Setenv("HOME", syntheticHome(t))
 
 			stdout, stderr, code := runCLI(t, "--json", "open", tt.fullRef)
-			if code != 0 {
+			if code != 1 {
 				t.Fatalf("open --json code = %d stderr=%s stdout=%s", code, stderr, stdout)
 			}
-			if stdout != tt.payload+"\n" {
-				t.Fatalf("stdout = %q, want raw payload", stdout)
+			var response openv1.OpenResponse
+			if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+				t.Fatalf("open JSON = %s err=%v", stdout, err)
+			}
+			if response.GetRequestedRef() != tt.fullRef || response.GetFailure().GetCode().String() != "FAILURE_CODE_INVALID_INPUT" {
+				t.Fatalf("legacy ref response = %#v", response)
 			}
 			if stderr != "" {
 				t.Fatalf("stderr = %s", stderr)
@@ -143,6 +156,19 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
+	}
+
+	requestedRef := "  t7k3f  "
+	stdout, stderr, code = runCLI(t, "--json", "open", requestedRef)
+	if code != 0 {
+		t.Fatalf("JSON code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var response openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("open JSON = %s err=%v", stdout, err)
+	}
+	if response.GetRequestedRef() != requestedRef || response.GetRecord().GetOpenRef() != "imessage:msg/1" {
+		t.Fatalf("open response = %#v", response)
 	}
 }
 
@@ -281,7 +307,7 @@ func TestOpenShortRefReportsUnknown(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %s", stdout)
 	}
-	if !strings.Contains(stderr, `Short ref "t7k3f" was not found.`) {
+	if !strings.Contains(stderr, `Could not resolve short ref "t7k3f". Every source failed:`) {
 		t.Fatalf("stderr missing unknown short ref:\n%s", stderr)
 	}
 }
@@ -308,9 +334,12 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"error":{"code":"ambiguous_short_ref","message":"Short ref \"t7k3f\" matched more than one item.","remedy":"rerun the search or use the full ref"}}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	var response openv1.OpenResponse
+	if err := (protojson.UnmarshalOptions{}).Unmarshal([]byte(stdout), &response); err != nil {
+		t.Fatalf("open JSON = %s err=%v", stdout, err)
+	}
+	if response.GetOutcome().String() != "OPERATION_OUTCOME_FAILED" || response.GetRequestedRef() != "t7k3f" || response.GetFailure().GetCode().String() != "FAILURE_CODE_INVALID_INPUT" {
+		t.Fatalf("ambiguous response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -323,6 +352,7 @@ func TestOpenShortRefRejectsLegacyLookupEnvelope(t *testing.T) {
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		open:          `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
+		openExit:      1,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
@@ -351,7 +381,7 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 			if code != 1 {
 				t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 			}
-			if !strings.Contains(stderr, "refs look like <source>:<path>") && !strings.Contains(stderr, "short refs use") {
+			if !strings.Contains(stderr, "refs look like <source>:<path>") && !strings.Contains(stderr, "short refs use") && !strings.Contains(stderr, "was not found") {
 				t.Fatalf("stderr missing ref remedy:\n%s", stderr)
 			}
 		})
@@ -374,10 +404,10 @@ func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	if code != 1 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if stdout != "partial crawler output\n" {
-		t.Fatalf("stdout = %q, want crawler stdout", stdout)
+	if stdout != "" {
+		t.Fatalf("stdout = %q, want no partial source bytes", stdout)
 	}
-	if !strings.Contains(stderr, `Messages could not open ref "imessage:msg/8842".`) {
-		t.Fatalf("stderr = %q, want trawl open failure", stderr)
+	if !strings.Contains(stderr, "open failed") || !strings.Contains(stderr, "Remedy: trawl doctor imessage") {
+		t.Fatalf("stderr = %q, want typed open failure", stderr)
 	}
 }

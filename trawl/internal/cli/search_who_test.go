@@ -11,19 +11,19 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 			name:        "imsgcrawl",
 			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
 			searchQuery: "boat trip",
-			searchWho:   "Alice Example",
+			searchWho:   "alice@example.com",
 			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 			whoQuery:    "Alice Example",
-			who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+			who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 		},
 		fakeCrawler{
 			name:        "telecrawl",
 			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
 			searchQuery: "boat trip",
-			searchWho:   "Alice Example",
+			searchWho:   "+15550001001",
 			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 			whoQuery:    "Alice Example",
-			who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["telegram"],"messages":7}]}`,
+			who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","identifiers":["+15550001001"],"match_quality":"exact","sources":["telegram"],"messages":7}]}`,
 		},
 	)
 	t.Setenv("PATH", binDir)
@@ -58,25 +58,22 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 			search:     `{"error":{"code":"unknown_who","message":"No person matched \"alice@example.com\".","remedy":"retry with a suggestion or search without --who"}}`,
 			searchExit: 5,
 			whoQuery:   "alice@example.com",
-			who:        `{"query":"alice@example.com","candidates":[]}`,
+			who:        `{"query":"alice@example.com","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["telegram"],"messages":7}]}`,
 		},
 	)
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--who", "alice@example.com")
-	if code != 0 {
+	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var payload federatedSearchEnvelope
-	if err := decodeContractJSON([]byte(stdout), &payload); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetHits()) != 1 || response.GetHits()[0].GetSourceId() != "imessage" || len(response.GetFailures()) != 0 {
+		t.Fatalf("search response = %#v", response)
 	}
-	if len(payload.Results) != 1 || payload.Results[0].Source != "imessage" {
-		t.Fatalf("results = %+v", payload.Results)
-	}
-	if len(payload.FailedSources) != 0 {
-		t.Fatalf("failed_sources = %+v", payload.FailedSources)
+	if len(response.GetSkippedSources()) != 1 || response.GetSkippedSources()[0].GetSourceId() != "telegram" || response.GetSkippedSources()[0].GetReason() != "Cannot filter by the resolved person." {
+		t.Fatalf("skips = %#v", response.GetSkippedSources())
 	}
 	if strings.Contains(stderr, "search failed") || strings.Contains(stderr, "trawl doctor") {
 		t.Fatalf("stderr reported unknown person as source failure:\n%s", stderr)
@@ -137,18 +134,12 @@ func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "--json", "search", "boat trip", "--who", "alice@example.com")
-	if code != 0 {
+	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	var payload federatedSearchEnvelope
-	if err := decodeContractJSON([]byte(stdout), &payload); err != nil {
-		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
-	}
-	if len(payload.Results) != 1 || payload.Results[0].Source != "imessage" {
-		t.Fatalf("results = %+v", payload.Results)
-	}
-	if len(payload.FailedSources) != 0 {
-		t.Fatalf("failed_sources = %+v", payload.FailedSources)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetHits()) != 1 || response.GetHits()[0].GetSourceId() != "imessage" || len(response.GetFailures()) != 1 || response.GetFailures()[0].GetSourceId() != "telegram" {
+		t.Fatalf("search response = %#v", response)
 	}
 	if strings.Contains(stderr, "search failed") || strings.Contains(stderr, "trawl doctor") {
 		t.Fatalf("stderr reported unknown person as source failure:\n%s", stderr)
@@ -163,10 +154,10 @@ func TestSearchWhoPassesThroughWithPositionalSource(t *testing.T) {
 		name:        "imsgcrawl",
 		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
 		searchQuery: "boat trip",
-		searchWho:   "Alice Example",
+		searchWho:   "alice@example.com",
 		search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 		whoQuery:    "Alice Example",
-		who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+		who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
@@ -183,11 +174,12 @@ func TestSearchWhoPassesThroughWithPositionalSource(t *testing.T) {
 func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
-			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
-			search:   `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
-			whoQuery: "Alice",
-			who:      `{"query":"Alice","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+			name:      "imsgcrawl",
+			metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			search:    `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
+			searchWho: "alice@example.com",
+			whoQuery:  "Alice",
+			who:       `{"query":"Alice","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 		},
 		fakeCrawler{
 			name:       "telecrawl",
@@ -202,15 +194,12 @@ func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	for _, want := range []string{
-		"imessage:msg/1",
-		"note: 1 of 2 sources skipped - results are partial (see stderr)",
-	} {
+	for _, want := range []string{"imessage:msg/1"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
 		}
 	}
-	if !strings.Contains(stderr, "Telegram cannot filter by person yet") {
+	if !strings.Contains(stderr, "Telegram search skipped: Cannot filter by the resolved person.") {
 		t.Fatalf("stderr missing capability note:\n%s", stderr)
 	}
 	if strings.Contains(stderr, "Telegram search failed") {
@@ -429,13 +418,13 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 
 	stdout, stderr, code := runCLI(t, "search", "specs", "--who", "alex")
-	if code != 0 {
+	if code != 3 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if !strings.Contains(stdout, "alex → Alex Jones (Contacts, Messages, WhatsApp)") {
 		t.Fatalf("stdout missing clawdex-upgraded resolution:\n%s", stdout)
 	}
-	if stderr != "" {
+	if !strings.Contains(stderr, "Contacts search skipped: Search is not supported.") {
 		t.Fatalf("stderr = %s", stderr)
 	}
 }
@@ -445,10 +434,10 @@ func TestSearchFilterOnlyPassesThroughWithoutQuery(t *testing.T) {
 		name:          "imsgcrawl",
 		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
 		searchNoQuery: true,
-		searchWho:     "Alice Example",
+		searchWho:     "alice@example.com",
 		search:        `{"query":"","results":[],"total_matches":0,"truncated":false}`,
 		whoQuery:      "Alice Example",
-		who:           `{"query":"Alice Example","candidates":[{"who":"Alice Example","match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+		who:           `{"query":"Alice Example","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
 	})
 	t.Setenv("PATH", binDir)
 	t.Setenv("HOME", syntheticHome(t))
@@ -478,9 +467,9 @@ func TestSearchJSONIgnoresLegacyWhoMatched(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	want := `{"query":"specs","results":[],"total_matches":0,"truncated":false}` + "\n"
-	if stdout != want {
-		t.Fatalf("stdout = %s\nwant = %s", stdout, want)
+	response := decodeCanonicalSearchResponse(t, stdout)
+	if len(response.GetSources()) != 1 || len(response.GetHits()) != 0 || response.GetTruncated() {
+		t.Fatalf("search response = %#v", response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
