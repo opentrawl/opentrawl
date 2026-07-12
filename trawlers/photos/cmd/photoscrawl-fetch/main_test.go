@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -212,6 +213,28 @@ func TestCurrentStillWireErrorResponseUsesFixedStageTokensWithoutLeakage(t *test
 		if strings.Contains(response.ErrorMessage, "/private/runtime") || strings.Contains(response.ErrorMessage, "asset-uuid") {
 			t.Fatalf("stage=%q response leaked input: %q", stage, response.ErrorMessage)
 		}
+	}
+}
+
+func TestRunCurrentStillAppKeepsMainLoopAliveUntilResponseWorkFinishes(t *testing.T) {
+	originalPrepare := prepareCurrentMainLoop
+	originalRun := runCurrentMainLoop
+	originalStop := stopCurrentMainLoop
+	t.Cleanup(func() {
+		prepareCurrentMainLoop = originalPrepare
+		runCurrentMainLoop = originalRun
+		stopCurrentMainLoop = originalStop
+	})
+	prepared := make(chan struct{})
+	stopped := make(chan struct{})
+	prepareCurrentMainLoop = func() bool { close(prepared); return true }
+	runCurrentMainLoop = func() {
+		<-prepared
+		<-stopped
+	}
+	stopCurrentMainLoop = func() { close(stopped) }
+	if code := runCurrentStillApp([]string{"run-current-still"}, io.Discard); code != 2 {
+		t.Fatalf("exit code = %d, want 2", code)
 	}
 }
 

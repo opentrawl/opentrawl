@@ -25,14 +25,37 @@ var (
 	requestAuthorization   = photos.RequestPhotoLibraryAuthorization
 	exportOriginalMatching = photos.ExportOriginalResourceMatching
 	exportCurrentStill     = photos.ExportCurrentStillMatching
+	prepareCurrentMainLoop = photos.PrepareCurrentStillMainLoop
+	runCurrentMainLoop     = photos.RunCurrentStillMainLoop
+	stopCurrentMainLoop    = photos.StopCurrentStillMainLoop
 )
+
+func init() { runtime.LockOSThread() }
 
 func main() {
 	if len(os.Args) == 1 {
 		runtime.LockOSThread()
 		os.Exit(requestAccess(context.Background()))
 	}
+	if len(os.Args) == 6 && os.Args[1] == "run-current-still" {
+		os.Exit(runCurrentStillApp(os.Args[1:], os.Stderr))
+	}
 	os.Exit(run(context.Background(), os.Args[1:], os.Stderr))
+}
+
+func runCurrentStillApp(args []string, stderr io.Writer) int {
+	if !prepareCurrentMainLoop() {
+		writeln(stderr, "photoscrawl-fetch current-still main loop must run on the native main thread")
+		return 1
+	}
+	result := make(chan int, 1)
+	go func() {
+		code := run(context.Background(), args, stderr)
+		result <- code
+		stopCurrentMainLoop()
+	}()
+	runCurrentMainLoop()
+	return <-result
 }
 
 // requestAccess is the LaunchServices first-run entrypoint. It may show the

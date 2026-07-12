@@ -6,6 +6,132 @@
 #include <stdlib.h>
 #include <string.h>
 
+@class CSCurrentStillState;
+static NSCondition *csCommandCondition;
+static BOOL csCommandFinished;
+static BOOL csCancellationRequested;
+static CSCurrentStillState *csActiveState;
+void photoscrawl_cancel_current_still_request(void);
+
+int photoscrawl_prepare_current_still_main_loop(void) {
+  if (![NSThread isMainThread]) return 0;
+  csCommandCondition = [[NSCondition alloc] init];
+  csCommandFinished = NO;
+  csCancellationRequested = NO;
+  csActiveState = nil;
+  return 1;
+}
+
+void photoscrawl_run_current_still_main_loop(void) {
+  if (![NSThread isMainThread]) return;
+  while (true) {
+    [csCommandCondition lock];
+    BOOL finished = csCommandFinished;
+    [csCommandCondition unlock];
+    if (finished) return;
+    CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.1, true);
+  }
+}
+
+void photoscrawl_stop_current_still_main_loop(void) {
+  [csCommandCondition lock];
+  csCommandFinished = YES;
+  [csCommandCondition signal];
+  [csCommandCondition unlock];
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
+@interface CSCurrentStillState : NSObject
+@property(nonatomic, strong) NSCondition *condition;
+@property(nonatomic, strong) NSData *data;
+@property(nonatomic, strong) NSString *uti;
+@property(nonatomic, strong) NSDictionary *info;
+@property(nonatomic, strong) PHImageManager *manager;
+@property(nonatomic) PHImageRequestID requestID;
+@property(nonatomic) CGImagePropertyOrientation orientation;
+@property(nonatomic) BOOL started;
+@property(nonatomic) BOOL finished;
+@property(nonatomic) BOOL timedOut;
+@property(nonatomic) BOOL cancelled;
+@property(nonatomic) BOOL sawDegraded;
+@property(nonatomic) BOOL sawInCloud;
+@end
+
+@implementation CSCurrentStillState
+@end
+
+static BOOL csFinishCurrentStill(CSCurrentStillState *state, BOOL timedOut, BOOL cancelled, NSData *data, NSString *uti, CGImagePropertyOrientation orientation, NSDictionary *info) {
+  [state.condition lock];
+  if (state.finished) { [state.condition unlock]; return NO; }
+  state.data = data;
+  state.uti = uti;
+  state.orientation = orientation;
+  state.info = info;
+  state.finished = YES;
+  state.timedOut = timedOut;
+  state.cancelled = cancelled;
+  [state.condition unlock];
+  return YES;
+}
+
+int photoscrawl_test_current_still_finish_once(int first, int second, int started, int *cancelCountOut, int *successCountOut) {
+  CSCurrentStillState *state = [[CSCurrentStillState alloc] init];
+  state.condition = [[NSCondition alloc] init];
+  state.started = started != 0;
+  int cancelCount = 0;
+  int successCount = 0;
+  for (int index = 0; index < 2; index++) {
+    int outcome = index == 0 ? first : second;
+    BOOL won = csFinishCurrentStill(state, outcome == 2, outcome == 3, outcome == 1 ? [NSData data] : nil, nil, kCGImagePropertyOrientationUp, nil);
+    if (!won) continue;
+    if (outcome == 1) successCount++;
+    if ((outcome == 2 || outcome == 3) && state.started) cancelCount++;
+  }
+  if (cancelCountOut) *cancelCountOut = cancelCount;
+  if (successCountOut) *successCountOut = successCount;
+  return state.finished ? 1 : 0;
+}
+
+static BOOL csRegisterCurrentStillState(CSCurrentStillState *state) {
+  [csCommandCondition lock];
+  csActiveState = state;
+  BOOL cancellationRequested = csCancellationRequested;
+  csCancellationRequested = NO;
+  [csCommandCondition unlock];
+  return cancellationRequested;
+}
+
+int photoscrawl_test_current_still_cancel_before_registration(void) {
+  csCommandCondition = [[NSCondition alloc] init];
+  csActiveState = nil;
+  csCancellationRequested = NO;
+  photoscrawl_cancel_current_still_request();
+  CSCurrentStillState *state = [[CSCurrentStillState alloc] init];
+  state.condition = [[NSCondition alloc] init];
+  return csRegisterCurrentStillState(state) && !state.started ? 1 : 0;
+}
+
+void photoscrawl_cancel_current_still_request(void) {
+  [csCommandCondition lock];
+  CSCurrentStillState *state = csActiveState;
+  if (state == nil) csCancellationRequested = YES;
+  [csCommandCondition unlock];
+  if (state == nil) return;
+  CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+    if (!csFinishCurrentStill(state, NO, YES, nil, nil, kCGImagePropertyOrientationUp, nil)) return;
+    [state.condition lock];
+    PHImageManager *manager = state.manager;
+    PHImageRequestID requestID = state.requestID;
+    BOOL started = state.started;
+    [state.condition unlock];
+    if (started) [manager cancelImageRequest:requestID];
+    [state.condition lock];
+    [state.condition broadcast];
+    [state.condition unlock];
+  });
+  CFRunLoopWakeUp(CFRunLoopGetMain());
+}
+
 static void csError(char **out, NSString *message) {
   if (out == NULL) return;
   NSData *data = [message dataUsingEncoding:NSUTF8StringEncoding];
@@ -53,39 +179,78 @@ int photoscrawl_export_current_still_matching(const char *assetUUID, long long m
     long long observedMicroseconds = llround((observed - observedSeconds) * 1000000.0);
     if (observedMicroseconds == 1000000) { observedSeconds++; observedMicroseconds = 0; }
     if (observedSeconds != modificationUnixSeconds || observedMicroseconds != modificationMicroseconds) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }
-    PHImageRequestOptions *options = [[PHImageRequestOptions alloc] init]; options.version = PHImageRequestOptionsVersionCurrent; options.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat; options.resizeMode = PHImageRequestOptionsResizeModeNone; options.networkAccessAllowed = allowNetwork != 0; options.synchronous = NO;
-    dispatch_semaphore_t done = dispatch_semaphore_create(0);
-    __block NSData *data = nil;
-    __block NSString *uti = nil;
-    __block CGImagePropertyOrientation orientation = kCGImagePropertyOrientationUp;
-    __block NSDictionary *info = nil;
-    __block BOOL finished = NO;
-    __block BOOL sawDegraded = NO;
-    __block BOOL sawInCloud = NO;
-    PHImageRequestID requestID = [[PHImageManager defaultManager] requestImageDataAndOrientationForAsset:asset options:options resultHandler:^(NSData *result, NSString *resultUTI, CGImagePropertyOrientation resultOrientation, NSDictionary *resultInfo) {
-      @synchronized (done) {
-        if (finished) return;
+    CSCurrentStillState *state = [[CSCurrentStillState alloc] init];
+    state.condition = [[NSCondition alloc] init];
+    state.orientation = kCGImagePropertyOrientationUp;
+    BOOL cancellationRequested = csRegisterCurrentStillState(state);
+    if (cancellationRequested) csFinishCurrentStill(state, NO, YES, nil, nil, kCGImagePropertyOrientationUp, nil);
+    if (cancellationRequested) goto currentStillFinished;
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), kCFRunLoopDefaultMode, ^{
+      [state.condition lock];
+      if (state.finished) { [state.condition unlock]; return; }
+      [state.condition unlock];
+      PHImageRequestOptions *options = [[PHImageRequestOptions alloc] init]; options.version = PHImageRequestOptionsVersionCurrent; options.deliveryMode = PHImageRequestOptionsDeliveryModeHighQualityFormat; options.resizeMode = PHImageRequestOptionsResizeModeNone; options.networkAccessAllowed = allowNetwork != 0; options.synchronous = NO;
+      PHImageManager *manager = [PHImageManager defaultManager];
+      PHImageRequestID requestID = [manager requestImageDataAndOrientationForAsset:asset options:options resultHandler:^(NSData *result, NSString *resultUTI, CGImagePropertyOrientation resultOrientation, NSDictionary *resultInfo) {
+        [state.condition lock];
+        if (state.finished) { [state.condition unlock]; return; }
         BOOL degraded = [resultInfo[PHImageResultIsDegradedKey] boolValue];
         BOOL cancelled = [resultInfo[PHImageCancelledKey] boolValue];
         NSError *callbackError = resultInfo[PHImageErrorKey];
-        sawDegraded = sawDegraded || degraded;
-        sawInCloud = sawInCloud || [resultInfo[PHImageResultIsInCloudKey] boolValue];
-        if (degraded && !cancelled && callbackError == nil) return;
-        finished = YES;
-        data = result;
-        uti = resultUTI;
-        orientation = resultOrientation;
-        info = resultInfo;
-        dispatch_semaphore_signal(done);
-      }
-    }];
-    if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, timeoutMilliseconds * NSEC_PER_MSEC)) != 0) {
-      @synchronized (done) {
-        finished = YES;
-        if (callbackDegradedOut) *callbackDegradedOut = sawDegraded;
-        if (callbackInCloudOut) *callbackInCloudOut = sawInCloud;
-      }
-      [[PHImageManager defaultManager] cancelImageRequest:requestID];
+        state.sawDegraded = state.sawDegraded || degraded;
+        state.sawInCloud = state.sawInCloud || [resultInfo[PHImageResultIsInCloudKey] boolValue];
+        if (degraded && !cancelled && callbackError == nil) { [state.condition unlock]; return; }
+        [state.condition unlock];
+        if (!csFinishCurrentStill(state, NO, NO, result, resultUTI, resultOrientation, resultInfo)) return;
+        [state.condition lock];
+        [state.condition broadcast];
+        [state.condition unlock];
+      }];
+      [state.condition lock];
+      state.manager = manager;
+      state.requestID = requestID;
+      state.started = YES;
+      BOOL cancelAfterStart = state.cancelled || state.timedOut;
+      [state.condition unlock];
+      if (cancelAfterStart) [manager cancelImageRequest:requestID];
+      CFRunLoopTimerRef timer = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + (CFAbsoluteTime)timeoutMilliseconds / 1000.0, 0, 0, 0, ^(CFRunLoopTimerRef unused) {
+        if (!csFinishCurrentStill(state, YES, NO, nil, nil, kCGImagePropertyOrientationUp, nil)) return;
+        [state.condition lock];
+        PHImageManager *manager = state.manager;
+        PHImageRequestID requestID = state.requestID;
+        BOOL started = state.started;
+        [state.condition unlock];
+        if (started) [manager cancelImageRequest:requestID];
+        [state.condition lock];
+        [state.condition broadcast];
+        [state.condition unlock];
+      });
+      CFRunLoopAddTimer(CFRunLoopGetMain(), timer, kCFRunLoopDefaultMode);
+      CFRelease(timer);
+    });
+    CFRunLoopWakeUp(CFRunLoopGetMain());
+currentStillFinished:
+    [state.condition lock];
+    while (!state.finished) [state.condition wait];
+    BOOL timedOut = state.timedOut;
+    BOOL cancelled = state.cancelled;
+    NSData *data = state.data;
+    NSString *uti = state.uti;
+    CGImagePropertyOrientation orientation = state.orientation;
+    NSDictionary *info = state.info;
+    BOOL sawDegraded = state.sawDegraded;
+    BOOL sawInCloud = state.sawInCloud;
+    [state.condition unlock];
+    [csCommandCondition lock];
+    if (csActiveState == state) csActiveState = nil;
+    [csCommandCondition unlock];
+    if (cancelled) {
+      csError(errorOut, @"photokit current-still request cancelled");
+      return 0;
+    }
+    if (timedOut) {
+      if (callbackDegradedOut) *callbackDegradedOut = sawDegraded;
+      if (callbackInCloudOut) *callbackInCloudOut = sawInCloud;
       csError(errorOut, @"photokit original export timed out");
       return 0;
     }

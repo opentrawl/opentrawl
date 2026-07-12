@@ -7,6 +7,34 @@ import (
 	"testing"
 )
 
+func TestCurrentStillNativeFinishOnceRaces(t *testing.T) {
+	tests := []struct {
+		name                     string
+		first, second            int
+		started                  bool
+		wantCancels, wantSuccess int
+	}{
+		{name: "callback before timeout", first: 1, second: 2, started: true, wantSuccess: 1},
+		{name: "timeout before callback", first: 2, second: 1, started: true, wantCancels: 1},
+		{name: "cancellation before callback", first: 3, second: 1, started: true, wantCancels: 1},
+		{name: "cancellation before start", first: 3, second: 1},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			cancellations, successes := currentStillFinishOnceForTest(test.first, test.second, test.started)
+			if cancellations != test.wantCancels || successes != test.wantSuccess {
+				t.Fatalf("cancellations=%d successes=%d, want %d %d", cancellations, successes, test.wantCancels, test.wantSuccess)
+			}
+		})
+	}
+}
+
+func TestCurrentStillNativeCancellationBeforeRegistrationStartsNoRequest(t *testing.T) {
+	if !currentStillCancelBeforeRegistrationForTest() {
+		t.Fatal("cancellation before registration did not stop request start")
+	}
+}
+
 func TestCurrentStillBridgeErrorPreservesTerminalCallbackFacts(t *testing.T) {
 	err := currentStillBridgeError("PHPhotosErrorDomain", 3303, "callback /private/source", true, true, false, true, "")
 	var callbackErr *PhotoKitExportError

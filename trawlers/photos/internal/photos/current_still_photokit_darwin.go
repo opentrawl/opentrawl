@@ -6,6 +6,12 @@ package photos
 #cgo darwin LDFLAGS: -framework Foundation -framework Photos -framework ImageIO
 #include <stdlib.h>
 int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut);
+int photoscrawl_prepare_current_still_main_loop(void);
+void photoscrawl_run_current_still_main_loop(void);
+void photoscrawl_stop_current_still_main_loop(void);
+void photoscrawl_cancel_current_still_request(void);
+int photoscrawl_test_current_still_finish_once(int first, int second, int started, int *cancelCountOut, int *successCountOut);
+int photoscrawl_test_current_still_cancel_before_registration(void);
 */
 import "C"
 
@@ -18,6 +24,22 @@ import (
 	"time"
 	"unsafe"
 )
+
+func PrepareCurrentStillMainLoop() bool { return C.photoscrawl_prepare_current_still_main_loop() != 0 }
+
+func RunCurrentStillMainLoop() { C.photoscrawl_run_current_still_main_loop() }
+
+func StopCurrentStillMainLoop() { C.photoscrawl_stop_current_still_main_loop() }
+
+func currentStillFinishOnceForTest(first, second int, started bool) (int, int) {
+	var cancellations, successes C.int
+	C.photoscrawl_test_current_still_finish_once(C.int(first), C.int(second), C.int(boolInt(started)), &cancellations, &successes)
+	return int(cancellations), int(successes)
+}
+
+func currentStillCancelBeforeRegistrationForTest() bool {
+	return C.photoscrawl_test_current_still_cancel_before_registration() != 0
+}
 
 // ExportCurrentStillMatching obtains only the full-resolution .current image
 // from PhotoKit. The callback does not install a file after timeout.
@@ -44,7 +66,16 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	var cErr, domain, stage *C.char
 	var code C.longlong
 	var cancelled, degraded, inCloud, callbackReturned C.int
+	nativeDone := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			C.photoscrawl_cancel_current_still_request()
+		case <-nativeDone:
+		}
+	}()
 	ok := C.photoscrawl_export_current_still_matching(cUUID, C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage)
+	close(nativeDone)
 	if mediaType != nil {
 		defer C.free(unsafe.Pointer(mediaType))
 	}
@@ -56,6 +87,9 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 	}
 	if stage != nil {
 		defer C.free(unsafe.Pointer(stage))
+	}
+	if err := ctx.Err(); err != nil {
+		return CurrentStillFact{}, err
 	}
 	domainText := ""
 	if domain != nil {
