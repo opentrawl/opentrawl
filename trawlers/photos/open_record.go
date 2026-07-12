@@ -254,7 +254,7 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 	if title == "" {
 		title = "Photo"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 12)
 	mechanical := record.Mechanical
 	if mechanical != nil {
 		if captured := mechanical.Captured; captured != nil {
@@ -282,7 +282,10 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 			appendPresentationField(&fields, "Availability", original.GetAvailability())
 		}
 	}
-	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	blocks := make([]*presentationv1.Block, 0, 3)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
 	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
 	}

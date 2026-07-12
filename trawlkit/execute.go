@@ -211,7 +211,7 @@ func openStore(ctx context.Context, paths Paths, mode storeMode) (*store.Store, 
 			return nil, fmt.Errorf("stat archive: %w", err)
 		}
 		if !exists {
-			return nil, output.UsageError{Err: fmt.Errorf("archive does not exist at %s", paths.Archive)}
+			return nil, NewMissingArchiveError(paths.Archive)
 		}
 		return store.OpenReadOnly(ctx, paths.Archive)
 	case storeWrite:

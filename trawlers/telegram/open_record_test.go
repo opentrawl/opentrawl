@@ -47,7 +47,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Lantern"
-blocks: { fields: { fields: { label: "Ref" display: "telegram:msg/41" } fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
+blocks: { fields: { fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
 blocks: { prose: { text: "Target" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T13:59:00Z" } cells: { display: "Morgan Example" } cells: { display: "Before" } } rows: { role: ROLE_TARGET cells: { display: "2026-07-10T14:00:00Z" } cells: { display: "Avery Example" } cells: { display: "Target" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:01:00Z" } cells: { display: "Unavailable" } cells: { display: "After" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:02:00Z" } cells: { display: "Unavailable" } cells: { display: "No exported sender" } } } }
 actions: { label: "Open media link" url: "https://example.com/fixture" }
@@ -114,13 +114,16 @@ func assertOpenRecord(t *testing.T, input any, got proto.Message, wantName, want
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

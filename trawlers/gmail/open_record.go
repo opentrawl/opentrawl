@@ -78,7 +78,7 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 	if title == "" {
 		title = "(no subject)"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 6)
 	if from := formatPresentationAddress(record.Headers.GetFromName(), record.Headers.GetFromAddress()); from != "" {
 		fields = append(fields, &presentationv1.Field{Label: "From", Display: from})
 	}
@@ -95,7 +95,10 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 		fields = append(fields, &presentationv1.Field{Label: "Labels", Display: labels})
 	}
 	fields = append(fields, &presentationv1.Field{Label: "Unread", Display: formatPresentationBool(record.Unread)})
-	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	blocks := make([]*presentationv1.Block, 0, 3)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
 	if body := strings.TrimSpace(record.Body); body != "" {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}}})
 	}

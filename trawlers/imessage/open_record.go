@@ -82,11 +82,14 @@ func projectOpenPresentation(value archive.MessageContext) *presentationv1.Prese
 	if title == "" || title == "unknown chat" {
 		title = "Conversation"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 1)
 	if participants := joinPresentationStrings(record.Chat.Participants); participants != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Participants", Display: participants})
 	}
-	blocks := []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}
+	blocks := make([]*presentationv1.Block, 0, 3)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
 	if text := strings.TrimSpace(record.Message.Text); text != "" {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
 	}

@@ -90,7 +90,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	if title == "" {
 		title = "Contact"
 	}
-	fields := []*presentationv1.Field{{Label: "Ref", Display: record.Ref}}
+	fields := make([]*presentationv1.Field, 0, 7)
 	appendPresentationField(&fields, "Also known as", joinPresentationStrings(record.Aka))
 	appendPresentationField(&fields, "Tags", joinPresentationStrings(record.Tags))
 	appendPresentationField(&fields, "Emails", formatPresentationContactValues(record.Emails))
@@ -98,7 +98,11 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	appendPresentationField(&fields, "Addresses", formatPresentationContactValues(record.Addresses))
 	appendPresentationField(&fields, "Accounts", formatPresentationAccounts(record.Accounts))
 	appendPresentationField(&fields, "Annotation", record.GetAnnotation())
-	return &presentationv1.PresentationDocument{Title: title, Blocks: []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}}}
+	blocks := make([]*presentationv1.Block, 0, 1)
+	if len(fields) > 0 {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
+	}
+	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
 }
 
 func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {

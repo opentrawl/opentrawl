@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
@@ -118,6 +119,27 @@ func TestFederationAdaptersProjectMixedResponses(t *testing.T) {
 	}
 	writeRuntimeEvidence(t, "open-adapter-input.json", append(openInput, '\n'))
 	writeRuntimeEvidence(t, "open-response.pbtxt", []byte(prototext.Format(open)))
+}
+
+func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
+	ensureSyntheticHome(t)
+	archive := filepath.Join(t.TempDir(), "synthetic-missing.db")
+	manifest := control.NewManifest("notes", "Notes", "notescrawl")
+	manifest.Commands["search"] = control.Command{}
+	runtime := &Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}
+	response := federation.Search(context.Background(), runtime.federationSearchSources([]Source{{
+		Manifest: manifest,
+		ID:       "notes",
+		Surface:  "Notes",
+		Crawler:  &adapterCrawler{id: "notes", archive: archive},
+	}}), trawlkit.Query{Text: "synthetic"}, federationv1.SearchOrder_SEARCH_ORDER_RECENCY, 1)
+	if len(response.GetFailures()) != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+	failure := response.GetFailures()[0]
+	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "trawl doctor notes" || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
+		t.Fatalf("failure = %#v", failure)
+	}
 }
 
 type adapterCrawler struct {

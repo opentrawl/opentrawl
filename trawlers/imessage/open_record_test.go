@@ -40,7 +40,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	assertOpenRecord(t, input, projectOpenRecord(input), want, "trawl.source.imessage.open.v1.IMessageRecord", `{"ref":"imessage:msg/42", "chat":{"name":"Project Lantern", "participants":["Avery Example", "+15550001111"]}, "message":{"ref":"imessage:msg/42", "time":"2026-07-10T14:00:00Z", "who":"Avery Example", "where":"Project Lantern", "text":"The synthetic pickup moved to Friday.", "from_me":false}, "context":[{"ref":"imessage:msg/41", "time":"2026-07-10T13:59:00Z", "who":"me", "where":"Project Lantern", "text":"That works.", "from_me":true}, {"ref":"imessage:msg/42", "time":"2026-07-10T14:00:00Z", "who":"Avery Example", "where":"Project Lantern", "text":"The synthetic pickup moved to Friday.", "from_me":false, "target":true}, {"ref":"imessage:msg/43", "time":"2026-07-10T14:01:00Z", "who":"Avery Example", "where":"Project Lantern", "text":"", "from_me":false, "has_attachments":true}]}`)
 	presentation := projectOpenPresentation(input)
 	wantPresentation := &presentationv1.PresentationDocument{Title: "Project Lantern", Blocks: []*presentationv1.Block{
-		{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Ref", Display: "imessage:msg/42"}, {Label: "Participants", Display: "Avery Example, +15550001111"}}}}},
+		{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Participants", Display: "Avery Example, +15550001111"}}}}},
 		{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "The synthetic pickup moved to Friday."}}},
 		{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: []*presentationv1.Row{{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "2026-07-10T13:59:00Z"}, {Display: "me"}, {Display: "That works."}}}, {Role: presentationv1.Row_ROLE_TARGET, Cells: []*presentationv1.Cell{{Display: "2026-07-10T14:00:00Z"}, {Display: "Avery Example"}, {Display: "The synthetic pickup moved to Friday."}}}, {Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "2026-07-10T14:01:00Z"}, {Display: "Avery Example"}, {Display: ""}}}}}}},
 	}}
@@ -93,7 +93,10 @@ func assertOpenRecord(t *testing.T, input any, got, want proto.Message, wantName
 
 func testBool(value bool) *bool { return &value }
 
-func assertOpenPresentation(t *testing.T, input any, machine proto.Message, got, want *presentationv1.PresentationDocument, sourceID string) {
+func assertOpenPresentation(t *testing.T, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, got, want *presentationv1.PresentationDocument, sourceID string) {
 	t.Helper()
 	if !proto.Equal(got, want) {
 		t.Fatalf("presentation = %s\nwant = %s", prototext.Format(got), prototext.Format(want))
@@ -102,7 +105,7 @@ func assertOpenPresentation(t *testing.T, input any, machine proto.Message, got,
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: sourceID, OpenRef: got.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: got}
+	open := &openv1.OpenRecord{SourceId: sourceID, OpenRef: machine.GetRef(), Data: packed, Presentation: got}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

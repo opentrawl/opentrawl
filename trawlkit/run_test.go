@@ -588,8 +588,12 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 		t.Fatalf("status code=%d sawNil=%t sawLog=%t stdout=%s", code, statusSawNil, statusSawLog, stdout)
 	}
 	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
-	if code != 2 || !strings.Contains(stdout, "archive does not exist") {
-		t.Fatalf("missing archive code=%d stdout=%s", code, stdout)
+	var missingArchive ckoutput.ErrorEnvelope
+	if err := json.Unmarshal([]byte(stdout), &missingArchive); err != nil {
+		t.Fatalf("missing archive error = %q: %v", stdout, err)
+	}
+	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "" || strings.Contains(stdout, stateRoot) {
+		t.Fatalf("missing archive code=%d error=%#v stdout=%s", code, missingArchive.Error, stdout)
 	}
 
 	createArchive(t, stateRoot)
@@ -682,8 +686,12 @@ func TestRunBespokeStoreRequiredRequiresArchive(t *testing.T) {
 	}}}
 
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
-	if code != 2 || !strings.Contains(stdout, "archive does not exist") || stderr != "" {
-		t.Fatalf("required missing archive code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	var missingArchive ckoutput.ErrorEnvelope
+	if err := json.Unmarshal([]byte(stdout), &missingArchive); err != nil {
+		t.Fatalf("required missing archive error = %q: %v", stdout, err)
+	}
+	if code != 1 || missingArchive.Error.Code != "unavailable" || missingArchive.Error.Message != "This source is not ready yet." || missingArchive.Error.Remedy != "" || stderr != "" || strings.Contains(stdout, stateRoot) {
+		t.Fatalf("required missing archive code=%d error=%#v stdout=%s stderr=%s", code, missingArchive.Error, stdout, stderr)
 	}
 	createArchive(t, stateRoot)
 	code, stdout, stderr = runForTestAt(stateRoot, []string{"archive", "inspect", "--json"}, source, runOptions{})
@@ -1590,14 +1598,30 @@ func TestRunSearchWhoAmbiguousTextListsCandidatesAndRetry(t *testing.T) {
 func TestRunTextErrorsUseStderr(t *testing.T) {
 	stateRoot := t.TempDir()
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "hello"}, &testCrawler{}, runOptions{})
-	if code != 2 {
+	if code != 1 {
 		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
 	if stdout != "" {
 		t.Fatalf("text error wrote stdout: %q", stdout)
 	}
-	if !strings.Contains(stderr, "Error:") || !strings.Contains(stderr, "archive does not exist") {
+	if stderr != "Error: This source is not ready yet.\n" || strings.Contains(stderr, stateRoot) {
 		t.Fatalf("stderr = %q", stderr)
+	}
+}
+
+func TestOpenStoreMissingArchiveKeepsPathOutOfErrorBody(t *testing.T) {
+	archive := filepath.Join(t.TempDir(), "synthetic-missing.db")
+	_, err := openStore(context.Background(), Paths{Archive: archive}, storeRead)
+	if err == nil {
+		t.Fatal("openStore returned nil error")
+	}
+	var missing MissingArchiveError
+	if !errors.As(err, &missing) {
+		t.Fatalf("error type = %T, want MissingArchiveError", err)
+	}
+	body := errorBodyFor(err)
+	if err.Error() != "This source is not ready yet." || body.Code != "unavailable" || body.Message != "This source is not ready yet." || body.Remedy != "" || strings.Contains(err.Error(), archive) || strings.Contains(body.Message, archive) || strings.Contains(body.Remedy, archive) {
+		t.Fatalf("missing archive error=%q body=%#v", err, body)
 	}
 }
 

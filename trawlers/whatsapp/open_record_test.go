@@ -52,7 +52,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Lantern group"
-blocks: { fields: { fields: { label: "Ref" display: "whatsapp:msg/m2" } fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
+blocks: { fields: { fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
 blocks: { prose: { text: "[image]" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T13:59:00Z" } cells: { display: "me" } cells: { display: "Sent." } } rows: { role: ROLE_TARGET cells: { display: "2026-07-10T14:00:00Z" } cells: { display: "Avery Example" } cells: { display: "[image]" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:01:00Z" } cells: { display: "Avery Example" } cells: { display: "Received." } } } }
 blocks: { fields: { fields: { label: "Media type" display: "image" } fields: { label: "Media title" display: "fixture.jpg" } fields: { label: "Media size" display: "2048 bytes" } } }`)
@@ -109,13 +109,16 @@ func testString(value string) *string { return &value }
 func testInt64(value int64) *int64    { return &value }
 func testBool(value bool) *bool       { return &value }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}

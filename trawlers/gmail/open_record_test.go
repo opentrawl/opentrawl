@@ -68,7 +68,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Project Lantern"
-blocks: { fields: { fields: { label: "Ref" display: "gmail:msg/fixture-1" } fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "2026-07-10T14:00:00Z" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
+blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "2026-07-10T14:00:00Z" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
 blocks: { prose: { text: "Synthetic review body." } }
 blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2048 bytes" } } } }
 facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 characters omitted." }`)
@@ -92,13 +92,16 @@ func assertRecordIdentity(t *testing.T, name, want string) {
 	}
 }
 
-func assertOpenPresentation(t *testing.T, source string, input any, machine proto.Message, presentation *presentationv1.PresentationDocument) {
+func assertOpenPresentation(t *testing.T, source string, input any, machine interface {
+	proto.Message
+	GetRef() string
+}, presentation *presentationv1.PresentationDocument) {
 	t.Helper()
 	packed, err := anypb.New(machine)
 	if err != nil {
 		t.Fatal(err)
 	}
-	open := &openv1.OpenRecord{SourceId: source, OpenRef: presentation.Blocks[0].GetFields().Fields[0].Display, Data: packed, Presentation: presentation}
+	open := &openv1.OpenRecord{SourceId: source, OpenRef: machine.GetRef(), Data: packed, Presentation: presentation}
 	if err := openrecord.Validate(open); err != nil {
 		t.Fatal(err)
 	}
