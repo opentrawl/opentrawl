@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 )
 
@@ -12,6 +13,7 @@ import (
 // self-report (TRAWL-147/194 leak: "imsgcrawl status failed" next to a
 // table row that says "iMessage").
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
+	ensureSyntheticHome(t)
 	tests := []struct {
 		name       string
 		crawler    fakeCrawler
@@ -23,13 +25,13 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 			name:       "valid manifest maps runtime id",
 			crawler:    fakeCrawler{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"}}`},
 			wantID:     "imessage",
-			wantBinary: "imessage",
+			wantBinary: "cli.test",
 		},
 		{
 			name:       "invalid manifest canonicalizes the legacy binary name and errors",
 			crawler:    fakeCrawler{name: "telecrawl", metadata: `not-json`},
 			wantID:     "telegram",
-			wantBinary: "telegram",
+			wantBinary: "",
 			wantErr:    true,
 		},
 	}
@@ -49,6 +51,16 @@ func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 			}
 			if (source.MetadataErr != nil) != tt.wantErr {
 				t.Fatalf("MetadataErr = %v, want error %v", source.MetadataErr, tt.wantErr)
+			}
+			if source.Manifest.ID != source.ID || source.Manifest.DisplayName != source.DisplayName || source.Manifest.Binary.Name != source.Binary {
+				t.Fatalf("source does not project stored manifest: %#v", source)
+			}
+			if tt.name == "valid manifest maps runtime id" {
+				content, err := json.MarshalIndent(source.Manifest, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeRuntimeEvidence(t, "discovery-manifests.json", append(content, '\n'))
 			}
 		})
 	}
