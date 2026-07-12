@@ -30,4 +30,8 @@ message CurrentStillFetchResponse {
   string photos_access_status = 10;
   string error_domain = 11;
   int64 error_code = 12;
+  int64 photokit_callback_micros = 13;
+  int64 validation_hash_micros = 14;
+  int64 helper_started_unix_nanos = 15;
+  int32 photokit_calls = 16;
 }

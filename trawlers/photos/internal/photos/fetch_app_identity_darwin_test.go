@@ -40,6 +40,23 @@ func TestCodeSigningLeafCertificateSupportsNormalDeveloperIDRequirement(t *testi
 	t.Logf("boundary=developer_id_leaf_certificate raw_input_app=%q raw_input_requirement=%q raw_output_certificate_bytes=%d raw_output_sha256=%x", appPath, bytes.TrimSpace(requirement), len(certificate), digest)
 }
 
+func TestParseFixedLeafRequirementHash(t *testing.T) {
+	const digest = "04ac0357bd280de843954d6615292ac9d42dd82b"
+	got, err := parseFixedLeafRequirementHash(`designated => identifier "org.opentrawl.synthetic" and certificate leaf = H"` + digest + `"`)
+	if err != nil || got != digest {
+		t.Fatalf("got %q, error %v", got, err)
+	}
+	for _, invalid := range []string{
+		`designated => identifier "org.opentrawl.synthetic"`,
+		`designated => certificate leaf = H"00"`,
+		`designated => certificate leaf = H"` + digest + `" and certificate leaf = H"` + digest + `"`,
+	} {
+		if _, err := parseFixedLeafRequirementHash(invalid); err == nil {
+			t.Fatalf("invalid requirement passed: %q", invalid)
+		}
+	}
+}
+
 func TestPhotoKitFetchAppPathUsesOnlyTheCallersLocation(t *testing.T) {
 	home := filepath.Join(string(filepath.Separator), "synthetic", "home")
 	contents := filepath.Join(string(filepath.Separator), "synthetic", "OpenTrawl.app", "Contents")

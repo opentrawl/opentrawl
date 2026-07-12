@@ -50,11 +50,7 @@ var launchPhotoKitFetchApp = func(ctx context.Context, requestPath, responsePath
 	return runPhotoKitFetchOpen(ctx, appPath, requestPath, responsePath)
 }
 
-var launchPhotoKitCurrentStillApp = func(ctx context.Context, requestPath, responsePath string) error {
-	appPath, err := resolvePhotoKitFetchApp(ctx)
-	if err != nil {
-		return err
-	}
+var launchPhotoKitCurrentStillApp = func(ctx context.Context, appPath, requestPath, responsePath string) error {
 	command := exec.CommandContext(ctx, "/usr/bin/open", photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath)...)
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
@@ -151,15 +147,11 @@ func verifyPhotoKitFetchApp(ctx context.Context, callerPath, appPath string) err
 		return fmt.Errorf("signed Photos helper executable is %q, want %q", executable, photoKitFetchExecutable)
 	}
 
-	callerLeafHash, err := codeSigningLeafDigest(callerPath)
+	matches, err := codeSigningLeafIdentityMatches(ctx, callerPath, appPath)
 	if err != nil {
-		return fmt.Errorf("read Photos helper caller leaf certificate identity: %w", err)
+		return err
 	}
-	helperLeafHash, err := codeSigningLeafDigest(appPath)
-	if err != nil {
-		return fmt.Errorf("read signed Photos helper leaf certificate identity: %w", err)
-	}
-	if callerLeafHash != helperLeafHash {
+	if !matches {
 		return errors.New("signed Photos helper leaf certificate does not match its caller")
 	}
 	if err := verifyPhotoKitCodeSignature(ctx, callerPath, false); err != nil {
@@ -357,22 +349,29 @@ func ExportOriginalResourceThroughApp(ctx context.Context, query OriginalExportQ
 // original path, but sends a distinct protobuf and helper mode. Network use is
 // represented only by request.AllowNetwork.
 func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillRequest, destinationPath string) (CurrentStillFact, error) {
+	timings := CurrentStillPhaseTimings{}
 	if err := ctx.Err(); err != nil {
 		return CurrentStillFact{}, err
 	}
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
-		return CurrentStillFact{}, err
+		return failedCurrentStillFact(err, timings)
 	}
 	timeout := defaultPhotoKitFetchTimeout
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
 		if timeout <= 0 {
-			return CurrentStillFact{}, context.DeadlineExceeded
+			return failedCurrentStillFact(context.DeadlineExceeded, timings)
 		}
+	}
+	verificationStartedAt := time.Now()
+	appPath, err := resolvePhotoKitFetchApp(ctx)
+	timings.HelperVerificationMicros = elapsedMicros(verificationStartedAt)
+	if err != nil {
+		return failedCurrentStillFact(err, timings)
 	}
 	wireDir, err := os.MkdirTemp(filepath.Dir(destinationPath), ".photokit-current-still-request-*")
 	if err != nil {
-		return CurrentStillFact{}, fmt.Errorf("create current-still request directory: %w", err)
+		return failedCurrentStillFact(fmt.Errorf("create current-still request directory: %w", err), timings)
 	}
 	defer func() { _ = os.RemoveAll(wireDir) }()
 	requestPath := filepath.Join(wireDir, "request.pb")
@@ -383,52 +382,76 @@ func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillReque
 		AllowNetwork: request.AllowNetwork, TimeoutMilliseconds: timeout.Milliseconds(), ModificationMicroseconds: request.Modification.Microseconds,
 	})
 	if err != nil {
-		return CurrentStillFact{}, fmt.Errorf("encode current-still request: %w", err)
+		return failedCurrentStillFact(fmt.Errorf("encode current-still request: %w", err), timings)
 	}
 	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
-		return CurrentStillFact{}, fmt.Errorf("write current-still request: %w", err)
+		return failedCurrentStillFact(fmt.Errorf("write current-still request: %w", err), timings)
 	}
 	if err := ctx.Err(); err != nil {
-		return CurrentStillFact{}, err
+		return failedCurrentStillFact(err, timings)
 	}
 	launchCtx, cancel := context.WithTimeout(context.Background(), timeout+10*time.Second)
 	defer cancel()
-	if err := launchPhotoKitCurrentStillApp(launchCtx, requestPath, responsePath); err != nil {
+	launchStartedAt := time.Now()
+	if err := launchPhotoKitCurrentStillApp(launchCtx, appPath, requestPath, responsePath); err != nil {
+		timings.LaunchServicesStartMicros = elapsedMicros(launchStartedAt)
 		removeOriginalOutput(destinationPath)
 		if ctx.Err() != nil {
-			return CurrentStillFact{}, ctx.Err()
+			return failedCurrentStillFact(ctx.Err(), timings)
 		}
-		return CurrentStillFact{}, err
+		return failedCurrentStillFact(err, timings)
 	}
-	if ctx.Err() != nil {
-		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, ctx.Err()
-	}
+	timings.LaunchServicesStartMicros = elapsedMicros(launchStartedAt)
 	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
 	if err != nil {
 		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, fmt.Errorf("read current-still response: %w", err)
+		return failedCurrentStillFact(fmt.Errorf("read current-still response: %w", err), timings)
 	}
 	var response fetchwire.CurrentStillFetchResponse
 	if err := proto.Unmarshal(responseData, &response); err != nil {
 		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, fmt.Errorf("decode current-still response: %w", err)
+		return failedCurrentStillFact(fmt.Errorf("decode current-still response: %w", err), timings)
+	}
+	if response.HelperStartedUnixNanos >= launchStartedAt.UnixNano() {
+		timings.LaunchServicesStartMicros = max((response.HelperStartedUnixNanos-launchStartedAt.UnixNano()+int64(time.Microsecond)-1)/int64(time.Microsecond), 1)
+	}
+	timings.PhotoKitCallbackMicros = response.PhotokitCallbackMicros
+	timings.ValidationHashMicros = response.ValidationHashMicros
+	photoKitCalls := int(response.PhotokitCalls)
+	if ctx.Err() != nil {
+		removeOriginalOutput(destinationPath)
+		return failedCurrentStillFactWithCalls(ctx.Err(), timings, photoKitCalls)
 	}
 	if !response.Success {
 		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, currentStillAppFailure(&response)
+		return failedCurrentStillFactWithCalls(currentStillAppFailure(&response), timings, photoKitCalls)
 	}
+	validationStartedAt := time.Now()
 	info, digest, err := InspectOriginalFile(destinationPath)
 	if err != nil {
+		timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
 		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, fmt.Errorf("inspect current-still output: %w", err)
+		return failedCurrentStillFactWithCalls(fmt.Errorf("inspect current-still output: %w", err), timings, photoKitCalls)
 	}
-	fact := CurrentStillFact{MediaType: response.MediaType, Orientation: response.Orientation, PixelWidth: response.PixelWidth, PixelHeight: response.PixelHeight, Size: response.SizeBytes, SHA256: fmt.Sprintf("%x", response.Sha256)}
+	fact := CurrentStillFact{MediaType: response.MediaType, Orientation: response.Orientation, PixelWidth: response.PixelWidth, PixelHeight: response.PixelHeight, Size: response.SizeBytes, SHA256: fmt.Sprintf("%x", response.Sha256), PhotoKitCalls: photoKitCalls}
 	if fact.Size != info.Size() || !bytes.Equal(response.Sha256, digest[:]) || fact.MediaType == "" || fact.PixelWidth <= 0 || fact.PixelHeight <= 0 {
+		timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
 		removeOriginalOutput(destinationPath)
-		return CurrentStillFact{}, errors.New("signed Photos current-still fetch app returned mismatched output proof")
+		return failedCurrentStillFactWithCalls(errors.New("signed Photos current-still fetch app returned mismatched output proof"), timings, photoKitCalls)
 	}
+	timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
+	fact.Timings = timings
 	return fact, nil
+}
+
+func failedCurrentStillFact(err error, timings CurrentStillPhaseTimings) (CurrentStillFact, error) {
+	return failedCurrentStillFactWithCalls(err, timings, 0)
+}
+
+func failedCurrentStillFactWithCalls(err error, timings CurrentStillPhaseTimings, photoKitCalls int) (CurrentStillFact, error) {
+	failure := measuredCurrentStillError(err, timings)
+	failure.PhotoKitCalls = photoKitCalls
+	return CurrentStillFact{}, failure
 }
 
 func currentStillAppFailure(response *fetchwire.CurrentStillFetchResponse) error {

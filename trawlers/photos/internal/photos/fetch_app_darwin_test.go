@@ -72,7 +72,7 @@ func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testi
 	oldLaunch := launchPhotoKitCurrentStillApp
 	defer func() { launchPhotoKitCurrentStillApp = oldLaunch }()
 	launched := false
-	launchPhotoKitCurrentStillApp = func(context.Context, string, string) error { launched = true; return nil }
+	launchPhotoKitCurrentStillApp = func(context.Context, string, string, string) error { launched = true; return nil }
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := ExportCurrentStillThroughApp(ctx, CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}, filepath.Join(t.TempDir(), "current.heic"))
@@ -81,6 +81,182 @@ func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testi
 	}
 	if launched {
 		t.Fatal("cancelled current-still request launched the helper")
+	}
+}
+
+func TestExportCurrentStillThroughAppReturnsEveryMeasuredHelperPhase(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldLaunch := launchPhotoKitCurrentStillApp
+	defer func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitCurrentStillApp = oldLaunch
+	}()
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		time.Sleep(time.Millisecond)
+		return "/synthetic/Photoscrawl Fetch.app", nil
+	}
+	launchPhotoKitCurrentStillApp = func(_ context.Context, appPath, requestPath, responsePath string) error {
+		if appPath != "/synthetic/Photoscrawl Fetch.app" {
+			t.Fatalf("app path = %q", appPath)
+		}
+		requestData, err := os.ReadFile(requestPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var request fetchwire.CurrentStillFetchRequest
+		if err := proto.Unmarshal(requestData, &request); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond)
+		const current = "exact synthetic current-still bytes"
+		if err := os.WriteFile(request.DestinationPath, []byte(current), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256([]byte(current))
+		responseData, err := proto.Marshal(&fetchwire.CurrentStillFetchResponse{
+			Success:                true,
+			SizeBytes:              int64(len(current)),
+			Sha256:                 digest[:],
+			MediaType:              "public.jpeg",
+			Orientation:            1,
+			PixelWidth:             2,
+			PixelHeight:            3,
+			PhotokitCallbackMicros: 101,
+			ValidationHashMicros:   102,
+			PhotokitCalls:          1,
+			HelperStartedUnixNanos: time.Now().UnixNano(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return os.WriteFile(responsePath, responseData, 0o600)
+	}
+	destination := filepath.Join(t.TempDir(), "current.jpeg")
+	fact, err := ExportCurrentStillThroughApp(context.Background(), CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}, destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fact.PhotoKitCalls != 1 || fact.Timings.HelperVerificationMicros <= 0 || fact.Timings.LaunchServicesStartMicros <= 0 || fact.Timings.PhotoKitCallbackMicros != 101 || fact.Timings.ValidationHashMicros < 102 {
+		t.Fatalf("timings = %#v", fact.Timings)
+	}
+}
+
+func TestExportCurrentStillThroughAppMeasuresEveryFailureBoundary(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldLaunch := launchPhotoKitCurrentStillApp
+	defer func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitCurrentStillApp = oldLaunch
+	}()
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		time.Sleep(time.Millisecond)
+		return "/synthetic/Photoscrawl Fetch.app", nil
+	}
+	request := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}
+
+	t.Run("launch", func(t *testing.T) {
+		launchPhotoKitCurrentStillApp = func(context.Context, string, string, string) error {
+			time.Sleep(time.Millisecond)
+			return errors.New("synthetic launch failure")
+		}
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic"))
+		assertMeasuredFactFailure(t, err, 0, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0
+		})
+	})
+
+	t.Run("read", func(t *testing.T) {
+		launchPhotoKitCurrentStillApp = func(context.Context, string, string, string) error { return nil }
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic"))
+		assertMeasuredFactFailure(t, err, 0, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0
+		})
+	})
+
+	t.Run("decode", func(t *testing.T) {
+		launchPhotoKitCurrentStillApp = func(_ context.Context, _, _, responsePath string) error {
+			return os.WriteFile(responsePath, []byte{0xff}, 0o600)
+		}
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic"))
+		assertMeasuredFactFailure(t, err, 0, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0
+		})
+	})
+
+	t.Run("typed timeout", func(t *testing.T) {
+		launchPhotoKitCurrentStillApp = func(_ context.Context, _, _, responsePath string) error {
+			data, err := proto.Marshal(&fetchwire.CurrentStillFetchResponse{FailureKind: "timeout", ErrorMessage: "PhotoKit current-still request timed out", HelperStartedUnixNanos: time.Now().UnixNano(), PhotokitCallbackMicros: 9, PhotokitCalls: 1})
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(responsePath, data, 0o600)
+		}
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic"))
+		if !errors.Is(err, ErrPhotoKitExportTimedOut) {
+			t.Fatalf("error = %v", err)
+		}
+		assertMeasuredFactFailure(t, err, 1, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0 && timings.PhotoKitCallbackMicros == 9
+		})
+	})
+
+	t.Run("cancelled after response", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		launchPhotoKitCurrentStillApp = func(_ context.Context, _, _, responsePath string) error {
+			data, err := proto.Marshal(&fetchwire.CurrentStillFetchResponse{Success: true, HelperStartedUnixNanos: time.Now().UnixNano(), PhotokitCalls: 1})
+			if err != nil {
+				return err
+			}
+			if err := os.WriteFile(responsePath, data, 0o600); err != nil {
+				return err
+			}
+			cancel()
+			return nil
+		}
+		_, err := ExportCurrentStillThroughApp(ctx, request, filepath.Join(t.TempDir(), "current.heic"))
+		assertMeasuredFactFailure(t, err, 1, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0
+		})
+	})
+
+	t.Run("inspect output", func(t *testing.T) {
+		launchPhotoKitCurrentStillApp = func(_ context.Context, _, _, responsePath string) error {
+			data, err := proto.Marshal(&fetchwire.CurrentStillFetchResponse{Success: true, HelperStartedUnixNanos: time.Now().UnixNano(), PhotokitCalls: 1})
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(responsePath, data, 0o600)
+		}
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic"))
+		assertMeasuredFactFailure(t, err, 1, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0 && timings.ValidationHashMicros > 0
+		})
+	})
+
+	t.Run("mismatched proof", func(t *testing.T) {
+		destination := filepath.Join(t.TempDir(), "current.heic")
+		launchPhotoKitCurrentStillApp = func(_ context.Context, _, _, responsePath string) error {
+			if err := os.WriteFile(destination, []byte("synthetic current bytes"), 0o600); err != nil {
+				return err
+			}
+			data, err := proto.Marshal(&fetchwire.CurrentStillFetchResponse{Success: true, SizeBytes: 1, Sha256: make([]byte, sha256.Size), MediaType: "public.heic", PixelWidth: 2, PixelHeight: 3, HelperStartedUnixNanos: time.Now().UnixNano(), PhotokitCalls: 1})
+			if err != nil {
+				return err
+			}
+			return os.WriteFile(responsePath, data, 0o600)
+		}
+		_, err := ExportCurrentStillThroughApp(context.Background(), request, destination)
+		assertMeasuredFactFailure(t, err, 1, func(timings CurrentStillPhaseTimings) bool {
+			return timings.HelperVerificationMicros > 0 && timings.LaunchServicesStartMicros > 0 && timings.ValidationHashMicros > 0
+		})
+	})
+}
+
+func assertMeasuredFactFailure(t *testing.T, err error, calls int, valid func(CurrentStillPhaseTimings) bool) {
+	t.Helper()
+	var measured *CurrentStillMeasuredError
+	if !errors.As(err, &measured) || measured.PhotoKitCalls != calls || !valid(measured.Timings) {
+		t.Fatalf("measured failure = %#v, error = %v", measured, err)
 	}
 }
 

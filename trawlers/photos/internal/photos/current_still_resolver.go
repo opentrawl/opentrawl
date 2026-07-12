@@ -53,20 +53,49 @@ func (m CurrentStillModification) valid() bool {
 }
 
 type CurrentStillFact struct {
-	MediaType   string
-	Orientation int32
-	PixelWidth  int64
-	PixelHeight int64
-	Size        int64
-	SHA256      string
+	MediaType     string
+	Orientation   int32
+	PixelWidth    int64
+	PixelHeight   int64
+	Size          int64
+	SHA256        string
+	Timings       CurrentStillPhaseTimings
+	PhotoKitCalls int
 }
 
+// CurrentStillPhaseTimings records the non-overlapping acquisition phases for
+// one current-still observation. Microseconds preserve short cache phases
+// without implying network bandwidth.
+type CurrentStillPhaseTimings struct {
+	QueueWaitMicros           int64 `json:"queue_wait_micros"`
+	HelperVerificationMicros  int64 `json:"helper_verification_micros"`
+	LaunchServicesStartMicros int64 `json:"launch_services_start_micros"`
+	PhotoKitCallbackMicros    int64 `json:"photokit_callback_micros"`
+	ValidationHashMicros      int64 `json:"validation_hash_micros"`
+	CacheInstallationMicros   int64 `json:"cache_installation_micros"`
+	TotalMicros               int64 `json:"total_micros"`
+}
+
+// CurrentStillMeasuredError keeps timings for failed observations while
+// preserving the typed cause for errors.Is and errors.As.
+type CurrentStillMeasuredError struct {
+	Cause         error
+	Timings       CurrentStillPhaseTimings
+	PhotoKitCalls int
+}
+
+func (e *CurrentStillMeasuredError) Error() string { return e.Cause.Error() }
+
+func (e *CurrentStillMeasuredError) Unwrap() error { return e.Cause }
+
 type CurrentStillResolution struct {
-	Path     string
-	Source   string
-	Fact     CurrentStillFact
-	Exported bool
-	Lease    *OriginalLease
+	Path          string
+	Source        string
+	Fact          CurrentStillFact
+	Exported      bool
+	Timings       CurrentStillPhaseTimings
+	PhotoKitCalls int
+	Lease         *OriginalLease
 }
 
 type CurrentStillExporter func(context.Context, CurrentStillRequest, string) (CurrentStillFact, error)
@@ -101,6 +130,7 @@ func NewCurrentStillResolver(root string, exporter CurrentStillExporter) (*Curre
 }
 
 func (r *CurrentStillResolver) Resolve(ctx context.Context, request CurrentStillRequest) (CurrentStillResolution, error) {
+	startedAt := time.Now()
 	if r == nil || r.cache == nil {
 		return CurrentStillResolution{}, errors.New("current-still resolver is not configured")
 	}
@@ -110,56 +140,80 @@ func (r *CurrentStillResolver) Resolve(ctx context.Context, request CurrentStill
 		return CurrentStillResolution{}, errors.New("source library ID, asset UUID and canonical modification instant are required for current-still resolution")
 	}
 	path := CurrentStillCachePath(r.cache.root, request.SourceLibraryID, request.AssetUUID, request.Modification)
+	queueStartedAt := time.Now()
 	lock, err := r.cache.lock(ctx, path, syscall.LOCK_EX)
 	if err != nil {
-		return CurrentStillResolution{}, fmt.Errorf("lock current-still cache entry: %w", err)
+		timings := CurrentStillPhaseTimings{QueueWaitMicros: elapsedMicros(queueStartedAt)}
+		return failedCurrentStillResolution(fmt.Errorf("lock current-still cache entry: %w", err), timings, startedAt, 0)
 	}
+	timings := CurrentStillPhaseTimings{QueueWaitMicros: elapsedMicros(queueStartedAt)}
 	keepLock := false
 	defer func() {
 		if !keepLock {
 			lock.Close()
 		}
 	}()
+	validationStartedAt := time.Now()
 	if fact, ok := inspectCachedCurrentStill(path); ok {
+		timings.ValidationHashMicros = elapsedMicros(validationStartedAt)
 		_ = os.Chtimes(path, time.Now(), time.Now())
 		if err := syscall.Flock(int(lock.file.Fd()), syscall.LOCK_SH); err != nil {
-			return CurrentStillResolution{}, fmt.Errorf("lock cached current still for use: %w", err)
+			return failedCurrentStillResolution(fmt.Errorf("lock cached current still for use: %w", err), timings, startedAt, 0)
 		}
 		lease := &OriginalLease{resolver: r.cache, lock: lock.file}
 		lock.file = nil
 		keepLock = true
-		return CurrentStillResolution{Path: path, Source: CurrentStillSourceCache, Fact: fact, Lease: lease}, nil
+		timings.TotalMicros = elapsedMicros(startedAt)
+		return CurrentStillResolution{Path: path, Source: CurrentStillSourceCache, Fact: fact, Timings: timings, Lease: lease}, nil
 	}
+	timings.ValidationHashMicros = elapsedMicros(validationStartedAt)
 	removeCachedOriginal(path)
 	temporary := originalCacheTemporaryPath(path)
 	defer func() { _ = os.Remove(temporary); _ = os.Remove(temporary + ".exporting") }()
 	fact, err := r.export(ctx, request, temporary)
+	timings = mergeCurrentStillTimings(timings, fact.Timings)
+	photoKitCalls := fact.PhotoKitCalls
+	fact.Timings = CurrentStillPhaseTimings{}
+	fact.PhotoKitCalls = 0
 	if err != nil {
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		var measured *CurrentStillMeasuredError
+		if errors.As(err, &measured) {
+			timings = mergeCurrentStillTimings(timings, measured.Timings)
+			photoKitCalls = measured.PhotoKitCalls
+		}
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
+	validationStartedAt = time.Now()
 	if err := validateCurrentStillFile(temporary, fact); err != nil {
+		timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
+	timings.ValidationHashMicros += elapsedMicros(validationStartedAt)
 	if fact.Size > r.cache.maxBytes {
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, fmt.Errorf("current still exceeds cache budget: %d bytes", fact.Size)
+		return failedCurrentStillResolution(fmt.Errorf("current still exceeds cache budget: %d bytes", fact.Size), timings, startedAt, photoKitCalls)
 	}
+	installationStartedAt := time.Now()
 	if err := os.Chmod(temporary, 0o600); err != nil {
-		return CurrentStillResolution{}, err
+		timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
 	if err := os.Rename(temporary, path); err != nil {
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
 	if err := writeCurrentStillCacheProof(path, fact); err != nil {
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
 	if err := syscall.Flock(int(lock.file.Fd()), syscall.LOCK_SH); err != nil {
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
 	lease := &OriginalLease{resolver: r.cache, lock: lock.file}
 	lock.file = nil
@@ -167,9 +221,45 @@ func (r *CurrentStillResolver) Resolve(ctx context.Context, request CurrentStill
 	if err := r.cache.prune(); err != nil {
 		lease.Close()
 		removeCachedOriginal(path)
-		return CurrentStillResolution{}, err
+		timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+		return failedCurrentStillResolution(err, timings, startedAt, photoKitCalls)
 	}
-	return CurrentStillResolution{Path: path, Source: CurrentStillSourcePhotoKit, Fact: fact, Exported: true, Lease: lease}, nil
+	timings.CacheInstallationMicros = elapsedMicros(installationStartedAt)
+	timings.TotalMicros = elapsedMicros(startedAt)
+	return CurrentStillResolution{Path: path, Source: CurrentStillSourcePhotoKit, Fact: fact, Exported: true, Timings: timings, PhotoKitCalls: photoKitCalls, Lease: lease}, nil
+}
+
+func failedCurrentStillResolution(err error, timings CurrentStillPhaseTimings, startedAt time.Time, photoKitCalls int) (CurrentStillResolution, error) {
+	timings.TotalMicros = elapsedMicros(startedAt)
+	failure := measuredCurrentStillError(err, timings)
+	failure.PhotoKitCalls = photoKitCalls
+	return CurrentStillResolution{}, failure
+}
+
+func elapsedMicros(start time.Time) int64 {
+	elapsed := time.Since(start)
+	if elapsed <= 0 {
+		return 1
+	}
+	return max((elapsed.Nanoseconds()+int64(time.Microsecond)-1)/int64(time.Microsecond), 1)
+}
+
+func mergeCurrentStillTimings(left, right CurrentStillPhaseTimings) CurrentStillPhaseTimings {
+	left.HelperVerificationMicros += right.HelperVerificationMicros
+	left.LaunchServicesStartMicros += right.LaunchServicesStartMicros
+	left.PhotoKitCallbackMicros += right.PhotoKitCallbackMicros
+	left.ValidationHashMicros += right.ValidationHashMicros
+	return left
+}
+
+func measuredCurrentStillError(err error, timings CurrentStillPhaseTimings) *CurrentStillMeasuredError {
+	var measured *CurrentStillMeasuredError
+	photoKitCalls := 0
+	if errors.As(err, &measured) {
+		err = measured.Cause
+		photoKitCalls = measured.PhotoKitCalls
+	}
+	return &CurrentStillMeasuredError{Cause: err, Timings: timings, PhotoKitCalls: photoKitCalls}
 }
 
 func validateCurrentStillFile(path string, want CurrentStillFact) error {

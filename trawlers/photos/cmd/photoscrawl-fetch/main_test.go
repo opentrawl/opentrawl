@@ -249,7 +249,7 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 		if err := os.WriteFile(destination, data, 0o600); err != nil {
 			return photos.CurrentStillFact{}, err
 		}
-		return photos.CurrentStillFact{MediaType: "public.heic", Orientation: 1, PixelWidth: 4032, PixelHeight: 3024, Size: int64(len(data)), SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}, nil
+		return photos.CurrentStillFact{MediaType: "public.heic", Orientation: 1, PixelWidth: 4032, PixelHeight: 3024, Size: int64(len(data)), SHA256: fmt.Sprintf("%x", sha256.Sum256(data)), Timings: photos.CurrentStillPhaseTimings{PhotoKitCallbackMicros: 31, ValidationHashMicros: 32}, PhotoKitCalls: 1}, nil
 	}
 	dir := t.TempDir()
 	requestPath := filepath.Join(dir, "request.pb")
@@ -276,7 +276,64 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 	if err := proto.Unmarshal(responseData, &response); err != nil {
 		t.Fatal(err)
 	}
-	if !response.Success || response.MediaType != "public.heic" || response.PixelWidth != 4032 || response.PixelHeight != 3024 {
+	if !response.Success || response.MediaType != "public.heic" || response.PixelWidth != 4032 || response.PixelHeight != 3024 || response.HelperStartedUnixNanos <= 0 || response.PhotokitCallbackMicros != 31 || response.ValidationHashMicros != 32 || response.PhotokitCalls != 1 {
 		t.Fatalf("response = %#v", response)
 	}
+}
+
+func TestApplyCurrentStillErrorTimingsPreservesFailedObservation(t *testing.T) {
+	response := &fetchwire.CurrentStillFetchResponse{}
+	err := &photos.CurrentStillMeasuredError{Cause: errors.New("synthetic failure"), Timings: photos.CurrentStillPhaseTimings{PhotoKitCallbackMicros: 41, ValidationHashMicros: 42}, PhotoKitCalls: 1}
+	applyCurrentStillErrorTimings(response, err)
+	if response.PhotokitCallbackMicros != 41 || response.ValidationHashMicros != 42 || response.PhotokitCalls != 1 {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func TestRunCurrentStillWireRequestPreservesStartAndZeroCallsOnEarlyFailures(t *testing.T) {
+	tests := []struct {
+		name    string
+		request []byte
+		write   bool
+	}{
+		{name: "read", write: false},
+		{name: "decode", request: []byte{0xff}, write: true},
+		{name: "timeout validation", request: mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, DestinationPath: filepath.Join(t.TempDir(), "current.heic")}), write: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			requestPath := filepath.Join(dir, "request.pb")
+			responsePath := filepath.Join(dir, "response.pb")
+			if test.write {
+				if err := os.WriteFile(requestPath, test.request, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if code := runCurrentStillWireRequest(context.Background(), []string{"--request", requestPath, "--response", responsePath}, io.Discard); code != 1 {
+				t.Fatalf("exit = %d", code)
+			}
+			data, err := os.ReadFile(responsePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("boundary=synthetic_early_failure_%s raw_response_hex=%x", test.name, data)
+			var response fetchwire.CurrentStillFetchResponse
+			if err := proto.Unmarshal(data, &response); err != nil {
+				t.Fatal(err)
+			}
+			if response.FailureKind != "invalid_request" || response.HelperStartedUnixNanos <= 0 || response.PhotokitCalls != 0 {
+				t.Fatalf("response = %#v", response)
+			}
+		})
+	}
+}
+
+func mustMarshalCurrentStillRequest(t *testing.T, request *fetchwire.CurrentStillFetchRequest) []byte {
+	t.Helper()
+	data, err := proto.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return data
 }

@@ -117,21 +117,25 @@ func (x *CurrentStillFetchRequest) GetModificationMicroseconds() int32 {
 }
 
 type CurrentStillFetchResponse struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Success            bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
-	SizeBytes          int64                  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
-	Sha256             []byte                 `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`
-	MediaType          string                 `protobuf:"bytes,4,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
-	Orientation        int32                  `protobuf:"varint,5,opt,name=orientation,proto3" json:"orientation,omitempty"`
-	PixelWidth         int64                  `protobuf:"varint,6,opt,name=pixel_width,json=pixelWidth,proto3" json:"pixel_width,omitempty"`
-	PixelHeight        int64                  `protobuf:"varint,7,opt,name=pixel_height,json=pixelHeight,proto3" json:"pixel_height,omitempty"`
-	FailureKind        string                 `protobuf:"bytes,8,opt,name=failure_kind,json=failureKind,proto3" json:"failure_kind,omitempty"`
-	ErrorMessage       string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
-	PhotosAccessStatus string                 `protobuf:"bytes,10,opt,name=photos_access_status,json=photosAccessStatus,proto3" json:"photos_access_status,omitempty"`
-	ErrorDomain        string                 `protobuf:"bytes,11,opt,name=error_domain,json=errorDomain,proto3" json:"error_domain,omitempty"`
-	ErrorCode          int64                  `protobuf:"varint,12,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	Success                bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	SizeBytes              int64                  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	Sha256                 []byte                 `protobuf:"bytes,3,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	MediaType              string                 `protobuf:"bytes,4,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
+	Orientation            int32                  `protobuf:"varint,5,opt,name=orientation,proto3" json:"orientation,omitempty"`
+	PixelWidth             int64                  `protobuf:"varint,6,opt,name=pixel_width,json=pixelWidth,proto3" json:"pixel_width,omitempty"`
+	PixelHeight            int64                  `protobuf:"varint,7,opt,name=pixel_height,json=pixelHeight,proto3" json:"pixel_height,omitempty"`
+	FailureKind            string                 `protobuf:"bytes,8,opt,name=failure_kind,json=failureKind,proto3" json:"failure_kind,omitempty"`
+	ErrorMessage           string                 `protobuf:"bytes,9,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	PhotosAccessStatus     string                 `protobuf:"bytes,10,opt,name=photos_access_status,json=photosAccessStatus,proto3" json:"photos_access_status,omitempty"`
+	ErrorDomain            string                 `protobuf:"bytes,11,opt,name=error_domain,json=errorDomain,proto3" json:"error_domain,omitempty"`
+	ErrorCode              int64                  `protobuf:"varint,12,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	PhotokitCallbackMicros int64                  `protobuf:"varint,13,opt,name=photokit_callback_micros,json=photokitCallbackMicros,proto3" json:"photokit_callback_micros,omitempty"`
+	ValidationHashMicros   int64                  `protobuf:"varint,14,opt,name=validation_hash_micros,json=validationHashMicros,proto3" json:"validation_hash_micros,omitempty"`
+	HelperStartedUnixNanos int64                  `protobuf:"varint,15,opt,name=helper_started_unix_nanos,json=helperStartedUnixNanos,proto3" json:"helper_started_unix_nanos,omitempty"`
+	PhotokitCalls          int32                  `protobuf:"varint,16,opt,name=photokit_calls,json=photokitCalls,proto3" json:"photokit_calls,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *CurrentStillFetchResponse) Reset() {
@@ -248,6 +252,34 @@ func (x *CurrentStillFetchResponse) GetErrorCode() int64 {
 	return 0
 }
 
+func (x *CurrentStillFetchResponse) GetPhotokitCallbackMicros() int64 {
+	if x != nil {
+		return x.PhotokitCallbackMicros
+	}
+	return 0
+}
+
+func (x *CurrentStillFetchResponse) GetValidationHashMicros() int64 {
+	if x != nil {
+		return x.ValidationHashMicros
+	}
+	return 0
+}
+
+func (x *CurrentStillFetchResponse) GetHelperStartedUnixNanos() int64 {
+	if x != nil {
+		return x.HelperStartedUnixNanos
+	}
+	return 0
+}
+
+func (x *CurrentStillFetchResponse) GetPhotokitCalls() int32 {
+	if x != nil {
+		return x.PhotokitCalls
+	}
+	return 0
+}
+
 var File_opentrawl_photos_fetch_v1_current_still_fetch_proto protoreflect.FileDescriptor
 
 const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
@@ -261,7 +293,7 @@ const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
 	"\x10destination_path\x18\x04 \x01(\tR\x0fdestinationPath\x12#\n" +
 	"\rallow_network\x18\x05 \x01(\bR\fallowNetwork\x121\n" +
 	"\x14timeout_milliseconds\x18\x06 \x01(\x03R\x13timeoutMilliseconds\x12;\n" +
-	"\x19modification_microseconds\x18\a \x01(\x05R\x18modificationMicroseconds\"\xad\x03\n" +
+	"\x19modification_microseconds\x18\a \x01(\x05R\x18modificationMicroseconds\"\xff\x04\n" +
 	"\x19CurrentStillFetchResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +
@@ -279,7 +311,11 @@ const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
 	" \x01(\tR\x12photosAccessStatus\x12!\n" +
 	"\ferror_domain\x18\v \x01(\tR\verrorDomain\x12\x1d\n" +
 	"\n" +
-	"error_code\x18\f \x01(\x03R\terrorCodeBTZRgithub.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwireb\x06proto3"
+	"error_code\x18\f \x01(\x03R\terrorCode\x128\n" +
+	"\x18photokit_callback_micros\x18\r \x01(\x03R\x16photokitCallbackMicros\x124\n" +
+	"\x16validation_hash_micros\x18\x0e \x01(\x03R\x14validationHashMicros\x129\n" +
+	"\x19helper_started_unix_nanos\x18\x0f \x01(\x03R\x16helperStartedUnixNanos\x12%\n" +
+	"\x0ephotokit_calls\x18\x10 \x01(\x05R\rphotokitCallsBTZRgithub.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwireb\x06proto3"
 
 var (
 	file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDescOnce sync.Once
