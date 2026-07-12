@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package trawl.presentation.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1";
+
+message PresentationDocument {
+  string title = 1;
+  repeated Block blocks = 2;
+  repeated Action actions = 3;
+  repeated Fact facts = 4;
+}
+
+message Block {
+  oneof content {
+    Heading heading = 1;
+    Prose prose = 2;
+    FieldGroup fields = 3;
+    Table table = 4;
+    Resource resource = 5;
+  }
+}
+
+message Heading {
+  string text = 1;
+}
+
+message Prose {
+  string text = 1;
+}
+
+message FieldGroup {
+  repeated Field fields = 1;
+}
+
+message Field {
+  string label = 1;
+  string display = 2;
+}
+
+message Table {
+  repeated string columns = 1;
+  repeated Row rows = 2;
+}
+
+message Row {
+  enum Role {
+    ROLE_UNSPECIFIED = 0;
+    ROLE_NORMAL = 1;
+    ROLE_TARGET = 2;
+  }
+
+  Role role = 1;
+  repeated Cell cells = 2;
+}
+
+message Cell {
+  string display = 1;
+}
+
+message Resource {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_FILE = 1;
+    KIND_IMAGE = 2;
+    KIND_VIDEO = 3;
+    KIND_AUDIO = 4;
+  }
+
+  Kind kind = 1;
+  string label = 2;
+  string ref = 3;
+  repeated Field metadata = 4;
+}
+
+message Action {
+  string label = 1;
+  oneof target {
+    string open_ref = 2;
+    string url = 3;
+  }
+}
+
+message Fact {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_TRUNCATION = 1;
+    KIND_PROVENANCE = 2;
+    KIND_WARNING = 3;
+    KIND_ERROR = 4;
+  }
+
+  Kind kind = 1;
+  string message = 2;
+  string remedy = 3;
+}
