@@ -1,13 +1,13 @@
 package cli
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawl/internal/federation"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
 
 type OpenCmd struct {
@@ -15,40 +15,53 @@ type OpenCmd struct {
 }
 
 func (c *OpenCmd) Run(r *Runtime) error {
-	ref := strings.TrimSpace(c.Ref)
-	sourceID, _, ok := splitOpenRef(ref)
+	trimmed := strings.TrimSpace(c.Ref)
+	sourceID, _, ok := splitOpenRef(trimmed)
+	sources := discoverCrawlers(r.ctx)
+	adapters := r.federationOpenSources(sources)
 	if ok {
-		source, err := r.selectedSource(sourceID)
-		if err != nil {
-			return err
+		source, found := findSource(sources, sourceID)
+		if !found {
+			return r.renderOpenResponse(r.canonicalOpen(adapters, sourceID, c.Ref, c.Ref))
 		}
-		return r.openWithSource(source, ref)
+		return r.renderOpenResponse(r.canonicalOpen(adapters, source.ID, c.Ref, c.Ref))
 	}
-	if strings.Contains(ref, ":") {
-		return r.writeError("invalid_ref",
-			"Ref is missing a source or path.",
-			"refs look like <source>:<path>, for example imessage:msg/8842")
+	if strings.Contains(trimmed, ":") {
+		sourceID, _, _ := strings.Cut(trimmed, ":")
+		if source, found := findSource(sources, sourceID); found {
+			sourceID = source.ID
+		}
+		return r.renderOpenResponse(r.canonicalOpen(adapters, sourceID, c.Ref, c.Ref))
 	}
-	return r.openShortRef(ref)
+	return r.openShortRef(sources, adapters, trimmed, c.Ref)
 }
 
-func (r *Runtime) openWithSource(source Source, ref string) error {
-	if source.MetadataErr != nil {
-		return r.openFailed(ref, source)
+func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
+	if r.root.JSON {
+		if err := writeCanonicalJSON(r.stdout, response); err != nil {
+			return err
+		}
+		return outcomeExit(response.GetOutcome())
 	}
-	opener, ok := source.Crawler.(trawlkit.Opener)
-	if !ok {
-		return r.openFailed(ref, source)
+	if response.GetFailure() != nil {
+		failure := response.GetFailure()
+		_, _ = fmt.Fprintf(r.stderr, "%s\n", strings.TrimSpace(failure.GetMessage()))
+		if remedy := strings.TrimSpace(failure.GetRemedy()); remedy != "" {
+			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
+		}
+		return exitErr{code: 1}
 	}
-	started := r.logSourceStart(source, "open")
-	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(r.root.JSON), r.stdout, func(ctx context.Context, req *trawlkit.Request) error {
-		return opener.Open(ctx, req, ref)
-	})
-	r.logSourceDone(source, "open", started, err)
-	if err != nil {
-		return r.openFailed(ref, source)
+	if response.GetRecord() == nil {
+		return fmt.Errorf("open response has no record")
 	}
-	return nil
+	presentation := response.GetRecord().GetPresentation()
+	if r.canonicalObserver != nil {
+		r.canonicalObserver.observePresentation(presentation)
+	}
+	if err := renderPresentation(r.stdout, presentation); err != nil {
+		return err
+	}
+	return outcomeExit(response.GetOutcome())
 }
 
 func splitOpenRef(ref string) (string, string, bool) {
@@ -62,12 +75,6 @@ func splitOpenRef(ref string) (string, string, bool) {
 		return "", "", false
 	}
 	return source, path, true
-}
-
-func (r *Runtime) openFailed(ref string, source Source) error {
-	return r.writeError("open_failed",
-		fmt.Sprintf("%s could not open ref %q.", sourceHumanName(source), ref),
-		fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source)))
 }
 
 const (
@@ -96,20 +103,26 @@ type shortRefFailure struct {
 
 var errAmbiguousShortRef = errors.New("ambiguous short ref")
 
-func (r *Runtime) openShortRef(alias string) error {
+func (r *Runtime) openShortRef(discovered []Source, adapters []federation.OpenSource, alias, requestedRef string) error {
 	if !validShortRefAlias(alias) {
+		if r.root.JSON {
+			return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT, fmt.Sprintf("Short ref %q is not valid.", alias), "short refs use 5 or more lowercase characters from 2-9 and abcdefghjkmnpqrstuvwxyz"))
+		}
 		return r.writeError("invalid_short_ref",
 			fmt.Sprintf("Short ref %q is not valid.", alias),
 			"short refs use 5 or more lowercase characters from 2-9 and abcdefghjkmnpqrstuvwxyz")
 	}
-	sources := shortRefSources(discoverCrawlers(r.ctx))
+	sources := shortRefSources(discovered)
 	matches := make([]shortRefMatch, 0)
 	seenRefs := map[string]bool{}
 	var failures []shortRefFailure
 	for _, source := range sources {
-		refs, err := r.resolveSourceShortRef(source, alias)
+		refs, err := r.resolveSourceShortRef(adapters, source, requestedRef)
 		if err != nil {
 			if errors.Is(err, errAmbiguousShortRef) {
+				if r.root.JSON {
+					return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT, fmt.Sprintf("Short ref %q matched more than one item.", alias), "rerun the search or use the full ref"))
+				}
 				return r.writeError("ambiguous_short_ref",
 					fmt.Sprintf("Short ref %q matched more than one item.", alias),
 					"rerun the search or use the full ref")
@@ -135,8 +148,11 @@ func (r *Runtime) openShortRef(alias string) error {
 	}
 	switch {
 	case len(matches) == 1:
-		return r.openWithSource(matches[0].Source, matches[0].Ref)
+		return r.renderOpenResponse(r.canonicalOpen(adapters, matches[0].Source.ID, matches[0].Ref, requestedRef))
 	case len(matches) > 1:
+		if r.root.JSON {
+			return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT, fmt.Sprintf("Short ref %q matched more than one item.", alias), "rerun the search or use the full ref"))
+		}
 		return r.writeError("ambiguous_short_ref",
 			fmt.Sprintf("Short ref %q matched more than one item.", alias),
 			"rerun the search or use the full ref")
@@ -144,22 +160,31 @@ func (r *Runtime) openShortRef(alias string) error {
 		// Every source failed for an unrelated reason: no source ever
 		// actually answered resolved/unknown/ambiguous, so "not found"
 		// would be dishonest. Report exactly what broke.
-		return r.shortRefResolutionFailed(alias, failures)
+		return r.shortRefResolutionFailed(alias, requestedRef, failures)
 	default:
+		if r.root.JSON {
+			return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_NOT_FOUND, fmt.Sprintf("Short ref %q was not found.", alias), "use a full ref from trawl search --json"))
+		}
 		return r.writeError("unknown_short_ref",
 			fmt.Sprintf("Short ref %q was not found.", alias),
 			"use a full ref from trawl search --json")
 	}
 }
 
-func (r *Runtime) shortRefResolutionFailed(alias string, failures []shortRefFailure) error {
+func shortRefOpenFailure(alias string, code federationv1.FailureCode, message, remedy string) *openv1.OpenResponse {
+	return &openv1.OpenResponse{RequestedRef: alias, Outcome: federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED, Failure: &federationv1.SourceFailure{Code: code, Message: message, Remedy: remedy}}
+}
+
+func (r *Runtime) shortRefResolutionFailed(alias, requestedRef string, failures []shortRefFailure) error {
 	reasons := make([]string, 0, len(failures))
 	for _, failure := range failures {
 		reasons = append(reasons, fmt.Sprintf("%s (%s)", firstNonEmpty(failure.DisplayName, failure.SourceID), failure.Err))
 	}
-	return r.writeError("short_ref_resolution_failed",
-		fmt.Sprintf("Could not resolve short ref %q. Every source failed: %s.", alias, strings.Join(reasons, ", ")),
-		"run trawl doctor")
+	message := fmt.Sprintf("Could not resolve short ref %q. Every source failed: %s.", alias, strings.Join(reasons, ", "))
+	if r.root.JSON {
+		return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE, message, "run trawl doctor"))
+	}
+	return r.writeError("short_ref_resolution_failed", message, "run trawl doctor")
 }
 
 func validShortRefAlias(alias string) bool {
@@ -184,63 +209,17 @@ func shortRefSources(sources []Source) []Source {
 	return out
 }
 
-func (r *Runtime) resolveSourceShortRef(source Source, alias string) ([]string, error) {
-	opener, ok := source.Crawler.(trawlkit.Opener)
-	if !ok {
-		return nil, fmt.Errorf("source does not support open")
+func (r *Runtime) resolveSourceShortRef(adapters []federation.OpenSource, source Source, requestedRef string) ([]string, error) {
+	response := r.canonicalOpen(adapters, source.ID, requestedRef, requestedRef)
+	if response.GetRecord() != nil {
+		return []string{response.GetRecord().GetOpenRef()}, nil
 	}
-	var data bytes.Buffer
-	err := r.withSourceRequest(source, "open", sourceStoreRead, outputFormat(true), &data, func(ctx context.Context, req *trawlkit.Request) error {
-		return opener.Open(ctx, req, alias)
-	})
-	if err != nil {
-		body := sourceErrorBody(err)
-		switch body.Code {
-		case "unknown_short_ref":
-			return nil, nil
-		case "ambiguous_short_ref":
-			return nil, errAmbiguousShortRef
-		}
-		return nil, fmt.Errorf("%s: %s", body.Code, body.Message)
+	failure := failureForOpenResponse(response)
+	if isNotFoundFailure(failure) {
+		return nil, nil
 	}
-	if envelope, ok := shortRefErrorEnvelope(data.Bytes()); ok {
-		switch envelope.Error.Code {
-		case "unknown_short_ref":
-			return nil, nil
-		case "ambiguous_short_ref":
-			return nil, errAmbiguousShortRef
-		}
-		return nil, fmt.Errorf("%s: %s", envelope.Error.Code, envelope.Error.Message)
+	if isAmbiguousShortRefFailure(failure) {
+		return nil, errAmbiguousShortRef
 	}
-	ref, err := decodeShortRefOpenRef(data.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	return []string{ref}, nil
-}
-
-func shortRefErrorEnvelope(data []byte) (ErrorEnvelope, bool) {
-	var envelope ErrorEnvelope
-	if err := decodeContractJSON(data, &envelope); err != nil {
-		return ErrorEnvelope{}, false
-	}
-	envelope.Error.Code = strings.TrimSpace(envelope.Error.Code)
-	if envelope.Error.Code == "" {
-		return ErrorEnvelope{}, false
-	}
-	return envelope, true
-}
-
-func decodeShortRefOpenRef(data []byte) (string, error) {
-	var raw struct {
-		Ref string `json:"ref"`
-	}
-	if err := decodeContractJSON(data, &raw); err != nil {
-		return "", err
-	}
-	ref := strings.TrimSpace(raw.Ref)
-	if ref == "" {
-		return "", errors.New("open ref is missing")
-	}
-	return ref, nil
+	return nil, fmt.Errorf("%s: %s", failure.GetCode(), failure.GetMessage())
 }

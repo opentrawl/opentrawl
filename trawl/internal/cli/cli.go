@@ -34,14 +34,15 @@ type CLI struct {
 }
 
 type Runtime struct {
-	ctx      context.Context
-	stdout   io.Writer
-	stderr   io.Writer
-	stderrMu sync.Mutex
-	root     *CLI
-	now      func() time.Time
-	timeout  time.Duration
-	log      *logRun
+	ctx               context.Context
+	stdout            io.Writer
+	stderr            io.Writer
+	stderrMu          sync.Mutex
+	root              *CLI
+	now               func() time.Time
+	timeout           time.Duration
+	log               *logRun
+	canonicalObserver canonicalConsumerObserver
 }
 
 type StatusCmd struct {
@@ -64,6 +65,10 @@ func Execute(args []string, stdout, stderr io.Writer) (err error) {
 // real timeout path against a slow crawler without a 30s wait. It is
 // the same seam as Runtime.now; production always passes the const.
 func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (err error) {
+	return executeWithCanonicalObserver(args, stdout, stderr, timeout, nil)
+}
+
+func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeout time.Duration, observer canonicalConsumerObserver) (err error) {
 	if isAppWireCommand(args) {
 		return executeAppWire(args, stdout, stderr, timeout)
 	}
@@ -107,12 +112,13 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 	// flags reach the crawler verb untouched.
 	if token, ok := namespaceCandidate(args); ok {
 		runtime := &Runtime{
-			ctx:     context.Background(),
-			stdout:  stdout,
-			stderr:  stderr,
-			root:    namespaceRoot(args),
-			now:     time.Now,
-			timeout: timeout,
+			ctx:               context.Background(),
+			stdout:            stdout,
+			stderr:            stderr,
+			root:              namespaceRoot(args),
+			now:               time.Now,
+			timeout:           timeout,
+			canonicalObserver: observer,
 		}
 		if err := runtime.startLogRun("namespace"); err != nil {
 			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
@@ -128,12 +134,13 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, usageErr{err})
 	}
 	runtime := &Runtime{
-		ctx:     context.Background(),
-		stdout:  stdout,
-		stderr:  stderr,
-		root:    &root,
-		now:     time.Now,
-		timeout: timeout,
+		ctx:               context.Background(),
+		stdout:            stdout,
+		stderr:            stderr,
+		root:              &root,
+		now:               time.Now,
+		timeout:           timeout,
+		canonicalObserver: observer,
 	}
 	if err := runtime.startLogRun(commandName(args)); err != nil {
 		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
@@ -153,20 +160,34 @@ func execute(args []string, stdout, stderr io.Writer, timeout time.Duration) (er
 }
 
 func (c *StatusCmd) Run(r *Runtime) error {
-	sources, err := r.selectedSources(c.Source)
-	if err != nil {
-		return err
-	}
-	results := collectStatus(r, sources)
-	if r.root.JSON {
-		statuses := make([]StatusEnvelope, 0, len(results))
-		for _, result := range results {
-			statuses = append(statuses, result.Status)
+	var sources []Source
+	if r.root.JSON && c.Source != "" {
+		source, found := findSource(discoverCrawlers(r.ctx), c.Source)
+		if !found {
+			response := statusSourceNotFoundResponse(c.Source)
+			if err := writeCanonicalJSON(r.stdout, response); err != nil {
+				return err
+			}
+			return outcomeExit(response.GetOutcome())
 		}
-		if err := writeJSON(r.stdout, statuses); err != nil {
+		sources = []Source{source}
+	} else {
+		var err error
+		sources, err = r.selectedSources(c.Source)
+		if err != nil {
 			return err
 		}
-		return statusExit(results)
+	}
+	response := r.canonicalStatus(sources)
+	if r.root.JSON {
+		if err := writeCanonicalJSON(r.stdout, response); err != nil {
+			return err
+		}
+		return outcomeExit(response.GetOutcome())
+	}
+	results, err := statusResultsFromResponse(sources, response)
+	if err != nil {
+		return err
 	}
 	if c.Source == "" {
 		if err := renderStatusTable(r.stdout, results, r.now()); err != nil {
@@ -177,8 +198,8 @@ func (c *StatusCmd) Run(r *Runtime) error {
 			return err
 		}
 	}
-	r.reportStatusFailures(results)
-	return statusExit(results)
+	r.reportFederationOutcomes(response.GetFailures(), response.GetSkippedSources(), "status")
+	return outcomeExit(response.GetOutcome())
 }
 
 func (c *DoctorCmd) Run(r *Runtime) error {
