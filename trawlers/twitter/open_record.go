@@ -9,17 +9,24 @@ import (
 	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
 )
 
-func projectOpenRecord(value store.OpenResult, aliases map[string]string, ownerAuthorID string) *twitteropenv1.TwitterRecord {
+type openValue struct {
+	result        store.OpenResult
+	aliases       map[string]string
+	ownerAuthorID string
+}
+
+func projectOpenRecord(value openValue) *twitteropenv1.TwitterRecord {
+	result, aliases, ownerAuthorID := value.result, value.aliases, value.ownerAuthorID
 	_ = aliases
 	record := &twitteropenv1.TwitterRecord{
-		Ref:                store.TweetRef(value.Tweet.ID),
-		Tweet:              projectTweet(value.Tweet, ownerAuthorID),
-		Ancestors:          make([]*twitteropenv1.Tweet, 0, len(value.Ancestors)),
-		Replies:            make([]*twitteropenv1.Tweet, 0, len(value.Replies)),
-		AncestorsTruncated: value.AncestorsTruncated,
-		RepliesTruncated:   value.RepliesTruncated,
+		Ref:                store.TweetRef(result.Tweet.ID),
+		Tweet:              projectTweet(result.Tweet, ownerAuthorID),
+		Ancestors:          make([]*twitteropenv1.Tweet, 0, len(result.Ancestors)),
+		Replies:            make([]*twitteropenv1.Tweet, 0, len(result.Replies)),
+		AncestorsTruncated: result.AncestorsTruncated,
+		RepliesTruncated:   result.RepliesTruncated,
 	}
-	for _, ancestor := range value.Ancestors {
+	for _, ancestor := range result.Ancestors {
 		if ancestor.Available {
 			record.Ancestors = append(record.Ancestors, projectTweet(ancestor.Tweet, ownerAuthorID))
 			continue
@@ -30,7 +37,7 @@ func projectOpenRecord(value store.OpenResult, aliases map[string]string, ownerA
 			Unavailable: recordBool(true),
 		})
 	}
-	for _, reply := range value.Replies {
+	for _, reply := range result.Replies {
 		record.Replies = append(record.Replies, projectTweet(reply, ownerAuthorID))
 	}
 	return record
@@ -73,10 +80,10 @@ func setOptionalString(target **string, value string) {
 func recordInt64(value int64) *int64 { return &value }
 func recordBool(value bool) *bool    { return &value }
 
-func projectOpenPresentation(value store.OpenResult, aliases map[string]string, ownerAuthorID string) *presentationv1.PresentationDocument {
-	record := projectOpenRecord(value, aliases, ownerAuthorID)
+func projectOpenPresentation(value openValue) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Tweet.GetWho())
-	if strings.TrimSpace(value.Tweet.AuthorName) == "" && strings.TrimSpace(value.Tweet.AuthorHandle) == "" {
+	if strings.TrimSpace(value.result.Tweet.AuthorName) == "" && strings.TrimSpace(value.result.Tweet.AuthorHandle) == "" {
 		title = ""
 	}
 	if title == "" {

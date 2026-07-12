@@ -1,15 +1,39 @@
 package photoscrawl
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	photosopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+var _ trawlkit.RecordOpener = (*Crawler)(nil)
+
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenAsset(ctx, req, ref)
+	if err != nil {
+		return nil, err
+	}
+	machine := projectOpenRecord(value)
+	data, err := anypb.New(machine)
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	if err := openrecord.Validate(record); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
 
 const sourceRecordSchemaVersion = 5
 

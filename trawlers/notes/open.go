@@ -38,35 +38,39 @@ func newOpenVersion(body archive.VersionBody) openVersion {
 }
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	resolvedRef, err := resolveInputRef(ctx, req, ref)
+	value, err := c.loadOpenNote(ctx, req, ref)
 	if err != nil {
 		return err
 	}
-	note, body, err := resolveOpen(ctx, st, resolvedRef)
-	if err != nil {
-		return err
-	}
-	if body.Title == "" {
-		body.Title = note.Title
-	}
-	out := openOutput{Ref: body.Ref, Note: note, Version: newOpenVersion(body), Text: body.Text}
+	out := openOutput{Ref: value.body.Ref, Note: value.note, Version: newOpenVersion(value.body), Text: value.body.Text}
 	if req.Log != nil {
 		_ = req.Log.Info("open_complete", "result=note_version")
 	}
 	if req.Format == output.JSON {
 		return writeJSON(req.Out, out)
 	}
-	// The card always shows a typeable ref for the exact version displayed
-	// (versionRef), plus the ref the reader actually typed to get here
-	// (openRef) when that differs — reopening by note ref shows the note's
-	// current version, not necessarily the same recovered version twice.
-	openRef := displayRef(ctx, req, cardRef(resolvedRef, note.ID, body.Ref))
-	versionRef := displayRef(ctx, req, body.Ref)
+	openRef := displayRef(ctx, req, cardRef(value.resolvedRef, value.note.ID, value.body.Ref))
+	versionRef := displayRef(ctx, req, value.body.Ref)
 	return printOpenText(req.Out, out, openRef, versionRef)
+}
+
+func (c *Crawler) loadOpenNote(ctx context.Context, req *trawlkit.Request, ref string) (openValue, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return openValue{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	resolvedRef, err := resolveInputRef(ctx, req, ref)
+	if err != nil {
+		return openValue{}, err
+	}
+	note, body, err := resolveOpen(ctx, st, resolvedRef)
+	if err != nil {
+		return openValue{}, err
+	}
+	if body.Title == "" {
+		body.Title = note.Title
+	}
+	return openValue{resolvedRef: resolvedRef, note: note, body: body}, nil
 }
 
 // cardRef picks which ref the open card echoes. A reader who opened a note by

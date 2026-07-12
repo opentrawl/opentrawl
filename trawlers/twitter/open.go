@@ -20,8 +20,17 @@ func (r *runtime) runOpen(args []string) error {
 	if fs.NArg() != 1 {
 		return usageErr(errors.New("open takes exactly one ref"))
 	}
-	return r.withReadOnlyStore(func(st *store.Store) error {
-		id, err := r.resolveOpenTweetID(fs.Arg(0))
+	value, err := r.loadOpenPost(fs.Arg(0))
+	if err != nil {
+		return err
+	}
+	return r.print(newOpenEnvelope(value.result, value.aliases, value.ownerAuthorID))
+}
+
+func (r *runtime) loadOpenPost(ref string) (openValue, error) {
+	var value openValue
+	err := r.withReadOnlyStore(func(st *store.Store) error {
+		id, err := r.resolveOpenTweetID(ref)
 		if err != nil {
 			return err
 		}
@@ -40,8 +49,10 @@ func (r *runtime) runOpen(args []string) error {
 		if err != nil {
 			return err
 		}
-		return r.print(newOpenEnvelope(result, aliases, ownerAuthorID))
+		value = openValue{result: result, aliases: aliases, ownerAuthorID: ownerAuthorID}
+		return nil
 	})
+	return value, err
 }
 
 func (r *runtime) resolveOpenTweetID(ref string) (string, error) {

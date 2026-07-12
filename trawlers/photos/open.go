@@ -16,11 +16,7 @@ import (
 )
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	resolved, err := c.resolveInputRef(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	result, err := archive.Open(ctx, archivePaths(req), resolved)
+	result, err := c.loadOpenAsset(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -31,6 +27,18 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 		return output.Write(req.Out, req.Format, "open", result)
 	}
 	return printOpenText(req.Out, result)
+}
+
+func (c *Crawler) loadOpenAsset(ctx context.Context, req *trawlkit.Request, ref string) (archive.OpenResult, error) {
+	resolved, err := c.resolveInputRef(ctx, req, ref)
+	if err != nil {
+		return archive.OpenResult{}, err
+	}
+	result, err := archive.Open(ctx, archivePaths(req), resolved)
+	if err != nil {
+		return archive.OpenResult{}, err
+	}
+	return result, nil
 }
 
 func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

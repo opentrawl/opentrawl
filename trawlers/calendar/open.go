@@ -15,15 +15,7 @@ import (
 )
 
 func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) error {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	resolved, err := c.resolveOpenRef(ctx, req, ref)
-	if err != nil {
-		return err
-	}
-	event, err := st.OpenEvent(ctx, resolved)
+	event, err := c.loadOpenEvent(ctx, req, ref)
 	if err != nil {
 		return err
 	}
@@ -32,6 +24,22 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 		return output.Write(req.Out, req.Format, "open", event)
 	}
 	return printOpenText(req.Out, event)
+}
+
+func (c *Crawler) loadOpenEvent(ctx context.Context, req *trawlkit.Request, ref string) (archive.EventDetail, error) {
+	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
+	if err != nil {
+		return archive.EventDetail{}, archiveErr(fmt.Errorf("open archive: %w", err))
+	}
+	resolved, err := c.resolveOpenRef(ctx, req, ref)
+	if err != nil {
+		return archive.EventDetail{}, err
+	}
+	event, err := st.OpenEvent(ctx, resolved)
+	if err != nil {
+		return archive.EventDetail{}, err
+	}
+	return event, nil
 }
 
 func (c *Crawler) resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

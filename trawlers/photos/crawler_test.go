@@ -6,6 +6,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"flag"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
 	"os"
 	"path/filepath"
@@ -15,10 +18,12 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	sourcephotos "github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestMain(m *testing.M) {
@@ -30,6 +35,39 @@ func TestMain(m *testing.M) {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{source}))
 	}
 	os.Exit(m.Run())
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenAsset")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
+	}
 }
 
 func TestSetupRequirementMapping(t *testing.T) {
@@ -114,10 +152,18 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 		Config:  filepath.Join(stateRoot, "photos", "config.toml"),
 		Logs:    filepath.Join(stateRoot, "photos", "logs"),
 	}
-	t.Setenv("HOME", filepath.Join(root, "home"))
-	createSyntheticLibrary(t, filepath.Join(root, "home", "Pictures", "Photos Library.photoslibrary"))
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
+	createSyntheticLibrary(t, libraryPath)
+	snapshot, err := (sourcephotos.SQLiteSnapshotProvider{}).Snapshot(ctx, libraryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	source := New()
+	source.cfg.LibraryPath = "/synthetic/Photos Library.photoslibrary"
+	source.snapshotProvider = staticSnapshotProvider{snapshot: snapshot}
 	writeStore, err := store.Open(ctx, store.Options{Path: paths.Archive})
 	if err != nil {
 		t.Fatal(err)
@@ -173,6 +219,96 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	}
 	if strings.Contains(openOut.String(), "short_ref") {
 		t.Fatalf("open JSON leaked short ref:\n%s", openOut.String())
+	}
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	fullRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	shortRecord, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.ShortRef)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != hit.Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.photos.open.v1.PhotosRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	load := func(ref string) archive.OpenResult {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		value, loadErr := source.loadOpenAsset(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		return value
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "fae78acb0b146d7865bd805c18b63f0d66caa386a13792ca93d5cd833ab79544", "text": "b31d653ef54ec3d5c2892473c6730c78688c02b2601608c9b22c0037f0a1f03b"}
+		for _, format := range []struct {
+			name  string
+			value output.Format
+		}{{"json", output.JSON}, {"text", output.Text}} {
+			readStore = openReadStore(t, ctx, paths.Archive)
+			var stdout bytes.Buffer
+			openErr := source.Open(ctx, &trawlkit.Request{Store: readStore, Paths: paths, Format: format.value, Out: &stdout}, ref)
+			_ = readStore.Close()
+			writeLegacyOpenEvidence(t, "photos", caseName, format.name, stdout.Bytes(), openErr)
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "photos", "full", hit.Ref, load(hit.Ref), fullRecord)
+	writeRuntimeOpenEvidence(t, "photos", "short", hit.ShortRef, load(hit.ShortRef), shortRecord)
+	captureLegacy("full", hit.Ref)
+	captureLegacy("short", hit.ShortRef)
+	readStore = openReadStore(t, ctx, paths.Archive)
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "zzzzz")
+	_ = readStore.Close()
+	if typed, ok := err.(commandError); !ok || typed.Code != "unknown_short_ref" {
+		t.Fatalf("unknown short ref error = %#v", err)
+	}
+	writeStore, err = store.Open(ctx, store.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", hit.Ref, hit.Ref, "zzzzz", "photos:asset/missing", "photos:asset/missing"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "zzzzz")
+	_ = readStore.Close()
+	if typed, ok := err.(commandError); !ok || typed.Code != "ambiguous_short_ref" {
+		t.Fatalf("ambiguous short ref error = %#v", err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "photos:asset/missing")
+	_ = readStore.Close()
+	if err == nil || err.Error() != "asset not found: asset:missing" {
+		t.Fatalf("missing asset ref error = %#v", err)
+	}
+	for ref, want := range map[string]string{
+		"calendar:event/example": "asset not found: calendar:event:example",
+		"photos:asset/":          "asset not found: asset:",
+	} {
+		readStore = openReadStore(t, ctx, paths.Archive)
+		_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+		_ = readStore.Close()
+		if err == nil || err.Error() != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: paths.Archive + ".missing"}}, hit.Ref)
+	if err == nil || !strings.HasPrefix(err.Error(), "stat sqlite db: stat ") {
+		t.Fatalf("missing archive open error = %#v", err)
 	}
 
 	classifyStore, err := store.Open(ctx, store.Options{Path: paths.Archive})

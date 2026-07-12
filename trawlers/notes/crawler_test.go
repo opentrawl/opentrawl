@@ -7,6 +7,10 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +23,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestSetupRequirementMapping(t *testing.T) {
@@ -34,6 +39,39 @@ func TestSetupRequirementMapping(t *testing.T) {
 	needsAction := notesSetupRequirementForError(os.ErrPermission)
 	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
 		t.Fatalf("needs-action requirement = %#v", needsAction)
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenNote")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -117,7 +155,6 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	c.syncStorePath = f.path()
 	req := testRequest(t, archivePath, output.JSON, nil, true)
 	report, err := c.Sync(context.Background(), req)
-	closeStore(t, req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +164,18 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	if report.Updated != 4 {
 		t.Fatalf("updated = %d, want 4", report.Updated)
 	}
+	if _, err := req.Store.DB().ExecContext(context.Background(), `update notes set last_seen_at = ?; update note_versions set first_observed_at = ?, latest_observed_at = ?`, "2026-07-10T14:00:00Z", "2026-07-10T14:00:00Z", "2026-07-10T14:00:00Z"); err != nil {
+		closeStore(t, req)
+		t.Fatal(err)
+	}
+	records, err := c.ShortRefRecords(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := req.AssignShortRefs(context.Background(), records); err != nil {
+		t.Fatal(err)
+	}
+	closeStore(t, req)
 
 	readReq := testRequest(t, archivePath, output.JSON, nil, false)
 	search, err := c.Search(context.Background(), readReq, trawlkit.Query{Text: "second", Limit: 20})
@@ -156,6 +205,94 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	// shows what the note says now ("third"). History stays in versions/at-time.
 	if opened.Text != "third synthetic edit" {
 		t.Fatalf("open text = %q", opened.Text)
+	}
+
+	recordReq := testRequest(t, archivePath, output.JSON, nil, false)
+	fullRecord, err := c.OpenRecord(context.Background(), recordReq, search.Results[0].Ref)
+	if err != nil {
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	aliases, err := recordReq.ShortRefAliases(context.Background(), []string{search.Results[0].Ref})
+	if err != nil {
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	shortRecord, err := c.OpenRecord(context.Background(), recordReq, aliases[search.Results[0].Ref])
+	if err != nil {
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != search.Results[0].Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.notes.open.v1.NotesRecord" || shortRecord.Presentation == nil {
+		closeStore(t, recordReq)
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	fullValue, err := c.loadOpenNote(context.Background(), recordReq, search.Results[0].Ref)
+	if err != nil {
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	shortValue, err := c.loadOpenNote(context.Background(), recordReq, aliases[search.Results[0].Ref])
+	if err != nil {
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "06c5b41b82b2fcdb9d52d77a70aab4d20ab36677418bff70725ff6b526929484", "text": "933379507c39312d34345469d798566e5dcdacf06f8a76762720c675c228815f"}
+		for _, format := range []struct {
+			name  string
+			value output.Format
+		}{{"json", output.JSON}, {"text", output.Text}} {
+			var stdout bytes.Buffer
+			legacyReq := testRequest(t, archivePath, format.value, &stdout, false)
+			openErr := c.Open(context.Background(), legacyReq, ref)
+			closeStore(t, legacyReq)
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "notes", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				closeStore(t, recordReq)
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "notes", "full", search.Results[0].Ref, map[string]any{"resolved_ref": fullValue.resolvedRef, "note": fullValue.note, "body": fullValue.body}, fullRecord)
+	writeRuntimeOpenEvidence(t, "notes", "short", aliases[search.Results[0].Ref], map[string]any{"resolved_ref": shortValue.resolvedRef, "note": shortValue.note, "body": shortValue.body}, shortRecord)
+	captureLegacy("full", search.Results[0].Ref)
+	captureLegacy("short", aliases[search.Results[0].Ref])
+	if _, err := c.OpenRecord(context.Background(), recordReq, "zzzzz"); err == nil || err.Error() != `no archived note matches "zzzzz"` {
+		closeStore(t, recordReq)
+		t.Fatalf("unknown short-like note query error = %#v", err)
+	}
+	writeReq := testRequest(t, archivePath, output.JSON, nil, true)
+	if _, err := writeReq.Store.DB().ExecContext(context.Background(), `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", search.Results[0].Ref, search.Results[0].Ref, "zzzzz", "notes:note/missing", "notes:note/missing"); err != nil {
+		closeStore(t, writeReq)
+		closeStore(t, recordReq)
+		t.Fatal(err)
+	}
+	closeStore(t, writeReq)
+	_, err = c.OpenRecord(context.Background(), recordReq, "zzzzz")
+	var ambiguous crawlerError
+	if !errors.As(err, &ambiguous) || ambiguous.code != "ambiguous_short_ref" {
+		closeStore(t, recordReq)
+		t.Fatalf("ambiguous short ref error = %#v", err)
+	}
+	if _, err := c.OpenRecord(context.Background(), recordReq, "notes:note/missing"); err == nil || err.Error() != `no archived note matches "missing"` {
+		closeStore(t, recordReq)
+		t.Fatalf("missing note ref error = %#v", err)
+	}
+	for ref, want := range map[string]string{
+		"photos:asset/example": `no archived note matches "photos:asset/example"`,
+		"notes:version/":       `no archived note matches "notes:version/"`,
+	} {
+		if _, err := c.OpenRecord(context.Background(), recordReq, ref); err == nil || err.Error() != want {
+			closeStore(t, recordReq)
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	closeStore(t, recordReq)
+	missingReq := &trawlkit.Request{Paths: trawlkit.Paths{Archive: archivePath + ".missing"}}
+	if _, err := c.OpenRecord(context.Background(), missingReq, search.Results[0].Ref); err == nil || !strings.Contains(err.Error(), "open archive") {
+		t.Fatalf("missing archive open error = %#v", err)
 	}
 
 	var versionsBuf bytes.Buffer

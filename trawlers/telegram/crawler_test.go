@@ -3,6 +3,10 @@ package telecrawl
 import (
 	"bytes"
 	"context"
+	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +15,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestCrawlerVerbs(t *testing.T) {
@@ -31,6 +36,39 @@ func TestCrawlerVerbs(t *testing.T) {
 		if verb.Name != name || verb.Flags == nil || verb.Help != "" || verb.Run != nil || verb.Mutates || verb.Timeout != 0 || len(verb.Args) != 0 {
 			t.Fatalf("spine verb %q has invalid declaration: %+v", name, verb)
 		}
+	}
+}
+
+func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
+	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
+}
+
+func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
+	t.Helper()
+	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	for _, declaration := range file.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv == nil || function.Name.Name != "OpenRecord" {
+			continue
+		}
+		ast.Inspect(function.Body, func(node ast.Node) bool {
+			call, ok := node.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			selector, ok := call.Fun.(*ast.SelectorExpr)
+			if ok && selector.Sel.Name == loader {
+				calls++
+			}
+			return true
+		})
+	}
+	if calls != 1 {
+		t.Fatalf("OpenRecord %s calls = %d, want 1", loader, calls)
 	}
 }
 
@@ -79,6 +117,75 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "synthetic launch note") {
 		t.Fatalf("open output = %s", out.String())
+	}
+
+	fullRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortRecord, err := crawler.OpenRecord(ctx, req, search.Results[0].ShortRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != search.Results[0].Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.telegram.open.v1.TelegramRecord" || shortRecord.Presentation == nil {
+		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
+	}
+	fullValue, err := crawler.loadOpenMessage(ctx, req, search.Results[0].Ref)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shortValue, err := crawler.loadOpenMessage(ctx, req, search.Results[0].ShortRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	captureLegacy := func(caseName, ref string) {
+		goldens := map[string]string{"json": "8c504c278fc371071d879b8c8a2c59fa9ec023835c67a22f7301151aa333bc1b", "text": "8db357a983a9ed6fd8434c7da6b0ed08d4e368cd809833ba834db872e66f10f7"}
+		for _, format := range []struct {
+			name  string
+			value ckoutput.Format
+		}{{"json", ckoutput.JSON}, {"text", ckoutput.Text}} {
+			var stdout bytes.Buffer
+			legacyReq := *req
+			legacyReq.Format, legacyReq.Out = format.value, &stdout
+			openErr := crawler.Open(ctx, &legacyReq, ref)
+			assertLegacyOpenGolden(t, stdout.Bytes(), openErr, goldens[format.name])
+			writeLegacyOpenEvidence(t, "telegram", caseName, format.name, stdout.Bytes(), openErr)
+			if openErr != nil {
+				t.Fatal(openErr)
+			}
+		}
+	}
+	writeRuntimeOpenEvidence(t, "telegram", "full", search.Results[0].Ref, fullValue, fullRecord)
+	writeRuntimeOpenEvidence(t, "telegram", "short", search.Results[0].ShortRef, shortValue, shortRecord)
+	captureLegacy("full", search.Results[0].Ref)
+	captureLegacy("short", search.Results[0].ShortRef)
+	assertOpenRecordError := func(ref, want string) {
+		_, err = crawler.OpenRecord(ctx, req, ref)
+		var typed commandError
+		if !errors.As(err, &typed) || typed.name != want {
+			t.Fatalf("open %q error = %#v, want %q", ref, err, want)
+		}
+	}
+	assertOpenRecordError("zzzzz", "unknown_short_ref")
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `insert into short_refs(alias, full_ref, canonical_ref) values (?, ?, ?), (?, ?, ?)`, "zzzzz", search.Results[0].Ref, search.Results[0].Ref, "zzzzz", "telegram:msg/999999999", "telegram:msg/999999999"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	assertOpenRecordError("zzzzz", "ambiguous_short_ref")
+	assertOpenRecordError("photos:asset/example", "invalid_ref")
+	assertOpenRecordError("telegram:msg/not-a-number", "invalid_ref")
+	assertOpenRecordError("telegram:msg/999999999", "not_found")
+	_, err = crawler.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: archivePath + ".missing"}}, search.Results[0].Ref)
+	var archiveFailure commandError
+	if !errors.As(err, &archiveFailure) || archiveFailure.name != "archive" {
+		t.Fatalf("missing archive error = %#v", err)
 	}
 
 	contacts, err := crawler.ContactExport(ctx, req)

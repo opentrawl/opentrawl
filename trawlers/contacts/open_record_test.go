@@ -2,7 +2,9 @@ package clawdex
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,7 +36,8 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("canonical Go input: %s", inputJSON)
-	record := projectOpenRecord(archive.PersonRef(input.ID), input)
+	value := openValue{ref: archive.PersonRef(input.ID), person: input}
+	record := projectOpenRecord(value)
 	name := string(record.ProtoReflect().Descriptor().FullName())
 	if name != "trawl.source.contacts.open.v1.ContactsRecord" {
 		t.Fatalf("message name = %q", name)
@@ -64,7 +67,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("storage ID field leaked: %s", data)
 	}
 	assertExactRecord(t, record, &contactsopenv1.ContactsRecord{}, `{"ref":"contacts:person/person_storage_fixture","name":"Avery Example","sort_name":"Example, Avery","aka":["Avery E."],"tags":["project"],"emails":[{"value":"avery@example.com","label":"work","primary":true}],"phones":[{"value":"+15550001111","label":"mobile"}],"addresses":[{"value":"1 Example Street","label":"work"}],"accounts":{"telegram":{"values":["avery_example"]}},"annotation":"Synthetic collaborator.","annotation_stated_at":"2026-07-10"}`)
-	presentation := projectOpenPresentation(archive.PersonRef(input.ID), input)
+	presentation := projectOpenPresentation(value)
 	if presentation.Title != "Avery Example" || len(presentation.Blocks) != 1 || len(presentation.Blocks[0].GetFields().Fields) != 8 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
@@ -99,7 +102,7 @@ blocks: { fields: { fields: { label: "Ref" display: "contacts:person/person_stor
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Name = ""
-		if got := projectOpenPresentation(archive.PersonRef(blank.ID), blank).Title; got != "Contact" {
+		if got := projectOpenPresentation(openValue{ref: archive.PersonRef(blank.ID), person: blank}).Title; got != "Contact" {
 			t.Fatalf("title = %q", got)
 		}
 	})
@@ -163,6 +166,69 @@ func writeEvidence(t *testing.T, source, name string, content []byte) {
 	}
 	directory = filepath.Join(directory, source)
 	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	readBack, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(readBack, content) {
+		t.Fatalf("evidence %s changed on write", name)
+	}
+}
+
+func writeRuntimeOpenEvidence(t *testing.T, source, caseName, ref string, loaded any, record *openv1.OpenRecord) {
+	t.Helper()
+	machine, err := record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEvidence(t, source, filepath.Join(caseName, "argv-ref.txt"), []byte("OpenRecord "+ref+"\n"))
+	loadedJSON, err := json.MarshalIndent(loaded, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeEvidence(t, source, filepath.Join(caseName, "loaded-value.json"), append(loadedJSON, '\n'))
+	writeEvidence(t, source, filepath.Join(caseName, "machine.pbtxt"), []byte(prototext.Format(machine)))
+	writeEvidence(t, source, filepath.Join(caseName, "presentation.pbtxt"), []byte(prototext.Format(record.Presentation)))
+	writeEvidence(t, source, filepath.Join(caseName, "validated-open.pbtxt"), []byte(prototext.Format(record)))
+}
+
+func writeLegacyOpenEvidence(t *testing.T, source, caseName, format string, stdout []byte, err error) {
+	t.Helper()
+	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-stdout.txt"), stdout)
+	writeRawEvidence(t, source, filepath.Join(caseName, "open-"+format+"-stderr.txt"), nil)
+	if err == nil {
+		writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("0\n"))
+		writeRawEvidence(t, source, filepath.Join(caseName, "open-"+format+"-error.txt"), nil)
+		return
+	}
+	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-exit.txt"), []byte("1\n"))
+	writeEvidence(t, source, filepath.Join(caseName, "open-"+format+"-error.txt"), []byte(err.Error()+"\n"))
+}
+
+func assertLegacyOpenGolden(t *testing.T, stdout []byte, err error, wantSHA256 string) {
+	t.Helper()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprintf("%x", sha256.Sum256(stdout)); got != wantSHA256 {
+		t.Fatalf("legacy open stdout SHA-256 = %s, want %s", got, wantSHA256)
+	}
+}
+
+func writeRawEvidence(t *testing.T, source, name string, content []byte) {
+	t.Helper()
+	directory := os.Getenv("OPENTRAWL_EVIDENCE_DIR")
+	if directory == "" {
+		return
+	}
+	directory = filepath.Join(directory, source)
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(directory, name)), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(directory, name)

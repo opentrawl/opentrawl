@@ -1,15 +1,46 @@
 package wacrawl
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	whatsappopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/whatsapp/open/v1"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func projectOpenRecord(target store.Message, context []store.Message, participants []string) *whatsappopenv1.WhatsAppRecord {
+type openValue struct {
+	target       store.Message
+	context      []store.Message
+	participants []string
+}
+
+var _ trawlkit.RecordOpener = (*Crawler)(nil)
+
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenMessage(ctx, req, ref)
+	if err != nil {
+		return nil, err
+	}
+	machine := projectOpenRecord(value)
+	data, err := anypb.New(machine)
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	if err := openrecord.Validate(record); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func projectOpenRecord(value openValue) *whatsappopenv1.WhatsAppRecord {
+	target, context, participants := value.target, value.context, value.participants
 	record := &whatsappopenv1.WhatsAppRecord{
 		Ref:          messageRef(target),
 		Chat:         messageWhereJSON(target),
@@ -66,8 +97,8 @@ func recordString(value string) *string { return &value }
 func recordInt64(value int64) *int64    { return &value }
 func recordBool(value bool) *bool       { return &value }
 
-func projectOpenPresentation(target store.Message, context []store.Message, participants []string) *presentationv1.PresentationDocument {
-	record := projectOpenRecord(target, context, participants)
+func projectOpenPresentation(value openValue) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Chat)
 	if title == "" || title == "Unknown chat" {
 		title = "WhatsApp conversation"

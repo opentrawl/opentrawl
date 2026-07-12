@@ -429,6 +429,21 @@ func TestOpenCardOmitsVersionRowWhenSameAsRef(t *testing.T) {
 		t.Fatal("no short ref alias for the version ref")
 	}
 
+	_, sha, ok := archive.VersionFromRef(versions.Versions[0].Ref)
+	if !ok {
+		t.Fatalf("version ref = %q", versions.Versions[0].Ref)
+	}
+	prefixRef := strings.TrimSuffix(versions.Versions[0].Ref, sha) + archive.ShortSHA(sha)
+	recordReq := testRequest(t, path, output.JSON, nil, false)
+	record, err := c.OpenRecord(context.Background(), recordReq, prefixRef)
+	closeStore(t, recordReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.OpenRef != versions.Versions[0].Ref {
+		t.Fatalf("open ref = %q, want %q", record.OpenRef, versions.Versions[0].Ref)
+	}
+
 	var buf bytes.Buffer
 	openReq := testRequest(t, path, output.Text, &buf, false)
 	if err := c.Open(context.Background(), openReq, versionShortRef); err != nil {

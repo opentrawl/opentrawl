@@ -1,18 +1,49 @@
 package notes
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	notesopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/notes/open/v1"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
-func projectOpenRecord(requestedRef string, note archive.Note, body archive.VersionBody) *notesopenv1.NotesRecord {
+type openValue struct {
+	resolvedRef string
+	note        archive.Note
+	body        archive.VersionBody
+}
+
+var _ trawlkit.RecordOpener = (*Crawler)(nil)
+
+func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
+	value, err := c.loadOpenNote(ctx, req, ref)
+	if err != nil {
+		return nil, err
+	}
+	machine := projectOpenRecord(value)
+	data, err := anypb.New(machine)
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	if err := openrecord.Validate(record); err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+func projectOpenRecord(value openValue) *notesopenv1.NotesRecord {
+	requestedRef, note, body := value.resolvedRef, value.note, value.body
 	recordRef := archive.RefForNote(note.ID)
 	if _, _, ok := archive.VersionFromRef(requestedRef); ok {
-		recordRef = requestedRef
+		recordRef = body.Ref
 	}
 	title := strings.TrimSpace(body.Title)
 	if title == "" {
@@ -44,8 +75,8 @@ func setOptionalString(target **string, value string) {
 
 func recordString(value string) *string { return &value }
 
-func projectOpenPresentation(requestedRef string, note archive.Note, body archive.VersionBody) *presentationv1.PresentationDocument {
-	record := projectOpenRecord(requestedRef, note, body)
+func projectOpenPresentation(value openValue) *presentationv1.PresentationDocument {
+	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Title)
 	if title == "" {
 		title = "Note"
