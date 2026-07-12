@@ -17,7 +17,7 @@ func TestUsageMentionsLabVerbs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected usage error")
 	}
-	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-context|eval-card|known-places>") {
+	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|known-places>") {
 		t.Fatalf("unexpected usage error: %v", err)
 	}
 }
@@ -72,6 +72,9 @@ nearby_limit = 50
 	if got.CoordinateVariant != "source-coordinate" || got.OutputDir != outDir {
 		t.Fatalf("run boundary = %#v", got)
 	}
+	if got.Operation != place.EvidenceOperationAll {
+		t.Fatalf("default operation = %q", got.Operation)
+	}
 	if got.Geoapify.ProviderIdentity != "synthetic-osm" || got.Geoapify.ReverseEndpoint != "https://geo.example.com/configured/reverse" || got.Geoapify.NearbyEndpoint != "https://geo.example.com/configured/nearby" {
 		t.Fatalf("provider boundary = %#v", got.Geoapify)
 	}
@@ -83,6 +86,82 @@ nearby_limit = 50
 	}
 	t.Logf("RAW CONFIG %q", config)
 	t.Logf("RAW COORDINATE INPUT %q", input)
+}
+
+func TestPlaceEvidenceOperationStopsBeforeConfigOrRunner(t *testing.T) {
+	t.Setenv(placeEvidenceOperationEnv, "unknown")
+	runnerCalled := false
+	err := runPlaceEvidenceWith(context.Background(), archive.Paths{ConfigPath: filepath.Join(t.TempDir(), "missing.toml")}, []string{
+		"--input", "missing.json",
+		"--coordinate-variant", "source-coordinate",
+		"--radius", "150",
+		"--out", t.TempDir(),
+		"--json",
+	}, &bytes.Buffer{}, func(context.Context, place.EvidenceOptions) (place.EvidenceResult, error) {
+		runnerCalled = true
+		return place.EvidenceResult{}, nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "unknown place evidence operation") || runnerCalled {
+		t.Fatalf("operation guard error=%v runner=%v", err, runnerCalled)
+	}
+}
+
+func TestPlaceEvidenceOperationPassesEachAllowedValue(t *testing.T) {
+	for _, operation := range []place.EvidenceOperation{
+		place.EvidenceOperationAll,
+		place.EvidenceOperationApple,
+		place.EvidenceOperationGeoapifyReverse,
+		place.EvidenceOperationGeoapifyNearby,
+	} {
+		t.Run(string(operation), func(t *testing.T) {
+			root := t.TempDir()
+			paths := archive.Paths{ConfigPath: filepath.Join(root, "config.toml"), CacheDir: filepath.Join(root, "cache")}
+			config := `[place_evidence.geoapify]
+provider_identity = "synthetic-osm"
+reverse_endpoint = "https://geo.example.com/reverse"
+nearby_endpoint = "https://geo.example.com/nearby"
+credential_env = "SYNTHETIC_OSM_KEY"
+credential_parameter = "syntheticKey"
+nearby_categories = ["natural"]
+reverse_limit = 2
+nearby_limit = 4
+`
+			if err := os.WriteFile(paths.ConfigPath, []byte(config), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			inputPath := filepath.Join(root, "input.json")
+			if err := os.WriteFile(inputPath, []byte(`{"asset_id":"synthetic-asset","location":{"latitude":52.36,"longitude":4.89}}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(placeEvidenceOperationEnv, string(operation))
+			t.Setenv("SYNTHETIC_OSM_KEY", "synthetic-secret")
+			var got place.EvidenceOperation
+			err := runPlaceEvidenceWith(context.Background(), paths, []string{"--input", inputPath, "--coordinate-variant", "source-coordinate", "--radius", "150", "--out", filepath.Join(root, "out"), "--json"}, &bytes.Buffer{}, func(_ context.Context, opts place.EvidenceOptions) (place.EvidenceResult, error) {
+				got = opts.Operation
+				return place.EvidenceResult{State: "complete"}, nil
+			})
+			if err != nil || got != operation {
+				t.Fatalf("operation boundary = %q error=%v", got, err)
+			}
+		})
+	}
+}
+
+func TestPlaceEvidenceCommandsUsePhotosRunLog(t *testing.T) {
+	run, err := newPlaceEvidenceLog(archive.Paths{DataDir: t.TempDir()}, "place-evidence-campaign")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Info("place_evidence_campaign_case", "phase=canary case=1 outcome=complete duration_ms=1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := run.Finish(nil); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(run.Path())
+	if err != nil || !strings.Contains(string(data), "place_evidence_campaign_case") || !strings.Contains(string(data), "duration_ms=1") {
+		t.Fatalf("Photos run log = %q error=%v", data, err)
+	}
 }
 
 func TestSplitList(t *testing.T) {

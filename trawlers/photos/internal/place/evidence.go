@@ -1,10 +1,7 @@
 package place
 
 import (
-	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,30 +9,38 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
+	"time"
 )
 
 const (
-	evidenceParserVersion = "photos-place-evidence-v2"
-	evidenceStateComplete = "complete"
-	evidenceStateStopped  = "stopped"
-	evidenceStopEmpty     = "empty"
-	evidenceStopFailed    = "failed"
-	evidenceStopMalformed = "malformed"
-	evidenceStopNoResult  = "no_result"
-	evidenceStopSaturated = "limit_saturated"
-	evidenceStopTooLarge  = "response_too_large"
-	appleEmptyResponse    = "Apple returned an empty response"
-	maxRawEvidenceBytes   = 4 << 20
+	evidenceParserVersion       = "photos-place-evidence-v2"
+	evidenceStateComplete       = "complete"
+	evidenceStateStopped        = "stopped"
+	evidenceStopEmpty           = "empty"
+	evidenceStopFailed          = "failed"
+	evidenceStopMalformed       = "malformed"
+	evidenceStopNoResult        = "no_result"
+	evidenceStopSaturated       = "limit_saturated"
+	evidenceStopTooLarge        = "response_too_large"
+	evidenceStopBilling         = "billing_signal"
+	evidenceStopCredential      = "credential_bearing_response"
+	evidenceStopRateLimited     = "rate_limited"
+	evidenceStopCacheIncomplete = "cache_incomplete"
+	appleEmptyResponse          = "Apple returned an empty response"
+	maxRawEvidenceBytes         = 4 << 20
 )
 
 var (
-	errEvidenceEmpty       = errors.New(evidenceStopEmpty)
-	errEvidenceFailed      = errors.New(evidenceStopFailed)
-	errEvidenceMalformed   = errors.New(evidenceStopMalformed)
-	errEvidenceSaturated   = errors.New(evidenceStopSaturated)
-	errRawEvidenceTooLarge = fmt.Errorf("provider response exceeds %d bytes", maxRawEvidenceBytes)
+	errEvidenceEmpty           = errors.New(evidenceStopEmpty)
+	errEvidenceFailed          = errors.New(evidenceStopFailed)
+	errEvidenceMalformed       = errors.New(evidenceStopMalformed)
+	errEvidenceSaturated       = errors.New(evidenceStopSaturated)
+	errEvidenceBilling         = errors.New(evidenceStopBilling)
+	errEvidenceCredential      = errors.New(evidenceStopCredential)
+	errEvidenceRateLimited     = errors.New(evidenceStopRateLimited)
+	errEvidenceCacheIncomplete = errors.New(evidenceStopCacheIncomplete)
+	errRawEvidenceTooLarge     = fmt.Errorf("provider response exceeds %d bytes", maxRawEvidenceBytes)
 )
 
 type EvidenceOptions struct {
@@ -44,8 +49,18 @@ type EvidenceOptions struct {
 	RadiusMeters      float64
 	OutputDir         string
 	CacheDir          string
+	Operation         EvidenceOperation
 	Geoapify          ConfiguredGeoapifyEvidence
 }
+
+type EvidenceOperation string
+
+const (
+	EvidenceOperationAll             EvidenceOperation = "all"
+	EvidenceOperationApple           EvidenceOperation = "apple"
+	EvidenceOperationGeoapifyReverse EvidenceOperation = "geoapify-reverse"
+	EvidenceOperationGeoapifyNearby  EvidenceOperation = "geoapify-nearby"
+)
 
 type ConfiguredGeoapifyEvidence struct {
 	ProviderIdentity    string
@@ -90,16 +105,22 @@ type EvidenceRecord struct {
 	PreAuthRequestSHA256 string              `json:"pre_auth_request_sha256"`
 	RawResponseFile      string              `json:"raw_response_file"`
 	RawResponseSHA256    string              `json:"raw_response_sha256"`
+	RawHeadersFile       string              `json:"raw_headers_file,omitempty"`
+	RawHeadersSHA256     string              `json:"raw_headers_sha256,omitempty"`
 	HTTPStatus           int                 `json:"http_status,omitempty"`
 	Address              *Address            `json:"address,omitempty"`
 	Candidates           []EvidenceCandidate `json:"candidates"`
 	CompletionState      string              `json:"completion_state"`
 	StopReason           string              `json:"stop_reason,omitempty"`
 	StopDetail           string              `json:"stop_detail,omitempty"`
+	ProviderErrorClass   string              `json:"provider_error_class,omitempty"`
 	CacheIdentity        string              `json:"cache_identity"`
 	Cached               bool                `json:"cached,omitempty"`
 	RecordDir            string              `json:"record_dir,omitempty"`
 	CredentialReference  string              `json:"credential_reference,omitempty"`
+	StartedAt            string              `json:"started_at"`
+	CompletedAt          string              `json:"completed_at"`
+	DurationMilliseconds float64             `json:"duration_milliseconds"`
 }
 
 type EvidenceCandidate struct {
@@ -117,6 +138,7 @@ type evidenceCapture struct {
 	record   EvidenceRecord
 	request  []byte
 	response []byte
+	headers  []byte
 }
 
 type parsedEvidence struct {
@@ -128,19 +150,67 @@ type evidenceParser func([]byte, int, Input) (parsedEvidence, error)
 
 type evidenceRunner struct {
 	callApple func(context.Context, Input, float64) appleBoundaryOutput
+	now       func() time.Time
 }
+
+type evidenceOperation string
+
+const (
+	evidenceOperationApple   evidenceOperation = "apple"
+	evidenceOperationReverse evidenceOperation = "geoapify_reverse"
+	evidenceOperationNearby  evidenceOperation = "geoapify_nearby"
+)
 
 func LoadEvidenceInput(path string) (Input, error) {
 	return loadInput(path)
 }
 
 func RunEvidence(ctx context.Context, opts EvidenceOptions) (EvidenceResult, error) {
-	return runEvidence(ctx, opts, evidenceRunner{
+	selected, err := selectedEvidenceOperations(opts.Operation)
+	if err != nil {
+		return EvidenceResult{}, err
+	}
+	return runEvidenceOperations(ctx, opts, evidenceRunner{
 		callApple: callAppleBoundary,
-	})
+		now:       time.Now,
+	}, selected)
 }
 
 func runEvidence(ctx context.Context, opts EvidenceOptions, runner evidenceRunner) (EvidenceResult, error) {
+	return runEvidenceOperations(ctx, opts, runner, []evidenceOperation{
+		evidenceOperationApple,
+		evidenceOperationReverse,
+		evidenceOperationNearby,
+	})
+}
+
+func ParseEvidenceOperation(value string) (EvidenceOperation, error) {
+	operation := EvidenceOperation(strings.TrimSpace(value))
+	if operation == "" {
+		operation = EvidenceOperationAll
+	}
+	if _, err := selectedEvidenceOperations(operation); err != nil {
+		return "", err
+	}
+	return operation, nil
+}
+
+func selectedEvidenceOperations(operation EvidenceOperation) ([]evidenceOperation, error) {
+	switch operation {
+	case "", EvidenceOperationAll:
+		return []evidenceOperation{evidenceOperationApple, evidenceOperationReverse, evidenceOperationNearby}, nil
+	case EvidenceOperationApple:
+		return []evidenceOperation{evidenceOperationApple}, nil
+	case EvidenceOperationGeoapifyReverse:
+		return []evidenceOperation{evidenceOperationReverse}, nil
+	case EvidenceOperationGeoapifyNearby:
+		return []evidenceOperation{evidenceOperationNearby}, nil
+	default:
+		return nil, fmt.Errorf("unknown place evidence operation %q", operation)
+	}
+}
+
+func runEvidenceOperations(ctx context.Context, opts EvidenceOptions, runner evidenceRunner, selected []evidenceOperation) (EvidenceResult, error) {
 	if err := validateInput(opts.Input); err != nil {
 		return EvidenceResult{}, err
 	}
@@ -168,15 +238,28 @@ func runEvidence(ctx context.Context, opts EvidenceOptions, runner evidenceRunne
 		return EvidenceResult{}, err
 	}
 
-	operations := []func() evidenceCapture{
-		func() evidenceCapture { return captureAppleEvidence(ctx, opts, runner) },
-		func() evidenceCapture { return captureGeoapifyReverse(ctx, opts) },
-		func() evidenceCapture { return captureGeoapifyNearby(ctx, opts) },
+	if runner.now == nil {
+		runner.now = time.Now
 	}
-	captures := make([]evidenceCapture, 0, len(operations))
+	captures := make([]evidenceCapture, 0, len(selected))
 	result := EvidenceResult{State: evidenceStateComplete, CoordinateVariant: variant}
-	for index, operation := range operations {
-		capture := operation()
+	for index, operation := range selected {
+		started := runner.now().UTC()
+		var capture evidenceCapture
+		switch operation {
+		case evidenceOperationApple:
+			capture = captureAppleEvidence(ctx, opts, runner)
+		case evidenceOperationReverse:
+			capture = captureGeoapifyReverse(ctx, opts)
+		case evidenceOperationNearby:
+			capture = captureGeoapifyNearby(ctx, opts)
+		default:
+			return EvidenceResult{}, fmt.Errorf("unknown place evidence operation %q", operation)
+		}
+		completed := runner.now().UTC()
+		capture.record.StartedAt = started.Format(time.RFC3339Nano)
+		capture.record.CompletedAt = completed.Format(time.RFC3339Nano)
+		capture.record.DurationMilliseconds = float64(completed.Sub(started)) / float64(time.Millisecond)
 		dirName := fmt.Sprintf("%02d-%s-%s-%s", index+1, safePathPart(capture.record.ProviderIdentity), safePathPart(capture.record.Operation), capture.record.CacheIdentity[:12])
 		if err := writeEvidenceCapture(filepath.Join(opts.OutputDir, dirName), &capture); err != nil {
 			return EvidenceResult{}, err
@@ -230,14 +313,42 @@ func stoppedCapture(input Input, provider, operation, variant, credentialReferen
 	capture := completeCapture(input, provider, operation, variant, credentialReference, request, response, status, parsed)
 	capture.record.CompletionState = evidenceStateStopped
 	capture.record.StopReason = namedEvidenceStop(response, err)
+	capture.record.ProviderErrorClass = evidenceErrorClass(err)
 	if err != nil && err.Error() != capture.record.StopReason {
 		capture.record.StopDetail = err.Error()
 	}
 	return capture
 }
 
+func evidenceErrorClass(err error) string {
+	switch {
+	case errors.Is(err, ErrProviderThrottled):
+		return "throttled"
+	case errors.Is(err, ErrProviderTimeout):
+		return "timeout"
+	case errors.Is(err, ErrProviderNoResult):
+		return "no_result"
+	case errors.Is(err, errEvidenceRateLimited):
+		return "rate_limited"
+	case errors.Is(err, errEvidenceBilling):
+		return "billing"
+	case err != nil:
+		return "other"
+	default:
+		return ""
+	}
+}
+
 func namedEvidenceStop(response []byte, err error) string {
 	switch {
+	case errors.Is(err, errEvidenceBilling):
+		return evidenceStopBilling
+	case errors.Is(err, errEvidenceCredential):
+		return evidenceStopCredential
+	case errors.Is(err, errEvidenceRateLimited):
+		return evidenceStopRateLimited
+	case errors.Is(err, errEvidenceCacheIncomplete):
+		return evidenceStopCacheIncomplete
 	case errors.Is(err, errEvidenceSaturated):
 		return evidenceStopSaturated
 	case errors.Is(err, ErrProviderNoResult):
@@ -265,98 +376,6 @@ func namedEvidenceStop(response []byte, err error) string {
 		return evidenceStopEmpty
 	}
 	return evidenceStopFailed
-}
-
-func cachedCapture(cacheDir, provider, operation, variant, credentialReference string, request []byte, input Input, parser evidenceParser) (evidenceCapture, bool) {
-	identity := evidenceCacheIdentity(input, provider, operation, variant, credentialReference, request)
-	dir := filepath.Join(cacheDir, identity)
-	metadata, err := os.ReadFile(filepath.Join(dir, "record.json"))
-	if err != nil {
-		return evidenceCapture{}, false
-	}
-	var record EvidenceRecord
-	if err := json.Unmarshal(metadata, &record); err != nil {
-		return evidenceCapture{}, false
-	}
-	storedRequest, err := os.ReadFile(filepath.Join(dir, "request.raw"))
-	if err != nil || !bytes.Equal(storedRequest, request) {
-		return evidenceCapture{}, false
-	}
-	response, err := readBoundedEvidenceFile(filepath.Join(dir, "response.raw"))
-	if err != nil ||
-		record.CompletionState != evidenceStateComplete ||
-		record.CacheIdentity != identity ||
-		record.ParserVersion != evidenceParserVersion ||
-		record.PreAuthRequestSHA256 != evidenceDigest(storedRequest) ||
-		record.RawResponseSHA256 != evidenceDigest(response) ||
-		record.ProviderIdentity != provider ||
-		record.Operation != operation ||
-		record.CoordinateVariant != variant ||
-		record.CredentialReference != credentialReference ||
-		!reflect.DeepEqual(record.Input, input) {
-		return evidenceCapture{}, false
-	}
-	parsed, err := parser(response, record.HTTPStatus, input)
-	if err != nil || !reflect.DeepEqual(parsed.address, record.Address) || !reflect.DeepEqual(parsed.candidates, record.Candidates) {
-		return evidenceCapture{}, false
-	}
-	record.Cached = true
-	record.CredentialReference = credentialReference
-	return evidenceCapture{record: record, request: storedRequest, response: response}, true
-}
-
-func evidenceDigest(data []byte) string {
-	sum := sha256.Sum256(data)
-	return hex.EncodeToString(sum[:])
-}
-
-func readBoundedEvidenceFile(path string) ([]byte, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = file.Close() }()
-	data, err := io.ReadAll(io.LimitReader(file, maxRawEvidenceBytes+1))
-	if err != nil {
-		return data, err
-	}
-	if len(data) > maxRawEvidenceBytes {
-		return data, fmt.Errorf("cached provider response exceeds %d bytes", maxRawEvidenceBytes)
-	}
-	return data, nil
-}
-
-func writeEvidenceCapture(dir string, capture *evidenceCapture) error {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "request.raw"), capture.request, 0o600); err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "response.raw"), capture.response, 0o600); err != nil {
-		return err
-	}
-	capture.record.RecordDir = dir
-	metadataRecord := capture.record
-	metadataRecord.RecordDir = ""
-	metadata, err := json.MarshalIndent(metadataRecord, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(filepath.Join(dir, "record.json"), append(metadata, '\n'), 0o600)
-}
-
-func evidenceCacheIdentity(input Input, provider, operation, variant, credentialReference string, request []byte) string {
-	hash := sha256.New()
-	for _, value := range []string{provider, operation, evidenceParserVersion, variant, credentialReference} {
-		_, _ = hash.Write([]byte(value))
-		_, _ = hash.Write([]byte{0})
-	}
-	inputJSON, _ := json.Marshal(input)
-	_, _ = hash.Write(inputJSON)
-	_, _ = hash.Write([]byte{0})
-	_, _ = hash.Write(request)
-	return hex.EncodeToString(hash.Sum(nil))
 }
 
 func safePathPart(value string) string {

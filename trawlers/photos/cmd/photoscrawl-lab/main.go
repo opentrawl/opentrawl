@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -19,8 +20,11 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
+	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
+
+const placeEvidenceOperationEnv = "PHOTOS_PLACE_EVIDENCE_OPERATION"
 
 func main() {
 	if err := run(context.Background(), os.Args[1:]); err != nil {
@@ -46,6 +50,10 @@ func run(ctx context.Context, args []string) error {
 	switch args[0] {
 	case "place-evidence":
 		return runPlaceEvidence(ctx, paths, args[1:])
+	case "place-evidence-inventory":
+		return runPlaceEvidenceInventory(ctx, paths, args[1:])
+	case "place-evidence-campaign":
+		return runPlaceEvidenceCampaign(ctx, paths, args[1:])
 	case "place-context":
 		fs := flag.NewFlagSet("place-context", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -121,7 +129,143 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-context|eval-card|known-places>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|known-places>")}
+}
+
+func runPlaceEvidenceInventory(ctx context.Context, paths archive.Paths, args []string) (runErr error) {
+	fs := flag.NewFlagSet("place-evidence-inventory", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	archivePath := fs.String("archive", "", "schema-13 Photos archive path")
+	sourceLibrary := fs.String("source-library", "", "exact source library ID")
+	outDir := fs.String("out", "", "existing owner-only private output root")
+	jsonFlag := fs.Bool("json", false, "write JSON")
+	if err := fs.Parse(args); err != nil {
+		return output.UsageError{Err: err}
+	}
+	if !*jsonFlag {
+		return output.UsageError{Err: errors.New("place-evidence-inventory requires --json")}
+	}
+	if err := place.ValidatePrivateEvidenceInputFile(strings.TrimSpace(*archivePath)); err != nil {
+		return err
+	}
+	logRun, err := newPlaceEvidenceLog(paths, "place-evidence-inventory")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if finishErr := logRun.Finish(runErr); runErr == nil {
+			runErr = finishErr
+		}
+	}()
+	config, err := loadPhotosLabConfig(paths.ConfigPath)
+	if err != nil {
+		return err
+	}
+	configured, err := config.ConfiguredGeoapifyEvidence()
+	if err != nil {
+		return err
+	}
+	source := place.EvidenceInventorySource{SourceLibraryID: strings.TrimSpace(*sourceLibrary)}
+	inventory, inventoryErr := archive.ReadPlaceEvidenceInventory(ctx, strings.TrimSpace(*archivePath), source.SourceLibraryID)
+	if inventoryErr != nil {
+		var incomplete *archive.PlaceEvidenceSnapshotIncompleteError
+		if errors.As(inventoryErr, &incomplete) {
+			source.StopReason = place.EvidenceInventoryStopSnapshotIncomplete
+		} else {
+			source.StopReason = place.EvidenceInventoryStopUnsafe
+		}
+	} else {
+		source.Snapshot = place.EvidenceSnapshotReceipt{
+			ID:                       inventory.Snapshot.ID,
+			CompletedAt:              inventory.Snapshot.CompletedAt,
+			CompletenessState:        inventory.Snapshot.CompletenessState,
+			CompletenessEvidenceJSON: inventory.Snapshot.CompletenessEvidenceJSON,
+		}
+		for _, asset := range inventory.Assets {
+			row := place.EvidenceInventorySourceAsset{AssetID: asset.AssetID, TakenAt: asset.CreationDate}
+			if asset.Coordinate != nil {
+				row.Location = &place.Coordinate{Latitude: asset.Coordinate.Latitude, Longitude: asset.Coordinate.Longitude}
+			}
+			source.Assets = append(source.Assets, row)
+		}
+	}
+	summary, err := place.RunEvidenceInventory(ctx, place.EvidenceInventoryOptions{
+		Source:    source,
+		OutputDir: strings.TrimSpace(*outDir),
+		Geoapify:  configuredGeoapify(configured, "", nil),
+		LogSink:   logRun,
+	})
+	if err != nil {
+		return err
+	}
+	return output.Write(os.Stdout, output.JSON, "place_evidence_inventory", summary)
+}
+
+func runPlaceEvidenceCampaign(ctx context.Context, paths archive.Paths, args []string) (runErr error) {
+	fs := flag.NewFlagSet("place-evidence-campaign", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	manifestPath := fs.String("manifest", "", "private inventory manifest path")
+	targetsPath := fs.String("targets", "", "private operator-selected targets path")
+	inspectionReceiptPath := fs.String("inspection-receipt", "", "private canary inspection receipt path")
+	outDir := fs.String("out", "", "existing owner-only private output root")
+	resume := fs.Bool("resume", false, "resume the next incomplete manifest stage")
+	jsonFlag := fs.Bool("json", false, "write JSON")
+	if err := fs.Parse(args); err != nil {
+		return output.UsageError{Err: err}
+	}
+	if !*jsonFlag {
+		return output.UsageError{Err: errors.New("place-evidence-campaign requires --json")}
+	}
+	logRun, err := newPlaceEvidenceLog(paths, "place-evidence-campaign")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if finishErr := logRun.Finish(runErr); runErr == nil {
+			runErr = finishErr
+		}
+	}()
+	config, err := loadPhotosLabConfig(paths.ConfigPath)
+	if err != nil {
+		return err
+	}
+	configured, err := config.ConfiguredGeoapifyEvidence()
+	if err != nil {
+		return err
+	}
+	summary, err := place.RunEvidenceCampaign(ctx, place.EvidenceCampaignOptions{
+		ManifestPath:          strings.TrimSpace(*manifestPath),
+		TargetsPath:           strings.TrimSpace(*targetsPath),
+		InspectionReceiptPath: strings.TrimSpace(*inspectionReceiptPath),
+		OutputDir:             strings.TrimSpace(*outDir),
+		CacheDir:              filepath.Join(paths.CacheDir, "place-evidence-canary"),
+		Resume:                *resume,
+		Geoapify:              configuredGeoapify(configured, "", nil),
+		LogSink:               logRun,
+	})
+	if err != nil {
+		return err
+	}
+	return output.Write(os.Stdout, output.JSON, "place_evidence_campaign", summary)
+}
+
+func newPlaceEvidenceLog(paths archive.Paths, command string) (*cklog.Run, error) {
+	return cklog.NewRun(cklog.Options{StateRoot: filepath.Dir(paths.DataDir), CrawlerID: "photos", Command: command, Version: "dev", Platform: runtime.GOOS + "/" + runtime.GOARCH})
+}
+
+func configuredGeoapify(config photoscrawl.GeoapifyEvidenceConfig, credential string, client *http.Client) place.ConfiguredGeoapifyEvidence {
+	return place.ConfiguredGeoapifyEvidence{
+		ProviderIdentity:    config.ProviderIdentity,
+		ReverseEndpoint:     config.ReverseEndpoint,
+		NearbyEndpoint:      config.NearbyEndpoint,
+		CredentialReference: config.CredentialEnv,
+		CredentialParameter: config.CredentialParameter,
+		Credential:          credential,
+		NearbyCategories:    append([]string(nil), config.NearbyCategories...),
+		ReverseLimit:        config.ReverseLimit,
+		NearbyLimit:         config.NearbyLimit,
+		HTTPClient:          client,
+	}
 }
 
 func runPlaceEvidence(ctx context.Context, paths archive.Paths, args []string) error {
@@ -141,6 +285,10 @@ func runPlaceEvidenceWith(ctx context.Context, paths archive.Paths, args []strin
 		return output.UsageError{Err: err}
 	}
 	format, err := output.Resolve(*formatFlag, *jsonFlag)
+	if err != nil {
+		return err
+	}
+	operation, err := place.ParseEvidenceOperation(os.Getenv(placeEvidenceOperationEnv))
 	if err != nil {
 		return err
 	}
@@ -170,6 +318,7 @@ func runPlaceEvidenceWith(ctx context.Context, paths archive.Paths, args []strin
 		RadiusMeters:      *radius,
 		OutputDir:         out,
 		CacheDir:          filepath.Join(paths.CacheDir, "place-evidence-canary"),
+		Operation:         operation,
 		Geoapify: place.ConfiguredGeoapifyEvidence{
 			ProviderIdentity:    configured.ProviderIdentity,
 			ReverseEndpoint:     configured.ReverseEndpoint,

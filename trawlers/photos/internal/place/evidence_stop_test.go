@@ -215,13 +215,14 @@ func TestGenericAppleFailureIsNotClassifiedAsEmpty(t *testing.T) {
 func TestCredentialNeverEntersRetainedEvidenceOrReturnedError(t *testing.T) {
 	credential := "synthetic-secret+/="
 	tests := []struct {
-		name     string
-		marker   string
-		response func(*http.Request) (*http.Response, error)
+		name               string
+		marker             string
+		wantCredentialStop bool
+		response           func(*http.Request) (*http.Response, error)
 	}{
 		{
-			name:   "credential-bearing response",
-			marker: redactedResponseFailure,
+			name:               "credential-bearing response",
+			wantCredentialStop: true,
 			response: func(request *http.Request) (*http.Response, error) {
 				return &http.Response{
 					StatusCode: http.StatusBadGateway,
@@ -279,7 +280,11 @@ func TestCredentialNeverEntersRetainedEvidenceOrReturnedError(t *testing.T) {
 					t.Fatalf("stop reason leaked credential: %q", reason)
 				}
 			}
-			if got := readRawFile(t, result.Records[1], "response.raw"); got != test.marker {
+			if test.wantCredentialStop {
+				if result.Records[1].StopReason != evidenceStopCredential || result.Records[1].RawResponseFile != "" || result.Records[1].RawHeadersFile != "" {
+					t.Fatalf("credential-bearing response retained bytes: %#v", result.Records[1])
+				}
+			} else if got := readRawFile(t, result.Records[1], "response.raw"); got != test.marker {
 				t.Fatalf("retained safety marker = %q", got)
 			}
 			if err := filepath.Walk(root, func(path string, info os.FileInfo, walkErr error) error {
@@ -298,5 +303,48 @@ func TestCredentialNeverEntersRetainedEvidenceOrReturnedError(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestCachedCredentialBearingResponseIsDiscardedBeforeProviderCall(t *testing.T) {
+	server, requests := syntheticEvidenceServer(t, map[string]syntheticHTTPResponse{
+		"/reverse": {status: http.StatusOK, body: syntheticReverseResponse},
+		"/nearby":  {status: http.StatusOK, body: syntheticNearbyResponse},
+	})
+	defer server.Close()
+	runner := evidenceRunner{callApple: func(_ context.Context, input Input, radius float64) appleBoundaryOutput {
+		request, _ := appleRequestJSON(input, radius)
+		return appleBoundaryOutput{Request: request, Response: []byte(syntheticAppleResponse)}
+	}}
+	root := t.TempDir()
+	cacheDir := filepath.Join(root, "cache")
+	opts := syntheticEvidenceOptions(server, syntheticEvidenceInput(52.36, 4.89), filepath.Join(root, "first"), cacheDir)
+	first, err := runEvidence(context.Background(), opts, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unsafeResponse := []byte("provider echoed " + opts.Geoapify.Credential)
+	cacheRecordDir := filepath.Join(cacheDir, first.Records[1].CacheIdentity)
+	if err := os.WriteFile(filepath.Join(cacheRecordDir, "response.raw"), unsafeResponse, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts.OutputDir = filepath.Join(root, "second")
+	result, err := runEvidence(context.Background(), opts, runner)
+	var stopped *EvidenceStoppedError
+	if !errors.As(err, &stopped) || result.Records[1].StopReason != evidenceStopCredential {
+		t.Fatalf("unsafe cache result = %#v error=%v", result, err)
+	}
+	if len(*requests) != 2 || strings.Contains(err.Error(), opts.Geoapify.Credential) {
+		t.Fatalf("unsafe cache triggered transport or leaked credential: requests=%d error=%v", len(*requests), err)
+	}
+	for _, name := range []string{"response.raw", "headers.raw"} {
+		data, readErr := os.ReadFile(filepath.Join(cacheRecordDir, name))
+		if readErr != nil || len(data) != 0 {
+			t.Fatalf("unsafe cache %s was not discarded: bytes=%q error=%v", name, data, readErr)
+		}
+	}
+	marker, err := os.ReadFile(filepath.Join(cacheRecordDir, "record.json"))
+	if err != nil || !strings.Contains(string(marker), evidenceStopCredential) || bytes.Contains(marker, []byte(opts.Geoapify.Credential)) {
+		t.Fatalf("unsafe cache marker = %q error=%v", marker, err)
 	}
 }

@@ -1,6 +1,7 @@
 package place
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -71,6 +72,15 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 		}
 		if record.RawResponseSHA256 != evidenceDigest([]byte(readRawFile(t, record, "response.raw"))) {
 			t.Fatalf("response digest mismatch for %s", record.Operation)
+		}
+		if record.StartedAt == "" || record.CompletedAt == "" || record.DurationMilliseconds < 0 {
+			t.Fatalf("missing evidence timing for %s: %#v", record.Operation, record)
+		}
+	}
+	for _, record := range first.Records[1:] {
+		headers := readRawFile(t, record, "headers.raw")
+		if !strings.Contains(headers, "Content-Type: application/json") || record.RawHeadersSHA256 != evidenceDigest([]byte(headers)) {
+			t.Fatalf("raw headers were incomplete for %s: %q", record.Operation, headers)
 		}
 	}
 	if got := []string{first.Records[0].ProviderIdentity, first.Records[1].Operation, first.Records[2].Operation}; !slices.Equal(got, []string{"apple", "osm_reverse", "osm_nearby"}) {
@@ -152,11 +162,12 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 	}
 	thirdOptions := syntheticEvidenceOptions(server, input, filepath.Join(t.TempDir(), "third"), cacheDir)
 	third, err := runEvidence(context.Background(), thirdOptions, runner)
-	if err != nil {
-		t.Fatal(err)
+	var stopped *EvidenceStoppedError
+	if !errors.As(err, &stopped) || len(third.Records) != 2 || third.Records[1].StopReason != evidenceStopCacheIncomplete {
+		t.Fatalf("tampered cache did not stop at use: result=%#v error=%v", third, err)
 	}
-	if len(*requests) != 3 || third.Records[1].Cached || !third.Records[0].Cached || !third.Records[2].Cached {
-		t.Fatalf("tampered cache was not repaired at use: calls=%d records=%#v", len(*requests), third.Records)
+	if len(*requests) != 2 || appleCalls != 1 {
+		t.Fatalf("tampered cache triggered provider work: HTTP=%d Apple=%d", len(*requests), appleCalls)
 	}
 }
 
@@ -339,6 +350,47 @@ func TestCachedResponseBoundAndIdentityAreRevalidatedBeforeReuse(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "mismatched raw status",
+			mutate: func(t *testing.T, cacheDir string, record EvidenceRecord) {
+				t.Helper()
+				path := filepath.Join(cacheDir, record.CacheIdentity, "record.json")
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var metadata EvidenceRecord
+				if err := json.Unmarshal(data, &metadata); err != nil {
+					t.Fatal(err)
+				}
+				metadata.HTTPStatus = http.StatusCreated
+				data, err = json.MarshalIndent(metadata, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
+		{
+			name: "symlink response",
+			mutate: func(t *testing.T, cacheDir string, record EvidenceRecord) {
+				t.Helper()
+				dir := filepath.Join(cacheDir, record.CacheIdentity)
+				response := filepath.Join(dir, "response.raw")
+				if err := os.Rename(response, filepath.Join(dir, "response.saved")); err != nil {
+					t.Fatal(err)
+				}
+				outside := filepath.Join(filepath.Dir(cacheDir), "outside.raw")
+				if err := os.WriteFile(outside, []byte("synthetic outside evidence"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(outside, response); err != nil {
+					t.Fatal(err)
+				}
+			},
+		},
 	}
 	for _, test := range mutations {
 		t.Run(test.name, func(t *testing.T) {
@@ -360,13 +412,65 @@ func TestCachedResponseBoundAndIdentityAreRevalidatedBeforeReuse(t *testing.T) {
 			test.mutate(t, cacheDir, first.Records[1])
 			options.OutputDir = filepath.Join(t.TempDir(), "second")
 			second, err := runEvidence(context.Background(), options, runner)
-			if err != nil {
-				t.Fatal(err)
+			var stopped *EvidenceStoppedError
+			if !errors.As(err, &stopped) || len(second.Records) != 2 || second.Records[1].StopReason != evidenceStopCacheIncomplete {
+				t.Fatalf("invalid cache did not stop: result=%#v error=%v", second, err)
 			}
-			if len(*requests) != 3 || second.Records[1].Cached || !second.Records[0].Cached || !second.Records[2].Cached {
-				t.Fatalf("invalid cache was reused: requests=%d records=%#v", len(*requests), second.Records)
+			if len(*requests) != 2 {
+				t.Fatalf("invalid cache triggered provider work: requests=%d", len(*requests))
 			}
 		})
+	}
+}
+
+func TestCacheMetadataCannotReadOrDiscardOutsideItsRecordDirectory(t *testing.T) {
+	server, requests := syntheticEvidenceServer(t, map[string]syntheticHTTPResponse{
+		"/reverse": {status: http.StatusOK, body: syntheticReverseResponse},
+		"/nearby":  {status: http.StatusOK, body: syntheticNearbyResponse},
+	})
+	defer server.Close()
+	runner := evidenceRunner{callApple: func(_ context.Context, input Input, radius float64) appleBoundaryOutput {
+		request, _ := appleRequestJSON(input, radius)
+		return appleBoundaryOutput{Request: request, Response: []byte(syntheticAppleResponse)}
+	}}
+	root := t.TempDir()
+	cacheDir := filepath.Join(root, "cache")
+	opts := syntheticEvidenceOptions(server, syntheticEvidenceInput(52.36, 4.89), filepath.Join(root, "first"), cacheDir)
+	first, err := runEvidence(context.Background(), opts, runner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(root, "outside.raw")
+	outsideBytes := []byte("synthetic-secret-outside-cache")
+	if err := os.WriteFile(outside, outsideBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	recordPath := filepath.Join(cacheDir, first.Records[1].CacheIdentity, "record.json")
+	data, err := os.ReadFile(recordPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record EvidenceRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	record.RawResponseFile = "../../outside.raw"
+	data, err = json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(recordPath, append(data, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	opts.OutputDir = filepath.Join(root, "second")
+	result, err := runEvidence(context.Background(), opts, runner)
+	var stopped *EvidenceStoppedError
+	if !errors.As(err, &stopped) || result.Records[1].StopReason != evidenceStopCacheIncomplete || len(*requests) != 2 {
+		t.Fatalf("traversal cache result = %#v requests=%d error=%v", result, len(*requests), err)
+	}
+	got, err := os.ReadFile(outside)
+	if err != nil || !bytes.Equal(got, outsideBytes) {
+		t.Fatalf("outside cache file changed: %q error=%v", got, err)
 	}
 }
 
