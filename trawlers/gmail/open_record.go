@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	gmailopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open/v1"
@@ -21,6 +22,9 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOpenTimestamps(value); err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
 	if err != nil {
@@ -31,6 +35,10 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	return record, nil
+}
+
+func validateOpenTimestamps(value archive.OpenResult) error {
+	return presentation.ValidateTimestamps(value.Time)
 }
 
 func projectOpenRecord(value archive.OpenResult) *gmailopenv1.GmailRecord {
@@ -89,7 +97,7 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 		fields = append(fields, &presentationv1.Field{Label: "Cc", Display: value})
 	}
 	if value := strings.TrimSpace(record.Time); value != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Date", Display: value})
+		fields = append(fields, &presentationv1.Field{Label: "Date", Display: presentation.MustTimestamp(value)})
 	}
 	if labels := joinPresentationStrings(record.Labels); labels != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Labels", Display: labels})
@@ -104,7 +112,7 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 	}
 	rows := make([]*presentationv1.Row, 0, len(record.Attachments))
 	for _, attachment := range record.Attachments {
-		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: attachment.Filename}, {Display: attachment.MimeType}, {Display: formatPresentationBytes(attachment.Size)}}})
+		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: attachment.Filename}, {Display: attachment.MimeType}, {Display: presentation.Bytes(attachment.Size)}}})
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"File", "Type", "Bytes"}, Rows: rows}}})
 	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
@@ -142,5 +150,3 @@ func formatPresentationBool(value bool) string {
 	}
 	return "No"
 }
-
-func formatPresentationBytes(value int64) string { return fmt.Sprintf("%d bytes", value) }

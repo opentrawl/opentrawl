@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/whatsapp/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	whatsappopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/whatsapp/open/v1"
@@ -27,6 +28,9 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOpenTimestamps(value); err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
 	if err != nil {
@@ -37,6 +41,18 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	return record, nil
+}
+
+func validateOpenTimestamps(value openValue) error {
+	if value.target.Timestamp.IsZero() {
+		return fmt.Errorf("message timestamp is missing")
+	}
+	for _, message := range value.context {
+		if message.Timestamp.IsZero() {
+			return fmt.Errorf("message timestamp is missing")
+		}
+	}
+	return nil
 }
 
 func projectOpenRecord(value openValue) *whatsappopenv1.WhatsAppRecord {
@@ -104,7 +120,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		title = "WhatsApp conversation"
 	}
 	fields := make([]*presentationv1.Field, 0, 1)
-	if participants := joinPresentationStrings(record.Participants); participants != "" {
+	if participants := joinPresentationStrings(resolvedParticipantNames(record.Participants)); participants != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Participants", Display: participants})
 	}
 	blocks := make([]*presentationv1.Block, 0, 4)
@@ -120,7 +136,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		if message.GetCurrent() {
 			role = presentationv1.Row_ROLE_TARGET
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: message.Time}, {Display: message.Who}, {Display: message.Text}}})
+		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: presentationWho(message.Who)}, {Display: message.Text}}})
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
 	if media := record.Message.Media; media != nil {
@@ -132,13 +148,20 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 			mediaFields = append(mediaFields, &presentationv1.Field{Label: "Media title", Display: value})
 		}
 		if media.SizeBytes != nil {
-			mediaFields = append(mediaFields, &presentationv1.Field{Label: "Media size", Display: formatPresentationBytes(*media.SizeBytes)})
+			mediaFields = append(mediaFields, &presentationv1.Field{Label: "Media size", Display: presentation.Bytes(*media.SizeBytes)})
 		}
 		if len(mediaFields) != 0 {
 			blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: mediaFields}}})
 		}
 	}
 	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+}
+
+func presentationWho(value string) string {
+	if privacyID(value) {
+		return "Unavailable"
+	}
+	return value
 }
 
 func joinPresentationStrings(values []string) string {
@@ -150,5 +173,3 @@ func joinPresentationStrings(values []string) string {
 	}
 	return strings.Join(items, ", ")
 }
-
-func formatPresentationBytes(value int64) string { return fmt.Sprintf("%d bytes", value) }

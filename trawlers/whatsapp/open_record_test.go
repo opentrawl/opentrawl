@@ -54,14 +54,24 @@ func TestOpenRecordProjection(t *testing.T) {
 	assertExactPresentation(t, presentation, `title: "Lantern group"
 blocks: { fields: { fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
 blocks: { prose: { text: "[image]" } }
-blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T13:59:00Z" } cells: { display: "me" } cells: { display: "Sent." } } rows: { role: ROLE_TARGET cells: { display: "2026-07-10T14:00:00Z" } cells: { display: "Avery Example" } cells: { display: "[image]" } } rows: { role: ROLE_NORMAL cells: { display: "2026-07-10T14:01:00Z" } cells: { display: "Avery Example" } cells: { display: "Received." } } } }
-blocks: { fields: { fields: { label: "Media type" display: "image" } fields: { label: "Media title" display: "fixture.jpg" } fields: { label: "Media size" display: "2048 bytes" } } }`)
+blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 13:59:00 +00:00" } cells: { display: "me" } cells: { display: "Sent." } } rows: { role: ROLE_TARGET cells: { display: "10 July 2026 at 14:00:00 +00:00" } cells: { display: "Avery Example" } cells: { display: "[image]" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:01:00 +00:00" } cells: { display: "Avery Example" } cells: { display: "Received." } } } }
+blocks: { fields: { fields: { label: "Media type" display: "image" } fields: { label: "Media title" display: "fixture.jpg" } fields: { label: "Media size" display: "2.0 KiB" } } }`)
 	assertOpenPresentation(t, "whatsapp", input, projectOpenRecord(value), presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := target
 		blank.ChatName = ""
 		if got := projectOpenPresentation(openValue{target: blank, context: []store.Message{blank}}).Title; got != "WhatsApp conversation" {
 			t.Fatalf("title = %q", got)
+		}
+	})
+	t.Run("omits_privacy_ids_only_from_presentation", func(t *testing.T) {
+		withID := value
+		withID.participants = append(withID.participants, "118390991671363@lid")
+		if got := projectOpenRecord(withID).Participants; len(got) != 3 || got[2] != "118390991671363@lid" {
+			t.Fatalf("typed participants = %#v", got)
+		}
+		if got := projectOpenPresentation(withID).Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "Avery Example, Morgan Example" {
+			t.Fatalf("presentation participants = %q", got)
 		}
 	})
 }

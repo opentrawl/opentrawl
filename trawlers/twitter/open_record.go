@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
 )
@@ -90,7 +91,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		title = "Post"
 	}
 	fields := make([]*presentationv1.Field, 0, 5)
-	appendPresentationField(&fields, "Time", record.Tweet.GetTime())
+	appendPresentationField(&fields, "Time", presentation.MustTimestamp(record.Tweet.GetTime()))
 	if record.Tweet.LikeCount != nil {
 		fields = append(fields, &presentationv1.Field{Label: "Likes", Display: strconv.FormatInt(*record.Tweet.LikeCount, 10)})
 	}
@@ -100,7 +101,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	if record.Tweet.ReplyCount != nil {
 		fields = append(fields, &presentationv1.Field{Label: "Replies", Display: strconv.FormatInt(*record.Tweet.ReplyCount, 10)})
 	}
-	appendPresentationField(&fields, "Counts as of", record.Tweet.GetCountsAsOf())
+	appendPresentationField(&fields, "Counts as of", presentation.MustTimestamp(record.Tweet.GetCountsAsOf()))
 	blocks := make([]*presentationv1.Block, 0, 6)
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
@@ -133,7 +134,7 @@ func appendPresentationField(fields *[]*presentationv1.Field, label, value strin
 func presentationTweetTable(tweets []*twitteropenv1.Tweet) *presentationv1.Block {
 	rows := make([]*presentationv1.Row, 0, len(tweets))
 	for _, tweet := range tweets {
-		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: tweet.GetTime()}, {Display: tweet.GetWho()}, {Display: tweet.Text}}})
+		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(tweet.GetTime())}, {Display: tweet.GetWho()}, {Display: tweet.Text}}})
 	}
 	return &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}}
 }

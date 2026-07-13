@@ -7,6 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	imessageopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/imessage/open/v1"
@@ -20,7 +21,11 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOpenTimestamps(value); err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
+
 	data, err := anypb.New(machine)
 	if err != nil {
 		return nil, err
@@ -30,6 +35,17 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	return record, nil
+}
+
+func validateOpenTimestamps(value archive.MessageContext) error {
+	values := []string{value.Message.Time}
+	for _, message := range value.Before {
+		values = append(values, message.Time)
+	}
+	for _, message := range value.After {
+		values = append(values, message.Time)
+	}
+	return presentation.ValidateTimestamps(values...)
 }
 
 func projectOpenRecord(value archive.MessageContext) *imessageopenv1.IMessageRecord {
@@ -99,7 +115,7 @@ func projectOpenPresentation(value archive.MessageContext) *presentationv1.Prese
 		if message.GetTarget() {
 			role = presentationv1.Row_ROLE_TARGET
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: message.Time}, {Display: message.Who}, {Display: message.Text}}})
+		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: message.Who}, {Display: message.Text}}})
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
 	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}

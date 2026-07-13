@@ -7,6 +7,7 @@ import (
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	calendaropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/calendar/open/v1"
@@ -20,6 +21,9 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOpenTimestamps(value); err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
 	if err != nil {
@@ -30,6 +34,10 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	return record, nil
+}
+
+func validateOpenTimestamps(value archive.EventDetail) error {
+	return presentation.ValidateTimestamps(value.Start, value.End)
 }
 
 func projectOpenRecord(value archive.EventDetail) *calendaropenv1.CalendarRecord {
@@ -108,8 +116,8 @@ func projectOpenPresentation(value archive.EventDetail) *presentationv1.Presenta
 		title = "Calendar event"
 	}
 	fields := make([]*presentationv1.Field, 0, 12)
-	appendPresentationField(&fields, "Start", record.Start)
-	appendPresentationField(&fields, "End", record.End)
+	appendPresentationField(&fields, "Start", presentation.MustTimestamp(record.Start))
+	appendPresentationField(&fields, "End", presentation.MustTimestamp(record.End))
 	fields = append(fields, &presentationv1.Field{Label: "All day", Display: formatPresentationBool(record.AllDay)})
 	appendPresentationField(&fields, "Calendar", record.Calendar)
 	appendPresentationField(&fields, "Account", record.Account)

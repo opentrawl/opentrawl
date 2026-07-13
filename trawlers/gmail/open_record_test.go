@@ -2,6 +2,7 @@ package gogcrawl
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -10,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/gogcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	gmailopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/gmail/open/v1"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -68,9 +71,9 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Project Lantern"
-blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "2026-07-10T14:00:00Z" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
+blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "10 July 2026 at 14:00:00 +00:00" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
 blocks: { prose: { text: "Synthetic review body." } }
-blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2048 bytes" } } } }
+blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2.0 KiB" } } } }
 facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 characters omitted." }`)
 	assertOpenPresentation(t, "gmail", input, record, presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
@@ -80,6 +83,88 @@ facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 character
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestOpenRecordTimestampBoundary(t *testing.T) {
+	if err := validateOpenTimestamps(archive.OpenResult{Time: "2026-07-10T14:00:00.5+02:00"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOpenTimestamps(archive.OpenResult{Time: "bad timestamp"}); err == nil {
+		t.Fatal("accepted malformed date")
+	}
+	if err := validateOpenTimestamps(archive.OpenResult{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenRecordFixtureBoundary(t *testing.T) {
+	installFakeGog(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	paths := trawlkit.Paths{Archive: filepath.Join(root, "gmail.db")}
+	source := New()
+	source.syncQuery = "project"
+	source.syncMax = 25
+	source.backupRepoPath = filepath.Join(root, "backup")
+	writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = source.Sync(ctx, &trawlkit.Request{Store: writeStore, Paths: paths, Progress: func(trawlkit.Progress) {}}); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	setTime := func(value string) {
+		store, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = store.DB().ExecContext(ctx, `update messages set time = ? where id = ?`, value, "m3")
+		_ = store.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	setTime("2026-07-10T14:00:00.5+02:00")
+	readStore := ckstoreOpenRead(t, ctx, paths.Archive)
+	record, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "gmail:msg/m3")
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, ok := machine.(*gmailopenv1.GmailRecord)
+	if !ok {
+		t.Fatalf("typed record = %T", machine)
+	}
+	if typed.GetTime() != "2026-07-10T14:00:00.5+02:00" {
+		t.Fatalf("typed time = %q", typed.GetTime())
+	}
+	if got := record.Presentation.Blocks[0].GetFields().GetFields()[3].GetDisplay(); got != "10 July 2026 at 14:00:00.5 +02:00" {
+		t.Fatalf("date display = %q", got)
+	}
+	setTime("not-a-timestamp")
+	readStore = ckstoreOpenRead(t, ctx, paths.Archive)
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, "gmail:msg/m3")
+	_ = readStore.Close()
+	if err == nil {
+		t.Fatal("accepted malformed archive timestamp")
+	}
+}
+
+func ckstoreOpenRead(t *testing.T, ctx context.Context, path string) *ckstore.Store {
+	t.Helper()
+	store, err := ckstore.OpenReadOnly(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
 }
 
 func assertRecordIdentity(t *testing.T, name, want string) {

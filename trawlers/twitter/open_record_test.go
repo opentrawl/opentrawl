@@ -79,7 +79,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}{input, ownerAuthorID}
 	assertOpenPresentation(t, "twitter", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "me (@avery)"
-blocks: { fields: { fields: { label: "Time" display: "2026-07-10T14:00:00Z" } fields: { label: "Likes" display: "4" } fields: { label: "Reposts" display: "2" } fields: { label: "Replies" display: "1" } fields: { label: "Counts as of" display: "2026-07-10T15:00:00Z" } } }
+blocks: { fields: { fields: { label: "Time" display: "10 July 2026 at 14:00:00 +00:00" } fields: { label: "Likes" display: "4" } fields: { label: "Reposts" display: "2" } fields: { label: "Replies" display: "1" } fields: { label: "Counts as of" display: "10 July 2026 at 15:00:00 +00:00" } } }
 blocks: { prose: { text: "RT @example synthetic text" } }
 blocks: { heading: { text: "Ancestors" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: {} cells: {} cells: { display: "unavailable (not in archive)" } } } }

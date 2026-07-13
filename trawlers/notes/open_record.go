@@ -8,6 +8,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	notesopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/notes/open/v1"
@@ -27,6 +28,9 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
+	if err := validateOpenTimestamps(value); err != nil {
+		return nil, err
+	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
 	if err != nil {
@@ -37,6 +41,10 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	return record, nil
+}
+
+func validateOpenTimestamps(value openValue) error {
+	return presentation.ValidateTimestamps(value.note.CreatedAt, value.note.ModifiedAt)
 }
 
 func projectOpenRecord(value openValue) *notesopenv1.NotesRecord {
@@ -83,8 +91,8 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	}
 	fields := make([]*presentationv1.Field, 0, 4)
 	appendPresentationField(&fields, "Folder", record.GetFolder())
-	appendPresentationField(&fields, "Created", record.GetCreatedAt())
-	appendPresentationField(&fields, "Modified", record.GetModifiedAt())
+	appendPresentationField(&fields, "Created", presentation.MustTimestamp(record.GetCreatedAt()))
+	appendPresentationField(&fields, "Modified", presentation.MustTimestamp(record.GetModifiedAt()))
 	fields = append(fields, &presentationv1.Field{Label: "Versions", Display: strconv.FormatInt(record.VersionCount, 10)})
 	blocks := make([]*presentationv1.Block, 0, 2)
 	if len(fields) > 0 {

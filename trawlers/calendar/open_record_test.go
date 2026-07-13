@@ -2,6 +2,7 @@ package calcrawl
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -10,10 +11,12 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/calcrawl/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	calendaropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/calendar/open/v1"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -65,7 +68,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Synthetic planning"
-blocks: { fields: { fields: { label: "Start" display: "2026-07-10T14:00:00+02:00" } fields: { label: "End" display: "2026-07-10T15:00:00+02:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
+blocks: { fields: { fields: { label: "Start" display: "10 July 2026 at 14:00:00 +02:00" } fields: { label: "End" display: "10 July 2026 at 15:00:00 +02:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
 blocks: { prose: { text: "Review the fixture." } }
 actions: { label: "Open event link" url: "https://example.com/event" }
 facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
@@ -110,6 +113,63 @@ facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
 			})
 		}
 	})
+}
+
+func TestOpenRecordTimestampBoundary(t *testing.T) {
+	if err := validateOpenTimestamps(archive.EventDetail{Start: "2026-07-10T14:00:00.5+02:00"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOpenTimestamps(archive.EventDetail{Start: "bad timestamp"}); err == nil {
+		t.Fatal("accepted malformed start")
+	}
+	if err := validateOpenTimestamps(archive.EventDetail{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenRecordFixtureBoundary(t *testing.T) {
+	ctx := context.Background()
+	_, paths := syncedCalendarFixture(t)
+	ref := "calendar:event/11111111-1111-1111-1111-111111111111"
+	setStart := func(value string) {
+		store, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = store.DB().ExecContext(ctx, `update events set start_time = ? where event_uid = ?`, value, "11111111-1111-1111-1111-111111111111")
+		_ = store.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	setStart("2026-07-10T14:00:00.5+02:00")
+	readStore := openReadStore(t, ctx, paths.Archive)
+	record, err := New().OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, ok := machine.(*calendaropenv1.CalendarRecord)
+	if !ok {
+		t.Fatalf("typed record = %T", machine)
+	}
+	if typed.GetStart() != "2026-07-10T14:00:00.5+02:00" {
+		t.Fatalf("typed start = %q", typed.GetStart())
+	}
+	if got := record.Presentation.Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "10 July 2026 at 14:00:00.5 +02:00" {
+		t.Fatalf("start display = %q", got)
+	}
+	setStart("not-a-timestamp")
+	readStore = openReadStore(t, ctx, paths.Archive)
+	_, err = New().OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
+	_ = readStore.Close()
+	if err == nil {
+		t.Fatal("accepted malformed archive timestamp")
+	}
 }
 
 func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {

@@ -10,6 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	photosopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1"
@@ -22,6 +23,11 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	value, err := c.loadOpenAsset(ctx, req, ref)
 	if err != nil {
 		return nil, err
+	}
+	if captured := value.Mechanical.Captured; captured != nil {
+		if err := presentation.ValidateTimestamps(captured.Local); err != nil {
+			return nil, err
+		}
 	}
 	machine := projectOpenRecord(value)
 	data, err := anypb.New(machine)
@@ -258,7 +264,8 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 	mechanical := record.Mechanical
 	if mechanical != nil {
 		if captured := mechanical.Captured; captured != nil {
-			appendPresentationField(&fields, "Captured", captured.Local)
+			capturedAt := presentation.MustTimestamp(captured.Local)
+			appendPresentationField(&fields, "Captured local time", capturedAt)
 		}
 		appendPresentationField(&fields, "Media", formatPresentationMedia(mechanical.Media))
 		appendPresentationField(&fields, "Place", formatPresentationPlace(mechanical.Place))
@@ -277,7 +284,7 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 		if original := mechanical.Original; original != nil {
 			appendPresentationField(&fields, "Original filename", original.GetFilename())
 			if original.Bytes != nil {
-				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: fmt.Sprintf("%d bytes", *original.Bytes)})
+				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: presentation.Bytes(*original.Bytes)})
 			}
 			appendPresentationField(&fields, "Availability", original.GetAvailability())
 		}

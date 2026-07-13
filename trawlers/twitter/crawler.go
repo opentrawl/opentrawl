@@ -14,6 +14,7 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	"google.golang.org/protobuf/types/known/anypb"
 )
@@ -133,6 +134,16 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 		return nil, err
 	}
 	machine := projectOpenRecord(value)
+	values := []string{machine.Tweet.GetTime(), machine.Tweet.GetCountsAsOf()}
+	for _, tweet := range machine.Ancestors {
+		values = append(values, tweet.GetTime())
+	}
+	for _, tweet := range machine.Replies {
+		values = append(values, tweet.GetTime())
+	}
+	if err := presentation.ValidateTimestamps(values...); err != nil {
+		return nil, err
+	}
 	data, err := anypb.New(machine)
 	if err != nil {
 		return nil, err

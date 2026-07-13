@@ -306,6 +306,67 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	if !proto.Equal(fullRecord, shortRecord) || shortRecord.OpenRef != hit.Ref || shortRecord.Data.GetTypeUrl() != "type.googleapis.com/trawl.source.whatsapp.open.v1.WhatsAppRecord" || shortRecord.Presentation == nil {
 		t.Fatalf("open records full=%#v short=%#v", fullRecord, shortRecord)
 	}
+	assertZeroTimestamp := func(messageID string) {
+		writeStore, err := ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := writeStore.DB().ExecContext(ctx, `update messages set ts = 0 where msg_id = ?`, messageID)
+		if err != nil {
+			_ = writeStore.Close()
+			t.Fatal(err)
+		}
+		if changed, err := result.RowsAffected(); err != nil || changed != 1 {
+			_ = writeStore.Close()
+			t.Fatalf("updated %s rows = %d, %v", messageID, changed, err)
+		}
+		_ = writeStore.Close()
+		readStore = openReadStore(t, ctx, paths.Archive)
+		record, err := crawler.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, hit.Ref)
+		_ = readStore.Close()
+		if record != nil || err == nil || err.Error() != "message timestamp is missing" {
+			t.Fatalf("zero timestamp open = %#v, %v", record, err)
+		}
+	}
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var originalTargetTimestamp int64
+	if err := writeStore.DB().QueryRowContext(ctx, `select ts from messages where msg_id = ?`, "group-image").Scan(&originalTargetTimestamp); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	_ = writeStore.Close()
+	assertZeroTimestamp("group-image")
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `update messages set ts = ? where msg_id = ?`, originalTargetTimestamp, "group-image"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	insert, err := writeStore.DB().ExecContext(ctx, `insert into messages(source_pk, chat_jid, chat_name, msg_id, sender_jid, sender_name, ts, from_me, text, raw_type, message_type, media_type, media_title, media_path, media_url, media_size, starred) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, 99, "123@g.us", "Launch Group", "group-context", "alice@s.whatsapp.net", "Alice Example", 1710000001, 0, "context", 0, "text", "", "", "", "", 0, 0)
+	if err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if changed, err := insert.RowsAffected(); err != nil || changed != 1 {
+		_ = writeStore.Close()
+		t.Fatalf("inserted context rows = %d, %v", changed, err)
+	}
+	_ = writeStore.Close()
+	assertZeroTimestamp("group-context")
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `delete from messages where msg_id = ?`, "group-context"); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	_ = writeStore.Close()
 	load := func(ref string) openValue {
 		readStore = openReadStore(t, ctx, paths.Archive)
 		value, loadErr := crawler.loadOpenMessage(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, ref)
