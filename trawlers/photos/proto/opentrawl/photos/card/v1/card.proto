@@ -123,3 +123,30 @@ message Address {
   string formatted = 13;
   string source = 14;
 }
+
+// FixtureResponse crosses the deterministic fixture boundary. It retains the
+// same raw provider fields that production parsing consumes.
+message FixtureResponse {
+  bytes response = 1;
+  bytes failure = 2;
+  string status = 3;
+  int32 status_code = 4;
+  string provider_request_id = 5;
+  bool transmission_started = 6;
+}
+
+message CardExecutionCustody {
+  string source_id = 1;
+  string asset_id = 2;
+  string immutable_original_resource_id = 3;
+  string metadata_record_id = 4;
+  string metadata_projection_id = 5;
+  string full_current_proof_sha256 = 6;
+  repeated EvidenceLink evidence = 7;
+}
+
+message EvidenceLink {
+  string provider_identity = 1;
+  string operation = 2;
+  string raw_response_sha256 = 3;
+}
