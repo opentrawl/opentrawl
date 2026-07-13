@@ -5,19 +5,32 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
-	rowID = normalizeRef(rowID)
-	if rowID == "" {
-		return OpenResult{}, errors.New("ref is required")
-	}
 	db, err := openExistingArchive(ctx, paths.Database)
 	if err != nil {
 		return OpenResult{}, err
 	}
 	defer func() { _ = db.Close() }()
+	return open(ctx, db, rowID)
+}
 
+// OpenWithStore opens a record from the runner-owned read-only Photos store.
+func OpenWithStore(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
+	if err := validateReadStore(ctx, db); err != nil {
+		return OpenResult{}, err
+	}
+	return open(ctx, db, rowID)
+}
+
+func open(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
+	rowID = normalizeRef(rowID)
+	if rowID == "" {
+		return OpenResult{}, errors.New("ref is required")
+	}
 	asset, err := oneRow(ctx, db.DB(), `
 select id, media_type, creation_date, timezone_name, width, height, duration_seconds, favorite, hidden, burst_identifier,
        camera_make, camera_model, lens_model, focal_length_mm, focal_length_35mm, aperture, shutter_speed, iso,

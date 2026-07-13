@@ -34,7 +34,7 @@ func (c *Crawler) loadOpenAsset(ctx context.Context, req *trawlkit.Request, ref 
 	if err != nil {
 		return archive.OpenResult{}, err
 	}
-	result, err := archive.Open(ctx, archivePaths(req), resolved)
+	result, err := archive.OpenWithStore(ctx, req.Store, resolved)
 	if err != nil {
 		return archive.OpenResult{}, archiveReadCommandError(err)
 	}
