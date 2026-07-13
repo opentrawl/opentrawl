@@ -54,7 +54,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	assertExactPresentation(t, presentation, `title: "Lantern group"
 blocks: { fields: { fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
 blocks: { prose: { text: "[image]" } }
-blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 13:59:00 +00:00" } cells: { display: "me" } cells: { display: "Sent." } } rows: { role: ROLE_TARGET cells: { display: "10 July 2026 at 14:00:00 +00:00" } cells: { display: "Avery Example" } cells: { display: "[image]" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:01:00 +00:00" } cells: { display: "Avery Example" } cells: { display: "Received." } } } }
+blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 13:59" } cells: { display: "me" } cells: { display: "Sent." } } rows: { role: ROLE_TARGET cells: { display: "10 July 2026 at 14:00" } cells: { display: "Avery Example" } cells: { display: "[image]" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:01" } cells: { display: "Avery Example" } cells: { display: "Received." } } } }
 blocks: { fields: { fields: { label: "Media type" display: "image" } fields: { label: "Media title" display: "fixture.jpg" } fields: { label: "Media size" display: "2.0 KiB" } } }`)
 	assertOpenPresentation(t, "whatsapp", input, projectOpenRecord(value), presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
