@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -185,6 +186,60 @@ func TestFixtureCardIncompleteInputWritesNothing(t *testing.T) {
 	}
 }
 
+func TestFixtureCardMismatchedPlaceBoundaryWritesNothing(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(*fixtureCardPreparation)
+		wantErr string
+	}{
+		{name: "omitted place", mutate: func(prepared *fixtureCardPreparation) { prepared.Classify.Place = nil }, wantErr: "checked place evidence identities differ"},
+		{name: "omitted identity", mutate: func(prepared *fixtureCardPreparation) {
+			prepared.Classify.Place.EvidenceRawResponseSHA256 = nil
+		}, wantErr: "checked place evidence identities differ"},
+		{name: "wrong identity", mutate: func(prepared *fixtureCardPreparation) {
+			prepared.Classify.Place.EvidenceRawResponseSHA256[0] = strings.Repeat("0", 64)
+		}, wantErr: "checked place evidence identities differ"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := fixtureCardStore(t, ctx)
+			defer db.Close()
+			assetID := "asset:place-mismatch:" + test.name
+			seedFixtureCardAsset(t, ctx, db, assetID)
+			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepared := fixtureCardPreparationFor(assetID)
+			test.mutate(&prepared)
+			executionID := fixtureExecutionIdentity(t, prepared, classifier)
+			var before, after int
+			_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&before)
+			_, err = executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+				return prepared, nil
+			}, classifier, fixtureWireBytes(t, fixtureProviderResponse(t)), time.Now())
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("place mismatch error = %v", err)
+			}
+			_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&after)
+			if before != after {
+				t.Fatalf("place mismatch wrote %d rows", after-before)
+			}
+		})
+	}
+}
+
+func TestFixturePlaceEvidenceIdentityPreservesOrder(t *testing.T) {
+	first := strings.Repeat("a", 64)
+	second := strings.Repeat("b", 64)
+	records := []place.EvidenceRecord{{RawResponseSHA256: first}, {RawResponseSHA256: second}}
+	prompt := classifyInput{Place: &classifyPlaceContext{EvidenceRawResponseSHA256: []string{second, first}}}
+	if err := validateFixturePlaceEvidenceIdentity(records, prompt); err == nil {
+		t.Fatal("reordered checked place evidence identities succeeded")
+	}
+}
+
 func TestFixtureCardUnsafeEvidenceWritesNothing(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
@@ -262,9 +317,9 @@ func fixtureCardPreparationFor(assetID string) fixtureCardPreparation {
 	full := cardinput.FullCurrentFact{Role: "full_current", MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, SizeBytes: int64(len(current)), SHA256: digest(current)}
 	source := cardinput.SourceFacts{AssetID: assetID, SourceID: "source:fixture", CaptureTime: "2026-07-13T09:00:00Z", MediaType: "image", PixelWidth: 2, PixelHeight: 2, ImmutableOriginal: original, Metadata: metadata, FullCurrent: full, Location: &cardinput.LocationFact{Latitude: 52.0, Longitude: 4.0, HorizontalAccuracyMeters: &accuracy}, RequiredPlaceOperations: []string{"synthetic-nearby"}}
 	artifacts := cardinput.CheckedArtifacts{ImmutableOriginal: cardinput.CheckedImmutableOriginal{Fact: original, ResourceID: "resource:fixture"}, Metadata: cardinput.CheckedMetadata{Fact: metadata, RecordID: "metadata:fixture", ProjectionID: "projection:fixture"}, FullCurrent: cardinput.CheckedFullCurrent{Fact: full, ProofSHA256: digest([]byte("proof"))}}
-	providerCandidate := place.POICandidate{Name: "Example Ferry Terminal", Category: "transport", DistanceM: 12, Tier: place.TierVenueCandidate, Source: "synthetic-provider"}
-	classify := classifyInput{QueueID: "queue:" + assetID, AssetID: assetID, SourceLibraryID: "source:fixture", MediaType: "image", CreationDate: source.CaptureTime, Width: 2, Height: 2, CameraMake: "Example", CameraModel: "Camera", LensModel: "Lens", HasLocation: true, Latitude: 52.0, Longitude: 4.0, AccuracyMeters: 4.0, Place: &classifyPlaceContext{Result: place.Result{Input: place.Input{AssetID: assetID, TakenAt: source.CaptureTime, Location: place.Coordinate{Latitude: 52.0, Longitude: 4.0}, AccuracyMeters: 4.0}, Provider: "synthetic-provider", POIStatus: place.POIStatusFound, POITotal: 1, POICandidates: []place.POICandidate{providerCandidate}}, CacheStatus: "fixture"}}
 	evidence := []place.EvidenceRecord{{Input: place.Input{AssetID: assetID, TakenAt: source.CaptureTime, Location: place.Coordinate{Latitude: 52.0, Longitude: 4.0}, AccuracyMeters: 4.0}, ProviderIdentity: "synthetic-provider", Operation: "synthetic-nearby", CoordinateVariant: "source", ParserVersion: "v1", PreAuthRequestSHA256: digest([]byte("place-request")), RawResponseSHA256: digest([]byte("place-response")), HTTPStatus: 200, Candidates: []place.EvidenceCandidate{{ProviderIndex: 0, ProviderID: "terminal-1", Name: "Example Ferry Terminal", Categories: []string{"transport"}, DistanceM: 12, Source: "synthetic-provider"}}, CompletionState: "complete"}}
+	providerCandidate := place.POICandidate{Name: "Example Ferry Terminal", Category: "transport", DistanceM: 12, Tier: place.TierVenueCandidate, Source: "synthetic-provider"}
+	classify := classifyInput{QueueID: "queue:" + assetID, AssetID: assetID, SourceLibraryID: "source:fixture", MediaType: "image", CreationDate: source.CaptureTime, Width: 2, Height: 2, CameraMake: "Example", CameraModel: "Camera", LensModel: "Lens", HasLocation: true, Latitude: 52.0, Longitude: 4.0, AccuracyMeters: 4.0, Place: &classifyPlaceContext{Result: place.Result{Input: place.Input{AssetID: assetID, TakenAt: source.CaptureTime, Location: place.Coordinate{Latitude: 52.0, Longitude: 4.0}, AccuracyMeters: 4.0}, Provider: "synthetic-provider", POIStatus: place.POIStatusFound, POITotal: 1, POICandidates: []place.POICandidate{providerCandidate}}, CacheStatus: "fixture", EvidenceRawResponseSHA256: []string{evidence[0].RawResponseSHA256}}}
 	return fixtureCardPreparation{Source: source, Artifacts: artifacts, Evidence: evidence, Classify: classify, CurrentStill: current, MIMEType: "image/jpeg"}
 }
 

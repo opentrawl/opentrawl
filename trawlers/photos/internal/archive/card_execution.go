@@ -67,6 +67,9 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
+	if err := validateFixturePlaceEvidenceIdentity(prepared.Evidence, prepared.Classify); err != nil {
+		return fixtureCardResult{}, fmt.Errorf("validate fixture card request boundary: %w", err)
+	}
 	imageDigest := sha256.Sum256(prepared.CurrentStill)
 	if int64(len(prepared.CurrentStill)) != prepared.Source.FullCurrent.SizeBytes || hex.EncodeToString(imageDigest[:]) != prepared.Source.FullCurrent.SHA256 {
 		return fixtureCardResult{}, errors.New("current-still bytes do not match checked CardInput facts")
@@ -128,6 +131,26 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 		return fixtureCardResult{}, err
 	}
 	return fixtureCardResult{ExecutionID: executionID, Input: input, Request: providerRequest, RawResponse: raw, PromptVersion: classifier.promptVersion, ParserVersion: modelParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: custody}, nil
+}
+
+// validateFixturePlaceEvidenceIdentity keeps the checked records accepted by
+// CardInput.Build and the already prepared request projection on one custody
+// boundary. It deliberately compares identity only; place semantics stay in
+// their existing canonical projections.
+func validateFixturePlaceEvidenceIdentity(records []place.EvidenceRecord, prompt classifyInput) error {
+	identities := []string(nil)
+	if prompt.Place != nil {
+		identities = prompt.Place.EvidenceRawResponseSHA256
+	}
+	if len(identities) != len(records) {
+		return errors.New("model input checked place evidence identities differ from CardInput")
+	}
+	for index, record := range records {
+		if identities[index] != record.RawResponseSHA256 {
+			return errors.New("model input checked place evidence identities differ from CardInput")
+		}
+	}
+	return nil
 }
 
 func fixtureCardExecutionID(assetID, cardInputID string, request model.ProviderRequest, promptVersion, parserVersion string) string {
