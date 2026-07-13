@@ -443,6 +443,8 @@ do {
   let arguments = Array(CommandLine.arguments.dropFirst())
   if arguments == ["__app", "status"] {
     try status()
+  } else if arguments == ["__app", "request-photos"] {
+    try status()
   } else if arguments == ["__app", "sync"] {
     try syntheticSync()
   } else if arguments.starts(with: ["__app", "search"]) {

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	"github.com/opentrawl/opentrawl/trawlkit/control"
+	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -25,7 +27,7 @@ func isAppWireCommand(args []string) bool {
 
 func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Duration) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open|request-photos", appWireCommand)
 	}
 	runtime := &Runtime{
 		ctx: context.Background(), stdout: stdout, stderr: stderr,
@@ -40,9 +42,49 @@ func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Durati
 		return runtime.runAppSearch(args[2:])
 	case "open":
 		return runtime.runAppOpen(args[2:])
+	case "request-photos":
+		if len(args) != 2 {
+			return fmt.Errorf("usage: trawl %s request-photos", appWireCommand)
+		}
+		return runtime.runAppRequestPhotos()
 	default:
-		return fmt.Errorf("usage: trawl %s status|sync|search|open", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open|request-photos", appWireCommand)
 	}
+}
+
+type photosAccessRequester interface {
+	RequestPhotosAccess(context.Context) (control.SetupRequirement, error)
+}
+
+func (r *Runtime) runAppRequestPhotos() error {
+	source, found := findSource(discoverCrawlers(r.ctx), "photos")
+	if !found {
+		return fmt.Errorf("Photos is not installed")
+	}
+	requester, ok := source.Crawler.(photosAccessRequester)
+	if !ok {
+		return fmt.Errorf("Photos does not support app permission requests")
+	}
+	if _, err := requester.RequestPhotosAccess(r.ctx); err == nil {
+		return r.runAppStatus()
+	} else {
+		return writeAppResponse(r.stdout, appPhotosRequestFailure(r.appStatusResponse(r.ctx), source))
+	}
+}
+
+func appPhotosRequestFailure(response *federationv1.StatusResponse, source Source) *federationv1.StatusResponse {
+	response.Failures = append(response.Failures, &federationv1.SourceFailure{
+		SourceId: source.ID, Surface: sourceHumanName(source),
+		Code:    federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
+		Message: "Photos access could not be requested.",
+		Remedy:  "Try again from OpenTrawl.",
+	})
+	if len(response.Sources) > 0 {
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+	} else {
+		response.Outcome = federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+	}
+	return response
 }
 
 func (r *Runtime) runAppStatus() error {
@@ -126,7 +168,9 @@ func (r *Runtime) runAppSearch(args []string) error {
 	sources := discoverCrawlers(r.ctx)
 	if id := strings.TrimSpace(*sourceID); id != "" {
 		selected, ok := findSource(sources, id)
-		if !ok { return fmt.Errorf("source %q was not found", id) }
+		if !ok {
+			return fmt.Errorf("source %q was not found", id)
+		}
 		sources = []Source{selected}
 	}
 	return writeAppResponse(r.stdout, r.appSearchResponse(r.ctx, sources, query))

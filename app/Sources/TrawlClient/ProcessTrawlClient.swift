@@ -7,6 +7,7 @@ public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
+  static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
 
   private let binaryURL: URL
   private let searchDeadline: Duration
@@ -41,6 +42,14 @@ public struct ProcessTrawlClient: TrawlClient {
     try await response(
       arguments: ["__app", "status"],
       deadline: operationDeadline,
+      as: Trawl_Federation_V1_StatusResponse.self
+    ).model()
+  }
+
+  public func requestPhotos() async throws -> StatusResponse {
+    try await response(
+      arguments: ["__app", "request-photos"],
+      deadline: Self.defaultPhotosPermissionDeadline,
       as: Trawl_Federation_V1_StatusResponse.self
     ).model()
   }

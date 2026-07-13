@@ -93,6 +93,11 @@ struct RootView: View {
           if model.diskAccess == .denied {
             PermissionBanner(action: onRequestDiskAccess)
           }
+          if let requirement = model.photosAccess {
+            PhotosPermissionBanner(requirement: requirement) {
+              Task { await model.requestPhotos() }
+            }
+          }
         }
         .padding(TrawlDesign.contentInset)
       }
@@ -196,6 +201,24 @@ private struct PermissionBanner: View {
       Label("OpenTrawl needs Full Disk Access to read local sources.", systemImage: "lock.fill")
         .font(.callout)
       Button("Give access", action: action)
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 9)
+    .glassEffect(.regular, in: Capsule())
+  }
+}
+
+private struct PhotosPermissionBanner: View {
+  let requirement: SetupRequirement
+  let requestAccess: () -> Void
+
+  var body: some View {
+    HStack(spacing: 12) {
+      Label(requirement.explanation, systemImage: "photo.on.rectangle")
+        .font(.callout)
+      if requirement.action == .requestPhotos {
+        Button("Request access", action: requestAccess)
+      }
     }
     .padding(.horizontal, 14)
     .padding(.vertical, 9)

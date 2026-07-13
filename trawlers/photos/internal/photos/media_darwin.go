@@ -7,6 +7,7 @@ package photos
 #include <stdlib.h>
 
 int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut, char **errorDomainOut, long long *errorCodeOut);
+char *photoscrawl_photokit_authorization_status(char **errorOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut);
@@ -110,8 +111,31 @@ func photoKitError(message string) error {
 	return errors.New(trimmed)
 }
 
+// PhotoLibraryAuthorizationStatus reads the Photos access state without
+// prompting or reading the library.
+func PhotoLibraryAuthorizationStatus(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	default:
+	}
+
+	var cErr *C.char
+	cStatus := C.photoscrawl_photokit_authorization_status(&cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return "", photoKitError(C.GoString(cErr))
+	}
+	if cStatus == nil {
+		return "", errors.New("PhotoKit returned no authorization status")
+	}
+	defer C.free(unsafe.Pointer(cStatus))
+	return C.GoString(cStatus), nil
+}
+
 // RequestPhotoLibraryAuthorization may show the macOS Photos permission
-// prompt. Only the signed app's first-run entrypoint calls it.
+// prompt. The signed helper calls it only after a status check finds that the
+// decision is not determined.
 func RequestPhotoLibraryAuthorization(ctx context.Context) (string, error) {
 	select {
 	case <-ctx.Done():

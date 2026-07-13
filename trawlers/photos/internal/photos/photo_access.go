@@ -9,6 +9,18 @@ type PhotoLibraryAccessError struct {
 	Status string
 }
 
+type PhotoLibraryAccessFailure struct {
+	Kind    string
+	Message string
+}
+
+func (e *PhotoLibraryAccessFailure) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
+	return "Photos access could not be checked"
+}
+
 func (e *PhotoLibraryAccessError) Error() string {
 	switch e.Status {
 	case "not_determined":
