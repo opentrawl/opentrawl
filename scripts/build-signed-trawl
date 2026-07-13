@@ -27,6 +27,17 @@ mkdir -p "$(dirname "$output")"
   cd "$repo_root/trawl"
   go build -o "$output" ./cmd/trawl
 )
+
+# The Nix Go toolchain can record its resolver library by store path. A
+# hardened standalone binary must use the equivalent macOS platform library.
+while IFS= read -r library; do
+  case "$library" in
+    /nix/store/*/libresolv.9.dylib|/Volumes/*/libresolv.9.dylib)
+      /usr/bin/install_name_tool -change "$library" /usr/lib/libresolv.9.dylib "$output"
+      ;;
+  esac
+done < <(/usr/bin/otool -L "$output" | /usr/bin/awk 'NR > 1 { print $1 }')
+
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none \
   "$output"

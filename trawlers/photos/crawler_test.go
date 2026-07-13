@@ -151,7 +151,7 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	if manifest.SchemaVersion != control.RunnerManifestVersion {
 		t.Fatalf("schema_version = %d", manifest.SchemaVersion)
 	}
-	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "search", "short_refs", "open"} {
+	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "acquire_current_still", "search", "short_refs", "open"} {
 		if !slices.Contains(manifest.Capabilities, capability) {
 			t.Fatalf("missing capability %q in %#v", capability, manifest.Capabilities)
 		}
@@ -171,6 +171,15 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	for _, name := range []string{"limit", "model"} {
 		if !commandHasFlag(classify, name) {
 			t.Fatalf("classify flags missing %q: %#v", name, classify.Flags)
+		}
+	}
+	acquire := manifest.Commands["acquire_current_still"]
+	if !acquire.Mutates || acquire.Store != "none" || !acquire.JSON {
+		t.Fatalf("acquire-current-still command = %#v", acquire)
+	}
+	for _, name := range []string{"asset", "source-library"} {
+		if !commandHasFlag(acquire, name) {
+			t.Fatalf("acquire-current-still flags missing %q: %#v", name, acquire.Flags)
 		}
 	}
 	if !manifest.Commands["sync"].Mutates {

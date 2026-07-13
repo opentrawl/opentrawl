@@ -326,6 +326,7 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		fs.SetOutput(os.Stderr)
 		archivePath := fs.String("archive", "", "complete Photos archive path")
 		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		cacheDir := fs.String("cache", "", "private checked-artifact cache directory")
 		outDir := fs.String("out", "", "existing owner-only private audit output directory")
 		selectionPath := fs.String("selection", "", "private JSON selection with asset_ids")
 		backstop := fs.Int("backstop", 0, "number of stable SHA-256 inventory backstop assets")
@@ -337,6 +338,9 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		}
 		if !*jsonFlag {
 			return output.UsageError{Err: errors.New("audit-card-input inspect requires --json")}
+		}
+		if strings.TrimSpace(*cacheDir) == "" {
+			return output.UsageError{Err: errors.New("audit-card-input inspect requires --cache")}
 		}
 		if err := validateCardInputAuditOutput(*outDir); err != nil {
 			return err
@@ -362,7 +366,7 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 			}
 			assetIDs = append(assetIDs, archive.StableCardInputAuditBackstop(inventory.SnapshotID, candidates, *backstop)...)
 		}
-		inspections, err := archive.InspectCardInputs(ctx, archive.CardInputAuditInspectOptions{CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)}, CacheDir: paths.CacheDir, AssetIDs: assetIDs, Model: strings.TrimSpace(*modelName), ModelURL: strings.TrimSpace(*modelURL)})
+		inspections, err := archive.InspectCardInputs(ctx, archive.CardInputAuditInspectOptions{CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)}, CacheDir: strings.TrimSpace(*cacheDir), AssetIDs: assetIDs, Model: strings.TrimSpace(*modelName), ModelURL: strings.TrimSpace(*modelURL)})
 		if err != nil {
 			return err
 		}

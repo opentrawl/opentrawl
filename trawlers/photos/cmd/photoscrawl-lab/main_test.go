@@ -79,6 +79,17 @@ func TestCardInputAuditPrepareRequiresItsPrivateBoundary(t *testing.T) {
 	}
 }
 
+func TestCardInputAuditInspectRequiresItsPreparedCache(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "audit")
+	if err := os.Mkdir(outDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err := runAuditCardInput(context.Background(), archive.Paths{}, []string{"inspect", "--archive", "archive.sqlite", "--source-library", "source:synthetic", "--out", outDir, "--json"})
+	if err == nil || !strings.Contains(err.Error(), "requires --cache") {
+		t.Fatalf("inspect cache validation error = %v", err)
+	}
+}
+
 func TestCardInputAuditSnapshotsWALArchiveWithoutChangingSource(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.sqlite")

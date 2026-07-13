@@ -277,7 +277,10 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		stored.Preflight = input
 		return stored, nil
 	}
-	original, ok := cardInputAuditOriginal(input.Resources)
+	original, ok, err := cardInputAuditCheckedPackageOriginal(input)
+	if err != nil {
+		return CardInputAuditInspection{}, err
+	}
 	if !ok {
 		inspection.StopReason = cardInputAuditStopMissingMetadata
 		return inspection, nil
@@ -461,6 +464,31 @@ func cardInputAuditOriginal(resources []classifyResource) (classifyResource, boo
 		}
 	}
 	return classifyResource{}, false
+}
+
+// cardInputAuditCheckedPackageOriginal reopens the same unique package-local
+// original that prepare used. Archive resource digests are observations, so
+// the metadata lookup and CardInput fact use the verified bytes instead.
+func cardInputAuditCheckedPackageOriginal(input classifyInput) (classifyResource, bool, error) {
+	candidate, ok := photos.UniquePackageOriginal(input.originalRequest().PackageCandidates)
+	if !ok {
+		return classifyResource{}, false, nil
+	}
+	info, digest, err := photos.InspectOriginalFile(candidate.Path)
+	if err != nil {
+		return classifyResource{}, false, fmt.Errorf("inspect package-local immutable original: %w", err)
+	}
+	for _, resource := range input.Resources {
+		if resource.ResourceType != "local_original" || filepath.Clean(resource.LocalPath) != filepath.Clean(candidate.Path) {
+			continue
+		}
+		resource.AvailableLocally = true
+		resource.NeedsDownload = false
+		resource.FileSize = info.Size()
+		resource.SHA256 = hex.EncodeToString(digest[:])
+		return resource, true, nil
+	}
+	return classifyResource{}, false, errors.New("unique package-local immutable original has no matching resource")
 }
 
 func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {

@@ -119,6 +119,27 @@ func TestStandaloneTrawlBuilderRequiresANewExplicitOutput(t *testing.T) {
 	t.Logf("boundary=standalone_trawl_builder raw_input_argv=%q raw_output=%q", []string{builder, "--output", existing}, output)
 }
 
+func TestStandaloneTrawlBuilderUsesThePlatformResolverBeforeSigning(t *testing.T) {
+	repoRoot := photoKitTestRepoRoot(t)
+	builder := filepath.Join(repoRoot, "scripts", "build-signed-trawl")
+	outputPath := filepath.Join(t.TempDir(), "trawl")
+	output, exitCode := runPackagingCommand(t, builder, "--output", outputPath)
+	if exitCode != 0 {
+		t.Fatalf("standalone trawl build output = %q, exit = %d", output, exitCode)
+	}
+	libraries, exitCode := runPackagingCommand(t, "/usr/bin/otool", "-L", outputPath)
+	if exitCode != 0 {
+		t.Fatalf("standalone trawl libraries = %q, exit = %d", libraries, exitCode)
+	}
+	if bytes.Contains(libraries, []byte("/nix/store/")) || bytes.Contains(libraries, []byte("/Volumes/")) {
+		t.Fatalf("standalone trawl has a non-platform library dependency: %q", libraries)
+	}
+	signatureOutput, exitCode := runPackagingCommand(t, "/usr/bin/codesign", "--verify", "--strict", "--verbose=2", outputPath)
+	if exitCode != 0 {
+		t.Fatalf("standalone trawl signature output = %q, exit = %d", signatureOutput, exitCode)
+	}
+}
+
 func TestHelperPackagingHasNoDeleteRegistrationOrFallbackStep(t *testing.T) {
 	repoRoot := photoKitTestRepoRoot(t)
 	helperInfo, err := os.ReadFile(filepath.Join(repoRoot, "trawlers", "photos", "cmd", "photoscrawl-fetch", "Info.plist"))

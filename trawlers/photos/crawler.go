@@ -25,10 +25,12 @@ const (
 )
 
 type Crawler struct {
-	cfg              Config
-	snapshotProvider photos.Provider
-	classifyLimit    trackedLimit
-	classifyModel    string
+	cfg                Config
+	snapshotProvider   photos.Provider
+	classifyLimit      trackedLimit
+	classifyModel      string
+	currentStillAsset  string
+	currentStillSource string
 }
 
 type Config struct {
@@ -76,6 +78,15 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Flags:   c.classifyFlags,
 			Run:     c.runClassify,
 		},
+		{
+			Name:      "acquire-current-still",
+			Help:      "Acquire one checked current still for an exact asset.",
+			Mutates:   true,
+			Secondary: true,
+			Store:     trawlkit.StoreNone,
+			Flags:     c.currentStillFlags,
+			Run:       c.runCurrentStillAcquire,
+		},
 	}
 }
 
@@ -84,6 +95,13 @@ func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
 	c.classifyModel = ""
 	fs.Var(&c.classifyLimit, "limit", "max pending assets to classify")
 	fs.StringVar(&c.classifyModel, "model", "", "Ollama-API vision model for content observations; local or cloud")
+}
+
+func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {
+	c.currentStillAsset = ""
+	c.currentStillSource = ""
+	fs.StringVar(&c.currentStillAsset, "asset", "", "exact Photos asset ID")
+	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
@@ -237,6 +255,27 @@ func (c *Crawler) runClassify(ctx context.Context, req *trawlkit.Request) error 
 		_ = req.Log.Info("classify_written", fmt.Sprintf("processed=%d metadata=%d content=%d failures=%d", result.Processed, result.MetadataClassified, result.ContentClassified, result.ContentClassificationFailures))
 	}
 	return output.Write(req.Out, req.Format, "classify", result)
+}
+
+func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Request) error {
+	if len(req.Args) != 0 {
+		return output.UsageError{Err: errors.New("acquire-current-still takes flags only")}
+	}
+	if strings.TrimSpace(c.currentStillAsset) == "" || strings.TrimSpace(c.currentStillSource) == "" {
+		return output.UsageError{Err: errors.New("acquire-current-still requires --asset and --source-library")}
+	}
+	result, err := archive.AcquireCardInputCurrentStill(ctx, archive.CardInputCurrentStillOptions{
+		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
+			ArchivePath:     req.Paths.Archive,
+			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
+		},
+		CacheDir: archivePaths(req).CacheDir,
+		AssetID:  strings.TrimSpace(c.currentStillAsset),
+	})
+	if err != nil {
+		return err
+	}
+	return output.Write(req.Out, req.Format, "current_still_acquisition", result)
 }
 
 func archivePaths(req *trawlkit.Request) archive.Paths {

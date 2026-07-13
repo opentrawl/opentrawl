@@ -206,6 +206,63 @@ func TestCardInputAuditPrepareReopensOnePackageOriginalAndExistingCurrentStillWi
 	}
 }
 
+func TestCardInputCurrentStillAcquiresOnceThenPrepareReopensWithoutPhotoKit(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:acquire", "current", "image", `{"present":true}`)
+	root := t.TempDir()
+	originalPath := filepath.Join(root, "original.jpg")
+	originalBytes := []byte("synthetic package original")
+	if err := os.WriteFile(originalPath, originalBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	originalSHA := digestText(string(originalBytes))
+	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values('resource:acquire','asset:acquire','local_original','public.jpeg','original.jpg',?,?,?,1,0)`, originalPath, len(originalBytes), originalSHA); err != nil {
+		t.Fatal(err)
+	}
+	oldCurrentExporter := exportCurrentStillResource
+	oldExtract := extractImageMetadata
+	t.Cleanup(func() {
+		exportCurrentStillResource = oldCurrentExporter
+		extractImageMetadata = oldExtract
+	})
+	currentBytes := []byte("synthetic current still")
+	exporterCalls := 0
+	exportCurrentStillResource = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
+		exporterCalls++
+		if request.AllowNetwork {
+			t.Fatal("acquire enabled current-still network access")
+		}
+		if err := os.WriteFile(destination, currentBytes, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		return photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: int64(len(currentBytes)), SHA256: digestText(string(currentBytes)), PhotoKitCalls: 1}, nil
+	}
+	cacheDir := filepath.Join(root, "checked-cache")
+	acquired, err := acquireCardInputCurrentStill(ctx, db, true, CardInputCurrentStillOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:acquire"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acquired.StopReason != "" || acquired.ImmutableOriginal.Source != photos.OriginalSourcePackage || acquired.CurrentStillSource != photos.CurrentStillSourcePhotoKit || acquired.CurrentStillRequests != 1 || acquired.CurrentStillProof == "" || exporterCalls != 1 {
+		t.Fatalf("acquired=%+v exporter calls=%d", acquired, exporterCalls)
+	}
+	exportCurrentStillResource = func(context.Context, photos.CurrentStillRequest, string) (photos.CurrentStillFact, error) {
+		t.Fatal("prepare invoked the current-still exporter after acquisition")
+		return photos.CurrentStillFact{}, nil
+	}
+	extractImageMetadata = func(context.Context, string) ([]byte, error) {
+		return []byte(fmt.Sprintf(`{"extractor_version":"imageio-v1","original_sha256":%q,"container":{"type":"dictionary","dictionary":{"Make":{"type":"string","string":"Example"}}},"images":[{"index":0,"properties":{"type":"dictionary","dictionary":{}}}]}`, originalSHA)), nil
+	}
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:acquire"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != "" || prepared.CurrentStillSource != photos.CurrentStillSourceCache || prepared.CurrentStillRequests != 0 || prepared.CurrentStillProof != acquired.CurrentStillProof || exporterCalls != 1 {
+		t.Fatalf("prepared=%+v exporter calls=%d", prepared, exporterCalls)
+	}
+}
+
 func TestCardInputAuditPrepareProhibitedStopsBeforeCacheOrArtifactAccess(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
 	defer db.Close()
@@ -325,7 +382,9 @@ func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	originalSHA := digestText(string(originalBytes))
-	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values('resource:ready','asset:ready','photo','public.jpeg','synthetic.jpg',?, ?,?,1,0)`, originalPath, len(originalBytes), originalSHA); err != nil {
+	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values
+		('resource:ready-photo','asset:ready','photo','public.jpeg','synthetic.jpg',?, ?,?,1,0),
+		('resource:ready-original','asset:ready','local_original','public.jpeg','synthetic.jpg',?, ?,?,1,0)`, originalPath, len(originalBytes), digestText("stale photo observation"), originalPath, len(originalBytes), digestText("stale package observation")); err != nil {
 		t.Fatal(err)
 	}
 	metadataStore, err := imagemetadata.NewStore(filepath.Join(cacheDir, "image-metadata"), func(context.Context, string) ([]byte, error) {
