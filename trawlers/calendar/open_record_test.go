@@ -68,7 +68,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Synthetic planning"
-blocks: { fields: { fields: { label: "Start" display: "10 July 2026 at 14:00:00 +02:00" } fields: { label: "End" display: "10 July 2026 at 15:00:00 +02:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
+blocks: { fields: { fields: { label: "Start" display: "10 July 2026 at 14:00" } fields: { label: "End" display: "10 July 2026 at 15:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
 blocks: { prose: { text: "Review the fixture." } }
 actions: { label: "Open event link" url: "https://example.com/event" }
 facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
@@ -160,7 +160,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetStart() != "2026-07-10T14:00:00.5+02:00" {
 		t.Fatalf("typed start = %q", typed.GetStart())
 	}
-	if got := record.Presentation.Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "10 July 2026 at 14:00:00.5 +02:00" {
+	if got := record.Presentation.Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "10 July 2026 at 14:00" {
 		t.Fatalf("start display = %q", got)
 	}
 	setStart("not-a-timestamp")

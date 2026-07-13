@@ -71,7 +71,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Project Lantern"
-blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "10 July 2026 at 14:00:00 +00:00" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
+blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "10 July 2026 at 14:00" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
 blocks: { prose: { text: "Synthetic review body." } }
 blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2.0 KiB" } } } }
 facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 characters omitted." }`)
@@ -146,7 +146,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetTime() != "2026-07-10T14:00:00.5+02:00" {
 		t.Fatalf("typed time = %q", typed.GetTime())
 	}
-	if got := record.Presentation.Blocks[0].GetFields().GetFields()[3].GetDisplay(); got != "10 July 2026 at 14:00:00.5 +02:00" {
+	if got := record.Presentation.Blocks[0].GetFields().GetFields()[3].GetDisplay(); got != "10 July 2026 at 14:00" {
 		t.Fatalf("date display = %q", got)
 	}
 	setTime("not-a-timestamp")

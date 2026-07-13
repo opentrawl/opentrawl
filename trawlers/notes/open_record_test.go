@@ -93,7 +93,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	evidenceInput.Body.Text, evidenceInput.Body.Unsupported = body.Text, body.Unsupported
 	assertOpenPresentation(t, "notes", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Packing list"
-blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "8 July 2026 at 10:00:00 +00:00" } fields: { label: "Modified" display: "10 July 2026 at 14:00:00 +00:00" } fields: { label: "Versions" display: "3" } } }
+blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "8 July 2026 at 10:00" } fields: { label: "Modified" display: "10 July 2026 at 14:00" } fields: { label: "Versions" display: "3" } } }
 blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := body
@@ -157,7 +157,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 		t.Fatalf("typed timestamps = %q/%q", typed.GetCreatedAt(), typed.GetModifiedAt())
 	}
 	fields := record.Presentation.Blocks[0].GetFields().GetFields()
-	if fields[1].GetDisplay() != "8 July 2026 at 10:00:00.5 +02:00" || fields[2].GetDisplay() != "10 July 2026 at 14:00:00.5 +02:00" {
+	if fields[1].GetDisplay() != "8 July 2026 at 10:00" || fields[2].GetDisplay() != "10 July 2026 at 14:00" {
 		t.Fatalf("timestamp displays = %#v", fields)
 	}
 	setTimes("2026-07-08T10:00:00Z", "")

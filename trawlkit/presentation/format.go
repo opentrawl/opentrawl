@@ -7,10 +7,9 @@ import (
 	"time"
 )
 
-const timeLayout = "2 January 2006 at 15:04:05.999999999 -07:00"
+const timeLayout = "2 January 2006 at 15:04"
 
-// Timestamp converts an RFC 3339 timestamp to a readable form without
-// changing its represented instant or numeric offset.
+// Timestamp converts an RFC 3339 timestamp to a readable local date and time.
 func Timestamp(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

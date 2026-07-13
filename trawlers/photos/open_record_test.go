@@ -107,7 +107,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertOpenPresentation(t, "photos", input, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Synthetic square."
-blocks: { fields: { fields: { label: "Captured local time" display: "10 July 2026 at 14:00:00 +02:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
+blocks: { fields: { fields: { label: "Captured local time" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
 blocks: { prose: { text: "A synthetic scene." } }
 blocks: { prose: { text: "EXAMPLE" } }
 facts: { kind: KIND_WARNING message: "Card status: Stale · source details changed after this card was created · since 10 July 2026" }
