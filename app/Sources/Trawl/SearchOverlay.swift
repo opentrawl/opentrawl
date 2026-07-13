@@ -7,7 +7,7 @@ struct SearchOverlay: View {
   let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
   private let sourceStatuses: [SourceStatus]
 
-  @State private var scope: SourceStatus?
+  @State private var scope: RestingSource?
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
   @State private var sourceResolver: SearchSourceResolver
@@ -15,7 +15,7 @@ struct SearchOverlay: View {
 
   init(
     client: any TrawlClient,
-    initialScope: SourceStatus?,
+    initialScope: RestingSource?,
     sourceStatuses: [SourceStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
     onDismiss: @escaping () -> Void
@@ -30,24 +30,21 @@ struct SearchOverlay: View {
       initialValue: SearchInteraction(model: model, sourceID: initialScope?.id)
     )
     _sourceResolver = State(
-      initialValue: SearchSourceResolver(
-        statuses: sourceStatuses,
-        scopedStatus: initialScope
-      )
+      initialValue: SearchSourceResolver(statuses: sourceStatuses)
     )
   }
 
   var body: some View {
     GeometryReader { proxy in
       let size = CGSize(
-        width: min(proxy.size.width, 760),
+        width: min(proxy.size.width, 860),
         height: min(proxy.size.height, 560)
       )
       SearchWorkspace(
         interaction: interaction,
         scope: scope,
         sourceResolver: sourceResolver,
-        isCompact: size.width < 680,
+        isCompact: size.width < 720,
         model: model,
         focus: $focus,
         onClearScope: clearScope,
@@ -67,11 +64,14 @@ struct SearchOverlay: View {
       reportActivity()
     }
     .onChange(of: sourceStatuses) { _, statuses in
-      sourceResolver.replace(with: statuses, scopedStatus: scope)
+      sourceResolver.replace(with: statuses)
     }
     .onKeyPress(.escape) {
       onDismiss()
       return .handled
+    }
+    .onAppear {
+      focus = .field
     }
     .task(id: SearchKey(query: interaction.query, sourceID: interaction.sourceID)) {
       await model.search(interaction.query, source: interaction.sourceID)

@@ -122,6 +122,8 @@ private struct SearchStatePlaceholder: View {
 }
 
 private struct SearchResultRow: View {
+  @Environment(\.locale) private var locale
+
   let hit: SearchHit
   let title: String
   let sourceDisplayName: String
@@ -134,7 +136,7 @@ private struct SearchResultRow: View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           Text(title)
             .font(.body.weight(.semibold))
-            .lineLimit(1)
+            .lineLimit(2)
           Spacer(minLength: 4)
           if let time = hit.time {
             Text(time, format: hit.allDay ? .dateTime.year().month().day() : .dateTime.month().day().hour().minute())
@@ -145,7 +147,7 @@ private struct SearchResultRow: View {
         Text(hit.snippet)
           .font(.callout)
           .foregroundStyle(.secondary)
-          .lineLimit(1)
+          .lineLimit(2)
       }
     }
     .padding(.vertical, 7)
@@ -157,6 +159,21 @@ private struct SearchResultRow: View {
     .padding(.horizontal, 5)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
-    .accessibilityLabel("\(sourceDisplayName), \(title)")
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  private var accessibilityLabel: String {
+    [sourceDisplayName, title, formattedTime, hit.snippet]
+      .compactMap { $0 }
+      .filter { !$0.isEmpty }
+      .joined(separator: ". ")
+  }
+
+  private var formattedTime: String? {
+    guard let time = hit.time else { return nil }
+    if hit.allDay {
+      return time.formatted(.dateTime.year().month().day().locale(locale))
+    }
+    return time.formatted(.dateTime.month().day().hour().minute().locale(locale))
   }
 }

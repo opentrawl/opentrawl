@@ -40,6 +40,40 @@ private struct StatusClient: TrawlClient {
   #expect(!SourceRestingCopy.needsAttention(model))
 }
 
+@Test func restingCopyKeepsHealthySourcesQuietAndShowsDiagnosticAttention() throws {
+  var manifest = Trawl_Federation_V1_SourceManifest()
+  manifest.sourceID = "notes"
+  manifest.surface = "Notes"
+  var source = Trawl_Federation_V1_SourceStatus()
+  source.manifest = manifest
+  source.state = "ok"
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .complete
+  response.sources = [source]
+  let healthy = try response.model().sources[0]
+  #expect(SourceRestingCopy.detail(for: healthy) == nil)
+  #expect(!SourceRestingCopy.needsAttention(healthy))
+
+  source.warnings = ["Reconnect Notes to search it."]
+  response.sources = [source]
+  let diagnostic = try response.model().sources[0]
+  #expect(SourceRestingCopy.detail(for: diagnostic) == "Reconnect Notes to search it.")
+  #expect(SourceRestingCopy.needsAttention(diagnostic))
+
+  source.warnings = []
+  source.state = "stale"
+  source.summary = "Notes were synced days ago; run trawl notes sync to refresh."
+  response.sources = [source]
+  let stale = try response.model().sources[0]
+  #expect(SourceRestingCopy.detail(for: stale) == "Needs sync.")
+
+  source.state = "missing"
+  source.summary = "Notes archive has not been created."
+  response.sources = [source]
+  let missing = try response.model().sources[0]
+  #expect(SourceRestingCopy.detail(for: missing) == "Not set up.")
+}
+
 @MainActor
 @Test func skippedOnlyStatusIsPartialNotFailed() async throws {
   var skipped = Trawl_Federation_V1_SkippedSource()
@@ -53,6 +87,9 @@ private struct StatusClient: TrawlClient {
   await model.refresh()
   #expect(model.phase == .partial)
   #expect(model.skippedSources.map(\.sourceID) == ["synthetic"])
+  #expect(model.restingSources.map(\.id) == ["synthetic"])
+  #expect(model.restingSources.first?.detail == "Status is not supported.")
+  #expect(model.restingSources.first?.needsAttention == true)
 }
 
 @MainActor
@@ -79,6 +116,83 @@ private struct StatusClient: TrawlClient {
   #expect(model.sources.map(\.id) == ["gmail"])
   #expect(model.statusFailures.map(\.sourceID) == ["notes"])
   #expect(model.phase == .partial)
+  #expect(model.restingSources.map(\.id) == ["gmail", "notes"])
+  #expect(model.restingSources.map(\.surface) == ["Gmail", "Notes"])
+  #expect(model.restingSources[0].detail == nil)
+  #expect(model.restingSources[1].detail == "Allow Notes access.")
+  #expect(model.restingSources[1].needsAttention)
+}
+
+@MainActor
+@Test func partialFailureOverridesItsExistingSourceWithoutDuplicatingIt() async throws {
+  var source = Trawl_Federation_V1_SourceStatus()
+  source.manifest = .with {
+    $0.sourceID = "notes"
+    $0.surface = "Notes"
+    $0.headlines = ["Search your notes"]
+  }
+  source.state = "ok"
+  var failure = Trawl_Federation_V1_SourceFailure()
+  failure.sourceID = "notes"
+  failure.surface = "Notes"
+  failure.code = .permission
+  failure.message = "Allow Notes access."
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .partial
+  response.sources = [source]
+  response.failures = [failure]
+  let model = AppModel(client: StatusClient(response: try response.model()))
+
+  await model.refresh()
+
+  #expect(model.restingSources.map(\.id) == ["notes"])
+  #expect(model.restingSources[0].detail == "Allow Notes access.")
+  #expect(model.restingSources[0].needsAttention)
+}
+
+@MainActor
+@Test func totalFailureKeepsItsSourceButtonsInsteadOfUsingTheGenericFallback() async throws {
+  var failure = Trawl_Federation_V1_SourceFailure()
+  failure.sourceID = "notes"
+  failure.surface = "Notes"
+  failure.code = .permission
+  failure.message = "Allow Notes access."
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .failed
+  response.failures = [failure]
+  let model = AppModel(client: StatusClient(response: try response.model()))
+
+  await model.refresh()
+
+  #expect(model.phase == .failed("Allow Notes access."))
+  #expect(model.restingSources.map(\.id) == ["notes"])
+  #expect(!model.shouldShowFailureFallback)
+}
+
+@MainActor
+@Test func failedRefreshExplainsWhyRetainedSourcesMayBeStale() async throws {
+  var source = Trawl_Federation_V1_SourceStatus()
+  source.manifest = .with {
+    $0.sourceID = "gmail"
+    $0.surface = "Gmail"
+  }
+  source.state = "ok"
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .complete
+  response.sources = [source]
+  let client = MutableAppClient(status: try response.model())
+  let model = AppModel(client: client)
+  await model.refresh()
+  #expect(model.phase == .ready)
+  #expect(model.statusRefreshFailure == nil)
+
+  client.statusFails = true
+  await model.refresh()
+
+  #expect(model.phase == .failed(TrawlClientError.launchFailed.localizedDescription))
+  #expect(model.restingSources.map(\.id) == ["gmail"])
+  #expect(model.statusRefreshFailure == TrawlClientError.launchFailed.localizedDescription)
+  #expect(!model.shouldShowFailureFallback)
 }
 
 @MainActor
@@ -214,6 +328,7 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   let statusResponse: StatusResponse
   private let lock = NSLock()
   private var isCancelled = false
+  private var returnsStatusFailure = false
   private var returnsPartialSync = false
   private var returnsSyncFailure = false
   init(status: StatusResponse) { statusResponse = status }
@@ -225,12 +340,17 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
     get { lock.withLock { returnsPartialSync } }
     set { lock.withLock { returnsPartialSync = newValue } }
   }
+  var statusFails: Bool {
+    get { lock.withLock { returnsStatusFailure } }
+    set { lock.withLock { returnsStatusFailure = newValue } }
+  }
   var syncFails: Bool {
     get { lock.withLock { returnsSyncFailure } }
     set { lock.withLock { returnsSyncFailure = newValue } }
   }
   func status() async throws -> StatusResponse {
     if cancelled { throw TrawlClientError.cancelled }
+    if statusFails { throw TrawlClientError.launchFailed }
     return statusResponse
   }
   func sync() async throws -> SyncResponse {

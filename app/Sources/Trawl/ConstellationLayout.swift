@@ -1,14 +1,9 @@
 import CoreGraphics
 import Foundation
-import TrawlClient
 import TrawlCore
 
-enum ConstellationGeometry {
-  static let sourceLabelAllowance: CGFloat = 58
-}
-
 struct MovingSource: Identifiable {
-  let source: SourceStatus
+  let source: RestingSource
   let anchor: CGPoint
   let diameter: CGFloat
   let metrics: ConstellationLayoutMetrics
@@ -107,7 +102,7 @@ private struct Triangle {
 }
 
 struct ConstellationLayout {
-  private let sources: [SourceStatus]
+  private let sources: [RestingSource]
   private let sourceBases: [CGPoint]
   private let metrics: ConstellationLayoutMetrics
   private let contextBases: [CGPoint]
@@ -116,7 +111,7 @@ struct ConstellationLayout {
   private let minimumBytes: Double
   private let maximumBytes: Double
 
-  init(size: CGSize, sources: [SourceStatus], meshSeed: UInt64) {
+  init(size: CGSize, sources: [RestingSource], meshSeed: UInt64) {
     self.sources = sources
     let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(sources.count)
     metrics = layoutMetrics
@@ -129,7 +124,7 @@ struct ConstellationLayout {
       metrics: layoutMetrics
     )
     contextBases = Self.makeContextBases(
-      count: max(10, min(18, sources.count + 3)),
+      count: max(8, min(12, sources.count + 1)),
       size: size,
       centre: centreBase,
       seed: meshSeed
@@ -197,7 +192,7 @@ struct ConstellationLayout {
     )
   }
 
-  private func diameter(for source: SourceStatus) -> CGFloat {
+  private func diameter(for source: RestingSource) -> CGFloat {
     guard source.databaseBytes > 0, maximumBytes > minimumBytes else {
       return CGFloat(metrics.minimumIconDiameter)
     }
@@ -211,7 +206,7 @@ struct ConstellationLayout {
   }
 
   private static func makeSourceBases(
-    sources: [SourceStatus],
+    sources: [RestingSource],
     size: CGSize,
     centre: CGPoint,
     metrics: ConstellationLayoutMetrics
@@ -265,7 +260,7 @@ struct ConstellationLayout {
       let nearestContext = contextIndices.sorted {
         distance(points[sourceIndex], points[$0]) < distance(points[sourceIndex], points[$1])
       }
-      for contextIndex in nearestContext.prefix(2) {
+      for contextIndex in nearestContext.prefix(1) {
         edges.insert(GraphEdge(sourceIndex, contextIndex))
       }
     }

@@ -1,24 +1,23 @@
 import AppKit
 import QuartzCore
 import SwiftUI
-import TrawlClient
 import TrawlCore
 
 struct ConstellationView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-  let sources: [SourceStatus]
+  let sources: [RestingSource]
   let activity: ConstellationActivity
   let trafficEvent: ConstellationTrafficEvent?
   let onSelectEverything: @MainActor @Sendable () -> Void
-  let onSelectSource: @MainActor @Sendable (SourceStatus) -> Void
+  let onSelectSource: @MainActor @Sendable (RestingSource) -> Void
 
   init(
-    sources: [SourceStatus],
+    sources: [RestingSource],
     activity: ConstellationActivity = .idle,
     trafficEvent: ConstellationTrafficEvent? = nil,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
-    onSelectSource: @escaping @MainActor @Sendable (SourceStatus) -> Void
+    onSelectSource: @escaping @MainActor @Sendable (RestingSource) -> Void
   ) {
     self.sources = sources
     self.activity = activity
@@ -28,10 +27,10 @@ struct ConstellationView: View {
   }
 
   init(
-    sources: [SourceStatus],
+    sources: [RestingSource],
     isSyncing: Bool,
     onSelectEverything: @escaping @MainActor @Sendable () -> Void,
-    onSelectSource: @escaping @MainActor @Sendable (SourceStatus) -> Void
+    onSelectSource: @escaping @MainActor @Sendable (RestingSource) -> Void
   ) {
     self.init(
       sources: sources,
@@ -45,7 +44,7 @@ struct ConstellationView: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let size = geometry.size
+      let size = canvasSize(in: geometry.size)
       let layout = ConstellationLayout(
         size: size,
         sources: sources,
@@ -72,7 +71,14 @@ struct ConstellationView: View {
         }
       }
       .frame(width: size.width, height: size.height)
+      .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
     }
+  }
+
+  private func canvasSize(in available: CGSize) -> CGSize {
+    let maximumHeight = min(available.height, 760)
+    let width = min(available.width, maximumHeight * 1.15, 880)
+    return CGSize(width: width, height: width / 1.15)
   }
 }
 
@@ -90,13 +96,14 @@ private struct OrbitingSourceNode: View {
           source: placement.source,
           diameter: placement.diameter,
           contentWidth: CGFloat(placement.metrics.labelWidth),
+          labelAllowance: CGFloat(placement.metrics.labelHeight),
           action: action
         )
         .environment(iconStore)
       ),
       contentSize: CGSize(
         width: CGFloat(placement.metrics.labelWidth),
-        height: placement.diameter + ConstellationGeometry.sourceLabelAllowance
+        height: placement.diameter + CGFloat(placement.metrics.labelHeight)
       ),
       motion: placement.motion,
       reduceMotion: reduceMotion
@@ -282,6 +289,10 @@ private struct CentreButton: View {
           .resizable()
           .scaledToFit()
           .frame(width: TrawlDesign.centreSize, height: TrawlDesign.centreSize)
+        Text("Search everything")
+          .font(.callout.weight(.semibold))
+          .fixedSize()
+          .offset(y: TrawlDesign.centreSize / 2 + 4)
         if isWorking {
           ProgressView()
             .controlSize(.small)
@@ -300,20 +311,23 @@ private struct CentreButton: View {
 private struct SourceNode: View {
   @FocusState private var isFocused: Bool
 
-  let source: SourceStatus
+  let source: RestingSource
   let diameter: CGFloat
   let contentWidth: CGFloat
+  let labelAllowance: CGFloat
   let action: @MainActor @Sendable () -> Void
 
   nonisolated init(
-    source: SourceStatus,
+    source: RestingSource,
     diameter: CGFloat,
     contentWidth: CGFloat,
+    labelAllowance: CGFloat,
     action: @MainActor @escaping @Sendable () -> Void
   ) {
     self.source = source
     self.diameter = diameter
     self.contentWidth = contentWidth
+    self.labelAllowance = labelAllowance
     self.action = action
   }
 
@@ -321,15 +335,21 @@ private struct SourceNode: View {
     Button(action: action) {
       ZStack(alignment: .top) {
         VStack(spacing: 7) {
-          SourceIconBadge(sourceID: source.id, diameter: diameter, state: source.state)
+          SourceIconBadge(
+            sourceID: source.id,
+            diameter: diameter,
+            state: source.state,
+            needsAttention: source.needsAttention
+          )
           SourceLabel(
             title: SourceRestingCopy.title(for: source),
-            detail: SourceRestingCopy.detail(for: source)
+            detail: source.detail,
+            width: contentWidth
           )
         }
         .frame(
           width: contentWidth,
-          height: diameter + ConstellationGeometry.sourceLabelAllowance,
+          height: diameter + labelAllowance,
           alignment: .top
         )
 
@@ -340,7 +360,7 @@ private struct SourceNode: View {
       }
       .frame(
         width: contentWidth,
-        height: diameter + ConstellationGeometry.sourceLabelAllowance,
+        height: diameter + labelAllowance,
         alignment: .top
       )
       .contentShape(.rect)
@@ -349,8 +369,14 @@ private struct SourceNode: View {
     .focusable()
     .focused($isFocused)
     .focusEffectDisabled()
-    .help("Search \(source.manifest.surface)")
-    .accessibilityLabel("Search \(source.manifest.surface), \(source.summary)")
+    .help("Search \(source.surface)")
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  private var accessibilityLabel: String {
+    [SourceRestingCopy.title(for: source), source.detail]
+      .compactMap { $0 }
+      .joined(separator: ". ")
   }
 }
 
@@ -358,12 +384,13 @@ private struct SourceIconBadge: View {
   let sourceID: String
   let diameter: CGFloat
   let state: String
+  let needsAttention: Bool
 
   var body: some View {
     ZStack(alignment: .bottomTrailing) {
       SourceIconView(sourceID: sourceID, size: diameter)
         .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
-      if state != "ok" {
+      if needsAttention {
         Circle()
           .fill(statusColour)
           .frame(width: 12, height: 12)
@@ -383,6 +410,7 @@ private struct SourceIconBadge: View {
 private struct SourceLabel: View {
   let title: String
   let detail: String?
+  let width: CGFloat
 
   var body: some View {
     VStack(spacing: 2) {
@@ -390,18 +418,18 @@ private struct SourceLabel: View {
         .font(.body.weight(.semibold))
         .foregroundStyle(.primary)
         .lineLimit(1)
-        .minimumScaleFactor(0.88)
       if let detail {
         Text(detail)
-          .font(.callout)
-          .foregroundStyle(.primary.opacity(0.78))
-          .lineLimit(1)
-          .minimumScaleFactor(0.88)
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
+          .multilineTextAlignment(.center)
       }
     }
+    .frame(maxWidth: width)
     .padding(.horizontal, 8)
     .padding(.vertical, 5)
-    .background(.thinMaterial, in: .rect(cornerRadius: 9))
-    .shadow(color: .black.opacity(0.05), radius: 3, y: 1)
+    .background(.ultraThinMaterial, in: .rect(cornerRadius: 9))
   }
 }
