@@ -2,6 +2,7 @@ package photoscrawl
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -11,10 +12,13 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	sourcephotos "github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	photosopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -28,7 +32,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		SchemaVersion: 4, Ref: "photos:asset/fixture-1",
 		Stale: &archive.OpenStale{Since: "2026-07-10T12:00:00Z", Reason: "asset metadata changed in sync (fingerprint drift)", Banner: "legacy debug banner"},
 		Mechanical: archive.OpenMechanical{
-			Source: archive.OpenSource{State: "current"}, Captured: &archive.OpenCaptured{Local: "10 July 2026 at 14:00", Timezone: "Europe/Amsterdam"},
+			Source: archive.OpenSource{State: "current"}, Captured: &archive.OpenCaptured{Local: "2026-07-10T14:00:00+02:00", Timezone: "Europe/Amsterdam"},
 			Media: &archive.OpenMedia{Kind: "photo", Width: 4032, Height: 3024, DurationSeconds: 1.5},
 			Place: &archive.OpenPlace{Name: "Example Square", Latitude: &latitude, Longitude: &longitude}, GPS: &archive.OpenGPS{Latitude: latitude, Longitude: longitude, HorizontalAccuracyMeters: 4.5},
 			KnownPlace: &archive.OpenKnownPlace{Kind: "home", Name: "Example home", After: true}, Camera: &archive.OpenCamera{Display: "Example Camera", Make: "Example", Model: "C1", LensModel: "Prime", FocalLengthMM: 35, FocalLength35MM: 35, Aperture: 2.8, ShutterSpeed: "1/125", ISO: 200},
@@ -78,7 +82,7 @@ func TestOpenRecordProjection(t *testing.T) {
 			t.Fatalf("removed field leaked %q", forbidden)
 		}
 	}
-	assertExactRecord(t, record, &photosopenv1.PhotosRecord{}, `{"schema_version":5,"ref":"photos:asset/fixture-1","stale":{"since":"2026-07-10T12:00:00Z","reason":"source details changed after this card was created","banner":"Card status: Stale · source details changed after this card was created · since 10 July 2026"},"mechanical":{"source":{"state":"current"},"captured":{"local":"10 July 2026 at 14:00","timezone":"Europe/Amsterdam"},"media":{"kind":"photo","width":"4032","height":"3024","duration_seconds":1.5},"place":{"name":"Example Square","latitude":52.3702,"longitude":4.8952},"gps":{"latitude":52.3702,"longitude":4.8952,"horizontal_accuracy_meters":4.5},"known_place":{"kind":"home","name":"Example home","after":true},"venue_candidates":[],"camera":{"display":"Example Camera","make":"Example","model":"C1","lens_model":"Prime","focal_length_mm":35,"focal_length_35mm":35,"aperture":2.8,"shutter_speed":"1/125","iso":"200"},"albums":[{"title":"Synthetic trip"}],"original":{"filename":"fixture.heic","bytes":"4096","availability":"local"},"flags":["favourite"]},"model":{"prompt_version":"v1","model_id":"example-model","summary":"Synthetic square.","description":"A synthetic scene.","ocr_text":"EXAMPLE","uncertainties":["weather"]}}`)
+	assertExactRecord(t, record, &photosopenv1.PhotosRecord{}, `{"schema_version":5,"ref":"photos:asset/fixture-1","stale":{"since":"2026-07-10T12:00:00Z","reason":"source details changed after this card was created","banner":"Card status: Stale · source details changed after this card was created · since 10 July 2026"},"mechanical":{"source":{"state":"current"},"captured":{"local":"2026-07-10T14:00:00+02:00","timezone":"Europe/Amsterdam"},"media":{"kind":"photo","width":"4032","height":"3024","duration_seconds":1.5},"place":{"name":"Example Square","latitude":52.3702,"longitude":4.8952},"gps":{"latitude":52.3702,"longitude":4.8952,"horizontal_accuracy_meters":4.5},"known_place":{"kind":"home","name":"Example home","after":true},"venue_candidates":[],"camera":{"display":"Example Camera","make":"Example","model":"C1","lens_model":"Prime","focal_length_mm":35,"focal_length_35mm":35,"aperture":2.8,"shutter_speed":"1/125","iso":"200"},"albums":[{"title":"Synthetic trip"}],"original":{"filename":"fixture.heic","bytes":"4096","availability":"local"},"flags":["favourite"]},"model":{"prompt_version":"v1","model_id":"example-model","summary":"Synthetic square.","description":"A synthetic scene.","ocr_text":"EXAMPLE","uncertainties":["weather"]}}`)
 	current := input
 	current.Stale = nil
 	currentRecord := projectOpenRecord(current)
@@ -103,7 +107,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertOpenPresentation(t, "photos", input, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Synthetic square."
-blocks: { fields: { fields: { label: "Captured" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4096 bytes" } fields: { label: "Availability" display: "local" } } }
+blocks: { fields: { fields: { label: "Captured local time" display: "10 July 2026 at 14:00:00 +02:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
 blocks: { prose: { text: "A synthetic scene." } }
 blocks: { prose: { text: "EXAMPLE" } }
 facts: { kind: KIND_WARNING message: "Card status: Stale · source details changed after this card was created · since 10 July 2026" }
@@ -115,6 +119,69 @@ facts: { kind: KIND_WARNING message: "weather" }`)
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestOpenRecordFixtureBoundary(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	paths := trawlkit.Paths{Archive: filepath.Join(root, "photos.db")}
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
+	createSyntheticLibrary(t, libraryPath)
+	snapshot, err := (sourcephotos.SQLiteSnapshotProvider{}).Snapshot(ctx, libraryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := New()
+	source.cfg.LibraryPath = "/synthetic/Photos Library.photoslibrary"
+	source.snapshotProvider = staticSnapshotProvider{snapshot: snapshot}
+	writeStore, err := store.Open(ctx, store.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = source.Sync(ctx, &trawlkit.Request{Store: writeStore, Paths: paths, Progress: func(trawlkit.Progress) {}}); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	readStore := openReadStore(t, ctx, paths.Archive)
+	search, err := source.Search(ctx, readRequest(readStore, paths), trawlkit.Query{Text: "synthetic", Limit: 1})
+	_ = readStore.Close()
+	if err != nil || len(search.Results) != 1 {
+		t.Fatalf("fixture search = %#v, error = %v", search, err)
+	}
+	readStore = openReadStore(t, ctx, paths.Archive)
+	record, err := source.OpenRecord(ctx, &trawlkit.Request{Store: readStore, Paths: paths}, search.Results[0].Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, ok := machine.(*photosopenv1.PhotosRecord)
+	if !ok {
+		t.Fatalf("typed record = %T", machine)
+	}
+	if typed.GetMechanical().GetCaptured().GetLocal() == "" || typed.GetMechanical().GetOriginal().GetBytes() != 12345 {
+		t.Fatalf("typed mechanical = %s", prototext.Format(typed.GetMechanical()))
+	}
+	fields := record.Presentation.Blocks[0].GetFields().GetFields()
+	find := func(label string) string {
+		for _, field := range fields {
+			if field.GetLabel() == label {
+				return field.GetDisplay()
+			}
+		}
+		return ""
+	}
+	if find("Captured local time") == "" || find("Original size") != "12.1 KiB" {
+		t.Fatalf("mechanical presentation = %s", prototext.Format(record.Presentation))
+	}
 }
 
 func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {

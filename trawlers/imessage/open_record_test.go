@@ -42,7 +42,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	wantPresentation := &presentationv1.PresentationDocument{Title: "Project Lantern", Blocks: []*presentationv1.Block{
 		{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Participants", Display: "Avery Example, +15550001111"}}}}},
 		{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "The synthetic pickup moved to Friday."}}},
-		{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: []*presentationv1.Row{{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "2026-07-10T13:59:00Z"}, {Display: "me"}, {Display: "That works."}}}, {Role: presentationv1.Row_ROLE_TARGET, Cells: []*presentationv1.Cell{{Display: "2026-07-10T14:00:00Z"}, {Display: "Avery Example"}, {Display: "The synthetic pickup moved to Friday."}}}, {Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "2026-07-10T14:01:00Z"}, {Display: "Avery Example"}, {Display: ""}}}}}}},
+		{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: []*presentationv1.Row{{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 13:59:00 +00:00"}, {Display: "me"}, {Display: "That works."}}}, {Role: presentationv1.Row_ROLE_TARGET, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:00:00 +00:00"}, {Display: "Avery Example"}, {Display: "The synthetic pickup moved to Friday."}}}, {Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:01:00 +00:00"}, {Display: "Avery Example"}, {Display: ""}}}}}}},
 	}}
 	assertOpenPresentation(t, input, projectOpenRecord(input), presentation, wantPresentation, "imessage")
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
@@ -52,6 +52,18 @@ func TestOpenRecordProjection(t *testing.T) {
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestOpenRecordTimestampBoundary(t *testing.T) {
+	if err := validateOpenTimestamps(archive.MessageContext{Message: archive.MessageRow{Time: "2026-07-10T14:00:00.5+02:00"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOpenTimestamps(archive.MessageContext{Message: archive.MessageRow{Time: "bad timestamp"}}); err == nil {
+		t.Fatal("accepted malformed message time")
+	}
+	if err := validateOpenTimestamps(archive.MessageContext{}); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertOpenRecord(t *testing.T, input any, got, want proto.Message, wantName, wantJSON string) {

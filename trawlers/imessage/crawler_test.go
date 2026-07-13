@@ -294,6 +294,29 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 		t.Fatalf("missing archive error = %#v", err)
 	}
 
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `update messages set date = ? where source_rowid = ?`, "not a timestamp", 2); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	_, err = source.OpenRecord(ctx, &trawlkit.Request{Store: writeStore, Paths: paths}, hit.Ref)
+	_ = writeStore.Close()
+	if err == nil {
+		t.Fatal("malformed stored timestamp opened")
+	}
+	writeStore, err = ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeStore.DB().ExecContext(ctx, `update messages set date = ? where source_rowid = ?`, 200, 2); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	_ = writeStore.Close()
+
 	readStore = openReadStore(t, ctx, paths.Archive)
 	contacts, err := source.ContactExport(ctx, readRequest(readStore, paths))
 	_ = readStore.Close()

@@ -3,10 +3,12 @@ package telecrawl
 import (
 	"context"
 	"strings"
+	"unicode"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	telegramopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/telegram/open/v1"
@@ -156,7 +158,7 @@ func projectOpenPresentation(value store.MessageWindow) *presentationv1.Presenta
 		title = "Telegram conversation"
 	}
 	fields := make([]*presentationv1.Field, 0, 1)
-	if participants := joinPresentationStrings(record.Participants); participants != "" {
+	if participants := joinPresentationStrings(presentationParticipants(record.Participants)); participants != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Participants", Display: participants})
 	}
 	blocks := make([]*presentationv1.Block, 0, 3)
@@ -176,7 +178,7 @@ func projectOpenPresentation(value store.MessageWindow) *presentationv1.Presenta
 		if message.Sender != nil && message.Sender.State == telegramopenv1.SenderState_SENDER_STATE_AVAILABLE {
 			who = message.Sender.GetDisplayName()
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: message.Time}, {Display: who}, {Display: message.GetText()}}})
+		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: who}, {Display: message.GetText()}}})
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
 	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
@@ -193,6 +195,27 @@ func projectOpenPresentation(value store.MessageWindow) *presentationv1.Presenta
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Later context is truncated."})
 	}
 	return document
+}
+
+func presentationParticipants(values []string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" || opaqueNumericParticipant(value) {
+			continue
+		}
+		result = append(result, value)
+	}
+	return result
+}
+
+func opaqueNumericParticipant(value string) bool {
+	for _, r := range value {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func joinPresentationStrings(values []string) string {

@@ -2,6 +2,7 @@ package notes
 
 import (
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
+	"github.com/opentrawl/opentrawl/trawlkit/output"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	notesopenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/notes/open/v1"
@@ -91,7 +93,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	evidenceInput.Body.Text, evidenceInput.Body.Unsupported = body.Text, body.Unsupported
 	assertOpenPresentation(t, "notes", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Packing list"
-blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "2026-07-08T10:00:00Z" } fields: { label: "Modified" display: "2026-07-10T14:00:00Z" } fields: { label: "Versions" display: "3" } } }
+blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "8 July 2026 at 10:00:00 +00:00" } fields: { label: "Modified" display: "10 July 2026 at 14:00:00 +00:00" } fields: { label: "Versions" display: "3" } } }
 blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := body
@@ -102,6 +104,89 @@ blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestOpenRecordTimestampBoundary(t *testing.T) {
+	if err := validateOpenTimestamps(openValue{note: archive.Note{CreatedAt: "2026-07-10T14:00:00.5+02:00"}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateOpenTimestamps(openValue{note: archive.Note{ModifiedAt: "bad timestamp"}}); err == nil {
+		t.Fatal("accepted malformed modified time")
+	}
+	if err := validateOpenTimestamps(openValue{}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestOpenRecordFixtureBoundary(t *testing.T) {
+	f := newFixture(t, false)
+	defer f.close()
+	archivePath := filepath.Join(t.TempDir(), "notes.db")
+	crawler := New()
+	crawler.syncStorePath = f.path()
+	syncReq := testRequest(t, archivePath, output.JSON, nil, true)
+	if _, err := crawler.Sync(context.Background(), syncReq); err != nil {
+		closeStore(t, syncReq)
+		t.Fatal(err)
+	}
+	closeStore(t, syncReq)
+	setTimes := func(created, modified string) {
+		req := testRequest(t, archivePath, output.JSON, nil, true)
+		_, err := req.Store.DB().ExecContext(context.Background(), `update notes set created_at = ?, modified_at = ? where note_id = ?`, created, modified, "note-alpha")
+		closeStore(t, req)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	setTimes("2026-07-08T10:00:00.5+02:00", "2026-07-10T14:00:00.5+02:00")
+	recordReq := testRequest(t, archivePath, output.JSON, nil, false)
+	record, err := crawler.OpenRecord(context.Background(), recordReq, "notes:note/note-alpha")
+	closeStore(t, recordReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err := record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed, ok := machine.(*notesopenv1.NotesRecord)
+	if !ok {
+		t.Fatalf("typed record = %T", machine)
+	}
+	if typed.GetCreatedAt() != "2026-07-08T10:00:00.5+02:00" || typed.GetModifiedAt() != "2026-07-10T14:00:00.5+02:00" {
+		t.Fatalf("typed timestamps = %q/%q", typed.GetCreatedAt(), typed.GetModifiedAt())
+	}
+	fields := record.Presentation.Blocks[0].GetFields().GetFields()
+	if fields[1].GetDisplay() != "8 July 2026 at 10:00:00.5 +02:00" || fields[2].GetDisplay() != "10 July 2026 at 14:00:00.5 +02:00" {
+		t.Fatalf("timestamp displays = %#v", fields)
+	}
+	setTimes("2026-07-08T10:00:00Z", "")
+	recordReq = testRequest(t, archivePath, output.JSON, nil, false)
+	record, err = crawler.OpenRecord(context.Background(), recordReq, "notes:note/note-alpha")
+	closeStore(t, recordReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	machine, err = record.Data.UnmarshalNew()
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed = machine.(*notesopenv1.NotesRecord)
+	if typed.GetModifiedAt() != "" {
+		t.Fatalf("absent modified timestamp = %q", typed.GetModifiedAt())
+	}
+	for _, field := range record.Presentation.Blocks[0].GetFields().GetFields() {
+		if field.GetLabel() == "Modified" {
+			t.Fatal("absent modified timestamp was presented")
+		}
+	}
+	setTimes("2026-07-08T10:00:00Z", "not-a-timestamp")
+	recordReq = testRequest(t, archivePath, output.JSON, nil, false)
+	_, err = crawler.OpenRecord(context.Background(), recordReq, "notes:note/note-alpha")
+	closeStore(t, recordReq)
+	if err == nil {
+		t.Fatal("accepted malformed archive timestamp")
+	}
 }
 
 func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {
