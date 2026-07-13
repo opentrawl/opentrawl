@@ -179,26 +179,44 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 	})
 }
 
-func TestReadOpenerDoesNotPrepareArchivesForWriting(t *testing.T) {
-	source, err := os.ReadFile("store.go")
+func TestRunnerStoreReadsValidateOnceWithoutOpening(t *testing.T) {
+	validation := functionSource(t, "store.go", "func validateReadStore", "func ensureArchiveMigrations")
+	if strings.Count(validation, "db.SchemaVersion(ctx)") != 1 {
+		t.Fatalf("read store must read schema version once:\n%s", validation)
+	}
+	for _, check := range []struct {
+		path  string
+		start string
+		end   string
+	}{
+		{path: "query.go", start: "func SearchWithStore", end: "func search"},
+		{path: "open_query.go", start: "func OpenWithStore", end: "func open"},
+	} {
+		body := functionSource(t, check.path, check.start, check.end)
+		if strings.Count(body, "validateReadStore(ctx, db)") != 1 {
+			t.Fatalf("%s must validate the runner store once:\n%s", check.start, body)
+		}
+		for _, forbidden := range []string{"OpenReadOnly", "openExistingArchive", "openArchive", "archiveMigrationsRequired", "ensureArchiveMigrations"} {
+			if strings.Contains(body, forbidden) {
+				t.Fatalf("%s calls %s:\n%s", check.start, forbidden, body)
+			}
+		}
+	}
+}
+
+func functionSource(t *testing.T, path, startMarker, endMarker string) string {
+	t.Helper()
+	source, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	readOpener := string(source)
-	start := strings.Index(readOpener, "func openExistingArchive")
-	end := strings.Index(readOpener, "func ensureArchiveMigrations")
+	body := string(source)
+	start := strings.Index(body, startMarker)
+	end := strings.Index(body, endMarker)
 	if start < 0 || end < 0 || end <= start {
-		t.Fatal("could not inspect openExistingArchive")
+		t.Fatalf("could not inspect %s in %s", startMarker, path)
 	}
-	readOpener = readOpener[start:end]
-	if strings.Count(readOpener, "store.OpenReadOnly") != 1 || strings.Count(readOpener, "db.SchemaVersion(ctx)") != 1 {
-		t.Fatalf("read opener must open and read schema version once:\n%s", readOpener)
-	}
-	for _, forbidden := range []string{"archiveMigrationsRequired", "openArchive", "ensureArchiveMigrations"} {
-		if strings.Contains(readOpener, forbidden) {
-			t.Fatalf("read opener calls %s:\n%s", forbidden, readOpener)
-		}
-	}
+	return body[start:end]
 }
 
 func TestEnsureArchiveMigrationsTreatsDuplicateColumnRaceAsSuccess(t *testing.T) {

@@ -307,8 +307,8 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 		}
 	}
 	_, err = source.OpenRecord(ctx, &trawlkit.Request{Paths: trawlkit.Paths{Archive: paths.Archive + ".missing"}}, hit.Ref)
-	if err == nil || !strings.HasPrefix(err.Error(), "stat sqlite db: stat ") {
-		t.Fatalf("missing archive open error = %#v", err)
+	if err == nil || err.Error() != "photos read store is required" {
+		t.Fatalf("missing runner store error = %#v", err)
 	}
 
 	classifyStore, err := store.Open(ctx, store.Options{Path: paths.Archive})
@@ -376,6 +376,40 @@ func TestSearchAndOpenMapIncompatibleArchivesToOnePublicError(t *testing.T) {
 	err = source.Open(ctx, readRequest(readStore, paths), "photos:asset/fixture")
 	_ = readStore.Close()
 	assertIncompatible(t, err)
+}
+
+func TestSearchAndOpenUseRunnerProvidedReadStore(t *testing.T) {
+	ctx := context.Background()
+	paths := trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "photos.db")}
+	writeStore, err := store.Open(ctx, store.Options{
+		Path:          paths.Archive,
+		Schema:        archive.Schema,
+		SchemaVersion: archive.SchemaVersion,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	readStore := openReadStore(t, ctx, paths.Archive)
+	defer func() { _ = readStore.Close() }()
+	if err := os.Rename(paths.Archive, paths.Archive+".moved"); err != nil {
+		t.Fatal(err)
+	}
+
+	source := New()
+	search, err := source.Search(ctx, readRequest(readStore, paths), trawlkit.Query{Text: "fixture", Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if search.TotalMatches != 0 || len(search.Results) != 0 {
+		t.Fatalf("search = %#v", search)
+	}
+	err = source.Open(ctx, readRequest(readStore, paths), "photos:asset/fixture")
+	if err == nil || err.Error() != "asset not found: asset:fixture" {
+		t.Fatalf("open error = %v, want missing fixture asset", err)
+	}
 }
 
 func TestSearchKeepsDatelessAssets(t *testing.T) {

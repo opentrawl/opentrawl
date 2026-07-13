@@ -3,6 +3,7 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -63,18 +64,25 @@ func openExistingArchive(ctx context.Context, path string) (*store.Store, error)
 	if err != nil {
 		return nil, err
 	}
-	version, err := db.SchemaVersion(ctx)
-	if err != nil {
+	if err := validateReadStore(ctx, db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
+	return db, nil
+}
+
+func validateReadStore(ctx context.Context, db *store.Store) error {
+	if db == nil {
+		return errors.New("photos read store is required")
+	}
+	version, err := db.SchemaVersion(ctx)
+	if err != nil {
+		return err
+	}
 	if version == SchemaVersion {
-		return db, nil
+		return nil
 	}
-	if err := db.Close(); err != nil {
-		return nil, err
-	}
-	return nil, ArchiveIncompatibleError{}
+	return ArchiveIncompatibleError{}
 }
 
 func ensureArchiveMigrations(ctx context.Context, db *sql.DB) error {

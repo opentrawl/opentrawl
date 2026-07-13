@@ -228,7 +228,7 @@ func syncCommandError(err error) error {
 }
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
-	result, err := archive.Search(ctx, archivePaths(req), archive.SearchOptions{
+	result, err := archive.SearchWithStore(ctx, req.Store, archive.SearchOptions{
 		Query:         query.Text,
 		Limit:         query.Limit,
 		BoundedTotals: query.BoundedTotals,

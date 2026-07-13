@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type SearchOptions struct {
@@ -161,6 +163,23 @@ const searchStaleReasonSQL = `coalesce((
 ), '')`
 
 func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult, error) {
+	db, err := openExistingArchive(ctx, paths.Database)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	defer func() { _ = db.Close() }()
+	return search(ctx, db, opts)
+}
+
+// SearchWithStore searches the runner-owned read-only Photos store.
+func SearchWithStore(ctx context.Context, db *store.Store, opts SearchOptions) (SearchResult, error) {
+	if err := validateReadStore(ctx, db); err != nil {
+		return SearchResult{}, err
+	}
+	return search(ctx, db, opts)
+}
+
+func search(ctx context.Context, db *store.Store, opts SearchOptions) (SearchResult, error) {
 	query := strings.TrimSpace(opts.Query)
 	if query == "" {
 		return SearchResult{}, errors.New("query is required")
@@ -186,11 +205,6 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if err != nil {
 		return SearchResult{}, fmt.Errorf("before must be a date (2006-01-02) or RFC 3339 timestamp: %w", err)
 	}
-	db, err := openExistingArchive(ctx, paths.Database)
-	if err != nil {
-		return SearchResult{}, err
-	}
-	defer func() { _ = db.Close() }()
 	whereSQL := searchWhereGPSOnlySQL
 	if ok, err := tableExists(ctx, db.DB(), "place_observation"); err == nil && ok {
 		whereSQL = searchWherePlaceSQL
