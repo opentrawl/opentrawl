@@ -249,7 +249,7 @@ type cardInputAuditSelection struct {
 
 func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) error {
 	if len(args) == 0 {
-		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|inspect>")}
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|prepare|inspect>")}
 	}
 	switch args[0] {
 	case "inventory":
@@ -278,6 +278,45 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 			return err
 		}
 		path, err := writeCardInputAuditOutput(*outDir, "inventory", inventory)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
+	case "prepare":
+		fs := flag.NewFlagSet("audit-card-input prepare", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		archivePath := fs.String("archive", "", "canonical Photos archive path")
+		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		assetID := fs.String("asset", "", "exact asset identity")
+		cacheDir := fs.String("cache", "", "private checked-artifact cache directory")
+		outDir := fs.String("out", "", "existing owner-only private audit output directory")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if !*jsonFlag {
+			return output.UsageError{Err: errors.New("audit-card-input prepare requires --json")}
+		}
+		if strings.TrimSpace(*assetID) == "" || strings.TrimSpace(*cacheDir) == "" {
+			return output.UsageError{Err: errors.New("audit-card-input prepare requires --asset and --cache")}
+		}
+		if err := validateCardInputAuditOutput(*outDir); err != nil {
+			return err
+		}
+		auditArchivePath, cleanup, err := snapshotCardInputAuditArchive(ctx, *archivePath, *outDir)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		prepared, err := archive.PrepareCardInputAudit(ctx, archive.CardInputAuditPrepareOptions{
+			CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)},
+			CacheDir:                       strings.TrimSpace(*cacheDir),
+			AssetID:                        strings.TrimSpace(*assetID),
+		})
+		if err != nil {
+			return err
+		}
+		path, err := writeCardInputAuditOutput(*outDir, "prepare", prepared)
 		if err != nil {
 			return err
 		}
@@ -333,7 +372,7 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		}
 		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
 	default:
-		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|inspect>")}
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|prepare|inspect>")}
 	}
 }
 
