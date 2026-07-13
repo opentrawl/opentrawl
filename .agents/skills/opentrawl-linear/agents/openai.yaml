@@ -1,7 +1,0 @@
-interface:
-  display_name: "OpenTrawl Linear"
-  short_description: "Manage OpenTrawl work without notification spam"
-  default_prompt: "Use $opentrawl-linear to audit this OpenTrawl workstream and show its current gate, active claims, risks and next unblocked work."
-
-policy:
-  allow_implicit_invocation: true
