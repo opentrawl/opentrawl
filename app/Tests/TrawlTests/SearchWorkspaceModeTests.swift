@@ -36,3 +36,19 @@ import Testing
       == "Calendar: Search is not supported. 1 more source was skipped."
   )
 }
+
+@Test func partialEmptySearchLeadsWithTheResultWithoutChangingScopedFailureCopy() {
+  let failure = "Contacts: This source is not ready yet."
+  #expect(
+    SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: false)
+      == "No matches in available sources. Contacts: This source is not ready yet."
+  )
+  #expect(
+    SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: true)
+      == failure
+  )
+  #expect(
+    SearchWorkspaceCopy.partialNoMatches(failureGuidance: nil, isScoped: false)
+      == "No matches in available sources. Some sources failed."
+  )
+}

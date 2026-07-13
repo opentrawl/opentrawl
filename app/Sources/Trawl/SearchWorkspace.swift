@@ -31,7 +31,8 @@ struct SearchWorkspace: View {
         SearchOutcome(
           phase: model.phase,
           failureGuidance: model.failureGuidance,
-          skippedSources: model.skippedSources
+          skippedSources: model.skippedSources,
+          isScoped: scope != nil
         )
       case .results:
         Divider()
@@ -168,6 +169,7 @@ private struct SearchOutcome: View {
   let phase: SearchPhase
   let failureGuidance: String?
   let skippedSources: [SkippedSource]
+  let isScoped: Bool
 
   var body: some View {
     VStack(spacing: 9) {
@@ -180,7 +182,10 @@ private struct SearchOutcome: View {
         Label("No matches.", systemImage: "magnifyingglass")
       case .partial:
         Label(
-          failureGuidance ?? "Some sources failed; the others returned no matches.",
+          SearchWorkspaceCopy.partialNoMatches(
+            failureGuidance: failureGuidance,
+            isScoped: isScoped
+          ),
           systemImage: "exclamationmark.triangle"
         )
       case .skipped:
