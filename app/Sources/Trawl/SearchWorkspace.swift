@@ -122,7 +122,7 @@ private struct SearchField: View {
         }
       if let scope {
         HStack(spacing: 8) {
-          SourceIconView(sourceID: scope.id, size: 28)
+          SourceIconView(sourceID: scope.id, size: 36)
           Text(scope.surface)
             .font(.callout.weight(.semibold))
             .lineLimit(1)
@@ -139,7 +139,7 @@ private struct SearchField: View {
         }
         .padding(.leading, 8)
         .padding(.trailing, 7)
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
         .background(.secondary.opacity(0.14), in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
       }

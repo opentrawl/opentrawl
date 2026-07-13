@@ -1,6 +1,8 @@
 import Foundation
+import QuartzCore
 import Testing
 
+@testable import Trawl
 @testable import TrawlCore
 
 @Test func sourceAndAttachedEndpointUseTheSameUneditedSample() {
@@ -205,6 +207,48 @@ import Testing
 
   #expect(ambientStart == 0)
   #expect(workStart == currentElapsed)
+}
+
+@MainActor
+@Test func ambientTrafficKeepsThreeRestrainedPhotonsAtSourceMotionSpeed() {
+  let centre = CGPoint(x: 200, y: 200)
+  let sourceIDs = ["calendar", "gmail", "photos"]
+  let segments = sourceIDs.enumerated().map { index, sourceID in
+    NetworkSegment(
+      startEndpoint: NetworkEndpoint(anchor: centre, trimRadius: 20, sourceID: nil),
+      endEndpoint: NetworkEndpoint(
+        anchor: CGPoint(x: 80 + index * 120, y: 80),
+        trimRadius: 20,
+        sourceID: sourceID
+      ),
+      kind: .centre
+    )
+  }
+  let rootLayer = CALayer()
+
+  ConstellationTrafficRenderer(
+    centre: centre,
+    segments: segments,
+    reduceMotion: false,
+    scale: 2
+  ).addLayers(activity: .idle, event: nil, to: rootLayer)
+
+  let photons = rootLayer.sublayers ?? []
+  let sourceDurations = Set(sourceIDs.map { ConstellationMotion(sourceID: $0).duration })
+  print("CONSTELLATION_INPUT sourceIDs=\(sourceIDs) activity=idle")
+  print("CONSTELLATION_OUTPUT photons=\(photons)")
+
+  #expect(photons.count == 3)
+  for photon in photons {
+    let animation = photon.animation(forKey: "opentrawl.ambient-photon")
+      as? CAKeyframeAnimation
+    #expect(photon.bounds.size == CGSize(width: 3, height: 3))
+    #expect(photon.opacity == 0.48)
+    #expect(photon.shadowOpacity == 0.48)
+    #expect(photon.shadowRadius == 4)
+    #expect(animation?.repeatCount == .infinity)
+    #expect(animation.map { sourceDurations.contains($0.duration) } == true)
+  }
 }
 
 @Test func reduceMotionKeepsTheCompleteStaticPosition() {

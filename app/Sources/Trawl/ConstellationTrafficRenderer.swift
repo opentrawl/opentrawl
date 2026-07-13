@@ -59,7 +59,7 @@ struct ConstellationTrafficRenderer {
         makePulseLayer(
           route: route,
           diameter: 3,
-          opacity: 0.28,
+          opacity: 0.48,
           glow: 4,
           duration: ConstellationMotion(sourceID: sourceID).duration,
           repeats: true
