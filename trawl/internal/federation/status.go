@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"sync"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
@@ -18,15 +17,45 @@ type statusRunResult struct {
 
 func Status(ctx context.Context, sources []StatusSource) *federationv1.StatusResponse {
 	results := make([]statusRunResult, len(sources))
-	var wait sync.WaitGroup
+	type completedStatus struct {
+		index  int
+		result statusRunResult
+	}
+	completed := make(chan completedStatus, len(sources))
 	for index := range sources {
-		wait.Add(1)
 		go func(index int) {
-			defer wait.Done()
-			results[index] = runStatusSource(ctx, sources[index])
+			completed <- completedStatus{index: index, result: runStatusSource(ctx, sources[index])}
 		}(index)
 	}
-	wait.Wait()
+	remaining := len(sources)
+	for remaining > 0 {
+		select {
+		case completed := <-completed:
+			results[completed.index] = completed.result
+			remaining--
+		case <-ctx.Done():
+		drainCompleted:
+			for {
+				select {
+				case completed := <-completed:
+					results[completed.index] = completed.result
+					remaining--
+				default:
+					break drainCompleted
+				}
+			}
+			code := federationv1.FailureCode_FAILURE_CODE_CANCELLED
+			if ctx.Err() == context.DeadlineExceeded {
+				code = federationv1.FailureCode_FAILURE_CODE_TIMEOUT
+			}
+			for index := range sources {
+				if results[index].status == nil && results[index].failure == nil && results[index].skip == nil {
+					results[index].failure = operationFailure(sources[index].Manifest, "status", ctx.Err().Error(), code)
+				}
+			}
+			remaining = 0
+		}
+	}
 
 	response := &federationv1.StatusResponse{}
 	successes := 0

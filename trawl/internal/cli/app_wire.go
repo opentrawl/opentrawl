@@ -57,7 +57,8 @@ type photosAccessRequester interface {
 }
 
 func (r *Runtime) runAppRequestPhotos() error {
-	source, found := findSource(discoverCrawlers(r.ctx), "photos")
+	sources := discoverCrawlers(r.ctx)
+	source, found := findSource(sources, "photos")
 	if !found {
 		return fmt.Errorf("Photos is not installed")
 	}
@@ -68,7 +69,7 @@ func (r *Runtime) runAppRequestPhotos() error {
 	if _, err := requester.RequestPhotosAccess(r.ctx); err == nil {
 		return r.runAppStatus()
 	} else {
-		return writeAppResponse(r.stdout, appPhotosRequestFailure(r.appStatusResponse(r.ctx), source))
+		return writeAppResponse(r.stdout, appPhotosRequestFailure(r.appStatusResponse(r.ctx, sources), source))
 	}
 }
 
@@ -88,7 +89,7 @@ func appPhotosRequestFailure(response *federationv1.StatusResponse, source Sourc
 }
 
 func (r *Runtime) runAppStatus() error {
-	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx))
+	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, discoverCrawlers(r.ctx)))
 }
 
 func (r *Runtime) runAppSync() error {

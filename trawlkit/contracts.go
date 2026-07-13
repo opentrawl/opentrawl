@@ -10,6 +10,8 @@ import (
 
 type Crawler interface {
 	Info() Info
+	// Status reports only OpenTrawl-owned archive state. Source applications,
+	// accounts and libraries are inspected by sync, import or doctor.
 	Status(ctx context.Context, req *Request) (*control.Status, error)
 	Doctor(ctx context.Context, req *Request) (*Doctor, error)
 	Verbs() []Verb

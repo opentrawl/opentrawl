@@ -70,38 +70,16 @@ func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 	}
 }
 
-func TestSetupRequirementMapping(t *testing.T) {
-	oldStatus := photosAccessStatus
-	t.Cleanup(func() { photosAccessStatus = oldStatus })
-	photosAccessStatus = func(context.Context, bool) (string, error) { return "authorized", nil }
-	if got := photosSetupStateFromErrors(os.ErrPermission, nil, false); got != control.SetupStateNeedsAction {
-		t.Fatalf("library permission state = %q", got)
-	}
-	if got := photosSetupStateFromErrors(nil, os.ErrPermission, true); got != control.SetupStateNeedsAction {
-		t.Fatalf("database permission state = %q", got)
-	}
-	missingPath := filepath.Join(t.TempDir(), "missing-library")
-	if got := photosLibrarySetupState(missingPath); got != control.SetupStateUnavailable {
-		t.Fatalf("missing library state = %q", got)
-	}
-	missingCrawler := New()
-	missingCrawler.cfg.LibraryPath = missingPath
-	missing := missingCrawler.photosSetupRequirements(context.Background())[0]
-	if missing.State != control.SetupStateUnavailable || missing.Action != control.SetupActionNone || len(missing.Command) != 0 {
-		t.Fatalf("missing requirement = %#v", missing)
-	}
-	library := filepath.Join(t.TempDir(), "Photos Library.photoslibrary")
-	if err := os.MkdirAll(filepath.Join(library, "database"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(library, "database", "Photos.sqlite"), []byte("synthetic"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+func TestStatusUsesOnlyArchiveState(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	crawler := New()
-	crawler.cfg.LibraryPath = library
-	requirement := crawler.photosSetupRequirements(context.Background())[0]
-	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != control.SetupStateReady || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
-		t.Fatalf("requirement = %#v", requirement)
+	crawler.cfg.LibraryPath = filepath.Join(t.TempDir(), "synthetic-missing.photoslibrary")
+	status, err := crawler.Status(context.Background(), &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "photos.db")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "missing" || len(status.SetupRequirements) != 0 {
+		t.Fatalf("status = %#v, want missing archive without source setup", status)
 	}
 }
 
@@ -150,11 +128,11 @@ func TestPhotosPermissionStatusIsInternalToTheAppRequest(t *testing.T) {
 		return "authorized", nil
 	}
 	crawler := New()
-	if requirements := crawler.photosSetupRequirements(context.Background()); len(requirements) != 1 || calls != 0 {
+	if requirements := crawler.photosSetupRequirements(context.Background()); len(requirements) != 0 || calls != 0 {
 		t.Fatalf("public requirements=%#v calls=%d", requirements, calls)
 	}
 	requirements := crawler.photosSetupRequirements(trawlkit.WithInternalAppRequest(context.Background()))
-	if len(requirements) != 2 || requirements[1].Kind != control.SetupKindPhotosPermission || calls != 1 {
+	if len(requirements) != 1 || requirements[0].Kind != control.SetupKindPhotosPermission || calls != 1 {
 		t.Fatalf("app requirements=%#v calls=%d", requirements, calls)
 	}
 }

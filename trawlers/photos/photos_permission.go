@@ -11,20 +11,10 @@ import (
 var photosAccessStatus = photos.PhotoLibraryAccessStatusThroughApp
 
 func (c *Crawler) photosSetupRequirements(ctx context.Context) []control.SetupRequirement {
-	requirements := []control.SetupRequirement{
-		control.NewSetupRequirement(
-			"full_disk_access",
-			control.SetupKindFullDiskAccess,
-			photosLibrarySetupState(c.cfg.LibraryPath),
-			"OpenTrawl reads the local Photos library for source sync.",
-			control.SetupActionOpenFullDiskAccess,
-			nil,
-		),
+	if !trawlkit.IsInternalAppRequest(ctx) {
+		return nil
 	}
-	if trawlkit.IsInternalAppRequest(ctx) {
-		requirements = append(requirements, photosAccessRequirement(ctx))
-	}
-	return requirements
+	return []control.SetupRequirement{photosAccessRequirement(ctx)}
 }
 
 // RequestPhotosAccess is the app-only action. Its caller is responsible for

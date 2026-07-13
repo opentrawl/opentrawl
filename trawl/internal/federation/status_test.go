@@ -225,6 +225,27 @@ func TestStatusMapsPanicCancellationAndDeadline(t *testing.T) {
 	}
 }
 
+func TestStatusDeadlineKeepsCompletedSources(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	readyManifest, readyStatus := completeStatusFixture()
+	response := Status(ctx, []StatusSource{
+		{Manifest: readyManifest, Run: func(context.Context) (*control.Status, *federationv1.SourceFailure) { return readyStatus, nil }},
+		{Manifest: manifestFixture("notes", "Notes"), Run: func(ctx context.Context) (*control.Status, *federationv1.SourceFailure) {
+			<-release
+			return nil, &federationv1.SourceFailure{Message: "late"}
+		}},
+	})
+	if len(response.Sources) != 1 || response.Sources[0].AppId != "gmail" {
+		t.Fatalf("completed sources = %#v", response.Sources)
+	}
+	if len(response.Failures) != 1 || response.Failures[0].Code != federationv1.FailureCode_FAILURE_CODE_TIMEOUT {
+		t.Fatalf("timeout failure = %#v", response.Failures)
+	}
+}
+
 func TestStatusBoundaryEvidence(t *testing.T) {
 	readyManifest, readyStatus := completeStatusFixture()
 	missingManifest := manifestFixture("photos", "Photos")

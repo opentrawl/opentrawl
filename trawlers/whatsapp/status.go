@@ -20,7 +20,6 @@ import (
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus("whatsapp", "Archive has not been synced.")
 	status.State = "missing"
-	status.SetupRequirements = whatsappSetupRequirements(ctx, c.cfg.Source)
 	status.ConfigPath = req.Paths.Config
 	status.DatabasePath = req.Paths.Archive
 	if req.Store == nil {
@@ -56,43 +55,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 		status.Summary = "Recently synced."
 	}
 	return &status, nil
-}
-
-func whatsappSetupRequirements(ctx context.Context, configuredPath string) []control.SetupRequirement {
-	source, discoverErr := whatsappdb.Discover(ctx, configuredPath)
-	if discoverErr != nil {
-		if isPermissionError(discoverErr) {
-			return fullDiskAccessRequirement(control.SetupStateNeedsAction)
-		}
-		return nil
-	}
-	if !source.Available || strings.TrimSpace(source.ChatDB) == "" {
-		return nil
-	}
-	if _, err := os.Stat(source.ChatDB); err != nil {
-		if !isPermissionError(err) {
-			return nil
-		}
-		return fullDiskAccessRequirement(control.SetupStateNeedsAction)
-	}
-	if err := sourceCanary(ctx, source); err != nil {
-		if !isPermissionError(err) {
-			return nil
-		}
-		return fullDiskAccessRequirement(control.SetupStateNeedsAction)
-	}
-	return fullDiskAccessRequirement(control.SetupStateReady)
-}
-
-func fullDiskAccessRequirement(state control.SetupState) []control.SetupRequirement {
-	return []control.SetupRequirement{control.NewSetupRequirement(
-		"full_disk_access",
-		control.SetupKindFullDiskAccess,
-		state,
-		"OpenTrawl reads the local WhatsApp database.",
-		control.SetupActionOpenFullDiskAccess,
-		nil,
-	)}
 }
 
 func statusCounts(status store.Status) []control.Count {

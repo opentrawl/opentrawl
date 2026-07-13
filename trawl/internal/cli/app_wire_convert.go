@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -12,9 +13,13 @@ import (
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
 
-func (r *Runtime) appStatusResponse(ctx context.Context) *federationv1.StatusResponse {
+const appStatusTimeout = 2 * time.Second
+
+func (r *Runtime) appStatusResponse(ctx context.Context, sources []Source) *federationv1.StatusResponse {
 	ctx = trawlkit.WithInternalAppRequest(ctx)
-	return federation.Status(ctx, r.federationStatusSources(discoverCrawlers(ctx)))
+	ctx, cancel := context.WithTimeout(ctx, appStatusTimeout)
+	defer cancel()
+	return federation.Status(ctx, r.federationStatusSources(sources))
 }
 
 func (r *Runtime) appSearchResponse(ctx context.Context, sources []Source, query string) *federationv1.SearchResponse {

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -164,6 +165,71 @@ func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "trawl doctor notes" || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
 		t.Fatalf("failure = %#v", failure)
 	}
+}
+
+func TestAppStatusResponseAppliesShortBudgetAndKeepsCompletedSource(t *testing.T) {
+	ensureSyntheticHome(t)
+	readyManifest := control.NewManifest("ready", "Ready", "readycrawl")
+	readyManifest.Commands["status"] = control.Command{}
+	timedManifest := control.NewManifest("timed", "Timed", "timedcrawl")
+	timedManifest.Commands["status"] = control.Command{}
+	deadline := make(chan time.Time, 1)
+	runtime := &Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}
+	started := time.Now()
+	response := runtime.appStatusResponse(context.Background(), []Source{
+		{Manifest: readyManifest, ID: "ready", Surface: "Ready", Crawler: appStatusCrawler{
+			id: "ready",
+			status: func(context.Context) (*control.Status, error) {
+				return &control.Status{AppID: "ready", State: "ok", Summary: "The synthetic archive is ready."}, nil
+			},
+		}},
+		{Manifest: timedManifest, ID: "timed", Surface: "Timed", Crawler: appStatusCrawler{
+			id: "timed",
+			status: func(ctx context.Context) (*control.Status, error) {
+				value, ok := ctx.Deadline()
+				if !ok {
+					deadline <- time.Time{}
+					return nil, errors.New("app status context has no deadline")
+				}
+				deadline <- value
+				return nil, context.DeadlineExceeded
+			},
+		}},
+	})
+	finished := time.Now()
+
+	if appStatusTimeout != 2*time.Second {
+		t.Fatalf("app status timeout = %s, want 2s", appStatusTimeout)
+	}
+	observed := <-deadline
+	if observed.Before(started.Add(appStatusTimeout)) || observed.After(finished.Add(appStatusTimeout)) {
+		t.Fatalf("status deadline = %s, want %s after the response call began", observed, appStatusTimeout)
+	}
+	if len(response.GetSources()) != 1 || response.GetSources()[0].GetAppId() != "ready" {
+		t.Fatalf("completed sources = %#v", response.GetSources())
+	}
+	if len(response.GetFailures()) != 1 || response.GetFailures()[0].GetSourceId() != "timed" || response.GetFailures()[0].GetCode() != federationv1.FailureCode_FAILURE_CODE_TIMEOUT {
+		t.Fatalf("timeout failures = %#v", response.GetFailures())
+	}
+}
+
+type appStatusCrawler struct {
+	id     string
+	status func(context.Context) (*control.Status, error)
+}
+
+func (c appStatusCrawler) Info() trawlkit.Info {
+	return trawlkit.Info{ID: c.id, Surface: c.id, DisplayName: c.id}
+}
+
+func (appStatusCrawler) Verbs() []trawlkit.Verb { return nil }
+
+func (c appStatusCrawler) Status(ctx context.Context, _ *trawlkit.Request) (*control.Status, error) {
+	return c.status(ctx)
+}
+
+func (appStatusCrawler) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
+	return nil, nil
 }
 
 type adapterCrawler struct {

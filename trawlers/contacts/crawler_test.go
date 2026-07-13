@@ -39,22 +39,6 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestSetupRequirementMapping(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
-	requirement := contactsSetupRequirement(context.Background())
-	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != control.SetupStateUnavailable || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
-		t.Fatalf("requirement = %#v", requirement)
-	}
-	ready := contactsSetupRequirementForState(apple.SourceReady)
-	if ready.ID != "full_disk_access" || ready.Kind != control.SetupKindFullDiskAccess || ready.State != control.SetupStateReady || ready.Action != control.SetupActionNone || len(ready.Command) != 0 {
-		t.Fatalf("ready requirement = %#v", ready)
-	}
-	needsAction := contactsSetupRequirementForState(apple.SourceNeedsFullDiskAccess)
-	if needsAction.ID != "full_disk_access" || needsAction.Kind != control.SetupKindFullDiskAccess || needsAction.State != control.SetupStateNeedsAction || needsAction.Action != control.SetupActionOpenFullDiskAccess || len(needsAction.Command) != 0 {
-		t.Fatalf("needs-action requirement = %#v", needsAction)
-	}
-}
-
 func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenPerson")
 }
@@ -88,56 +72,17 @@ func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 	}
 }
 
-func TestStatusSetupRequirementBoundary(t *testing.T) {
-	cases := []struct {
-		name  string
-		state control.SetupState
-		setup func(*testing.T, string)
-	}{
-		{name: "ready", state: control.SetupStateReady},
-		{name: "needs action", state: control.SetupStateNeedsAction, setup: func(t *testing.T, sourcePath string) {
-			if os.Geteuid() == 0 {
-				t.Skip("root can read a mode-zero fixture")
-			}
-			if err := os.Chmod(sourcePath, 0); err != nil {
-				t.Fatal(err)
-			}
-			t.Cleanup(func() { _ = os.Chmod(sourcePath, 0o600) })
-		}},
-		{name: "unavailable", state: control.SetupStateUnavailable},
+func TestStatusUsesOnlyArchiveState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeContactsSourceFixture(t, filepath.Join(home, "Library", "Application Support", "AddressBook", "AddressBook-v22.abcddb"))
+	request := &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "contacts.db")}}
+	status, err := New().Status(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, test := range cases {
-		t.Run(test.name, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			sourcePath := filepath.Join(home, "Library", "Application Support", "AddressBook", "AddressBook-v22.abcddb")
-			if test.name != "unavailable" {
-				writeContactsSourceFixture(t, sourcePath)
-			}
-			if test.setup != nil {
-				test.setup(t, sourcePath)
-			}
-			request := &trawlkit.Request{Paths: trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "contacts.db")}}
-			status, err := New().Status(context.Background(), request)
-			t.Logf("synthetic status boundary request=%#v status=%#v error=%v", request, status, err)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if status.State != "missing" || len(status.SetupRequirements) != 1 {
-				t.Fatalf("status = %#v, want missing with one setup requirement", status)
-			}
-			requirement := status.SetupRequirements[0]
-			if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != test.state {
-				t.Fatalf("requirement = %#v, want state %q", requirement, test.state)
-			}
-			wantAction := control.SetupActionNone
-			if test.state == control.SetupStateNeedsAction {
-				wantAction = control.SetupActionOpenFullDiskAccess
-			}
-			if requirement.Action != wantAction || len(requirement.Command) != 0 {
-				t.Fatalf("requirement action/command = %q/%#v, want %q/empty", requirement.Action, requirement.Command, wantAction)
-			}
-		})
+	if status.State != "missing" || len(status.SetupRequirements) != 0 {
+		t.Fatalf("status = %#v, want missing archive without source setup", status)
 	}
 }
 
