@@ -730,6 +730,7 @@ func createSyntheticPhotosDB(db *sql.DB) error {
 		)`,
 		`create table ZEXTENDEDATTRIBUTES (
 			ZASSET integer,
+			ZTIMEZONENAME varchar,
 			ZCAMERAMAKE varchar,
 			ZCAMERAMODEL varchar,
 			ZLENSMODEL varchar,
