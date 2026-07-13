@@ -328,6 +328,11 @@ public final class SearchInteraction {
     return model.results.first(where: { $0.id == selectedResultID })
   }
 
+  public func handleReturn() async {
+    guard let hit = resultForReturn() else { return }
+    await model.open(hit)
+  }
+
   private func invalidateInput() {
     selectedResultID = nil
     model.invalidateForInputChange()

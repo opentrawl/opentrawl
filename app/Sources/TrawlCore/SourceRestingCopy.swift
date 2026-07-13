@@ -87,21 +87,21 @@ public enum SourceRestingCopy {
     if let error = source.errors.first(where: { !$0.isEmpty }) { return error }
     if let warning = source.warnings.first(where: { !$0.isEmpty }) { return warning }
     switch source.state {
-    case "stale":
-      return "Needs sync."
     case "missing":
       return "Not set up."
     default:
       break
     }
-    if source.state != "ok", !source.summary.isEmpty { return source.summary }
+    if source.state != "ok", source.state != "stale", !source.summary.isEmpty {
+      return source.summary
+    }
     let headlines = source.manifest.headlines.lazy.filter { !$0.isEmpty }.prefix(4)
     guard !headlines.isEmpty else { return nil }
     return headlines.joined(separator: " · ")
   }
 
   public static func needsAttention(_ source: SourceStatus) -> Bool {
-    source.state != "ok"
+    (source.state != "ok" && source.state != "stale")
       || source.setupRequirements.contains(where: { $0.state == .needsAction })
       || source.errors.contains(where: { !$0.isEmpty })
       || source.warnings.contains(where: { !$0.isEmpty })

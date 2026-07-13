@@ -48,7 +48,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TrawlTests",
-            dependencies: ["PermissionGuide", "TrawlClient", "TrawlCore"]
+            dependencies: ["PermissionGuide", "TrawlClient", "TrawlCore", "Trawl"]
         ),
     ]
 )

@@ -7,52 +7,54 @@ struct SearchResultsList: View {
   let results: [SearchHit]
   let sourceDisplayName: (String) -> String
   let failureGuidance: String?
+  let hasTimeoutFailure: Bool
+  let resultLimit: UInt32
   let title: (SearchHit) -> String
   @Binding var selectedResultID: SearchHit.ID?
   @FocusState.Binding var focus: SearchFocus?
+  let onReturn: () -> Void
+  let onOpen: (SearchHit) -> Void
 
   var body: some View {
-    Group {
-      if results.isEmpty {
-        SearchStatePlaceholder(phase: phase, failureGuidance: failureGuidance)
-      } else {
-        ScrollView {
-          LazyVStack(spacing: 0) {
-            ForEach(results) { hit in
-              Button {
-                selectedResultID = hit.id
-              } label: {
-                SearchResultRow(
-                  hit: hit,
-                  title: title(hit),
-                  sourceDisplayName: sourceDisplayName(hit.sourceID),
-                  isSelected: selectedResultID == hit.id
-                )
-              }
-              .buttonStyle(.plain)
-              Divider()
-            }
-          }
-        }
-        .focused($focus, equals: .results)
-        .onKeyPress(.upArrow) {
-          moveSelection(by: -1)
-          return .handled
-        }
-        .onKeyPress(.downArrow) {
-          moveSelection(by: 1)
-          return .handled
-        }
-        .overlay {
-          RoundedRectangle(cornerRadius: 9)
-            .stroke(
-              focus == .results ? TrawlDesign.brandRed.opacity(0.45) : .clear,
-              lineWidth: 1
+    ScrollView {
+      LazyVStack(spacing: 0) {
+        SearchResultsContext(
+          phase: phase,
+          resultCount: results.count,
+          resultLimit: resultLimit,
+          failureGuidance: failureGuidance,
+          hasTimeoutFailure: hasTimeoutFailure
+        )
+        ForEach(results) { hit in
+          Button {
+            selectedResultID = hit.id
+            onOpen(hit)
+          } label: {
+            SearchResultRow(
+              hit: hit,
+              title: title(hit),
+              sourceDisplayName: sourceDisplayName(hit.sourceID),
+              isSelected: selectedResultID == hit.id
             )
-            .padding(5)
-            .allowsHitTesting(false)
+          }
+          .buttonStyle(.plain)
+          Divider()
         }
       }
+    }
+    .focused($focus, equals: .results)
+    .onKeyPress(.upArrow) {
+      moveSelection(by: -1)
+      return .handled
+    }
+    .onKeyPress(.downArrow) {
+      moveSelection(by: 1)
+      return .handled
+    }
+    .onKeyPress(.return) {
+      guard selectedResultID != nil else { return .ignored }
+      onReturn()
+      return .handled
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
@@ -67,57 +69,34 @@ struct SearchResultsList: View {
   }
 }
 
-private struct SearchStatePlaceholder: View {
+private struct SearchResultsContext: View {
   let phase: SearchPhase
+  let resultCount: Int
+  let resultLimit: UInt32
   let failureGuidance: String?
+  let hasTimeoutFailure: Bool
 
   var body: some View {
-    VStack(spacing: 9) {
-      if case .loading = phase {
-        ProgressView()
-          .controlSize(.small)
-      } else {
-        Image(systemName: symbol)
+    HStack(alignment: .firstTextBaseline, spacing: 10) {
+      if case .partial = phase {
+        Label(partialMessage, systemImage: "exclamationmark.triangle")
+          .lineLimit(2)
       }
-      Text(title)
-      if shouldShowFailure, let failureGuidance {
-        Text(failureGuidance)
-          .font(.caption)
-      }
+      Spacer(minLength: 8)
+      Text("Top \(resultLimit == 0 ? SearchResponse.maximumResults : resultLimit)")
+        .fixedSize()
     }
     .font(.callout)
     .foregroundStyle(.secondary)
-    .multilineTextAlignment(.center)
-    .padding()
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
   }
 
-  private var shouldShowFailure: Bool {
-    switch phase {
-    case .partial, .skipped, .failed: true
-    case .idle, .loading, .complete, .timedOut: false
-    }
-  }
-
-  private var title: LocalizedStringResource {
-    switch phase {
-    case .idle: "Search your sources"
-    case .loading: "Searching"
-    case .complete: "No matches"
-    case .partial: "No matches from available sources"
-    case .skipped: "The selected sources do not support search"
-    case .failed: "Search failed"
-    case .timedOut: "Search timed out"
-    }
-  }
-
-  private var symbol: String {
-    switch phase {
-    case .idle, .complete, .loading: "magnifyingglass"
-    case .partial: "exclamationmark.triangle"
-    case .skipped: "exclamationmark.triangle"
-    case .failed: "exclamationmark.circle"
-    case .timedOut: "clock.badge.exclamationmark"
-    }
+  private var partialMessage: String {
+    let result = SearchWorkspaceCopy.usefulResults(resultCount)
+    if hasTimeoutFailure { return "Some sources timed out. \(result)" }
+    guard let failureGuidance else { return "Some sources failed. \(result)" }
+    return "\(result) \(failureGuidance)"
   }
 }
 
@@ -139,9 +118,14 @@ private struct SearchResultRow: View {
             .lineLimit(2)
           Spacer(minLength: 4)
           if let time = hit.time {
-            Text(time, format: hit.allDay ? .dateTime.year().month().day() : .dateTime.month().day().hour().minute())
-              .font(.caption)
-              .foregroundStyle(.tertiary)
+            Text(
+              time,
+              format: hit.allDay
+                ? .dateTime.year().month().day()
+                : .dateTime.month().day().hour().minute()
+            )
+            .font(.caption)
+            .foregroundStyle(.tertiary)
           }
         }
         Text(hit.snippet)
@@ -160,6 +144,8 @@ private struct SearchResultRow: View {
     .contentShape(.rect)
     .accessibilityElement(children: .combine)
     .accessibilityLabel(accessibilityLabel)
+    .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
   private var accessibilityLabel: String {

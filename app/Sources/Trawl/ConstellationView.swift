@@ -61,7 +61,7 @@ struct ConstellationView: View {
           trafficEvent: trafficEvent,
           reduceMotion: reduceMotion
         )
-        CentreButton(isWorking: activity.isWorkInProgress, action: onSelectEverything)
+        CentreButton(action: onSelectEverything)
           .position(snapshot.centre)
         ForEach(snapshot.sources) { placement in
           OrbitingSourceNode(
@@ -274,11 +274,9 @@ private final class OrbitLayerView: NSView {
 }
 
 private struct CentreButton: View {
-  let isWorking: Bool
   let action: @MainActor @Sendable () -> Void
 
-  nonisolated init(isWorking: Bool, action: @MainActor @escaping @Sendable () -> Void) {
-    self.isWorking = isWorking
+  nonisolated init(action: @MainActor @escaping @Sendable () -> Void) {
     self.action = action
   }
 
@@ -293,13 +291,6 @@ private struct CentreButton: View {
           .font(.callout.weight(.semibold))
           .fixedSize()
           .offset(y: TrawlDesign.centreSize / 2 + 4)
-        if isWorking {
-          ProgressView()
-            .controlSize(.small)
-            .padding(7)
-            .background(.ultraThinMaterial, in: Circle())
-            .offset(x: 38, y: 38)
-        }
       }
     }
     .buttonStyle(.plain)
