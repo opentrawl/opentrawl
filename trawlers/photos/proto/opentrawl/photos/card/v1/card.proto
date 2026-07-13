@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package opentrawl.photos.card.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1;cardwire";
+
+// CardInput contains only checked facts consumed by the photo-card model.
+// Custody, source and execution fields belong outside this content identity.
+message CardInput {
+  uint32 schema_version = 1;
+  string capture_time = 2;
+  optional string timezone = 3;
+  string media_type = 4;
+  repeated string media_subtypes = 5;
+  int64 pixel_width = 6;
+  int64 pixel_height = 7;
+  double duration_seconds = 8;
+  ImmutableOriginal immutable_original = 9;
+  bool favorite = 10;
+  bool hidden = 11;
+  bool burst_member = 12;
+  repeated Album albums = 13;
+  Location location = 14;
+  KnownPlace known_place = 15;
+  Camera camera = 16;
+  Metadata metadata = 17;
+  FullCurrent full_current = 18;
+  repeated PlaceProjection places = 19;
+}
+
+message ImmutableOriginal {
+  string resource_type = 1;
+  string uti = 2;
+  string filename = 3;
+  string availability = 4;
+  int64 size_bytes = 5;
+  string sha256 = 6;
+}
+
+message Album {
+  string title = 1;
+  string kind = 2;
+}
+
+message Location {
+  double latitude = 1;
+  double longitude = 2;
+  optional double horizontal_accuracy_meters = 3;
+}
+
+message Coordinate {
+  double latitude = 1;
+  double longitude = 2;
+}
+
+message KnownPlace {
+  string name = 1;
+  string relationship = 2;
+}
+
+message Camera {
+  string make = 1;
+  string model = 2;
+  string lens_model = 3;
+  optional double focal_length_mm = 4;
+  optional double focal_length_35mm = 5;
+  optional double aperture = 6;
+  optional double shutter_speed = 7;
+  optional int64 iso = 8;
+}
+
+message Metadata {
+  string record_sha256 = 1;
+  string projection_sha256 = 2;
+  repeated string projection_lines = 3;
+}
+
+message FullCurrent {
+  string role = 1;
+  string media_type = 2;
+  int32 orientation = 3;
+  int64 pixel_width = 4;
+  int64 pixel_height = 5;
+  int64 size_bytes = 6;
+  string sha256 = 7;
+}
+
+message PlaceProjection {
+  string provider_identity = 1;
+  string operation = 2;
+  string coordinate_variant = 3;
+  string parser_version = 4;
+  string pre_auth_request_sha256 = 5;
+  string raw_response_sha256 = 6;
+  Address address = 7;
+  repeated PlaceCandidate candidates = 8;
+}
+
+message PlaceCandidate {
+  int32 provider_index = 1;
+  string provider_id = 2;
+  string name = 3;
+  repeated string categories = 4;
+  Coordinate coordinate = 5;
+  double distance_meters = 6;
+  Address address = 7;
+  string source = 8;
+}
+
+message Address {
+  string name = 1;
+  string thoroughfare = 2;
+  string sub_thoroughfare = 3;
+  string locality = 4;
+  string sub_locality = 5;
+  string administrative_area = 6;
+  string sub_administrative_area = 7;
+  string postal_code = 8;
+  string country = 9;
+  string iso_country_code = 10;
+  string time_zone = 11;
+  repeated string areas_of_interest = 12;
+  string formatted = 13;
+  string source = 14;
+}
