@@ -123,18 +123,22 @@ private struct SearchField: View {
       if let scope {
         HStack(spacing: 8) {
           SourceIconView(sourceID: scope.id, size: 36)
+            .scaleEffect(1.22)
+            .frame(width: 36, height: 36)
+            .clipShape(.rect(cornerRadius: 8))
           Text(scope.surface)
             .font(.callout.weight(.semibold))
             .lineLimit(1)
             .fixedSize()
           Button(action: onClearScope) {
-            Image(systemName: "xmark")
-              .font(.caption.weight(.bold))
+            Image(systemName: "square.grid.2x2.fill")
+              .font(.caption.weight(.semibold))
               .foregroundStyle(.secondary)
-              .frame(width: 18, height: 18)
+              .frame(width: 20, height: 20)
               .contentShape(.circle)
           }
           .buttonStyle(.plain)
+          .help("Search all sources")
           .accessibilityLabel("Search all sources")
         }
         .padding(.leading, 8)
@@ -146,9 +150,13 @@ private struct SearchField: View {
       if !query.isEmpty {
         Button(action: clearQuery) {
           Image(systemName: "xmark.circle.fill")
+            .font(.body)
             .foregroundStyle(.secondary)
+            .frame(width: 20, height: 20)
+            .contentShape(.circle)
         }
         .buttonStyle(.plain)
+        .help("Clear search query")
         .accessibilityLabel("Clear search query")
       }
     }

@@ -118,6 +118,47 @@ import Testing
   }
 }
 
+@Test func actionLabelsNeverOverlapAcrossFullMotionAtMinimumSize() {
+  let sourceIDs = [
+    "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
+    "whatsapp",
+  ]
+  let size = ConstellationPoint(x: 744, y: 644)
+  let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
+  let metrics = ConstellationLayoutMetrics.forSourceCount(sourceIDs.count)
+  let placements = ConstellationOrbitLayout(
+    sourceIDs: sourceIDs,
+    size: size,
+    centre: centre,
+    metrics: metrics
+  ).placements()
+  let phases = (0...CoreAnimationTimeline.sampleCount).map {
+    Double($0) / Double(CoreAnimationTimeline.sampleCount)
+  }
+  let renderedLabels = placements.map { placement in
+    let bounds = phases.map {
+      placement.labelRect.translated(by: ConstellationMotion(sourceID: placement.id).translation(at: $0))
+    }
+    return (sourceID: placement.id, envelope: bounds.envelope)
+  }
+
+  print("CONSTELLATION_INPUT size=\(size) sourceIDs=\(sourceIDs) phases=\(phases.count)")
+  print("CONSTELLATION_OUTPUT placements=\(placements) actionLabelEnvelopes=\(renderedLabels)")
+
+  #expect(placements.count == sourceIDs.count)
+  for left in renderedLabels.indices {
+    for right in renderedLabels.indices.dropFirst(left + 1) {
+      let overlap = renderedLabels[left].envelope.intersects(renderedLabels[right].envelope)
+      if overlap {
+        print(
+          "CONSTELLATION_LABEL_OVERLAP left=\(renderedLabels[left].sourceID) right=\(renderedLabels[right].sourceID)"
+        )
+      }
+      #expect(!overlap)
+    }
+  }
+}
+
 @Test func activityPreservesTheCompleteUntouchedInputMeaning() {
   let allSources: Set<String> = ["calendar", "gmail", "photos"]
   let usefulGmail = ConstellationTrafficEvent(
@@ -260,4 +301,25 @@ import Testing
   print("CONSTELLATION_INPUT sourceID=\(sourceID) reduceMotion=true phases=\(phases)")
   print("CONSTELLATION_OUTPUT translations=\(outputs)")
   #expect(outputs.allSatisfy { $0 == .zero })
+}
+
+private extension ConstellationRect {
+  func translated(by vector: ConstellationVector) -> Self {
+    Self(x: x + vector.dx, y: y + vector.dy, width: width, height: height)
+  }
+}
+
+private extension [ConstellationRect] {
+  var envelope: ConstellationRect {
+    let minimumX = map(\.x).min() ?? 0
+    let minimumY = map(\.y).min() ?? 0
+    let maximumX = map(\.maxX).max() ?? 0
+    let maximumY = map(\.maxY).max() ?? 0
+    return ConstellationRect(
+      x: minimumX,
+      y: minimumY,
+      width: maximumX - minimumX,
+      height: maximumY - minimumY
+    )
+  }
 }

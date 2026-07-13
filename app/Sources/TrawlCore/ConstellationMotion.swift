@@ -208,7 +208,7 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
       return Self(
         hostSize: ConstellationPoint(x: 172, y: 160),
         hostCentreYOffset: 35,
-        labelWidth: 156,
+        labelWidth: 148,
         labelTop: 30,
         labelHeight: 68,
         minimumIconDiameter: 48,
