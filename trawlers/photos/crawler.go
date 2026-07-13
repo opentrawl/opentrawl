@@ -229,13 +229,14 @@ func syncCommandError(err error) error {
 
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	result, err := archive.Search(ctx, archivePaths(req), archive.SearchOptions{
-		Query:  query.Text,
-		Limit:  query.Limit,
-		After:  queryTime(query.After),
-		Before: queryTime(query.Before),
+		Query:         query.Text,
+		Limit:         query.Limit,
+		BoundedTotals: query.BoundedTotals,
+		After:         queryTime(query.After),
+		Before:        queryTime(query.Before),
 	})
 	if err != nil {
-		return trawlkit.SearchResult{}, err
+		return trawlkit.SearchResult{}, archiveReadCommandError(err)
 	}
 	hits := make([]trawlkit.Hit, 0, len(result.Results))
 	for _, hit := range result.Results {
@@ -249,9 +250,10 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 		_ = req.Log.Info("search_written", fmt.Sprintf("returned=%d total=%d truncated=%t", len(result.Results), result.TotalMatches, result.Truncated))
 	}
 	return trawlkit.SearchResult{
-		Results:      hits,
-		TotalMatches: result.TotalMatches,
-		Truncated:    result.Truncated,
+		Results:           hits,
+		TotalMatches:      result.TotalMatches,
+		TotalIsLowerBound: result.TotalIsLowerBound,
+		Truncated:         result.Truncated,
 	}, nil
 }
 

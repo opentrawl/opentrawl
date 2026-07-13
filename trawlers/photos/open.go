@@ -36,9 +36,21 @@ func (c *Crawler) loadOpenAsset(ctx context.Context, req *trawlkit.Request, ref 
 	}
 	result, err := archive.Open(ctx, archivePaths(req), resolved)
 	if err != nil {
-		return archive.OpenResult{}, err
+		return archive.OpenResult{}, archiveReadCommandError(err)
 	}
 	return result, nil
+}
+
+func archiveReadCommandError(err error) error {
+	var incompatible archive.ArchiveIncompatibleError
+	if errors.As(err, &incompatible) {
+		return commandError{
+			Code:    "archive_incompatible",
+			Message: "The Photos archive needs to be updated.",
+			Remedy:  "run trawl photos sync, then retry",
+		}
+	}
+	return err
 }
 
 func (c *Crawler) resolveInputRef(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {

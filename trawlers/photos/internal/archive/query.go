@@ -9,18 +9,20 @@ import (
 )
 
 type SearchOptions struct {
-	Query  string
-	Limit  int
-	After  string
-	Before string
+	Query         string
+	Limit         int
+	BoundedTotals bool
+	After         string
+	Before        string
 }
 
 type SearchResult struct {
-	Query        string      `json:"query"`
-	Limit        int         `json:"-"`
-	Results      []SearchHit `json:"results"`
-	TotalMatches int         `json:"total_matches"`
-	Truncated    bool        `json:"truncated"`
+	Query             string      `json:"query"`
+	Limit             int         `json:"-"`
+	Results           []SearchHit `json:"results"`
+	TotalMatches      int         `json:"total_matches"`
+	TotalIsLowerBound bool        `json:"total_is_lower_bound,omitempty"`
+	Truncated         bool        `json:"truncated"`
 }
 
 type SearchHit struct {
@@ -169,8 +171,11 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	if limit < 0 {
 		limit = 0
 	}
+	boundedTotals := opts.BoundedTotals && limit > 0
 	sqlLimit := limit
-	if sqlLimit == 0 {
+	if boundedTotals {
+		sqlLimit++
+	} else if sqlLimit == 0 {
 		sqlLimit = -1 // SQLite: a negative LIMIT is unbounded.
 	}
 	after, err := searchTimeBound(opts.After)
@@ -192,9 +197,12 @@ func Search(ctx context.Context, paths Paths, opts SearchOptions) (SearchResult,
 	}
 
 	fts := ftsQuery(query)
-	totalMatches, err := ftsDistinctAssetCount(ctx, db.DB(), fts, after, before)
-	if err != nil {
-		return SearchResult{}, fmt.Errorf("count search matches: %w", err)
+	totalMatches := 0
+	if !boundedTotals {
+		totalMatches, err = ftsDistinctAssetCount(ctx, db.DB(), fts, after, before)
+		if err != nil {
+			return SearchResult{}, fmt.Errorf("count search matches: %w", err)
+		}
 	}
 	rows, err := db.DB().QueryContext(ctx, `
 with asset_matches as (
@@ -253,8 +261,9 @@ limit ?
 		Limit:        limit,
 		Results:      []SearchHit{},
 		TotalMatches: totalMatches,
-		Truncated:    limit > 0 && totalMatches > limit,
+		Truncated:    !boundedTotals && limit > 0 && totalMatches > limit,
 	}
+	hasProbe := false
 	for rows.Next() {
 		var hit SearchHit
 		var assetBody, cardSummary, cardDescription, timezoneName, sourceState string
@@ -272,7 +281,11 @@ limit ?
 			hit.Snippet = "Deleted upstream · " + hit.Snippet
 		}
 		hit.Stale = strings.TrimSpace(hit.StaleSince) != ""
-		result.Results = append(result.Results, hit)
+		if boundedTotals && len(result.Results) == limit {
+			hasProbe = true
+		} else {
+			result.Results = append(result.Results, hit)
+		}
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
@@ -280,6 +293,15 @@ limit ?
 	}
 	if err := rows.Close(); err != nil {
 		return SearchResult{}, err
+	}
+	if boundedTotals {
+		if hasProbe {
+			result.TotalMatches = limit + 1
+			result.TotalIsLowerBound = true
+			result.Truncated = true
+		} else {
+			result.TotalMatches = len(result.Results)
+		}
 	}
 	return result, nil
 }

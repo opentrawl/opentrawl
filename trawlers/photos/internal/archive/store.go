@@ -9,6 +9,14 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
+// ArchiveIncompatibleError means an existing archive cannot safely serve a
+// read request until sync has updated it.
+type ArchiveIncompatibleError struct{}
+
+func (ArchiveIncompatibleError) Error() string {
+	return "photos archive is incompatible"
+}
+
 type archiveColumnMigration struct {
 	table      string
 	column     string
@@ -55,22 +63,18 @@ func openExistingArchive(ctx context.Context, path string) (*store.Store, error)
 	if err != nil {
 		return nil, err
 	}
-	needsMigration, err := archiveMigrationsRequired(ctx, db.DB())
+	version, err := db.SchemaVersion(ctx)
 	if err != nil {
 		_ = db.Close()
 		return nil, err
 	}
-	if !needsMigration {
+	if version == SchemaVersion {
 		return db, nil
 	}
-	_ = db.Close()
-
-	writable, err := openArchive(ctx, path)
-	if err != nil {
+	if err := db.Close(); err != nil {
 		return nil, err
 	}
-	_ = writable.Close()
-	return store.OpenReadOnly(ctx, path)
+	return nil, ArchiveIncompatibleError{}
 }
 
 func ensureArchiveMigrations(ctx context.Context, db *sql.DB) error {

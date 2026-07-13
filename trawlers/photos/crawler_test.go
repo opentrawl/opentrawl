@@ -338,6 +338,46 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	}
 }
 
+func TestSearchAndOpenMapIncompatibleArchivesToOnePublicError(t *testing.T) {
+	ctx := context.Background()
+	paths := trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "photos.db")}
+	writeStore, err := store.Open(ctx, store.Options{
+		Path:          paths.Archive,
+		Schema:        archive.Schema,
+		SchemaVersion: archive.SchemaVersion - 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	source := New()
+	assertIncompatible := func(t *testing.T, err error) {
+		t.Helper()
+		got, ok := err.(commandError)
+		want := commandError{
+			Code:    "archive_incompatible",
+			Message: "The Photos archive needs to be updated.",
+			Remedy:  "run trawl photos sync, then retry",
+		}
+		if !ok || got != want {
+			t.Fatalf("error = %#v, want %#v", err, want)
+		}
+	}
+
+	readStore := openReadStore(t, ctx, paths.Archive)
+	_, err = source.Search(ctx, readRequest(readStore, paths), trawlkit.Query{Text: "fixture", Limit: 1})
+	_ = readStore.Close()
+	assertIncompatible(t, err)
+
+	readStore = openReadStore(t, ctx, paths.Archive)
+	err = source.Open(ctx, readRequest(readStore, paths), "photos:asset/fixture")
+	_ = readStore.Close()
+	assertIncompatible(t, err)
+}
+
 func TestSearchKeepsDatelessAssets(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
