@@ -52,6 +52,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          "photos",
 		Surface:     "photos",
 		DisplayName: "Photos",
+		Headlines:   []string{"photos"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ExportsSecrets: false,

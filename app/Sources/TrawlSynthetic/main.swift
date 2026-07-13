@@ -116,15 +116,15 @@ private func productSource(_ id: String, _ surface: String, _ headlines: [String
 }
 private func productSources() -> [Trawl_Federation_V1_SourceStatus] {
   [
-    productSource("calendar", "Calendar", ["calendars"]),
-    productSource("contacts", "Contacts", ["person"]),
-    productSource("gmail", "Gmail", []),
+    productSource("calendar", "Calendar", ["events", "calendars"]),
+    productSource("contacts", "Contacts", ["people"]),
+    productSource("gmail", "Gmail", ["emails"]),
     productSource("imessage", "Messages", ["chats"]),
-    productSource("notes", "Notes", ["versions"]),
-    productSource("photos", "Photos", []),
+    productSource("notes", "Notes", ["notes", "folders", "versions"]),
+    productSource("photos", "Photos", ["photos"]),
     productSource("telegram", "Telegram", ["chats", "folders", "topics"]),
     productSource("twitter", "X", ["tweets", "bookmarks", "likes", "mentions"]),
-    productSource("whatsapp", "WhatsApp", ["chats"]),
+    productSource("whatsapp", "WhatsApp", ["chats", "groups"]),
   ]
 }
 private func hit(_ sourceID: String, _ ref: String, _ who: String) -> Trawl_Federation_V1_SearchHit

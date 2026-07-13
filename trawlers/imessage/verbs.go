@@ -67,8 +67,7 @@ type openMessageOutput struct {
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{
-			Name:     "chats",
-			Headline: true,
+			Name: "chats",
 		},
 		{
 			Name:  "messages",

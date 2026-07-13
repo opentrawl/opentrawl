@@ -97,6 +97,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "telegram",
 		DisplayName: "Telegram",
+		Headlines:   []string{"chats", "folders", "topics"},
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
@@ -110,9 +111,9 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 		{Name: "doctor", Flags: c.bindDoctorFlags},
 		{Name: "sync", Flags: c.bindSyncFlags},
 		{Name: "search", Flags: c.bindSearchFlags},
-		{Name: "chats", Headline: true},
-		{Name: "folders", Help: "List archived Telegram folders.", Headline: true, Run: c.runFolders},
-		{Name: "topics", Help: "List archived Telegram forum topics.", Headline: true, Flags: c.bindTopicsFlags, Run: c.runTopics},
+		{Name: "chats"},
+		{Name: "folders", Help: "List archived Telegram folders.", Run: c.runFolders},
+		{Name: "topics", Help: "List archived Telegram forum topics.", Flags: c.bindTopicsFlags, Run: c.runTopics},
 		{Name: "messages", Help: "List archived Telegram messages.", Flags: c.bindMessagesFlags, Run: c.runMessages},
 		{Name: "contacts", Help: "List archived Telegram contacts.", Flags: c.bindContactsFlags, Run: c.runContacts},
 	}

@@ -58,7 +58,6 @@ type Command struct {
 	Store      string   `json:"store,omitempty"`
 	Legacy     bool     `json:"legacy,omitempty"`
 	Deprecated bool     `json:"deprecated,omitempty"`
-	Headline   bool     `json:"headline,omitempty"`
 	// Secondary marks a specialist verb the namespace listing moves under a
 	// "More verbs" heading, out of the primary namespace list.
 	Secondary bool   `json:"secondary,omitempty"`

@@ -46,6 +46,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "imessage",
 		DisplayName: display,
+		Headlines:   []string{"chats"},
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,

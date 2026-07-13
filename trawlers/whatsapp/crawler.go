@@ -35,6 +35,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          "whatsapp",
 		Surface:     "whatsapp",
 		DisplayName: "WhatsApp",
+		Headlines:   []string{"chats", "groups"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
@@ -47,8 +48,7 @@ func (c *Crawler) Info() trawlkit.Info {
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
 		{
-			Name:     "chats",
-			Headline: true,
+			Name: "chats",
 		},
 		{
 			Name:  "messages",

@@ -84,9 +84,6 @@ func validateSpineVerb(key string, verb Verb, decls map[string]Verb, supportErr 
 	if fields := invalidSpineVerbFields(verb); len(fields) > 0 {
 		return invalidSpineVerbFieldsError(key, fields)
 	}
-	if verb.Headline && key != "chats" {
-		return invalidSpineVerbHeadlineError(key)
-	}
 	if supportErr != nil {
 		return supportErr
 	}
@@ -111,7 +108,7 @@ func unsupportedSpineVerbError(source Crawler, key string) error {
 
 func invalidSpineVerbFieldsError(key string, fields []string) spineVerbError {
 	return spineVerbError{
-		message: fmt.Sprintf("invalid %s Verb declaration: spine verb declarations may only set Name, Flags, Headline, and Store", key),
+		message: fmt.Sprintf("invalid %s Verb declaration: spine verb declarations may only set Name, Flags, and Store", key),
 		remedy:  fmt.Sprintf("Remove %s from the %s Verb declaration.", humanList(fields), key),
 	}
 }
@@ -120,13 +117,6 @@ func invalidSpineVerbStoreError(key string, declared StoreAccess) spineVerbError
 	return spineVerbError{
 		message: fmt.Sprintf("invalid %s Verb declaration: %s is not valid; %s", key, storeAccessName(declared), spineVerbStoreAllowance(key)),
 		remedy:  spineVerbStoreRemedy(key),
-	}
-}
-
-func invalidSpineVerbHeadlineError(key string) spineVerbError {
-	return spineVerbError{
-		message: fmt.Sprintf("invalid %s Verb declaration: Headline is only valid on chats", key),
-		remedy:  "Remove Headline from this declaration, or declare chats; chats is the one shared verb that may headline.",
 	}
 }
 

@@ -49,6 +49,7 @@ func (a *App) Info() trawlkit.Info {
 		ID:          archive.AppID,
 		Surface:     "contacts",
 		DisplayName: archive.DisplayName,
+		Headlines:   []string{"people"},
 		Config:      &a.cfg,
 		Privacy: control.Privacy{
 			LocalOnlyScopes: []string{"contacts", "sqlite", "contact-search", "contact-export"},
