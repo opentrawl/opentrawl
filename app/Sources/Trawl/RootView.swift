@@ -57,22 +57,14 @@ struct RootView: View {
         Task { await model.refresh() }
       }
     } else {
-      ZStack(alignment: .top) {
-        ConstellationView(
-          sources: model.restingSources,
-          activity: constellationActivity,
-          trafficEvent: constellationTrafficEvent,
-          onSelectEverything: { showSearch(scope: nil) },
-          onSelectSource: { showSearch(scope: $0) }
-        )
-        .padding(TrawlDesign.contentInset)
-        if let requirement = model.photosAccess {
-          PhotosPermissionBanner(requirement: requirement) {
-            Task { await model.requestPhotos() }
-          }
-          .padding(TrawlDesign.contentInset)
-        }
-      }
+      ConstellationView(
+        sources: model.restingSources,
+        activity: constellationActivity,
+        trafficEvent: constellationTrafficEvent,
+        onSelectEverything: { showSearch(scope: nil) },
+        onSelectSource: { showSearch(scope: $0) }
+      )
+      .padding(TrawlDesign.contentInset)
     }
   }
 
@@ -122,23 +114,5 @@ private struct FailureView: View {
     } actions: {
       Button("Try again", action: retry)
     }
-  }
-}
-
-private struct PhotosPermissionBanner: View {
-  let requirement: SetupRequirement
-  let requestAccess: () -> Void
-
-  var body: some View {
-    HStack(spacing: 12) {
-      Label(requirement.explanation, systemImage: "photo.on.rectangle")
-        .font(.callout)
-      if requirement.action == .requestPhotos {
-        Button("Request access", action: requestAccess)
-      }
-    }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 9)
-    .glassEffect(.regular, in: Capsule())
   }
 }

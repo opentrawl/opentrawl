@@ -120,24 +120,25 @@ private struct SearchField: View {
           return .handled
         }
       if let scope {
-        HStack(spacing: 5) {
-          SourceIconView(sourceID: scope.id, size: 22)
+        HStack(spacing: 8) {
+          SourceIconView(sourceID: scope.id, size: 28)
           Text(scope.surface)
-            .font(.caption.weight(.medium))
+            .font(.callout.weight(.semibold))
             .lineLimit(1)
             .fixedSize()
-          Divider()
-            .frame(height: 18)
           Button(action: onClearScope) {
-            Image(systemName: "xmark.circle.fill")
-              .imageScale(.small)
+            Image(systemName: "xmark")
+              .font(.caption.weight(.bold))
+              .foregroundStyle(.secondary)
+              .frame(width: 18, height: 18)
+              .contentShape(.circle)
           }
           .buttonStyle(.plain)
           .accessibilityLabel("Search all sources")
         }
         .padding(.leading, 8)
-        .padding(.trailing, 5)
-        .padding(.vertical, 5)
+        .padding(.trailing, 7)
+        .padding(.vertical, 4)
         .background(.secondary.opacity(0.14), in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
       }
