@@ -54,10 +54,6 @@ because human review is for taste, not for catching violations.
 Outputs must read clearly to a human cold, which is what makes them
 safe for agents too.
 
-Follow the [Bitter Lesson](docs/vision.md#build-for-stronger-models): build a
-substrate that improves with stronger models, not handcrafted domain
-intelligence that competes with them.
-
 The full distilled ruleset — code bar, output/design bar,
 architecture, model grounding, process rules, ticket quality gates,
 and the war stories behind them — lives in the private workspace at

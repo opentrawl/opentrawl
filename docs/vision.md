@@ -103,30 +103,6 @@ The layers, bottom to top:
 - Read only in v1. Write capability (sending messages) comes later
   through source-specific access CLIs, behind explicit authorisation.
 
-## Build for stronger models
-
-OpenTrawl follows the Bitter Lesson: general models should supply the
-intelligence, while the product gives them better access to the world.
-The durable product is source access, lossless evidence, persistent
-state, provenance and safe execution. Interpretation, judgement and
-strategy belong to the best available model. A stronger model should
-answer harder questions through the same archives and contracts,
-without a new hand-built semantic feature for each question.
-
-Derived artifacts such as cards, clusters and orientation reports are
-useful projections, not canonical truth. Each keeps its source
-references, complete bounded input, prompt and model version, and
-generation time. A later model can challenge or regenerate it without
-losing the underlying evidence. Recomputing may be slow or expensive,
-but it must be mechanically straightforward.
-
-Human steering is different from model inference. A dated human
-assertion stays durable; an automatic interpretation stays replaceable.
-Do not flatten observed facts, model judgements and human corrections
-into one record. Prompts may define a task or an output contract, but
-they must not hard-code domain intelligence that a stronger model could
-discover from the evidence.
-
 ## Engineering principles
 
 - Software fixes what it can fix. A printed remedy is an admission,
