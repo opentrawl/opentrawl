@@ -17,8 +17,47 @@ func TestUsageMentionsLabVerbs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected usage error")
 	}
-	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|known-places>") {
+	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|known-places>") {
 		t.Fatalf("unexpected usage error: %v", err)
+	}
+}
+
+func TestCardInputAuditSelectionAndOutputBoundary(t *testing.T) {
+	root := t.TempDir()
+	outDir := filepath.Join(root, "audit")
+	if err := os.Mkdir(outDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCardInputAuditOutput(outDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := validateCardInputAuditOutput(root); err == nil {
+		t.Fatal("non-owner-only output directory passed")
+	}
+	selectionPath := filepath.Join(root, "selection.json")
+	if err := os.WriteFile(selectionPath, []byte(`{"asset_ids":["asset:ready","asset:stopped"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	selection, err := readCardInputAuditSelection(selectionPath)
+	if err != nil || len(selection.AssetIDs) != 2 || selection.AssetIDs[0] != "asset:ready" {
+		t.Fatalf("selection=%+v err=%v", selection, err)
+	}
+	if _, err := readCardInputAuditSelection(""); err == nil {
+		t.Fatal("empty selection path passed")
+	}
+	path, err := writeCardInputAuditOutput(outDir, "inventory", map[string]string{"asset": "synthetic"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("private output=%q info=%v err=%v", path, info, err)
+	}
+	if _, err := writeCardInputAuditOutput(outDir, "inventory", map[string]string{"asset": "changed"}); err == nil {
+		t.Fatal("audit output overwrite passed")
 	}
 }
 

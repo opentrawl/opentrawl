@@ -15,6 +15,7 @@ type classifyInput struct {
 	QueueID           string
 	AssetID           string
 	SourceLibraryID   string
+	SourceState       string
 	LocalIdentifier   string
 	NeedsDownload     bool
 	MediaType         string
@@ -60,6 +61,7 @@ type classifyResource struct {
 	OriginalFilename string
 	LocalPath        string
 	FileSize         int64
+	SHA256           string
 	AvailableLocally bool
 	NeedsDownload    bool
 }
@@ -298,8 +300,8 @@ func (input classifyInput) keywordText() string {
 	return strings.ToLower(strings.Join(parts, " "))
 }
 
-func loadClassifyLocation(ctx context.Context, tx *sql.Tx, input *classifyInput) error {
-	row := tx.QueryRowContext(ctx, `
+func loadClassifyLocation(ctx context.Context, db queryRower, input *classifyInput) error {
+	row := db.QueryRowContext(ctx, `
 select latitude, longitude, coalesce(horizontal_accuracy, 0)
 from location_observation
 where asset_id = ?

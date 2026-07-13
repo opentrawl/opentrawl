@@ -173,6 +173,18 @@ func readCheckedArtifacts(dir, originalSHA256 string) (Artifacts, bool) {
 	return artifacts, true
 }
 
+// ReadCheckedArtifacts opens an already checked metadata record without
+// creating a cache directory or invoking ImageIO. It is for read-only audit
+// paths that must not turn missing metadata into a new extraction.
+func ReadCheckedArtifacts(root, originalSHA256 string) (Artifacts, bool) {
+
+	originalSHA256 = strings.ToLower(strings.TrimSpace(originalSHA256))
+	if validateSHA256(originalSHA256) != nil {
+		return Artifacts{}, false
+	}
+	return readCheckedArtifacts(filepath.Join(strings.TrimSpace(root), originalSHA256, ExtractorVersion), originalSHA256)
+}
+
 func privateCacheDirectory(path string) bool {
 	info, err := os.Lstat(path)
 	return err == nil && info.IsDir() && info.Mode().Perm() == 0o700

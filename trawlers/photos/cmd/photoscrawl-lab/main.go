@@ -121,6 +121,8 @@ func run(ctx context.Context, args []string) error {
 			return err
 		}
 		return output.Write(os.Stdout, format, "eval_card", result)
+	case "audit-card-input":
+		return runAuditCardInput(ctx, paths, args[1:])
 	case "known-places":
 		return runKnownPlaces(ctx, paths, args[1:])
 	default:
@@ -129,7 +131,143 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|known-places>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|known-places>")}
+}
+
+type cardInputAuditSelection struct {
+	AssetIDs []string `json:"asset_ids"`
+}
+
+func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) error {
+	if len(args) == 0 {
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|inspect>")}
+	}
+	switch args[0] {
+	case "inventory":
+		fs := flag.NewFlagSet("audit-card-input inventory", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		archivePath := fs.String("archive", "", "complete Photos archive path")
+		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		outDir := fs.String("out", "", "existing owner-only private audit output directory")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if !*jsonFlag {
+			return output.UsageError{Err: errors.New("audit-card-input inventory requires --json")}
+		}
+		if err := validateCardInputAuditOutput(*outDir); err != nil {
+			return err
+		}
+		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		if err != nil {
+			return err
+		}
+		path, err := writeCardInputAuditOutput(*outDir, "inventory", inventory)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
+	case "inspect":
+		fs := flag.NewFlagSet("audit-card-input inspect", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		archivePath := fs.String("archive", "", "complete Photos archive path")
+		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		outDir := fs.String("out", "", "existing owner-only private audit output directory")
+		selectionPath := fs.String("selection", "", "private JSON selection with asset_ids")
+		backstop := fs.Int("backstop", 0, "number of stable SHA-256 inventory backstop assets")
+		modelName := fs.String("model", "", "candidate model name used only to render the request")
+		modelURL := fs.String("model-url", "", "candidate model base URL used only to render the request")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if !*jsonFlag {
+			return output.UsageError{Err: errors.New("audit-card-input inspect requires --json")}
+		}
+		if err := validateCardInputAuditOutput(*outDir); err != nil {
+			return err
+		}
+		selection, err := readCardInputAuditSelection(*selectionPath)
+		if err != nil {
+			return err
+		}
+		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		if err != nil {
+			return err
+		}
+		assetIDs := append([]string(nil), selection.AssetIDs...)
+		if *backstop > 0 {
+			candidates := make([]string, 0, len(inventory.Assets))
+			for _, row := range inventory.Assets {
+				candidates = append(candidates, row.AssetID)
+			}
+			assetIDs = append(assetIDs, archive.StableCardInputAuditBackstop(inventory.SnapshotID, candidates, *backstop)...)
+		}
+		inspections, err := archive.InspectCardInputs(ctx, archive.CardInputAuditInspectOptions{CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)}, CacheDir: paths.CacheDir, AssetIDs: assetIDs, Model: strings.TrimSpace(*modelName), ModelURL: strings.TrimSpace(*modelURL)})
+		if err != nil {
+			return err
+		}
+		path, err := writeCardInputAuditOutput(*outDir, "inspect", inspections)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
+	default:
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|inspect>")}
+	}
+}
+
+func validateCardInputAuditOutput(path string) error {
+	info, err := os.Stat(strings.TrimSpace(path))
+	if err != nil {
+		return fmt.Errorf("audit card-input output directory: %w", err)
+	}
+	if !info.IsDir() || info.Mode().Perm() != 0o700 {
+		return errors.New("audit card-input output directory must be an existing owner-only directory")
+	}
+	return nil
+}
+
+func writeCardInputAuditOutput(outDir, name string, value any) (string, error) {
+	path := filepath.Join(strings.TrimSpace(outDir), name+".json")
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return "", fmt.Errorf("create private audit output: %w", err)
+	}
+	if err := output.Write(file, output.JSON, "card_input_audit_"+name, value); err != nil {
+		_ = file.Close()
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func readCardInputAuditSelection(path string) (cardInputAuditSelection, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return cardInputAuditSelection{}, errors.New("audit card-input inspect requires --selection")
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return cardInputAuditSelection{}, err
+	}
+	defer file.Close()
+	decoder := json.NewDecoder(file)
+	decoder.DisallowUnknownFields()
+	var selection cardInputAuditSelection
+	if err := decoder.Decode(&selection); err != nil {
+		return cardInputAuditSelection{}, fmt.Errorf("decode audit card-input selection: %w", err)
+	}
+	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
+		return cardInputAuditSelection{}, errors.New("audit card-input selection must contain one JSON object")
+	}
+	if len(selection.AssetIDs) == 0 {
+		return cardInputAuditSelection{}, errors.New("audit card-input selection has no asset_ids")
+	}
+	return selection, nil
 }
 
 func runPlaceEvidenceInventory(ctx context.Context, paths archive.Paths, args []string) (runErr error) {

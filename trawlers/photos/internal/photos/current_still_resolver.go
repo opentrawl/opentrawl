@@ -343,6 +343,25 @@ func inspectCachedCurrentStill(path string) (CurrentStillFact, bool) {
 	return fact, true
 }
 
+// ReadCachedCurrentStill opens an already proved current-still cache entry.
+// It never creates a cache entry or falls back to PhotoKit.
+func ReadCachedCurrentStill(root, sourceLibraryID, assetUUID string, freshness CurrentStillFreshness) (string, CurrentStillFact, string, bool) {
+	if !freshness.valid() {
+		return "", CurrentStillFact{}, "", false
+	}
+	path := CurrentStillCachePath(root, sourceLibraryID, assetUUID, freshness)
+	fact, ok := inspectCachedCurrentStill(path)
+	if !ok {
+		return "", CurrentStillFact{}, "", false
+	}
+	proof, err := os.ReadFile(originalCacheProofPath(path))
+	if err != nil {
+		return "", CurrentStillFact{}, "", false
+	}
+	digest := sha256.Sum256(proof)
+	return path, fact, hex.EncodeToString(digest[:]), true
+}
+
 func writeCurrentStillCacheProof(path string, fact CurrentStillFact) error {
 	proof := currentStillCacheProof{Version: 1, Role: "current_still", MediaType: fact.MediaType, Orientation: fact.Orientation, PixelWidth: fact.PixelWidth, PixelHeight: fact.PixelHeight, Size: fact.Size, SHA256: fact.SHA256}
 	data, err := json.Marshal(proof)
