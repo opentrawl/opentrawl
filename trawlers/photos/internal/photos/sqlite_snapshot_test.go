@@ -77,6 +77,9 @@ where m.Z_3ASSETS = 1
 	if asset.MediaType != "image" || asset.CreationDate != "2026-05-28T10:00:00Z" {
 		t.Fatalf("asset = %#v", asset)
 	}
+	if asset.TimezoneName != "Europe/Amsterdam" {
+		t.Fatalf("timezone = %q", asset.TimezoneName)
+	}
 	if asset.Location == nil || asset.Location.Latitude != 52.3676 || asset.Location.Longitude != 4.9041 {
 		t.Fatalf("location = %#v", asset.Location)
 	}
@@ -245,21 +248,6 @@ values (?, printf('synthetic-%d', ?), 0, 0, ?, ?, ?, 1, 1, 0, 0, 0, '', 1, 1, ''
 	assertAssetTimezoneAndAccuracy(t, assets[2], "", float64Pointer(12.5))
 	assertAssetTimezoneAndAccuracy(t, assets[3], "", nil)
 
-	if _, err := db.DB().Exec(`
-insert into ZASSET(Z_PK, ZUUID, ZKIND, ZKINDSUBTYPE, ZDATECREATED, ZMODIFICATIONDATE, ZADDEDDATE, ZWIDTH, ZHEIGHT, ZDURATION, ZFAVORITE, ZHIDDEN, ZAVALANCHEUUID, ZLATITUDE, ZLONGITUDE, ZUNIFORMTYPEIDENTIFIER, ZFILENAME, ZTRASHEDSTATE)
-values (5, 'synthetic-conflict', 0, 0, ?, ?, ?, 1, 1, 0, 0, 0, '', 1, 1, '', '', 0)
-`, created, created, created); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.DB().Exec(`insert into ZADDITIONALASSETATTRIBUTES(ZASSET, ZTIMEZONENAME, ZGPSHORIZONTALACCURACY, ZORIGINALFILENAME) values (5, 'Current/Zone', 1, '')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := db.DB().Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZTIMEZONENAME) values (5, 'Other/Zone')`); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := sqliteAssets(context.Background(), db.DB(), nil, nil); err == nil || err.Error() != "sqlite timezone schema conflict: additional and extended timezone fields differ" {
-		t.Fatalf("sqliteAssets error = %v", err)
-	}
 }
 
 func assertAssetTimezoneAndAccuracy(t *testing.T, asset Asset, timezone string, accuracy *float64) {
@@ -366,7 +354,7 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 	if _, err := db.Exec(`insert into ZADDITIONALASSETATTRIBUTES(ZASSET, ZTIMEZONENAME, ZGPSHORIZONTALACCURACY, ZORIGINALFILENAME) values (1, 'Europe/Amsterdam', 8.25, 'synthetic.heic')`); err != nil {
 		return err
 	}
-	if _, err := db.Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZCAMERAMAKE, ZCAMERAMODEL, ZLENSMODEL, ZFOCALLENGTH, ZFOCALLENGTHIN35MM, ZAPERTURE, ZSHUTTERSPEED, ZISO) values (1, 'Apple', 'iPhone 15 Pro', 'back camera', 6.86, 24, 1.8, 0.008333333333333333, 64)`); err != nil {
+	if _, err := db.Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZTIMEZONENAME, ZCAMERAMAKE, ZCAMERAMODEL, ZLENSMODEL, ZFOCALLENGTH, ZFOCALLENGTHIN35MM, ZAPERTURE, ZSHUTTERSPEED, ZISO) values (1, 'Fallback/Zone', 'Apple', 'iPhone 15 Pro', 'back camera', 6.86, 24, 1.8, 0.008333333333333333, 64)`); err != nil {
 		return err
 	}
 	if _, err := db.Exec(`insert into ZINTERNALRESOURCE(ZASSET, ZRESOURCETYPE, ZCOMPACTUTI, ZDATALENGTH, ZSTABLEHASH, ZFINGERPRINT, ZLOCALAVAILABILITY, ZREMOTEAVAILABILITY, ZVERSION) values (1, 0, 'public.heic', 12345, 'stable-hash', '', 0, 1, 1)`); err != nil {
