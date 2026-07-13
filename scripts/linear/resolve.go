@@ -125,7 +125,7 @@ func (api *LinearAPI) ResolveProjectStatus(ctx context.Context, name string) (Pr
 		return ProjectStatus{}, fmt.Errorf("project status %q is ambiguous. Valid statuses: %s", name, strings.Join(names, ", "))
 	}
 	if len(names) == 0 {
-		return ProjectStatus{}, fmt.Errorf("Linear has no project statuses")
+		return ProjectStatus{}, fmt.Errorf("linear has no project statuses")
 	}
 	return ProjectStatus{}, fmt.Errorf("project status %q was not found. Valid statuses: %s", name, strings.Join(names, ", "))
 }

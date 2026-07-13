@@ -1,7 +1,6 @@
 package qa
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -90,14 +89,4 @@ func coreDate(t time.Time) float64 {
 
 func touch(path string, at time.Time) error {
 	return os.Chtimes(path, at, at)
-}
-
-func canaryRead(path string) error {
-	db, err := sql.Open("sqlite3", path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = db.Close() }()
-	var tables int
-	return db.QueryRowContext(context.Background(), "select count(*) from sqlite_master").Scan(&tables)
 }

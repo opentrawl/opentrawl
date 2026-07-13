@@ -233,31 +233,6 @@ func (r *Runtime) selectedSources(source string) ([]Source, error) {
 	return nil, r.writeSourceNotFound(source)
 }
 
-func collectStatus(r *Runtime, sources []Source) []StatusResult {
-	results := make([]StatusResult, 0, len(sources))
-	for _, source := range sources {
-		status := StatusEnvelope{}
-		if source.MetadataErr != nil {
-			started := r.logSourceStart(source, "status")
-			r.logSourceDone(source, "status", started, source.MetadataErr)
-			status = errorStatus(source, "the crawler did not identify itself")
-			results = append(results, StatusResult{Source: source, Status: status})
-			continue
-		}
-		started := r.logSourceStart(source, "status")
-		status, err := r.statusSource(source)
-		if err != nil {
-			r.logSourceDone(source, "status", started, err)
-			status = errorStatus(source, "the crawler did not report its status")
-			results = append(results, StatusResult{Source: source, Status: status})
-			continue
-		}
-		r.logSourceDone(source, "status", started, nil)
-		results = append(results, StatusResult{Source: source, Status: normalizeStatus(source, status)})
-	}
-	return results
-}
-
 func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 	results := make([]DoctorResult, 0, len(sources))
 	for _, source := range sources {
@@ -283,19 +258,6 @@ func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
 		results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
 	}
 	return results
-}
-
-func (r *Runtime) statusSource(source Source) (StatusEnvelope, error) {
-	var status *control.Status
-	err := r.withSourceRequest(source, "status", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var runErr error
-		status, runErr = source.Crawler.Status(ctx, req)
-		return runErr
-	})
-	if err != nil {
-		return StatusEnvelope{}, err
-	}
-	return statusEnvelopeFromControl(source, status)
 }
 
 func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnvelope, error) {
@@ -360,25 +322,6 @@ func doctorCommandFailed(source Source) DoctorCheck {
 	}
 }
 
-func statusExit(results []StatusResult) error {
-	failures := 0
-	successes := 0
-	for _, result := range results {
-		if statusFailed(result.Status) {
-			failures++
-			continue
-		}
-		successes++
-	}
-	if failures == 0 {
-		return nil
-	}
-	if successes > 0 {
-		return exitErr{code: 3}
-	}
-	return exitErr{code: 1}
-}
-
 func doctorExit(results []DoctorResult) error {
 	for _, result := range results {
 		for _, check := range result.Checks {
@@ -388,16 +331,6 @@ func doctorExit(results []DoctorResult) error {
 		}
 	}
 	return nil
-}
-
-func (r *Runtime) reportStatusFailures(results []StatusResult) {
-	for _, result := range results {
-		if !statusFailed(result.Status) {
-			continue
-		}
-		_, _ = fmt.Fprintf(r.stderr, "%s status failed.\n", sourceHumanName(result.Source))
-		_, _ = fmt.Fprintf(r.stderr, "  Remedy: run trawl doctor %s\n", sourceCommandToken(result.Source))
-	}
 }
 
 func (r *Runtime) reportDoctorFailures(results []DoctorResult) {

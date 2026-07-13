@@ -24,14 +24,6 @@ func (r *Runtime) selectSources(installed []Source, names []string) ([]Source, e
 	return selected, nil
 }
 
-func (r *Runtime) selectedSource(source string) (Source, error) {
-	sources, err := r.selectedSourceArgs([]string{source})
-	if err != nil {
-		return Source{}, err
-	}
-	return sources[0], nil
-}
-
 func (r *Runtime) writeSourceNotFound(source string) error {
 	return r.writeError("source_not_found",
 		fmt.Sprintf("Source %q was not found.", source),

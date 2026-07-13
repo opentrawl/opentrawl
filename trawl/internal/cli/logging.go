@@ -62,13 +62,6 @@ func (r *Runtime) logInfo(event, message string) {
 	_ = r.log.Info(event, message)
 }
 
-func (r *Runtime) logDebug(event, message string) {
-	if r == nil || r.log == nil {
-		return
-	}
-	_ = r.log.Debug(event, message)
-}
-
 func (r *Runtime) logSourceStart(source Source, verb string) time.Time {
 	started := r.now()
 	r.logInfo("source_start", strings.Join([]string{

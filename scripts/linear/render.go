@@ -5,6 +5,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode"
 
 	crender "github.com/opentrawl/opentrawl/trawlkit/render"
 )
@@ -345,7 +346,17 @@ func projectHealth(health string) string {
 		}
 		words = append(words, string(rune))
 	}
-	return strings.Title(strings.ToLower(strings.Join(words, "")))
+	return titleWords(strings.ToLower(strings.Join(words, "")))
+}
+
+func titleWords(value string) string {
+	words := strings.Fields(value)
+	for index, word := range words {
+		runes := []rune(word)
+		runes[0] = unicode.ToUpper(runes[0])
+		words[index] = string(runes)
+	}
+	return strings.Join(words, " ")
 }
 
 func projectOpenIssues(project Project) int {

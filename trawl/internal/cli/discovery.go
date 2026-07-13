@@ -76,22 +76,6 @@ func discoverCrawlers(ctx context.Context) []Source {
 	return sources
 }
 
-// trimAliases keeps only the human aliases a crawler declares (birdcrawl's
-// "twitter"): the words a person types and the block renders in parentheses.
-// Legacy binary names route through legacyRoutingAliases and never display.
-func trimAliases(aliases []string) []string {
-	out := make([]string, 0, len(aliases))
-	for _, alias := range aliases {
-		if trimmed := strings.TrimSpace(alias); trimmed != "" {
-			out = append(out, trimmed)
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
 // legacyRoutingAliases keeps the pre-rename binary names dispatchable
 // (`trawl imsgcrawl`, `trawl clawdex`) without displaying them anywhere.
 // findSource consults it; the front door and blocks never see it.
