@@ -66,6 +66,50 @@ func TestSearchHonorsLimitContract(t *testing.T) {
 	}
 }
 
+func TestSearchBoundedTotalsUseOneProbeRow(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Sync(ctx, paths, SyncOptions{
+		LibraryPath: libraryPath,
+		Provider:    fakeProvider{snapshot: manyAssetsSnapshot(3)},
+		Now:         fixedClock("2026-05-28T10:00:00Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	exact, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exact.TotalMatches != 3 || exact.TotalIsLowerBound || !exact.Truncated || len(exact.Results) != 2 {
+		t.Fatalf("exact result = %#v", exact)
+	}
+
+	bounded, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 2, BoundedTotals: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bounded.TotalMatches != 3 || !bounded.TotalIsLowerBound || !bounded.Truncated || len(bounded.Results) != 2 {
+		t.Fatalf("bounded probe result = %#v", bounded)
+	}
+	if !reflect.DeepEqual(bounded.Results, exact.Results) {
+		t.Fatalf("bounded results include a probe or change order: %#v", bounded.Results)
+	}
+
+	underLimit, err := Search(ctx, paths, SearchOptions{Query: "image", Limit: 5, BoundedTotals: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if underLimit.TotalMatches != 3 || underLimit.TotalIsLowerBound || underLimit.Truncated || len(underLimit.Results) != 3 {
+		t.Fatalf("bounded under-limit result = %#v", underLimit)
+	}
+}
+
 func TestSearchAddsWhereAndWho(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

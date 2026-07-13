@@ -2,7 +2,9 @@ package archive
 
 import (
 	"context"
+	"errors"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -95,7 +97,7 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 	}
 }
 
-func TestOpenAndSearchMigrateOldObservationSchema(t *testing.T) {
+func TestOpenAndSearchRejectIncompatibleArchiveWithoutMigration(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	buildArchive := func(t *testing.T) Paths {
@@ -104,7 +106,7 @@ func TestOpenAndSearchMigrateOldObservationSchema(t *testing.T) {
 		db, err := store.Open(ctx, store.Options{
 			Path:          paths.Database,
 			Schema:        oldObservationSchema(t),
-			SchemaVersion: SchemaVersion,
+			SchemaVersion: SchemaVersion - 1,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -141,57 +143,62 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 		}
 		return paths
 	}
-	assertMigrated := func(t *testing.T, paths Paths) {
+	assertUnchanged := func(t *testing.T, paths Paths) {
 		t.Helper()
 		db, err := store.OpenReadOnly(ctx, paths.Database)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = db.Close() }()
-		for _, table := range []string{"model_observation", "place_observation"} {
-			for _, column := range []string{"stale_since", "stale_reason", "superseded_at"} {
-				exists, err := tableColumnExists(ctx, db.DB(), table, column)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if !exists {
-					t.Fatalf("missing migrated column %s.%s", table, column)
-				}
-			}
+		exists, err := tableColumnExists(ctx, db.DB(), "model_observation", "stale_since")
+		if err != nil {
+			t.Fatal(err)
 		}
-		for _, table := range []string{"model_observation", "place_observation"} {
-			exists, err := tableColumnExists(ctx, db.DB(), table, "generation_id")
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !exists {
-				t.Fatalf("missing migrated column %s.generation_id", table)
-			}
+		if exists {
+			t.Fatal("read path migrated model_observation.stale_since")
 		}
 	}
 
 	t.Run("open", func(t *testing.T) {
 		paths := buildArchive(t)
-		opened, err := Open(ctx, paths, "asset:old-schema")
-		if err != nil {
-			t.Fatal(err)
+		_, err := Open(ctx, paths, "asset:old-schema")
+		var incompatible ArchiveIncompatibleError
+		if !errors.As(err, &incompatible) {
+			t.Fatalf("open error = %v, want ArchiveIncompatibleError", err)
 		}
-		if opened.Ref != "photos:asset/old-schema" || opened.Model.Summary != "Old migrationterm card." || opened.Stale != nil {
-			t.Fatalf("opened old-schema card = %#v", opened)
-		}
-		assertMigrated(t, paths)
+		assertUnchanged(t, paths)
 	})
 	t.Run("search", func(t *testing.T) {
 		paths := buildArchive(t)
-		search, err := Search(ctx, paths, SearchOptions{Query: "migrationterm", Limit: 5})
-		if err != nil {
-			t.Fatal(err)
+		_, err := Search(ctx, paths, SearchOptions{Query: "migrationterm", Limit: 5})
+		var incompatible ArchiveIncompatibleError
+		if !errors.As(err, &incompatible) {
+			t.Fatalf("search error = %v, want ArchiveIncompatibleError", err)
 		}
-		if len(search.Results) != 1 || search.Results[0].Ref != "photos:asset/old-schema" || search.Results[0].Stale {
-			t.Fatalf("old-schema search = %#v", search.Results)
-		}
-		assertMigrated(t, paths)
+		assertUnchanged(t, paths)
 	})
+}
+
+func TestReadOpenerDoesNotPrepareArchivesForWriting(t *testing.T) {
+	source, err := os.ReadFile("store.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	readOpener := string(source)
+	start := strings.Index(readOpener, "func openExistingArchive")
+	end := strings.Index(readOpener, "func ensureArchiveMigrations")
+	if start < 0 || end < 0 || end <= start {
+		t.Fatal("could not inspect openExistingArchive")
+	}
+	readOpener = readOpener[start:end]
+	if strings.Count(readOpener, "store.OpenReadOnly") != 1 || strings.Count(readOpener, "db.SchemaVersion(ctx)") != 1 {
+		t.Fatalf("read opener must open and read schema version once:\n%s", readOpener)
+	}
+	for _, forbidden := range []string{"archiveMigrationsRequired", "openArchive", "ensureArchiveMigrations"} {
+		if strings.Contains(readOpener, forbidden) {
+			t.Fatalf("read opener calls %s:\n%s", forbidden, readOpener)
+		}
+	}
 }
 
 func TestEnsureArchiveMigrationsTreatsDuplicateColumnRaceAsSuccess(t *testing.T) {
