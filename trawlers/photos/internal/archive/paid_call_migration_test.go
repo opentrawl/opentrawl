@@ -20,7 +20,7 @@ func TestMigrationPaidCallLedgerPreservesVersion12GenerationRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version, err := upgraded.SchemaVersion(ctx); err != nil || version != 13 {
+	if version, err := upgraded.SchemaVersion(ctx); err != nil || version != 14 {
 		t.Fatalf("upgraded schema version = %d, %v", version, err)
 	}
 	after := readPaidCallMigrationRows(t, upgraded)
@@ -39,7 +39,7 @@ func TestMigrationPaidCallLedgerPreservesVersion12GenerationRows(t *testing.T) {
 	assertPaidCallMigrationRowsEqual(t, before, reopenedRows)
 	assertEmptyPaidCallLedger(t, reopened)
 	logPaidCallBoundary(t, "paid_call_migration_output", map[string]any{
-		"schema_version": 13,
+		"schema_version": 14,
 		"rows":           reopenedRows,
 		"ledger_rows":    0,
 	})

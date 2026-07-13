@@ -20,7 +20,7 @@ func TestUsageMentionsLabVerbs(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected usage error")
 	}
-	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|known-places>") {
+	if !strings.Contains(err.Error(), "usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|approved-card|known-places>") {
 		t.Fatalf("unexpected usage error: %v", err)
 	}
 }

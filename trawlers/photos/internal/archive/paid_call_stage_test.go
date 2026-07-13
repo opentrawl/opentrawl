@@ -147,6 +147,7 @@ func paidCallTestStage(
 			Position:          position,
 			AssetID:           assetID,
 			CardInputID:       "card_input:" + positionText,
+			CustodySHA256:     paidCallTestSHA("synthetic custody " + positionText),
 			FullCurrentSHA256: paidCallTestSHA("synthetic full current " + positionText),
 			RequestRoute:      request.Route(),
 			ModelID:           request.Model(),
@@ -172,7 +173,7 @@ from paid_call_stage where id = ?
 	}
 	stage.CreatedAt, _ = time.Parse(time.RFC3339Nano, createdAt)
 	rows, err := db.DB().QueryContext(ctx, `
-select item_id, position, asset_id, card_input_id, full_current_sha256,
+select item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
        request_route, model_id, request_sha256, prompt_version, parser_version
 from paid_call_stage_item where stage_id = ? order by position
 `, stageID)
@@ -183,7 +184,7 @@ from paid_call_stage_item where stage_id = ? order by position
 	for rows.Next() {
 		var item paidCallStageItem
 		if err := rows.Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
-			&item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
+			&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
 			&item.PromptVersion, &item.ParserVersion); err != nil {
 			t.Fatal(err)
 		}

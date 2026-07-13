@@ -1206,6 +1206,8 @@ type CardExecutionCustody struct {
 	MetadataProjectionId        string                 `protobuf:"bytes,5,opt,name=metadata_projection_id,json=metadataProjectionId,proto3" json:"metadata_projection_id,omitempty"`
 	FullCurrentProofSha256      string                 `protobuf:"bytes,6,opt,name=full_current_proof_sha256,json=fullCurrentProofSha256,proto3" json:"full_current_proof_sha256,omitempty"`
 	Evidence                    []*EvidenceLink        `protobuf:"bytes,7,rep,name=evidence,proto3" json:"evidence,omitempty"`
+	CardInputSha256             string                 `protobuf:"bytes,8,opt,name=card_input_sha256,json=cardInputSha256,proto3" json:"card_input_sha256,omitempty"`
+	RequestSha256               string                 `protobuf:"bytes,9,opt,name=request_sha256,json=requestSha256,proto3" json:"request_sha256,omitempty"`
 	unknownFields               protoimpl.UnknownFields
 	sizeCache                   protoimpl.SizeCache
 }
@@ -1289,6 +1291,20 @@ func (x *CardExecutionCustody) GetEvidence() []*EvidenceLink {
 	return nil
 }
 
+func (x *CardExecutionCustody) GetCardInputSha256() string {
+	if x != nil {
+		return x.CardInputSha256
+	}
+	return ""
+}
+
+func (x *CardExecutionCustody) GetRequestSha256() string {
+	if x != nil {
+		return x.RequestSha256
+	}
+	return ""
+}
+
 type EvidenceLink struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	ProviderIdentity  string                 `protobuf:"bytes,1,opt,name=provider_identity,json=providerIdentity,proto3" json:"provider_identity,omitempty"`
@@ -1345,6 +1361,224 @@ func (x *EvidenceLink) GetOperation() string {
 func (x *EvidenceLink) GetRawResponseSha256() string {
 	if x != nil {
 		return x.RawResponseSha256
+	}
+	return ""
+}
+
+// ApprovedCardBundle is the complete credential-free boundary between local
+// preparation and the explicit local send action.
+type ApprovedCardBundle struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Purpose       string                 `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	CallCap       uint32                 `protobuf:"varint,2,opt,name=call_cap,json=callCap,proto3" json:"call_cap,omitempty"`
+	Items         []*ApprovedCardItem    `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ApprovedCardBundle) Reset() {
+	*x = ApprovedCardBundle{}
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApprovedCardBundle) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApprovedCardBundle) ProtoMessage() {}
+
+func (x *ApprovedCardBundle) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApprovedCardBundle.ProtoReflect.Descriptor instead.
+func (*ApprovedCardBundle) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ApprovedCardBundle) GetPurpose() string {
+	if x != nil {
+		return x.Purpose
+	}
+	return ""
+}
+
+func (x *ApprovedCardBundle) GetCallCap() uint32 {
+	if x != nil {
+		return x.CallCap
+	}
+	return 0
+}
+
+func (x *ApprovedCardBundle) GetItems() []*ApprovedCardItem {
+	if x != nil {
+		return x.Items
+	}
+	return nil
+}
+
+type ApprovedCardItem struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Position          uint32                 `protobuf:"varint,1,opt,name=position,proto3" json:"position,omitempty"`
+	AssetId           string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	CardInputId       string                 `protobuf:"bytes,3,opt,name=card_input_id,json=cardInputId,proto3" json:"card_input_id,omitempty"`
+	CardInput         []byte                 `protobuf:"bytes,4,opt,name=card_input,json=cardInput,proto3" json:"card_input,omitempty"`
+	Custody           []byte                 `protobuf:"bytes,5,opt,name=custody,proto3" json:"custody,omitempty"`
+	CustodySha256     string                 `protobuf:"bytes,6,opt,name=custody_sha256,json=custodySha256,proto3" json:"custody_sha256,omitempty"`
+	FullCurrentSha256 string                 `protobuf:"bytes,7,opt,name=full_current_sha256,json=fullCurrentSha256,proto3" json:"full_current_sha256,omitempty"`
+	RequestRoute      string                 `protobuf:"bytes,8,opt,name=request_route,json=requestRoute,proto3" json:"request_route,omitempty"`
+	ModelId           string                 `protobuf:"bytes,9,opt,name=model_id,json=modelId,proto3" json:"model_id,omitempty"`
+	RequestBody       []byte                 `protobuf:"bytes,10,opt,name=request_body,json=requestBody,proto3" json:"request_body,omitempty"`
+	RequestBodyLength uint64                 `protobuf:"varint,11,opt,name=request_body_length,json=requestBodyLength,proto3" json:"request_body_length,omitempty"`
+	RequestSha256     string                 `protobuf:"bytes,12,opt,name=request_sha256,json=requestSha256,proto3" json:"request_sha256,omitempty"`
+	PromptVersion     string                 `protobuf:"bytes,13,opt,name=prompt_version,json=promptVersion,proto3" json:"prompt_version,omitempty"`
+	ParserVersion     string                 `protobuf:"bytes,14,opt,name=parser_version,json=parserVersion,proto3" json:"parser_version,omitempty"`
+	ExecutionId       string                 `protobuf:"bytes,15,opt,name=execution_id,json=executionId,proto3" json:"execution_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *ApprovedCardItem) Reset() {
+	*x = ApprovedCardItem{}
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ApprovedCardItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ApprovedCardItem) ProtoMessage() {}
+
+func (x *ApprovedCardItem) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ApprovedCardItem.ProtoReflect.Descriptor instead.
+func (*ApprovedCardItem) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ApprovedCardItem) GetPosition() uint32 {
+	if x != nil {
+		return x.Position
+	}
+	return 0
+}
+
+func (x *ApprovedCardItem) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetCardInputId() string {
+	if x != nil {
+		return x.CardInputId
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetCardInput() []byte {
+	if x != nil {
+		return x.CardInput
+	}
+	return nil
+}
+
+func (x *ApprovedCardItem) GetCustody() []byte {
+	if x != nil {
+		return x.Custody
+	}
+	return nil
+}
+
+func (x *ApprovedCardItem) GetCustodySha256() string {
+	if x != nil {
+		return x.CustodySha256
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetFullCurrentSha256() string {
+	if x != nil {
+		return x.FullCurrentSha256
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetRequestRoute() string {
+	if x != nil {
+		return x.RequestRoute
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetModelId() string {
+	if x != nil {
+		return x.ModelId
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetRequestBody() []byte {
+	if x != nil {
+		return x.RequestBody
+	}
+	return nil
+}
+
+func (x *ApprovedCardItem) GetRequestBodyLength() uint64 {
+	if x != nil {
+		return x.RequestBodyLength
+	}
+	return 0
+}
+
+func (x *ApprovedCardItem) GetRequestSha256() string {
+	if x != nil {
+		return x.RequestSha256
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetPromptVersion() string {
+	if x != nil {
+		return x.PromptVersion
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetParserVersion() string {
+	if x != nil {
+		return x.ParserVersion
+	}
+	return ""
+}
+
+func (x *ApprovedCardItem) GetExecutionId() string {
+	if x != nil {
+		return x.ExecutionId
 	}
 	return ""
 }
@@ -1482,7 +1716,7 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\vstatus_code\x18\x04 \x01(\x05R\n" +
 	"statusCode\x12.\n" +
 	"\x13provider_request_id\x18\x05 \x01(\tR\x11providerRequestId\x121\n" +
-	"\x14transmission_started\x18\x06 \x01(\bR\x13transmissionStarted\"\xf6\x02\n" +
+	"\x14transmission_started\x18\x06 \x01(\bR\x13transmissionStarted\"\xc9\x03\n" +
 	"\x14CardExecutionCustody\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x19\n" +
 	"\basset_id\x18\x02 \x01(\tR\aassetId\x12C\n" +
@@ -1490,11 +1724,35 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\x12metadata_record_id\x18\x04 \x01(\tR\x10metadataRecordId\x124\n" +
 	"\x16metadata_projection_id\x18\x05 \x01(\tR\x14metadataProjectionId\x129\n" +
 	"\x19full_current_proof_sha256\x18\x06 \x01(\tR\x16fullCurrentProofSha256\x12B\n" +
-	"\bevidence\x18\a \x03(\v2&.opentrawl.photos.card.v1.EvidenceLinkR\bevidence\"\x89\x01\n" +
+	"\bevidence\x18\a \x03(\v2&.opentrawl.photos.card.v1.EvidenceLinkR\bevidence\x12*\n" +
+	"\x11card_input_sha256\x18\b \x01(\tR\x0fcardInputSha256\x12%\n" +
+	"\x0erequest_sha256\x18\t \x01(\tR\rrequestSha256\"\x89\x01\n" +
 	"\fEvidenceLink\x12+\n" +
 	"\x11provider_identity\x18\x01 \x01(\tR\x10providerIdentity\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12.\n" +
-	"\x13raw_response_sha256\x18\x03 \x01(\tR\x11rawResponseSha256BXZVgithub.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1;cardwireb\x06proto3"
+	"\x13raw_response_sha256\x18\x03 \x01(\tR\x11rawResponseSha256\"\x8b\x01\n" +
+	"\x12ApprovedCardBundle\x12\x18\n" +
+	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x19\n" +
+	"\bcall_cap\x18\x02 \x01(\rR\acallCap\x12@\n" +
+	"\x05items\x18\x03 \x03(\v2*.opentrawl.photos.card.v1.ApprovedCardItemR\x05items\"\xa8\x04\n" +
+	"\x10ApprovedCardItem\x12\x1a\n" +
+	"\bposition\x18\x01 \x01(\rR\bposition\x12\x19\n" +
+	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\"\n" +
+	"\rcard_input_id\x18\x03 \x01(\tR\vcardInputId\x12\x1d\n" +
+	"\n" +
+	"card_input\x18\x04 \x01(\fR\tcardInput\x12\x18\n" +
+	"\acustody\x18\x05 \x01(\fR\acustody\x12%\n" +
+	"\x0ecustody_sha256\x18\x06 \x01(\tR\rcustodySha256\x12.\n" +
+	"\x13full_current_sha256\x18\a \x01(\tR\x11fullCurrentSha256\x12#\n" +
+	"\rrequest_route\x18\b \x01(\tR\frequestRoute\x12\x19\n" +
+	"\bmodel_id\x18\t \x01(\tR\amodelId\x12!\n" +
+	"\frequest_body\x18\n" +
+	" \x01(\fR\vrequestBody\x12.\n" +
+	"\x13request_body_length\x18\v \x01(\x04R\x11requestBodyLength\x12%\n" +
+	"\x0erequest_sha256\x18\f \x01(\tR\rrequestSha256\x12%\n" +
+	"\x0eprompt_version\x18\r \x01(\tR\rpromptVersion\x12%\n" +
+	"\x0eparser_version\x18\x0e \x01(\tR\rparserVersion\x12!\n" +
+	"\fexecution_id\x18\x0f \x01(\tR\vexecutionIdBXZVgithub.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1;cardwireb\x06proto3"
 
 var (
 	file_opentrawl_photos_card_v1_card_proto_rawDescOnce sync.Once
@@ -1508,7 +1766,7 @@ func file_opentrawl_photos_card_v1_card_proto_rawDescGZIP() []byte {
 	return file_opentrawl_photos_card_v1_card_proto_rawDescData
 }
 
-var file_opentrawl_photos_card_v1_card_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_opentrawl_photos_card_v1_card_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_opentrawl_photos_card_v1_card_proto_goTypes = []any{
 	(*CardInput)(nil),            // 0: opentrawl.photos.card.v1.CardInput
 	(*ImmutableOriginal)(nil),    // 1: opentrawl.photos.card.v1.ImmutableOriginal
@@ -1525,6 +1783,8 @@ var file_opentrawl_photos_card_v1_card_proto_goTypes = []any{
 	(*FixtureResponse)(nil),      // 12: opentrawl.photos.card.v1.FixtureResponse
 	(*CardExecutionCustody)(nil), // 13: opentrawl.photos.card.v1.CardExecutionCustody
 	(*EvidenceLink)(nil),         // 14: opentrawl.photos.card.v1.EvidenceLink
+	(*ApprovedCardBundle)(nil),   // 15: opentrawl.photos.card.v1.ApprovedCardBundle
+	(*ApprovedCardItem)(nil),     // 16: opentrawl.photos.card.v1.ApprovedCardItem
 }
 var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	1,  // 0: opentrawl.photos.card.v1.CardInput.immutable_original:type_name -> opentrawl.photos.card.v1.ImmutableOriginal
@@ -1540,11 +1800,12 @@ var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	4,  // 10: opentrawl.photos.card.v1.PlaceCandidate.coordinate:type_name -> opentrawl.photos.card.v1.Coordinate
 	11, // 11: opentrawl.photos.card.v1.PlaceCandidate.address:type_name -> opentrawl.photos.card.v1.Address
 	14, // 12: opentrawl.photos.card.v1.CardExecutionCustody.evidence:type_name -> opentrawl.photos.card.v1.EvidenceLink
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	16, // 13: opentrawl.photos.card.v1.ApprovedCardBundle.items:type_name -> opentrawl.photos.card.v1.ApprovedCardItem
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_card_v1_card_proto_init() }
@@ -1561,7 +1822,7 @@ func file_opentrawl_photos_card_v1_card_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_card_v1_card_proto_rawDesc), len(file_opentrawl_photos_card_v1_card_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

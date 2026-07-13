@@ -235,7 +235,7 @@ func TestFixturePlaceEvidenceIdentityPreservesOrder(t *testing.T) {
 	second := strings.Repeat("b", 64)
 	records := []place.EvidenceRecord{{RawResponseSHA256: first}, {RawResponseSHA256: second}}
 	prompt := classifyInput{Place: &classifyPlaceContext{EvidenceRawResponseSHA256: []string{second, first}}}
-	if err := validateFixturePlaceEvidenceIdentity(records, prompt); err == nil {
+	if err := validatePlaceEvidenceIdentity(records, prompt); err == nil {
 		t.Fatal("reordered checked place evidence identities succeeded")
 	}
 }

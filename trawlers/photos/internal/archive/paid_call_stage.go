@@ -28,6 +28,7 @@ type paidCallStageItem struct {
 	Position          int
 	AssetID           string
 	CardInputID       string
+	CustodySHA256     string
 	FullCurrentSHA256 string
 	RequestRoute      string
 	ModelID           string
@@ -48,6 +49,7 @@ type paidCallStage struct {
 type paidCallStageTuple struct {
 	AssetID           string
 	CardInputID       string
+	CustodySHA256     string
 	FullCurrentSHA256 string
 	RequestRoute      string
 	ModelID           string
@@ -96,11 +98,11 @@ on conflict(id) do nothing
 		for _, item := range stage.Items {
 			if _, err := tx.ExecContext(ctx, `
 insert into paid_call_stage_item(
-  stage_id, item_id, position, asset_id, card_input_id, full_current_sha256,
+  stage_id, item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
   request_route, model_id, request_sha256, prompt_version, parser_version
 )
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, stage.ID, item.ItemID, item.Position, item.AssetID, item.CardInputID, item.FullCurrentSHA256,
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`, stage.ID, item.ItemID, item.Position, item.AssetID, item.CardInputID, item.CustodySHA256, item.FullCurrentSHA256,
 				item.RequestRoute, item.ModelID, item.RequestSHA256, item.PromptVersion, item.ParserVersion); err != nil {
 				return fmt.Errorf("persist paid call stage item %d: %w", item.Position, err)
 			}
@@ -151,6 +153,11 @@ func validatePaidCallStage(stage paidCallStage) error {
 		if err := validateSHA256("full-current", item.FullCurrentSHA256); err != nil {
 			return fmt.Errorf("paid call item %d: %w", item.Position, err)
 		}
+		if stage.Purpose != paidCallPurposeScreening {
+			if err := validateSHA256("custody", item.CustodySHA256); err != nil {
+				return fmt.Errorf("paid call item %d: %w", item.Position, err)
+			}
+		}
 		if err := validateSHA256("request", item.RequestSHA256); err != nil {
 			return fmt.Errorf("paid call item %d: %w", item.Position, err)
 		}
@@ -188,7 +195,7 @@ where id = ?
 	}
 
 	rows, err := tx.QueryContext(ctx, `
-select item_id, position, asset_id, card_input_id, full_current_sha256,
+select item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
        request_route, model_id, request_sha256, prompt_version, parser_version
 from paid_call_stage_item
 where stage_id = ?
@@ -202,7 +209,7 @@ order by position
 	for rows.Next() {
 		var item paidCallStageItem
 		if err := rows.Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
-			&item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
+			&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
 			&item.PromptVersion, &item.ParserVersion); err != nil {
 			return time.Time{}, fmt.Errorf("scan paid call stage item: %w", err)
 		}
@@ -227,7 +234,7 @@ func paidCallStageID(stage paidCallStage) string {
 	parts := []string{string(stage.Purpose), stage.ApprovalReceiptSHA256, strconv.Itoa(stage.ApprovedCallCap), strconv.Itoa(len(stage.Items))}
 	for _, item := range stage.Items {
 		parts = append(parts, strconv.Itoa(item.Position), item.ItemID, item.AssetID, item.CardInputID,
-			item.FullCurrentSHA256, item.RequestRoute, item.ModelID, item.RequestSHA256,
+			item.CustodySHA256, item.FullCurrentSHA256, item.RequestRoute, item.ModelID, item.RequestSHA256,
 			item.PromptVersion, item.ParserVersion)
 	}
 	for _, part := range parts {
@@ -241,7 +248,7 @@ func paidCallStageID(stage paidCallStage) string {
 
 func paidCallItemTuple(item paidCallStageItem) paidCallStageTuple {
 	return paidCallStageTuple{
-		AssetID: item.AssetID, CardInputID: item.CardInputID, FullCurrentSHA256: item.FullCurrentSHA256,
+		AssetID: item.AssetID, CardInputID: item.CardInputID, CustodySHA256: item.CustodySHA256, FullCurrentSHA256: item.FullCurrentSHA256,
 		RequestRoute: item.RequestRoute, ModelID: item.ModelID, RequestSHA256: item.RequestSHA256,
 		PromptVersion: item.PromptVersion, ParserVersion: item.ParserVersion,
 	}

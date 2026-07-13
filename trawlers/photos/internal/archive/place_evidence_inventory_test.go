@@ -98,13 +98,13 @@ func TestPlaceEvidenceInventoryUsesFirstLocationAndKeepsMissingLocation(t *testi
 	}
 }
 
-func TestPlaceEvidenceInventoryRequiresSchema13(t *testing.T) {
+func TestPlaceEvidenceInventoryRequiresCurrentSchema(t *testing.T) {
 	ctx := context.Background()
 	db, path := newPlaceEvidenceInventoryFixture(t, SchemaVersion-1)
 	closePlaceEvidenceInventoryFixture(t, db)
 
 	_, err := ReadPlaceEvidenceInventory(ctx, path, "source:fixture")
-	if err == nil || !strings.Contains(err.Error(), "schema is 12, want 13") {
+	if err == nil || !strings.Contains(err.Error(), "schema is 13, want 14") {
 		t.Fatalf("schema error = %v", err)
 	}
 }

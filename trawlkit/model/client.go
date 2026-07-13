@@ -302,6 +302,34 @@ func (c *Client) Render(request Request) (ProviderRequest, error) {
 	return c.renderNative(request)
 }
 
+// ValidateRequest proves that a retained request is still for this configured
+// endpoint and model before a client can attach its credential.
+func (c *Client) ValidateRequest(request ProviderRequest) error {
+	if err := validateProviderRoute(request.route); err != nil {
+		return err
+	}
+	wantRoute, err := GenerateEndpoint(c.baseURL)
+	if err != nil {
+		return err
+	}
+	if request.route != wantRoute {
+		return errors.New("model request route does not match configured endpoint")
+	}
+	if request.model != c.model {
+		return errors.New("model request model does not match configured model")
+	}
+	var body struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(request.body, &body); err != nil {
+		return fmt.Errorf("decode model request body: %w", err)
+	}
+	if body.Model != c.model {
+		return errors.New("model request body model does not match configured model")
+	}
+	return nil
+}
+
 func marshalProviderRequest(route, model string, payload any) (ProviderRequest, error) {
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -324,7 +352,7 @@ func validateProviderRoute(route string) error {
 // Send transmits the exact body held by request. It returns response or
 // failure bytes before provider JSON or card prose is parsed.
 func (c *Client) Send(ctx context.Context, request ProviderRequest) (RawResult, error) {
-	if err := validateProviderRoute(request.route); err != nil {
+	if err := c.ValidateRequest(request); err != nil {
 		return RawResult{}, err
 	}
 	var started atomic.Bool

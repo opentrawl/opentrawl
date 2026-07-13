@@ -67,7 +67,7 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
-	if err := validateFixturePlaceEvidenceIdentity(prepared.Evidence, prepared.Classify); err != nil {
+	if err := validatePlaceEvidenceIdentity(prepared.Evidence, prepared.Classify); err != nil {
 		return fixtureCardResult{}, fmt.Errorf("validate fixture card request boundary: %w", err)
 	}
 	imageDigest := sha256.Sum256(prepared.CurrentStill)
@@ -133,11 +133,11 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	return fixtureCardResult{ExecutionID: executionID, Input: input, Request: providerRequest, RawResponse: raw, PromptVersion: classifier.promptVersion, ParserVersion: modelParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: custody}, nil
 }
 
-// validateFixturePlaceEvidenceIdentity keeps the checked records accepted by
+// validatePlaceEvidenceIdentity keeps the checked records accepted by
 // CardInput.Build and the already prepared request projection on one custody
 // boundary. It deliberately compares identity only; place semantics stay in
 // their existing canonical projections.
-func validateFixturePlaceEvidenceIdentity(records []place.EvidenceRecord, prompt classifyInput) error {
+func validatePlaceEvidenceIdentity(records []place.EvidenceRecord, prompt classifyInput) error {
 	identities := []string(nil)
 	if prompt.Place != nil {
 		identities = prompt.Place.EvidenceRawResponseSHA256

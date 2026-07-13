@@ -143,10 +143,38 @@ message CardExecutionCustody {
   string metadata_projection_id = 5;
   string full_current_proof_sha256 = 6;
   repeated EvidenceLink evidence = 7;
+  string card_input_sha256 = 8;
+  string request_sha256 = 9;
 }
 
 message EvidenceLink {
   string provider_identity = 1;
   string operation = 2;
   string raw_response_sha256 = 3;
+}
+
+// ApprovedCardBundle is the complete credential-free boundary between local
+// preparation and the explicit local send action.
+message ApprovedCardBundle {
+  string purpose = 1;
+  uint32 call_cap = 2;
+  repeated ApprovedCardItem items = 3;
+}
+
+message ApprovedCardItem {
+  uint32 position = 1;
+  string asset_id = 2;
+  string card_input_id = 3;
+  bytes card_input = 4;
+  bytes custody = 5;
+  string custody_sha256 = 6;
+  string full_current_sha256 = 7;
+  string request_route = 8;
+  string model_id = 9;
+  bytes request_body = 10;
+  uint64 request_body_length = 11;
+  string request_sha256 = 12;
+  string prompt_version = 13;
+  string parser_version = 14;
+  string execution_id = 15;
 }
