@@ -23,9 +23,9 @@ func liveSourceFakes() []fakeCrawler {
 
 func TestBareFrontDoorRendersSyntheticManifestHeadlines(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
-		fakeCrawler{name: "alphacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"alpha","display_name":"Alpha","binary":{"name":"alphacrawl"},"capabilities":["sync","search","open"],"headlines":["zeta","alpha","middle","search","sync","status"],"commands":{"alpha":{"title":"Alpha","argv":["alphacrawl","alpha","--json"],"json":true,"headline":true},"middle":{"title":"Middle","argv":["alphacrawl","middle","--json"],"json":true,"headline":true},"zeta":{"title":"Zeta","argv":["alphacrawl","zeta","--json"],"json":true,"headline":true},"search":{"title":"Search","argv":["alphacrawl","search","QUERY","--json"],"json":true,"headline":true},"status":{"title":"Status","argv":["alphacrawl","status","--json"],"json":true,"headline":true},"sync":{"title":"Sync","argv":["alphacrawl","sync","--json"],"json":true,"headline":true}}}`},
+		fakeCrawler{name: "alphacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"alpha","display_name":"Alpha","binary":{"name":"alphacrawl"},"capabilities":["sync","search","open"],"headlines":["zeta","alpha","middle"]}`},
 		fakeCrawler{name: "emptycrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"empty","display_name":"Empty","binary":{"name":"emptycrawl"}}`},
-		fakeCrawler{name: "betacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"beta","display_name":"Beta","binary":{"name":"betacrawl"},"headlines":["only"],"commands":{"only":{"title":"Only","argv":["betacrawl","only","--json"],"json":true,"headline":true}}}`},
+		fakeCrawler{name: "betacrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"beta","display_name":"Beta","binary":{"name":"betacrawl"},"headlines":["only"]}`},
 	)
 	t.Setenv("PATH", binDir)
 
@@ -62,14 +62,14 @@ func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
 	}
 	want := `Sources:
   imessage        chats
-  whatsapp        chats
+  whatsapp        chats · groups
   telegram        chats · folders · topics
-  gmail
-  calendar        calendars
-  contacts        person
-  photos
+  gmail           emails
+  calendar        events · calendars
+  contacts        people
+  photos          photos
   x (twitter)     tweets · bookmarks · likes · mentions
-  notes           versions
+  notes           notes · folders · versions
 
 Start here:
   trawl status                 every source, and how fresh

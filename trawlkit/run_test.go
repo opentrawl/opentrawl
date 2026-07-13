@@ -30,6 +30,7 @@ import (
 type testCrawler struct {
 	id        string
 	surface   string
+	headlines []string
 	cfg       *testConfig
 	verbs     []Verb
 	statusFn  func(context.Context, *Request) (*control.Status, error)
@@ -86,6 +87,7 @@ func (c *testCrawler) Info() Info {
 		ID:          id,
 		Surface:     firstText(c.surface, "test"),
 		DisplayName: "Test",
+		Headlines:   append([]string(nil), c.headlines...),
 	}
 	if c.cfg != nil {
 		info.Config = c.cfg
@@ -1161,7 +1163,7 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 		},
 	}}}
 	wantMessage := "invalid sync Verb declaration"
-	wantDetail := "spine verb declarations may only set Name, Flags, Headline, and Store"
+	wantDetail := "spine verb declarations may only set Name, Flags, and Store"
 	wantRemedy := "Remove Help, Run, Mutates, Timeout, and Args from the sync Verb declaration."
 
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
@@ -1180,23 +1182,34 @@ func TestRunRejectsIllegalSpineVerbDeclaration(t *testing.T) {
 	}
 }
 
-func TestRunRejectsNonChatsSpineHeadlineDeclaration(t *testing.T) {
-	stateRoot := t.TempDir()
-	source := &testCrawler{verbs: []Verb{{
-		Name:     "search",
-		Headline: true,
-	}}}
-	wantMessage := "invalid search Verb declaration: Headline is only valid on chats"
-	wantRemedy := "Remove Headline from this declaration, or declare chats; chats is the one shared verb that may headline."
-
-	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
-	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
-		t.Fatalf("metadata invalid Headline code=%d stdout=%s stderr=%s", code, stdout, stderr)
+func TestManifestValidatesHeadlines(t *testing.T) {
+	cases := []struct {
+		name      string
+		headlines []string
+		want      string
+	}{
+		{name: "empty", headlines: []string{""}, want: "entries must not be empty"},
+		{name: "padded", headlines: []string{" chats"}, want: "entries must already be trimmed"},
+		{name: "duplicate", headlines: []string{"chats", "chats"}, want: "entries must be distinct"},
+		{name: "fifth", headlines: []string{"a", "b", "c", "d", "e"}, want: "at most four entries are allowed"},
 	}
-
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"search", "--json", "needle"}, source, runOptions{})
-	if code != 1 || stderr != "" || !strings.Contains(stdout, wantMessage) || !strings.Contains(stdout, wantRemedy) {
-		t.Fatalf("search invalid Headline code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Manifest(&testCrawler{headlines: tc.headlines})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Manifest() error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	manifest, err := Manifest(&testCrawler{
+		headlines: []string{"emails", "labels"},
+		verbs:     []Verb{{Name: "renamed command"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(manifest.Headlines, []string{"emails", "labels"}) {
+		t.Fatalf("headlines = %#v", manifest.Headlines)
 	}
 }
 

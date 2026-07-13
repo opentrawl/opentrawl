@@ -52,6 +52,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          archive.AppID,
 		Surface:     archive.AppID,
 		DisplayName: archive.DisplayName,
+		Headlines:   []string{"notes", "folders", "versions"},
 		Privacy: control.Privacy{
 			ContainsPrivateMessages: true,
 			ExportsSecrets:          false,
@@ -87,7 +88,6 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Name:      "versions",
 			Help:      "List recovered versions for one note",
 			Args:      []string{"NOTE"},
-			Headline:  true,
 			Secondary: true,
 			Store:     trawlkit.StoreRequired,
 			Run: func(ctx context.Context, req *trawlkit.Request) error {

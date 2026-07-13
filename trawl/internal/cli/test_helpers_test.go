@@ -491,6 +491,7 @@ func (f *fakeSource) Info() trawlkit.Info {
 		Surface:     sourceAlias(f.manifest.DisplayName),
 		Aliases:     f.manifest.Aliases,
 		DisplayName: f.manifest.DisplayName,
+		Headlines:   f.manifest.Headlines,
 	}
 }
 
@@ -508,17 +509,15 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 			continue
 		}
 		name := strings.Join(tokens, " ")
-		headline := fakeCommandHeadline(f.manifest, command)
 		if fakeSpineVerb(name) {
 			continue
 		}
 		verbName := name
 		limit := ""
 		verbs = append(verbs, trawlkit.Verb{
-			Name:     verbName,
-			Help:     command.Title,
-			Headline: headline,
-			Store:    trawlkit.StoreNone,
+			Name:  verbName,
+			Help:  command.Title,
+			Store: trawlkit.StoreNone,
 			Flags: func(fs *flag.FlagSet) {
 				fs.StringVar(&limit, "limit", "", "limit")
 			},
@@ -552,49 +551,11 @@ func orderedFakeCommands(manifest control.Manifest) []control.Command {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)
-	used := map[string]struct{}{}
 	out := make([]control.Command, 0, len(keys))
-	for _, headline := range manifest.Headlines {
-		for _, key := range keys {
-			if _, ok := used[key]; ok {
-				continue
-			}
-			command := manifest.Commands[key]
-			if fakeHeadlineVerb(command) != headline {
-				continue
-			}
-			out = append(out, command)
-			used[key] = struct{}{}
-		}
-	}
 	for _, key := range keys {
-		if _, ok := used[key]; ok {
-			continue
-		}
 		out = append(out, manifest.Commands[key])
 	}
 	return out
-}
-
-func fakeCommandHeadline(manifest control.Manifest, command control.Command) bool {
-	if command.Headline {
-		return true
-	}
-	headline := fakeHeadlineVerb(command)
-	for _, want := range manifest.Headlines {
-		if headline == want {
-			return true
-		}
-	}
-	return false
-}
-
-func fakeHeadlineVerb(command control.Command) string {
-	tokens := fixedVerbTokens(command)
-	if len(tokens) == 0 {
-		return ""
-	}
-	return tokens[0]
 }
 
 func fakeSpineVerb(name string) bool {

@@ -427,15 +427,15 @@ private func expectedStatus(_ name: String) -> StatusResponse {
   case "status-product":
     StatusResponse(
       sources: [
-        expectedProductSource("calendar", "Calendar", ["calendars"]),
-        expectedProductSource("contacts", "Contacts", ["person"]),
-        expectedProductSource("gmail", "Gmail", []),
+        expectedProductSource("calendar", "Calendar", ["events", "calendars"]),
+        expectedProductSource("contacts", "Contacts", ["people"]),
+        expectedProductSource("gmail", "Gmail", ["emails"]),
         expectedProductSource("imessage", "Messages", ["chats"]),
-        expectedProductSource("notes", "Notes", ["versions"]),
-        expectedProductSource("photos", "Photos", []),
+        expectedProductSource("notes", "Notes", ["notes", "folders", "versions"]),
+        expectedProductSource("photos", "Photos", ["photos"]),
         expectedProductSource("telegram", "Telegram", ["chats", "folders", "topics"]),
         expectedProductSource("twitter", "X", ["tweets", "bookmarks", "likes", "mentions"]),
-        expectedProductSource("whatsapp", "WhatsApp", ["chats"]),
+        expectedProductSource("whatsapp", "WhatsApp", ["chats", "groups"]),
       ], failures: [], skippedSources: [], outcome: .complete)
   case "status-complete":
     StatusResponse(

@@ -32,7 +32,7 @@ func writeFrontDoor(w io.Writer) error {
 }
 
 // sourcesBlock renders installed crawlers as source names plus declared
-// headline verbs. Sources with no headline verbs render as names only.
+// manifest headlines. Sources with no headlines render as names only.
 func sourcesBlock(sources []Source) string {
 	if len(sources) == 0 {
 		return "Sources:\n  No crawlers are installed yet."

@@ -2,6 +2,7 @@ package trawlkit
 
 import (
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"sort"
@@ -12,6 +13,9 @@ import (
 
 func generateManifest(source Crawler, stateRoot, binaryName string) (control.Manifest, error) {
 	info := source.Info()
+	if err := validateHeadlines(info.Headlines); err != nil {
+		return control.Manifest{}, err
+	}
 	paths, err := resolveSourcePaths(stateRoot, info)
 	if err != nil {
 		return control.Manifest{}, err
@@ -39,7 +43,7 @@ func generateManifest(source Crawler, stateRoot, binaryName string) (control.Man
 	}
 	manifest.Capabilities = capabilitiesFor(source, info)
 	manifest.Commands = commandTable(source, binaryName, spine)
-	manifest.Headlines = headlineVerbs(source, manifest.Commands)
+	manifest.Headlines = append([]string(nil), info.Headlines...)
 	return manifest, nil
 }
 
@@ -125,7 +129,6 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 			JSON:      true,
 			Mutates:   verb.Mutates,
 			Store:     storeModeManifestValue(mode),
-			Headline:  verb.Headline,
 			Secondary: verb.Secondary,
 			Flags:     flagsForVerb(verb),
 		}
@@ -133,46 +136,24 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 	return commands
 }
 
-func headlineVerbs(source Crawler, commands map[string]control.Command) []string {
-	seen := map[string]struct{}{}
-	var out []string
-	for _, verb := range source.Verbs() {
-		if !verb.Headline {
-			continue
-		}
-		if !canHeadlineVerb(verb) {
-			continue
-		}
-		command, ok := commands[commandKey(verb.Name)]
-		if !ok || !command.Headline {
-			continue
-		}
-		headline := headlineVerb(command)
+func validateHeadlines(headlines []string) error {
+	if len(headlines) > 4 {
+		return fmt.Errorf("invalid headlines: at most four entries are allowed")
+	}
+	seen := make(map[string]struct{}, len(headlines))
+	for _, headline := range headlines {
 		if headline == "" {
-			continue
+			return fmt.Errorf("invalid headlines: entries must not be empty")
+		}
+		if strings.TrimSpace(headline) != headline {
+			return fmt.Errorf("invalid headlines: entries must already be trimmed")
 		}
 		if _, ok := seen[headline]; ok {
-			continue
+			return fmt.Errorf("invalid headlines: entries must be distinct")
 		}
 		seen[headline] = struct{}{}
-		out = append(out, headline)
 	}
-	return out
-}
-
-func canHeadlineVerb(verb Verb) bool {
-	key, ok := spineVerbKey(verb.Name)
-	// Chats is the one shared verb that names a source's primary corpus on the
-	// front door. Other spine verbs describe runner-wide actions and stay out.
-	return !ok || key == "chats"
-}
-
-func headlineVerb(command control.Command) string {
-	tokens := fixedCommandTokens(command)
-	if len(tokens) == 0 {
-		return ""
-	}
-	return tokens[0]
+	return nil
 }
 
 func chatsCommand(source Crawler, binaryName string, spine map[string]Verb) (control.Command, bool) {
@@ -209,7 +190,6 @@ func applySpineDeclaration(command control.Command, spine map[string]Verb, key s
 		return command
 	}
 	command.Store = storeModeManifestValue(spineStoreMode(key, &verb))
-	command.Headline = verb.Headline
 	command.Flags = append(command.Flags, flagsForVerb(verb)...)
 	sort.Slice(command.Flags, func(i, j int) bool { return command.Flags[i].Name < command.Flags[j].Name })
 	return command
@@ -254,16 +234,6 @@ func commandKey(name string) string {
 	name = strings.Join(strings.Fields(strings.TrimSpace(name)), "_")
 	name = strings.ReplaceAll(name, "-", "_")
 	return name
-}
-
-func fixedCommandTokens(command control.Command) []string {
-	for _, token := range command.Argv[1:] {
-		if strings.HasPrefix(token, "-") {
-			continue
-		}
-		return []string{token}
-	}
-	return nil
 }
 
 func uniqueStrings(values []string) []string {
