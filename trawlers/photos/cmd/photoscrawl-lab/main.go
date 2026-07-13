@@ -22,6 +22,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/cache"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
+	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
@@ -124,6 +125,8 @@ func run(ctx context.Context, args []string) error {
 		return output.Write(os.Stdout, format, "eval_card", result)
 	case "audit-card-input":
 		return runAuditCardInput(ctx, paths, args[1:])
+	case "approved-card":
+		return runApprovedCard(ctx, args[1:])
 	case "known-places":
 		return runKnownPlaces(ctx, paths, args[1:])
 	default:
@@ -132,7 +135,112 @@ func run(ctx context.Context, args []string) error {
 }
 
 func usage() error {
-	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|known-places>")}
+	return output.UsageError{Err: errors.New("usage: photoscrawl-lab <place-evidence|place-evidence-inventory|place-evidence-campaign|place-context|eval-card|audit-card-input|approved-card|known-places>")}
+}
+
+func runApprovedCard(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab approved-card <prepare|send>")}
+	}
+	fs := flag.NewFlagSet("approved-card "+args[0], flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	archivePath := fs.String("archive", "", "Photos archive path")
+	cacheDir := fs.String("cache-dir", "", "Photos checked-artifact cache directory")
+	sourceLibrary := fs.String("source-library", "", "Photos source library identity")
+	assets := stringList{}
+	fs.Var(&assets, "asset", "asset identity to prepare; repeat for each asset")
+	preparedPath := fs.String("prepared", "", "private prepared protobuf bundle")
+	approvedSHA256 := fs.String("approve-manifest-sha256", "", "SHA-256 of the prepared bundle to send")
+	outDir := fs.String("out", "", "existing owner-only private output directory")
+	modelConfigPath := fs.String("model-config", "", "private model credential configuration")
+	if err := fs.Parse(args[1:]); err != nil {
+		return output.UsageError{Err: err}
+	}
+	if err := validateCardInputAuditOutput(*outDir); err != nil {
+		return err
+	}
+	switch args[0] {
+	case "prepare":
+		config, err := readApprovedCardModelConfig(*modelConfigPath)
+		if err != nil {
+			return err
+		}
+		prepared, err := archive.PrepareApprovedCardBundle(ctx, archive.ApprovedCardPrepareOptions{
+			ArchivePath: *archivePath, CacheDir: *cacheDir, SourceLibraryID: *sourceLibrary,
+			AssetIDs: assets, Model: config.Model, ModelURL: config.BaseURL,
+			Purpose: "canary", CallCap: len(assets),
+		})
+		if err != nil {
+			return err
+		}
+		return writeApprovedCardBundle(*outDir, prepared)
+	case "send":
+		config, err := readApprovedCardModelConfig(*modelConfigPath)
+		if err != nil {
+			return err
+		}
+		prepared, err := os.ReadFile(*preparedPath)
+		if err != nil {
+			return err
+		}
+		if err := archive.ValidateApprovedCardSend(prepared, strings.TrimSpace(*approvedSHA256)); err != nil {
+			return err
+		}
+		db, err := archive.OpenApprovedCardArchive(ctx, *archivePath)
+		if err != nil {
+			return err
+		}
+		defer db.Close()
+		client, err := model.New(model.Config{BaseURL: config.BaseURL, Model: config.Model, BearerKeyEnv: config.BearerKeyEnv})
+		if err != nil {
+			return err
+		}
+		return archive.SendApprovedCardBundle(ctx, db, prepared, strings.TrimSpace(*approvedSHA256), time.Now().UTC(), client)
+	default:
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab approved-card <prepare|send>")}
+	}
+}
+
+type approvedCardModelConfig struct {
+	BaseURL      string `toml:"base_url"`
+	Model        string `toml:"model"`
+	BearerKeyEnv string `toml:"bearer_key_env"`
+}
+
+func readApprovedCardModelConfig(path string) (approvedCardModelConfig, error) {
+	var config approvedCardModelConfig
+	if err := ckconfig.LoadTOML(path, &config); err != nil {
+		return approvedCardModelConfig{}, fmt.Errorf("load approved-card model config: %w", err)
+	}
+	if strings.TrimSpace(config.BaseURL) == "" || strings.TrimSpace(config.Model) == "" {
+		return approvedCardModelConfig{}, errors.New("approved-card model config requires base_url and model")
+	}
+	return config, nil
+}
+
+func writeApprovedCardBundle(outDir string, prepared []byte) error {
+	file, err := os.OpenFile(filepath.Join(strings.TrimSpace(outDir), "approved-card.pb"), os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := file.Write(prepared); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+type stringList []string
+
+func (values *stringList) String() string { return strings.Join(*values, ",") }
+
+func (values *stringList) Set(value string) error {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return errors.New("asset identity is required")
+	}
+	*values = append(*values, value)
+	return nil
 }
 
 type cardInputAuditSelection struct {

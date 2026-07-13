@@ -41,6 +41,8 @@ var archiveColumnMigrations = []archiveColumnMigration{
 	{table: "place_observation", column: "stale_reason", definition: "text"},
 	{table: "place_observation", column: "superseded_at", definition: "text"},
 	{table: "place_observation", column: "generation_id", definition: "text references model_generation(id)"},
+	{table: "paid_call_stage_item", column: "custody_sha256", definition: "text not null default ''"},
+	{table: "paid_call_claim", column: "custody_sha256", definition: "text not null default ''"},
 }
 
 func openArchive(ctx context.Context, path string) (*store.Store, error) {

@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 13
+const SchemaVersion = 14
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -230,6 +230,7 @@ create table if not exists paid_call_stage_item (
   position integer not null check (position > 0),
   asset_id text not null references asset(id),
   card_input_id text not null,
+  custody_sha256 text not null default '',
   full_current_sha256 text not null,
   request_route text not null,
   model_id text not null,
@@ -257,6 +258,7 @@ create table if not exists paid_call_claim (
   purpose text not null check (purpose in ('screening', 'canary', 'backfill')),
   asset_id text not null references asset(id),
   card_input_id text not null,
+  custody_sha256 text not null default '',
   full_current_sha256 text not null,
   request_sha256 text not null,
   prompt_version text not null,

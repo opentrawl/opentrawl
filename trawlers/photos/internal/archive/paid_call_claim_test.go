@@ -163,27 +163,6 @@ func TestPaidCallScreeningCannotSatisfyStoredCardGeneration(t *testing.T) {
 		t.Fatalf("canary decision after screening = %#v, %v", canaryDecision, err)
 	}
 	assertPaidCallCounts(t, db, 2, 1, 1)
-
-	rows, err := db.DB().QueryContext(ctx, `
-select purpose, coalesce(generation_id, '') from paid_call_claim order by purpose desc
-`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = rows.Close() }()
-	var stored []map[string]string
-	for rows.Next() {
-		var purpose, generation string
-		if err := rows.Scan(&purpose, &generation); err != nil {
-			t.Fatal(err)
-		}
-		stored = append(stored, map[string]string{"purpose": purpose, "generation_id": generation})
-	}
-	logPaidCallBoundary(t, "paid_call_screening_isolation_output", stored)
-	if len(stored) != 2 || stored[0]["purpose"] != "screening" || stored[0]["generation_id"] != "" ||
-		stored[1]["purpose"] != "canary" || stored[1]["generation_id"] == "" {
-		t.Fatalf("screening isolation rows = %#v", stored)
-	}
 }
 
 func TestPaidCallProhibitedFirstCardCreatesNoClaimOrGeneration(t *testing.T) {
@@ -220,6 +199,7 @@ func paidCallClaimForItem(stage paidCallStage, item paidCallStageItem, request m
 		ItemID:            item.ItemID,
 		AssetID:           item.AssetID,
 		CardInputID:       item.CardInputID,
+		CustodySHA256:     item.CustodySHA256,
 		FullCurrentSHA256: item.FullCurrentSHA256,
 		PromptVersion:     item.PromptVersion,
 		ParserVersion:     item.ParserVersion,

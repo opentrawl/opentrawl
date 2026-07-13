@@ -17,6 +17,7 @@ type paidCallClaimInput struct {
 	ItemID            string
 	AssetID           string
 	CardInputID       string
+	CustodySHA256     string
 	FullCurrentSHA256 string
 	PromptVersion     string
 	ParserVersion     string
@@ -173,12 +174,12 @@ func validatePaidCallClaimInput(input paidCallClaimInput) error {
 func readPaidCallStageItem(ctx context.Context, tx *sql.Tx, stageID, itemID string) (paidCallStageItem, error) {
 	var item paidCallStageItem
 	err := tx.QueryRowContext(ctx, `
-select item_id, position, asset_id, card_input_id, full_current_sha256,
+select item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
        request_route, model_id, request_sha256, prompt_version, parser_version
 from paid_call_stage_item
 where stage_id = ? and item_id = ?
 `, stageID, itemID).Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
-		&item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
+		&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
 		&item.PromptVersion, &item.ParserVersion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return paidCallStageItem{}, errors.New("paid call stage item does not exist")
@@ -193,6 +194,7 @@ func matchPaidCallClaimInput(item paidCallStageItem, input paidCallClaimInput) e
 	digest := input.Request.Digest()
 	requestSHA256 := hex.EncodeToString(digest[:])
 	if item.AssetID != input.AssetID || item.CardInputID != input.CardInputID ||
+		item.CustodySHA256 != input.CustodySHA256 ||
 		item.FullCurrentSHA256 != input.FullCurrentSHA256 || item.RequestRoute != input.Request.Route() ||
 		item.ModelID != input.Request.Model() || item.RequestSHA256 != requestSHA256 ||
 		item.PromptVersion != input.PromptVersion || item.ParserVersion != input.ParserVersion {
@@ -216,12 +218,13 @@ func insertPaidCallClaim(
 	}
 	result, err := tx.ExecContext(ctx, `
 insert into paid_call_claim(
-  stage_id, item_id, purpose, asset_id, card_input_id, full_current_sha256,
+  stage_id, item_id, purpose, asset_id, card_input_id, custody_sha256, full_current_sha256,
   request_sha256, prompt_version, parser_version, generation_id, claimed_at
 )
-values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(stage_id, item_id) do nothing
-`, input.StageID, input.ItemID, purpose, input.AssetID, input.CardInputID,
+
+`, input.StageID, input.ItemID, purpose, input.AssetID, input.CardInputID, input.CustodySHA256,
 		input.FullCurrentSHA256, requestSHA256, input.PromptVersion, input.ParserVersion,
 		generation, input.ClaimedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
@@ -248,14 +251,15 @@ func verifyPaidCallClaim(
 	generationID string,
 ) error {
 	var gotPurpose paidCallPurpose
-	var assetID, cardInputID, fullCurrentSHA256, requestSHA256, promptVersion, parserVersion, claimedAt string
+	var assetID, cardInputID, custodySHA256, fullCurrentSHA256, requestSHA256, promptVersion, parserVersion, claimedAt string
 	var gotGeneration sql.NullString
 	if err := tx.QueryRowContext(ctx, `
-select purpose, asset_id, card_input_id, full_current_sha256, request_sha256,
+select purpose, asset_id, card_input_id, custody_sha256, full_current_sha256, request_sha256,
        prompt_version, parser_version, generation_id, claimed_at
 from paid_call_claim
 where stage_id = ? and item_id = ?
-`, input.StageID, input.ItemID).Scan(&gotPurpose, &assetID, &cardInputID, &fullCurrentSHA256,
+
+`, input.StageID, input.ItemID).Scan(&gotPurpose, &assetID, &cardInputID, &custodySHA256, &fullCurrentSHA256,
 		&requestSHA256, &promptVersion, &parserVersion, &gotGeneration, &claimedAt); err != nil {
 		return fmt.Errorf("read paid call claim: %w", err)
 	}
@@ -263,6 +267,7 @@ where stage_id = ? and item_id = ?
 	wantDigest := hex.EncodeToString(digest[:])
 	wantGenerationValid := generationID != ""
 	if gotPurpose != purpose || assetID != input.AssetID || cardInputID != input.CardInputID ||
+		custodySHA256 != input.CustodySHA256 ||
 		fullCurrentSHA256 != input.FullCurrentSHA256 || requestSHA256 != wantDigest ||
 		promptVersion != input.PromptVersion || parserVersion != input.ParserVersion ||
 		gotGeneration.Valid != wantGenerationValid || (gotGeneration.Valid && gotGeneration.String != generationID) {

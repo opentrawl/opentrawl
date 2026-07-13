@@ -282,3 +282,35 @@ func TestSendReturnsRawHTTPErrorBeforeParsing(t *testing.T) {
 		t.Fatalf("raw result = %#v", raw)
 	}
 }
+
+func TestValidateRequestBindsConfiguredEndpointAndModel(t *testing.T) {
+	client := newTestClient(t, Config{BaseURL: "https://models.example.com/api", Model: "fixture-model"})
+	request, err := client.Render(Request{Prompt: "synthetic request"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.ValidateRequest(request); err != nil {
+		t.Fatal(err)
+	}
+	cases := []ProviderRequest{}
+	changedRoute, err := RestoreProviderRequest("https://other.example.com/api/generate", request.Model(), request.Body())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases, changedRoute)
+	changedModel, err := RestoreProviderRequest(request.Route(), "other-model", request.Body())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases, changedModel)
+	changedBody, err := RestoreProviderRequest(request.Route(), request.Model(), []byte(`{"model":"other-model","prompt":"synthetic request","stream":false}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cases = append(cases, changedBody)
+	for _, changed := range cases {
+		if err := client.ValidateRequest(changed); err == nil {
+			t.Fatalf("accepted changed request: route=%s model=%s body=%s", changed.Route(), changed.Model(), changed.Body())
+		}
+	}
+}
