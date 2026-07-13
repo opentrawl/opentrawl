@@ -61,7 +61,7 @@ func parseAppleEvidence(raw []byte, _ int, input Input) (parsedEvidence, error) 
 		return parsed, ErrProviderNoResult
 	}
 	if len(result.NearbyItems) == 0 {
-		return parsed, errors.New("Apple returned no nearby candidates")
+		return parsed, ErrProviderNoResult
 	}
 	return parsed, nil
 }

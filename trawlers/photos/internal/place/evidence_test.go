@@ -217,6 +217,33 @@ func TestStoppedEvidenceRetainsRawOutputAndNeverEntersCache(t *testing.T) {
 	}
 }
 
+func TestAppleNoNearbyResultRetainsReverseEvidence(t *testing.T) {
+	server, _ := syntheticEvidenceServer(t, map[string]syntheticHTTPResponse{})
+	defer server.Close()
+	input := syntheticEvidenceInput(52.36, 4.89)
+	raw := []byte(`{"reverse_items":[{"name":"Example Road","address":{"formatted":"Example Road, Example City","source":"apple_mapkit_reverse"},"source":"apple_mapkit_reverse"}],"nearby_items":[]}`)
+	runner := evidenceRunner{callApple: func(_ context.Context, got Input, radius float64) appleBoundaryOutput {
+		request, err := appleRequestJSON(got, radius)
+		return appleBoundaryOutput{Request: request, Response: raw, Err: err}
+	}}
+	options := syntheticEvidenceOptions(server, input, filepath.Join(t.TempDir(), "stopped"), filepath.Join(t.TempDir(), "cache"))
+	options.Operation = EvidenceOperationApple
+
+	result, err := runEvidenceOperations(context.Background(), options, runner, []evidenceOperation{evidenceOperationApple})
+	var stopped *EvidenceStoppedError
+	if !errors.As(err, &stopped) {
+		t.Fatalf("stopped error = %v", err)
+	}
+	if len(result.Records) != 1 || result.Records[0].StopReason != evidenceStopNoResult {
+		t.Fatalf("Apple no-result record = %#v", result.Records)
+	}
+	record := result.Records[0]
+	if record.Address == nil || record.Address.Formatted != "Example Road, Example City" || len(record.Candidates) != 1 {
+		t.Fatalf("reverse evidence was discarded: %#v", record)
+	}
+	assertRawFile(t, record, "response.raw", string(raw))
+}
+
 func TestCoordinateVariantsKeepExactRequestsAndCacheIdentitiesSeparate(t *testing.T) {
 	server, requests := syntheticEvidenceServer(t, map[string]syntheticHTTPResponse{
 		"/reverse": {status: http.StatusOK, body: syntheticReverseResponse},

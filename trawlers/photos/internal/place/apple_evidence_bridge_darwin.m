@@ -133,7 +133,7 @@ char *photoscrawl_place_evidence_json(const char *requestJSON, char **errorOut) 
         [origin release];
         return NULL;
       }
-      if (reverseError != nil) {
+      if (reverseError != nil && !([reverseError.domain isEqualToString:MKErrorDomain] && reverseError.code == MKErrorPlacemarkNotFound)) {
         pcEvidenceSetError(errorOut, [NSString stringWithFormat:@"Apple evidence reverse request failed: %@", reverseError.localizedDescription]);
         [reverseItems release];
         [reverseError release];
@@ -165,7 +165,7 @@ char *photoscrawl_place_evidence_json(const char *requestJSON, char **errorOut) 
         [origin release];
         return NULL;
       }
-      if (nearbyError != nil) {
+      if (nearbyError != nil && !([nearbyError.domain isEqualToString:MKErrorDomain] && nearbyError.code == MKErrorPlacemarkNotFound)) {
         pcEvidenceSetError(errorOut, [NSString stringWithFormat:@"Apple evidence nearby request failed: %@", nearbyError.localizedDescription]);
         [reverseItems release];
         [reverseError release];
