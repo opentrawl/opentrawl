@@ -52,11 +52,13 @@ private struct SearchClient: TrawlClient {
   timeout.surface = "Slow source"
   timeout.code = .timeout
   timeout.message = "Wait expired."
+  timeout.remedy = "trawl doctor slow"
   var permission = Trawl_Federation_V1_SourceFailure()
   permission.sourceID = "private"
   permission.surface = "Private source"
   permission.code = .permission
   permission.message = "Access denied."
+  permission.remedy = "trawl doctor private"
   var response = Trawl_Federation_V1_SearchResponse()
   response.outcome = .partial
   response.order = .recency
@@ -67,6 +69,8 @@ private struct SearchClient: TrawlClient {
   let model = SearchModel(client: SearchClient(response: try response.model()), debounce: .zero)
   await model.search("mixed", source: nil)
   #expect(model.hasTimeoutFailure)
+  #expect(model.failureGuidance == "Slow source: Wait expired. 1 more source failed.")
+  #expect(model.failureGuidance?.contains("trawl doctor") == false)
   #expect(model.sourceDisplayName(for: "response-only", resolvedName: nil) == "Response source")
   #expect(
     model.sourceDisplayName(for: "missing", resolvedName: nil)
@@ -189,7 +193,7 @@ private struct SearchClient: TrawlClient {
   let failed = SearchModel(
     client: ScriptedSearchClient { _, _ in canonicalFailedSearch([permission]) }, debounce: .zero)
   await failed.search("failed", source: nil)
-  #expect(failed.phase == .failed("Notes: Allow Notes access. Open System Settings."))
+  #expect(failed.phase == .failed("Notes: Allow Notes access."))
 
   let allTimeout = SearchModel(
     client: ScriptedSearchClient { _, _ in canonicalFailedSearch([timeout]) }, debounce: .zero)
@@ -201,7 +205,7 @@ private struct SearchClient: TrawlClient {
     debounce: .zero)
   await mixed.search("mixed", source: nil)
   #expect(
-    mixed.phase == .failed("Calendar: Calendar timed out. Try again. 1 more source failures."))
+    mixed.phase == .failed("Calendar: Calendar timed out. 1 more source failed."))
 
   let processTimeout = SearchModel(
     client: ScriptedSearchClient { _, _ in throw TrawlClientError.timedOut }, debounce: .zero)

@@ -9,7 +9,7 @@ enum SearchFocus: Hashable {
 
 struct SearchWorkspace: View {
   @Bindable var interaction: SearchInteraction
-  let scope: SourceStatus?
+  let scope: RestingSource?
   let sourceResolver: SearchSourceResolver
   let isCompact: Bool
   let model: SearchModel
@@ -38,7 +38,7 @@ struct SearchWorkspace: View {
       SearchStatus(
         phase: model.phase,
         count: model.results.count,
-        scopeName: scope?.manifest.surface,
+        scopeName: scope?.surface,
         resultLimit: model.resultLimit,
         failureGuidance: model.failureGuidance,
         hasTimeoutFailure: model.hasTimeoutFailure
@@ -79,7 +79,7 @@ struct SearchWorkspace: View {
           selectedResultID: $interaction.selectedResultID,
           focus: $focus
         )
-        .frame(width: 306)
+        .frame(minWidth: 360)
         Divider()
         ResultPreview(
           phase: model.openPhase,
@@ -94,13 +94,17 @@ struct SearchWorkspace: View {
   }
 
   private func sourceDisplayName(for sourceID: String) -> String {
-    model.sourceDisplayName(for: sourceID, resolvedName: sourceResolver.displayName(for: sourceID))
+    if sourceID == scope?.id { return scope?.surface ?? SearchSourceResolver.unavailableDisplayName }
+    return model.sourceDisplayName(
+      for: sourceID,
+      resolvedName: sourceResolver.displayName(for: sourceID)
+    )
   }
 }
 
 private struct SearchField: View {
   @Binding var query: String
-  let scope: SourceStatus?
+  let scope: RestingSource?
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
   let onSubmit: () -> Void
@@ -111,10 +115,20 @@ private struct SearchField: View {
     HStack(spacing: 9) {
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
+      TextField(scope == nil ? "Search everything" : "Search this source", text: $query)
+        .textFieldStyle(.plain)
+        .focused($focus, equals: .field)
+        .defaultFocus($focus, .field, priority: .userInitiated)
+        .layoutPriority(1)
+        .onSubmit(onSubmit)
+        .onKeyPress(.downArrow) {
+          onMoveToResults()
+          return .handled
+        }
       if let scope {
         HStack(spacing: 5) {
           SourceIconView(sourceID: scope.id, size: 18)
-          Text(scope.manifest.surface)
+          Text(scope.surface)
             .font(.caption.weight(.medium))
             .lineLimit(1)
           Button {
@@ -129,15 +143,6 @@ private struct SearchField: View {
         .padding(.vertical, 5)
         .background(.secondary.opacity(0.1), in: Capsule())
       }
-      TextField(scope == nil ? "Search everything" : "Search this source", text: $query)
-        .textFieldStyle(.plain)
-        .focused($focus, equals: .field)
-        .defaultFocus($focus, .field, priority: .userInitiated)
-        .onSubmit(onSubmit)
-        .onKeyPress(.downArrow) {
-          onMoveToResults()
-          return .handled
-        }
       Button(action: onDismiss) {
         Image(systemName: "xmark.circle.fill")
           .foregroundStyle(.secondary)

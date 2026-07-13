@@ -63,8 +63,11 @@ fi
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
 echo "Building the signed Photos helper"
-"$repo_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
-  --output "$contents/Helpers/Photoscrawl Fetch.app"
+(
+  cd "$repo_root"
+  devenv shell -- "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/build-app" \
+    --output "$contents/Helpers/Photoscrawl Fetch.app"
+)
 
 # The Nix Go toolchain may record its own resolver path. The shipped helper
 # uses the equivalent macOS platform library so it runs outside the dev shell.

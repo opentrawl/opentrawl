@@ -204,6 +204,19 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   public let spacing: Double
 
   public static func forSourceCount(_ count: Int) -> Self {
+    if count <= 9 {
+      return Self(
+        hostSize: ConstellationPoint(x: 172, y: 160),
+        hostCentreYOffset: 35,
+        labelWidth: 156,
+        labelTop: 30,
+        labelHeight: 68,
+        minimumIconDiameter: 48,
+        maximumIconDiameter: 68,
+        diamondClearanceRadius: 66,
+        spacing: 6
+      )
+    }
     if count <= 12 {
       return Self(
         hostSize: ConstellationPoint(x: 156, y: 148),

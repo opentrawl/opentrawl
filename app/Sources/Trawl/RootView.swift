@@ -9,7 +9,7 @@ struct RootView: View {
   let onRequestDiskAccess: () -> Void
 
   @State private var iconStore = SourceIconStore()
-  @State private var searchScope: SourceStatus?
+  @State private var searchScope: RestingSource?
   @State private var isSearching = false
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
@@ -72,14 +72,14 @@ struct RootView: View {
     case .loading where model.sources.isEmpty:
       ProgressView("Loading sources")
         .controlSize(.large)
-    case .failed(let message) where model.sources.isEmpty:
+    case .failed(let message) where model.shouldShowFailureFallback:
       FailureView(message: message) {
         Task { await model.refresh() }
       }
     case .loading, .ready, .partial, .timedOut, .failed:
       ZStack(alignment: .top) {
         ConstellationView(
-          sources: model.sources,
+          sources: model.restingSources,
           activity: constellationActivity,
           trafficEvent: constellationTrafficEvent,
           onSelectEverything: { showSearch(scope: nil) },
@@ -103,24 +103,10 @@ struct RootView: View {
     if let syncMessage = model.syncMessage {
       return syncMessage
     }
-    switch model.phase {
-    case .failed(let message):
-      return message
-    case .loading, .ready:
-      break
-    case .partial:
-      return model.skippedSources.isEmpty ? "Some source status checks failed." : "Some sources were skipped."
-    case .timedOut:
-      return "Source status checks timed out."
-    }
-    switch model.completion {
-    case .complete: return nil
-    case .partial: return "Some source status checks failed."
-    case .failed: return "No source status check succeeded."
-    }
+    return model.statusRefreshFailure
   }
 
-  private func showSearch(scope: SourceStatus?) {
+  private func showSearch(scope: RestingSource?) {
     searchScope = scope
     isSearching = true
   }

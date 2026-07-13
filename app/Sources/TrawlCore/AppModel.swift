@@ -22,11 +22,25 @@ public final class AppModel {
   public private(set) var statusFailures: [SourceFailure] = []
   public private(set) var skippedSources: [SkippedSource] = []
   public private(set) var completion: FanoutCompletion = .complete
+  public private(set) var statusRefreshFailure: String?
   public private(set) var isSyncing = false
   public private(set) var syncMessage: String?
   public private(set) var syncResults: [SyncSourceResult] = []
   public private(set) var syncFailures: [SourceFailure] = []
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
+
+  public var restingSources: [RestingSource] {
+    SourceRestingCopy.sources(
+      from: sources,
+      failures: statusFailures,
+      skippedSources: skippedSources
+    )
+  }
+
+  public var shouldShowFailureFallback: Bool {
+    guard case .failed = phase else { return false }
+    return restingSources.isEmpty
+  }
 
   public init(
     client: any TrawlClient,
@@ -47,6 +61,7 @@ public final class AppModel {
       statusFailures = response.failures
       skippedSources = response.skippedSources
       completion = response.outcome
+      statusRefreshFailure = nil
       if response.outcome == .failed, !response.failures.isEmpty, response.failures.allSatisfy({ $0.code == .timeout }) {
         phase = .timedOut
       } else if response.outcome == .failed {
@@ -61,9 +76,12 @@ public final class AppModel {
     } catch TrawlClientError.cancelled {
       return
     } catch TrawlClientError.timedOut {
+      statusRefreshFailure = "Source status checks timed out."
       phase = .timedOut
     } catch {
-      phase = .failed(error.localizedDescription)
+      let message = error.localizedDescription
+      statusRefreshFailure = message
+      phase = .failed(message)
     }
   }
 
