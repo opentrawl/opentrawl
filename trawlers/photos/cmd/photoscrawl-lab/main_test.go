@@ -64,6 +64,21 @@ func TestCardInputAuditSelectionAndOutputBoundary(t *testing.T) {
 	}
 }
 
+func TestCardInputAuditPrepareRequiresItsPrivateBoundary(t *testing.T) {
+	outDir := filepath.Join(t.TempDir(), "audit")
+	if err := os.Mkdir(outDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	err := runAuditCardInput(context.Background(), archive.Paths{}, []string{"prepare", "--archive", "archive.sqlite", "--source-library", "source:synthetic", "--out", outDir, "--json"})
+	if err == nil || !strings.Contains(err.Error(), "requires --asset and --cache") {
+		t.Fatalf("prepare validation error = %v", err)
+	}
+	err = runAuditCardInput(context.Background(), archive.Paths{}, []string{"prepare", "--archive", "archive.sqlite", "--source-library", "source:synthetic", "--asset", "asset:synthetic", "--cache", filepath.Join(t.TempDir(), "cache"), "--out", outDir})
+	if err == nil || !strings.Contains(err.Error(), "requires --json") {
+		t.Fatalf("prepare JSON error = %v", err)
+	}
+}
+
 func TestCardInputAuditSnapshotsWALArchiveWithoutChangingSource(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "source.sqlite")

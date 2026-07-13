@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +19,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
@@ -67,6 +69,41 @@ func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	}
 }
 
+func TestCardInputAuditOpensTheCurrentSchema13SnapshotReadOnly(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "photos.sqlite")
+	fixture, err := store.Open(ctx, store.Options{Path: path, Schema: Schema, SchemaVersion: cardInputAuditSchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.Close(); err != nil {
+		t.Fatal(err)
+	}
+	opened, err := openCardInputAuditArchive(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := opened.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCardInputAuditRejectsSchema12Snapshot(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "photos.sqlite")
+	fixture, err := store.Open(ctx, store.Options{Path: path, Schema: Schema, SchemaVersion: cardInputAuditSchemaVersion - 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_, err = openCardInputAuditArchive(ctx, path)
+	if !errors.Is(err, ArchiveIncompatibleError{}) {
+		t.Fatalf("open schema 12 error = %v, want incompatible archive", err)
+	}
+}
+
 func TestCardInputAuditProhibitedStopsBeforeArtifactRead(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
 	defer db.Close()
@@ -93,6 +130,159 @@ func TestCardInputAuditProhibitedStopsBeforeArtifactRead(t *testing.T) {
 	preflight, ok := inspection.Preflight.(classifyInput)
 	if !ok || !reflect.DeepEqual(preflight, input) {
 		t.Fatalf("preflight=%#v want=%#v", inspection.Preflight, input)
+	}
+}
+
+func TestCardInputAuditPrepareReopensOnePackageOriginalAndExistingCurrentStillWithoutPhotoKit(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:prepare", "current", "image", `{"present":true}`)
+	root := t.TempDir()
+	originalPath := filepath.Join(root, "original.jpg")
+	originalBytes := []byte("synthetic package original")
+	if err := os.WriteFile(originalPath, originalBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	originalSHA := digestText(string(originalBytes))
+	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values('resource:prepare','asset:prepare','local_original','public.jpeg','original.jpg',?,?,?,1,0)`, originalPath, len(originalBytes), originalSHA); err != nil {
+		t.Fatal(err)
+	}
+	currentBytes := []byte("synthetic current still")
+	oldExtract := extractImageMetadata
+	t.Cleanup(func() {
+		extractImageMetadata = oldExtract
+	})
+	extractCalls := 0
+	extractImageMetadata = func(_ context.Context, path string) ([]byte, error) {
+		extractCalls++
+		if path != originalPath {
+			t.Fatalf("ImageIO path = %q, want %q", path, originalPath)
+		}
+		return []byte(fmt.Sprintf(`{"extractor_version":"imageio-v1","original_sha256":%q,"container":{"type":"dictionary","dictionary":{"Make":{"type":"string","string":"Example"}}},"images":[{"index":0,"properties":{"type":"dictionary","dictionary":{}}}]}`, originalSHA)), nil
+	}
+	cacheDir := filepath.Join(root, "checked-cache")
+	input, err := loadCardInputAuditInput(ctx, db, "source:synthetic", "asset:prepare")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentRequest, err := input.currentStillRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheSeedCalls := 0
+	currentResolver, err := photos.NewCurrentStillResolver(filepath.Join(cacheDir, "originals"), func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
+		cacheSeedCalls++
+		if request.AllowNetwork {
+			t.Fatal("cache seed enabled current-still network access")
+		}
+		if err := os.WriteFile(destination, currentBytes, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		return photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: int64(len(currentBytes)), SHA256: digestText(string(currentBytes)), PhotoKitCalls: 1}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	seeded, err := currentResolver.Resolve(ctx, currentRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if seeded.Lease != nil {
+		defer seeded.Lease.Close()
+	}
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:prepare"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != "" || prepared.ImmutableOriginal.Source != photos.OriginalSourcePackage || prepared.ImmutableOriginal.SHA256 != originalSHA || prepared.CurrentStillRequests != 0 || prepared.CurrentStillSource != photos.CurrentStillSourceCache || prepared.CurrentStillProof == "" || cacheSeedCalls != 1 || extractCalls != 1 {
+		t.Fatalf("prepared=%+v cache seed calls=%d ImageIO calls=%d", prepared, cacheSeedCalls, extractCalls)
+	}
+	if _, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(cacheDir, "image-metadata"), originalSHA); !ok {
+		t.Fatal("prepare did not write checked metadata")
+	}
+	if _, err := os.Stat(filepath.Join(cacheDir, "originals")); err != nil {
+		t.Fatalf("prepare did not create the named checked cache root: %v", err)
+	}
+}
+
+func TestCardInputAuditPrepareProhibitedStopsBeforeCacheOrArtifactAccess(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:prohibited-prepare", "deleted_upstream", "image", `{"present":true}`)
+	if _, err := db.ExecContext(ctx, `update asset set first_card_blocked_at='2026-07-13T00:00:00Z', first_card_blocked_snapshot_id='snapshot:complete' where id='asset:prohibited-prepare'`); err != nil {
+		t.Fatal(err)
+	}
+	cacheDir := filepath.Join(t.TempDir(), "must-not-exist")
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:prohibited-prepare"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != cardInputAuditStopProhibited {
+		t.Fatalf("prepared=%+v", prepared)
+	}
+	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
+		t.Fatalf("prohibited prepare touched cache: %v", err)
+	}
+}
+
+func TestCardInputAuditPrepareStopsWithoutOnePackageOriginal(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:no-package", "current", "image", `{"present":true}`)
+	cacheDir := filepath.Join(t.TempDir(), "must-not-exist")
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:no-package"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != cardInputAuditStopPackageOriginal {
+		t.Fatalf("prepared=%+v", prepared)
+	}
+	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
+		t.Fatalf("missing package original touched cache: %v", err)
+	}
+}
+
+func TestCardInputAuditPrepareStopsWithoutCheckedCurrentStill(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:no-current", "current", "image", `{"present":true}`)
+	root := t.TempDir()
+	originalPath := filepath.Join(root, "original.jpg")
+	originalBytes := []byte("synthetic package original")
+	if err := os.WriteFile(originalPath, originalBytes, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	originalSHA := digestText(string(originalBytes))
+	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values('resource:no-current','asset:no-current','local_original','public.jpeg','original.jpg',?,?,?,1,0)`, originalPath, len(originalBytes), originalSHA); err != nil {
+		t.Fatal(err)
+	}
+	oldExtract := extractImageMetadata
+	oldCurrentExporter := exportCurrentStillResource
+	t.Cleanup(func() {
+		extractImageMetadata = oldExtract
+		exportCurrentStillResource = oldCurrentExporter
+	})
+	extractImageMetadata = func(context.Context, string) ([]byte, error) {
+		return []byte(fmt.Sprintf(`{"extractor_version":"imageio-v1","original_sha256":%q,"container":{"type":"dictionary","dictionary":{"Make":{"type":"string","string":"Example"}}},"images":[{"index":0,"properties":{"type":"dictionary","dictionary":{}}}]}`, originalSHA)), nil
+	}
+	exportCurrentStillResource = func(context.Context, photos.CurrentStillRequest, string) (photos.CurrentStillFact, error) {
+		t.Fatal("prepare invoked the current-still exporter on a checked-cache miss")
+		return photos.CurrentStillFact{}, nil
+	}
+	cacheDir := filepath.Join(root, "checked-cache")
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:no-current"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != cardInputAuditStopMissingCurrentStill || prepared.CurrentStillRequests != 0 || prepared.CurrentStillProof != "" {
+		t.Fatalf("prepared=%+v", prepared)
+	}
+	if paths, err := filepath.Glob(filepath.Join(cacheDir, "originals", "*.current")); err != nil || len(paths) != 0 {
+		t.Fatalf("prepare created a current-still cache entry: paths=%v err=%v", paths, err)
 	}
 }
 
