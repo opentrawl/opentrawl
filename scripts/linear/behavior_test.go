@@ -10,20 +10,17 @@ import (
 	"time"
 )
 
-func TestDecodeGraphResponseKeepsDataWithWarning(t *testing.T) {
-	logger, stderr := testRequestLogger(t)
+func TestDecodeGraphResponseRejectsDataWithErrors(t *testing.T) {
+	logger, _ := testRequestLogger(t)
 	var out struct {
 		Value string `json:"value"`
 	}
 	err := decodeGraphResponse([]byte(`{"data":{"value":"kept"},"errors":[{"message":"partial failure"}]}`), &out, logger)
-	if err != nil {
-		t.Fatalf("decodeGraphResponse returned error: %v", err)
+	if err == nil || !strings.Contains(err.Error(), "partial failure") {
+		t.Fatalf("decodeGraphResponse error = %v", err)
 	}
-	if out.Value != "kept" {
-		t.Fatalf("Value = %q, want kept", out.Value)
-	}
-	if count := strings.Count(stderr.String(), "Linear GraphQL returned data with errors"); count != 1 {
-		t.Fatalf("warning count = %d, want 1; stderr %q", count, stderr.String())
+	if out.Value != "" {
+		t.Fatalf("Value = %q, want empty", out.Value)
 	}
 }
 

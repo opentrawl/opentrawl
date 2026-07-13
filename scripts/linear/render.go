@@ -57,7 +57,7 @@ func RenderIssue(w io.Writer, issue Issue) error {
 }
 
 func RenderProject(w io.Writer, project Project) error {
-	if _, err := fmt.Fprintf(w, "%s\nStatus: %s\nPriority: %s\nHealth: %s\nLead: %s\nIssues: %d open, %d total\n\n", project.Name, project.Status.Name, projectPriority(project), projectHealth(project.Health), personName(project.Lead, "Unassigned"), projectOpenIssues(project), len(project.Issues.Nodes)); err != nil {
+	if _, err := fmt.Fprintf(w, "%s\nTeams: %s\nStatus: %s\nPriority: %s\nHealth: %s\nLead: %s\nIssues: %d open, %d total\n\n", project.Name, projectTeamNames(project), project.Status.Name, projectPriority(project), projectHealth(project.Health), personName(project.Lead, "Unassigned"), projectOpenIssues(project), len(project.Issues.Nodes)); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintln(w, "Summary"); err != nil {
@@ -80,10 +80,65 @@ func RenderProject(w io.Writer, project Project) error {
 			}
 		}
 	}
+	if _, err := fmt.Fprintln(w, "\nInitiatives"); err != nil {
+		return err
+	}
+	if len(project.Initiatives.Nodes) == 0 {
+		if _, err := fmt.Fprintln(w, "None"); err != nil {
+			return err
+		}
+	} else {
+		for _, initiative := range project.Initiatives.Nodes {
+			if _, err := fmt.Fprintf(w, "- %s\n", initiative.Name); err != nil {
+				return err
+			}
+		}
+	}
 	if _, err := fmt.Fprintln(w, "\nDescription"); err != nil {
 		return err
 	}
 	return writeProjectText(w, project.Content)
+}
+
+func projectTeamNames(project Project) string {
+	if len(project.Teams.Nodes) == 0 {
+		return "None"
+	}
+	names := make([]string, 0, len(project.Teams.Nodes))
+	for _, team := range project.Teams.Nodes {
+		names = append(names, team.Name)
+	}
+	return strings.Join(names, ", ")
+}
+
+func RenderInitiative(w io.Writer, initiative Initiative) error {
+	if _, err := fmt.Fprintf(w, "%s\nProjects: %d\n\n", initiative.Name, len(initiative.Projects.Nodes)); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "Summary"); err != nil {
+		return err
+	}
+	if err := writeProjectText(w, initiative.Description); err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintln(w, "\nProjects"); err != nil {
+		return err
+	}
+	if len(initiative.Projects.Nodes) == 0 {
+		if _, err := fmt.Fprintln(w, "None"); err != nil {
+			return err
+		}
+	} else {
+		for _, project := range initiative.Projects.Nodes {
+			if _, err := fmt.Fprintf(w, "- %s\n", project.Name); err != nil {
+				return err
+			}
+		}
+	}
+	if _, err := fmt.Fprintln(w, "\nDescription"); err != nil {
+		return err
+	}
+	return writeProjectText(w, initiative.Content)
 }
 
 func RenderEnsuredProjectMilestone(w io.Writer, result EnsuredProjectMilestone) error {

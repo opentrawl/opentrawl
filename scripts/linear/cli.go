@@ -58,6 +58,8 @@ func execute(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return runIssue(args[1:], stdout, opts)
 	case "project":
 		return runProject(args[1:], stdout, opts)
+	case "initiative":
+		return runInitiative(args[1:], stdout, opts)
 	case "issues":
 		return runIssues(args[1:], stdout, opts)
 	case "mcp":

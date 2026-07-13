@@ -24,8 +24,11 @@ var mcpToolAccess = map[string]toolAccess{
 	"add_issue_relation":       toolWrite,
 	"remove_issue_relation":    toolWrite,
 	"get_project":              toolRead,
+	"create_project":           toolWrite,
 	"update_project":           toolWrite,
 	"ensure_project_milestone": toolWrite,
+	"get_initiative":           toolRead,
+	"update_initiative":        toolWrite,
 	"list_issues":              toolRead,
 }
 
@@ -131,11 +134,26 @@ func mcpTools() []map[string]any {
 			}, []string{"project"}),
 		},
 		{
+			"name":        "create_project",
+			"description": "Create a Linear project and optionally attach it to one initiative.",
+			"inputSchema": objectSchema(map[string]any{
+				"team":        stringSchema("Linear team key, for example TRAWL."),
+				"name":        stringSchema("Project name."),
+				"actor":       stringSchema("Required actor name for the local request log."),
+				"summary":     stringSchema("Project summary."),
+				"description": stringSchema("Project Markdown description."),
+				"status":      stringSchema("Current Linear project status name."),
+				"priority":    map[string]any{"type": "string", "description": "Project priority.", "enum": []string{"none", "urgent", "high", "medium", "low"}},
+				"initiative":  stringSchema("Optional initiative name or id to attach."),
+			}, []string{"team", "name", "actor", "summary", "description", "status", "priority"}),
+		},
+		{
 			"name":        "update_project",
 			"description": "Update selected project fields as the OpenTrawl app. The actor is recorded in the local request log.",
 			"inputSchema": objectSchema(map[string]any{
 				"project":     stringSchema("Project name or slug."),
 				"actor":       stringSchema("Required actor name for the local request log."),
+				"name":        stringSchema("Optional replacement project name."),
 				"summary":     stringSchema("Optional replacement summary. Use none to clear it."),
 				"description": stringSchema("Optional replacement Markdown brief. An empty string clears it."),
 				"status":      stringSchema("Optional current Linear project status name."),
@@ -144,6 +162,7 @@ func mcpTools() []map[string]any {
 					"description": "Optional replacement priority.",
 					"enum":        []string{"none", "urgent", "high", "medium", "low"},
 				},
+				"initiative": stringSchema("Optional initiative name or id to attach."),
 			}, []string{"project", "actor"}),
 		},
 		{
@@ -155,6 +174,23 @@ func mcpTools() []map[string]any {
 				"actor":       stringSchema("Required actor name for the local request log."),
 				"description": stringSchema("Optional replacement Markdown description. An empty string clears it."),
 			}, []string{"project", "name", "actor"}),
+		},
+		{
+			"name":        "get_initiative",
+			"description": "Show one Linear initiative, its summary, Markdown brief and every attached project.",
+			"inputSchema": objectSchema(map[string]any{
+				"initiative": stringSchema("Initiative name or id."),
+			}, []string{"initiative"}),
+		},
+		{
+			"name":        "update_initiative",
+			"description": "Update the supplied initiative summary or Markdown brief. The actor is recorded in the local request log.",
+			"inputSchema": objectSchema(map[string]any{
+				"initiative":  stringSchema("Initiative name or id."),
+				"actor":       stringSchema("Required actor name for the local request log."),
+				"summary":     stringSchema("Optional replacement summary. Use none to clear it."),
+				"description": stringSchema("Optional replacement Markdown brief. An empty string clears it."),
+			}, []string{"initiative", "actor"}),
 		},
 		{
 			"name":        "list_issues",

@@ -23,8 +23,11 @@ Usage:
   linear issue <ISSUE>
   linear issues --team <KEY> [--project <PROJECT>] [--state <name>]
   linear project <PROJECT>
-  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+  linear project create --team <KEY> --name <name> --summary <text> --description-file <path> --status <status> --priority <priority> --as <actor> [--initiative <initiative>]
+  linear project update <PROJECT> --as <actor> [--name <name>] [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>] [--initiative <initiative>]
   linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
+  linear initiative <INITIATIVE>
+  linear initiative update <INITIATIVE> --as <actor> [--summary <text>] [--description-file <path>]
   linear mcp
 
 Environment:
@@ -47,6 +50,8 @@ Examples:
   linear issue label add TRAWL-99 --label agent-filed --as coordinator
   linear issue relation add TRAWL-99 --blocked-by TRAWL-98 --as coordinator
   linear project Photos
+  linear project create --team TRAWL --name "Search quality" --summary "One clear outcome" --description-file project.md --status Triage --priority high --as coordinator
+  linear initiative OpenTrawl
   linear issue TRAWL-99
   linear issues --team TRAWL
   linear mcp
@@ -223,7 +228,8 @@ const projectHelp = `Show one Linear project and its milestones.
 
 Usage:
   linear project <PROJECT>
-  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+  linear project create --team <KEY> --name <name> --summary <text> --description-file <path> --status <status> --priority <priority> --as <actor> [--initiative <initiative>]
+  linear project update <PROJECT> --as <actor> [--name <name>] [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>] [--initiative <initiative>]
   linear project milestone ensure <PROJECT> --name <name> --as <actor> [--description-file <path>]
 
 Arguments:
@@ -238,25 +244,80 @@ Examples:
 const projectUpdateHelp = `Replace selected Linear project fields.
 
 Usage:
-  linear project update <PROJECT> --as <actor> [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>]
+  linear project update <PROJECT> --as <actor> [--name <name>] [--summary <text>] [--description-file <path>] [--status <status>] [--priority <priority>] [--initiative <initiative>]
 
 Arguments:
   PROJECT  Project name or slug.
 
 Flags:
   --as <actor>               Required. Actor name recorded in the local request log.
+  --name <name>              Optional replacement project name.
   --summary <text>           Optional replacement summary. Use none to clear it.
   --description-file <path>  Optional file containing the full replacement Markdown description.
                              An empty file clears it.
   --status <status>          Optional current Linear project status name.
   --priority <priority>      Optional. One of none, urgent, high, medium or low.
+  --initiative <initiative>  Optional initiative name or id to attach. Existing memberships stay attached.
 
 Linear attributes the change to the OpenTrawl app. Project updates do not
 support createAsUser. The --as value records the responsible agent locally
 without adding a comment.
 
 Example:
-  linear project update Photos --as lane-photos --summary "One clear outcome" --description-file project.md --status "In Progress" --priority high
+  linear project update Photos --as lane-photos --name "Photos archive" --summary "One clear outcome" --description-file project.md --status "In Progress" --priority high --initiative OpenTrawl
+` + commonHelp
+
+const projectCreateHelp = `Create a Linear project and optionally attach it to one initiative.
+
+Linear creates the project before attaching an initiative. If the attachment
+fails, linear reports the created project instead of hiding the partial write.
+
+Usage:
+  linear project create --team <KEY> --name <name> --summary <text> --description-file <path> --status <status> --priority <priority> --as <actor> [--initiative <initiative>]
+
+Flags:
+  --team <KEY>               Required Linear team key.
+  --name <name>              Required project name.
+  --summary <text>           Required project summary.
+  --description-file <path>  Required file containing the project Markdown description.
+  --status <status>          Required current Linear project status name.
+  --priority <priority>      Required. One of none, urgent, high, medium or low.
+  --as <actor>               Required actor name recorded in the local request log.
+  --initiative <initiative>  Optional initiative name or id to attach.
+
+Example:
+  linear project create --team TRAWL --name "Search quality" --summary "One clear outcome" --description-file project.md --status Triage --priority high --as coordinator --initiative OpenTrawl
+` + commonHelp
+
+const initiativeHelp = `Show one Linear initiative and every attached project.
+
+Usage:
+  linear initiative <INITIATIVE>
+  linear initiative update <INITIATIVE> --as <actor> [--summary <text>] [--description-file <path>]
+
+Arguments:
+  INITIATIVE  Initiative name or id.
+
+Example:
+  linear initiative OpenTrawl
+` + commonHelp
+
+const initiativeUpdateHelp = `Replace selected Linear initiative fields.
+
+Usage:
+  linear initiative update <INITIATIVE> --as <actor> [--summary <text>] [--description-file <path>]
+
+Arguments:
+  INITIATIVE  Initiative name or id.
+
+Flags:
+  --as <actor>               Required actor name recorded in the local request log.
+  --summary <text>           Optional replacement summary. Use none to clear it.
+  --description-file <path>  Optional file containing the full replacement Markdown description.
+                             An empty file clears it.
+
+Example:
+  linear initiative update OpenTrawl --as coordinator --summary "A clear outcome" --description-file initiative.md
 ` + commonHelp
 
 const projectMilestoneHelp = `Manage Linear project milestones.

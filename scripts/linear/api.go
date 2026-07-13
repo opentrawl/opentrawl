@@ -24,32 +24,6 @@ type Team struct {
 	Name string `json:"name"`
 }
 
-type Project struct {
-	ID            string        `json:"id"`
-	Name          string        `json:"name"`
-	SlugID        string        `json:"slugId"`
-	Description   string        `json:"description"`
-	Content       string        `json:"content"`
-	Status        ProjectStatus `json:"status"`
-	Priority      int           `json:"priority"`
-	PriorityLabel string        `json:"priorityLabel"`
-	Health        string        `json:"health"`
-	Lead          *Person       `json:"lead"`
-	Milestones    struct {
-		Nodes    []ProjectMilestone `json:"nodes"`
-		PageInfo PageInfo           `json:"pageInfo"`
-	} `json:"projectMilestones"`
-	Issues struct {
-		Nodes    []Issue  `json:"nodes"`
-		PageInfo PageInfo `json:"pageInfo"`
-	} `json:"issues"`
-}
-
-type ProjectStatus struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
 type ProjectMilestone struct {
 	ID          string   `json:"id"`
 	Name        string   `json:"name"`

@@ -30,7 +30,7 @@ func TestGetProjectReadsEveryMilestoneAndIssuePage(t *testing.T) {
 	if err := RenderProject(&output, project); err != nil {
 		t.Fatalf("RenderProject returned error: %v", err)
 	}
-	want := "Photos\nStatus: In Progress\nPriority: High\nHealth: Not set\nLead: Unassigned\nIssues: 2 open, 3 total\n\nSummary\nCurrent Apple Photos to one reconstructable stored card\n\nMilestones\n- Foundations complete\n- Deterministic input integrity\n\nDescription\nBuild the simplest proven Photos pipeline.\n"
+	want := "Photos\nTeams: TRAWL\nStatus: In Progress\nPriority: High\nHealth: Not set\nLead: Unassigned\nIssues: 2 open, 3 total\n\nSummary\nCurrent Apple Photos to one reconstructable stored card\n\nMilestones\n- Foundations complete\n- Deterministic input integrity\n\nInitiatives\nNone\n\nDescription\nBuild the simplest proven Photos pipeline.\n"
 	if output.String() != want {
 		t.Fatalf("project output =\n%s\nwant:\n%s", output.String(), want)
 	}
@@ -38,7 +38,9 @@ func TestGetProjectReadsEveryMilestoneAndIssuePage(t *testing.T) {
 
 func TestUpdateProjectUsesExactInputAndReadsBack(t *testing.T) {
 	project := sampleProject()
-	graph := &projectGraph{project: project, readBack: project, statuses: []ProjectStatus{{ID: "status-progress", Name: "In Progress"}}}
+	readBack := project
+	readBack.Description, readBack.Content = "", "Brief\n\n"
+	graph := &projectGraph{project: project, readBack: readBack, statuses: []ProjectStatus{{ID: "status-progress", Name: "In Progress"}}}
 	api := &LinearAPI{graph: graph}
 	summary, description, status, priority := "none", "Brief\n\n", "In Progress", "high"
 	updated, err := api.UpdateProject(context.Background(), "Photos", "lane photos", ProjectUpdateOptions{Summary: &summary, Description: &description, Status: &status, Priority: &priority})
@@ -49,14 +51,16 @@ func TestUpdateProjectUsesExactInputAndReadsBack(t *testing.T) {
 	if !reflect.DeepEqual(graph.projectUpdateInput, wantInput) {
 		t.Fatalf("project update input = %#v, want %#v", graph.projectUpdateInput, wantInput)
 	}
-	if graph.projectReads != 1 || updated.Name != "Photos" {
+	if graph.projectReads != 3 || updated.Name != "Photos" {
 		t.Fatalf("read-back = %#v, project reads = %d", updated, graph.projectReads)
 	}
 }
 
 func TestUpdateProjectClearsSummaryContentAndPriority(t *testing.T) {
 	project := sampleProject()
-	graph := &projectGraph{project: project, readBack: project}
+	readBack := project
+	readBack.Description, readBack.Content, readBack.Priority = "", "", 0
+	graph := &projectGraph{project: project, readBack: readBack}
 	summary, content, priority := "none", "", "none"
 	_, err := (&LinearAPI{graph: graph}).UpdateProject(context.Background(), "Photos", "lane photos", ProjectUpdateOptions{Summary: &summary, Description: &content, Priority: &priority})
 	if err != nil {
@@ -204,7 +208,9 @@ func TestMCPProjectToolsMatchCLIFields(t *testing.T) {
 
 func TestMCPUpdateProjectUsesTheAppMutationPath(t *testing.T) {
 	project := sampleProject()
-	graph := &projectGraph{project: project, readBack: project, statuses: []ProjectStatus{{ID: "status-progress", Name: "In Progress"}}}
+	readBack := project
+	readBack.Description, readBack.Content = "One clear outcome", "Brief\n\n"
+	graph := &projectGraph{project: project, readBack: readBack, statuses: []ProjectStatus{{ID: "status-progress", Name: "In Progress"}}}
 	server := &MCPServer{api: &LinearAPI{graph: graph}}
 	text, err := server.runTool("update_project", map[string]json.RawMessage{
 		"project":     json.RawMessage(`"Photos"`),
@@ -221,13 +227,15 @@ func TestMCPUpdateProjectUsesTheAppMutationPath(t *testing.T) {
 	if !reflect.DeepEqual(graph.projectUpdateInput, want) {
 		t.Fatalf("project update input = %#v, want %#v", graph.projectUpdateInput, want)
 	}
-	if !strings.Contains(text, "Photos\nStatus: In Progress") {
+	if !strings.Contains(text, "Photos\nTeams: TRAWL\nStatus: In Progress") {
 		t.Fatalf("MCP output = %q", text)
 	}
 }
 
 func sampleProject() Project {
-	return Project{ID: "project-1", Name: "Photos", SlugID: "photos", Description: "Current Apple Photos to one reconstructable stored card", Content: "Build the simplest proven Photos pipeline.", Status: ProjectStatus{ID: "status-progress", Name: "In Progress"}, Priority: 2, PriorityLabel: "High"}
+	project := Project{ID: "project-1", Name: "Photos", SlugID: "photos", Description: "Current Apple Photos to one reconstructable stored card", Content: "Build the simplest proven Photos pipeline.", Status: ProjectStatus{ID: "status-progress", Name: "In Progress"}, Priority: 2, PriorityLabel: "High"}
+	project.Teams.Nodes = []Team{{ID: "team-1", Key: "TRAWL", Name: "TRAWL"}}
+	return project
 }
 
 type projectPaginationGraph struct{ reads int }

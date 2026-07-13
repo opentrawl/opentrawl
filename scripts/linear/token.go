@@ -15,8 +15,11 @@ import (
 	"time"
 )
 
-const tokenEndpoint = "https://api.linear.app/oauth/token"
-const tokenExpiryMargin = 60 * time.Second
+const (
+	tokenEndpoint     = "https://api.linear.app/oauth/token"
+	tokenExpiryMargin = 60 * time.Second
+	linearTokenScopes = "read,write,initiative:read,initiative:write"
+)
 
 type TokenStore struct {
 	path         string
@@ -77,7 +80,10 @@ func (s *TokenStore) Token(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if ok && s.valid(cached) {
-		return cached.AccessToken, nil
+		if hasRequiredTokenScopes(cached.Scope) {
+			return cached.AccessToken, nil
+		}
+		s.logger.LogDiagnostic("info", "token cache is missing required Linear scopes; minting replacement")
 	}
 	return s.refreshLocked(ctx)
 }
@@ -175,7 +181,7 @@ func (s *TokenStore) mint(ctx context.Context) (tokenCache, error) {
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", s.clientID)
 	form.Set("client_secret", s.clientSecret)
-	form.Set("scope", "read,write")
+	form.Set("scope", linearTokenScopes)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, tokenEndpoint, strings.NewReader(form.Encode()))
 	if err != nil {
 		return tokenCache{}, fmt.Errorf("build token request: %w", err)
@@ -231,6 +237,10 @@ func (s *TokenStore) mint(ctx context.Context) (tokenCache, error) {
 		s.logger.LogDiagnostic("error", "Linear token response was missing access_token or expires_in")
 		return tokenCache{}, fmt.Errorf("token response is missing access_token or expires_in")
 	}
+	if !hasRequiredTokenScopes(decoded.Scope) {
+		s.logger.LogDiagnostic("error", "Linear token response was missing required scopes")
+		return tokenCache{}, fmt.Errorf("Linear token response is missing required scopes")
+	}
 	return tokenCache{
 		AccessToken: decoded.AccessToken,
 		ExpiresAt:   s.now().Add(time.Duration(decoded.ExpiresIn) * time.Second),
@@ -243,12 +253,25 @@ func (s *TokenStore) valid(cached tokenCache) bool {
 	return cached.AccessToken != "" && !cached.ExpiresAt.IsZero() && s.now().Add(tokenExpiryMargin).Before(cached.ExpiresAt)
 }
 
+func hasRequiredTokenScopes(scope string) bool {
+	found := map[string]bool{}
+	for _, value := range strings.FieldsFunc(scope, func(r rune) bool { return r == ',' || r == ' ' }) {
+		found[value] = true
+	}
+	for _, required := range strings.Split(linearTokenScopes, ",") {
+		if !found[required] {
+			return false
+		}
+	}
+	return true
+}
+
 func tokenRequestLogBody() []byte {
 	form := url.Values{}
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", "<redacted>")
 	form.Set("client_secret", "<redacted>")
-	form.Set("scope", "read,write")
+	form.Set("scope", linearTokenScopes)
 	return []byte(form.Encode())
 }
 
