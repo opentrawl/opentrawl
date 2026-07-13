@@ -110,7 +110,7 @@ plutil -insert GitCommit -string "$(git -C "$repo_root" rev-parse --short HEAD)"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"
-plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads selected Photos media to prepare a card." "$info"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads your photo library on this Mac so you can search your photos." "$info"
 
 echo "Signing the local app"
 "$repo_root/scripts/dev-cert"

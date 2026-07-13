@@ -121,6 +121,14 @@ func TestStandaloneTrawlBuilderRequiresANewExplicitOutput(t *testing.T) {
 
 func TestHelperPackagingHasNoDeleteRegistrationOrFallbackStep(t *testing.T) {
 	repoRoot := photoKitTestRepoRoot(t)
+	helperInfo, err := os.ReadFile(filepath.Join(repoRoot, "trawlers", "photos", "cmd", "photoscrawl-fetch", "Info.plist"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(helperInfo, []byte("<key>LSUIElement</key>\n\t<true/>")) ||
+		!bytes.Contains(helperInfo, []byte("OpenTrawl reads your photo library on this Mac so you can search your photos.")) {
+		t.Fatal("Photos helper must remain a background agent with the approved purpose string")
+	}
 	builderPath := filepath.Join(repoRoot, "trawlers", "photos", "cmd", "photoscrawl-fetch", "build-app")
 	builder, err := os.ReadFile(builderPath)
 	if err != nil {
@@ -147,8 +155,7 @@ func TestHelperPackagingHasNoDeleteRegistrationOrFallbackStep(t *testing.T) {
 		!bytes.Contains(devRun, []byte("--entitlements \"$photos_entitlements\" \"$app\"")) {
 		t.Fatal("OpenTrawl host signing must carry the existing Photos entitlement")
 	}
-	if !bytes.Contains(devRun, []byte("NSPhotoLibraryUsageDescription")) ||
-		!bytes.Contains(devRun, []byte("OpenTrawl reads selected Photos media to prepare a card.")) {
+	if !bytes.Contains(devRun, []byte("plutil -insert NSPhotoLibraryUsageDescription -string \"OpenTrawl reads your photo library on this Mac so you can search your photos.\" \"$info\"")) {
 		t.Fatal("OpenTrawl host must carry the Photos purpose string")
 	}
 }
