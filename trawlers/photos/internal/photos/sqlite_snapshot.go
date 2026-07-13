@@ -110,6 +110,7 @@ select a.Z_PK,
        cast(a.ZMODIFICATIONDATE as real),
        cast(a.ZADDEDDATE as real),
        coalesce(aa.ZTIMEZONENAME, ''),
+       coalesce(ea.ZTIMEZONENAME, ''),
        coalesce(a.ZWIDTH, 0),
        coalesce(a.ZHEIGHT, 0),
        coalesce(a.ZDURATION, 0),
@@ -154,6 +155,7 @@ order by a.ZDATECREATED, a.ZUUID
 			&row.modificationDate,
 			&row.addedDate,
 			&row.timezoneName,
+			&row.extendedTimezoneName,
 			&row.width,
 			&row.height,
 			&row.duration,
@@ -177,6 +179,10 @@ order by a.ZDATECREATED, a.ZUUID
 		); err != nil {
 			return nil, err
 		}
+		timezoneName, err := sqliteTimezoneName(row)
+		if err != nil {
+			return nil, err
+		}
 		asset := Asset{
 			LocalIdentifier:  row.uuid,
 			MediaType:        sqliteMediaType(row.kind),
@@ -184,7 +190,7 @@ order by a.ZDATECREATED, a.ZUUID
 			CreationDate:     coreDataTime(row.creationDate),
 			ModificationDate: coreDataTime(row.modificationDate),
 			AddedDate:        coreDataTime(row.addedDate),
-			TimezoneName:     row.timezoneName,
+			TimezoneName:     timezoneName,
 			Width:            row.width,
 			Height:           row.height,
 			DurationSeconds:  row.duration,
@@ -206,7 +212,7 @@ order by a.ZDATECREATED, a.ZUUID
 		}
 		if row.latitude.Valid && row.longitude.Valid && validLocation(row.latitude.Float64, row.longitude.Float64) {
 			var accuracy *float64
-			if row.horizontalAccuracy.Valid {
+			if row.horizontalAccuracy.Valid && row.horizontalAccuracy.Float64 >= 0 {
 				accuracy = &row.horizontalAccuracy.Float64
 			}
 			asset.Location = &Location{
@@ -221,6 +227,16 @@ order by a.ZDATECREATED, a.ZUUID
 		return nil, err
 	}
 	return assets, nil
+}
+
+func sqliteTimezoneName(row sqliteAssetRow) (string, error) {
+	if row.timezoneName == "" {
+		return row.extendedTimezoneName, nil
+	}
+	if row.extendedTimezoneName == "" || row.timezoneName == row.extendedTimezoneName {
+		return row.timezoneName, nil
+	}
+	return "", fmt.Errorf("sqlite timezone schema conflict: additional and extended timezone fields differ")
 }
 
 func sqliteResources(ctx context.Context, db *sql.DB) (map[int64][]Resource, error) {
@@ -432,34 +448,35 @@ func sqliteColumnNames(ctx context.Context, db *sql.DB, table string) ([]string,
 }
 
 type sqliteAssetRow struct {
-	pk                 int64
-	uuid               string
-	kind               int64
-	kindSubtype        int64
-	creationDate       sql.NullFloat64
-	modificationDate   sql.NullFloat64
-	addedDate          sql.NullFloat64
-	timezoneName       string
-	width              int64
-	height             int64
-	duration           float64
-	favorite           int64
-	hidden             int64
-	burstIdentifier    string
-	latitude           sql.NullFloat64
-	longitude          sql.NullFloat64
-	horizontalAccuracy sql.NullFloat64
-	uti                string
-	filename           string
-	originalFilename   string
-	cameraMake         string
-	cameraModel        string
-	lensModel          string
-	focalLengthMM      sql.NullFloat64
-	focalLength35MM    sql.NullFloat64
-	aperture           sql.NullFloat64
-	shutterSpeed       sql.NullFloat64
-	iso                sql.NullFloat64
+	pk                   int64
+	uuid                 string
+	kind                 int64
+	kindSubtype          int64
+	creationDate         sql.NullFloat64
+	modificationDate     sql.NullFloat64
+	addedDate            sql.NullFloat64
+	timezoneName         string
+	extendedTimezoneName string
+	width                int64
+	height               int64
+	duration             float64
+	favorite             int64
+	hidden               int64
+	burstIdentifier      string
+	latitude             sql.NullFloat64
+	longitude            sql.NullFloat64
+	horizontalAccuracy   sql.NullFloat64
+	uti                  string
+	filename             string
+	originalFilename     string
+	cameraMake           string
+	cameraModel          string
+	lensModel            string
+	focalLengthMM        sql.NullFloat64
+	focalLength35MM      sql.NullFloat64
+	aperture             sql.NullFloat64
+	shutterSpeed         sql.NullFloat64
+	iso                  sql.NullFloat64
 }
 
 func sqliteCamera(row sqliteAssetRow) *Camera {

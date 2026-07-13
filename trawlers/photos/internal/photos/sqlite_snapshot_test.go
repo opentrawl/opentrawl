@@ -178,6 +178,113 @@ func TestValidLocationRejectsPhotosSentinels(t *testing.T) {
 	}
 }
 
+func TestSQLiteAssetsPreserveKnownLocationAccuracyAndTimezone(t *testing.T) {
+	t.Parallel()
+	db, err := store.Open(context.Background(), store.Options{Path: filepath.Join(t.TempDir(), "Photos.sqlite")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	for _, statement := range []string{
+		`create table ZASSET (
+			Z_PK integer primary key, ZUUID varchar, ZKIND integer, ZKINDSUBTYPE integer,
+			ZDATECREATED timestamp, ZMODIFICATIONDATE timestamp, ZADDEDDATE timestamp,
+			ZWIDTH integer, ZHEIGHT integer, ZDURATION float, ZFAVORITE integer, ZHIDDEN integer,
+			ZAVALANCHEUUID varchar, ZLATITUDE float, ZLONGITUDE float,
+			ZUNIFORMTYPEIDENTIFIER varchar, ZFILENAME varchar, ZTRASHEDSTATE integer
+		)`,
+		`create table ZADDITIONALASSETATTRIBUTES (
+			ZASSET integer, ZTIMEZONENAME varchar, ZGPSHORIZONTALACCURACY float, ZORIGINALFILENAME varchar
+		)`,
+		`create table ZEXTENDEDATTRIBUTES (
+			ZASSET integer, ZTIMEZONENAME varchar, ZCAMERAMAKE varchar, ZCAMERAMODEL varchar,
+			ZLENSMODEL varchar, ZFOCALLENGTH float, ZFOCALLENGTHIN35MM float, ZAPERTURE float,
+			ZSHUTTERSPEED float, ZISO float
+		)`,
+	} {
+		if _, err := db.DB().Exec(statement); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	created := coreDataSeconds("2026-05-28T10:00:00Z")
+	for _, row := range []struct {
+		id       int
+		current  string
+		extended string
+		accuracy any
+	}{
+		{id: 1, current: "", extended: "Fallback/Zone", accuracy: -1.0},
+		{id: 2, current: "Current/Zone", extended: "", accuracy: 0.0},
+		{id: 3, current: "", extended: "", accuracy: 12.5},
+		{id: 4, current: "", extended: "", accuracy: nil},
+	} {
+		if _, err := db.DB().Exec(`
+insert into ZASSET(Z_PK, ZUUID, ZKIND, ZKINDSUBTYPE, ZDATECREATED, ZMODIFICATIONDATE, ZADDEDDATE, ZWIDTH, ZHEIGHT, ZDURATION, ZFAVORITE, ZHIDDEN, ZAVALANCHEUUID, ZLATITUDE, ZLONGITUDE, ZUNIFORMTYPEIDENTIFIER, ZFILENAME, ZTRASHEDSTATE)
+values (?, printf('synthetic-%d', ?), 0, 0, ?, ?, ?, 1, 1, 0, 0, 0, '', 1, 1, '', '', 0)
+`, row.id, row.id, created, created, created); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.DB().Exec(`insert into ZADDITIONALASSETATTRIBUTES(ZASSET, ZTIMEZONENAME, ZGPSHORIZONTALACCURACY, ZORIGINALFILENAME) values (?, ?, ?, '')`, row.id, row.current, row.accuracy); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := db.DB().Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZTIMEZONENAME) values (?, ?)`, row.id, row.extended); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	assets, err := sqliteAssets(context.Background(), db.DB(), nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 4 {
+		t.Fatalf("assets = %d, want 4", len(assets))
+	}
+	assertAssetTimezoneAndAccuracy(t, assets[0], "Fallback/Zone", nil)
+	assertAssetTimezoneAndAccuracy(t, assets[1], "Current/Zone", float64Pointer(0))
+	assertAssetTimezoneAndAccuracy(t, assets[2], "", float64Pointer(12.5))
+	assertAssetTimezoneAndAccuracy(t, assets[3], "", nil)
+
+	if _, err := db.DB().Exec(`
+insert into ZASSET(Z_PK, ZUUID, ZKIND, ZKINDSUBTYPE, ZDATECREATED, ZMODIFICATIONDATE, ZADDEDDATE, ZWIDTH, ZHEIGHT, ZDURATION, ZFAVORITE, ZHIDDEN, ZAVALANCHEUUID, ZLATITUDE, ZLONGITUDE, ZUNIFORMTYPEIDENTIFIER, ZFILENAME, ZTRASHEDSTATE)
+values (5, 'synthetic-conflict', 0, 0, ?, ?, ?, 1, 1, 0, 0, 0, '', 1, 1, '', '', 0)
+`, created, created, created); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB().Exec(`insert into ZADDITIONALASSETATTRIBUTES(ZASSET, ZTIMEZONENAME, ZGPSHORIZONTALACCURACY, ZORIGINALFILENAME) values (5, 'Current/Zone', 1, '')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB().Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZTIMEZONENAME) values (5, 'Other/Zone')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sqliteAssets(context.Background(), db.DB(), nil, nil); err == nil || err.Error() != "sqlite timezone schema conflict: additional and extended timezone fields differ" {
+		t.Fatalf("sqliteAssets error = %v", err)
+	}
+}
+
+func assertAssetTimezoneAndAccuracy(t *testing.T, asset Asset, timezone string, accuracy *float64) {
+	t.Helper()
+	if asset.TimezoneName != timezone {
+		t.Fatalf("asset %q timezone = %q, want %q", asset.LocalIdentifier, asset.TimezoneName, timezone)
+	}
+	if asset.Location == nil {
+		t.Fatalf("asset %q location = nil", asset.LocalIdentifier)
+	}
+	if accuracy == nil {
+		if asset.Location.HorizontalAccuracy != nil {
+			t.Fatalf("asset %q accuracy = %v, want nil", asset.LocalIdentifier, *asset.Location.HorizontalAccuracy)
+		}
+		return
+	}
+	if asset.Location.HorizontalAccuracy == nil || *asset.Location.HorizontalAccuracy != *accuracy {
+		t.Fatalf("asset %q accuracy = %v, want %v", asset.LocalIdentifier, asset.Location.HorizontalAccuracy, *accuracy)
+	}
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
 func createSyntheticPhotosDB(db *sql.DB) error {
 	statements := []string{
 		`create table ZASSET (
@@ -208,6 +315,7 @@ func createSyntheticPhotosDB(db *sql.DB) error {
 		)`,
 		`create table ZEXTENDEDATTRIBUTES (
 			ZASSET integer,
+			ZTIMEZONENAME varchar,
 			ZCAMERAMAKE varchar,
 			ZCAMERAMODEL varchar,
 			ZLENSMODEL varchar,
