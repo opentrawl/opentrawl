@@ -65,7 +65,7 @@ func evidenceScenarios(milestonePath, projectPath string) []evidenceScenario {
 			cliArgs:    []string{"project", "update", "Photos", "--as", "lane photos", "--summary", "One clear outcome", "--description-file", projectPath, "--status", "In Progress", "--priority", "high"},
 			mcpTool:    "update_project",
 			mcpArgs:    map[string]any{"project": "Photos", "actor": "lane photos", "summary": "One clear outcome", "description": "Updated project brief.\n\n", "status": "In Progress", "priority": "high"},
-			wantOutput: "Photos\nStatus: In Progress\nPriority: High\nHealth: Not set\nLead: Unassigned\nIssues: 0 open, 0 total\n\nSummary\nOne clear outcome\n\nMilestones\nNone\n\nDescription\nUpdated project brief.\n\n",
+			wantOutput: "Photos\nTeams: TRAWL\nStatus: In Progress\nPriority: High\nHealth: Not set\nLead: Unassigned\nIssues: 0 open, 0 total\n\nSummary\nOne clear outcome\n\nMilestones\nNone\n\nInitiatives\nNone\n\nDescription\nUpdated project brief.\n\n",
 			newGraph:   func() graphDoer { return &literalEvidenceGraph{mode: "project-update"} },
 		},
 		{
@@ -321,6 +321,7 @@ func (graph *literalEvidenceGraph) projectReadFixture() map[string]any {
 		"id": "project-1", "name": "Photos", "slugId": "photos",
 		"description": description, "content": content,
 		"status":   map[string]any{"id": "status-progress", "name": "In Progress"},
+		"teams":    map[string]any{"nodes": []any{map[string]any{"id": "team-1", "key": "TRAWL", "name": "TRAWL"}}},
 		"priority": 2, "priorityLabel": "High", "health": nil, "lead": nil,
 		"projectMilestones": map[string]any{"nodes": milestones, "pageInfo": pageInfo()},
 		"issues":            map[string]any{"nodes": []any{}, "pageInfo": pageInfo()},

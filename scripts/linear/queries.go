@@ -125,7 +125,7 @@ const teamStatesQuery = `
 query TeamStates($team: String!) {
   workflowStates(first: 100, filter: {team: {key: {eq: $team}}}) {
     nodes { id name type }
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -137,13 +137,13 @@ query ResolveTeam($key: String!) {
 }`
 
 const resolveProjectQuery = `
-query ResolveProject($reference: String!) {
-  projects(first: 10, filter: {or: [
+query ResolveProject($reference: String!, $after: String) {
+  projects(first: 100, after: $after, filter: {or: [
     {name: {eq: $reference}},
     {slugId: {eq: $reference}}
   ]}) {
     nodes { id name slugId }
-    pageInfo { hasNextPage }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -157,10 +157,18 @@ const projectCoreFields = `
       priority
       priorityLabel
       health
-      lead { displayName name }`
+      lead { displayName name }
+      teams(first: 100) { nodes { id key name } }`
+
+const initiativeCoreFields = `
+      id
+      name
+      slugId
+      description
+      content`
 
 const projectByIDQuery = `
-query ProjectByID($id: String!, $milestonesAfter: String, $issuesAfter: String, $readMilestones: Boolean!, $readIssues: Boolean!) {
+query ProjectByID($id: String!, $milestonesAfter: String, $issuesAfter: String, $initiativesAfter: String, $readMilestones: Boolean!, $readIssues: Boolean!, $readInitiatives: Boolean!) {
   project(id: $id) {` + projectCoreFields + `
     projectMilestones(first: 100, after: $milestonesAfter) @include(if: $readMilestones) {
       nodes { id name description project { id name slugId } }
@@ -170,6 +178,33 @@ query ProjectByID($id: String!, $milestonesAfter: String, $issuesAfter: String, 
       nodes { id state { type } }
       pageInfo { hasNextPage endCursor }
     }
+    initiatives(first: 100, after: $initiativesAfter) @include(if: $readInitiatives) {
+      nodes {` + initiativeCoreFields + ` }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`
+
+const initiativeByIDQuery = `
+query InitiativeByID($id: String!, $projectsAfter: String, $readProjects: Boolean!) {
+  initiative(id: $id) {` + initiativeCoreFields + `
+    projects(first: 100, after: $projectsAfter) @include(if: $readProjects) {
+      nodes { id name slugId }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}`
+
+const resolveInitiativeByIDQuery = `
+query ResolveInitiativeByID($id: String!) {
+  initiative(id: $id) { id name slugId }
+}`
+
+const resolveInitiativeByNameQuery = `
+query ResolveInitiativeByName($name: String!, $after: String) {
+  initiatives(first: 100, after: $after, filter: {name: {eq: $name}}) {
+    nodes { id name slugId }
+    pageInfo { hasNextPage endCursor }
   }
 }`
 
@@ -230,6 +265,24 @@ mutation UpdateProject($id: String!, $input: ProjectUpdateInput!) {
   projectUpdate(id: $id, input: $input) {
     success
   }
+}`
+
+const createProjectMutation = `
+mutation CreateProject($input: ProjectCreateInput!) {
+  projectCreate(input: $input) {
+    success
+    project { id }
+  }
+}`
+
+const createInitiativeToProjectMutation = `
+mutation CreateInitiativeToProject($input: InitiativeToProjectCreateInput!) {
+  initiativeToProjectCreate(input: $input) { success }
+}`
+
+const updateInitiativeMutation = `
+mutation UpdateInitiative($id: String!, $input: InitiativeUpdateInput!) {
+  initiativeUpdate(id: $id, input: $input) { success }
 }`
 
 const createProjectMilestoneMutation = `

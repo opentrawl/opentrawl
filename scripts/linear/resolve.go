@@ -34,22 +34,126 @@ func (api *LinearAPI) ResolveProject(ctx context.Context, reference string) (Pro
 	if reference == "" {
 		return Project{}, fmt.Errorf("--project needs a value")
 	}
-	var out struct {
-		Projects struct {
-			Nodes    []Project `json:"nodes"`
-			PageInfo PageInfo  `json:"pageInfo"`
-		} `json:"projects"`
-	}
-	if err := api.graph.Do(ctx, resolveProjectQuery, map[string]any{"reference": reference}, &out); err != nil {
+	matches, err := api.findProjects(ctx, reference)
+	if err != nil {
 		return Project{}, err
 	}
-	if out.Projects.PageInfo.HasNextPage || len(out.Projects.Nodes) > 1 {
-		return Project{}, fmt.Errorf("project %q is ambiguous: %s", reference, projectChoices(out.Projects.Nodes))
-	}
-	if len(out.Projects.Nodes) == 0 {
+	if len(matches) == 0 {
 		return Project{}, fmt.Errorf("project %q was not found", reference)
 	}
-	return out.Projects.Nodes[0], nil
+	if len(matches) > 1 {
+		return Project{}, fmt.Errorf("project %q is ambiguous: %s", reference, projectChoices(matches))
+	}
+	return matches[0], nil
+}
+
+func (api *LinearAPI) findProjects(ctx context.Context, reference string) ([]Project, error) {
+	var projects []Project
+	after := ""
+	for {
+		var out struct {
+			Projects struct {
+				Nodes    []Project `json:"nodes"`
+				PageInfo PageInfo  `json:"pageInfo"`
+			} `json:"projects"`
+		}
+		variables := map[string]any{"reference": reference}
+		if after != "" {
+			variables["after"] = after
+		}
+		if err := api.graph.Do(ctx, resolveProjectQuery, variables, &out); err != nil {
+			return nil, err
+		}
+		projects = append(projects, out.Projects.Nodes...)
+		if !out.Projects.PageInfo.HasNextPage {
+			return projects, nil
+		}
+		after = out.Projects.PageInfo.EndCursor
+		if after == "" {
+			return nil, fmt.Errorf("linear did not return a cursor for the next project page")
+		}
+	}
+}
+
+func (api *LinearAPI) ResolveInitiative(ctx context.Context, reference string) (Initiative, error) {
+	reference = strings.TrimSpace(reference)
+	if reference == "" {
+		return Initiative{}, fmt.Errorf("--initiative needs a value")
+	}
+	if isLinearID(reference) {
+		var byID struct {
+			Initiative *Initiative `json:"initiative"`
+		}
+		if err := api.graph.Do(ctx, resolveInitiativeByIDQuery, map[string]any{"id": reference}, &byID); err != nil {
+			return Initiative{}, err
+		}
+		if byID.Initiative != nil {
+			return *byID.Initiative, nil
+		}
+	}
+	var matches []Initiative
+	after := ""
+	for {
+		var out struct {
+			Initiatives struct {
+				Nodes    []Initiative `json:"nodes"`
+				PageInfo PageInfo     `json:"pageInfo"`
+			} `json:"initiatives"`
+		}
+		variables := map[string]any{"name": reference}
+		if after != "" {
+			variables["after"] = after
+		}
+		if err := api.graph.Do(ctx, resolveInitiativeByNameQuery, variables, &out); err != nil {
+			return Initiative{}, err
+		}
+		matches = append(matches, out.Initiatives.Nodes...)
+		if !out.Initiatives.PageInfo.HasNextPage {
+			break
+		}
+		after = out.Initiatives.PageInfo.EndCursor
+		if after == "" {
+			return Initiative{}, fmt.Errorf("linear did not return a cursor for the next initiative page")
+		}
+	}
+	if len(matches) == 0 {
+		return Initiative{}, fmt.Errorf("initiative %q was not found", reference)
+	}
+	if len(matches) > 1 {
+		return Initiative{}, fmt.Errorf("initiative %q is ambiguous: %s", reference, initiativeChoices(matches))
+	}
+	return matches[0], nil
+}
+
+func isLinearID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, rune := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if rune != '-' {
+				return false
+			}
+			continue
+		}
+		if !((rune >= '0' && rune <= '9') || (rune >= 'a' && rune <= 'f') || (rune >= 'A' && rune <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
+func initiativeChoices(initiatives []Initiative) string {
+	choices := make([]string, 0, len(initiatives))
+	for _, initiative := range initiatives {
+		choice := initiative.Name
+		if strings.TrimSpace(initiative.SlugID) != "" {
+			choice += " (" + initiative.SlugID + ")"
+		}
+		choices = append(choices, choice)
+	}
+	sort.Strings(choices)
+	return strings.Join(choices, ", ")
 }
 
 func projectChoices(projects []Project) string {
@@ -62,9 +166,6 @@ func projectChoices(projects []Project) string {
 		choices = append(choices, choice)
 	}
 	sort.Strings(choices)
-	if len(choices) == 0 {
-		return "more than 10 matches"
-	}
 	return strings.Join(choices, ", ")
 }
 

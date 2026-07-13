@@ -125,13 +125,10 @@ func decodeGraphResponse(body []byte, out any, logger *requestLogger) error {
 		return fmt.Errorf("decode GraphQL response: %w", err)
 	}
 	hasData := graphResponseHasData(response.Data)
-	if len(response.Errors) > 0 && !hasData {
-		summary := graphErrorText(response.Errors)
-		logger.LogDiagnostic("error", "Linear GraphQL returned errors without data: "+summary)
-		return fmt.Errorf("linear GraphQL: %s", summary)
-	}
 	if len(response.Errors) > 0 {
-		logger.Warn("Linear GraphQL returned data with errors: " + graphErrorText(response.Errors))
+		summary := graphErrorText(response.Errors)
+		logger.LogDiagnostic("error", "Linear GraphQL returned errors: "+summary)
+		return fmt.Errorf("linear GraphQL: %s", summary)
 	}
 	if out == nil {
 		return nil

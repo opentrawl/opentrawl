@@ -111,7 +111,7 @@ func captureRestrictedTokenRefresh(t *testing.T, dir string) {
 	}
 	logger, stderr := testRequestLogger(t)
 	var requestEvidence map[string]any
-	rawResponse := `{"access_token":"synthetic-access-token","expires_in":3600,"scope":"read,write","token_type":"Bearer"}`
+	rawResponse := `{"access_token":"synthetic-access-token","expires_in":3600,"scope":"read write initiative:read initiative:write","token_type":"Bearer"}`
 	store := &TokenStore{
 		path:         filepath.Join(blockedParent, "token.json"),
 		clientID:     "synthetic-client",

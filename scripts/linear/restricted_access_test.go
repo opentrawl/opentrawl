@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -53,6 +54,10 @@ func TestEveryCLIWriteRequiresAuditBeforeAPIConstruction(t *testing.T) {
 	newLinearWriteAPI = NewLinearWriteAPI
 	t.Cleanup(func() { newLinearWriteAPI = oldFactory })
 
+	descriptionPath := filepath.Join(t.TempDir(), "synthetic.md")
+	if err := os.WriteFile(descriptionPath, []byte("Synthetic brief"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cases := [][]string{
 		{"ack", "00000000-0000-4000-8000-000000000001"},
 		{"comment", "TRAWL-1", "Synthetic comment", "--as", "test actor"},
@@ -62,7 +67,9 @@ func TestEveryCLIWriteRequiresAuditBeforeAPIConstruction(t *testing.T) {
 		{"issue", "label", "add", "TRAWL-1", "--label", "synthetic", "--as", "test actor"},
 		{"issue", "relation", "add", "TRAWL-1", "--blocks", "TRAWL-2", "--as", "test actor"},
 		{"project", "update", "Synthetic project", "--summary", "Synthetic summary", "--as", "test actor"},
+		{"project", "create", "--team", "TRAWL", "--name", "Synthetic project", "--summary", "Synthetic summary", "--description-file", descriptionPath, "--status", "Triage", "--priority", "high", "--as", "test actor"},
 		{"project", "milestone", "ensure", "Synthetic project", "--name", "Synthetic milestone", "--as", "test actor"},
+		{"initiative", "update", "Synthetic initiative", "--summary", "Synthetic summary", "--as", "test actor"},
 	}
 	for _, args := range cases {
 		var stdout, stderr bytes.Buffer
@@ -120,7 +127,7 @@ func TestEveryMCPToolHasOneAccessClassification(t *testing.T) {
 			t.Errorf("classification exists for unexposed tool %q", name)
 		}
 	}
-	writes := []string{"ack_comment", "create_comment", "create_issue", "ensure_project_milestone", "update_issue", "update_project", "add_issue_labels", "remove_issue_labels", "add_issue_relation", "remove_issue_relation"}
+	writes := []string{"ack_comment", "create_comment", "create_issue", "create_project", "ensure_project_milestone", "update_issue", "update_project", "update_initiative", "add_issue_labels", "remove_issue_labels", "add_issue_relation", "remove_issue_relation"}
 	for name, access := range mcpToolAccess {
 		want := toolRead
 		if containsString(writes, name) {
@@ -128,6 +135,28 @@ func TestEveryMCPToolHasOneAccessClassification(t *testing.T) {
 		}
 		if access != want {
 			t.Errorf("tool %q access = %v, want %v", name, access, want)
+		}
+	}
+}
+
+func TestPortfolioMCPWritesRequireAuditBeforeGraphQL(t *testing.T) {
+	server := &MCPServer{
+		stderr: &bytes.Buffer{},
+		newAPI: func(_ io.Writer, _ int, access toolAccess) (*LinearAPI, error) {
+			if access != toolWrite {
+				t.Fatalf("access = %v, want write", access)
+			}
+			return nil, errors.New("open required Linear write audit: synthetic denial")
+		},
+	}
+	for name, args := range map[string]map[string]string{
+		"create_project":    {"team": "TRAWL", "name": "Synthetic project", "actor": "test actor", "summary": "Synthetic summary", "description": "Synthetic brief", "status": "Triage", "priority": "high"},
+		"update_project":    {"project": "Synthetic project", "actor": "test actor", "name": "Renamed project"},
+		"update_initiative": {"initiative": "Synthetic initiative", "actor": "test actor", "summary": "Synthetic summary"},
+	} {
+		_, err := server.runTool(name, rawArguments(args))
+		if err == nil || !strings.Contains(err.Error(), "required Linear write audit") {
+			t.Fatalf("%s error = %v", name, err)
 		}
 	}
 }
@@ -166,6 +195,63 @@ func TestRefreshedTokenSurvivesCacheWriteFailure(t *testing.T) {
 	}
 	if count := strings.Count(stderr.String(), "token cache could not be saved"); count != 1 {
 		t.Fatalf("save warning count = %d, want 1; stderr %q", count, stderr.String())
+	}
+}
+
+func TestTokenReplacesCachedTokenMissingInitiativeScopes(t *testing.T) {
+	logger, _ := testRequestLogger(t)
+	path := filepath.Join(t.TempDir(), "token.json")
+	old := tokenCache{AccessToken: "synthetic-old-token", ExpiresAt: time.Unix(4_000_000_000, 0), Scope: "read write", TokenType: "Bearer"}
+	data, err := json.Marshal(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	requests := 0
+	var scope string
+	store := &TokenStore{
+		path: path, clientID: "synthetic-client", clientSecret: "synthetic-secret", logger: logger,
+		now: func() time.Time { return time.Unix(1_000, 0) },
+		httpClient: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			requests++
+			body, err := io.ReadAll(request.Body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			form, err := url.ParseQuery(string(body))
+			if err != nil {
+				t.Fatal(err)
+			}
+			scope = form.Get("scope")
+			return syntheticTokenResponse(), nil
+		})},
+	}
+	token, err := store.Token(context.Background())
+	if err != nil {
+		t.Fatalf("Token returned error: %v", err)
+	}
+	if token != "synthetic-access-token" || requests != 1 || scope != linearTokenScopes {
+		t.Fatalf("token=%q requests=%d scope=%q", token, requests, scope)
+	}
+	if !hasRequiredTokenScopes(store.cached.Scope) {
+		t.Fatalf("replacement scope = %q", store.cached.Scope)
+	}
+}
+
+func TestTokenRefusesReplacementMissingRequiredScopes(t *testing.T) {
+	logger, _ := testRequestLogger(t)
+	store := &TokenStore{
+		path: filepath.Join(t.TempDir(), "token.json"), clientID: "synthetic-client", clientSecret: "synthetic-secret", logger: logger,
+		now: func() time.Time { return time.Unix(1_000, 0) },
+		httpClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"access_token":"synthetic-access-token","expires_in":3600,"scope":"read write","token_type":"Bearer"}`)), Header: make(http.Header)}, nil
+		})},
+	}
+	_, err := store.Token(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "missing required scopes") {
+		t.Fatalf("Token error = %v", err)
 	}
 }
 
@@ -244,7 +330,7 @@ func (fn roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error)
 func syntheticTokenResponse() *http.Response {
 	return &http.Response{
 		StatusCode: http.StatusOK,
-		Body:       io.NopCloser(strings.NewReader(`{"access_token":"synthetic-access-token","expires_in":3600,"scope":"read,write","token_type":"Bearer"}`)),
+		Body:       io.NopCloser(strings.NewReader(`{"access_token":"synthetic-access-token","expires_in":3600,"scope":"read write initiative:read initiative:write","token_type":"Bearer"}`)),
 		Header:     make(http.Header),
 	}
 }
