@@ -31,8 +31,7 @@ struct TrawlApp: App {
     Window("OpenTrawl", id: "main") {
       RootView(
         model: delegate.model,
-        client: delegate.client,
-        onRequestDiskAccess: delegate.requestFullDiskAccess
+        client: delegate.client
       )
       .preferredColorScheme(.light)
       .frame(

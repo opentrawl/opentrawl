@@ -13,84 +13,79 @@ struct SearchWorkspace: View {
   let sourceResolver: SearchSourceResolver
   let isCompact: Bool
   let model: SearchModel
+  let fieldIdentity: UUID
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
-  let onDismiss: () -> Void
+  let onOpen: (SearchHit) -> Void
 
   var body: some View {
     VStack(spacing: 0) {
-      SearchField(
-        query: $interaction.query,
-        scope: scope,
-        focus: $focus,
-        onClearScope: onClearScope,
-        onSubmit: onSubmit,
-        onMoveToResults: onMoveToResults,
-        onDismiss: onDismiss
-      )
-      .padding(14)
-
-      Divider()
-      workspaceLayout
-      Divider()
-      SearchStatus(
-        phase: model.phase,
-        count: model.results.count,
-        scopeName: scope?.surface,
-        resultLimit: model.resultLimit,
-        failureGuidance: model.failureGuidance,
-        hasTimeoutFailure: model.hasTimeoutFailure
-      )
-      .padding(.horizontal, 16)
-      .frame(minHeight: 48)
+      searchField
+      switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
+      case .field:
+        EmptyView()
+      case .outcome:
+        Divider()
+        SearchOutcome(
+          phase: model.phase,
+          failureGuidance: model.failureGuidance,
+          skippedSources: model.skippedSources
+        )
+      case .results:
+        Divider()
+        workspaceLayout
+      }
     }
+  }
+
+  private var searchField: some View {
+    SearchField(
+      query: $interaction.query,
+      scope: scope,
+      focus: $focus,
+      onClearScope: onClearScope,
+      onSubmit: onSubmit,
+      onMoveToResults: onMoveToResults
+    )
+    .padding(14)
+    .id(fieldIdentity)
   }
 
   @ViewBuilder
   private var workspaceLayout: some View {
     if isCompact {
       VStack(spacing: 0) {
-        SearchResultsList(
-          phase: model.phase,
-          results: model.results,
-          sourceDisplayName: sourceDisplayName(for:),
-          failureGuidance: model.failureGuidance,
-          title: model.displayTitle(for:),
-          selectedResultID: $interaction.selectedResultID,
-          focus: $focus
-        )
-        .frame(height: 188)
+        results
+          .frame(height: 188)
         Divider()
-        ResultPreview(
-          phase: model.openPhase,
-          response: model.openResult
-        )
+        ResultPreview(phase: model.openPhase, response: model.openResult)
       }
     } else {
       HStack(spacing: 0) {
-        SearchResultsList(
-          phase: model.phase,
-          results: model.results,
-          sourceDisplayName: sourceDisplayName(for:),
-          failureGuidance: model.failureGuidance,
-          title: model.displayTitle(for:),
-          selectedResultID: $interaction.selectedResultID,
-          focus: $focus
-        )
-        .frame(minWidth: 360)
+        results
+          .frame(minWidth: 360)
         Divider()
-        ResultPreview(
-          phase: model.openPhase,
-          response: model.openResult
-        )
+        ResultPreview(phase: model.openPhase, response: model.openResult)
       }
     }
   }
 
-  private var selectedHit: SearchHit? {
-    model.results.first(where: { $0.id == interaction.selectedResultID })
+  private var results: some View {
+    SearchResultsList(
+      phase: model.phase,
+      results: model.results,
+      sourceDisplayName: sourceDisplayName(for:),
+      failureGuidance: model.failureGuidance,
+      hasTimeoutFailure: model.hasTimeoutFailure,
+      resultLimit: model.resultLimit,
+      title: model.displayTitle(for:),
+      selectedResultID: $interaction.selectedResultID,
+      focus: $focus,
+      onReturn: onSubmit,
+      onOpen: onOpen
+    )
   }
 
   private func sourceDisplayName(for sourceID: String) -> String {
@@ -109,13 +104,12 @@ private struct SearchField: View {
   let onClearScope: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
-  let onDismiss: () -> Void
 
   var body: some View {
     HStack(spacing: 9) {
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
-      TextField(scope == nil ? "Search everything" : "Search this source", text: $query)
+      TextField(scope.map { "Search \($0.surface)" } ?? "Search everything", text: $query)
         .textFieldStyle(.plain)
         .focused($focus, equals: .field)
         .defaultFocus($focus, .field, priority: .userInitiated)
@@ -127,112 +121,87 @@ private struct SearchField: View {
         }
       if let scope {
         HStack(spacing: 5) {
-          SourceIconView(sourceID: scope.id, size: 18)
+          SourceIconView(sourceID: scope.id, size: 22)
           Text(scope.surface)
             .font(.caption.weight(.medium))
             .lineLimit(1)
-          Button {
-            onClearScope()
-          } label: {
-            Image(systemName: "xmark")
+            .fixedSize()
+          Divider()
+            .frame(height: 18)
+          Button(action: onClearScope) {
+            Image(systemName: "xmark.circle.fill")
+              .imageScale(.small)
           }
           .buttonStyle(.plain)
-          .accessibilityLabel("Search every source")
+          .accessibilityLabel("Search all sources")
         }
-        .padding(.horizontal, 8)
+        .padding(.leading, 8)
+        .padding(.trailing, 5)
         .padding(.vertical, 5)
-        .background(.secondary.opacity(0.1), in: Capsule())
+        .background(.secondary.opacity(0.14), in: Capsule())
+        .fixedSize(horizontal: true, vertical: false)
       }
-      Button(action: onDismiss) {
-        Image(systemName: "xmark.circle.fill")
-          .foregroundStyle(.secondary)
+      if !query.isEmpty {
+        Button(action: clearQuery) {
+          Image(systemName: "xmark.circle.fill")
+            .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear search query")
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel("Close search")
     }
     .padding(.horizontal, 13)
     .frame(height: 44)
     .background(.secondary.opacity(0.08), in: Capsule())
   }
+
+  private func clearQuery() {
+    query = ""
+    Task { @MainActor in
+      focus = .field
+    }
+  }
 }
 
-private struct SearchStatus: View {
+private struct SearchOutcome: View {
   let phase: SearchPhase
-  let count: Int
-  let scopeName: String?
-  let resultLimit: UInt32
   let failureGuidance: String?
-  let hasTimeoutFailure: Bool
+  let skippedSources: [SkippedSource]
 
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      HStack(alignment: .firstTextBaseline, spacing: 12) {
-        status
-        Spacer(minLength: 8)
-        context
-      }
-      VStack(alignment: .leading, spacing: 3) {
-        status
-        context
+    VStack(spacing: 9) {
+      switch phase {
+      case .loading:
+        ProgressView()
+          .controlSize(.small)
+        Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
+      case .complete:
+        Label("No matches.", systemImage: "magnifyingglass")
+      case .partial:
+        Label(
+          failureGuidance ?? "Some sources failed; the others returned no matches.",
+          systemImage: "exclamationmark.triangle"
+        )
+      case .skipped:
+        Label(SearchWorkspaceCopy.skippedOutcome(for: skippedSources), systemImage: "exclamationmark.triangle")
+      case .failed(let message):
+        Label(message, systemImage: "exclamationmark.circle")
+      case .timedOut:
+        Label(
+          "Search stopped after \(SearchModel.defaultWaitSeconds) seconds.",
+          systemImage: "clock.badge.exclamationmark"
+        )
+      case .idle:
+        EmptyView()
       }
     }
     .font(.callout)
     .foregroundStyle(.secondary)
-    .frame(maxWidth: .infinity, alignment: .leading)
+    .multilineTextAlignment(.center)
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding()
   }
 
-  @ViewBuilder
-  private var status: some View {
-    switch phase {
-    case .idle:
-      Text("Ready to search.")
-    case .loading:
-      HStack(spacing: 7) {
-        ProgressView()
-          .controlSize(.small)
-        Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
-      }
-    case .complete where count == 0:
-      Text("No matches.")
-    case .complete:
-      Text("\(count) results.")
-    case .partial where count == 0:
-      Label(
-        failureGuidance ?? "Some sources failed; the others returned no matches.",
-        systemImage: "exclamationmark.triangle"
-      )
-    case .partial:
-      Label(
-        partialMessage,
-        systemImage: "exclamationmark.triangle"
-      )
-    case .skipped:
-      Label("Some sources were skipped.", systemImage: "exclamationmark.triangle")
-    case .failed(let message):
-      Label(message, systemImage: "exclamationmark.circle")
-    case .timedOut:
-      Label(
-        "Search stopped after \(SearchModel.defaultWaitSeconds) seconds.",
-        systemImage: "clock.badge.exclamationmark"
-      )
-    }
-  }
-
-  private var partialMessage: String {
-    let result = "Showing \(count) useful results."
-    if hasTimeoutFailure { return "Some sources timed out. \(result)" }
-    guard let failureGuidance else { return "Some sources failed. \(result)" }
-    return "\(result) \(failureGuidance)"
-  }
-
-  private var context: some View {
-    HStack(spacing: 10) {
-      Label(scopeName ?? "All sources", systemImage: scopeName == nil ? "square.grid.2x2" : "scope")
-        .lineLimit(1)
-      Text("Up to \(resultLimit == 0 ? SearchResponse.maximumResults : resultLimit)")
-        .fixedSize()
-    }
-  }
 }
 
 struct SearchKey: Hashable {

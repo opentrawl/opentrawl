@@ -6,7 +6,6 @@ struct RootView: View {
   @Bindable var model: AppModel
 
   let client: any TrawlClient
-  let onRequestDiskAccess: () -> Void
 
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: RestingSource?
@@ -46,37 +45,18 @@ struct RootView: View {
     }
     .environment(iconStore)
     .animation(.easeOut(duration: 0.16), value: isSearching)
-    .toolbar {
-      ToolbarItem {
-        if !isSearching {
-          Button {
-            Task { await syncNow() }
-          } label: {
-            if model.isSyncing {
-              ProgressView()
-                .controlSize(.small)
-            } else {
-              Label("Sync now", systemImage: "arrow.triangle.2.circlepath")
-            }
-          }
-          .disabled(model.isSyncing)
-          .help("Sync now")
-        }
-      }
-    }
   }
 
   @ViewBuilder
   private var home: some View {
-    switch model.phase {
-    case .loading where model.sources.isEmpty:
+    if case .loading = model.phase, model.sources.isEmpty {
       ProgressView("Loading sources")
         .controlSize(.large)
-    case .failed(let message) where model.shouldShowFailureFallback:
+    } else if let message = model.blockingFailureMessage {
       FailureView(message: message) {
         Task { await model.refresh() }
       }
-    case .loading, .ready, .partial, .timedOut, .failed:
+    } else {
       ZStack(alignment: .top) {
         ConstellationView(
           sources: model.restingSources,
@@ -86,29 +66,14 @@ struct RootView: View {
           onSelectSource: { showSearch(scope: $0) }
         )
         .padding(TrawlDesign.contentInset)
-        VStack(spacing: 8) {
-          if let message = statusMessage {
-            StatusBanner(message: message)
+        if let requirement = model.photosAccess {
+          PhotosPermissionBanner(requirement: requirement) {
+            Task { await model.requestPhotos() }
           }
-          if model.diskAccess == .denied {
-            PermissionBanner(action: onRequestDiskAccess)
-          }
-          if let requirement = model.photosAccess {
-            PhotosPermissionBanner(requirement: requirement) {
-              Task { await model.requestPhotos() }
-            }
-          }
+          .padding(TrawlDesign.contentInset)
         }
-        .padding(TrawlDesign.contentInset)
       }
     }
-  }
-
-  private var statusMessage: String? {
-    if let syncMessage = model.syncMessage {
-      return syncMessage
-    }
-    return model.statusRefreshFailure
   }
 
   private func showSearch(scope: RestingSource?) {
@@ -119,26 +84,6 @@ struct RootView: View {
   private func dismissSearch() {
     presentTraffic(activity: .idle, event: nil)
     isSearching = false
-  }
-
-  private func syncNow() async {
-    let requestedSourceIDs = Set(model.sources.map(\.id))
-    presentTraffic(activity: .syncing(sourceIDs: requestedSourceIDs), event: nil)
-    await model.syncNow()
-    let failedSourceIDs = Set(model.syncFailures.map(\.sourceID))
-    let usefulSourceIDs = Set(
-      model.syncResults.lazy
-        .filter { $0.outcome != .failed }
-        .map(\.sourceID)
-    )
-    presentTraffic(
-      activity: failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),
-      event: ConstellationTrafficEvent(
-        requestedSourceIDs: requestedSourceIDs,
-        usefulSourceIDs: usefulSourceIDs,
-        failedSourceIDs: failedSourceIDs
-      )
-    )
   }
 
   private func presentTraffic(
@@ -177,34 +122,6 @@ private struct FailureView: View {
     } actions: {
       Button("Try again", action: retry)
     }
-  }
-}
-
-private struct StatusBanner: View {
-  let message: String
-
-  var body: some View {
-    Label(message, systemImage: "exclamationmark.triangle.fill")
-      .font(.callout)
-      .foregroundStyle(.secondary)
-      .padding(.horizontal, 14)
-      .padding(.vertical, 9)
-      .glassEffect(.regular, in: Capsule())
-  }
-}
-
-private struct PermissionBanner: View {
-  let action: () -> Void
-
-  var body: some View {
-    HStack(spacing: 12) {
-      Label("OpenTrawl needs Full Disk Access to read local sources.", systemImage: "lock.fill")
-        .font(.callout)
-      Button("Give access", action: action)
-    }
-    .padding(.horizontal, 14)
-    .padding(.vertical, 9)
-    .glassEffect(.regular, in: Capsule())
   }
 }
 

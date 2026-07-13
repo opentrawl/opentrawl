@@ -44,8 +44,19 @@ public final class AppModel {
   }
 
   public var shouldShowFailureFallback: Bool {
-    guard case .failed = phase else { return false }
-    return restingSources.isEmpty
+    blockingFailureMessage != nil
+  }
+
+  public var blockingFailureMessage: String? {
+    guard restingSources.isEmpty else { return nil }
+    switch phase {
+    case .failed(let message):
+      return message
+    case .timedOut:
+      return statusRefreshFailure ?? "Source status checks timed out."
+    case .loading, .ready, .partial:
+      return nil
+    }
   }
 
   public init(

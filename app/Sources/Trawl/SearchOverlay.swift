@@ -11,6 +11,7 @@ struct SearchOverlay: View {
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
   @State private var sourceResolver: SearchSourceResolver
+  @State private var fieldState = SearchFieldState()
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -20,7 +21,22 @@ struct SearchOverlay: View {
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
     onDismiss: @escaping () -> Void
   ) {
-    let model = SearchModel(client: client)
+    self.init(
+      model: SearchModel(client: client),
+      initialScope: initialScope,
+      sourceStatuses: sourceStatuses,
+      onTrafficChange: onTrafficChange,
+      onDismiss: onDismiss
+    )
+  }
+
+  init(
+    model: SearchModel,
+    initialScope: RestingSource?,
+    sourceStatuses: [SourceStatus] = [],
+    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
+    onDismiss: @escaping () -> Void
+  ) {
     self.onDismiss = onDismiss
     self.onTrafficChange = onTrafficChange
     self.sourceStatuses = sourceStatuses
@@ -38,7 +54,7 @@ struct SearchOverlay: View {
     GeometryReader { proxy in
       let size = CGSize(
         width: min(proxy.size.width, 860),
-        height: min(proxy.size.height, 560)
+        height: panelHeight(in: proxy.size)
       )
       SearchWorkspace(
         interaction: interaction,
@@ -46,22 +62,27 @@ struct SearchOverlay: View {
         sourceResolver: sourceResolver,
         isCompact: size.width < 720,
         model: model,
+        fieldIdentity: fieldState.identity,
         focus: $focus,
         onClearScope: clearScope,
         onSubmit: openSelectedResult,
         onMoveToResults: focusResults,
-        onDismiss: onDismiss
+        onOpen: open
       )
       .frame(width: size.width, height: size.height)
       .glassEffect(.regular, in: .rect(cornerRadius: TrawlDesign.panelCornerRadius))
       .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
     }
-    .onChange(of: interaction.selectedResultID) { _, resultID in
-      guard let hit = model.results.first(where: { $0.id == resultID }) else { return }
-      Task { await model.open(hit) }
-    }
-    .onChange(of: model.phase) { _, _ in
+    .onChange(of: model.phase) { oldPhase, newPhase in
+      if oldPhase == .idle, newPhase == .loading {
+        fieldState.requestFocus()
+      }
       reportActivity()
+    }
+    .onChange(of: fieldState.focusRequest) { _, _ in
+      Task { @MainActor in
+        focus = .field
+      }
     }
     .onChange(of: sourceStatuses) { _, statuses in
       sourceResolver.replace(with: statuses)
@@ -71,7 +92,9 @@ struct SearchOverlay: View {
       return .handled
     }
     .onAppear {
-      focus = .field
+      Task { @MainActor in
+        focus = .field
+      }
     }
     .task(id: SearchKey(query: interaction.query, sourceID: interaction.sourceID)) {
       await model.search(interaction.query, source: interaction.sourceID)
@@ -95,8 +118,21 @@ struct SearchOverlay: View {
   }
 
   private func openSelectedResult() {
-    guard let hit = interaction.resultForReturn() else { return }
-    Task { await model.open(hit) }
+    Task { await interaction.handleReturn() }
+  }
+
+  private func open(_ hit: SearchHit) {
+    interaction.selectedResultID = hit.id
+    Task { await interaction.handleReturn() }
+  }
+
+  private func panelHeight(in available: CGSize) -> CGFloat {
+    switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
+    case .field:
+      72
+    case .outcome, .results:
+      min(available.height, 560)
+    }
   }
 
   private func reportActivity() {

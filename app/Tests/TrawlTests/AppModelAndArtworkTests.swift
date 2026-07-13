@@ -66,7 +66,8 @@ private struct StatusClient: TrawlClient {
   source.summary = "Notes were synced days ago; run trawl notes sync to refresh."
   response.sources = [source]
   let stale = try response.model().sources[0]
-  #expect(SourceRestingCopy.detail(for: stale) == "Needs sync.")
+  #expect(SourceRestingCopy.detail(for: stale) == nil)
+  #expect(!SourceRestingCopy.needsAttention(stale))
 
   source.state = "missing"
   source.summary = "Notes archive has not been created."

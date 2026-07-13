@@ -93,6 +93,8 @@ private struct SearchClient: TrawlClient {
   await model.search("synthetic", source: nil)
   #expect(model.phase == .skipped)
   #expect(model.skippedSources.map(\.sourceID) == ["synthetic"])
+  #expect(model.skippedSources.map(\.surface) == ["Synthetic"])
+  #expect(model.skippedSources.map(\.reason) == ["Search is not supported."])
 }
 
 @MainActor
@@ -127,6 +129,108 @@ private struct SearchClient: TrawlClient {
   #expect(model.results.isEmpty)
   interaction.changeScope(to: "notes")
   #expect(interaction.selectedResultID == nil)
+}
+
+@MainActor
+@Test func selectingForKeyboardNavigationDoesNotOpenTheResult() async {
+  let hit = canonicalHit("keyboard")
+  let model = SearchModel(
+    client: ScriptedSearchClient { _, _ in canonicalSearch([hit]) }, debounce: .zero)
+  let interaction = SearchInteraction(model: model, sourceID: nil)
+
+  await model.search("synthetic", source: nil)
+  interaction.selectedResultID = hit.id
+
+  #expect(interaction.resultForReturn() == hit)
+  #expect(model.openPhase == .idle)
+  #expect(model.openResult == nil)
+}
+
+@MainActor
+@Test func returnHandlerOpensTheKeyboardSelectedResultAndKeepsTheSearchState() async {
+  let hit = canonicalHit("return")
+  let opened = OpenResponse(
+    outcome: .complete,
+    requestedRef: hit.shortRef,
+    record: OpenRecord(
+      sourceID: hit.sourceID,
+      openRef: hit.openRef,
+      typeURL: "type.example/Synthetic",
+      value: Data([1]),
+      presentation: PresentationDocument(title: "Synthetic", blocks: [], actions: [], facts: [])
+    ),
+    failure: nil
+  )
+  let model = SearchModel(
+    client: ScriptedSearchClient(
+      search: { _, _ in canonicalSearch([hit]) },
+      open: { _, _ in opened }
+    ),
+    debounce: .zero
+  )
+  let interaction = SearchInteraction(model: model, sourceID: "gmail")
+
+  interaction.query = "synthetic"
+  await model.search(interaction.query, source: interaction.sourceID)
+  interaction.selectedResultID = hit.id
+  await interaction.handleReturn()
+
+  #expect(interaction.query == "synthetic")
+  #expect(interaction.sourceID == "gmail")
+  #expect(model.results == [hit])
+  #expect(model.openPhase == .output)
+  #expect(model.openResult == opened)
+}
+
+@MainActor
+@Test func queryStateSurvivesSearchOutcomeTransitions() async {
+  let hit = canonicalHit("typing")
+  let model = SearchModel(
+    client: ScriptedSearchClient { query, _ in
+      query == "partial"
+        ? SearchResponse(
+          order: .recency,
+          sources: [],
+          hits: [hit],
+          failures: [],
+          skippedSources: [],
+          outcome: .partial,
+          resultLimit: 20,
+          truncated: false
+        )
+        : canonicalSearch([])
+    },
+    debounce: .zero
+  )
+  let interaction = SearchInteraction(model: model, sourceID: nil)
+
+  interaction.query = "p"
+  await model.search(interaction.query, source: interaction.sourceID)
+  interaction.query = "partial"
+  await model.search(interaction.query, source: interaction.sourceID)
+
+  #expect(interaction.query == "partial")
+  #expect(model.phase == .partial)
+  #expect(model.results == [hit])
+}
+
+@MainActor
+@Test func searchFieldStateRetainsItsIdentityAndRequestsFocusForAQueryTransition() async {
+  let field = SearchFieldState()
+  let identity = field.identity
+  let model = SearchModel(
+    client: ScriptedSearchClient { _, _ in canonicalSearch([]) }, debounce: .zero)
+  let interaction = SearchInteraction(model: model, sourceID: nil)
+
+  interaction.query = "p"
+  field.requestFocus()
+  await model.search(interaction.query, source: interaction.sourceID)
+  interaction.query = "partial"
+
+  #expect(field.identity == identity)
+  #expect(field.focusRequest == 1)
+  #expect(interaction.query == "partial")
+  #expect(model.phase == .idle)
 }
 
 @MainActor
