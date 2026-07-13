@@ -204,6 +204,16 @@ create table if not exists model_generation_attempt (
   retained_at text
 );
 
+create table if not exists card_execution (
+  id text primary key,
+  asset_id text not null references asset(id),
+  card_input_id text not null,
+  card_input blob not null,
+  generation_id text not null unique references model_generation(id),
+  custody blob not null,
+  completed_at text not null
+);
+
 create table if not exists paid_call_stage (
   id text primary key,
   purpose text not null check (purpose in ('screening', 'canary', 'backfill')),

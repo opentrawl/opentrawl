@@ -63,6 +63,10 @@ func (c modelClassifier) buildRequest(input classifyInput, imagePath string, ori
 	if err != nil {
 		return model.Request{}, imageMeta{}, fmt.Errorf("read image: %w", err)
 	}
+	return c.buildRequestFromBytes(input, data, mimeTypeForPath(imagePath), originalMetadata)
+}
+
+func (c modelClassifier) buildRequestFromBytes(input classifyInput, data []byte, mimeType string, originalMetadata imagemetadata.Projection) (model.Request, imageMeta, error) {
 	sum := sha256.Sum256(data)
 	imageSHA256 := hex.EncodeToString(sum[:])
 	prompt, err := renderPhotoCardPrompt(repoPrompts.PhotoCardV3, input, originalMetadata)
@@ -73,7 +77,7 @@ func (c modelClassifier) buildRequest(input classifyInput, imagePath string, ori
 			Prompt: prompt,
 			Images: []model.Image{{
 				Data:     data,
-				MIMEType: mimeTypeForPath(imagePath),
+				MIMEType: mimeType,
 			}},
 			Temperature: 0.1,
 		}, imageMeta{
