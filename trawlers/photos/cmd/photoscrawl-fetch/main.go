@@ -178,7 +178,7 @@ func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Wr
 		return 1
 	}
 	var request fetchwire.CurrentStillFetchRequest
-	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.ModificationUnixSeconds <= 0 || request.ModificationMicroseconds < 0 || request.ModificationMicroseconds >= 1_000_000 || request.DestinationPath == "" {
+	if err := proto.Unmarshal(data, &request); err != nil || request.SourceLibraryId == "" || request.AssetUuid == "" || request.DestinationPath == "" || (request.HasExpectedModification && (request.ModificationUnixSeconds <= 0 || request.ModificationMicroseconds < 0 || request.ModificationMicroseconds >= 1_000_000)) || (!request.HasExpectedModification && (request.ModificationUnixSeconds != 0 || request.ModificationMicroseconds != 0)) {
 		_ = writeCurrentStillWireResponse(responsePath, startedCurrentStillFailure(helperStartedAt, "invalid_request", "PhotoKit current-still request is invalid"))
 		return 1
 	}
@@ -189,7 +189,7 @@ func runCurrentStillWireRequest(ctx context.Context, args []string, stderr io.Wr
 	}
 	exportCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	fact, err := exportCurrentStill(exportCtx, photos.CurrentStillRequest{SourceLibraryID: request.SourceLibraryId, AssetUUID: request.AssetUuid, Modification: photos.CurrentStillModification{UnixSeconds: request.ModificationUnixSeconds, Microseconds: request.ModificationMicroseconds}, AllowNetwork: request.AllowNetwork}, request.DestinationPath)
+	fact, err := exportCurrentStill(exportCtx, photos.CurrentStillNativeRequest{AssetUUID: request.AssetUuid, HasExpectedModification: request.HasExpectedModification, Modification: photos.CurrentStillModification{UnixSeconds: request.ModificationUnixSeconds, Microseconds: request.ModificationMicroseconds}, AllowNetwork: request.AllowNetwork}, request.DestinationPath)
 	if err != nil {
 		_ = os.Remove(request.DestinationPath)
 		_ = os.Remove(request.DestinationPath + ".exporting")

@@ -68,7 +68,32 @@ func TestFetchAppBuilderWorksOutsideRepository(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(outputPath, "Contents", "MacOS", photoKitFetchExecutable)); err != nil {
 		t.Fatal(err)
 	}
-	t.Logf("boundary=outside_repository_builder raw_input_cwd=%q raw_input_argv=%q raw_output=%q", outsideRepository, []string{builder, "--output", outputPath}, output)
+	binaryPath := filepath.Join(outputPath, "Contents", "MacOS", photoKitFetchExecutable)
+	libraries := linkedMachOLibraries(t, binaryPath)
+	foundPlatformResolver := false
+	for _, library := range libraries {
+		if library == "/usr/lib/libresolv.9.dylib" {
+			foundPlatformResolver = true
+		}
+		if !strings.HasPrefix(library, "/usr/lib/") && !strings.HasPrefix(library, "/System/Library/") {
+			t.Fatalf("final helper has external dynamic library dependency %q; all dependencies = %q", library, libraries)
+		}
+	}
+	if !foundPlatformResolver {
+		t.Fatalf("final helper dependencies = %q, missing macOS platform resolver", libraries)
+	}
+	signatureOutput, exitCode := runPackagingCommand(t, "/usr/bin/codesign", "--verify", "--deep", "--strict", "--verbose=2", outputPath)
+	if exitCode != 0 {
+		t.Fatalf("final helper signature output = %q, exit = %d", signatureOutput, exitCode)
+	}
+	entitlements, err := exec.Command("/usr/bin/codesign", "--display", "--entitlements", "-", outputPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect final helper entitlements: %v\n%s", err, entitlements)
+	}
+	if !bytes.Contains(entitlements, []byte("[Key] "+photoKitPhotosEntitlement)) || !bytes.Contains(entitlements, []byte("[Bool] true")) {
+		t.Fatalf("final helper Photos entitlement is missing or false: %s", entitlements)
+	}
+	t.Logf("boundary=outside_repository_builder raw_input_cwd=%q raw_input_argv=%q raw_output=%q final_helper_libraries=%q signature_output=%q", outsideRepository, []string{builder, "--output", outputPath}, output, libraries, signatureOutput)
 }
 
 func TestStandaloneTrawlBuilderRequiresANewExplicitOutput(t *testing.T) {
@@ -152,4 +177,25 @@ func packagingCommandOutput(t *testing.T, command *exec.Cmd) ([]byte, int) {
 		t.Fatalf("run %s: %v", command.Path, err)
 	}
 	return output, exitError.ExitCode()
+}
+
+func linkedMachOLibraries(t *testing.T, binaryPath string) []string {
+	t.Helper()
+	output, err := exec.Command("/usr/bin/otool", "-L", binaryPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("inspect final helper linkage: %v\n%s", err, output)
+	}
+	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
+	libraries := make([]string, 0, len(lines)-1)
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		libraries = append(libraries, fields[0])
+	}
+	if len(libraries) == 0 {
+		t.Fatalf("final helper has no Mach-O dependencies: %q", output)
+	}
+	return libraries
 }

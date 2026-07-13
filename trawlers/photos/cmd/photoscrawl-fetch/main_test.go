@@ -305,8 +305,8 @@ func TestRunCurrentStillAppKeepsMainLoopAliveUntilResponseWorkFinishes(t *testin
 func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T) {
 	oldExport := exportCurrentStill
 	defer func() { exportCurrentStill = oldExport }()
-	exportCurrentStill = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
-		if request.SourceLibraryID != "synthetic-library" || request.AssetUUID != "synthetic-asset" || request.Modification.UnixSeconds != 1783771200 || request.Modification.Microseconds != 125000 || request.AllowNetwork {
+	exportCurrentStill = func(_ context.Context, request photos.CurrentStillNativeRequest, destination string) (photos.CurrentStillFact, error) {
+		if request.AssetUUID != "synthetic-asset" || !request.HasExpectedModification || request.Modification.UnixSeconds != 1783771200 || request.Modification.Microseconds != 125000 || request.AllowNetwork {
 			t.Fatalf("request = %#v", request)
 		}
 		data := []byte("exact synthetic current-still bytes")
@@ -319,7 +319,7 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 	requestPath := filepath.Join(dir, "request.pb")
 	responsePath := filepath.Join(dir, "response.pb")
 	destination := filepath.Join(dir, "current.heic")
-	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
+	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, HasExpectedModification: true, DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -345,6 +345,37 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 	}
 }
 
+func TestRunCurrentStillWireRequestOmitsExpectedModification(t *testing.T) {
+	oldExport := exportCurrentStill
+	defer func() { exportCurrentStill = oldExport }()
+	exportCurrentStill = func(_ context.Context, request photos.CurrentStillNativeRequest, destination string) (photos.CurrentStillFact, error) {
+		if request.HasExpectedModification || request.Modification != (photos.CurrentStillModification{}) {
+			t.Fatalf("native request fabricated a modification instant: %#v", request)
+		}
+		data := []byte("exact synthetic current-still bytes")
+		if err := os.WriteFile(destination, data, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		return photos.CurrentStillFact{MediaType: "public.heic", Orientation: 1, PixelWidth: 4032, PixelHeight: 3024, Size: int64(len(data)), SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}, nil
+	}
+	dir := t.TempDir()
+	requestPath := filepath.Join(dir, "request.pb")
+	responsePath := filepath.Join(dir, "response.pb")
+	destination := filepath.Join(dir, "current.heic")
+	data := mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", DestinationPath: destination, TimeoutMilliseconds: time.Minute.Milliseconds()})
+	t.Logf("boundary=synthetic_current_still_without_modification raw_hex=%x", data)
+	var request fetchwire.CurrentStillFetchRequest
+	if err := proto.Unmarshal(data, &request); err != nil || request.HasExpectedModification || request.ModificationUnixSeconds != 0 || request.ModificationMicroseconds != 0 {
+		t.Fatalf("wire request = %#v, %v", request, err)
+	}
+	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := run(context.Background(), []string{"run-current-still", "--request", requestPath, "--response", responsePath}, io.Discard); code != 0 {
+		t.Fatalf("exit = %d", code)
+	}
+}
+
 func TestApplyCurrentStillErrorTimingsPreservesFailedObservation(t *testing.T) {
 	response := &fetchwire.CurrentStillFetchResponse{}
 	err := &photos.CurrentStillMeasuredError{Cause: errors.New("synthetic failure"), Timings: photos.CurrentStillPhaseTimings{PhotoKitCallbackMicros: 41, ValidationHashMicros: 42}, PhotoKitCalls: 1}
@@ -362,7 +393,9 @@ func TestRunCurrentStillWireRequestPreservesStartAndZeroCallsOnEarlyFailures(t *
 	}{
 		{name: "read", write: false},
 		{name: "decode", request: []byte{0xff}, write: true},
-		{name: "timeout validation", request: mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, DestinationPath: filepath.Join(t.TempDir(), "current.heic")}), write: true},
+		{name: "unexpected modification", request: mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", ModificationUnixSeconds: 1783771200, ModificationMicroseconds: 125000, DestinationPath: filepath.Join(t.TempDir(), "current.heic"), TimeoutMilliseconds: time.Minute.Milliseconds()}), write: true},
+		{name: "missing expected modification", request: mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", HasExpectedModification: true, DestinationPath: filepath.Join(t.TempDir(), "current.heic"), TimeoutMilliseconds: time.Minute.Milliseconds()}), write: true},
+		{name: "timeout validation", request: mustMarshalCurrentStillRequest(t, &fetchwire.CurrentStillFetchRequest{SourceLibraryId: "synthetic-library", AssetUuid: "synthetic-asset", DestinationPath: filepath.Join(t.TempDir(), "current.heic")}), write: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

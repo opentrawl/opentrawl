@@ -38,6 +38,32 @@ cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$contents/Info
   cd "$repo_root/trawlers/photos"
   go build -o "$binary" ./cmd/photoscrawl-fetch
 )
+
+# The Nix Go toolchain records its resolver library as an absolute store path.
+# A hardened app cannot load that development library, so use the equivalent
+# macOS platform install name before the helper is signed.
+linked_libraries() {
+  /usr/bin/otool -L "$binary" | /usr/bin/awk 'NR > 1 { print $1 }'
+}
+while IFS= read -r library; do
+  case "$library" in
+    /nix/store/*/libresolv.9.dylib|/Volumes/*/libresolv.9.dylib)
+      /usr/bin/install_name_tool -change "$library" /usr/lib/libresolv.9.dylib "$binary"
+      ;;
+  esac
+done < <(linked_libraries)
+
+while IFS= read -r library; do
+  case "$library" in
+    /usr/lib/*|/System/Library/*|@rpath/*|@loader_path/*|@executable_path/*)
+      ;;
+    *)
+      echo "build-app: helper has an external dynamic library dependency: $library" >&2
+      exit 1
+      ;;
+  esac
+done < <(linked_libraries)
+
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none \
   --identifier org.opentrawl.photoscrawl.fetch \

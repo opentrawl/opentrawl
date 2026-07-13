@@ -75,7 +75,7 @@ func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testi
 	launchPhotoKitCurrentStillApp = func(context.Context, string, string, string) error { launched = true; return nil }
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := ExportCurrentStillThroughApp(ctx, CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}, filepath.Join(t.TempDir(), "current.heic"))
+	_, err := ExportCurrentStillThroughApp(ctx, testCurrentStillRequest(t), filepath.Join(t.TempDir(), "current.heic"))
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("error = %v", err)
 	}
@@ -107,6 +107,9 @@ func TestExportCurrentStillThroughAppReturnsEveryMeasuredHelperPhase(t *testing.
 		if err := proto.Unmarshal(requestData, &request); err != nil {
 			t.Fatal(err)
 		}
+		if !request.HasExpectedModification || request.ModificationUnixSeconds != 1783771200 || request.ModificationMicroseconds != 123000 {
+			t.Fatalf("wire request modification state = %#v", request)
+		}
 		time.Sleep(time.Millisecond)
 		const current = "exact synthetic current-still bytes"
 		if err := os.WriteFile(request.DestinationPath, []byte(current), 0o600); err != nil {
@@ -132,12 +135,47 @@ func TestExportCurrentStillThroughAppReturnsEveryMeasuredHelperPhase(t *testing.
 		return os.WriteFile(responsePath, responseData, 0o600)
 	}
 	destination := filepath.Join(t.TempDir(), "current.jpeg")
-	fact, err := ExportCurrentStillThroughApp(context.Background(), CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}, destination)
+	fact, err := ExportCurrentStillThroughApp(context.Background(), testCurrentStillRequest(t), destination)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if fact.PhotoKitCalls != 1 || fact.Timings.HelperVerificationMicros <= 0 || fact.Timings.LaunchServicesStartMicros <= 0 || fact.Timings.PhotoKitCallbackMicros != 101 || fact.Timings.ValidationHashMicros < 102 {
 		t.Fatalf("timings = %#v", fact.Timings)
+	}
+}
+
+func TestExportCurrentStillThroughAppSendsNoFabricatedModification(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldLaunch := launchPhotoKitCurrentStillApp
+	defer func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitCurrentStillApp = oldLaunch
+	}()
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		return "/synthetic/Photoscrawl Fetch.app", nil
+	}
+	var wireRequest fetchwire.CurrentStillFetchRequest
+	launchPhotoKitCurrentStillApp = func(_ context.Context, _, requestPath, _ string) error {
+		requestData, err := os.ReadFile(requestPath)
+		if err != nil {
+			return err
+		}
+		t.Logf("boundary=synthetic_source_fingerprint_wire_request raw_hex=%x", requestData)
+		if err := proto.Unmarshal(requestData, &wireRequest); err != nil {
+			return err
+		}
+		return errors.New("synthetic stop after wire capture")
+	}
+	freshness, err := CurrentStillFreshnessForSourceFingerprint("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Freshness: freshness}
+	if _, err := ExportCurrentStillThroughApp(context.Background(), request, filepath.Join(t.TempDir(), "current.heic")); err == nil {
+		t.Fatal("synthetic launch stop did not surface")
+	}
+	if wireRequest.HasExpectedModification || wireRequest.ModificationUnixSeconds != 0 || wireRequest.ModificationMicroseconds != 0 {
+		t.Fatalf("wire request fabricated a modification instant: %#v", wireRequest)
 	}
 }
 
@@ -152,7 +190,7 @@ func TestExportCurrentStillThroughAppMeasuresEveryFailureBoundary(t *testing.T) 
 		time.Sleep(time.Millisecond)
 		return "/synthetic/Photoscrawl Fetch.app", nil
 	}
-	request := CurrentStillRequest{SourceLibraryID: "synthetic-library", AssetUUID: "synthetic-asset", Modification: CurrentStillModification{UnixSeconds: 1783771200, Microseconds: 125000}}
+	request := testCurrentStillRequest(t)
 
 	t.Run("launch", func(t *testing.T) {
 		launchPhotoKitCurrentStillApp = func(context.Context, string, string, string) error {

@@ -21,7 +21,7 @@ const (
 type CurrentStillRequest struct {
 	SourceLibraryID string
 	AssetUUID       string
-	Modification    CurrentStillModification
+	Freshness       CurrentStillFreshness
 	AllowNetwork    bool
 }
 
@@ -50,6 +50,60 @@ func ParseCurrentStillModification(value string) (CurrentStillModification, erro
 
 func (m CurrentStillModification) valid() bool {
 	return m.UnixSeconds > 0 && m.Microseconds >= 0 && m.Microseconds < 1_000_000
+}
+
+// CurrentStillFreshness is one source fact that versions a current still.
+// Constructors make modification time and snapshot fingerprint exclusive.
+type CurrentStillFreshness struct {
+	modification      *CurrentStillModification
+	sourceFingerprint string
+}
+
+func CurrentStillFreshnessForModification(modification CurrentStillModification) (CurrentStillFreshness, error) {
+	if !modification.valid() {
+		return CurrentStillFreshness{}, errors.New("current-still modification instant is invalid")
+	}
+	return CurrentStillFreshness{modification: &modification}, nil
+}
+
+func CurrentStillFreshnessForSourceFingerprint(fingerprint string) (CurrentStillFreshness, error) {
+	if !validCurrentStillSourceFingerprint(fingerprint) {
+		return CurrentStillFreshness{}, errors.New("current-still source fingerprint must be a lower-case SHA-256")
+	}
+	return CurrentStillFreshness{sourceFingerprint: fingerprint}, nil
+}
+
+func validCurrentStillSourceFingerprint(fingerprint string) bool {
+	if len(fingerprint) != sha256.Size*2 {
+		return false
+	}
+	for _, character := range fingerprint {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (f CurrentStillFreshness) ExpectedModification() (CurrentStillModification, bool) {
+	if f.modification != nil && f.sourceFingerprint == "" && f.modification.valid() {
+		return *f.modification, true
+	}
+	return CurrentStillModification{}, false
+}
+
+func (f CurrentStillFreshness) SourceFingerprint() (string, bool) {
+	if f.modification == nil && validCurrentStillSourceFingerprint(f.sourceFingerprint) {
+		return f.sourceFingerprint, true
+	}
+	return "", false
+}
+
+func (f CurrentStillFreshness) valid() bool {
+	if modification, ok := f.ExpectedModification(); ok {
+		return modification.valid()
+	}
+	return f.modification == nil && validCurrentStillSourceFingerprint(f.sourceFingerprint)
 }
 
 type CurrentStillFact struct {
@@ -136,10 +190,10 @@ func (r *CurrentStillResolver) Resolve(ctx context.Context, request CurrentStill
 	}
 	request.SourceLibraryID = strings.TrimSpace(request.SourceLibraryID)
 	request.AssetUUID = strings.ToLower(strings.TrimSpace(request.AssetUUID))
-	if request.SourceLibraryID == "" || request.AssetUUID == "" || !request.Modification.valid() {
-		return CurrentStillResolution{}, errors.New("source library ID, asset UUID and canonical modification instant are required for current-still resolution")
+	if request.SourceLibraryID == "" || request.AssetUUID == "" || !request.Freshness.valid() {
+		return CurrentStillResolution{}, errors.New("source library ID, asset UUID and exactly one valid current-still freshness token are required")
 	}
-	path := CurrentStillCachePath(r.cache.root, request.SourceLibraryID, request.AssetUUID, request.Modification)
+	path := CurrentStillCachePath(r.cache.root, request.SourceLibraryID, request.AssetUUID, request.Freshness)
 	queueStartedAt := time.Now()
 	lock, err := r.cache.lock(ctx, path, syscall.LOCK_EX)
 	if err != nil {
