@@ -26,6 +26,7 @@ var (
 	requestAuthorization            = photos.RequestPhotoLibraryAuthorization
 	exportOriginalMatching          = photos.ExportOriginalResourceMatching
 	exportCurrentStill              = photos.ExportCurrentStillMatching
+	assetReadinessForUUID           = photos.AssetReadinessForUUID
 	prepareCurrentMainLoop          = photos.PrepareCurrentStillMainLoop
 	runCurrentMainLoop              = photos.RunCurrentStillMainLoop
 	stopCurrentMainLoop             = photos.StopCurrentStillMainLoop
@@ -62,6 +63,9 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 	if len(args) == 5 && args[0] == "run-current-still" {
 		return runCurrentStillWireRequest(ctx, args[1:], stderr)
 	}
+	if len(args) == 5 && args[0] == "run-readiness" {
+		return runReadinessWireRequest(ctx, args[1:], stderr)
+	}
 	if len(args) == 4 && args[0] == "permission" {
 		return runPermission(ctx, args[1:], stderr)
 	}
@@ -69,6 +73,63 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 		writeln(stderr, "photoscrawl-fetch is an internal app and accepts no direct commands")
 		return 2
 	}
+}
+
+func runReadinessWireRequest(ctx context.Context, args []string, stderr io.Writer) int {
+	requestPath, responsePath, ok := wirePaths(args, stderr)
+	if !ok {
+		return 2
+	}
+	data, err := readWireRequest(requestPath)
+	if err != nil {
+		_ = writeReadinessWireResponse(responsePath, failedReadinessResponse("invalid_request", "PhotoKit asset readiness request could not be read", nil))
+		return 1
+	}
+	var request fetchwire.AssetReadinessRequest
+	if err := proto.Unmarshal(data, &request); err != nil || request.AssetUuid == "" {
+		_ = writeReadinessWireResponse(responsePath, failedReadinessResponse("invalid_request", "PhotoKit asset readiness request is invalid", nil))
+		return 1
+	}
+	readiness, err := assetReadinessForUUID(ctx, request.AssetUuid)
+	if err != nil {
+		kind := "readiness_failed"
+		_ = writeReadinessWireResponse(responsePath, failedReadinessResponse(kind, "PhotoKit could not read asset readiness", err))
+		return 1
+	}
+	if err := writeReadinessWireResponse(responsePath, &fetchwire.AssetReadinessResponse{
+		Success:          true,
+		LocalIdentifier:  readiness.LocalIdentifier,
+		AssetUuid:        readiness.AssetUUID,
+		MediaType:        readiness.MediaType,
+		HasLocation:      readiness.HasLocation,
+		CreationDate:     readiness.CreationDate,
+		ModificationDate: readiness.ModificationDate,
+		PixelWidth:       readiness.PixelWidth,
+		PixelHeight:      readiness.PixelHeight,
+		OriginalFilename: readiness.OriginalFilename,
+		OriginalUti:      readiness.OriginalUTI,
+	}); err != nil {
+		return 1
+	}
+	return 0
+}
+
+func failedReadinessResponse(kind, message string, err error) *fetchwire.AssetReadinessResponse {
+	response := &fetchwire.AssetReadinessResponse{FailureKind: kind, ErrorMessage: message}
+	var accessErr *photos.PhotoLibraryAccessError
+	if errors.As(err, &accessErr) {
+		response.FailureKind = "photos_access"
+		response.PhotosAccessStatus = accessErr.Status
+	}
+	return response
+}
+
+func writeReadinessWireResponse(path string, response *fetchwire.AssetReadinessResponse) error {
+	data, err := proto.Marshal(response)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0o600)
 }
 
 func runPermission(ctx context.Context, args []string, stderr io.Writer) int {

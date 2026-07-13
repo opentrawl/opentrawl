@@ -68,6 +68,48 @@ func TestExportOriginalResourceThroughAppChecksWireInputAndOutput(t *testing.T) 
 	}
 }
 
+func TestAssetReadinessThroughAppChecksTypedResponse(t *testing.T) {
+	oldResolve := resolvePhotoKitFetchApp
+	oldLaunch := launchPhotoKitReadinessApp
+	t.Cleanup(func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitReadinessApp = oldLaunch
+	})
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) { return "/synthetic/Photoscrawl Fetch.app", nil }
+	launchPhotoKitReadinessApp = func(_ context.Context, appPath, requestPath, responsePath string) error {
+		if appPath != "/synthetic/Photoscrawl Fetch.app" {
+			t.Fatalf("app path = %q", appPath)
+		}
+		data, err := os.ReadFile(requestPath)
+		if err != nil {
+			return err
+		}
+		var request fetchwire.AssetReadinessRequest
+		if err := proto.Unmarshal(data, &request); err != nil {
+			return err
+		}
+		if request.AssetUuid != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" {
+			t.Fatalf("readiness request UUID = %q", request.AssetUuid)
+		}
+		response, err := proto.Marshal(&fetchwire.AssetReadinessResponse{
+			Success: true, LocalIdentifier: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001", AssetUuid: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+			MediaType: "image", CreationDate: "2026-07-14T12:00:00Z", ModificationDate: "2026-07-14T12:00:01Z",
+			PixelWidth: 4032, PixelHeight: 3024, OriginalFilename: "synthetic.heic", OriginalUti: "public.heic",
+		})
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(responsePath, response, 0o600)
+	}
+	readiness, err := AssetReadinessThroughApp(context.Background(), "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if readiness.AssetUUID != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" || readiness.LocalIdentifier == "" || readiness.OriginalFilename != "synthetic.heic" || readiness.HasLocation {
+		t.Fatalf("readiness = %#v", readiness)
+	}
+}
+
 func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testing.T) {
 	oldLaunch := launchPhotoKitCurrentStillApp
 	defer func() { launchPhotoKitCurrentStillApp = oldLaunch }()

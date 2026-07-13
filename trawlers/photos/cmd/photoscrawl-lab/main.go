@@ -249,7 +249,7 @@ type cardInputAuditSelection struct {
 
 func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) error {
 	if len(args) == 0 {
-		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|prepare|inspect>")}
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|readiness|prepare|inspect>")}
 	}
 	switch args[0] {
 	case "inventory":
@@ -321,6 +321,31 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 			return err
 		}
 		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
+	case "readiness":
+		fs := flag.NewFlagSet("audit-card-input readiness", flag.ContinueOnError)
+		fs.SetOutput(os.Stderr)
+		archivePath := fs.String("archive", "", "complete Photos archive path")
+		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		outDir := fs.String("out", "", "existing owner-only private audit output directory")
+		jsonFlag := fs.Bool("json", false, "write JSON")
+		if err := fs.Parse(args[1:]); err != nil {
+			return output.UsageError{Err: err}
+		}
+		if !*jsonFlag {
+			return output.UsageError{Err: errors.New("audit-card-input readiness requires --json")}
+		}
+		if err := validateCardInputAuditOutput(*outDir); err != nil {
+			return err
+		}
+		readiness, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: *archivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		if err != nil {
+			return err
+		}
+		path, err := writeCardInputAuditOutput(*outDir, "readiness", readiness)
+		if err != nil {
+			return err
+		}
+		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
 	case "inspect":
 		fs := flag.NewFlagSet("audit-card-input inspect", flag.ContinueOnError)
 		fs.SetOutput(os.Stderr)
@@ -376,7 +401,7 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		}
 		return output.Write(os.Stdout, output.JSON, "card_input_audit_output", map[string]string{"path": path})
 	default:
-		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|prepare|inspect>")}
+		return output.UsageError{Err: errors.New("usage: photoscrawl-lab audit-card-input <inventory|readiness|prepare|inspect>")}
 	}
 }
 

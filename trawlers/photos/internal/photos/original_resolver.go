@@ -244,6 +244,17 @@ func inspectCachedOriginal(path string) (os.FileInfo, [32]byte, bool) {
 	return info, digest, true
 }
 
+// ReadCachedOriginal reopens one hash-proved immutable original without
+// creating, pruning or touching the cache.
+func ReadCachedOriginal(root string, request OriginalRequest) (string, int64, string, bool) {
+	path := OriginalCachePath(root, request.SourceLibraryID, request.ModificationDate, request.Query)
+	info, digest, ok := inspectCachedOriginal(path)
+	if !ok {
+		return "", 0, "", false
+	}
+	return path, info.Size(), hex.EncodeToString(digest[:]), true
+}
+
 func writeOriginalCacheProof(path string, size int64, digest []byte) error {
 	proof := originalCacheProof{Version: originalCacheProofVersion, Size: size, SHA256: hex.EncodeToString(digest)}
 	data, err := json.Marshal(proof)

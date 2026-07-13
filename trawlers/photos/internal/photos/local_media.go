@@ -146,6 +146,10 @@ func mediaUUID(value string) string {
 	return ""
 }
 
+// CanonicalAssetUUID returns the UUID identity shared by Photos.sqlite and a
+// PhotoKit local identifier. It returns an empty string when no UUID is present.
+func CanonicalAssetUUID(value string) string { return mediaUUID(value) }
+
 func isUUID(value string) bool {
 	if len(value) != 36 {
 		return false

@@ -19,10 +19,11 @@ const (
 )
 
 type CurrentStillRequest struct {
-	SourceLibraryID string
-	AssetUUID       string
-	Freshness       CurrentStillFreshness
-	AllowNetwork    bool
+	SourceLibraryID         string
+	AssetUUID               string
+	PhotoKitLocalIdentifier string
+	Freshness               CurrentStillFreshness
+	AllowNetwork            bool
 }
 
 type CurrentStillModification struct {

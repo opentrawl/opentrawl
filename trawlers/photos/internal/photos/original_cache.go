@@ -10,10 +10,14 @@ import (
 const originalCacheKeyVersion = "photos-camera-original-v3"
 
 func OriginalCachePath(root, sourceLibraryID, modificationDate string, query OriginalExportQuery) string {
+	identity := CanonicalAssetUUID(query.LocalIdentifier)
+	if identity == "" {
+		identity = query.LocalIdentifier
+	}
 	key := strings.Join([]string{
 		originalCacheKeyVersion,
 		sourceLibraryID,
-		query.LocalIdentifier,
+		identity,
 		modificationDate,
 		query.OriginalFilename,
 		query.OriginalUTI,

@@ -12,7 +12,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-const cardInputAuditStopPackageOriginal = "package_original_not_checked"
+const cardInputAuditStopImmutableOriginal = "immutable_original_not_checked"
 
 // CardInputAuditPrepareOptions names one asset and the private checked-artifact
 // root that prepare may write. The archive is always opened read-only.
@@ -82,32 +82,20 @@ func prepareCardInputAudit(ctx context.Context, db *sql.DB, complete bool, optio
 		prepared.StopReason = cardInputAuditStopUnsupportedMedia
 		return prepared, nil
 	}
-	request := input.originalRequest()
-	if _, ok := photos.UniquePackageOriginal(request.PackageCandidates); !ok {
-		prepared.StopReason = cardInputAuditStopPackageOriginal
-		return prepared, nil
-	}
-	request.AllowNetwork = false
-	originalResolver, err := photos.NewOriginalResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), rejectCardInputAuditOriginalExport)
+	originalResource, originalPath, originalSource, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(strings.TrimSpace(options.CacheDir), "originals"))
 	if err != nil {
 		return CardInputAuditPreparation{}, err
 	}
-	original, err := originalResolver.Resolve(ctx, request)
-	if err != nil {
-		return CardInputAuditPreparation{}, fmt.Errorf("prepare package-local immutable original: %w", err)
+	if !ok {
+		prepared.StopReason = cardInputAuditStopImmutableOriginal
+		return prepared, nil
 	}
-	if original.Lease != nil {
-		defer original.Lease.Close()
-	}
-	if original.Source != photos.OriginalSourcePackage {
-		return CardInputAuditPreparation{}, errors.New("prepare did not resolve a package-local immutable original")
-	}
-	prepared.ImmutableOriginal = cardInputAuditArtifact{Source: original.Source, Size: original.Size, SHA256: original.SHA256}
+	prepared.ImmutableOriginal = cardInputAuditArtifact{Source: originalSource, Size: originalResource.FileSize, SHA256: originalResource.SHA256}
 	metadataStore, err := imagemetadata.NewStore(filepath.Join(strings.TrimSpace(options.CacheDir), "image-metadata"), extractImageMetadata)
 	if err != nil {
 		return CardInputAuditPreparation{}, err
 	}
-	metadata, err := metadataStore.Load(ctx, original.Path, original.SHA256)
+	metadata, err := metadataStore.Load(ctx, originalPath, originalResource.SHA256)
 	if err != nil {
 		return CardInputAuditPreparation{}, fmt.Errorf("prepare exact-original metadata: %w", err)
 	}
@@ -129,8 +117,4 @@ func prepareCardInputAudit(ctx context.Context, db *sql.DB, complete bool, optio
 	prepared.CurrentStillSource = photos.CurrentStillSourceCache
 	prepared.CurrentStillRequests = 0
 	return prepared, nil
-}
-
-func rejectCardInputAuditOriginalExport(context.Context, photos.OriginalExportQuery, string, bool) error {
-	return errors.New("card-input audit prepare requires a package-local immutable original")
 }

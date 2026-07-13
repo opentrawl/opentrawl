@@ -79,6 +79,20 @@ var launchPhotoKitCurrentStillApp = func(ctx context.Context, appPath, requestPa
 	return nil
 }
 
+var launchPhotoKitReadinessApp = func(ctx context.Context, appPath, requestPath, responsePath string) error {
+	command := exec.CommandContext(ctx, "/usr/bin/open", photoKitFetchReadinessOpenArgs(appPath, requestPath, responsePath)...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		message := bytes.TrimSpace(stderr.Bytes())
+		if len(message) > 0 {
+			return fmt.Errorf("launch signed Photos readiness app: %w: %s", err, message)
+		}
+		return fmt.Errorf("launch signed Photos readiness app: %w", err)
+	}
+	return nil
+}
+
 func verifiedPhotoKitFetchAppPath(ctx context.Context) (string, error) {
 	callerPath, err := os.Executable()
 	if err != nil {
@@ -272,6 +286,13 @@ func photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath string
 	}
 }
 
+func photoKitFetchReadinessOpenArgs(appPath, requestPath, responsePath string) []string {
+	return []string{
+		"-n", "-g", appPath,
+		"--args", "run-readiness", "--request", requestPath, "--response", responsePath,
+	}
+}
+
 func photoKitFetchPermissionOpenArgs(appPath, operation, responsePath string) []string {
 	args := []string{
 		"-n", appPath,
@@ -338,6 +359,75 @@ func validPhotoLibraryAccessStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+// AssetReadinessThroughApp asks the verified helper to resolve one archive
+// UUID and return its identity and resource facts without reading media bytes.
+func AssetReadinessThroughApp(ctx context.Context, assetUUID string) (AssetReadiness, error) {
+	if err := ctx.Err(); err != nil {
+		return AssetReadiness{}, err
+	}
+	appPath, err := resolvePhotoKitFetchApp(ctx)
+	if err != nil {
+		return AssetReadiness{}, err
+	}
+	wireDir, err := os.MkdirTemp("", ".photokit-readiness-*")
+	if err != nil {
+		return AssetReadiness{}, fmt.Errorf("create Photos readiness directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(wireDir) }()
+	requestPath := filepath.Join(wireDir, "request.pb")
+	responsePath := filepath.Join(wireDir, "response.pb")
+	data, err := proto.Marshal(&fetchwire.AssetReadinessRequest{AssetUuid: assetUUID})
+	if err != nil {
+		return AssetReadiness{}, fmt.Errorf("encode Photos readiness request: %w", err)
+	}
+	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
+		return AssetReadiness{}, fmt.Errorf("write Photos readiness request: %w", err)
+	}
+	launchCtx, cancel := context.WithTimeout(context.Background(), defaultPhotoKitFetchTimeout+10*time.Second)
+	defer cancel()
+	if err := launchPhotoKitReadinessApp(launchCtx, appPath, requestPath, responsePath); err != nil {
+		if ctx.Err() != nil {
+			return AssetReadiness{}, ctx.Err()
+		}
+		return AssetReadiness{}, err
+	}
+	if ctx.Err() != nil {
+		return AssetReadiness{}, ctx.Err()
+	}
+	responseData, err := waitForBoundedFile(launchCtx, responsePath, maxPhotoKitWireBytes)
+	if err != nil {
+		return AssetReadiness{}, fmt.Errorf("read Photos readiness response: %w", err)
+	}
+	var response fetchwire.AssetReadinessResponse
+	if err := proto.Unmarshal(responseData, &response); err != nil {
+		return AssetReadiness{}, fmt.Errorf("decode Photos readiness response: %w", err)
+	}
+	if !response.Success {
+		return AssetReadiness{}, photoKitReadinessAppFailure(&response)
+	}
+	readiness := AssetReadiness{
+		LocalIdentifier: response.LocalIdentifier, AssetUUID: response.AssetUuid,
+		MediaType: response.MediaType, HasLocation: response.HasLocation,
+		CreationDate: response.CreationDate, ModificationDate: response.ModificationDate,
+		PixelWidth: response.PixelWidth, PixelHeight: response.PixelHeight,
+		OriginalFilename: response.OriginalFilename, OriginalUTI: response.OriginalUti,
+	}
+	if readiness.AssetUUID == "" || readiness.LocalIdentifier == "" || readiness.MediaType != "image" || readiness.HasLocation || readiness.OriginalFilename == "" {
+		return AssetReadiness{}, errors.New("signed Photos readiness app returned incomplete asset facts")
+	}
+	return readiness, nil
+}
+
+func photoKitReadinessAppFailure(response *fetchwire.AssetReadinessResponse) error {
+	if response.GetFailureKind() == "photos_access" {
+		return &PhotoLibraryAccessFailure{Kind: "photos_access", Message: response.GetPhotosAccessStatus()}
+	}
+	if response.GetFailureKind() == "no_compatible_asset" {
+		return errors.New("signed Photos readiness app found no unlocated image with an immutable-original resource")
+	}
+	return errors.New("signed Photos readiness app could not select a compatible image")
 }
 
 // ExportOriginalResourceThroughApp exports one preferred original through the
@@ -460,8 +550,12 @@ func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillReque
 	requestPath := filepath.Join(wireDir, "request.pb")
 	responsePath := filepath.Join(wireDir, "response.pb")
 	modification, hasExpectedModification := request.Freshness.ExpectedModification()
+	photoKitIdentifier := request.PhotoKitLocalIdentifier
+	if photoKitIdentifier == "" {
+		photoKitIdentifier = request.AssetUUID
+	}
 	data, err := proto.Marshal(&fetchwire.CurrentStillFetchRequest{
-		SourceLibraryId: request.SourceLibraryID, AssetUuid: request.AssetUUID,
+		SourceLibraryId: request.SourceLibraryID, AssetUuid: photoKitIdentifier,
 		ModificationUnixSeconds: modification.UnixSeconds, DestinationPath: destinationPath,
 		AllowNetwork: request.AllowNetwork, TimeoutMilliseconds: timeout.Milliseconds(), ModificationMicroseconds: modification.Microseconds,
 		HasExpectedModification: hasExpectedModification,

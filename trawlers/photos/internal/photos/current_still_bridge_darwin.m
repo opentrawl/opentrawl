@@ -180,9 +180,10 @@ int photoscrawl_export_current_still_matching(const char *assetUUID, int hasExpe
     if (uuid.length == 0 || path.length == 0 || (hasExpectedModification && (modificationUnixSeconds <= 0 || modificationMicroseconds < 0 || modificationMicroseconds >= 1000000))) { csError(errorOut, @"asset UUID, expected modification instant when present and destination path are required"); return 0; }
     PHAuthorizationStatus status = csStatus();
     if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) { csError(errorOut, @"photos_access:denied"); return 0; }
-    PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithOptions:nil];
-    PHAsset *asset = nil;
-    for (PHAsset *candidate in assets) { if ([csUUID(candidate.localIdentifier) isEqualToString:uuid.lowercaseString]) { asset = candidate; break; } }
+    PHFetchOptions *fetchOptions = [[PHFetchOptions alloc] init];
+    fetchOptions.includeHiddenAssets = YES;
+    PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithLocalIdentifiers:@[uuid] options:fetchOptions];
+    PHAsset *asset = assets.firstObject;
     if (asset == nil) { csError(errorOut, @"photokit asset not found"); return 0; }
     if (hasExpectedModification) {
       if (asset.modificationDate == nil) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }

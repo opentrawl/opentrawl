@@ -211,6 +211,9 @@ func TestCardInputCurrentStillAcquiresOnceThenPrepareReopensWithoutPhotoKit(t *t
 	defer db.Close()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:acquire", "current", "image", `{"present":true}`)
+	if _, err := db.ExecContext(ctx, `update asset set local_identifier='AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' where id='asset:acquire'`); err != nil {
+		t.Fatal(err)
+	}
 	root := t.TempDir()
 	originalPath := filepath.Join(root, "original.jpg")
 	originalBytes := []byte("synthetic package original")
@@ -223,16 +226,22 @@ func TestCardInputCurrentStillAcquiresOnceThenPrepareReopensWithoutPhotoKit(t *t
 	}
 	oldCurrentExporter := exportCurrentStillResource
 	oldExtract := extractImageMetadata
+	oldReadiness := preflightCardInputMedia
 	t.Cleanup(func() {
 		exportCurrentStillResource = oldCurrentExporter
 		extractImageMetadata = oldExtract
+		preflightCardInputMedia = oldReadiness
 	})
+	preflightCardInputMedia = syntheticCardInputReadiness
 	currentBytes := []byte("synthetic current still")
 	exporterCalls := 0
 	exportCurrentStillResource = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
 		exporterCalls++
 		if request.AllowNetwork {
 			t.Fatal("acquire enabled current-still network access")
+		}
+		if request.PhotoKitLocalIdentifier != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001" {
+			t.Fatalf("current-still PhotoKit identifier = %q", request.PhotoKitLocalIdentifier)
 		}
 		if err := os.WriteFile(destination, currentBytes, 0o600); err != nil {
 			return photos.CurrentStillFact{}, err
@@ -284,7 +293,7 @@ func TestCardInputAuditPrepareProhibitedStopsBeforeCacheOrArtifactAccess(t *test
 	}
 }
 
-func TestCardInputAuditPrepareStopsWithoutOnePackageOriginal(t *testing.T) {
+func TestCardInputAuditPrepareStopsWithoutCheckedImmutableOriginal(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
 	defer db.Close()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
@@ -294,11 +303,83 @@ func TestCardInputAuditPrepareStopsWithoutOnePackageOriginal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if prepared.StopReason != cardInputAuditStopPackageOriginal {
+	if prepared.StopReason != cardInputAuditStopImmutableOriginal {
 		t.Fatalf("prepared=%+v", prepared)
 	}
 	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
 		t.Fatalf("missing package original touched cache: %v", err)
+	}
+}
+
+func TestCardInputCurrentStillAcquiresAndReopensPhotoKitOriginalWithoutNetwork(t *testing.T) {
+	ctx, db := cardInputAuditTestDB(t)
+	defer db.Close()
+	seedCardInputAuditSnapshot(t, ctx, db, "complete")
+	seedCardInputAuditAsset(t, ctx, db, "asset:photokit", "current", "image", `{"present":true}`)
+	if _, err := db.ExecContext(ctx, `update asset set local_identifier='AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' where id='asset:photokit'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values('resource:photokit','asset:photokit','photo','','photokit.jpg','',0,'',0,1)`); err != nil {
+		t.Fatal(err)
+	}
+	oldOriginalExporter := exportOriginalResource
+	oldCurrentExporter := exportCurrentStillResource
+	oldExtract := extractImageMetadata
+	oldReadiness := preflightCardInputMedia
+	t.Cleanup(func() {
+		exportOriginalResource = oldOriginalExporter
+		exportCurrentStillResource = oldCurrentExporter
+		extractImageMetadata = oldExtract
+		preflightCardInputMedia = oldReadiness
+	})
+	preflightCardInputMedia = syntheticCardInputReadiness
+	originalBytes := []byte("synthetic PhotoKit original")
+	originalCalls := 0
+	exportOriginalResource = func(_ context.Context, query photos.OriginalExportQuery, destination string, allowNetwork bool) error {
+		originalCalls++
+		if allowNetwork {
+			t.Fatal("acquire enabled original network access")
+		}
+		if query.LocalIdentifier != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001" {
+			t.Fatalf("original PhotoKit identifier = %q", query.LocalIdentifier)
+		}
+		return os.WriteFile(destination, originalBytes, 0o600)
+	}
+	currentBytes := []byte("synthetic PhotoKit current still")
+	exportCurrentStillResource = func(_ context.Context, request photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
+		if request.AllowNetwork {
+			t.Fatal("acquire enabled current-still network access")
+		}
+		if request.PhotoKitLocalIdentifier != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001" {
+			t.Fatalf("current-still PhotoKit identifier = %q", request.PhotoKitLocalIdentifier)
+		}
+		if err := os.WriteFile(destination, currentBytes, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		return photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: int64(len(currentBytes)), SHA256: digestText(string(currentBytes)), PhotoKitCalls: 1}, nil
+	}
+	cacheDir := filepath.Join(t.TempDir(), "checked-cache")
+	options := CardInputCurrentStillOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:synthetic"}, CacheDir: cacheDir, AssetID: "asset:photokit"}
+	acquired, err := acquireCardInputCurrentStill(ctx, db, true, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acquired.ImmutableOriginal.Source != photos.OriginalSourcePhotoKit || acquired.OriginalRequests != 1 || originalCalls != 1 {
+		t.Fatalf("acquired=%+v original calls=%d", acquired, originalCalls)
+	}
+	exportOriginalResource = func(context.Context, photos.OriginalExportQuery, string, bool) error {
+		t.Fatal("cache-only prepare invoked PhotoKit original export")
+		return nil
+	}
+	extractImageMetadata = func(context.Context, string) ([]byte, error) {
+		return []byte(fmt.Sprintf(`{"extractor_version":"imageio-v1","original_sha256":%q,"container":{"type":"dictionary","dictionary":{"Make":{"type":"string","string":"Example"}}},"images":[{"index":0,"properties":{"type":"dictionary","dictionary":{}}}]}`, digestText(string(originalBytes)))), nil
+	}
+	prepared, err := prepareCardInputAudit(ctx, db, true, CardInputAuditPrepareOptions{CardInputAuditInventoryOptions: options.CardInputAuditInventoryOptions, CacheDir: cacheDir, AssetID: options.AssetID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.StopReason != "" || prepared.ImmutableOriginal.Source != photos.OriginalSourceCache || prepared.ImmutableOriginal.SHA256 != acquired.ImmutableOriginal.SHA256 || originalCalls != 1 {
+		t.Fatalf("prepared=%+v original calls=%d", prepared, originalCalls)
 	}
 }
 
@@ -341,6 +422,15 @@ func TestCardInputAuditPrepareStopsWithoutCheckedCurrentStill(t *testing.T) {
 	if paths, err := filepath.Glob(filepath.Join(cacheDir, "originals", "*.current")); err != nil || len(paths) != 0 {
 		t.Fatalf("prepare created a current-still cache entry: paths=%v err=%v", paths, err)
 	}
+}
+
+func syntheticCardInputReadiness(_ context.Context, input classifyInput) (photos.AssetReadiness, error) {
+	return photos.AssetReadiness{
+		LocalIdentifier:  input.LocalIdentifier + "/L0/001",
+		AssetUUID:        input.LocalIdentifier,
+		MediaType:        "image",
+		OriginalFilename: "synthetic.heic",
+	}, nil
 }
 
 func TestCardInputAuditFactsKeepNumericCameraValues(t *testing.T) {

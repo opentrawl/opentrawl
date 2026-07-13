@@ -79,6 +79,15 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Run:     c.runClassify,
 		},
 		{
+			Name:      "select-card-input-ready",
+			Help:      "Select one PhotoKit-ready image before checked media acquisition.",
+			Mutates:   false,
+			Secondary: true,
+			Store:     trawlkit.StoreNone,
+			Flags:     c.currentStillReadinessFlags,
+			Run:       c.runCardInputReadiness,
+		},
+		{
 			Name:      "acquire-current-still",
 			Help:      "Acquire one checked current still for an exact asset.",
 			Mutates:   true,
@@ -88,6 +97,11 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Run:       c.runCurrentStillAcquire,
 		},
 	}
+}
+
+func (c *Crawler) currentStillReadinessFlags(fs *flag.FlagSet) {
+	c.currentStillSource = ""
+	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
 }
 
 func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
@@ -269,13 +283,31 @@ func (c *Crawler) runCurrentStillAcquire(ctx context.Context, req *trawlkit.Requ
 			ArchivePath:     req.Paths.Archive,
 			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
 		},
-		CacheDir: archivePaths(req).CacheDir,
-		AssetID:  strings.TrimSpace(c.currentStillAsset),
+		CacheDir:     archivePaths(req).CacheDir,
+		AssetID:      strings.TrimSpace(c.currentStillAsset),
+		AllowNetwork: false,
 	})
 	if err != nil {
 		return err
 	}
 	return output.Write(req.Out, req.Format, "current_still_acquisition", result)
+}
+
+func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.Request) error {
+	if len(req.Args) != 0 {
+		return output.UsageError{Err: errors.New("select-card-input-ready takes flags only")}
+	}
+	if strings.TrimSpace(c.currentStillSource) == "" {
+		return output.UsageError{Err: errors.New("select-card-input-ready requires --source-library")}
+	}
+	result, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputAuditInventoryOptions{
+		ArchivePath:     req.Paths.Archive,
+		SourceLibraryID: strings.TrimSpace(c.currentStillSource),
+	})
+	if err != nil {
+		return err
+	}
+	return output.Write(req.Out, req.Format, "card_input_readiness", result)
 }
 
 func archivePaths(req *trawlkit.Request) archive.Paths {

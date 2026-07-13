@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package opentrawl.photos.fetch.v1;
+
+option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/internal/photos/fetchwire;fetchwire";
+
+// AssetReadinessRequest asks the signed helper to resolve and inspect exactly
+// one archive UUID. It never asks PhotoKit to read or export image bytes.
+message AssetReadinessRequest {
+  string asset_uuid = 1;
+}
+
+// AssetReadinessResponse records identity and resource facts only. A success
+// proves neither local byte availability nor exportability.
+message AssetReadinessResponse {
+  bool success = 1;
+  string local_identifier = 2;
+  string asset_uuid = 3;
+  string media_type = 4;
+  bool has_location = 5;
+  string creation_date = 6;
+  string modification_date = 7;
+  int64 pixel_width = 8;
+  int64 pixel_height = 9;
+  string original_filename = 10;
+  string original_uti = 11;
+  string failure_kind = 12;
+  string error_message = 13;
+  string photos_access_status = 14;
+}

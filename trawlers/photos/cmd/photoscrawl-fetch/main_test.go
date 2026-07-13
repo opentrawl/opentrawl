@@ -128,6 +128,50 @@ func TestDirectCommandsAreRejected(t *testing.T) {
 	}
 }
 
+func TestRunReadinessWireRequestReturnsIdentityAndResourceFacts(t *testing.T) {
+	oldReadiness := assetReadinessForUUID
+	t.Cleanup(func() { assetReadinessForUUID = oldReadiness })
+	assetReadinessForUUID = func(_ context.Context, assetUUID string) (photos.AssetReadiness, error) {
+		if assetUUID != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" {
+			t.Fatalf("asset UUID = %q", assetUUID)
+		}
+		return photos.AssetReadiness{
+			LocalIdentifier:  "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001",
+			AssetUUID:        "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
+			MediaType:        "image",
+			CreationDate:     "2026-07-14T12:00:00Z",
+			ModificationDate: "2026-07-14T12:00:01Z",
+			PixelWidth:       4032,
+			PixelHeight:      3024,
+			OriginalFilename: "synthetic.heic",
+			OriginalUTI:      "public.heic",
+		}, nil
+	}
+	requestPath := filepath.Join(t.TempDir(), "request.pb")
+	responsePath := filepath.Join(t.TempDir(), "response.pb")
+	request, err := proto.Marshal(&fetchwire.AssetReadinessRequest{AssetUuid: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(requestPath, request, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if code := run(context.Background(), []string{"run-readiness", "--request", requestPath, "--response", responsePath}, io.Discard); code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	data, err := os.ReadFile(responsePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var response fetchwire.AssetReadinessResponse
+	if err := proto.Unmarshal(data, &response); err != nil {
+		t.Fatal(err)
+	}
+	if !response.Success || response.AssetUuid != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" || response.LocalIdentifier == "" || response.OriginalFilename != "synthetic.heic" || response.HasLocation {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	const capturedRequestHex = "0a0f73796e7468657469632d61737365742a0e73796e7468657469632e68656963320d6f726967696e616c2e68656963380140c0a907"
 	const capturedResponseHex = "0801101e1a2046aaee4914ea18f1c75caf43585122c198f09291000416caa8aa743ce102ab72"

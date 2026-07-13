@@ -640,6 +640,54 @@ char *photoscrawl_photokit_authorization_status(char **errorOut) {
   }
 }
 
+char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) *errorOut = NULL;
+    if (!@available(macOS 10.15, *)) {
+      pcSetError(errorOut, @"PhotoKit asset readiness requires macOS 10.15 or newer");
+      return NULL;
+    }
+    if (!pcRequireAuthorization(pcCurrentAuthorizationStatus(), errorOut)) return NULL;
+    NSString *uuid = assetUUID == NULL ? @"" : [NSString stringWithUTF8String:assetUUID];
+    if (pcIdentifierUUID(uuid).length == 0) {
+      pcSetError(errorOut, @"PhotoKit asset readiness requires an asset UUID");
+      return NULL;
+    }
+    PHAsset *selected = pcFetchAssetForIdentifier(uuid);
+    PHAssetResource *resource = pcPreferredOriginalResource(selected);
+    if (selected == nil || selected.mediaType != PHAssetMediaTypeImage || selected.location != nil || resource == nil || resource.originalFilename.length == 0) {
+      pcSetError(errorOut, @"PhotoKit selected asset does not meet readiness requirements");
+      return NULL;
+    }
+    NSDictionary *record = @{
+      @"local_identifier": pcString(selected.localIdentifier),
+      @"asset_uuid": pcIdentifierUUID(selected.localIdentifier),
+      @"media_type": pcMediaType(selected.mediaType),
+      @"has_location": @(selected.location != nil),
+      @"creation_date": pcDate(selected.creationDate),
+      @"modification_date": pcDate(selected.modificationDate),
+      @"pixel_width": @((long long)selected.pixelWidth),
+      @"pixel_height": @((long long)selected.pixelHeight),
+      @"original_filename": pcString(resource.originalFilename),
+      @"original_uti": pcString(resource.uniformTypeIdentifier)
+    };
+    NSError *jsonError = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:record options:0 error:&jsonError];
+    if (data == nil) {
+      pcSetError(errorOut, @"encode PhotoKit asset readiness");
+      return NULL;
+    }
+    char *json = malloc(data.length + 1);
+    if (json == NULL) {
+      pcSetError(errorOut, @"allocate PhotoKit asset readiness");
+      return NULL;
+    }
+    memcpy(json, data.bytes, data.length);
+    json[data.length] = '\0';
+    return json;
+  }
+}
+
 char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {

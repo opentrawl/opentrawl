@@ -277,7 +277,7 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		stored.Preflight = input
 		return stored, nil
 	}
-	original, ok, err := cardInputAuditCheckedPackageOriginal(input)
+	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(options.CacheDir, "originals"))
 	if err != nil {
 		return CardInputAuditInspection{}, err
 	}
@@ -476,7 +476,7 @@ func cardInputAuditCheckedPackageOriginal(input classifyInput) (classifyResource
 	}
 	info, digest, err := photos.InspectOriginalFile(candidate.Path)
 	if err != nil {
-		return classifyResource{}, false, fmt.Errorf("inspect package-local immutable original: %w", err)
+		return classifyResource{}, false, nil
 	}
 	for _, resource := range input.Resources {
 		if resource.ResourceType != "local_original" || filepath.Clean(resource.LocalPath) != filepath.Clean(candidate.Path) {
@@ -489,6 +489,33 @@ func cardInputAuditCheckedPackageOriginal(input classifyInput) (classifyResource
 		return resource, true, nil
 	}
 	return classifyResource{}, false, errors.New("unique package-local immutable original has no matching resource")
+}
+
+func cardInputAuditCheckedOriginal(input classifyInput, cacheRoot string) (classifyResource, string, string, bool, error) {
+	if resource, ok, err := cardInputAuditCheckedPackageOriginal(input); err != nil || ok {
+		path := ""
+		if ok {
+			path = resource.LocalPath
+		}
+		return resource, path, photos.OriginalSourcePackage, ok, err
+	}
+	request := input.originalRequest()
+	path, size, digest, ok := photos.ReadCachedOriginal(cacheRoot, request)
+	if !ok {
+		return classifyResource{}, "", "", false, nil
+	}
+	for _, resource := range input.Resources {
+		if resource.ResourceType != "photo" || resource.OriginalFilename != request.Query.OriginalFilename {
+			continue
+		}
+		resource.AvailableLocally = true
+		resource.NeedsDownload = false
+		resource.LocalPath = path
+		resource.FileSize = size
+		resource.SHA256 = digest
+		return resource, path, photos.OriginalSourceCache, true, nil
+	}
+	return classifyResource{}, "", "", false, errors.New("checked PhotoKit original has no matching archive resource")
 }
 
 func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {

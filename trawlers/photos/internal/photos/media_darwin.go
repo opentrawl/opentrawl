@@ -9,6 +9,7 @@ package photos
 int photoscrawl_export_original_resource_matching(const char *localIdentifier, const char *creationDate, long long width, long long height, const char *originalFilename, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **errorOut, char **errorDomainOut, long long *errorCodeOut);
 char *photoscrawl_photokit_authorization_status(char **errorOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
+char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut);
 char *photoscrawl_image_metadata_typed_fixture_json(char **errorOut);
@@ -28,6 +29,53 @@ import (
 	"time"
 	"unsafe"
 )
+
+// AssetReadiness is the signed-helper's small proof that one current,
+// unlocated PhotoKit image has the identity and resource facts needed before
+// any immutable-original or current-still export is attempted.
+type AssetReadiness struct {
+	LocalIdentifier  string `json:"local_identifier"`
+	AssetUUID        string `json:"asset_uuid"`
+	MediaType        string `json:"media_type"`
+	HasLocation      bool   `json:"has_location"`
+	CreationDate     string `json:"creation_date"`
+	ModificationDate string `json:"modification_date"`
+	PixelWidth       int64  `json:"pixel_width"`
+	PixelHeight      int64  `json:"pixel_height"`
+	OriginalFilename string `json:"original_filename"`
+	OriginalUTI      string `json:"original_uti"`
+}
+
+// AssetReadinessForUUID resolves and reads identity and resource metadata for
+// one live PhotoKit image. It does not request image bytes or network access.
+func AssetReadinessForUUID(ctx context.Context, assetUUID string) (AssetReadiness, error) {
+	if err := ctx.Err(); err != nil {
+		return AssetReadiness{}, err
+	}
+	if CanonicalAssetUUID(assetUUID) == "" {
+		return AssetReadiness{}, errors.New("PhotoKit asset readiness requires an asset UUID")
+	}
+	cUUID := C.CString(assetUUID)
+	defer C.free(unsafe.Pointer(cUUID))
+	var cErr *C.char
+	cJSON := C.photoscrawl_asset_readiness(cUUID, &cErr)
+	if cErr != nil {
+		defer C.free(unsafe.Pointer(cErr))
+		return AssetReadiness{}, photoKitError(C.GoString(cErr))
+	}
+	if cJSON == nil {
+		return AssetReadiness{}, errors.New("PhotoKit returned no asset readiness")
+	}
+	defer C.free(unsafe.Pointer(cJSON))
+	var readiness AssetReadiness
+	if err := json.Unmarshal([]byte(C.GoString(cJSON)), &readiness); err != nil {
+		return AssetReadiness{}, fmt.Errorf("decode PhotoKit asset readiness: %w", err)
+	}
+	if readiness.AssetUUID == "" || readiness.LocalIdentifier == "" || readiness.MediaType != "image" || readiness.HasLocation || readiness.OriginalFilename == "" {
+		return AssetReadiness{}, errors.New("PhotoKit returned incomplete asset readiness")
+	}
+	return readiness, nil
+}
 
 const photoLibraryAccessErrorPrefix = "photos_access:"
 

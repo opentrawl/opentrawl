@@ -12,11 +12,12 @@ import (
 )
 
 // CardInputCurrentStillOptions names one ready-candidate asset. Acquisition
-// reads the archive and package original, then writes only the checked cache.
+// reads the archive, then writes only the checked cache.
 type CardInputCurrentStillOptions struct {
 	CardInputAuditInventoryOptions
-	CacheDir string
-	AssetID  string
+	CacheDir     string
+	AssetID      string
+	AllowNetwork bool
 }
 
 // CardInputCurrentStill records one checked current-still acquisition. A
@@ -26,14 +27,15 @@ type CardInputCurrentStill struct {
 	StopReason           string                  `json:"stop_reason,omitempty"`
 	Preflight            any                     `json:"preflight"`
 	ImmutableOriginal    cardInputAuditArtifact  `json:"immutable_original,omitempty"`
+	OriginalRequests     int                     `json:"original_requests,omitempty"`
 	CurrentStill         photos.CurrentStillFact `json:"current_still,omitempty"`
 	CurrentStillProof    string                  `json:"current_still_proof_sha256,omitempty"`
 	CurrentStillSource   string                  `json:"current_still_source,omitempty"`
 	CurrentStillRequests int                     `json:"current_still_requests,omitempty"`
 }
 
-// AcquireCardInputCurrentStill makes at most one no-network PhotoKit request
-// through the production resolver. A cache hit is reopened without PhotoKit.
+// AcquireCardInputCurrentStill makes at most one request for each missing
+// CardInput image role. Cache hits are reopened without PhotoKit.
 func AcquireCardInputCurrentStill(ctx context.Context, options CardInputCurrentStillOptions) (CardInputCurrentStill, error) {
 	db, err := openCardInputAuditArchive(ctx, options.ArchivePath)
 	if err != nil {
@@ -73,34 +75,34 @@ func acquireCardInputCurrentStill(ctx context.Context, db *sql.DB, complete bool
 		acquisition.StopReason = cardInputAuditStopUnsupportedMedia
 		return acquisition, nil
 	}
-	originalRequest := input.originalRequest()
-	if _, ok := photos.UniquePackageOriginal(originalRequest.PackageCandidates); !ok {
-		acquisition.StopReason = cardInputAuditStopPackageOriginal
-		return acquisition, nil
+	readiness, err := preflightCardInputMedia(ctx, input)
+	if err != nil {
+		return CardInputCurrentStill{}, fmt.Errorf("preflight PhotoKit media identity: %w", err)
 	}
-	originalRequest.AllowNetwork = false
-	originalResolver, err := photos.NewOriginalResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), rejectCardInputAuditOriginalExport)
+	originalRequest := input.originalRequest()
+	originalRequest.AllowNetwork = options.AllowNetwork
+	originalRequest.Query.LocalIdentifier = readiness.LocalIdentifier
+	originalResolver, err := photos.NewOriginalResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), exportOriginalResource)
 	if err != nil {
 		return CardInputCurrentStill{}, err
 	}
 	original, err := originalResolver.Resolve(ctx, originalRequest)
 	if err != nil {
-		return CardInputCurrentStill{}, fmt.Errorf("acquire package-local immutable original: %w", err)
+		return CardInputCurrentStill{}, fmt.Errorf("acquire immutable original: %w", err)
 	}
 	if original.Lease != nil {
 		defer original.Lease.Close()
 	}
-	if original.Source != photos.OriginalSourcePackage {
-		return CardInputCurrentStill{}, errors.New("acquire did not resolve a package-local immutable original")
-	}
 	acquisition.ImmutableOriginal = cardInputAuditArtifact{Source: original.Source, Size: original.Size, SHA256: original.SHA256}
+	if original.Exported {
+		acquisition.OriginalRequests = 1
+	}
 	request, err := input.currentStillRequest()
 	if err != nil {
 		return CardInputCurrentStill{}, err
 	}
-	if request.AllowNetwork {
-		return CardInputCurrentStill{}, errors.New("acquire current-still request enabled network access")
-	}
+	request.AllowNetwork = options.AllowNetwork
+	request.PhotoKitLocalIdentifier = readiness.LocalIdentifier
 	resolver, err := newCurrentStillResolver(filepath.Join(strings.TrimSpace(options.CacheDir), "originals"), exportCurrentStillResource)
 	if err != nil {
 		return CardInputCurrentStill{}, err
