@@ -50,8 +50,9 @@ type classifyInput struct {
 }
 
 type classifyPlaceContext struct {
-	Result      place.Result
-	CacheStatus string
+	Result                    place.Result
+	CacheStatus               string
+	EvidenceRawResponseSHA256 []string
 }
 
 type classifyResource struct {

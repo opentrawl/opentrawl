@@ -1,9 +1,11 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -192,6 +194,112 @@ func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 	}
 }
 
+func TestCardInputAuditReadsStoredProductionBoundaryBeforeArchiveDigest(t *testing.T) {
+	ctx := context.Background()
+	db := fixtureCardStore(t, ctx)
+	defer db.Close()
+	assetID := "asset:stored-audit"
+	seedFixtureCardAsset(t, ctx, db, assetID)
+	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared := fixtureCardPreparationFor(assetID)
+	executionID := fixtureExecutionIdentity(t, prepared, classifier)
+	stored, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+		return prepared, nil
+	}, classifier, fixtureWireBytes(t, fixtureProviderResponse(t)), fixedClock("2026-07-13T17:00:00Z")())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var changesBefore, changesAfter int
+	cacheDir := filepath.Join(t.TempDir(), "must-not-open")
+	_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&changesBefore)
+	inspection, err := inspectCardInput(ctx, db.DB(), true, CardInputAuditInspectOptions{CardInputAuditInventoryOptions: CardInputAuditInventoryOptions{SourceLibraryID: "source:fixture"}, CacheDir: cacheDir}, modelClassifier{}, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&changesAfter)
+	if inspection.StopReason != "" || inspection.RenderedRoute != stored.Request.Route() || inspection.RenderedModel != stored.Request.Model() || !bytes.Equal(inspection.RenderedRequest, stored.Request.Body()) || inspection.CardInputWire != base64.StdEncoding.EncodeToString(stored.Input.Bytes) {
+		t.Fatalf("stored inspection=%+v", inspection)
+	}
+	if _, ok := inspection.Preflight.(classifyInput); !ok || changesAfter != changesBefore {
+		t.Fatalf("stored audit preflight=%T changes=%d/%d", inspection.Preflight, changesBefore, changesAfter)
+	}
+	if _, err := os.Stat(cacheDir); !os.IsNotExist(err) {
+		t.Fatalf("stored audit touched cache: %v", err)
+	}
+}
+
+func TestStoredCardInputAuditBoundaryRejectsIdentityMismatch(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  string
+		wantErr string
+	}{
+		{name: "CardInput", mutate: `update card_execution set card_input_id='card_input:mismatch' where id=?`, wantErr: "stored card-input audit identity does not match its bytes"},
+		{name: "request", mutate: `update model_generation set request_sha256='mismatch' where id=(select generation_id from card_execution where id=?)`, wantErr: "stored card-input audit request identity does not match its bytes"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ctx := context.Background()
+			db := fixtureCardStore(t, ctx)
+			defer db.Close()
+			assetID := "asset:audit-mismatch:" + test.name
+			seedFixtureCardAsset(t, ctx, db, assetID)
+			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepared := fixtureCardPreparationFor(assetID)
+			executionID := fixtureExecutionIdentity(t, prepared, classifier)
+			if _, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+				return prepared, nil
+			}, classifier, fixtureWireBytes(t, fixtureProviderResponse(t)), fixedClock("2026-07-13T17:00:00Z")()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.DB().ExecContext(ctx, test.mutate, executionID); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err = readStoredCardInputAuditBoundary(ctx, db.DB(), assetID)
+			if err == nil || !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("identity mismatch error = %v", err)
+			}
+		})
+	}
+}
+
+func TestStoredCardInputAuditBoundaryIgnoresInactiveExecution(t *testing.T) {
+	for _, column := range []string{"stale_since", "superseded_at"} {
+		t.Run(column, func(t *testing.T) {
+			ctx := context.Background()
+			db := fixtureCardStore(t, ctx)
+			defer db.Close()
+			assetID := "asset:audit-inactive:" + column
+			seedFixtureCardAsset(t, ctx, db, assetID)
+			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			prepared := fixtureCardPreparationFor(assetID)
+			executionID := fixtureExecutionIdentity(t, prepared, classifier)
+			if _, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+				return prepared, nil
+			}, classifier, fixtureWireBytes(t, fixtureProviderResponse(t)), fixedClock("2026-07-13T17:00:00Z")()); err != nil {
+				t.Fatal(err)
+			}
+			query := `update model_observation set ` + column + `='2026-07-13T18:00:00Z' where generation_id=(select generation_id from card_execution where id=?) and observation_type=?`
+			if _, err := db.DB().ExecContext(ctx, query, executionID, modelObservationCardSummary); err != nil {
+				t.Fatal(err)
+			}
+			_, found, err := readStoredCardInputAuditBoundary(ctx, db.DB(), assetID)
+			if err != nil || found {
+				t.Fatalf("inactive execution found=%v err=%v", found, err)
+			}
+		})
+	}
+}
+
 func cardInputAuditTestDB(t *testing.T) (context.Context, *sql.DB) {
 	t.Helper()
 	ctx := context.Background()
@@ -206,7 +314,9 @@ create table classification_queue(id text, asset_id text, source_library_id text
 create table asset_resource(id text, asset_id text, resource_type text, uti text, original_filename text, local_path text, file_size integer, sha256 text, available_locally integer, needs_download integer);
 create table album_membership(asset_id text, album_title text, album_kind text);
 create table location_observation(asset_id text, latitude real, longitude real, horizontal_accuracy real);
-create table model_observation(asset_id text, observation_type text);
+create table model_observation(asset_id text, observation_type text, generation_id text, stale_since text, superseded_at text);
+create table model_generation(id text primary key, request_sha256 text, request_route text, model_id text, request_body blob);
+create table card_execution(id text primary key, asset_id text, card_input_id text, card_input blob, generation_id text, completed_at text);
 create table crawl_seen_asset(asset_id text, source_library_id text, source_fingerprint text, last_seen_snapshot_id text);
 	`
 	for _, statement := range strings.Split(schema, ";\n") {

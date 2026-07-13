@@ -19,6 +19,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/evalcard"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
+	"github.com/opentrawl/opentrawl/trawlkit/cache"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -159,7 +160,12 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		if err := validateCardInputAuditOutput(*outDir); err != nil {
 			return err
 		}
-		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		auditArchivePath, cleanup, err := snapshotCardInputAuditArchive(ctx, *archivePath, *outDir)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
 		if err != nil {
 			return err
 		}
@@ -188,11 +194,16 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		if err := validateCardInputAuditOutput(*outDir); err != nil {
 			return err
 		}
+		auditArchivePath, cleanup, err := snapshotCardInputAuditArchive(ctx, *archivePath, *outDir)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
 		selection, err := readCardInputAuditSelection(*selectionPath)
 		if err != nil {
 			return err
 		}
-		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		inventory, err := archive.ReadCardInputAuditInventory(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
 		if err != nil {
 			return err
 		}
@@ -204,7 +215,7 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 			}
 			assetIDs = append(assetIDs, archive.StableCardInputAuditBackstop(inventory.SnapshotID, candidates, *backstop)...)
 		}
-		inspections, err := archive.InspectCardInputs(ctx, archive.CardInputAuditInspectOptions{CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: strings.TrimSpace(*archivePath), SourceLibraryID: strings.TrimSpace(*sourceLibrary)}, CacheDir: paths.CacheDir, AssetIDs: assetIDs, Model: strings.TrimSpace(*modelName), ModelURL: strings.TrimSpace(*modelURL)})
+		inspections, err := archive.InspectCardInputs(ctx, archive.CardInputAuditInspectOptions{CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: auditArchivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)}, CacheDir: paths.CacheDir, AssetIDs: assetIDs, Model: strings.TrimSpace(*modelName), ModelURL: strings.TrimSpace(*modelURL)})
 		if err != nil {
 			return err
 		}
@@ -227,6 +238,24 @@ func validateCardInputAuditOutput(path string) error {
 		return errors.New("audit card-input output directory must be an existing owner-only directory")
 	}
 	return nil
+}
+
+func snapshotCardInputAuditArchive(ctx context.Context, sourcePath, outDir string) (string, func(), error) {
+	root, err := os.MkdirTemp(strings.TrimSpace(outDir), ".archive-snapshot-")
+	if err != nil {
+		return "", func() {}, fmt.Errorf("create private audit archive snapshot: %w", err)
+	}
+	cleanup := func() { _ = os.RemoveAll(root) }
+	snapshot, err := cache.SnapshotSQLite(ctx, cache.SQLiteSnapshotOptions{
+		SourcePath:     strings.TrimSpace(sourcePath),
+		DestinationDir: root,
+		Name:           "archive.sqlite",
+	})
+	if err != nil {
+		cleanup()
+		return "", func() {}, fmt.Errorf("snapshot audit card-input archive: %w", err)
+	}
+	return snapshot.Path, cleanup, nil
 }
 
 func writeCardInputAuditOutput(outDir, name string, value any) (string, error) {

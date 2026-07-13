@@ -3,10 +3,13 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
@@ -59,6 +62,92 @@ func TestCardInputAuditSelectionAndOutputBoundary(t *testing.T) {
 	if _, err := writeCardInputAuditOutput(outDir, "inventory", map[string]string{"asset": "changed"}); err == nil {
 		t.Fatal("audit output overwrite passed")
 	}
+}
+
+func TestCardInputAuditSnapshotsWALArchiveWithoutChangingSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source.sqlite")
+	db, err := sql.Open("sqlite3", source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if _, err := db.Exec(`pragma journal_mode=WAL; pragma wal_autocheckpoint=0; create table fixture(value text not null); insert into fixture(value) values('synthetic');`); err != nil {
+		t.Fatal(err)
+	}
+	before := cardInputAuditSQLiteState(t, source)
+	outDir := filepath.Join(root, "out")
+	if err := os.Mkdir(outDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	snapshotPath, cleanup, err := snapshotCardInputAuditArchive(context.Background(), source, outDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	copyDB, err := sql.Open("sqlite3", snapshotPath)
+	if err != nil {
+		cleanup()
+		t.Fatal(err)
+	}
+	var count int
+	if err := copyDB.QueryRow(`select count(*) from fixture`).Scan(&count); err != nil {
+		_ = copyDB.Close()
+		cleanup()
+		t.Fatal(err)
+	}
+	if err := copyDB.Close(); err != nil {
+		cleanup()
+		t.Fatal(err)
+	}
+	after := cardInputAuditSQLiteState(t, source)
+	if count != 1 || !sameCardInputAuditSQLiteState(before, after) {
+		cleanup()
+		t.Fatalf("snapshot count=%d source changed=%v", count, !sameCardInputAuditSQLiteState(before, after))
+	}
+	cleanup()
+	entries, err := os.ReadDir(outDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("temporary snapshot remains: entries=%v err=%v", entries, err)
+	}
+}
+
+type cardInputAuditSQLiteFileState struct {
+	Size    int64
+	Mode    os.FileMode
+	ModTime time.Time
+	SHA256  [sha256.Size]byte
+}
+
+func cardInputAuditSQLiteState(t *testing.T, path string) map[string]cardInputAuditSQLiteFileState {
+	t.Helper()
+	state := map[string]cardInputAuditSQLiteFileState{}
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		data, err := os.ReadFile(path + suffix)
+		if err != nil {
+			if suffix != "" && os.IsNotExist(err) {
+				continue
+			}
+			t.Fatal(err)
+		}
+		info, err := os.Stat(path + suffix)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state[suffix] = cardInputAuditSQLiteFileState{Size: info.Size(), Mode: info.Mode(), ModTime: info.ModTime(), SHA256: sha256.Sum256(data)}
+	}
+	return state
+}
+
+func sameCardInputAuditSQLiteState(left, right map[string]cardInputAuditSQLiteFileState) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for suffix, want := range left {
+		if got, ok := right[suffix]; !ok || got != want {
+			return false
+		}
+	}
+	return true
 }
 
 func TestPlaceEvidencePassesExactCheckedConfiguration(t *testing.T) {

@@ -267,6 +267,15 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		inspection.StopReason = cardInputAuditStopUnsupportedMedia
 		return inspection, nil
 	}
+	stored, found, err := readStoredCardInputAuditBoundary(ctx, db, assetID)
+	if err != nil {
+		return CardInputAuditInspection{}, err
+	}
+	if found {
+		stored.AssetID = assetID
+		stored.Preflight = input
+		return stored, nil
+	}
 	original, ok := cardInputAuditOriginal(input.Resources)
 	if !ok {
 		inspection.StopReason = cardInputAuditStopMissingMetadata
