@@ -83,7 +83,7 @@ func validateCompleteRecord(record place.EvidenceRecord) error {
 }
 
 func validateCandidate(index int, candidate place.EvidenceCandidate) error {
-	if candidate.ProviderIndex != index {
+	if candidate.ProviderIndex < 0 {
 		return fmt.Errorf("%w: candidate %d has provider index %d", ErrMalformedEvidence, index, candidate.ProviderIndex)
 	}
 	if strings.TrimSpace(candidate.Source) == "" || (strings.TrimSpace(candidate.ProviderID) == "" && strings.TrimSpace(candidate.Name) == "") {

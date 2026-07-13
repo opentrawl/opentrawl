@@ -1,6 +1,8 @@
 package cardinput
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"math"
 	"testing"
@@ -46,6 +48,27 @@ func TestEveryIncompleteEvidenceStateStops(t *testing.T) {
 				t.Fatalf("error = %v, want incomplete evidence", err)
 			}
 		})
+	}
+}
+
+func TestLimitSaturatedEvidenceStopsWithoutMutatingCandidates(t *testing.T) {
+	source, artifacts, records := fixtureInput()
+	records[1].CompletionState = "limit_saturated"
+	before, err := json.Marshal(records[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = Build(source, artifacts, records)
+	if !errors.Is(err, ErrIncompleteEvidence) {
+		t.Fatalf("error = %v, want incomplete evidence", err)
+	}
+	after, err := json.Marshal(records[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(after, before) {
+		t.Fatal("limit-saturated evidence changed")
 	}
 }
 
@@ -112,7 +135,7 @@ func TestMalformedEvidenceAndCandidatesStop(t *testing.T) {
 		{"operation", func(record *place.EvidenceRecord) { record.Operation = "" }},
 		{"coordinate variant", func(record *place.EvidenceRecord) { record.CoordinateVariant = "" }},
 		{"parser version", func(record *place.EvidenceRecord) { record.ParserVersion = "" }},
-		{"candidate index", func(record *place.EvidenceRecord) { record.Candidates[0].ProviderIndex = 2 }},
+		{"candidate index", func(record *place.EvidenceRecord) { record.Candidates[0].ProviderIndex = -1 }},
 		{"candidate identity", func(record *place.EvidenceRecord) {
 			record.Candidates[0].ProviderID, record.Candidates[0].Name = "", ""
 		}},

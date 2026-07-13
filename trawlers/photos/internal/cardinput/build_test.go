@@ -34,6 +34,26 @@ func TestBuildProjectsEveryModelConsumedFieldInCallerOrder(t *testing.T) {
 	}
 }
 
+func TestBuildPreservesProviderNativeCandidateIndices(t *testing.T) {
+	source, artifacts, records := fixtureInput()
+	records[1].Candidates = append(records[1].Candidates, records[1].Candidates[0], records[1].Candidates[1])
+	records[1].Candidates[0].ProviderIndex = 0
+	records[1].Candidates[1].ProviderIndex = 1
+	records[1].Candidates[2].ProviderIndex = 0
+	records[1].Candidates[3].ProviderIndex = 1
+
+	first := requireBuild(t, source, artifacts, records)
+	second := requireBuild(t, source, artifacts, records)
+	if !bytes.Equal(first.Bytes, second.Bytes) {
+		t.Fatal("repeated build changed provider-native candidate indices")
+	}
+	for index, want := range []int32{0, 1, 0, 1} {
+		if got := first.Input.Places[1].Candidates[index].ProviderIndex; got != want {
+			t.Fatalf("candidate %d provider index = %d, want %d", index, got, want)
+		}
+	}
+}
+
 func TestBuildPreservesOptionalPresenceAndBooleanValues(t *testing.T) {
 	tests := []struct {
 		name   string
