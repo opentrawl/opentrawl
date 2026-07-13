@@ -5,6 +5,16 @@ public enum SearchWorkspaceCopy {
     "Showing \(count) useful \(count == 1 ? "result" : "results")."
   }
 
+  public static func partialNoMatches(failureGuidance: String?, isScoped: Bool) -> String {
+    guard !isScoped else {
+      return failureGuidance ?? "Some sources failed; the others returned no matches."
+    }
+    guard let failureGuidance else {
+      return "No matches in available sources. Some sources failed."
+    }
+    return "No matches in available sources. \(failureGuidance)"
+  }
+
   public static func skippedOutcome(for sources: [SkippedSource]) -> String {
     guard let first = sources.first else { return "A source was skipped." }
     let source = first.surface.isEmpty ? first.sourceID : first.surface
