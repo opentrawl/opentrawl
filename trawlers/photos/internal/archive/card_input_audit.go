@@ -101,7 +101,8 @@ func readCardInputAuditInventory(ctx context.Context, db *sql.DB, sourceLibraryI
 select a.id, a.source_state, coalesce(q.state, ''), a.media_type,
        a.metadata_json, a.favorite, a.hidden, a.burst_identifier,
        exists(select 1 from location_observation where asset_id=a.id),
-       (select count(*) from album_membership where asset_id=a.id)
+       (select count(*) from album_membership where asset_id=a.id),
+       a.first_card_blocked_at is not null and a.first_card_blocked_snapshot_id is not null
 from asset a
 left join classification_queue q on q.asset_id=a.id
 where a.source_library_id=?
@@ -109,29 +110,45 @@ order by a.creation_date, a.id`, strings.TrimSpace(sourceLibraryID))
 	if err != nil {
 		return CardInputAuditInventory{}, fmt.Errorf("read card-input audit inventory: %w", err)
 	}
-	defer rows.Close()
 	result := CardInputAuditInventory{SourceLibraryID: strings.TrimSpace(sourceLibraryID), SnapshotID: snapshotID, Complete: complete}
+	blockedByAsset := map[string]bool{}
 	for rows.Next() {
 		var row CardInputAuditInventoryRow
 		var metadata string
-		var favorite, hidden, hasLocation int
+		var favorite, hidden, hasLocation, firstCardBlocked int
 		var burst string
-		if err := rows.Scan(&row.AssetID, &row.SourceState, &row.QueueState, &row.MediaType, &metadata, &favorite, &hidden, &burst, &hasLocation, &row.AlbumCount); err != nil {
+		if err := rows.Scan(&row.AssetID, &row.SourceState, &row.QueueState, &row.MediaType, &metadata, &favorite, &hidden, &burst, &hasLocation, &row.AlbumCount, &firstCardBlocked); err != nil {
 			return CardInputAuditInventory{}, err
 		}
 		row.Favorite, row.Hidden, row.BurstMember, row.HasLocation = favorite != 0, hidden != 0, strings.TrimSpace(burst) != "", hasLocation != 0
 		row.HasMetadata = strings.TrimSpace(metadata) != "" && strings.TrimSpace(metadata) != "{}"
-		roles, err := cardInputAuditResourceRoles(ctx, db, row.AssetID)
-		if err != nil {
-			return CardInputAuditInventory{}, err
-		}
-		row.ResourceRoles = roles
+		result.Assets = append(result.Assets, row)
+		blockedByAsset[row.AssetID] = firstCardBlocked != 0
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return CardInputAuditInventory{}, err
+	}
+	if err := rows.Close(); err != nil {
+		return CardInputAuditInventory{}, err
+	}
+	rolesByAsset, err := cardInputAuditResourceRolesByAsset(ctx, db, sourceLibraryID)
+	if err != nil {
+		return CardInputAuditInventory{}, err
+	}
+	cardedByAsset, err := cardInputAuditCardedAssets(ctx, db, sourceLibraryID)
+	if err != nil {
+		return CardInputAuditInventory{}, err
+	}
+	for index := range result.Assets {
+		row := &result.Assets[index]
+		row.ResourceRoles = rolesByAsset[row.AssetID]
 		if !complete {
 			row.StopReasons = append(row.StopReasons, cardInputAuditStopSnapshotIncomplete)
 		}
-		eligibility, err := firstCardEligibilityForAsset(ctx, db, row.AssetID)
-		if err != nil {
-			return CardInputAuditInventory{}, err
+		eligibility := firstCardEligible
+		if !cardedByAsset[row.AssetID] && blockedByAsset[row.AssetID] {
+			eligibility = firstCardProhibitedDeletedBeforeCard
 		}
 		row.Eligibility = string(eligibility)
 		if eligibility == firstCardProhibitedDeletedBeforeCard {
@@ -143,12 +160,51 @@ order by a.creation_date, a.id`, strings.TrimSpace(sourceLibraryID))
 		if row.MediaType != "image" {
 			row.StopReasons = append(row.StopReasons, cardInputAuditStopUnsupportedMedia)
 		}
-		result.Assets = append(result.Assets, row)
-	}
-	if err := rows.Err(); err != nil {
-		return CardInputAuditInventory{}, err
 	}
 	return result, nil
+}
+
+func cardInputAuditCardedAssets(ctx context.Context, db *sql.DB, sourceLibraryID string) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `
+select distinct observation.asset_id
+from model_observation observation
+join asset on asset.id = observation.asset_id
+where asset.source_library_id = ? and observation.observation_type = ?`, strings.TrimSpace(sourceLibraryID), modelObservationCardSummary)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	carded := map[string]bool{}
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			return nil, err
+		}
+		carded[assetID] = true
+	}
+	return carded, rows.Err()
+}
+
+func cardInputAuditResourceRolesByAsset(ctx context.Context, db *sql.DB, sourceLibraryID string) (map[string][]string, error) {
+	rows, err := db.QueryContext(ctx, `
+select resource.asset_id, resource.resource_type
+from asset_resource resource
+join asset on asset.id = resource.asset_id
+where asset.source_library_id = ?
+order by resource.asset_id, resource.resource_type, resource.original_filename`, strings.TrimSpace(sourceLibraryID))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	roles := map[string][]string{}
+	for rows.Next() {
+		var assetID, role string
+		if err := rows.Scan(&assetID, &role); err != nil {
+			return nil, err
+		}
+		roles[assetID] = append(roles[assetID], role)
+	}
+	return roles, rows.Err()
 }
 
 func InspectCardInputs(ctx context.Context, options CardInputAuditInspectOptions) ([]CardInputAuditInspection, error) {

@@ -25,10 +25,17 @@ func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	seedCardInputAuditAsset(t, ctx, db, "asset:ready", "current", "image", "{}")
 	seedCardInputAuditAsset(t, ctx, db, "asset:video", "current", "video", `{"source":"present"}`)
 	seedCardInputAuditAsset(t, ctx, db, "asset:gone", "deleted_upstream", "image", `{"source":"present"}`)
+	seedCardInputAuditAsset(t, ctx, db, "asset:carded", "current", "image", `{"source":"present"}`)
 	if _, err := db.ExecContext(ctx, `update asset set first_card_blocked_at='2026-07-13T00:00:00Z', first_card_blocked_snapshot_id='snapshot:complete' where id='asset:gone'`); err != nil {
 		t.Fatal(err)
 	}
-	for _, assetID := range []string{"asset:ready", "asset:video", "asset:gone"} {
+	if _, err := db.ExecContext(ctx, `update asset set first_card_blocked_at='2026-07-13T00:00:00Z', first_card_blocked_snapshot_id='snapshot:complete' where id='asset:carded'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `insert into model_observation(asset_id,observation_type) values('asset:carded', ?)`, modelObservationCardSummary); err != nil {
+		t.Fatal(err)
+	}
+	for _, assetID := range []string{"asset:ready", "asset:video", "asset:gone", "asset:carded"} {
 		if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values(?,?,'photo','public.jpeg','synthetic.jpg','',3,?,1,0)`, "resource:"+assetID, assetID, digestText(assetID)); err != nil {
 			t.Fatal(err)
 		}
@@ -37,7 +44,7 @@ func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !inventory.Complete || len(inventory.Assets) != 3 {
+	if !inventory.Complete || len(inventory.Assets) != 4 {
 		t.Fatalf("inventory=%+v", inventory)
 	}
 	byID := map[string]CardInputAuditInventoryRow{}
@@ -52,6 +59,9 @@ func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	}
 	if row := byID["asset:gone"]; !containsAuditStop(row.StopReasons, cardInputAuditStopProhibited) || !containsAuditStop(row.StopReasons, cardInputAuditStopSourceNotCurrent) {
 		t.Fatalf("gone stops=%+v", row.StopReasons)
+	}
+	if row := byID["asset:carded"]; row.Eligibility != string(firstCardEligible) || containsAuditStop(row.StopReasons, cardInputAuditStopProhibited) {
+		t.Fatalf("carded row=%+v", row)
 	}
 }
 
