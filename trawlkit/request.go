@@ -1,6 +1,7 @@
 package trawlkit
 
 import (
+	"context"
 	"io"
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -8,6 +9,21 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
+
+type internalAppRequestKey struct{}
+
+// WithInternalAppRequest marks a request path that is reachable only through
+// the embedded Mac app transport.
+func WithInternalAppRequest(ctx context.Context) context.Context {
+	return context.WithValue(ctx, internalAppRequestKey{}, true)
+}
+
+// IsInternalAppRequest reports whether a request came through the embedded
+// Mac app transport.
+func IsInternalAppRequest(ctx context.Context) bool {
+	marked, _ := ctx.Value(internalAppRequestKey{}).(bool)
+	return marked
+}
 
 type Info struct {
 	ID          string

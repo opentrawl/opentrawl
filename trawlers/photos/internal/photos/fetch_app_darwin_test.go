@@ -291,6 +291,37 @@ func TestPhotoKitFetchLaunchUsesVerifiedAppPath(t *testing.T) {
 	}
 }
 
+func TestPhotoLibraryAccessStatusUsesTheVerifiedHelper(t *testing.T) {
+	oldResolve, oldLaunch := resolvePhotoKitFetchApp, launchPhotoKitPermissionApp
+	t.Cleanup(func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitPermissionApp = oldLaunch
+	})
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) {
+		return "/synthetic/Photoscrawl Fetch.app", nil
+	}
+	called := 0
+	launchPhotoKitPermissionApp = func(_ context.Context, appPath, operation, responsePath string) error {
+		called++
+		if appPath != "/synthetic/Photoscrawl Fetch.app" || operation != "status" {
+			t.Fatalf("launch = %q %q", appPath, operation)
+		}
+		data, err := proto.Marshal(&fetchwire.OriginalFetchResponse{Success: true, PhotosAccessStatus: "not_determined"})
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(responsePath, data, 0o600)
+	}
+	status, err := PhotoLibraryAccessStatusThroughApp(context.Background(), false)
+	if err != nil || status != "not_determined" || called != 1 {
+		t.Fatalf("status=%q err=%v called=%d", status, err, called)
+	}
+	want := []string{"-W", "-n", "-g", "/synthetic/Photoscrawl Fetch.app", "--args", "permission", "status", "--response", "response.pb"}
+	if got := photoKitFetchPermissionOpenArgs("/synthetic/Photoscrawl Fetch.app", "status", "response.pb"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("open args = %#v, want %#v", got, want)
+	}
+}
+
 func TestPhotoKitFetchLaunchStopsBeforeOpenWhenVerificationFails(t *testing.T) {
 	oldResolve := resolvePhotoKitFetchApp
 	oldRun := runPhotoKitFetchOpen

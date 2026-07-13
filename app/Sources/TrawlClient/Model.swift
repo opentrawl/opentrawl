@@ -35,6 +35,7 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
 
 public protocol TrawlClient: Sendable {
   func status() async throws -> StatusResponse
+  func requestPhotos() async throws -> StatusResponse
   func sync() async throws -> SyncResponse
   func search(_ query: String, source: String?) async throws -> SearchResponse
   func open(sourceID: String, ref: String) async throws -> OpenResponse

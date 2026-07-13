@@ -71,6 +71,9 @@ func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 }
 
 func TestSetupRequirementMapping(t *testing.T) {
+	oldStatus := photosAccessStatus
+	t.Cleanup(func() { photosAccessStatus = oldStatus })
+	photosAccessStatus = func(context.Context, bool) (string, error) { return "authorized", nil }
 	if got := photosSetupStateFromErrors(os.ErrPermission, nil, false); got != control.SetupStateNeedsAction {
 		t.Fatalf("library permission state = %q", got)
 	}
@@ -83,7 +86,7 @@ func TestSetupRequirementMapping(t *testing.T) {
 	}
 	missingCrawler := New()
 	missingCrawler.cfg.LibraryPath = missingPath
-	missing := missingCrawler.photosSetupRequirement()
+	missing := missingCrawler.photosSetupRequirements(context.Background())[0]
 	if missing.State != control.SetupStateUnavailable || missing.Action != control.SetupActionNone || len(missing.Command) != 0 {
 		t.Fatalf("missing requirement = %#v", missing)
 	}
@@ -96,9 +99,63 @@ func TestSetupRequirementMapping(t *testing.T) {
 	}
 	crawler := New()
 	crawler.cfg.LibraryPath = library
-	requirement := crawler.photosSetupRequirement()
+	requirement := crawler.photosSetupRequirements(context.Background())[0]
 	if requirement.ID != "full_disk_access" || requirement.Kind != control.SetupKindFullDiskAccess || requirement.State != control.SetupStateReady || requirement.Action != control.SetupActionNone || len(requirement.Command) != 0 {
 		t.Fatalf("requirement = %#v", requirement)
+	}
+}
+
+func TestPhotosAccessRequirementMapsAllStates(t *testing.T) {
+	for _, test := range []struct {
+		status string
+		id     string
+		state  control.SetupState
+		action control.SetupActionKind
+	}{
+		{status: "not_determined", id: "photos_access_not_determined", state: control.SetupStateNeedsAction, action: control.SetupActionRequestPhotos},
+		{status: "restricted", id: "photos_access_restricted", state: control.SetupStateUnavailable, action: control.SetupActionNone},
+		{status: "denied", id: "photos_access_denied", state: control.SetupStateNeedsAction, action: control.SetupActionNone},
+		{status: "authorized", id: "photos_access_authorized", state: control.SetupStateReady, action: control.SetupActionNone},
+		{status: "limited", id: "photos_access_limited", state: control.SetupStateNeedsAction, action: control.SetupActionNone},
+	} {
+		t.Run(test.status, func(t *testing.T) {
+			requirement := photosAccessSetupRequirement(test.status)
+			if requirement.ID != test.id || requirement.State != test.state || requirement.Action != test.action {
+				t.Fatalf("requirement = %#v", requirement)
+			}
+		})
+	}
+}
+
+func TestRequestPhotosAccessUsesTheSharedHelperPath(t *testing.T) {
+	oldStatus := photosAccessStatus
+	t.Cleanup(func() { photosAccessStatus = oldStatus })
+	requested := false
+	photosAccessStatus = func(_ context.Context, request bool) (string, error) {
+		requested = request
+		return "authorized", nil
+	}
+	requirement, err := New().RequestPhotosAccess(context.Background())
+	if err != nil || !requested || requirement.ID != "photos_access_authorized" {
+		t.Fatalf("requirement=%#v err=%v requested=%t", requirement, err, requested)
+	}
+}
+
+func TestPhotosPermissionStatusIsInternalToTheAppRequest(t *testing.T) {
+	oldStatus := photosAccessStatus
+	t.Cleanup(func() { photosAccessStatus = oldStatus })
+	calls := 0
+	photosAccessStatus = func(context.Context, bool) (string, error) {
+		calls++
+		return "authorized", nil
+	}
+	crawler := New()
+	if requirements := crawler.photosSetupRequirements(context.Background()); len(requirements) != 1 || calls != 0 {
+		t.Fatalf("public requirements=%#v calls=%d", requirements, calls)
+	}
+	requirements := crawler.photosSetupRequirements(trawlkit.WithInternalAppRequest(context.Background()))
+	if len(requirements) != 2 || requirements[1].Kind != control.SetupKindPhotosPermission || calls != 1 {
+		t.Fatalf("app requirements=%#v calls=%d", requirements, calls)
 	}
 }
 

@@ -29,6 +29,12 @@ public final class AppModel {
   public private(set) var syncFailures: [SourceFailure] = []
   public private(set) var diskAccess: FullDiskAccessStatus = .undetermined
 
+  public var photosAccess: SetupRequirement? {
+    sources.first(where: { $0.id == "photos" })?.setupRequirements.first {
+      $0.kind == .photosPermission && $0.state != .ready
+    }
+  }
+
   public var restingSources: [RestingSource] {
     SourceRestingCopy.sources(
       from: sources,
@@ -57,20 +63,7 @@ public final class AppModel {
     }
     do {
       let response = try await client.status()
-      sources = response.sources
-      statusFailures = response.failures
-      skippedSources = response.skippedSources
-      completion = response.outcome
-      statusRefreshFailure = nil
-      if response.outcome == .failed, !response.failures.isEmpty, response.failures.allSatisfy({ $0.code == .timeout }) {
-        phase = .timedOut
-      } else if response.outcome == .failed {
-        phase = .failed(response.failures.first?.message ?? "No source status check succeeded.")
-      } else if response.outcome == .partial {
-        phase = .partial
-      } else {
-        phase = .ready
-      }
+      applyStatus(response)
     } catch is CancellationError {
       return
     } catch TrawlClientError.cancelled {
@@ -82,6 +75,36 @@ public final class AppModel {
       let message = error.localizedDescription
       statusRefreshFailure = message
       phase = .failed(message)
+    }
+  }
+
+  public func requestPhotos() async {
+    guard photosAccess?.action == .requestPhotos else { return }
+    do {
+      applyStatus(try await client.requestPhotos())
+    } catch is CancellationError {
+      return
+    } catch TrawlClientError.cancelled {
+      return
+    } catch {
+      statusRefreshFailure = error.localizedDescription
+    }
+  }
+
+  private func applyStatus(_ response: StatusResponse) {
+    sources = response.sources
+    statusFailures = response.failures
+    skippedSources = response.skippedSources
+    completion = response.outcome
+    statusRefreshFailure = nil
+    if response.outcome == .failed, !response.failures.isEmpty, response.failures.allSatisfy({ $0.code == .timeout }) {
+      phase = .timedOut
+    } else if response.outcome == .failed {
+      phase = .failed(response.failures.first?.message ?? "No source status check succeeded.")
+    } else if response.outcome == .partial {
+      phase = .partial
+    } else {
+      phase = .ready
     }
   }
 

@@ -13,6 +13,7 @@ import (
 )
 
 func (r *Runtime) appStatusResponse(ctx context.Context) *federationv1.StatusResponse {
+	ctx = trawlkit.WithInternalAppRequest(ctx)
 	return federation.Status(ctx, r.federationStatusSources(discoverCrawlers(ctx)))
 }
 

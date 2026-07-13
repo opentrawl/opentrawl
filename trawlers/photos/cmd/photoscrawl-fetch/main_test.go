@@ -21,24 +21,88 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-func TestNoArgumentLaunchOnlyRequestsAccess(t *testing.T) {
-	oldRequest := requestAuthorization
-	requestAuthorization = func(context.Context) (string, error) { return "authorized", nil }
-	defer func() { requestAuthorization = oldRequest }()
-
-	if exitCode := requestAccess(context.Background()); exitCode != 0 {
-		t.Fatalf("exit code = %d", exitCode)
+func TestPermissionStatusIsPassive(t *testing.T) {
+	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
+	t.Cleanup(func() {
+		photoLibraryAuthorizationStatus = oldStatus
+		requestAuthorization = oldRequest
+	})
+	photoLibraryAuthorizationStatus = func(context.Context) (string, error) { return "not_determined", nil }
+	requestAuthorization = func(context.Context) (string, error) {
+		t.Fatal("passive status requested Photos access")
+		return "", nil
+	}
+	response := permissionResponse(t, "status")
+	if !response.Success || response.PhotosAccessStatus != "not_determined" {
+		t.Fatalf("response = %#v", response)
 	}
 }
 
-func TestNoArgumentLaunchFailsWithoutReadAccess(t *testing.T) {
-	oldRequest := requestAuthorization
-	requestAuthorization = func(context.Context) (string, error) { return "denied", nil }
-	defer func() { requestAuthorization = oldRequest }()
-
-	if exitCode := requestAccess(context.Background()); exitCode != 1 {
-		t.Fatalf("exit code = %d", exitCode)
+func TestPermissionRequestOnlyPromptsWhenUndecided(t *testing.T) {
+	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
+	t.Cleanup(func() {
+		photoLibraryAuthorizationStatus = oldStatus
+		requestAuthorization = oldRequest
+	})
+	for _, test := range []struct {
+		name, before, after string
+		requests            int
+	}{
+		{name: "undecided", before: "not_determined", after: "authorized", requests: 1},
+		{name: "denied", before: "denied", after: "", requests: 0},
+		{name: "limited", before: "limited", after: "", requests: 0},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			requests := 0
+			photoLibraryAuthorizationStatus = func(context.Context) (string, error) { return test.before, nil }
+			requestAuthorization = func(context.Context) (string, error) {
+				requests++
+				return test.after, nil
+			}
+			response := permissionResponse(t, "request")
+			want := test.before
+			if test.after != "" {
+				want = test.after
+			}
+			if !response.Success || response.PhotosAccessStatus != want || requests != test.requests {
+				t.Fatalf("response=%#v requests=%d", response, requests)
+			}
+		})
 	}
+}
+
+func TestPermissionRejectsUnknownNativeStatus(t *testing.T) {
+	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
+	t.Cleanup(func() {
+		photoLibraryAuthorizationStatus = oldStatus
+		requestAuthorization = oldRequest
+	})
+	photoLibraryAuthorizationStatus = func(context.Context) (string, error) { return "unknown", nil }
+	requestAuthorization = func(context.Context) (string, error) {
+		t.Fatal("unknown status requested Photos access")
+		return "", nil
+	}
+	response := permissionResponse(t, "request")
+	if response.Success || response.FailureKind != "native_status" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
+func permissionResponse(t *testing.T, operation string) *fetchwire.OriginalFetchResponse {
+	t.Helper()
+	responsePath := filepath.Join(t.TempDir(), "response.pb")
+	if code := run(context.Background(), []string{"permission", operation, "--response", responsePath}, io.Discard); code != 0 && code != 1 {
+		t.Fatalf("exit code = %d", code)
+	}
+	data, err := os.ReadFile(responsePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response := &fetchwire.OriginalFetchResponse{}
+	if err := proto.Unmarshal(data, response); err != nil {
+		t.Fatal(err)
+	}
+	return response
 }
 
 func TestDirectCommandsAreRejected(t *testing.T) {

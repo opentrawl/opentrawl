@@ -88,6 +88,7 @@ func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
 }
 
 func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.Status, error) {
+	setup := c.photosSetupRequirements(ctx)
 	paths := archivePaths(req)
 	status, err := archive.Status(ctx, paths)
 	if err != nil {
@@ -96,24 +97,12 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 		out.ConfigPath = req.Paths.Config
 		out.DatabasePath = req.Paths.Archive
 		out.Errors = []string{err.Error()}
-		out.SetupRequirements = []control.SetupRequirement{c.photosSetupRequirement()}
+		out.SetupRequirements = setup
 		return &out, nil
 	}
 	out := controlStatus(status, req.Paths.Config)
-	out.SetupRequirements = []control.SetupRequirement{c.photosSetupRequirement()}
+	out.SetupRequirements = setup
 	return out, nil
-}
-
-func (c *Crawler) photosSetupRequirement() control.SetupRequirement {
-	state := photosLibrarySetupState(c.cfg.LibraryPath)
-	return control.NewSetupRequirement(
-		"full_disk_access",
-		control.SetupKindFullDiskAccess,
-		state,
-		"OpenTrawl reads the local Photos library for source sync.",
-		control.SetupActionOpenFullDiskAccess,
-		nil,
-	)
 }
 
 func photosLibrarySetupState(libraryPath string) control.SetupState {

@@ -23,6 +23,7 @@ const (
 	photoKitFetchExecutable     = "photoscrawl-fetch"
 	photoKitPhotosEntitlement   = "com.apple.security.personal-information.photos-library"
 	defaultPhotoKitFetchTimeout = 2 * time.Minute
+	photoKitAccessTimeout       = 5 * time.Minute
 	maxPhotoKitWireBytes        = 64 * 1024
 )
 
@@ -48,6 +49,20 @@ var launchPhotoKitFetchApp = func(ctx context.Context, requestPath, responsePath
 		return err
 	}
 	return runPhotoKitFetchOpen(ctx, appPath, requestPath, responsePath)
+}
+
+var launchPhotoKitPermissionApp = func(ctx context.Context, appPath, operation, responsePath string) error {
+	command := exec.CommandContext(ctx, "/usr/bin/open", photoKitFetchPermissionOpenArgs(appPath, operation, responsePath)...)
+	var stderr bytes.Buffer
+	command.Stderr = &stderr
+	if err := command.Run(); err != nil {
+		message := bytes.TrimSpace(stderr.Bytes())
+		if len(message) > 0 {
+			return fmt.Errorf("launch signed Photos permission app: %w: %s", err, message)
+		}
+		return fmt.Errorf("launch signed Photos permission app: %w", err)
+	}
+	return nil
 }
 
 var launchPhotoKitCurrentStillApp = func(ctx context.Context, appPath, requestPath, responsePath string) error {
@@ -254,6 +269,70 @@ func photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath string
 	return []string{
 		"-W", "-n", "-g", appPath,
 		"--args", "run-current-still", "--request", requestPath, "--response", responsePath,
+	}
+}
+
+func photoKitFetchPermissionOpenArgs(appPath, operation, responsePath string) []string {
+	return []string{
+		"-W", "-n", "-g", appPath,
+		"--args", "permission", operation, "--response", responsePath,
+	}
+}
+
+// PhotoLibraryAccessStatusThroughApp reads, and only when requested asks for,
+// Photos access through the verified helper identity.
+func PhotoLibraryAccessStatusThroughApp(ctx context.Context, request bool) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	appPath, err := resolvePhotoKitFetchApp(ctx)
+	if err != nil {
+		return "", err
+	}
+	wireDir, err := os.MkdirTemp("", ".photokit-access-*")
+	if err != nil {
+		return "", fmt.Errorf("create Photos access response directory: %w", err)
+	}
+	defer func() { _ = os.RemoveAll(wireDir) }()
+	responsePath := filepath.Join(wireDir, "response.pb")
+	operation := "status"
+	if request {
+		operation = "request"
+	}
+	launchCtx, cancel := context.WithTimeout(context.Background(), photoKitAccessTimeout+10*time.Second)
+	defer cancel()
+	if err := launchPhotoKitPermissionApp(launchCtx, appPath, operation, responsePath); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		return "", err
+	}
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
+	if err != nil {
+		return "", fmt.Errorf("read Photos access response: %w", err)
+	}
+	var response fetchwire.OriginalFetchResponse
+	if err := proto.Unmarshal(responseData, &response); err != nil {
+		return "", fmt.Errorf("decode Photos access response: %w", err)
+	}
+	if !response.Success {
+		return "", &PhotoLibraryAccessFailure{Kind: response.GetFailureKind(), Message: response.GetErrorMessage()}
+	}
+	if !validPhotoLibraryAccessStatus(response.GetPhotosAccessStatus()) {
+		return "", &PhotoLibraryAccessFailure{Kind: "native_status", Message: "PhotoKit returned an unrecognised Photos access state"}
+	}
+	return response.GetPhotosAccessStatus(), nil
+}
+
+func validPhotoLibraryAccessStatus(status string) bool {
+	switch status {
+	case "not_determined", "restricted", "denied", "authorized", "limited":
+		return true
+	default:
+		return false
 	}
 }
 

@@ -8,6 +8,7 @@ import Testing
 private struct StatusClient: TrawlClient {
   let response: StatusResponse
   func status() async throws -> StatusResponse { response }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
@@ -90,6 +91,46 @@ private struct StatusClient: TrawlClient {
   #expect(model.restingSources.map(\.id) == ["synthetic"])
   #expect(model.restingSources.first?.detail == "Status is not supported.")
   #expect(model.restingSources.first?.needsAttention == true)
+}
+
+@MainActor
+@Test func requestingPhotosAppliesTheReturnedAccessStatus() async throws {
+  let notRequested = try photosStatus(state: .needsAction, action: .requestPhotos).model()
+  let authorised = try photosStatus(state: .ready, action: .none).model()
+  let client = PhotosRequestClient(status: notRequested, requestedStatus: authorised)
+  let model = AppModel(client: client)
+
+  await model.refresh()
+  #expect(model.photosAccess?.action == .requestPhotos)
+
+  await model.requestPhotos()
+  #expect(client.didRequestPhotos)
+  #expect(model.photosAccess == nil)
+}
+
+@MainActor
+@Test func failedPhotosRequestKeepsTheRefreshedStatus() async throws {
+  let notRequested = try photosStatus(state: .needsAction, action: .requestPhotos).model()
+  var failed = photosStatus(state: .needsAction, action: .requestPhotos)
+  failed.outcome = .partial
+  failed.failures = [
+    .with {
+      $0.sourceID = "photos"
+      $0.surface = "Photos"
+      $0.code = .unavailable
+      $0.message = "Photos access could not be requested."
+      $0.remedy = "Try again from OpenTrawl."
+    }
+  ]
+  let client = PhotosRequestClient(status: notRequested, requestedStatus: try failed.model())
+  let model = AppModel(client: client)
+
+  await model.refresh()
+  await model.requestPhotos()
+
+  #expect(model.sources.map(\.id) == ["photos"])
+  #expect(model.photosAccess?.action == .requestPhotos)
+  #expect(model.statusFailures.map(\.sourceID) == ["photos"])
 }
 
 @MainActor
@@ -319,6 +360,7 @@ private final class CancellingStatusClient: TrawlClient, @unchecked Sendable {
     if cancelled { throw TrawlClientError.cancelled }
     return response
   }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
@@ -353,6 +395,7 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
     if statusFails { throw TrawlClientError.launchFailed }
     return statusResponse
   }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse {
     if cancelled { throw TrawlClientError.cancelled }
     if syncFails { throw TrawlClientError.launchFailed }
@@ -369,6 +412,53 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
   }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
   func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+}
+
+private final class PhotosRequestClient: TrawlClient, @unchecked Sendable {
+  let statusResponse: StatusResponse
+  let requestedStatus: StatusResponse
+  private(set) var didRequestPhotos = false
+
+  init(status: StatusResponse, requestedStatus: StatusResponse) {
+    self.statusResponse = status
+    self.requestedStatus = requestedStatus
+  }
+
+  func status() async throws -> StatusResponse { statusResponse }
+  func requestPhotos() async throws -> StatusResponse {
+    didRequestPhotos = true
+    return requestedStatus
+  }
+  func sync() async throws -> SyncResponse { fatalError() }
+  func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
+  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+}
+
+private func photosStatus(
+  state: Trawl_Federation_V1_SetupState,
+  action: Trawl_Federation_V1_SetupActionKind
+) -> Trawl_Federation_V1_StatusResponse {
+  .with {
+    $0.outcome = .complete
+    $0.sources = [
+      .with {
+        $0.manifest = .with {
+          $0.sourceID = "photos"
+          $0.surface = "Photos"
+        }
+        $0.state = "ok"
+        $0.setupRequirements = [
+          .with {
+            $0.id = "photos_access"
+            $0.kind = .photosPermission
+            $0.state = state
+            $0.explanation = "Synthetic Photos permission state."
+            $0.action = action
+          }
+        ]
+      }
+    ]
+  }
 }
 
 private actor URLRecorder {

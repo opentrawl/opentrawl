@@ -596,6 +596,19 @@ char *photoscrawl_request_photokit_authorization(char **errorOut) {
   }
 }
 
+char *photoscrawl_photokit_authorization_status(char **errorOut) {
+  @autoreleasepool {
+    if (errorOut != NULL) {
+      *errorOut = NULL;
+    }
+    if (!@available(macOS 10.15, *)) {
+      pcSetError(errorOut, @"PhotoKit authorization status requires macOS 10.15 or newer");
+      return NULL;
+    }
+    return pcCopyCString(pcAuthorizationStatus(pcCurrentAuthorizationStatus()));
+  }
+}
+
 char *photoscrawl_photokit_snapshot(const char *libraryPath, char **errorOut) {
   @autoreleasepool {
     if (errorOut != NULL) {

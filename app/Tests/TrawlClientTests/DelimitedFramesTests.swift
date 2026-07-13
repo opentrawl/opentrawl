@@ -98,6 +98,19 @@ import Testing
   #expect(response.failures.isEmpty)
 }
 
+@Test func processClientSendsThePrivatePhotosRequest() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  let response = try await ProcessTrawlClient(
+    binaryURL: binary,
+    receiveReceipt: { receipt in
+      #expect(receipt.arguments == ["__app", "request-photos"])
+      #expect(!receipt.stdout.isEmpty)
+    }
+  ).requestPhotos()
+  #expect(response.outcome == .complete)
+  #expect(response.sources.map(\.id) == ["gmail", "notes"])
+}
+
 private func developmentSyntheticBinary() -> URL? {
   let workingDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
   return [

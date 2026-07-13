@@ -22,21 +22,18 @@ import (
 )
 
 var (
-	requestAuthorization   = photos.RequestPhotoLibraryAuthorization
-	exportOriginalMatching = photos.ExportOriginalResourceMatching
-	exportCurrentStill     = photos.ExportCurrentStillMatching
-	prepareCurrentMainLoop = photos.PrepareCurrentStillMainLoop
-	runCurrentMainLoop     = photos.RunCurrentStillMainLoop
-	stopCurrentMainLoop    = photos.StopCurrentStillMainLoop
+	photoLibraryAuthorizationStatus = photos.PhotoLibraryAuthorizationStatus
+	requestAuthorization            = photos.RequestPhotoLibraryAuthorization
+	exportOriginalMatching          = photos.ExportOriginalResourceMatching
+	exportCurrentStill              = photos.ExportCurrentStillMatching
+	prepareCurrentMainLoop          = photos.PrepareCurrentStillMainLoop
+	runCurrentMainLoop              = photos.RunCurrentStillMainLoop
+	stopCurrentMainLoop             = photos.StopCurrentStillMainLoop
 )
 
 func init() { runtime.LockOSThread() }
 
 func main() {
-	if len(os.Args) == 1 {
-		runtime.LockOSThread()
-		os.Exit(requestAccess(context.Background()))
-	}
 	if len(os.Args) == 6 && os.Args[1] == "run-current-still" {
 		os.Exit(runCurrentStillApp(os.Args[1:], os.Stderr))
 	}
@@ -58,19 +55,6 @@ func runCurrentStillApp(args []string, stderr io.Writer) int {
 	return <-result
 }
 
-// requestAccess is the LaunchServices first-run entrypoint. It may show the
-// Photos permission prompt, but it never reads or exports an asset.
-func requestAccess(ctx context.Context) int {
-	status, err := requestAuthorization(ctx)
-	if err != nil {
-		return 1
-	}
-	if status == "authorized" || status == "limited" {
-		return 0
-	}
-	return 1
-}
-
 func run(ctx context.Context, args []string, stderr io.Writer) int {
 	if len(args) == 5 && args[0] == "run" {
 		return runWireRequest(ctx, args[1:], stderr)
@@ -78,9 +62,48 @@ func run(ctx context.Context, args []string, stderr io.Writer) int {
 	if len(args) == 5 && args[0] == "run-current-still" {
 		return runCurrentStillWireRequest(ctx, args[1:], stderr)
 	}
+	if len(args) == 4 && args[0] == "permission" {
+		return runPermission(ctx, args[1:], stderr)
+	}
 	{
 		writeln(stderr, "photoscrawl-fetch is an internal app and accepts no direct commands")
 		return 2
+	}
+}
+
+func runPermission(ctx context.Context, args []string, stderr io.Writer) int {
+	operation := args[0]
+	flags := flag.NewFlagSet("permission", flag.ContinueOnError)
+	flags.SetOutput(stderr)
+	responsePath := flags.String("response", "", "protobuf response path")
+	if (operation != "status" && operation != "request") || flags.Parse(args[1:]) != nil || flags.NArg() != 0 || *responsePath == "" {
+		writeln(stderr, "photoscrawl-fetch permission: status or request and --response are required")
+		return 2
+	}
+	status, err := photoLibraryAuthorizationStatus(ctx)
+	if err == nil && operation == "request" && status == "not_determined" {
+		status, err = requestAuthorization(ctx)
+	}
+	if err != nil {
+		_ = writeWireResponse(*responsePath, failedWireResponse("native_status", "PhotoKit could not read Photos access", nil))
+		return 1
+	}
+	if !validPhotosAccessStatus(status) {
+		_ = writeWireResponse(*responsePath, failedWireResponse("native_status", "PhotoKit returned an unrecognised Photos access state", nil))
+		return 1
+	}
+	if err := writeWireResponse(*responsePath, &fetchwire.OriginalFetchResponse{Success: true, PhotosAccessStatus: status}); err != nil {
+		return 1
+	}
+	return 0
+}
+
+func validPhotosAccessStatus(status string) bool {
+	switch status {
+	case "not_determined", "restricted", "denied", "authorized", "limited":
+		return true
+	default:
+		return false
 	}
 }
 

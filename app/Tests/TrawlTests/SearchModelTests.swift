@@ -7,6 +7,7 @@ import Testing
 private struct SearchClient: TrawlClient {
   let response: SearchResponse
   func status() async throws -> StatusResponse { fatalError() }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { response }
   func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
@@ -228,6 +229,7 @@ private struct ScriptedSearchClient: TrawlClient {
   }
 
   func status() async throws -> StatusResponse { fatalError() }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_ query: String, source: String?) async throws -> SearchResponse {
     try await searchAction(query, source)
