@@ -9,6 +9,7 @@ contents="$app/Contents"
 identity="OpenTrawl Dev Signing"
 keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
+photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 launch=1
 fixture_helper=""
 synthetic_helper=0
@@ -109,6 +110,7 @@ plutil -insert GitCommit -string "$(git -C "$repo_root" rev-parse --short HEAD)"
 plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
 plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
 plutil -insert NSHighResolutionCapable -bool true "$info"
+plutil -insert NSPhotoLibraryUsageDescription -string "OpenTrawl reads selected Photos media to prepare a card." "$info"
 
 echo "Signing the local app"
 "$repo_root/scripts/dev-cert"
@@ -117,9 +119,10 @@ xattr -cr "$app"
 codesign --force --sign "$identity" --keychain "$keychain" \
   --options runtime --timestamp=none "$contents/Helpers/trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none "$contents/MacOS/Trawl"
+  --options runtime --timestamp=none --entitlements "$photos_entitlements" \
+  "$contents/MacOS/Trawl"
 codesign --force --sign "$identity" --keychain "$keychain" \
-  --options runtime --timestamp=none "$app"
+  --options runtime --timestamp=none --entitlements "$photos_entitlements" "$app"
 codesign --verify --deep --strict "$app"
 
 echo "Built $app"

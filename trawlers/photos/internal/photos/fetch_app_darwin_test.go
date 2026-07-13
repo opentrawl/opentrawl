@@ -321,7 +321,7 @@ func TestPhotoKitFetchLaunchUsesVerifiedAppPath(t *testing.T) {
 	if gotApp != appPath || gotRequest != "request.pb" || gotResponse != "response.pb" {
 		t.Fatalf("launch target = %q %q %q", gotApp, gotRequest, gotResponse)
 	}
-	wantArgs := []string{"-W", "-n", "-g", appPath, "--args", "run", "--request", "request.pb", "--response", "response.pb"}
+	wantArgs := []string{"-n", "-g", appPath, "--args", "run", "--request", "request.pb", "--response", "response.pb"}
 	if got := photoKitFetchOpenArgs(appPath, "request.pb", "response.pb"); !reflect.DeepEqual(got, wantArgs) {
 		t.Fatalf("open args = %#v, want %#v", got, wantArgs)
 	} else {
@@ -354,9 +354,36 @@ func TestPhotoLibraryAccessStatusUsesTheVerifiedHelper(t *testing.T) {
 	if err != nil || status != "not_determined" || called != 1 {
 		t.Fatalf("status=%q err=%v called=%d", status, err, called)
 	}
-	want := []string{"-W", "-n", "-g", "/synthetic/Photoscrawl Fetch.app", "--args", "permission", "status", "--response", "response.pb"}
+	want := []string{"-g", "-n", "/synthetic/Photoscrawl Fetch.app", "--args", "permission", "status", "--response", "response.pb"}
 	if got := photoKitFetchPermissionOpenArgs("/synthetic/Photoscrawl Fetch.app", "status", "response.pb"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("open args = %#v, want %#v", got, want)
+	}
+	want = []string{"-n", "/synthetic/Photoscrawl Fetch.app", "--args", "permission", "request", "--response", "response.pb"}
+	if got := photoKitFetchPermissionOpenArgs("/synthetic/Photoscrawl Fetch.app", "request", "response.pb"); !reflect.DeepEqual(got, want) {
+		t.Fatalf("request open args = %#v, want %#v", got, want)
+	}
+}
+
+func TestPhotoLibraryAccessStatusWaitsForDetachedHelperResponse(t *testing.T) {
+	oldResolve, oldLaunch := resolvePhotoKitFetchApp, launchPhotoKitPermissionApp
+	t.Cleanup(func() {
+		resolvePhotoKitFetchApp = oldResolve
+		launchPhotoKitPermissionApp = oldLaunch
+	})
+	resolvePhotoKitFetchApp = func(context.Context) (string, error) { return "/synthetic/Photoscrawl Fetch.app", nil }
+	launchPhotoKitPermissionApp = func(_ context.Context, _, _, responsePath string) error {
+		go func() {
+			time.Sleep(25 * time.Millisecond)
+			data, err := proto.Marshal(&fetchwire.OriginalFetchResponse{Success: true, PhotosAccessStatus: "authorized"})
+			if err == nil {
+				_ = os.WriteFile(responsePath, data, 0o600)
+			}
+		}()
+		return nil
+	}
+	status, err := PhotoLibraryAccessStatusThroughApp(context.Background(), true)
+	if err != nil || status != "authorized" {
+		t.Fatalf("status=%q err=%v", status, err)
 	}
 }
 

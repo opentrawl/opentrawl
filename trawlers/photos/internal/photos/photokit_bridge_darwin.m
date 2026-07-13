@@ -331,7 +331,12 @@ static PHAuthorizationStatus pcCurrentAuthorizationStatus(void) {
   return [PHPhotoLibrary authorizationStatus];
 }
 
-static PHAuthorizationStatus pcRequestAuthorization(void) {
+static const NSTimeInterval pcAuthorizationRequestTimeout = 4 * 60;
+
+static PHAuthorizationStatus pcRequestAuthorization(BOOL *timedOutOut) {
+  if (timedOutOut != NULL) {
+    *timedOutOut = NO;
+  }
   __block PHAuthorizationStatus status = pcCurrentAuthorizationStatus();
   if (status != PHAuthorizationStatusNotDetermined) {
     return status;
@@ -341,12 +346,28 @@ static PHAuthorizationStatus pcRequestAuthorization(void) {
   [application setActivationPolicy:NSApplicationActivationPolicyRegular];
   [application activateIgnoringOtherApps:YES];
 
-  void (^completeRequest)(PHAuthorizationStatus) = ^(PHAuthorizationStatus requestedStatus) {
+  __block BOOL finished = NO;
+  __block BOOL timedOut = NO;
+  void (^finish)(PHAuthorizationStatus, BOOL) = ^(PHAuthorizationStatus requestedStatus, BOOL didTimeOut) {
     dispatch_async(dispatch_get_main_queue(), ^{
-      status = requestedStatus;
+      if (finished) {
+        return;
+      }
+      finished = YES;
+      timedOut = didTimeOut;
+      if (!didTimeOut) {
+        status = requestedStatus;
+      }
       [application stop:nil];
     });
   };
+
+  void (^completeRequest)(PHAuthorizationStatus) = ^(PHAuthorizationStatus requestedStatus) {
+    finish(requestedStatus, NO);
+  };
+  NSTimer *timeout = [NSTimer scheduledTimerWithTimeInterval:pcAuthorizationRequestTimeout repeats:NO block:^(__unused NSTimer *timer) {
+    finish(PHAuthorizationStatusNotDetermined, YES);
+  }];
   if (@available(macOS 11.0, *)) {
     [PHPhotoLibrary requestAuthorizationForAccessLevel:PHAccessLevelReadWrite handler:^(PHAuthorizationStatus requestedStatus) {
       completeRequest(requestedStatus);
@@ -357,6 +378,10 @@ static PHAuthorizationStatus pcRequestAuthorization(void) {
     }];
   }
   [application run];
+  [timeout invalidate];
+  if (timedOutOut != NULL) {
+    *timedOutOut = timedOut;
+  }
   return status;
 }
 
@@ -592,7 +617,13 @@ char *photoscrawl_request_photokit_authorization(char **errorOut) {
       pcSetError(errorOut, @"PhotoKit authorization requests require macOS 10.15 or newer");
       return NULL;
     }
-    return pcCopyCString(pcAuthorizationStatus(pcRequestAuthorization()));
+    BOOL timedOut = NO;
+    PHAuthorizationStatus status = pcRequestAuthorization(&timedOut);
+    if (timedOut) {
+      pcSetError(errorOut, @"PhotoKit authorization request timed out");
+      return NULL;
+    }
+    return pcCopyCString(pcAuthorizationStatus(status));
   }
 }
 
