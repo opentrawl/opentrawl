@@ -497,7 +497,7 @@ private func expectedSearch(_ name: String) -> SearchResponse {
   let source = SearchSourceResult(
     sourceID: "gmail", surface: "Gmail",
     whoResolved: WhoResolved(who: "Avery Example", identifiers: ["avery@example.com"]), hits: hits,
-    totalMatches: 7, truncated: true)
+    totalMatches: 7, totalIsExact: true, truncated: true)
   return switch name {
   case "search-none":
     SearchResponse(
@@ -529,6 +529,28 @@ private func expectedSearch(_ name: String) -> SearchResponse {
       skippedSources: [expectedSkipped("calendar", "Calendar", "Search is not supported.")],
       outcome: .partial, resultLimit: 20, truncated: true)
   }
+}
+
+@Test func searchSourceMappingPreservesTotalExactness() throws {
+  var exact = Trawl_Federation_V1_SearchSourceResult()
+  exact.sourceID = "exact"
+  exact.surface = "Exact"
+  exact.totalMatches = 1
+  exact.totalIsExact = true
+
+  var lowerBound = Trawl_Federation_V1_SearchSourceResult()
+  lowerBound.sourceID = "lower-bound"
+  lowerBound.surface = "Lower bound"
+  lowerBound.totalMatches = 21
+
+  var response = Trawl_Federation_V1_SearchResponse()
+  response.outcome = .complete
+  response.order = .recency
+  response.resultLimit = 20
+  response.sources = [exact, lowerBound]
+  let sources = try response.model().sources
+  #expect(sources[0].totalIsExact)
+  #expect(!sources[1].totalIsExact)
 }
 
 private func expectedOpen(_ name: String) -> OpenResponse {

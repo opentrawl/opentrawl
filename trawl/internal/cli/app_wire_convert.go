@@ -20,7 +20,7 @@ func (r *Runtime) appSearchResponse(ctx context.Context, sources []Source, query
 	return federation.Search(
 		ctx,
 		r.federationSearchSources(sources),
-		trawlkit.Query{Text: query, Limit: appSearchLimit},
+		trawlkit.Query{Text: query, Limit: appSearchLimit, BoundedTotals: true},
 		federationv1.SearchOrder_SEARCH_ORDER_RECENCY,
 		uint32(appSearchLimit),
 	)

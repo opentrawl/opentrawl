@@ -121,6 +121,30 @@ func TestFederationAdaptersProjectMixedResponses(t *testing.T) {
 	writeRuntimeEvidence(t, "open-response.pbtxt", []byte(prototext.Format(open)))
 }
 
+func TestAppSearchUsesBoundedTotals(t *testing.T) {
+	ensureSyntheticHome(t)
+	archive := filepath.Join(t.TempDir(), "notes.db")
+	store, err := ckstore.Open(context.Background(), ckstore.Options{Path: archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Close(); err != nil {
+		t.Fatal(err)
+	}
+	manifest := control.NewManifest("notes", "Notes", "notescrawl")
+	manifest.Commands["search"] = control.Command{}
+	crawler := &adapterCrawler{id: "notes", archive: archive, searchLimit: appSearchLimit, boundedTotals: true}
+	response := (&Runtime{timeout: crawlerCommandTimeout, stderr: io.Discard}).appSearchResponse(context.Background(), []Source{{
+		Manifest: manifest,
+		ID:       "notes",
+		Surface:  "Notes",
+		Crawler:  crawler,
+	}}, "synthetic")
+	if len(response.GetFailures()) != 0 || len(response.GetSources()) != 1 || !response.GetSources()[0].GetTotalIsExact() {
+		t.Fatalf("app search response = %#v", response)
+	}
+}
+
 func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 	ensureSyntheticHome(t)
 	archive := filepath.Join(t.TempDir(), "synthetic-missing.db")
@@ -143,11 +167,13 @@ func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 }
 
 type adapterCrawler struct {
-	id          string
-	archive     string
-	statusCalls int
-	searchCalls int
-	openCalls   int
+	id            string
+	archive       string
+	searchLimit   int
+	boundedTotals bool
+	statusCalls   int
+	searchCalls   int
+	openCalls     int
 }
 
 func (c *adapterCrawler) Info() trawlkit.Info {
@@ -167,8 +193,12 @@ func (c *adapterCrawler) Doctor(context.Context, *trawlkit.Request) (*trawlkit.D
 
 func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	c.searchCalls++
-	if query.Text != "synthetic" || query.Limit != 2 {
-		return trawlkit.SearchResult{}, errors.New("query did not preserve its text and limit")
+	limit := c.searchLimit
+	if limit == 0 {
+		limit = 2
+	}
+	if query.Text != "synthetic" || query.Limit != limit || query.BoundedTotals != c.boundedTotals {
+		return trawlkit.SearchResult{}, errors.New("query did not preserve its total policy, text and limit")
 	}
 	return trawlkit.SearchResult{Results: []trawlkit.Hit{{Source: c.id, Ref: "notes:note/1", ShortRef: "short-7", Snippet: "Synthetic note"}}, TotalMatches: 1}, nil
 }

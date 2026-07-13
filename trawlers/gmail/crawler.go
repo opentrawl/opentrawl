@@ -137,9 +137,10 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 		return trawlkit.SearchResult{}, archiveErr(err)
 	}
 	opts := archive.SearchOptions{
-		Query: strings.TrimSpace(query.Text),
-		Limit: query.Limit,
-		Who:   strings.Join(strings.Fields(query.Who), " "),
+		Query:         strings.TrimSpace(query.Text),
+		Limit:         query.Limit,
+		BoundedTotals: query.BoundedTotals,
+		Who:           strings.Join(strings.Fields(query.Who), " "),
 	}
 	if !query.After.IsZero() {
 		opts.After = &query.After
@@ -160,9 +161,10 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 		hits = append(hits, converted)
 	}
 	out := trawlkit.SearchResult{
-		Results:      hits,
-		TotalMatches: int(result.TotalMatches),
-		Truncated:    result.Truncated,
+		Results:           hits,
+		TotalMatches:      int(result.TotalMatches),
+		TotalIsLowerBound: result.TotalIsLowerBound,
+		Truncated:         result.Truncated,
 	}
 	if result.WhoResolved != nil {
 		out.WhoResolved = &trawlkit.WhoResolved{

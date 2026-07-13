@@ -1521,6 +1521,7 @@ type SearchSourceResult struct {
 	Hits          []*SearchHit           `protobuf:"bytes,4,rep,name=hits,proto3" json:"hits,omitempty"`
 	TotalMatches  uint64                 `protobuf:"varint,5,opt,name=total_matches,json=totalMatches,proto3" json:"total_matches,omitempty"`
 	Truncated     bool                   `protobuf:"varint,6,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	TotalIsExact  bool                   `protobuf:"varint,7,opt,name=total_is_exact,json=totalIsExact,proto3" json:"total_is_exact,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1593,6 +1594,13 @@ func (x *SearchSourceResult) GetTotalMatches() uint64 {
 func (x *SearchSourceResult) GetTruncated() bool {
 	if x != nil {
 		return x.Truncated
+	}
+	return false
+}
+
+func (x *SearchSourceResult) GetTotalIsExact() bool {
+	if x != nil {
+		return x.TotalIsExact
 	}
 	return false
 }
@@ -1877,14 +1885,15 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	" \x01(\x03H\x00R\favailability\x88\x01\x01\x12\x1b\n" +
 	"\x06unread\x18\v \x01(\bH\x01R\x06unread\x88\x01\x01B\x0f\n" +
 	"\r_availabilityB\t\n" +
-	"\a_unread\"\x87\x02\n" +
+	"\a_unread\"\xad\x02\n" +
 	"\x12SearchSourceResult\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x18\n" +
 	"\asurface\x18\x02 \x01(\tR\asurface\x12C\n" +
 	"\fwho_resolved\x18\x03 \x01(\v2 .trawl.federation.v1.WhoResolvedR\vwhoResolved\x122\n" +
 	"\x04hits\x18\x04 \x03(\v2\x1e.trawl.federation.v1.SearchHitR\x04hits\x12#\n" +
 	"\rtotal_matches\x18\x05 \x01(\x04R\ftotalMatches\x12\x1c\n" +
-	"\ttruncated\x18\x06 \x01(\bR\ttruncated\"\x9b\x02\n" +
+	"\ttruncated\x18\x06 \x01(\bR\ttruncated\x12$\n" +
+	"\x0etotal_is_exact\x18\a \x01(\bR\ftotalIsExact\"\x9b\x02\n" +
 	"\x0eStatusResponse\x12?\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x12;\n" +
 	"\asources\x18\x02 \x03(\v2!.trawl.federation.v1.SourceStatusR\asources\x12>\n" +

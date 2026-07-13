@@ -3,8 +3,10 @@ package trawlkit
 import "time"
 
 type Query struct {
-	Text          string
-	Limit         int
+	Text  string
+	Limit int
+	// BoundedTotals requests a lower-bound total when a source finds a probe row.
+	BoundedTotals bool
 	After, Before time.Time
 	Who           string
 	WhoResolved   *WhoResolved
@@ -19,7 +21,9 @@ type SearchResult struct {
 	WhoResolved  *WhoResolved `json:"who_resolved,omitempty"`
 	Results      []Hit        `json:"results"`
 	TotalMatches int          `json:"total_matches"`
-	Truncated    bool         `json:"truncated"`
+	// TotalIsLowerBound reports that TotalMatches is at least Limit plus one.
+	TotalIsLowerBound bool `json:"total_is_lower_bound,omitempty"`
+	Truncated         bool `json:"truncated"`
 }
 
 type Hit struct {
