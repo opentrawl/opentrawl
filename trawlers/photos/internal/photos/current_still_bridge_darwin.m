@@ -161,7 +161,7 @@ static PHAuthorizationStatus csStatus(void) {
   return [PHPhotoLibrary authorizationStatus];
 }
 
-int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut) {
+int photoscrawl_export_current_still_matching(const char *assetUUID, int hasExpectedModification, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut) {
   @autoreleasepool {
     if (mediaTypeOut) *mediaTypeOut = NULL;
     if (errorOut) *errorOut = NULL;
@@ -177,19 +177,21 @@ int photoscrawl_export_current_still_matching(const char *assetUUID, long long m
     if (photoKitCallsOut) *photoKitCallsOut = 0;
     NSString *uuid = assetUUID ? [NSString stringWithUTF8String:assetUUID] : @"";
     NSString *path = destinationPath ? [NSString stringWithUTF8String:destinationPath] : @"";
-    if (uuid.length == 0 || modificationUnixSeconds <= 0 || modificationMicroseconds < 0 || modificationMicroseconds >= 1000000 || path.length == 0) { csError(errorOut, @"asset UUID, canonical modification instant and destination path are required"); return 0; }
+    if (uuid.length == 0 || path.length == 0 || (hasExpectedModification && (modificationUnixSeconds <= 0 || modificationMicroseconds < 0 || modificationMicroseconds >= 1000000))) { csError(errorOut, @"asset UUID, expected modification instant when present and destination path are required"); return 0; }
     PHAuthorizationStatus status = csStatus();
     if (status != PHAuthorizationStatusAuthorized && status != PHAuthorizationStatusLimited) { csError(errorOut, @"photos_access:denied"); return 0; }
     PHFetchResult<PHAsset *> *assets = [PHAsset fetchAssetsWithOptions:nil];
     PHAsset *asset = nil;
     for (PHAsset *candidate in assets) { if ([csUUID(candidate.localIdentifier) isEqualToString:uuid.lowercaseString]) { asset = candidate; break; } }
     if (asset == nil) { csError(errorOut, @"photokit asset not found"); return 0; }
-    if (asset.modificationDate == nil) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }
-    NSTimeInterval observed = asset.modificationDate.timeIntervalSince1970;
-    long long observedSeconds = (long long)floor(observed);
-    long long observedMicroseconds = llround((observed - observedSeconds) * 1000000.0);
-    if (observedMicroseconds == 1000000) { observedSeconds++; observedMicroseconds = 0; }
-    if (observedSeconds != modificationUnixSeconds || observedMicroseconds != modificationMicroseconds) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }
+    if (hasExpectedModification) {
+      if (asset.modificationDate == nil) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }
+      NSTimeInterval observed = asset.modificationDate.timeIntervalSince1970;
+      long long observedSeconds = (long long)floor(observed);
+      long long observedMicroseconds = llround((observed - observedSeconds) * 1000000.0);
+      if (observedMicroseconds == 1000000) { observedSeconds++; observedMicroseconds = 0; }
+      if (observedSeconds != modificationUnixSeconds || observedMicroseconds != modificationMicroseconds) { csStage(stageOut, @"selection_validation"); csError(errorOut, @"selected asset modification instant does not match PhotoKit"); return 0; }
+    }
     CSCurrentStillState *state = [[CSCurrentStillState alloc] init];
     state.condition = [[NSCondition alloc] init];
     state.orientation = kCGImagePropertyOrientationUp;

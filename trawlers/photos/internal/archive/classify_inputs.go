@@ -12,39 +12,40 @@ import (
 )
 
 type classifyInput struct {
-	QueueID          string
-	AssetID          string
-	SourceLibraryID  string
-	LocalIdentifier  string
-	NeedsDownload    bool
-	MediaType        string
-	MediaSubtypes    string
-	CreationDate     string
-	ModificationDate string
-	TimezoneName     string
-	Width            int64
-	Height           int64
-	DurationSeconds  float64
-	Favorite         bool
-	Hidden           bool
-	BurstIdentifier  string
-	MetadataJSON     string
-	CameraMake       string
-	CameraModel      string
-	LensModel        string
-	FocalLengthMM    float64
-	FocalLength35MM  float64
-	Aperture         float64
-	ShutterSpeed     float64
-	ISO              int64
-	HasLocation      bool
-	Latitude         float64
-	Longitude        float64
-	AccuracyMeters   float64
-	Place            *classifyPlaceContext
-	KnownPlace       *KnownPlaceMatch
-	Resources        []classifyResource
-	Albums           []classifyAlbum
+	QueueID           string
+	AssetID           string
+	SourceLibraryID   string
+	LocalIdentifier   string
+	NeedsDownload     bool
+	MediaType         string
+	MediaSubtypes     string
+	CreationDate      string
+	ModificationDate  string
+	SourceFingerprint string
+	TimezoneName      string
+	Width             int64
+	Height            int64
+	DurationSeconds   float64
+	Favorite          bool
+	Hidden            bool
+	BurstIdentifier   string
+	MetadataJSON      string
+	CameraMake        string
+	CameraModel       string
+	LensModel         string
+	FocalLengthMM     float64
+	FocalLength35MM   float64
+	Aperture          float64
+	ShutterSpeed      float64
+	ISO               int64
+	HasLocation       bool
+	Latitude          float64
+	Longitude         float64
+	AccuracyMeters    float64
+	Place             *classifyPlaceContext
+	KnownPlace        *KnownPlaceMatch
+	Resources         []classifyResource
+	Albums            []classifyAlbum
 }
 
 type classifyPlaceContext struct {
@@ -76,7 +77,16 @@ func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, refreshModel
 	// the limit — minutes of CPU per batch on a full library.
 	selectColumns := `
 select q.id as queue_id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
-       a.media_type, a.media_subtypes, a.creation_date, a.modification_date, a.timezone_name, a.width, a.height, a.duration_seconds,
+       a.media_type, a.media_subtypes, a.creation_date, a.modification_date,
+       coalesce((
+         select seen.source_fingerprint
+         from crawl_seen_asset seen
+         join crawl_snapshot snapshot on snapshot.id = seen.last_seen_snapshot_id
+         where seen.asset_id = a.id
+           and seen.source_library_id = q.source_library_id
+           and snapshot.completeness_state = 'complete'
+       ), '') as source_fingerprint,
+       a.timezone_name, a.width, a.height, a.duration_seconds,
        a.favorite, a.hidden, a.burst_identifier, a.metadata_json,
        a.camera_make, a.camera_model, a.lens_model,
        coalesce(a.focal_length_mm, 0) as focal_length_mm,
@@ -143,6 +153,7 @@ order by creation_date desc, has_location desc, queue_id
 			&input.MediaSubtypes,
 			&input.CreationDate,
 			&input.ModificationDate,
+			&input.SourceFingerprint,
 			&input.TimezoneName,
 			&input.Width,
 			&input.Height,

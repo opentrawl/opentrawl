@@ -33,6 +33,7 @@ type CurrentStillFetchRequest struct {
 	AllowNetwork             bool                   `protobuf:"varint,5,opt,name=allow_network,json=allowNetwork,proto3" json:"allow_network,omitempty"`
 	TimeoutMilliseconds      int64                  `protobuf:"varint,6,opt,name=timeout_milliseconds,json=timeoutMilliseconds,proto3" json:"timeout_milliseconds,omitempty"`
 	ModificationMicroseconds int32                  `protobuf:"varint,7,opt,name=modification_microseconds,json=modificationMicroseconds,proto3" json:"modification_microseconds,omitempty"`
+	HasExpectedModification  bool                   `protobuf:"varint,8,opt,name=has_expected_modification,json=hasExpectedModification,proto3" json:"has_expected_modification,omitempty"`
 	unknownFields            protoimpl.UnknownFields
 	sizeCache                protoimpl.SizeCache
 }
@@ -114,6 +115,13 @@ func (x *CurrentStillFetchRequest) GetModificationMicroseconds() int32 {
 		return x.ModificationMicroseconds
 	}
 	return 0
+}
+
+func (x *CurrentStillFetchRequest) GetHasExpectedModification() bool {
+	if x != nil {
+		return x.HasExpectedModification
+	}
+	return false
 }
 
 type CurrentStillFetchResponse struct {
@@ -284,7 +292,7 @@ var File_opentrawl_photos_fetch_v1_current_still_fetch_proto protoreflect.FileDe
 
 const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
 	"\n" +
-	"3opentrawl/photos/fetch/v1/current_still_fetch.proto\x12\x19opentrawl.photos.fetch.v1\"\xe1\x02\n" +
+	"3opentrawl/photos/fetch/v1/current_still_fetch.proto\x12\x19opentrawl.photos.fetch.v1\"\x9d\x03\n" +
 	"\x18CurrentStillFetchRequest\x12*\n" +
 	"\x11source_library_id\x18\x01 \x01(\tR\x0fsourceLibraryId\x12\x1d\n" +
 	"\n" +
@@ -293,7 +301,8 @@ const file_opentrawl_photos_fetch_v1_current_still_fetch_proto_rawDesc = "" +
 	"\x10destination_path\x18\x04 \x01(\tR\x0fdestinationPath\x12#\n" +
 	"\rallow_network\x18\x05 \x01(\bR\fallowNetwork\x121\n" +
 	"\x14timeout_milliseconds\x18\x06 \x01(\x03R\x13timeoutMilliseconds\x12;\n" +
-	"\x19modification_microseconds\x18\a \x01(\x05R\x18modificationMicroseconds\"\xff\x04\n" +
+	"\x19modification_microseconds\x18\a \x01(\x05R\x18modificationMicroseconds\x12:\n" +
+	"\x19has_expected_modification\x18\b \x01(\bR\x17hasExpectedModification\"\xff\x04\n" +
 	"\x19CurrentStillFetchResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x1d\n" +
 	"\n" +

@@ -15,6 +15,7 @@ message CurrentStillFetchRequest {
   bool allow_network = 5;
   int64 timeout_milliseconds = 6;
   int32 modification_microseconds = 7;
+  bool has_expected_modification = 8;
 }
 
 message CurrentStillFetchResponse {

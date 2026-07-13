@@ -5,7 +5,7 @@ package photos
 /*
 #cgo darwin LDFLAGS: -framework Foundation -framework Photos -framework ImageIO
 #include <stdlib.h>
-int photoscrawl_export_current_still_matching(const char *assetUUID, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut);
+int photoscrawl_export_current_still_matching(const char *assetUUID, int hasExpectedModification, long long modificationUnixSeconds, int modificationMicroseconds, const char *destinationPath, int allowNetwork, long long timeoutMilliseconds, char **mediaTypeOut, long long *orientationOut, long long *pixelWidthOut, long long *pixelHeightOut, char **errorOut, char **errorDomainOut, long long *errorCodeOut, int *callbackCancelledOut, int *callbackDegradedOut, int *callbackInCloudOut, int *callbackReturnedOut, char **stageOut, long long *callbackMicrosOut, long long *validationMicrosOut, int *photoKitCallsOut);
 int photoscrawl_prepare_current_still_main_loop(void);
 void photoscrawl_run_current_still_main_loop(void);
 void photoscrawl_stop_current_still_main_loop(void);
@@ -41,9 +41,19 @@ func currentStillCancelBeforeRegistrationForTest() bool {
 	return C.photoscrawl_test_current_still_cancel_before_registration() != 0
 }
 
+type CurrentStillNativeRequest struct {
+	AssetUUID               string
+	HasExpectedModification bool
+	Modification            CurrentStillModification
+	AllowNetwork            bool
+}
+
 // ExportCurrentStillMatching obtains only the full-resolution .current image
 // from PhotoKit. The callback does not install a file after timeout.
-func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest, destinationPath string) (CurrentStillFact, error) {
+func ExportCurrentStillMatching(ctx context.Context, request CurrentStillNativeRequest, destinationPath string) (CurrentStillFact, error) {
+	if (request.HasExpectedModification && !request.Modification.valid()) || (!request.HasExpectedModification && request.Modification != (CurrentStillModification{})) {
+		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStageSelectionValidation, errors.New("current-still native request has an invalid expected modification state"))
+	}
 	if err := os.MkdirAll(filepath.Dir(destinationPath), 0o755); err != nil {
 		return CurrentStillFact{}, NewCurrentStillStageError(CurrentStillStagePrepareDestination, err)
 	}
@@ -74,7 +84,7 @@ func ExportCurrentStillMatching(ctx context.Context, request CurrentStillRequest
 		case <-nativeDone:
 		}
 	}()
-	ok := C.photoscrawl_export_current_still_matching(cUUID, C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage, &callbackMicros, &validationMicros, &photoKitCalls)
+	ok := C.photoscrawl_export_current_still_matching(cUUID, C.int(boolInt(request.HasExpectedModification)), C.longlong(request.Modification.UnixSeconds), C.int(request.Modification.Microseconds), cDestination, C.int(boolInt(request.AllowNetwork)), C.longlong(timeout.Milliseconds()), &mediaType, &orientation, &width, &height, &cErr, &domain, &code, &cancelled, &degraded, &inCloud, &callbackReturned, &stage, &callbackMicros, &validationMicros, &photoKitCalls)
 	close(nativeDone)
 	if mediaType != nil {
 		defer C.free(unsafe.Pointer(mediaType))
