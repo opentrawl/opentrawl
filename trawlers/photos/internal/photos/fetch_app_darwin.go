@@ -260,23 +260,27 @@ func runPhotoKitFetchCombinedCommand(ctx context.Context, name string, args ...s
 
 func photoKitFetchOpenArgs(appPath, requestPath, responsePath string) []string {
 	return []string{
-		"-W", "-n", "-g", appPath,
+		"-n", "-g", appPath,
 		"--args", "run", "--request", requestPath, "--response", responsePath,
 	}
 }
 
 func photoKitFetchCurrentStillOpenArgs(appPath, requestPath, responsePath string) []string {
 	return []string{
-		"-W", "-n", "-g", appPath,
+		"-n", "-g", appPath,
 		"--args", "run-current-still", "--request", requestPath, "--response", responsePath,
 	}
 }
 
 func photoKitFetchPermissionOpenArgs(appPath, operation, responsePath string) []string {
-	return []string{
-		"-W", "-n", "-g", appPath,
+	args := []string{
+		"-n", appPath,
 		"--args", "permission", operation, "--response", responsePath,
 	}
+	if operation != "request" {
+		args = append([]string{"-g"}, args...)
+	}
+	return args
 }
 
 // PhotoLibraryAccessStatusThroughApp reads, and only when requested asks for,
@@ -310,7 +314,7 @@ func PhotoLibraryAccessStatusThroughApp(ctx context.Context, request bool) (stri
 	if ctx.Err() != nil {
 		return "", ctx.Err()
 	}
-	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
+	responseData, err := waitForBoundedFile(launchCtx, responsePath, maxPhotoKitWireBytes)
 	if err != nil {
 		return "", fmt.Errorf("read Photos access response: %w", err)
 	}
@@ -398,7 +402,7 @@ func ExportOriginalResourceThroughApp(ctx context.Context, query OriginalExportQ
 		removeOriginalOutput(destinationPath)
 		return ctx.Err()
 	}
-	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
+	responseData, err := waitForBoundedFile(launchCtx, responsePath, maxPhotoKitWireBytes)
 	if err != nil {
 		removeOriginalOutput(destinationPath)
 		return fmt.Errorf("read PhotoKit response: %w", err)
@@ -483,7 +487,7 @@ func ExportCurrentStillThroughApp(ctx context.Context, request CurrentStillReque
 		return failedCurrentStillFact(err, timings)
 	}
 	timings.LaunchServicesStartMicros = elapsedMicros(launchStartedAt)
-	responseData, err := readBoundedFile(responsePath, maxPhotoKitWireBytes)
+	responseData, err := waitForBoundedFile(launchCtx, responsePath, maxPhotoKitWireBytes)
 	if err != nil {
 		removeOriginalOutput(destinationPath)
 		return failedCurrentStillFact(fmt.Errorf("read current-still response: %w", err), timings)
@@ -591,4 +595,26 @@ func readBoundedFile(path string, limit int64) ([]byte, error) {
 		return nil, fmt.Errorf("file exceeds %d bytes", limit)
 	}
 	return data, nil
+}
+
+func waitForBoundedFile(ctx context.Context, path string, limit int64) ([]byte, error) {
+	const retry = 25 * time.Millisecond
+	for {
+		data, err := readBoundedFile(path, limit)
+		if err == nil {
+			return data, nil
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+		timer := time.NewTimer(retry)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			return nil, ctx.Err()
+		case <-timer.C:
+		}
+	}
 }

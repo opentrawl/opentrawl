@@ -88,6 +88,22 @@ func TestPermissionRejectsUnknownNativeStatus(t *testing.T) {
 	}
 }
 
+func TestPermissionRequestWritesTypedFailureWhenNativeRequestTimesOut(t *testing.T) {
+	oldStatus, oldRequest := photoLibraryAuthorizationStatus, requestAuthorization
+	t.Cleanup(func() {
+		photoLibraryAuthorizationStatus = oldStatus
+		requestAuthorization = oldRequest
+	})
+	photoLibraryAuthorizationStatus = func(context.Context) (string, error) { return "not_determined", nil }
+	requestAuthorization = func(context.Context) (string, error) {
+		return "", errors.New("PhotoKit authorization request timed out")
+	}
+	response := permissionResponse(t, "request")
+	if response.Success || response.FailureKind != "native_status" || response.ErrorMessage != "PhotoKit could not read Photos access" {
+		t.Fatalf("response = %#v", response)
+	}
+}
+
 func permissionResponse(t *testing.T, operation string) *fetchwire.OriginalFetchResponse {
 	t.Helper()
 	responsePath := filepath.Join(t.TempDir(), "response.pb")

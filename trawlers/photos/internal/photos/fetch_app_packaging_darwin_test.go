@@ -138,9 +138,18 @@ func TestHelperPackagingHasNoDeleteRegistrationOrFallbackStep(t *testing.T) {
 		t.Fatal(err)
 	}
 	helperBuild := bytes.Index(devRun, []byte("Photoscrawl Fetch.app"))
-	outerSign := bytes.LastIndex(devRun, []byte("--timestamp=none \"$app\""))
+	outerSign := bytes.LastIndex(devRun, []byte("--entitlements \"$photos_entitlements\" \"$app\""))
 	if helperBuild < 0 || outerSign < 0 || helperBuild >= outerSign {
 		t.Fatalf("helper build index = %d, outer sign index = %d", helperBuild, outerSign)
+	}
+	if !bytes.Contains(devRun, []byte("--entitlements \"$photos_entitlements\"")) ||
+		!bytes.Contains(devRun, []byte("\"$contents/MacOS/Trawl\"")) ||
+		!bytes.Contains(devRun, []byte("--entitlements \"$photos_entitlements\" \"$app\"")) {
+		t.Fatal("OpenTrawl host signing must carry the existing Photos entitlement")
+	}
+	if !bytes.Contains(devRun, []byte("NSPhotoLibraryUsageDescription")) ||
+		!bytes.Contains(devRun, []byte("OpenTrawl reads selected Photos media to prepare a card.")) {
+		t.Fatal("OpenTrawl host must carry the Photos purpose string")
 	}
 }
 
