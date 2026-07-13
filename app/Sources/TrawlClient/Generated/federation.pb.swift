@@ -737,6 +737,8 @@ public nonisolated struct Trawl_Federation_V1_SearchSourceResult: Sendable {
 
   public var truncated: Bool = false
 
+  public var totalIsExact: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1661,7 +1663,7 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
 
 nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchSourceResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{1}surface\0\u{3}who_resolved\0\u{1}hits\0\u{3}total_matches\0\u{1}truncated\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{1}surface\0\u{3}who_resolved\0\u{1}hits\0\u{3}total_matches\0\u{1}truncated\0\u{3}total_is_exact\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1675,6 +1677,7 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.hits) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.totalMatches) }()
       case 6: try { try decoder.decodeSingularBoolField(value: &self.truncated) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.totalIsExact) }()
       default: break
       }
     }
@@ -1703,6 +1706,9 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
     if self.truncated != false {
       try visitor.visitSingularBoolField(value: self.truncated, fieldNumber: 6)
     }
+    if self.totalIsExact != false {
+      try visitor.visitSingularBoolField(value: self.totalIsExact, fieldNumber: 7)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1713,6 +1719,7 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
     if lhs.hits != rhs.hits {return false}
     if lhs.totalMatches != rhs.totalMatches {return false}
     if lhs.truncated != rhs.truncated {return false}
+    if lhs.totalIsExact != rhs.totalIsExact {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

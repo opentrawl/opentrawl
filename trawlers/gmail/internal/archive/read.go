@@ -51,15 +51,20 @@ func (s *Store) Search(ctx context.Context, opts SearchOptions) (SearchResult, e
 		return SearchResult{}, err
 	}
 	from, where, args, order := searchQueryParts(opts, query, whoFilter)
-	total, err := s.countSearch(ctx, from, where, args)
-	if err != nil {
-		return SearchResult{}, err
-	}
 	// limit 0 means everything for internal callers; a positive limit caps the
 	// rows and marks the result truncated.
 	limit := opts.Limit
 	if limit < 0 {
 		limit = 0
+	}
+	boundedTotals := opts.BoundedTotals && limit > 0
+	total := int64(0)
+	if !boundedTotals {
+		var err error
+		total, err = s.countSearch(ctx, from, where, args)
+		if err != nil {
+			return SearchResult{}, err
+		}
 	}
 	ownerEmails, err := s.OwnerEmails(ctx)
 	if err != nil {
@@ -72,8 +77,12 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 ` + order
 	queryArgs := args
 	if limit > 0 {
+		queryLimit := limit
+		if boundedTotals {
+			queryLimit++
+		}
 		querySQL += "\nlimit ?"
-		queryArgs = append(queryArgs, limit)
+		queryArgs = append(queryArgs, queryLimit)
 	}
 	rows, err := s.store.DB().QueryContext(ctx, querySQL, queryArgs...)
 	if err != nil {
@@ -102,6 +111,17 @@ select m.id, m.time, m.from_name, m.from_address, m.subject, m.body, m.is_unread
 	}
 	if err := rows.Close(); err != nil {
 		return SearchResult{}, err
+	}
+	if boundedTotals {
+		if len(result.Results) > limit {
+			result.Results = result.Results[:limit]
+			result.TotalMatches = int64(limit + 1)
+			result.TotalIsLowerBound = true
+			result.Truncated = true
+		} else {
+			result.TotalMatches = int64(len(result.Results))
+			result.Truncated = false
+		}
 	}
 	if result.Results == nil {
 		result.Results = []SearchHit{}

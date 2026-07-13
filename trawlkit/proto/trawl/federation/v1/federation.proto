@@ -186,6 +186,7 @@ message SearchSourceResult {
   repeated SearchHit hits = 4;
   uint64 total_matches = 5;
   bool truncated = 6;
+  bool total_is_exact = 7;
 }
 
 message StatusResponse {

@@ -30,7 +30,7 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projected.SourceId != "calendar" || projected.Surface != "Calendar" || projected.TotalMatches != 3 || !projected.Truncated {
+	if projected.SourceId != "calendar" || projected.Surface != "Calendar" || projected.TotalMatches != 3 || !projected.TotalIsExact || !projected.Truncated {
 		t.Fatalf("projected summary = %#v", projected)
 	}
 	if projected.WhoResolved == nil || len(projected.WhoResolved.Identifiers) != 2 {
@@ -67,7 +67,8 @@ func TestProjectSearchPinsCompleteProtobufText(t *testing.T) {
 		"  time_rfc3339:  \"2026-07-12T09:00:00Z\"\n" +
 		"  snippet:  \"Synthetic note\"\n" +
 		"}\n" +
-		"total_matches:  1\n"
+		"total_matches:  1\n" +
+		"total_is_exact:  true\n"
 	if got := prototext.Format(projected); got != want {
 		t.Fatalf("search protobuf text changed\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
@@ -84,7 +85,7 @@ func TestSearchOrdersAndBoundsDeterministically(t *testing.T) {
 		"two": {Results: []trawlkit.Hit{
 			{Ref: "two:middle", Time: mustTime("2026-07-12T09:00:00Z"), Snippet: "two rank zero"},
 			{Ref: "two:untimed", Snippet: "two rank one"},
-		}, TotalMatches: 5, Truncated: true},
+		}, TotalMatches: 5, TotalIsLowerBound: true, Truncated: true},
 	}
 	limits := make(chan int, 2)
 	sources := []SearchSource{
@@ -108,6 +109,9 @@ func TestSearchOrdersAndBoundsDeterministically(t *testing.T) {
 	}
 	if !recency.Truncated || recency.Outcome != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE {
 		t.Fatalf("recency outcome = %s, truncated=%t", recency.Outcome, recency.Truncated)
+	}
+	if !recency.Sources[0].GetTotalIsExact() || recency.Sources[1].GetTotalIsExact() {
+		t.Fatalf("source exactness = %#v", recency.Sources)
 	}
 
 	relevance := Search(context.Background(), sources, trawlkit.Query{Text: "launch"}, federationv1.SearchOrder_SEARCH_ORDER_RELEVANCE, 4)

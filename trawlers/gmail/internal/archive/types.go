@@ -50,20 +50,22 @@ type Status struct {
 }
 
 type SearchOptions struct {
-	Query  string
-	Limit  int
-	After  *time.Time
-	Before *time.Time
-	Who    string
+	Query         string
+	Limit         int
+	BoundedTotals bool
+	After         *time.Time
+	Before        *time.Time
+	Who           string
 }
 
 type SearchResult struct {
-	Query        string       `json:"query"`
-	WhoResolved  *WhoResolved `json:"who_resolved,omitempty"`
-	WhoQuery     string       `json:"-"`
-	Results      []SearchHit  `json:"results"`
-	TotalMatches int64        `json:"total_matches"`
-	Truncated    bool         `json:"truncated"`
+	Query             string       `json:"query"`
+	WhoResolved       *WhoResolved `json:"who_resolved,omitempty"`
+	WhoQuery          string       `json:"-"`
+	Results           []SearchHit  `json:"results"`
+	TotalMatches      int64        `json:"total_matches"`
+	TotalIsLowerBound bool         `json:"total_is_lower_bound,omitempty"`
+	Truncated         bool         `json:"truncated"`
 }
 
 type SearchHit struct {

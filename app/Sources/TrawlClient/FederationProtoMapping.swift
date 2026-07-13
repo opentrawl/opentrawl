@@ -251,7 +251,8 @@ extension Trawl_Federation_V1_SearchSourceResult {
   fileprivate func model() throws -> SearchSourceResult {
     SearchSourceResult(
       sourceID: sourceID, surface: surface, whoResolved: hasWhoResolved ? whoResolved.model() : nil,
-      hits: try hits.map { try $0.model() }, totalMatches: totalMatches, truncated: truncated)
+      hits: try hits.map { try $0.model() }, totalMatches: totalMatches, totalIsExact: totalIsExact,
+      truncated: truncated)
   }
 }
 extension Trawl_Federation_V1_SearchResponse {

@@ -68,6 +68,51 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 	}
 }
 
+func TestSearchBoundedTotalsUseOneProbeRow(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", Subject: "Needle", Body: "First synthetic result."},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "Bob", FromAddress: "bob@example.com", Subject: "Needle", Body: "Second synthetic result."},
+		{ID: "m3", ThreadID: "t3", Time: now.Add(2 * time.Minute), FromName: "Casey", FromAddress: "casey@example.com", Subject: "Needle", Body: "Third synthetic result."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	underLimit, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 3, BoundedTotals: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if underLimit.TotalMatches != 3 || underLimit.TotalIsLowerBound || underLimit.Truncated || len(underLimit.Results) != 3 {
+		t.Fatalf("under-limit bounded search = %#v", underLimit)
+	}
+
+	overLimit, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 2, BoundedTotals: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if overLimit.TotalMatches != 3 || !overLimit.TotalIsLowerBound || !overLimit.Truncated || len(overLimit.Results) != 2 {
+		t.Fatalf("over-limit bounded search = %#v", overLimit)
+	}
+	if overLimit.Results[0].Ref != RefPrefix+"m3" || overLimit.Results[1].Ref != RefPrefix+"m2" {
+		t.Fatalf("bounded search returned probe row or changed order: %#v", overLimit.Results)
+	}
+
+	exact, err := st.Search(ctx, SearchOptions{Query: "needle", Limit: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if exact.TotalMatches != 3 || exact.TotalIsLowerBound || !exact.Truncated || len(exact.Results) != 2 {
+		t.Fatalf("default exact search = %#v", exact)
+	}
+}
+
 func TestInsertMessagesIgnoresExistingIDs(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))

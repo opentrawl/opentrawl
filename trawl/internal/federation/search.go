@@ -123,6 +123,7 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 		Surface:      manifest.DisplayName,
 		TotalMatches: uint64(result.TotalMatches),
 		Truncated:    result.Truncated,
+		TotalIsExact: !result.TotalIsLowerBound,
 	}
 	if result.WhoResolved != nil {
 		out.WhoResolved = &federationv1.WhoResolved{
