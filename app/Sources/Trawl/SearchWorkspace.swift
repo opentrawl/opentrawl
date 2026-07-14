@@ -58,6 +58,15 @@ enum SearchWorkspaceGeometry {
   }
 }
 
+enum SearchWorkspaceFieldContent: Equatable {
+  case none
+  case scopedPrompt
+
+  static func resolve(isScoped: Bool) -> Self {
+    isScoped ? .scopedPrompt : .none
+  }
+}
+
 struct SearchWorkspace: View {
   let client: any TrawlClient
   @Bindable var interaction: SearchInteraction
@@ -82,7 +91,12 @@ struct SearchWorkspace: View {
         .padding(14)
       switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
       case .field:
-        EmptyView()
+        if SearchWorkspaceFieldContent.resolve(isScoped: scope != nil) == .scopedPrompt,
+          let scope
+        {
+          Divider()
+          ScopedSearchPrompt(scope: scope)
+        }
       case .outcome:
         Divider()
         SearchOutcome(
@@ -270,11 +284,8 @@ private struct SearchField: View {
             .lineLimit(1)
             .fixedSize()
           Button(action: onClearScope) {
-            Image(systemName: "square.grid.2x2.fill")
+            Text("All sources")
               .font(.caption.weight(.semibold))
-              .foregroundStyle(.secondary)
-              .frame(width: 20, height: 20)
-              .contentShape(.circle)
           }
           .buttonStyle(.plain)
           .help("Search all sources")
@@ -314,6 +325,20 @@ private struct SearchField: View {
     Task { @MainActor in
       focus = .field
     }
+  }
+}
+
+private struct ScopedSearchPrompt: View {
+  let scope: RestingSource
+
+  var body: some View {
+    ContentUnavailableView {
+      Label("Search \(scope.surface)", systemImage: "magnifyingglass")
+    } description: {
+      Text("Enter a word or phrase to search this source.")
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .padding()
   }
 }
 

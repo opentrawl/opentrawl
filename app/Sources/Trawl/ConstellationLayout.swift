@@ -95,10 +95,6 @@ private struct Triangle {
   var edges: [GraphEdge] {
     [GraphEdge(a, b), GraphEdge(b, c), GraphEdge(c, a)]
   }
-
-  func contains(vertex: Int) -> Bool {
-    a == vertex || b == vertex || c == vertex
-  }
 }
 
 struct ConstellationLayout {
@@ -109,7 +105,7 @@ struct ConstellationLayout {
   private let centreBase: CGPoint
   private let graphEdges: [GraphEdge]
 
-  init(size: CGSize, sources: [RestingSource], meshSeed: UInt64) {
+  init(size: CGSize, sources: [RestingSource], meshSeed _: UInt64) {
     self.sources = sources
     let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
       sources.count,
@@ -124,16 +120,8 @@ struct ConstellationLayout {
       centre: centreBase,
       metrics: layoutMetrics
     )
-    contextBases = Self.makeContextBases(
-      count: max(8, min(12, sources.count + 1)),
-      size: size,
-      centre: centreBase,
-      seed: meshSeed
-    )
-    graphEdges = Self.makeGraphEdges(
-      points: sourceBases + [centreBase] + contextBases,
-      sourceCount: sources.count
-    )
+    contextBases = Self.makeContextBases(sources: sourceBases, centre: centreBase)
+    graphEdges = Self.makeGraphEdges(sourceCount: sources.count)
 
   }
 
@@ -212,46 +200,33 @@ struct ConstellationLayout {
     }
   }
 
-  private static func makeContextBases(
-    count: Int,
-    size: CGSize,
-    centre: CGPoint,
-    seed: UInt64
-  ) -> [CGPoint] {
-    var random = SplitMix64(seed: seed)
-    let rotation = Double(random.unit()) * 2 * .pi
-    let goldenAngle = .pi * (3 - sqrt(5.0))
-    return (0..<count).map { index in
-      let fraction = (Double(index) + 0.75) / Double(count)
-      let radius = CGFloat(0.1 + sqrt(fraction) * 0.18)
-      let radialJitter = (random.unit() - 0.5) * 0.016
-      let angularJitter = Double(random.unit() - 0.5) * 0.28
-      let angle = rotation + Double(index) * goldenAngle + angularJitter
+  private static func makeContextBases(sources: [CGPoint], centre: CGPoint) -> [CGPoint] {
+    sources.enumerated().map { index, source in
+      let radialFraction = 0.43 + CGFloat(index % 3) * 0.035
+      let tangentFraction = index.isMultiple(of: 2) ? 0.035 : -0.035
+      let radial = CGVector(dx: source.x - centre.x, dy: source.y - centre.y)
+      let tangent = CGVector(dx: -radial.dy * tangentFraction, dy: radial.dx * tangentFraction)
       return CGPoint(
-        x: centre.x + CGFloat(cos(angle)) * (radius + radialJitter) * size.width,
-        y: centre.y
-          + CGFloat(sin(angle)) * (radius + radialJitter) * size.height * 0.94
+        x: centre.x + radial.dx * radialFraction + tangent.dx,
+        y: centre.y + radial.dy * radialFraction + tangent.dy
       )
     }
   }
 
-  private static func makeGraphEdges(points: [CGPoint], sourceCount: Int) -> [GraphEdge] {
+  private static func makeGraphEdges(sourceCount: Int) -> [GraphEdge] {
+    guard sourceCount > 0 else { return [] }
     let centreIndex = sourceCount
-    let contextIndices = Array(points.indices.dropFirst(sourceCount + 1))
-    let interiorIndices = [centreIndex] + contextIndices
-    var edges = Set(
-      triangulatedEdges(points: interiorIndices.map { points[$0] }).map { edge in
-        GraphEdge(interiorIndices[edge.start], interiorIndices[edge.end])
-      }
-    )
-
+    let contextStart = sourceCount + 1
+    var edges = Set<GraphEdge>()
     for sourceIndex in 0..<sourceCount {
-      let nearestContext = contextIndices.sorted {
-        distance(points[sourceIndex], points[$0]) < distance(points[sourceIndex], points[$1])
+      let contextIndex = contextStart + sourceIndex
+      edges.insert(GraphEdge(sourceIndex, contextIndex))
+      if sourceCount > 1 {
+        edges.insert(GraphEdge(contextIndex, contextStart + (sourceIndex + 1) % sourceCount))
       }
-      for contextIndex in nearestContext.prefix(1) {
-        edges.insert(GraphEdge(sourceIndex, contextIndex))
-      }
+    }
+    for index in Set([0, sourceCount / 3, sourceCount * 2 / 3]) {
+      edges.insert(GraphEdge(centreIndex, contextStart + index))
     }
     return edges.sorted()
   }

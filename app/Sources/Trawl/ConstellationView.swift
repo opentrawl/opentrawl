@@ -72,6 +72,7 @@ struct ConstellationView: View {
       }
       .frame(width: size.width, height: size.height)
       .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
+      .animation(.easeOut(duration: 0.16), value: geometry.size)
     }
   }
 

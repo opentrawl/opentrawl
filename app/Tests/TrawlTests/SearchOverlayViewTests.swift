@@ -33,7 +33,7 @@ struct SearchOverlayViewTests {
     let wideAvailable = constellationSize(in: windowSizes[3])
     let sourceIDs = [
       "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
-      "whatsapp", "synthetic",
+      "whatsapp",
     ]
     let centre = ConstellationPoint(
       x: minimumCanvas.width / 2,
@@ -65,11 +65,11 @@ struct SearchOverlayViewTests {
       sourceIDs.count,
       fitting: ConstellationPoint(x: restoredCanvas.width, y: restoredCanvas.height)
     )
-    #expect(minimumMetrics.labelWidth == 120)
-    #expect(minimumMetrics.labelHeight == 78)
-    #expect(restoredMetrics == minimumMetrics)
-    #expect(defaultMetrics.labelWidth == 156)
-    #expect(defaultMetrics.labelHeight == 92)
+    #expect(minimumMetrics.labelWidth < restoredMetrics.labelWidth)
+    #expect(restoredMetrics.labelWidth < defaultMetrics.labelWidth)
+    #expect(minimumMetrics.labelHeight < restoredMetrics.labelHeight)
+    #expect(restoredMetrics.labelHeight < defaultMetrics.labelHeight)
+    #expect(minimumMetrics.minimumIconDiameter < defaultMetrics.minimumIconDiameter)
     #expect(wideCanvas.width > wideAvailable.width * 0.9)
     #expect(wideCanvas.width <= TrawlDesign.constellationMaximumWidth)
     #expect(wideCanvas.height <= TrawlDesign.constellationMaximumHeight)
@@ -114,6 +114,40 @@ struct SearchOverlayViewTests {
     }
     #expect(ConstellationLabelLayout.titleLineLimit(for: 78) == 2)
     #expect(ConstellationLabelLayout.titleLineLimit(for: 68) == 2)
+  }
+
+  @Test func constellationResizeKeepsSourceIdentityInTheSameOrbitOrder() {
+    let sourceIDs = [
+      "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
+      "whatsapp",
+    ]
+    let sizes = [
+      ConstellationPoint(x: 704, y: 504),
+      ConstellationPoint(x: 824, y: 584),
+      ConstellationPoint(x: 984, y: 664),
+      ConstellationPoint(x: 2_200, y: 900),
+    ]
+    let expectedOrbitOrder = sourceIDs.sorted()
+
+    for size in sizes {
+      let centre = ConstellationPoint(
+        x: size.x / 2,
+        y: size.y / 2 - min(27, size.y * 0.035)
+      )
+      let placements = ConstellationOrbitLayout(
+        sourceIDs: sourceIDs,
+        size: size,
+        centre: centre,
+        metrics: .forSourceCount(sourceIDs.count, fitting: size)
+      ).placements()
+      let orbitOrder = placements.sorted {
+        atan2($0.anchor.y - centre.y, $0.anchor.x - centre.x)
+          < atan2($1.anchor.y - centre.y, $1.anchor.x - centre.x)
+      }.map(\.id)
+
+      #expect(placements.count == sourceIDs.count)
+      #expect(orbitOrder == expectedOrbitOrder)
+    }
   }
 
   @MainActor

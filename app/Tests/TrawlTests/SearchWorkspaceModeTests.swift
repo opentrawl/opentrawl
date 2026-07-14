@@ -12,6 +12,11 @@ import Testing
     SearchWorkspaceMode.resolve(phase: .failed("Synthetic failure."), resultCount: 0) == .outcome)
 }
 
+@Test func emptyScopedSearchExplainsWhatToDo() {
+  #expect(SearchWorkspaceFieldContent.resolve(isScoped: true) == .scopedPrompt)
+  #expect(SearchWorkspaceFieldContent.resolve(isScoped: false) == .none)
+}
+
 @Test func searchWorkspaceKeepsUsefulPartialResultsInTheResultsLayout() {
   #expect(SearchWorkspaceMode.resolve(phase: .complete, resultCount: 1) == .results)
   #expect(SearchWorkspaceMode.resolve(phase: .partial, resultCount: 1) == .results)
@@ -150,7 +155,7 @@ import Testing
       skippedSources: [],
       isScoped: true,
       timeoutSeconds: 10
-    ) == "No matches in this source."
+    ).isEmpty
   )
   #expect(SearchWorkspaceCopy.outcomeTitle(for: .failed(failure)) == "Search unavailable")
   #expect(

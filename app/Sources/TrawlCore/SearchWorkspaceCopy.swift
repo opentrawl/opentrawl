@@ -63,7 +63,7 @@ public enum SearchWorkspaceCopy {
   ) -> String {
     switch phase {
     case .complete:
-      isScoped ? "No matches in this source." : "No matches in available sources."
+      isScoped ? "" : "No matches in available sources."
     case .partial:
       partialNoMatches(failureGuidance: failureGuidance, isScoped: isScoped)
     case .skipped:

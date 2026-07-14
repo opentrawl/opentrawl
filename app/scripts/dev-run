@@ -11,8 +11,6 @@ keychain="opentrawl-dev.keychain"
 pass_file="${XDG_CONFIG_HOME:-$HOME/.config}/opentrawl/dev-keychain-pass"
 photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
 launch=1
-fixture_helper=""
-synthetic_helper=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -20,28 +18,15 @@ while [[ $# -gt 0 ]]; do
       launch=0
       shift
       ;;
-    --fixture-helper)
-      [[ $# -ge 2 ]] || { echo "--fixture-helper needs a path" >&2; exit 2; }
-      fixture_helper="$2"
-      shift 2
-      ;;
-    --synthetic)
-      synthetic_helper=1
-      shift
-      ;;
     *)
-      echo "usage: app/scripts/dev-run [--build-only] [--fixture-helper PATH] [--synthetic]" >&2
+      echo "usage: app/scripts/dev-run [--build-only]" >&2
       exit 2
       ;;
   esac
 done
 
-if [[ -n "$fixture_helper" ]]; then
-  [[ -x "$fixture_helper" ]] || { echo "fixture helper is not executable" >&2; exit 2; }
-elif [[ "$synthetic_helper" -eq 0 ]]; then
-  echo "Building the embedded helper"
-  (cd "$repo_root" && devenv shell -- true)
-fi
+echo "Building the embedded helper"
+(cd "$repo_root" && devenv shell -- true)
 
 echo "Building the Mac app"
 host_swift() {
@@ -49,18 +34,11 @@ host_swift() {
 }
 host_swift build --package-path "$app_dir" --configuration debug
 swift_bin="$(host_swift build --package-path "$app_dir" --configuration debug --show-bin-path)"
-if [[ "$synthetic_helper" -eq 1 ]]; then
-  fixture_helper="$swift_bin/TrawlSynthetic"
-fi
 
 rm -rf "$app"
 mkdir -p "$contents/MacOS" "$contents/Helpers" "$contents/Resources"
 cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
-if [[ -n "$fixture_helper" ]]; then
-  cp "$fixture_helper" "$contents/Helpers/trawl"
-else
-  cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
-fi
+cp "$repo_root/.dev/bin/trawl" "$contents/Helpers/trawl"
 chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl"
 
 echo "Building the signed Photos helper"
