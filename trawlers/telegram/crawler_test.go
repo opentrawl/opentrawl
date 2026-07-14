@@ -200,6 +200,45 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	}
 }
 
+func TestSearchMediaOnlyMessageHasEvidence(t *testing.T) {
+	ctx := context.Background()
+	archivePath := t.TempDir() + "/telecrawl.db"
+	st, err := store.Open(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 7, 2, 14, 0, 0, 0, time.UTC)
+	if _, err := st.ReplaceAll(ctx,
+		store.ImportStats{SourcePath: "/synthetic/source", DBPath: st.Path(), Chats: 1, Messages: 1, StartedAt: now, FinishedAt: now},
+		nil,
+		[]store.Chat{{JID: "chat-1", Kind: "group", Name: "Example chat", LastMessageAt: now, MessageCount: 1}},
+		nil, nil, nil, nil,
+		[]store.Message{{SourcePK: 1, ChatJID: "chat-1", ChatName: "Example chat", MessageID: "1", SenderJID: "sender-1", SenderName: "Alex Example", Timestamp: now, MediaType: "document"}},
+	); err != nil {
+		_ = st.Close()
+		t.Fatal(err)
+	}
+	if err := st.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	rawStore, err := ckstore.OpenReadOnly(ctx, archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rawStore.Close() }()
+	result, err := New().Search(ctx, &trawlkit.Request{Store: rawStore, Paths: trawlkit.Paths{Archive: archivePath}}, trawlkit.Query{Text: "document", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 1 || len(result.Results[0].Evidence) != 1 || result.Results[0].Evidence[0].Text == nil || len(result.Results[0].Evidence[0].Text.Runs) != 1 || result.Results[0].Evidence[0].Text.Runs[0].Text == "" {
+		t.Fatalf("media-only search result has invalid evidence: %#v", result)
+	}
+	if got := result.Results[0].Evidence[0].Text.Runs[0].Text; !strings.Contains(got, "document") {
+		t.Fatalf("media-only evidence = %q, want indexed media type", got)
+	}
+}
+
 func TestOpenGroupTranscriptShowsParticipantsAndContext(t *testing.T) {
 	ctx := context.Background()
 	archivePath := t.TempDir() + "/telecrawl.db"
