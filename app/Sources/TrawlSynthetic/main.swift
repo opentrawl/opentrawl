@@ -219,8 +219,21 @@ private func syntheticSync() throws {
   }
   try write(response)
 }
+
+private func searchArguments(
+  _ arguments: [String]
+) -> (query: String, source: Trawl_Federation_V1_SourceStatus?) {
+  guard let query = arguments.last else { exit(2) }
+  guard arguments.count != 1 else { return (query, nil) }
+  guard arguments.count == 3, arguments[0] == "--source",
+    let source = productSources().first(where: { $0.manifest.sourceID == arguments[1] })
+  else { exit(2) }
+  return (query, source)
+}
+
 private func search(_ arguments: [String]) throws {
-  let query = arguments.last ?? ""
+  let request = searchArguments(arguments)
+  let query = request.query
   if query == "frame-missing" { return }
   if query == "frame-truncated" {
     FileHandle.standardOutput.write(Data([1, 0, 0]))
@@ -270,13 +283,18 @@ private func search(_ arguments: [String]) throws {
       }
     ]
   } else {
-    let value = hit("gmail", "gmail:message/example-1", "Avery Example")
+    let source = request.source ?? productSources().first { $0.manifest.sourceID == "gmail" }!
+    let value = hit(
+      source.manifest.sourceID,
+      "\(source.manifest.sourceID):message/example-1",
+      "Avery Example"
+    )
     response.outcome = query == "partial" ? .partial : .complete
     response.hits = query == "none" ? [] : [value]
     response.sources = [
       Trawl_Federation_V1_SearchSourceResult.with {
-        $0.sourceID = "gmail"
-        $0.displayName = "Gmail"
+        $0.sourceID = source.manifest.sourceID
+        $0.displayName = source.manifest.displayName
         $0.whoResolved = .with {
           $0.who = "Avery Example"
           $0.identifiers = ["avery@example.com"]
