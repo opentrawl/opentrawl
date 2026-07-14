@@ -99,6 +99,7 @@ public final class SearchModel {
   public private(set) var isTruncated = false
   public private(set) var openPhase: SearchOpenPhase = .idle
   public private(set) var openResult: OpenResponse?
+  public private(set) var committedInput: SearchStateInput?
 
   public init(
     client: any TrawlClient,
@@ -114,22 +115,13 @@ public final class SearchModel {
 
   public func reset() {
     invalidateForInputChange()
+    clearCommittedSearch()
     phase = .idle
   }
 
-  /// Clears state owned by a query or scope before SwiftUI schedules the next search task.
+  /// Cancels work for an edited query without disturbing the page the person is reading.
   public func invalidateForInputChange() {
     generation &+= 1
-    openGeneration &+= 1
-    results = []
-    failures = []
-    skippedSources = []
-    sourceResults = []
-    resultLimit = 0
-    isTruncated = false
-    phase = .idle
-    openPhase = .idle
-    openResult = nil
   }
 
   public func search(_ rawQuery: String, source: String?) async {
@@ -138,27 +130,11 @@ public final class SearchModel {
     let token = generation
     let query = rawQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !query.isEmpty else {
-      results = []
-      failures = []
-      skippedSources = []
-      sourceResults = []
-      resultLimit = 0
-      isTruncated = false
-      phase = .idle
-      openPhase = .idle
-      openResult = nil
+      clearCommittedSearch()
       return
     }
 
-    results = []
-    failures = []
-    skippedSources = []
-    sourceResults = []
-    resultLimit = 0
-    isTruncated = false
     phase = .loading
-    openPhase = .idle
-    openResult = nil
     let input = SearchStateInput(
       query: query,
       sourceID: source,
@@ -183,6 +159,7 @@ public final class SearchModel {
       order = response.order
       resultLimit = response.resultLimit
       isTruncated = response.truncated
+      committedInput = input
       switch response.outcome {
       case .complete:
         phase = .complete
@@ -201,20 +178,16 @@ public final class SearchModel {
     } catch is SearchWaitExpired {
       guard token == generation else { return }
       observe(.timedOut(input))
-      results = []
       phase = .timedOut
     } catch TrawlClientError.timedOut {
       guard token == generation else { return }
       observe(.timedOut(input))
-      results = []
-      failures = []
       phase = .timedOut
     } catch TrawlClientError.cancelled {
       return
     } catch {
       guard token == generation else { return }
       observe(.searchFailed(input, error.localizedDescription))
-      results = []
       phase = .failed(error.localizedDescription)
     }
   }
@@ -286,6 +259,27 @@ public final class SearchModel {
     hit.summary.title
   }
 
+  public func clearOpenResult() {
+    openGeneration &+= 1
+    openPhase = .idle
+    openResult = nil
+  }
+
+  private func clearCommittedSearch() {
+    results = []
+    failures = []
+    skippedSources = []
+    sourceResults = []
+    sourceSurfaces = [:]
+    resultLimit = 0
+    isTruncated = false
+    committedInput = nil
+    phase = .idle
+    openGeneration &+= 1
+    openPhase = .idle
+    openResult = nil
+  }
+
   private func searchWithinLimit(_ query: String, source: String?) async throws -> SearchResponse {
     let client = client
     let waitLimit = waitLimit
@@ -343,8 +337,13 @@ public final class SearchInteraction {
     await model.open(hit)
   }
 
+  public func reconcileCommittedResults() {
+    guard let selectedResultID, !model.results.contains(where: { $0.id == selectedResultID }) else { return }
+    self.selectedResultID = nil
+    model.clearOpenResult()
+  }
+
   private func invalidateInput() {
-    selectedResultID = nil
     model.invalidateForInputChange()
   }
 }

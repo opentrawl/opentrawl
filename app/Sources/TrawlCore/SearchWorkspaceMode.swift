@@ -7,9 +7,9 @@ public enum SearchWorkspaceMode: Sendable, Equatable {
     switch phase {
     case .idle:
       .field
-    case .complete, .partial:
+    case .loading, .complete, .partial, .failed, .timedOut:
       resultCount > 0 ? .results : .outcome
-    case .loading, .skipped, .failed, .timedOut:
+    case .skipped:
       .outcome
     }
   }

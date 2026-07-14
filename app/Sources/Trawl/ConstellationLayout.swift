@@ -108,8 +108,6 @@ struct ConstellationLayout {
   private let contextBases: [CGPoint]
   private let centreBase: CGPoint
   private let graphEdges: [GraphEdge]
-  private let minimumBytes: Double
-  private let maximumBytes: Double
 
   init(size: CGSize, sources: [RestingSource], meshSeed: UInt64) {
     self.sources = sources
@@ -134,9 +132,6 @@ struct ConstellationLayout {
       sourceCount: sources.count
     )
 
-    let positive = sources.map(\.databaseBytes).filter { $0 > 0 }.map(Double.init)
-    minimumBytes = positive.min() ?? 0
-    maximumBytes = positive.max() ?? 0
   }
 
   func snapshot() -> ConstellationSnapshot {
@@ -192,17 +187,8 @@ struct ConstellationLayout {
     )
   }
 
-  private func diameter(for source: RestingSource) -> CGFloat {
-    guard source.databaseBytes > 0, maximumBytes > minimumBytes else {
-      return CGFloat(metrics.minimumIconDiameter)
-    }
-    let value = log1p(Double(source.databaseBytes))
-    let lower = log1p(minimumBytes)
-    let upper = log1p(maximumBytes)
-    let normalised = (value - lower) / (upper - lower)
-    return CGFloat(metrics.minimumIconDiameter)
-      + CGFloat(normalised)
-        * CGFloat(metrics.maximumIconDiameter - metrics.minimumIconDiameter)
+  private func diameter(for _: RestingSource) -> CGFloat {
+    CGFloat(metrics.minimumIconDiameter)
   }
 
   private static func makeSourceBases(

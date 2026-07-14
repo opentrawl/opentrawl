@@ -1,5 +1,7 @@
 import Testing
 
+@testable import Trawl
+
 @testable import TrawlClient
 @testable import TrawlCore
 
@@ -14,6 +16,28 @@ import Testing
   #expect(SearchWorkspaceMode.resolve(phase: .complete, resultCount: 1) == .results)
   #expect(SearchWorkspaceMode.resolve(phase: .partial, resultCount: 1) == .results)
   #expect(SearchWorkspaceMode.resolve(phase: .partial, resultCount: 0) == .outcome)
+}
+
+@Test func searchWorkspaceKeepsTheResultsLayoutWhileAReplacementSearchRuns() {
+  #expect(SearchWorkspaceMode.resolve(phase: .loading, resultCount: 1) == .results)
+  #expect(SearchWorkspaceMode.resolve(phase: .failed("Synthetic failure."), resultCount: 1) == .results)
+}
+
+@Test func retainedResultsStayVisibleForTimeoutAndFailure() {
+  #expect(SearchWorkspaceMode.resolve(phase: .timedOut, resultCount: 1) == .results)
+  #expect(SearchWorkspaceMode.resolve(phase: .failed("Synthetic failure."), resultCount: 1) == .results)
+}
+
+@Test func retainedResultCopyNamesTheCommittedQueryAndFailure() {
+  #expect(SearchResultsContextCopy.retained(.loading, query: "old", failure: nil) == "Showing results for old while searching")
+  #expect(SearchResultsContextCopy.retained(.timedOut, query: "old", failure: nil) == "Showing results for old. The replacement search timed out.")
+  #expect(SearchResultsContextCopy.retained(.failed("bad"), query: "old", failure: "Bad source.") == "Showing results for old. bad")
+}
+
+@Test func widePaneAppearsOnlyForAnOpenAttempt() {
+  #expect(!SearchWorkspacePaneVisibility.showsRecord(for: .idle))
+  #expect(SearchWorkspacePaneVisibility.showsRecord(for: .loading))
+  #expect(SearchWorkspacePaneVisibility.showsRecord(for: .failed("Synthetic failure.")))
 }
 
 @Test func searchWorkspaceCopyUsesCorrectSingularAndPluralCounts() {

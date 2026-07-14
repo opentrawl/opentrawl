@@ -12,6 +12,7 @@ struct SearchOverlay: View {
   @State private var interaction: SearchInteraction
   @State private var sourceResolver: SearchSourceResolver
   @State private var fieldState = SearchFieldState()
+  @State private var showsRecord = false
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -52,30 +53,29 @@ struct SearchOverlay: View {
 
   var body: some View {
     GeometryReader { proxy in
-      let size = CGSize(
-        width: min(proxy.size.width, 860),
-        height: panelHeight(in: proxy.size)
-      )
       SearchWorkspace(
         interaction: interaction,
         scope: scope,
         sourceResolver: sourceResolver,
-        isCompact: size.width < 720,
+        isCompact: proxy.size.width < 760,
         model: model,
         fieldIdentity: fieldState.identity,
         focus: $focus,
         onClearScope: clearScope,
         onSubmit: openSelectedResult,
         onMoveToResults: focusResults,
-        onOpen: open
+        onOpen: open,
+        showsRecord: $showsRecord
       )
-      .frame(width: size.width, height: size.height)
-      .glassEffect(.regular, in: .rect(cornerRadius: TrawlDesign.panelCornerRadius))
-      .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .onChange(of: model.phase) { oldPhase, newPhase in
       if oldPhase == .idle, newPhase == .loading {
         fieldState.requestFocus()
+      }
+      if newPhase != .loading {
+        interaction.reconcileCommittedResults()
+        if interaction.selectedResultID == nil { showsRecord = false }
       }
       reportActivity()
     }
@@ -88,7 +88,7 @@ struct SearchOverlay: View {
       sourceResolver.replace(with: statuses)
     }
     .onKeyPress(.escape) {
-      onDismiss()
+      if showsRecord { showsRecord = false } else { focus = .field }
       return .handled
     }
     .onAppear {
@@ -118,21 +118,14 @@ struct SearchOverlay: View {
   }
 
   private func openSelectedResult() {
+    showsRecord = true
     Task { await interaction.handleReturn() }
   }
 
   private func open(_ hit: SearchHit) {
     interaction.selectedResultID = hit.id
+    showsRecord = true
     Task { await interaction.handleReturn() }
-  }
-
-  private func panelHeight(in available: CGSize) -> CGFloat {
-    switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
-    case .field:
-      72
-    case .outcome, .results:
-      min(available.height, 560)
-    }
   }
 
   private func reportActivity() {

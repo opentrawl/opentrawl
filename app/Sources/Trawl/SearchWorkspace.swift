@@ -7,6 +7,10 @@ enum SearchFocus: Hashable {
   case results
 }
 
+enum SearchWorkspacePaneVisibility {
+  static func showsRecord(for phase: SearchOpenPhase) -> Bool { phase != .idle }
+}
+
 struct SearchWorkspace: View {
   @Bindable var interaction: SearchInteraction
   let scope: RestingSource?
@@ -19,6 +23,7 @@ struct SearchWorkspace: View {
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
   let onOpen: (SearchHit) -> Void
+  @Binding var showsRecord: Bool
 
   var body: some View {
     VStack(spacing: 0) {
@@ -57,18 +62,22 @@ struct SearchWorkspace: View {
   @ViewBuilder
   private var workspaceLayout: some View {
     if isCompact {
-      VStack(spacing: 0) {
-        results
-          .frame(height: 188)
-        Divider()
-        ResultPreview(phase: model.openPhase, response: model.openResult)
-      }
+      if showsRecord {
+        VStack(spacing: 0) {
+          HStack { Button("Back") { showsRecord = false }; Spacer() }.padding()
+          Divider()
+          ResultPreview(phase: model.openPhase, response: model.openResult)
+        }
+      } else { results }
     } else {
-      HStack(spacing: 0) {
+      if SearchWorkspacePaneVisibility.showsRecord(for: model.openPhase) {
+        HStack(spacing: 0) {
+          results.frame(minWidth: 360)
+          Divider()
+          ResultPreview(phase: model.openPhase, response: model.openResult)
+        }
+      } else {
         results
-          .frame(minWidth: 360)
-        Divider()
-        ResultPreview(phase: model.openPhase, response: model.openResult)
       }
     }
   }
@@ -80,12 +89,14 @@ struct SearchWorkspace: View {
       sourceDisplayName: sourceDisplayName(for:),
       failureGuidance: model.failureGuidance,
       hasTimeoutFailure: model.hasTimeoutFailure,
+      committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,
       title: model.displayTitle(for:),
       selectedResultID: $interaction.selectedResultID,
       focus: $focus,
       onReturn: onSubmit,
-      onOpen: onOpen
+      onOpen: onOpen,
+      onSelectionChanged: { hit in if !isCompact { onOpen(hit) } }
     )
   }
 
