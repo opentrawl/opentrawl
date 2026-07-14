@@ -214,18 +214,19 @@ func geoapifyNearbyQuery(input Input, radius float64, configuredCategories []str
 func captureGeoapify(ctx context.Context, opts EvidenceOptions, operation, endpoint string, query url.Values, requestedLimit int) evidenceCapture {
 	provider := strings.TrimSpace(opts.Geoapify.ProviderIdentity)
 	credentialReference := strings.TrimSpace(opts.Geoapify.CredentialReference)
+	selectionPolicy := SelectionPolicy{RequestedLimit: requestedLimit}
 	parser := parseGeoapifyEvidenceAtLimit(requestedLimit)
 	request, preAuth, err := geoapifyRequest(ctx, endpoint, query)
 	if err != nil {
 		failed := fmt.Errorf("%w: %v", errEvidenceFailed, err)
-		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, nil, []byte(err.Error()), 0, parsedEvidence{}, failed)
+		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, nil, []byte(err.Error()), 0, parsedEvidence{}, failed)
 	}
-	if cached, found, cacheErr := checkedCachedCapture(opts.CacheDir, provider, operation, opts.CoordinateVariant, credentialReference, opts.Geoapify.Credential, preAuth, opts.Input, parser); found {
+	if cached, found, cacheErr := checkedCachedCapture(opts.CacheDir, provider, operation, opts.CoordinateVariant, credentialReference, opts.Geoapify.Credential, selectionPolicy, preAuth, opts.Input, parser); found {
 		if cacheErr != nil {
 			if errors.Is(cacheErr, errEvidenceCredential) {
-				return discardedCredentialCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, 0)
+				return discardedCredentialCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, 0)
 			}
-			return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, nil, 0, parsedEvidence{}, cacheErr)
+			return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, nil, 0, parsedEvidence{}, cacheErr)
 		}
 		return cached
 	}
@@ -240,42 +241,45 @@ func captureGeoapify(ctx context.Context, opts EvidenceOptions, operation, endpo
 			_ = response.Body.Close()
 		}
 		if errors.Is(transportErr, errEvidenceRateLimited) {
-			return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, nil, 0, parsedEvidence{}, errEvidenceRateLimited)
+			return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, nil, 0, parsedEvidence{}, errEvidenceRateLimited)
 		}
 		err := fmt.Errorf("%w: %s", errEvidenceFailed, redactedTransportFailure)
-		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, []byte(redactedTransportFailure), 0, parsedEvidence{}, err)
+		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, []byte(redactedTransportFailure), 0, parsedEvidence{}, err)
 	}
 	rawHeaders, headerErr := httputil.DumpResponse(response, false)
 	raw, readErr := readBoundedResponse(response)
 	if responseContainsCredential(rawHeaders, opts.Geoapify.Credential) || responseContainsCredential(raw, opts.Geoapify.Credential) {
-		return discardedCredentialCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, response.StatusCode)
+		return discardedCredentialCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, response.StatusCode)
 	}
 	if headerErr != nil {
 		err := fmt.Errorf("%w: configured OSM provider headers were incomplete", errEvidenceMalformed)
-		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, err)
+		return stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsedEvidence{}, err)
 	}
 	if readErr != nil {
 		err := fmt.Errorf("%w: configured OSM provider response read failed", errEvidenceFailed)
 		if errors.Is(readErr, errRawEvidenceTooLarge) {
 			err = errRawEvidenceTooLarge
 		}
-		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, err), rawHeaders)
+		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsedEvidence{}, err), rawHeaders)
 	}
 	if response.StatusCode == http.StatusPaymentRequired {
-		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, errEvidenceBilling), rawHeaders)
+		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsedEvidence{}, errEvidenceBilling), rawHeaders)
 	}
 	if response.StatusCode == http.StatusTooManyRequests {
-		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, errEvidenceRateLimited), rawHeaders)
+		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsedEvidence{}, errEvidenceRateLimited), rawHeaders)
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		err := fmt.Errorf("%w: configured OSM provider returned HTTP %d", errEvidenceFailed, response.StatusCode)
-		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsedEvidence{}, err), rawHeaders)
+		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsedEvidence{}, err), rawHeaders)
 	}
 	parsed, parseErr := parser(raw, response.StatusCode, opts.Input)
 	if parseErr != nil {
-		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsed, parseErr), rawHeaders)
+		if errors.Is(parseErr, errEvidenceSaturated) {
+			selectionPolicy.LimitReached = true
+		}
+		return attachRawHeaders(stoppedCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsed, parseErr), rawHeaders)
 	}
-	return attachRawHeaders(completeCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, preAuth, raw, response.StatusCode, parsed), rawHeaders)
+	return attachRawHeaders(completeCapture(opts.Input, provider, operation, opts.CoordinateVariant, credentialReference, selectionPolicy, preAuth, raw, response.StatusCode, parsed), rawHeaders)
 }
 
 func parseGeoapifyEvidenceAtLimit(requestedLimit int) evidenceParser {

@@ -59,6 +59,9 @@ func validateCompleteRecord(record place.EvidenceRecord) error {
 	if strings.TrimSpace(record.ProviderIdentity) == "" || strings.TrimSpace(record.Operation) == "" || strings.TrimSpace(record.CoordinateVariant) == "" || strings.TrimSpace(record.ParserVersion) == "" {
 		return fmt.Errorf("%w: record identity is incomplete", ErrMalformedEvidence)
 	}
+	if !validEvidenceSelectionPolicy(record.SelectionPolicy, len(record.Candidates)) {
+		return fmt.Errorf("%w: selection policy is incomplete or contradictory", ErrUnsafeEvidence)
+	}
 	if !validDigest(record.PreAuthRequestSHA256) || !validDigest(record.RawResponseSHA256) {
 		return fmt.Errorf("%w: request or response digest is invalid", ErrUnsafeEvidence)
 	}
@@ -80,6 +83,16 @@ func validateCompleteRecord(record place.EvidenceRecord) error {
 		}
 	}
 	return nil
+}
+
+func validEvidenceSelectionPolicy(policy place.SelectionPolicy, candidateCount int) bool {
+	if policy.RequestedLimit == 0 {
+		return !policy.LimitReached && !policy.MoreResultsNotRequested && !policy.BoundedReverse
+	}
+	if policy.RequestedLimit < 1 || candidateCount > policy.RequestedLimit || policy.LimitReached != (candidateCount == policy.RequestedLimit) {
+		return false
+	}
+	return policy.MoreResultsNotRequested == (policy.BoundedReverse && policy.LimitReached)
 }
 
 func validateCandidate(index int, candidate place.EvidenceCandidate) error {

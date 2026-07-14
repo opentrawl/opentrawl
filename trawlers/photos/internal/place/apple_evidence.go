@@ -17,24 +17,24 @@ const (
 func captureAppleEvidence(ctx context.Context, opts EvidenceOptions, runner evidenceRunner) evidenceCapture {
 	request, requestErr := appleRequestJSON(opts.Input, opts.RadiusMeters)
 	if requestErr != nil {
-		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", nil, []byte(requestErr.Error()), 0, parsedEvidence{}, requestErr)
+		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, nil, []byte(requestErr.Error()), 0, parsedEvidence{}, requestErr)
 	}
-	if cached, ok := cachedCapture(opts.CacheDir, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, opts.Input, parseAppleEvidence); ok {
+	if cached, ok := cachedCapture(opts.CacheDir, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, request, opts.Input, parseAppleEvidence); ok {
 		return cached
 	}
 	boundary := runner.callApple(ctx, opts.Input, opts.RadiusMeters)
 	if !bytes.Equal(boundary.Request, request) {
 		err := errors.New("apple boundary request does not match the selected coordinate request")
-		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, boundary.Response, 0, parsedEvidence{}, err)
+		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, request, boundary.Response, 0, parsedEvidence{}, err)
 	}
 	if boundary.Err != nil {
-		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, boundary.Response, 0, parsedEvidence{}, boundary.Err)
+		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, request, boundary.Response, 0, parsedEvidence{}, boundary.Err)
 	}
 	parsed, err := parseAppleEvidence(boundary.Response, 0, opts.Input)
 	if err != nil {
-		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, boundary.Response, 0, parsed, err)
+		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, request, boundary.Response, 0, parsed, err)
 	}
-	return completeCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, boundary.Response, 0, parsed)
+	return completeCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", SelectionPolicy{}, request, boundary.Response, 0, parsed)
 }
 
 func parseAppleEvidence(raw []byte, _ int, input Input) (parsedEvidence, error) {

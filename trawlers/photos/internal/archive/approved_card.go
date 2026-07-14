@@ -24,14 +24,15 @@ import (
 )
 
 type ApprovedCardPrepareOptions struct {
-	ArchivePath     string
-	CacheDir        string
-	SourceLibraryID string
-	AssetIDs        []string
-	Model           string
-	ModelURL        string
-	Purpose         string
-	CallCap         int
+	ArchivePath             string
+	CacheDir                string
+	SourceLibraryID         string
+	AssetIDs                []string
+	Model                   string
+	ModelURL                string
+	Purpose                 string
+	CallCap                 int
+	PlaceEvidenceOperations []place.CheckedOperation
 }
 
 func OpenApprovedCardArchive(ctx context.Context, path string) (*store.Store, error) {
@@ -100,9 +101,6 @@ func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options App
 	if eligibility != firstCardEligible {
 		return nil, fmt.Errorf("approved card asset is %s", eligibility)
 	}
-	if input.HasLocation {
-		return nil, errors.New("approved card prepare requires checked place evidence")
-	}
 	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(options.CacheDir, "originals"))
 	if err != nil {
 		return nil, err
@@ -122,15 +120,23 @@ func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options App
 	if !ok {
 		return nil, errors.New("approved card checked current still is unavailable")
 	}
+	evidence, evidenceOK := checkedPlaceEvidence(options.CacheDir, input, options.PlaceEvidenceOperations)
+	if !evidenceOK {
+		return nil, errors.New(cardInputAuditStopMissingPlace)
+	}
 	image, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read approved card current still: %w", err)
 	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
-	return prepareCard(preparedCard{
-		source: source, artifacts: artifacts, classify: input, currentStill: image,
+	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, options.PlaceEvidenceOperations)
+	item, err := prepareCard(preparedCard{
+		source: source, artifacts: artifacts, evidence: evidence, classify: input, currentStill: image,
 		classifier: classifier,
 	}, position)
+	if isPlaceEvidenceError(err) {
+		return nil, errors.New(cardInputAuditStopMissingPlace)
+	}
+	return item, err
 }
 
 func readApprovedCardCurrentStill(cacheDir string, request photos.CurrentStillRequest) (string, photos.CurrentStillFact, string, bool) {

@@ -214,19 +214,19 @@ func evidenceInventoryRequests(ctx context.Context, input Input, config Configur
 		return nil, err
 	}
 	return []evidenceInventoryRequest{
-		inventoryRequest(input, appleEvidenceProvider, appleEvidenceOperation, "", apple),
-		inventoryRequest(input, config.ProviderIdentity, geoapifyReverseOperation, config.CredentialReference, reverse),
-		inventoryRequest(input, config.ProviderIdentity, geoapifyNearbyOperation, config.CredentialReference, nearby),
+		inventoryRequest(input, appleEvidenceProvider, appleEvidenceOperation, "", SelectionPolicy{}, apple),
+		inventoryRequest(input, config.ProviderIdentity, geoapifyReverseOperation, config.CredentialReference, SelectionPolicy{RequestedLimit: config.ReverseLimit}, reverse),
+		inventoryRequest(input, config.ProviderIdentity, geoapifyNearbyOperation, config.CredentialReference, SelectionPolicy{RequestedLimit: config.NearbyLimit}, nearby),
 	}, nil
 }
 
-func inventoryRequest(input Input, provider, operation, credentialReference string, raw []byte) evidenceInventoryRequest {
+func inventoryRequest(input Input, provider, operation, credentialReference string, selectionPolicy SelectionPolicy, raw []byte) evidenceInventoryRequest {
 	return evidenceInventoryRequest{
 		Provider:      provider,
 		Operation:     operation,
 		Bytes:         string(raw),
 		SHA256:        evidenceDigest(raw),
-		CacheIdentity: evidenceCacheIdentity(input, provider, operation, evidenceCoordinateVariant, credentialReference, raw),
+		CacheIdentity: evidenceCacheIdentity(input, provider, operation, evidenceCoordinateVariant, credentialReference, selectionPolicy, raw),
 	}
 }
 
