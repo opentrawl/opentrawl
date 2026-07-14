@@ -52,6 +52,16 @@ func TestPhotoKitLocationValidityMatchesArchive(t *testing.T) {
 	}
 }
 
+func TestPhotoKitDatePreservesCurrentStillMicroseconds(t *testing.T) {
+	const unixSeconds = 1784030400.123456789
+	if got, want := photoKitDate(unixSeconds), "2026-07-14T12:00:00.123457Z"; got != want {
+		t.Fatalf("PhotoKit date = %q, want %q", got, want)
+	}
+	if got, want := photoKitDate(1784030400), "2026-07-14T12:00:00.000000Z"; got != want {
+		t.Fatalf("whole-second PhotoKit date = %q, want %q", got, want)
+	}
+}
+
 func TestPhotoKitReadinessErrorsAreTyped(t *testing.T) {
 	tests := []struct {
 		message string

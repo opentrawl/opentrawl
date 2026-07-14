@@ -20,14 +20,33 @@ static NSString *pcDate(NSDate *date) {
   if (date == nil) {
     return @"";
   }
-  static NSISO8601DateFormatter *formatter = nil;
+  NSTimeInterval observed = date.timeIntervalSince1970;
+  long long seconds = (long long)floor(observed);
+  long long microseconds = llround((observed - seconds) * 1000000.0);
+  if (microseconds == 1000000) {
+    seconds++;
+    microseconds = 0;
+  }
+  static NSDateFormatter *formatter = nil;
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    formatter = [[NSISO8601DateFormatter alloc] init];
-    formatter.formatOptions = NSISO8601DateFormatWithInternetDateTime | NSISO8601DateFormatWithFractionalSeconds;
+    formatter = [[NSDateFormatter alloc] init];
+    formatter.locale = [[NSLocale alloc] initWithLocaleIdentifier:@"en_US_POSIX"];
     formatter.timeZone = [NSTimeZone timeZoneWithName:@"UTC"];
+    formatter.dateFormat = @"yyyy-MM-dd'T'HH:mm:ss";
   });
-  return [formatter stringFromDate:date];
+  NSString *wholeSeconds = nil;
+  @synchronized(formatter) {
+    wholeSeconds = [formatter stringFromDate:[NSDate dateWithTimeIntervalSince1970:(NSTimeInterval)seconds]];
+  }
+  return [NSString stringWithFormat:@"%@.%06lldZ", wholeSeconds, microseconds];
+}
+
+char *photoscrawl_format_date(double unixSeconds) {
+  @autoreleasepool {
+    NSString *formatted = pcDate([NSDate dateWithTimeIntervalSince1970:unixSeconds]);
+    return strdup(formatted.UTF8String);
+  }
 }
 
 static NSString *pcMediaType(PHAssetMediaType mediaType) {

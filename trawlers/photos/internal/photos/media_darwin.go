@@ -10,6 +10,7 @@ int photoscrawl_export_original_resource_matching(const char *localIdentifier, c
 char *photoscrawl_photokit_authorization_status(char **errorOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
 char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut);
+char *photoscrawl_format_date(double unixSeconds);
 int photoscrawl_location_is_valid(double latitude, double longitude);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut);
@@ -49,6 +50,15 @@ type AssetReadiness struct {
 
 func photoKitLocationIsValid(latitude, longitude float64) bool {
 	return C.photoscrawl_location_is_valid(C.double(latitude), C.double(longitude)) != 0
+}
+
+func photoKitDate(unixSeconds float64) string {
+	formatted := C.photoscrawl_format_date(C.double(unixSeconds))
+	if formatted == nil {
+		return ""
+	}
+	defer C.free(unsafe.Pointer(formatted))
+	return C.GoString(formatted)
 }
 
 // AssetReadinessForUUID resolves and reads identity and resource metadata for
