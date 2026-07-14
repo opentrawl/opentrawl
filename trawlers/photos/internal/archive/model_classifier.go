@@ -3,7 +3,6 @@ package archive
 import (
 	"net"
 	"net/url"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -165,25 +164,6 @@ func (c modelClassifier) remote() bool {
 	}
 	ip := net.ParseIP(host)
 	return ip == nil || !ip.IsLoopback()
-}
-
-func mimeTypeForPath(path string) string {
-	switch strings.ToLower(filepath.Ext(path)) {
-	case ".jpg", ".jpeg":
-		return "image/jpeg"
-	case ".png":
-		return "image/png"
-	case ".heic":
-		return "image/heic"
-	case ".heif":
-		return "image/heif"
-	case ".tif", ".tiff":
-		return "image/tiff"
-	case ".dng":
-		return "image/x-adobe-dng"
-	default:
-		return "image/jpeg"
-	}
 }
 
 // knownPlaceRelationship phrases the match for the model in plain words —

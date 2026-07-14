@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
@@ -143,7 +142,6 @@ func PrepareArchive(ctx context.Context, path string) error {
 	if err := parkArchiveFile(path, version); err != nil {
 		return err
 	}
-	log.Printf("notes archive: parked schema v%d archive alongside %s; next open rebuilds at schema v%d", version, path, SchemaVersion)
 	return nil
 }
 
@@ -234,7 +232,6 @@ func ensureCurrentSchema(ctx context.Context, st *store.Store, path string) (out
 	if err := parkArchiveFile(path, version); err != nil {
 		return nil, false, err
 	}
-	log.Printf("notes archive: parked schema v%d archive alongside %s; rebuilding at schema v%d", version, path, SchemaVersion)
 	fresh, err := store.Open(ctx, store.Options{Path: path, Schema: schema})
 	if err != nil {
 		return nil, false, err

@@ -128,10 +128,6 @@ func validateReadStore(ctx context.Context, db *store.Store) error {
 	return ArchiveIncompatibleError{}
 }
 
-func ensureArchiveMigrations(ctx context.Context, db *sql.DB) error {
-	return ensureArchiveMigrationsBeforeAlter(ctx, db, nil)
-}
-
 type archiveMigrationDB interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
@@ -199,19 +195,6 @@ func ensureArchiveMigrationsBeforeAlter(ctx context.Context, db archiveMigration
 		}
 	}
 	return migrateFirstCardEligibility(ctx, db)
-}
-
-func archiveMigrationsRequired(ctx context.Context, db *sql.DB) (bool, error) {
-	for _, migration := range archiveColumnMigrations {
-		exists, err := tableColumnExists(ctx, db, migration.table, migration.column)
-		if err != nil {
-			return false, err
-		}
-		if !exists {
-			return true, nil
-		}
-	}
-	return firstCardEligibilityMigrationRequired(ctx, db)
 }
 
 func alterArchiveColumn(ctx context.Context, db archiveMigrationDB, migration archiveColumnMigration) error {

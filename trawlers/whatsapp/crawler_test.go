@@ -9,8 +9,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -352,7 +352,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 
 func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	stateRootForRun(t)
-	code, stdout, stderr := captureRun(t, []string{"metadata", "--json"}, New())
+	code, stdout, stderr := captureRun(t, []string{"metadata", "--json"})
 	if code != 0 {
 		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -423,30 +423,21 @@ func contactPresent(contacts []control.Contact, name, phone string) bool {
 	return false
 }
 
-func captureRun(t *testing.T, args []string, crawler *Crawler) (int, string, string) {
+func captureRun(t *testing.T, args []string) (int, string, string) {
 	t.Helper()
-	origStdout := os.Stdout
-	origStderr := os.Stderr
-	outR, outW, err := os.Pipe()
-	if err != nil {
+	var stdout, stderr bytes.Buffer
+	command := exec.Command(os.Args[0], append([]string{whatsappTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return 0, stdout.String(), stderr.String()
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatal(err)
 	}
-	errR, errW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = outW
-	os.Stderr = errW
-	code := trawlkit.Run(args, []trawlkit.Crawler{crawler})
-	_ = outW.Close()
-	_ = errW.Close()
-	os.Stdout = origStdout
-	os.Stderr = origStderr
-	stdout, _ := io.ReadAll(outR)
-	stderr, _ := io.ReadAll(errR)
-	_ = outR.Close()
-	_ = errR.Close()
-	return code, string(stdout), string(stderr)
+	return exitErr.ExitCode(), stdout.String(), stderr.String()
 }
 
 func stateRootForRun(t *testing.T) string {

@@ -41,7 +41,7 @@ func AcquireCardInputCurrentStill(ctx context.Context, options CardInputCurrentS
 	if err != nil {
 		return CardInputCurrentStill{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return CardInputCurrentStill{}, err

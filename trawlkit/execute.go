@@ -75,7 +75,8 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
-	if verb.storeMode == storeWrite {
+	switch verb.storeMode {
+	case storeWrite:
 		// Peek-and-park, if the crawler wants it, happens here -- before
 		// openStore ever creates the write connection req.Store will hand to
 		// the verb. Parking after req.Store is open would mean either
@@ -85,14 +86,14 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		// that's about to be parked, mutating what's meant to survive
 		// untouched. See ArchivePreparer.
 		if preparer, ok := source.(ArchivePreparer); ok {
-			if err := preparer.PrepareArchive(ctx, paths.Paths.Archive); err != nil {
+			if err := preparer.PrepareArchive(ctx, paths.Archive); err != nil {
 				return executionResult{err: err}
 			}
 		}
-	} else if verb.storeMode == storeOptional || verb.storeMode == storeRead {
+	case storeOptional, storeRead:
 		if preparer, ok := source.(ReadArchivePreparer); ok {
 			started := time.Now()
-			if err := preparer.PrepareReadArchive(ctx, paths.Paths.Archive); err != nil {
+			if err := preparer.PrepareReadArchive(ctx, paths.Archive); err != nil {
 				_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
 				return executionResult{err: err}
 			}

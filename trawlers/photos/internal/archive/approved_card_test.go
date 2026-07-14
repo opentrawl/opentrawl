@@ -19,7 +19,7 @@ import (
 func TestApprovedCardBundleBindsPreparedBytesAndRetainedSuccessResumes(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:approved"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -103,7 +103,7 @@ func TestApprovedCardBundleBindsPreparedBytesAndRetainedSuccessResumes(t *testin
 func TestApprovedCardRejectsApprovalMismatchBeforeLedger(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedFixtureCardAsset(t, ctx, db, "asset:approved-mismatch")
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {
@@ -134,7 +134,7 @@ func TestApprovedCardRejectsApprovalMismatchBeforeLedger(t *testing.T) {
 func TestApprovedCardRetainsParseFailureWithoutCompleting(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:approved-parse-failure"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -176,7 +176,7 @@ func TestApprovedCardRetainsParseFailureWithoutCompleting(t *testing.T) {
 func TestApprovedCardRejectsCardInputMutationEvenWithNewOuterDigests(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:approved-custody-mismatch"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")

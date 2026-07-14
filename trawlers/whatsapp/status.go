@@ -42,8 +42,8 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	status.DatabasePath = archiveStatus.DBPath
 	status.LastSyncAt = contractTime(archiveStatus.LastImportAt)
 	status.Counts = statusCounts(archiveStatus)
-	switch {
-	case archiveStatus.Messages == 0:
+	switch archiveStatus.Messages {
+	case 0:
 		status.State = "empty"
 		if archiveStatus.LastImportAt.IsZero() {
 			status.Summary = "Archive is empty; run trawl whatsapp sync to populate it."

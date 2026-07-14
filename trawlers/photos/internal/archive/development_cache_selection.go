@@ -29,7 +29,7 @@ type DevelopmentCacheAsset struct {
 func SelectDevelopmentCacheAssets(ctx context.Context, databasePath, sourceLibraryID string) (DevelopmentCacheSelection, error) {
 	sourceLibraryID = strings.TrimSpace(sourceLibraryID)
 	if strings.TrimSpace(databasePath) == "" {
-		return DevelopmentCacheSelection{}, errors.New("Photos archive path is required")
+		return DevelopmentCacheSelection{}, errors.New("photos archive path is required")
 	}
 	if sourceLibraryID == "" {
 		return DevelopmentCacheSelection{}, errors.New("source library ID is required")

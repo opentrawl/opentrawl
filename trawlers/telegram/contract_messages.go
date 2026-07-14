@@ -7,29 +7,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
 )
 
-func newSearchEnvelope(query string, messages []store.Message, total int, limit int, whoQuery string, resolved *store.WhoCandidate, shortRefs map[string]string) searchEnvelope {
-	return searchEnvelope{
-		Query:        query,
-		WhoQuery:     whoQuery,
-		Limit:        limit,
-		WhoResolved:  newWhoResolved(resolved),
-		Results:      searchResults(messages, shortRefs),
-		TotalMatches: total,
-		Truncated:    total > len(messages),
-	}
-}
-
-func newWhoEnvelope(query string, candidates []store.WhoCandidate) whoEnvelope {
-	return whoEnvelope{Query: query, Candidates: whoCandidates(candidates)}
-}
-
-func newWhoResolved(candidate *store.WhoCandidate) *whoResolved {
-	if candidate == nil {
-		return nil
-	}
-	return &whoResolved{Who: candidate.Who, Identifiers: append([]string(nil), candidate.Identifiers...)}
-}
-
 func whoCandidates(candidates []store.WhoCandidate) []whoCandidate {
 	out := make([]whoCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -38,22 +15,6 @@ func whoCandidates(candidates []store.WhoCandidate) []whoCandidate {
 			Identifiers: append([]string(nil), candidate.Identifiers...),
 			LastSeen:    formatOptionalTime(candidate.LastSeen),
 			Messages:    candidate.Messages,
-		})
-	}
-	return out
-}
-
-func searchResults(messages []store.Message, shortRefs map[string]string) []searchResult {
-	out := make([]searchResult, 0, len(messages))
-	for _, message := range messages {
-		ref := messageRef(message.SourcePK)
-		out = append(out, searchResult{
-			Ref:      ref,
-			ShortRef: shortRefs[ref],
-			Time:     formatLocalTime(message.Timestamp),
-			Who:      outputField(messageWho(message)),
-			Where:    outputField(messageWhereForList(message)),
-			Snippet:  outputField(messageSnippet(message)),
 		})
 	}
 	return out
@@ -200,11 +161,4 @@ func messageSnippet(message store.Message) string {
 
 func outputField(value string) string {
 	return strings.Join(strings.Fields(value), " ")
-}
-
-func displayRef(fullRef, shortRef string) string {
-	if strings.TrimSpace(shortRef) != "" {
-		return shortRef
-	}
-	return fullRef
 }

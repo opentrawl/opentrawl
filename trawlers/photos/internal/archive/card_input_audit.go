@@ -89,7 +89,7 @@ func ReadCardInputAuditInventory(ctx context.Context, options CardInputAuditInve
 	if err != nil {
 		return CardInputAuditInventory{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	return readCardInputAuditInventory(ctx, db.DB(), options.SourceLibraryID)
 }
 
@@ -174,7 +174,7 @@ where asset.source_library_id = ? and observation.observation_type = ?`, strings
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	carded := map[string]bool{}
 	for rows.Next() {
 		var assetID string
@@ -196,7 +196,7 @@ order by resource.asset_id, resource.resource_type, resource.original_filename`,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	roles := map[string][]string{}
 	for rows.Next() {
 		var assetID, role string
@@ -216,7 +216,7 @@ func InspectCardInputs(ctx context.Context, options CardInputAuditInspectOptions
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return nil, err
@@ -356,23 +356,6 @@ func cardInputAuditSnapshot(ctx context.Context, db *sql.DB, sourceLibraryID str
 	return id, state == "complete", nil
 }
 
-func cardInputAuditResourceRoles(ctx context.Context, db *sql.DB, assetID string) ([]string, error) {
-	rows, err := db.QueryContext(ctx, `select resource_type from asset_resource where asset_id=? order by resource_type, original_filename`, assetID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var roles []string
-	for rows.Next() {
-		var role string
-		if err := rows.Scan(&role); err != nil {
-			return nil, err
-		}
-		roles = append(roles, role)
-	}
-	return roles, rows.Err()
-}
-
 func loadCardInputAuditInput(ctx context.Context, db *sql.DB, sourceLibraryID, assetID string) (classifyInput, error) {
 	var input classifyInput
 	var needsDownload, favorite, hidden, hasLocation int
@@ -414,7 +397,7 @@ func loadCardInputAuditResources(ctx context.Context, db *sql.DB, assetID string
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var resources []classifyResource
 	for rows.Next() {
 		var resource classifyResource
@@ -433,7 +416,7 @@ func loadCardInputAuditAlbums(ctx context.Context, db *sql.DB, assetID string) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var albums []classifyAlbum
 	for rows.Next() {
 		var album classifyAlbum
@@ -443,15 +426,6 @@ func loadCardInputAuditAlbums(ctx context.Context, db *sql.DB, assetID string) (
 		albums = append(albums, album)
 	}
 	return albums, rows.Err()
-}
-
-func cardInputAuditOriginal(resources []classifyResource) (classifyResource, bool) {
-	for _, resource := range resources {
-		if resource.ResourceType == "photo" && len(strings.TrimSpace(resource.SHA256)) == sha256.Size*2 {
-			return resource, true
-		}
-	}
-	return classifyResource{}, false
 }
 
 // cardInputAuditCheckedPackageOriginal reopens the same unique package-local

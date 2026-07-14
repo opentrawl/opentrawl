@@ -71,10 +71,6 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if opened.Mechanical.Camera == nil || opened.Mechanical.Camera.Display != "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64" {
 		t.Fatalf("open camera = %#v", opened.Mechanical.Camera)
 	}
-	openedJSON, err := json.Marshal(opened)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if opened.Mechanical.Source.State != sourceStateCurrent {
 		t.Fatalf("open JSON source state = %#v", opened.Mechanical.Source)
 	}
@@ -105,7 +101,7 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if !slices.ContainsFunc(opened.Mechanical.Signals, func(signal OpenSignal) bool { return signal.Label == "screenshot_candidate" }) {
 		t.Fatalf("open signals = %#v", opened.Mechanical.Signals)
 	}
-	openedJSON, err = json.Marshal(opened)
+	openedJSON, err := json.Marshal(opened)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,12 +1,10 @@
 package telecrawl
 
 import (
-	"os"
 	"strconv"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
-	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/telegramdesktop"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -175,42 +173,6 @@ type openMessage struct {
 	Pinned        bool            `json:"pinned,omitempty"`
 }
 
-func (r *runtime) statusEnvelope() statusEnvelope {
-	if info, err := os.Stat(r.dbPath); err != nil {
-		if os.IsNotExist(err) {
-			return r.newStatusEnvelope("missing", "archive database is missing", store.Status{})
-		}
-		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{})
-	} else if info.IsDir() {
-		return r.newStatusEnvelope("error", "archive database path is a directory", store.Status{})
-	}
-	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
-	if err != nil {
-		return r.newStatusEnvelope("error", "archive database cannot be read", store.Status{})
-	}
-	defer func() { _ = st.Close() }()
-	status, err := st.Status(r.ctx)
-	if err != nil {
-		return r.newStatusEnvelope("error", "archive status cannot be read", store.Status{})
-	}
-	return r.newStatusEnvelope(statusState(status), statusSummary(status), status)
-}
-
-func (r *runtime) newStatusEnvelope(state, summary string, status store.Status) statusEnvelope {
-	return statusEnvelope{
-		AppID:     "telegram",
-		State:     state,
-		Summary:   summary,
-		Freshness: statusFreshness(status),
-		Counts: []countEnvelope{
-			{ID: "messages", Label: "messages", Value: int64(status.Messages)},
-			{ID: "chats", Label: "chats", Value: int64(status.Chats)},
-			{ID: "since", Label: "since", Value: oldestMessageYear(status)},
-		},
-		Auth: authEnvelope{Authorized: true},
-	}
-}
-
 func statusState(status store.Status) string {
 	switch {
 	case status.Messages == 0:
@@ -259,111 +221,9 @@ func agePhrase(age time.Duration) string {
 	return "less than 1 hour"
 }
 
-func statusFreshness(status store.Status) freshnessEnvelope {
-	if status.LastImportAt.IsZero() {
-		return freshnessEnvelope{}
-	}
-	return freshnessEnvelope{LastSync: formatLocalTime(status.LastImportAt)}
-}
-
 func oldestMessageYear(status store.Status) int64 {
 	if status.OldestMessage.IsZero() {
 		return 0
 	}
 	return int64(status.OldestMessage.In(time.Local).Year())
-}
-
-func (r *runtime) doctorEnvelope(report telegramdesktop.Report) doctorOutput {
-	logTail := r.logTail()
-	checks := []doctorCheck{sourceStoreEnvelopeCheck(report)}
-	checks = append(checks, r.archiveChecks()...)
-	return doctorOutput{
-		Checks:  checks,
-		Log:     render.DoctorLogTailOutput(logTail),
-		logTail: logTail,
-	}
-}
-
-func sourceStoreEnvelopeCheck(report telegramdesktop.Report) doctorCheck {
-	if report.Exists && report.Accessible && report.Error == "" {
-		return doctorCheck{ID: "source_store", Label: "Telegram data", State: "ok", Message: "Telegram source data is readable."}
-	}
-	check := doctorCheck{
-		ID:     "source_store",
-		Label:  "Telegram data",
-		State:  "missing",
-		Remedy: "Install or open Telegram Desktop, or pass --path to a readable Telegram data directory.",
-	}
-	switch {
-	case !report.Exists:
-		check.Message = "Telegram source data was not found."
-	case report.Error != "":
-		check.Message = "Telegram source data could not be read."
-	default:
-		check.Message = "Telegram source data is not readable."
-	}
-	return check
-}
-
-func (r *runtime) archiveChecks() []doctorCheck {
-	if info, err := os.Stat(r.dbPath); err != nil {
-		return []doctorCheck{{
-			ID:      "archive",
-			Label:   "Archive",
-			State:   "missing",
-			Message: "Telegram archive has not been created.",
-			Remedy:  "run trawl telegram sync to create the archive.",
-		}}
-	} else if info.IsDir() {
-		return []doctorCheck{{
-			ID:      "archive",
-			Label:   "Archive",
-			State:   "missing",
-			Message: "Telegram archive path is a directory.",
-			Remedy:  "Use a writable state root, then run trawl telegram sync.",
-		}}
-	}
-	st, err := store.OpenReadOnly(r.ctx, r.dbPath)
-	if err != nil {
-		return []doctorCheck{{
-			ID:      "archive",
-			Label:   "Archive",
-			State:   "missing",
-			Message: "Telegram archive cannot be read.",
-			Remedy:  "run trawl telegram sync to rebuild the archive.",
-		}}
-	}
-	defer func() { _ = st.Close() }()
-	status, err := st.Status(r.ctx)
-	if err != nil {
-		return []doctorCheck{{
-			ID:      "archive",
-			Label:   "Archive",
-			State:   "missing",
-			Message: "Telegram archive status cannot be read.",
-			Remedy:  "run trawl telegram sync to rebuild the archive.",
-		}}
-	}
-	if status.Messages == 0 {
-		return []doctorCheck{{ID: "archive", Label: "Archive", State: "empty", Message: "Archive exists but has no messages.", Remedy: "run trawl telegram sync to fill the archive."}}
-	}
-	return []doctorCheck{
-		{ID: "archive", Label: "Archive", State: "ok", Message: "Archive is readable."},
-		syncRecencyCheck(status),
-	}
-}
-
-func syncRecencyCheck(status store.Status) doctorCheck {
-	check := doctorCheck{ID: "sync_recency", Label: "Telegram sync", State: "ok", Message: "Recently synced."}
-	switch {
-	case status.LastImportAt.IsZero():
-		check.State = "warn"
-		check.Message = "Telegram has never been synced."
-		check.Remedy = "run trawl telegram sync"
-	case time.Since(status.LastImportAt) > statusFreshFor:
-		check.State = "warn"
-		check.Message = "Telegram was synced " + agePhrase(time.Since(status.LastImportAt)) + " ago."
-		check.Remedy = "run trawl telegram sync"
-	}
-	return check
 }

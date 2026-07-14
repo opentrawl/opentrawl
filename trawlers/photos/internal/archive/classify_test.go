@@ -1042,7 +1042,7 @@ func classifyQueueRawRows(t *testing.T, db *store.Store, ids ...string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var out bytes.Buffer
 	for rows.Next() {
 		var values [7]string
@@ -1722,27 +1722,6 @@ func priorityAsset(localIdentifier, creationDate, filename string, horizontalAcc
 		}
 	}
 	return asset
-}
-
-func countFiles(t *testing.T, root string) int {
-	t.Helper()
-	count := 0
-	err := filepath.WalkDir(root, func(_ string, entry os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if !entry.IsDir() {
-			count++
-		}
-		return nil
-	})
-	if os.IsNotExist(err) {
-		return 0
-	}
-	if err != nil {
-		t.Fatal(err)
-	}
-	return count
 }
 
 func countOriginalCacheMedia(t *testing.T, root string) int {

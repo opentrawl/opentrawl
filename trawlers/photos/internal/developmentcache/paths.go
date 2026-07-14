@@ -31,7 +31,7 @@ func ValidateStoragePaths(paths StoragePaths) (StoragePaths, error) {
 		return StoragePaths{}, fmt.Errorf("validate Photos source root: %w", err)
 	}
 	if !sourceInfo.IsDir() || !ownedPath(sourceInfo) || sourceInfo.Mode().Perm()&0o022 != 0 {
-		return StoragePaths{}, errors.New("Photos source root must be an owner-controlled directory")
+		return StoragePaths{}, errors.New("photos source root must be an owner-controlled directory")
 	}
 	cacheRoot, cacheInfo, err := existingPathWithoutSymlinks(paths.CacheRoot)
 	if err != nil {

@@ -25,7 +25,7 @@ import (
 func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedFixtureCardAsset(t, ctx, db, "asset:fixture")
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {
@@ -181,7 +181,7 @@ func TestFixtureCardExecutionIdentityCoversInputRequestPromptAndParser(t *testin
 func TestPreparedCardPreservesEveryProviderCandidateThroughBothRequestShapesAndWriter(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:candidate-order"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	preparation := fixtureCardPreparationFor(assetID)
@@ -252,7 +252,7 @@ func TestPreparedCardPreservesEveryProviderCandidateThroughBothRequestShapesAndW
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	var gotProviderIDs, gotNames []string
 	for rows.Next() {
 		var providerID, name string
@@ -273,7 +273,7 @@ func TestPreparedCardPreservesEveryProviderCandidateThroughBothRequestShapesAndW
 func TestFixtureCardRetainsTypedCandidateFailureAndRestartsFromBytes(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:fixture-parse-failure"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -309,7 +309,7 @@ func TestFixtureCardRetainsTypedCandidateFailureAndRestartsFromBytes(t *testing.
 func TestFixtureCardIncompleteInputWritesNothing(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedFixtureCardAsset(t, ctx, db, "asset:bad")
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {
@@ -347,7 +347,7 @@ func TestFixtureCardMismatchedPlaceBoundaryWritesNothing(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			db := fixtureCardStore(t, ctx)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			assetID := "asset:place-mismatch:" + test.name
 			seedFixtureCardAsset(t, ctx, db, assetID)
 			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -386,7 +386,7 @@ func TestFixturePlaceEvidenceIdentityPreservesOrder(t *testing.T) {
 func TestFixtureCardUnsafeEvidenceWritesNothing(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedFixtureCardAsset(t, ctx, db, "asset:unsafe")
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {
@@ -412,7 +412,7 @@ func TestFixtureCardUnsafeEvidenceWritesNothing(t *testing.T) {
 func TestFixtureCardMismatchedSourceWritesNothing(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedFixtureCardAsset(t, ctx, db, "asset:source-mismatch")
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {

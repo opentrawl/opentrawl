@@ -17,15 +17,6 @@ type classifyLogger struct {
 	sink ClassifyLogSink
 }
 
-func (logger classifyLogger) logOriginalResolved(input classifyInput, resolved photos.OriginalResolution) {
-	logger.info("original_resolved",
-		logTokenField("asset_ref", AssetRef(input.AssetID)),
-		logTokenField("source", resolved.Source),
-		logInt64Field("bytes", resolved.Size),
-		logTokenField("sha256", resolved.SHA256),
-	)
-}
-
 func (logger classifyLogger) logOutcome(write classifyWrite) {
 	switch write.outcome {
 	case contentOutcomeFailedDownload:

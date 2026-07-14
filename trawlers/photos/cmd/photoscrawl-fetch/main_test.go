@@ -168,7 +168,7 @@ func TestRunReadinessWireRequestReturnsIdentityAndResourceFacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !response.Success || response.AssetUuid != "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE" || response.LocalIdentifier == "" || response.OriginalFilename != "synthetic.heic" || response.HasLocation {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 }
 
@@ -245,7 +245,7 @@ func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	}
 	digest := sha256.Sum256([]byte("exact synthetic original bytes"))
 	if !response.Success || response.SizeBytes != 30 || !bytes.Equal(response.Sha256, digest[:]) {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 	media, err := os.ReadFile(destination)
 	if err != nil {
@@ -288,14 +288,14 @@ func TestRunWireRequestReturnsTypedPhotosAccessFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	if response.FailureKind != "photos_access" || response.PhotosAccessStatus != "denied" {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 }
 
 func TestWireErrorResponsePreservesTypedPhotoKitFailure(t *testing.T) {
 	response := wireErrorResponse(&photos.PhotoKitExportError{Domain: "PHPhotosErrorDomain", Code: 3303})
 	if response.FailureKind != "photokit_export" || response.ErrorDomain != "PHPhotosErrorDomain" || response.ErrorCode != 3303 {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 	if response.ErrorMessage == "" {
 		t.Fatal("typed PhotoKit failure lost its safe message")
@@ -305,7 +305,7 @@ func TestWireErrorResponsePreservesTypedPhotoKitFailure(t *testing.T) {
 func TestCurrentStillWireErrorResponsePreservesCallbackFacts(t *testing.T) {
 	response := currentStillWireErrorResponse(photos.NewPhotoKitCallbackError("PHPhotosErrorDomain", 3303, "callback /private/source", true, true, false, true))
 	if response.FailureKind != "photokit_export" || response.ErrorDomain != "PHPhotosErrorDomain" || response.ErrorCode != 3303 {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 	if strings.Contains(response.ErrorMessage, "/private/source") {
 		t.Fatalf("response leaked callback detail: %q", response.ErrorMessage)
@@ -324,7 +324,7 @@ func TestCurrentStillWireErrorResponsePreservesTimeoutFacts(t *testing.T) {
 	}
 	response := currentStillWireErrorResponse(err)
 	if response.FailureKind != "timeout" {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 	for _, want := range []string{"degraded=true", "in_cloud=true", "timed_out=true"} {
 		if !strings.Contains(response.ErrorMessage, want) {
@@ -346,7 +346,7 @@ func TestCurrentStillWireErrorResponseUsesFixedStageTokensWithoutLeakage(t *test
 		err := photos.NewCurrentStillStageError(stage, errors.New("synthetic failure at /private/runtime/asset-uuid"))
 		response := currentStillWireErrorResponse(err)
 		if response.FailureKind != "export_failed" {
-			t.Fatalf("stage=%q response=%#v", stage, response)
+			t.Fatalf("stage=%q response=%#v", stage, &response)
 		}
 		want := fmt.Sprintf("PhotoKit current-still request failed (stage=%s)", stage)
 		if response.ErrorMessage != want {
@@ -419,7 +419,7 @@ func TestRunCurrentStillWireRequestPreservesExplicitNetworkAndFacts(t *testing.T
 		t.Fatal(err)
 	}
 	if !response.Success || response.MediaType != "public.heic" || response.PixelWidth != 4032 || response.PixelHeight != 3024 || response.HelperStartedUnixNanos <= 0 || response.PhotokitCallbackMicros != 31 || response.ValidationHashMicros != 32 || response.PhotokitCalls != 1 {
-		t.Fatalf("response = %#v", response)
+		t.Fatalf("response = %#v", &response)
 	}
 }
 
@@ -444,7 +444,7 @@ func TestRunCurrentStillWireRequestOmitsExpectedModification(t *testing.T) {
 	t.Logf("boundary=synthetic_current_still_without_modification raw_hex=%x", data)
 	var request fetchwire.CurrentStillFetchRequest
 	if err := proto.Unmarshal(data, &request); err != nil || request.HasExpectedModification || request.ModificationUnixSeconds != 0 || request.ModificationMicroseconds != 0 {
-		t.Fatalf("wire request = %#v, %v", request, err)
+		t.Fatalf("wire request = %#v, %v", &request, err)
 	}
 	if err := os.WriteFile(requestPath, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -498,7 +498,7 @@ func TestRunCurrentStillWireRequestPreservesStartAndZeroCallsOnEarlyFailures(t *
 				t.Fatal(err)
 			}
 			if response.FailureKind != "invalid_request" || response.HelperStartedUnixNanos <= 0 || response.PhotokitCalls != 0 {
-				t.Fatalf("response = %#v", response)
+				t.Fatalf("response = %#v", &response)
 			}
 		})
 	}

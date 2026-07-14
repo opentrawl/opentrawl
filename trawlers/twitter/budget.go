@@ -9,10 +9,6 @@ func liveSyncPausedSentence(month string) string {
 	return "Live sync is paused: the monthly X API budget is spent; it resumes " + formatHumanDate(nextSpendMonthStart(month)) + "."
 }
 
-func monthlyBudgetSpentMessage(month string) string {
-	return "monthly X API budget is spent; live sync resumes " + formatHumanDate(nextSpendMonthStart(month))
-}
-
 func nextSpendMonthStart(month string) time.Time {
 	t, err := time.Parse("2006-01", strings.TrimSpace(month))
 	if err != nil {

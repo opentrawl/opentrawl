@@ -41,7 +41,7 @@ func callAppleBoundary(ctx context.Context, input Input, radius float64) appleBo
 		return appleBoundaryOutput{Request: requestJSON, Response: rawError, Err: classifyBridgeError(string(rawError))}
 	}
 	if cJSON == nil {
-		err := errors.New("Apple place evidence returned no JSON")
+		err := errors.New("apple place evidence returned no JSON")
 		return appleBoundaryOutput{Request: requestJSON, Response: []byte(err.Error()), Err: err}
 	}
 	defer C.free(unsafe.Pointer(cJSON))

@@ -134,13 +134,13 @@ func photoKitFetchAppPath(callerPath, home string) (string, error) {
 	case callerName == "trawl" && filepath.Base(callerDir) == "Helpers" && isOpenTrawlBundle:
 		return filepath.Join(contentsDir, "Helpers", "Photoscrawl Fetch.app"), nil
 	case callerName == "Trawl":
-		return "", errors.New("Photos helper caller is not the OpenTrawl Mac app executable")
+		return "", errors.New("photos helper caller is not the OpenTrawl Mac app executable")
 	case callerName == "trawl" && filepath.Base(callerDir) == "Helpers" && filepath.Base(contentsDir) == "Contents":
-		return "", errors.New("Photos helper caller is not bundled in OpenTrawl.app")
+		return "", errors.New("photos helper caller is not bundled in OpenTrawl.app")
 	case callerName == "trawl":
 		return filepath.Join(home, "Applications", "Photoscrawl Fetch.app"), nil
 	default:
-		return "", errors.New("Photos helper caller is not a supported OpenTrawl executable")
+		return "", errors.New("photos helper caller is not a supported OpenTrawl executable")
 	}
 }
 

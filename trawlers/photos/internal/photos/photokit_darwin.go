@@ -69,9 +69,10 @@ func decodePhotoKitSnapshot(ctx context.Context, snapshotJSON []byte) (LibrarySn
 
 func photoKitSnapshotCompleteness(authorizationStatus string) SnapshotCompleteness {
 	state := SnapshotPartial
-	if authorizationStatus == "authorized" {
+	switch authorizationStatus {
+	case "authorized":
 		state = SnapshotComplete
-	} else if authorizationStatus == "limited" {
+	case "limited":
 		state = SnapshotLimited
 	}
 	return SnapshotCompleteness{

@@ -64,7 +64,7 @@ func fixedLeafRequirementHash(ctx context.Context, path string) (string, error) 
 func parseFixedLeafRequirementHash(text string) (string, error) {
 	const marker = `certificate leaf = H"`
 	start := strings.Index(text, marker)
-	if start < 0 || strings.Index(text[start+len(marker):], marker) >= 0 {
+	if start < 0 || strings.Contains(text[start+len(marker):], marker) {
 		return "", fmt.Errorf("code-signing requirement does not contain one fixed leaf certificate")
 	}
 	start += len(marker)

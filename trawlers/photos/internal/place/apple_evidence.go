@@ -24,7 +24,7 @@ func captureAppleEvidence(ctx context.Context, opts EvidenceOptions, runner evid
 	}
 	boundary := runner.callApple(ctx, opts.Input, opts.RadiusMeters)
 	if !bytes.Equal(boundary.Request, request) {
-		err := errors.New("Apple boundary request does not match the selected coordinate request")
+		err := errors.New("apple boundary request does not match the selected coordinate request")
 		return stoppedCapture(opts.Input, appleEvidenceProvider, appleEvidenceOperation, opts.CoordinateVariant, "", request, boundary.Response, 0, parsedEvidence{}, err)
 	}
 	if boundary.Err != nil {
@@ -39,7 +39,7 @@ func captureAppleEvidence(ctx context.Context, opts EvidenceOptions, runner evid
 
 func parseAppleEvidence(raw []byte, _ int, input Input) (parsedEvidence, error) {
 	if len(raw) == 0 {
-		return parsedEvidence{}, errors.New("Apple returned an empty response")
+		return parsedEvidence{}, errors.New("apple returned an empty response")
 	}
 	var result appleEvidenceResponse
 	if err := json.Unmarshal(raw, &result); err != nil {

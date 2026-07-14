@@ -62,25 +62,3 @@ where source_state = ?
 	}
 	return nil
 }
-
-func firstCardEligibilityMigrationRequired(ctx context.Context, db *sql.DB) (bool, error) {
-	var required bool
-	if err := db.QueryRowContext(ctx, `
-select exists (
-  select 1
-  from asset
-  where source_state = ?
-    and first_missing_at is not null
-    and trim(source_state_snapshot_id) <> ''
-    and (first_card_blocked_at is null or first_card_blocked_snapshot_id is null)
-    and not exists (
-      select 1 from model_observation
-      where asset_id = asset.id
-        and observation_type = ?
-    )
-)
-`, sourceStateDeletedUpstream, modelObservationCardSummary).Scan(&required); err != nil {
-		return false, fmt.Errorf("inspect first card eligibility migration: %w", err)
-	}
-	return required, nil
-}

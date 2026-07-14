@@ -2656,7 +2656,7 @@ func TestRunnerChildHelper(t *testing.T) {
 				if line == "" {
 					return nil, errors.New("missing odd log line")
 				}
-				if err := writeChildFrame(os.Stdout, childLogFrame(line)); err != nil {
+				if err := writeChildFrame(req.Out, childLogFrame(line)); err != nil {
 					return nil, err
 				}
 				return &SyncReport{Added: 1}, nil

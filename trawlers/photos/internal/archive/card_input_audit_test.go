@@ -24,7 +24,7 @@ import (
 
 func TestCardInputAuditInventoryIsStructuralAndNamesStops(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:ready", "current", "image", "{}")
 	seedCardInputAuditAsset(t, ctx, db, "asset:video", "current", "video", `{"source":"present"}`)
@@ -106,7 +106,7 @@ func TestCardInputAuditRejectsSchema12Snapshot(t *testing.T) {
 
 func TestCardInputAuditProhibitedStopsBeforeArtifactRead(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:prohibited", "deleted_upstream", "image", `{"present":true}`)
 	if _, err := db.ExecContext(ctx, `update asset set first_card_blocked_at='2026-07-13T00:00:00Z', first_card_blocked_snapshot_id='snapshot:complete' where id='asset:prohibited'`); err != nil {
@@ -135,7 +135,7 @@ func TestCardInputAuditProhibitedStopsBeforeArtifactRead(t *testing.T) {
 
 func TestCardInputAuditPrepareReopensOnePackageOriginalAndExistingCurrentStillWithoutPhotoKit(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:prepare", "current", "image", `{"present":true}`)
 	root := t.TempDir()
@@ -208,7 +208,7 @@ func TestCardInputAuditPrepareReopensOnePackageOriginalAndExistingCurrentStillWi
 
 func TestCardInputCurrentStillAcquiresOnceThenPrepareReopensWithoutPhotoKit(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:acquire", "current", "image", `{"present":true}`)
 	if _, err := db.ExecContext(ctx, `update asset set local_identifier='AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' where id='asset:acquire'`); err != nil {
@@ -274,7 +274,7 @@ func TestCardInputCurrentStillAcquiresOnceThenPrepareReopensWithoutPhotoKit(t *t
 
 func TestCardInputAuditPrepareProhibitedStopsBeforeCacheOrArtifactAccess(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:prohibited-prepare", "deleted_upstream", "image", `{"present":true}`)
 	if _, err := db.ExecContext(ctx, `update asset set first_card_blocked_at='2026-07-13T00:00:00Z', first_card_blocked_snapshot_id='snapshot:complete' where id='asset:prohibited-prepare'`); err != nil {
@@ -295,7 +295,7 @@ func TestCardInputAuditPrepareProhibitedStopsBeforeCacheOrArtifactAccess(t *test
 
 func TestCardInputAuditPrepareStopsWithoutCheckedImmutableOriginal(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:no-package", "current", "image", `{"present":true}`)
 	cacheDir := filepath.Join(t.TempDir(), "must-not-exist")
@@ -313,7 +313,7 @@ func TestCardInputAuditPrepareStopsWithoutCheckedImmutableOriginal(t *testing.T)
 
 func TestCardInputCurrentStillAcquiresAndReopensPhotoKitOriginalWithoutNetwork(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:photokit", "current", "image", `{"present":true}`)
 	if _, err := db.ExecContext(ctx, `update asset set local_identifier='AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE' where id='asset:photokit'`); err != nil {
@@ -385,7 +385,7 @@ func TestCardInputCurrentStillAcquiresAndReopensPhotoKitOriginalWithoutNetwork(t
 
 func TestCardInputAuditPrepareStopsWithoutCheckedCurrentStill(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:no-current", "current", "image", `{"present":true}`)
 	root := t.TempDir()
@@ -474,7 +474,7 @@ func TestCardInputAuditBackstopIsStableAndBounded(t *testing.T) {
 
 func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
 	seedCardInputAuditAsset(t, ctx, db, "asset:ready", "current", "image", `{"uniform_type_identifier":"public.jpeg"}`)
 	root := t.TempDir()
@@ -549,7 +549,7 @@ func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 func TestCardInputAuditReadsStoredProductionBoundaryBeforeArchiveDigest(t *testing.T) {
 	ctx := context.Background()
 	db := fixtureCardStore(t, ctx)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	assetID := "asset:stored-audit"
 	seedFixtureCardAsset(t, ctx, db, assetID)
 	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -596,7 +596,7 @@ func TestStoredCardInputAuditBoundaryRejectsIdentityMismatch(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := context.Background()
 			db := fixtureCardStore(t, ctx)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			assetID := "asset:audit-mismatch:" + test.name
 			seedFixtureCardAsset(t, ctx, db, assetID)
 			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -626,7 +626,7 @@ func TestStoredCardInputAuditBoundaryIgnoresInactiveExecution(t *testing.T) {
 		t.Run(column, func(t *testing.T) {
 			ctx := context.Background()
 			db := fixtureCardStore(t, ctx)
-			defer db.Close()
+			defer func() { _ = db.Close() }()
 			assetID := "asset:audit-inactive:" + column
 			seedFixtureCardAsset(t, ctx, db, assetID)
 			classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
@@ -680,7 +680,7 @@ create table crawl_seen_asset(asset_id text, source_library_id text, source_fing
 		}
 	}
 	if err != nil {
-		db.Close()
+		_ = db.Close()
 		t.Fatal(err)
 	}
 	return ctx, db

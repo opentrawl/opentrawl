@@ -9,8 +9,8 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -22,6 +22,8 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
 )
+
+const gmailTestRunSubcommand = "gmail-test-run"
 
 func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
@@ -66,6 +68,9 @@ func TestStatusUsesOnlyArchiveState(t *testing.T) {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == gmailTestRunSubcommand {
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{New()}))
+	}
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
@@ -432,44 +437,19 @@ func flagSet(name string) *flag.FlagSet {
 func runGogcrawl(t *testing.T, stateRoot string, args ...string) (int, string, string) {
 	t.Helper()
 	t.Setenv("HOME", filepath.Dir(stateRoot))
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
+	var stdout, stderr bytes.Buffer
+	command := exec.Command(os.Args[0], append([]string{gmailTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return 0, stdout.String(), stderr.String()
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatal(err)
 	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = stdoutW
-	os.Stderr = stderrW
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
-	}()
-	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
-	if err := stdoutW.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := stderrW.Close(); err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := io.ReadAll(stdoutR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderr, err := io.ReadAll(stderrR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := stdoutR.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := stderrR.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return code, string(stdout), string(stderr)
+	return exitErr.ExitCode(), stdout.String(), stderr.String()
 }
 
 func stateRootForRun(t *testing.T) string {
