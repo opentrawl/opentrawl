@@ -250,7 +250,10 @@ private final class ProcessInvocation: @unchecked Sendable {
   private let arguments: [String]
   private let receiveReceipt: (@Sendable (ProcessBoundaryReceipt) -> Void)?
   private let terminationLock = NSLock()
+  private let exitLock = NSLock()
+  private let exitSemaphore = DispatchSemaphore(value: 0)
   private var requestedTermination = false
+  private var exitResult: ProcessExitResult?
 
   let process = Process()
   let stdout = Pipe()
@@ -269,6 +272,14 @@ private final class ProcessInvocation: @unchecked Sendable {
     process.standardInput = FileHandle.nullDevice
     process.standardOutput = stdout
     process.standardError = stderr
+    process.terminationHandler = { [weak self] process in
+      self?.recordExit(
+        ProcessExitResult(
+          terminatedBySignal: process.terminationReason == .uncaughtSignal,
+          exitCode: process.terminationStatus
+        )
+      )
+    }
   }
 
   var terminationWasRequested: Bool {
@@ -283,25 +294,21 @@ private final class ProcessInvocation: @unchecked Sendable {
       self.stderr.fileHandleForReading.readDataToEndOfFile()
     }
     let exitTask = Task.detached {
-      self.process.waitUntilExit()
-      return (
-        self.process.terminationReason == .uncaughtSignal,
-        self.process.terminationStatus
-      )
+      await self.waitForExit()
     }
 
     let frame = await stdoutTask.value
     if frame.error != nil, process.isRunning {
       terminateAfterGrace()
     }
-    let (terminatedBySignal, exitCode) = await exitTask.value
+    let exit = await exitTask.value
     let result = ProcessResult(
       stdout: frame.bytes,
       payload: frame.payload,
       framingError: frame.error,
       stderr: await stderrTask.value,
-      terminatedBySignal: terminatedBySignal,
-      exitCode: exitCode
+      terminatedBySignal: exit.terminatedBySignal,
+      exitCode: exit.exitCode
     )
     receiveReceipt?(
       ProcessBoundaryReceipt(
@@ -325,6 +332,20 @@ private final class ProcessInvocation: @unchecked Sendable {
       try? await Task.sleep(for: .seconds(2))
       guard self.process.isRunning else { return }
       _ = Darwin.kill(self.process.processIdentifier, SIGKILL)
+    }
+  }
+
+  private func recordExit(_ result: ProcessExitResult) {
+    exitLock.withLock { exitResult = result }
+    exitSemaphore.signal()
+  }
+
+  private func waitForExit() async -> ProcessExitResult {
+    await withCheckedContinuation { continuation in
+      DispatchQueue.global().async { [self] in
+        exitSemaphore.wait()
+        continuation.resume(returning: exitLock.withLock { exitResult! })
+      }
     }
   }
 
@@ -372,6 +393,11 @@ private final class ProcessInvocation: @unchecked Sendable {
     }
     return bytes.suffix(count)
   }
+}
+
+private struct ProcessExitResult: Sendable {
+  let terminatedBySignal: Bool
+  let exitCode: Int32
 }
 
 private struct FrameRead: Sendable {

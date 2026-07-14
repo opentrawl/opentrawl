@@ -111,7 +111,10 @@ struct ConstellationLayout {
 
   init(size: CGSize, sources: [RestingSource], meshSeed: UInt64) {
     self.sources = sources
-    let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(sources.count)
+    let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
+      sources.count,
+      fitting: ConstellationPoint(x: size.width, y: size.height)
+    )
     metrics = layoutMetrics
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)

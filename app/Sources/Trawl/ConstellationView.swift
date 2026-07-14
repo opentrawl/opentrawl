@@ -77,7 +77,7 @@ struct ConstellationView: View {
 
   static func canvasSize(in available: CGSize) -> CGSize {
     let maximumHeight = available.height
-    let width = min(available.width * 0.9, maximumHeight * 1.15, 1_400)
+    let width = min(available.width, maximumHeight * 1.15, 1_400)
     return CGSize(width: width, height: min(width / 1.15, available.height))
   }
 }

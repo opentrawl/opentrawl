@@ -62,6 +62,19 @@ import Testing
   }
 }
 
+@Test func processClientReapsTimedOutHelpersAcrossRepeatedCalls() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  for _ in 0..<8 {
+    await #expect(throws: TrawlClientError.timedOut) {
+      _ = try await ProcessTrawlClient(
+        binaryURL: binary,
+        searchDeadline: .milliseconds(20),
+        receiveReceipt: { _ in }
+      ).search("process-hang", source: nil)
+    }
+  }
+}
+
 @Test func delimitedFramesRejectEveryInvalidShape() throws {
   var response = Trawl_Federation_V1_SearchResponse()
   response.outcome = .complete
@@ -93,9 +106,33 @@ import Testing
   #expect(
     response.sources.map(\.sourceID) == [
       "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
-      "whatsapp",
+      "whatsapp", "synthetic",
     ])
   #expect(response.failures.isEmpty)
+}
+
+@Test func productSyntheticStatusIncludesEveryWorkspaceSourceAndAnOverflowNode() async throws {
+  let helper = try #require(developmentSyntheticBinary())
+  let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+  let wrapper = directory.appending(path: "product-status-helper")
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  try Data("#!/bin/sh\nTRAWL_SYNTHETIC_STATUS=product exec \(helper.path) \"$@\"\n".utf8).write(to: wrapper)
+  try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: wrapper.path)
+
+  let response = try await ProcessTrawlClient(
+    binaryURL: wrapper,
+    receiveReceipt: { receipt in
+      #expect(receipt.arguments == ["__app", "status"])
+    }
+  ).status()
+
+  #expect(response.outcome == .complete)
+  #expect(
+    response.sources.map(\.id) == [
+      "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
+      "whatsapp", "synthetic",
+    ])
 }
 
 @Test func processClientSendsThePrivatePhotosRequest() async throws {
@@ -137,6 +174,25 @@ import Testing
         sourceID: "synthetic", ref: "synthetic:record/example-1",
         anchorID: "matching passage")
   }
+}
+
+@Test func syntheticPartialSearchSelectAndOpenKeepsTheSelectedReference() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  let client = ProcessTrawlClient(binaryURL: binary, receiveReceipt: { _ in })
+  let search = try await client.search("partial", source: nil)
+  let selected = try #require(search.hits.first)
+
+  let opened = try await client.open(
+    sourceID: selected.sourceID,
+    ref: selected.openRef,
+    anchorID: selected.anchorID
+  )
+
+  #expect(search.outcome == .partial)
+  #expect(opened.requestedRef == selected.openRef)
+  #expect(opened.requestedAnchorID == selected.anchorID)
+  #expect(opened.record?.openRef == selected.openRef)
+  #expect(opened.record?.presentation.primaryAnchorID == selected.anchorID)
 }
 
 @Test func processClientCarriesOneBoundedOpaqueResourceFrame() async throws {
