@@ -168,7 +168,7 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 		t.Fatalf("open JSON = %s err=%v", stdout, err)
 	}
 	if response.GetRequestedRef() != requestedRef || response.GetRecord().GetOpenRef() != "imessage:msg/1" {
-		t.Fatalf("open response = %#v", response)
+		t.Fatalf("open response = %#v", &response)
 	}
 }
 
@@ -339,7 +339,7 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 		t.Fatalf("open JSON = %s err=%v", stdout, err)
 	}
 	if response.GetOutcome().String() != "OPERATION_OUTCOME_FAILED" || response.GetRequestedRef() != "t7k3f" || response.GetFailure().GetCode().String() != "FAILURE_CODE_INVALID_INPUT" {
-		t.Fatalf("ambiguous response = %#v", response)
+		t.Fatalf("ambiguous response = %#v", &response)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
