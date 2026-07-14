@@ -62,10 +62,10 @@ struct SearchOverlay: View {
   var body: some View {
     ZStack {
       Button(action: onDismiss) {
-        Color(nsColor: .windowBackgroundColor).opacity(0.97)
+        Color(nsColor: .windowBackgroundColor)
       }
       .buttonStyle(.plain)
-      .accessibilityLabel("Return to sources")
+      .accessibilityHidden(true)
       GeometryReader { proxy in
         SearchWorkspace(
           interaction: interaction,
@@ -76,6 +76,7 @@ struct SearchOverlay: View {
           fieldIdentity: fieldState.identity,
           focus: $focus,
           onClearScope: clearScope,
+          onReturnToSources: onDismiss,
           onSubmit: openSelectedResult,
           onMoveToResults: focusResults,
           onEscape: handleEscape,

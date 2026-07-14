@@ -31,6 +31,7 @@ struct SearchWorkspace: View {
   let fieldIdentity: UUID
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
+  let onReturnToSources: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
   let onEscape: () -> Void
@@ -40,6 +41,7 @@ struct SearchWorkspace: View {
   var body: some View {
     VStack(spacing: 0) {
       searchField
+        .padding(14)
       switch SearchWorkspaceMode.resolve(phase: model.phase, resultCount: model.results.count) {
       case .field:
         EmptyView()
@@ -64,10 +66,10 @@ struct SearchWorkspace: View {
       scope: scope,
       focus: $focus,
       onClearScope: onClearScope,
+      onReturnToSources: onReturnToSources,
       onSubmit: onSubmit,
       onMoveToResults: onMoveToResults
     )
-    .padding(14)
     .id(fieldIdentity)
   }
 
@@ -126,11 +128,22 @@ private struct SearchField: View {
   let scope: RestingSource?
   @FocusState.Binding var focus: SearchFocus?
   let onClearScope: () -> Void
+  let onReturnToSources: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
 
   var body: some View {
     HStack(spacing: 9) {
+      Button(action: onReturnToSources) {
+        Image(systemName: "chevron.left")
+          .font(.body.weight(.semibold))
+          .foregroundStyle(.secondary)
+          .frame(width: 32, height: 32)
+          .contentShape(.rect)
+      }
+      .buttonStyle(.plain)
+      .help("Return to sources")
+      .accessibilityLabel("Return to sources")
       Image(systemName: "magnifyingglass")
         .foregroundStyle(.secondary)
       TextField(scope.map { "Search \($0.surface)" } ?? "Search everything", text: $query)
@@ -203,42 +216,38 @@ private struct SearchOutcome: View {
   let isScoped: Bool
 
   var body: some View {
-    VStack(spacing: 9) {
+    Group {
       switch phase {
       case .loading:
-        ProgressView()
-          .controlSize(.small)
-        Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
-      case .complete:
-        Label("No matches.", systemImage: "magnifyingglass")
-      case .partial:
-        Label(
-          SearchWorkspaceCopy.partialNoMatches(
-            failureGuidance: failureGuidance,
-            isScoped: isScoped
-          ),
-          systemImage: "exclamationmark.triangle"
+        VStack(spacing: 9) {
+          ProgressView()
+            .controlSize(.small)
+          Text("Searching. Stops after \(SearchModel.defaultWaitSeconds) seconds.")
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+      default:
+        ContentUnavailableView(
+          SearchWorkspaceCopy.outcomeTitle(for: phase),
+          systemImage: SearchWorkspaceCopy.outcomeSymbol(for: phase),
+          description: Text(detail)
         )
-      case .skipped:
-        Label(SearchWorkspaceCopy.skippedOutcome(for: skippedSources), systemImage: "exclamationmark.triangle")
-      case .failed(let message):
-        Label(message, systemImage: "exclamationmark.circle")
-      case .timedOut:
-        Label(
-          "Search stopped after \(SearchModel.defaultWaitSeconds) seconds.",
-          systemImage: "clock.badge.exclamationmark"
-        )
-      case .idle:
-        EmptyView()
       }
     }
-    .font(.callout)
-    .foregroundStyle(.secondary)
     .multilineTextAlignment(.center)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .padding()
   }
 
+  private var detail: String {
+    SearchWorkspaceCopy.outcomeDetail(
+      for: phase,
+      failureGuidance: failureGuidance,
+      skippedSources: skippedSources,
+      isScoped: isScoped,
+      timeoutSeconds: SearchModel.defaultWaitSeconds
+    )
+  }
 }
 
 struct SearchKey: Hashable {

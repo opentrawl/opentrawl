@@ -24,4 +24,59 @@ public enum SearchWorkspaceCopy {
     let verb = remaining == 1 ? "was" : "were"
     return "\(source): \(first.reason) \(remaining) more \(noun) \(verb) skipped."
   }
+
+  public static func outcomeTitle(for phase: SearchPhase) -> String {
+    switch phase {
+    case .complete, .partial:
+      "No matches"
+    case .skipped, .failed:
+      "Search unavailable"
+    case .timedOut:
+      "Search timed out"
+    case .idle, .loading:
+      "Search"
+    }
+  }
+
+  public static func outcomeSymbol(for phase: SearchPhase) -> String {
+    switch phase {
+    case .complete:
+      "magnifyingglass"
+    case .partial, .skipped:
+      "exclamationmark.triangle"
+    case .failed:
+      "exclamationmark.circle"
+    case .timedOut:
+      "clock.badge.exclamationmark"
+    case .idle, .loading:
+      "magnifyingglass"
+    }
+  }
+
+  public static func outcomeDetail(
+    for phase: SearchPhase,
+    failureGuidance: String?,
+    skippedSources: [SkippedSource],
+    isScoped: Bool,
+    timeoutSeconds: Int
+  ) -> String {
+    switch phase {
+    case .complete:
+      isScoped ? "No matches in this source." : "No matches in available sources."
+    case .partial:
+      partialNoMatches(failureGuidance: failureGuidance, isScoped: isScoped)
+    case .skipped:
+      skippedOutcome(for: skippedSources)
+    case .failed(let message):
+      message
+    case .timedOut:
+      timedOutOutcome(after: timeoutSeconds)
+    case .idle, .loading:
+      ""
+    }
+  }
+
+  public static func timedOutOutcome(after seconds: Int) -> String {
+    "Search stopped after \(seconds) seconds."
+  }
 }

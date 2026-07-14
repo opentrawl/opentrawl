@@ -90,3 +90,62 @@ import Testing
       == "No matches in available sources. Some sources failed."
   )
 }
+
+@Test func terminalSearchOutcomesHaveClearHeadingsAndSourceAwareDetails() {
+  let skipped = SkippedSource(
+    sourceID: "calendar",
+    surface: "Calendar",
+    reason: "Search is not supported."
+  )
+  let failure = "Photos: This source is not ready yet."
+
+  #expect(SearchWorkspaceCopy.outcomeTitle(for: .complete) == "No matches")
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .complete,
+      failureGuidance: nil,
+      skippedSources: [],
+      isScoped: false,
+      timeoutSeconds: 10
+    ) == "No matches in available sources."
+  )
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .complete,
+      failureGuidance: nil,
+      skippedSources: [],
+      isScoped: true,
+      timeoutSeconds: 10
+    ) == "No matches in this source."
+  )
+  #expect(SearchWorkspaceCopy.outcomeTitle(for: .failed(failure)) == "Search unavailable")
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .failed(failure),
+      failureGuidance: nil,
+      skippedSources: [],
+      isScoped: true,
+      timeoutSeconds: 10
+    ) == failure
+  )
+  #expect(SearchWorkspaceCopy.outcomeTitle(for: .timedOut) == "Search timed out")
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .timedOut,
+      failureGuidance: nil,
+      skippedSources: [],
+      isScoped: false,
+      timeoutSeconds: 10
+    ) == "Search stopped after 10 seconds."
+  )
+  #expect(SearchWorkspaceCopy.outcomeTitle(for: .skipped) == "Search unavailable")
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .skipped,
+      failureGuidance: nil,
+      skippedSources: [skipped],
+      isScoped: true,
+      timeoutSeconds: 10
+    ) == "Calendar: Search is not supported."
+  )
+}
