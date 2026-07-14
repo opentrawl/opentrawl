@@ -10,6 +10,7 @@ import Testing
 struct SearchOverlayViewTests {
   @Test func minimumWindowUsesCompactSearchWhileDefaultWindowKeepsTheSplitView() {
     #expect(TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.minimumWindow.width))
+    #expect(!TrawlDesign.usesCompactSearchLayout(width: 864))
     #expect(!TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.defaultWindow.width))
   }
 
@@ -29,6 +30,7 @@ struct SearchOverlayViewTests {
     let restoredCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[1]))
     let defaultCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[2]))
     let wideCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[3]))
+    let wideAvailable = constellationSize(in: windowSizes[3])
     let sourceIDs = [
       "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
       "whatsapp", "synthetic",
@@ -68,6 +70,9 @@ struct SearchOverlayViewTests {
     #expect(restoredMetrics == minimumMetrics)
     #expect(defaultMetrics.labelWidth == 156)
     #expect(defaultMetrics.labelHeight == 92)
+    #expect(wideCanvas.width > wideAvailable.width * 0.9)
+    #expect(wideCanvas.width <= TrawlDesign.constellationMaximumWidth)
+    #expect(wideCanvas.height <= TrawlDesign.constellationMaximumHeight)
     for (canvas, metrics) in [
       (minimumCanvas, minimumMetrics),
       (restoredCanvas, restoredMetrics),

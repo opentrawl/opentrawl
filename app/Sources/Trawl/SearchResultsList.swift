@@ -41,31 +41,41 @@ struct SearchResultsList: View {
   let onSelectionChanged: (SearchHit) -> Void
 
   var body: some View {
-    ScrollView {
-      LazyVStack(spacing: 0) {
-        SearchResultsContext(
-          phase: phase,
-          resultCount: results.count,
-          resultLimit: resultLimit,
-          failureGuidance: failureGuidance,
-          committedQuery: committedQuery
-        )
-        ForEach(results) { hit in
-          Button {
-            selectedResultID = hit.id
-            onOpen(hit)
-          } label: {
-            SearchResultRow(
-              hit: hit,
-              title: title(hit),
-              sourceDisplayName: sourceDisplayName(hit.sourceID),
-              isSelected: selectedResultID == hit.id
-            )
+    GeometryReader { proxy in
+      ScrollView {
+        LazyVStack(spacing: 0) {
+          SearchResultsContext(
+            phase: phase,
+            resultCount: results.count,
+            resultLimit: resultLimit,
+            failureGuidance: failureGuidance,
+            committedQuery: committedQuery
+          )
+          ForEach(results) { hit in
+            Button {
+              selectedResultID = hit.id
+              onOpen(hit)
+            } label: {
+              SearchResultRow(
+                hit: hit,
+                title: title(hit),
+                sourceDisplayName: sourceDisplayName(hit.sourceID),
+                isSelected: selectedResultID == hit.id
+              )
+            }
+            .buttonStyle(.plain)
+            Divider()
           }
-          .buttonStyle(.plain)
-          Divider()
+          if case .partial = phase {
+            SearchPartialFailure(message: failureGuidance ?? "Some sources failed.")
+          }
         }
+        .frame(
+          width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
+          alignment: .leading
+        )
       }
+      .frame(maxWidth: .infinity, alignment: .leading)
     }
     .focused($focus, equals: .results)
     .onKeyPress(.upArrow) {
@@ -104,39 +114,38 @@ private struct SearchResultsContext: View {
   let failureGuidance: String?
   let committedQuery: String?
 
+  @ViewBuilder
   var body: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      if case .partial = phase {
-        Label(partialMessage, systemImage: "exclamationmark.triangle")
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      HStack(alignment: .firstTextBaseline, spacing: 10) {
-        Spacer(minLength: 8)
-        if let retained = SearchResultsContextCopy.retained(
-          phase,
-          query: committedQuery,
-          failure: failureGuidance
-        ) {
-          Label(retained, systemImage: "magnifyingglass")
-            .fixedSize(horizontal: false, vertical: true)
-        } else if resultLimit > 0 {
-          Text(resultBounds)
-            .fixedSize()
-        }
+    VStack(alignment: .leading, spacing: 4) {
+      if let retained = SearchResultsContextCopy.retained(
+        phase,
+        query: committedQuery,
+        failure: failureGuidance
+      ) {
+        Label(retained, systemImage: "magnifyingglass")
+      } else if resultLimit > 0 {
+        Text(SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit))
       }
     }
-    .font(.callout)
-    .foregroundStyle(.secondary)
+    .font(.caption)
+    .foregroundStyle(.tertiary)
+    .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, 14)
-    .padding(.vertical, 10)
+    .padding(.top, 6)
+    .padding(.bottom, 4)
   }
+}
 
-  private var partialMessage: String {
-    return failureGuidance ?? "Some sources failed."
-  }
+private struct SearchPartialFailure: View {
+  let message: String
 
-  private var resultBounds: String {
-    SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit)
+  var body: some View {
+    Label(message, systemImage: "exclamationmark.triangle")
+      .font(.caption)
+      .foregroundStyle(.tertiary)
+      .fixedSize(horizontal: false, vertical: true)
+      .padding(.horizontal, 14)
+      .padding(.vertical, 10)
   }
 }
 
@@ -168,24 +177,32 @@ private struct SearchResultRow: View {
             .foregroundStyle(.tertiary)
           }
         }
-        if !hit.summary.subtitle.isEmpty {
-          Text(hit.summary.subtitle)
+        if !evidenceText.isEmpty {
+          Text(evidenceText)
             .font(.callout)
             .foregroundStyle(.secondary)
             .lineLimit(2)
         }
-        Text(evidenceText)
-          .font(.callout)
-          .foregroundStyle(.secondary)
-          .lineLimit(2)
+        if !hit.summary.subtitle.isEmpty {
+          Text(hit.summary.subtitle)
+            .font(.callout)
+            .foregroundStyle(.tertiary)
+            .lineLimit(2)
+        }
       }
     }
     .padding(.vertical, 7)
     .padding(.horizontal, 10)
     .background(
-      isSelected ? TrawlDesign.brandRed.opacity(0.08) : .clear,
+      isSelected ? TrawlDesign.brandRed.opacity(0.12) : .clear,
       in: RoundedRectangle(cornerRadius: 8)
     )
+    .overlay {
+      if isSelected {
+        RoundedRectangle(cornerRadius: 8)
+          .stroke(TrawlDesign.brandRed.opacity(0.28), lineWidth: 1)
+      }
+    }
     .padding(.horizontal, 5)
     .contentShape(.rect)
     .accessibilityElement(children: .combine)

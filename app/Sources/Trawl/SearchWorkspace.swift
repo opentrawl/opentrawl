@@ -22,6 +22,23 @@ enum SearchWorkspacePaneVisibility {
   static func showsRecord(for phase: SearchOpenPhase) -> Bool { phase != .idle }
 }
 
+enum SearchWorkspaceLayout: Equatable {
+  case results
+  case compactRecord
+  case split
+
+  static func resolve(
+    isCompact: Bool,
+    showsCompactRecord: Bool,
+    openPhase: SearchOpenPhase
+  ) -> Self {
+    if isCompact {
+      return showsCompactRecord ? .compactRecord : .results
+    }
+    return SearchWorkspacePaneVisibility.showsRecord(for: openPhase) ? .split : .results
+  }
+}
+
 struct SearchWorkspace: View {
   let client: any TrawlClient
   @Bindable var interaction: SearchInteraction
@@ -37,6 +54,7 @@ struct SearchWorkspace: View {
   let onMoveToResults: () -> Void
   let onEscape: () -> Void
   let onOpen: (SearchHit) -> Void
+  let onReturnToResults: () -> Void
   @Binding var showsRecord: Bool
 
   var body: some View {
@@ -77,29 +95,35 @@ struct SearchWorkspace: View {
 
   @ViewBuilder
   private var workspaceLayout: some View {
-    if isCompact {
-      if showsRecord {
-        VStack(spacing: 0) {
-          HStack {
-            Button("Back") { showsRecord = false }
-            Spacer()
-          }
-          .padding()
-          Divider()
-          ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
-        }
-      } else {
+    switch SearchWorkspaceLayout.resolve(
+      isCompact: isCompact,
+      showsCompactRecord: showsRecord,
+      openPhase: model.openPhase
+    ) {
+    case .results:
+      results.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    case .compactRecord:
+      ZStack {
         results
+          .opacity(0)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
+        CompactRecordWorkspace(
+          client: client,
+          phase: model.openPhase,
+          response: model.openResult,
+          onReturnToResults: onReturnToResults
+        )
       }
-    } else {
-      if SearchWorkspacePaneVisibility.showsRecord(for: model.openPhase) {
-        HStack(spacing: 0) {
-          results.frame(minWidth: 360)
-          Divider()
-          ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
-        }
-      } else {
-        results
+    case .split:
+      HStack(spacing: 0) {
+        results.frame(
+          minWidth: TrawlDesign.searchResultsMinimumWidth,
+          idealWidth: TrawlDesign.searchResultsMinimumWidth,
+          maxWidth: TrawlDesign.searchResultsMaximumWidth
+        )
+        Divider()
+        ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
       }
     }
   }
@@ -132,6 +156,30 @@ struct SearchWorkspace: View {
       for: sourceID,
       resolvedName: sourceResolver.displayName(for: sourceID)
     )
+  }
+}
+
+private struct CompactRecordWorkspace: View {
+  let client: any TrawlClient
+  let phase: SearchOpenPhase
+  let response: OpenResponse?
+  let onReturnToResults: () -> Void
+
+  var body: some View {
+    VStack(spacing: 0) {
+      HStack {
+        Button(action: onReturnToResults) {
+          Label("Results", systemImage: "chevron.left")
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel("Back to results")
+        Spacer()
+      }
+      .padding(.horizontal, 14)
+      .padding(.vertical, 9)
+      Divider()
+      ResultPreview(client: client, phase: phase, response: response)
+    }
   }
 }
 
