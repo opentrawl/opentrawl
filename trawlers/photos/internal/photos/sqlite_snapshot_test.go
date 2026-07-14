@@ -89,7 +89,7 @@ where m.Z_3ASSETS = 1
 	if asset.Camera.Aperture == nil || *asset.Camera.Aperture != 1.8 || asset.Camera.ISO == nil || *asset.Camera.ISO != 64 {
 		t.Fatalf("camera exposure = %#v", asset.Camera)
 	}
-	if len(asset.Resources) != 1 || !asset.Resources[0].NeedsDownload || asset.Resources[0].Availability != "remote" {
+	if len(asset.Resources) != 2 || asset.Resources[0].UTI != "public.heic" || !asset.Resources[0].NeedsDownload || asset.Resources[0].Availability != "remote" || asset.Resources[1].Type != "video" || asset.Resources[1].UTI != "" {
 		t.Fatalf("resources = %#v", asset.Resources)
 	}
 	if len(asset.Albums) != userAlbumMemberships || asset.Albums[0].AlbumID != userAlbumID || asset.Albums[0].AlbumTitle != "Synthetic Album" || asset.Albums[0].AlbumKind != "generic_album:2:0" {
@@ -357,7 +357,10 @@ values (1, 'fixture-uuid-1', 0, 0, ?, ?, ?, 4032, 3024, 0, 1, 0, '', 52.3676, 4.
 	if _, err := db.Exec(`insert into ZEXTENDEDATTRIBUTES(ZASSET, ZTIMEZONENAME, ZCAMERAMAKE, ZCAMERAMODEL, ZLENSMODEL, ZFOCALLENGTH, ZFOCALLENGTHIN35MM, ZAPERTURE, ZSHUTTERSPEED, ZISO) values (1, 'Fallback/Zone', 'Apple', 'iPhone 15 Pro', 'back camera', 6.86, 24, 1.8, 0.008333333333333333, 64)`); err != nil {
 		return err
 	}
-	if _, err := db.Exec(`insert into ZINTERNALRESOURCE(ZASSET, ZRESOURCETYPE, ZCOMPACTUTI, ZDATALENGTH, ZSTABLEHASH, ZFINGERPRINT, ZLOCALAVAILABILITY, ZREMOTEAVAILABILITY, ZVERSION) values (1, 0, 'public.heic', 12345, 'stable-hash', '', 0, 1, 1)`); err != nil {
+	if _, err := db.Exec(`insert into ZINTERNALRESOURCE(ZASSET, ZRESOURCETYPE, ZCOMPACTUTI, ZDATALENGTH, ZSTABLEHASH, ZFINGERPRINT, ZLOCALAVAILABILITY, ZREMOTEAVAILABILITY, ZVERSION) values (1, 0, '1', 12345, 'stable-hash', '', 0, 1, 1)`); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`insert into ZINTERNALRESOURCE(ZASSET, ZRESOURCETYPE, ZCOMPACTUTI, ZDATALENGTH, ZSTABLEHASH, ZFINGERPRINT, ZLOCALAVAILABILITY, ZREMOTEAVAILABILITY, ZVERSION) values (1, 1, '2', 6789, 'paired-stable-hash', '', 0, 1, 1)`); err != nil {
 		return err
 	}
 	if _, err := db.Exec(`insert into ZGENERICALBUM(Z_PK, ZUUID, ZTITLE, ZKIND, ZCLOUDALBUMSUBTYPE, ZTRASHEDSTATE) values (10, 'album-uuid-1', 'Synthetic Album', 2, 0, 0)`); err != nil {

@@ -447,6 +447,19 @@ func TestCardInputAuditFactsKeepNumericCameraValues(t *testing.T) {
 	}
 }
 
+func TestCardInputAuditFactsRejectsInvalidAssetUTIFallback(t *testing.T) {
+	metadata := imagemetadata.Artifacts{Projection: imagemetadata.Projection{Lines: []string{"Camera: Example"}}, Proof: imagemetadata.Proof{RecordSHA256: digestText("record"), ProjectionSHA256: digestText("projection")}}
+	current := photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: 3, SHA256: digestText("current")}
+	for _, metadataJSON := range []string{`{"uniform_type_identifier":"1"}`, `{not-json`} {
+		input := classifyInput{AssetID: "asset:invalid-uti", SourceLibraryID: "source:synthetic", CreationDate: "2026-07-13T10:00:00Z", MediaType: "image", Width: 2, Height: 2, MetadataJSON: metadataJSON}
+		original := classifyResource{ID: "resource:invalid-uti", ResourceType: "photo", OriginalFilename: "synthetic.jpg", FileSize: 3, SHA256: digestText("original"), AvailableLocally: true}
+		source, artifacts := cardInputAuditFacts(input, original, metadata, current, digestText("proof"))
+		if _, err := cardinput.Build(source, artifacts, nil); !errors.Is(err, cardinput.ErrIncompleteArtifact) {
+			t.Fatalf("metadata %q build error = %v, want incomplete artefact", metadataJSON, err)
+		}
+	}
+}
+
 func TestCardInputAuditBackstopIsStableAndBounded(t *testing.T) {
 	assets := []string{"asset:c", "asset:a", "asset:b"}
 	first := StableCardInputAuditBackstop("snapshot:complete", assets, 2)
@@ -463,7 +476,7 @@ func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
 	defer db.Close()
 	seedCardInputAuditSnapshot(t, ctx, db, "complete")
-	seedCardInputAuditAsset(t, ctx, db, "asset:ready", "current", "image", `{"present":true}`)
+	seedCardInputAuditAsset(t, ctx, db, "asset:ready", "current", "image", `{"uniform_type_identifier":"public.jpeg"}`)
 	root := t.TempDir()
 	cacheDir := filepath.Join(root, "cache")
 	originalPath := filepath.Join(root, "original.jpg")
@@ -473,8 +486,8 @@ func TestCardInputAuditReadyInspectionReadsOnlyCheckedArtifacts(t *testing.T) {
 	}
 	originalSHA := digestText(string(originalBytes))
 	if _, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values
-		('resource:ready-photo','asset:ready','photo','public.jpeg','synthetic.jpg',?, ?,?,1,0),
-		('resource:ready-original','asset:ready','local_original','public.jpeg','synthetic.jpg',?, ?,?,1,0)`, originalPath, len(originalBytes), digestText("stale photo observation"), originalPath, len(originalBytes), digestText("stale package observation")); err != nil {
+		('resource:ready-photo','asset:ready','photo','','synthetic.jpg',?, ?,?,1,0),
+		('resource:ready-original','asset:ready','local_original','','synthetic.jpg',?, ?,?,1,0)`, originalPath, len(originalBytes), digestText("stale photo observation"), originalPath, len(originalBytes), digestText("stale package observation")); err != nil {
 		t.Fatal(err)
 	}
 	metadataStore, err := imagemetadata.NewStore(filepath.Join(cacheDir, "image-metadata"), func(context.Context, string) ([]byte, error) {

@@ -507,7 +507,16 @@ func cardInputAuditCheckedOriginal(input classifyInput, cacheRoot string) (class
 }
 
 func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {
-	originalFact := cardinput.ImmutableOriginalFact{ResourceType: original.ResourceType, UTI: original.UTI, Filename: original.OriginalFilename, Availability: original.Availability(), SizeBytes: original.FileSize, SHA256: strings.ToLower(original.SHA256)}
+	originalUTI := strings.TrimSpace(original.UTI)
+	if originalUTI == "" {
+		var sourceMetadata struct {
+			UniformTypeIdentifier string `json:"uniform_type_identifier"`
+		}
+		if json.Unmarshal([]byte(input.MetadataJSON), &sourceMetadata) == nil && photos.IsOriginalUTI(strings.TrimSpace(sourceMetadata.UniformTypeIdentifier)) {
+			originalUTI = strings.TrimSpace(sourceMetadata.UniformTypeIdentifier)
+		}
+	}
+	originalFact := cardinput.ImmutableOriginalFact{ResourceType: original.ResourceType, UTI: originalUTI, Filename: original.OriginalFilename, Availability: original.Availability(), SizeBytes: original.FileSize, SHA256: strings.ToLower(original.SHA256)}
 	metadataFact := cardinput.MetadataFact{RecordSHA256: metadata.Proof.RecordSHA256, ProjectionSHA256: metadata.Proof.ProjectionSHA256, ProjectionLines: metadata.Projection.Lines}
 	currentFact := cardinput.FullCurrentFact{Role: "full_current", MediaType: current.MediaType, Orientation: current.Orientation, PixelWidth: current.PixelWidth, PixelHeight: current.PixelHeight, SizeBytes: current.Size, SHA256: current.SHA256}
 	source := cardinput.SourceFacts{AssetID: input.AssetID, SourceID: input.SourceLibraryID, CaptureTime: input.CreationDate, MediaType: input.MediaType, MediaSubtypes: splitSubtypes(input.MediaSubtypes), PixelWidth: input.Width, PixelHeight: input.Height, DurationSeconds: input.DurationSeconds, ImmutableOriginal: originalFact, Favorite: input.Favorite, Hidden: input.Hidden, BurstMember: strings.TrimSpace(input.BurstIdentifier) != "", Metadata: metadataFact, FullCurrent: currentFact}
