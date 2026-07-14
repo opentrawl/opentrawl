@@ -37,6 +37,7 @@ type Crawler struct {
 type Config struct {
 	LibraryPath   string              `toml:"library_path"`
 	PlaceEvidence PlaceEvidenceConfig `toml:"place_evidence"`
+	CardModel     CardModelConfig     `toml:"card_model"`
 }
 
 var (
@@ -101,6 +102,24 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 			Store:     trawlkit.StoreNone,
 			Flags:     c.currentStillFlags,
 			Run:       c.runCurrentStillAcquire,
+		},
+		{
+			Name:      "prepare-card",
+			Help:      "Prepare one Photos card request for review.",
+			Args:      []string{"PHOTO"},
+			Mutates:   true,
+			Secondary: true,
+			Store:     trawlkit.StoreNone,
+			Run:       c.runPrepareCard,
+		},
+		{
+			Name:      "create-card",
+			Help:      "Create one approved Photos card.",
+			Args:      []string{"APPROVAL"},
+			Mutates:   true,
+			Secondary: true,
+			Store:     trawlkit.StoreNone,
+			Run:       c.runCreateCard,
 		},
 	}
 }

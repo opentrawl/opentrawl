@@ -25,6 +25,11 @@ type GeoapifyEvidenceConfig struct {
 }
 
 func (c Config) Validate() error {
+	if c.CardModel.configured() {
+		if err := c.CardModel.validate(); err != nil {
+			return err
+		}
+	}
 	if !c.PlaceEvidence.Geoapify.configured() {
 		return nil
 	}

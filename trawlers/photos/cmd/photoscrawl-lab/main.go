@@ -168,6 +168,7 @@ func runApprovedCard(ctx context.Context, args []string) error {
 		prepared, err := archive.PrepareApprovedCardBundle(ctx, archive.ApprovedCardPrepareOptions{
 			ArchivePath: *archivePath, CacheDir: *cacheDir, SourceLibraryID: *sourceLibrary,
 			AssetIDs: assets, Model: config.Model, ModelURL: config.BaseURL,
+			ProviderIdentity: config.ProviderIdentity, CredentialEnv: config.BearerKeyEnv,
 			Purpose: "canary", CallCap: len(assets),
 		})
 		if err != nil {
@@ -183,8 +184,11 @@ func runApprovedCard(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := archive.ValidateApprovedCardSend(prepared, strings.TrimSpace(*approvedSHA256)); err != nil {
+		if err := archive.ValidateApprovedCardSend(prepared, strings.TrimSpace(*approvedSHA256), config.BearerKeyEnv); err != nil {
 			return err
+		}
+		if strings.TrimSpace(os.Getenv(config.BearerKeyEnv)) == "" {
+			return fmt.Errorf("configured model credential %s is unavailable", config.BearerKeyEnv)
 		}
 		db, err := archive.OpenApprovedCardArchive(ctx, *archivePath)
 		if err != nil {
@@ -195,16 +199,18 @@ func runApprovedCard(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return archive.SendApprovedCardBundle(ctx, db, prepared, strings.TrimSpace(*approvedSHA256), time.Now().UTC(), client)
+		_, err = archive.SendApprovedCardBundle(ctx, db, prepared, strings.TrimSpace(*approvedSHA256), config.BearerKeyEnv, time.Now().UTC(), client)
+		return err
 	default:
 		return output.UsageError{Err: errors.New("usage: photoscrawl-lab approved-card <prepare|send>")}
 	}
 }
 
 type approvedCardModelConfig struct {
-	BaseURL      string `toml:"base_url"`
-	Model        string `toml:"model"`
-	BearerKeyEnv string `toml:"bearer_key_env"`
+	ProviderIdentity string `toml:"provider_identity"`
+	BaseURL          string `toml:"base_url"`
+	Model            string `toml:"model"`
+	BearerKeyEnv     string `toml:"bearer_key_env"`
 }
 
 func readApprovedCardModelConfig(path string) (approvedCardModelConfig, error) {
@@ -212,8 +218,8 @@ func readApprovedCardModelConfig(path string) (approvedCardModelConfig, error) {
 	if err := ckconfig.LoadTOML(path, &config); err != nil {
 		return approvedCardModelConfig{}, fmt.Errorf("load approved-card model config: %w", err)
 	}
-	if strings.TrimSpace(config.BaseURL) == "" || strings.TrimSpace(config.Model) == "" {
-		return approvedCardModelConfig{}, errors.New("approved-card model config requires base_url and model")
+	if strings.TrimSpace(config.ProviderIdentity) == "" || strings.TrimSpace(config.BaseURL) == "" || strings.TrimSpace(config.Model) == "" || strings.TrimSpace(config.BearerKeyEnv) == "" {
+		return approvedCardModelConfig{}, errors.New("approved-card model config requires provider_identity, base_url, model and bearer_key_env")
 	}
 	return config, nil
 }

@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
@@ -30,6 +29,8 @@ type ApprovedCardPrepareOptions struct {
 	AssetIDs                []string
 	Model                   string
 	ModelURL                string
+	ProviderIdentity        string
+	CredentialEnv           string
 	Purpose                 string
 	CallCap                 int
 	PlaceEvidenceOperations []place.CheckedOperation
@@ -43,9 +44,9 @@ func OpenApprovedCardArchive(ctx context.Context, path string) (*store.Store, er
 // seams. No caller can pass CardInput, custody or provider request bytes.
 func PrepareApprovedCardBundle(ctx context.Context, options ApprovedCardPrepareOptions) ([]byte, error) {
 	if strings.TrimSpace(options.ArchivePath) == "" || strings.TrimSpace(options.CacheDir) == "" ||
-		strings.TrimSpace(options.SourceLibraryID) == "" || strings.TrimSpace(options.Model) == "" ||
-		strings.TrimSpace(options.ModelURL) == "" {
-		return nil, errors.New("approved card prepare requires archive, cache, source library, model and model URL")
+		strings.TrimSpace(options.Model) == "" ||
+		strings.TrimSpace(options.ModelURL) == "" || strings.TrimSpace(options.ProviderIdentity) == "" || strings.TrimSpace(options.CredentialEnv) == "" {
+		return nil, errors.New("approved card prepare requires archive, cache, provider, model, model URL and credential reference")
 	}
 	if len(options.AssetIDs) == 0 {
 		return nil, errors.New("approved card prepare requires at least one asset")
@@ -55,6 +56,11 @@ func PrepareApprovedCardBundle(ctx context.Context, options ApprovedCardPrepareO
 		return nil, err
 	}
 	defer func() { _ = db.Close() }()
+	if strings.TrimSpace(options.SourceLibraryID) == "" {
+		if err := db.DB().QueryRowContext(ctx, `select source_library_id from asset where id = ?`, strings.TrimSpace(options.AssetIDs[0])).Scan(&options.SourceLibraryID); err != nil {
+			return nil, fmt.Errorf("read approved card source: %w", err)
+		}
+	}
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return nil, err
@@ -83,7 +89,7 @@ func PrepareApprovedCardBundle(ctx context.Context, options ApprovedCardPrepareO
 		}
 		items = append(items, item)
 	}
-	return marshalApprovedCardBundle(paidCallPurpose(options.Purpose), options.CallCap, items)
+	return marshalApprovedCardBundle(paidCallPurpose(options.Purpose), options.CallCap, options.ProviderIdentity, options.CredentialEnv, items)
 }
 
 func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options ApprovedCardPrepareOptions, classifier modelClassifier, assetID string, position int) (*cardwire.ApprovedCardItem, error) {
@@ -197,8 +203,11 @@ func approvedCardExecutionID(assetID string, request preparedCardRequest) string
 	return stableID("card_execution", assetID, request.Input.ID, request.CustodySHA256, hex.EncodeToString(requestDigest[:]), request.CardRequestID, request.PromptVersion, request.ParserVersion)
 }
 
-func marshalApprovedCardBundle(purpose paidCallPurpose, callCap int, items []*cardwire.ApprovedCardItem) ([]byte, error) {
-	bundle := &cardwire.ApprovedCardBundle{Purpose: string(purpose), CallCap: uint32(callCap), Items: items}
+func marshalApprovedCardBundle(purpose paidCallPurpose, callCap int, providerIdentity, credentialEnv string, items []*cardwire.ApprovedCardItem) ([]byte, error) {
+	bundle := &cardwire.ApprovedCardBundle{
+		Purpose: string(purpose), CallCap: uint32(callCap), Items: items,
+		ProviderIdentity: strings.TrimSpace(providerIdentity), CredentialEnv: strings.TrimSpace(credentialEnv),
+	}
 	if err := validateApprovedCardBundle(bundle); err != nil {
 		return nil, err
 	}
@@ -232,6 +241,12 @@ func validateApprovedCardBundle(bundle *cardwire.ApprovedCardBundle) error {
 	}
 	if bundle.GetCallCap() == 0 || int(bundle.GetCallCap()) > len(bundle.GetItems()) {
 		return errors.New("approved card call cap is invalid")
+	}
+	if strings.TrimSpace(bundle.GetCredentialEnv()) == "" {
+		return errors.New("approved card credential reference is required")
+	}
+	if strings.TrimSpace(bundle.GetProviderIdentity()) == "" {
+		return errors.New("approved card provider identity is required")
 	}
 	seenAssets := map[string]struct{}{}
 	for index, item := range bundle.GetItems() {
@@ -322,139 +337,22 @@ func validateApprovedCardItem(item *cardwire.ApprovedCardItem) error {
 	return nil
 }
 
-func approvedCardApprovalActionDigest(bundle []byte) string {
-	bundleDigest := sha256.Sum256(bundle)
-	action := sha256.Sum256([]byte("approved-card-send-v1\n" + hex.EncodeToString(bundleDigest[:])))
-	return hex.EncodeToString(action[:])
-}
-
-// ValidateApprovedCardSend checks the explicit local approval and every
-// immutable cross-link before the caller opens an archive for writing.
-func ValidateApprovedCardSend(bundleBytes []byte, approvedBundleSHA256 string) error {
-	bundleDigest := sha256.Sum256(bundleBytes)
-	if approvedBundleSHA256 != hex.EncodeToString(bundleDigest[:]) {
-		return errors.New("approved card digest does not match the prepared bundle")
-	}
-	_, err := decodeApprovedCardBundle(bundleBytes)
-	return err
-}
-
-// SendApprovedCardBundle accepts one exact local approval of canonical prepared
-// bytes. It validates every configured request before it creates the ledger.
-func SendApprovedCardBundle(ctx context.Context, db *store.Store, bundleBytes []byte, approvedBundleSHA256 string, now time.Time, transport approvedCardTransport) error {
-	if db == nil || transport == nil {
-		return errors.New("approved card archive and transport are required")
-	}
-	if err := ValidateApprovedCardSend(bundleBytes, approvedBundleSHA256); err != nil {
-		return err
-	}
-	bundle, err := decodeApprovedCardBundle(bundleBytes)
+func ValidateApprovedCardBundleFreshness(ctx context.Context, bundle []byte, options ApprovedCardPrepareOptions) error {
+	stored, err := decodeApprovedCardBundle(bundle)
 	if err != nil {
 		return err
 	}
-	stage := paidCallStage{
-		Purpose:               paidCallPurpose(bundle.GetPurpose()),
-		ApprovalReceiptSHA256: approvedCardApprovalActionDigest(bundleBytes),
-		ApprovedCallCap:       int(bundle.GetCallCap()),
-		CreatedAt:             now,
+	assets := make([]string, 0, len(stored.GetItems()))
+	for _, item := range stored.GetItems() {
+		assets = append(assets, item.GetAssetId())
 	}
-	items := make([]approvedCardItem, 0, len(bundle.GetItems()))
-	for _, raw := range bundle.GetItems() {
-		prepared, err := restorePreparedCardRequestUnchecked(raw)
-		if err != nil {
-			return err
-		}
-		if err := transport.ValidateRequest(prepared.Request); err != nil {
-			return fmt.Errorf("validate approved card request: %w", err)
-		}
-		stageItem, err := newPaidCallStageItem(raw.GetExecutionId(), int(raw.GetPosition()), prepared)
-		if err != nil {
-			return err
-		}
-		stage.Items = append(stage.Items, stageItem)
-		items = append(items, approvedCardItem{raw: raw, prepared: prepared})
-	}
-	stage, err = createPaidCallStage(ctx, db, stage)
+	options.AssetIDs, options.Purpose, options.CallCap = assets, stored.GetPurpose(), int(stored.GetCallCap())
+	fresh, err := PrepareApprovedCardBundle(ctx, options)
 	if err != nil {
-		return err
+		return fmt.Errorf("approved card request is stale: %w", err)
 	}
-	for index := range items {
-		if err := executeApprovedCard(ctx, db, stage, items[index], now, transport); err != nil {
-			return err
-		}
+	if !bytes.Equal(bundle, fresh) {
+		return errors.New("approved card request is stale")
 	}
 	return nil
-}
-
-type approvedCardItem struct {
-	raw      *cardwire.ApprovedCardItem
-	prepared preparedCardRequest
-}
-
-func executeApprovedCard(ctx context.Context, db *store.Store, stage paidCallStage, item approvedCardItem, now time.Time, transport approvedCardTransport) error {
-	if completed, err := approvedCardCompleted(ctx, db, item.raw.GetExecutionId()); err != nil || completed {
-		return err
-	}
-	decision, err := claimPaidCall(ctx, db, paidCallClaimInput{StageID: stage.ID, ItemID: item.raw.GetExecutionId(), Prepared: item.prepared, ClaimedAt: now})
-	if err != nil {
-		return err
-	}
-	if decision.Call.Reused {
-		return errors.New("approved card completed generation has no card execution")
-	}
-	if decision.Call.Retained != nil {
-		return writeApprovedCard(ctx, db, item, decision.GenerationID, *decision.Call.Retained, now)
-	}
-	if !decision.Send {
-		return errors.New("approved card claim did not authorise a send")
-	}
-	if err := transport.ValidateRequest(decision.Call.Request); err != nil {
-		return fmt.Errorf("validate approved card request before send: %w", err)
-	}
-	raw, sendErr := transport.Send(ctx, decision.Call.Request)
-	if err := retainModelGenerationResult(ctx, db, decision.GenerationID, raw, now); err != nil {
-		return err
-	}
-	if sendErr != nil {
-		return sendErr
-	}
-	return writeApprovedCard(ctx, db, item, decision.GenerationID, raw, now)
-}
-
-func writeApprovedCard(ctx context.Context, db *store.Store, item approvedCardItem, generationID string, raw model.RawResult, now time.Time) error {
-	classifier := modelClassifier{modelID: item.prepared.Request.Model(), promptVersion: item.prepared.PromptVersion}
-	result, err := parseRetainedModelGeneration(ctx, db, generationID, item.raw.GetAssetId(), classifier, item.prepared, raw, now)
-	if err != nil {
-		return err
-	}
-	queueID, err := approvedCardQueueID(ctx, db, item.raw.GetAssetId())
-	if err != nil {
-		return err
-	}
-	return db.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, _, err := writeModelClassification(ctx, tx, classifyInput{AssetID: item.raw.GetAssetId(), QueueID: queueID}, classifier, result, item.prepared, now, generationID); err != nil {
-			return err
-		}
-		if err := completeModelGeneration(ctx, tx, generationID, item.raw.GetAssetId(), now); err != nil {
-			return err
-		}
-		return completePreparedCardRequest(ctx, tx, item.raw.GetExecutionId(), now.UTC().Format(time.RFC3339Nano))
-	})
-}
-
-func approvedCardQueueID(ctx context.Context, db *store.Store, assetID string) (string, error) {
-	var queueID string
-	if err := db.DB().QueryRowContext(ctx, `select id from classification_queue where asset_id = ?`, assetID).Scan(&queueID); err != nil {
-		return "", fmt.Errorf("read approved card queue: %w", err)
-	}
-	return queueID, nil
-}
-
-func approvedCardCompleted(ctx context.Context, db *store.Store, executionID string) (bool, error) {
-	var found int
-	err := db.DB().QueryRowContext(ctx, `select 1 from card_execution where id = ? and completed_at <> ''`, executionID).Scan(&found)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	return err == nil, err
 }

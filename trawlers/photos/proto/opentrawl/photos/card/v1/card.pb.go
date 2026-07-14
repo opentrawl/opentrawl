@@ -1373,15 +1373,17 @@ func (x *EvidenceLink) GetRawResponseSha256() string {
 	return ""
 }
 
-// ApprovedCardBundle is the complete credential-free boundary between local
+// ApprovedCardBundle is the complete secret-free boundary between local
 // preparation and the explicit local send action.
 type ApprovedCardBundle struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Purpose       string                 `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
-	CallCap       uint32                 `protobuf:"varint,2,opt,name=call_cap,json=callCap,proto3" json:"call_cap,omitempty"`
-	Items         []*ApprovedCardItem    `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Purpose          string                 `protobuf:"bytes,1,opt,name=purpose,proto3" json:"purpose,omitempty"`
+	CallCap          uint32                 `protobuf:"varint,2,opt,name=call_cap,json=callCap,proto3" json:"call_cap,omitempty"`
+	Items            []*ApprovedCardItem    `protobuf:"bytes,3,rep,name=items,proto3" json:"items,omitempty"`
+	ProviderIdentity string                 `protobuf:"bytes,4,opt,name=provider_identity,json=providerIdentity,proto3" json:"provider_identity,omitempty"`
+	CredentialEnv    string                 `protobuf:"bytes,5,opt,name=credential_env,json=credentialEnv,proto3" json:"credential_env,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ApprovedCardBundle) Reset() {
@@ -1433,6 +1435,20 @@ func (x *ApprovedCardBundle) GetItems() []*ApprovedCardItem {
 		return x.Items
 	}
 	return nil
+}
+
+func (x *ApprovedCardBundle) GetProviderIdentity() string {
+	if x != nil {
+		return x.ProviderIdentity
+	}
+	return ""
+}
+
+func (x *ApprovedCardBundle) GetCredentialEnv() string {
+	if x != nil {
+		return x.CredentialEnv
+	}
+	return ""
 }
 
 type ApprovedCardItem struct {
@@ -1739,11 +1755,13 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\fEvidenceLink\x12+\n" +
 	"\x11provider_identity\x18\x01 \x01(\tR\x10providerIdentity\x12\x1c\n" +
 	"\toperation\x18\x02 \x01(\tR\toperation\x12.\n" +
-	"\x13raw_response_sha256\x18\x03 \x01(\tR\x11rawResponseSha256\"\x8b\x01\n" +
+	"\x13raw_response_sha256\x18\x03 \x01(\tR\x11rawResponseSha256\"\xdf\x01\n" +
 	"\x12ApprovedCardBundle\x12\x18\n" +
 	"\apurpose\x18\x01 \x01(\tR\apurpose\x12\x19\n" +
 	"\bcall_cap\x18\x02 \x01(\rR\acallCap\x12@\n" +
-	"\x05items\x18\x03 \x03(\v2*.opentrawl.photos.card.v1.ApprovedCardItemR\x05items\"\xa8\x04\n" +
+	"\x05items\x18\x03 \x03(\v2*.opentrawl.photos.card.v1.ApprovedCardItemR\x05items\x12+\n" +
+	"\x11provider_identity\x18\x04 \x01(\tR\x10providerIdentity\x12%\n" +
+	"\x0ecredential_env\x18\x05 \x01(\tR\rcredentialEnv\"\xa8\x04\n" +
 	"\x10ApprovedCardItem\x12\x1a\n" +
 	"\bposition\x18\x01 \x01(\rR\bposition\x12\x19\n" +
 	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\"\n" +

@@ -154,12 +154,14 @@ message EvidenceLink {
   string raw_response_sha256 = 3;
 }
 
-// ApprovedCardBundle is the complete credential-free boundary between local
+// ApprovedCardBundle is the complete secret-free boundary between local
 // preparation and the explicit local send action.
 message ApprovedCardBundle {
   string purpose = 1;
   uint32 call_cap = 2;
   repeated ApprovedCardItem items = 3;
+  string provider_identity = 4;
+  string credential_env = 5;
 }
 
 message ApprovedCardItem {
