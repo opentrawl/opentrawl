@@ -139,8 +139,8 @@ func expectedInput(source SourceFacts, records []place.EvidenceRecord) *cardwire
 		Places: []*cardwire.PlaceProjection{
 			{ProviderIdentity: "synthetic-apple", Operation: "synthetic-reverse", CoordinateVariant: "source-coordinate", ParserVersion: "synthetic-parser-v1", PreAuthRequestSha256: digest("reverse-request"), RawResponseSha256: digest("reverse-response"), Address: expectedAddress("reverse")},
 			{ProviderIdentity: "synthetic-osm", Operation: "synthetic-nearby", CoordinateVariant: "source-coordinate", ParserVersion: "synthetic-parser-v1", PreAuthRequestSha256: digest("nearby-request"), RawResponseSha256: digest("nearby-response"), Candidates: []*cardwire.PlaceCandidate{
-				{ProviderIndex: 0, ProviderId: "place-z", Name: "Zulu synthetic venue", Categories: []string{"museum", "gallery"}, Coordinate: &cardwire.Coordinate{Latitude: 52.1235, Longitude: 4.5679}, DistanceMeters: 12.5, Address: expectedAddress("candidate-z"), Source: "synthetic-osm"},
-				{ProviderIndex: 1, ProviderId: "place-a", Name: "Alpha synthetic venue", Categories: []string{"park", "garden"}, Coordinate: &cardwire.Coordinate{Latitude: 52.1236, Longitude: 4.5680}, DistanceMeters: 24.75, Address: expectedAddress("candidate-a"), Source: "synthetic-osm"},
+				{ProviderIndex: 0, ProviderId: "place-z", Name: "Zulu synthetic venue", Categories: []string{"museum", "gallery"}, Coordinate: &cardwire.Coordinate{Latitude: 52.1235, Longitude: 4.5679}, DistanceMeters: 12.5, Address: expectedAddress("candidate-z"), Source: "synthetic-osm", CandidateId: "place_2_candidate_1"},
+				{ProviderIndex: 1, ProviderId: "place-a", Name: "Alpha synthetic venue", Categories: []string{"park", "garden"}, Coordinate: &cardwire.Coordinate{Latitude: 52.1236, Longitude: 4.5680}, DistanceMeters: 24.75, Address: expectedAddress("candidate-a"), Source: "synthetic-osm", CandidateId: "place_2_candidate_2"},
 			}},
 		},
 	}

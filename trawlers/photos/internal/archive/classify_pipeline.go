@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,6 +23,7 @@ type classifyWrite struct {
 	contentErr          error
 	imagePath           string
 	pathClass           string
+	prepared            preparedCardRequest
 	exported            bool
 	resolutionErr       error
 	resolutionDuration  time.Duration
@@ -33,6 +35,7 @@ type classifyWrite struct {
 	transientErrEvents  int
 	outcome             contentOutcome
 	generationID        string
+	executionID         string
 	generationReused    bool
 	transmissionStarted bool
 }
@@ -42,6 +45,7 @@ type contentOutcome string
 var extractImageMetadata = photos.ImageMetadataRecord
 
 var errUnknownCurrentStillMIMEType = errors.New("current-still media type is unknown")
+var errCardInputNotReady = errors.New("card input not ready")
 
 type currentStillResolver interface {
 	Resolve(context.Context, photos.CurrentStillRequest) (photos.CurrentStillResolution, error)
@@ -57,6 +61,7 @@ const (
 	contentOutcomeFailedModel             contentOutcome = "failed_model"
 	contentOutcomeStoppedUncertain        contentOutcome = "stopped_uncertain"
 	contentOutcomeRateLimited             contentOutcome = "rate_limited"
+	contentOutcomeCardInputNotReady       contentOutcome = "card_input_not_ready"
 	contentOutcomeFailedDownload          contentOutcome = "failed_download"
 	contentOutcomeNotInPhotoKit           contentOutcome = "not_in_photokit"
 	contentOutcomeNoContentAvailable      contentOutcome = "no_content_available"
@@ -70,8 +75,9 @@ type contentItem struct {
 	imagePath string
 	pathClass string
 
-	meta               imageMeta
+	prepared           preparedCardRequest
 	generationID       string
+	executionID        string
 	exported           bool
 	resolutionErr      error
 	resolutionDuration time.Duration
@@ -85,19 +91,6 @@ type contentItem struct {
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
 func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
-	resolver, err := photos.NewOriginalResolver(paths.OriginalsCacheDir(), exportOriginalResource)
-	if err != nil {
-		return err
-	}
-	currentStillResolver, err := newCurrentStillResolver(paths.OriginalsCacheDir(), exportCurrentStillResource)
-	if err != nil {
-		return err
-	}
-	metadataStore, err := imagemetadata.NewStore(filepath.Join(paths.CacheDir, "image-metadata"), extractImageMetadata)
-	if err != nil {
-		return err
-	}
-
 	// Pre-pass: items that never reach the model resolve immediately.
 	items := make([]*contentItem, 0, len(inputs))
 	for _, input := range inputs {
@@ -117,74 +110,26 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 	prepare := func(ctx context.Context, index int) (model.Call, error) {
 		item := items[index]
 		startedAt := time.Now()
-		resolved, err := resolver.Resolve(ctx, item.input.originalRequest())
+		prepared, generationID, found, err := restoreRetainedPreparedCardRequestForAsset(ctx, db, item.input.AssetID, classifier.client)
+		imagePath := ""
+		if err == nil && !found {
+			prepared, imagePath, err = prepareClassifyCardRequestFromCache(ctx, paths, item.input, classifier)
+		}
 		item.resolutionDuration = time.Since(startedAt)
 		if err != nil {
 			item.resolutionErr = err
 			return model.Call{}, err
 		}
-		item.exported = resolved.Exported
-		if resolved.Exported {
-			item.exportBytes = resolved.Size
+		item.prepared = prepared
+		item.imagePath = imagePath
+		item.pathClass = photos.CurrentStillSourceCache
+		item.executionID = approvedCardExecutionID(item.input.AssetID, prepared)
+		decision := modelGenerationDecision{GenerationID: generationID}
+		if found {
+			decision, err = prepareModelGeneration(ctx, db, item.input.AssetID, prepared.PromptVersion, prepared.ParserVersion, prepared.Request, now().UTC())
+		} else {
+			decision, err = prepareModelGenerationForPreparedCard(ctx, db, item.executionID, item.input.AssetID, prepared, now().UTC())
 		}
-		item.imagePath = resolved.Path
-		item.pathClass = resolved.Source
-		logger.logOriginalResolved(item.input, resolved)
-		// Register release before the first metadata operation so a failed
-		// extractor cannot leave a cache entry leased until process exit.
-		if resolved.Lease != nil {
-			defer resolved.Lease.Close()
-		}
-		metadataStartedAt := time.Now()
-		metadata, err := metadataStore.Load(ctx, item.imagePath, resolved.SHA256)
-		metadataDuration := time.Since(metadataStartedAt)
-		if err != nil {
-			logger.warn("image_metadata_failed",
-				logTokenField("asset_ref", AssetRef(item.input.AssetID)),
-				logInt64Field("duration_ms", metadataDuration.Milliseconds()),
-				logStringField("reason", "exact-original metadata unavailable"),
-			)
-			return model.Call{}, fmt.Errorf("prepare exact-original metadata: %w", err)
-		}
-		cacheStatus := "extracted"
-		if metadata.CacheHit {
-			cacheStatus = "hit"
-		}
-		logger.info("image_metadata_ready",
-			logTokenField("asset_ref", AssetRef(item.input.AssetID)),
-			logTokenField("cache", cacheStatus),
-			logInt64Field("duration_ms", metadataDuration.Milliseconds()),
-			logIntField("fields", metadata.Proof.FieldCount),
-			logIntField("excluded", metadata.Proof.ExclusionCount),
-		)
-		currentStillRequest, err := item.input.currentStillRequest()
-		if err != nil {
-			return model.Call{}, err
-		}
-		currentStill, err := currentStillResolver.Resolve(ctx, currentStillRequest)
-		if err != nil {
-			return model.Call{}, fmt.Errorf("prepare full current still: %w", err)
-		}
-		if currentStill.Lease != nil {
-			defer currentStill.Lease.Close()
-		}
-		item.imagePath = currentStill.Path
-		item.pathClass = currentStill.Source
-		request, meta, err := classifier.buildRequest(item.input, currentStill.Path, metadata.Projection)
-		if err != nil {
-			return model.Call{}, err
-		}
-		mimeType, err := currentStillMIMEType(currentStill.Fact.MediaType)
-		if err != nil {
-			return model.Call{}, err
-		}
-		request.Images[0].MIMEType = mimeType
-		item.meta = meta
-		providerRequest, err := classifier.client.Render(request)
-		if err != nil {
-			return model.Call{}, err
-		}
-		decision, err := prepareModelGeneration(ctx, db, item.input.AssetID, classifier.promptVersion, modelParserVersion, providerRequest, now().UTC())
 		item.generationID = decision.GenerationID
 		if err != nil {
 			return model.Call{}, err
@@ -202,6 +147,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			hasContent:         true,
 			imagePath:          item.imagePath,
 			pathClass:          item.pathClass,
+			prepared:           item.prepared,
 			exported:           item.exported,
 			resolutionErr:      item.resolutionErr,
 			resolutionDuration: item.resolutionDuration,
@@ -211,6 +157,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			rateLimitEvents:    res.RateLimitEvents,
 			transientErrEvents: res.TransientEvents,
 			generationID:       item.generationID,
+			executionID:        item.executionID,
 		}
 		if errors.Is(res.Err, errModelGenerationUncertain) || errors.Is(res.Err, errModelGenerationStoppedUncertain) {
 			write.contentErr = errModelGenerationStoppedUncertain
@@ -240,13 +187,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		}
 		switch res.Outcome {
 		case model.OutcomeOK:
-			response, err := model.Parse(res.Request, res.Raw)
-			if err != nil {
-				write.contentErr = err
-				write.outcome = contentOutcomeFailedParse
-				break
-			}
-			parsed, err := classifier.parseResult(response.Text, item.input, item.meta)
+			parsed, err := parseRetainedModelGeneration(ctx, db, item.generationID, item.input.AssetID, classifier, item.prepared, res.Raw, now().UTC())
 			if err != nil {
 				write.contentErr = err
 				write.outcome = modelFailureOutcome(err)
@@ -260,7 +201,10 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 			write.outcome = contentOutcomeRateLimited
 		case model.OutcomeFailed:
 			write.contentErr = res.Err
-			if item.resolutionErr != nil {
+			if errors.Is(item.resolutionErr, errCardInputNotReady) {
+				write.hasContent = false
+				write.outcome = contentOutcomeCardInputNotReady
+			} else if item.resolutionErr != nil {
 				write.hasContent = false
 				write.outcome = downloadFailureOutcome(item.resolutionErr)
 			} else {
@@ -325,14 +269,16 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	var metadataWritten, contentWritten, placeWritten int
 	classifiedAt := now().UTC()
 	writeStartedAt := time.Now()
+	if write.outcome == contentOutcomeCardInputNotReady {
+		write.writeDuration = time.Since(writeStartedAt)
+		result.Processed++
+		result.addContentOutcome(write.outcome)
+		logger.logOutcome(write)
+		return nil
+	}
 	err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		switch write.outcome {
 		case contentOutcomeFailedParse:
-			if write.generationID != "" {
-				if err := recordModelGenerationParseFailure(ctx, tx, write.generationID, write.input.AssetID, write.contentErr, classifiedAt); err != nil {
-					return err
-				}
-			}
 			state, reason := contentOutcomeQueueStateReason(write)
 			return updateClassificationQueue(ctx, tx, write.input.QueueID, state, reason, classifiedAt)
 		case contentOutcomeFailedModel:
@@ -361,12 +307,15 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 			if !write.hasContent || write.contentResult == nil {
 				return updateClassificationQueue(ctx, tx, write.input.QueueID, "content_failed", "classified outcome missing model result", classifiedAt)
 			}
-			written, placeWritten, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, classifiedAt, write.generationID)
+			written, placeWritten, err = writeModelClassification(ctx, tx, write.input, classifier, *write.contentResult, write.prepared, classifiedAt, write.generationID)
 			if err != nil {
 				return err
 			}
 			contentWritten = written
 			if err := completeModelGeneration(ctx, tx, write.generationID, write.input.AssetID, classifiedAt); err != nil {
+				return err
+			}
+			if err := completePreparedCardRequest(ctx, tx, write.executionID, classifiedAt.Format(time.RFC3339Nano)); err != nil {
 				return err
 			}
 		default:
@@ -404,6 +353,47 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	return nil
 }
 
+func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input classifyInput, classifier modelClassifier) (preparedCardRequest, string, error) {
+	if input.SourceState != sourceStateCurrent {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	if input.HasLocation {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, paths.OriginalsCacheDir())
+	if err != nil {
+		return preparedCardRequest{}, "", err
+	}
+	if !ok {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	metadata, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(paths.CacheDir, "image-metadata"), original.SHA256)
+	if !ok {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	currentRequest, err := input.currentStillRequest()
+	if err != nil {
+		return preparedCardRequest{}, "", err
+	}
+	path, current, proofSHA256, ok := photos.ReadCachedCurrentStill(paths.OriginalsCacheDir(), currentRequest.SourceLibraryID, currentRequest.AssetUUID, currentRequest.Freshness)
+	if !ok {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	image, err := os.ReadFile(path)
+	if err != nil {
+		return preparedCardRequest{}, "", err
+	}
+	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
+	prepared, err := renderPreparedCardRequest(source, artifacts, nil, image, classifier)
+	if err != nil {
+		return preparedCardRequest{}, "", err
+	}
+	if err := ctx.Err(); err != nil {
+		return preparedCardRequest{}, "", err
+	}
+	return prepared, path, nil
+}
+
 func missingContentOutcome(input classifyInput) contentOutcome {
 	if input.MediaType != "image" {
 		return contentOutcomeSkippedUnsupportedMedia
@@ -426,7 +416,7 @@ func modelFailureOutcome(err error) contentOutcome {
 }
 
 func isModelParseFailure(err error) bool {
-	return errors.Is(err, errModelCardParse)
+	return errors.Is(err, errModelCardParse) || errors.Is(err, errUnknownCardCandidate)
 }
 
 func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
@@ -439,6 +429,8 @@ func contentOutcomeQueueStateReason(write classifyWrite) (string, string) {
 		return "content_failed", "stopped_uncertain: model attempt has no retained result"
 	case contentOutcomeRateLimited:
 		return "metadata_classified", "requeued: model rate limited (429)"
+	case contentOutcomeCardInputNotReady:
+		return "", "card input not ready"
 	case contentOutcomeFailedDownload:
 		return "failed_download", "failed_download: " + classifyFailureReason(write.resolutionErr)
 	case contentOutcomeNotInPhotoKit:
@@ -470,6 +462,8 @@ func (result *ClassifyResult) addContentOutcome(outcome contentOutcome) {
 		result.ContentStoppedUncertain++
 	case contentOutcomeRateLimited:
 		result.RateLimitRequeued++
+	case contentOutcomeCardInputNotReady:
+		result.CardInputNotReady++
 	case contentOutcomeFailedDownload:
 		result.ContentFailedDownload++
 	case contentOutcomeNotInPhotoKit:

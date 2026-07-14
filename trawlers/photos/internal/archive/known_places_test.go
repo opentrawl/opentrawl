@@ -73,57 +73,6 @@ func TestSetKnownPlacesUpsertsByKindAndName(t *testing.T) {
 	}
 }
 
-func TestPhotoCardMetadataJSONIncludesKnownPlaceAndSuppressesPOIs(t *testing.T) {
-	t.Parallel()
-	metadata, err := photoCardMetadataJSON(classifyInput{
-		CreationDate:   "2026-05-27T10:00:00Z",
-		MediaType:      "image",
-		Width:          100,
-		Height:         80,
-		HasLocation:    true,
-		Latitude:       52,
-		Longitude:      4,
-		AccuracyMeters: 8,
-		KnownPlace: &KnownPlaceMatch{
-			Kind: KnownPlaceKindHome,
-			Name: "Example Residence",
-		},
-		Place: &classifyPlaceContext{
-			CacheStatus: "hit",
-			Result: place.Result{
-				POIStatus: place.POIStatusFound,
-				Address:   &place.Address{Formatted: "23 Example Street, Example City, Example Country"},
-				POICandidates: []place.POICandidate{{
-					Name:      "Synthetic Consultancy",
-					Category:  "business",
-					DistanceM: 12,
-					Tier:      place.TierVenueCandidate,
-					Source:    "fixture",
-				}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal(metadata, &payload); err != nil {
-		t.Fatal(err)
-	}
-	location := payload["location"].(map[string]any)
-	knownPlace := location["known_place"].(map[string]any)
-	if knownPlace["relationship"] != "the user's home" || knownPlace["name"] != "Example Residence" {
-		t.Fatalf("known place sidecar = %#v", knownPlace)
-	}
-	placeContext := location["place_context"].(map[string]any)
-	if candidates, present := placeContext["venue_candidates"]; present {
-		t.Fatalf("known place sidecar kept POIs: %#v", candidates)
-	}
-	if strings.Contains(string(metadata), "Synthetic Consultancy") {
-		t.Fatalf("known place sidecar leaked POI candidate:\n%s", metadata)
-	}
-}
-
 func TestKnownPlaceOpenSearchAndPOISuppression(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

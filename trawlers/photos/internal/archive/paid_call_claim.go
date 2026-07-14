@@ -13,16 +13,10 @@ import (
 )
 
 type paidCallClaimInput struct {
-	StageID           string
-	ItemID            string
-	AssetID           string
-	CardInputID       string
-	CustodySHA256     string
-	FullCurrentSHA256 string
-	PromptVersion     string
-	ParserVersion     string
-	Request           model.ProviderRequest
-	ClaimedAt         time.Time
+	StageID   string
+	ItemID    string
+	Prepared  preparedCardRequest
+	ClaimedAt time.Time
 }
 
 type paidCallDecision struct {
@@ -82,11 +76,11 @@ returning purpose, approved_call_cap
 		if err := observePaidCallClaimSQL(paidCallClaimStageItemRead); err != nil {
 			return err
 		}
-		item, err := readPaidCallStageItem(ctx, tx, input.StageID, input.ItemID)
+		item, position, err := readPaidCallStageItem(ctx, tx, input.StageID, input.ItemID)
 		if err != nil {
 			return err
 		}
-		if item.Position > cap {
+		if position > cap {
 			return errors.New("paid call item is outside the approved cap")
 		}
 		if err := matchPaidCallClaimInput(item, input); err != nil {
@@ -97,7 +91,7 @@ returning purpose, approved_call_cap
 			return err
 		}
 		var sourceState string
-		if err := tx.QueryRowContext(ctx, `select source_state from asset where id = ?`, input.AssetID).Scan(&sourceState); err != nil {
+		if err := tx.QueryRowContext(ctx, `select source_state from asset where id = ?`, input.Prepared.Custody.GetAssetId()).Scan(&sourceState); err != nil {
 			return fmt.Errorf("read paid call asset source state: %w", err)
 		}
 		if sourceState != sourceStateCurrent {
@@ -107,7 +101,7 @@ returning purpose, approved_call_cap
 		if err := observePaidCallClaimSQL(paidCallClaimEligibilityRead); err != nil {
 			return err
 		}
-		eligibility, err := firstCardEligibilityForAsset(ctx, tx, input.AssetID)
+		eligibility, err := firstCardEligibilityForAsset(ctx, tx, input.Prepared.Custody.GetAssetId())
 		if err != nil {
 			return err
 		}
@@ -116,7 +110,7 @@ returning purpose, approved_call_cap
 		}
 
 		if decision.Purpose == paidCallPurposeScreening {
-			decision.Call.Request = input.Request
+			decision.Call.Request = input.Prepared.Request
 			fresh, err := insertPaidCallClaim(ctx, tx, input, decision.Purpose, "")
 			if err != nil {
 				return err
@@ -126,11 +120,14 @@ returning purpose, approved_call_cap
 		}
 
 		generation, err := prepareModelGenerationTx(
-			ctx, tx, input.AssetID, input.PromptVersion, input.ParserVersion, input.Request, input.ClaimedAt,
+			ctx, tx, input.Prepared.Custody.GetAssetId(), input.Prepared.PromptVersion, input.Prepared.ParserVersion, input.Prepared.Request, input.ClaimedAt,
 		)
 		decision.GenerationID = generation.GenerationID
 		decision.Call = generation.Call
 		if err != nil {
+			return err
+		}
+		if err := retainPreparedCardRequest(ctx, tx, input.ItemID, input.Prepared.Custody.GetAssetId(), generation.GenerationID, input.Prepared); err != nil {
 			return err
 		}
 		if !generation.Fresh {
@@ -151,53 +148,47 @@ returning purpose, approved_call_cap
 
 func validatePaidCallClaimInput(input paidCallClaimInput) error {
 	for name, value := range map[string]string{
-		"stage id": input.StageID, "item id": input.ItemID, "asset id": input.AssetID,
-		"CardInput id": input.CardInputID, "prompt version": input.PromptVersion,
-		"parser version": input.ParserVersion,
+		"stage id": input.StageID, "item id": input.ItemID,
 	} {
 		if err := requireExactPaidCallValue(name, value); err != nil {
 			return err
 		}
 	}
-	if err := validateSHA256("full-current", input.FullCurrentSHA256); err != nil {
-		return err
-	}
 	if input.ClaimedAt.IsZero() {
 		return errors.New("paid call claim time is required")
 	}
-	if _, err := model.RestoreProviderRequest(input.Request.Route(), input.Request.Model(), input.Request.Body()); err != nil {
-		return fmt.Errorf("validate paid call provider request: %w", err)
-	}
-	return nil
+	return validatePreparedCardRequest(input.Prepared)
 }
 
-func readPaidCallStageItem(ctx context.Context, tx *sql.Tx, stageID, itemID string) (paidCallStageItem, error) {
-	var item paidCallStageItem
+func readPaidCallStageItem(ctx context.Context, tx *sql.Tx, stageID, itemID string) (paidCallStageTuple, int, error) {
+	var item paidCallStageTuple
+	var storedItemID string
+	var position int
 	err := tx.QueryRowContext(ctx, `
 select item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
        request_route, model_id, request_sha256, prompt_version, parser_version
 from paid_call_stage_item
 where stage_id = ? and item_id = ?
-`, stageID, itemID).Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
+`, stageID, itemID).Scan(&storedItemID, &position, &item.AssetID, &item.CardInputID,
 		&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
 		&item.PromptVersion, &item.ParserVersion)
 	if errors.Is(err, sql.ErrNoRows) {
-		return paidCallStageItem{}, errors.New("paid call stage item does not exist")
+		return paidCallStageTuple{}, 0, errors.New("paid call stage item does not exist")
 	}
 	if err != nil {
-		return paidCallStageItem{}, fmt.Errorf("read paid call stage item: %w", err)
+		return paidCallStageTuple{}, 0, fmt.Errorf("read paid call stage item: %w", err)
 	}
-	return item, nil
+	return item, position, nil
 }
 
-func matchPaidCallClaimInput(item paidCallStageItem, input paidCallClaimInput) error {
-	digest := input.Request.Digest()
+func matchPaidCallClaimInput(item paidCallStageTuple, input paidCallClaimInput) error {
+	digest := input.Prepared.Request.Digest()
 	requestSHA256 := hex.EncodeToString(digest[:])
-	if item.AssetID != input.AssetID || item.CardInputID != input.CardInputID ||
-		item.CustodySHA256 != input.CustodySHA256 ||
-		item.FullCurrentSHA256 != input.FullCurrentSHA256 || item.RequestRoute != input.Request.Route() ||
-		item.ModelID != input.Request.Model() || item.RequestSHA256 != requestSHA256 ||
-		item.PromptVersion != input.PromptVersion || item.ParserVersion != input.ParserVersion {
+	if item.AssetID != input.Prepared.Custody.GetAssetId() || item.CardInputID != input.Prepared.Input.ID ||
+		item.CustodySHA256 != input.Prepared.CustodySHA256 ||
+		item.FullCurrentSHA256 != input.Prepared.Image.SHA256 || item.RequestRoute != input.Prepared.Request.Route() ||
+		item.ModelID != input.Prepared.Request.Model() || item.RequestSHA256 != requestSHA256 ||
+		item.PromptVersion != input.Prepared.PromptVersion || item.ParserVersion != input.Prepared.ParserVersion {
 		return errors.New("paid call claim does not match the approved stage item")
 	}
 	return nil
@@ -210,7 +201,7 @@ func insertPaidCallClaim(
 	purpose paidCallPurpose,
 	generationID string,
 ) (bool, error) {
-	digest := input.Request.Digest()
+	digest := input.Prepared.Request.Digest()
 	requestSHA256 := hex.EncodeToString(digest[:])
 	var generation any
 	if generationID != "" {
@@ -224,8 +215,8 @@ insert into paid_call_claim(
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 on conflict(stage_id, item_id) do nothing
 
-`, input.StageID, input.ItemID, purpose, input.AssetID, input.CardInputID, input.CustodySHA256,
-		input.FullCurrentSHA256, requestSHA256, input.PromptVersion, input.ParserVersion,
+`, input.StageID, input.ItemID, purpose, input.Prepared.Custody.GetAssetId(), input.Prepared.Input.ID, input.Prepared.CustodySHA256,
+		input.Prepared.Image.SHA256, requestSHA256, input.Prepared.PromptVersion, input.Prepared.ParserVersion,
 		generation, input.ClaimedAt.UTC().Format(time.RFC3339Nano))
 	if err != nil {
 		return false, fmt.Errorf("persist paid call claim: %w", err)
@@ -263,13 +254,13 @@ where stage_id = ? and item_id = ?
 		&requestSHA256, &promptVersion, &parserVersion, &gotGeneration, &claimedAt); err != nil {
 		return fmt.Errorf("read paid call claim: %w", err)
 	}
-	digest := input.Request.Digest()
+	digest := input.Prepared.Request.Digest()
 	wantDigest := hex.EncodeToString(digest[:])
 	wantGenerationValid := generationID != ""
-	if gotPurpose != purpose || assetID != input.AssetID || cardInputID != input.CardInputID ||
-		custodySHA256 != input.CustodySHA256 ||
-		fullCurrentSHA256 != input.FullCurrentSHA256 || requestSHA256 != wantDigest ||
-		promptVersion != input.PromptVersion || parserVersion != input.ParserVersion ||
+	if gotPurpose != purpose || assetID != input.Prepared.Custody.GetAssetId() || cardInputID != input.Prepared.Input.ID ||
+		custodySHA256 != input.Prepared.CustodySHA256 ||
+		fullCurrentSHA256 != input.Prepared.Image.SHA256 || requestSHA256 != wantDigest ||
+		promptVersion != input.Prepared.PromptVersion || parserVersion != input.Prepared.ParserVersion ||
 		gotGeneration.Valid != wantGenerationValid || (gotGeneration.Valid && gotGeneration.String != generationID) {
 		return errors.New("paid call claim already exists with different bytes")
 	}

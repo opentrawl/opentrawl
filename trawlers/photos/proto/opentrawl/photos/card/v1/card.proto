@@ -105,6 +105,7 @@ message PlaceCandidate {
   double distance_meters = 6;
   Address address = 7;
   string source = 8;
+  string candidate_id = 9;
 }
 
 message Address {

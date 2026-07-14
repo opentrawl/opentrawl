@@ -456,6 +456,9 @@ func openVenue(rows []map[string]any) *OpenVenue {
 			continue
 		}
 		tier := rowString(row, "tier")
+		if tier == "model_selected" {
+			tier = "venue_candidate"
+		}
 		if tier != "confirmed_venue" && tier != "venue_candidate" {
 			continue
 		}

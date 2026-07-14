@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -28,11 +29,42 @@ func TestApprovedCardBundleBindsPreparedBytesAndRetainedSuccessResumes(t *testin
 	prepared := fixtureCardPreparationFor(assetID)
 	item, err := prepareCard(preparedCard{
 		source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence,
-		classify: prepared.Classify, currentStill: prepared.CurrentStill, mimeType: prepared.MIMEType,
+		classify: prepared.Classify, currentStill: prepared.CurrentStill,
 		classifier: classifier,
 	}, 1)
 	if err != nil {
 		t.Fatal(err)
+	}
+	fresh, err := renderPreparedCardRequest(prepared.Source, prepared.Artifacts, prepared.Evidence, prepared.CurrentStill, classifier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	restored, err := restorePreparedCardRequest(item, classifier.client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, value := range map[string]preparedCardRequest{"fresh": fresh, "restored": restored} {
+		custodyBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(value.Custody)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(custodyBytes, value.CustodyBytes) || !bytes.Equal(value.CustodyBytes, item.GetCustody()) || value.Custody.GetCardInputSha256() == "" || value.Custody.GetRequestSha256() != value.RequestSHA256 {
+			t.Fatalf("%s in-memory custody does not match retained bytes", name)
+		}
+	}
+	var providerEnvelope struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := json.Unmarshal(item.GetRequestBody(), &providerEnvelope); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(providerEnvelope.Prompt, `"provider_index":  0`) && !strings.Contains(providerEnvelope.Prompt, `"provider_index": 0`) {
+		t.Fatalf("complete CardInput ProtoJSON omitted provider index 0:\n%s", providerEnvelope.Prompt)
+	}
+	unsupported := proto.Clone(item).(*cardwire.ApprovedCardItem)
+	unsupported.PromptVersion = "photo-card-v3.0"
+	if _, err := restorePreparedCardRequest(unsupported, classifier.client); err == nil {
+		t.Fatal("unregistered retained prompt version restored")
 	}
 	bundle, err := marshalApprovedCardBundle(paidCallPurposeCanary, 1, []*cardwire.ApprovedCardItem{item})
 	if err != nil {
@@ -48,7 +80,7 @@ func TestApprovedCardBundleBindsPreparedBytesAndRetainedSuccessResumes(t *testin
 		t.Fatalf("sends=%d body=%q", transport.sends, transport.body)
 	}
 	var cards, complete, claims int
-	if err := db.DB().QueryRowContext(ctx, "select count(*) from card_execution").Scan(&cards); err != nil {
+	if err := db.DB().QueryRowContext(ctx, "select count(*) from card_execution where completed_at <> ''").Scan(&cards); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.DB().QueryRowContext(ctx, "select count(*) from model_generation_asset where completed_at is not null").Scan(&complete); err != nil {
@@ -78,7 +110,7 @@ func TestApprovedCardRejectsApprovalMismatchBeforeLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepared := fixtureCardPreparationFor("asset:approved-mismatch")
-	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, mimeType: prepared.MIMEType, classifier: classifier}, 1)
+	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, classifier: classifier}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +142,7 @@ func TestApprovedCardRetainsParseFailureWithoutCompleting(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepared := fixtureCardPreparationFor(assetID)
-	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, mimeType: prepared.MIMEType, classifier: classifier}, 1)
+	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, classifier: classifier}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +162,7 @@ func TestApprovedCardRetainsParseFailureWithoutCompleting(t *testing.T) {
 	if err := db.DB().QueryRowContext(ctx, "select count(*) from model_generation_asset where completed_at is not null").Scan(&complete); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.DB().QueryRowContext(ctx, "select count(*) from card_execution").Scan(&cards); err != nil {
+	if err := db.DB().QueryRowContext(ctx, "select count(*) from card_execution where completed_at <> ''").Scan(&cards); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.DB().QueryRowContext(ctx, "select count(*) from model_generation_asset where parse_failure is not null").Scan(&parseFailures); err != nil {
@@ -152,7 +184,7 @@ func TestApprovedCardRejectsCardInputMutationEvenWithNewOuterDigests(t *testing.
 		t.Fatal(err)
 	}
 	prepared := fixtureCardPreparationFor(assetID)
-	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, mimeType: prepared.MIMEType, classifier: classifier}, 1)
+	item, err := prepareCard(preparedCard{source: prepared.Source, artifacts: prepared.Artifacts, evidence: prepared.Evidence, classify: prepared.Classify, currentStill: prepared.CurrentStill, classifier: classifier}, 1)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -24,17 +24,9 @@ const (
 )
 
 type paidCallStageItem struct {
-	ItemID            string
-	Position          int
-	AssetID           string
-	CardInputID       string
-	CustodySHA256     string
-	FullCurrentSHA256 string
-	RequestRoute      string
-	ModelID           string
-	RequestSHA256     string
-	PromptVersion     string
-	ParserVersion     string
+	ItemID   string
+	Position int
+	Prepared *preparedCardRequest
 }
 
 type paidCallStage struct {
@@ -56,6 +48,15 @@ type paidCallStageTuple struct {
 	RequestSHA256     string
 	PromptVersion     string
 	ParserVersion     string
+}
+
+func newPaidCallStageItem(itemID string, position int, prepared preparedCardRequest) (paidCallStageItem, error) {
+	if err := validatePreparedCardRequest(prepared); err != nil {
+		return paidCallStageItem{}, err
+	}
+	return paidCallStageItem{
+		ItemID: itemID, Position: position, Prepared: &prepared,
+	}, nil
 }
 
 func createPaidCallStage(ctx context.Context, db *store.Store, stage paidCallStage) (paidCallStage, error) {
@@ -96,14 +97,18 @@ on conflict(id) do nothing
 			return nil
 		}
 		for _, item := range stage.Items {
+			tuple := paidCallItemTuple(item)
+			if _, err := retainPreparedModelBoundaryTx(ctx, tx, item.ItemID, item.Prepared.Custody.GetAssetId(), *item.Prepared, stage.CreatedAt); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `
 insert into paid_call_stage_item(
   stage_id, item_id, position, asset_id, card_input_id, custody_sha256, full_current_sha256,
   request_route, model_id, request_sha256, prompt_version, parser_version
 )
 values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-`, stage.ID, item.ItemID, item.Position, item.AssetID, item.CardInputID, item.CustodySHA256, item.FullCurrentSHA256,
-				item.RequestRoute, item.ModelID, item.RequestSHA256, item.PromptVersion, item.ParserVersion); err != nil {
+`, stage.ID, item.ItemID, item.Position, tuple.AssetID, tuple.CardInputID, tuple.CustodySHA256, tuple.FullCurrentSHA256,
+				tuple.RequestRoute, tuple.ModelID, tuple.RequestSHA256, tuple.PromptVersion, tuple.ParserVersion); err != nil {
 				return fmt.Errorf("persist paid call stage item %d: %w", item.Position, err)
 			}
 		}
@@ -138,34 +143,38 @@ func validatePaidCallStage(stage paidCallStage) error {
 	itemIDs := make(map[string]struct{}, len(stage.Items))
 	tuples := make(map[paidCallStageTuple]struct{}, len(stage.Items))
 	for index, item := range stage.Items {
+		if item.Prepared == nil {
+			return fmt.Errorf("paid call item %d: prepared card request is required", item.Position)
+		}
+		if err := validatePreparedCardRequest(*item.Prepared); err != nil {
+			return fmt.Errorf("paid call item %d: %w", item.Position, err)
+		}
+		tuple := paidCallItemTuple(item)
 		if item.Position != index+1 {
 			return errors.New("paid call item positions must be contiguous and start at 1")
 		}
 		for name, value := range map[string]string{
-			"item id": item.ItemID, "asset id": item.AssetID, "CardInput id": item.CardInputID,
-			"request route": item.RequestRoute, "model id": item.ModelID,
-			"prompt version": item.PromptVersion, "parser version": item.ParserVersion,
+			"item id": item.ItemID, "asset id": tuple.AssetID, "CardInput id": tuple.CardInputID,
+			"request route": tuple.RequestRoute, "model id": tuple.ModelID,
+			"prompt version": tuple.PromptVersion, "parser version": tuple.ParserVersion,
 		} {
 			if err := requireExactPaidCallValue(name, value); err != nil {
 				return fmt.Errorf("paid call item %d: %w", item.Position, err)
 			}
 		}
-		if err := validateSHA256("full-current", item.FullCurrentSHA256); err != nil {
+		if err := validateSHA256("full-current", tuple.FullCurrentSHA256); err != nil {
 			return fmt.Errorf("paid call item %d: %w", item.Position, err)
 		}
-		if stage.Purpose != paidCallPurposeScreening {
-			if err := validateSHA256("custody", item.CustodySHA256); err != nil {
-				return fmt.Errorf("paid call item %d: %w", item.Position, err)
-			}
+		if err := validateSHA256("custody", tuple.CustodySHA256); err != nil {
+			return fmt.Errorf("paid call item %d: %w", item.Position, err)
 		}
-		if err := validateSHA256("request", item.RequestSHA256); err != nil {
+		if err := validateSHA256("request", tuple.RequestSHA256); err != nil {
 			return fmt.Errorf("paid call item %d: %w", item.Position, err)
 		}
 		if _, exists := itemIDs[item.ItemID]; exists {
 			return fmt.Errorf("paid call item id %q is duplicated", item.ItemID)
 		}
 		itemIDs[item.ItemID] = struct{}{}
-		tuple := paidCallItemTuple(item)
 		if _, exists := tuples[tuple]; exists {
 			return fmt.Errorf("paid call item tuple at position %d is duplicated", item.Position)
 		}
@@ -205,12 +214,20 @@ order by position
 		return time.Time{}, fmt.Errorf("read paid call stage items: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	got := make([]paidCallStageItem, 0, len(want.Items))
+	got := make([]struct {
+		itemID   string
+		position int
+		tuple    paidCallStageTuple
+	}, 0, len(want.Items))
 	for rows.Next() {
-		var item paidCallStageItem
-		if err := rows.Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
-			&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
-			&item.PromptVersion, &item.ParserVersion); err != nil {
+		var item struct {
+			itemID   string
+			position int
+			tuple    paidCallStageTuple
+		}
+		if err := rows.Scan(&item.itemID, &item.position, &item.tuple.AssetID, &item.tuple.CardInputID,
+			&item.tuple.CustodySHA256, &item.tuple.FullCurrentSHA256, &item.tuple.RequestRoute, &item.tuple.ModelID, &item.tuple.RequestSHA256,
+			&item.tuple.PromptVersion, &item.tuple.ParserVersion); err != nil {
 			return time.Time{}, fmt.Errorf("scan paid call stage item: %w", err)
 		}
 		got = append(got, item)
@@ -222,7 +239,7 @@ order by position
 		return time.Time{}, errors.New("paid call stage identity already exists with a different item count")
 	}
 	for index := range got {
-		if got[index] != want.Items[index] {
+		if got[index].tuple != paidCallItemTuple(want.Items[index]) || got[index].itemID != want.Items[index].ItemID || got[index].position != want.Items[index].Position {
 			return time.Time{}, fmt.Errorf("paid call stage identity already exists with different item bytes at position %d", index+1)
 		}
 	}
@@ -233,9 +250,10 @@ func paidCallStageID(stage paidCallStage) string {
 	hash := sha256.New()
 	parts := []string{string(stage.Purpose), stage.ApprovalReceiptSHA256, strconv.Itoa(stage.ApprovedCallCap), strconv.Itoa(len(stage.Items))}
 	for _, item := range stage.Items {
-		parts = append(parts, strconv.Itoa(item.Position), item.ItemID, item.AssetID, item.CardInputID,
-			item.CustodySHA256, item.FullCurrentSHA256, item.RequestRoute, item.ModelID, item.RequestSHA256,
-			item.PromptVersion, item.ParserVersion)
+		tuple := paidCallItemTuple(item)
+		parts = append(parts, strconv.Itoa(item.Position), item.ItemID, tuple.AssetID, tuple.CardInputID,
+			tuple.CustodySHA256, tuple.FullCurrentSHA256, tuple.RequestRoute, tuple.ModelID, tuple.RequestSHA256,
+			tuple.PromptVersion, tuple.ParserVersion)
 	}
 	for _, part := range parts {
 		var size [8]byte
@@ -247,10 +265,16 @@ func paidCallStageID(stage paidCallStage) string {
 }
 
 func paidCallItemTuple(item paidCallStageItem) paidCallStageTuple {
+	if item.Prepared == nil {
+		return paidCallStageTuple{}
+	}
+	digest := item.Prepared.Request.Digest()
 	return paidCallStageTuple{
-		AssetID: item.AssetID, CardInputID: item.CardInputID, CustodySHA256: item.CustodySHA256, FullCurrentSHA256: item.FullCurrentSHA256,
-		RequestRoute: item.RequestRoute, ModelID: item.ModelID, RequestSHA256: item.RequestSHA256,
-		PromptVersion: item.PromptVersion, ParserVersion: item.ParserVersion,
+		AssetID: item.Prepared.Custody.GetAssetId(), CardInputID: item.Prepared.Input.ID,
+		CustodySHA256: item.Prepared.CustodySHA256, FullCurrentSHA256: item.Prepared.Image.SHA256,
+		RequestRoute: item.Prepared.Request.Route(), ModelID: item.Prepared.Request.Model(),
+		RequestSHA256: hex.EncodeToString(digest[:]), PromptVersion: item.Prepared.PromptVersion,
+		ParserVersion: item.Prepared.ParserVersion,
 	}
 }
 

@@ -13,8 +13,10 @@ import (
 	"testing"
 	"time"
 
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPaidCallCommittedDecisionUsesExactFixtureRequestAndRetainsRawResult(t *testing.T) {
@@ -42,16 +44,28 @@ func TestPaidCallCommittedDecisionUsesExactFixtureRequestAndRetainsRawResult(t *
 	}
 
 	db, _ := openModelGenerationTestStore(t)
-	stage, _ := paidCallTestStage(t, db, paidCallPurposeCanary, 1, 1)
+	stage, requests := paidCallTestStage(t, db, paidCallPurposeCanary, 1, 1)
+	prepared := requests[stage.Items[0].ItemID]
+	prepared.Request = request
 	digest := request.Digest()
-	stage.Items[0].RequestRoute = request.Route()
-	stage.Items[0].ModelID = request.Model()
-	stage.Items[0].RequestSHA256 = hex.EncodeToString(digest[:])
+	prepared.RequestSHA256 = hex.EncodeToString(digest[:])
+	prepared.Custody = proto.Clone(prepared.Custody).(*cardwire.CardExecutionCustody)
+	prepared.Custody.RequestSha256 = prepared.RequestSHA256
+	prepared.CustodyBytes, err = proto.MarshalOptions{Deterministic: true}.Marshal(prepared.Custody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared.CustodySHA256 = digestBytes(prepared.CustodyBytes)
+	prepared.CardRequestID = cardRequestID(prepared.Input.ID, prepared.UTI, prepared.MIMEType, prepared.PromptVersion, request)
+	stage.Items[0], err = newPaidCallStageItem(stage.Items[0].ItemID, stage.Items[0].Position, prepared)
+	if err != nil {
+		t.Fatal(err)
+	}
 	stage, err = createPaidCallStage(ctx, db, stage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	input := paidCallClaimForItem(stage, stage.Items[0], request)
+	input := paidCallClaimForItem(stage, stage.Items[0], prepared)
 	logPaidCallBoundary(t, "paid_call_fixture_claim_input", paidCallClaimBoundary(input))
 	decision, err := claimPaidCall(ctx, db, input)
 	if err != nil || !decision.Send {
@@ -97,7 +111,7 @@ func TestPaidCallClaimSerialisesBothSourceDeletionCommitOrders(t *testing.T) {
 		if err == nil || decision.Send {
 			t.Fatalf("deletion-first decision = %#v, %v", decision, err)
 		}
-		assertPaidCallCounts(t, db, 0, 0, 0)
+		assertPaidCallCounts(t, db, 0, 1, 0)
 		logPaidCallBoundary(t, "paid_call_deletion_first_input", map[string]any{"claim": paidCallClaimBoundary(input), "asset_state": sourceStateDeletedUpstream})
 		logPaidCallBoundary(t, "paid_call_deletion_first_output", map[string]any{"send": decision.Send, "error": err.Error(), "claims": 0})
 	})

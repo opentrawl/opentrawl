@@ -102,8 +102,8 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 	if got := []string{appleCandidates[0].Source, appleCandidates[1].Source, appleCandidates[2].Source, appleCandidates[3].Source}; !slices.Equal(got, []string{"apple_mapkit_reverse", "apple_mapkit_reverse", "apple_mapkit_local_search", "apple_mapkit_local_search"}) {
 		t.Fatalf("Apple reverse and nearby boundaries merged: %#v", appleCandidates)
 	}
-	if first.Records[2].Candidates[1].ProviderID != "nearby-3" || first.Records[2].Candidates[1].Name != "" {
-		t.Fatalf("unnamed unfamiliar candidate was hidden: %#v", first.Records[2].Candidates)
+	if first.Records[2].Candidates[2].ProviderID != "nearby-3" || first.Records[2].Candidates[2].Name != "" {
+		t.Fatalf("unnamed unfamiliar candidate was dropped from provider order: %#v", first.Records[2].Candidates)
 	}
 	assertRawFile(t, first.Records[0], "request.raw", `{"latitude":52.36,"longitude":4.89,"radius_meters":150}`)
 	assertRawFile(t, first.Records[0], "response.raw", syntheticAppleResponse)

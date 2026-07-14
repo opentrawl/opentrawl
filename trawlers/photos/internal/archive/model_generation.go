@@ -60,6 +60,56 @@ func prepareModelGeneration(
 	return decision, err
 }
 
+func prepareModelGenerationForPreparedCard(
+	ctx context.Context,
+	db *store.Store,
+	executionID, assetID string,
+	prepared preparedCardRequest,
+	now time.Time,
+) (modelGenerationDecision, error) {
+	var decision modelGenerationDecision
+	err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		decision, err = prepareModelGenerationTx(ctx, tx, assetID, prepared.PromptVersion, prepared.ParserVersion, prepared.Request, now)
+		if err != nil {
+			return err
+		}
+		return retainPreparedCardRequest(ctx, tx, executionID, assetID, decision.GenerationID, prepared)
+	})
+	return decision, err
+}
+
+func retainPreparedModelBoundaryTx(ctx context.Context, tx *sql.Tx, executionID, assetID string, prepared preparedCardRequest, now time.Time) (string, error) {
+	digest := prepared.Request.Digest()
+	digestText := hex.EncodeToString(digest[:])
+	generationID := "model_generation:" + digestText[:32]
+	if _, err := tx.ExecContext(ctx, `
+insert into model_generation(id, request_sha256, request_route, model_id, request_body, created_at)
+values (?, ?, ?, ?, ?, ?)
+on conflict(id) do nothing
+`, generationID, digestText, prepared.Request.Route(), prepared.Request.Model(), prepared.Request.Body(), now.UTC().Format(time.RFC3339Nano)); err != nil {
+		return "", fmt.Errorf("persist prepared model request: %w", err)
+	}
+	storedRequest, storedDigest, err := readModelGenerationRequest(ctx, tx, generationID)
+	if err != nil {
+		return "", err
+	}
+	if storedDigest != digestText || storedRequest.Route() != prepared.Request.Route() || storedRequest.Model() != prepared.Request.Model() || !bytes.Equal(storedRequest.Body(), prepared.Request.Body()) {
+		return "", fmt.Errorf("%w: persisted provider request", errPreparedCardMismatch)
+	}
+	if _, err := tx.ExecContext(ctx, `
+insert into model_generation_asset(generation_id, asset_id, prompt_version, parser_version)
+values (?, ?, ?, ?)
+on conflict(generation_id, asset_id) do nothing
+`, generationID, assetID, prepared.PromptVersion, prepared.ParserVersion); err != nil {
+		return "", fmt.Errorf("persist prepared model asset: %w", err)
+	}
+	if err := retainPreparedCardRequest(ctx, tx, executionID, assetID, generationID, prepared); err != nil {
+		return "", err
+	}
+	return generationID, nil
+}
+
 func prepareModelGenerationTx(
 	ctx context.Context,
 	tx *sql.Tx,
@@ -272,6 +322,33 @@ where generation_id = ? and asset_id = ? and completed_at is null
 		return errors.New("model generation asset relation is missing for parse failure")
 	}
 	return nil
+}
+
+func parseRetainedModelGeneration(
+	ctx context.Context,
+	db *store.Store,
+	generationID, assetID string,
+	classifier modelClassifier,
+	prepared preparedCardRequest,
+	raw model.RawResult,
+	now time.Time,
+) (modelResult, error) {
+	response, err := model.Parse(prepared.Request, raw)
+	if err != nil {
+		err = fmt.Errorf("%w: provider envelope: %v", errModelCardParse, err)
+	} else {
+		var parsed modelResult
+		parsed, err = classifier.parseResult(response.Text, prepared)
+		if err == nil {
+			return parsed, nil
+		}
+	}
+	if persistErr := db.WithTx(ctx, func(tx *sql.Tx) error {
+		return recordModelGenerationParseFailure(ctx, tx, generationID, assetID, err, now)
+	}); persistErr != nil {
+		return modelResult{}, persistErr
+	}
+	return modelResult{}, err
 }
 
 func completeModelGeneration(ctx context.Context, tx *sql.Tx, generationID, assetID string, now time.Time) error {

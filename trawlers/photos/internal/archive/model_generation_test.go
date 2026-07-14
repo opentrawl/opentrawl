@@ -10,7 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -253,13 +255,29 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 		},
 	}
 	classifier := modelClassifier{modelID: "fixture-model", promptVersion: modelPromptVersion}
+	preparedCandidates := []preparedPlaceCandidate{
+		{ID: "place_1_candidate_1", Provider: "synthetic-provider", ProviderIndex: 0, Name: "Synthetic Provider Bakery", DistanceMeters: 4, Source: "synthetic", PlacePosition: 1, CandidatePosition: 1},
+		{ID: "place_1_candidate_2", Provider: "synthetic-provider", ProviderIndex: 1, Name: "Synthetic Card Venue", DistanceMeters: 12, Source: "synthetic", PlacePosition: 1, CandidatePosition: 2},
+	}
+	prepared := preparedCardRequest{Image: imageMeta{Bytes: 17, SHA256: "synthetic-image"}, CandidateByID: map[string]preparedPlaceCandidate{}, CandidatesInSeq: preparedCandidates}
+	prepared.Input.Input = &cardwire.CardInput{Places: []*cardwire.PlaceProjection{{
+		ProviderIdentity: "synthetic-provider",
+		Operation:        "synthetic-reverse",
+		Address: &cardwire.Address{
+			Formatted: "Synthetic Provider Avenue 42, Synthetic Town, Syntheticland",
+			Source:    "synthetic-provider",
+		},
+	}}}
+	for _, candidate := range preparedCandidates {
+		prepared.CandidateByID[candidate.ID] = candidate
+	}
 	parsed, err := classifier.parseResult(fixtureCardResponse(
 		"Synthetic duplicate summary.",
 		"Synthetic duplicate description with a visible venue sign.",
-		"candidate_id: venue_candidate_2\nverdict: corroborated\nreason: synthetic sign matches the provider candidate.",
+		"candidate_id: place_1_candidate_2\nverdict: corroborated\nreason: synthetic sign matches the provider candidate.",
 		"Synthetic card venue sign",
 		"none",
-	), input, imageMeta{Bytes: 17, SHA256: "synthetic-image"})
+	), prepared)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +285,7 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 		var observations, places int
 		err := db.WithTx(ctx, func(tx *sql.Tx) error {
 			var err error
-			observations, places, err = writeModelClassification(ctx, tx, input, classifier, parsed, at, decision.GenerationID)
+			observations, places, err = writeModelClassification(ctx, tx, input, classifier, parsed, prepared, at, decision.GenerationID)
 			if err != nil {
 				return err
 			}
@@ -320,7 +338,13 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 	var knownObservations, knownPlaces int
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
 		var err error
-		knownObservations, knownPlaces, err = writeModelClassification(ctx, tx, knownInput, classifier, parsed, now.Add(5*time.Second), knownDecision.GenerationID)
+		knownPrepared := preparedCardRequest{
+			Input:         cardinput.Result{Input: &cardwire.CardInput{KnownPlace: &cardwire.KnownPlace{Name: "Synthetic Local Workshop", Relationship: KnownPlaceKindWork}}},
+			CandidateByID: map[string]preparedPlaceCandidate{}, CandidatesInSeq: []preparedPlaceCandidate{},
+		}
+		knownParsed := parsed
+		knownParsed.VenuePlausibility.CandidateID = "none"
+		knownObservations, knownPlaces, err = writeModelClassification(ctx, tx, knownInput, classifier, knownParsed, knownPrepared, now.Add(5*time.Second), knownDecision.GenerationID)
 		if err != nil {
 			return err
 		}
@@ -387,10 +411,10 @@ order by p.asset_id, p.observation_type, p.value_text
 		generationID  string
 		searchFTSRows int
 	}{
-		assetID + "|address|Synthetic Provider Avenue 42, Synthetic Town, Syntheticland": {generationID: "", searchFTSRows: 1},
 		assetID + "|poi_candidate|Synthetic Provider Bakery":                             {generationID: "", searchFTSRows: 0},
 		assetID + "|poi_candidate|Synthetic Card Venue":                                  {generationID: decision.GenerationID, searchFTSRows: 0},
 		assetID + "|venue|Synthetic Card Venue":                                          {generationID: decision.GenerationID, searchFTSRows: 1},
+		assetID + "|address|Synthetic Provider Avenue 42, Synthetic Town, Syntheticland": {generationID: "", searchFTSRows: 1},
 		knownAssetID + "|known_place|work — Synthetic Local Workshop":                    {generationID: "", searchFTSRows: 1},
 	}
 	for _, row := range stored {

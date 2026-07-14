@@ -3,8 +3,10 @@ package archive
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,8 +26,11 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -118,6 +123,7 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	if metadataOnly.MetadataClassified != 1 || metadataOnly.ContentClassified != 0 {
 		t.Fatalf("metadata classify result = %#v", metadataOnly)
 	}
+	prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, "fixture-model-asset")
 
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-vision",
@@ -128,7 +134,13 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.ContentClassified != 1 || result.ContentObservationsWritten == 0 || result.ContentClassificationFailures != 0 || result.WaitingForLocalContent != 0 {
-		t.Fatalf("classify result = %#v", result)
+		proof, _ := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+		var parseFailure []byte
+		if proof != nil {
+			_ = proof.DB().QueryRowContext(ctx, `select coalesce(parse_failure, X'') from model_generation_asset limit 1`).Scan(&parseFailure)
+			_ = proof.Close()
+		}
+		t.Fatalf("classify result = %#v parse_failure=%q", result, parseFailure)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
 
@@ -223,8 +235,8 @@ func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
 		_, _, err = writeModelClassification(ctx, tx, firstInput, firstClassifier, recardModelResult(
 			"Old oldcardterm synthetic card.",
 			"Old oldcardterm description for the retained history row.",
-			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "old synthetic place"},
-		), fixedClock("2026-05-28T10:15:00Z")(), generationID)
+			venuePlausibility{CandidateID: "place_1_candidate_1", Verdict: venueVerdictPlausible, Reason: "old synthetic place"},
+		), recardPreparedRequest("Old Synthetic Pier"), fixedClock("2026-05-28T10:15:00Z")(), generationID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -251,8 +263,8 @@ func TestClassifyRecardsBySupersedingHistory(t *testing.T) {
 		_, _, err = writeModelClassification(ctx, tx, secondInput, secondClassifier, recardModelResult(
 			"New newcardterm synthetic card.",
 			"New newcardterm description for the active row.",
-			venuePlausibility{CandidateID: "venue_candidate_1", Verdict: venueVerdictPlausible, Reason: "new synthetic place"},
-		), fixedClock("2026-05-28T10:45:00Z")(), generationID)
+			venuePlausibility{CandidateID: "place_1_candidate_1", Verdict: venueVerdictPlausible, Reason: "new synthetic place"},
+		), recardPreparedRequest("New Synthetic Pier"), fixedClock("2026-05-28T10:45:00Z")(), generationID)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -376,6 +388,16 @@ func recardPlaceContext(name string) *classifyPlaceContext {
 	}
 }
 
+func recardPreparedRequest(name string) preparedCardRequest {
+	candidate := preparedPlaceCandidate{ID: "place_1_candidate_1", Provider: "synthetic", ProviderIndex: 0, ProviderID: "provider:" + name, Name: name, DistanceMeters: 4, Source: "synthetic", PlacePosition: 1, CandidatePosition: 1}
+	return preparedCardRequest{
+		Input: cardinput.Result{Input: &cardwire.CardInput{Places: []*cardwire.PlaceProjection{{
+			ProviderIdentity: "synthetic", Candidates: []*cardwire.PlaceCandidate{{CandidateId: candidate.ID, ProviderId: candidate.ProviderID, Name: candidate.Name}},
+		}}}},
+		CandidateByID: map[string]preparedPlaceCandidate{candidate.ID: candidate}, CandidatesInSeq: []preparedPlaceCandidate{candidate},
+	}
+}
+
 func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 	withSyntheticCurrentStill(t)
 	ctx := context.Background()
@@ -451,37 +473,12 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentClassified != 1 || result.PhotoKitExports != 1 || result.OriginalResolutionFailures != 0 || result.WaitingForLocalContent != 0 {
+	if result.Processed != 1 || result.CardInputNotReady != 1 || result.PhotoKitExports != 0 || result.OriginalResolutionFailures != 0 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.PhotoKitExportBytes != int64(len(exportedImageBytes)) {
-		t.Fatalf("PhotoKit export bytes = %d", result.PhotoKitExportBytes)
-	}
-	if files := countOriginalCacheMedia(t, paths.OriginalsCacheDir()); files != 1 {
+	if files := countOriginalCacheMedia(t, paths.OriginalsCacheDir()); files != 0 {
 		t.Fatalf("originals cache files after classify = %d", files)
-	}
-	foundOriginal := false
-	foundMetadata := false
-	for _, event := range logs.events {
-		if event.event == "original_resolved" &&
-			strings.Contains(event.message, "source=photokit_original_export") &&
-			strings.Contains(event.message, fmt.Sprintf("bytes=%d", len(exportedImageBytes))) &&
-			strings.Contains(event.message, "sha256=") {
-			foundOriginal = true
-		}
-		if event.event == "image_metadata_ready" &&
-			strings.Contains(event.message, "cache=extracted") &&
-			strings.Contains(event.message, "fields=") &&
-			strings.Contains(event.message, "excluded=") {
-			foundMetadata = true
-		}
-	}
-	if !foundOriginal {
-		t.Fatalf("privacy-safe original proof missing from logs: %#v", logs.events)
-	}
-	if !foundMetadata {
-		t.Fatalf("privacy-safe metadata proof missing from logs: %#v", logs.events)
 	}
 }
 
@@ -549,43 +546,9 @@ func TestClassifyReleasesOriginalLeaseWhenMetadataExtractionFails(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentFailedModel != 1 || result.PhotoKitExports != 1 || result.Processed != 1 {
+	if result.CardInputNotReady != 1 || result.ContentFailedModel != 0 || result.PhotoKitExports != 0 || result.Processed != 1 {
 		t.Fatalf("classify result = %#v", result)
 	}
-	assertRecordedLogEvent(t, logs, "image_metadata_failed")
-
-	// A failed extractor must not retain the resolver's shared cache lease.
-	// Resolving the same original in a fresh resolver would time out here if
-	// prepare deferred release only after successful metadata extraction.
-	resolver, err := photos.NewOriginalResolver(paths.OriginalsCacheDir(), func(context.Context, photos.OriginalExportQuery, string, bool) error {
-		t.Fatal("checked original cache reached exporter after metadata failure")
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	reacquireContext, cancel := context.WithTimeout(ctx, time.Second)
-	defer cancel()
-	resolved, err := resolver.Resolve(reacquireContext, photos.OriginalRequest{
-		SourceLibraryID:  photos.SourceLibraryID(libraryPath),
-		ModificationDate: modificationDate,
-		AllowNetwork:     true,
-		Query: photos.OriginalExportQuery{
-			LocalIdentifier:  "metadata-extractor-failure",
-			CreationDate:     "2026-05-27T12:00:00Z",
-			Width:            100,
-			Height:           80,
-			OriginalFilename: "metadata-extractor-failure.jpeg",
-			OriginalUTI:      "public.jpeg",
-		},
-	})
-	if err != nil {
-		t.Fatalf("reacquire checked original cache: %v", err)
-	}
-	if resolved.Source != photos.OriginalSourceCache || resolved.Lease == nil {
-		t.Fatalf("reacquired original = %#v", resolved)
-	}
-	resolved.Lease.Close()
 }
 
 func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
@@ -681,6 +644,7 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, "parse-fails")
 	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-vision",
@@ -693,19 +657,18 @@ func TestClassifyContentOutcomesSumToProcessed(t *testing.T) {
 	}
 	if result.Processed != 5 ||
 		result.ContentFailedParse != 1 ||
-		result.ContentFailedDownload != 2 ||
-		result.ContentNotInPhotoKit != 1 ||
+		result.CardInputNotReady != 3 ||
+		result.ContentFailedDownload != 0 ||
+		result.ContentNotInPhotoKit != 0 ||
 		result.ContentNoContentAvailable != 0 ||
 		result.ContentSkippedUnsupportedMedia != 1 {
 		t.Fatalf("classify result = %#v", result)
 	}
 	assertContentOutcomesSumToProcessed(t, result)
-	if result.ContentClassificationFailures != 1 || result.OriginalResolutionFailures != 3 || result.WaitingForLocalContent != 0 {
+	if result.ContentClassificationFailures != 1 || result.OriginalResolutionFailures != 0 || result.WaitingForLocalContent != 0 {
 		t.Fatalf("aggregate counters = %#v", result)
 	}
 	assertRecordedLogEvent(t, logs, "failed_parse")
-	assertRecordedLogEvent(t, logs, "not_in_photokit")
-	assertRecordedLogEvent(t, logs, "failed_download")
 
 	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
 	if err != nil {
@@ -722,7 +685,7 @@ where state in ('pending', 'metadata_classified')
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if nonTerminal != 1 {
+	if nonTerminal != 4 {
 		t.Fatalf("non-terminal classified rows = %d", nonTerminal)
 	}
 	states := map[string]string{}
@@ -749,9 +712,9 @@ join asset a on a.id = q.asset_id
 	}
 	wantStates := map[string]string{
 		"parse-fails":     "metadata_classified",
-		"not-in-photokit": "content_not_in_photokit",
-		"download-fails":  "failed_download",
-		"no-content":      "failed_download",
+		"not-in-photokit": "pending",
+		"download-fails":  "pending",
+		"no-content":      "pending",
 		"video-skipped":   "content_skipped",
 	}
 	if !reflect.DeepEqual(states, wantStates) {
@@ -766,7 +729,7 @@ join asset a on a.id = q.asset_id
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Processed != 3 || second.ContentFailedParse != 1 || second.ContentFailedDownload != 2 || second.OriginalResolutionFailures != 2 || second.ModelCallAttempts != 0 {
+	if second.Processed != 4 || second.ContentFailedParse != 1 || second.CardInputNotReady != 3 || second.ContentFailedDownload != 0 || second.OriginalResolutionFailures != 0 || second.ModelCallAttempts != 0 {
 		t.Fatalf("failed download did not resume on the next run: %#v", second)
 	}
 	assertContentOutcomesSumToProcessed(t, second)
@@ -814,12 +777,12 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Processed != 1 || first.ContentFailedDownload != 1 || first.OriginalResolutionFailures != 1 {
+	if first.Processed != 1 || first.CardInputNotReady != 1 || first.ContentFailedDownload != 0 || first.OriginalResolutionFailures != 0 {
 		t.Fatalf("first classify result = %#v", first)
 	}
 	assertContentOutcomesSumToProcessed(t, first)
-	if calls := exportCalls.Load(); calls != 1 {
-		t.Fatalf("first export attempts = %d, want 1", calls)
+	if calls := exportCalls.Load(); calls != 0 {
+		t.Fatalf("first export attempts = %d, want 0", calls)
 	}
 
 	if _, err := Sync(ctx, paths, SyncOptions{
@@ -837,13 +800,13 @@ func TestClassifyRetriesFailedDownloadOnNextRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if second.Processed != 1 || second.ContentFailedDownload != 1 || second.OriginalResolutionFailures != 1 {
+	if second.Processed != 1 || second.CardInputNotReady != 1 || second.ContentFailedDownload != 0 || second.OriginalResolutionFailures != 0 {
 		t.Fatalf("failed download did not resume: %#v", second)
 	}
-	if calls := exportCalls.Load(); calls != 2 {
-		t.Fatalf("export attempts after resume = %d, want 2", calls)
+	if calls := exportCalls.Load(); calls != 0 {
+		t.Fatalf("export attempts after resume = %d, want 0", calls)
 	}
-	assertQueueState(t, ctx, paths, "permanent-download-failure", "failed_download")
+	assertQueueState(t, ctx, paths, "permanent-download-failure", "pending")
 }
 
 func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
@@ -901,7 +864,7 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.ContentFailedDownload != 1 || result.OriginalResolutionFailures != 1 {
+	if result.CardInputNotReady != 1 || result.ContentFailedDownload != 0 || result.OriginalResolutionFailures != 0 {
 		t.Fatalf("classify result = %#v", result)
 	}
 
@@ -913,17 +876,9 @@ func TestClassifyLogsFailedDownloadToTrawlkitRun(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, line := range lines {
-		if line.Event != "failed_download" {
-			continue
-		}
-		t.Logf("log line: %s", line.Raw)
-		if !strings.Contains(line.Message, "asset_ref=photos:asset/") || !strings.Contains(line.Message, `reason="photokit export failed: domain=PHPhotosErrorDomain code=3303"`) {
-			t.Fatalf("failed_download message = %q", line.Message)
-		}
-		return
+	if len(lines) == 0 {
+		t.Fatal("run log is empty")
 	}
-	t.Fatalf("failed_download log line missing: %#v", lines)
 }
 
 func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {
@@ -971,6 +926,7 @@ func TestClassifyModelRateLimitSendsOnceAndRestartDoesNotSend(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, "retry-asset")
 	logs := &recordingClassifyLogSink{}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-vision",
@@ -1026,13 +982,80 @@ func assertContentOutcomesSumToProcessed(t *testing.T, result ClassifyResult) {
 		result.ContentFailedDownload +
 		result.ContentNotInPhotoKit +
 		result.ContentNoContentAvailable +
-		result.ContentSkippedUnsupportedMedia
+		result.ContentSkippedUnsupportedMedia +
+		result.CardInputNotReady
 	if sum != result.Processed {
 		t.Fatalf("content outcomes sum = %d, processed = %d, result = %#v", sum, result.Processed, result)
 	}
 	if result.ContentOutcomeTotal != result.Processed {
 		t.Fatalf("content_outcome_total = %d, processed = %d, result = %#v", result.ContentOutcomeTotal, result.Processed, result)
 	}
+}
+
+func TestClassifyPendingAndPlacePendingStayByteForByteReadOnly(t *testing.T) {
+	ctx := context.Background()
+	db, _ := openModelGenerationTestStore(t)
+	if _, err := db.DB().ExecContext(ctx, `delete from classification_queue where id = 'queue:synthetic'; delete from asset where id = 'asset:synthetic'`); err != nil {
+		t.Fatal(err)
+	}
+	insertModelGenerationTestAsset(t, db, "asset:not-ready-pending", "queue:not-ready-pending", "not-ready-pending")
+	insertModelGenerationTestAsset(t, db, "asset:not-ready-place", "queue:not-ready-place", "not-ready-place")
+	if _, err := db.DB().ExecContext(ctx, `update classification_queue set state = 'place_pending', reason = 'synthetic checked place wait', needs_download = 1, updated_at = '2026-07-13T09:10:11.123456789Z' where id = 'queue:not-ready-place'`); err != nil {
+		t.Fatal(err)
+	}
+	before := classifyQueueRawRows(t, db, "queue:not-ready-pending", "queue:not-ready-place")
+	result, err := ClassifyWithStore(ctx, db, Paths{DataDir: t.TempDir(), CacheDir: t.TempDir()}, ClassifyOptions{Limit: 2, Model: "fixture-vision", ModelURL: fixtureModelURL, Now: fixedClock("2026-07-13T10:00:00Z")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Processed != 2 || result.CardInputNotReady != 2 || result.ContentOutcomeTotal != 2 || result.ModelRunID != "" {
+		t.Fatalf("classify result = %#v", result)
+	}
+	after := classifyQueueRawRows(t, db, "queue:not-ready-pending", "queue:not-ready-place")
+	if !bytes.Equal(before, after) {
+		t.Fatalf("queue bytes changed\nbefore=%s\nafter=%s", before, after)
+	}
+	jsonOutput, err := json.Marshal(result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(jsonOutput, []byte(`"card_input_not_ready":2`)) {
+		t.Fatalf("raw JSON = %s", jsonOutput)
+	}
+	if human := result.String(); !strings.Contains(human, "Card input not ready: 2") {
+		t.Fatalf("human output = %q", human)
+	}
+	for _, table := range []string{"model_run", "model_generation", "model_generation_attempt", "model_observation", "place_observation", "paid_call_stage", "paid_call_claim", "card_execution"} {
+		var count int
+		if err := db.DB().QueryRowContext(ctx, "select count(*) from "+table).Scan(&count); err != nil {
+			t.Fatal(err)
+		}
+		if count != 0 {
+			t.Fatalf("forbidden %s rows = %d", table, count)
+		}
+	}
+}
+
+func classifyQueueRawRows(t *testing.T, db *store.Store, ids ...string) []byte {
+	t.Helper()
+	rows, err := db.DB().Query(`select quote(id), quote(asset_id), quote(source_library_id), quote(state), quote(reason), quote(needs_download), quote(updated_at) from classification_queue where id in (?, ?) order by id`, ids[0], ids[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out bytes.Buffer
+	for rows.Next() {
+		var values [7]string
+		if err := rows.Scan(&values[0], &values[1], &values[2], &values[3], &values[4], &values[5], &values[6]); err != nil {
+			t.Fatal(err)
+		}
+		out.WriteString(strings.Join(values[:], "|"))
+		out.WriteByte('\n')
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out.Bytes()
 }
 
 type recordedClassifyLogEvent struct {
@@ -1215,6 +1238,33 @@ func TestParsePhotoCardRequiresSections(t *testing.T) {
 	}
 }
 
+func TestCandidateIDUsesStructuralTrimAndExactRegistryValues(t *testing.T) {
+	if got := cleanCardCandidateID(" \n place_1_candidate_1\t"); got != "place_1_candidate_1" {
+		t.Fatalf("trimmed candidate id = %q", got)
+	}
+	if got := cleanCardCandidateID("`place_1_candidate_1`"); got != "`place_1_candidate_1`" {
+		t.Fatalf("candidate punctuation was normalised: %q", got)
+	}
+	for name, test := range map[string]struct {
+		prepared preparedCardRequest
+		id       string
+		wantErr  bool
+	}{
+		"empty registry none": {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}}, id: "none"},
+		"upper-case none":     {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}}, id: "None", wantErr: true},
+		"exact id":            {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{"place_1_candidate_1": {ID: "place_1_candidate_1"}}}, id: "place_1_candidate_1"},
+		"decorated id":        {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{"place_1_candidate_1": {ID: "place_1_candidate_1"}}}, id: "`place_1_candidate_1`", wantErr: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			value := venuePlausibility{CandidateID: test.id}
+			err := validateVenueCandidate(test.prepared, &value)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("validate candidate %q: %v", test.id, err)
+			}
+		})
+	}
+}
+
 func TestParsePhotoCardReadsVenueCandidateID(t *testing.T) {
 	t.Parallel()
 	card, err := parsePhotoCard(fixtureCardResponse(
@@ -1267,65 +1317,6 @@ func TestParsePhotoCardUncertaintyUsesListItems(t *testing.T) {
 	}
 	if !reflect.DeepEqual(card.Uncertainties, want) {
 		t.Fatalf("uncertainties = %#v, want %#v", card.Uncertainties, want)
-	}
-}
-
-func TestPhotoCardMetadataJSONIncludesRoundedCameraAndPlaceContext(t *testing.T) {
-	t.Parallel()
-	metadata, err := photoCardMetadataJSON(classifyInput{
-		CreationDate:    "2026-05-27T10:00:00Z",
-		TimezoneName:    "Europe/Amsterdam",
-		MediaType:       "image",
-		Width:           4032,
-		Height:          3024,
-		HasLocation:     true,
-		Latitude:        52.367612345678,
-		Longitude:       4.904112345678,
-		AccuracyMeters:  8.25,
-		CameraMake:      "Apple",
-		CameraModel:     "iPhone 15 Pro",
-		LensModel:       "back camera",
-		FocalLengthMM:   6.859999999,
-		FocalLength35MM: 24,
-		Aperture:        1.799999952,
-		ShutterSpeed:    0.008333333333333333,
-		ISO:             64,
-		Place: &classifyPlaceContext{
-			CacheStatus: "hit",
-			Result: place.Result{
-				POIStatus: place.POIStatusFound,
-				POICandidates: []place.POICandidate{{
-					Name:      "Synthetic Store",
-					Category:  "MKPOICategoryStore",
-					DistanceM: 14.000099785938678,
-					Tier:      place.TierNearbyPOI,
-					Source:    "apple",
-				}},
-			},
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(metadata)
-	for _, want := range []string{
-		`"latitude": 52.36761`,
-		`"longitude": 4.90411`,
-		`"horizontal_accuracy_meters": 8`,
-		`"display": "Apple iPhone 15 Pro, 24mm equiv, f/1.8, 1/120s, ISO 64"`,
-		`"aperture": 1.8`,
-		`"distance_meters": 14`,
-		`"candidate_id": "venue_candidate_1"`,
-		`"category": "shop"`,
-	} {
-		if !strings.Contains(text, want) {
-			t.Fatalf("metadata JSON missing %s:\n%s", want, text)
-		}
-	}
-	for _, forbidden := range []string{"MKPOICategory", `"source": "apple"`} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("metadata JSON leaked %q:\n%s", forbidden, text)
-		}
 	}
 }
 
@@ -1419,7 +1410,7 @@ func TestOpenVenueCandidatesCapsRoundsAndFlattens(t *testing.T) {
 	}
 }
 
-func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
+func TestTopPOICandidatesStayInsideHumanOpenPresentation(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -1469,12 +1460,6 @@ func TestTopPOICandidatesMatchStoragePromptAndOpen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	metadata, err := photoCardMetadataJSON(input)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sent := promptCandidateSnapshots(t, metadata)
-
 	storedRows, err := rows(ctx, db.DB(), `
 select observation_type, value_text, value_json, tier, distance_meters
 from place_observation
@@ -1499,14 +1484,11 @@ order by case when distance_meters is null then 1 else 0 end, distance_meters, v
 		{CandidateID: "venue_candidate_4", Name: "Station Salon", Category: "personal care", Tier: place.TierNearbyPOI, DistanceMeters: 21},
 		{CandidateID: "venue_candidate_5", Name: "Book Casino", Category: "entertainment", Tier: place.TierVenueCandidate, DistanceMeters: 42},
 	}
-	if !reflect.DeepEqual(sent, want) {
-		t.Fatalf("prompt candidates = %#v, want %#v", sent, want)
+	if !reflect.DeepEqual(stored, want) {
+		t.Fatalf("stored candidates = %#v, want %#v", stored, want)
 	}
-	if !reflect.DeepEqual(stored, sent) {
-		t.Fatalf("stored candidates = %#v, want sent %#v", stored, sent)
-	}
-	if !reflect.DeepEqual(shown, sent) {
-		t.Fatalf("open candidates = %#v, want sent %#v", shown, sent)
+	if !reflect.DeepEqual(shown, want) {
+		t.Fatalf("open candidates = %#v, want %#v", shown, want)
 	}
 }
 
@@ -1516,45 +1498,6 @@ type candidateSnapshot struct {
 	Category       string
 	Tier           string
 	DistanceMeters float64
-}
-
-func promptCandidateSnapshots(t *testing.T, metadata []byte) []candidateSnapshot {
-	t.Helper()
-	var payload map[string]any
-	if err := json.Unmarshal(metadata, &payload); err != nil {
-		t.Fatal(err)
-	}
-	location, ok := payload["location"].(map[string]any)
-	if !ok {
-		t.Fatalf("metadata missing location: %s", metadata)
-	}
-	placeContext, ok := location["place_context"].(map[string]any)
-	if !ok {
-		// Suppressed or empty place context omits the block entirely.
-		return nil
-	}
-	if _, present := placeContext["venue_candidates"]; !present {
-		return nil
-	}
-	candidates, ok := placeContext["venue_candidates"].([]any)
-	if !ok {
-		t.Fatalf("metadata venue_candidates = %#v", placeContext["venue_candidates"])
-	}
-	out := make([]candidateSnapshot, 0, len(candidates))
-	for _, item := range candidates {
-		row, ok := item.(map[string]any)
-		if !ok {
-			t.Fatalf("candidate = %#v", item)
-		}
-		out = append(out, candidateSnapshot{
-			CandidateID:    mapText(row, "candidate_id"),
-			Name:           mapText(row, "name"),
-			Category:       mapText(row, "category"),
-			Tier:           mapText(row, "tier"),
-			DistanceMeters: mapFloat(row, "distance_meters"),
-		})
-	}
-	return out
 }
 
 func storedCandidateSnapshots(t *testing.T, rows []map[string]any) []candidateSnapshot {
@@ -1620,7 +1563,7 @@ func openCandidateRow(name, tier string, distance float64, category, verdict str
 
 func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertainty string) string {
 	if strings.TrimSpace(venuePlausibility) == "" {
-		venuePlausibility = "verdict: plausible\nreason: no visible contradiction."
+		venuePlausibility = "candidate_id: none\nverdict: plausible\nreason: no visible contradiction."
 	}
 	lower := strings.ToLower(strings.TrimSpace(venuePlausibility))
 	if !strings.Contains(lower, "verdict:") &&
@@ -1628,6 +1571,9 @@ func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertain
 		!strings.HasPrefix(lower, venueVerdictPlausible) &&
 		!strings.HasPrefix(lower, venueVerdictInconsistent) {
 		venuePlausibility = "verdict: plausible\nreason: " + venuePlausibility
+	}
+	if !strings.Contains(strings.ToLower(venuePlausibility), "candidate_id:") {
+		venuePlausibility = "candidate_id: none\n" + venuePlausibility
 	}
 	if strings.TrimSpace(ocr) == "" {
 		ocr = "None"
@@ -1803,6 +1749,9 @@ func countOriginalCacheMedia(t *testing.T, root string) int {
 	t.Helper()
 	entries, err := os.ReadDir(root)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return 0
+		}
 		t.Fatal(err)
 	}
 	count := 0
@@ -1896,6 +1845,9 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	for i := 0; i < 12; i++ {
+		prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, fmt.Sprintf("quota-asset-%d", i))
+	}
 	result, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-vision",
 		ModelURL: fixtureModelURL,
@@ -1938,6 +1890,54 @@ func TestClassifyQuotaExhaustionRequeuesAndAborts(t *testing.T) {
 func writeSyntheticImage(t *testing.T, path string) {
 	t.Helper()
 	if err := os.WriteFile(path, syntheticImageBytes(t), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func prepareCheckedCardInputForModelTest(t *testing.T, ctx context.Context, paths Paths, libraryPath, localIdentifier string) {
+	t.Helper()
+	sourceID := stableID("source_library", libraryPath)
+	assetID := stableID("asset", sourceID, localIdentifier)
+	db := openTestStore(t, ctx, paths)
+	defer func() { _ = db.Close() }()
+	input, err := loadCardInputAuditInput(ctx, db.DB(), sourceID, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := input.currentStillRequest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentBytes := syntheticImageBytes(t)
+	resolver, err := photos.NewCurrentStillResolver(paths.OriginalsCacheDir(), func(_ context.Context, _ photos.CurrentStillRequest, destination string) (photos.CurrentStillFact, error) {
+		if err := os.WriteFile(destination, currentBytes, 0o600); err != nil {
+			return photos.CurrentStillFact{}, err
+		}
+		sum := sha256.Sum256(currentBytes)
+		return photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: input.Width, PixelHeight: input.Height, Size: int64(len(currentBytes)), SHA256: hex.EncodeToString(sum[:])}, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := resolver.Resolve(ctx, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Lease != nil {
+		resolved.Lease.Close()
+	}
+	original, originalPath, _, ok, err := cardInputAuditCheckedOriginal(input, paths.OriginalsCacheDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatalf("asset %s has no checked original", localIdentifier)
+	}
+	metadataStore, err := imagemetadata.NewStore(filepath.Join(paths.CacheDir, "image-metadata"), extractImageMetadata)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := metadataStore.Load(ctx, originalPath, original.SHA256); err != nil {
 		t.Fatal(err)
 	}
 }

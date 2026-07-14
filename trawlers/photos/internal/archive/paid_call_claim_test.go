@@ -7,8 +7,10 @@ import (
 	"testing"
 	"time"
 
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPaidCallClaimUsesFixedCapMembershipAndStageWriteFirst(t *testing.T) {
@@ -89,27 +91,30 @@ func TestPaidCallClaimRejectsEveryTupleMismatchWithoutRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := paidCallClaimForItem(stage, stage.Items[0], requests[stage.Items[0].ItemID])
-	changedBody, err := model.RestoreProviderRequest(base.Request.Route(), base.Request.Model(), []byte(`{"model":"fixture-vision","prompt":"changed"}`))
+	changedBody, err := model.RestoreProviderRequest(base.Prepared.Request.Route(), base.Prepared.Request.Model(), []byte(`{"model":"fixture-vision","prompt":"changed"}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	changedModel, err := model.RestoreProviderRequest(base.Request.Route(), "fixture-vision-changed", base.Request.Body())
+	changedModel, err := model.RestoreProviderRequest(base.Prepared.Request.Route(), "fixture-vision-changed", base.Prepared.Request.Body())
 	if err != nil {
 		t.Fatal(err)
 	}
-	changedRoute, err := model.RestoreProviderRequest("https://alternate.example.com/api/generate", base.Request.Model(), base.Request.Body())
+	changedRoute, err := model.RestoreProviderRequest("https://alternate.example.com/api/generate", base.Prepared.Request.Model(), base.Prepared.Request.Body())
 	if err != nil {
 		t.Fatal(err)
 	}
 	tests := map[string]func(*paidCallClaimInput){
-		"asset":        func(input *paidCallClaimInput) { input.AssetID = "asset:unknown" },
-		"CardInput":    func(input *paidCallClaimInput) { input.CardInputID = "card_input:changed" },
-		"full current": func(input *paidCallClaimInput) { input.FullCurrentSHA256 = paidCallTestSHA("changed full current") },
-		"request":      func(input *paidCallClaimInput) { input.Request = changedBody },
-		"model":        func(input *paidCallClaimInput) { input.Request = changedModel },
-		"route":        func(input *paidCallClaimInput) { input.Request = changedRoute },
-		"prompt":       func(input *paidCallClaimInput) { input.PromptVersion = "fixture-prompt-v2" },
-		"parser":       func(input *paidCallClaimInput) { input.ParserVersion = "fixture-parser-v2" },
+		"asset": func(input *paidCallClaimInput) {
+			input.Prepared.Custody = proto.Clone(input.Prepared.Custody).(*cardwire.CardExecutionCustody)
+			input.Prepared.Custody.AssetId = "asset:unknown"
+		},
+		"CardInput":    func(input *paidCallClaimInput) { input.Prepared.Input.ID = "card_input:changed" },
+		"full current": func(input *paidCallClaimInput) { input.Prepared.Image.SHA256 = paidCallTestSHA("changed full current") },
+		"request":      func(input *paidCallClaimInput) { input.Prepared.Request = changedBody },
+		"model":        func(input *paidCallClaimInput) { input.Prepared.Request = changedModel },
+		"route":        func(input *paidCallClaimInput) { input.Prepared.Request = changedRoute },
+		"prompt":       func(input *paidCallClaimInput) { input.Prepared.PromptVersion = "fixture-prompt-v2" },
+		"parser":       func(input *paidCallClaimInput) { input.Prepared.ParserVersion = "fixture-parser-v2" },
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -121,7 +126,7 @@ func TestPaidCallClaimRejectsEveryTupleMismatchWithoutRows(t *testing.T) {
 			} else {
 				logPaidCallBoundary(t, "paid_call_mismatch_output", map[string]any{"case": name, "error": err.Error(), "claim_rows": 0})
 			}
-			assertPaidCallCounts(t, db, 0, 0, 0)
+			assertPaidCallCounts(t, db, 0, 1, 0)
 		})
 	}
 }
@@ -142,7 +147,7 @@ func TestPaidCallScreeningCannotSatisfyStoredCardGeneration(t *testing.T) {
 	if err != nil || !screeningDecision.Send || screeningDecision.GenerationID != "" {
 		t.Fatalf("screening decision = %#v, %v", screeningDecision, err)
 	}
-	assertPaidCallCounts(t, db, 1, 0, 0)
+	assertPaidCallCounts(t, db, 1, 1, 0)
 
 	canary := paidCallStage{
 		Purpose:               paidCallPurposeCanary,
@@ -189,32 +194,24 @@ where id = ?
 	if _, err := claimPaidCall(ctx, db, input); err == nil {
 		t.Fatal("prohibited first card was authorised")
 	}
-	assertPaidCallCounts(t, db, 0, 0, 0)
+	assertPaidCallCounts(t, db, 0, 1, 0)
 	logPaidCallBoundary(t, "paid_call_prohibited_output", map[string]int{"claims": 0, "generations": 0, "attempts": 0})
 }
 
-func paidCallClaimForItem(stage paidCallStage, item paidCallStageItem, request model.ProviderRequest) paidCallClaimInput {
+func paidCallClaimForItem(stage paidCallStage, item paidCallStageItem, prepared preparedCardRequest) paidCallClaimInput {
 	return paidCallClaimInput{
-		StageID:           stage.ID,
-		ItemID:            item.ItemID,
-		AssetID:           item.AssetID,
-		CardInputID:       item.CardInputID,
-		CustodySHA256:     item.CustodySHA256,
-		FullCurrentSHA256: item.FullCurrentSHA256,
-		PromptVersion:     item.PromptVersion,
-		ParserVersion:     item.ParserVersion,
-		Request:           request,
-		ClaimedAt:         time.Date(2026, 7, 11, 13, 0, 0, 0, time.UTC),
+		StageID: stage.ID, ItemID: item.ItemID, Prepared: prepared,
+		ClaimedAt: time.Date(2026, 7, 11, 13, 0, 0, 0, time.UTC),
 	}
 }
 
 func paidCallClaimBoundary(input paidCallClaimInput) map[string]any {
 	return map[string]any{
-		"stage_id": input.StageID, "item_id": input.ItemID, "asset_id": input.AssetID,
-		"card_input_id": input.CardInputID, "full_current_sha256": input.FullCurrentSHA256,
-		"request_route": input.Request.Route(), "model_id": input.Request.Model(),
-		"request_body": string(input.Request.Body()), "prompt_version": input.PromptVersion,
-		"parser_version": input.ParserVersion, "claimed_at": input.ClaimedAt.UTC().Format(time.RFC3339Nano),
+		"stage_id": input.StageID, "item_id": input.ItemID, "asset_id": input.Prepared.Custody.GetAssetId(),
+		"card_input_id": input.Prepared.Input.ID, "full_current_sha256": input.Prepared.Image.SHA256,
+		"request_route": input.Prepared.Request.Route(), "model_id": input.Prepared.Request.Model(),
+		"request_body": string(input.Prepared.Request.Body()), "prompt_version": input.Prepared.PromptVersion,
+		"parser_version": input.Prepared.ParserVersion, "claimed_at": input.ClaimedAt.UTC().Format(time.RFC3339Nano),
 	}
 }
 

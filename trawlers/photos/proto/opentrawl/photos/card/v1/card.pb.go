@@ -873,6 +873,7 @@ type PlaceCandidate struct {
 	DistanceMeters float64                `protobuf:"fixed64,6,opt,name=distance_meters,json=distanceMeters,proto3" json:"distance_meters,omitempty"`
 	Address        *Address               `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
 	Source         string                 `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
+	CandidateId    string                 `protobuf:"bytes,9,opt,name=candidate_id,json=candidateId,proto3" json:"candidate_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -959,6 +960,13 @@ func (x *PlaceCandidate) GetAddress() *Address {
 func (x *PlaceCandidate) GetSource() string {
 	if x != nil {
 		return x.Source
+	}
+	return ""
+}
+
+func (x *PlaceCandidate) GetCandidateId() string {
+	if x != nil {
+		return x.CandidateId
 	}
 	return ""
 }
@@ -1677,7 +1685,7 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\aaddress\x18\a \x01(\v2!.opentrawl.photos.card.v1.AddressR\aaddress\x12H\n" +
 	"\n" +
 	"candidates\x18\b \x03(\v2(.opentrawl.photos.card.v1.PlaceCandidateR\n" +
-	"candidates\"\xd0\x02\n" +
+	"candidates\"\xf3\x02\n" +
 	"\x0ePlaceCandidate\x12%\n" +
 	"\x0eprovider_index\x18\x01 \x01(\x05R\rproviderIndex\x12\x1f\n" +
 	"\vprovider_id\x18\x02 \x01(\tR\n" +
@@ -1691,7 +1699,8 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"coordinate\x12'\n" +
 	"\x0fdistance_meters\x18\x06 \x01(\x01R\x0edistanceMeters\x12;\n" +
 	"\aaddress\x18\a \x01(\v2!.opentrawl.photos.card.v1.AddressR\aaddress\x12\x16\n" +
-	"\x06source\x18\b \x01(\tR\x06source\"\xf8\x03\n" +
+	"\x06source\x18\b \x01(\tR\x06source\x12!\n" +
+	"\fcandidate_id\x18\t \x01(\tR\vcandidateId\"\xf8\x03\n" +
 	"\aAddress\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
 	"\fthoroughfare\x18\x02 \x01(\tR\fthoroughfare\x12)\n" +

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 )
@@ -79,7 +78,7 @@ func loadClassifyInputs(ctx context.Context, tx *sql.Tx, limit int, refreshModel
 	// group_concats over resources and albums for every queued row before
 	// the limit — minutes of CPU per batch on a full library.
 	selectColumns := `
-select q.id as queue_id, q.asset_id, q.source_library_id, a.local_identifier, q.needs_download,
+select q.id as queue_id, q.asset_id, q.source_library_id, a.source_state, a.local_identifier, q.needs_download,
        a.media_type, a.media_subtypes, a.creation_date, a.modification_date,
        coalesce((
          select seen.source_fingerprint
@@ -150,6 +149,7 @@ order by creation_date desc, has_location desc, queue_id
 			&input.QueueID,
 			&input.AssetID,
 			&input.SourceLibraryID,
+			&input.SourceState,
 			&input.LocalIdentifier,
 			&needsDownload,
 			&input.MediaType,
@@ -197,9 +197,6 @@ order by creation_date desc, has_location desc, queue_id
 				return nil, err
 			}
 			if eligibility == firstCardProhibitedDeletedBeforeCard {
-				if err := updateClassificationQueue(ctx, tx, input.QueueID, classifyQueueStateFirstCardProhibited, "deleted_before_first_card", time.Now().UTC()); err != nil {
-					return nil, err
-				}
 				continue
 			}
 			eligibleInputs = append(eligibleInputs, input)
@@ -227,7 +224,7 @@ order by creation_date desc, has_location desc, queue_id
 
 func classifyQueueStates(includeMetadataClassified bool) string {
 	if includeMetadataClassified {
-		return "'" + classifyQueueStatePending + "', '" + classifyQueueStateMetadataClassified + "', '" + classifyQueueStateFailedDownload + "'"
+		return "'" + classifyQueueStatePending + "', '" + classifyQueueStateMetadataClassified + "', '" + classifyQueueStateFailedDownload + "', '" + classifyQueueStatePlacePending + "'"
 	}
 	return "'" + classifyQueueStatePending + "', '" + classifyQueueStateFirstCardProhibited + "'"
 }

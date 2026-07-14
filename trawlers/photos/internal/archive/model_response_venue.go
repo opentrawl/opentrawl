@@ -2,7 +2,6 @@ package archive
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -20,7 +19,7 @@ func parseVenuePlausibility(value string) venuePlausibility {
 		if ok {
 			switch strings.ToLower(strings.Join(strings.Fields(strings.Trim(key, "`*_ ")), " ")) {
 			case "candidate_id", "candidate id", "id":
-				plausibility.CandidateID = cleanVenueCandidateID(field)
+				plausibility.CandidateID = cleanCardCandidateID(field)
 				continue
 			case "verdict", "decision", "answer", "plausibility", "venue plausibility", "assessment":
 				if verdict, err := normalizeVenueVerdict(field); err == nil {
@@ -56,22 +55,27 @@ func parseVenuePlausibility(value string) venuePlausibility {
 	return plausibility
 }
 
-func cleanVenueCandidateID(value string) string {
-	value = strings.ToLower(strings.Trim(strings.Join(strings.Fields(value), " "), " .`'\""))
-	if emptyCardField(value) {
-		return ""
+func cleanCardCandidateID(value string) string {
+	return strings.TrimSpace(value)
+}
+
+func validateVenueCandidate(prepared preparedCardRequest, plausibility *venuePlausibility) error {
+	if plausibility == nil {
+		return fmt.Errorf("%w: missing venue_plausibility", errUnknownCardCandidate)
 	}
-	value = strings.ReplaceAll(value, "-", "_")
-	value = strings.ReplaceAll(value, " ", "_")
-	const prefix = "venue_candidate_"
-	if !strings.HasPrefix(value, prefix) {
-		return ""
+	id := plausibility.CandidateID
+	if id == "none" {
+		plausibility.CandidateID = id
+		return nil
 	}
-	number, err := strconv.Atoi(strings.TrimPrefix(value, prefix))
-	if err != nil || number < 1 {
-		return ""
+	if id == "" {
+		return fmt.Errorf("%w: missing candidate_id", errUnknownCardCandidate)
 	}
-	return prefix + strconv.Itoa(number)
+	if _, ok := prepared.CandidateByID[id]; !ok {
+		return fmt.Errorf("%w: %s", errUnknownCardCandidate, id)
+	}
+	plausibility.CandidateID = id
+	return nil
 }
 
 func normalizeVenueVerdict(value string) (string, error) {

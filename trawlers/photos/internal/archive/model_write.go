@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, classifiedAt time.Time, generationID string) (int, int, error) {
+func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, prepared preparedCardRequest, classifiedAt time.Time, generationID string) (int, int, error) {
 	if strings.TrimSpace(generationID) == "" {
 		return 0, 0, errors.New("model generation id is required")
 	}
@@ -17,7 +17,7 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 		return 0, 0, err
 	}
 
-	placeWritten, err := writeModelPlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, generationID, classifiedAt)
+	placeWritten, err := writeModelPlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, prepared, generationID, classifiedAt)
 	if err != nil {
 		return 0, placeWritten, err
 	}

@@ -238,7 +238,7 @@ func TestFirstCardEligibilityLifecycleStopsPaidCallBeforeMedia(t *testing.T) {
 		"provider_calls": prohibitedProviderCalls.Load(),
 		"queue_state":    prohibitedRow.QueueState,
 	})
-	if mediaCalls.Load() != 0 || prohibitedResult.PlaceProviderAttempts != 0 || prohibitedProviderCalls.Load() != 0 || prohibitedResult.ModelCallAttempts != 0 || prohibitedRow.QueueState != classifyQueueStateFirstCardProhibited {
+	if mediaCalls.Load() != 0 || prohibitedResult.PlaceProviderAttempts != 0 || prohibitedProviderCalls.Load() != 0 || prohibitedResult.ModelCallAttempts != 0 || prohibitedRow.QueueState != classifyQueueStatePending {
 		t.Fatalf("prohibited paid path: result=%#v media=%d provider=%d row=%#v", prohibitedResult, mediaCalls.Load(), prohibitedProviderCalls.Load(), prohibitedRow)
 	}
 
@@ -253,6 +253,7 @@ func TestFirstCardEligibilityLifecycleStopsPaidCallBeforeMedia(t *testing.T) {
 	if changedBlockedRow.QueueState != classifyQueueStateFirstCardProhibited || changedBlockedRow.FirstCardBlockedAt != blockedMissing.FirstCardBlockedAt {
 		t.Fatalf("changed blocked asset queue projection = %#v", changedBlockedRow)
 	}
+	prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, "eligible-control")
 	fixtureResponse := fixtureCardResponse(
 		"A synthetic blue and gold image fixture.",
 		"A 2 by 2 synthetic image contains blue and gold pixels for a local provider test.",

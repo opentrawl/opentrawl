@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
@@ -67,13 +68,23 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	second, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
 		t.Fatal("restart rebuilt CardInput")
 		return fixtureCardPreparation{}, nil
-	}, modelClassifier{}, nil, time.Now())
+	}, classifier, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&changesAfter)
 	if !second.Reused || changesAfter != changesBefore || second.ParserVersion != modelParserVersion || second.PromptVersion != modelPromptVersion || second.OCR != first.OCR || len(second.Uncertainties) != 2 || second.VenuePlausibility.Verdict != "plausible" || second.Custody.SourceId != "source:fixture" || second.Custody.AssetId != "asset:fixture" || second.Custody.ImmutableOriginalResourceId != "resource:fixture" || second.Custody.MetadataRecordId != "metadata:fixture" || second.Custody.MetadataProjectionId != "projection:fixture" || second.Custody.FullCurrentProofSha256 != prepared.Artifacts.FullCurrent.ProofSHA256 || len(second.Custody.Evidence) != 1 || second.Custody.Evidence[0].ProviderIdentity != "synthetic-provider" || second.Custody.Evidence[0].Operation != "synthetic-nearby" || second.Custody.Evidence[0].RawResponseSha256 != prepared.Evidence[0].RawResponseSHA256 {
 		t.Fatalf("restart result=%+v changes=%d/%d", second, changesBefore, changesAfter)
+	}
+	wrongClient, err := newModelClassifier("fixture-model", "https://other-models.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+		t.Fatal("mismatched restart rebuilt CardInput")
+		return fixtureCardPreparation{}, nil
+	}, wrongClient, nil, time.Now()); err == nil || !strings.Contains(err.Error(), "route does not match configured endpoint") {
+		t.Fatalf("mismatched retained route error = %v", err)
 	}
 	changedPrepareCalls := 0
 	if _, err := executeFixtureCard(ctx, db, executionID+"-changed", func() (fixtureCardPreparation, error) { changedPrepareCalls++; return prepared, nil }, classifier, fixtureBytes, time.Now()); err == nil || changedPrepareCalls != 1 {
@@ -88,7 +99,6 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	secondClassifier.promptVersion = modelPromptVersion + "-fixture-v2"
 	secondExecutionID := fixtureExecutionIdentity(t, prepared, secondClassifier)
 	if secondExecutionID == executionID {
 		t.Fatal("changed request and prompt kept the execution identity")
@@ -100,17 +110,22 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	if third.Input.ID != first.Input.ID || third.Request.Model() == first.Request.Model() {
 		t.Fatalf("second execution=%+v", third)
 	}
+	unsupported := secondClassifier
+	unsupported.promptVersion = modelPromptVersion + "-unsupported"
+	if _, err := renderPreparedCardRequest(prepared.Source, prepared.Artifacts, prepared.Evidence, prepared.CurrentStill, unsupported); err == nil {
+		t.Fatal("unregistered photo-card prompt version rendered")
+	}
 	firstAgain, err := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
 		t.Fatal("first execution reopened through preparation")
 		return fixtureCardPreparation{}, nil
-	}, modelClassifier{}, nil, time.Now())
+	}, classifier, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
 	secondAgain, err := executeFixtureCard(ctx, db, secondExecutionID, func() (fixtureCardPreparation, error) {
 		t.Fatal("second execution reopened through preparation")
 		return fixtureCardPreparation{}, nil
-	}, modelClassifier{}, nil, time.Now())
+	}, secondClassifier, nil, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,33 +148,161 @@ func TestFixtureCardExecutionIdentityCoversInputRequestPromptAndParser(t *testin
 		t.Fatal(err)
 	}
 	prepared := fixtureCardPreparationFor("asset:identity")
-	input, err := cardinput.Build(prepared.Source, prepared.Artifacts, prepared.Evidence)
+	request, err := renderPreparedCardRequest(prepared.Source, prepared.Artifacts, prepared.Evidence, prepared.CurrentStill, classifier)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, _, err := classifier.buildRequestFromBytes(prepared.Classify, prepared.CurrentStill, prepared.MIMEType, imagemetadata.Projection{Lines: prepared.Source.Metadata.ProjectionLines})
+	base := fixtureCardExecutionID(prepared.Source.AssetID, request)
+	changedProviderRequest, err := model.RestoreProviderRequest(request.Request.Route(), request.Request.Model(), append(request.Request.Body(), ' '))
 	if err != nil {
 		t.Fatal(err)
 	}
-	providerRequest, err := classifier.client.Render(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	base := fixtureCardExecutionID(prepared.Source.AssetID, input.ID, providerRequest, modelPromptVersion, modelParserVersion)
-	changedRequest, err := model.RestoreProviderRequest(providerRequest.Route(), providerRequest.Model(), append(providerRequest.Body(), ' '))
-	if err != nil {
-		t.Fatal(err)
-	}
+	changedInputID := request
+	changedInputID.Input.ID += "-changed"
+	changedRequest := request
+	changedRequest.Request = changedProviderRequest
+	changedPrompt := request
+	changedPrompt.PromptVersion += "-changed"
+	changedParser := request
+	changedParser.ParserVersion += "-changed"
 	identities := []string{
-		fixtureCardExecutionID(prepared.Source.AssetID, input.ID+"-changed", providerRequest, modelPromptVersion, modelParserVersion),
-		fixtureCardExecutionID(prepared.Source.AssetID, input.ID, changedRequest, modelPromptVersion, modelParserVersion),
-		fixtureCardExecutionID(prepared.Source.AssetID, input.ID, providerRequest, modelPromptVersion+"-changed", modelParserVersion),
-		fixtureCardExecutionID(prepared.Source.AssetID, input.ID, providerRequest, modelPromptVersion, modelParserVersion+"-changed"),
+		fixtureCardExecutionID(prepared.Source.AssetID, changedInputID),
+		fixtureCardExecutionID(prepared.Source.AssetID, changedRequest),
+		fixtureCardExecutionID(prepared.Source.AssetID, changedPrompt),
+		fixtureCardExecutionID(prepared.Source.AssetID, changedParser),
 	}
 	for index, identity := range identities {
 		if identity == base {
 			t.Fatalf("identity mutation %d did not change execution id", index)
 		}
+	}
+}
+
+func TestPreparedCardPreservesEveryProviderCandidateThroughBothRequestShapesAndWriter(t *testing.T) {
+	ctx := context.Background()
+	db := fixtureCardStore(t, ctx)
+	defer db.Close()
+	assetID := "asset:candidate-order"
+	seedFixtureCardAsset(t, ctx, db, assetID)
+	preparation := fixtureCardPreparationFor(assetID)
+	wantProviderIDs := []string{"provider-z", "provider-a", "provider-y", "provider-duplicate", "provider-x", "provider-b", "provider-w"}
+	distances := []float64{70, 10, 60, 20, 50, 30, 40}
+	preparation.Evidence[0].Candidates = nil
+	for index, providerID := range wantProviderIDs {
+		name := "Synthetic venue " + providerID
+		if index == 0 || index == 3 {
+			name = "Duplicate synthetic venue"
+		}
+		preparation.Evidence[0].Candidates = append(preparation.Evidence[0].Candidates, place.EvidenceCandidate{
+			ProviderIndex: index,
+			ProviderID:    providerID,
+			Name:          name,
+			Categories:    []string{"synthetic"},
+			DistanceM:     distances[index],
+			Source:        "synthetic-provider",
+		})
+	}
+
+	classifiers := []struct {
+		name    string
+		baseURL string
+	}{
+		{name: "native", baseURL: "https://models.example.com"},
+		{name: "chat", baseURL: "https://models.example.com/v1"},
+	}
+	var prepared preparedCardRequest
+	for _, provider := range classifiers {
+		t.Run(provider.name, func(t *testing.T) {
+			classifier, err := newModelClassifier("fixture-model", provider.baseURL, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			request, err := renderPreparedCardRequest(preparation.Source, preparation.Artifacts, preparation.Evidence, preparation.CurrentStill, classifier)
+			if err != nil {
+				t.Fatal(err)
+			}
+			body := request.Request.Body()
+			position := -1
+			for _, providerID := range wantProviderIDs {
+				next := bytes.Index(body[position+1:], []byte(providerID))
+				if next < 0 {
+					t.Fatalf("%s request omitted provider id %q: %s", provider.name, providerID, body)
+				}
+				position += next + 1
+			}
+			if bytes.Count(body, []byte("Duplicate synthetic venue")) != 2 {
+				t.Fatalf("%s request did not preserve duplicate names: %s", provider.name, body)
+			}
+			if len(request.CandidatesInSeq) != len(wantProviderIDs) {
+				t.Fatalf("%s prepared %d candidates, want %d", provider.name, len(request.CandidatesInSeq), len(wantProviderIDs))
+			}
+			if provider.name == "native" {
+				prepared = request
+			}
+		})
+	}
+
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := writePreparedPlaceClassification(ctx, tx, preparation.Classify, venuePlausibility{CandidateID: "none", Verdict: venueVerdictPlausible}, prepared, "generation:candidate-order", time.Now().UTC())
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.DB().QueryContext(ctx, `select json_extract(value_json, '$.provider_id'), value_text from place_observation where asset_id = ? and observation_type = 'poi_candidate' order by rowid`, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var gotProviderIDs, gotNames []string
+	for rows.Next() {
+		var providerID, name string
+		if err := rows.Scan(&providerID, &name); err != nil {
+			t.Fatal(err)
+		}
+		gotProviderIDs = append(gotProviderIDs, providerID)
+		gotNames = append(gotNames, name)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(gotProviderIDs, "|") != strings.Join(wantProviderIDs, "|") || len(gotNames) != 7 || gotNames[0] != gotNames[3] {
+		t.Fatalf("writer candidate order ids=%q names=%q", gotProviderIDs, gotNames)
+	}
+}
+
+func TestFixtureCardRetainsTypedCandidateFailureAndRestartsFromBytes(t *testing.T) {
+	ctx := context.Background()
+	db := fixtureCardStore(t, ctx)
+	defer db.Close()
+	assetID := "asset:fixture-parse-failure"
+	seedFixtureCardAsset(t, ctx, db, assetID)
+	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	preparation := fixtureCardPreparationFor(assetID)
+	executionID := fixtureExecutionIdentity(t, preparation, classifier)
+	fixture := fixtureProviderResponse(t)
+	fixture.Response = bytes.Replace(fixture.Response, []byte("place_1_candidate_1"), []byte("place_1_candidate_99"), 1)
+	_, firstErr := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) { return preparation, nil }, classifier, fixtureWireBytes(t, fixture), time.Now())
+	if !errors.Is(firstErr, errUnknownCardCandidate) {
+		t.Fatalf("first error = %v", firstErr)
+	}
+	var parseFailure, completedAt string
+	var observations int
+	if err := db.DB().QueryRowContext(ctx, `select cast(ga.parse_failure as text), c.completed_at, (select count(*) from model_observation where generation_id = c.generation_id) from card_execution c join model_generation_asset ga on ga.generation_id = c.generation_id and ga.asset_id = c.asset_id where c.id = ?`, executionID).Scan(&parseFailure, &completedAt, &observations); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(parseFailure, errUnknownCardCandidate.Error()) || completedAt != "" || observations != 0 {
+		t.Fatalf("retained failure=%q completed=%q observations=%d", parseFailure, completedAt, observations)
+	}
+	prepareCalls := 0
+	_, restartErr := executeFixtureCard(ctx, db, executionID, func() (fixtureCardPreparation, error) {
+		prepareCalls++
+		return fixtureCardPreparation{}, errors.New("restart reached preparation")
+	}, classifier, nil, time.Now())
+	if !errors.Is(restartErr, errUnknownCardCandidate) || prepareCalls != 0 {
+		t.Fatalf("restart error=%v prepare_calls=%d", restartErr, prepareCalls)
 	}
 }
 
@@ -325,7 +468,7 @@ func fixtureCardPreparationFor(assetID string) fixtureCardPreparation {
 
 func fixtureProviderResponse(t *testing.T) *cardwire.FixtureResponse {
 	t.Helper()
-	prose := "Summary\nSynthetic harbour at dusk.\nDescription\nA synthetic ferry crosses a calm harbour under an orange sky.\nVenue plausibility\ncandidate_id: venue_candidate_1\nverdict: plausible\nreason: The terminal is near the synthetic coordinate.\nOCR\nFERRY 12\nUncertainty\n- The distant shoreline is indistinct.\n- The ferry name is not readable."
+	prose := "Summary\nSynthetic harbour at dusk.\nDescription\nA synthetic ferry crosses a calm harbour under an orange sky.\nVenue plausibility\ncandidate_id: place_1_candidate_1\nverdict: plausible\nreason: The terminal is near the synthetic coordinate.\nOCR\nFERRY 12\nUncertainty\n- The distant shoreline is indistinct.\n- The ferry name is not readable."
 	body, err := json.Marshal(map[string]any{"response": prose, "done": true})
 	if err != nil {
 		t.Fatal(err)
@@ -335,19 +478,11 @@ func fixtureProviderResponse(t *testing.T) *cardwire.FixtureResponse {
 
 func fixtureExecutionIdentity(t *testing.T, prepared fixtureCardPreparation, classifier modelClassifier) string {
 	t.Helper()
-	input, err := cardinput.Build(prepared.Source, prepared.Artifacts, prepared.Evidence)
+	request, err := renderPreparedCardRequest(prepared.Source, prepared.Artifacts, prepared.Evidence, prepared.CurrentStill, classifier)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, _, err := classifier.buildRequestFromBytes(prepared.Classify, prepared.CurrentStill, prepared.MIMEType, imagemetadata.Projection{Lines: prepared.Source.Metadata.ProjectionLines})
-	if err != nil {
-		t.Fatal(err)
-	}
-	providerRequest, err := classifier.client.Render(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return fixtureCardExecutionID(prepared.Source.AssetID, input.ID, providerRequest, classifier.promptVersion, modelParserVersion)
+	return fixtureCardExecutionID(prepared.Source.AssetID, request)
 }
 
 func fixtureWireBytes(t *testing.T, fixture *cardwire.FixtureResponse) []byte {

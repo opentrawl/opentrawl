@@ -103,7 +103,10 @@ func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options App
 	if input.HasLocation {
 		return nil, errors.New("approved card prepare requires checked place evidence")
 	}
-	original, ok := cardInputAuditOriginal(input.Resources)
+	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, filepath.Join(options.CacheDir, "originals"))
+	if err != nil {
+		return nil, err
+	}
 	if !ok {
 		return nil, errors.New("approved card immutable original is unavailable")
 	}
@@ -123,14 +126,10 @@ func prepareApprovedCardFromArchive(ctx context.Context, db *sql.DB, options App
 	if err != nil {
 		return nil, fmt.Errorf("read approved card current still: %w", err)
 	}
-	mimeType, err := currentStillMIMEType(current.MediaType)
-	if err != nil {
-		return nil, err
-	}
 	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
 	return prepareCard(preparedCard{
 		source: source, artifacts: artifacts, classify: input, currentStill: image,
-		mimeType: mimeType, classifier: classifier,
+		classifier: classifier,
 	}, position)
 }
 
@@ -151,7 +150,6 @@ type preparedCard struct {
 	evidence     []place.EvidenceRecord
 	classify     classifyInput
 	currentStill []byte
-	mimeType     string
 	classifier   modelClassifier
 }
 
@@ -162,72 +160,35 @@ func prepareCard(value preparedCard, position int) (*cardwire.ApprovedCardItem, 
 		value.source.SourceID == "" || value.source.SourceID != value.classify.SourceLibraryID {
 		return nil, errors.New("approved card source identities do not match")
 	}
-	input, err := cardinput.Build(value.source, value.artifacts, value.evidence)
-	if err != nil {
-		return nil, fmt.Errorf("build approved CardInput: %w", err)
-	}
-	if err := validatePlaceEvidenceIdentity(value.evidence, value.classify); err != nil {
-		return nil, fmt.Errorf("validate approved card place evidence: %w", err)
-	}
-	imageDigest := sha256.Sum256(value.currentStill)
-	if int64(len(value.currentStill)) != value.source.FullCurrent.SizeBytes ||
-		hex.EncodeToString(imageDigest[:]) != value.source.FullCurrent.SHA256 {
-		return nil, errors.New("approved card current still does not match checked facts")
-	}
-	request, _, err := value.classifier.buildRequestFromBytes(
-		value.classify, value.currentStill, value.mimeType,
-		imagemetadata.Projection{Lines: value.source.Metadata.ProjectionLines},
-	)
-	if err != nil {
-		return nil, err
-	}
-	rendered, err := value.classifier.client.Render(request)
-	if err != nil {
-		return nil, err
-	}
-	requestDigest := rendered.Digest()
-	custodyBytes, custodyDigest, err := approvedCardCustody(value.source, value.artifacts, value.evidence, input.Bytes, hex.EncodeToString(requestDigest[:]))
+	prepared, err := renderPreparedCardRequest(value.source, value.artifacts, value.evidence, value.currentStill, value.classifier)
 	if err != nil {
 		return nil, err
 	}
 	executionID := approvedCardExecutionID(
-		value.source.AssetID, input.ID, hex.EncodeToString(custodyDigest[:]),
-		rendered, value.classifier.promptVersion, modelParserVersion,
+		value.source.AssetID, prepared,
 	)
 	return &cardwire.ApprovedCardItem{
 		Position:          uint32(position),
 		AssetId:           value.source.AssetID,
-		CardInputId:       input.ID,
-		CardInput:         input.Bytes,
-		Custody:           custodyBytes,
-		CustodySha256:     hex.EncodeToString(custodyDigest[:]),
+		CardInputId:       prepared.Input.ID,
+		CardInput:         prepared.Input.Bytes,
+		Custody:           prepared.CustodyBytes,
+		CustodySha256:     prepared.CustodySHA256,
 		FullCurrentSha256: value.source.FullCurrent.SHA256,
-		RequestRoute:      rendered.Route(),
-		ModelId:           rendered.Model(),
-		RequestBody:       rendered.Body(),
-		RequestBodyLength: uint64(len(rendered.Body())),
-		RequestSha256:     hex.EncodeToString(requestDigest[:]),
-		PromptVersion:     value.classifier.promptVersion,
-		ParserVersion:     modelParserVersion,
+		RequestRoute:      prepared.Request.Route(),
+		ModelId:           prepared.Request.Model(),
+		RequestBody:       prepared.Request.Body(),
+		RequestBodyLength: uint64(len(prepared.Request.Body())),
+		RequestSha256:     prepared.RequestSHA256,
+		PromptVersion:     prepared.PromptVersion,
+		ParserVersion:     prepared.ParserVersion,
 		ExecutionId:       executionID,
 	}, nil
 }
 
-func approvedCardCustody(source cardinput.SourceFacts, artifacts cardinput.CheckedArtifacts, evidence []place.EvidenceRecord, cardInput []byte, requestSHA256 string) ([]byte, [sha256.Size]byte, error) {
-	custody := executionCustody(source, artifacts, evidence)
-	cardInputDigest := sha256.Sum256(cardInput)
-	custody.CardInputSha256 = hex.EncodeToString(cardInputDigest[:])
-	custody.RequestSha256 = requestSHA256
-	bytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(custody)
-	if err != nil {
-		return nil, [sha256.Size]byte{}, fmt.Errorf("marshal approved card custody: %w", err)
-	}
-	return bytes, sha256.Sum256(bytes), nil
-}
-
-func approvedCardExecutionID(assetID, cardInputID, custodySHA256 string, request model.ProviderRequest, promptVersion, parserVersion string) string {
-	requestDigest := request.Digest()
-	return stableID("card_execution", assetID, cardInputID, custodySHA256, hex.EncodeToString(requestDigest[:]), promptVersion, parserVersion)
+func approvedCardExecutionID(assetID string, request preparedCardRequest) string {
+	requestDigest := request.Request.Digest()
+	return stableID("card_execution", assetID, request.Input.ID, request.CustodySHA256, hex.EncodeToString(requestDigest[:]), request.CardRequestID, request.PromptVersion, request.ParserVersion)
 }
 
 func marshalApprovedCardBundle(purpose paidCallPurpose, callCap int, items []*cardwire.ApprovedCardItem) ([]byte, error) {
@@ -345,7 +306,11 @@ func validateApprovedCardItem(item *cardwire.ApprovedCardItem) error {
 	if custody.GetRequestSha256() != item.GetRequestSha256() {
 		return errors.New("custody request digest does not match the item")
 	}
-	if item.GetExecutionId() != approvedCardExecutionID(item.GetAssetId(), item.GetCardInputId(), item.GetCustodySha256(), request, item.GetPromptVersion(), item.GetParserVersion()) {
+	prepared, err := restorePreparedCardRequestUnchecked(item)
+	if err != nil {
+		return err
+	}
+	if item.GetExecutionId() != approvedCardExecutionID(item.GetAssetId(), prepared) {
 		return errors.New("execution identity does not match the prepared bytes")
 	}
 	return nil
@@ -389,20 +354,19 @@ func SendApprovedCardBundle(ctx context.Context, db *store.Store, bundleBytes []
 	}
 	items := make([]approvedCardItem, 0, len(bundle.GetItems()))
 	for _, raw := range bundle.GetItems() {
-		request, err := model.RestoreProviderRequest(raw.GetRequestRoute(), raw.GetModelId(), raw.GetRequestBody())
+		prepared, err := restorePreparedCardRequestUnchecked(raw)
 		if err != nil {
 			return err
 		}
-		if err := transport.ValidateRequest(request); err != nil {
+		if err := transport.ValidateRequest(prepared.Request); err != nil {
 			return fmt.Errorf("validate approved card request: %w", err)
 		}
-		stage.Items = append(stage.Items, paidCallStageItem{
-			ItemID: raw.GetExecutionId(), Position: int(raw.GetPosition()), AssetID: raw.GetAssetId(),
-			CardInputID: raw.GetCardInputId(), CustodySHA256: raw.GetCustodySha256(), FullCurrentSHA256: raw.GetFullCurrentSha256(),
-			RequestRoute: raw.GetRequestRoute(), ModelID: raw.GetModelId(), RequestSHA256: raw.GetRequestSha256(),
-			PromptVersion: raw.GetPromptVersion(), ParserVersion: raw.GetParserVersion(),
-		})
-		items = append(items, approvedCardItem{raw: raw, request: request})
+		stageItem, err := newPaidCallStageItem(raw.GetExecutionId(), int(raw.GetPosition()), prepared)
+		if err != nil {
+			return err
+		}
+		stage.Items = append(stage.Items, stageItem)
+		items = append(items, approvedCardItem{raw: raw, prepared: prepared})
 	}
 	stage, err = createPaidCallStage(ctx, db, stage)
 	if err != nil {
@@ -417,20 +381,15 @@ func SendApprovedCardBundle(ctx context.Context, db *store.Store, bundleBytes []
 }
 
 type approvedCardItem struct {
-	raw     *cardwire.ApprovedCardItem
-	request model.ProviderRequest
+	raw      *cardwire.ApprovedCardItem
+	prepared preparedCardRequest
 }
 
 func executeApprovedCard(ctx context.Context, db *store.Store, stage paidCallStage, item approvedCardItem, now time.Time, transport approvedCardTransport) error {
 	if completed, err := approvedCardCompleted(ctx, db, item.raw.GetExecutionId()); err != nil || completed {
 		return err
 	}
-	decision, err := claimPaidCall(ctx, db, paidCallClaimInput{
-		StageID: stage.ID, ItemID: item.raw.GetExecutionId(), AssetID: item.raw.GetAssetId(),
-		CardInputID: item.raw.GetCardInputId(), CustodySHA256: item.raw.GetCustodySha256(),
-		FullCurrentSHA256: item.raw.GetFullCurrentSha256(), PromptVersion: item.raw.GetPromptVersion(),
-		ParserVersion: item.raw.GetParserVersion(), Request: item.request, ClaimedAt: now,
-	})
+	decision, err := claimPaidCall(ctx, db, paidCallClaimInput{StageID: stage.ID, ItemID: item.raw.GetExecutionId(), Prepared: item.prepared, ClaimedAt: now})
 	if err != nil {
 		return err
 	}
@@ -457,39 +416,23 @@ func executeApprovedCard(ctx context.Context, db *store.Store, stage paidCallSta
 }
 
 func writeApprovedCard(ctx context.Context, db *store.Store, item approvedCardItem, generationID string, raw model.RawResult, now time.Time) error {
-	response, err := model.Parse(item.request, raw)
+	classifier := modelClassifier{modelID: item.prepared.Request.Model(), promptVersion: item.prepared.PromptVersion}
+	result, err := parseRetainedModelGeneration(ctx, db, generationID, item.raw.GetAssetId(), classifier, item.prepared, raw, now)
 	if err != nil {
-		return err
-	}
-	input := new(cardwire.CardInput)
-	if err := proto.Unmarshal(item.raw.GetCardInput(), input); err != nil {
-		return fmt.Errorf("decode approved card input: %w", err)
-	}
-	card, err := parsePhotoCard(response.Text, len(input.GetPlaces()) > 0)
-	if err != nil {
-		if persistErr := db.WithTx(ctx, func(tx *sql.Tx) error {
-			return recordModelGenerationParseFailure(ctx, tx, generationID, item.raw.GetAssetId(), err, now)
-		}); persistErr != nil {
-			return persistErr
-		}
 		return err
 	}
 	queueID, err := approvedCardQueueID(ctx, db, item.raw.GetAssetId())
 	if err != nil {
 		return err
 	}
-	classifier := modelClassifier{modelID: item.request.Model(), promptVersion: item.raw.GetPromptVersion()}
-	result := modelResult{Payload: photoCardPayload(card), RawResponse: response.Text, VenuePlausibility: card.VenuePlausibility, Observations: observationsFromCard(card)}
 	return db.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, _, err := writeModelClassification(ctx, tx, classifyInput{AssetID: item.raw.GetAssetId(), QueueID: queueID}, classifier, result, now, generationID); err != nil {
+		if _, _, err := writeModelClassification(ctx, tx, classifyInput{AssetID: item.raw.GetAssetId(), QueueID: queueID}, classifier, result, item.prepared, now, generationID); err != nil {
 			return err
 		}
 		if err := completeModelGeneration(ctx, tx, generationID, item.raw.GetAssetId(), now); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `insert into card_execution(id, asset_id, card_input_id, card_input, generation_id, custody, completed_at) values (?, ?, ?, ?, ?, ?, ?)`,
-			item.raw.GetExecutionId(), item.raw.GetAssetId(), item.raw.GetCardInputId(), item.raw.GetCardInput(), generationID, item.raw.GetCustody(), now.UTC().Format(time.RFC3339Nano))
-		return err
+		return completePreparedCardRequest(ctx, tx, item.raw.GetExecutionId(), now.UTC().Format(time.RFC3339Nano))
 	})
 }
 
@@ -503,7 +446,7 @@ func approvedCardQueueID(ctx context.Context, db *store.Store, assetID string) (
 
 func approvedCardCompleted(ctx context.Context, db *store.Store, executionID string) (bool, error) {
 	var found int
-	err := db.DB().QueryRowContext(ctx, `select 1 from card_execution where id = ?`, executionID).Scan(&found)
+	err := db.DB().QueryRowContext(ctx, `select 1 from card_execution where id = ? and completed_at <> ''`, executionID).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}

@@ -415,7 +415,6 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 		}
 		parsed.candidates = append(parsed.candidates, candidate)
 	}
-	sortEvidenceCandidates(parsed.candidates)
 	if useful == 0 {
 		return parsed, fmt.Errorf("%w: configured OSM provider returned no named or formatted candidates", errEvidenceMalformed)
 	}

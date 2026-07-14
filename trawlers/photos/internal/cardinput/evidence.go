@@ -26,7 +26,7 @@ func projectEvidence(source SourceFacts, records []place.EvidenceRecord) ([]*car
 		if err := validateCompleteRecord(record); err != nil {
 			return nil, fmt.Errorf("record %d: %w", index, err)
 		}
-		projections = append(projections, projectRecord(record))
+		projections = append(projections, projectRecord(index, record))
 	}
 	return projections, nil
 }
@@ -134,7 +134,7 @@ func addressHasMeaningfulFacts(address *place.Address) bool {
 	return false
 }
 
-func projectRecord(record place.EvidenceRecord) *cardwire.PlaceProjection {
+func projectRecord(recordIndex int, record place.EvidenceRecord) *cardwire.PlaceProjection {
 	projection := &cardwire.PlaceProjection{
 		ProviderIdentity:     record.ProviderIdentity,
 		Operation:            record.Operation,
@@ -144,7 +144,7 @@ func projectRecord(record place.EvidenceRecord) *cardwire.PlaceProjection {
 		RawResponseSha256:    record.RawResponseSHA256,
 		Address:              projectAddress(record.Address),
 	}
-	for _, candidate := range record.Candidates {
+	for candidateIndex, candidate := range record.Candidates {
 		var coordinate *cardwire.Coordinate
 		if candidate.Coordinate != nil {
 			coordinate = &cardwire.Coordinate{Latitude: candidate.Coordinate.Latitude, Longitude: candidate.Coordinate.Longitude}
@@ -158,9 +158,14 @@ func projectRecord(record place.EvidenceRecord) *cardwire.PlaceProjection {
 			DistanceMeters: candidate.DistanceM,
 			Address:        projectAddress(candidate.Address),
 			Source:         candidate.Source,
+			CandidateId:    candidateID(recordIndex, candidateIndex),
 		})
 	}
 	return projection
+}
+
+func candidateID(recordIndex, candidateIndex int) string {
+	return fmt.Sprintf("place_%d_candidate_%d", recordIndex+1, candidateIndex+1)
 }
 
 func projectAddress(address *place.Address) *cardwire.Address {

@@ -1,6 +1,7 @@
 package archive
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -9,20 +10,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestPaidCallStagePersistsOneImmutableOrderedApproval(t *testing.T) {
 	ctx := context.Background()
 	db, _ := openModelGenerationTestStore(t)
 	stage, _ := paidCallTestStage(t, db, paidCallPurposeScreening, 2, 3)
+	client, err := model.New(model.Config{BaseURL: "https://models.example.com/api", Model: "fixture-vision"})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	created, err := createPaidCallStage(ctx, db, stage)
 	if err != nil {
 		t.Fatal(err)
 	}
-	stored := readPaidCallTestStage(t, db, created.ID)
+	for _, item := range created.Items {
+		retained, _, found, err := restoreRetainedPreparedCardRequest(ctx, db, item.ItemID, client)
+		if err != nil || !found {
+			t.Fatalf("restore screened item %q: found=%t err=%v", item.ItemID, found, err)
+		}
+		if !bytes.Equal(retained.Input.Bytes, item.Prepared.Input.Bytes) || !bytes.Equal(retained.CustodyBytes, item.Prepared.CustodyBytes) || !bytes.Equal(retained.Request.Body(), item.Prepared.Request.Body()) {
+			t.Fatalf("screening item %q did not retain its prepared boundary", item.ItemID)
+		}
+	}
+	stored, storedTuples := readPaidCallTestStage(t, db, created.ID)
 	logPaidCallBoundary(t, "paid_call_stage_input", stage)
 	logPaidCallBoundary(t, "paid_call_stage_output", stored)
 	if stored.ID != created.ID || stored.Purpose != stage.Purpose ||
@@ -31,7 +48,7 @@ func TestPaidCallStagePersistsOneImmutableOrderedApproval(t *testing.T) {
 		t.Fatalf("stored paid call stage = %#v", stored)
 	}
 	for index := range stage.Items {
-		if stored.Items[index] != stage.Items[index] {
+		if stored.Items[index].ItemID != stage.Items[index].ItemID || stored.Items[index].Position != stage.Items[index].Position || storedTuples[index] != paidCallItemTuple(stage.Items[index]) {
 			t.Fatalf("stored item %d = %#v, want %#v", index+1, stored.Items[index], stage.Items[index])
 		}
 	}
@@ -47,12 +64,16 @@ func TestPaidCallStagePersistsOneImmutableOrderedApproval(t *testing.T) {
 		"purpose": func(value *paidCallStage) { value.Purpose = paidCallPurposeCanary },
 		"cap":     func(value *paidCallStage) { value.ApprovedCallCap = 1 },
 		"receipt": func(value *paidCallStage) { value.ApprovalReceiptSHA256 = paidCallTestSHA("changed receipt") },
-		"tuple":   func(value *paidCallStage) { value.Items[0].CardInputID = "card_input:changed" },
+		"tuple":   func(value *paidCallStage) { value.Items[0].Prepared.Input.ID = "card_input:changed" },
 	}
 	for name, change := range changes {
 		t.Run(name, func(t *testing.T) {
 			changed := created
 			changed.Items = append([]paidCallStageItem(nil), created.Items...)
+			for index := range changed.Items {
+				prepared := *changed.Items[index].Prepared
+				changed.Items[index].Prepared = &prepared
+			}
 			change(&changed)
 			logPaidCallBoundary(t, "paid_call_changed_stage_input", map[string]any{"case": name, "stage": changed})
 			if _, err := createPaidCallStage(ctx, db, changed); err == nil {
@@ -86,7 +107,7 @@ func TestPaidCallStageRejectsInvalidMembershipBeforeWriting(t *testing.T) {
 			stage.Items[1].ItemID = "item:duplicate-tuple"
 			stage.Items[1].Position = 2
 		},
-		"invalid request sha": func(stage *paidCallStage) { stage.Items[0].RequestSHA256 = "not-a-digest" },
+		"invalid request sha": func(stage *paidCallStage) { stage.Items[0].Prepared.RequestSHA256 = "not-a-digest" },
 	}
 	for name, mutate := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -116,7 +137,7 @@ func paidCallTestStage(
 	db *store.Store,
 	purpose paidCallPurpose,
 	cap, itemCount int,
-) (paidCallStage, map[string]model.ProviderRequest) {
+) (paidCallStage, map[string]preparedCardRequest) {
 	t.Helper()
 	client, err := model.New(model.Config{BaseURL: "https://models.example.com/api", Model: "fixture-vision"})
 	if err != nil {
@@ -128,7 +149,7 @@ func paidCallTestStage(
 		ApprovedCallCap:       cap,
 		CreatedAt:             time.Date(2026, 7, 11, 12, 0, 0, 0, time.UTC),
 	}
-	requests := make(map[string]model.ProviderRequest, itemCount)
+	requests := make(map[string]preparedCardRequest, itemCount)
 	for position := 1; position <= itemCount; position++ {
 		positionText := strconv.Itoa(position)
 		assetID := "asset:synthetic"
@@ -136,31 +157,49 @@ func paidCallTestStage(
 			assetID = "asset:paid-call-" + positionText
 			insertModelGenerationTestAsset(t, db, assetID, "queue:paid-call-"+positionText, "paid-call-"+positionText)
 		}
-		itemID := "item:" + positionText
 		request, err := client.Render(model.Request{Prompt: "synthetic paid call item " + positionText})
 		if err != nil {
 			t.Fatal(err)
 		}
-		digest := request.Digest()
-		stage.Items = append(stage.Items, paidCallStageItem{
-			ItemID:            itemID,
-			Position:          position,
-			AssetID:           assetID,
-			CardInputID:       "card_input:" + positionText,
-			CustodySHA256:     paidCallTestSHA("synthetic custody " + positionText),
-			FullCurrentSHA256: paidCallTestSHA("synthetic full current " + positionText),
-			RequestRoute:      request.Route(),
-			ModelID:           request.Model(),
-			RequestSHA256:     hex.EncodeToString(digest[:]),
-			PromptVersion:     "fixture-prompt-v1",
-			ParserVersion:     "fixture-parser-v1",
-		})
-		requests[itemID] = request
+		prepared := paidCallTestPrepared(t, assetID, request, positionText)
+		itemID := approvedCardExecutionID(assetID, prepared)
+		item, err := newPaidCallStageItem(itemID, position, prepared)
+		if err != nil {
+			t.Fatal(err)
+		}
+		stage.Items = append(stage.Items, item)
+		requests[itemID] = prepared
 	}
 	return stage, requests
 }
 
-func readPaidCallTestStage(t *testing.T, db *store.Store, stageID string) paidCallStage {
+func paidCallTestPrepared(t *testing.T, assetID string, request model.ProviderRequest, suffix string) preparedCardRequest {
+	t.Helper()
+	fullCurrentSHA := paidCallTestSHA("synthetic full current " + suffix)
+	inputMessage := &cardwire.CardInput{SchemaVersion: cardinput.SchemaVersion, FullCurrent: &cardwire.FullCurrent{Role: "full_current", MediaType: "public.png", SizeBytes: 1, Sha256: fullCurrentSHA}}
+	inputBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(inputMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inputID := "card_input:" + digestBytes(inputBytes)
+	requestDigest := request.Digest()
+	requestSHA := hex.EncodeToString(requestDigest[:])
+	custody := &cardwire.CardExecutionCustody{SourceId: "source:synthetic", AssetId: assetID, FullCurrentProofSha256: paidCallTestSHA("proof " + suffix), CardInputSha256: inputID[len("card_input:"):], RequestSha256: requestSHA}
+	custodyBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(custody)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared := preparedCardRequest{
+		Input: cardinput.Result{Input: inputMessage, Bytes: inputBytes, ID: inputID}, Custody: custody,
+		CustodyBytes: custodyBytes, CustodySHA256: digestBytes(custodyBytes), Image: imageMeta{Bytes: 1, SHA256: fullCurrentSHA},
+		UTI: "public.png", MIMEType: "image/png", PromptVersion: modelPromptVersion, ParserVersion: modelParserVersion,
+		Request: request, RequestSHA256: requestSHA, CandidateByID: map[string]preparedPlaceCandidate{}, CandidatesInSeq: []preparedPlaceCandidate{},
+	}
+	prepared.CardRequestID = cardRequestID(prepared.Input.ID, prepared.UTI, prepared.MIMEType, prepared.PromptVersion, request)
+	return prepared
+}
+
+func readPaidCallTestStage(t *testing.T, db *store.Store, stageID string) (paidCallStage, []paidCallStageTuple) {
 	t.Helper()
 	ctx := context.Background()
 	var stage paidCallStage
@@ -181,19 +220,22 @@ from paid_call_stage_item where stage_id = ? order by position
 		t.Fatal(err)
 	}
 	defer func() { _ = rows.Close() }()
+	tuples := make([]paidCallStageTuple, 0)
 	for rows.Next() {
 		var item paidCallStageItem
-		if err := rows.Scan(&item.ItemID, &item.Position, &item.AssetID, &item.CardInputID,
-			&item.CustodySHA256, &item.FullCurrentSHA256, &item.RequestRoute, &item.ModelID, &item.RequestSHA256,
-			&item.PromptVersion, &item.ParserVersion); err != nil {
+		var tuple paidCallStageTuple
+		if err := rows.Scan(&item.ItemID, &item.Position, &tuple.AssetID, &tuple.CardInputID,
+			&tuple.CustodySHA256, &tuple.FullCurrentSHA256, &tuple.RequestRoute, &tuple.ModelID, &tuple.RequestSHA256,
+			&tuple.PromptVersion, &tuple.ParserVersion); err != nil {
 			t.Fatal(err)
 		}
 		stage.Items = append(stage.Items, item)
+		tuples = append(tuples, tuple)
 	}
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	return stage
+	return stage, tuples
 }
 
 func paidCallTestSHA(value string) string {

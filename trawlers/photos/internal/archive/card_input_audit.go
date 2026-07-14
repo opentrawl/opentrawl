@@ -304,34 +304,22 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		return inspection, nil
 	}
 	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
-	card, err := cardinput.Build(source, artifacts, nil)
-	if err != nil {
-		return CardInputAuditInspection{}, fmt.Errorf("build audited CardInput: %w", err)
-	}
 	image, err := os.ReadFile(path)
 	if err != nil {
 		return CardInputAuditInspection{}, fmt.Errorf("read checked current still: %w", err)
 	}
-	mimeType, err := currentStillMIMEType(current.MediaType)
+	prepared, err := renderPreparedCardRequest(source, artifacts, nil, image, classifier)
 	if err != nil {
 		return CardInputAuditInspection{}, err
 	}
-	request, _, err := classifier.buildRequestFromBytes(input, image, mimeType, metadata.Projection)
-	if err != nil {
-		return CardInputAuditInspection{}, err
-	}
-	rendered, err := classifier.client.Render(request)
-	if err != nil {
-		return CardInputAuditInspection{}, err
-	}
-	cardJSON, err := protojson.MarshalOptions{Indent: "  "}.Marshal(card.Input)
+	cardJSON, err := protojson.MarshalOptions{Indent: "  "}.Marshal(prepared.Input.Input)
 	if err != nil {
 		return CardInputAuditInspection{}, err
 	}
 	inspection.CardInput = cardJSON
-	inspection.CardInputWire = base64.StdEncoding.EncodeToString(card.Bytes)
-	inspection.RenderedRequest = rendered.Body()
-	inspection.RenderedRoute, inspection.RenderedModel, inspection.CurrentStillPath = rendered.Route(), rendered.Model(), path
+	inspection.CardInputWire = base64.StdEncoding.EncodeToString(prepared.Input.Bytes)
+	inspection.RenderedRequest = prepared.Request.Body()
+	inspection.RenderedRoute, inspection.RenderedModel, inspection.CurrentStillPath = prepared.Request.Route(), prepared.Request.Model(), path
 	return inspection, nil
 }
 

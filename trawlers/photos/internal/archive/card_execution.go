@@ -3,7 +3,6 @@ package archive
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
-	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
@@ -50,8 +48,22 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if strings.TrimSpace(executionID) == "" {
 		return fixtureCardResult{}, errors.New("fixture card execution id is required")
 	}
-	if completed, found, err := readCompletedFixtureCard(ctx, db, executionID); err != nil || found {
+	if completed, found, err := readCompletedFixtureCard(ctx, db, executionID, classifier.client); err != nil || found {
 		return completed, err
+	}
+	retained, generationID, found, err := restoreRetainedPreparedCardRequest(ctx, db, executionID, classifier.client)
+	if err != nil {
+		return fixtureCardResult{}, err
+	}
+	if found {
+		decision, err := prepareModelGeneration(ctx, db, retained.Custody.GetAssetId(), retained.PromptVersion, retained.ParserVersion, retained.Request, now)
+		if err != nil {
+			return fixtureCardResult{}, err
+		}
+		if decision.GenerationID != generationID || decision.Call.Retained == nil {
+			return fixtureCardResult{}, errors.New("retained fixture card request has no retained model result")
+		}
+		return finishRetainedFixtureCard(ctx, db, executionID, generationID, retained, *decision.Call.Retained, now)
 	}
 	prepared, err := prepare()
 	if err != nil {
@@ -67,22 +79,17 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
+	request, err := renderPreparedCardRequest(prepared.Source, prepared.Artifacts, prepared.Evidence, prepared.CurrentStill, classifier)
+	if err != nil {
+		return fixtureCardResult{}, err
+	}
+	if request.Input.ID != input.ID {
+		return fixtureCardResult{}, errors.New("fixture card prepared request does not match CardInput")
+	}
 	if err := validatePlaceEvidenceIdentity(prepared.Evidence, prepared.Classify); err != nil {
-		return fixtureCardResult{}, fmt.Errorf("validate fixture card request boundary: %w", err)
-	}
-	imageDigest := sha256.Sum256(prepared.CurrentStill)
-	if int64(len(prepared.CurrentStill)) != prepared.Source.FullCurrent.SizeBytes || hex.EncodeToString(imageDigest[:]) != prepared.Source.FullCurrent.SHA256 {
-		return fixtureCardResult{}, errors.New("current-still bytes do not match checked CardInput facts")
-	}
-	request, image, err := classifier.buildRequestFromBytes(prepared.Classify, prepared.CurrentStill, prepared.MIMEType, imagemetadata.Projection{Lines: prepared.Source.Metadata.ProjectionLines})
-	if err != nil {
 		return fixtureCardResult{}, err
 	}
-	providerRequest, err := classifier.client.Render(request)
-	if err != nil {
-		return fixtureCardResult{}, err
-	}
-	wantExecutionID := fixtureCardExecutionID(prepared.Source.AssetID, input.ID, providerRequest, classifier.promptVersion, modelParserVersion)
+	wantExecutionID := fixtureCardExecutionID(prepared.Source.AssetID, request)
 	if executionID != wantExecutionID {
 		return fixtureCardResult{}, errors.New("fixture card execution identity does not match prepared input and request")
 	}
@@ -93,7 +100,7 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err := proto.Unmarshal(fixtureBytes, &fixture); err != nil {
 		return fixtureCardResult{}, fmt.Errorf("decode fixture response protobuf: %w", err)
 	}
-	decision, err := prepareModelGeneration(ctx, db, prepared.Source.AssetID, classifier.promptVersion, modelParserVersion, providerRequest, now)
+	decision, err := prepareModelGenerationForPreparedCard(ctx, db, executionID, prepared.Source.AssetID, request, now)
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
@@ -104,33 +111,49 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err := retainModelGenerationResult(ctx, db, decision.GenerationID, raw, now); err != nil {
 		return fixtureCardResult{}, err
 	}
-	response, err := model.Parse(providerRequest, raw)
-	if err != nil {
-		return fixtureCardResult{}, err
-	}
-	parsed, err := classifier.parseResult(response.Text, prepared.Classify, image)
-	if err != nil {
-		return fixtureCardResult{}, err
-	}
-	custody := executionCustody(prepared.Source, prepared.Artifacts, prepared.Evidence)
-	custodyBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(custody)
+	parsed, err := parseRetainedModelGeneration(ctx, db, decision.GenerationID, prepared.Source.AssetID, classifier, request, raw, now)
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
 	err = db.WithTx(ctx, func(tx *sql.Tx) error {
-		if _, _, err := writeModelClassification(ctx, tx, prepared.Classify, classifier, parsed, now, decision.GenerationID); err != nil {
+		if _, _, err := writeModelClassification(ctx, tx, prepared.Classify, classifier, parsed, request, now, decision.GenerationID); err != nil {
 			return err
 		}
 		if err := completeModelGeneration(ctx, tx, decision.GenerationID, prepared.Source.AssetID, now); err != nil {
 			return err
 		}
-		_, err := tx.ExecContext(ctx, `insert into card_execution(id, asset_id, card_input_id, card_input, generation_id, custody, completed_at) values (?, ?, ?, ?, ?, ?, ?)`, executionID, prepared.Source.AssetID, input.ID, input.Bytes, decision.GenerationID, custodyBytes, now.UTC().Format(time.RFC3339Nano))
-		return err
+		return completePreparedCardRequest(ctx, tx, executionID, now.UTC().Format(time.RFC3339Nano))
 	})
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
-	return fixtureCardResult{ExecutionID: executionID, Input: input, Request: providerRequest, RawResponse: raw, PromptVersion: classifier.promptVersion, ParserVersion: modelParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: custody}, nil
+	return fixtureCardResult{ExecutionID: executionID, Input: request.Input, Request: request.Request, RawResponse: raw, PromptVersion: request.PromptVersion, ParserVersion: request.ParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: request.Custody}, nil
+}
+
+func finishRetainedFixtureCard(ctx context.Context, db *store.Store, executionID, generationID string, prepared preparedCardRequest, raw model.RawResult, now time.Time) (fixtureCardResult, error) {
+	classifier := modelClassifier{modelID: prepared.Request.Model(), promptVersion: prepared.PromptVersion}
+	parsed, err := parseRetainedModelGeneration(ctx, db, generationID, prepared.Custody.GetAssetId(), classifier, prepared, raw, now)
+	if err != nil {
+		return fixtureCardResult{}, err
+	}
+	queueID, err := approvedCardQueueID(ctx, db, prepared.Custody.GetAssetId())
+	if err != nil {
+		return fixtureCardResult{}, err
+	}
+	err = db.WithTx(ctx, func(tx *sql.Tx) error {
+		input := classifyInput{AssetID: prepared.Custody.GetAssetId(), QueueID: queueID}
+		if _, _, err := writeModelClassification(ctx, tx, input, classifier, parsed, prepared, now, generationID); err != nil {
+			return err
+		}
+		if err := completeModelGeneration(ctx, tx, generationID, input.AssetID, now); err != nil {
+			return err
+		}
+		return completePreparedCardRequest(ctx, tx, executionID, now.UTC().Format(time.RFC3339Nano))
+	})
+	if err != nil {
+		return fixtureCardResult{}, err
+	}
+	return fixtureCardResult{ExecutionID: executionID, Input: prepared.Input, Request: prepared.Request, RawResponse: raw, PromptVersion: prepared.PromptVersion, ParserVersion: prepared.ParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: prepared.Custody}, nil
 }
 
 // validatePlaceEvidenceIdentity keeps the checked records accepted by
@@ -153,9 +176,9 @@ func validatePlaceEvidenceIdentity(records []place.EvidenceRecord, prompt classi
 	return nil
 }
 
-func fixtureCardExecutionID(assetID, cardInputID string, request model.ProviderRequest, promptVersion, parserVersion string) string {
-	digest := request.Digest()
-	return stableID("card_execution", assetID, cardInputID, hex.EncodeToString(digest[:]), promptVersion, parserVersion)
+func fixtureCardExecutionID(assetID string, request preparedCardRequest) string {
+	requestDigest := request.Request.Digest()
+	return stableID("card_execution", assetID, request.Input.ID, request.CustodySHA256, hex.EncodeToString(requestDigest[:]), request.CardRequestID, request.PromptVersion, request.ParserVersion)
 }
 
 func executionCustody(source cardinput.SourceFacts, artifacts cardinput.CheckedArtifacts, records []place.EvidenceRecord) *cardwire.CardExecutionCustody {
@@ -166,11 +189,11 @@ func executionCustody(source cardinput.SourceFacts, artifacts cardinput.CheckedA
 	return custody
 }
 
-func readCompletedFixtureCard(ctx context.Context, db *store.Store, executionID string) (fixtureCardResult, bool, error) {
+func readCompletedFixtureCard(ctx context.Context, db *store.Store, executionID string, client *model.Client) (fixtureCardResult, bool, error) {
 	var result fixtureCardResult
 	var inputBytes, custodyBytes, requestBody []byte
 	var route, modelID string
-	err := db.DB().QueryRowContext(ctx, `select c.id, c.card_input_id, c.card_input, c.custody, g.request_route, g.model_id, g.request_body, ga.prompt_version, ga.parser_version, a.response_body, a.failure_body, a.http_status_text, a.http_status, a.provider_request_id, a.transmission_started from card_execution c join model_generation g on g.id = c.generation_id join model_generation_asset ga on ga.generation_id = g.id and ga.asset_id = c.asset_id join model_generation_attempt a on a.generation_id = g.id where c.id = ?`, executionID).Scan(&result.ExecutionID, &result.Input.ID, &inputBytes, &custodyBytes, &route, &modelID, &requestBody, &result.PromptVersion, &result.ParserVersion, &result.RawResponse.Response, &result.RawResponse.Failure, &result.RawResponse.Status, &result.RawResponse.StatusCode, &result.RawResponse.ProviderRequestID, &result.RawResponse.TransmissionStarted)
+	err := db.DB().QueryRowContext(ctx, `select c.id, c.card_input_id, c.card_input, c.custody, g.request_route, g.model_id, g.request_body, ga.prompt_version, ga.parser_version, a.response_body, a.failure_body, a.http_status_text, a.http_status, a.provider_request_id, a.transmission_started from card_execution c join model_generation g on g.id = c.generation_id join model_generation_asset ga on ga.generation_id = g.id and ga.asset_id = c.asset_id join model_generation_attempt a on a.generation_id = g.id where c.id = ? and c.completed_at <> ''`, executionID).Scan(&result.ExecutionID, &result.Input.ID, &inputBytes, &custodyBytes, &route, &modelID, &requestBody, &result.PromptVersion, &result.ParserVersion, &result.RawResponse.Response, &result.RawResponse.Failure, &result.RawResponse.Status, &result.RawResponse.StatusCode, &result.RawResponse.ProviderRequestID, &result.RawResponse.TransmissionStarted)
 	if errors.Is(err, sql.ErrNoRows) {
 		return fixtureCardResult{}, false, nil
 	}
@@ -188,6 +211,12 @@ func readCompletedFixtureCard(ctx context.Context, db *store.Store, executionID 
 	}
 	result.Request, err = model.RestoreProviderRequest(route, modelID, requestBody)
 	if err != nil {
+		return fixtureCardResult{}, false, err
+	}
+	if client == nil {
+		return fixtureCardResult{}, false, errors.New("model client is required to reopen a completed card execution")
+	}
+	if err := client.ValidateRequest(result.Request); err != nil {
 		return fixtureCardResult{}, false, err
 	}
 	rows, err := db.DB().QueryContext(ctx, `select observation_type, value_text from model_observation where generation_id = (select generation_id from card_execution where id = ?) order by rowid`, result.ExecutionID)

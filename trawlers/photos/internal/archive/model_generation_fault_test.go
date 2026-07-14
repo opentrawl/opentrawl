@@ -395,6 +395,7 @@ func syntheticGenerationClassifyFixture(t *testing.T) Paths {
 	}); err != nil {
 		t.Fatal(err)
 	}
+	prepareCheckedCardInputForModelTest(t, ctx, paths, libraryPath, "generation-fault-asset")
 	return paths
 }
 

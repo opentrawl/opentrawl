@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -98,20 +97,4 @@ func appleEvidenceCandidate(index int, item appleEvidenceItem, input Input) Evid
 		Address:       item.Address,
 		Source:        item.Source,
 	}
-}
-
-func sortEvidenceCandidates(candidates []EvidenceCandidate) {
-	sort.SliceStable(candidates, func(i, j int) bool {
-		left, right := candidates[i], candidates[j]
-		switch {
-		case left.DistanceM > 0 && right.DistanceM > 0 && left.DistanceM != right.DistanceM:
-			return left.DistanceM < right.DistanceM
-		case left.DistanceM > 0 && right.DistanceM <= 0:
-			return true
-		case left.DistanceM <= 0 && right.DistanceM > 0:
-			return false
-		default:
-			return left.ProviderIndex < right.ProviderIndex
-		}
-	})
 }

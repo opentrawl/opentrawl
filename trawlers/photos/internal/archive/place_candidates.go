@@ -139,21 +139,6 @@ func placeCandidateRows(rows []map[string]any) []venueCandidate {
 	return candidates
 }
 
-func promptVenueCandidateWithID(candidate venueCandidate, candidateID string) map[string]any {
-	row := map[string]any{
-		"name":            candidate.Name,
-		"distance_meters": cardformat.Meters(candidate.DistanceM),
-		"tier":            candidate.Tier,
-	}
-	if candidateID != "" {
-		row["candidate_id"] = candidateID
-	}
-	if category := placeCategory(candidate.Category); category != "" {
-		row["category"] = category
-	}
-	return row
-}
-
 func openVenueCandidate(candidate venueCandidate) OpenVenueCandidate {
 	return OpenVenueCandidate{
 		Name:           candidate.Name,

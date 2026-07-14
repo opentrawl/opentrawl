@@ -25,7 +25,7 @@ func TestBuildProjectsEveryModelConsumedFieldInCallerOrder(t *testing.T) {
 	if first.ID != wantID {
 		t.Fatalf("id = %q, want %q", first.ID, wantID)
 	}
-	const stableFixtureID = "card_input:2e561e7158d832e7b4381cad3c290b99c59d7919ba77ae2cd23b77cb315824bf"
+	const stableFixtureID = "card_input:ef097069ae8fee935423738b39d4f19feadfc92a63a4cc49cc4ce9342c35a9e3"
 	if first.ID != stableFixtureID {
 		t.Fatalf("fixture identity = %q, want %q", first.ID, stableFixtureID)
 	}

@@ -52,6 +52,7 @@ type ClassifyResult struct {
 	ContentNotInPhotoKit           int    `json:"content_not_in_photokit"`
 	ContentNoContentAvailable      int    `json:"content_no_content_available"`
 	ContentSkippedUnsupportedMedia int    `json:"content_skipped_unsupported_media"`
+	CardInputNotReady              int    `json:"card_input_not_ready,omitempty"`
 	ContentOutcomeTotal            int    `json:"content_outcome_total,omitempty"`
 	ContentObservationsWritten     int    `json:"content_observations_written"`
 	PlaceCacheHits                 int    `json:"place_cache_hits,omitempty"`
@@ -72,6 +73,21 @@ type ClassifyResult struct {
 	RateLimitAborted               bool   `json:"rate_limit_aborted,omitempty"`
 	ModelTransientErrorEvents      int    `json:"model_transient_error_events"`
 	PhotoKitExportBytes            int64  `json:"photokit_export_bytes"`
+}
+
+func (result ClassifyResult) String() string {
+	lines := []string{
+		fmt.Sprintf("Processed: %d", result.Processed),
+		fmt.Sprintf("Metadata classified: %d", result.MetadataClassified),
+		fmt.Sprintf("Content classified: %d", result.ContentClassified),
+	}
+	if result.CardInputNotReady > 0 {
+		lines = append(lines, fmt.Sprintf("Card input not ready: %d", result.CardInputNotReady))
+	}
+	if result.ContentClassificationFailures > 0 {
+		lines = append(lines, fmt.Sprintf("Content classification failures: %d", result.ContentClassificationFailures))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func Classify(ctx context.Context, paths Paths, opts ClassifyOptions) (ClassifyResult, error) {
@@ -146,20 +162,6 @@ func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts C
 		return ClassifyResult{}, err
 	}
 	logger.logPhase("inputs_loaded", time.Since(loadStartedAt), logIntField("rows", len(inputs)))
-	if classifier != nil {
-		placeStartedAt := time.Now()
-		selected := len(inputs)
-		inputs, err = prepareClassifyPlaces(ctx, db, paths, inputs, now, &result, logger)
-		if err != nil {
-			return ClassifyResult{}, err
-		}
-		logger.logPhase("place_phase", time.Since(placeStartedAt),
-			logIntField("selected", selected),
-			logIntField("ready", len(inputs)),
-			logIntField("cache_hits", result.PlaceCacheHits),
-			logIntField("provider_attempts", result.PlaceProviderAttempts),
-		)
-	}
 	if classifier == nil {
 		for start := 0; start < len(inputs); start += metadataClassificationBatchSize {
 			end := start + metadataClassificationBatchSize
@@ -199,11 +201,15 @@ func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts C
 		if result.ContentOutcomeTotal != result.Processed {
 			return ClassifyResult{}, fmt.Errorf("content outcome accounting mismatch: processed %d, outcomes %d", result.Processed, result.ContentOutcomeTotal)
 		}
-		err := db.WithTx(ctx, func(tx *sql.Tx) error {
-			return writeModelRun(ctx, tx, result.ModelRunID, *classifier, len(inputs), result, now().UTC())
-		})
-		if err != nil {
-			return ClassifyResult{}, err
+		if result.Processed == result.CardInputNotReady {
+			result.ModelRunID = ""
+		} else {
+			err := db.WithTx(ctx, func(tx *sql.Tx) error {
+				return writeModelRun(ctx, tx, result.ModelRunID, *classifier, len(inputs), result, now().UTC())
+			})
+			if err != nil {
+				return ClassifyResult{}, err
+			}
 		}
 	}
 	return finishClassifyResult(startedAt, result), nil

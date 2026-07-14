@@ -9,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardformat"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 )
 
 const placeObservationSource = "place_context"
@@ -21,11 +22,111 @@ func writePlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyI
 	return writePlaceClassificationForGeneration(ctx, tx, input, plausibility, "", classifiedAt)
 }
 
-func writeModelPlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, generationID string, classifiedAt time.Time) (int, error) {
+func writeModelPlaceClassificationAt(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, prepared preparedCardRequest, generationID string, classifiedAt time.Time) (int, error) {
 	if strings.TrimSpace(generationID) == "" {
 		return 0, fmt.Errorf("model generation id is required")
 	}
-	return writePlaceClassificationForGeneration(ctx, tx, input, plausibility, generationID, classifiedAt)
+	return writePreparedPlaceClassification(ctx, tx, input, plausibility, prepared, generationID, classifiedAt)
+}
+
+func writePreparedPlaceClassification(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, prepared preparedCardRequest, generationID string, classifiedAt time.Time) (int, error) {
+	written := 0
+	preserveIDs := []string{}
+	canonical := prepared.Input.Input
+	if canonical == nil {
+		return 0, fmt.Errorf("prepared CardInput is required")
+	}
+	if known := canonical.GetKnownPlace(); known != nil {
+		match := KnownPlaceMatch{Kind: known.GetRelationship(), Name: known.GetName()}
+		observationID := knownPlaceObservationID(input.AssetID, generationID, match)
+		preserveIDs = append(preserveIDs, observationID)
+		n, err := insertKnownPlaceObservation(ctx, tx, input.AssetID, generationID, match)
+		if err != nil {
+			return written, err
+		}
+		written += n
+	}
+	for index, projection := range canonical.GetPlaces() {
+		address := projection.GetAddress()
+		text := cardAddressLine(address)
+		if text == "" {
+			continue
+		}
+		observationID := stableID("place_observation", input.AssetID, generationID, "address", fmt.Sprint(index+1))
+		preserveIDs = append(preserveIDs, observationID)
+		value := map[string]any{
+			"address":             address,
+			"place_position":      index + 1,
+			"provider":            projection.GetProviderIdentity(),
+			"operation":           projection.GetOperation(),
+			"coordinate_variant":  projection.GetCoordinateVariant(),
+			"raw_response_sha256": projection.GetRawResponseSha256(),
+		}
+		n, err := insertPlaceObservationWithID(ctx, tx, observationID, input.AssetID, "", "address", text, value,
+			projection.GetProviderIdentity(), "checked_card_input", place.TierAreaContext, 0)
+		if err != nil {
+			return written, err
+		}
+		written += n
+	}
+	for _, candidate := range prepared.CandidatesInSeq {
+		text := strings.TrimSpace(candidate.Name)
+		if text == "" {
+			text = strings.TrimSpace(candidate.ProviderID)
+		}
+		if text == "" {
+			text = candidate.ID
+		}
+		value := preparedPlaceCandidateValue(candidate)
+		candidateGenerationID := ""
+		if plausibility.CandidateID == candidate.ID && plausibility.Verdict != "" {
+			value["venue_plausibility"] = plausibility
+			candidateGenerationID = generationID
+		}
+		observationID := placeObservationID(input.AssetID, generationID, "poi_candidate", candidate.ID, "provider_candidate")
+		preserveIDs = append(preserveIDs, observationID)
+		n, err := insertPlaceObservationWithID(ctx, tx, observationID, input.AssetID, candidateGenerationID, "poi_candidate", text, value, candidate.Provider, "checked_card_input", "provider_candidate", candidate.DistanceMeters)
+		if err != nil {
+			return written, err
+		}
+		written += n
+		if plausibility.CandidateID != candidate.ID || plausibility.Verdict == "" || plausibility.CandidateID == "none" {
+			continue
+		}
+		venueID := placeObservationID(input.AssetID, generationID, "venue", candidate.ID, "model_selected")
+		preserveIDs = append(preserveIDs, venueID)
+		n, err = insertPlaceObservationWithID(ctx, tx, venueID, input.AssetID, generationID, "venue", text, value, candidate.Provider, "checked_card_input", "model_selected", candidate.DistanceMeters)
+		if err != nil {
+			return written, err
+		}
+		written += n
+	}
+	if err := supersedePlaceObservations(ctx, tx, input.AssetID, preserveIDs, classifiedAt); err != nil {
+		return written, err
+	}
+	return written, nil
+}
+
+func cardAddressLine(address *cardwire.Address) string {
+	if address == nil {
+		return ""
+	}
+	return place.FormatAddress(&place.Address{
+		Name:                  address.GetName(),
+		Thoroughfare:          address.GetThoroughfare(),
+		SubThoroughfare:       address.GetSubThoroughfare(),
+		Locality:              address.GetLocality(),
+		SubLocality:           address.GetSubLocality(),
+		AdministrativeArea:    address.GetAdministrativeArea(),
+		SubAdministrativeArea: address.GetSubAdministrativeArea(),
+		PostalCode:            address.GetPostalCode(),
+		Country:               address.GetCountry(),
+		ISOCountryCode:        address.GetIsoCountryCode(),
+		TimeZone:              address.GetTimeZone(),
+		AreasOfInterest:       address.GetAreasOfInterest(),
+		Formatted:             address.GetFormatted(),
+		Source:                address.GetSource(),
+	})
 }
 
 func writePlaceClassificationForGeneration(ctx context.Context, tx *sql.Tx, input classifyInput, plausibility venuePlausibility, modelGenerationID string, classifiedAt time.Time) (int, error) {
@@ -112,6 +213,10 @@ func writePlaceClassificationForGeneration(ctx context.Context, tx *sql.Tx, inpu
 }
 
 func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity, modelGenerationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
+	return insertPlaceObservationWithID(ctx, tx, placeObservationID(assetID, identity, kind, text, tier), assetID, modelGenerationID, kind, text, value, provider, cacheStatus, tier, distance)
+}
+
+func insertPlaceObservationWithID(ctx context.Context, tx *sql.Tx, observationID, assetID, modelGenerationID, kind, text string, value any, provider, cacheStatus, tier string, distance float64) (int, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return 0, nil
@@ -124,7 +229,6 @@ func insertPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity, 
 	if distance > 0 {
 		distanceValue = distance
 	}
-	observationID := placeObservationID(assetID, identity, kind, text, tier)
 	if kind != "poi_candidate" {
 		if _, err := tx.ExecContext(ctx, `delete from observation_fts where id = ?`, observationID); err != nil {
 			return 0, fmt.Errorf("clear existing place fts: %w", err)
@@ -154,6 +258,33 @@ values (?, ?, ?, ?)
 		}
 	}
 	return int(inserted), nil
+}
+
+func preparedPlaceCandidateValue(candidate preparedPlaceCandidate) map[string]any {
+	value := map[string]any{
+		"candidate_id":        candidate.ID,
+		"provider_index":      candidate.ProviderIndex,
+		"place_position":      candidate.PlacePosition,
+		"candidate_position":  candidate.CandidatePosition,
+		"name":                candidate.Name,
+		"distance_m":          candidate.DistanceMeters,
+		"source":              candidate.Source,
+		"provider":            candidate.Provider,
+		"raw_response_sha256": candidate.RawResponseID,
+	}
+	if strings.TrimSpace(candidate.ProviderID) != "" {
+		value["provider_id"] = candidate.ProviderID
+	}
+	if len(candidate.Categories) > 0 {
+		value["categories"] = candidate.Categories
+	}
+	if candidate.Coordinate != nil {
+		value["coordinate"] = candidate.Coordinate
+	}
+	if candidate.Address != nil {
+		value["address"] = candidate.Address
+	}
+	return value
 }
 
 func insertKnownPlaceObservation(ctx context.Context, tx *sql.Tx, assetID, identity string, match KnownPlaceMatch) (int, error) {

@@ -1,17 +1,17 @@
 ---
 written_by: ai
-prompt_version: photo-card-v3.2
-change_rationale: "Require venue corroboration to return a typed provider candidate id."
+prompt_version: photo-card-v4.0
+change_rationale: "Read complete CardInput ProtoJSON and return exact provider place candidate ids."
 ---
 
-# photoscrawl photo card prompt v3
+# photoscrawl photo card prompt v4
 
 Create a personal photo-library card for the supplied image.
 
 Use the image as primary evidence. Use the metadata context to reason about the
 image, not to echo a data dump. Mechanical facts such as time, GPS, address,
-venue candidates, camera, albums, flags, and original availability are printed
-by the app outside your response.
+provider place candidates, camera, albums, flags, and original availability are
+printed by the app outside your response.
 
 Return only these sections:
 
@@ -36,11 +36,13 @@ person from the image alone.
 
 Use place context carefully:
 
-- if `confirmed_venue` is present, you may say the photo is at that venue
-- if `venue_candidate` is present, say candidate, likely, or at or near
-- if only `nearby_poi` is present, do not turn it into the photo location
-- if only address or area exists, name the area, street, city, region, or
-  country as context
+- if a provider candidate is visibly corroborated, you may say the photo is at
+  that place
+- if a provider candidate is only plausible, say candidate, likely, or at or
+  near
+- do not turn a merely nearby provider candidate into the photo location
+- if only address or area context exists, name the area, street, city, region,
+  or country as context
 - if the image contradicts the place context, trust the image and say why
 
 Do not treat visible brands, appliance labels, product packaging, menu supplier
@@ -54,17 +56,19 @@ candidate is inconsistent with the scene, ignore it silently.
 
 ## Venue plausibility
 
-Answer for the top provider venue candidate only. Use exactly these fields:
+Answer for one provider place candidate. Use exactly these fields:
 
-- `candidate_id`: one of the `venue_candidates[].candidate_id` values, or `none`
+- `candidate_id`: one exact `places[].candidates[].candidate_id` value from
+  the metadata context, or `none`
 - `verdict`: `corroborated`, `plausible`, or `inconsistent`
 - `reason`: one short sentence
 
 Use `corroborated` only when visible evidence supports the same venue name,
 storefront, sign, logo, entrance, menu, receipt, or unmistakable venue type. Use
-`plausible` when the candidate is near the GPS point and nothing visible
-contradicts that venue type. Use `inconsistent` when the scene contradicts the
-venue type, for example a private home meal near a registered business.
+`plausible` when a candidate is near the GPS point and nothing visible
+contradicts that place type. Use `inconsistent` when the scene contradicts the
+place type, for example a private home meal near a registered business. Use
+`none` when no listed candidate is a useful venue interpretation.
 
 Do not use `corroborated` for a merely nearby provider candidate. Do not use
 `plausible` when the image itself points to a private, residential, vehicle,
@@ -94,6 +98,6 @@ raw EXIF blocks, raw metadata JSON, hashes, or filenames.
 
 ## Metadata context
 
-Use this context for reasoning only:
+Use this complete CardInput ProtoJSON context for reasoning only:
 
 {{.MetadataJSON}}

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 )
 
@@ -45,7 +46,6 @@ func TestBuildRequestSeparatesOriginalMetadataFromModelImageIdentity(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	classifier := modelClassifier{}
 	input := classifyInput{
 		CreationDate: "2026-07-10T10:00:00Z",
 		TimezoneName: "Europe/Amsterdam",
@@ -57,35 +57,44 @@ func TestBuildRequestSeparatesOriginalMetadataFromModelImageIdentity(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, meta, err := classifier.buildRequest(input, modelPath, metadata.Projection)
+	classifier, err := newModelClassifier("fixture-model", "https://models.example.com", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if extractions != 1 || meta.SHA256 != modelSHA256 || meta.Bytes != int64(len(modelBytes)) {
-		t.Fatalf("extractions = %d meta = %#v", extractions, meta)
+	source, artifacts := metadataTestCardFacts(input, provedOriginalSHA256, metadata.Projection, modelBytes)
+	request, err := renderPreparedCardRequest(source, artifacts, nil, modelBytes, classifier)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(request.Images) != 1 || string(request.Images[0].Data) != string(modelBytes) {
-		t.Fatalf("request image = %#v", request.Images)
+	prompt, err := renderCardInputPrompt(request.Input.Input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if extractions != 1 || request.Image.SHA256 != modelSHA256 || request.Image.Bytes != int64(len(modelBytes)) {
+		t.Fatalf("extractions = %d image = %#v", extractions, request.Image)
+	}
+	if request.Input.Input.GetFullCurrent().GetSha256() != modelSHA256 {
+		t.Fatalf("CardInput full-current sha = %q, want %q", request.Input.Input.GetFullCurrent().GetSha256(), modelSHA256)
 	}
 	for _, want := range []string{
-		`"exact_original_metadata": [`,
+		`"projection_lines"`,
 		`Image 1 › EXIF › Exposure time: 1/120 s`,
 		`Image 1 › EXIF › Aperture: f/1.8`,
 	} {
-		if !strings.Contains(request.Prompt, want) {
-			t.Fatalf("rendered request missing %q:\n%s", want, request.Prompt)
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("rendered request missing %q:\n%s", want, prompt)
 		}
 	}
-	if strings.Contains(request.Prompt, base64.StdEncoding.EncodeToString([]byte("synthetic binary metadata"))) {
-		t.Fatalf("rendered request contains binary metadata:\n%s", request.Prompt)
+	if strings.Contains(prompt, base64.StdEncoding.EncodeToString([]byte("synthetic binary metadata"))) {
+		t.Fatalf("rendered request contains binary metadata:\n%s", prompt)
 	}
-	if strings.Contains(request.Prompt, "MysteryScalar") {
-		t.Fatalf("rendered request contains an unrecognised raw metadata token:\n%s", request.Prompt)
+	if strings.Contains(prompt, "MysteryScalar") {
+		t.Fatalf("rendered request contains an unrecognised raw metadata token:\n%s", prompt)
 	}
 	t.Logf("RAW exact-original metadata input: path=%s proved_sha256=%s", filepath.Base(originalPath), provedOriginalSHA256)
 	t.Logf("RAW model-image input: path=%s sha256=%s", filepath.Base(modelPath), modelSHA256)
 	t.Logf("RAW ImageIO output before typed decoding:\n%s", rawRecord)
-	t.Logf("RAW rendered model request before provider call:\n%s", request.Prompt)
+	t.Logf("RAW rendered model request before provider call:\n%s", request.Request.Body())
 
 	restartedStore, err := imagemetadata.NewStore(cacheRoot, func(context.Context, string) ([]byte, error) {
 		t.Fatal("checked metadata restart reached ImageIO")
@@ -101,13 +110,30 @@ func TestBuildRequestSeparatesOriginalMetadataFromModelImageIdentity(t *testing.
 	if !restartedMetadata.CacheHit {
 		t.Fatal("restart metadata was not a checked cache hit")
 	}
-	restartedRequest, restartedMeta, err := classifier.buildRequest(input, modelPath, restartedMetadata.Projection)
+	restartedSource, restartedArtifacts := metadataTestCardFacts(input, provedOriginalSHA256, restartedMetadata.Projection, modelBytes)
+	restartedRequest, err := renderPreparedCardRequest(restartedSource, restartedArtifacts, nil, modelBytes, classifier)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if restartedRequest.Prompt != request.Prompt || restartedMeta != meta {
-		t.Fatalf("restart request changed\nfirst meta: %#v\nsecond meta: %#v", meta, restartedMeta)
+	if restartedRequest.RequestSHA256 != request.RequestSHA256 || restartedRequest.CardRequestID != request.CardRequestID || restartedRequest.Image != request.Image {
+		t.Fatalf("restart request changed\nfirst image: %#v\nsecond image: %#v", request.Image, restartedRequest.Image)
 	}
+}
+
+func metadataTestCardFacts(input classifyInput, originalSHA256 string, projection imagemetadata.Projection, modelBytes []byte) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {
+	modelDigest := sha256.Sum256(modelBytes)
+	modelSHA256 := hex.EncodeToString(modelDigest[:])
+	original := cardinput.ImmutableOriginalFact{ResourceType: "photo", UTI: "public.jpeg", Filename: "exact-original.jpeg", Availability: "local", SizeBytes: 3, SHA256: originalSHA256}
+	metadata := cardinput.MetadataFact{RecordSHA256: metadataTestDigest("metadata-record"), ProjectionSHA256: metadataTestDigest(strings.Join(projection.Lines, "\n")), ProjectionLines: projection.Lines}
+	fullCurrent := cardinput.FullCurrentFact{Role: "full_current", MediaType: "public.jpeg", Orientation: 1, PixelWidth: input.Width, PixelHeight: input.Height, SizeBytes: int64(len(modelBytes)), SHA256: modelSHA256}
+	source := cardinput.SourceFacts{AssetID: "asset:metadata-request", SourceID: "source:synthetic", CaptureTime: input.CreationDate, Timezone: &input.TimezoneName, MediaType: input.MediaType, PixelWidth: input.Width, PixelHeight: input.Height, ImmutableOriginal: original, Metadata: metadata, FullCurrent: fullCurrent}
+	artifacts := cardinput.CheckedArtifacts{ImmutableOriginal: cardinput.CheckedImmutableOriginal{Fact: original, ResourceID: "resource:metadata-original"}, Metadata: cardinput.CheckedMetadata{Fact: metadata, RecordID: "image_metadata:" + metadata.RecordSHA256, ProjectionID: "image_metadata_projection:" + metadata.ProjectionSHA256}, FullCurrent: cardinput.CheckedFullCurrent{Fact: fullCurrent, ProofSHA256: metadataTestDigest("current-still-proof")}}
+	return source, artifacts
+}
+
+func metadataTestDigest(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }
 
 func archiveSyntheticMetadataRecord(t *testing.T) []byte {
