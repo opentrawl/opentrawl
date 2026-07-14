@@ -58,22 +58,48 @@ func SelectCardInputReadyAsset(ctx context.Context, options CardInputAuditInvent
 }
 
 func selectCardInputArchiveCandidate(ctx context.Context, db *sql.DB, sourceLibraryID string) (classifyInput, error) {
-	var assetID string
-	err := db.QueryRowContext(ctx, `
+	rows, err := db.QueryContext(ctx, `
 		select a.id from asset a
 		where a.source_library_id=? and a.source_state=? and a.media_type='image'
 		  and not exists(select 1 from location_observation where asset_id=a.id)
 		  and a.first_card_blocked_at is null
-		order by a.creation_date, a.id limit 1`,
+		  and (select count(*) from asset_resource resource
+		       where resource.asset_id=a.id and resource.resource_type='local_original'
+		         and trim(resource.local_path)<>'')=1
+		order by a.creation_date, a.id`,
 		strings.TrimSpace(sourceLibraryID), sourceStateCurrent,
-	).Scan(&assetID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return classifyInput{}, errors.New("archive has no current unlocated image candidate")
-	}
+	)
 	if err != nil {
 		return classifyInput{}, fmt.Errorf("select archive image candidate: %w", err)
 	}
-	return loadCardInputAuditInput(ctx, db, sourceLibraryID, assetID)
+	var assetIDs []string
+	for rows.Next() {
+		var assetID string
+		if err := rows.Scan(&assetID); err != nil {
+			_ = rows.Close()
+			return classifyInput{}, fmt.Errorf("scan archive image candidate: %w", err)
+		}
+		assetIDs = append(assetIDs, assetID)
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return classifyInput{}, fmt.Errorf("read archive image candidates: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return classifyInput{}, fmt.Errorf("close archive image candidates: %w", err)
+	}
+	for _, assetID := range assetIDs {
+		input, err := loadCardInputAuditInput(ctx, db, sourceLibraryID, assetID)
+		if err != nil {
+			return classifyInput{}, err
+		}
+		if _, ok, err := cardInputAuditCheckedPackageOriginal(input); err != nil {
+			return classifyInput{}, err
+		} else if ok {
+			return input, nil
+		}
+	}
+	return classifyInput{}, errors.New("archive has no current unlocated image candidate with a checked package original")
 }
 
 func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetReadiness) error {
