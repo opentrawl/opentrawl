@@ -30,10 +30,17 @@ type CardInputReadiness struct {
 	AssetID string `json:"asset_id"`
 }
 
+// CardInputReadinessOptions names the canonical archive and any exact assets
+// that the operator has already stopped and must not retry.
+type CardInputReadinessOptions struct {
+	CardInputAuditInventoryOptions
+	ExcludedAssetIDs []string
+}
+
 // SelectCardInputReadyAsset chooses one unlocated live PhotoKit image through
 // the signed helper, then verifies that the archive has the same canonical
 // identity and the source facts required by both media boundaries.
-func SelectCardInputReadyAsset(ctx context.Context, options CardInputAuditInventoryOptions) (CardInputReadiness, error) {
+func SelectCardInputReadyAsset(ctx context.Context, options CardInputReadinessOptions) (CardInputReadiness, error) {
 	db, err := openCardInputAuditArchive(ctx, options.ArchivePath)
 	if err != nil {
 		return CardInputReadiness{}, err
@@ -46,7 +53,7 @@ func SelectCardInputReadyAsset(ctx context.Context, options CardInputAuditInvent
 	if !complete {
 		return CardInputReadiness{}, errors.New("Photos archive snapshot is not complete")
 	}
-	input, err := selectCardInputArchiveCandidate(ctx, db.DB(), options.SourceLibraryID)
+	input, err := selectCardInputArchiveCandidate(ctx, db.DB(), options.SourceLibraryID, options.ExcludedAssetIDs)
 	if err != nil {
 		return CardInputReadiness{}, err
 	}
@@ -57,15 +64,12 @@ func SelectCardInputReadyAsset(ctx context.Context, options CardInputAuditInvent
 	return CardInputReadiness{AssetID: input.AssetID}, nil
 }
 
-func selectCardInputArchiveCandidate(ctx context.Context, db *sql.DB, sourceLibraryID string) (classifyInput, error) {
+func selectCardInputArchiveCandidate(ctx context.Context, db *sql.DB, sourceLibraryID string, excludedAssetIDs []string) (classifyInput, error) {
 	rows, err := db.QueryContext(ctx, `
 		select a.id from asset a
 		where a.source_library_id=? and a.source_state=? and a.media_type='image'
 		  and not exists(select 1 from location_observation where asset_id=a.id)
 		  and a.first_card_blocked_at is null
-		  and (select count(*) from asset_resource resource
-		       where resource.asset_id=a.id and resource.resource_type='local_original'
-		         and trim(resource.local_path)<>'')=1
 		order by a.creation_date, a.id`,
 		strings.TrimSpace(sourceLibraryID), sourceStateCurrent,
 	)
@@ -88,18 +92,23 @@ func selectCardInputArchiveCandidate(ctx context.Context, db *sql.DB, sourceLibr
 	if err := rows.Close(); err != nil {
 		return classifyInput{}, fmt.Errorf("close archive image candidates: %w", err)
 	}
+	excluded := make(map[string]bool, len(excludedAssetIDs))
+	for _, assetID := range excludedAssetIDs {
+		if assetID = strings.TrimSpace(assetID); assetID != "" {
+			excluded[assetID] = true
+		}
+	}
 	for _, assetID := range assetIDs {
+		if excluded[assetID] {
+			continue
+		}
 		input, err := loadCardInputAuditInput(ctx, db, sourceLibraryID, assetID)
 		if err != nil {
 			return classifyInput{}, err
 		}
-		if _, ok, err := cardInputAuditCheckedPackageOriginal(input); err != nil {
-			return classifyInput{}, err
-		} else if ok {
-			return input, nil
-		}
+		return input, nil
 	}
-	return classifyInput{}, errors.New("archive has no current unlocated image candidate with a checked package original")
+	return classifyInput{}, errors.New("archive has no current unlocated image candidate after stopped assets were excluded")
 }
 
 func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetReadiness) error {
