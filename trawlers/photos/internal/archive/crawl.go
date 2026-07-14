@@ -48,11 +48,7 @@ type SyncResult struct {
 }
 
 func Sync(ctx context.Context, paths Paths, opts SyncOptions) (SyncResult, error) {
-	db, err := store.Open(ctx, store.Options{
-		Path:          paths.Database,
-		Schema:        Schema,
-		SchemaVersion: SchemaVersion,
-	})
+	db, err := openArchive(ctx, paths.Database)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -121,19 +117,6 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 		return SyncResult{}, err
 	}
 	return importer.result, nil
-}
-
-func prepareStore(ctx context.Context, db *store.Store) error {
-	if db == nil {
-		return errors.New("archive store is not open")
-	}
-	if _, err := db.DB().ExecContext(ctx, Schema); err != nil {
-		return fmt.Errorf("apply schema: %w", err)
-	}
-	if err := ensureArchiveMigrations(ctx, db.DB()); err != nil {
-		return err
-	}
-	return db.EnsureSchemaVersion(ctx, SchemaVersion)
 }
 
 type syncImporter struct {

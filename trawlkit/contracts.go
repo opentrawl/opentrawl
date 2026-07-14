@@ -76,3 +76,10 @@ type ShortRefProvider interface {
 type ArchivePreparer interface {
 	PrepareArchive(ctx context.Context, path string) error
 }
+
+// ReadArchivePreparer upgrades or validates a crawler-owned archive before
+// the harness opens an optional or read-only request store. It owns and closes
+// any connection used for preparation.
+type ReadArchivePreparer interface {
+	PrepareReadArchive(ctx context.Context, path string) error
+}

@@ -28,17 +28,18 @@ import (
 )
 
 type testCrawler struct {
-	id        string
-	surface   string
-	headlines []string
-	cfg       *testConfig
-	verbs     []Verb
-	statusFn  func(context.Context, *Request) (*control.Status, error)
-	doctorFn  func(context.Context, *Request) (*Doctor, error)
-	searchFn  func(context.Context, *Request, Query) (SearchResult, error)
-	whoFn     func(context.Context, *Request, string) ([]whomatch.Candidate, error)
-	syncFn    func(context.Context, *Request) (*SyncReport, error)
-	prepareFn func(context.Context, string) error
+	id            string
+	surface       string
+	headlines     []string
+	cfg           *testConfig
+	verbs         []Verb
+	statusFn      func(context.Context, *Request) (*control.Status, error)
+	doctorFn      func(context.Context, *Request) (*Doctor, error)
+	searchFn      func(context.Context, *Request, Query) (SearchResult, error)
+	whoFn         func(context.Context, *Request, string) ([]whomatch.Candidate, error)
+	syncFn        func(context.Context, *Request) (*SyncReport, error)
+	prepareFn     func(context.Context, string) error
+	readPrepareFn func(context.Context, string) error
 }
 
 type testStatusCrawler struct {
@@ -47,6 +48,11 @@ type testStatusCrawler struct {
 
 type testSearchCrawler struct {
 	testStatusCrawler
+}
+
+type writeOnlyArchivePreparer struct {
+	testSearchCrawler
+	prepareCalls int
 }
 
 type testContactCrawler struct {
@@ -159,6 +165,18 @@ func (c *testCrawler) PrepareArchive(ctx context.Context, path string) error {
 	if c.prepareFn != nil {
 		return c.prepareFn(ctx, path)
 	}
+	return nil
+}
+
+func (c *testCrawler) PrepareReadArchive(ctx context.Context, path string) error {
+	if c.readPrepareFn != nil {
+		return c.readPrepareFn(ctx, path)
+	}
+	return nil
+}
+
+func (c *writeOnlyArchivePreparer) PrepareArchive(context.Context, string) error {
+	c.prepareCalls++
 	return nil
 }
 
@@ -521,14 +539,13 @@ func TestSyncPrepareArchiveErrorAbortsBeforeSync(t *testing.T) {
 	}
 }
 
-// TestStatusDoesNotRunPrepareArchive checks that ArchivePreparer only fires
-// for storeWrite verbs: status opens the archive (if any) storeOptional and
-// must never ask a crawler to park it.
-func TestStatusDoesNotRunPrepareArchive(t *testing.T) {
+// TestStatusRunsReadArchivePreparation checks that preparation happens before every
+// store-backed verb, including status's optional read store.
+func TestStatusRunsReadArchivePreparation(t *testing.T) {
 	stateRoot := t.TempDir()
 	prepareCalls := 0
 	source := &testCrawler{
-		prepareFn: func(context.Context, string) error {
+		readPrepareFn: func(context.Context, string) error {
 			prepareCalls++
 			return nil
 		},
@@ -537,8 +554,38 @@ func TestStatusDoesNotRunPrepareArchive(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if prepareCalls != 0 {
-		t.Fatalf("PrepareArchive calls = %d, want 0 for a read-only verb", prepareCalls)
+	if prepareCalls != 1 {
+		t.Fatalf("PrepareReadArchive calls = %d, want 1 for a store-backed verb", prepareCalls)
+	}
+	logData, err := os.ReadFile(filepath.Join(stateRoot, "testcrawl", "logs", "current.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(logData), "archive_prepare_read: duration_ms=") {
+		t.Fatalf("read archive preparation duration missing from run log:\n%s", logData)
+	}
+}
+
+func TestReadVerbsDoNotRunWriteArchivePreparation(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		wantCode int
+	}{
+		{name: "status", args: []string{"status", "--json"}, wantCode: 0},
+		{name: "search", args: []string{"search", "anything", "--json"}, wantCode: 1},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			source := &writeOnlyArchivePreparer{}
+			code, stdout, stderr := runForTestAt(t.TempDir(), tt.args, source, runOptions{})
+			if code != tt.wantCode {
+				t.Fatalf("code = %d, want %d; stdout=%s stderr=%s", code, tt.wantCode, stdout, stderr)
+			}
+			if source.prepareCalls != 0 {
+				t.Fatalf("PrepareArchive calls = %d, want 0 for a read verb", source.prepareCalls)
+			}
+		})
 	}
 }
 
