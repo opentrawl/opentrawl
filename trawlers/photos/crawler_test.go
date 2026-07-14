@@ -182,6 +182,15 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 			t.Fatalf("acquire-current-still flags missing %q: %#v", name, acquire.Flags)
 		}
 	}
+	readiness := manifest.Commands["select_card_input_ready"]
+	if readiness.Mutates || readiness.Store != "none" || !readiness.JSON {
+		t.Fatalf("select-card-input-ready command = %#v", readiness)
+	}
+	for _, name := range []string{"source-library", "exclude-asset"} {
+		if !commandHasFlag(readiness, name) {
+			t.Fatalf("select-card-input-ready flags missing %q: %#v", name, readiness.Flags)
+		}
+	}
 	if !manifest.Commands["sync"].Mutates {
 		t.Fatalf("sync command = %#v", manifest.Commands["sync"])
 	}

@@ -25,12 +25,13 @@ const (
 )
 
 type Crawler struct {
-	cfg                Config
-	snapshotProvider   photos.Provider
-	classifyLimit      trackedLimit
-	classifyModel      string
-	currentStillAsset  string
-	currentStillSource string
+	cfg                        Config
+	snapshotProvider           photos.Provider
+	classifyLimit              trackedLimit
+	classifyModel              string
+	currentStillAsset          string
+	currentStillSource         string
+	currentStillExcludedAssets []string
 }
 
 type Config struct {
@@ -101,7 +102,16 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 
 func (c *Crawler) currentStillReadinessFlags(fs *flag.FlagSet) {
 	c.currentStillSource = ""
+	c.currentStillExcludedAssets = nil
 	fs.StringVar(&c.currentStillSource, "source-library", "", "exact Photos source library ID")
+	fs.Func("exclude-asset", "exact stopped asset identity to exclude; repeat for each asset", func(value string) error {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return errors.New("excluded asset identity is required")
+		}
+		c.currentStillExcludedAssets = append(c.currentStillExcludedAssets, value)
+		return nil
+	})
 }
 
 func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
@@ -300,9 +310,12 @@ func (c *Crawler) runCardInputReadiness(ctx context.Context, req *trawlkit.Reque
 	if strings.TrimSpace(c.currentStillSource) == "" {
 		return output.UsageError{Err: errors.New("select-card-input-ready requires --source-library")}
 	}
-	result, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputAuditInventoryOptions{
-		ArchivePath:     req.Paths.Archive,
-		SourceLibraryID: strings.TrimSpace(c.currentStillSource),
+	result, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputReadinessOptions{
+		CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{
+			ArchivePath:     req.Paths.Archive,
+			SourceLibraryID: strings.TrimSpace(c.currentStillSource),
+		},
+		ExcludedAssetIDs: append([]string(nil), c.currentStillExcludedAssets...),
 	})
 	if err != nil {
 		return err

@@ -3,40 +3,38 @@ package archive
 import (
 	"context"
 	"database/sql"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
 
-func TestSelectCardInputArchiveCandidateSkipsUnavailablePackageOriginal(t *testing.T) {
+func TestSelectCardInputArchiveCandidateExcludesStoppedAsset(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
 	defer db.Close()
 	db.SetMaxOpenConns(1)
 	seedCardInputAuditAsset(t, ctx, db, "asset:a-stopped", sourceStateCurrent, "image", `{}`)
 	seedCardInputAuditAsset(t, ctx, db, "asset:b-ready", sourceStateCurrent, "image", `{}`)
-	missingPath := filepath.Join(t.TempDir(), "missing.jpg")
-	readyPath := filepath.Join(t.TempDir(), "ready.jpg")
-	readyBytes := []byte("synthetic package original")
-	if err := os.WriteFile(readyPath, readyBytes, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	insertCardInputReadinessResource(t, ctx, db, "asset:a-stopped", missingPath, 1)
-	insertCardInputReadinessResource(t, ctx, db, "asset:b-ready", readyPath, int64(len(readyBytes)))
-
-	input, err := selectCardInputArchiveCandidate(ctx, db, "source:synthetic")
+	insertCardInputReadinessResource(t, ctx, db, "asset:a-stopped")
+	insertCardInputReadinessResource(t, ctx, db, "asset:b-ready")
+	input, err := selectCardInputArchiveCandidate(ctx, db, "source:synthetic", []string{"asset:a-stopped"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if input.AssetID != "asset:b-ready" {
 		t.Fatalf("selected asset = %q, want asset:b-ready", input.AssetID)
 	}
+	fresh, err := selectCardInputArchiveCandidate(ctx, db, "source:synthetic", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh.AssetID != "asset:a-stopped" {
+		t.Fatalf("fresh selected asset = %q, want asset:a-stopped", fresh.AssetID)
+	}
 }
 
-func insertCardInputReadinessResource(t *testing.T, ctx context.Context, db *sql.DB, assetID, path string, size int64) {
+func insertCardInputReadinessResource(t *testing.T, ctx context.Context, db *sql.DB, assetID string) {
 	t.Helper()
-	_, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values(?,?,'local_original','public.jpeg','synthetic.jpg',?,?,'',1,0)`, "resource:"+assetID, assetID, path, size)
+	_, err := db.ExecContext(ctx, `insert into asset_resource(id,asset_id,resource_type,uti,original_filename,local_path,file_size,sha256,available_locally,needs_download) values(?,?,'photo','public.jpeg','synthetic.jpg','',0,'',0,1)`, "resource:"+assetID, assetID)
 	if err != nil {
 		t.Fatal(err)
 	}

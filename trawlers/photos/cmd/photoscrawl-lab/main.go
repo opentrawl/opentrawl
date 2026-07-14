@@ -326,6 +326,8 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		fs.SetOutput(os.Stderr)
 		archivePath := fs.String("archive", "", "complete Photos archive path")
 		sourceLibrary := fs.String("source-library", "", "exact source library ID")
+		excludedAssets := stringList{}
+		fs.Var(&excludedAssets, "exclude-asset", "exact stopped asset identity to exclude; repeat for each asset")
 		outDir := fs.String("out", "", "existing owner-only private audit output directory")
 		jsonFlag := fs.Bool("json", false, "write JSON")
 		if err := fs.Parse(args[1:]); err != nil {
@@ -337,7 +339,10 @@ func runAuditCardInput(ctx context.Context, paths archive.Paths, args []string) 
 		if err := validateCardInputAuditOutput(*outDir); err != nil {
 			return err
 		}
-		readiness, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputAuditInventoryOptions{ArchivePath: *archivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)})
+		readiness, err := archive.SelectCardInputReadyAsset(ctx, archive.CardInputReadinessOptions{
+			CardInputAuditInventoryOptions: archive.CardInputAuditInventoryOptions{ArchivePath: *archivePath, SourceLibraryID: strings.TrimSpace(*sourceLibrary)},
+			ExcludedAssetIDs:               append([]string(nil), excludedAssets...),
+		})
 		if err != nil {
 			return err
 		}
