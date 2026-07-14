@@ -208,6 +208,123 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	}
 }
 
+func TestOpenRecordFollowsSearchAnchors(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	paths := trawlkit.Paths{Archive: filepath.Join(root, "photos.db")}
+	home := filepath.Join(root, "home")
+	t.Setenv("HOME", home)
+	libraryPath := filepath.Join(home, "Pictures", "Photos Library.photoslibrary")
+	createSyntheticLibrary(t, libraryPath)
+	snapshot, err := (sourcephotos.SQLiteSnapshotProvider{}).Snapshot(ctx, libraryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := New()
+	source.cfg.LibraryPath = "/synthetic/Photos Library.photoslibrary"
+	source.snapshotProvider = staticSnapshotProvider{snapshot: snapshot}
+	writeStore, err := store.Open(ctx, store.Options{Path: paths.Archive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = source.Sync(ctx, &trawlkit.Request{Store: writeStore, Paths: paths, Progress: func(trawlkit.Progress) {}}); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	var assetID string
+	if err := writeStore.DB().QueryRowContext(ctx, `select id from asset where local_identifier = 'fixture-uuid-1'`).Scan(&assetID); err != nil {
+		_ = writeStore.Close()
+		t.Fatal(err)
+	}
+	for _, observation := range []struct{ id, kind, text string }{
+		{"anchor-description", "card_description", "Synthetic descriptionneedle."},
+		{"anchor-summary", "card_summary", "Synthetic summaryneedle."},
+	} {
+		if _, err := writeStore.DB().ExecContext(ctx, `
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
+values (?, ?, ?, ?, '{}', 1.0, 'fixture', 'fixture-model', 'v1', '')
+`, observation.id, assetID, observation.kind, observation.text); err != nil {
+			_ = writeStore.Close()
+			t.Fatal(err)
+		}
+		if _, err := writeStore.DB().ExecContext(ctx, `insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`, observation.id, assetID, observation.text); err != nil {
+			_ = writeStore.Close()
+			t.Fatal(err)
+		}
+	}
+	for index := 0; index <= 64; index++ {
+		label := fmt.Sprintf("signal-%03d", index)
+		if index == 64 {
+			label = "zz-beyondanchor"
+		}
+		id := fmt.Sprintf("anchor-metadata-%03d", index)
+		if _, err := writeStore.DB().ExecContext(ctx, `
+insert into metadata_observation(id, asset_id, observation_type, label, source, classifier_id, evidence_id)
+values (?, ?, 'fixture', ?, 'fixture', '', '')
+`, id, assetID, label); err != nil {
+			_ = writeStore.Close()
+			t.Fatal(err)
+		}
+		if _, err := writeStore.DB().ExecContext(ctx, `insert into observation_fts(id, asset_id, title, body) values (?, ?, ?, ?)`, id, assetID, label, label); err != nil {
+			_ = writeStore.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := writeStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	openSearchResult := func(query, wantAnchor string) (trawlkit.Hit, *openv1.OpenRecord) {
+		t.Helper()
+		readStore := openReadStore(t, ctx, paths.Archive)
+		request := readRequest(readStore, paths)
+		search, err := source.Search(ctx, request, trawlkit.Query{Text: query, Limit: 1})
+		if err != nil {
+			_ = readStore.Close()
+			t.Fatal(err)
+		}
+		if len(search.Results) != 1 || search.Results[0].AnchorID != wantAnchor {
+			_ = readStore.Close()
+			t.Fatalf("search %q = %#v", query, search.Results)
+		}
+		hit := search.Results[0]
+		request.RequestedAnchorID = hit.AnchorID
+		record, err := source.OpenRecord(ctx, request, hit.Ref)
+		_ = readStore.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("search result: %#v", hit)
+		t.Logf("public open request: ref=%q anchor=%q", hit.Ref, request.RequestedAnchorID)
+		t.Logf("returned presentation: %s", prototext.Format(record.Presentation))
+		if err := openrecord.ValidateRequestedAnchor(record, hit.AnchorID); err != nil {
+			t.Fatal(err)
+		}
+		return hit, record
+	}
+
+	description, _ := openSearchResult("descriptionneedle", "description")
+	_, _ = openSearchResult("summaryneedle", "summary")
+	metadata, _ := openSearchResult("beyondanchor", "metadata.YW5jaG9yLW1ldGFkYXRhLTA2NA")
+	if description.Ref != metadata.Ref {
+		t.Fatalf("search refs differ: description=%q metadata=%q", description.Ref, metadata.Ref)
+	}
+
+	readStore := openReadStore(t, ctx, paths.Archive)
+	request := readRequest(readStore, paths)
+	request.RequestedAnchorID = "unknown-anchor"
+	record, err := source.OpenRecord(ctx, request, description.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("public open request: ref=%q anchor=%q", description.Ref, request.RequestedAnchorID)
+	t.Logf("returned presentation: %s", prototext.Format(record.Presentation))
+	if err := openrecord.ValidateRequestedAnchor(record, request.RequestedAnchorID); err == nil {
+		t.Fatal("unknown anchor passed canonical validation")
+	}
+}
+
 func TestPresentationResourceResolverIsOpaqueAndBounded(t *testing.T) {
 	ctx := context.Background()
 	archivePath := filepath.Join(t.TempDir(), "photos.db")

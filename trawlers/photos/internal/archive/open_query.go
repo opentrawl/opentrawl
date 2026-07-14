@@ -129,11 +129,7 @@ limit ?
 	if len(metadataObservations) > maximumOpenSignals {
 		metadataObservations = metadataObservations[:maximumOpenSignals]
 	}
-	if anchorID != "" && !hasMetadataAnchor(metadataObservations, anchorID) {
-		metadataID, ok := metadataIDForAnchor(anchorID)
-		if !ok {
-			return OpenResult{}, fmt.Errorf("invalid requested metadata anchor: %s", anchorID)
-		}
+	if metadataID, ok := metadataIDForAnchor(anchorID); ok && !hasMetadataAnchor(metadataObservations, anchorID) {
 		focused, err := oneRow(ctx, db.DB(), `
 select id, label
 from metadata_observation
