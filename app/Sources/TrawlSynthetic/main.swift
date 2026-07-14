@@ -423,7 +423,7 @@ private func open(_ arguments: [String]) throws {
   ]
   var record = Trawl_Open_V1_OpenRecord()
   record.sourceID = sourceID
-  record.openRef = "\(sourceID):record/example-1"
+  record.openRef = requestedRef
   record.data = Google_Protobuf_Any.with {
     $0.typeURL = "type.example/Synthetic"
     $0.value = Data([1, 2])
