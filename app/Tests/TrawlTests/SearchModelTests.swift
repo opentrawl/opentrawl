@@ -102,7 +102,7 @@ private struct SearchClient: TrawlClient {
   let model = SearchModel(client: SearchClient(response: try response.model()), debounce: .zero)
   await model.search("mixed", source: nil)
   #expect(model.hasTimeoutFailure)
-  #expect(model.failureGuidance == "Slow source: Wait expired. 1 more source failed.")
+  #expect(model.failureGuidance == "Slow source: Wait expired. Private source: Access denied.")
   #expect(model.failureGuidance?.contains("trawl doctor") == false)
   #expect(model.sourceDisplayName(for: "response-only", resolvedName: nil) == "Response source")
   #expect(
@@ -360,7 +360,7 @@ private struct SearchClient: TrawlClient {
     debounce: .zero)
   await mixed.search("mixed", source: nil)
   #expect(
-    mixed.phase == .failed("Calendar: Calendar timed out. 1 more source failed."))
+    mixed.phase == .failed("Calendar: Calendar timed out. Notes: Allow Notes access."))
 
   let processTimeout = SearchModel(
     client: ScriptedSearchClient { _, _ in throw TrawlClientError.timedOut }, debounce: .zero)

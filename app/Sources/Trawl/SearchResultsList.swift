@@ -30,13 +30,13 @@ struct SearchResultsList: View {
   let results: [SearchHit]
   let sourceDisplayName: (String) -> String
   let failureGuidance: String?
-  let hasTimeoutFailure: Bool
   let committedQuery: String?
   let resultLimit: UInt32
   let title: (SearchHit) -> String
   @Binding var selectedResultID: SearchHit.ID?
   @FocusState.Binding var focus: SearchFocus?
   let onReturn: () -> Void
+  let onEscape: () -> Void
   let onOpen: (SearchHit) -> Void
   let onSelectionChanged: (SearchHit) -> Void
 
@@ -48,7 +48,6 @@ struct SearchResultsList: View {
           resultCount: results.count,
           resultLimit: resultLimit,
           failureGuidance: failureGuidance,
-          hasTimeoutFailure: hasTimeoutFailure,
           committedQuery: committedQuery
         )
         ForEach(results) { hit in
@@ -82,6 +81,7 @@ struct SearchResultsList: View {
       onReturn()
       return .handled
     }
+    .onExitCommand(perform: onEscape)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 
@@ -102,22 +102,23 @@ private struct SearchResultsContext: View {
   let resultCount: Int
   let resultLimit: UInt32
   let failureGuidance: String?
-  let hasTimeoutFailure: Bool
   let committedQuery: String?
 
   var body: some View {
-    HStack(alignment: .firstTextBaseline, spacing: 10) {
+    VStack(alignment: .leading, spacing: 6) {
       if case .partial = phase {
         Label(partialMessage, systemImage: "exclamationmark.triangle")
-          .lineLimit(2)
+          .fixedSize(horizontal: false, vertical: true)
       }
-      Spacer(minLength: 8)
-      if let retained = SearchResultsContextCopy.retained(phase, query: committedQuery, failure: failureGuidance) {
-        Label(retained, systemImage: "magnifyingglass")
-          .fixedSize()
-      } else if resultLimit > 0 {
-        Text(resultBounds)
-          .fixedSize()
+      HStack(alignment: .firstTextBaseline, spacing: 10) {
+        Spacer(minLength: 8)
+        if let retained = SearchResultsContextCopy.retained(phase, query: committedQuery, failure: failureGuidance) {
+          Label(retained, systemImage: "magnifyingglass")
+            .fixedSize()
+        } else if resultLimit > 0 {
+          Text(resultBounds)
+            .fixedSize()
+        }
       }
     }
     .font(.callout)
@@ -127,7 +128,6 @@ private struct SearchResultsContext: View {
   }
 
   private var partialMessage: String {
-    if hasTimeoutFailure { return "Some sources timed out." }
     return failureGuidance ?? "Some sources failed."
   }
 

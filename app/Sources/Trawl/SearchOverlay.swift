@@ -78,6 +78,7 @@ struct SearchOverlay: View {
           onClearScope: clearScope,
           onSubmit: openSelectedResult,
           onMoveToResults: focusResults,
+          onEscape: handleEscape,
           onOpen: open,
           showsRecord: $showsRecord
         )
@@ -108,17 +109,10 @@ struct SearchOverlay: View {
       onQueryChange(query)
     }
     .onKeyPress(.escape) {
-      switch SearchEscapeAction.resolve(showsRecord: showsRecord, focus: focus) {
-      case .closeRecord:
-        showsRecord = false
-        focus = interaction.selectedResultID == nil ? .field : .results
-      case .focusField:
-        focus = .field
-      case .dismiss:
-        onDismiss()
-      }
+      handleEscape()
       return .handled
     }
+    .onExitCommand(perform: handleEscape)
     .onAppear {
       Task { @MainActor in
         focus = .field
@@ -135,6 +129,22 @@ struct SearchOverlay: View {
   private func clearScope() {
     interaction.changeScope(to: nil)
     scope = nil
+  }
+
+  private func handleEscape() {
+    switch SearchEscapeAction.resolve(
+      showsRecord: showsRecord || model.openPhase != .idle,
+      focus: focus
+    ) {
+    case .closeRecord:
+      model.clearOpenResult()
+      showsRecord = false
+      focus = interaction.selectedResultID == nil ? .field : .results
+    case .focusField:
+      focus = .field
+    case .dismiss:
+      onDismiss()
+    }
   }
 
   private func focusResults() {

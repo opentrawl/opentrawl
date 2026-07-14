@@ -165,7 +165,8 @@ struct SearchOverlayViewTests {
       rootView: MountedSearchResultsList(
         hit: hit,
         onFocused: { driver.searchResultsFocused() },
-        onReturn: { recorder.count += 1 }
+        onReturn: { recorder.count += 1 },
+        onEscape: {}
       )
       .environment(iconStore)
     )
@@ -191,6 +192,57 @@ struct SearchOverlayViewTests {
     #expect(driver.didDispatchReturn)
     #expect(driver.hadFirstResponderAtDispatch)
     #expect(recorder.count == 1)
+  }
+
+  @MainActor
+  @Test func mountedSearchOverlayClosesOpenedRecordOnEscapeWithoutDismissing() async throws {
+    let hit = SearchHit(
+      sourceID: "calendar",
+      openRef: "calendar:event/escape",
+      shortRef: "escape",
+      timeRFC3339: "",
+      time: nil,
+      anchorID: "match",
+      summary: ResultSummary(title: "Synthetic event", subtitle: "Avery Example"),
+      evidence: [
+        .field(
+          label: "Event match", name: "event",
+          value: [SearchTextRun(text: "Synthetic", matched: true)])
+      ],
+      allDay: false,
+      availability: nil,
+      unread: nil
+    )
+    let model = SearchModel(client: MountedOpenedSearchClient(hit: hit), debounce: .zero)
+    await model.search("synthetic", source: nil)
+    await model.open(hit)
+    #expect(model.openPhase == .output)
+
+    let recorder = EscapeRecorder()
+    let host = NSHostingView(
+      rootView: SearchOverlay(
+        model: model,
+        initialScope: nil,
+        initialQuery: "synthetic",
+        onDismiss: { recorder.count += 1 }
+      )
+      .environment(SourceIconStore())
+    )
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+      styleMask: [.titled],
+      backing: .buffered,
+      defer: false
+    )
+    window.contentView = host
+    window.makeKeyAndOrderFront(nil)
+    defer { window.orderOut(nil) }
+
+    try sendMountedKey("\u{1B}", keyCode: 53, to: window)
+    try await Task.sleep(for: .milliseconds(20))
+
+    #expect(model.openPhase == .idle)
+    #expect(recorder.count == 0)
   }
 
   @MainActor
@@ -368,17 +420,20 @@ private struct MountedSearchResultsList: View {
   let hit: SearchHit
   let onFocused: @MainActor @Sendable () -> Void
   let onReturn: () -> Void
+  let onEscape: () -> Void
   @State private var selectedResultID: SearchHit.ID?
   @FocusState private var focus: SearchFocus?
 
   init(
     hit: SearchHit,
     onFocused: @escaping @MainActor @Sendable () -> Void,
-    onReturn: @escaping () -> Void
+    onReturn: @escaping () -> Void,
+    onEscape: @escaping () -> Void
   ) {
     self.hit = hit
     self.onFocused = onFocused
     self.onReturn = onReturn
+    self.onEscape = onEscape
     _selectedResultID = State(initialValue: hit.id)
   }
 
@@ -388,13 +443,13 @@ private struct MountedSearchResultsList: View {
       results: [hit],
       sourceDisplayName: { _ in "Calendar" },
       failureGuidance: nil,
-      hasTimeoutFailure: false,
       committedQuery: nil,
       resultLimit: 20,
       title: { _ in "Synthetic" },
       selectedResultID: $selectedResultID,
       focus: $focus,
       onReturn: onReturn,
+      onEscape: onEscape,
       onOpen: { _ in },
       onSelectionChanged: { _ in }
     )
@@ -429,6 +484,61 @@ private struct MountedSearchClient: TrawlClient {
   }
 }
 
+private struct MountedOpenedSearchClient: TrawlClient {
+  let hit: SearchHit
+
+  func status() async throws -> StatusResponse { fatalError() }
+  func requestPhotos() async throws -> StatusResponse { fatalError() }
+  func sync() async throws -> SyncResponse { fatalError() }
+  func search(_: String, source _: String?) async throws -> SearchResponse {
+    SearchResponse(
+      order: .recency, sources: [], hits: [hit], failures: [], skippedSources: [], outcome: .complete,
+      resultLimit: 20, truncated: false)
+  }
+  func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse {
+    let presentation = PresentationDocument(
+      title: "Synthetic event",
+      primaryAnchorID: anchorID,
+      blocks: [.prose(anchorID: anchorID, text: "Synthetic matching passage")],
+      actions: [],
+      facts: []
+    )
+    return OpenResponse(
+      outcome: .complete,
+      requestedRef: ref,
+      requestedAnchorID: anchorID,
+      record: OpenRecord(
+        sourceID: sourceID,
+        openRef: ref,
+        typeURL: "type.googleapis.com/opentrawl.synthetic.Event",
+        value: Data(),
+        presentation: presentation
+      ),
+      failure: nil
+    )
+  }
+}
+
+@MainActor
+private func sendMountedKey(_ characters: String, keyCode: UInt16, to window: NSWindow) throws {
+  let event = try #require(
+    NSEvent.keyEvent(
+      with: .keyDown,
+      location: .zero,
+      modifierFlags: [],
+      timestamp: 0,
+      windowNumber: window.windowNumber,
+      context: nil,
+      characters: characters,
+      charactersIgnoringModifiers: characters,
+      isARepeat: false,
+      keyCode: keyCode
+    )
+  )
+  window.sendEvent(event)
+}
+
+@MainActor
 private func constellationSize(in windowSize: CGSize) -> CGSize {
   CGSize(
     width: windowSize.width - TrawlDesign.contentInset * 2,

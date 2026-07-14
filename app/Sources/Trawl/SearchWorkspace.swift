@@ -33,6 +33,7 @@ struct SearchWorkspace: View {
   let onClearScope: () -> Void
   let onSubmit: () -> Void
   let onMoveToResults: () -> Void
+  let onEscape: () -> Void
   let onOpen: (SearchHit) -> Void
   @Binding var showsRecord: Bool
 
@@ -99,13 +100,13 @@ struct SearchWorkspace: View {
       results: model.results,
       sourceDisplayName: sourceDisplayName(for:),
       failureGuidance: model.failureGuidance,
-      hasTimeoutFailure: model.hasTimeoutFailure,
       committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,
       title: model.displayTitle(for:),
       selectedResultID: $interaction.selectedResultID,
       focus: $focus,
       onReturn: onSubmit,
+      onEscape: onEscape,
       onOpen: onOpen,
       onSelectionChanged: { hit in if !isCompact { onOpen(hit) } }
     )

@@ -234,17 +234,15 @@ public final class SearchModel {
   }
 
   public var failureGuidance: String? {
-    guard let first = failures.first else { return nil }
-    let source =
-      first.sourceName.isEmpty ? (sourceSurfaces[first.sourceID] ?? "A source") : first.sourceName
-    let additionalFailureCount = failures.count - 1
-    let more: String
-    switch additionalFailureCount {
-    case 0: more = ""
-    case 1: more = " 1 more source failed."
-    default: more = " \(additionalFailureCount) more sources failed."
+    guard !failures.isEmpty else { return nil }
+    return failures.map { failure in
+      let source =
+        failure.sourceName.isEmpty
+          ? (sourceSurfaces[failure.sourceID] ?? "A source")
+          : failure.sourceName
+      return "\(source): \(failure.message)"
     }
-    return "\(source): \(first.message)\(more)"
+    .joined(separator: " ")
   }
 
   public var hasTimeoutFailure: Bool {
