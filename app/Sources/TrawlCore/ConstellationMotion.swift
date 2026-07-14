@@ -217,6 +217,19 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
         spacing: 6
       )
     }
+    if count == 10 {
+      return Self(
+        hostSize: ConstellationPoint(x: 172, y: 184),
+        hostCentreYOffset: 35,
+        labelWidth: 156,
+        labelTop: 30,
+        labelHeight: 92,
+        minimumIconDiameter: 48,
+        maximumIconDiameter: 68,
+        diamondClearanceRadius: 66,
+        spacing: 6
+      )
+    }
     if count <= 12 {
       return Self(
         hostSize: ConstellationPoint(x: 156, y: 148),

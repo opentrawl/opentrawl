@@ -61,7 +61,11 @@ struct SearchOverlay: View {
 
   var body: some View {
     ZStack {
-      Color(nsColor: .windowBackgroundColor).opacity(0.97)
+      Button(action: onDismiss) {
+        Color(nsColor: .windowBackgroundColor).opacity(0.97)
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Return to sources")
       GeometryReader { proxy in
         SearchWorkspace(
           interaction: interaction,
@@ -79,6 +83,7 @@ struct SearchOverlay: View {
         )
         .frame(maxWidth: 1_180, maxHeight: .infinity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(TrawlDesign.contentInset)
       }
     }
     .onChange(of: model.phase) { oldPhase, newPhase in
