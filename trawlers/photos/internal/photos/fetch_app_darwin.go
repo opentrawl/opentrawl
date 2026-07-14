@@ -421,13 +421,22 @@ func AssetReadinessThroughApp(ctx context.Context, assetUUID string) (AssetReadi
 }
 
 func photoKitReadinessAppFailure(response *fetchwire.AssetReadinessResponse) error {
-	if response.GetFailureKind() == "photos_access" {
+	switch response.GetFailureKind() {
+	case "photos_access":
 		return &PhotoLibraryAccessFailure{Kind: "photos_access", Message: response.GetPhotosAccessStatus()}
-	}
-	if response.GetFailureKind() == "no_compatible_asset" {
+	case "asset_not_found":
+		return ErrPhotoKitAssetNotFound
+	case "not_image":
+		return ErrPhotoKitAssetNotImage
+	case "has_location":
+		return ErrPhotoKitAssetHasLocation
+	case "missing_original":
+		return ErrPhotoKitOriginalMissing
+	case "no_compatible_asset":
 		return errors.New("signed Photos readiness app found no unlocated image with an immutable-original resource")
+	default:
+		return errors.New("signed Photos readiness app could not select a compatible image")
 	}
-	return errors.New("signed Photos readiness app could not select a compatible image")
 }
 
 // ExportOriginalResourceThroughApp exports one preferred original through the

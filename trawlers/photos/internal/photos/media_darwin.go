@@ -10,6 +10,7 @@ int photoscrawl_export_original_resource_matching(const char *localIdentifier, c
 char *photoscrawl_photokit_authorization_status(char **errorOut);
 char *photoscrawl_request_photokit_authorization(char **errorOut);
 char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut);
+int photoscrawl_location_is_valid(double latitude, double longitude);
 int photoscrawl_render_canonical_jpeg(const char *sourcePath, const char *destinationPath, double quality, char **errorOut);
 char *photoscrawl_image_metadata_record_json(const char *sourcePath, char **errorOut);
 char *photoscrawl_image_metadata_typed_fixture_json(char **errorOut);
@@ -44,6 +45,10 @@ type AssetReadiness struct {
 	PixelHeight      int64  `json:"pixel_height"`
 	OriginalFilename string `json:"original_filename"`
 	OriginalUTI      string `json:"original_uti"`
+}
+
+func photoKitLocationIsValid(latitude, longitude float64) bool {
+	return C.photoscrawl_location_is_valid(C.double(latitude), C.double(longitude)) != 0
 }
 
 // AssetReadinessForUUID resolves and reads identity and resource metadata for
@@ -152,6 +157,15 @@ func photoKitError(message string) error {
 			return ErrPhotoKitAssetNotFound
 		}
 		return fmt.Errorf("%w: %s", ErrPhotoKitAssetNotFound, trimmed)
+	}
+	if strings.EqualFold(trimmed, "PhotoKit asset is not an image") {
+		return ErrPhotoKitAssetNotImage
+	}
+	if strings.EqualFold(trimmed, "PhotoKit asset has a valid location") {
+		return ErrPhotoKitAssetHasLocation
+	}
+	if strings.EqualFold(trimmed, "PhotoKit asset has no image original resource") {
+		return ErrPhotoKitOriginalMissing
 	}
 	if strings.Contains(strings.ToLower(trimmed), "photokit original export timed out") {
 		return ErrPhotoKitExportTimedOut

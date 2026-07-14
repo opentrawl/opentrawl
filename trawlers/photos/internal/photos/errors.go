@@ -7,8 +7,11 @@ import (
 )
 
 var (
-	ErrPhotoKitAssetNotFound  = errors.New("photokit asset not found")
-	ErrPhotoKitExportTimedOut = errors.New("photokit original export timed out")
+	ErrPhotoKitAssetNotFound    = errors.New("photokit asset not found")
+	ErrPhotoKitAssetNotImage    = errors.New("photokit asset is not an image")
+	ErrPhotoKitAssetHasLocation = errors.New("photokit asset has a valid location")
+	ErrPhotoKitOriginalMissing  = errors.New("photokit asset has no image original resource")
+	ErrPhotoKitExportTimedOut   = errors.New("photokit original export timed out")
 )
 
 type PhotoKitExportError struct {

@@ -172,6 +172,24 @@ func TestRunReadinessWireRequestReturnsIdentityAndResourceFacts(t *testing.T) {
 	}
 }
 
+func TestReadinessFailureKindPreservesSelectionReason(t *testing.T) {
+	tests := []struct {
+		err  error
+		want string
+	}{
+		{err: photos.ErrPhotoKitAssetNotFound, want: "asset_not_found"},
+		{err: photos.ErrPhotoKitAssetNotImage, want: "not_image"},
+		{err: photos.ErrPhotoKitAssetHasLocation, want: "has_location"},
+		{err: photos.ErrPhotoKitOriginalMissing, want: "missing_original"},
+		{err: errors.New("synthetic readiness failure"), want: "readiness_failed"},
+	}
+	for _, test := range tests {
+		if got := readinessFailureKind(test.err); got != test.want {
+			t.Fatalf("error %v kind = %q, want %q", test.err, got, test.want)
+		}
+	}
+}
+
 func TestRunWireRequestExportsExactOriginalAndProof(t *testing.T) {
 	const capturedRequestHex = "0a0f73796e7468657469632d61737365742a0e73796e7468657469632e68656963320d6f726967696e616c2e68656963380140c0a907"
 	const capturedResponseHex = "0801101e1a2046aaee4914ea18f1c75caf43585122c198f09291000416caa8aa743ce102ab72"

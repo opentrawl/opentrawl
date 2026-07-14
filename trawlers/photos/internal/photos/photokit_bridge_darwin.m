@@ -393,8 +393,15 @@ static BOOL pcRequireAuthorization(PHAuthorizationStatus status, char **errorOut
   return NO;
 }
 
+int photoscrawl_location_is_valid(double latitude, double longitude) {
+  if (!(latitude >= -90.0 && latitude <= 90.0 && longitude >= -180.0 && longitude <= 180.0)) {
+    return 0;
+  }
+  return latitude != 0.0 || longitude != 0.0;
+}
+
 static NSDictionary *pcLocationDictionary(CLLocation *location) {
-  if (location == nil) {
+  if (location == nil || !photoscrawl_location_is_valid(location.coordinate.latitude, location.coordinate.longitude)) {
     return nil;
   }
   NSMutableDictionary *out = [NSMutableDictionary dictionary];
@@ -654,16 +661,28 @@ char *photoscrawl_asset_readiness(const char *assetUUID, char **errorOut) {
       return NULL;
     }
     PHAsset *selected = pcFetchAssetForIdentifier(uuid);
+    if (selected == nil) {
+      pcSetError(errorOut, @"PhotoKit asset not found");
+      return NULL;
+    }
+    if (selected.mediaType != PHAssetMediaTypeImage) {
+      pcSetError(errorOut, @"PhotoKit asset is not an image");
+      return NULL;
+    }
+    if (pcLocationDictionary(selected.location) != nil) {
+      pcSetError(errorOut, @"PhotoKit asset has a valid location");
+      return NULL;
+    }
     PHAssetResource *resource = pcPreferredOriginalResource(selected);
-    if (selected == nil || selected.mediaType != PHAssetMediaTypeImage || selected.location != nil || resource == nil || resource.originalFilename.length == 0) {
-      pcSetError(errorOut, @"PhotoKit selected asset does not meet readiness requirements");
+    if (resource == nil || resource.originalFilename.length == 0) {
+      pcSetError(errorOut, @"PhotoKit asset has no image original resource");
       return NULL;
     }
     NSDictionary *record = @{
       @"local_identifier": pcString(selected.localIdentifier),
       @"asset_uuid": pcIdentifierUUID(selected.localIdentifier),
       @"media_type": pcMediaType(selected.mediaType),
-      @"has_location": @(selected.location != nil),
+      @"has_location": @NO,
       @"creation_date": pcDate(selected.creationDate),
       @"modification_date": pcDate(selected.modificationDate),
       @"pixel_width": @((long long)selected.pixelWidth),

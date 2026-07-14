@@ -5,6 +5,7 @@ package photos
 import (
 	"context"
 	"errors"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -21,6 +22,52 @@ const (
 	exportLockReadyEnv    = "PHOTOSCRAWL_EXPORT_LOCK_READY"
 	exportLockHelperSleep = 10 * time.Minute
 )
+
+func TestPhotoKitLocationValidityMatchesArchive(t *testing.T) {
+	tests := []struct {
+		latitude, longitude float64
+		want                bool
+	}{
+		{latitude: -180, longitude: -180, want: false},
+		{latitude: 0, longitude: 0, want: false},
+		{latitude: 52.37, longitude: 4.89, want: true},
+		{latitude: 91, longitude: 4.89, want: false},
+		{latitude: 52.37, longitude: 181, want: false},
+		{latitude: -90, longitude: -180, want: true},
+		{latitude: 90, longitude: 180, want: true},
+		{latitude: math.NaN(), longitude: 4.89, want: false},
+		{latitude: 52.37, longitude: math.NaN(), want: false},
+		{latitude: math.Inf(1), longitude: 4.89, want: false},
+		{latitude: math.Inf(-1), longitude: 4.89, want: false},
+		{latitude: 52.37, longitude: math.Inf(1), want: false},
+		{latitude: 52.37, longitude: math.Inf(-1), want: false},
+	}
+	for _, test := range tests {
+		if got := photoKitLocationIsValid(test.latitude, test.longitude); got != test.want {
+			t.Fatalf("location (%v, %v) valid = %v, want %v", test.latitude, test.longitude, got, test.want)
+		}
+		if got := validLocation(test.latitude, test.longitude); got != test.want {
+			t.Fatalf("archive location (%v, %v) valid = %v, want %v", test.latitude, test.longitude, got, test.want)
+		}
+	}
+}
+
+func TestPhotoKitReadinessErrorsAreTyped(t *testing.T) {
+	tests := []struct {
+		message string
+		want    error
+	}{
+		{message: "PhotoKit asset not found", want: ErrPhotoKitAssetNotFound},
+		{message: "PhotoKit asset is not an image", want: ErrPhotoKitAssetNotImage},
+		{message: "PhotoKit asset has a valid location", want: ErrPhotoKitAssetHasLocation},
+		{message: "PhotoKit asset has no image original resource", want: ErrPhotoKitOriginalMissing},
+	}
+	for _, test := range tests {
+		if err := photoKitError(test.message); !errors.Is(err, test.want) {
+			t.Fatalf("message %q error = %v, want %v", test.message, err, test.want)
+		}
+	}
+}
 
 func TestPhotoKitAccessErrorsGiveExactRemedy(t *testing.T) {
 	tests := []struct {

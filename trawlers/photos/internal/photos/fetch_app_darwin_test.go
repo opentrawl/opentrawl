@@ -110,6 +110,24 @@ func TestAssetReadinessThroughAppChecksTypedResponse(t *testing.T) {
 	}
 }
 
+func TestPhotoKitReadinessAppFailurePreservesSelectionReason(t *testing.T) {
+	tests := []struct {
+		kind string
+		want error
+	}{
+		{kind: "asset_not_found", want: ErrPhotoKitAssetNotFound},
+		{kind: "not_image", want: ErrPhotoKitAssetNotImage},
+		{kind: "has_location", want: ErrPhotoKitAssetHasLocation},
+		{kind: "missing_original", want: ErrPhotoKitOriginalMissing},
+	}
+	for _, test := range tests {
+		err := photoKitReadinessAppFailure(&fetchwire.AssetReadinessResponse{FailureKind: test.kind})
+		if !errors.Is(err, test.want) {
+			t.Fatalf("kind %q error = %v, want %v", test.kind, err, test.want)
+		}
+	}
+}
+
 func TestExportCurrentStillThroughAppStopsBeforeLaunchAfterCancellation(t *testing.T) {
 	oldLaunch := launchPhotoKitCurrentStillApp
 	defer func() { launchPhotoKitCurrentStillApp = oldLaunch }()

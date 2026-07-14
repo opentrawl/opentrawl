@@ -92,7 +92,7 @@ func runReadinessWireRequest(ctx context.Context, args []string, stderr io.Write
 	}
 	readiness, err := assetReadinessForUUID(ctx, request.AssetUuid)
 	if err != nil {
-		kind := "readiness_failed"
+		kind := readinessFailureKind(err)
 		_ = writeReadinessWireResponse(responsePath, failedReadinessResponse(kind, "PhotoKit could not read asset readiness", err))
 		return 1
 	}
@@ -112,6 +112,21 @@ func runReadinessWireRequest(ctx context.Context, args []string, stderr io.Write
 		return 1
 	}
 	return 0
+}
+
+func readinessFailureKind(err error) string {
+	switch {
+	case errors.Is(err, photos.ErrPhotoKitAssetNotFound):
+		return "asset_not_found"
+	case errors.Is(err, photos.ErrPhotoKitAssetNotImage):
+		return "not_image"
+	case errors.Is(err, photos.ErrPhotoKitAssetHasLocation):
+		return "has_location"
+	case errors.Is(err, photos.ErrPhotoKitOriginalMissing):
+		return "missing_original"
+	default:
+		return "readiness_failed"
+	}
 }
 
 func failedReadinessResponse(kind, message string, err error) *fetchwire.AssetReadinessResponse {

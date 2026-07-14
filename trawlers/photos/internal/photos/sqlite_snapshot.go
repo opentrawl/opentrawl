@@ -542,7 +542,7 @@ func sqliteAvailability(local, remote bool) string {
 }
 
 func validLocation(latitude, longitude float64) bool {
-	if latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180 {
+	if !(latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180) {
 		return false
 	}
 	return latitude != 0 || longitude != 0
