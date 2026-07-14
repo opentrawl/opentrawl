@@ -353,16 +353,18 @@ create table asset_resource (
 		t.Fatal(err)
 	}
 	if _, err := st.DB().ExecContext(ctx, `
-insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-preview.jpg', ?, ?, 1, 0)`, "asset_resource:example", "fixture-asset", mediaPath, len(media)); err != nil {
+	insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-preview.jpg', ?, ?, 1, 0)`, "asset_resource:example", "asset:example", mediaPath, len(media)); err != nil {
 		t.Fatal(err)
 	}
 
 	crawler := New()
 	req := &trawlkit.Request{Store: st, Paths: trawlkit.Paths{Archive: archivePath}}
-	resource, err := crawler.presentationResource(ctx, req, "photos:asset/fixture-asset")
+	resource, err := crawler.presentationResource(ctx, req, "photos:asset/example")
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("open ref=%q archive asset id=%q selected resource=%q", "photos:asset/example", "asset:example", "asset_resource:example")
+	t.Logf("presentation resource=%#v", resource)
 	if resource == nil || resource.GetKind() != presentationv1.Resource_KIND_IMAGE || resource.GetRef() != "photos:resource/asset_resource:example" || strings.Contains(resource.GetRef(), mediaPath) {
 		t.Fatalf("presentation resource = %#v", resource)
 	}
@@ -374,6 +376,7 @@ insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-prev
 	if err := openrecord.ValidateResourceResponse(request, response); err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("resource request=%#v response=%#v", request, response)
 	if response.GetContentType() != "image/jpeg" || !bytes.Equal(response.GetData(), media) || strings.Contains(string(response.GetData()), mediaPath) {
 		t.Fatalf("resource response = %#v", response)
 	}
@@ -390,7 +393,7 @@ insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-prev
 		t.Fatal(err)
 	}
 	if _, err := st.DB().ExecContext(ctx, `
-insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-link.jpg', ?, ?, 1, 0)`, "asset_resource:symlink", "fixture-asset", symlinkPath, len(media)); err != nil {
+	insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-link.jpg', ?, ?, 1, 0)`, "asset_resource:symlink", "asset:example", symlinkPath, len(media)); err != nil {
 		t.Fatal(err)
 	}
 	symlink := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "photos:resource/asset_resource:symlink", MaxBytes: uint32(len(media))}

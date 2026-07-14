@@ -31,7 +31,7 @@ func OpenWithStoreFocused(ctx context.Context, db *store.Store, rowID, anchorID 
 }
 
 func open(ctx context.Context, db *store.Store, rowID, anchorID string) (OpenResult, error) {
-	rowID = normalizeRef(rowID)
+	rowID = AssetID(rowID)
 	if rowID == "" {
 		return OpenResult{}, errors.New("ref is required")
 	}

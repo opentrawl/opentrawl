@@ -154,7 +154,8 @@ func photoscrawlRef(id string) string {
 	return "photos:" + strings.Replace(id, ":", "/", 1)
 }
 
-func normalizeRef(ref string) string {
+// AssetID converts a public Photos asset ref to its archive identifier.
+func AssetID(ref string) string {
 	ref = strings.TrimSpace(ref)
 	for _, prefix := range []string{"photos:", "photoscrawl:"} {
 		ref = strings.TrimPrefix(ref, prefix)

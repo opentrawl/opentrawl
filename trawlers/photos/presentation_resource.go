@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
@@ -22,7 +23,7 @@ var _ trawlkit.ResourceResolver = (*Crawler)(nil)
 const presentationResourcePrefix = "photos:resource/"
 
 func (c *Crawler) presentationResource(ctx context.Context, req *trawlkit.Request, openRef string) (*presentationv1.Resource, error) {
-	assetID := strings.TrimSpace(strings.TrimPrefix(openRef, "photos:asset/"))
+	assetID := archive.AssetID(openRef)
 	if assetID == "" || req == nil || req.Store == nil {
 		return nil, nil
 	}
