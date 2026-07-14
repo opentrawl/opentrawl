@@ -9,6 +9,7 @@ struct RootView: View {
 
   @State private var iconStore = SourceIconStore()
   @State private var searchScope: RestingSource?
+  @State private var searchQuery = ""
   @State private var isSearching = false
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
@@ -25,8 +26,10 @@ struct RootView: View {
         SearchOverlay(
           client: client,
           initialScope: searchScope,
+          initialQuery: searchQuery,
           sourceStatuses: model.sources,
           onTrafficChange: presentTraffic,
+          onQueryChange: { searchQuery = $0 },
           onDismiss: dismissSearch
         )
         .padding(TrawlDesign.contentInset)

@@ -61,6 +61,20 @@ import Testing
   )
 }
 
+@Test func resultBoundsUseTruthfulSingularAndPluralCopy() {
+  #expect(SearchResultBounds.copy(resultCount: 0, resultLimit: 20) == "Showing no results")
+  #expect(SearchResultBounds.copy(resultCount: 1, resultLimit: 20) == "Showing 1 result")
+  #expect(SearchResultBounds.copy(resultCount: 2, resultLimit: 20) == "Showing 2 results")
+  #expect(SearchResultBounds.copy(resultCount: 24, resultLimit: 20) == "Showing 20 results")
+}
+
+@Test func escapeReturnsFromRecordToResultsThenFieldThenHome() {
+  #expect(SearchEscapeAction.resolve(showsRecord: true, focus: .field) == .closeRecord)
+  #expect(SearchEscapeAction.resolve(showsRecord: false, focus: .results) == .focusField)
+  #expect(SearchEscapeAction.resolve(showsRecord: false, focus: .field) == .dismiss)
+  #expect(SearchEscapeAction.resolve(showsRecord: false, focus: nil) == .dismiss)
+}
+
 @Test func partialEmptySearchLeadsWithTheResultWithoutChangingScopedFailureCopy() {
   let failure = "Contacts: This source is not ready yet."
   #expect(

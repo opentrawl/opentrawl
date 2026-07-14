@@ -332,8 +332,9 @@ private struct SourceNode: View {
           )
           SourceLabel(
             title: SourceRestingCopy.title(for: source),
-            detail: source.detail,
-            width: contentWidth
+            detail: labelAllowance >= 60 ? source.detail : nil,
+            width: contentWidth,
+            titleLineLimit: ConstellationLabelLayout.titleLineLimit(for: labelAllowance)
           )
         }
         .frame(
@@ -379,17 +380,26 @@ private struct SourceIconBadge: View {
   }
 }
 
-private struct SourceLabel: View {
+enum ConstellationLabelLayout {
+  static func titleLineLimit(for labelAllowance: CGFloat) -> Int {
+    labelAllowance < 60 ? 2 : 1
+  }
+}
+
+struct SourceLabel: View {
   let title: String
   let detail: String?
   let width: CGFloat
+  let titleLineLimit: Int
 
   var body: some View {
     VStack(spacing: 2) {
       Text(title)
         .font(.body.weight(.semibold))
         .foregroundStyle(.primary)
-        .lineLimit(1)
+        .lineLimit(titleLineLimit)
+        .fixedSize(horizontal: false, vertical: true)
+        .multilineTextAlignment(.center)
       if let detail {
         Text(detail)
           .font(.caption)

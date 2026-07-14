@@ -33,6 +33,8 @@ struct SearchOverlayViewTests {
       )
     )
     #expect(layout.placements().count == sourceIDs.count)
+    #expect(ConstellationLabelLayout.titleLineLimit(for: 44) == 2)
+    #expect(ConstellationLabelLayout.titleLineLimit(for: 68) == 1)
   }
 
   @MainActor
@@ -121,10 +123,57 @@ struct SearchOverlayViewTests {
     #expect(driver.hadFirstResponderAtDispatch)
     #expect(recorder.count == 1)
   }
+
+  @MainActor
+  @Test func mountedSearchOverlayDismissesFromTheFocusedFieldOnEscape() async throws {
+    let model = SearchModel(client: MountedSearchClient(), debounce: .seconds(1))
+    let recorder = EscapeRecorder()
+    let host = NSHostingView(
+      rootView: SearchOverlay(
+        model: model,
+        initialScope: nil,
+        onDismiss: { recorder.count += 1 }
+      )
+    )
+    let window = NSWindow(
+      contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+      styleMask: [.titled],
+      backing: .buffered,
+      defer: false
+    )
+    window.contentView = host
+    window.makeKeyAndOrderFront(nil)
+    defer { window.orderOut(nil) }
+    try await Task.sleep(for: .milliseconds(50))
+
+    let event = try #require(
+      NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: window.windowNumber,
+        context: nil,
+        characters: "\u{1B}",
+        charactersIgnoringModifiers: "\u{1B}",
+        isARepeat: false,
+        keyCode: 53
+      )
+    )
+    window.sendEvent(event)
+    try await Task.sleep(for: .milliseconds(20))
+
+    #expect(recorder.count == 1)
+  }
 }
 
 @MainActor
 private final class ReturnRecorder {
+  var count = 0
+}
+
+@MainActor
+private final class EscapeRecorder {
   var count = 0
 }
 

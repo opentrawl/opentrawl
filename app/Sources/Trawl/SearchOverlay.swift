@@ -5,6 +5,7 @@ import TrawlCore
 struct SearchOverlay: View {
   let onDismiss: () -> Void
   let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
+  let onQueryChange: (String) -> Void
   private let sourceStatuses: [SourceStatus]
 
   @State private var scope: RestingSource?
@@ -18,15 +19,19 @@ struct SearchOverlay: View {
   init(
     client: any TrawlClient,
     initialScope: RestingSource?,
+    initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
+    onQueryChange: @escaping (String) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
     self.init(
       model: SearchModel(client: client),
       initialScope: initialScope,
+      initialQuery: initialQuery,
       sourceStatuses: sourceStatuses,
       onTrafficChange: onTrafficChange,
+      onQueryChange: onQueryChange,
       onDismiss: onDismiss
     )
   }
@@ -34,41 +39,47 @@ struct SearchOverlay: View {
   init(
     model: SearchModel,
     initialScope: RestingSource?,
+    initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
+    onQueryChange: @escaping (String) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
     self.onDismiss = onDismiss
     self.onTrafficChange = onTrafficChange
+    self.onQueryChange = onQueryChange
     self.sourceStatuses = sourceStatuses
     _scope = State(initialValue: initialScope)
     _model = State(initialValue: model)
-    _interaction = State(
-      initialValue: SearchInteraction(model: model, sourceID: initialScope?.id)
-    )
+    let interaction = SearchInteraction(model: model, sourceID: initialScope?.id)
+    interaction.query = initialQuery
+    _interaction = State(initialValue: interaction)
     _sourceResolver = State(
       initialValue: SearchSourceResolver(statuses: sourceStatuses)
     )
   }
 
   var body: some View {
-    GeometryReader { proxy in
-      SearchWorkspace(
-        interaction: interaction,
-        scope: scope,
-        sourceResolver: sourceResolver,
-        isCompact: proxy.size.width < 760,
-        model: model,
-        fieldIdentity: fieldState.identity,
-        focus: $focus,
-        onClearScope: clearScope,
-        onSubmit: openSelectedResult,
-        onMoveToResults: focusResults,
-        onOpen: open,
-        showsRecord: $showsRecord
-      )
-      .frame(maxWidth: 1_180, maxHeight: .infinity)
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    ZStack {
+      Color(nsColor: .windowBackgroundColor).opacity(0.97)
+      GeometryReader { proxy in
+        SearchWorkspace(
+          interaction: interaction,
+          scope: scope,
+          sourceResolver: sourceResolver,
+          isCompact: proxy.size.width < 760,
+          model: model,
+          fieldIdentity: fieldState.identity,
+          focus: $focus,
+          onClearScope: clearScope,
+          onSubmit: openSelectedResult,
+          onMoveToResults: focusResults,
+          onOpen: open,
+          showsRecord: $showsRecord
+        )
+        .frame(maxWidth: 1_180, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
     }
     .onChange(of: model.phase) { oldPhase, newPhase in
       if oldPhase == .idle, newPhase == .loading {
@@ -88,8 +99,19 @@ struct SearchOverlay: View {
     .onChange(of: sourceStatuses) { _, statuses in
       sourceResolver.replace(with: statuses)
     }
+    .onChange(of: interaction.query) { _, query in
+      onQueryChange(query)
+    }
     .onKeyPress(.escape) {
-      if showsRecord { showsRecord = false } else { focus = .field }
+      switch SearchEscapeAction.resolve(showsRecord: showsRecord, focus: focus) {
+      case .closeRecord:
+        showsRecord = false
+        focus = interaction.selectedResultID == nil ? .field : .results
+      case .focusField:
+        focus = .field
+      case .dismiss:
+        onDismiss()
+      }
       return .handled
     }
     .onAppear {

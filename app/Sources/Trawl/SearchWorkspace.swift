@@ -7,6 +7,17 @@ enum SearchFocus: Hashable {
   case results
 }
 
+enum SearchEscapeAction: Equatable {
+  case closeRecord
+  case focusField
+  case dismiss
+
+  static func resolve(showsRecord: Bool, focus: SearchFocus?) -> Self {
+    if showsRecord { return .closeRecord }
+    return focus == .results ? .focusField : .dismiss
+  }
+}
+
 enum SearchWorkspacePaneVisibility {
   static func showsRecord(for phase: SearchOpenPhase) -> Bool { phase != .idle }
 }

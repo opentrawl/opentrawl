@@ -14,6 +14,17 @@ enum SearchResultsContextCopy {
   }
 }
 
+enum SearchResultBounds {
+  static func copy(resultCount: Int, resultLimit: UInt32) -> String {
+    let shown = min(resultCount, Int(resultLimit))
+    return switch shown {
+    case 0: "Showing no results"
+    case 1: "Showing 1 result"
+    default: "Showing \(shown) results"
+    }
+  }
+}
+
 struct SearchResultsList: View {
   let phase: SearchPhase
   let results: [SearchHit]
@@ -121,8 +132,7 @@ private struct SearchResultsContext: View {
   }
 
   private var resultBounds: String {
-    let limit = Int(resultLimit)
-    return resultCount < limit ? "Showing \(resultCount) results" : "Showing \(limit) results"
+    SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit)
   }
 }
 
