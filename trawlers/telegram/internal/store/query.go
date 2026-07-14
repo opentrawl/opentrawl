@@ -261,5 +261,13 @@ func (s *Store) messages(ctx context.Context, filter MessageFilter, search bool)
 }
 
 func messageSnippetText(message Message) string {
-	return strings.TrimSpace(message.Text + " " + message.MediaTitle + " " + message.MetadataTitle + " " + message.MetadataURL)
+	return strings.TrimSpace(strings.Join([]string{
+		message.Text,
+		message.MediaTitle,
+		message.MetadataTitle,
+		message.MetadataURL,
+		message.ChatName,
+		message.SenderName,
+		message.MediaType,
+	}, " "))
 }

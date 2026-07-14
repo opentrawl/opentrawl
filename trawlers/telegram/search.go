@@ -85,13 +85,32 @@ func searchHits(messages []store.Message) []trawlkit.Hit {
 		if who == "" {
 			who = "Unknown sender"
 		}
+		evidenceText := messageSearchEvidenceText(message)
+		if evidenceText == "" {
+			evidenceText = where
+		}
 		hits = append(hits, trawlkit.Hit{
 			Ref: ref, Time: message.Timestamp.Local(), AnchorID: trawlkit.MatchAnchorID,
 			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
-			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, outputField(messageSnippet(message)))},
+			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, evidenceText)},
 		})
 	}
 	return hits
+}
+
+func messageSearchEvidenceText(message store.Message) string {
+	if snippet := outputField(messageSnippet(message)); snippet != "" {
+		return snippet
+	}
+	return outputField(strings.Join([]string{
+		message.Text,
+		message.MediaTitle,
+		message.MetadataTitle,
+		message.MetadataURL,
+		messageWhereForList(message),
+		messageWho(message),
+		message.MediaType,
+	}, " "))
 }
 
 func trawlkitWhoResolved(queryResolved *trawlkit.WhoResolved, resolved *store.WhoCandidate) *trawlkit.WhoResolved {

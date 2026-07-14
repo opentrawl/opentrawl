@@ -879,8 +879,8 @@ func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
 	if len(searchA) != 1 {
 		t.Fatalf("FTS 'updated' in chat A = %d, want 1", len(searchA))
 	}
-	if searchA[0].Snippet != "updated a pic.jpg" {
-		t.Fatalf("search snippet = %q, want marker-free text", searchA[0].Snippet)
+	if searchA[0].Snippet != "updated a pic.jpg Chat A Updated Alice photo" {
+		t.Fatalf("search snippet = %q, want the marker-free indexed text", searchA[0].Snippet)
 	}
 
 	searchB, err := st.Search(ctx, MessageFilter{Query: "hello", ChatJID: "-1002", Limit: 10})
