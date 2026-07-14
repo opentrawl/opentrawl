@@ -58,6 +58,7 @@ public enum SearchWorkspaceCopy {
     failureGuidance: String?,
     skippedSources: [SkippedSource],
     isScoped: Bool,
+    timedOutLocally: Bool = true,
     timeoutSeconds: Int
   ) -> String {
     switch phase {
@@ -70,7 +71,9 @@ public enum SearchWorkspaceCopy {
     case .failed(let message):
       message
     case .timedOut:
-      timedOutOutcome(after: timeoutSeconds)
+      timedOutLocally
+        ? timedOutOutcome(after: timeoutSeconds)
+        : (failureGuidance ?? "A source timed out.")
     case .idle, .loading:
       ""
     }

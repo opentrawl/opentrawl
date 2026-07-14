@@ -100,6 +100,7 @@ public final class SearchModel {
   public private(set) var openPhase: SearchOpenPhase = .idle
   public private(set) var openResult: OpenResponse?
   public private(set) var committedInput: SearchStateInput?
+  public private(set) var timedOutLocally = false
 
   public init(
     client: any TrawlClient,
@@ -134,6 +135,7 @@ public final class SearchModel {
       return
     }
 
+    timedOutLocally = false
     phase = .loading
     let input = SearchStateInput(
       query: query,
@@ -168,6 +170,7 @@ public final class SearchModel {
           response.hits.isEmpty && response.failures.isEmpty && !response.skippedSources.isEmpty
           ? .skipped : .partial
       case .failed:
+        timedOutLocally = false
         phase =
           response.hits.isEmpty && !response.failures.isEmpty
             && response.failures.allSatisfy({ $0.code == .timeout })
@@ -178,10 +181,12 @@ public final class SearchModel {
     } catch is SearchWaitExpired {
       guard token == generation else { return }
       observe(.timedOut(input))
+      timedOutLocally = true
       phase = .timedOut
     } catch TrawlClientError.timedOut {
       guard token == generation else { return }
       observe(.timedOut(input))
+      timedOutLocally = true
       phase = .timedOut
     } catch TrawlClientError.cancelled {
       return
@@ -272,6 +277,7 @@ public final class SearchModel {
     resultLimit = 0
     isTruncated = false
     committedInput = nil
+    timedOutLocally = false
     phase = .idle
     openGeneration &+= 1
     openPhase = .idle

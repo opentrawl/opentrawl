@@ -48,6 +48,10 @@ import Testing
   #expect(SearchWorkspacePaneVisibility.showsRecord(for: .failed("Synthetic failure.")))
 }
 
+@Test func wideResultsColumnKeepsTheSameWidthBeforeAndAfterOpening() {
+  #expect(SearchWorkspaceGeometry.wideResultsWidth == TrawlDesign.searchResultsMaximumWidth)
+}
+
 @Test func compactRecordUsesTheSameSearchHierarchyAsTheResultsList() {
   #expect(
     SearchWorkspaceLayout.resolve(isCompact: true, showsCompactRecord: false, openPhase: .output)
@@ -161,6 +165,16 @@ import Testing
       isScoped: false,
       timeoutSeconds: 10
     ) == "Search stopped after 10 seconds."
+  )
+  #expect(
+    SearchWorkspaceCopy.outcomeDetail(
+      for: .timedOut,
+      failureGuidance: "Calendar: Calendar timed out.",
+      skippedSources: [],
+      isScoped: false,
+      timedOutLocally: false,
+      timeoutSeconds: 10
+    ) == "Calendar: Calendar timed out."
   )
   #expect(SearchWorkspaceCopy.outcomeTitle(for: .skipped) == "Search unavailable")
   #expect(

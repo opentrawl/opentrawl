@@ -9,30 +9,6 @@ enum PresentationResourceLoadPhase {
   case failed
 }
 
-enum PresentationResourceVisibility {
-  static func isVisible(_ resource: PresentationResource) -> Bool {
-    resource.kind == .image || !resource.metadata.isEmpty
-      || !isGenericLabel(resource.label, kind: resource.kind)
-  }
-
-  private static func isGenericLabel(_ label: String, kind: PresentationResourceKind) -> Bool {
-    let normalised =
-      label
-      .components(separatedBy: .whitespacesAndNewlines)
-      .filter { !$0.isEmpty }
-      .joined(separator: " ")
-      .lowercased()
-    let kindLabel =
-      switch kind {
-      case .file: "file"
-      case .image: "image"
-      case .video: "video"
-      case .audio: "audio"
-      }
-    return normalised.isEmpty || normalised == "resource" || normalised == kindLabel
-  }
-}
-
 @MainActor
 @Observable
 final class PresentationResourceLoader {

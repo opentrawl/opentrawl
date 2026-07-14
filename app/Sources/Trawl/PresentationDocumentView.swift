@@ -83,34 +83,11 @@ private struct BlockView: View {
       ResponsiveTable(columns: columns, rows: rows, blockIndex: index)
         .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     case .resource(let anchorID, let resource):
-      if PresentationResourceVisibility.isVisible(resource) {
-        PresentationResourceView(
-          client: client, sourceID: sourceID, resource: resource, blockIndex: index
-        )
-        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
-      } else {
-        VStack(spacing: 0) {
-          PresentationAnchor(
-            PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
-          if anchorID != resource.anchorID {
-            PresentationAnchor(
-              PresentationElementID.sourceAnchor(resource.anchorID, fallback: .resource(index)))
-          }
-        }
-      }
+      PresentationResourceView(
+        client: client, sourceID: sourceID, resource: resource, blockIndex: index
+      )
+      .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     }
-  }
-}
-
-private struct PresentationAnchor: View {
-  let id: PresentationElementID
-
-  init(_ id: PresentationElementID) {
-    self.id = id
-  }
-
-  var body: some View {
-    Color.clear.frame(height: 0).accessibilityHidden(true).id(id)
   }
 }
 

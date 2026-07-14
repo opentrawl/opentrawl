@@ -66,9 +66,6 @@ struct SearchResultsList: View {
             .buttonStyle(.plain)
             Divider()
           }
-          if case .partial = phase {
-            SearchPartialFailure(message: failureGuidance ?? "Some sources failed.")
-          }
         }
         .frame(
           width: min(proxy.size.width, TrawlDesign.recordReadingWidth),
@@ -126,26 +123,16 @@ private struct SearchResultsContext: View {
       } else if resultLimit > 0 {
         Text(SearchResultBounds.copy(resultCount: resultCount, resultLimit: resultLimit))
       }
+      if case .partial = phase {
+        Label(failureGuidance ?? "Some sources failed.", systemImage: "exclamationmark.triangle")
+          .font(.caption)
+      }
     }
-    .font(.caption)
-    .foregroundStyle(.tertiary)
+    .font(.callout)
+    .foregroundStyle(.secondary)
     .fixedSize(horizontal: false, vertical: true)
     .padding(.horizontal, 14)
-    .padding(.top, 6)
-    .padding(.bottom, 4)
-  }
-}
-
-private struct SearchPartialFailure: View {
-  let message: String
-
-  var body: some View {
-    Label(message, systemImage: "exclamationmark.triangle")
-      .font(.caption)
-      .foregroundStyle(.tertiary)
-      .fixedSize(horizontal: false, vertical: true)
-      .padding(.horizontal, 14)
-      .padding(.vertical, 10)
+    .padding(.vertical, 8)
   }
 }
 

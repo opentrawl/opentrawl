@@ -354,6 +354,7 @@ private struct SearchClient: TrawlClient {
     client: ScriptedSearchClient { _, _ in canonicalFailedSearch([timeout]) }, debounce: .zero)
   await allTimeout.search("timeout", source: nil)
   #expect(allTimeout.phase == .timedOut)
+  #expect(!allTimeout.timedOutLocally)
 
   let mixed = SearchModel(
     client: ScriptedSearchClient { _, _ in canonicalFailedSearch([timeout, permission]) },
@@ -366,6 +367,7 @@ private struct SearchClient: TrawlClient {
     client: ScriptedSearchClient { _, _ in throw TrawlClientError.timedOut }, debounce: .zero)
   await processTimeout.search("process-timeout", source: nil)
   #expect(processTimeout.phase == .timedOut)
+  #expect(processTimeout.timedOutLocally)
 }
 
 private struct ScriptedSearchClient: TrawlClient {

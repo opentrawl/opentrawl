@@ -5,6 +5,7 @@ import TrawlCore
 enum SearchFocus: Hashable {
   case field
   case results
+  case record
 }
 
 enum SearchEscapeAction: Equatable {
@@ -39,6 +40,10 @@ enum SearchWorkspaceLayout: Equatable {
   }
 }
 
+enum SearchWorkspaceGeometry {
+  static let wideResultsWidth = TrawlDesign.searchResultsMaximumWidth
+}
+
 struct SearchWorkspace: View {
   let client: any TrawlClient
   @Bindable var interaction: SearchInteraction
@@ -70,7 +75,8 @@ struct SearchWorkspace: View {
           phase: model.phase,
           failureGuidance: model.failureGuidance,
           skippedSources: model.skippedSources,
-          isScoped: scope != nil
+          isScoped: scope != nil,
+          timedOutLocally: model.timedOutLocally
         )
       case .results:
         Divider()
@@ -101,7 +107,17 @@ struct SearchWorkspace: View {
       openPhase: model.openPhase
     ) {
     case .results:
-      results.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      if isCompact {
+        results.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+      } else {
+        results.frame(
+          minWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          maxHeight: .infinity,
+          alignment: .leading
+        )
+      }
     case .compactRecord:
       ZStack {
         results
@@ -112,15 +128,17 @@ struct SearchWorkspace: View {
           client: client,
           phase: model.openPhase,
           response: model.openResult,
+          focus: $focus,
           onReturnToResults: onReturnToResults
         )
       }
     case .split:
       HStack(spacing: 0) {
         results.frame(
-          minWidth: TrawlDesign.searchResultsMinimumWidth,
-          idealWidth: TrawlDesign.searchResultsMinimumWidth,
-          maxWidth: TrawlDesign.searchResultsMaximumWidth
+          minWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
+          maxHeight: .infinity
         )
         Divider()
         ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
@@ -163,6 +181,7 @@ private struct CompactRecordWorkspace: View {
   let client: any TrawlClient
   let phase: SearchOpenPhase
   let response: OpenResponse?
+  @FocusState.Binding var focus: SearchFocus?
   let onReturnToResults: () -> Void
 
   var body: some View {
@@ -173,6 +192,7 @@ private struct CompactRecordWorkspace: View {
         }
         .buttonStyle(.borderless)
         .accessibilityLabel("Back to results")
+        .focused($focus, equals: .record)
         Spacer()
       }
       .padding(.horizontal, 14)
@@ -180,6 +200,7 @@ private struct CompactRecordWorkspace: View {
       Divider()
       ResultPreview(client: client, phase: phase, response: response)
     }
+    .onAppear { focus = .record }
   }
 }
 
@@ -279,6 +300,7 @@ private struct SearchOutcome: View {
   let failureGuidance: String?
   let skippedSources: [SkippedSource]
   let isScoped: Bool
+  let timedOutLocally: Bool
 
   var body: some View {
     Group {
@@ -310,6 +332,7 @@ private struct SearchOutcome: View {
       failureGuidance: failureGuidance,
       skippedSources: skippedSources,
       isScoped: isScoped,
+      timedOutLocally: timedOutLocally,
       timeoutSeconds: SearchModel.defaultWaitSeconds
     )
   }
