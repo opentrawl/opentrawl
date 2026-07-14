@@ -76,9 +76,13 @@ struct ConstellationView: View {
   }
 
   static func canvasSize(in available: CGSize) -> CGSize {
-    let maximumHeight = available.height
-    let width = min(available.width, maximumHeight * 1.15, 1_400)
-    return CGSize(width: width, height: min(width / 1.15, available.height))
+    let height = min(available.height, TrawlDesign.constellationMaximumHeight)
+    let width = min(
+      available.width,
+      height * TrawlDesign.constellationMaximumAspectRatio,
+      TrawlDesign.constellationMaximumWidth
+    )
+    return CGSize(width: width, height: height)
   }
 }
 
@@ -181,7 +185,8 @@ private final class OrbitLayerView: NSView {
     reduceMotion: Bool
   ) {
     hostingView.rootView = rootView
-    if self.contentSize != contentSize || self.motion != motion || self.reduceMotion != reduceMotion {
+    if self.contentSize != contentSize || self.motion != motion || self.reduceMotion != reduceMotion
+    {
       self.contentSize = contentSize
       self.motion = motion
       self.reduceMotion = reduceMotion

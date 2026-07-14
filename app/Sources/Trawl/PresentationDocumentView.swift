@@ -29,12 +29,7 @@ struct PresentationDocumentView: View {
             .textSelection(.enabled)
             .accessibilityLabel(document.title)
           ForEach(Array(document.blocks.enumerated()), id: \.offset) { index, block in
-            BlockView(
-              client: client,
-              sourceID: sourceID,
-              block: block,
-              index: index
-            )
+            BlockView(client: client, sourceID: sourceID, block: block, index: index)
           }
           ForEach(Array(document.actions.enumerated()), id: \.offset) { _, action in
             ActionView(action: action)
@@ -44,6 +39,7 @@ struct PresentationDocumentView: View {
           }
         }
         .padding(18)
+        .frame(maxWidth: TrawlDesign.recordReadingWidth, alignment: .leading)
         .frame(maxWidth: .infinity, alignment: .leading)
       }
       .onAppear {
@@ -62,33 +58,24 @@ private struct BlockView: View {
   var body: some View {
     switch block {
     case .heading(let anchorID, let text):
-      Text(text)
-        .font(.headline)
-        .textSelection(.enabled)
+      Text(text).font(.headline).textSelection(.enabled)
         .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     case .prose(let anchorID, let text):
-      Text(text)
-        .textSelection(.enabled)
+      Text(text).textSelection(.enabled)
         .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     case .fields(let anchorID, let fields):
       VStack(alignment: .leading, spacing: 6) {
         ForEach(Array(fields.enumerated()), id: \.offset) { fieldIndex, field in
           HStack(alignment: .firstTextBaseline, spacing: 16) {
-            Text(field.label)
-              .foregroundStyle(.secondary)
-              .frame(width: 112, alignment: .leading)
-            Text(field.display)
-              .textSelection(.enabled)
+            Text(field.label).foregroundStyle(.secondary).frame(width: 112, alignment: .leading)
+            Text(field.display).textSelection(.enabled)
             Spacer(minLength: 0)
           }
           .accessibilityElement(children: .ignore)
           .accessibilityLabel("\(field.label): \(field.display)")
           .id(
             PresentationElementID.sourceAnchor(
-              field.anchorID,
-              fallback: .field(block: index, field: fieldIndex)
-            )
-          )
+              field.anchorID, fallback: .field(block: index, field: fieldIndex)))
         }
       }
       .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
@@ -96,14 +83,34 @@ private struct BlockView: View {
       ResponsiveTable(columns: columns, rows: rows, blockIndex: index)
         .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     case .resource(let anchorID, let resource):
-      PresentationResourceView(
-        client: client,
-        sourceID: sourceID,
-        resource: resource,
-        blockIndex: index
-      )
-      .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+      if PresentationResourceVisibility.isVisible(resource) {
+        PresentationResourceView(
+          client: client, sourceID: sourceID, resource: resource, blockIndex: index
+        )
+        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+      } else {
+        VStack(spacing: 0) {
+          PresentationAnchor(
+            PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+          if anchorID != resource.anchorID {
+            PresentationAnchor(
+              PresentationElementID.sourceAnchor(resource.anchorID, fallback: .resource(index)))
+          }
+        }
+      }
     }
+  }
+}
+
+private struct PresentationAnchor: View {
+  let id: PresentationElementID
+
+  init(_ id: PresentationElementID) {
+    self.id = id
+  }
+
+  var body: some View {
+    Color.clear.frame(height: 0).accessibilityHidden(true).id(id)
   }
 }
 
@@ -119,19 +126,15 @@ private struct ResponsiveTable: View {
           HStack(alignment: .firstTextBaseline, spacing: 14) {
             ForEach(columns.indices, id: \.self) { index in
               VStack(alignment: .leading, spacing: 3) {
-                Text(columns[index])
-                  .font(.caption.weight(.semibold))
-                  .foregroundStyle(.secondary)
-                Text(value(at: index, in: row))
-                  .textSelection(.enabled)
+                Text(columns[index]).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                Text(value(at: index, in: row)).textSelection(.enabled)
               }
               .frame(minWidth: 120, alignment: .leading)
             }
           }
           VStack(alignment: .leading, spacing: 5) {
             ForEach(columns.indices, id: \.self) { index in
-              LabeledContent(columns[index], value: value(at: index, in: row))
-                .font(.callout)
+              LabeledContent(columns[index], value: value(at: index, in: row)).font(.callout)
             }
           }
         }
@@ -145,10 +148,7 @@ private struct ResponsiveTable: View {
         .accessibilityLabel(accessibilityLabel(for: row))
         .id(
           PresentationElementID.sourceAnchor(
-            row.anchorID,
-            fallback: .row(block: blockIndex, row: rowIndex)
-          )
-        )
+            row.anchorID, fallback: .row(block: blockIndex, row: rowIndex)))
       }
     }
   }
@@ -158,29 +158,22 @@ private struct ResponsiveTable: View {
   }
 
   private func accessibilityLabel(for row: PresentationRow) -> String {
-    let fields = columns.indices.map { index in
-      "\(columns[index]): \(value(at: index, in: row))"
-    }
-    let prefix = row.role == .target ? "Target. " : ""
-    return prefix + fields.joined(separator: ". ")
+    let fields = columns.indices.map { "\(columns[$0]): \(value(at: $0, in: row))" }
+    return (row.role == .target ? "Target. " : "") + fields.joined(separator: ". ")
   }
 }
 
 struct LabeledContent: View {
   let label: String
   let value: String
-
   init(_ label: String, value: String) {
     self.label = label
     self.value = value
   }
-
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 10) {
-      Text(label)
-        .foregroundStyle(.secondary)
-      Text(value)
-        .textSelection(.enabled)
+      Text(label).foregroundStyle(.secondary)
+      Text(value).textSelection(.enabled)
       Spacer(minLength: 0)
     }
   }
@@ -188,18 +181,13 @@ struct LabeledContent: View {
 
 private struct ActionView: View {
   let action: PresentationAction
-
   var body: some View {
     switch action.target {
-    case .url(let url):
-      Link(action.label, destination: url)
-        .accessibilityLabel(action.label)
+    case .url(let url): Link(action.label, destination: url).accessibilityLabel(action.label)
     case .openRef:
       VStack(alignment: .leading, spacing: 2) {
         Text(action.label)
-        Text("Unavailable in this preview")
-          .font(.caption)
-          .foregroundStyle(.secondary)
+        Text("Unavailable in this preview").font(.caption).foregroundStyle(.secondary)
       }
       .disabled(true)
       .accessibilityElement(children: .ignore)
@@ -211,24 +199,16 @@ private struct ActionView: View {
 
 private struct FactView: View {
   let fact: PresentationFact
-
   var body: some View {
     VStack(alignment: .leading, spacing: 2) {
-      Text(label)
-        .font(.callout.weight(.semibold))
+      Text(label).font(.callout.weight(.semibold))
       Text(fact.message)
-      if !fact.remedy.isEmpty {
-        Text(fact.remedy)
-          .foregroundStyle(.secondary)
-      }
+      if !fact.remedy.isEmpty { Text(fact.remedy).foregroundStyle(.secondary) }
     }
     .font(.callout)
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(
-      "\(label): \(fact.message)\(fact.remedy.isEmpty ? "" : ". \(fact.remedy)")"
-    )
+    .accessibilityLabel("\(label): \(fact.message)\(fact.remedy.isEmpty ? "" : ". \(fact.remedy)")")
   }
-
   private var label: String {
     switch fact.kind {
     case .truncation: "Truncated"

@@ -4,8 +4,15 @@ import SwiftUI
 enum TrawlDesign {
   static let minimumWindow = CGSize(width: 760, height: 560)
   static let defaultWindow = CGSize(width: 1040, height: 720)
-  static let compactSearchWidth: CGFloat = 900
   static let contentInset: CGFloat = 28
+  static let searchResultsMinimumWidth: CGFloat = 360
+  static let searchRecordMinimumWidth: CGFloat = 400
+  static let searchResultsMaximumWidth: CGFloat = 460
+  static let searchWorkspaceMaximumWidth: CGFloat = 1_600
+  static let recordReadingWidth: CGFloat = 760
+  static let constellationMaximumWidth: CGFloat = 2_800
+  static let constellationMaximumHeight: CGFloat = 1_200
+  static let constellationMaximumAspectRatio: CGFloat = 2.4
   static let panelCornerRadius: CGFloat = 22
   static let backgroundContentOpacity = 0.42
   static let backgroundContentBlur: CGFloat = 4
@@ -27,6 +34,6 @@ enum TrawlDesign {
   }()
 
   static func usesCompactSearchLayout(width: CGFloat) -> Bool {
-    width < compactSearchWidth
+    width < contentInset * 2 + searchResultsMinimumWidth + searchRecordMinimumWidth
   }
 }

@@ -15,6 +15,7 @@ struct SearchOverlay: View {
   @State private var sourceResolver: SearchSourceResolver
   @State private var fieldState = SearchFieldState()
   @State private var showsRecord = false
+  @State private var returnedToResults = false
   @FocusState private var focus: SearchFocus?
 
   init(
@@ -90,9 +91,10 @@ struct SearchOverlay: View {
           onMoveToResults: focusResults,
           onEscape: handleEscape,
           onOpen: open,
+          onReturnToResults: returnToResults,
           showsRecord: $showsRecord
         )
-        .frame(maxWidth: 1_180, maxHeight: .infinity)
+        .frame(maxWidth: TrawlDesign.searchWorkspaceMaximumWidth, maxHeight: .infinity)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(TrawlDesign.contentInset)
       }
@@ -103,7 +105,10 @@ struct SearchOverlay: View {
       }
       if newPhase != .loading {
         interaction.reconcileCommittedResults()
-        if interaction.selectedResultID == nil { showsRecord = false }
+        if interaction.selectedResultID == nil {
+          showsRecord = false
+          returnedToResults = false
+        }
       }
       reportActivity()
     }
@@ -124,6 +129,9 @@ struct SearchOverlay: View {
     }
     .onExitCommand(perform: handleEscape)
     .onAppear {
+      if model.openPhase != .idle {
+        showsRecord = true
+      }
       Task { @MainActor in
         focus = .field
       }
@@ -143,12 +151,13 @@ struct SearchOverlay: View {
 
   private func handleEscape() {
     switch SearchEscapeAction.resolve(
-      showsRecord: showsRecord || model.openPhase != .idle,
+      showsRecord: showsRecord || (model.openPhase != .idle && !returnedToResults),
       focus: focus
     ) {
     case .closeRecord:
       model.clearOpenResult()
       showsRecord = false
+      returnedToResults = false
       focus = interaction.selectedResultID == nil ? .field : .results
     case .focusField:
       focus = .field
@@ -166,14 +175,22 @@ struct SearchOverlay: View {
   }
 
   private func openSelectedResult() {
+    returnedToResults = false
     showsRecord = true
     Task { await interaction.handleReturn() }
   }
 
   private func open(_ hit: SearchHit) {
     interaction.selectedResultID = hit.id
+    returnedToResults = false
     showsRecord = true
     Task { await interaction.handleReturn() }
+  }
+
+  private func returnToResults() {
+    showsRecord = false
+    returnedToResults = true
+    focus = .results
   }
 
   private func reportActivity() {
