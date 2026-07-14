@@ -394,13 +394,15 @@ public struct ConstellationOrbitLayout: Sendable {
 
   private func normalisedComposition(for orderedIDs: [String]) -> [(angle: Double, radius: Double)]
   {
-    let weights = orderedIDs.map { 0.92 + unit($0, salt: 11) * 0.16 }
+    let sectorWeights: [Double] = [0.82, 1, 1.08, 1.15, 0.85, 0.82, 1.18, 1.05, 1.05]
+    let radialTiers: [Double] = [0.82, 0.88, 0.8, 0.86, 0.88, 0.87, 0.8, 0.88, 0.88]
+    let weights = orderedIDs.indices.map { sectorWeights[$0 % sectorWeights.count] }
     let weightTotal = weights.reduce(0, +)
     let gaps = weights.map { 2 * Double.pi * $0 / weightTotal }
     var angle = -gaps[0] / 2
     return orderedIDs.indices.map { index in
       defer { angle += gaps[index] }
-      return (angle: angle, radius: 0.96 + unit(orderedIDs[index], salt: 13) * 0.04)
+      return (angle: angle, radius: radialTiers[index % radialTiers.count])
     }
   }
 
@@ -408,7 +410,9 @@ public struct ConstellationOrbitLayout: Sendable {
     for sourceID: String,
     polar: (angle: Double, radius: Double)
   ) -> ConstellationPoint? {
-    let horizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+    let availableHorizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+    let activeHorizontalRadius = size.x / size.y > 1.45 ? size.y * 0.68 : availableHorizontalRadius
+    let horizontalRadius = min(availableHorizontalRadius, activeHorizontalRadius)
     let minimumAnchorY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
     let maximumAnchorY = min(
       size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset,
@@ -425,10 +429,4 @@ public struct ConstellationOrbitLayout: Sendable {
     return anchor
   }
 
-  private func unit(_ value: String, salt: UInt64) -> Double {
-    let hash = value.utf8.reduce(0xcbf2_9ce4_8422_2325 ^ salt) { partial, byte in
-      (partial ^ UInt64(byte)) &* 0x100_0000_01b3
-    }
-    return Double(hash) / Double(UInt64.max)
-  }
 }

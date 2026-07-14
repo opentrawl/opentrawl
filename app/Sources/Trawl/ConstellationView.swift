@@ -52,6 +52,7 @@ struct ConstellationView: View {
         CoreAnimationNetwork(
           centre: snapshot.centre,
           centreDiameter: snapshot.centreDiameter,
+          visualScale: snapshot.visualScale,
           contextNodes: snapshot.contextNodes,
           segments: snapshot.segments,
           activity: activity,

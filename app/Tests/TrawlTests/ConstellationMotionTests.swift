@@ -152,6 +152,11 @@ import Testing
       let wrappedAngles = Array(angles.dropFirst()) + [angles[0] + 2 * .pi]
       let angleGaps = zip(angles, wrappedAngles).map { $1 - $0 }
       #expect((angleGaps.max() ?? 0) - (angleGaps.min() ?? 0) >= 0.001)
+      if size.x / size.y > 1.45 {
+        let horizontalExtent = placements.map { abs($0.anchor.x - centre.x) }.max() ?? 0
+        let verticalExtent = placements.map { abs($0.anchor.y - centre.y) }.max() ?? 1
+        #expect(horizontalExtent / verticalExtent <= 1.7)
+      }
       if let previousMetrics {
         #expect(metrics.labelWidth >= previousMetrics.labelWidth)
         #expect(metrics.labelHeight >= previousMetrics.labelHeight)
@@ -185,7 +190,7 @@ import Testing
     #expect(visited.count == points.count)
     #expect(edges.count >= points.count)
     #expect(snapshot.segments.filter { $0.kind == .source }.count == sources.count)
-    #expect(snapshot.segments.filter { $0.kind == .centre }.count == 3)
+    #expect(snapshot.segments.filter { $0.kind == .centre }.count == 4)
     if let expectedEdges {
       #expect(edges == expectedEdges)
     } else {
@@ -194,13 +199,70 @@ import Testing
   }
 }
 
+@Test func graphSegmentsNeverProperlyIntersectDuringResizeOrSourceMotion() throws {
+  let orderedSources = try restingSources(count: 9)
+  let sources = [
+    orderedSources[4], orderedSources[0], orderedSources[7],
+    orderedSources[2], orderedSources[8], orderedSources[5],
+    orderedSources[1], orderedSources[6], orderedSources[3],
+  ]
+  let sizes = [
+    CGSize(width: 704, height: 504),
+    CGSize(width: 824, height: 585),
+    CGSize(width: 1_024, height: 720),
+    CGSize(width: 2_200, height: 900),
+  ]
+  let phases: [Double] = [0, 0.125, 0.25, 0.5, 0.75]
+
+  for size in sizes {
+    let segments = ConstellationLayout(size: size, sources: sources).snapshot().segments
+    for phase in phases {
+      let paths = segments.map { segment in
+        segment.points(
+          sourceOffset: segment.movingSourceID.map {
+            let translation = ConstellationMotion(sourceID: $0).translation(at: phase)
+            return CGVector(dx: translation.dx, dy: translation.dy)
+          } ?? .zero
+        )
+      }
+      for index in paths.indices {
+        for otherIndex in paths.indices.dropFirst(index + 1) {
+          #expect(!properlyIntersects(paths[index], paths[otherIndex]))
+        }
+      }
+    }
+  }
+}
+
+private func properlyIntersects(
+  _ first: (start: CGPoint, end: CGPoint),
+  _ second: (start: CGPoint, end: CGPoint)
+) -> Bool {
+  let sharedEndpoint = [first.start, first.end].contains { firstPoint in
+    [second.start, second.end].contains { secondPoint in
+      hypot(firstPoint.x - secondPoint.x, firstPoint.y - secondPoint.y) < 0.01
+    }
+  }
+  guard !sharedEndpoint else { return false }
+  func orientation(_ first: CGPoint, _ second: CGPoint, _ third: CGPoint) -> CGFloat {
+    (second.x - first.x) * (third.y - first.y) - (second.y - first.y) * (third.x - first.x)
+  }
+  let firstStart = orientation(first.start, first.end, second.start)
+  let firstEnd = orientation(first.start, first.end, second.end)
+  let secondStart = orientation(second.start, second.end, first.start)
+  let secondEnd = orientation(second.start, second.end, first.end)
+  return firstStart * firstEnd < 0 && secondStart * secondEnd < 0
+}
+
 private func normalisedOrbitIdentity(
   for placement: ConstellationPlacement,
   centre: ConstellationPoint,
   size: ConstellationPoint,
   metrics: ConstellationLayoutMetrics
 ) -> (angle: Double, radius: Double) {
-  let horizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+  let availableHorizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+  let activeHorizontalRadius = size.x / size.y > 1.45 ? size.y * 0.68 : availableHorizontalRadius
+  let horizontalRadius = min(availableHorizontalRadius, activeHorizontalRadius)
   let minimumAnchorY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
   let maximumAnchorY = min(
     size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset,
@@ -393,6 +455,7 @@ private func restingSources(count: Int) throws -> [RestingSource] {
   ConstellationTrafficRenderer(
     centre: centre,
     centreDiameter: TrawlDesign.centreSize,
+    visualScale: 1,
     segments: segments,
     reduceMotion: false,
     scale: 2

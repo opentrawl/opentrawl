@@ -11,6 +11,7 @@ private struct DirectedNetworkSegment {
 struct ConstellationTrafficRenderer {
   let centre: CGPoint
   let centreDiameter: CGFloat
+  let visualScale: CGFloat
   let segments: [NetworkSegment]
   let reduceMotion: Bool
   let scale: CGFloat
@@ -78,10 +79,10 @@ struct ConstellationTrafficRenderer {
   ) {
     let affected = eventPlan?.affectedSourceIDs ?? activityPlan.affectedSourceIDs
     guard !affected.isEmpty else { return }
-    rootLayer.addSublayer(makeOutline(at: centre, radius: centreDiameter / 2 + 5))
+    rootLayer.addSublayer(makeOutline(at: centre, radius: centreDiameter / 2 + scaled(5)))
     for sourceID in affected.sorted() {
       guard let endpoint = sourceEndpoint(for: sourceID) else { continue }
-      rootLayer.addSublayer(makeOutline(at: endpoint.anchor, radius: endpoint.trimRadius + 5))
+      rootLayer.addSublayer(makeOutline(at: endpoint.anchor, radius: endpoint.trimRadius + scaled(5)))
     }
   }
 
@@ -96,13 +97,14 @@ struct ConstellationTrafficRenderer {
   ) -> CALayer {
     let pulse = CALayer()
     pulse.contentsScale = scale
-    pulse.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
-    pulse.cornerRadius = diameter / 2
+    let scaledDiameter = scaled(diameter)
+    pulse.bounds = CGRect(x: 0, y: 0, width: scaledDiameter, height: scaledDiameter)
+    pulse.cornerRadius = scaledDiameter / 2
     pulse.backgroundColor =
       NSColor(TrawlDesign.brandRed).withAlphaComponent(CGFloat(opacity)).cgColor
     pulse.shadowColor = NSColor(TrawlDesign.brandRed).cgColor
     pulse.shadowOpacity = opacity
-    pulse.shadowRadius = glow
+    pulse.shadowRadius = scaled(glow)
     pulse.shadowOffset = .zero
 
     let now = CoreAnimationTimeline.elapsed
@@ -147,8 +149,9 @@ struct ConstellationTrafficRenderer {
     guard let endpoint = sourceEndpoint(for: sourceID) else { return CALayer() }
     let node = CALayer()
     node.contentsScale = scale
-    node.bounds = CGRect(x: 0, y: 0, width: 2, height: 2)
-    node.cornerRadius = 1
+    let diameter = scaled(2)
+    node.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+    node.cornerRadius = diameter / 2
     node.position = endpoint.anchor
     node.backgroundColor = NSColor(TrawlDesign.brandRed).cgColor
     node.opacity = 0
@@ -185,7 +188,7 @@ struct ConstellationTrafficRenderer {
     outline.contentsScale = scale
     outline.fillColor = nil
     outline.strokeColor = NSColor(TrawlDesign.brandRed).cgColor
-    outline.lineWidth = 2
+    outline.lineWidth = scaled(2)
     outline.path = CGPath(
       ellipseIn: CGRect(
         x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2),
@@ -281,5 +284,9 @@ struct ConstellationTrafficRenderer {
 
   private func vector(_ value: ConstellationVector) -> CGVector {
     CGVector(dx: CGFloat(value.dx), dy: CGFloat(value.dy))
+  }
+
+  private func scaled(_ value: CGFloat) -> CGFloat {
+    value * visualScale
   }
 }

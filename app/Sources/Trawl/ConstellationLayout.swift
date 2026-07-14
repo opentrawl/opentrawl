@@ -16,6 +16,7 @@ struct MovingSource: Identifiable {
 struct ConstellationSnapshot {
   let centre: CGPoint
   let centreDiameter: CGFloat
+  let visualScale: CGFloat
   let sources: [MovingSource]
   let contextNodes: [CGPoint]
   let segments: [NetworkSegment]
@@ -95,6 +96,7 @@ struct ConstellationLayout {
   private let contextBases: [CGPoint]
   private let centreBase: CGPoint
   private let centreDiameter: CGFloat
+  private let visualScale: CGFloat
   private let graphEdges: [GraphEdge]
 
   init(size: CGSize, sources: [RestingSource]) {
@@ -104,21 +106,24 @@ struct ConstellationLayout {
       fitting: ConstellationPoint(x: size.width, y: size.height)
     )
     metrics = layoutMetrics
+    visualScale = min(1, max(0.8, CGFloat(layoutMetrics.minimumIconDiameter / 44)))
     centreDiameter = max(
       84,
       min(
         TrawlDesign.centreSize,
-        CGFloat(layoutMetrics.minimumIconDiameter / 44) * TrawlDesign.centreSize))
+        visualScale * TrawlDesign.centreSize))
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
-    sourceBases = Self.makeSourceBases(
+    let bases = Self.makeSourceBases(
       sources: sources,
       size: size,
       centre: centreBase,
       metrics: layoutMetrics
     )
+    sourceBases = bases
     contextBases = Self.makeContextBases(sources: sourceBases, centre: centreBase)
-    graphEdges = Self.makeGraphEdges(sourceCount: sources.count)
+    let orbitOrder = Self.orbitOrder(points: bases, centre: centreBase)
+    graphEdges = Self.makeGraphEdges(sourceCount: sources.count, orbitOrder: orbitOrder)
   }
 
   func snapshot() -> ConstellationSnapshot {
@@ -162,6 +167,7 @@ struct ConstellationLayout {
     return ConstellationSnapshot(
       centre: centreBase,
       centreDiameter: centreDiameter,
+      visualScale: visualScale,
       sources: zip(sources.indices, sources).map { index, source in
         MovingSource(
           source: source,
@@ -198,39 +204,42 @@ struct ConstellationLayout {
   }
 
   private static func makeContextBases(sources: [CGPoint], centre: CGPoint) -> [CGPoint] {
-    sources.enumerated().map { index, source in
-      let radialFraction = 0.43 + CGFloat(index % 3) * 0.035
-      let tangentFraction = index.isMultiple(of: 2) ? 0.035 : -0.035
+    sources.map { source in
+      let radialFraction: CGFloat = 0.6
       let radial = CGVector(dx: source.x - centre.x, dy: source.y - centre.y)
-      let tangent = CGVector(dx: -radial.dy * tangentFraction, dy: radial.dx * tangentFraction)
       return CGPoint(
-        x: centre.x + radial.dx * radialFraction + tangent.dx,
-        y: centre.y + radial.dy * radialFraction + tangent.dy
+        x: centre.x + radial.dx * radialFraction,
+        y: centre.y + radial.dy * radialFraction
       )
     }
   }
 
-  private static func makeGraphEdges(sourceCount: Int) -> [GraphEdge] {
+  private static func orbitOrder(points: [CGPoint], centre: CGPoint) -> [Int] {
+    points.indices.sorted {
+      atan2(points[$0].y - centre.y, points[$0].x - centre.x)
+        < atan2(points[$1].y - centre.y, points[$1].x - centre.x)
+    }
+  }
+
+  private static func makeGraphEdges(sourceCount: Int, orbitOrder: [Int]) -> [GraphEdge] {
     guard sourceCount > 0 else { return [] }
+    guard orbitOrder.count == sourceCount else { return [] }
     let centreIndex = sourceCount
     let contextStart = sourceCount + 1
     var edges = Set<GraphEdge>()
     for sourceIndex in 0..<sourceCount {
       let contextIndex = contextStart + sourceIndex
       edges.insert(GraphEdge(sourceIndex, contextIndex))
-      if sourceCount > 1 {
-        edges.insert(GraphEdge(contextIndex, contextStart + (sourceIndex + 1) % sourceCount))
-      }
     }
-    if sourceCount > 3 {
-      for sourceIndex in stride(from: 0, to: sourceCount, by: 3) {
-        let start = contextStart + sourceIndex
-        let end = contextStart + (sourceIndex + 2) % sourceCount
+    if sourceCount > 1 {
+      for index in orbitOrder.indices {
+        let start = contextStart + orbitOrder[index]
+        let end = contextStart + orbitOrder[(index + 1) % sourceCount]
         edges.insert(GraphEdge(start, end))
       }
     }
-    for index in Set([0, sourceCount / 3, sourceCount * 2 / 3]) {
-      edges.insert(GraphEdge(centreIndex, contextStart + index))
+    for index in Set([0, sourceCount / 4, sourceCount / 2, sourceCount * 3 / 4]) {
+      edges.insert(GraphEdge(centreIndex, contextStart + orbitOrder[index]))
     }
     return edges.sorted()
   }
