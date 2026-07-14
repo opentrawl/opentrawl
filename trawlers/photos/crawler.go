@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	ollamaCloudBaseURL = "https://ollama.com/api"
+	ollamaCloudBaseURL = "https://ollama.com/v1"
 	ollamaAPIKeyEnv    = "OLLAMA_API_KEY"
 	heartbeatEvery     = 30 * time.Second
 )

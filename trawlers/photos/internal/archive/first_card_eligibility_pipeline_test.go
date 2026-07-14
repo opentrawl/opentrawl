@@ -257,11 +257,11 @@ func TestFirstCardEligibilityLifecycleStopsPaidCallBeforeMedia(t *testing.T) {
 	fixtureResponse := fixtureCardResponse(
 		"A synthetic blue and gold image fixture.",
 		"A 2 by 2 synthetic image contains blue and gold pixels for a local provider test.",
-		"verdict: plausible\nreason: no place claim is made.",
+		"verdict: none\nreason: no place claim is made.",
 		"None",
 		"The fixture has no real-world scene.",
 	)
-	rawFixtureResponse, err := json.Marshal(map[string]any{"response": fixtureResponse, "done": true})
+	rawFixtureResponse, err := json.Marshal(fixtureToolResponse(fixtureResponse))
 	if err != nil {
 		t.Fatal(err)
 	}

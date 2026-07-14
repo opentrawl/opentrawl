@@ -271,13 +271,16 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 	for _, candidate := range preparedCandidates {
 		prepared.CandidateByID[candidate.ID] = candidate
 	}
-	parsed, err := classifier.parseResult(fixtureCardResponse(
-		"Synthetic duplicate summary.",
-		"Synthetic duplicate description with a visible venue sign.",
-		"candidate_id: place_1_candidate_2\nverdict: corroborated\nreason: synthetic sign matches the provider candidate.",
-		"Synthetic card venue sign",
-		"none",
-	), prepared)
+	parsed, err := classifier.parseResult(model.Response{ToolCalls: []model.ToolCall{{
+		Name: photoCardToolName,
+		Arguments: []byte(fixtureCardResponse(
+			"Synthetic duplicate summary.",
+			"Synthetic duplicate description with a visible venue sign.",
+			"candidate_id: place_1_candidate_2\nverdict: corroborated\nreason: synthetic sign matches the provider candidate.",
+			"Synthetic card venue sign",
+			"none",
+		)),
+	}}}, prepared)
 	if err != nil {
 		t.Fatal(err)
 	}

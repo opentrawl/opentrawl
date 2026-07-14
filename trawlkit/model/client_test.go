@@ -207,6 +207,61 @@ func TestGenerateChatUsesOpenAICompatibleEndpoint(t *testing.T) {
 	}
 }
 
+func TestGenerateChatForcesOneFunctionToolAndReturnsArguments(t *testing.T) {
+	server := sandboxSafeServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Tools []struct {
+				Type     string `json:"type"`
+				Function struct {
+					Name       string          `json:"name"`
+					Parameters json.RawMessage `json:"parameters"`
+				} `json:"function"`
+			} `json:"tools"`
+			ToolChoice struct {
+				Type     string `json:"type"`
+				Function struct {
+					Name string `json:"name"`
+				} `json:"function"`
+			} `json:"tool_choice"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+			return
+		}
+		if len(request.Tools) != 1 || request.Tools[0].Type != "function" || request.Tools[0].Function.Name != "submit_fixture" || request.ToolChoice.Type != "function" || request.ToolChoice.Function.Name != "submit_fixture" {
+			t.Errorf("tool request = %#v", request)
+		}
+		if !json.Valid(request.Tools[0].Function.Parameters) {
+			t.Errorf("tool schema = %s", request.Tools[0].Function.Parameters)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"choices": []map[string]any{{
+				"message": map[string]any{
+					"tool_calls": []map[string]any{{
+						"type": "function",
+						"function": map[string]string{
+							"name":      "submit_fixture",
+							"arguments": `{"summary":"synthetic"}`,
+						},
+					}},
+				},
+			}},
+		})
+	}))
+	client := newTestClient(t, Config{BaseURL: server.URL + "/v1", Model: "openai-compatible"})
+	schema := json.RawMessage(`{"type":"object","properties":{"summary":{"type":"string"}},"required":["summary"]}`)
+	response, err := client.Generate(context.Background(), Request{
+		Prompt: "describe this",
+		Tool:   &Tool{Name: "submit_fixture", Parameters: schema},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(response.ToolCalls) != 1 || response.ToolCalls[0].Name != "submit_fixture" || string(response.ToolCalls[0].Arguments) != `{"summary":"synthetic"}` {
+		t.Fatalf("tool calls = %#v", response.ToolCalls)
+	}
+}
+
 func TestRenderIdentityAndRawProviderBoundary(t *testing.T) {
 	t.Setenv("MODEL_TEST_KEY", "synthetic-secret")
 	var fixtureBody []byte

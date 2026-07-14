@@ -35,7 +35,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-const fixtureModelURL = "http://127.0.0.1:11434/api/generate"
+const fixtureModelURL = "http://127.0.0.1:11434/v1"
 
 func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	withSyntheticCurrentStill(t)
@@ -49,14 +49,18 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 	writeSyntheticImage(t, imagePath)
 	var fixtureRequestBody []byte
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/generate" {
+		if r.URL.Path != "/v1/chat/completions" {
 			t.Fatalf("path = %q", r.URL.Path)
 		}
 		var request struct {
-			Model   string         `json:"model"`
-			Images  []string       `json:"images"`
-			Stream  bool           `json:"stream"`
-			Options map[string]any `json:"options"`
+			Model    string `json:"model"`
+			Messages []struct {
+				Content []struct {
+					Type string `json:"type"`
+				} `json:"content"`
+			} `json:"messages"`
+			Tools      []any `json:"tools"`
+			ToolChoice any   `json:"tool_choice"`
 		}
 		var err error
 		fixtureRequestBody, err = io.ReadAll(r.Body)
@@ -66,19 +70,16 @@ func TestClassifyModelWritesTypedObservations(t *testing.T) {
 		if err := json.Unmarshal(fixtureRequestBody, &request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if request.Model != "fixture-vision" || len(request.Images) != 1 {
+		if request.Model != "fixture-vision" || len(request.Messages) != 1 || len(request.Messages[0].Content) != 2 || len(request.Tools) != 1 || request.ToolChoice == nil {
 			t.Fatalf("request = %#v", request)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": fixtureCardResponse(
-				"Outdoor street-food meal with satay skewers, prawns, sauces, and a shared table.",
-				"A synthetic outdoor food table holds satay skewers, grilled prawns, peanut sauce, and shared dishes. A small receipt-like slip is visible near the edge of the table. Only hands are visible, with no identifiable people.",
-				"Nearby hawker centre candidate.",
-				"A small receipt-like slip is visible.",
-				"exact venue is not proven",
-			),
-			"done": true,
-		})
+		_ = json.NewEncoder(w).Encode(fixtureToolResponse(fixtureCardResponse(
+			"Outdoor street-food meal with satay skewers, prawns, sauces, and a shared table.",
+			"A synthetic outdoor food table holds satay skewers, grilled prawns, peanut sauce, and shared dishes. A small receipt-like slip is visible near the edge of the table. Only hands are visible, with no identifiable people.",
+			"Nearby hawker centre candidate.",
+			"A small receipt-like slip is visible.",
+			"exact venue is not proven",
+		)))
 	}))
 	defer restoreTransport()
 
@@ -420,16 +421,13 @@ func TestClassifyDownloadsOriginalThroughPersistentBoundedCache(t *testing.T) {
 	defer func() { exportOriginalResource = oldExport }()
 
 	restoreTransport := useArchiveHandlerTransport(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"response": fixtureCardResponse(
-				"A synthetic test photo shows a printed menu on a table.",
-				"The image shows a printed menu lying on a table in a synthetic fixture. The word menu is visible and is the main readable text. No people are visible.",
-				"Restaurant table candidate.",
-				"The word menu is visible.",
-				"synthetic image bytes",
-			),
-			"done": true,
-		})
+		_ = json.NewEncoder(w).Encode(fixtureToolResponse(fixtureCardResponse(
+			"A synthetic test photo shows a printed menu on a table.",
+			"The image shows a printed menu lying on a table in a synthetic fixture. The word menu is visible and is the main readable text. No people are visible.",
+			"Restaurant table candidate.",
+			"The word menu is visible.",
+			"synthetic image bytes",
+		)))
 	}))
 	defer restoreTransport()
 
@@ -1231,95 +1229,6 @@ func useArchiveHandlerTransport(t *testing.T, handler http.Handler) func() {
 	return func() { http.DefaultTransport = oldTransport }
 }
 
-func TestParsePhotoCardRequiresSections(t *testing.T) {
-	t.Parallel()
-	if _, err := parsePhotoCard("Return only valid compact JSON.", true); err == nil {
-		t.Fatal("expected malformed card to fail")
-	}
-}
-
-func TestCandidateIDUsesStructuralTrimAndExactRegistryValues(t *testing.T) {
-	if got := cleanCardCandidateID(" \n place_1_candidate_1\t"); got != "place_1_candidate_1" {
-		t.Fatalf("trimmed candidate id = %q", got)
-	}
-	if got := cleanCardCandidateID("`place_1_candidate_1`"); got != "`place_1_candidate_1`" {
-		t.Fatalf("candidate punctuation was normalised: %q", got)
-	}
-	for name, test := range map[string]struct {
-		prepared preparedCardRequest
-		id       string
-		wantErr  bool
-	}{
-		"empty registry none": {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}}, id: "none"},
-		"upper-case none":     {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}}, id: "None", wantErr: true},
-		"exact id":            {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{"place_1_candidate_1": {ID: "place_1_candidate_1"}}}, id: "place_1_candidate_1"},
-		"decorated id":        {prepared: preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{"place_1_candidate_1": {ID: "place_1_candidate_1"}}}, id: "`place_1_candidate_1`", wantErr: true},
-	} {
-		t.Run(name, func(t *testing.T) {
-			value := venuePlausibility{CandidateID: test.id}
-			err := validateVenueCandidate(test.prepared, &value)
-			if (err != nil) != test.wantErr {
-				t.Fatalf("validate candidate %q: %v", test.id, err)
-			}
-		})
-	}
-}
-
-func TestParsePhotoCardReadsVenueCandidateID(t *testing.T) {
-	t.Parallel()
-	card, err := parsePhotoCard(fixtureCardResponse(
-		"A synthetic kitchen cooking scene.",
-		"The image shows food preparation on a kitchen counter.",
-		"candidate_id: venue_candidate_2\nverdict: corroborated\nreason: a visible sign matches the provider candidate.",
-		"None",
-		"exact city",
-	), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if card.VenuePlausibility.Verdict != venueVerdictCorroborated || card.VenuePlausibility.CandidateID != "venue_candidate_2" {
-		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
-	}
-}
-
-func TestParsePhotoCardBadVenueIDDoesNotFailCard(t *testing.T) {
-	t.Parallel()
-	card, err := parsePhotoCard(fixtureCardResponse(
-		"A synthetic private meal scene.",
-		"The image shows a meal in a private indoor setting.",
-		"candidate_id: Synthetic Consultancy\nplausibility: inconsistent\nreason: the visible scene contradicts the venue type.",
-		"None",
-		"exact venue",
-	), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if card.VenuePlausibility.CandidateID != "" || card.VenuePlausibility.Verdict != venueVerdictInconsistent {
-		t.Fatalf("venue plausibility = %#v", card.VenuePlausibility)
-	}
-}
-
-func TestParsePhotoCardUncertaintyUsesListItems(t *testing.T) {
-	t.Parallel()
-	card, err := parsePhotoCard(fixtureCardResponse(
-		"A synthetic document scene.",
-		"The image shows a synthetic document on a desk.",
-		"verdict: plausible\nreason: no visible contradiction.",
-		"None",
-		"venue type is only a provider candidate. The description already explains the visible scene.\n- small text is partly unreadable",
-	), true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []string{
-		"venue type is only a provider candidate",
-		"small text is partly unreadable",
-	}
-	if !reflect.DeepEqual(card.Uncertainties, want) {
-		t.Fatalf("uncertainties = %#v, want %#v", card.Uncertainties, want)
-	}
-}
-
 func TestWritePlaceClassificationAppliesVenuePlausibilityAndAddressLine(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -1562,41 +1471,44 @@ func openCandidateRow(name, tier string, distance float64, category, verdict str
 }
 
 func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertainty string) string {
-	if strings.TrimSpace(venuePlausibility) == "" {
-		venuePlausibility = "candidate_id: none\nverdict: plausible\nreason: no visible contradiction."
+	venue := map[string]string{"candidate_id": "none", "verdict": venueVerdictNone, "reason": "no useful venue interpretation"}
+	for _, line := range strings.Split(venuePlausibility, "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "candidate_id":
+			venue["candidate_id"] = strings.TrimSpace(value)
+		case "verdict":
+			venue["verdict"] = strings.TrimSpace(value)
+		case "reason":
+			venue["reason"] = strings.TrimSpace(value)
+		}
 	}
-	lower := strings.ToLower(strings.TrimSpace(venuePlausibility))
-	if !strings.Contains(lower, "verdict:") &&
-		!strings.HasPrefix(lower, venueVerdictCorroborated) &&
-		!strings.HasPrefix(lower, venueVerdictPlausible) &&
-		!strings.HasPrefix(lower, venueVerdictInconsistent) {
-		venuePlausibility = "verdict: plausible\nreason: " + venuePlausibility
+	if strings.TrimSpace(venuePlausibility) != "" && venue["reason"] == "no useful venue interpretation" {
+		venue["reason"] = strings.TrimSpace(venuePlausibility)
 	}
-	if !strings.Contains(strings.ToLower(venuePlausibility), "candidate_id:") {
-		venuePlausibility = "candidate_id: none\n" + venuePlausibility
+	if strings.EqualFold(strings.TrimSpace(ocr), "none") {
+		ocr = ""
 	}
-	if strings.TrimSpace(ocr) == "" {
-		ocr = "None"
+	uncertainties := []string{}
+	if text := strings.TrimSpace(uncertainty); text != "" && !strings.EqualFold(text, "none") {
+		uncertainties = append(uncertainties, text)
 	}
-	if strings.TrimSpace(uncertainty) == "" {
-		uncertainty = "None"
-	}
-	return strings.Join([]string{
-		"## One-line summary",
-		summary,
-		"",
-		"## Detailed description",
-		description,
-		"",
-		"## Venue plausibility",
-		venuePlausibility,
-		"",
-		"## OCR and machine-readable text",
-		ocr,
-		"",
-		"## Uncertainty",
-		"- " + uncertainty,
-	}, "\n")
+	arguments, _ := json.Marshal(map[string]any{
+		"summary": summary, "description": description, "venue_plausibility": venue,
+		"ocr_text": ocr, "uncertainties": uncertainties,
+	})
+	return string(arguments)
+}
+
+func fixtureToolResponse(arguments string) map[string]any {
+	return map[string]any{"choices": []map[string]any{{"message": map[string]any{
+		"tool_calls": []map[string]any{{"type": "function", "function": map[string]any{
+			"name": photoCardToolName, "arguments": arguments,
+		}}},
+	}}}}
 }
 
 func seedSyntheticPlaceAsset(t *testing.T, paths Paths) {
