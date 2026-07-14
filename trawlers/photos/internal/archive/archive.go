@@ -8,7 +8,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
-	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type StatusResult struct {
@@ -42,7 +41,12 @@ func Status(ctx context.Context, paths Paths) (StatusResult, error) {
 		return StatusResult{}, err
 	}
 	status.DatabaseBytes = info.Size()
-	metrics, err := readStatusMetrics(ctx, paths.Database)
+	db, err := openExistingArchive(ctx, paths.Database)
+	if err != nil {
+		return StatusResult{}, err
+	}
+	defer func() { _ = db.Close() }()
+	metrics, err := readStatusMetrics(ctx, db.DB())
 	if err != nil {
 		return StatusResult{}, err
 	}
@@ -80,29 +84,24 @@ type statusMetrics struct {
 	Counts       []control.Count
 }
 
-func readStatusMetrics(ctx context.Context, dbPath string) (statusMetrics, error) {
-	db, err := store.OpenReadOnly(ctx, dbPath)
-	if err != nil {
-		return statusMetrics{}, err
-	}
-	defer func() { _ = db.Close() }()
+func readStatusMetrics(ctx context.Context, db *sql.DB) (statusMetrics, error) {
 	var metrics statusMetrics
 	var since sql.NullInt64
-	if err := db.DB().QueryRowContext(ctx, `
+	if err := db.QueryRowContext(ctx, `
 select count(*),
        min(case
          when creation_date glob '[0-9][0-9][0-9][0-9]*'
          then cast(substr(creation_date, 1, 4) as integer)
        end)
 from asset
-`).Scan(&metrics.PhotoCount, &since); err != nil {
+	`).Scan(&metrics.PhotoCount, &since); err != nil {
 		return statusMetrics{}, fmt.Errorf("read photos status counts: %w", err)
 	}
 	metrics.Counts = []control.Count{control.NewCount("photos", "photos", metrics.PhotoCount)}
 	if since.Valid && since.Int64 > 0 {
 		metrics.Counts = append(metrics.Counts, control.NewCount("since", "since", since.Int64))
 	}
-	queuedForClassify, queuedNeedsDownload, classificationQueuePending, err := readQueueCounts(ctx, db.DB())
+	queuedForClassify, queuedNeedsDownload, classificationQueuePending, err := readQueueCounts(ctx, db)
 	if err != nil {
 		return statusMetrics{}, err
 	}
@@ -111,7 +110,7 @@ from asset
 		control.NewCount("queued_needs_download", "queued needs download", queuedNeedsDownload),
 		control.NewCount("classification_queue_pending", "classification queue pending", classificationQueuePending),
 	)
-	lastImportAt, err := lastImportAt(ctx, db.DB())
+	lastImportAt, err := lastImportAt(ctx, db)
 	if err != nil {
 		return statusMetrics{}, err
 	}

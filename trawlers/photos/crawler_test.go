@@ -401,7 +401,7 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 	}
 }
 
-func TestSearchAndOpenMapIncompatibleArchivesToOnePublicError(t *testing.T) {
+func TestStatusSearchAndOpenAgreeOnIncompatibleArchive(t *testing.T) {
 	ctx := context.Background()
 	paths := trawlkit.Paths{Archive: filepath.Join(t.TempDir(), "photos.db")}
 	writeStore, err := store.Open(ctx, store.Options{
@@ -417,6 +417,13 @@ func TestSearchAndOpenMapIncompatibleArchivesToOnePublicError(t *testing.T) {
 	}
 
 	source := New()
+	status, err := source.Status(ctx, &trawlkit.Request{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.State != "error" || status.Summary != "Photos archive status cannot be read." || len(status.Counts) != 0 || len(status.Errors) != 1 || status.Errors[0] != "photos archive is incompatible" {
+		t.Fatalf("status = %#v", status)
+	}
 	assertIncompatible := func(t *testing.T, err error) {
 		t.Helper()
 		got, ok := err.(commandError)
