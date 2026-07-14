@@ -104,6 +104,7 @@ private struct OrbitingSourceNode: View {
       contentSize: CGSize(
         width: CGFloat(placement.metrics.labelWidth),
         height: placement.diameter + CGFloat(placement.metrics.labelHeight)
+          + ConstellationLabelLayout.iconSpacing
       ),
       motion: placement.motion,
       reduceMotion: reduceMotion
@@ -325,22 +326,22 @@ private struct SourceNode: View {
   var body: some View {
     Button(action: action) {
       ZStack(alignment: .top) {
-        VStack(spacing: 7) {
+        VStack(spacing: ConstellationLabelLayout.iconSpacing) {
           SourceIconBadge(
             sourceID: source.id,
             diameter: diameter
           )
           SourceLabel(
             title: SourceRestingCopy.title(for: source),
-            detail: ConstellationLabelLayout.showsDetail(for: labelAllowance) ? source.detail : nil,
+            detail: source.detail,
             width: contentWidth,
             titleLineLimit: ConstellationLabelLayout.titleLineLimit(for: labelAllowance),
-            detailLineLimit: ConstellationLabelLayout.detailLineLimit(for: labelAllowance)
+            isCompact: ConstellationLabelLayout.isCompact(for: labelAllowance)
           )
         }
         .frame(
           width: contentWidth,
-          height: diameter + labelAllowance,
+          height: diameter + labelAllowance + ConstellationLabelLayout.iconSpacing,
           alignment: .top
         )
 
@@ -351,7 +352,7 @@ private struct SourceNode: View {
       }
       .frame(
         width: contentWidth,
-        height: diameter + labelAllowance,
+        height: diameter + labelAllowance + ConstellationLabelLayout.iconSpacing,
         alignment: .top
       )
       .contentShape(.rect)
@@ -382,16 +383,12 @@ private struct SourceIconBadge: View {
 }
 
 enum ConstellationLabelLayout {
-  static func showsDetail(for labelAllowance: CGFloat) -> Bool {
-    labelAllowance >= 59
-  }
+  static let iconSpacing: CGFloat = 7
+
+  static func isCompact(for labelAllowance: CGFloat) -> Bool { labelAllowance < 92 }
 
   static func titleLineLimit(for labelAllowance: CGFloat) -> Int {
-    labelAllowance < 60 ? 2 : 1
-  }
-
-  static func detailLineLimit(for labelAllowance: CGFloat) -> Int {
-    labelAllowance >= 92 ? 3 : 2
+    isCompact(for: labelAllowance) ? 2 : 1
   }
 }
 
@@ -400,28 +397,27 @@ struct SourceLabel: View {
   let detail: String?
   let width: CGFloat
   let titleLineLimit: Int
-  let detailLineLimit: Int
+  let isCompact: Bool
 
   var body: some View {
-    VStack(spacing: 2) {
+    VStack(spacing: isCompact ? 1 : 2) {
       Text(title)
-        .font(.body.weight(.semibold))
+        .font(isCompact ? .caption2.weight(.semibold) : .body.weight(.semibold))
         .foregroundStyle(.primary)
         .lineLimit(titleLineLimit)
         .fixedSize(horizontal: false, vertical: true)
         .multilineTextAlignment(.center)
       if let detail {
         Text(detail)
-          .font(.caption)
+          .font(isCompact ? .caption2 : .caption)
           .foregroundStyle(.secondary)
-          .lineLimit(detailLineLimit)
           .fixedSize(horizontal: false, vertical: true)
           .multilineTextAlignment(.center)
       }
     }
-    .frame(maxWidth: width)
-    .padding(.horizontal, 8)
-    .padding(.vertical, 5)
+    .padding(.horizontal, isCompact ? 6 : 8)
+    .padding(.vertical, isCompact ? 3 : 5)
+    .frame(width: width)
     .background(.ultraThinMaterial, in: .rect(cornerRadius: 9))
   }
 }

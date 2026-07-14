@@ -11,7 +11,8 @@ struct SearchOverlayViewTests {
   @MainActor
   @Test func constellationCanvasFitsWindowsAndSupportsTheMinimumProductSourceSet() {
     let windowSizes = [
-      CGSize(width: 704, height: 504),
+      TrawlDesign.minimumWindow,
+      CGSize(width: 864, height: 576),
       CGSize(width: 1_024, height: 768),
       CGSize(width: 2_400, height: 1_000),
     ]
@@ -20,8 +21,9 @@ struct SearchOverlayViewTests {
     }
 
     let minimumCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[0]))
-    let defaultCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[1]))
-    let wideCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[2]))
+    let restoredCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[1]))
+    let defaultCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[2]))
+    let wideCanvas = ConstellationView.canvasSize(in: constellationSize(in: windowSizes[3]))
     let sourceIDs = [
       "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
       "whatsapp", "synthetic",
@@ -52,14 +54,21 @@ struct SearchOverlayViewTests {
       sourceIDs.count,
       fitting: ConstellationPoint(x: wideCanvas.width, y: wideCanvas.height)
     )
-    #expect(!ConstellationLabelLayout.showsDetail(for: minimumMetrics.labelHeight))
-    #expect(ConstellationLabelLayout.showsDetail(for: defaultMetrics.labelHeight))
-    #expect(ConstellationLabelLayout.showsDetail(for: wideMetrics.labelHeight))
+    let restoredMetrics = ConstellationLayoutMetrics.forSourceCount(
+      sourceIDs.count,
+      fitting: ConstellationPoint(x: restoredCanvas.width, y: restoredCanvas.height)
+    )
+    #expect(minimumMetrics.labelWidth == 120)
+    #expect(minimumMetrics.labelHeight == 78)
+    #expect(restoredMetrics == minimumMetrics)
     #expect(defaultMetrics.labelWidth == 156)
     #expect(defaultMetrics.labelHeight == 92)
-    #expect(ConstellationLabelLayout.detailLineLimit(for: defaultMetrics.labelHeight) == 3)
-    #expect(ConstellationLabelLayout.detailLineLimit(for: wideMetrics.labelHeight) == 3)
-    for (canvas, metrics) in [(defaultCanvas, defaultMetrics), (wideCanvas, wideMetrics)] {
+    for (canvas, metrics) in [
+      (minimumCanvas, minimumMetrics),
+      (restoredCanvas, restoredMetrics),
+      (defaultCanvas, defaultMetrics),
+      (wideCanvas, wideMetrics),
+    ] {
       let layout = ConstellationOrbitLayout(
         sourceIDs: sourceIDs,
         size: ConstellationPoint(x: canvas.width, y: canvas.height),
@@ -69,10 +78,32 @@ struct SearchOverlayViewTests {
         ),
         metrics: metrics
       )
-      #expect(layout.placements().count == sourceIDs.count)
+      let placements = layout.placements()
+      #expect(placements.count == sourceIDs.count)
+      for index in placements.indices {
+        for otherIndex in placements.indices.dropFirst(index + 1) {
+          #expect(
+            !placements[index].hostRect.expanded(by: metrics.spacing).intersects(
+              placements[otherIndex].hostRect.expanded(by: metrics.spacing)
+            )
+          )
+        }
+      }
     }
-    #expect(ConstellationLabelLayout.titleLineLimit(for: 44) == 2)
-    #expect(ConstellationLabelLayout.titleLineLimit(for: 68) == 1)
+    for metrics in [minimumMetrics, restoredMetrics] {
+      assertHeadlineLabelFits(
+        title: "Search Twitter (X)",
+        detail: "tweets · bookmarks · likes · mentions",
+        metrics: metrics
+      )
+      assertHeadlineLabelFits(
+        title: "Search Telegram",
+        detail: "chats · folders · topics",
+        metrics: metrics
+      )
+    }
+    #expect(ConstellationLabelLayout.titleLineLimit(for: 78) == 2)
+    #expect(ConstellationLabelLayout.titleLineLimit(for: 68) == 2)
   }
 
   @MainActor
@@ -403,6 +434,26 @@ private func constellationSize(in windowSize: CGSize) -> CGSize {
     width: windowSize.width - TrawlDesign.contentInset * 2,
     height: windowSize.height - TrawlDesign.contentInset * 2
   )
+}
+
+@MainActor
+private func assertHeadlineLabelFits(
+  title: String,
+  detail: String,
+  metrics: ConstellationLayoutMetrics
+) {
+  let host = NSHostingView(
+    rootView: SourceLabel(
+      title: title,
+      detail: detail,
+      width: CGFloat(metrics.labelWidth),
+      titleLineLimit: ConstellationLabelLayout.titleLineLimit(for: CGFloat(metrics.labelHeight)),
+      isCompact: ConstellationLabelLayout.isCompact(for: CGFloat(metrics.labelHeight))
+    )
+  )
+  let renderedSize = host.fittingSize
+  #expect(renderedSize.width == CGFloat(metrics.labelWidth))
+  #expect(renderedSize.height <= CGFloat(metrics.labelHeight))
 }
 
 private struct MountedSearchDismissHarness: View {

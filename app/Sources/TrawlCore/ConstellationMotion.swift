@@ -272,11 +272,11 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   public static func forSourceCount(_ count: Int, fitting size: ConstellationPoint) -> Self {
     guard count <= 10, size.x < 744 || size.y < 644 else { return forSourceCount(count) }
     return Self(
-      hostSize: ConstellationPoint(x: 120, y: 110),
-      hostCentreYOffset: 24,
-      labelWidth: 104,
-      labelTop: 24,
-      labelHeight: 44,
+      hostSize: ConstellationPoint(x: 124, y: 132),
+      hostCentreYOffset: 29,
+      labelWidth: 120,
+      labelTop: 28,
+      labelHeight: 78,
       minimumIconDiameter: 42,
       maximumIconDiameter: 48,
       diamondClearanceRadius: 48,
