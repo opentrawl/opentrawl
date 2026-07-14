@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	evidenceParserVersion       = "photos-place-evidence-v2"
+	evidenceParserVersion       = "photos-place-evidence-v3"
 	evidenceStateComplete       = "complete"
 	evidenceStateStopped        = "stopped"
 	evidenceStopEmpty           = "empty"
@@ -99,6 +99,7 @@ type EvidenceRecord struct {
 	Input                Input               `json:"input"`
 	ProviderIdentity     string              `json:"provider_identity"`
 	Operation            string              `json:"operation"`
+	SelectionPolicy      SelectionPolicy     `json:"selection_policy"`
 	CoordinateVariant    string              `json:"coordinate_variant"`
 	ParserVersion        string              `json:"parser_version"`
 	PreAuthRequestFile   string              `json:"pre_auth_request_file"`
@@ -122,6 +123,31 @@ type EvidenceRecord struct {
 	CompletedAt          string              `json:"completed_at"`
 	DurationMilliseconds float64             `json:"duration_milliseconds"`
 }
+
+// SelectionPolicy preserves why a bounded response is complete. A producer
+// may mark only an explicit reverse selection as complete at its limit.
+// Search and nearby operations remain incomplete when they reach their limit.
+type SelectionPolicy struct {
+	RequestedLimit          int  `json:"requested_limit"`
+	LimitReached            bool `json:"limit_reached"`
+	MoreResultsNotRequested bool `json:"more_results_not_requested"`
+	BoundedReverse          bool `json:"bounded_reverse"`
+}
+
+// CheckedOperation names one exact checked-cache boundary that may enter a
+// card. Its order is the card's evidence order.
+type CheckedOperation struct {
+	ProviderIdentity    string                `json:"provider_identity"`
+	Operation           string                `json:"operation"`
+	CoordinateVariant   string                `json:"coordinate_variant"`
+	CredentialReference string                `json:"credential_reference,omitempty"`
+	SelectionPolicy     SelectionPolicy       `json:"selection_policy"`
+	Parser              CheckedEvidenceParser `json:"-"`
+}
+
+// CheckedEvidenceParser reproduces the structured evidence from one cached
+// raw response. The loader uses it to reject altered record fields.
+type CheckedEvidenceParser func(raw []byte, status int, input Input) (*Address, []EvidenceCandidate, error)
 
 type EvidenceCandidate struct {
 	ProviderIndex int         `json:"provider_index"`
@@ -285,12 +311,13 @@ func runEvidenceOperations(ctx context.Context, opts EvidenceOptions, runner evi
 	return result, nil
 }
 
-func completeCapture(input Input, provider, operation, variant, credentialReference string, request, response []byte, status int, parsed parsedEvidence) evidenceCapture {
+func completeCapture(input Input, provider, operation, variant, credentialReference string, selectionPolicy SelectionPolicy, request, response []byte, status int, parsed parsedEvidence) evidenceCapture {
 	return evidenceCapture{
 		record: EvidenceRecord{
 			Input:                input,
 			ProviderIdentity:     provider,
 			Operation:            operation,
+			SelectionPolicy:      selectionPolicy,
 			CoordinateVariant:    variant,
 			ParserVersion:        evidenceParserVersion,
 			PreAuthRequestFile:   "request.raw",
@@ -301,7 +328,7 @@ func completeCapture(input Input, provider, operation, variant, credentialRefere
 			Address:              parsed.address,
 			Candidates:           parsed.candidates,
 			CompletionState:      evidenceStateComplete,
-			CacheIdentity:        evidenceCacheIdentity(input, provider, operation, variant, credentialReference, request),
+			CacheIdentity:        evidenceCacheIdentity(input, provider, operation, variant, credentialReference, selectionPolicy, request),
 			CredentialReference:  credentialReference,
 		},
 		request:  append([]byte(nil), request...),
@@ -309,8 +336,8 @@ func completeCapture(input Input, provider, operation, variant, credentialRefere
 	}
 }
 
-func stoppedCapture(input Input, provider, operation, variant, credentialReference string, request, response []byte, status int, parsed parsedEvidence, err error) evidenceCapture {
-	capture := completeCapture(input, provider, operation, variant, credentialReference, request, response, status, parsed)
+func stoppedCapture(input Input, provider, operation, variant, credentialReference string, selectionPolicy SelectionPolicy, request, response []byte, status int, parsed parsedEvidence, err error) evidenceCapture {
+	capture := completeCapture(input, provider, operation, variant, credentialReference, selectionPolicy, request, response, status, parsed)
 	capture.record.CompletionState = evidenceStateStopped
 	capture.record.StopReason = namedEvidenceStop(response, err)
 	capture.record.ProviderErrorClass = evidenceErrorClass(err)

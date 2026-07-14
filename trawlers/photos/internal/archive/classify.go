@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
@@ -18,12 +19,13 @@ const (
 )
 
 type ClassifyOptions struct {
-	Limit       int
-	Model       string
-	ModelURL    string
-	ModelKeyEnv string
-	LogSink     ClassifyLogSink
-	Now         func() time.Time
+	Limit                   int
+	Model                   string
+	ModelURL                string
+	ModelKeyEnv             string
+	LogSink                 ClassifyLogSink
+	Now                     func() time.Time
+	PlaceEvidenceOperations []place.CheckedOperation
 }
 
 type ClassifyLogSink interface {
@@ -194,7 +196,7 @@ func ClassifyWithStore(ctx context.Context, db *store.Store, paths Paths, opts C
 		}
 		return finishClassifyResult(startedAt, result), nil
 	}
-	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, &result, logger); err != nil {
+	if err := classifyContentInputs(ctx, db, paths, inputs, *classifier, now, opts.PlaceEvidenceOperations, &result, logger); err != nil {
 		return ClassifyResult{}, err
 	}
 	if classifier != nil {

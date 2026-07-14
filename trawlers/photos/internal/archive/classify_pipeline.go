@@ -12,6 +12,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -90,7 +91,7 @@ type contentItem struct {
 // photoscrawl keeps what is photoscrawl's: originals export inside prepare,
 // card parsing and SQL writes inside commit, and the outcome-to-queue-state
 // mapping.
-func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, result *ClassifyResult, logger classifyLogger) error {
+func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, classifier modelClassifier, now func() time.Time, operations []place.CheckedOperation, result *ClassifyResult, logger classifyLogger) error {
 	// Pre-pass: items that never reach the model resolve immediately.
 	items := make([]*contentItem, 0, len(inputs))
 	for _, input := range inputs {
@@ -113,7 +114,7 @@ func classifyContentInputs(ctx context.Context, db *store.Store, paths Paths, in
 		prepared, generationID, found, err := restoreRetainedPreparedCardRequestForAsset(ctx, db, item.input.AssetID, classifier.client)
 		imagePath := ""
 		if err == nil && !found {
-			prepared, imagePath, err = prepareClassifyCardRequestFromCache(ctx, paths, item.input, classifier)
+			prepared, imagePath, err = prepareClassifyCardRequestFromCache(ctx, paths, item.input, classifier, operations)
 		}
 		item.resolutionDuration = time.Since(startedAt)
 		if err != nil {
@@ -353,11 +354,8 @@ func writeClassifyResult(ctx context.Context, db *store.Store, classifier modelC
 	return nil
 }
 
-func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input classifyInput, classifier modelClassifier) (preparedCardRequest, string, error) {
+func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input classifyInput, classifier modelClassifier, operations []place.CheckedOperation) (preparedCardRequest, string, error) {
 	if input.SourceState != sourceStateCurrent {
-		return preparedCardRequest{}, "", errCardInputNotReady
-	}
-	if input.HasLocation {
 		return preparedCardRequest{}, "", errCardInputNotReady
 	}
 	original, _, _, ok, err := cardInputAuditCheckedOriginal(input, paths.OriginalsCacheDir())
@@ -365,6 +363,10 @@ func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input
 		return preparedCardRequest{}, "", err
 	}
 	if !ok {
+		return preparedCardRequest{}, "", errCardInputNotReady
+	}
+	evidence, evidenceOK := checkedPlaceEvidence(paths.CacheDir, input, operations)
+	if !evidenceOK {
 		return preparedCardRequest{}, "", errCardInputNotReady
 	}
 	metadata, ok := imagemetadata.ReadCheckedArtifacts(filepath.Join(paths.CacheDir, "image-metadata"), original.SHA256)
@@ -383,9 +385,12 @@ func prepareClassifyCardRequestFromCache(ctx context.Context, paths Paths, input
 	if err != nil {
 		return preparedCardRequest{}, "", err
 	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
-	prepared, err := renderPreparedCardRequest(source, artifacts, nil, image, classifier)
+	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, operations)
+	prepared, err := renderPreparedCardRequest(source, artifacts, evidence, image, classifier)
 	if err != nil {
+		if isPlaceEvidenceError(err) {
+			return preparedCardRequest{}, "", errCardInputNotReady
+		}
 		return preparedCardRequest{}, "", err
 	}
 	if err := ctx.Err(); err != nil {

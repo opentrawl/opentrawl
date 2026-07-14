@@ -437,7 +437,7 @@ func TestCardInputAuditFactsKeepNumericCameraValues(t *testing.T) {
 	input := classifyInput{AssetID: "asset:camera", SourceLibraryID: "source:synthetic", CreationDate: "2026-07-13T10:00:00Z", TimezoneName: "UTC", MediaType: "image", Width: 2, Height: 2, CameraMake: "Example", CameraModel: "Camera", FocalLengthMM: 6.5, FocalLength35MM: 28, Aperture: 1.8, ShutterSpeed: 0.01, ISO: 100}
 	original := classifyResource{ID: "resource:camera", ResourceType: "photo", UTI: "public.jpeg", OriginalFilename: "synthetic.jpg", FileSize: 3, SHA256: digestText("original"), AvailableLocally: true}
 	metadata := imagemetadata.Artifacts{Projection: imagemetadata.Projection{Lines: []string{"Camera: Example"}}, Proof: imagemetadata.Proof{RecordSHA256: digestText("record"), ProjectionSHA256: digestText("projection")}}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: 3, SHA256: digestText("current")}, digestText("proof"))
+	source, artifacts := cardInputAuditFacts(input, original, metadata, photos.CurrentStillFact{MediaType: "public.jpeg", Orientation: 1, PixelWidth: 2, PixelHeight: 2, Size: 3, SHA256: digestText("current")}, digestText("proof"), nil)
 	card, err := cardinput.Build(source, artifacts, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +453,7 @@ func TestCardInputAuditFactsRejectsInvalidAssetUTIFallback(t *testing.T) {
 	for _, metadataJSON := range []string{`{"uniform_type_identifier":"1"}`, `{not-json`} {
 		input := classifyInput{AssetID: "asset:invalid-uti", SourceLibraryID: "source:synthetic", CreationDate: "2026-07-13T10:00:00Z", MediaType: "image", Width: 2, Height: 2, MetadataJSON: metadataJSON}
 		original := classifyResource{ID: "resource:invalid-uti", ResourceType: "photo", OriginalFilename: "synthetic.jpg", FileSize: 3, SHA256: digestText("original"), AvailableLocally: true}
-		source, artifacts := cardInputAuditFacts(input, original, metadata, current, digestText("proof"))
+		source, artifacts := cardInputAuditFacts(input, original, metadata, current, digestText("proof"), nil)
 		if _, err := cardinput.Build(source, artifacts, nil); !errors.Is(err, cardinput.ErrIncompleteArtifact) {
 			t.Fatalf("metadata %q build error = %v, want incomplete artefact", metadataJSON, err)
 		}

@@ -230,7 +230,7 @@ func TestEvidenceCaptureAtomicallyReplacesSymlinkLeaf(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(dir, "response.raw")); err != nil {
 		t.Fatal(err)
 	}
-	capture := completeCapture(Input{AssetID: "synthetic"}, appleEvidenceProvider, appleEvidenceOperation, evidenceCoordinateVariant, "", []byte("request"), []byte("response"), 0, parsedEvidence{})
+	capture := completeCapture(Input{AssetID: "synthetic"}, appleEvidenceProvider, appleEvidenceOperation, evidenceCoordinateVariant, "", SelectionPolicy{}, []byte("request"), []byte("response"), 0, parsedEvidence{})
 	if err := writeEvidenceCapture(dir, &capture); err != nil {
 		t.Fatal(err)
 	}

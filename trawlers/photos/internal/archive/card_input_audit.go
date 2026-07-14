@@ -17,6 +17,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/cardinput"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/imagemetadata"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -66,10 +67,11 @@ type CardInputAuditInventoryRow struct {
 
 type CardInputAuditInspectOptions struct {
 	CardInputAuditInventoryOptions
-	CacheDir string
-	AssetIDs []string
-	Model    string
-	ModelURL string
+	CacheDir                string
+	AssetIDs                []string
+	Model                   string
+	ModelURL                string
+	PlaceEvidenceOperations []place.CheckedOperation
 }
 
 type CardInputAuditInspection struct {
@@ -299,17 +301,22 @@ func inspectCardInput(ctx context.Context, db *sql.DB, complete bool, options Ca
 		inspection.StopReason = cardInputAuditStopMissingCurrentStill
 		return inspection, nil
 	}
-	if input.HasLocation {
+	evidence, evidenceOK := checkedPlaceEvidence(options.CacheDir, input, options.PlaceEvidenceOperations)
+	if !evidenceOK {
 		inspection.StopReason = cardInputAuditStopMissingPlace
 		return inspection, nil
 	}
-	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256)
+	source, artifacts := cardInputAuditFacts(input, original, metadata, current, proofSHA256, options.PlaceEvidenceOperations)
 	image, err := os.ReadFile(path)
 	if err != nil {
 		return CardInputAuditInspection{}, fmt.Errorf("read checked current still: %w", err)
 	}
-	prepared, err := renderPreparedCardRequest(source, artifacts, nil, image, classifier)
+	prepared, err := renderPreparedCardRequest(source, artifacts, evidence, image, classifier)
 	if err != nil {
+		if isPlaceEvidenceError(err) {
+			inspection.StopReason = cardInputAuditStopMissingPlace
+			return inspection, nil
+		}
 		return CardInputAuditInspection{}, err
 	}
 	cardJSON, err := protojson.MarshalOptions{Indent: "  "}.Marshal(prepared.Input.Input)
@@ -480,7 +487,7 @@ func cardInputAuditCheckedOriginal(input classifyInput, cacheRoot string) (class
 	return classifyResource{}, "", "", false, errors.New("checked PhotoKit original has no matching archive resource")
 }
 
-func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {
+func cardInputAuditFacts(input classifyInput, original classifyResource, metadata imagemetadata.Artifacts, current photos.CurrentStillFact, proofSHA256 string, operations []place.CheckedOperation) (cardinput.SourceFacts, cardinput.CheckedArtifacts) {
 	originalUTI := strings.TrimSpace(original.UTI)
 	if originalUTI == "" {
 		var sourceMetadata struct {
@@ -497,6 +504,11 @@ func cardInputAuditFacts(input classifyInput, original classifyResource, metadat
 	if strings.TrimSpace(input.TimezoneName) != "" {
 		timezone := input.TimezoneName
 		source.Timezone = &timezone
+	}
+	if input.HasLocation {
+		accuracy := input.AccuracyMeters
+		source.Location = &cardinput.LocationFact{Latitude: input.Latitude, Longitude: input.Longitude, HorizontalAccuracyMeters: &accuracy}
+		source.RequiredPlaceOperations = cardPlaceOperationNames(operations)
 	}
 	for _, album := range input.Albums {
 		source.Albums = append(source.Albums, cardinput.AlbumFact{Title: album.AlbumTitle, Kind: album.AlbumKind})
