@@ -111,6 +111,22 @@ import Testing
   #expect(response.failures.isEmpty)
 }
 
+@Test func processClientScopedSearchKeepsTheRequestedSourceIdentity() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  let response = try await ProcessTrawlClient(
+    binaryURL: binary,
+    receiveReceipt: { receipt in
+      #expect(receipt.arguments == ["__app", "search", "--source", "telegram", "hello"])
+      #expect(!receipt.stdout.isEmpty)
+    }
+  ).search("hello", source: "telegram")
+
+  #expect(response.sources.map(\.sourceID) == ["telegram"])
+  #expect(response.sources.map(\.displayName) == ["Telegram"])
+  #expect(response.hits.map(\.sourceID) == ["telegram"])
+  #expect(response.hits.map(\.openRef) == ["telegram:message/example-1"])
+}
+
 @Test func productSyntheticStatusIncludesEveryWorkspaceSourceAndAnOverflowNode() async throws {
   let helper = try #require(developmentSyntheticBinary())
   let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
