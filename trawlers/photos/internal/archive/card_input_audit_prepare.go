@@ -48,7 +48,7 @@ func PrepareCardInputAudit(ctx context.Context, options CardInputAuditPrepareOpt
 	if err != nil {
 		return CardInputAuditPreparation{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return CardInputAuditPreparation{}, err

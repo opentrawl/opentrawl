@@ -190,7 +190,7 @@ func runApprovedCard(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		defer db.Close()
+		defer func() { _ = db.Close() }()
 		client, err := model.New(model.Config{BaseURL: config.BaseURL, Model: config.Model, BearerKeyEnv: config.BearerKeyEnv})
 		if err != nil {
 			return err
@@ -464,7 +464,7 @@ func readCardInputAuditSelection(path string) (cardInputAuditSelection, error) {
 	if err != nil {
 		return cardInputAuditSelection{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	decoder := json.NewDecoder(file)
 	decoder.DisallowUnknownFields()
 	var selection cardInputAuditSelection

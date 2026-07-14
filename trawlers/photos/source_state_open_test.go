@@ -206,13 +206,13 @@ func TestIncompleteSnapshotHasNoSuccessfulCrawlerReport(t *testing.T) {
 	}
 	t.Logf("boundary=crawler_sync input=%s", input)
 
-	humanStdout, humanStderr, humanCode := captureRunWithCrawler(t, []string{"sync"}, New())
+	humanStdout, humanStderr, humanCode := captureRun(t, []string{"sync"})
 	t.Logf("boundary=crawler_sync_human output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", humanStdout, humanStderr, humanCode)
 	if humanCode == 0 || !strings.Contains(humanStderr, "audit was recorded but source state was not changed") {
 		t.Fatalf("human incomplete sync code=%d stdout=%q stderr=%q", humanCode, humanStdout, humanStderr)
 	}
 
-	jsonStdout, jsonStderr, jsonCode := captureRunWithCrawler(t, []string{"sync", "--json"}, New())
+	jsonStdout, jsonStderr, jsonCode := captureRun(t, []string{"sync", "--json"})
 	t.Logf("boundary=crawler_sync_json output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", jsonStdout, jsonStderr, jsonCode)
 	if jsonCode == 0 || jsonStderr != "" {
 		t.Fatalf("JSON incomplete sync code=%d stdout=%q stderr=%q", jsonCode, jsonStdout, jsonStderr)
@@ -238,7 +238,7 @@ func TestIncompleteSnapshotHasNoSuccessfulCrawlerReport(t *testing.T) {
 		t.Fatalf("incomplete crawler status = %#v", status)
 	}
 
-	searchJSON, searchJSONErr, searchJSONCode := captureRunWithCrawler(t, []string{"search", "synthetic", "--json"}, New())
+	searchJSON, searchJSONErr, searchJSONCode := captureRun(t, []string{"search", "synthetic", "--json"})
 	t.Logf("boundary=crawler_search_json output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", searchJSON, searchJSONErr, searchJSONCode)
 	if searchJSONCode != 0 || searchJSONErr != "" {
 		t.Fatalf("search JSON code=%d stdout=%q stderr=%q", searchJSONCode, searchJSON, searchJSONErr)
@@ -251,19 +251,19 @@ func TestIncompleteSnapshotHasNoSuccessfulCrawlerReport(t *testing.T) {
 	if err := json.Unmarshal([]byte(searchJSON), &search); err != nil || len(search.Results) != 1 {
 		t.Fatalf("search JSON = %q, err=%v", searchJSON, err)
 	}
-	searchHuman, searchHumanErr, searchHumanCode := captureRunWithCrawler(t, []string{"search", "synthetic"}, New())
+	searchHuman, searchHumanErr, searchHumanCode := captureRun(t, []string{"search", "synthetic"})
 	t.Logf("boundary=crawler_search_human output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", searchHuman, searchHumanErr, searchHumanCode)
 	if searchHumanCode != 0 || searchHumanErr != "" || !strings.Contains(searchHuman, "synthetic.heic") {
 		t.Fatalf("search human code=%d stdout=%q stderr=%q", searchHumanCode, searchHuman, searchHumanErr)
 	}
 
 	ref := search.Results[0].Ref
-	openJSON, openJSONErr, openJSONCode := captureRunWithCrawler(t, []string{"open", ref, "--json"}, New())
+	openJSON, openJSONErr, openJSONCode := captureRun(t, []string{"open", ref, "--json"})
 	t.Logf("boundary=crawler_open_json output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", openJSON, openJSONErr, openJSONCode)
 	if openJSONCode != 0 || openJSONErr != "" || !strings.Contains(openJSON, `"state": "current"`) {
 		t.Fatalf("open JSON code=%d stdout=%q stderr=%q", openJSONCode, openJSON, openJSONErr)
 	}
-	openHuman, openHumanErr, openHumanCode := captureRunWithCrawler(t, []string{"open", ref}, New())
+	openHuman, openHumanErr, openHumanCode := captureRun(t, []string{"open", ref})
 	t.Logf("boundary=crawler_open_human output={\"stdout\":%q,\"stderr\":%q,\"code\":%d}", openHuman, openHumanErr, openHumanCode)
 	if openHumanCode != 0 || openHumanErr != "" || strings.Contains(openHuman, "Deleted upstream") {
 		t.Fatalf("open human code=%d stdout=%q stderr=%q", openHumanCode, openHuman, openHumanErr)

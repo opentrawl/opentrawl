@@ -33,7 +33,7 @@ func TestExportOriginalResourceThroughAppChecksWireInputAndOutput(t *testing.T) 
 			request.Width != 4032 || request.Height != 3024 ||
 			request.OriginalFilename != "synthetic.heic" || !request.AllowNetwork ||
 			request.TimeoutMilliseconds <= 0 {
-			t.Fatalf("request = %#v", request)
+			t.Fatalf("request = %#v", &request)
 		}
 		const original = "exact synthetic original bytes"
 		if err := os.WriteFile(request.DestinationPath, []byte(original), 0o600); err != nil {
@@ -168,7 +168,7 @@ func TestExportCurrentStillThroughAppReturnsEveryMeasuredHelperPhase(t *testing.
 			t.Fatal(err)
 		}
 		if !request.HasExpectedModification || request.ModificationUnixSeconds != 1783771200 || request.ModificationMicroseconds != 123000 {
-			t.Fatalf("wire request modification state = %#v", request)
+			t.Fatalf("wire request modification state = %#v", &request)
 		}
 		time.Sleep(time.Millisecond)
 		const current = "exact synthetic current-still bytes"
@@ -235,7 +235,7 @@ func TestExportCurrentStillThroughAppSendsNoFabricatedModification(t *testing.T)
 		t.Fatal("synthetic launch stop did not surface")
 	}
 	if wireRequest.HasExpectedModification || wireRequest.ModificationUnixSeconds != 0 || wireRequest.ModificationMicroseconds != 0 {
-		t.Fatalf("wire request fabricated a modification instant: %#v", wireRequest)
+		t.Fatalf("wire request fabricated a modification instant: %#v", &wireRequest)
 	}
 }
 

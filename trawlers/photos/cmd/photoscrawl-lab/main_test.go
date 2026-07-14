@@ -97,7 +97,7 @@ func TestCardInputAuditSnapshotsWALArchiveWithoutChangingSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	if _, err := db.Exec(`pragma journal_mode=WAL; pragma wal_autocheckpoint=0; create table fixture(value text not null); insert into fixture(value) values('synthetic');`); err != nil {
 		t.Fatal(err)
 	}

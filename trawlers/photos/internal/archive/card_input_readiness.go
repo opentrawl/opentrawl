@@ -46,13 +46,13 @@ func SelectCardInputReadyAsset(ctx context.Context, options CardInputReadinessOp
 	if err != nil {
 		return CardInputReadiness{}, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return CardInputReadiness{}, err
 	}
 	if !complete {
-		return CardInputReadiness{}, errors.New("Photos archive snapshot is not complete")
+		return CardInputReadiness{}, errors.New("photos archive snapshot is not complete")
 	}
 	input, err := selectCardInputArchiveCandidate(ctx, db.DB(), options.SourceLibraryID, options.ExcludedAssetIDs)
 	if err != nil {

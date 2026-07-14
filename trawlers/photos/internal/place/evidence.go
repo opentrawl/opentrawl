@@ -226,7 +226,7 @@ func runEvidenceOperations(ctx context.Context, opts EvidenceOptions, runner evi
 		return EvidenceResult{}, errors.New("place evidence output and cache dirs are required")
 	}
 	if runner.callApple == nil {
-		return EvidenceResult{}, errors.New("Apple evidence boundary is required")
+		return EvidenceResult{}, errors.New("apple evidence boundary is required")
 	}
 	if err := validateConfiguredGeoapify(opts.Geoapify); err != nil {
 		return EvidenceResult{}, err

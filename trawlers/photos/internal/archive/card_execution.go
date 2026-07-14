@@ -223,7 +223,7 @@ func readCompletedFixtureCard(ctx context.Context, db *store.Store, executionID 
 	if err != nil {
 		return fixtureCardResult{}, false, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var kind, value string
 		if err := rows.Scan(&kind, &value); err != nil {

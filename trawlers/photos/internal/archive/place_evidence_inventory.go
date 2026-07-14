@@ -46,7 +46,7 @@ func ReadPlaceEvidenceInventory(ctx context.Context, archivePath, sourceLibraryI
 	archivePath = strings.TrimSpace(archivePath)
 	sourceLibraryID = strings.TrimSpace(sourceLibraryID)
 	if archivePath == "" {
-		return PlaceEvidenceInventory{}, errors.New("Photos archive path is required")
+		return PlaceEvidenceInventory{}, errors.New("photos archive path is required")
 	}
 	if sourceLibraryID == "" {
 		return PlaceEvidenceInventory{}, errors.New("source library ID is required")
@@ -62,7 +62,7 @@ func ReadPlaceEvidenceInventory(ctx context.Context, archivePath, sourceLibraryI
 		return PlaceEvidenceInventory{}, fmt.Errorf("read Photos archive schema version: %w", err)
 	}
 	if schemaVersion != SchemaVersion {
-		return PlaceEvidenceInventory{}, fmt.Errorf("Photos archive schema is %d, want %d", schemaVersion, SchemaVersion)
+		return PlaceEvidenceInventory{}, fmt.Errorf("photos archive schema is %d, want %d", schemaVersion, SchemaVersion)
 	}
 	var sourceCount int
 	if err := db.DB().QueryRowContext(ctx, `select count(*) from source_library where id = ?`, sourceLibraryID).Scan(&sourceCount); err != nil {

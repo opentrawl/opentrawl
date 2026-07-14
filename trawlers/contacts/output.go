@@ -203,28 +203,6 @@ func writeLegacyImport(req *trawlkit.Request, value legacyImportEnvelope) error 
 	}, rows)
 }
 
-func writeDoctor(req *trawlkit.Request, doctor *trawlkit.Doctor) error {
-	if doctor == nil {
-		doctor = &trawlkit.Doctor{Checks: []trawlkit.Check{}}
-	}
-	if doctor.Checks == nil {
-		doctor.Checks = []trawlkit.Check{}
-	}
-	if req.Format == ckoutput.JSON {
-		return ckoutput.Write(req.Out, req.Format, "repair", doctor)
-	}
-	checks := make([]render.Check, 0, len(doctor.Checks))
-	for _, check := range doctor.Checks {
-		checks = append(checks, render.Check{
-			Name:    check.ID,
-			State:   render.CheckState(check.State),
-			Message: check.Message,
-			Remedy:  check.Remedy,
-		})
-	}
-	return render.WriteDoctor(req.Out, checks, render.LogTail{})
-}
-
 func peopleHaveTags(people []model.Person) bool {
 	for _, person := range people {
 		if len(person.Tags) > 0 {

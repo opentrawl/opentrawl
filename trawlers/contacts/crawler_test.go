@@ -10,13 +10,12 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
-	"sync"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -31,9 +30,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-var runMu sync.Mutex
+const contactsTestRunSubcommand = "contacts-test-run"
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == contactsTestRunSubcommand {
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{New()}))
+	}
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
@@ -514,41 +516,20 @@ func testHome(t *testing.T) string {
 
 func runContacts(t *testing.T, home string, args ...string) (int, string, string) {
 	t.Helper()
-	runMu.Lock()
-	defer runMu.Unlock()
 	t.Setenv("HOME", home)
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
 	var stdout, stderr bytes.Buffer
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		_, _ = io.Copy(&stdout, stdoutR)
-	}()
-	go func() {
-		defer wg.Done()
-		_, _ = io.Copy(&stderr, stderrR)
-	}()
-	os.Stdout = stdoutW
-	os.Stderr = stderrW
-	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
-	_ = stdoutW.Close()
-	_ = stderrW.Close()
-	wg.Wait()
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-	_ = stdoutR.Close()
-	_ = stderrR.Close()
-	return code, stdout.String(), stderr.String()
+	command := exec.Command(os.Args[0], append([]string{contactsTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return 0, stdout.String(), stderr.String()
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatal(err)
+	}
+	return exitErr.ExitCode(), stdout.String(), stderr.String()
 }
 
 func sortedKeys(commands map[string]control.Command) []string {

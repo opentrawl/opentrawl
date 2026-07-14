@@ -53,7 +53,7 @@ func PrepareApprovedCardBundle(ctx context.Context, options ApprovedCardPrepareO
 	if err != nil {
 		return nil, err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	_, complete, err := cardInputAuditSnapshot(ctx, db.DB(), options.SourceLibraryID)
 	if err != nil {
 		return nil, err

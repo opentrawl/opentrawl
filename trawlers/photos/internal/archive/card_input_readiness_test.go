@@ -10,7 +10,7 @@ import (
 
 func TestSelectCardInputArchiveCandidateExcludesStoppedAsset(t *testing.T) {
 	ctx, db := cardInputAuditTestDB(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	db.SetMaxOpenConns(1)
 	seedCardInputAuditAsset(t, ctx, db, "asset:a-stopped", sourceStateCurrent, "image", `{}`)
 	seedCardInputAuditAsset(t, ctx, db, "asset:b-ready", sourceStateCurrent, "image", `{}`)

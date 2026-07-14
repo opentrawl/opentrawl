@@ -192,23 +192,23 @@ func take(units []uint16, offset *int, n int) []uint16 {
 // numbered-list paragraphs and resets on any other style.
 func prefixFor(style paragraphStyle, number *int) string {
 	indent := strings.Repeat("  ", style.indent)
-	switch {
-	case style.styleType == styleCheckbox:
+	switch style.styleType {
+	case styleCheckbox:
 		*number = 0
 		if style.checklistDone {
 			return indent + "- [x] "
 		}
 		return indent + "- [ ] "
-	case style.styleType == styleHeading:
+	case styleHeading:
 		*number = 0
 		return "## "
-	case style.styleType == styleSubheading:
+	case styleSubheading:
 		*number = 0
 		return "### "
-	case style.styleType == styleDottedList || style.styleType == styleDashedList:
+	case styleDottedList, styleDashedList:
 		*number = 0
 		return indent + "- "
-	case style.styleType == styleNumbered:
+	case styleNumbered:
 		*number++
 		return fmt.Sprintf("%s%d. ", indent, *number)
 	default:

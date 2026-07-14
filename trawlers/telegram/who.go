@@ -57,67 +57,6 @@ func (r *runtime) unknownWhoError(who string, didYouMean []store.WhoCandidate) e
 	return commandErrFields(5, "unknown_who", fmt.Errorf("unknown --who %q", who), "run trawl telegram who <name>, or search without --who to check whether matching messages exist.", fields)
 }
 
-func ambiguousWhoText(query, who string, candidates []store.WhoCandidate) string {
-	var out strings.Builder
-	fmt.Fprintf(&out, "ambiguous --who %q: %s people match.\n\n", who, render.FormatInteger(int64(len(candidates))))
-	_ = writeWhoTable(&out, candidates)
-	if retry := retrySearchExample(query, candidates); retry != "" {
-		fmt.Fprintf(&out, "\nRetry with: %s", retry)
-	}
-	return strings.TrimRight(out.String(), "\n")
-}
-
-func unknownWhoText(who string, didYouMean []store.WhoCandidate) string {
-	var out strings.Builder
-	fmt.Fprintf(&out, "unknown --who %q: no person matched.", who)
-	if len(didYouMean) == 0 {
-		out.WriteString("\nSearch without --who to check whether matching messages exist.")
-		return out.String()
-	}
-	out.WriteString("\n\nDid you mean:\n")
-	_ = writeWhoTable(&out, didYouMean)
-	if retry := retrySearchExample("", didYouMean); retry != "" {
-		fmt.Fprintf(&out, "\nRetry with: %s", retry)
-	}
-	return strings.TrimRight(out.String(), "\n")
-}
-
-func retrySearchExample(query string, candidates []store.WhoCandidate) string {
-	if len(candidates) == 0 {
-		return ""
-	}
-	who := firstRetryIdentifier(candidates[0])
-	if who == "" {
-		return ""
-	}
-	parts := []string{"trawl", "telegram", "search"}
-	if strings.TrimSpace(query) != "" {
-		parts = append(parts, quoteShellArg(query))
-	}
-	parts = append(parts, "--who", quoteShellArg(who))
-	return strings.Join(parts, " ")
-}
-
-func firstRetryIdentifier(candidate store.WhoCandidate) string {
-	for _, identifier := range candidate.Identifiers {
-		if strings.TrimSpace(identifier) != "" {
-			return identifier
-		}
-	}
-	return candidate.Who
-}
-
-func quoteShellArg(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return `""`
-	}
-	if strings.ContainsAny(value, " \t\n\"'") {
-		return strconv.Quote(value)
-	}
-	return value
-}
-
 func (r *runtime) printWho(value whoEnvelope) error {
 	candidates := make([]store.WhoCandidate, 0, len(value.Candidates))
 	for _, candidate := range value.Candidates {

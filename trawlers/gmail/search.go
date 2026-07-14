@@ -21,7 +21,7 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 	if title == "" {
 		title = "(no subject)"
 	}
-	anchorID := trawlkit.MatchAnchorID
+	var anchorID string
 	evidence := searchEvidence(hit.Matches)
 	if len(hit.Matches) > 0 {
 		anchorID = hit.Matches[0].Field

@@ -15,7 +15,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 )
 
+const whatsappTestRunSubcommand = "whatsapp-test-run"
+
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == whatsappTestRunSubcommand {
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{New()}))
+	}
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
@@ -34,7 +39,7 @@ func TestRunStatusOmitsSinceForEmptyArchive(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, stdout, stderr := captureRun(t, []string{"status", "--json"}, New())
+	code, stdout, stderr := captureRun(t, []string{"status", "--json"})
 	if code != 0 {
 		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -54,7 +59,7 @@ func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
 	stateRoot := stateRootForRun(t)
 	createAmbiguousWhoArchive(t, stateRoot)
 
-	code, stdout, stderr := captureRun(t, []string{"search", "needle", "--who", "CASEY", "--json"}, New())
+	code, stdout, stderr := captureRun(t, []string{"search", "needle", "--who", "CASEY", "--json"})
 	if code != 4 || stderr != "" {
 		t.Fatalf("ambiguous JSON code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -70,7 +75,7 @@ func TestRunSearchWhoAmbiguousRefusesWithCandidates(t *testing.T) {
 		t.Fatalf("ambiguous candidates missing from JSON:\n%s", stdout)
 	}
 
-	code, stdout, stderr = captureRun(t, []string{"search", "needle", "--who", "CASEY"}, New())
+	code, stdout, stderr = captureRun(t, []string{"search", "needle", "--who", "CASEY"})
 	if code != 4 || stdout != "" {
 		t.Fatalf("ambiguous text code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -99,7 +104,7 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 		"who group":  {"who", "155500000000001@lid"},
 	}
 	for name, args := range humanCommands {
-		code, stdout, stderr := captureRun(t, args, New())
+		code, stdout, stderr := captureRun(t, args)
 		if code != 0 {
 			t.Fatalf("%s code=%d stdout=%s stderr=%s", name, code, stdout, stderr)
 		}
@@ -120,7 +125,7 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 		"who group":  {"--json", "who", "155500000000001@lid"},
 	}
 	for name, args := range jsonCommands {
-		code, stdout, stderr := captureRun(t, args, New())
+		code, stdout, stderr := captureRun(t, args)
 		if code != 0 {
 			t.Fatalf("%s JSON code=%d stdout=%s stderr=%s", name, code, stdout, stderr)
 		}
@@ -173,7 +178,7 @@ func TestChatsGroupExposesResolvedParticipants(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, stdout, stderr := captureRun(t, []string{"chats"}, New())
+	code, stdout, stderr := captureRun(t, []string{"chats"})
 	if code != 0 {
 		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
@@ -229,7 +234,7 @@ func TestChatsKindNeverCallsBroadcastADM(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	code, stdout, stderr := captureRun(t, []string{"--json", "chats"}, New())
+	code, stdout, stderr := captureRun(t, []string{"--json", "chats"})
 	if code != 0 {
 		t.Fatalf("chats code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}

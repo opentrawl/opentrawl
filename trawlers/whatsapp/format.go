@@ -18,14 +18,6 @@ func messageRef(message store.Message) string {
 	return messageRefPrefix + message.MessageID
 }
 
-func messageRefs(messages []store.Message) []string {
-	refs := make([]string, 0, len(messages))
-	for _, message := range messages {
-		refs = append(refs, messageRef(message))
-	}
-	return refs
-}
-
 func messageWho(message store.Message) string {
 	if message.FromMe {
 		return "me"

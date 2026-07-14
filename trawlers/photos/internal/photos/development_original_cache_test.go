@@ -31,8 +31,8 @@ func TestDevelopmentCacheRejectsMissingRootWithoutCreatingIt(t *testing.T) {
 
 func TestDevelopmentCacheRejectsInternalUnsafeSymlinkAndOverlappingRoots(t *testing.T) {
 	t.Run("secondary internal volume", func(t *testing.T) {
-		root, source, inspectVolume := syntheticDevelopmentRoots(t)
-		inspectVolume = volumeInspectorFor(root, developmentVolume{Mounted: true, Local: true, External: false, Physical: true, Writable: true})
+		root, source, _ := syntheticDevelopmentRoots(t)
+		inspectVolume := volumeInspectorFor(root, developmentVolume{Mounted: true, Local: true, External: false, Physical: true, Writable: true})
 		_, err := newDevelopmentOriginalResolver(root, source, inspectVolume, unexpectedOriginalExporter(t))
 		t.Logf("boundary internal_root input=%q output=%q", root, err)
 		if err == nil || !strings.Contains(err.Error(), "external physical volume") {

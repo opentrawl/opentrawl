@@ -209,6 +209,7 @@ func (t *failingXTransport) RoundTrip(req *http.Request) (*http.Response, error)
 
 func installFailingXTransport(t *testing.T) *failingXTransport {
 	t.Helper()
+	t.Setenv("BIRDCRAWL_TEST_DISABLE_NETWORK", "1")
 	transport := &failingXTransport{}
 	oldClient, oldBaseURL := xapiHTTPClient, xapiBaseURL
 	xapiHTTPClient = &http.Client{Transport: transport}

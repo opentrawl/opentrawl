@@ -13,7 +13,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const appID = "telegram"
@@ -173,10 +172,6 @@ func (r *runtime) logDebug(event, message string) error {
 		return nil
 	}
 	return r.log.Debug(event, message)
-}
-
-func (r *runtime) logTail() render.LogTail {
-	return render.LogTail{}
 }
 
 func (c *Crawler) bindDoctorFlags(fs *flag.FlagSet) {

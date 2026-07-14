@@ -5,12 +5,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"flag"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -26,7 +28,16 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+const photosTestRunSubcommand = "photos-test-run"
+
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == photosTestRunSubcommand {
+		source := New()
+		if provider := testSnapshotProviderFromEnv(); provider != nil {
+			source.snapshotProvider = provider
+		}
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{source}))
+	}
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		source := New()
 		if provider := testSnapshotProviderFromEnv(); provider != nil {
@@ -700,49 +711,20 @@ func TestClassifyLimitContractIsUsageError(t *testing.T) {
 }
 
 func captureRun(t *testing.T, args []string) (string, string, int) {
-	return captureRunWithCrawler(t, args, New())
-}
-
-func captureRunWithCrawler(t *testing.T, args []string, source trawlkit.Crawler) (string, string, int) {
 	t.Helper()
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	stdoutR, stdoutW, err := os.Pipe()
-	if err != nil {
+	var stdout, stderr bytes.Buffer
+	command := exec.Command(os.Args[0], append([]string{photosTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return stdout.String(), stderr.String(), 0
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatal(err)
 	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = stdoutW
-	os.Stderr = stderrW
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
-	}()
-	code := trawlkit.Run(args, []trawlkit.Crawler{source})
-	if err := stdoutW.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := stderrW.Close(); err != nil {
-		t.Fatal(err)
-	}
-	stdout, err := io.ReadAll(stdoutR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderr, err := io.ReadAll(stderrR)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := stdoutR.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if err := stderrR.Close(); err != nil {
-		t.Fatal(err)
-	}
-	return string(stdout), string(stderr), code
+	return stdout.String(), stderr.String(), exitErr.ExitCode()
 }
 
 func commandHasFlag(command control.Command, name string) bool {

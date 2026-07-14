@@ -39,19 +39,6 @@ type classifyPlaceKeyState struct {
 	resolved       *classifyPlaceContext
 }
 
-func prepareClassifyPlaces(ctx context.Context, db *store.Store, paths Paths, inputs []classifyInput, now func() time.Time, result *ClassifyResult, logger classifyLogger) ([]classifyInput, error) {
-	knownPlaces, err := loadKnownPlacesForClassify(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	resolver := newClassifyPlaceResolver(paths)
-	pending, err := loadPlacePendingInputs(ctx, db, resolver, classifyPlacePendingKeyLimit)
-	if err != nil {
-		return nil, err
-	}
-	return resolveClassifyPlaces(ctx, db, inputs, pending, knownPlaces, resolver, now, result, logger)
-}
-
 func newClassifyPlaceResolver(paths Paths) classifyPlaceResolver {
 	resolver := place.NewResolver(place.ResolverOptions{
 		CacheDir:           paths.PlaceContextCacheDir(),
@@ -65,10 +52,6 @@ func newClassifyPlaceResolver(paths Paths) classifyPlaceResolver {
 		resolveProvider: resolver.ResolveProvider,
 		sleep:           sleepClassifyPlace,
 	}
-}
-
-func loadKnownPlacesForClassify(ctx context.Context, db *store.Store) ([]KnownPlace, error) {
-	return loadKnownPlaces(ctx, db.DB())
 }
 
 func resolveClassifyPlaces(ctx context.Context, db *store.Store, inputs []classifyInput, pending []classifyInput, knownPlaces []KnownPlace, resolver classifyPlaceResolver, now func() time.Time, result *ClassifyResult, logger classifyLogger) ([]classifyInput, error) {

@@ -9,8 +9,10 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -22,7 +24,12 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 )
 
+const telegramTestRunSubcommand = "telegram-test-run"
+
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == telegramTestRunSubcommand {
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{New()}))
+	}
 	if len(os.Args) > 1 && os.Args[1] == trawlkit.HiddenWireSubcommand {
 		os.Exit(trawlkit.Run(os.Args[1:], []trawlkit.Crawler{New()}))
 	}
@@ -391,35 +398,19 @@ func runSyncJSON(t *testing.T, args ...string) syncJSONReport {
 
 func runTelecrawl(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
-	oldStdout, oldStderr := os.Stdout, os.Stderr
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderrReader, stderrWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = stdoutWriter
-	os.Stderr = stderrWriter
-	defer func() {
-		os.Stdout = oldStdout
-		os.Stderr = oldStderr
-	}()
-
 	var stdout, stderr bytes.Buffer
-	stdoutDone := copyPipe(&stdout, stdoutReader)
-	stderrDone := copyPipe(&stderr, stderrReader)
-	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
-	_ = stdoutWriter.Close()
-	_ = stderrWriter.Close()
-	if err := <-stdoutDone; err != nil {
+	command := exec.Command(os.Args[0], append([]string{telegramTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return 0, stdout.String(), stderr.String()
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
 		t.Fatal(err)
 	}
-	if err := <-stderrDone; err != nil {
-		t.Fatal(err)
-	}
-	return code, stdout.String(), stderr.String()
+	return exitErr.ExitCode(), stdout.String(), stderr.String()
 }
 
 func stateRootForRun(t *testing.T) string {
@@ -431,16 +422,6 @@ func stateRootForRun(t *testing.T) string {
 
 func archivePathForRun(stateRoot string) string {
 	return filepath.Join(stateRoot, "telegram", "telegram.db")
-}
-
-func copyPipe(dst *bytes.Buffer, src *os.File) <-chan error {
-	done := make(chan error, 1)
-	go func() {
-		_, err := io.Copy(dst, src)
-		_ = src.Close()
-		done <- err
-	}()
-	return done
 }
 
 func alterArchivedMessageText(t *testing.T, archivePath, text string) {

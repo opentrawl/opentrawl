@@ -204,20 +204,6 @@ func sourcePrefixedRef(ref string) bool {
 	return true
 }
 
-func isFrontTruncated(result searchResult) bool {
-	for _, value := range []*bool{result.SnippetFrontTruncated, result.FrontTruncated, result.TruncatedFront} {
-		if value != nil && *value {
-			return true
-		}
-	}
-	return false
-}
-
-func hasFrontTruncationMarker(snippet string) bool {
-	snippet = strings.TrimSpace(snippet)
-	return strings.HasPrefix(snippet, "\u2026") || strings.HasPrefix(snippet, "...")
-}
-
 // looksLikeBase64 filters candidate runs: 40+ chars of real base64
 // binary data virtually always carries + or = padding, while long
 // alphanumeric path segments (temp dirs, test names, content hashes

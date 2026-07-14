@@ -69,11 +69,6 @@ func usageErr(err error) error {
 	return &cliError{code: 2, name: "usage", message: err.Error(), remedy: usageRemedy, err: err}
 }
 
-func isUsageError(err error) bool {
-	var codeErr *cliError
-	return errors.As(err, &codeErr) && codeErr.name == "usage"
-}
-
 // contractError is a command failure with a machine code, human message and
 // remedy. WriteJSONErrorIfNeeded renders it as the {"error": {...}} envelope.
 func (r *runtime) contractError(code, message, remedy string) error {
@@ -88,10 +83,3 @@ func (r *runtime) contractError(code, message, remedy string) error {
 
 // loggableError keeps the health log clean: it records a command failure's
 // short machine message, never the rendered human text.
-func loggableError(err error) error {
-	var codeErr *cliError
-	if errors.As(err, &codeErr) && codeErr.message != "" {
-		return errors.New(codeErr.message)
-	}
-	return err
-}

@@ -357,27 +357,6 @@ func archiveReady(status store.Status) bool {
 	return status.Tweets > 0 && !status.LastImportAt.IsZero()
 }
 
-func newSearchEnvelope(query string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) searchEnvelope {
-	items := make([]searchResult, 0, len(results))
-	for _, result := range results {
-		ref := store.TweetRef(result.ID)
-		items = append(items, searchResult{
-			Ref:               ref,
-			ShortRef:          aliases[ref],
-			Time:              formatOptionalTime(result.CreatedAt),
-			Who:               jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
-			Where:             result.Where,
-			Snippet:           result.Snippet,
-			timeValue:         result.CreatedAt,
-			rawWho:            result.Who,
-			authorID:          result.AuthorID,
-			inReplyTo:         result.InReplyTo,
-			inReplyToAuthorID: result.InReplyToAuthorID,
-		})
-	}
-	return searchEnvelope{Query: query, Results: items, TotalMatches: total, Truncated: total > len(items), Limit: limit, ownerAuthorID: ownerAuthorID}
-}
-
 func newListEnvelope(kind string, results []store.SearchResult, total int, limit int, aliases map[string]string, ownerAuthorID string) listEnvelope {
 	items := make([]listResult, 0, len(results))
 	for _, result := range results {

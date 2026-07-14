@@ -41,13 +41,6 @@ func parseFormattedTime(value string) time.Time {
 	return time.Time{}
 }
 
-func displayRef(fullRef, shortRef string) string {
-	if strings.TrimSpace(shortRef) != "" {
-		return shortRef
-	}
-	return fullRef
-}
-
 func looksLikePhone(value string) bool {
 	value = strings.TrimSpace(value)
 	if value == "" {
