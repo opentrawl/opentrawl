@@ -42,6 +42,20 @@ enum SearchWorkspaceLayout: Equatable {
 
 enum SearchWorkspaceGeometry {
   static let wideResultsWidth = TrawlDesign.searchResultsMaximumWidth
+
+  struct WideLayout: Equatable {
+    let resultsOriginX: CGFloat
+    let reservesRecordRegion: Bool
+  }
+
+  static func layout(for workspace: SearchWorkspaceLayout) -> WideLayout {
+    switch workspace {
+    case .results, .split:
+      WideLayout(resultsOriginX: 0, reservesRecordRegion: true)
+    case .compactRecord:
+      WideLayout(resultsOriginX: 0, reservesRecordRegion: false)
+    }
+  }
 }
 
 struct SearchWorkspace: View {
@@ -110,13 +124,9 @@ struct SearchWorkspace: View {
       if isCompact {
         results.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
       } else {
-        results.frame(
-          minWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          maxHeight: .infinity,
-          alignment: .leading
-        )
+        wideWorkspace(layout: .results) {
+          Spacer(minLength: TrawlDesign.searchRecordMinimumWidth)
+        }
       }
     case .compactRecord:
       ZStack {
@@ -133,17 +143,29 @@ struct SearchWorkspace: View {
         )
       }
     case .split:
-      HStack(spacing: 0) {
-        results.frame(
-          minWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
-          maxHeight: .infinity
-        )
+      wideWorkspace(layout: .split) {
         Divider()
         ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
       }
     }
+  }
+
+  private func wideWorkspace<Preview: View>(
+    layout: SearchWorkspaceLayout,
+    @ViewBuilder preview: () -> Preview
+  ) -> some View {
+    let geometry = SearchWorkspaceGeometry.layout(for: layout)
+    return HStack(spacing: 0) {
+      results.frame(
+        minWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        idealWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        maxWidth: SearchWorkspaceGeometry.wideResultsWidth,
+        maxHeight: .infinity
+      )
+      preview()
+    }
+    .padding(.leading, geometry.resultsOriginX)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
   }
 
   private var results: some View {

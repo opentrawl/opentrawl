@@ -50,6 +50,12 @@ import Testing
 
 @Test func wideResultsColumnKeepsTheSameWidthBeforeAndAfterOpening() {
   #expect(SearchWorkspaceGeometry.wideResultsWidth == TrawlDesign.searchResultsMaximumWidth)
+  let beforeOpening = SearchWorkspaceGeometry.layout(for: .results)
+  let afterOpening = SearchWorkspaceGeometry.layout(for: .split)
+  #expect(beforeOpening.resultsOriginX == 0)
+  #expect(beforeOpening.resultsOriginX == afterOpening.resultsOriginX)
+  #expect(beforeOpening.reservesRecordRegion)
+  #expect(afterOpening.reservesRecordRegion)
 }
 
 @Test func compactRecordUsesTheSameSearchHierarchyAsTheResultsList() {
