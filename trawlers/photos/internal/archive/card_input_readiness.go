@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 )
@@ -118,8 +119,11 @@ func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetR
 	if input.SourceState != sourceStateCurrent || input.MediaType != "image" || input.HasLocation || readiness.MediaType != "image" || readiness.HasLocation {
 		return errors.New("live PhotoKit asset is not a current unlocated image in the archive")
 	}
-	if input.CreationDate != readiness.CreationDate || input.Width != readiness.PixelWidth || input.Height != readiness.PixelHeight {
-		return errors.New("live PhotoKit immutable-original facts do not match the archive asset")
+	if !sameCardInputReadinessInstant(input.CreationDate, readiness.CreationDate) {
+		return errors.New("live PhotoKit creation instant does not match the archive asset")
+	}
+	if input.Width != readiness.PixelWidth || input.Height != readiness.PixelHeight {
+		return errors.New("live PhotoKit dimensions do not match the archive asset")
 	}
 	original := input.originalRequest().Query
 	if original.OriginalFilename == "" || original.OriginalFilename != readiness.OriginalFilename || (original.OriginalUTI != "" && original.OriginalUTI != readiness.OriginalUTI) {
@@ -136,4 +140,10 @@ func validateCardInputLiveReadiness(input classifyInput, readiness photos.AssetR
 		}
 	}
 	return nil
+}
+
+func sameCardInputReadinessInstant(left, right string) bool {
+	leftInstant, leftErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(left))
+	rightInstant, rightErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(right))
+	return leftErr == nil && rightErr == nil && leftInstant.Equal(rightInstant)
 }

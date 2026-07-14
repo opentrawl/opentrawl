@@ -59,7 +59,7 @@ func TestValidateCardInputLiveReadinessBindsBothMediaBoundaries(t *testing.T) {
 		LocalIdentifier:  "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001",
 		AssetUUID:        "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE",
 		MediaType:        "image",
-		CreationDate:     "2026-07-14T12:00:00Z",
+		CreationDate:     "2026-07-14T12:00:00.000Z",
 		ModificationDate: "2026-07-14T12:00:01Z",
 		PixelWidth:       4032,
 		PixelHeight:      3024,
@@ -69,6 +69,11 @@ func TestValidateCardInputLiveReadinessBindsBothMediaBoundaries(t *testing.T) {
 	if err := validateCardInputLiveReadiness(input, readiness); err != nil {
 		t.Fatal(err)
 	}
+	readiness.CreationDate = "2026-07-14T12:00:00.001Z"
+	if err := validateCardInputLiveReadiness(input, readiness); err == nil {
+		t.Fatal("changed creation instant passed readiness")
+	}
+	readiness.CreationDate = "2026-07-14T12:00:00.000Z"
 	readiness.ModificationDate = "2026-07-14T12:00:02Z"
 	if err := validateCardInputLiveReadiness(input, readiness); err == nil {
 		t.Fatal("changed current-still freshness passed readiness")
