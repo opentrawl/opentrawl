@@ -49,10 +49,13 @@ struct SearchOverlayViewTests {
       shortRef: "return",
       timeRFC3339: "",
       time: nil,
-      who: "Avery Example",
-      where: "",
-      calendar: "",
-      snippet: "Synthetic",
+      anchorID: "match",
+      summary: ResultSummary(title: "Synthetic event", subtitle: "Avery Example"),
+      evidence: [
+        .field(
+          label: "Event match", name: "event",
+          value: [SearchTextRun(text: "Synthetic", matched: true)])
+      ],
       allDay: false,
       availability: nil,
       unread: nil
@@ -134,18 +137,20 @@ private final class MountedReturnDriver {
 
   private func dispatchReturnIfReady() {
     guard hasResultsFocus, hasKeyWindow, !didDispatchReturn, let window else { return }
-    guard let event = NSEvent.keyEvent(
-      with: .keyDown,
-      location: .zero,
-      modifierFlags: [],
-      timestamp: 0,
-      windowNumber: window.windowNumber,
-      context: nil,
-      characters: "\r",
-      charactersIgnoringModifiers: "\r",
-      isARepeat: false,
-      keyCode: 36
-    ) else {
+    guard
+      let event = NSEvent.keyEvent(
+        with: .keyDown,
+        location: .zero,
+        modifierFlags: [],
+        timestamp: 0,
+        windowNumber: window.windowNumber,
+        context: nil,
+        characters: "\r",
+        charactersIgnoringModifiers: "\r",
+        isARepeat: false,
+        keyCode: 36
+      )
+    else {
       NSApplication.shared.stop(nil)
       return
     }
@@ -226,5 +231,7 @@ private struct MountedSearchClient: TrawlClient {
       truncated: false
     )
   }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }

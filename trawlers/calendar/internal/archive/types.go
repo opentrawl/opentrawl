@@ -146,15 +146,26 @@ type Status struct {
 }
 
 type SearchResult struct {
-	Ref          string `json:"ref"`
-	ShortRef     string `json:"short_ref"`
-	Time         string `json:"time"`
-	Who          string `json:"who"`
-	Where        string `json:"where"`
-	Calendar     string `json:"calendar"`
-	Snippet      string `json:"snippet"`
-	AllDay       bool   `json:"all_day"`
-	Availability *int64 `json:"availability,omitempty"`
+	Ref          string        `json:"ref"`
+	ShortRef     string        `json:"short_ref"`
+	Time         string        `json:"time"`
+	Who          string        `json:"who"`
+	Where        string        `json:"where"`
+	Calendar     string        `json:"calendar"`
+	Snippet      string        `json:"snippet"`
+	AllDay       bool          `json:"all_day"`
+	Availability *int64        `json:"availability,omitempty"`
+	Matches      []SearchMatch `json:"-"`
+}
+
+type SearchMatch struct {
+	Field string
+	Runs  []SearchTextRun
+}
+
+type SearchTextRun struct {
+	Text    string
+	Matched bool
 }
 
 type EventDetail struct {

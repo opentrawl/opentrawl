@@ -52,7 +52,7 @@ func (c *Crawler) Info() trawlkit.Info {
 		ID:          appID,
 		Surface:     "x",
 		Aliases:     []string{"twitter"},
-		DisplayName: "X",
+		DisplayName: "Twitter (X)",
 		Headlines:   []string{"tweets", "bookmarks", "likes", "mentions"},
 		Config:      &c.cfg,
 		Privacy: control.Privacy{

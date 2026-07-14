@@ -119,8 +119,18 @@ func (c *testCrawler) Search(ctx context.Context, req *Request, q Query) (Search
 	if c.searchFn != nil {
 		return c.searchFn(ctx, req, q)
 	}
-	results := []Hit{{Ref: c.Info().ID + ":1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}
+	results := []Hit{testSearchHit(c.Info().ID+":1", "Test result", q.Text)}
 	return SearchResult{Results: results, TotalMatches: len(results)}, nil
+}
+
+func testSearchHit(ref, title, matchingText string) Hit {
+	return Hit{
+		Ref:      ref,
+		Time:     time.Unix(0, 0).UTC(),
+		AnchorID: MatchAnchorID,
+		Summary:  ResultSummary{Title: title},
+		Evidence: []EvidenceFragment{TextMatch("Matching text", matchingText)},
+	}
 }
 
 func (c *testCrawler) Who(ctx context.Context, req *Request, person string) ([]whomatch.Candidate, error) {
@@ -176,7 +186,7 @@ func (c *testStatusCrawler) Verbs() []Verb {
 
 func (c *testSearchCrawler) Search(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 	return SearchResult{
-		Results:      []Hit{{Ref: c.Info().ID + ":1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+		Results:      []Hit{testSearchHit(c.Info().ID+":1", "Test result", q.Text)},
 		TotalMatches: 3,
 		Truncated:    true,
 	}, nil
@@ -606,7 +616,7 @@ func TestRunDBOpenNilStoreAndReadOnly(t *testing.T) {
 		if _, err := req.Store.DB().ExecContext(ctx, `create table should_fail(id text)`); err == nil {
 			t.Fatal("read store accepted a write")
 		}
-		results := []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}
+		results := []Hit{testSearchHit("testcrawl:1", "Test result", q.Text)}
 		return SearchResult{Results: results, TotalMatches: len(results)}, nil
 	}
 	code, stdout, _ = runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
@@ -732,7 +742,7 @@ func TestRunSearchJSONEnvelopeAndFlags(t *testing.T) {
 	var got Query
 	source := &testCrawler{searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 		got = q
-		results := []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}
+		results := []Hit{testSearchHit("testcrawl:1", "Test result", q.Text)}
 		return SearchResult{Results: results, TotalMatches: 12, Truncated: true}, nil
 	}}
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "--json", "hello"}, source, runOptions{})
@@ -847,7 +857,7 @@ func TestRunSearchTextShowsTruncationSummary(t *testing.T) {
 	createArchive(t, stateRoot)
 	source := &testCrawler{searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 		return SearchResult{
-			Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+			Results:      []Hit{testSearchHit("testcrawl:1", "Test result", q.Text)},
 			TotalMatches: 3,
 			Truncated:    true,
 		}, nil
@@ -885,7 +895,7 @@ func TestRunSearchTruncationHintUsesManifestFlags(t *testing.T) {
 			name: "who-capable",
 			source: &testCrawler{searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 				return SearchResult{
-					Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}},
+					Results:      []Hit{testSearchHit("testcrawl:1", "Test result", q.Text)},
 					TotalMatches: 3,
 					Truncated:    true,
 				}, nil
@@ -1037,7 +1047,7 @@ func TestRunSpineSearchVerbPreservesPositionalQuery(t *testing.T) {
 		}},
 		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 			got = q
-			return SearchResult{Results: []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Snippet: q.Text}}, TotalMatches: 1}, nil
+			return SearchResult{Results: []Hit{testSearchHit("testcrawl:1", "Test result", q.Text)}, TotalMatches: 1}, nil
 		},
 	}
 	code, stdout, stderr := runForTestAt(stateRoot, []string{"search", "exact", "--json"}, source, runOptions{})
@@ -1455,7 +1465,7 @@ func TestRunSearchWhoResolutionJSONContract(t *testing.T) {
 		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 			got = q
 			return SearchResult{
-				Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Who: "Ada Example", Snippet: q.Text}},
+				Results:      []Hit{testSearchHit("testcrawl:1", "Ada Example", q.Text)},
 				TotalMatches: 1,
 			}, nil
 		},
@@ -1497,7 +1507,7 @@ func TestRunSearchWhoTextHeadingShowsResolvedPerson(t *testing.T) {
 		},
 		searchFn: func(ctx context.Context, req *Request, q Query) (SearchResult, error) {
 			return SearchResult{
-				Results:      []Hit{{Ref: "testcrawl:1", Time: time.Unix(0, 0).UTC(), Who: "Ada Example", Snippet: q.Text}},
+				Results:      []Hit{testSearchHit("testcrawl:1", "Ada Example", q.Text)},
 				TotalMatches: 1,
 			}, nil
 		},

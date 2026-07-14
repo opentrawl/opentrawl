@@ -8,6 +8,11 @@
 // For information on using the generated types, please see the documentation:
 //   https://github.com/apple/swift-protobuf/
 
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#else
+import Foundation
+#endif
 import SwiftProtobuf
 
 // If the compiler emits an error on this type, it is because this file
@@ -32,6 +37,8 @@ public nonisolated struct Trawl_Presentation_V1_PresentationDocument: Sendable {
   public var actions: [Trawl_Presentation_V1_Action] = []
 
   public var facts: [Trawl_Presentation_V1_Fact] = []
+
+  public var primaryAnchorID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -84,6 +91,8 @@ public nonisolated struct Trawl_Presentation_V1_Block: Sendable {
     }
     set {content = .resource(newValue)}
   }
+
+  public var anchorID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -144,6 +153,8 @@ public nonisolated struct Trawl_Presentation_V1_Field: Sendable {
 
   public var display: String = String()
 
+  public var anchorID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -171,6 +182,8 @@ public nonisolated struct Trawl_Presentation_V1_Row: Sendable {
   public var role: Trawl_Presentation_V1_Row.Role = .unspecified
 
   public var cells: [Trawl_Presentation_V1_Cell] = []
+
+  public var anchorID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -239,6 +252,8 @@ public nonisolated struct Trawl_Presentation_V1_Resource: Sendable {
   public var ref: String = String()
 
   public var metadata: [Trawl_Presentation_V1_Field] = []
+
+  public var anchorID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -389,13 +404,45 @@ public nonisolated struct Trawl_Presentation_V1_Fact: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_Presentation_V1_ResourceRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var sourceID: String = String()
+
+  public var resourceRef: String = String()
+
+  public var maxBytes: UInt32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Presentation_V1_ResourceResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var resourceRef: String = String()
+
+  public var contentType: String = String()
+
+  public var data: Data = Data()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "trawl.presentation.v1"
 
 nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PresentationDocument"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}blocks\0\u{1}actions\0\u{1}facts\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}blocks\0\u{1}actions\0\u{1}facts\0\u{3}primary_anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -407,6 +454,7 @@ nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.blocks) }()
       case 3: try { try decoder.decodeRepeatedMessageField(value: &self.actions) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.facts) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.primaryAnchorID) }()
       default: break
       }
     }
@@ -425,6 +473,9 @@ nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.
     if !self.facts.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.facts, fieldNumber: 4)
     }
+    if !self.primaryAnchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.primaryAnchorID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -433,6 +484,7 @@ nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.
     if lhs.blocks != rhs.blocks {return false}
     if lhs.actions != rhs.actions {return false}
     if lhs.facts != rhs.facts {return false}
+    if lhs.primaryAnchorID != rhs.primaryAnchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -440,7 +492,7 @@ nonisolated extension Trawl_Presentation_V1_PresentationDocument: SwiftProtobuf.
 
 nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Block"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}heading\0\u{1}prose\0\u{1}fields\0\u{1}table\0\u{1}resource\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}heading\0\u{1}prose\0\u{1}fields\0\u{1}table\0\u{1}resource\0\u{3}anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -513,6 +565,7 @@ nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftP
           self.content = .resource(v)
         }
       }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
       default: break
       }
     }
@@ -546,11 +599,15 @@ nonisolated extension Trawl_Presentation_V1_Block: SwiftProtobuf.Message, SwiftP
     }()
     case nil: break
     }
+    if !self.anchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Presentation_V1_Block, rhs: Trawl_Presentation_V1_Block) -> Bool {
     if lhs.content != rhs.content {return false}
+    if lhs.anchorID != rhs.anchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -648,7 +705,7 @@ nonisolated extension Trawl_Presentation_V1_FieldGroup: SwiftProtobuf.Message, S
 
 nonisolated extension Trawl_Presentation_V1_Field: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Field"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0\u{1}display\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0\u{1}display\0\u{3}anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -658,6 +715,7 @@ nonisolated extension Trawl_Presentation_V1_Field: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.label) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.display) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
       default: break
       }
     }
@@ -670,12 +728,16 @@ nonisolated extension Trawl_Presentation_V1_Field: SwiftProtobuf.Message, SwiftP
     if !self.display.isEmpty {
       try visitor.visitSingularStringField(value: self.display, fieldNumber: 2)
     }
+    if !self.anchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Presentation_V1_Field, rhs: Trawl_Presentation_V1_Field) -> Bool {
     if lhs.label != rhs.label {return false}
     if lhs.display != rhs.display {return false}
+    if lhs.anchorID != rhs.anchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -718,7 +780,7 @@ nonisolated extension Trawl_Presentation_V1_Table: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Trawl_Presentation_V1_Row: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Row"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}cells\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}cells\0\u{3}anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -728,6 +790,7 @@ nonisolated extension Trawl_Presentation_V1_Row: SwiftProtobuf.Message, SwiftPro
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.role) }()
       case 2: try { try decoder.decodeRepeatedMessageField(value: &self.cells) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
       default: break
       }
     }
@@ -740,12 +803,16 @@ nonisolated extension Trawl_Presentation_V1_Row: SwiftProtobuf.Message, SwiftPro
     if !self.cells.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.cells, fieldNumber: 2)
     }
+    if !self.anchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Trawl_Presentation_V1_Row, rhs: Trawl_Presentation_V1_Row) -> Bool {
     if lhs.role != rhs.role {return false}
     if lhs.cells != rhs.cells {return false}
+    if lhs.anchorID != rhs.anchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -787,7 +854,7 @@ nonisolated extension Trawl_Presentation_V1_Cell: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Trawl_Presentation_V1_Resource: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Resource"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}label\0\u{1}ref\0\u{1}metadata\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}label\0\u{1}ref\0\u{1}metadata\0\u{3}anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -799,6 +866,7 @@ nonisolated extension Trawl_Presentation_V1_Resource: SwiftProtobuf.Message, Swi
       case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.ref) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.metadata) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
       default: break
       }
     }
@@ -817,6 +885,9 @@ nonisolated extension Trawl_Presentation_V1_Resource: SwiftProtobuf.Message, Swi
     if !self.metadata.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.metadata, fieldNumber: 4)
     }
+    if !self.anchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -825,6 +896,7 @@ nonisolated extension Trawl_Presentation_V1_Resource: SwiftProtobuf.Message, Swi
     if lhs.label != rhs.label {return false}
     if lhs.ref != rhs.ref {return false}
     if lhs.metadata != rhs.metadata {return false}
+    if lhs.anchorID != rhs.anchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -938,4 +1010,84 @@ nonisolated extension Trawl_Presentation_V1_Fact: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Trawl_Presentation_V1_Fact.Kind: SwiftProtobuf._ProtoNameProviding {
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0KIND_UNSPECIFIED\0\u{1}KIND_TRUNCATION\0\u{1}KIND_PROVENANCE\0\u{1}KIND_WARNING\0\u{1}KIND_ERROR\0")
+}
+
+nonisolated extension Trawl_Presentation_V1_ResourceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResourceRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}resource_ref\0\u{3}max_bytes\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.sourceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.resourceRef) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.maxBytes) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.sourceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.sourceID, fieldNumber: 1)
+    }
+    if !self.resourceRef.isEmpty {
+      try visitor.visitSingularStringField(value: self.resourceRef, fieldNumber: 2)
+    }
+    if self.maxBytes != 0 {
+      try visitor.visitSingularUInt32Field(value: self.maxBytes, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_ResourceRequest, rhs: Trawl_Presentation_V1_ResourceRequest) -> Bool {
+    if lhs.sourceID != rhs.sourceID {return false}
+    if lhs.resourceRef != rhs.resourceRef {return false}
+    if lhs.maxBytes != rhs.maxBytes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Presentation_V1_ResourceResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResourceResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resource_ref\0\u{3}content_type\0\u{1}data\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.resourceRef) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.contentType) }()
+      case 3: try { try decoder.decodeSingularBytesField(value: &self.data) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.resourceRef.isEmpty {
+      try visitor.visitSingularStringField(value: self.resourceRef, fieldNumber: 1)
+    }
+    if !self.contentType.isEmpty {
+      try visitor.visitSingularStringField(value: self.contentType, fieldNumber: 2)
+    }
+    if !self.data.isEmpty {
+      try visitor.visitSingularBytesField(value: self.data, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Presentation_V1_ResourceResponse, rhs: Trawl_Presentation_V1_ResourceResponse) -> Bool {
+    if lhs.resourceRef != rhs.resourceRef {return false}
+    if lhs.contentType != rhs.contentType {return false}
+    if lhs.data != rhs.data {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
 }

@@ -58,6 +58,10 @@ func openArchive(ctx context.Context, path string) (*store.Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return db, nil
 }
 

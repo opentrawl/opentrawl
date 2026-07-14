@@ -34,7 +34,11 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return nil, err
 	}
-	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentation(value)}
+	resource, err := c.presentationResource(ctx, req, machine.GetRef())
+	if err != nil {
+		return nil, err
+	}
+	record := &openv1.OpenRecord{SourceId: c.Info().ID, OpenRef: machine.GetRef(), Data: data, Presentation: projectOpenPresentationWithResource(value, resource)}
 	if err := openrecord.Validate(record); err != nil {
 		return nil, err
 	}
@@ -255,24 +259,29 @@ func recordFloat64(value float64) *float64 { return &value }
 func recordBool(value bool) *bool          { return &value }
 
 func projectOpenPresentation(value archive.OpenResult) *presentationv1.PresentationDocument {
+	return projectOpenPresentationWithResource(value, nil)
+}
+
+func projectOpenPresentationWithResource(value archive.OpenResult, resource *presentationv1.Resource) *presentationv1.PresentationDocument {
 	record := projectOpenRecord(value)
 	title := strings.TrimSpace(record.Model.GetSummary())
 	if title == "" {
 		title = "Photo"
 	}
 	fields := make([]*presentationv1.Field, 0, 12)
+	appendPresentationFieldWithAnchor(&fields, "Photo summary", record.Model.GetSummary(), "summary")
 	mechanical := record.Mechanical
 	if mechanical != nil {
 		if captured := mechanical.Captured; captured != nil {
 			capturedAt := presentation.MustTimestamp(captured.Local)
 			appendPresentationField(&fields, "Captured local time", capturedAt)
 		}
-		appendPresentationField(&fields, "Media", formatPresentationMedia(mechanical.Media))
-		appendPresentationField(&fields, "Place", formatPresentationPlace(mechanical.Place))
+		appendPresentationFieldWithAnchor(&fields, "Media", formatPresentationMedia(mechanical.Media), "media")
+		appendPresentationFieldWithAnchor(&fields, "Place", formatPresentationPlace(mechanical.Place), "place")
 		appendPresentationField(&fields, "GPS", formatPresentationGPS(mechanical.Gps))
-		appendPresentationField(&fields, "Address", mechanical.GetAddress())
-		appendPresentationField(&fields, "Known place", formatPresentationKnownPlace(mechanical.KnownPlace))
-		appendPresentationField(&fields, "Venue", formatPresentationVenue(mechanical.Venue))
+		appendPresentationFieldWithAnchor(&fields, "Address", mechanical.GetAddress(), "address")
+		appendPresentationFieldWithAnchor(&fields, "Known place", formatPresentationKnownPlace(mechanical.KnownPlace), "known-place")
+		appendPresentationFieldWithAnchor(&fields, "Venue", formatPresentationVenue(mechanical.Venue), "venue")
 		appendPresentationField(&fields, "Camera", formatPresentationCamera(mechanical.Camera))
 		albumTitles := make([]string, 0, len(mechanical.Albums))
 		for _, album := range mechanical.Albums {
@@ -280,26 +289,44 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 				albumTitles = append(albumTitles, strings.TrimSpace(album.Title))
 			}
 		}
-		appendPresentationField(&fields, "Albums", strings.Join(albumTitles, ", "))
+		appendPresentationFieldWithAnchor(&fields, "Albums", strings.Join(albumTitles, ", "), "album")
+		for _, signal := range value.Mechanical.Signals {
+			appendPresentationFieldWithAnchor(&fields, "Photo signal", signal.Label, signal.AnchorID)
+		}
 		if original := mechanical.Original; original != nil {
-			appendPresentationField(&fields, "Original filename", original.GetFilename())
+			if filename := strings.TrimSpace(original.GetFilename()); filename != "" {
+				fields = append(fields, &presentationv1.Field{Label: "Original filename", Display: filename, AnchorId: "filename"})
+			}
 			if original.Bytes != nil {
 				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: presentation.Bytes(*original.Bytes)})
 			}
 			appendPresentationField(&fields, "Availability", original.GetAvailability())
 		}
 	}
-	blocks := make([]*presentationv1.Block, 0, 3)
+	blocks := make([]*presentationv1.Block, 0, 5)
+	blocks = append(blocks, &presentationv1.Block{AnchorId: "asset-details", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
+	if resource != nil {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Resource{Resource: resource}})
+	}
+	if filenames := strings.Join(value.Mechanical.Filenames, "\n"); strings.TrimSpace(filenames) != "" {
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "filenames", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: filenames}}})
+	}
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
+	if strings.TrimSpace(record.Model.GetDescription()) != "" || strings.TrimSpace(record.Model.GetOcrText()) != "" {
+		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Photo text"}}})
+	}
 	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "description", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
 	}
 	if ocr := strings.TrimSpace(record.Model.GetOcrText()); ocr != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "ocr", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
 	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if uncertainties := strings.Join(record.Model.Uncertainties, "\n"); strings.TrimSpace(uncertainties) != "" {
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "uncertainty", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: uncertainties}}})
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: "asset-details"}
 	if banner := strings.TrimSpace(record.Stale.GetBanner()); banner != "" {
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: banner})
 	}
@@ -308,12 +335,21 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 			document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: uncertainty})
 		}
 	}
+	if value.Mechanical.SignalsTruncated {
+		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Photo signals are truncated."})
+	}
 	return document
 }
 
 func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
 	if value = strings.TrimSpace(value); value != "" {
 		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
+	}
+}
+
+func appendPresentationFieldWithAnchor(fields *[]*presentationv1.Field, label, value, anchorID string) {
+	if value = strings.TrimSpace(value); value != "" {
+		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value, AnchorId: anchorID})
 	}
 }
 

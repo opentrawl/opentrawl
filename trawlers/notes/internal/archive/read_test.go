@@ -102,6 +102,28 @@ func TestSearchExcludesNotesDroppedFromTheNotesTable(t *testing.T) {
 	}
 }
 
+func TestSearchIdentifiesTitleOnlyMatch(t *testing.T) {
+	ctx := context.Background()
+	st := openArchive(t)
+	defer func() { _ = st.Close() }()
+	note := archive.Note{ID: "note-title", Title: "Alpha"}
+	applyBatch(t, st, note, []archive.BodyInsert{bodyInsert("note-title", "ordinary synthetic body", notesdb.AppleDateFloat(20))})
+	results, total, err := st.Search(ctx, "Alpha", archive.SearchOptions{Limit: 20})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(results) != 1 || len(results[0].Matches) != 1 || results[0].Matches[0].Field != "title" {
+		t.Fatalf("title match = %#v, total=%d", results, total)
+	}
+	matched := false
+	for _, run := range results[0].Matches[0].Runs {
+		matched = matched || run.Matched
+	}
+	if !matched {
+		t.Fatalf("title match is not marked: %#v", results[0].Matches)
+	}
+}
+
 func openArchive(t *testing.T) *archive.Store {
 	t.Helper()
 	st, err := archive.Open(context.Background(), filepath.Join(t.TempDir(), "notes.db"))

@@ -78,7 +78,7 @@ func (r *Runtime) canonicalSearch(sources []federation.SearchSource, query trawl
 }
 
 func (r *Runtime) canonicalOpen(sources []federation.OpenSource, sourceID, sourceRef, requestedRef string) *openv1.OpenResponse {
-	response := federation.Open(r.ctx, sources, sourceID, sourceRef)
+	response := federation.Open(r.ctx, sources, sourceID, sourceRef, "")
 	response.RequestedRef = requestedRef
 	if r.canonicalObserver != nil {
 		r.canonicalObserver.observeOpen(sources, sourceID, sourceRef, response)
@@ -140,7 +140,7 @@ func statusFromFederation(status *federationv1.SourceStatus) (StatusEnvelope, er
 		})
 	}
 	converted := StatusEnvelope{
-		AppID: status.GetAppId(), Surface: status.GetManifest().GetSurface(), State: status.GetState(), Summary: status.GetSummary(),
+		AppID: status.GetAppId(), Surface: status.GetManifest().GetDisplayName(), State: status.GetState(), Summary: status.GetSummary(),
 		DatabasePath: status.GetDatabasePath(), Databases: databases, LastSyncAt: status.GetLastSyncRfc3339(), LastImportAt: status.GetLastImportRfc3339(), Counts: counts,
 	}
 	if freshness := status.GetFreshness(); freshness != nil {
@@ -188,7 +188,7 @@ func searchRowsFromResponse(sources []Source, response *federationv1.SearchRespo
 		parsed, timeOK := parseSearchTime(hit.GetTimeRfc3339())
 		rows = append(rows, SearchRow{
 			Source: hit.GetSourceId(), Ref: hit.GetOpenRef(), ShortRef: hit.GetShortRef(), Time: hit.GetTimeRfc3339(), AllDay: hit.GetAllDay(),
-			Who: hit.GetWho(), Where: hit.GetWhere(), Calendar: hit.GetCalendar(), Snippet: hit.GetSnippet(), Availability: hit.Availability,
+			AnchorID: hit.GetAnchorId(), Summary: trawlkit.ResultSummary{Title: hit.GetSummary().GetTitle(), Subtitle: hit.GetSummary().GetSubtitle()}, Evidence: searchEvidenceFromProto(hit.GetEvidence()), Availability: hit.Availability,
 			surface: sourceHumanName(source), sourceShortRefs: hasCapability(source, "short_refs"), parsedTime: parsed, timeOK: timeOK,
 		})
 	}
@@ -201,6 +201,38 @@ func searchRowsFromResponse(sources []Source, response *federationv1.SearchRespo
 		more = 0
 	}
 	return mergedSearchResult{Rows: rows, TotalMatches: total, Truncated: response.GetTruncated(), More: more}
+}
+
+func searchEvidenceFromProto(values []*federationv1.EvidenceFragment) []trawlkit.EvidenceFragment {
+	out := make([]trawlkit.EvidenceFragment, 0, len(values))
+	for _, value := range values {
+		if value == nil {
+			continue
+		}
+		fragment := trawlkit.EvidenceFragment{Label: value.GetLabel()}
+		switch content := value.Content.(type) {
+		case *federationv1.EvidenceFragment_Text:
+			fragment.Text = &trawlkit.TextEvidence{Runs: searchTextRunsFromProto(content.Text.GetRuns())}
+		case *federationv1.EvidenceFragment_Field:
+			fragment.Field = &trawlkit.FieldEvidence{Name: content.Field.GetName(), Value: searchTextRunsFromProto(content.Field.GetValue())}
+		case *federationv1.EvidenceFragment_Media:
+			fragment.Media = &trawlkit.MediaEvidence{ResourceRef: content.Media.GetResourceRef(), Description: searchTextRunsFromProto(content.Media.GetDescription())}
+		case *federationv1.EvidenceFragment_Relation:
+			fragment.Relation = &trawlkit.RelationEvidence{Relation: content.Relation.GetRelation(), Target: searchTextRunsFromProto(content.Relation.GetTarget())}
+		}
+		out = append(out, fragment)
+	}
+	return out
+}
+
+func searchTextRunsFromProto(values []*federationv1.TextRun) []trawlkit.TextRun {
+	out := make([]trawlkit.TextRun, 0, len(values))
+	for _, value := range values {
+		if value != nil {
+			out = append(out, trawlkit.TextRun{Text: value.GetText(), Matched: value.GetMatched()})
+		}
+	}
+	return out
 }
 
 func federationOrder(mode searchSortMode) federationv1.SearchOrder {

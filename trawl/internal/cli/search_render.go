@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
@@ -37,11 +38,8 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 			Time:     row.parsedTime,
 			DateOnly: row.AllDay,
 			Source:   row.surface,
-			Who:      normalizeSelf(row.Who),
-			Where:    normalizeSelf(row.Where),
-			Calendar: row.Calendar,
 			Ref:      row.Ref,
-			Text:     row.Snippet,
+			Text:     trawlkit.SearchResultText(row.Summary, row.Evidence),
 		})
 	}
 	return items

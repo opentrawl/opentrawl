@@ -136,7 +136,11 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		if message.GetCurrent() {
 			role = presentationv1.Row_ROLE_TARGET
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: presentationWho(message.Who)}, {Display: message.Text}}})
+		row := &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: presentationWho(message.Who)}, {Display: message.Text}}}
+		if message.GetCurrent() {
+			row.AnchorId = trawlkit.MatchAnchorID
+		}
+		rows = append(rows, row)
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
 	if media := record.Message.Media; media != nil {
@@ -154,7 +158,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 			blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: mediaFields}}})
 		}
 	}
-	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: trawlkit.MatchAnchorID}
 }
 
 func presentationWho(value string) string {

@@ -69,13 +69,24 @@ type SearchResult struct {
 }
 
 type SearchHit struct {
-	Ref      string `json:"ref"`
-	Time     string `json:"time"`
-	Who      string `json:"who"`
-	Where    string `json:"where,omitempty"`
-	Snippet  string `json:"snippet"`
-	ShortRef string `json:"short_ref"`
-	Unread   bool   `json:"unread"`
+	Ref      string        `json:"ref"`
+	Time     string        `json:"time"`
+	Who      string        `json:"who"`
+	Where    string        `json:"where,omitempty"`
+	Snippet  string        `json:"snippet"`
+	ShortRef string        `json:"short_ref"`
+	Unread   bool          `json:"unread"`
+	Matches  []SearchMatch `json:"-"`
+}
+
+type SearchMatch struct {
+	Field string
+	Runs  []SearchTextRun
+}
+
+type SearchTextRun struct {
+	Text    string
+	Matched bool
 }
 
 type OpenResult struct {

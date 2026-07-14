@@ -139,8 +139,8 @@ func ProjectStatus(manifest control.Manifest, status *control.Status) (*federati
 	}
 	out := &federationv1.SourceStatus{
 		Manifest: &federationv1.SourceManifest{
-			SourceId: manifest.ID,
-			Surface:  manifest.DisplayName,
+			SourceId:    manifest.ID,
+			DisplayName: manifest.DisplayName,
 			Branding: &federationv1.Branding{
 				SymbolName:       manifest.Branding.SymbolName,
 				AccentColor:      manifest.Branding.AccentColor,
@@ -216,7 +216,7 @@ func statusFailure(status *federationv1.SourceStatus) *federationv1.SourceFailur
 	}
 	return &federationv1.SourceFailure{
 		SourceId: status.Manifest.SourceId,
-		Surface:  status.Manifest.Surface,
+		Surface:  status.Manifest.DisplayName,
 		Code:     code,
 		Message:  firstText(status.Summary, "The source is unavailable."),
 		Remedy:   "trawl doctor " + status.Manifest.SourceId,

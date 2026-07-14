@@ -64,9 +64,11 @@ func TestDeletedUpstreamSourceRendersInHumanOpen(t *testing.T) {
 func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
 	t.Parallel()
 	input := archive.SearchHit{
-		Ref:     "photos:asset/fixture",
-		Time:    "2026-07-11T10:00:00Z",
-		Snippet: "Deleted upstream · Synthetic beach card.",
+		Ref:      "photos:asset/fixture",
+		Time:     "2026-07-11T10:00:00Z",
+		Snippet:  "Deleted upstream · Synthetic beach card.",
+		AnchorID: "description",
+		Matches:  []archive.SearchMatch{{Field: "description", Runs: []archive.SearchTextRun{{Text: "Synthetic beach card.", Matched: true}}}},
 	}
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
@@ -82,8 +84,8 @@ func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("boundary=search_renderer output=%s", outputJSON)
-	if output.Snippet != input.Snippet {
-		t.Fatalf("search snippet = %q, want %q", output.Snippet, input.Snippet)
+	if output.AnchorID != "description" || len(output.Evidence) != 1 || output.Evidence[0].Field == nil || output.Evidence[0].Field.Name != "description" || len(output.Evidence[0].Field.Value) != 1 || output.Evidence[0].Field.Value[0].Text != "Synthetic beach card." || !output.Evidence[0].Field.Value[0].Matched {
+		t.Fatalf("search match = %#v", output)
 	}
 }
 
@@ -127,10 +129,12 @@ func TestStaleOpenAndSearchProjectClearly(t *testing.T) {
 	}
 
 	searchInput := archive.SearchHit{
-		Ref:     "photos:asset/stale-fixture",
-		Time:    "2026-07-10T12:00:00Z",
-		Snippet: "Synthetic beach scene.",
-		Stale:   true,
+		Ref:      "photos:asset/stale-fixture",
+		Time:     "2026-07-10T12:00:00Z",
+		Snippet:  "Synthetic beach scene.",
+		Stale:    true,
+		AnchorID: "summary",
+		Matches:  []archive.SearchMatch{{Field: "summary", Runs: []archive.SearchTextRun{{Text: "Synthetic beach scene.", Matched: true}}}},
 	}
 	searchInputJSON, err := json.Marshal(searchInput)
 	if err != nil {
@@ -146,8 +150,8 @@ func TestStaleOpenAndSearchProjectClearly(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("boundary=search_renderer output=%s", searchOutputJSON)
-	if searchOutput.Snippet != "Stale · Synthetic beach scene." {
-		t.Fatalf("search snippet = %q", searchOutput.Snippet)
+	if searchOutput.AnchorID != "summary" || len(searchOutput.Evidence) != 1 || searchOutput.Evidence[0].Field == nil || searchOutput.Evidence[0].Field.Name != "summary" || len(searchOutput.Evidence[0].Field.Value) != 1 || searchOutput.Evidence[0].Field.Value[0].Text != "Synthetic beach scene." || !searchOutput.Evidence[0].Field.Value[0].Matched {
+		t.Fatalf("search match = %#v", searchOutput)
 	}
 }
 

@@ -365,7 +365,7 @@ public nonisolated struct Trawl_Federation_V1_SourceManifest: Sendable {
 
   public var sourceID: String = String()
 
-  public var surface: String = String()
+  public var displayName: String = String()
 
   public var branding: Trawl_Federation_V1_Branding {
     get {_branding ?? Trawl_Federation_V1_Branding()}
@@ -664,6 +664,142 @@ public nonisolated struct Trawl_Federation_V1_WhoResolved: Sendable {
   public init() {}
 }
 
+public nonisolated struct Trawl_Federation_V1_ResultSummary: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var title: String = String()
+
+  public var subtitle: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_TextRun: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var text: String = String()
+
+  public var matched: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_TextEvidence: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var runs: [Trawl_Federation_V1_TextRun] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_FieldEvidence: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var name: String = String()
+
+  public var value: [Trawl_Federation_V1_TextRun] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_MediaEvidence: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var resourceRef: String = String()
+
+  public var description_p: [Trawl_Federation_V1_TextRun] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_RelationEvidence: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var relation: String = String()
+
+  public var target: [Trawl_Federation_V1_TextRun] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Trawl_Federation_V1_EvidenceFragment: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var label: String = String()
+
+  public var content: Trawl_Federation_V1_EvidenceFragment.OneOf_Content? = nil
+
+  public var text: Trawl_Federation_V1_TextEvidence {
+    get {
+      if case .text(let v)? = content {return v}
+      return Trawl_Federation_V1_TextEvidence()
+    }
+    set {content = .text(newValue)}
+  }
+
+  public var field: Trawl_Federation_V1_FieldEvidence {
+    get {
+      if case .field(let v)? = content {return v}
+      return Trawl_Federation_V1_FieldEvidence()
+    }
+    set {content = .field(newValue)}
+  }
+
+  public var media: Trawl_Federation_V1_MediaEvidence {
+    get {
+      if case .media(let v)? = content {return v}
+      return Trawl_Federation_V1_MediaEvidence()
+    }
+    set {content = .media(newValue)}
+  }
+
+  public var relation: Trawl_Federation_V1_RelationEvidence {
+    get {
+      if case .relation(let v)? = content {return v}
+      return Trawl_Federation_V1_RelationEvidence()
+    }
+    set {content = .relation(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Content: Equatable, Sendable {
+    case text(Trawl_Federation_V1_TextEvidence)
+    case field(Trawl_Federation_V1_FieldEvidence)
+    case media(Trawl_Federation_V1_MediaEvidence)
+    case relation(Trawl_Federation_V1_RelationEvidence)
+
+  }
+
+  public init() {}
+}
+
 public nonisolated struct Trawl_Federation_V1_SearchHit: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -676,14 +812,6 @@ public nonisolated struct Trawl_Federation_V1_SearchHit: Sendable {
   public var shortRef: String = String()
 
   public var timeRfc3339: String = String()
-
-  public var who: String = String()
-
-  public var `where`: String = String()
-
-  public var calendar: String = String()
-
-  public var snippet: String = String()
 
   public var allDay: Bool = false
 
@@ -705,12 +833,26 @@ public nonisolated struct Trawl_Federation_V1_SearchHit: Sendable {
   /// Clears the value of `unread`. Subsequent reads from it will return its default value.
   public mutating func clearUnread() {self._unread = nil}
 
+  public var anchorID: String = String()
+
+  public var summary: Trawl_Federation_V1_ResultSummary {
+    get {_summary ?? Trawl_Federation_V1_ResultSummary()}
+    set {_summary = newValue}
+  }
+  /// Returns true if `summary` has been explicitly set.
+  public var hasSummary: Bool {self._summary != nil}
+  /// Clears the value of `summary`. Subsequent reads from it will return its default value.
+  public mutating func clearSummary() {self._summary = nil}
+
+  public var evidence: [Trawl_Federation_V1_EvidenceFragment] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
   fileprivate var _availability: Int64? = nil
   fileprivate var _unread: Bool? = nil
+  fileprivate var _summary: Trawl_Federation_V1_ResultSummary? = nil
 }
 
 public nonisolated struct Trawl_Federation_V1_SearchSourceResult: Sendable {
@@ -720,7 +862,7 @@ public nonisolated struct Trawl_Federation_V1_SearchSourceResult: Sendable {
 
   public var sourceID: String = String()
 
-  public var surface: String = String()
+  public var displayName: String = String()
 
   public var whoResolved: Trawl_Federation_V1_WhoResolved {
     get {_whoResolved ?? Trawl_Federation_V1_WhoResolved()}
@@ -955,7 +1097,7 @@ nonisolated extension Trawl_Federation_V1_Branding: SwiftProtobuf.Message, Swift
 
 nonisolated extension Trawl_Federation_V1_SourceManifest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SourceManifest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{1}surface\0\u{1}branding\0\u{1}headlines\0\u{1}capabilities\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}display_name\0\u{1}branding\0\u{1}headlines\0\u{1}capabilities\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -964,7 +1106,7 @@ nonisolated extension Trawl_Federation_V1_SourceManifest: SwiftProtobuf.Message,
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.sourceID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.surface) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._branding) }()
       case 4: try { try decoder.decodeRepeatedStringField(value: &self.headlines) }()
       case 5: try { try decoder.decodeRepeatedStringField(value: &self.capabilities) }()
@@ -981,8 +1123,8 @@ nonisolated extension Trawl_Federation_V1_SourceManifest: SwiftProtobuf.Message,
     if !self.sourceID.isEmpty {
       try visitor.visitSingularStringField(value: self.sourceID, fieldNumber: 1)
     }
-    if !self.surface.isEmpty {
-      try visitor.visitSingularStringField(value: self.surface, fieldNumber: 2)
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
     }
     try { if let v = self._branding {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
@@ -998,7 +1140,7 @@ nonisolated extension Trawl_Federation_V1_SourceManifest: SwiftProtobuf.Message,
 
   public static func ==(lhs: Trawl_Federation_V1_SourceManifest, rhs: Trawl_Federation_V1_SourceManifest) -> Bool {
     if lhs.sourceID != rhs.sourceID {return false}
-    if lhs.surface != rhs.surface {return false}
+    if lhs.displayName != rhs.displayName {return false}
     if lhs._branding != rhs._branding {return false}
     if lhs.headlines != rhs.headlines {return false}
     if lhs.capabilities != rhs.capabilities {return false}
@@ -1577,9 +1719,320 @@ nonisolated extension Trawl_Federation_V1_WhoResolved: SwiftProtobuf.Message, Sw
   }
 }
 
+nonisolated extension Trawl_Federation_V1_ResultSummary: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ResultSummary"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0\u{1}subtitle\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.title) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.subtitle) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
+    }
+    if !self.subtitle.isEmpty {
+      try visitor.visitSingularStringField(value: self.subtitle, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_ResultSummary, rhs: Trawl_Federation_V1_ResultSummary) -> Bool {
+    if lhs.title != rhs.title {return false}
+    if lhs.subtitle != rhs.subtitle {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_TextRun: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TextRun"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}matched\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.matched) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
+    }
+    if self.matched != false {
+      try visitor.visitSingularBoolField(value: self.matched, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_TextRun, rhs: Trawl_Federation_V1_TextRun) -> Bool {
+    if lhs.text != rhs.text {return false}
+    if lhs.matched != rhs.matched {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_TextEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".TextEvidence"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}runs\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.runs) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.runs.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.runs, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_TextEvidence, rhs: Trawl_Federation_V1_TextEvidence) -> Bool {
+    if lhs.runs != rhs.runs {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_FieldEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".FieldEvidence"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}name\0\u{1}value\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.name) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.value) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.name.isEmpty {
+      try visitor.visitSingularStringField(value: self.name, fieldNumber: 1)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.value, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_FieldEvidence, rhs: Trawl_Federation_V1_FieldEvidence) -> Bool {
+    if lhs.name != rhs.name {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_MediaEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MediaEvidence"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}resource_ref\0\u{1}description\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.resourceRef) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.description_p) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.resourceRef.isEmpty {
+      try visitor.visitSingularStringField(value: self.resourceRef, fieldNumber: 1)
+    }
+    if !self.description_p.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.description_p, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_MediaEvidence, rhs: Trawl_Federation_V1_MediaEvidence) -> Bool {
+    if lhs.resourceRef != rhs.resourceRef {return false}
+    if lhs.description_p != rhs.description_p {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_RelationEvidence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RelationEvidence"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}relation\0\u{1}target\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.relation) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.target) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.relation.isEmpty {
+      try visitor.visitSingularStringField(value: self.relation, fieldNumber: 1)
+    }
+    if !self.target.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.target, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_RelationEvidence, rhs: Trawl_Federation_V1_RelationEvidence) -> Bool {
+    if lhs.relation != rhs.relation {return false}
+    if lhs.target != rhs.target {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Trawl_Federation_V1_EvidenceFragment: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".EvidenceFragment"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}label\0\u{1}text\0\u{1}field\0\u{1}media\0\u{1}relation\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 2: try {
+        var v: Trawl_Federation_V1_TextEvidence?
+        var hadOneofValue = false
+        if let current = self.content {
+          hadOneofValue = true
+          if case .text(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.content = .text(v)
+        }
+      }()
+      case 3: try {
+        var v: Trawl_Federation_V1_FieldEvidence?
+        var hadOneofValue = false
+        if let current = self.content {
+          hadOneofValue = true
+          if case .field(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.content = .field(v)
+        }
+      }()
+      case 4: try {
+        var v: Trawl_Federation_V1_MediaEvidence?
+        var hadOneofValue = false
+        if let current = self.content {
+          hadOneofValue = true
+          if case .media(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.content = .media(v)
+        }
+      }()
+      case 5: try {
+        var v: Trawl_Federation_V1_RelationEvidence?
+        var hadOneofValue = false
+        if let current = self.content {
+          hadOneofValue = true
+          if case .relation(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.content = .relation(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 1)
+    }
+    switch self.content {
+    case .text?: try {
+      guard case .text(let v)? = self.content else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .field?: try {
+      guard case .field(let v)? = self.content else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .media?: try {
+      guard case .media(let v)? = self.content else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    }()
+    case .relation?: try {
+      guard case .relation(let v)? = self.content else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Trawl_Federation_V1_EvidenceFragment, rhs: Trawl_Federation_V1_EvidenceFragment) -> Bool {
+    if lhs.label != rhs.label {return false}
+    if lhs.content != rhs.content {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchHit"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}open_ref\0\u{3}short_ref\0\u{3}time_rfc3339\0\u{1}who\0\u{1}where\0\u{1}calendar\0\u{1}snippet\0\u{3}all_day\0\u{1}availability\0\u{1}unread\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}open_ref\0\u{3}short_ref\0\u{3}time_rfc3339\0\u{4}\u{5}all_day\0\u{1}availability\0\u{1}unread\0\u{3}anchor_id\0\u{1}summary\0\u{1}evidence\0\u{c}\u{5}\u{4}")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1591,13 +2044,12 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
       case 2: try { try decoder.decodeSingularStringField(value: &self.openRef) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.shortRef) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.timeRfc3339) }()
-      case 5: try { try decoder.decodeSingularStringField(value: &self.who) }()
-      case 6: try { try decoder.decodeSingularStringField(value: &self.`where`) }()
-      case 7: try { try decoder.decodeSingularStringField(value: &self.calendar) }()
-      case 8: try { try decoder.decodeSingularStringField(value: &self.snippet) }()
       case 9: try { try decoder.decodeSingularBoolField(value: &self.allDay) }()
       case 10: try { try decoder.decodeSingularInt64Field(value: &self._availability) }()
       case 11: try { try decoder.decodeSingularBoolField(value: &self._unread) }()
+      case 12: try { try decoder.decodeSingularStringField(value: &self.anchorID) }()
+      case 13: try { try decoder.decodeSingularMessageField(value: &self._summary) }()
+      case 14: try { try decoder.decodeRepeatedMessageField(value: &self.evidence) }()
       default: break
       }
     }
@@ -1620,18 +2072,6 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
     if !self.timeRfc3339.isEmpty {
       try visitor.visitSingularStringField(value: self.timeRfc3339, fieldNumber: 4)
     }
-    if !self.who.isEmpty {
-      try visitor.visitSingularStringField(value: self.who, fieldNumber: 5)
-    }
-    if !self.`where`.isEmpty {
-      try visitor.visitSingularStringField(value: self.`where`, fieldNumber: 6)
-    }
-    if !self.calendar.isEmpty {
-      try visitor.visitSingularStringField(value: self.calendar, fieldNumber: 7)
-    }
-    if !self.snippet.isEmpty {
-      try visitor.visitSingularStringField(value: self.snippet, fieldNumber: 8)
-    }
     if self.allDay != false {
       try visitor.visitSingularBoolField(value: self.allDay, fieldNumber: 9)
     }
@@ -1641,6 +2081,15 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
     try { if let v = self._unread {
       try visitor.visitSingularBoolField(value: v, fieldNumber: 11)
     } }()
+    if !self.anchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.anchorID, fieldNumber: 12)
+    }
+    try { if let v = self._summary {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 13)
+    } }()
+    if !self.evidence.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.evidence, fieldNumber: 14)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -1649,13 +2098,12 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
     if lhs.openRef != rhs.openRef {return false}
     if lhs.shortRef != rhs.shortRef {return false}
     if lhs.timeRfc3339 != rhs.timeRfc3339 {return false}
-    if lhs.who != rhs.who {return false}
-    if lhs.`where` != rhs.`where` {return false}
-    if lhs.calendar != rhs.calendar {return false}
-    if lhs.snippet != rhs.snippet {return false}
     if lhs.allDay != rhs.allDay {return false}
     if lhs._availability != rhs._availability {return false}
     if lhs._unread != rhs._unread {return false}
+    if lhs.anchorID != rhs.anchorID {return false}
+    if lhs._summary != rhs._summary {return false}
+    if lhs.evidence != rhs.evidence {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -1663,7 +2111,7 @@ nonisolated extension Trawl_Federation_V1_SearchHit: SwiftProtobuf.Message, Swif
 
 nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SearchSourceResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{1}surface\0\u{3}who_resolved\0\u{1}hits\0\u{3}total_matches\0\u{1}truncated\0\u{3}total_is_exact\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}source_id\0\u{3}display_name\0\u{3}who_resolved\0\u{1}hits\0\u{3}total_matches\0\u{1}truncated\0\u{3}total_is_exact\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1672,7 +2120,7 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.sourceID) }()
-      case 2: try { try decoder.decodeSingularStringField(value: &self.surface) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._whoResolved) }()
       case 4: try { try decoder.decodeRepeatedMessageField(value: &self.hits) }()
       case 5: try { try decoder.decodeSingularUInt64Field(value: &self.totalMatches) }()
@@ -1691,8 +2139,8 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
     if !self.sourceID.isEmpty {
       try visitor.visitSingularStringField(value: self.sourceID, fieldNumber: 1)
     }
-    if !self.surface.isEmpty {
-      try visitor.visitSingularStringField(value: self.surface, fieldNumber: 2)
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 2)
     }
     try { if let v = self._whoResolved {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
@@ -1714,7 +2162,7 @@ nonisolated extension Trawl_Federation_V1_SearchSourceResult: SwiftProtobuf.Mess
 
   public static func ==(lhs: Trawl_Federation_V1_SearchSourceResult, rhs: Trawl_Federation_V1_SearchSourceResult) -> Bool {
     if lhs.sourceID != rhs.sourceID {return false}
-    if lhs.surface != rhs.surface {return false}
+    if lhs.displayName != rhs.displayName {return false}
     if lhs._whoResolved != rhs._whoResolved {return false}
     if lhs.hits != rhs.hits {return false}
     if lhs.totalMatches != rhs.totalMatches {return false}

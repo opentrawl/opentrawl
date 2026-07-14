@@ -5,6 +5,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -39,6 +40,13 @@ type Opener interface {
 
 type RecordOpener interface {
 	OpenRecord(ctx context.Context, req *Request, ref string) (*openv1.OpenRecord, error)
+}
+
+// ResourceResolver resolves an opaque, source-owned presentation resource
+// within the caller's explicit byte bound. Implementations must not return a
+// path or URL in place of the requested bytes.
+type ResourceResolver interface {
+	ResolveResource(ctx context.Context, req *Request, request *presentationv1.ResourceRequest) (*presentationv1.ResourceResponse, error)
 }
 
 type ContactExporter interface {

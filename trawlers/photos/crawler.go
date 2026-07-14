@@ -349,18 +349,40 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		}
 		capturedAt = parsed
 	}
-	snippet := hit.Snippet
-	if hit.Stale {
-		snippet = "Stale · " + snippet
+	title := strings.TrimSpace(hit.Title)
+	if title == "" {
+		title = "Photo"
+	}
+	evidence := photoSearchEvidence(hit.Matches)
+	if len(evidence) == 0 {
+		return trawlkit.Hit{}, fmt.Errorf("photo search hit has no matched evidence")
 	}
 	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     capturedAt,
-		Who:      hit.Who,
-		Where:    hit.Where,
-		Snippet:  snippet,
+		AnchorID: hit.AnchorID,
+		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Where},
+		Evidence: evidence,
 	}, nil
+}
+
+func photoSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
+	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+	labels := map[string]string{
+		"filename": "Original filename", "album": "Album", "media": "Media type",
+		"summary": "Photo summary", "description": "Photo description", "ocr": "Text in photo",
+		"asset": "Asset details", "metadata": "Photo signal", "place": "Place", "address": "Address",
+		"known-place": "Known place", "venue": "Venue",
+	}
+	for _, match := range matches {
+		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
+		for _, run := range match.Runs {
+			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		}
+		evidence = append(evidence, trawlkit.EvidenceFragment{Label: labels[match.Field], Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs}})
+	}
+	return evidence
 }
 
 func queryTime(value time.Time) string {

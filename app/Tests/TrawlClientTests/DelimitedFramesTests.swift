@@ -111,6 +111,61 @@ import Testing
   #expect(response.sources.map(\.id) == ["gmail", "notes"])
 }
 
+@Test func processClientCarriesTheCanonicalOpenIdentityAndAnchor() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  let response = try await ProcessTrawlClient(
+    binaryURL: binary,
+    receiveReceipt: { receipt in
+      #expect(
+        receipt.arguments
+          == ["__app", "open", "synthetic", "synthetic:record/example-1", "match"])
+      #expect(!receipt.stdout.isEmpty)
+    }
+  ).open(sourceID: "synthetic", ref: "synthetic:record/example-1", anchorID: "match")
+  #expect(response.requestedRef == "synthetic:record/example-1")
+  #expect(response.requestedAnchorID == "match")
+  #expect(response.record?.openRef == "synthetic:record/example-1")
+  #expect(response.record?.presentation.primaryAnchorID == "match")
+
+  await #expect(throws: TrawlClientError.invalidProtobuf) {
+    _ = try await ProcessTrawlClient(binaryURL: binary)
+      .open(sourceID: "synthetic", ref: "short-1", anchorID: "match")
+  }
+  await #expect(throws: TrawlClientError.invalidProtobuf) {
+    _ = try await ProcessTrawlClient(binaryURL: binary)
+      .open(
+        sourceID: "synthetic", ref: "synthetic:record/example-1",
+        anchorID: "matching passage")
+  }
+}
+
+@Test func processClientCarriesOneBoundedOpaqueResourceFrame() async throws {
+  let binary = try #require(developmentSyntheticBinary())
+  let resource = try await ProcessTrawlClient(
+    binaryURL: binary,
+    receiveReceipt: { receipt in
+      #expect(
+        receipt.arguments
+          == ["__app", "resource", "photos", "photos:resource/example-1", "32"])
+      #expect(!receipt.stdout.isEmpty)
+    }
+  ).resource(sourceID: "photos", ref: "photos:resource/example-1", maxBytes: 32)
+  #expect(resource.ref == "photos:resource/example-1")
+  #expect(resource.contentType == "image/jpeg")
+  #expect(resource.data == Data("synthetic resource bytes".utf8))
+
+  await #expect(throws: TrawlClientError.invalidProtobuf) {
+    _ = try await ProcessTrawlClient(binaryURL: binary)
+      .resource(sourceID: "photos", ref: "/tmp/synthetic.jpg", maxBytes: 32)
+  }
+  await #expect(throws: TrawlClientError.invalidProtobuf) {
+    _ = try await ProcessTrawlClient(binaryURL: binary)
+      .resource(
+        sourceID: "photos", ref: "photos:resource/example-1",
+        maxBytes: ProcessTrawlClient.maximumResourceBytes + 1)
+  }
+}
+
 private func developmentSyntheticBinary() -> URL? {
   let workingDirectory = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
   return [

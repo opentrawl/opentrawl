@@ -275,17 +275,49 @@ func searchHit(result archive.SearchResult) (trawlkit.Hit, error) {
 	if err != nil {
 		return trawlkit.Hit{}, err
 	}
+	title := strings.TrimSpace(result.Snippet)
+	if title == "" {
+		title = "Calendar event"
+	}
+	anchorID := trawlkit.MatchAnchorID
+	evidence := calendarSearchEvidence(result.Matches)
+	if len(result.Matches) > 0 {
+		anchorID = result.Matches[0].Field
+	} else {
+		anchorID = "summary"
+		evidence = []trawlkit.EvidenceFragment{{Label: "Event preview", Field: &trawlkit.FieldEvidence{Name: "summary", Value: []trawlkit.TextRun{{Text: title}}}}}
+	}
 	return trawlkit.Hit{
 		Ref:          result.Ref,
 		ShortRef:     result.ShortRef,
 		Time:         t,
-		Who:          result.Who,
-		Where:        result.Where,
-		Calendar:     result.Calendar,
-		Snippet:      result.Snippet,
+		AnchorID:     anchorID,
+		Summary:      trawlkit.ResultSummary{Title: title, Subtitle: result.Calendar},
+		Evidence:     evidence,
 		AllDay:       result.AllDay,
 		Availability: result.Availability,
 	}, nil
+}
+
+func calendarSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
+	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+	for _, match := range matches {
+		label := map[string]string{
+			"summary":     "Title",
+			"description": "Description",
+			"location":    "Location",
+			"participant": "Participant",
+		}[match.Field]
+		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
+		for _, run := range match.Runs {
+			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		}
+		evidence = append(evidence, trawlkit.EvidenceFragment{
+			Label: label,
+			Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs},
+		})
+	}
+	return evidence
 }
 
 func whoCandidate(candidate archive.WhoCandidate) whomatch.Candidate {

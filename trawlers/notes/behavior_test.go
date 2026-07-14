@@ -239,10 +239,10 @@ func TestListKnownFolderWithNoNotesStaysCalm(t *testing.T) {
 	}
 }
 
-// TestSearchHitsOmitWho pins the who-column fix: Apple Notes has no per-note
-// author, so a hit never carries the constant "me" — the shared list
-// renderer drops a column with no varying value on its own.
-func TestSearchHitsOmitWho(t *testing.T) {
+// TestSearchHitsDoNotInventAnAuthor pins the same source meaning in the shared
+// match contract: Apple Notes has no per-note author, so its summary describes
+// the note and its evidence describes the matching passage.
+func TestSearchHitsDoNotInventAnAuthor(t *testing.T) {
 	path := buildArchive(t,
 		[]archive.Note{{ID: "note-a", Title: "A", Folder: "Notes"}},
 		[]archive.BodyInsert{testBody(t, "note-a", "findable needle text", time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))})
@@ -256,9 +256,22 @@ func TestSearchHitsOmitWho(t *testing.T) {
 	if len(result.Results) != 1 {
 		t.Fatalf("results = %d, want 1", len(result.Results))
 	}
-	if result.Results[0].Who != "" {
-		t.Fatalf("who = %q, want empty (no constant \"me\")", result.Results[0].Who)
+	hit := result.Results[0]
+	if hit.AnchorID != "body" || hit.Summary.Title != "A" || strings.EqualFold(hit.Summary.Subtitle, "me") {
+		t.Fatalf("search hit = %#v", hit)
 	}
+	if len(hit.Evidence) != 1 || hit.Evidence[0].Label != "Note body" || hit.Evidence[0].Field == nil || hit.Evidence[0].Field.Name != "body" || !notesHasMatchedRun(hit.Evidence[0].Field.Value) {
+		t.Fatalf("search evidence = %#v", hit.Evidence)
+	}
+}
+
+func notesHasMatchedRun(runs []trawlkit.TextRun) bool {
+	for _, run := range runs {
+		if run.Matched && strings.Contains(run.Text, "needle") {
+			return true
+		}
+	}
+	return false
 }
 
 // TestOpenJSONVersionOmitsDuplicateText pins the JSON dedupe: the note body

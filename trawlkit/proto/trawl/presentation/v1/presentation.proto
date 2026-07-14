@@ -9,6 +9,7 @@ message PresentationDocument {
   repeated Block blocks = 2;
   repeated Action actions = 3;
   repeated Fact facts = 4;
+  string primary_anchor_id = 5;
 }
 
 message Block {
@@ -19,6 +20,7 @@ message Block {
     Table table = 4;
     Resource resource = 5;
   }
+  string anchor_id = 6;
 }
 
 message Heading {
@@ -36,6 +38,7 @@ message FieldGroup {
 message Field {
   string label = 1;
   string display = 2;
+  string anchor_id = 3;
 }
 
 message Table {
@@ -52,6 +55,7 @@ message Row {
 
   Role role = 1;
   repeated Cell cells = 2;
+  string anchor_id = 3;
 }
 
 message Cell {
@@ -71,6 +75,7 @@ message Resource {
   string label = 2;
   string ref = 3;
   repeated Field metadata = 4;
+  string anchor_id = 5;
 }
 
 message Action {
@@ -93,4 +98,16 @@ message Fact {
   Kind kind = 1;
   string message = 2;
   string remedy = 3;
+}
+
+message ResourceRequest {
+  string source_id = 1;
+  string resource_ref = 2;
+  uint32 max_bytes = 3;
+}
+
+message ResourceResponse {
+  string resource_ref = 1;
+  string content_type = 2;
+  bytes data = 3;
 }

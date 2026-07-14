@@ -16,7 +16,7 @@ var binaryIDs = []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcr
 func liveSourceFakes() []fakeCrawler {
 	return []fakeCrawler{
 		{name: "imsgcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage"}`},
-		{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X","aliases":["twitter"]}`},
+		{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`},
 		{name: "photoscrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"photos","display_name":"Photos"}`},
 	}
 }
@@ -37,9 +37,9 @@ func TestBareFrontDoorRendersSyntheticManifestHeadlines(t *testing.T) {
 	sources := outputSection(stdout, "Sources:")
 	want := strings.Join([]string{
 		"Sources:",
-		"  alpha     zeta · alpha · middle",
-		"  empty",
-		"  beta      only",
+		"  Alpha     zeta · alpha · middle",
+		"  Empty",
+		"  Beta      only",
 	}, "\n")
 	if sources != want {
 		t.Fatalf("sources block:\n%s\nwant:\n%s", sources, want)
@@ -61,15 +61,15 @@ func TestBareFrontDoorMatchesBlessedDeclarations(t *testing.T) {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
 	want := `Sources:
-  imessage        chats
-  whatsapp        chats · groups
-  telegram        chats · folders · topics
-  gmail           emails
-  calendar        events · calendars
-  contacts        people
-  photos          photos
-  x (twitter)     tweets · bookmarks · likes · mentions
-  notes           notes · folders · versions
+  Messages                  chats
+  WhatsApp                  chats · groups
+  Telegram                  chats · folders · topics
+  Gmail                     emails
+  Calendar                  events · calendars
+  Contacts                  people
+  Photos                    photos
+  Twitter (X) (twitter)     tweets · bookmarks · likes · mentions
+  Notes                     notes · folders · versions
 
 Start here:
   trawl status                 every source, and how fresh
@@ -97,7 +97,7 @@ func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 	if lines > 20 {
 		t.Errorf("bare trawl rendered %d lines, want 20 or fewer:\n%s", lines, stdout)
 	}
-	for _, want := range []string{"Sources:", "Start here:", "x (twitter)", "photos"} {
+	for _, want := range []string{"Sources:", "Start here:", "Twitter (X)", "Photos"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("bare trawl missing %q:\n%s", want, stdout)
 		}
@@ -171,7 +171,7 @@ func TestFrontDoorOmitsUnregisteredCrawler(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	if strings.Contains(stdout, "photos") || strings.Contains(stdout, "x (twitter)") {
+	if strings.Contains(stdout, "photos") || strings.Contains(stdout, "Twitter (X)") {
 		t.Errorf("front door named an uninstalled crawler:\n%s", stdout)
 	}
 	if !strings.Contains(stdout, "imessage") {
@@ -256,7 +256,7 @@ func TestFrontDoorDegradesWithNoCrawlers(t *testing.T) {
 // birdcrawl declares the alias "twitter", so `trawl twitter` resolves the
 // same source as the canonical `trawl x`.
 func TestTwitterAliasResolvesSameSourceAsX(t *testing.T) {
-	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","display_name":"X","aliases":["twitter"]}`}
+	bird := fakeCrawler{name: "birdcrawl", metadata: `{"schema_version":1,"contract_version":1,"id":"twitter","surface":"x","display_name":"Twitter (X)","aliases":["twitter"]}`}
 	binDir := writeFakeCrawlers(t, bird)
 	t.Setenv("PATH", binDir)
 

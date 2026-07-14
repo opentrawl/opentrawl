@@ -10,6 +10,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 )
 
@@ -120,7 +121,7 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 	}
 	out := &federationv1.SearchSourceResult{
 		SourceId:     manifest.ID,
-		Surface:      manifest.DisplayName,
+		DisplayName:  manifest.DisplayName,
 		TotalMatches: uint64(result.TotalMatches),
 		Truncated:    result.Truncated,
 		TotalIsExact: !result.TotalIsLowerBound,
@@ -131,19 +132,42 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 			Identifiers: append([]string(nil), result.WhoResolved.Identifiers...),
 		}
 	}
+	seenMatches := map[string]struct{}{}
 	for _, hit := range result.Results {
 		if hit.Source != "" && hit.Source != manifest.ID {
 			return nil, fmt.Errorf("search hit source %q does not match manifest id %q", hit.Source, manifest.ID)
+		}
+		if !openrecord.ValidSourceRef(manifest.ID, hit.Ref) {
+			return nil, fmt.Errorf("search hit open ref is outside the source namespace")
+		}
+		if hit.AnchorID != strings.TrimSpace(hit.AnchorID) || !openrecord.ValidAnchorID(hit.AnchorID) {
+			return nil, fmt.Errorf("search hit anchor id is invalid")
+		}
+		matchIdentity := hit.Ref + "\x00" + hit.AnchorID
+		if _, exists := seenMatches[matchIdentity]; exists {
+			return nil, fmt.Errorf("search hit ref and anchor are duplicated")
+		}
+		seenMatches[matchIdentity] = struct{}{}
+		if strings.TrimSpace(hit.Summary.Title) == "" {
+			return nil, fmt.Errorf("search hit summary title is empty")
+		}
+		if len(hit.Evidence) == 0 {
+			return nil, fmt.Errorf("search hit evidence is empty")
 		}
 		projected := &federationv1.SearchHit{
 			SourceId: manifest.ID,
 			OpenRef:  hit.Ref,
 			ShortRef: hit.ShortRef,
-			Who:      hit.Who,
-			Where:    hit.Where,
-			Calendar: hit.Calendar,
-			Snippet:  hit.Snippet,
 			AllDay:   hit.AllDay,
+			AnchorId: hit.AnchorID,
+			Summary:  &federationv1.ResultSummary{Title: hit.Summary.Title, Subtitle: hit.Summary.Subtitle},
+		}
+		for _, evidence := range hit.Evidence {
+			fragment, err := projectEvidence(manifest.ID, evidence)
+			if err != nil {
+				return nil, err
+			}
+			projected.Evidence = append(projected.Evidence, fragment)
 		}
 		if hit.Availability != nil {
 			availability := *hit.Availability
@@ -157,6 +181,74 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 			projected.TimeRfc3339 = hit.Time.Format(time.RFC3339Nano)
 		}
 		out.Hits = append(out.Hits, projected)
+	}
+	return out, nil
+}
+
+func projectEvidence(sourceID string, evidence trawlkit.EvidenceFragment) (*federationv1.EvidenceFragment, error) {
+	if strings.TrimSpace(evidence.Label) == "" {
+		return nil, fmt.Errorf("search evidence label is empty")
+	}
+	out := &federationv1.EvidenceFragment{Label: evidence.Label}
+	contents := 0
+	if evidence.Text != nil {
+		contents++
+		runs, err := projectTextRuns(evidence.Text.Runs)
+		if err != nil {
+			return nil, err
+		}
+		out.Content = &federationv1.EvidenceFragment_Text{Text: &federationv1.TextEvidence{Runs: runs}}
+	}
+	if evidence.Field != nil {
+		contents++
+		if strings.TrimSpace(evidence.Field.Name) == "" {
+			return nil, fmt.Errorf("search field evidence name is empty")
+		}
+		runs, err := projectTextRuns(evidence.Field.Value)
+		if err != nil {
+			return nil, err
+		}
+		out.Content = &federationv1.EvidenceFragment_Field{Field: &federationv1.FieldEvidence{Name: evidence.Field.Name, Value: runs}}
+	}
+	if evidence.Media != nil {
+		contents++
+		ref := evidence.Media.ResourceRef
+		if ref != "" && !openrecord.ValidSourceRef(sourceID, ref) {
+			return nil, fmt.Errorf("search media evidence resource ref is outside the source namespace")
+		}
+		runs, err := projectTextRuns(evidence.Media.Description)
+		if err != nil {
+			return nil, err
+		}
+		out.Content = &federationv1.EvidenceFragment_Media{Media: &federationv1.MediaEvidence{ResourceRef: ref, Description: runs}}
+	}
+	if evidence.Relation != nil {
+		contents++
+		if strings.TrimSpace(evidence.Relation.Relation) == "" {
+			return nil, fmt.Errorf("search relation evidence kind is empty")
+		}
+		runs, err := projectTextRuns(evidence.Relation.Target)
+		if err != nil {
+			return nil, err
+		}
+		out.Content = &federationv1.EvidenceFragment_Relation{Relation: &federationv1.RelationEvidence{Relation: evidence.Relation.Relation, Target: runs}}
+	}
+	if contents != 1 {
+		return nil, fmt.Errorf("search evidence must contain exactly one typed value")
+	}
+	return out, nil
+}
+
+func projectTextRuns(values []trawlkit.TextRun) ([]*federationv1.TextRun, error) {
+	if len(values) == 0 {
+		return nil, fmt.Errorf("search evidence text is empty")
+	}
+	out := make([]*federationv1.TextRun, 0, len(values))
+	for _, value := range values {
+		if value.Text == "" {
+			return nil, fmt.Errorf("search evidence text run is empty")
+		}
+		out = append(out, &federationv1.TextRun{Text: value.Text, Matched: value.Matched})
 	}
 	return out, nil
 }

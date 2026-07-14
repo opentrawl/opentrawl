@@ -94,14 +94,19 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 	appendPresentationField(&fields, "Created", presentation.MustTimestamp(record.GetCreatedAt()))
 	appendPresentationField(&fields, "Modified", presentation.MustTimestamp(record.GetModifiedAt()))
 	fields = append(fields, &presentationv1.Field{Label: "Versions", Display: strconv.FormatInt(record.VersionCount, 10)})
-	blocks := make([]*presentationv1.Block, 0, 2)
+	blocks := make([]*presentationv1.Block, 0, 3)
+	blocks = append(blocks, &presentationv1.Block{AnchorId: "title", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
 	if text := strings.TrimSpace(record.GetText()); text != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "body", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
 	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	primaryAnchorID := "title"
+	if strings.TrimSpace(record.GetText()) != "" {
+		primaryAnchorID = "body"
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: primaryAnchorID}
 	if record.TextState != notesopenv1.TextState_TEXT_STATE_DECODED {
 		message := strings.TrimSpace(record.GetUnsupported())
 		if message == "" {

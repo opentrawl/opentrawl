@@ -131,8 +131,11 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if !strings.HasPrefix(hit.Ref, archive.MessageRefPrefix) || hit.ShortRef == "" {
 		t.Fatalf("search hit refs = %#v", hit)
 	}
-	if hit.Who == "" || hit.Where != "Most Recent Name" || !strings.Contains(hit.Snippet, "launch") {
+	if hit.AnchorID != trawlkit.MatchAnchorID || hit.Summary.Title != "Most Recent Name" || hit.Summary.Subtitle == "" {
 		t.Fatalf("search hit = %#v", hit)
+	}
+	if len(hit.Evidence) != 1 || hit.Evidence[0].Text == nil || len(hit.Evidence[0].Text.Runs) != 1 || !hit.Evidence[0].Text.Runs[0].Matched || !strings.Contains(hit.Evidence[0].Text.Runs[0].Text, "launch") {
+		t.Fatalf("search evidence = %#v", hit.Evidence)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)

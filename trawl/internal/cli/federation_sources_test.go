@@ -51,7 +51,7 @@ func TestFederationAdaptersPreserveOrderAndCopyStoredManifest(t *testing.T) {
 	if _, failure := search[0].Run(context.Background(), trawlkit.Query{}); failure == nil || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_INTERNAL {
 		t.Fatalf("declared search without interface = %#v", failure)
 	}
-	if _, failure := open[0].Run(context.Background(), "n:7"); failure == nil || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_INTERNAL {
+	if _, failure := open[0].Run(context.Background(), "n:7", ""); failure == nil || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_INTERNAL {
 		t.Fatalf("declared open without interface = %#v", failure)
 	}
 	if status[0].SkipReason != "" || search[1].SkipReason != "" || open[1].SkipReason != "" {
@@ -93,11 +93,11 @@ func TestFederationAdaptersProjectMixedResponses(t *testing.T) {
 	if search.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL || len(search.GetHits()) != 1 || len(search.GetFailures()) != 1 || len(search.GetSkippedSources()) != 1 {
 		t.Fatalf("search = %#v", search)
 	}
-	open := federation.Open(context.Background(), runtime.federationOpenSources(sources), "notes", " short-7 ")
+	open := federation.Open(context.Background(), runtime.federationOpenSources(sources), "notes", " short-7 ", "")
 	if open.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || open.GetRequestedRef() != " short-7 " || crawler.statusCalls != 1 || crawler.searchCalls != 1 || crawler.openCalls != 1 {
 		t.Fatalf("open = %#v, calls = %#v", open, crawler)
 	}
-	unsupported := federation.Open(context.Background(), runtime.federationOpenSources(sources), "calendar", "short-7")
+	unsupported := federation.Open(context.Background(), runtime.federationOpenSources(sources), "calendar", "short-7", "")
 	if unsupported.GetFailure().GetMessage() != "Open is not supported." {
 		t.Fatalf("unsupported = %#v", unsupported)
 	}
@@ -266,7 +266,14 @@ func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query tr
 	if query.Text != "synthetic" || query.Limit != limit || query.BoundedTotals != c.boundedTotals {
 		return trawlkit.SearchResult{}, errors.New("query did not preserve its total policy, text and limit")
 	}
-	return trawlkit.SearchResult{Results: []trawlkit.Hit{{Source: c.id, Ref: "notes:note/1", ShortRef: "short-7", Snippet: "Synthetic note"}}, TotalMatches: 1}, nil
+	return trawlkit.SearchResult{Results: []trawlkit.Hit{{
+		Source:   c.id,
+		Ref:      "notes:note/1",
+		ShortRef: "short-7",
+		AnchorID: trawlkit.MatchAnchorID,
+		Summary:  trawlkit.ResultSummary{Title: "Synthetic note", Subtitle: "Notes"},
+		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Note passage", "Synthetic note")},
+	}}, TotalMatches: 1}, nil
 }
 
 func (c *adapterCrawler) OpenRecord(_ context.Context, _ *trawlkit.Request, ref string) (*openv1.OpenRecord, error) {
@@ -274,7 +281,10 @@ func (c *adapterCrawler) OpenRecord(_ context.Context, _ *trawlkit.Request, ref 
 	if ref != "short-7" {
 		return nil, errors.New("open ref was not trimmed")
 	}
-	return &openv1.OpenRecord{SourceId: c.id, OpenRef: "notes:note/1", Data: &anypb.Any{TypeUrl: "type.example/Open"}, Presentation: &presentationv1.PresentationDocument{Title: "Synthetic note"}}, nil
+	return &openv1.OpenRecord{SourceId: c.id, OpenRef: "notes:note/1", Data: &anypb.Any{TypeUrl: "type.example/Open"}, Presentation: &presentationv1.PresentationDocument{
+		Title: "Synthetic note", PrimaryAnchorId: trawlkit.MatchAnchorID,
+		Blocks: []*presentationv1.Block{{AnchorId: trawlkit.MatchAnchorID, Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "Synthetic note"}}}},
+	}}, nil
 }
 
 func writeRuntimeEvidence(t *testing.T, name string, content []byte) {

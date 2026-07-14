@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -87,16 +88,22 @@ func TestSyncImportsSnapshotAndTracksDelta(t *testing.T) {
 	if classified.Processed != 2 || classified.MetadataClassified != 2 || classified.WaitingForLocalContent != 1 || classified.MetadataObservationsWritten == 0 {
 		t.Fatalf("classify result = processed %d metadata %d waiting %d observations %d", classified.Processed, classified.MetadataClassified, classified.WaitingForLocalContent, classified.MetadataObservationsWritten)
 	}
-	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "screenshot", Limit: 5})
+	observationSearch, err := Search(ctx, paths, SearchOptions{Query: "candidate", Limit: 5})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(observationSearch.Results) != 1 {
 		t.Fatalf("observation search = %#v", observationSearch.Results)
 	}
+	if !strings.HasPrefix(observationSearch.Results[0].AnchorID, "metadata.") || len(observationSearch.Results[0].Matches) == 0 || observationSearch.Results[0].Matches[0].Field != "metadata" {
+		t.Fatalf("observation match = %#v", observationSearch.Results[0])
+	}
 	opened, err = Open(ctx, paths, observationSearch.Results[0].ID)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(opened.Mechanical.Signals, func(signal OpenSignal) bool { return signal.Label == "screenshot_candidate" }) {
+		t.Fatalf("open signals = %#v", opened.Mechanical.Signals)
 	}
 	openedJSON, err = json.Marshal(opened)
 	if err != nil {

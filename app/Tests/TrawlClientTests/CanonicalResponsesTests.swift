@@ -6,12 +6,9 @@ import Testing
 @testable import TrawlClient
 
 @Test func canonicalSearchMapsExactTimestampAndReferences() throws {
-  var hit = Trawl_Federation_V1_SearchHit()
-  hit.sourceID = "synthetic"
-  hit.openRef = "synthetic:record/full"
+  var hit = canonicalSearchHit()
   hit.shortRef = "short-1"
   hit.timeRfc3339 = "2026-07-12T09:30:00Z"
-  hit.who = "Avery Example"
   var response = Trawl_Federation_V1_SearchResponse()
   response.outcome = .complete
   response.order = .recency
@@ -34,7 +31,7 @@ import Testing
     var source = Trawl_Federation_V1_SourceStatus()
     source.manifest = .with {
       $0.sourceID = "synthetic"
-      $0.surface = "Synthetic"
+      $0.displayName = "Synthetic"
     }
     source.generatedRfc3339 = timestamp
     source.lastSyncRfc3339 = timestamp
@@ -53,9 +50,7 @@ import Testing
     #expect(mappedStatus.remote?.lastIngestRFC3339 == timestamp)
     #expect(mappedStatus.databases[0].modifiedRFC3339 == timestamp)
 
-    var hit = Trawl_Federation_V1_SearchHit()
-    hit.sourceID = "synthetic"
-    hit.openRef = "synthetic:record/full"
+    var hit = canonicalSearchHit()
     hit.timeRfc3339 = timestamp
     var search = Trawl_Federation_V1_SearchResponse()
     search.outcome = .complete
@@ -63,7 +58,8 @@ import Testing
     search.hits = [hit]
     let mappedHit = try search.model().hits[0]
     #expect(mappedHit.timeRFC3339 == timestamp)
-    #expect((timestamp.isEmpty && mappedHit.time == nil) || (!timestamp.isEmpty && mappedHit.time != nil))
+    #expect(
+      (timestamp.isEmpty && mappedHit.time == nil) || (!timestamp.isEmpty && mappedHit.time != nil))
   }
 }
 
@@ -84,7 +80,7 @@ import Testing
       var source = Trawl_Federation_V1_SourceStatus()
       source.manifest = .with {
         $0.sourceID = "synthetic"
-        $0.surface = "Synthetic"
+        $0.displayName = "Synthetic"
       }
       mutate(&source, timestamp)
       var response = Trawl_Federation_V1_StatusResponse()
@@ -100,15 +96,109 @@ import Testing
     "not-a-time", "2026-07-12T21:51:13", "2026-07-12T21:51:13Z trailing",
     "2026-02-30T21:51:13Z", "2026-07-12T21:51:13.Z", "2026-07-12T21:51:13.1",
   ] {
-    var hit = Trawl_Federation_V1_SearchHit()
-    hit.sourceID = "synthetic"
-    hit.openRef = "synthetic:record/full"
+    var hit = canonicalSearchHit()
     hit.timeRfc3339 = timestamp
     var response = Trawl_Federation_V1_SearchResponse()
     response.outcome = .complete
     response.order = .recency
     response.hits = [hit]
     #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
+  }
+}
+
+@Test func canonicalSearchRejectsMalformedMatchContracts() {
+  let invalidHits: [Trawl_Federation_V1_SearchHit] = [
+    .with {
+      $0 = canonicalSearchHit()
+      $0.openRef = "other:record/full"
+    },
+    .with {
+      $0 = canonicalSearchHit()
+      $0.anchorID = "matching passage"
+    },
+    .with {
+      $0 = canonicalSearchHit()
+      $0.evidence[0].label = ""
+    },
+  ]
+  for hit in invalidHits {
+    var response = Trawl_Federation_V1_SearchResponse()
+    response.outcome = .complete
+    response.order = .recency
+    response.hits = [hit]
+    #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
+  }
+}
+
+@Test func canonicalSearchAcceptsUnmatchedPreviewEvidence() throws {
+  var hit = canonicalSearchHit()
+  hit.evidence[0].text.runs[0].matched = false
+  var response = Trawl_Federation_V1_SearchResponse()
+  response.outcome = .complete
+  response.order = .recency
+  response.hits = [hit]
+
+  let mapped = try response.model().hits[0]
+  #expect(
+    mapped.evidence == [
+      .text(label: "Matching text", runs: [.init(text: "Synthetic evidence", matched: false)])
+    ])
+}
+
+@Test func openRejectsDuplicateMissingAndMismatchedPrimaryAnchors() {
+  var duplicate = canonicalOpenResponse()
+  duplicate.record.presentation.blocks.append(
+    .with {
+      $0.anchorID = "match"
+      $0.prose = .with { $0.text = "Duplicate target" }
+    })
+  #expect(throws: TrawlClientError.invalidProtobuf) { try duplicate.model() }
+
+  var metadataDuplicate = canonicalOpenResponse()
+  metadataDuplicate.record.presentation.blocks.append(
+    .with {
+      $0.resource = .with {
+        $0.kind = .image
+        $0.label = "Synthetic image"
+        $0.ref = "synthetic:resource/example-1"
+        $0.metadata = [
+          .with {
+            $0.label = "Match"
+            $0.display = "Synthetic"
+            $0.anchorID = "match"
+          }
+        ]
+      }
+    })
+  #expect(throws: TrawlClientError.invalidProtobuf) { try metadataDuplicate.model() }
+
+  var missing = canonicalOpenResponse()
+  missing.record.presentation.blocks[0].anchorID = "other"
+  #expect(throws: TrawlClientError.invalidProtobuf) { try missing.model() }
+
+  var mismatched = canonicalOpenResponse()
+  mismatched.requestedAnchorID = "other"
+  #expect(throws: TrawlClientError.invalidProtobuf) { try mismatched.model() }
+}
+
+@Test func resourceMappingRejectsUnsafeShapes() throws {
+  let valid = Trawl_Presentation_V1_ResourceResponse.with {
+    $0.resourceRef = "photos:resource/example-1"
+    $0.contentType = "image/jpeg"
+    $0.data = Data("synthetic bytes".utf8)
+  }
+  #expect(try valid.model().data == Data("synthetic bytes".utf8))
+  for invalid in [
+    Trawl_Presentation_V1_ResourceResponse.with {
+      $0 = valid
+      $0.contentType = "image jpeg"
+    },
+    Trawl_Presentation_V1_ResourceResponse.with {
+      $0 = valid
+      $0.data = Data()
+    },
+  ] {
+    #expect(throws: TrawlClientError.invalidProtobuf) { try invalid.model() }
   }
 }
 
@@ -121,8 +211,10 @@ import Testing
 @Test func presentationMappingKeepsEveryVariant() throws {
   var document = Trawl_Presentation_V1_PresentationDocument()
   document.title = "Synthetic"
+  document.primaryAnchorID = "match"
   document.blocks = [
     Trawl_Presentation_V1_Block.with {
+      $0.anchorID = "match"
       $0.heading = Trawl_Presentation_V1_Heading.with { $0.text = "H" }
     },
     Trawl_Presentation_V1_Block.with {
@@ -142,8 +234,14 @@ import Testing
       $0.table = Trawl_Presentation_V1_Table.with {
         $0.columns = ["C"]
         $0.rows = [
-          Trawl_Presentation_V1_Row.with { $0.role = .normal },
-          Trawl_Presentation_V1_Row.with { $0.role = .target },
+          Trawl_Presentation_V1_Row.with {
+            $0.role = .normal
+            $0.cells = [.with { $0.display = "Normal" }]
+          },
+          Trawl_Presentation_V1_Row.with {
+            $0.role = .target
+            $0.cells = [.with { $0.display = "Target" }]
+          },
         ]
       }
     },
@@ -154,14 +252,14 @@ import Testing
         $0.resource = Trawl_Presentation_V1_Resource.with {
           $0.kind = kind
           $0.label = "R"
-          $0.ref = "r"
+          $0.ref = "synthetic:resource/r"
         }
       })
   }
   document.actions = [
     Trawl_Presentation_V1_Action.with {
       $0.label = "R"
-      $0.openRef = "ref"
+      $0.openRef = "synthetic:record/next"
     },
     Trawl_Presentation_V1_Action.with {
       $0.label = "U"
@@ -193,6 +291,7 @@ import Testing
   record.presentation = document
   var response = Trawl_Open_V1_OpenResponse()
   response.outcome = .complete
+  response.requestedAnchorID = "match"
   response.record = record
   let mapped = try response.model()
   #expect(mapped.record?.presentation.blocks.count == 8)
@@ -388,7 +487,7 @@ private func expectedSkipped(_ sourceID: String, _ surface: String, _ reason: St
 private func expectedSource(_ id: String, _ surface: String) -> SourceStatus {
   SourceStatus(
     manifest: SourceManifest(
-      sourceID: id, surface: surface,
+      sourceID: id, displayName: surface,
       branding: Branding(
         symbolName: "tray.full", accentColor: "#AABBCC", iconPath: "/synthetic/icon",
         bundleIdentifier: "example.\(id)"), headlines: ["Synthetic source", "Complete fixture"],
@@ -434,7 +533,8 @@ private func expectedStatus(_ name: String) -> StatusResponse {
         expectedProductSource("notes", "Notes", ["notes", "folders", "versions"]),
         expectedProductSource("photos", "Photos", ["photos"]),
         expectedProductSource("telegram", "Telegram", ["chats", "folders", "topics"]),
-        expectedProductSource("twitter", "X", ["tweets", "bookmarks", "likes", "mentions"]),
+        expectedProductSource(
+          "twitter", "Twitter (X)", ["tweets", "bookmarks", "likes", "mentions"]),
         expectedProductSource("whatsapp", "WhatsApp", ["chats", "groups"]),
       ], failures: [], skippedSources: [], outcome: .complete)
   case "status-complete":
@@ -472,7 +572,7 @@ private func expectedProductSource(_ id: String, _ surface: String, _ headlines:
 {
   SourceStatus(
     manifest: SourceManifest(
-      sourceID: id, surface: surface, branding: nil, headlines: headlines,
+      sourceID: id, displayName: surface, branding: nil, headlines: headlines,
       capabilities: ["search", "open"]),
     appID: "example.\(id)", schemaVersion: "1", generatedRFC3339: "2026-07-12T09:31:00Z",
     state: "ok", summary: surface, configPath: "", databasePath: "", databaseBytes: 0, walBytes: 0,
@@ -486,8 +586,11 @@ private func expectedHit() -> SearchHit {
   SearchHit(
     sourceID: "gmail", openRef: "gmail:message/example-1", shortRef: "short-1",
     timeRFC3339: "2026-07-12T09:30:00Z",
-    time: ISO8601DateFormatter().date(from: "2026-07-12T09:30:00Z"), who: "Avery Example",
-    where: "Synthetic place", calendar: "Synthetic calendar", snippet: "Synthetic result",
+    time: ISO8601DateFormatter().date(from: "2026-07-12T09:30:00Z"), anchorID: "match",
+    summary: ResultSummary(title: "Synthetic place", subtitle: "Avery Example"),
+    evidence: [
+      .text(label: "Message body", runs: [SearchTextRun(text: "Synthetic result", matched: true)])
+    ],
     allDay: true, availability: 2, unread: true)
 }
 
@@ -495,7 +598,7 @@ private func expectedSearch(_ name: String) -> SearchResponse {
   let hit = expectedHit()
   let hits = name == "search-none" ? [] : [hit]
   let source = SearchSourceResult(
-    sourceID: "gmail", surface: "Gmail",
+    sourceID: "gmail", displayName: "Gmail",
     whoResolved: WhoResolved(who: "Avery Example", identifiers: ["avery@example.com"]), hits: hits,
     totalMatches: 7, totalIsExact: true, truncated: true)
   return switch name {
@@ -534,13 +637,13 @@ private func expectedSearch(_ name: String) -> SearchResponse {
 @Test func searchSourceMappingPreservesTotalExactness() throws {
   var exact = Trawl_Federation_V1_SearchSourceResult()
   exact.sourceID = "exact"
-  exact.surface = "Exact"
+  exact.displayName = "Exact"
   exact.totalMatches = 1
   exact.totalIsExact = true
 
   var lowerBound = Trawl_Federation_V1_SearchSourceResult()
   lowerBound.sourceID = "lower-bound"
-  lowerBound.surface = "Lower bound"
+  lowerBound.displayName = "Lower bound"
   lowerBound.totalMatches = 21
 
   var response = Trawl_Federation_V1_SearchResponse()
@@ -556,42 +659,53 @@ private func expectedSearch(_ name: String) -> SearchResponse {
 private func expectedOpen(_ name: String) -> OpenResponse {
   if name == "open-failed" {
     return OpenResponse(
-      outcome: .failed, requestedRef: "failed", record: nil,
+      outcome: .failed, requestedRef: "failed", requestedAnchorID: "match", record: nil,
       failure: expectedFailure("gmail", "Synthetic"))
   }
   if name == "open-timeout" {
     return OpenResponse(
-      outcome: .failed, requestedRef: "timeout", record: nil,
+      outcome: .failed, requestedRef: "timeout", requestedAnchorID: "match", record: nil,
       failure: expectedFailure("gmail", "Synthetic", .timeout))
   }
-  let metadata = [PresentationField(label: "Type", display: "Synthetic")]
+  let metadata = [PresentationField(label: "Type", display: "Synthetic", anchorID: "")]
   let presentation = PresentationDocument(
     title: "Synthetic record",
+    primaryAnchorID: "match",
     blocks: [
-      .heading("Synthetic heading"),
-      .prose("Synthetic readable text."),
-      .fields([PresentationField(label: "Label", display: "Value")]),
+      .heading(anchorID: "match", text: "Synthetic heading"),
+      .prose(anchorID: "", text: "Synthetic readable text."),
+      .fields(
+        anchorID: "", [PresentationField(label: "Label", display: "Value", anchorID: "")]),
       .table(
+        anchorID: "",
         columns: ["One", "Two"],
         rows: [
-          PresentationRow(role: .normal, cells: ["A", "B"]),
-          PresentationRow(role: .target, cells: ["C", "D"]),
+          PresentationRow(role: .normal, cells: ["A", "B"], anchorID: ""),
+          PresentationRow(role: .target, cells: ["C", "D"], anchorID: ""),
         ]),
       .resource(
+        anchorID: "",
         PresentationResource(
-          kind: .file, label: "Resource", ref: "synthetic:resource", metadata: metadata)),
+          kind: .file, label: "Resource", ref: "gmail:resource/example-1", metadata: metadata,
+          anchorID: "")),
       .resource(
+        anchorID: "",
         PresentationResource(
-          kind: .image, label: "Resource", ref: "synthetic:resource", metadata: metadata)),
+          kind: .image, label: "Resource", ref: "gmail:resource/example-1", metadata: metadata,
+          anchorID: "")),
       .resource(
+        anchorID: "",
         PresentationResource(
-          kind: .video, label: "Resource", ref: "synthetic:resource", metadata: metadata)),
+          kind: .video, label: "Resource", ref: "gmail:resource/example-1", metadata: metadata,
+          anchorID: "")),
       .resource(
+        anchorID: "",
         PresentationResource(
-          kind: .audio, label: "Resource", ref: "synthetic:resource", metadata: metadata)),
+          kind: .audio, label: "Resource", ref: "gmail:resource/example-1", metadata: metadata,
+          anchorID: "")),
     ],
     actions: [
-      PresentationAction(label: "Open ref", target: .openRef("synthetic:next")),
+      PresentationAction(label: "Open ref", target: .openRef("gmail:record/next")),
       PresentationAction(label: "Open web", target: .url(URL(string: "https://example.com")!)),
     ],
     facts: [
@@ -604,5 +718,52 @@ private func expectedOpen(_ name: String) -> OpenResponse {
   let record = OpenRecord(
     sourceID: "gmail", openRef: "gmail:record/example-1", typeURL: "type.example/Synthetic",
     value: Data([1, 2]), presentation: presentation)
-  return OpenResponse(outcome: .complete, requestedRef: "short-1", record: record, failure: nil)
+  return OpenResponse(
+    outcome: .complete, requestedRef: "short-1", requestedAnchorID: "match", record: record,
+    failure: nil)
+}
+
+private func canonicalSearchHit() -> Trawl_Federation_V1_SearchHit {
+  Trawl_Federation_V1_SearchHit.with {
+    $0.sourceID = "synthetic"
+    $0.openRef = "synthetic:record/full"
+    $0.anchorID = "match"
+    $0.summary = .with { $0.title = "Synthetic record" }
+    $0.evidence = [
+      .with {
+        $0.label = "Matching text"
+        $0.text = .with {
+          $0.runs = [
+            .with {
+              $0.text = "Synthetic evidence"
+              $0.matched = true
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
+
+private func canonicalOpenResponse() -> Trawl_Open_V1_OpenResponse {
+  .with {
+    $0.outcome = .complete
+    $0.requestedRef = "synthetic:record/full"
+    $0.requestedAnchorID = "match"
+    $0.record = .with {
+      $0.sourceID = "synthetic"
+      $0.openRef = "synthetic:record/full"
+      $0.data = .with { $0.typeURL = "type.example/Synthetic" }
+      $0.presentation = .with {
+        $0.title = "Synthetic record"
+        $0.primaryAnchorID = "match"
+        $0.blocks = [
+          .with {
+            $0.anchorID = "match"
+            $0.prose = .with { $0.text = "Synthetic matching passage" }
+          }
+        ]
+      }
+    }
+  }
 }

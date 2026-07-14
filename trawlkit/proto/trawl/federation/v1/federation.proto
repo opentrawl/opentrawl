@@ -77,7 +77,7 @@ message Branding {
 
 message SourceManifest {
   string source_id = 1;
-  string surface = 2;
+  string display_name = 2;
   Branding branding = 3;
   repeated string headlines = 4;
   repeated string capabilities = 5;
@@ -165,23 +165,62 @@ message WhoResolved {
   repeated string identifiers = 2;
 }
 
+message ResultSummary {
+  string title = 1;
+  string subtitle = 2;
+}
+
+message TextRun {
+  string text = 1;
+  bool matched = 2;
+}
+
+message TextEvidence {
+  repeated TextRun runs = 1;
+}
+
+message FieldEvidence {
+  string name = 1;
+  repeated TextRun value = 2;
+}
+
+message MediaEvidence {
+  string resource_ref = 1;
+  repeated TextRun description = 2;
+}
+
+message RelationEvidence {
+  string relation = 1;
+  repeated TextRun target = 2;
+}
+
+message EvidenceFragment {
+  string label = 1;
+  oneof content {
+    TextEvidence text = 2;
+    FieldEvidence field = 3;
+    MediaEvidence media = 4;
+    RelationEvidence relation = 5;
+  }
+}
+
 message SearchHit {
   string source_id = 1;
   string open_ref = 2;
   string short_ref = 3;
   string time_rfc3339 = 4;
-  string who = 5;
-  string where = 6;
-  string calendar = 7;
-  string snippet = 8;
+  reserved 5 to 8;
   bool all_day = 9;
   optional int64 availability = 10;
   optional bool unread = 11;
+  string anchor_id = 12;
+  ResultSummary summary = 13;
+  repeated EvidenceFragment evidence = 14;
 }
 
 message SearchSourceResult {
   string source_id = 1;
-  string surface = 2;
+  string display_name = 2;
   WhoResolved who_resolved = 3;
   repeated SearchHit hits = 4;
   uint64 total_matches = 5;

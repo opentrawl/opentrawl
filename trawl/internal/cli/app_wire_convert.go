@@ -32,8 +32,8 @@ func (r *Runtime) appSearchResponse(ctx context.Context, sources []Source, query
 	)
 }
 
-func (r *Runtime) appOpenResponse(ctx context.Context, sourceID, ref string) *openv1.OpenResponse {
-	return federation.Open(ctx, r.federationOpenSources(discoverCrawlers(ctx)), sourceID, ref)
+func (r *Runtime) appOpenResponse(ctx context.Context, sourceID, ref, anchorID string) *openv1.OpenResponse {
+	return federation.Open(ctx, r.federationOpenSources(discoverCrawlers(ctx)), sourceID, ref, anchorID)
 }
 
 func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse {
@@ -50,32 +50,48 @@ func appSyncResponse(sources []Source, results []SyncResult) *appv1.SyncResponse
 			item.Outcome, item.Failure = appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL, appSyncFailure(source, result)
 			response.Failures = append(response.Failures, item.Failure)
 			partial++
-		default: complete++
+		default:
+			complete++
 		}
 		response.Sources = append(response.Sources, item)
 	}
-	if partial > 0 || complete > 0 && len(response.Failures) > partial { response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
-	} else if len(response.Failures) > 0 { response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_FAILED
-	} else { response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE }
+	if partial > 0 || complete > 0 && len(response.Failures) > partial {
+		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_PARTIAL
+	} else if len(response.Failures) > 0 {
+		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_FAILED
+	} else {
+		response.Outcome = appv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE
+	}
 	return response
 }
 
 func appSyncFailure(source Source, result SyncResult) *appv1.SourceFailure {
 	code := appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
-	if result.Error != nil { code = appSyncFailureCode(result.Error.Code) }
+	if result.Error != nil {
+		code = appSyncFailureCode(result.Error.Code)
+	}
 	remedy := fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))
-	if result.Error != nil && result.Error.Remedy != "" { remedy = result.Error.Remedy }
+	if result.Error != nil && result.Error.Remedy != "" {
+		remedy = result.Error.Remedy
+	}
 	return &appv1.SourceFailure{AppId: source.ID, Surface: sourceHumanName(source), Code: code, Message: firstNonEmpty(result.Message, "The crawler did not complete sync."), Remedy: remedy}
 }
 
 func appSyncFailureCode(code string) appv1.FailureCode {
 	switch strings.ToLower(strings.TrimSpace(code)) {
-	case "timeout", "deadline_exceeded": return appv1.FailureCode_FAILURE_CODE_TIMEOUT
-	case "permission_denied", "permission": return appv1.FailureCode_FAILURE_CODE_PERMISSION
-	case "authentication_required", "authentication": return appv1.FailureCode_FAILURE_CODE_AUTHENTICATION
-	case "invalid_ref", "invalid_input": return appv1.FailureCode_FAILURE_CODE_INVALID_INPUT
-	case "not_found", "source_not_found", "unknown_short_ref": return appv1.FailureCode_FAILURE_CODE_NOT_FOUND
-	case "internal", "command_failed", "sync_failed": return appv1.FailureCode_FAILURE_CODE_INTERNAL
-	default: return appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
+	case "timeout", "deadline_exceeded":
+		return appv1.FailureCode_FAILURE_CODE_TIMEOUT
+	case "permission_denied", "permission":
+		return appv1.FailureCode_FAILURE_CODE_PERMISSION
+	case "authentication_required", "authentication":
+		return appv1.FailureCode_FAILURE_CODE_AUTHENTICATION
+	case "invalid_ref", "invalid_input":
+		return appv1.FailureCode_FAILURE_CODE_INVALID_INPUT
+	case "not_found", "source_not_found", "unknown_short_ref":
+		return appv1.FailureCode_FAILURE_CODE_NOT_FOUND
+	case "internal", "command_failed", "sync_failed":
+		return appv1.FailureCode_FAILURE_CODE_INTERNAL
+	default:
+		return appv1.FailureCode_FAILURE_CODE_UNAVAILABLE
 	}
 }

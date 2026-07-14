@@ -19,7 +19,8 @@ import (
 //	   term frequency ranks unfiltered queries sensibly
 //	3: unselected poi_candidate observations leave the index; bm25 favors
 //	   short docs, so candidate business names outranked real card matches
-const searchIndexVersion = 3
+//	4: rebuilds use the same index documents as normal crawler writes
+const searchIndexVersion = 4
 
 // Search matching quality lives in the FTS index. FTS content is derived
 // state, so an archive built by an older index version is rebuilt in place
@@ -37,7 +38,10 @@ func ensureSearchIndex(ctx context.Context, db *store.Store, logger classifyLogg
 		return fmt.Errorf("read search index version: %w", err)
 	}
 	if current >= searchIndexVersion {
-		return nil
+		var ddl string
+		if err := db.DB().QueryRowContext(ctx, `select sql from sqlite_master where name = 'asset_fts'`).Scan(&ddl); err == nil && strings.Contains(ddl, "porter") {
+			return nil
+		}
 	}
 	start := time.Now()
 	var assetRows, observationRows int64
@@ -157,8 +161,7 @@ insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`,
 	return int64(len(pending)), nil
 }
 
-// Mirrors writeModelClassification's card FTS row: one row per carded asset,
-// keyed by the card_summary observation id, body = the card's raw text fields.
+// Mirrors writeModelClassification's single raw-prose card FTS row.
 func rebuildCardFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `
 select asset_id, id, observation_type, value_text

@@ -81,7 +81,7 @@ func startHereSourceToken(sources []Source) string {
 // sourceBlockName is the left column of a Sources row: the canonical surface
 // name, with any declared human aliases in parentheses (e.g. "x (twitter)").
 func sourceBlockName(source Source) string {
-	name := firstNonEmpty(source.Surface, source.ID)
+	name := sourceHumanName(source)
 	if len(source.Aliases) > 0 {
 		name += " (" + strings.Join(source.Aliases, ", ") + ")"
 	}

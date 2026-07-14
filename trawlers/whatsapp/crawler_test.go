@@ -149,8 +149,11 @@ func TestCrawlerCoreMethods(t *testing.T) {
 		t.Fatalf("search = %#v, want one result", search)
 	}
 	hit := search.Results[0]
-	if hit.Ref != "whatsapp:msg/group-image" || hit.ShortRef == "" || hit.Who != "Alice Example" || hit.Where != "Launch Group" {
+	if hit.Ref != "whatsapp:msg/group-image" || hit.ShortRef == "" || hit.AnchorID != trawlkit.MatchAnchorID || hit.Summary.Title != "Launch Group" || hit.Summary.Subtitle != "Alice Example" {
 		t.Fatalf("search hit = %#v", hit)
+	}
+	if len(hit.Evidence) != 1 || hit.Evidence[0].Label != "Message from Alice Example" || hit.Evidence[0].Text == nil || len(hit.Evidence[0].Text.Runs) != 1 || !hit.Evidence[0].Text.Runs[0].Matched {
+		t.Fatalf("search evidence = %#v", hit.Evidence)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)

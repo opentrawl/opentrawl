@@ -117,6 +117,9 @@ func SyncWithStore(ctx context.Context, db *store.Store, paths Paths, opts SyncO
 	if !snapshot.Completeness.Complete() {
 		return importer.result, &SnapshotIncompleteError{State: string(snapshot.Completeness.State)}
 	}
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		return SyncResult{}, err
+	}
 	return importer.result, nil
 }
 

@@ -17,15 +17,47 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		return trawlkit.Hit{}, err
 	}
 	unread := hit.Unread
+	title := strings.TrimSpace(hit.Where)
+	if title == "" {
+		title = "(no subject)"
+	}
+	anchorID := trawlkit.MatchAnchorID
+	evidence := searchEvidence(hit.Matches)
+	if len(hit.Matches) > 0 {
+		anchorID = hit.Matches[0].Field
+	} else {
+		anchorID = "subject"
+		value := title
+		evidence = []trawlkit.EvidenceFragment{{Label: "Message preview", Field: &trawlkit.FieldEvidence{Name: "subject", Value: []trawlkit.TextRun{{Text: value}}}}}
+	}
 	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     t,
-		Who:      hit.Who,
-		Where:    hit.Where,
-		Snippet:  hit.Snippet,
+		AnchorID: anchorID,
+		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Who},
+		Evidence: evidence,
 		Unread:   &unread,
 	}, nil
+}
+
+func searchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
+	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+	for _, match := range matches {
+		label := "Message body"
+		if match.Field == "subject" {
+			label = "Subject"
+		}
+		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
+		for _, run := range match.Runs {
+			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		}
+		evidence = append(evidence, trawlkit.EvidenceFragment{
+			Label: label,
+			Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs},
+		})
+	}
+	return evidence
 }
 
 func whoCandidate(candidate archive.WhoCandidate) whomatch.Candidate {

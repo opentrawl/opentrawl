@@ -9,6 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 )
 
 func TestFederatedSearchPreservesFacts(t *testing.T) {
@@ -19,8 +20,14 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 		WhoResolved: &trawlkit.WhoResolved{Who: "Casey Example", Identifiers: []string{"casey@example.com", "+15550001001"}},
 		Results: []trawlkit.Hit{{
 			Source: "calendar", Ref: "calendar:event/example-1", ShortRef: "cal:1",
-			Time: time.Date(2026, 7, 12, 9, 30, 0, 123000000, time.FixedZone("CEST", 2*60*60)),
-			Who:  "Casey Example", Where: "Canal room", Calendar: "Work", Snippet: "Synthetic launch review", AllDay: false,
+			Time:     time.Date(2026, 7, 12, 9, 30, 0, 123000000, time.FixedZone("CEST", 2*60*60)),
+			AnchorID: trawlkit.MatchAnchorID,
+			Summary:  trawlkit.ResultSummary{Title: "Synthetic launch review", Subtitle: "Work"},
+			Evidence: []trawlkit.EvidenceFragment{
+				trawlkit.FieldMatch("Attendee", "attendee", "Casey Example"),
+				trawlkit.FieldMatch("Location", "location", "Canal room"),
+			},
+			AllDay:       false,
 			Availability: &availability, Unread: &unread,
 		}},
 		TotalMatches: 3,
@@ -30,7 +37,7 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projected.SourceId != "calendar" || projected.Surface != "Calendar" || projected.TotalMatches != 3 || !projected.TotalIsExact || !projected.Truncated {
+	if projected.SourceId != "calendar" || projected.DisplayName != "Calendar" || projected.TotalMatches != 3 || !projected.TotalIsExact || !projected.Truncated {
 		t.Fatalf("projected summary = %#v", projected)
 	}
 	if projected.WhoResolved == nil || len(projected.WhoResolved.Identifiers) != 2 {
@@ -39,6 +46,9 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 	hit := projected.Hits[0]
 	if hit.SourceId != "calendar" || hit.OpenRef != "calendar:event/example-1" || hit.ShortRef != "cal:1" || hit.TimeRfc3339 != "2026-07-12T09:30:00.123+02:00" {
 		t.Fatalf("hit identity = %#v", hit)
+	}
+	if hit.AnchorId != trawlkit.MatchAnchorID || hit.GetSummary().GetTitle() != "Synthetic launch review" || hit.GetSummary().GetSubtitle() != "Work" || len(hit.Evidence) != 2 {
+		t.Fatalf("hit match contract = %#v", hit)
 	}
 	if hit.Availability == nil || hit.GetAvailability() != 2 || hit.Unread == nil || !hit.GetUnread() {
 		t.Fatalf("optional hit facts = %#v", hit)
@@ -50,9 +60,43 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 	}
 }
 
+func TestProjectSearchRoundTripsEveryEvidenceKind(t *testing.T) {
+	projected, err := ProjectSearch(manifestFixture("gmail", "Gmail"), trawlkit.SearchResult{
+		Results: []trawlkit.Hit{{
+			Ref: "gmail:msg/example-1", AnchorID: "body",
+			Summary: trawlkit.ResultSummary{Title: "Synthetic message"},
+			Evidence: []trawlkit.EvidenceFragment{
+				trawlkit.TextMatch("Message body", "Synthetic message text"),
+				trawlkit.FieldMatch("Subject", "subject", "Synthetic subject"),
+				trawlkit.MediaMatch("Attachment", "gmail:resource/example-1", "Synthetic attachment"),
+				trawlkit.RelationMatch("Replying to", "reply", "Synthetic parent message"),
+			},
+		}},
+		TotalMatches: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := proto.Marshal(projected)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded := &federationv1.SearchSourceResult{}
+	if err := proto.Unmarshal(encoded, decoded); err != nil {
+		t.Fatal(err)
+	}
+	evidence := decoded.GetHits()[0].GetEvidence()
+	if len(evidence) != 4 || evidence[0].GetText() == nil || evidence[1].GetField() == nil || evidence[2].GetMedia() == nil || evidence[3].GetRelation() == nil {
+		t.Fatalf("round-tripped evidence = %#v", evidence)
+	}
+	if got := evidence[2].GetMedia().GetResourceRef(); got != "gmail:resource/example-1" {
+		t.Fatalf("attachment resource ref = %q", got)
+	}
+}
+
 func TestProjectSearchPinsCompleteProtobufText(t *testing.T) {
 	projected, err := ProjectSearch(manifestFixture("notes", "Notes"), trawlkit.SearchResult{
-		Results:      []trawlkit.Hit{{Ref: "notes:note/example-1", Time: mustTime("2026-07-12T09:00:00Z"), Snippet: "Synthetic note"}},
+		Results:      []trawlkit.Hit{federationSearchHit("notes:note/example-1", "Synthetic note", "Synthetic note", mustTime("2026-07-12T09:00:00Z"))},
 		TotalMatches: 1,
 	})
 	if err != nil {
@@ -60,12 +104,24 @@ func TestProjectSearchPinsCompleteProtobufText(t *testing.T) {
 	}
 	want := "" +
 		"source_id:  \"notes\"\n" +
-		"surface:  \"Notes\"\n" +
+		"display_name:  \"Notes\"\n" +
 		"hits:  {\n" +
 		"  source_id:  \"notes\"\n" +
 		"  open_ref:  \"notes:note/example-1\"\n" +
 		"  time_rfc3339:  \"2026-07-12T09:00:00Z\"\n" +
-		"  snippet:  \"Synthetic note\"\n" +
+		"  anchor_id:  \"match\"\n" +
+		"  summary:  {\n" +
+		"    title:  \"Synthetic note\"\n" +
+		"  }\n" +
+		"  evidence:  {\n" +
+		"    label:  \"Matching text\"\n" +
+		"    text:  {\n" +
+		"      runs:  {\n" +
+		"        text:  \"Synthetic note\"\n" +
+		"        matched:  true\n" +
+		"      }\n" +
+		"    }\n" +
+		"  }\n" +
 		"}\n" +
 		"total_matches:  1\n" +
 		"total_is_exact:  true\n"
@@ -79,12 +135,12 @@ func TestSearchOrdersAndBoundsDeterministically(t *testing.T) {
 	two := manifestFixture("two", "Two")
 	results := map[string]trawlkit.SearchResult{
 		"one": {Results: []trawlkit.Hit{
-			{Ref: "one:new", Time: mustTime("2026-07-12T10:00:00Z"), Snippet: "one rank zero"},
-			{Ref: "one:old", Time: mustTime("2026-07-12T08:00:00Z"), Snippet: "one rank one"},
+			federationSearchHit("one:new", "One new", "one rank zero", mustTime("2026-07-12T10:00:00Z")),
+			federationSearchHit("one:old", "One old", "one rank one", mustTime("2026-07-12T08:00:00Z")),
 		}, TotalMatches: 2},
 		"two": {Results: []trawlkit.Hit{
-			{Ref: "two:middle", Time: mustTime("2026-07-12T09:00:00Z"), Snippet: "two rank zero"},
-			{Ref: "two:untimed", Snippet: "two rank one"},
+			federationSearchHit("two:middle", "Two middle", "two rank zero", mustTime("2026-07-12T09:00:00Z")),
+			federationSearchHit("two:untimed", "Two untimed", "two rank one", time.Time{}),
 		}, TotalMatches: 5, TotalIsLowerBound: true, Truncated: true},
 	}
 	limits := make(chan int, 2)
@@ -138,7 +194,7 @@ func TestSearchPreservesEmptyPartialFailedSkippedAndTimeout(t *testing.T) {
 
 	partial := Search(context.Background(), []SearchSource{
 		{Manifest: manifestFixture("notes", "Notes"), Run: func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
-			return trawlkit.SearchResult{Results: []trawlkit.Hit{{Ref: "notes:one"}}, TotalMatches: 1}, nil
+			return trawlkit.SearchResult{Results: []trawlkit.Hit{federationSearchHit("notes:one", "One note", "one", time.Time{})}, TotalMatches: 1}, nil
 		}},
 		{Manifest: manifestFixture("photos", "Photos"), SkipReason: "not selected"},
 		{Manifest: manifestFixture("calendar", "Calendar"), Run: func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
@@ -181,6 +237,24 @@ func TestSearchRejectsForeignHitSourceAndConflictingLimit(t *testing.T) {
 	if _, err := ProjectSearch(manifestFixture("notes", "Notes"), trawlkit.SearchResult{Results: []trawlkit.Hit{{Source: "gmail", Ref: "gmail:one"}}}); err == nil {
 		t.Fatal("foreign source was accepted")
 	}
+	for _, test := range []struct {
+		name string
+		hit  trawlkit.Hit
+	}{
+		{name: "foreign open ref", hit: federationSearchHit("gmail:message/example-1", "Synthetic message", "matching text", time.Time{})},
+		{name: "padded open ref", hit: federationSearchHit(" notes:note/example-1 ", "Synthetic note", "matching text", time.Time{})},
+		{name: "invalid anchor", hit: func() trawlkit.Hit {
+			hit := federationSearchHit("notes:note/example-1", "Synthetic note", "matching text", time.Time{})
+			hit.AnchorID = "matching passage"
+			return hit
+		}()},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if _, err := ProjectSearch(manifestFixture("notes", "Notes"), trawlkit.SearchResult{Results: []trawlkit.Hit{test.hit}}); err == nil {
+				t.Fatalf("invalid hit was accepted: %#v", test.hit)
+			}
+		})
+	}
 	called := false
 	response := Search(context.Background(), []SearchSource{{
 		Manifest: manifestFixture("notes", "Notes"),
@@ -199,11 +273,11 @@ func TestSearchPreservesInputOrderWhenCallbacksFinishOutOfOrder(t *testing.T) {
 	response := Search(context.Background(), []SearchSource{
 		{Manifest: manifestFixture("one", "One"), Run: func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
 			<-secondFinished
-			return trawlkit.SearchResult{Results: []trawlkit.Hit{{Ref: "one:hit"}}, TotalMatches: 1}, nil
+			return trawlkit.SearchResult{Results: []trawlkit.Hit{federationSearchHit("one:hit", "One hit", "hit", time.Time{})}, TotalMatches: 1}, nil
 		}},
 		{Manifest: manifestFixture("two", "Two"), Run: func(context.Context, trawlkit.Query) (trawlkit.SearchResult, *federationv1.SourceFailure) {
 			close(secondFinished)
-			return trawlkit.SearchResult{Results: []trawlkit.Hit{{Ref: "two:hit"}}, TotalMatches: 1}, nil
+			return trawlkit.SearchResult{Results: []trawlkit.Hit{federationSearchHit("two:hit", "Two hit", "hit", time.Time{})}, TotalMatches: 1}, nil
 		}},
 	}, trawlkit.Query{Text: "hit"}, federationv1.SearchOrder_SEARCH_ORDER_RELEVANCE, 20)
 	if response.Sources[0].SourceId != "one" || response.Sources[1].SourceId != "two" || response.Hits[0].OpenRef != "one:hit" || response.Hits[1].OpenRef != "two:hit" {
@@ -242,8 +316,8 @@ func TestSearchBoundaryEvidence(t *testing.T) {
 	oneResult := trawlkit.SearchResult{
 		WhoResolved: &trawlkit.WhoResolved{Who: "Avery Example", Identifiers: []string{"avery@example.com"}},
 		Results: []trawlkit.Hit{
-			{Ref: "gmail:message:example-1", ShortRef: "mail:1", Time: mustTime("2026-07-12T10:00:00+02:00"), Who: "Avery Example", Where: "Canal room", Calendar: "Work", Snippet: "Synthetic launch note", AllDay: true, Availability: &availability, Unread: &unread},
-			{Ref: "gmail:message:example-2", Time: mustTime("2026-07-12T08:00:00Z"), Who: "Casey Example", Snippet: "Synthetic follow-up"},
+			{Ref: "gmail:message:example-1", ShortRef: "mail:1", Time: mustTime("2026-07-12T10:00:00+02:00"), AnchorID: trawlkit.MatchAnchorID, Summary: trawlkit.ResultSummary{Title: "Canal room", Subtitle: "Avery Example"}, Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message body", "Synthetic launch note"), trawlkit.FieldMatch("Mailbox", "mailbox", "Work")}, AllDay: true, Availability: &availability, Unread: &unread},
+			federationSearchHit("gmail:message:example-2", "Casey Example", "Synthetic follow-up", mustTime("2026-07-12T08:00:00Z")),
 		},
 		TotalMatches: 3,
 		Truncated:    true,
@@ -286,6 +360,16 @@ func TestSearchBoundaryEvidence(t *testing.T) {
 	writeEvidence(t, "search-input.json", inputBytes)
 	writeEvidence(t, "search-projected.pbtxt", []byte(prototext.Format(projected)))
 	writeEvidence(t, "search-response.pbtxt", []byte(prototext.Format(response)))
+}
+
+func federationSearchHit(ref, title, matchingText string, at time.Time) trawlkit.Hit {
+	return trawlkit.Hit{
+		Ref:      ref,
+		Time:     at,
+		AnchorID: trawlkit.MatchAnchorID,
+		Summary:  trawlkit.ResultSummary{Title: title},
+		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Matching text", matchingText)},
+	}
 }
 
 func mustTime(value string) time.Time {

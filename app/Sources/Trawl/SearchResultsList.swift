@@ -61,9 +61,10 @@ struct SearchResultsList: View {
 
   private func moveSelection(by offset: Int) {
     guard !results.isEmpty else { return }
-    let currentIndex = selectedResultID.flatMap { selectedID in
-      results.firstIndex(where: { $0.id == selectedID })
-    } ?? (offset > 0 ? -1 : results.count)
+    let currentIndex =
+      selectedResultID.flatMap { selectedID in
+        results.firstIndex(where: { $0.id == selectedID })
+      } ?? (offset > 0 ? -1 : results.count)
     let nextIndex = min(max(currentIndex + offset, 0), results.count - 1)
     selectedResultID = results[nextIndex].id
   }
@@ -128,7 +129,13 @@ private struct SearchResultRow: View {
             .foregroundStyle(.tertiary)
           }
         }
-        Text(hit.snippet)
+        if !hit.summary.subtitle.isEmpty {
+          Text(hit.summary.subtitle)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+        }
+        Text(evidenceText)
           .font(.callout)
           .foregroundStyle(.secondary)
           .lineLimit(2)
@@ -149,10 +156,14 @@ private struct SearchResultRow: View {
   }
 
   private var accessibilityLabel: String {
-    [sourceDisplayName, title, formattedTime, hit.snippet]
+    [sourceDisplayName, title, hit.summary.subtitle, formattedTime, evidenceText]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
       .joined(separator: ". ")
+  }
+
+  private var evidenceText: String {
+    hit.evidence.map(\.labelledDisplayText).joined(separator: " · ")
   }
 
   private var formattedTime: String? {

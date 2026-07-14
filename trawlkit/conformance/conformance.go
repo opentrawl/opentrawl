@@ -27,15 +27,39 @@ type searchEnvelope struct {
 }
 
 type searchResult struct {
-	Ref                   *string `json:"ref"`
-	Time                  *string `json:"time"`
-	Who                   *string `json:"who"`
-	Where                 *string `json:"where"`
-	Calendar              *string `json:"calendar"`
-	Snippet               *string `json:"snippet"`
-	SnippetFrontTruncated *bool   `json:"snippet_front_truncated"`
-	FrontTruncated        *bool   `json:"front_truncated"`
-	TruncatedFront        *bool   `json:"truncated_front"`
+	Ref                   *string          `json:"ref"`
+	Time                  *string          `json:"time"`
+	Who                   *string          `json:"who"`
+	Where                 *string          `json:"where"`
+	Snippet               *string          `json:"snippet"`
+	AnchorID              *string          `json:"anchor_id"`
+	Summary               *searchSummary   `json:"summary"`
+	Evidence              []searchEvidence `json:"evidence"`
+	SnippetFrontTruncated *bool            `json:"snippet_front_truncated"`
+	FrontTruncated        *bool            `json:"front_truncated"`
+	TruncatedFront        *bool            `json:"truncated_front"`
+}
+
+type searchSummary struct {
+	Title    *string `json:"title"`
+	Subtitle *string `json:"subtitle"`
+}
+type searchEvidence struct {
+	Label    *string     `json:"label"`
+	Text     *searchRuns `json:"text"`
+	Field    *searchRuns `json:"field"`
+	Media    *searchRuns `json:"media"`
+	Relation *searchRuns `json:"relation"`
+}
+type searchRuns struct {
+	Runs        []searchRun `json:"runs"`
+	Value       []searchRun `json:"value"`
+	Description []searchRun `json:"description"`
+	Target      []searchRun `json:"target"`
+}
+type searchRun struct {
+	Text    *string `json:"text"`
+	Matched bool    `json:"matched"`
 }
 
 func AssertSearchEnvelope(t *testing.T, envelope []byte) {
@@ -113,19 +137,23 @@ func checkSearchResult(index int, result searchResult) []string {
 		value *string
 	}{
 		{name: "ref", value: result.Ref},
+		{name: "anchor_id", value: result.AnchorID},
 		{name: "who", value: result.Who},
 		{name: "where", value: result.Where},
-		{name: "calendar", value: result.Calendar},
 		{name: "snippet", value: result.Snippet},
 	} {
 		if field.value != nil {
 			failures = append(failures, checkSearchText(index, field.name, *field.value)...)
 		}
 	}
-	if isFrontTruncated(result) {
-		if result.Snippet == nil || !hasFrontTruncationMarker(*result.Snippet) {
-			failures = append(failures, fmt.Sprintf("search result %d snippet is front-truncated but has no leading marker", index))
-		}
+	if result.Summary == nil || result.Summary.Title == nil || strings.TrimSpace(*result.Summary.Title) == "" {
+		failures = append(failures, fmt.Sprintf("search result %d has no summary title", index))
+	}
+	if len(result.Evidence) == 0 {
+		failures = append(failures, fmt.Sprintf("search result %d has no evidence", index))
+	}
+	if result.SnippetFrontTruncated != nil && *result.SnippetFrontTruncated && (result.Snippet == nil || !strings.HasPrefix(strings.TrimSpace(*result.Snippet), "…")) {
+		failures = append(failures, fmt.Sprintf("search result %d snippet is front-truncated but has no leading marker", index))
 	}
 	return failures
 }

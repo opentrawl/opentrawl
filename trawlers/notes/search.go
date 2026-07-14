@@ -25,18 +25,22 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 	if err != nil {
 		return trawlkit.SearchResult{}, err
 	}
-	// Who is left unset: Apple Notes has no per-note author, every note in this
-	// archive belongs to the one device owner, so "who" would read "me" on
-	// every row. The shared list renderer already drops a column that carries
-	// no varying value, which is the honest outcome for a constant that is not
-	// really data.
 	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
+		title := strings.TrimSpace(result.Title)
+		if title == "" {
+			title = "Note"
+		}
+		anchorID := trawlkit.MatchAnchorID
+		if len(result.Matches) > 0 {
+			anchorID = result.Matches[0].Field
+		}
 		hits = append(hits, trawlkit.Hit{
-			Ref:     result.Ref,
-			Time:    parseContractTime(result.Time),
-			Where:   noteWhere(result),
-			Snippet: result.Snippet,
+			Ref:      result.Ref,
+			Time:     parseContractTime(result.Time),
+			AnchorID: anchorID,
+			Summary:  trawlkit.ResultSummary{Title: title, Subtitle: noteWhere(result)},
+			Evidence: noteSearchEvidence(result.Matches),
 		})
 	}
 	if req.Log != nil {
@@ -49,10 +53,23 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 	}, nil
 }
 
-func noteWhere(result archive.SearchResult) string {
-	if strings.TrimSpace(result.Title) != "" {
-		return strings.TrimSpace(result.Title)
+func noteSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
+	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+	for _, match := range matches {
+		label := "Note body"
+		if match.Field == "title" {
+			label = "Title"
+		}
+		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
+		for _, run := range match.Runs {
+			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		}
+		evidence = append(evidence, trawlkit.EvidenceFragment{Label: label, Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs}})
 	}
+	return evidence
+}
+
+func noteWhere(result archive.SearchResult) string {
 	if strings.TrimSpace(result.Folder) != "" {
 		return strings.TrimSpace(result.Folder)
 	}

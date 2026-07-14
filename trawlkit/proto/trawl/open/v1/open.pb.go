@@ -93,13 +93,14 @@ func (x *OpenRecord) GetPresentation() *v1.PresentationDocument {
 }
 
 type OpenResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Outcome       v11.OperationOutcome   `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
-	Record        *OpenRecord            `protobuf:"bytes,2,opt,name=record,proto3" json:"record,omitempty"`
-	Failure       *v11.SourceFailure     `protobuf:"bytes,3,opt,name=failure,proto3" json:"failure,omitempty"`
-	RequestedRef  string                 `protobuf:"bytes,4,opt,name=requested_ref,json=requestedRef,proto3" json:"requested_ref,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Outcome           v11.OperationOutcome   `protobuf:"varint,1,opt,name=outcome,proto3,enum=trawl.federation.v1.OperationOutcome" json:"outcome,omitempty"`
+	Record            *OpenRecord            `protobuf:"bytes,2,opt,name=record,proto3" json:"record,omitempty"`
+	Failure           *v11.SourceFailure     `protobuf:"bytes,3,opt,name=failure,proto3" json:"failure,omitempty"`
+	RequestedRef      string                 `protobuf:"bytes,4,opt,name=requested_ref,json=requestedRef,proto3" json:"requested_ref,omitempty"`
+	RequestedAnchorId string                 `protobuf:"bytes,5,opt,name=requested_anchor_id,json=requestedAnchorId,proto3" json:"requested_anchor_id,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *OpenResponse) Reset() {
@@ -160,6 +161,13 @@ func (x *OpenResponse) GetRequestedRef() string {
 	return ""
 }
 
+func (x *OpenResponse) GetRequestedAnchorId() string {
+	if x != nil {
+		return x.RequestedAnchorId
+	}
+	return ""
+}
+
 var File_trawl_open_v1_open_proto protoreflect.FileDescriptor
 
 const file_trawl_open_v1_open_proto_rawDesc = "" +
@@ -170,12 +178,13 @@ const file_trawl_open_v1_open_proto_rawDesc = "" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x19\n" +
 	"\bopen_ref\x18\x02 \x01(\tR\aopenRef\x12(\n" +
 	"\x04data\x18\x03 \x01(\v2\x14.google.protobuf.AnyR\x04data\x12O\n" +
-	"\fpresentation\x18\x04 \x01(\v2+.trawl.presentation.v1.PresentationDocumentR\fpresentation\"\xe5\x01\n" +
+	"\fpresentation\x18\x04 \x01(\v2+.trawl.presentation.v1.PresentationDocumentR\fpresentation\"\x95\x02\n" +
 	"\fOpenResponse\x12?\n" +
 	"\aoutcome\x18\x01 \x01(\x0e2%.trawl.federation.v1.OperationOutcomeR\aoutcome\x121\n" +
 	"\x06record\x18\x02 \x01(\v2\x19.trawl.open.v1.OpenRecordR\x06record\x12<\n" +
 	"\afailure\x18\x03 \x01(\v2\".trawl.federation.v1.SourceFailureR\afailure\x12#\n" +
-	"\rrequested_ref\x18\x04 \x01(\tR\frequestedRefBDZBgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1b\x06proto3"
+	"\rrequested_ref\x18\x04 \x01(\tR\frequestedRef\x12.\n" +
+	"\x13requested_anchor_id\x18\x05 \x01(\tR\x11requestedAnchorIdBDZBgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1;openv1b\x06proto3"
 
 var (
 	file_trawl_open_v1_open_proto_rawDescOnce sync.Once

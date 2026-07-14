@@ -1,47 +1,69 @@
 import SwiftUI
 import TrawlClient
 
+private enum PresentationElementID: Hashable {
+  case anchor(String)
+  case block(Int)
+  case field(block: Int, field: Int)
+  case row(block: Int, row: Int)
+  case resource(Int)
+  case resourceField(block: Int, field: Int)
+
+  static func sourceAnchor(_ anchorID: String, fallback: Self) -> Self {
+    anchorID.isEmpty ? fallback : .anchor(anchorID)
+  }
+}
+
 struct PresentationDocumentView: View {
   let document: PresentationDocument
+  let targetAnchorID: String
 
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 16) {
-        Text(document.title)
-          .font(.title2)
-          .textSelection(.enabled)
-          .accessibilityLabel(document.title)
-        ForEach(Array(document.blocks.enumerated()), id: \.offset) { _, block in
-          BlockView(block: block)
+    ScrollViewReader { proxy in
+      ScrollView {
+        VStack(alignment: .leading, spacing: 16) {
+          Text(document.title)
+            .font(.title2)
+            .textSelection(.enabled)
+            .accessibilityLabel(document.title)
+          ForEach(Array(document.blocks.enumerated()), id: \.offset) { index, block in
+            BlockView(block: block, index: index)
+          }
+          ForEach(Array(document.actions.enumerated()), id: \.offset) { _, action in
+            ActionView(action: action)
+          }
+          ForEach(Array(document.facts.enumerated()), id: \.offset) { _, fact in
+            FactView(fact: fact)
+          }
         }
-        ForEach(Array(document.actions.enumerated()), id: \.offset) { _, action in
-          ActionView(action: action)
-        }
-        ForEach(Array(document.facts.enumerated()), id: \.offset) { _, fact in
-          FactView(fact: fact)
-        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
       }
-      .padding(18)
-      .frame(maxWidth: .infinity, alignment: .leading)
+      .onAppear {
+        proxy.scrollTo(PresentationElementID.anchor(targetAnchorID), anchor: .center)
+      }
     }
   }
 }
 
 private struct BlockView: View {
   let block: PresentationBlock
+  let index: Int
 
   var body: some View {
     switch block {
-    case let .heading(text):
+    case .heading(let anchorID, let text):
       Text(text)
         .font(.headline)
         .textSelection(.enabled)
-    case let .prose(text):
+        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+    case .prose(let anchorID, let text):
       Text(text)
         .textSelection(.enabled)
-    case let .fields(fields):
+        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+    case .fields(let anchorID, let fields):
       VStack(alignment: .leading, spacing: 6) {
-        ForEach(Array(fields.enumerated()), id: \.offset) { _, field in
+        ForEach(Array(fields.enumerated()), id: \.offset) { fieldIndex, field in
           HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(field.label)
               .foregroundStyle(.secondary)
@@ -52,12 +74,21 @@ private struct BlockView: View {
           }
           .accessibilityElement(children: .ignore)
           .accessibilityLabel("\(field.label): \(field.display)")
+          .id(
+            PresentationElementID.sourceAnchor(
+              field.anchorID,
+              fallback: .field(block: index, field: fieldIndex)
+            )
+          )
         }
       }
-    case let .table(columns, rows):
-      ResponsiveTable(columns: columns, rows: rows)
-    case let .resource(resource):
-      ResourceView(resource: resource)
+      .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+    case .table(let anchorID, let columns, let rows):
+      ResponsiveTable(columns: columns, rows: rows, blockIndex: index)
+        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+    case .resource(let anchorID, let resource):
+      ResourceView(resource: resource, blockIndex: index)
+        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     }
   }
 }
@@ -65,46 +96,45 @@ private struct BlockView: View {
 private struct ResponsiveTable: View {
   let columns: [String]
   let rows: [PresentationRow]
+  let blockIndex: Int
 
   var body: some View {
-    ViewThatFits(in: .horizontal) {
-      Grid(alignment: .leading, horizontalSpacing: 14, verticalSpacing: 7) {
-        GridRow {
-          ForEach(Array(columns.enumerated()), id: \.offset) { _, column in
-            Text(column)
-              .font(.caption.weight(.semibold))
+    VStack(alignment: .leading, spacing: 8) {
+      ForEach(Array(rows.enumerated()), id: \.offset) { rowIndex, row in
+        ViewThatFits(in: .horizontal) {
+          HStack(alignment: .firstTextBaseline, spacing: 14) {
+            ForEach(columns.indices, id: \.self) { index in
+              VStack(alignment: .leading, spacing: 3) {
+                Text(columns[index])
+                  .font(.caption.weight(.semibold))
+                  .foregroundStyle(.secondary)
+                Text(value(at: index, in: row))
+                  .textSelection(.enabled)
+              }
               .frame(minWidth: 120, alignment: .leading)
-          }
-        }
-        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
-          GridRow {
-            ForEach(Array(row.cells.enumerated()), id: \.offset) { _, cell in
-              Text(cell)
-                .textSelection(.enabled)
-                .frame(minWidth: 120, alignment: .leading)
             }
           }
-          .padding(6)
-          .background(row.role == .target ? Color.accentColor.opacity(0.12) : .clear)
-          .accessibilityElement(children: .ignore)
-          .accessibilityLabel(accessibilityLabel(for: row))
-        }
-      }
-      .fixedSize(horizontal: true, vertical: false)
-      VStack(alignment: .leading, spacing: 8) {
-        ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
           VStack(alignment: .leading, spacing: 5) {
             ForEach(columns.indices, id: \.self) { index in
               LabeledContent(columns[index], value: value(at: index, in: row))
                 .font(.callout)
             }
           }
-          .padding(10)
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .background(row.role == .target ? Color.accentColor.opacity(0.12) : .secondary.opacity(0.05), in: .rect(cornerRadius: 8))
-          .accessibilityElement(children: .ignore)
-          .accessibilityLabel(accessibilityLabel(for: row))
         }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+          row.role == .target ? Color.accentColor.opacity(0.12) : .secondary.opacity(0.05),
+          in: .rect(cornerRadius: 8)
+        )
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel(for: row))
+        .id(
+          PresentationElementID.sourceAnchor(
+            row.anchorID,
+            fallback: .row(block: blockIndex, row: rowIndex)
+          )
+        )
       }
     }
   }
@@ -144,6 +174,7 @@ private struct LabeledContent: View {
 
 private struct ResourceView: View {
   let resource: PresentationResource
+  let blockIndex: Int
 
   var body: some View {
     VStack(alignment: .leading, spacing: 4) {
@@ -152,14 +183,23 @@ private struct ResourceView: View {
       Text(kindLabel)
         .font(.callout)
         .foregroundStyle(.secondary)
-      ForEach(Array(resource.metadata.enumerated()), id: \.offset) { _, field in
+      ForEach(Array(resource.metadata.enumerated()), id: \.offset) { fieldIndex, field in
         LabeledContent(field.label, value: field.display)
           .font(.caption)
+          .id(
+            PresentationElementID.sourceAnchor(
+              field.anchorID,
+              fallback: .resourceField(block: blockIndex, field: fieldIndex)
+            )
+          )
       }
     }
     .padding(10)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(.secondary.opacity(0.05), in: .rect(cornerRadius: 8))
+    .id(
+      PresentationElementID.sourceAnchor(resource.anchorID, fallback: .resource(blockIndex))
+    )
   }
 
   private var symbol: String {
@@ -186,7 +226,7 @@ private struct ActionView: View {
 
   var body: some View {
     switch action.target {
-    case let .url(url):
+    case .url(let url):
       Link(action.label, destination: url)
         .accessibilityLabel(action.label)
     case .openRef:

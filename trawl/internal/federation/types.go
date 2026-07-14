@@ -29,7 +29,7 @@ type SearchSource struct {
 
 type OpenSource struct {
 	Manifest   control.Manifest
-	Run        func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure)
+	Run        func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure)
 	SkipReason string
 }
 

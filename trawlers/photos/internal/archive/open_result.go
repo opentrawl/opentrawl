@@ -27,19 +27,22 @@ type OpenStale struct {
 }
 
 type OpenMechanical struct {
-	Source          OpenSource           `json:"source"`
-	Captured        *OpenCaptured        `json:"captured,omitempty"`
-	Media           *OpenMedia           `json:"media,omitempty"`
-	Place           *OpenPlace           `json:"place,omitempty"`
-	GPS             *OpenGPS             `json:"gps,omitempty"`
-	Address         string               `json:"address,omitempty"`
-	KnownPlace      *OpenKnownPlace      `json:"known_place,omitempty"`
-	Venue           *OpenVenue           `json:"venue,omitempty"`
-	VenueCandidates []OpenVenueCandidate `json:"venue_candidates,omitempty"`
-	Camera          *OpenCamera          `json:"camera,omitempty"`
-	Albums          []OpenAlbum          `json:"albums,omitempty"`
-	Original        *OpenOriginal        `json:"original,omitempty"`
-	Flags           []string             `json:"flags,omitempty"`
+	Source           OpenSource           `json:"source"`
+	Captured         *OpenCaptured        `json:"captured,omitempty"`
+	Media            *OpenMedia           `json:"media,omitempty"`
+	Place            *OpenPlace           `json:"place,omitempty"`
+	GPS              *OpenGPS             `json:"gps,omitempty"`
+	Address          string               `json:"address,omitempty"`
+	KnownPlace       *OpenKnownPlace      `json:"known_place,omitempty"`
+	Venue            *OpenVenue           `json:"venue,omitempty"`
+	VenueCandidates  []OpenVenueCandidate `json:"venue_candidates,omitempty"`
+	Camera           *OpenCamera          `json:"camera,omitempty"`
+	Albums           []OpenAlbum          `json:"albums,omitempty"`
+	Original         *OpenOriginal        `json:"original,omitempty"`
+	Filenames        []string             `json:"-"`
+	Flags            []string             `json:"flags,omitempty"`
+	Signals          []OpenSignal         `json:"-"`
+	SignalsTruncated bool                 `json:"-"`
 }
 
 type OpenSource struct {
@@ -114,6 +117,11 @@ type OpenOriginal struct {
 	Availability string `json:"availability,omitempty"`
 }
 
+type OpenSignal struct {
+	AnchorID string
+	Label    string
+}
+
 type OpenModel struct {
 	PromptVersion string   `json:"prompt_version,omitempty"`
 	ModelID       string   `json:"model_id,omitempty"`
@@ -123,7 +131,7 @@ type OpenModel struct {
 	Uncertainties []string `json:"uncertainties,omitempty"`
 }
 
-func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations []map[string]any) OpenResult {
+func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations, metadataObservations []map[string]any) OpenResult {
 	knownPlace := openKnownPlace(placeObservations)
 	venue := openVenue(placeObservations)
 	venueCandidates := openVenueCandidates(placeObservations)
@@ -136,22 +144,47 @@ func newOpenResult(asset map[string]any, resources, locations, albums, modelObse
 		Ref:           AssetRef(rowString(asset, "id")),
 		Stale:         openStale(modelObservations, placeObservations),
 		Mechanical: OpenMechanical{
-			Source:          openSource(asset),
-			Captured:        openCaptured(asset),
-			Media:           openMedia(asset),
-			Place:           openPlace(placeObservations, locations),
-			GPS:             openGPS(locations),
-			Address:         openAddress(placeObservations),
-			KnownPlace:      knownPlace,
-			Venue:           venue,
-			VenueCandidates: venueCandidates,
-			Camera:          openCamera(asset),
-			Albums:          openAlbums(albums),
-			Original:        openOriginal(resources),
-			Flags:           openFlags(asset),
+			Source:           openSource(asset),
+			Captured:         openCaptured(asset),
+			Media:            openMedia(asset),
+			Place:            openPlace(placeObservations, locations),
+			GPS:              openGPS(locations),
+			Address:          openAddress(placeObservations),
+			KnownPlace:       knownPlace,
+			Venue:            venue,
+			VenueCandidates:  venueCandidates,
+			Camera:           openCamera(asset),
+			Albums:           openAlbums(albums),
+			Original:         openOriginal(resources),
+			Filenames:        openResourceNames(resources),
+			Flags:            openFlags(asset),
+			Signals:          openSignals(metadataObservations),
+			SignalsTruncated: len(metadataObservations) > maximumOpenSignals,
 		},
 		Model: openModel(modelObservations),
 	}
+}
+
+func openResourceNames(rows []map[string]any) []string {
+	values := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if name := strings.TrimSpace(rowString(row, "original_filename")); name != "" {
+			values = append(values, name)
+		}
+	}
+	return values
+}
+
+const maximumOpenSignals = 64
+
+func openSignals(rows []map[string]any) []OpenSignal {
+	values := make([]OpenSignal, 0, len(rows))
+	for _, row := range rows {
+		if label := strings.TrimSpace(rowString(row, "label")); label != "" {
+			values = append(values, OpenSignal{AnchorID: metadataAnchorID(rowString(row, "id")), Label: label})
+		}
+	}
+	return values
 }
 
 func openSource(asset map[string]any) OpenSource {
@@ -567,11 +600,11 @@ func openOriginal(rows []map[string]any) *OpenOriginal {
 }
 
 func originalResourceScore(row map[string]any) int {
-	text := strings.ToLower(strings.Join([]string{
-		rowString(row, "resource_type"),
-		rowString(row, "original_filename"),
-		rowString(row, "uti"),
-	}, " "))
+	return originalResourceTextScore(rowString(row, "resource_type"), rowString(row, "original_filename"), rowString(row, "uti"))
+}
+
+func originalResourceTextScore(resourceType, filename, uti string) int {
+	text := strings.ToLower(strings.Join([]string{resourceType, filename, uti}, " "))
 	score := 0
 	if strings.Contains(text, "original") {
 		score += 4
@@ -579,7 +612,7 @@ func originalResourceScore(row map[string]any) int {
 	if strings.Contains(text, "photo") || strings.Contains(text, "image") {
 		score += 2
 	}
-	if strings.TrimSpace(rowString(row, "original_filename")) != "" {
+	if strings.TrimSpace(filename) != "" {
 		score++
 	}
 	return score
@@ -717,18 +750,19 @@ func mapFloat(row map[string]any, key string) float64 {
 // "panorama" say more than "photo" when Apple recorded the distinction.
 func openMediaKind(mediaType, subtypes string) string {
 	kind := openMediaType(mediaType)
+	available := map[string]bool{}
 	for _, subtype := range splitSubtypes(subtypes) {
-		switch subtype {
-		case "live_photo":
-			return "live photo"
-		case "screenshot":
-			return "screenshot"
-		case "panorama":
-			return "panorama"
-		case "time_lapse":
-			return "time lapse"
-		case "slow_motion":
-			return "slow motion video"
+		available[subtype] = true
+	}
+	for _, candidate := range []struct{ subtype, display string }{
+		{"live_photo", "live photo"},
+		{"screenshot", "screenshot"},
+		{"panorama", "panorama"},
+		{"time_lapse", "time lapse"},
+		{"slow_motion", "slow motion video"},
+	} {
+		if available[candidate.subtype] {
+			return candidate.display
 		}
 	}
 	return kind

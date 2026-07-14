@@ -66,7 +66,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("note open refs = %q %q", noteRecord.Ref, noteRecord.VersionRef)
 	}
 	presentation := projectOpenPresentation(value)
-	if presentation.Title != "Packing list" || len(presentation.Blocks) != 2 || len(presentation.Facts) != 0 {
+	if presentation.Title != "Packing list" || len(presentation.Blocks) != 3 || len(presentation.Facts) != 0 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	evidenceInput := struct {
@@ -93,8 +93,10 @@ func TestOpenRecordProjection(t *testing.T) {
 	evidenceInput.Body.Text, evidenceInput.Body.Unsupported = body.Text, body.Unsupported
 	assertOpenPresentation(t, "notes", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Packing list"
+blocks: { heading: { text: "Packing list" } anchor_id: "title" }
 blocks: { fields: { fields: { label: "Folder" display: "Examples" } fields: { label: "Created" display: "8 July 2026 at 10:00" } fields: { label: "Modified" display: "10 July 2026 at 14:00" } fields: { label: "Versions" display: "3" } } }
-blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
+blocks: { prose: { text: "Passport, charger and synthetic train ticket." } anchor_id: "body" }
+primary_anchor_id: "body"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := body
 		blank.Title = ""
@@ -104,6 +106,16 @@ blocks: { prose: { text: "Passport, charger and synthetic train ticket." } }`)
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestNotePresentationContainsTitleAndBodySearchAnchors(t *testing.T) {
+	value := openValue{resolvedRef: "notes:note/example", note: archive.Note{ID: "example", Title: "Lantern title"}, body: archive.VersionBody{Version: archive.Version{TextStatus: "decoded"}, Text: "Lantern body"}}
+	record := &openv1.OpenRecord{SourceId: "notes", OpenRef: value.resolvedRef, Data: &anypb.Any{TypeUrl: "type.example/notes"}, Presentation: projectOpenPresentation(value)}
+	for _, anchorID := range []string{"title", "body"} {
+		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
+			t.Fatalf("anchor %q: %v", anchorID, err)
+		}
+	}
 }
 
 func TestOpenRecordTimestampBoundary(t *testing.T) {
@@ -156,7 +168,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetCreatedAt() != "2026-07-08T10:00:00.5+02:00" || typed.GetModifiedAt() != "2026-07-10T14:00:00.5+02:00" {
 		t.Fatalf("typed timestamps = %q/%q", typed.GetCreatedAt(), typed.GetModifiedAt())
 	}
-	fields := record.Presentation.Blocks[0].GetFields().GetFields()
+	fields := record.Presentation.Blocks[1].GetFields().GetFields()
 	if fields[1].GetDisplay() != "8 July 2026 at 10:00" || fields[2].GetDisplay() != "10 July 2026 at 14:00" {
 		t.Fatalf("timestamp displays = %#v", fields)
 	}

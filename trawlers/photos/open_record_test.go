@@ -102,16 +102,20 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("GPS-only ProtoJSON = %s", gpsJSON)
 	}
 	presentation := projectOpenPresentation(input)
-	if presentation.Title != "Synthetic square." || len(presentation.Blocks) != 3 || len(presentation.Facts) != 2 {
+	if presentation.Title != "Synthetic square." || len(presentation.Blocks) != 6 || len(presentation.Facts) != 2 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertOpenPresentation(t, "photos", input, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Synthetic square."
-blocks: { fields: { fields: { label: "Captured local time" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" } fields: { label: "Place" display: "Example Square" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" } fields: { label: "Original filename" display: "fixture.heic" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
-blocks: { prose: { text: "A synthetic scene." } }
-blocks: { prose: { text: "EXAMPLE" } }
+blocks: { heading: { text: "Synthetic square." } anchor_id: "asset-details" }
+blocks: { fields: { fields: { label: "Photo summary" display: "Synthetic square." anchor_id: "summary" } fields: { label: "Captured local time" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" anchor_id: "media" } fields: { label: "Place" display: "Example Square" anchor_id: "place" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" anchor_id: "known-place" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" anchor_id: "album" } fields: { label: "Original filename" display: "fixture.heic" anchor_id: "filename" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
+blocks: { heading: { text: "Photo text" } }
+blocks: { prose: { text: "A synthetic scene." } anchor_id: "description" }
+blocks: { prose: { text: "EXAMPLE" } anchor_id: "ocr" }
+blocks: { prose: { text: "weather" } anchor_id: "uncertainty" }
 facts: { kind: KIND_WARNING message: "Card status: Stale · source details changed after this card was created · since 10 July 2026" }
-facts: { kind: KIND_WARNING message: "weather" }`)
+facts: { kind: KIND_WARNING message: "weather" }
+primary_anchor_id: "asset-details"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Model.Summary = ""
@@ -119,6 +123,20 @@ facts: { kind: KIND_WARNING message: "weather" }`)
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestPhotoPresentationContainsSemanticSearchAnchors(t *testing.T) {
+	value := archive.OpenResult{
+		Ref:        "photos:asset/example",
+		Mechanical: archive.OpenMechanical{Source: archive.OpenSource{State: "current"}, Media: &archive.OpenMedia{Kind: "photo"}, Place: &archive.OpenPlace{Name: "Example place"}, Address: "1 Example Street", Albums: []archive.OpenAlbum{{Title: "Example album"}}, Signals: []archive.OpenSignal{{AnchorID: "metadata-example", Label: "screenshot_candidate"}}, Original: &archive.OpenOriginal{Filename: "example.heic"}, Filenames: []string{"example.heic", "alternate.heic"}},
+		Model:      archive.OpenModel{Summary: "Lantern summary", Description: "Lantern description", OCRText: "LANTERN", Uncertainties: []string{"Synthetic uncertainty"}},
+	}
+	record := &openv1.OpenRecord{SourceId: "photos", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/photos"}, Presentation: projectOpenPresentation(value)}
+	for _, anchorID := range []string{"asset-details", "filename", "filenames", "album", "media", "place", "address", "metadata-example", "summary", "description", "ocr", "uncertainty"} {
+		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
+			t.Fatalf("anchor %q: %v", anchorID, err)
+		}
+	}
 }
 
 func TestOpenRecordFixtureBoundary(t *testing.T) {
@@ -170,7 +188,13 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetMechanical().GetCaptured().GetLocal() == "" || typed.GetMechanical().GetOriginal().GetBytes() != 12345 {
 		t.Fatalf("typed mechanical = %s", prototext.Format(typed.GetMechanical()))
 	}
-	fields := record.Presentation.Blocks[0].GetFields().GetFields()
+	var fields []*presentationv1.Field
+	for _, block := range record.Presentation.Blocks {
+		if group := block.GetFields(); group != nil {
+			fields = group.GetFields()
+			break
+		}
+	}
 	find := func(label string) string {
 		for _, field := range fields {
 			if field.GetLabel() == label {
@@ -181,6 +205,99 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	}
 	if find("Captured local time") == "" || find("Original size") != "12.1 KiB" {
 		t.Fatalf("mechanical presentation = %s", prototext.Format(record.Presentation))
+	}
+}
+
+func TestPresentationResourceResolverIsOpaqueAndBounded(t *testing.T) {
+	ctx := context.Background()
+	archivePath := filepath.Join(t.TempDir(), "photos.db")
+	mediaPath := filepath.Join(t.TempDir(), "synthetic-preview.jpg")
+	media := []byte("synthetic preview bytes")
+	if err := os.WriteFile(mediaPath, media, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	st, err := store.Open(ctx, store.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if _, err := st.DB().ExecContext(ctx, `
+create table asset_resource (
+  id text primary key,
+  asset_id text not null,
+  resource_type text not null,
+  uti text not null,
+  original_filename text not null,
+  local_path text not null,
+  file_size integer not null,
+  available_locally integer not null,
+  needs_download integer not null
+)`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().ExecContext(ctx, `
+insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-preview.jpg', ?, ?, 1, 0)`, "asset_resource:example", "fixture-asset", mediaPath, len(media)); err != nil {
+		t.Fatal(err)
+	}
+
+	crawler := New()
+	req := &trawlkit.Request{Store: st, Paths: trawlkit.Paths{Archive: archivePath}}
+	resource, err := crawler.presentationResource(ctx, req, "photos:asset/fixture-asset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resource == nil || resource.GetKind() != presentationv1.Resource_KIND_IMAGE || resource.GetRef() != "photos:resource/asset_resource:example" || strings.Contains(resource.GetRef(), mediaPath) {
+		t.Fatalf("presentation resource = %#v", resource)
+	}
+	request := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: resource.GetRef(), MaxBytes: uint32(len(media))}
+	response, err := crawler.ResolveResource(ctx, req, request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := openrecord.ValidateResourceResponse(request, response); err != nil {
+		t.Fatal(err)
+	}
+	if response.GetContentType() != "image/jpeg" || !bytes.Equal(response.GetData(), media) || strings.Contains(string(response.GetData()), mediaPath) {
+		t.Fatalf("resource response = %#v", response)
+	}
+	tooSmall := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: resource.GetRef(), MaxBytes: uint32(len(media) - 1)}
+	if _, err := crawler.ResolveResource(ctx, req, tooSmall); err == nil {
+		t.Fatal("oversized resource was returned")
+	}
+	unsafe := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: mediaPath, MaxBytes: uint32(len(media))}
+	if _, err := crawler.ResolveResource(ctx, req, unsafe); err == nil {
+		t.Fatal("raw path resource ref was accepted")
+	}
+	symlinkPath := filepath.Join(t.TempDir(), "synthetic-link.jpg")
+	if err := os.Symlink(mediaPath, symlinkPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.DB().ExecContext(ctx, `
+insert into asset_resource values (?, ?, 'photo', 'public.jpeg', 'synthetic-link.jpg', ?, ?, 1, 0)`, "asset_resource:symlink", "fixture-asset", symlinkPath, len(media)); err != nil {
+		t.Fatal(err)
+	}
+	symlink := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "photos:resource/asset_resource:symlink", MaxBytes: uint32(len(media))}
+	if _, err := crawler.ResolveResource(ctx, req, symlink); err == nil {
+		t.Fatal("symlink resource was returned")
+	}
+}
+
+func TestPresentationResourceContentTypesAreBoundedToCommonLocalMedia(t *testing.T) {
+	for _, test := range []struct {
+		name, uti, filename, want string
+	}{
+		{name: "jpeg", uti: "public.jpeg", filename: "ignored.bin", want: "image/jpeg"},
+		{name: "heic extension", filename: "synthetic.heic", want: "image/heic"},
+		{name: "quicktime", uti: "com.apple.quicktime-movie", filename: "ignored.bin", want: "video/quicktime"},
+		{name: "mpeg 4", filename: "synthetic.mp4", want: "video/mp4"},
+		{name: "m4a", filename: "synthetic.m4a", want: "audio/mp4"},
+		{name: "unsupported", filename: "synthetic.txt", want: ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := presentationResourceContentType(test.uti, test.filename); got != test.want {
+				t.Fatalf("presentationResourceContentType(%q, %q) = %q, want %q", test.uti, test.filename, got, test.want)
+			}
+		})
 	}
 }
 

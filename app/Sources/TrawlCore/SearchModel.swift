@@ -19,9 +19,9 @@ public enum SearchStateEvent: Sendable, Equatable {
   case response(SearchStateInput, SearchResponse)
   case timedOut(SearchStateInput)
   case searchFailed(SearchStateInput, String)
-  case opening(String)
-  case openResponse(String, OpenResponse)
-  case openFailed(String, String)
+  case opening(SearchHitID)
+  case openResponse(SearchHitID, OpenResponse)
+  case openFailed(SearchHitID, String)
 }
 
 @MainActor
@@ -40,7 +40,7 @@ public final class SearchSourceResolver {
   }
 
   public func displayName(for sourceID: String) -> String? {
-    statuses.first(where: { $0.id == sourceID })?.manifest.surface
+    statuses.first(where: { $0.id == sourceID })?.manifest.displayName
   }
 
   public func displayNameOrUnavailable(for sourceID: String) -> String {
@@ -178,7 +178,8 @@ public final class SearchModel {
       failures = response.failures
       skippedSources = response.skippedSources
       sourceResults = response.sources
-      sourceSurfaces = Dictionary(uniqueKeysWithValues: response.sources.map { ($0.sourceID, $0.surface) })
+      sourceSurfaces = Dictionary(
+        uniqueKeysWithValues: response.sources.map { ($0.sourceID, $0.displayName) })
       order = response.order
       resultLimit = response.resultLimit
       isTruncated = response.truncated
@@ -186,9 +187,14 @@ public final class SearchModel {
       case .complete:
         phase = .complete
       case .partial:
-        phase = response.hits.isEmpty && response.failures.isEmpty && !response.skippedSources.isEmpty ? .skipped : .partial
+        phase =
+          response.hits.isEmpty && response.failures.isEmpty && !response.skippedSources.isEmpty
+          ? .skipped : .partial
       case .failed:
-        phase = response.hits.isEmpty && !response.failures.isEmpty && response.failures.allSatisfy({ $0.code == .timeout }) ? .timedOut : .failed(failureGuidance ?? "No source returned search results.")
+        phase =
+          response.hits.isEmpty && !response.failures.isEmpty
+            && response.failures.allSatisfy({ $0.code == .timeout })
+          ? .timedOut : .failed(failureGuidance ?? "No source returned search results.")
       }
     } catch is CancellationError {
       return
@@ -221,8 +227,8 @@ public final class SearchModel {
     openResult = nil
     observe(.opening(hit.id))
     do {
-      let ref = hit.shortRef.isEmpty ? hit.openRef : hit.shortRef
-      let response = try await client.open(sourceID: hit.sourceID, ref: ref)
+      let response = try await client.open(
+        sourceID: hit.sourceID, ref: hit.openRef, anchorID: hit.anchorID)
       observe(.openResponse(hit.id, response))
       try Task.checkCancellation()
       guard token == openGeneration else { return }
@@ -233,8 +239,11 @@ public final class SearchModel {
       case .partial:
         openPhase = .failed(TrawlClientError.invalidProtobuf.localizedDescription)
       case .failed:
-        if response.failure?.code == .timeout { openPhase = .timedOut(response.failure?.message ?? "Opening this result timed out.") }
-        else { openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.") }
+        if response.failure?.code == .timeout {
+          openPhase = .timedOut(response.failure?.message ?? "Opening this result timed out.")
+        } else {
+          openPhase = .failed(response.failure?.message ?? "OpenTrawl could not open this result.")
+        }
       }
     } catch is CancellationError {
       return
@@ -253,7 +262,8 @@ public final class SearchModel {
 
   public var failureGuidance: String? {
     guard let first = failures.first else { return nil }
-    let source = first.sourceName.isEmpty ? (sourceSurfaces[first.sourceID] ?? "A source") : first.sourceName
+    let source =
+      first.sourceName.isEmpty ? (sourceSurfaces[first.sourceID] ?? "A source") : first.sourceName
     let additionalFailureCount = failures.count - 1
     let more: String
     switch additionalFailureCount {
@@ -273,7 +283,7 @@ public final class SearchModel {
   }
 
   public func displayTitle(for hit: SearchHit) -> String {
-    [hit.who, hit.where, hit.calendar, sourceSurfaces[hit.sourceID] ?? ""].first(where: { !$0.isEmpty }) ?? "Untitled result"
+    hit.summary.title
   }
 
   private func searchWithinLimit(_ query: String, source: String?) async throws -> SearchResponse {

@@ -11,13 +11,15 @@ private struct StatusClient: TrawlClient {
   func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 @Test func restingCopyUsesOnlyTheFirstFourHumanHeadlines() throws {
   var manifest = Trawl_Federation_V1_SourceManifest()
   manifest.sourceID = "gmail"
-  manifest.surface = "Gmail"
+  manifest.displayName = "Gmail"
   manifest.headlines = ["mail", "attachments", "threads", "labels", "ignored"]
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = manifest
@@ -44,7 +46,7 @@ private struct StatusClient: TrawlClient {
 @Test func restingCopyKeepsHealthySourcesQuietAndShowsDiagnosticAttention() throws {
   var manifest = Trawl_Federation_V1_SourceManifest()
   manifest.sourceID = "notes"
-  manifest.surface = "Notes"
+  manifest.displayName = "Notes"
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = manifest
   source.state = "ok"
@@ -139,7 +141,7 @@ private struct StatusClient: TrawlClient {
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = .with {
     $0.sourceID = "gmail"
-    $0.surface = "Gmail"
+    $0.displayName = "Gmail"
   }
   source.state = "ok"
   var failure = Trawl_Federation_V1_SourceFailure()
@@ -170,7 +172,7 @@ private struct StatusClient: TrawlClient {
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = .with {
     $0.sourceID = "notes"
-    $0.surface = "Notes"
+    $0.displayName = "Notes"
     $0.headlines = ["Search your notes"]
   }
   source.state = "ok"
@@ -216,7 +218,7 @@ private struct StatusClient: TrawlClient {
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = .with {
     $0.sourceID = "gmail"
-    $0.surface = "Gmail"
+    $0.displayName = "Gmail"
   }
   source.state = "ok"
   var response = Trawl_Federation_V1_StatusResponse()
@@ -242,7 +244,7 @@ private struct StatusClient: TrawlClient {
   var source = Trawl_Federation_V1_SourceStatus()
   source.manifest = .with {
     $0.sourceID = "gmail"
-    $0.surface = "Gmail"
+    $0.displayName = "Gmail"
   }
   source.state = "ok"
   var response = Trawl_Federation_V1_StatusResponse()
@@ -364,7 +366,9 @@ private final class CancellingStatusClient: TrawlClient, @unchecked Sendable {
   func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 private final class MutableAppClient: TrawlClient, @unchecked Sendable {
@@ -412,7 +416,9 @@ private final class MutableAppClient: TrawlClient, @unchecked Sendable {
       : SyncResponse(sources: [], failures: [], outcome: .complete)
   }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 private final class PhotosRequestClient: TrawlClient, @unchecked Sendable {
@@ -432,7 +438,9 @@ private final class PhotosRequestClient: TrawlClient, @unchecked Sendable {
   }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 private func photosStatus(
@@ -445,7 +453,7 @@ private func photosStatus(
       .with {
         $0.manifest = .with {
           $0.sourceID = "photos"
-          $0.surface = "Photos"
+          $0.displayName = "Photos"
         }
         $0.state = "ok"
         $0.setupRequirements = [

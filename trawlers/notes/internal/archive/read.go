@@ -264,7 +264,9 @@ left join notes n on n.note_id = notes_fts.note_id
 	rows, err := s.store.DB().QueryContext(ctx, `
 select notes_fts.note_id,
        coalesce(n.title, ''), coalesce(n.folder, ''),
-       v.source_modified_at, v.first_observed_at, v.text
+       v.source_modified_at, v.first_observed_at, v.text,
+       snippet(notes_fts, 2, char(57344), char(57345), '…', 32),
+       snippet(notes_fts, 3, char(57344), char(57345), '…', 32)
 from notes_fts
 join note_versions v on v.note_id = notes_fts.note_id and v.zdata_sha256 = notes_fts.zdata_sha256
 left join notes n on n.note_id = notes_fts.note_id
@@ -277,8 +279,8 @@ order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) d
 	results := []SearchResult{}
 	seen := map[string]bool{}
 	for rows.Next() {
-		var noteID, title, folder, modified, observed, text string
-		if err := rows.Scan(&noteID, &title, &folder, &modified, &observed, &text); err != nil {
+		var noteID, title, folder, modified, observed, text, titleMatch, bodyMatch string
+		if err := rows.Scan(&noteID, &title, &folder, &modified, &observed, &text, &titleMatch, &bodyMatch); err != nil {
 			return nil, 0, err
 		}
 		if seen[noteID] {
@@ -296,6 +298,7 @@ order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) d
 			Folder:  folder,
 			Snippet: store.FTS5Snippet(text, query),
 			NoteID:  noteID,
+			Matches: noteSearchMatches(titleMatch, bodyMatch),
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -310,6 +313,55 @@ order by rank, coalesce(nullif(v.source_modified_at, ''), v.first_observed_at) d
 		results = results[:options.Limit]
 	}
 	return results, total, nil
+}
+
+func noteSearchMatches(title, body string) []SearchMatch {
+	values := []struct {
+		field string
+		value string
+	}{{field: "title", value: title}, {field: "body", value: body}}
+	matches := make([]SearchMatch, 0, len(values))
+	for _, value := range values {
+		if runs := markedSearchRuns(value.value); len(runs) > 0 {
+			matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
+		}
+	}
+	return matches
+}
+
+func markedSearchRuns(value string) []SearchTextRun {
+	const start, end = "\ue000", "\ue001"
+	if !strings.Contains(value, start) {
+		return nil
+	}
+	var runs []SearchTextRun
+	for value != "" {
+		startIndex := strings.Index(value, start)
+		if startIndex < 0 {
+			runs = appendSearchRun(runs, value, false)
+			break
+		}
+		runs = appendSearchRun(runs, value[:startIndex], false)
+		value = value[startIndex+len(start):]
+		endIndex := strings.Index(value, end)
+		if endIndex < 0 {
+			return nil
+		}
+		runs = appendSearchRun(runs, value[:endIndex], true)
+		value = value[endIndex+len(end):]
+	}
+	return runs
+}
+
+func appendSearchRun(runs []SearchTextRun, text string, matched bool) []SearchTextRun {
+	if text == "" {
+		return runs
+	}
+	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
+		runs[len(runs)-1].Text += text
+		return runs
+	}
+	return append(runs, SearchTextRun{Text: text, Matched: matched})
 }
 
 // contractTime parses an archive timestamp for ordering; unparseable values

@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	federationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/federation/v1"
+	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -27,7 +30,7 @@ func isAppWireCommand(args []string) bool {
 
 func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Duration) error {
 	if len(args) < 2 {
-		return fmt.Errorf("usage: trawl %s status|sync|search|open|request-photos", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open|resource|request-photos", appWireCommand)
 	}
 	runtime := &Runtime{
 		ctx: context.Background(), stdout: stdout, stderr: stderr,
@@ -42,13 +45,15 @@ func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Durati
 		return runtime.runAppSearch(args[2:])
 	case "open":
 		return runtime.runAppOpen(args[2:])
+	case "resource":
+		return runtime.runAppResource(args[2:])
 	case "request-photos":
 		if len(args) != 2 {
 			return fmt.Errorf("usage: trawl %s request-photos", appWireCommand)
 		}
 		return runtime.runAppRequestPhotos()
 	default:
-		return fmt.Errorf("usage: trawl %s status|sync|search|open|request-photos", appWireCommand)
+		return fmt.Errorf("usage: trawl %s status|sync|search|open|resource|request-photos", appWireCommand)
 	}
 }
 
@@ -60,11 +65,11 @@ func (r *Runtime) runAppRequestPhotos() error {
 	sources := discoverCrawlers(r.ctx)
 	source, found := findSource(sources, "photos")
 	if !found {
-		return fmt.Errorf("Photos is not installed")
+		return fmt.Errorf("photos is not installed")
 	}
 	requester, ok := source.Crawler.(photosAccessRequester)
 	if !ok {
-		return fmt.Errorf("Photos does not support app permission requests")
+		return fmt.Errorf("photos does not support app permission requests")
 	}
 	if _, err := requester.RequestPhotosAccess(r.ctx); err == nil {
 		return r.runAppStatus()
@@ -178,10 +183,45 @@ func (r *Runtime) runAppSearch(args []string) error {
 }
 
 func (r *Runtime) runAppOpen(args []string) error {
-	if len(args) != 2 {
-		return fmt.Errorf("usage: trawl %s open SOURCE_ID REF", appWireCommand)
+	if len(args) != 3 {
+		return fmt.Errorf("usage: trawl %s open SOURCE_ID REF ANCHOR_ID", appWireCommand)
 	}
-	return writeAppResponse(r.stdout, r.appOpenResponse(r.ctx, args[0], args[1]))
+	return writeAppResponse(r.stdout, r.appOpenResponse(r.ctx, args[0], args[1], args[2]))
+}
+
+func (r *Runtime) runAppResource(args []string) error {
+	if len(args) != 3 {
+		return fmt.Errorf("usage: trawl %s resource SOURCE_ID RESOURCE_REF MAX_BYTES", appWireCommand)
+	}
+	maxBytes, err := strconv.ParseUint(args[2], 10, 32)
+	if err != nil {
+		return fmt.Errorf("resource byte bound is invalid")
+	}
+	source, found := findSource(discoverCrawlers(r.ctx), args[0])
+	if !found {
+		return fmt.Errorf("source %q was not found", args[0])
+	}
+	request := &presentationv1.ResourceRequest{SourceId: source.ID, ResourceRef: args[1], MaxBytes: uint32(maxBytes)}
+	if err := openrecord.ValidateResourceRequest(request); err != nil {
+		return err
+	}
+	resolver, ok := source.Crawler.(trawlkit.ResourceResolver)
+	if !ok {
+		return fmt.Errorf("source %q does not resolve presentation resources", source.ID)
+	}
+	var response *presentationv1.ResourceResponse
+	err = r.withSourceRequest(source, "resource", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+		var resolveErr error
+		response, resolveErr = resolver.ResolveResource(ctx, req, request)
+		return resolveErr
+	})
+	if err != nil {
+		return err
+	}
+	if err := openrecord.ValidateResourceResponse(request, response); err != nil {
+		return err
+	}
+	return writeAppResponse(r.stdout, response)
 }
 
 func writeAppResponse(w io.Writer, message proto.Message) error {

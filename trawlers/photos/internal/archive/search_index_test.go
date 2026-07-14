@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -34,6 +35,12 @@ func TestSearchStemsAndRanksInsteadOfRequiringEveryTerm(t *testing.T) {
 		if err := tx.QueryRowContext(ctx, `select id from asset limit 1`).Scan(&assetID); err != nil {
 			return err
 		}
+		if _, err := tx.ExecContext(ctx, `
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, source, model_id, prompt_version, evidence_id)
+values ('obs-grill', ?, ?, 'whole chicken grilled charred garden', '{}', 'fixture', '', '', '')
+`, assetID, modelObservationCardDescription); err != nil {
+			return err
+		}
 		_, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values ('obs-grill', ?, '', 'whole chicken grilled charred garden')`, assetID)
@@ -51,6 +58,9 @@ values ('obs-grill', ?, '', 'whole chicken grilled charred garden')`, assetID)
 	}
 	if len(stemmed.Results) != 1 {
 		t.Fatalf("stemmed search results = %#v", stemmed.Results)
+	}
+	if stemmed.Results[0].AnchorID != "description" || len(stemmed.Results[0].Matches) == 0 || stemmed.Results[0].Matches[0].Field != "description" {
+		t.Fatalf("stemmed match = %#v", stemmed.Results[0])
 	}
 	partial, err := Search(ctx, paths, SearchOptions{Query: "grilled restaurant rooftop", Limit: 5})
 	if err != nil {
@@ -121,9 +131,9 @@ func TestEnsureSearchIndexRebuildsOldTokenizer(t *testing.T) {
 	}
 }
 
-// A card row indexed as a deduped term list is rebuilt into raw card prose,
-// the index version is stamped, and later calls leave the index alone.
-func TestEnsureSearchIndexRebuildsCardBodiesToRawProse(t *testing.T) {
+// A combined card row retains its original raw-prose search document after
+// rebuild, the index version is stamped, and later calls leave it alone.
+func TestEnsureSearchIndexPreservesCombinedCardDocument(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	paths := testPaths(t)
@@ -158,6 +168,10 @@ values (?, ?, ?, ?, '{}', 1.0, 'model_multimodal', 'fixture-model', 'v1', '')`,
 		_, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body)
 values ('card-sum', ?, '', 'grilled chicken new grill whole charcoal tongs beside')`, assetID)
+		if err != nil {
+			return err
+		}
+		_, err = tx.ExecContext(ctx, `delete from search_index_state`)
 		return err
 	}); err != nil {
 		t.Fatal(err)
@@ -167,13 +181,19 @@ values ('card-sum', ?, '', 'grilled chicken new grill whole charcoal tongs besid
 		t.Fatal(err)
 	}
 
-	var body string
-	if err := db.DB().QueryRowContext(ctx, `select body from observation_fts where id = 'card-sum'`).Scan(&body); err != nil {
+	var summaryBody string
+	if err := db.DB().QueryRowContext(ctx, `select body from observation_fts where id = 'card-sum'`).Scan(&summaryBody); err != nil {
 		t.Fatal(err)
 	}
-	want := "Grilled chicken on the new grill\nA whole chicken on a charcoal grill, grill tongs beside it."
-	if body != want {
-		t.Fatalf("card fts body = %q, want raw prose %q", body, want)
+	if summaryBody != "Grilled chicken on the new grill\nA whole chicken on a charcoal grill, grill tongs beside it." {
+		t.Fatalf("card fts body = %q", summaryBody)
+	}
+	var descriptionRows int
+	if err := db.DB().QueryRowContext(ctx, `select count(*) from observation_fts where id = 'card-desc'`).Scan(&descriptionRows); err != nil {
+		t.Fatal(err)
+	}
+	if descriptionRows != 0 {
+		t.Fatalf("description became a separate ranking document")
 	}
 	var version int
 	if err := db.DB().QueryRowContext(ctx, `select max(version) from search_index_state`).Scan(&version); err != nil {
@@ -201,6 +221,117 @@ values ('card-sum', ?, '', 'grilled chicken new grill whole charcoal tongs besid
 	if rows != 0 {
 		t.Fatalf("second ensure call rebuilt a current-version index")
 	}
+}
+
+func TestSearchIndexRebuildPreservesSearchCandidatesAndOrder(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	paths := testPaths(t)
+	libraryPath := filepath.Join(t.TempDir(), "Fixture Photos Library.photoslibrary")
+	if err := mkdirLibrary(libraryPath); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := photos.LibrarySnapshot{Provider: "fake", PhotosVersion: "fixture", AuthorizationStatus: "authorized", Assets: []photos.Asset{{
+		LocalIdentifier: "parity-asset", MediaType: "image", MediaSubtypes: "0", CreationDate: "2026-05-27T10:00:00Z", Width: 100, Height: 80,
+		Resources: []photos.Resource{{Type: "photo", UTI: "public.jpeg", OriginalFilename: "primaryname.jpg"}, {Type: "alternate", UTI: "public.jpeg", OriginalFilename: "secondfilename.jpg"}},
+		Albums:    []photos.AlbumMembership{{AlbumID: "parity-album", AlbumTitle: "albumneedle", AlbumKind: "album:1:2"}},
+	}}}
+	if _, err := Sync(ctx, paths, SyncOptions{LibraryPath: libraryPath, Provider: fakeProvider{snapshot: snapshot}, Now: fixedClock("2026-05-28T10:00:00Z")}); err != nil {
+		t.Fatal(err)
+	}
+	db, err := store.Open(ctx, store.Options{Path: paths.Database, Schema: Schema, SchemaVersion: SchemaVersion})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = db.Close() }()
+	var assetID string
+	if err := db.DB().QueryRowContext(ctx, `select id from asset where local_identifier = 'parity-asset'`).Scan(&assetID); err != nil {
+		t.Fatal(err)
+	}
+	resourceRows, err := db.DB().QueryContext(ctx, `select original_filename from asset_resource where asset_id = ? order by id`, assetID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resourceNames []string
+	for resourceRows.Next() {
+		var name string
+		if err := resourceRows.Scan(&name); err != nil {
+			_ = resourceRows.Close()
+			t.Fatal(err)
+		}
+		resourceNames = append(resourceNames, name)
+	}
+	if err := resourceRows.Err(); err != nil {
+		_ = resourceRows.Close()
+		t.Fatal(err)
+	}
+	if err := resourceRows.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if len(resourceNames) != 2 {
+		t.Fatalf("resource names = %#v, want two resources", resourceNames)
+	}
+	secondaryFilename := strings.TrimSuffix(resourceNames[1], filepath.Ext(resourceNames[1]))
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, row := range []struct{ id, kind, text string }{
+			{"parity-summary", modelObservationCardSummary, "summaryneedle"},
+			{"parity-description", modelObservationCardDescription, "descriptionneedle"},
+			{"parity-uncertainty", modelObservationCardUncertainty, "uncertaintyneedle"},
+		} {
+			if _, err := tx.ExecContext(ctx, `insert into model_observation(id, asset_id, observation_type, value_text, value_json, source, model_id, prompt_version, evidence_id) values (?, ?, ?, ?, '{}', 'fixture', '', '', '')`, row.id, assetID, row.kind, row.text); err != nil {
+				return err
+			}
+		}
+		_, err := tx.ExecContext(ctx, `insert into observation_fts(id, asset_id, title, body) values ('parity-summary', ?, '', ?)`, assetID, strings.Join([]string{"summaryneedle", "descriptionneedle", "uncertaintyneedle"}, "\n"))
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	queries := []string{secondaryFilename, "albumneedle", "uncertaintyneedle", "descriptionneedle"}
+	before := searchContracts(t, ctx, db, queries)
+	for query, anchorID := range map[string]string{secondaryFilename: "filenames", "albumneedle": "album", "uncertaintyneedle": "uncertainty", "descriptionneedle": "description"} {
+		if got := before[query].Anchors; !reflect.DeepEqual(got, []string{anchorID}) {
+			t.Fatalf("search %q anchors = %#v, want %#v", query, got, []string{anchorID})
+		}
+	}
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		_, err := tx.ExecContext(ctx, `delete from search_index_state`)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		t.Fatal(err)
+	}
+	after := searchContracts(t, ctx, db, queries)
+	if !reflect.DeepEqual(after, before) {
+		t.Fatalf("search contracts changed across rebuild\nbefore=%#v\nafter=%#v", before, after)
+	}
+}
+
+type searchContract struct {
+	Refs    []string
+	Anchors []string
+	Total   int
+}
+
+func searchContracts(t *testing.T, ctx context.Context, db *store.Store, queries []string) map[string]searchContract {
+	t.Helper()
+	contracts := make(map[string]searchContract, len(queries))
+	for _, query := range queries {
+		result, err := search(ctx, db, SearchOptions{Query: query, Limit: 10})
+		if err != nil {
+			t.Fatalf("search %q: %v", query, err)
+		}
+		refs := make([]string, 0, len(result.Results))
+		anchors := make([]string, 0, len(result.Results))
+		for _, hit := range result.Results {
+			refs = append(refs, hit.Ref)
+			anchors = append(anchors, hit.AnchorID)
+		}
+		contracts[query] = searchContract{Refs: refs, Anchors: anchors, Total: result.TotalMatches}
+	}
+	return contracts
 }
 
 // bm25 over raw prose: the asset whose card is about grilling outranks the
@@ -244,6 +375,12 @@ func TestSearchRanksByTermFrequency(t *testing.T) {
 			{"card-often", ids[0], "Grilling on the grill: grilled chicken over charcoal, grill tongs turning grilled corn."},
 			{"card-once", ids[1], "A kitchen counter with a pan, a grill pan hangs on the wall among many other utensils and appliances."},
 		} {
+			if _, err := tx.ExecContext(ctx, `
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, source, model_id, prompt_version, evidence_id)
+values (?, ?, ?, ?, '{}', 'fixture', '', '', '')
+`, row.id, row.assetID, modelObservationCardDescription, row.body); err != nil {
+				return err
+			}
 			if _, err := tx.ExecContext(ctx, `
 insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`,
 				row.id, row.assetID, row.body); err != nil {
@@ -318,12 +455,12 @@ func TestSearchExcludesUnselectedPOICandidates(t *testing.T) {
 
 	// Write path: candidate gets no FTS row, selected venue and address do.
 	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
-		for _, row := range []struct{ kind, text string }{
-			{"poi_candidate", "Meadow Grill Taqueria"},
-			{"venue", "UMI Sushi"},
-			{"address", "Simeonstrasse 1 Trier"},
+		for _, row := range []struct{ kind, text, tier string }{
+			{"poi_candidate", "Meadow Grill Taqueria", "nearby_poi"},
+			{"venue", "UMI Sushi", "venue_candidate"},
+			{"address", "Simeonstrasse 1 Trier", "area_context"},
 		} {
-			if _, err := insertPlaceObservation(ctx, tx, assetID, "fixture-generation", "", row.kind, row.text, map[string]any{}, "fixture", "hit", "poi", 10); err != nil {
+			if _, err := insertPlaceObservation(ctx, tx, assetID, "fixture-generation", "", row.kind, row.text, map[string]any{}, "fixture", "hit", row.tier, 10); err != nil {
 				return err
 			}
 		}

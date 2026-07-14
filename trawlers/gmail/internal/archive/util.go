@@ -133,6 +133,59 @@ func plainSnippet(query, subject, body string) string {
 	return snippet
 }
 
+func searchMatches(subject, body string) []SearchMatch {
+	values := []struct {
+		field string
+		value string
+	}{
+		{field: "subject", value: subject},
+		{field: "body", value: body},
+	}
+	matches := make([]SearchMatch, 0, len(values))
+	for _, value := range values {
+		runs := markedSearchRuns(value.value)
+		if len(runs) > 0 {
+			matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
+		}
+	}
+	return matches
+}
+
+func markedSearchRuns(value string) []SearchTextRun {
+	const start, end = "\ue000", "\ue001"
+	if !strings.Contains(value, start) {
+		return nil
+	}
+	var runs []SearchTextRun
+	for value != "" {
+		startIndex := strings.Index(value, start)
+		if startIndex < 0 {
+			runs = appendSearchRun(runs, value, false)
+			break
+		}
+		runs = appendSearchRun(runs, value[:startIndex], false)
+		value = value[startIndex+len(start):]
+		endIndex := strings.Index(value, end)
+		if endIndex < 0 {
+			return nil
+		}
+		runs = appendSearchRun(runs, value[:endIndex], true)
+		value = value[endIndex+len(end):]
+	}
+	return runs
+}
+
+func appendSearchRun(runs []SearchTextRun, text string, matched bool) []SearchTextRun {
+	if text == "" {
+		return runs
+	}
+	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
+		runs[len(runs)-1].Text += text
+		return runs
+	}
+	return append(runs, SearchTextRun{Text: text, Matched: matched})
+}
+
 func flattenWhitespace(value string) string {
 	return strings.Join(strings.Fields(value), " ")
 }

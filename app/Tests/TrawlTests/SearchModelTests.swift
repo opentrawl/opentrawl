@@ -10,7 +10,9 @@ private struct SearchClient: TrawlClient {
   func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { response }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 @MainActor
@@ -20,6 +22,21 @@ private struct SearchClient: TrawlClient {
   hit.openRef = "synthetic:record/full"
   hit.shortRef = "short-1"
   hit.timeRfc3339 = "2026-07-12T09:30:00Z"
+  hit.anchorID = "match"
+  hit.summary = .with { $0.title = "Synthetic record" }
+  hit.evidence = [
+    .with {
+      $0.label = "Matching text"
+      $0.text = .with {
+        $0.runs = [
+          .with {
+            $0.text = "Synthetic"
+            $0.matched = true
+          }
+        ]
+      }
+    }
+  ]
   var failure = Trawl_Federation_V1_SourceFailure()
   failure.sourceID = "slow"
   failure.surface = "Slow source"
@@ -44,9 +61,24 @@ private struct SearchClient: TrawlClient {
   var hit = Trawl_Federation_V1_SearchHit()
   hit.sourceID = "response-only"
   hit.openRef = "response-only:record/1"
+  hit.anchorID = "match"
+  hit.summary = .with { $0.title = "Synthetic record" }
+  hit.evidence = [
+    .with {
+      $0.label = "Matching text"
+      $0.text = .with {
+        $0.runs = [
+          .with {
+            $0.text = "Synthetic"
+            $0.matched = true
+          }
+        ]
+      }
+    }
+  ]
   var source = Trawl_Federation_V1_SearchSourceResult()
   source.sourceID = "response-only"
-  source.surface = "Response source"
+  source.displayName = "Response source"
   source.hits = [hit]
   var timeout = Trawl_Federation_V1_SourceFailure()
   timeout.sourceID = "slow"
@@ -151,20 +183,21 @@ private struct SearchClient: TrawlClient {
   let hit = canonicalHit("return")
   let opened = OpenResponse(
     outcome: .complete,
-    requestedRef: hit.shortRef,
+    requestedRef: hit.openRef,
+    requestedAnchorID: hit.anchorID,
     record: OpenRecord(
       sourceID: hit.sourceID,
       openRef: hit.openRef,
       typeURL: "type.example/Synthetic",
       value: Data([1]),
-      presentation: PresentationDocument(title: "Synthetic", blocks: [], actions: [], facts: [])
+      presentation: canonicalPresentation()
     ),
     failure: nil
   )
   let model = SearchModel(
     client: ScriptedSearchClient(
       search: { _, _ in canonicalSearch([hit]) },
-      open: { _, _ in opened }
+      open: { _, _, _ in opened }
     ),
     debounce: .zero
   )
@@ -238,21 +271,23 @@ private struct SearchClient: TrawlClient {
   let hit = canonicalHit("open")
   let expected = OpenResponse(
     outcome: .complete,
-    requestedRef: hit.shortRef,
+    requestedRef: hit.openRef,
+    requestedAnchorID: hit.anchorID,
     record: OpenRecord(
       sourceID: hit.sourceID,
       openRef: hit.openRef,
       typeURL: "type.example/Synthetic",
       value: Data([1, 2]),
-      presentation: PresentationDocument(title: "Synthetic", blocks: [], actions: [], facts: [])
+      presentation: canonicalPresentation()
     ),
     failure: nil
   )
   let client = ScriptedSearchClient(
     search: { _, _ in canonicalSearch([hit]) },
-    open: { sourceID, ref in
+    open: { sourceID, ref, anchorID in
       #expect(sourceID == hit.sourceID)
-      #expect(ref == hit.shortRef)
+      #expect(ref == hit.openRef)
+      #expect(anchorID == hit.anchorID)
       return expected
     })
   let model = SearchModel(client: client, debounce: .zero)
@@ -270,10 +305,11 @@ private struct SearchClient: TrawlClient {
     sourceID: "gmail", sourceName: "Gmail", code: .notFound,
     message: "Synthetic result is unavailable.", remedy: "Search again.")
   let response = OpenResponse(
-    outcome: .failed, requestedRef: hit.shortRef, record: nil, failure: failure)
+    outcome: .failed, requestedRef: hit.openRef, requestedAnchorID: hit.anchorID, record: nil,
+    failure: failure)
   let model = SearchModel(
     client: ScriptedSearchClient(
-      search: { _, _ in canonicalSearch([hit]) }, open: { _, _ in response }), debounce: .zero)
+      search: { _, _ in canonicalSearch([hit]) }, open: { _, _, _ in response }), debounce: .zero)
   await model.search("synthetic", source: nil)
   await model.open(hit)
   #expect(model.results == [hit])
@@ -320,12 +356,15 @@ private struct SearchClient: TrawlClient {
 
 private struct ScriptedSearchClient: TrawlClient {
   let searchAction: @Sendable (String, String?) async throws -> SearchResponse
-  let openAction: @Sendable (String, String) async throws -> OpenResponse
+  let openAction: @Sendable (String, String, String) async throws -> OpenResponse
 
   init(
     search: @escaping @Sendable (String, String?) async throws -> SearchResponse,
-    open: @escaping @Sendable (String, String) async throws -> OpenResponse = { _, ref in
-      OpenResponse(outcome: .failed, requestedRef: ref, record: nil, failure: nil)
+    open: @escaping @Sendable (String, String, String) async throws -> OpenResponse = {
+      _, ref, anchorID in
+      OpenResponse(
+        outcome: .failed, requestedRef: ref, requestedAnchorID: anchorID, record: nil,
+        failure: nil)
     }
   ) {
     searchAction = search
@@ -338,16 +377,27 @@ private struct ScriptedSearchClient: TrawlClient {
   func search(_ query: String, source: String?) async throws -> SearchResponse {
     try await searchAction(query, source)
   }
-  func open(sourceID: String, ref: String) async throws -> OpenResponse {
-    try await openAction(sourceID, ref)
+  func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse {
+    try await openAction(sourceID, ref, anchorID)
   }
 }
 
 private func canonicalHit(_ suffix: String) -> SearchHit {
   SearchHit(
     sourceID: "gmail", openRef: "gmail:message/\(suffix)", shortRef: "short-\(suffix)",
-    timeRFC3339: "", time: nil, who: "Avery Example", where: "", calendar: "", snippet: "Synthetic",
+    timeRFC3339: "", time: nil, anchorID: "match",
+    summary: ResultSummary(title: "Synthetic message", subtitle: "Avery Example"),
+    evidence: [
+      .text(label: "Message body", runs: [SearchTextRun(text: "Synthetic", matched: true)])
+    ],
     allDay: false, availability: nil, unread: nil)
+}
+
+private func canonicalPresentation() -> PresentationDocument {
+  PresentationDocument(
+    title: "Synthetic", primaryAnchorID: "match",
+    blocks: [.prose(anchorID: "match", text: "Synthetic matching passage")], actions: [],
+    facts: [])
 }
 
 private func canonicalSearch(_ hits: [SearchHit]) -> SearchResponse {

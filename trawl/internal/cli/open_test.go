@@ -24,8 +24,8 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("open code = %d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	if stdout != human+"\n" {
-		t.Fatalf("stdout = %q, want crawler human output", stdout)
+	if stdout != strings.Replace(human, "\n", "\n\n", 1)+"\n" {
+		t.Fatalf("stdout = %q, want canonical presentation", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -52,7 +52,7 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 		t.Fatalf("open JSON = %s err=%v", stdout, err)
 	}
 	if response.GetRequestedRef() != "imessage:msg/8842" || response.GetRecord().GetOpenRef() != "imessage:msg/8842" {
-		t.Fatalf("open response = %#v", response)
+		t.Fatalf("open response = %#v", &response)
 	}
 }
 
@@ -75,7 +75,7 @@ func TestOpenPassesFullRefToCrawler(t *testing.T) {
 		t.Fatalf("open JSON = %s err=%v", stdout, err)
 	}
 	if response.GetRequestedRef() != "fake:msg/1" || response.GetRecord().GetOpenRef() != "fake:msg/1" {
-		t.Fatalf("open response = %#v", response)
+		t.Fatalf("open response = %#v", &response)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
 				t.Fatalf("open JSON = %s err=%v", stdout, err)
 			}
 			if response.GetRequestedRef() != tt.fullRef || response.GetFailure().GetCode().String() != "FAILURE_CODE_INVALID_INPUT" {
-				t.Fatalf("legacy ref response = %#v", response)
+				t.Fatalf("legacy ref response = %#v", &response)
 			}
 			if stderr != "" {
 				t.Fatalf("stderr = %s", stderr)
@@ -151,8 +151,8 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if stdout != human+"\n" {
-		t.Fatalf("stdout = %q, want crawler human output", stdout)
+	if stdout != strings.Replace(human, "\n", "\n\n", 1)+"\n" {
+		t.Fatalf("stdout = %q, want canonical presentation", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)
@@ -202,8 +202,8 @@ func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if stdout != human+"\n" {
-		t.Fatalf("stdout = %q, want the healthy source's open output", stdout)
+	if stdout != strings.Replace(human, "\n", "\n\n", 1)+"\n" {
+		t.Fatalf("stdout = %q, want the healthy source's canonical presentation", stdout)
 	}
 	if stderr != "" {
 		t.Fatalf("stderr = %s", stderr)

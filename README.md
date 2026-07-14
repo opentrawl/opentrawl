@@ -92,8 +92,11 @@ Two surfaces sit on top of the contract:
 
 - `trawl`, the command line tool that fronts every registered crawler and
   searches them all at once
-- a macOS menu bar app that handles authorisation, runs syncs on a
-  schedule and shows the health of each archive
+- a Mac app that searches every source and opens each result at its exact
+  match
+
+The [Mac product contract](docs/mac-app.md) defines the app and its shared
+search and open meanings.
 
 The shared Go code both surfaces build on lives in `trawlkit`.
 
@@ -111,7 +114,7 @@ forks; where an upstream carries a licence, the directory retains it:
 | Calendar | trawlers/calendar | began as calcrawl |
 | Contacts | trawlers/contacts | [openclaw/clawdex](https://github.com/openclaw/clawdex) |
 | Apple Photos | trawlers/photos | [openclaw/photoscrawl](https://github.com/openclaw/photoscrawl) |
-| X (Twitter) | trawlers/twitter | began as birdcrawl |
+| Twitter (X) | trawlers/twitter | began as birdcrawl |
 | Apple Notes | trawlers/notes | monorepo-native |
 
 ## For agents
@@ -131,7 +134,7 @@ your history in one pass instead of one prompt at a time.
 ## Status
 
 Pre-v1 and moving fast. The design is settled (see
-[docs/vision.md](docs/vision.md)); the `trawl` CLI and the menu bar app
+[docs/vision.md](docs/vision.md)); the `trawl` CLI and the Mac app
 are being built; the crawlers work today. It is not yet packaged for end
 users.
 

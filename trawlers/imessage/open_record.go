@@ -115,10 +115,14 @@ func projectOpenPresentation(value archive.MessageContext) *presentationv1.Prese
 		if message.GetTarget() {
 			role = presentationv1.Row_ROLE_TARGET
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: message.Who}, {Display: message.Text}}})
+		row := &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: message.Who}, {Display: message.Text}}}
+		if message.GetTarget() {
+			row.AnchorId = trawlkit.MatchAnchorID
+		}
+		rows = append(rows, row)
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: trawlkit.MatchAnchorID}
 	if record.Message.GetHasAttachments() {
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_WARNING, Message: "Message has attachments."})
 	}

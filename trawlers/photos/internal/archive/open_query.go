@@ -15,18 +15,22 @@ func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
 		return OpenResult{}, err
 	}
 	defer func() { _ = db.Close() }()
-	return open(ctx, db, rowID)
+	return open(ctx, db, rowID, "")
 }
 
 // OpenWithStore opens a record from the runner-owned read-only Photos store.
 func OpenWithStore(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
+	return OpenWithStoreFocused(ctx, db, rowID, "")
+}
+
+func OpenWithStoreFocused(ctx context.Context, db *store.Store, rowID, anchorID string) (OpenResult, error) {
 	if err := validateReadStore(ctx, db); err != nil {
 		return OpenResult{}, err
 	}
-	return open(ctx, db, rowID)
+	return open(ctx, db, rowID, anchorID)
 }
 
-func open(ctx context.Context, db *store.Store, rowID string) (OpenResult, error) {
+func open(ctx context.Context, db *store.Store, rowID, anchorID string) (OpenResult, error) {
 	rowID = normalizeRef(rowID)
 	if rowID == "" {
 		return OpenResult{}, errors.New("ref is required")
@@ -111,7 +115,54 @@ end, distance_meters, id
 			return OpenResult{}, err
 		}
 	}
-	return newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations), nil
+	metadataObservations, err := rows(ctx, db.DB(), `
+select id, label
+from metadata_observation
+where asset_id = ?
+order by observation_type, label, id
+limit ?
+`, rowID, maximumOpenSignals+1)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	truncated := len(metadataObservations) > maximumOpenSignals
+	if len(metadataObservations) > maximumOpenSignals {
+		metadataObservations = metadataObservations[:maximumOpenSignals]
+	}
+	if anchorID != "" && !hasMetadataAnchor(metadataObservations, anchorID) {
+		metadataID, ok := metadataIDForAnchor(anchorID)
+		if !ok {
+			return OpenResult{}, fmt.Errorf("invalid requested metadata anchor: %s", anchorID)
+		}
+		focused, err := oneRow(ctx, db.DB(), `
+select id, label
+from metadata_observation
+where asset_id = ? and id = ?
+`, rowID, metadataID)
+		if errors.Is(err, sql.ErrNoRows) {
+			return OpenResult{}, fmt.Errorf("requested metadata anchor not found: %s", anchorID)
+		}
+		if err != nil {
+			return OpenResult{}, err
+		}
+		if len(metadataObservations) == maximumOpenSignals {
+			metadataObservations = append(metadataObservations[:maximumOpenSignals-1], focused)
+		} else {
+			metadataObservations = append(metadataObservations, focused)
+		}
+	}
+	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations, metadataObservations)
+	result.Mechanical.SignalsTruncated = truncated
+	return result, nil
+}
+
+func hasMetadataAnchor(rows []map[string]any, anchorID string) bool {
+	for _, row := range rows {
+		if metadataAnchorID(rowString(row, "id")) == anchorID {
+			return true
+		}
+	}
+	return false
 }
 
 func tableExists(ctx context.Context, db *sql.DB, name string) (bool, error) {

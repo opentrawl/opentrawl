@@ -124,11 +124,14 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if hit.Ref != "calendar:event/11111111-1111-1111-1111-111111111111" || hit.ShortRef == "" {
 		t.Fatalf("search hit refs = %#v", hit)
 	}
-	if hit.Who != "Alice Example" || hit.Where != "Room 1" {
-		t.Fatalf("search hit who/where = %q/%q", hit.Who, hit.Where)
+	if hit.AnchorID != "summary" {
+		t.Fatalf("search hit anchor = %q, want summary", hit.AnchorID)
 	}
-	if hit.Calendar != "Work" {
-		t.Fatalf("search hit calendar = %q, want Work", hit.Calendar)
+	if hit.Summary.Title != "Planning meeting - Room 1, 1 Example Street" || hit.Summary.Subtitle != "Work" {
+		t.Fatalf("search hit summary = %#v", hit.Summary)
+	}
+	if len(hit.Evidence) == 0 || hit.Evidence[0].Label != "Title" || hit.Evidence[0].Field == nil || hit.Evidence[0].Field.Name != "summary" || !calendarHasMatchedRun(hit.Evidence[0].Field.Value) {
+		t.Fatalf("search hit evidence = %#v", hit.Evidence)
 	}
 	if hit.Availability == nil || *hit.Availability != 2 {
 		t.Fatalf("search hit availability = %#v, want raw 2", hit.Availability)
@@ -245,6 +248,15 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if len(contacts.Contacts) != 2 || contacts.Contacts[0].PhoneNumbers[0] != "+15550100" {
 		t.Fatalf("contacts = %#v", contacts)
 	}
+}
+
+func calendarHasMatchedRun(runs []trawlkit.TextRun) bool {
+	for _, run := range runs {
+		if run.Matched {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCalendarVerbsDeclareReadAndWriteAccess(t *testing.T) {

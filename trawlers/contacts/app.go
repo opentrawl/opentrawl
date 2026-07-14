@@ -142,12 +142,17 @@ func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Quer
 	}
 	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
+		title := strings.TrimSpace(result.Who)
+		if title == "" {
+			title = "Contact"
+		}
 		hits = append(hits, trawlkit.Hit{
 			Ref:      result.Ref,
 			Time:     result.Time,
-			Who:      result.Who,
-			Snippet:  result.Snippet,
 			ShortRef: result.ShortRef,
+			AnchorID: result.AnchorID,
+			Summary:  trawlkit.ResultSummary{Title: title, Subtitle: "Contact"},
+			Evidence: contactSearchEvidence(result.Matches),
 		})
 	}
 	return trawlkit.SearchResult{
@@ -155,6 +160,27 @@ func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Quer
 		TotalMatches: total,
 		Truncated:    q.Limit > 0 && len(results) < total,
 	}, nil
+}
+
+func contactSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {
+	labels := map[string]string{
+		"name": "Name", "sort_name": "Sort name", "annotation": "Annotation", "body": "Contact note",
+		"identifier": "Identifier", "aka": "Also known as", "tag": "Tag", "email": "Email",
+		"phone": "Phone", "address": "Address", "account": "Account", "note_kind": "Note kind",
+		"source_name": "Source name", "note_source": "Note source", "note_body": "Note body", "note_topic": "Note topic",
+	}
+	evidence := make([]trawlkit.EvidenceFragment, 0, len(matches))
+	for _, match := range matches {
+		runs := make([]trawlkit.TextRun, 0, len(match.Runs))
+		for _, run := range match.Runs {
+			runs = append(runs, trawlkit.TextRun{Text: run.Text, Matched: run.Matched})
+		}
+		evidence = append(evidence, trawlkit.EvidenceFragment{
+			Label: labels[match.Field],
+			Field: &trawlkit.FieldEvidence{Name: match.Field, Value: runs},
+		})
+	}
+	return evidence
 }
 
 func (a *App) Who(ctx context.Context, req *trawlkit.Request, person string) ([]whomatch.Candidate, error) {
@@ -198,7 +224,11 @@ func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref str
 	if err != nil {
 		return openValue{}, err
 	}
-	return openValue{ref: archive.PersonRef(person.ID), person: person}, nil
+	notes, err := st.Notes(ctx, person.ID)
+	if err != nil {
+		return openValue{}, err
+	}
+	return openValue{ref: archive.PersonRef(person.ID), person: person, notes: notes}, nil
 }
 
 func (a *App) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {

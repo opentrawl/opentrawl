@@ -25,6 +25,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
+	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"google.golang.org/protobuf/proto"
@@ -145,8 +146,34 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &search); err != nil {
 		t.Fatalf("search JSON: %v\n%s", err, stdout)
 	}
-	if len(search.Results) != 1 || search.Results[0].Who != "Ada Example" || search.Results[0].ShortRef == "" {
+	if len(search.Results) != 1 || search.Results[0].ShortRef == "" {
 		t.Fatalf("search = %#v", search)
+	}
+	match := search.Results[0]
+	if match.AnchorID != "name" || match.Summary.Title != "Ada Example" || match.Summary.Subtitle != "Contact" {
+		t.Fatalf("search match = %#v", match)
+	}
+	nameEvidence := match.Evidence[0]
+	matched := false
+	if nameEvidence.Field != nil {
+		for _, run := range nameEvidence.Field.Value {
+			matched = matched || run.Matched
+		}
+	}
+	if nameEvidence.Label != "Name" || nameEvidence.Field == nil || nameEvidence.Field.Name != "name" || !matched {
+		t.Fatalf("search evidence = %#v", match.Evidence)
+	}
+	readStore, err := ckstore.OpenReadOnly(context.Background(), archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := New().OpenRecord(context.Background(), &trawlkit.Request{Store: readStore, Paths: trawlkit.Paths{Archive: archivePath}}, match.Ref)
+	_ = readStore.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := openrecord.ValidateRequestedAnchor(record, match.AnchorID); err != nil {
+		t.Fatalf("search anchor %q does not open: %v", match.AnchorID, err)
 	}
 	code, stdout, stderr = runContacts(t, home, "open", search.Results[0].ShortRef, "--json")
 	if code != 0 {

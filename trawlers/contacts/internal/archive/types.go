@@ -37,12 +37,24 @@ type SearchOptions struct {
 }
 
 type SearchResult struct {
+	AnchorID string
 	Ref      string
 	Time     time.Time
 	Who      string
 	Snippet  string
 	PersonID string
 	ShortRef string
+	Matches  []SearchMatch
+}
+
+type SearchMatch struct {
+	Field string
+	Runs  []SearchTextRun
+}
+
+type SearchTextRun struct {
+	Text    string
+	Matched bool
 }
 
 type ImportSummary struct {

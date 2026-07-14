@@ -134,6 +134,7 @@ func TestOpenResultProjectsStalenessAndAlbumsWithoutStorageTokens(t *testing.T) 
 		albums,
 		modelObservations,
 		nil,
+		nil,
 	)
 	data, err := json.Marshal(result)
 	if err != nil {

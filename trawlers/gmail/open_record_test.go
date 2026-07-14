@@ -67,14 +67,16 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("ProtoJSON = %s\nwant = %s", data, want)
 	}
 	presentation := projectOpenPresentation(input)
-	if presentation.Title != "Project Lantern" || len(presentation.Blocks) != 3 || len(presentation.Facts) != 1 || presentation.Facts[0].Message != "Message body is truncated; 17 characters omitted." {
+	if presentation.Title != "Project Lantern" || len(presentation.Blocks) != 4 || len(presentation.Facts) != 1 || presentation.Facts[0].Message != "Message body is truncated; 17 characters omitted." {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Project Lantern"
+blocks: { heading: { text: "Project Lantern" } anchor_id: "subject" }
 blocks: { fields: { fields: { label: "From" display: "Avery Example <avery@example.com>" } fields: { label: "To" display: "morgan@example.com" } fields: { label: "Cc" display: "team@example.com" } fields: { label: "Date" display: "10 July 2026 at 14:00" } fields: { label: "Labels" display: "INBOX, STARRED" } fields: { label: "Unread" display: "Yes" } } }
-blocks: { prose: { text: "Synthetic review body." } }
-blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2.0 KiB" } } } }
-facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 characters omitted." }`)
+blocks: { prose: { text: "Synthetic review body." } anchor_id: "body" }
+blocks: { table: { columns: "File" columns: "Type" columns: "Bytes" rows: { role: ROLE_NORMAL cells: { display: "brief.pdf" } cells: { display: "application/pdf" } cells: { display: "2.0 KiB" } anchor_id: "attachment-1" } } }
+facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 characters omitted." }
+primary_anchor_id: "body"`)
 	assertOpenPresentation(t, "gmail", input, record, presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
@@ -83,6 +85,16 @@ facts: { kind: KIND_TRUNCATION message: "Message body is truncated; 17 character
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestMessagePresentationContainsSubjectAndBodySearchAnchors(t *testing.T) {
+	value := archive.OpenResult{Ref: "gmail:msg/example", ID: "example", Headers: archive.MailHeaders{Subject: "Lantern subject"}, Body: "Lantern body", Attachments: []archive.Attachment{{Filename: "lantern.pdf", MIMEType: "application/pdf", Size: 42}}}
+	record := &openv1.OpenRecord{SourceId: "gmail", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/gmail"}, Presentation: projectOpenPresentation(value)}
+	for _, anchorID := range []string{"subject", "body", "attachment-1"} {
+		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
+			t.Fatalf("anchor %q: %v", anchorID, err)
+		}
+	}
 }
 
 func TestOpenRecordTimestampBoundary(t *testing.T) {
@@ -146,7 +158,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetTime() != "2026-07-10T14:00:00.5+02:00" {
 		t.Fatalf("typed time = %q", typed.GetTime())
 	}
-	if got := record.Presentation.Blocks[0].GetFields().GetFields()[3].GetDisplay(); got != "10 July 2026 at 14:00" {
+	if got := record.Presentation.Blocks[1].GetFields().GetFields()[3].GetDisplay(); got != "10 July 2026 at 14:00" {
 		t.Fatalf("date display = %q", got)
 	}
 	setTime("not-a-timestamp")

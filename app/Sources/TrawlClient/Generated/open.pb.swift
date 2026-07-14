@@ -82,6 +82,8 @@ public nonisolated struct Trawl_Open_V1_OpenResponse: Sendable {
 
   public var requestedRef: String = String()
 
+  public var requestedAnchorID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -145,7 +147,7 @@ nonisolated extension Trawl_Open_V1_OpenRecord: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OpenResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_ref\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}outcome\0\u{1}record\0\u{1}failure\0\u{3}requested_ref\0\u{3}requested_anchor_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -157,6 +159,7 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
       case 2: try { try decoder.decodeSingularMessageField(value: &self._record) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._failure) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.requestedRef) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.requestedAnchorID) }()
       default: break
       }
     }
@@ -179,6 +182,9 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
     if !self.requestedRef.isEmpty {
       try visitor.visitSingularStringField(value: self.requestedRef, fieldNumber: 4)
     }
+    if !self.requestedAnchorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.requestedAnchorID, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -187,6 +193,7 @@ nonisolated extension Trawl_Open_V1_OpenResponse: SwiftProtobuf.Message, SwiftPr
     if lhs._record != rhs._record {return false}
     if lhs._failure != rhs._failure {return false}
     if lhs.requestedRef != rhs.requestedRef {return false}
+    if lhs.requestedAnchorID != rhs.requestedAnchorID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

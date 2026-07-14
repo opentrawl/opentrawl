@@ -68,7 +68,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertExactRecord(t, record, &contactsopenv1.ContactsRecord{}, `{"ref":"contacts:person/person_storage_fixture","name":"Avery Example","sort_name":"Example, Avery","aka":["Avery E."],"tags":["project"],"emails":[{"value":"avery@example.com","label":"work","primary":true}],"phones":[{"value":"+15550001111","label":"mobile"}],"addresses":[{"value":"1 Example Street","label":"work"}],"accounts":{"telegram":{"values":["avery_example"]}},"annotation":"Synthetic collaborator.","annotation_stated_at":"2026-07-10"}`)
 	presentation := projectOpenPresentation(value)
-	if presentation.Title != "Avery Example" || len(presentation.Blocks) != 1 || len(presentation.Blocks[0].GetFields().Fields) != 7 {
+	if presentation.Title != "Avery Example" || presentation.PrimaryAnchorId != "name" || len(presentation.Blocks) != 2 || len(presentation.Blocks[1].GetFields().Fields) != 9 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	type evidenceContactValue struct {
@@ -98,7 +98,9 @@ func TestOpenRecordProjection(t *testing.T) {
 	}{archive.PersonRef(input.ID), input.Name, input.SortName, input.AKA, input.Tags, projectedValues(input.Emails), projectedValues(input.Phones), projectedValues(input.Addresses), input.Accounts, input.Annotation, input.AnnotationStatedAt}
 	assertOpenPresentation(t, "contacts", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "Avery Example"
-blocks: { fields: { fields: { label: "Also known as" display: "Avery E." } fields: { label: "Tags" display: "project" } fields: { label: "Emails" display: "avery@example.com (work) [primary]" } fields: { label: "Phones" display: "+15550001111 (mobile)" } fields: { label: "Addresses" display: "1 Example Street (work)" } fields: { label: "Accounts" display: "telegram: avery_example" } fields: { label: "Annotation" display: "Synthetic collaborator." } } }`)
+blocks: { heading: { text: "Avery Example" } anchor_id: "name" }
+blocks: { fields: { fields: { label: "Sort name" display: "Example, Avery" anchor_id: "sort_name" } fields: { label: "Identifier" display: "person_storage_fixture" anchor_id: "identifier" } fields: { label: "Also known as" display: "Avery E." anchor_id: "aka" } fields: { label: "Tags" display: "project" anchor_id: "tag" } fields: { label: "Emails" display: "avery@example.com (work) [primary]" anchor_id: "email" } fields: { label: "Phones" display: "+15550001111 (mobile)" anchor_id: "phone" } fields: { label: "Addresses" display: "1 Example Street (work)" anchor_id: "address" } fields: { label: "Accounts" display: "telegram: avery_example" anchor_id: "account" } fields: { label: "Annotation" display: "Synthetic collaborator." anchor_id: "annotation" } } }
+primary_anchor_id: "name"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Name = ""
@@ -106,6 +108,18 @@ blocks: { fields: { fields: { label: "Also known as" display: "Avery E." } field
 			t.Fatalf("title = %q", got)
 		}
 	})
+}
+
+func TestContactPresentationContainsFieldAndNoteSearchAnchors(t *testing.T) {
+	person := model.Person{ID: "person-example", Name: "Avery Example", Emails: []model.ContactValue{{Value: "avery@example.com"}}, Addresses: []model.ContactValue{{Value: "1 Example Street"}}, Sources: map[string]model.PersonSource{"fixture": {Names: []string{"Lantern alias"}}}}
+	notes := []model.Note{{ID: "note-one", PersonID: person.ID, Body: "First synthetic note"}, {ID: "note-two", PersonID: person.ID, Body: "Second synthetic note"}}
+	document := projectOpenPresentation(openValue{ref: archive.PersonRef(person.ID), person: person, notes: notes})
+	for _, anchorID := range []string{"email", "address", "source_name", archive.NoteAnchorID("note-one"), archive.NoteAnchorID("note-two")} {
+		record := &openv1.OpenRecord{SourceId: "contacts", OpenRef: archive.PersonRef(person.ID), Data: &anypb.Any{TypeUrl: "type.example/contacts"}, Presentation: document}
+		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
+			t.Fatalf("anchor %q: %v", anchorID, err)
+		}
+	}
 }
 
 func assertExactRecord(t *testing.T, got, want proto.Message, wantJSON string) {

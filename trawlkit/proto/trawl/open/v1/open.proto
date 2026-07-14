@@ -20,4 +20,5 @@ message OpenResponse {
   OpenRecord record = 2;
   trawl.federation.v1.SourceFailure failure = 3;
   string requested_ref = 4;
+  string requested_anchor_id = 5;
 }

@@ -564,7 +564,7 @@ func (x *Branding) GetBundleIdentifier() string {
 type SourceManifest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
-	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	Branding      *Branding              `protobuf:"bytes,3,opt,name=branding,proto3" json:"branding,omitempty"`
 	Headlines     []string               `protobuf:"bytes,4,rep,name=headlines,proto3" json:"headlines,omitempty"`
 	Capabilities  []string               `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
@@ -609,9 +609,9 @@ func (x *SourceManifest) GetSourceId() string {
 	return ""
 }
 
-func (x *SourceManifest) GetSurface() string {
+func (x *SourceManifest) GetDisplayName() string {
 	if x != nil {
-		return x.Surface
+		return x.DisplayName
 	}
 	return ""
 }
@@ -1389,26 +1389,451 @@ func (x *WhoResolved) GetIdentifiers() []string {
 	return nil
 }
 
+type ResultSummary struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Subtitle      string                 `protobuf:"bytes,2,opt,name=subtitle,proto3" json:"subtitle,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResultSummary) Reset() {
+	*x = ResultSummary{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResultSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResultSummary) ProtoMessage() {}
+
+func (x *ResultSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResultSummary.ProtoReflect.Descriptor instead.
+func (*ResultSummary) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ResultSummary) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *ResultSummary) GetSubtitle() string {
+	if x != nil {
+		return x.Subtitle
+	}
+	return ""
+}
+
+type TextRun struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Text          string                 `protobuf:"bytes,1,opt,name=text,proto3" json:"text,omitempty"`
+	Matched       bool                   `protobuf:"varint,2,opt,name=matched,proto3" json:"matched,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TextRun) Reset() {
+	*x = TextRun{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TextRun) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TextRun) ProtoMessage() {}
+
+func (x *TextRun) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TextRun.ProtoReflect.Descriptor instead.
+func (*TextRun) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TextRun) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *TextRun) GetMatched() bool {
+	if x != nil {
+		return x.Matched
+	}
+	return false
+}
+
+type TextEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Runs          []*TextRun             `protobuf:"bytes,1,rep,name=runs,proto3" json:"runs,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TextEvidence) Reset() {
+	*x = TextEvidence{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TextEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TextEvidence) ProtoMessage() {}
+
+func (x *TextEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TextEvidence.ProtoReflect.Descriptor instead.
+func (*TextEvidence) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TextEvidence) GetRuns() []*TextRun {
+	if x != nil {
+		return x.Runs
+	}
+	return nil
+}
+
+type FieldEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Value         []*TextRun             `protobuf:"bytes,2,rep,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *FieldEvidence) Reset() {
+	*x = FieldEvidence{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FieldEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FieldEvidence) ProtoMessage() {}
+
+func (x *FieldEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FieldEvidence.ProtoReflect.Descriptor instead.
+func (*FieldEvidence) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *FieldEvidence) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *FieldEvidence) GetValue() []*TextRun {
+	if x != nil {
+		return x.Value
+	}
+	return nil
+}
+
+type MediaEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ResourceRef   string                 `protobuf:"bytes,1,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
+	Description   []*TextRun             `protobuf:"bytes,2,rep,name=description,proto3" json:"description,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MediaEvidence) Reset() {
+	*x = MediaEvidence{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MediaEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MediaEvidence) ProtoMessage() {}
+
+func (x *MediaEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MediaEvidence.ProtoReflect.Descriptor instead.
+func (*MediaEvidence) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *MediaEvidence) GetResourceRef() string {
+	if x != nil {
+		return x.ResourceRef
+	}
+	return ""
+}
+
+func (x *MediaEvidence) GetDescription() []*TextRun {
+	if x != nil {
+		return x.Description
+	}
+	return nil
+}
+
+type RelationEvidence struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Relation      string                 `protobuf:"bytes,1,opt,name=relation,proto3" json:"relation,omitempty"`
+	Target        []*TextRun             `protobuf:"bytes,2,rep,name=target,proto3" json:"target,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RelationEvidence) Reset() {
+	*x = RelationEvidence{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RelationEvidence) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RelationEvidence) ProtoMessage() {}
+
+func (x *RelationEvidence) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RelationEvidence.ProtoReflect.Descriptor instead.
+func (*RelationEvidence) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *RelationEvidence) GetRelation() string {
+	if x != nil {
+		return x.Relation
+	}
+	return ""
+}
+
+func (x *RelationEvidence) GetTarget() []*TextRun {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+type EvidenceFragment struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Label string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
+	// Types that are valid to be assigned to Content:
+	//
+	//	*EvidenceFragment_Text
+	//	*EvidenceFragment_Field
+	//	*EvidenceFragment_Media
+	//	*EvidenceFragment_Relation
+	Content       isEvidenceFragment_Content `protobuf_oneof:"content"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *EvidenceFragment) Reset() {
+	*x = EvidenceFragment{}
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *EvidenceFragment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*EvidenceFragment) ProtoMessage() {}
+
+func (x *EvidenceFragment) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use EvidenceFragment.ProtoReflect.Descriptor instead.
+func (*EvidenceFragment) Descriptor() ([]byte, []int) {
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *EvidenceFragment) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *EvidenceFragment) GetContent() isEvidenceFragment_Content {
+	if x != nil {
+		return x.Content
+	}
+	return nil
+}
+
+func (x *EvidenceFragment) GetText() *TextEvidence {
+	if x != nil {
+		if x, ok := x.Content.(*EvidenceFragment_Text); ok {
+			return x.Text
+		}
+	}
+	return nil
+}
+
+func (x *EvidenceFragment) GetField() *FieldEvidence {
+	if x != nil {
+		if x, ok := x.Content.(*EvidenceFragment_Field); ok {
+			return x.Field
+		}
+	}
+	return nil
+}
+
+func (x *EvidenceFragment) GetMedia() *MediaEvidence {
+	if x != nil {
+		if x, ok := x.Content.(*EvidenceFragment_Media); ok {
+			return x.Media
+		}
+	}
+	return nil
+}
+
+func (x *EvidenceFragment) GetRelation() *RelationEvidence {
+	if x != nil {
+		if x, ok := x.Content.(*EvidenceFragment_Relation); ok {
+			return x.Relation
+		}
+	}
+	return nil
+}
+
+type isEvidenceFragment_Content interface {
+	isEvidenceFragment_Content()
+}
+
+type EvidenceFragment_Text struct {
+	Text *TextEvidence `protobuf:"bytes,2,opt,name=text,proto3,oneof"`
+}
+
+type EvidenceFragment_Field struct {
+	Field *FieldEvidence `protobuf:"bytes,3,opt,name=field,proto3,oneof"`
+}
+
+type EvidenceFragment_Media struct {
+	Media *MediaEvidence `protobuf:"bytes,4,opt,name=media,proto3,oneof"`
+}
+
+type EvidenceFragment_Relation struct {
+	Relation *RelationEvidence `protobuf:"bytes,5,opt,name=relation,proto3,oneof"`
+}
+
+func (*EvidenceFragment_Text) isEvidenceFragment_Content() {}
+
+func (*EvidenceFragment_Field) isEvidenceFragment_Content() {}
+
+func (*EvidenceFragment_Media) isEvidenceFragment_Content() {}
+
+func (*EvidenceFragment_Relation) isEvidenceFragment_Content() {}
+
 type SearchHit struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
 	OpenRef       string                 `protobuf:"bytes,2,opt,name=open_ref,json=openRef,proto3" json:"open_ref,omitempty"`
 	ShortRef      string                 `protobuf:"bytes,3,opt,name=short_ref,json=shortRef,proto3" json:"short_ref,omitempty"`
 	TimeRfc3339   string                 `protobuf:"bytes,4,opt,name=time_rfc3339,json=timeRfc3339,proto3" json:"time_rfc3339,omitempty"`
-	Who           string                 `protobuf:"bytes,5,opt,name=who,proto3" json:"who,omitempty"`
-	Where         string                 `protobuf:"bytes,6,opt,name=where,proto3" json:"where,omitempty"`
-	Calendar      string                 `protobuf:"bytes,7,opt,name=calendar,proto3" json:"calendar,omitempty"`
-	Snippet       string                 `protobuf:"bytes,8,opt,name=snippet,proto3" json:"snippet,omitempty"`
 	AllDay        bool                   `protobuf:"varint,9,opt,name=all_day,json=allDay,proto3" json:"all_day,omitempty"`
 	Availability  *int64                 `protobuf:"varint,10,opt,name=availability,proto3,oneof" json:"availability,omitempty"`
 	Unread        *bool                  `protobuf:"varint,11,opt,name=unread,proto3,oneof" json:"unread,omitempty"`
+	AnchorId      string                 `protobuf:"bytes,12,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
+	Summary       *ResultSummary         `protobuf:"bytes,13,opt,name=summary,proto3" json:"summary,omitempty"`
+	Evidence      []*EvidenceFragment    `protobuf:"bytes,14,rep,name=evidence,proto3" json:"evidence,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SearchHit) Reset() {
 	*x = SearchHit{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[12]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1420,7 +1845,7 @@ func (x *SearchHit) String() string {
 func (*SearchHit) ProtoMessage() {}
 
 func (x *SearchHit) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[12]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1433,7 +1858,7 @@ func (x *SearchHit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchHit.ProtoReflect.Descriptor instead.
 func (*SearchHit) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{12}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *SearchHit) GetSourceId() string {
@@ -1464,34 +1889,6 @@ func (x *SearchHit) GetTimeRfc3339() string {
 	return ""
 }
 
-func (x *SearchHit) GetWho() string {
-	if x != nil {
-		return x.Who
-	}
-	return ""
-}
-
-func (x *SearchHit) GetWhere() string {
-	if x != nil {
-		return x.Where
-	}
-	return ""
-}
-
-func (x *SearchHit) GetCalendar() string {
-	if x != nil {
-		return x.Calendar
-	}
-	return ""
-}
-
-func (x *SearchHit) GetSnippet() string {
-	if x != nil {
-		return x.Snippet
-	}
-	return ""
-}
-
 func (x *SearchHit) GetAllDay() bool {
 	if x != nil {
 		return x.AllDay
@@ -1513,10 +1910,31 @@ func (x *SearchHit) GetUnread() bool {
 	return false
 }
 
+func (x *SearchHit) GetAnchorId() string {
+	if x != nil {
+		return x.AnchorId
+	}
+	return ""
+}
+
+func (x *SearchHit) GetSummary() *ResultSummary {
+	if x != nil {
+		return x.Summary
+	}
+	return nil
+}
+
+func (x *SearchHit) GetEvidence() []*EvidenceFragment {
+	if x != nil {
+		return x.Evidence
+	}
+	return nil
+}
+
 type SearchSourceResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
-	Surface       string                 `protobuf:"bytes,2,opt,name=surface,proto3" json:"surface,omitempty"`
+	DisplayName   string                 `protobuf:"bytes,2,opt,name=display_name,json=displayName,proto3" json:"display_name,omitempty"`
 	WhoResolved   *WhoResolved           `protobuf:"bytes,3,opt,name=who_resolved,json=whoResolved,proto3" json:"who_resolved,omitempty"`
 	Hits          []*SearchHit           `protobuf:"bytes,4,rep,name=hits,proto3" json:"hits,omitempty"`
 	TotalMatches  uint64                 `protobuf:"varint,5,opt,name=total_matches,json=totalMatches,proto3" json:"total_matches,omitempty"`
@@ -1528,7 +1946,7 @@ type SearchSourceResult struct {
 
 func (x *SearchSourceResult) Reset() {
 	*x = SearchSourceResult{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[13]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1540,7 +1958,7 @@ func (x *SearchSourceResult) String() string {
 func (*SearchSourceResult) ProtoMessage() {}
 
 func (x *SearchSourceResult) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[13]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1553,7 +1971,7 @@ func (x *SearchSourceResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchSourceResult.ProtoReflect.Descriptor instead.
 func (*SearchSourceResult) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{13}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *SearchSourceResult) GetSourceId() string {
@@ -1563,9 +1981,9 @@ func (x *SearchSourceResult) GetSourceId() string {
 	return ""
 }
 
-func (x *SearchSourceResult) GetSurface() string {
+func (x *SearchSourceResult) GetDisplayName() string {
 	if x != nil {
-		return x.Surface
+		return x.DisplayName
 	}
 	return ""
 }
@@ -1617,7 +2035,7 @@ type StatusResponse struct {
 
 func (x *StatusResponse) Reset() {
 	*x = StatusResponse{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[14]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1629,7 +2047,7 @@ func (x *StatusResponse) String() string {
 func (*StatusResponse) ProtoMessage() {}
 
 func (x *StatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[14]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1642,7 +2060,7 @@ func (x *StatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatusResponse.ProtoReflect.Descriptor instead.
 func (*StatusResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{14}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *StatusResponse) GetOutcome() OperationOutcome {
@@ -1689,7 +2107,7 @@ type SearchResponse struct {
 
 func (x *SearchResponse) Reset() {
 	*x = SearchResponse{}
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1701,7 +2119,7 @@ func (x *SearchResponse) String() string {
 func (*SearchResponse) ProtoMessage() {}
 
 func (x *SearchResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_trawl_federation_v1_federation_proto_msgTypes[15]
+	mi := &file_trawl_federation_v1_federation_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1714,7 +2132,7 @@ func (x *SearchResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchResponse.ProtoReflect.Descriptor instead.
 func (*SearchResponse) Descriptor() ([]byte, []int) {
-	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{15}
+	return file_trawl_federation_v1_federation_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *SearchResponse) GetOutcome() OperationOutcome {
@@ -1793,10 +2211,10 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"symbolName\x12!\n" +
 	"\faccent_color\x18\x02 \x01(\tR\vaccentColor\x12\x1b\n" +
 	"\ticon_path\x18\x03 \x01(\tR\biconPath\x12+\n" +
-	"\x11bundle_identifier\x18\x04 \x01(\tR\x10bundleIdentifier\"\xc4\x01\n" +
+	"\x11bundle_identifier\x18\x04 \x01(\tR\x10bundleIdentifier\"\xcd\x01\n" +
 	"\x0eSourceManifest\x12\x1b\n" +
-	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x18\n" +
-	"\asurface\x18\x02 \x01(\tR\asurface\x129\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x129\n" +
 	"\bbranding\x18\x03 \x01(\v2\x1d.trawl.federation.v1.BrandingR\bbranding\x12\x1c\n" +
 	"\theadlines\x18\x04 \x03(\tR\theadlines\x12\"\n" +
 	"\fcapabilities\x18\x05 \x03(\tR\fcapabilities\"C\n" +
@@ -1870,25 +2288,48 @@ const file_trawl_federation_v1_federation_proto_rawDesc = "" +
 	"\x06errors\x18\x15 \x03(\tR\x06errors\"A\n" +
 	"\vWhoResolved\x12\x10\n" +
 	"\x03who\x18\x01 \x01(\tR\x03who\x12 \n" +
-	"\videntifiers\x18\x02 \x03(\tR\videntifiers\"\xdc\x02\n" +
+	"\videntifiers\x18\x02 \x03(\tR\videntifiers\"A\n" +
+	"\rResultSummary\x12\x14\n" +
+	"\x05title\x18\x01 \x01(\tR\x05title\x12\x1a\n" +
+	"\bsubtitle\x18\x02 \x01(\tR\bsubtitle\"7\n" +
+	"\aTextRun\x12\x12\n" +
+	"\x04text\x18\x01 \x01(\tR\x04text\x12\x18\n" +
+	"\amatched\x18\x02 \x01(\bR\amatched\"@\n" +
+	"\fTextEvidence\x120\n" +
+	"\x04runs\x18\x01 \x03(\v2\x1c.trawl.federation.v1.TextRunR\x04runs\"W\n" +
+	"\rFieldEvidence\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x122\n" +
+	"\x05value\x18\x02 \x03(\v2\x1c.trawl.federation.v1.TextRunR\x05value\"r\n" +
+	"\rMediaEvidence\x12!\n" +
+	"\fresource_ref\x18\x01 \x01(\tR\vresourceRef\x12>\n" +
+	"\vdescription\x18\x02 \x03(\v2\x1c.trawl.federation.v1.TextRunR\vdescription\"d\n" +
+	"\x10RelationEvidence\x12\x1a\n" +
+	"\brelation\x18\x01 \x01(\tR\brelation\x124\n" +
+	"\x06target\x18\x02 \x03(\v2\x1c.trawl.federation.v1.TextRunR\x06target\"\xa9\x02\n" +
+	"\x10EvidenceFragment\x12\x14\n" +
+	"\x05label\x18\x01 \x01(\tR\x05label\x127\n" +
+	"\x04text\x18\x02 \x01(\v2!.trawl.federation.v1.TextEvidenceH\x00R\x04text\x12:\n" +
+	"\x05field\x18\x03 \x01(\v2\".trawl.federation.v1.FieldEvidenceH\x00R\x05field\x12:\n" +
+	"\x05media\x18\x04 \x01(\v2\".trawl.federation.v1.MediaEvidenceH\x00R\x05media\x12C\n" +
+	"\brelation\x18\x05 \x01(\v2%.trawl.federation.v1.RelationEvidenceH\x00R\brelationB\t\n" +
+	"\acontent\"\xa2\x03\n" +
 	"\tSearchHit\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x19\n" +
 	"\bopen_ref\x18\x02 \x01(\tR\aopenRef\x12\x1b\n" +
 	"\tshort_ref\x18\x03 \x01(\tR\bshortRef\x12!\n" +
-	"\ftime_rfc3339\x18\x04 \x01(\tR\vtimeRfc3339\x12\x10\n" +
-	"\x03who\x18\x05 \x01(\tR\x03who\x12\x14\n" +
-	"\x05where\x18\x06 \x01(\tR\x05where\x12\x1a\n" +
-	"\bcalendar\x18\a \x01(\tR\bcalendar\x12\x18\n" +
-	"\asnippet\x18\b \x01(\tR\asnippet\x12\x17\n" +
+	"\ftime_rfc3339\x18\x04 \x01(\tR\vtimeRfc3339\x12\x17\n" +
 	"\aall_day\x18\t \x01(\bR\x06allDay\x12'\n" +
 	"\favailability\x18\n" +
 	" \x01(\x03H\x00R\favailability\x88\x01\x01\x12\x1b\n" +
-	"\x06unread\x18\v \x01(\bH\x01R\x06unread\x88\x01\x01B\x0f\n" +
+	"\x06unread\x18\v \x01(\bH\x01R\x06unread\x88\x01\x01\x12\x1b\n" +
+	"\tanchor_id\x18\f \x01(\tR\banchorId\x12<\n" +
+	"\asummary\x18\r \x01(\v2\".trawl.federation.v1.ResultSummaryR\asummary\x12A\n" +
+	"\bevidence\x18\x0e \x03(\v2%.trawl.federation.v1.EvidenceFragmentR\bevidenceB\x0f\n" +
 	"\r_availabilityB\t\n" +
-	"\a_unread\"\xad\x02\n" +
+	"\a_unreadJ\x04\b\x05\x10\t\"\xb6\x02\n" +
 	"\x12SearchSourceResult\x12\x1b\n" +
-	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x18\n" +
-	"\asurface\x18\x02 \x01(\tR\asurface\x12C\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
+	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12C\n" +
 	"\fwho_resolved\x18\x03 \x01(\v2 .trawl.federation.v1.WhoResolvedR\vwhoResolved\x122\n" +
 	"\x04hits\x18\x04 \x03(\v2\x1e.trawl.federation.v1.SearchHitR\x04hits\x12#\n" +
 	"\rtotal_matches\x18\x05 \x01(\x04R\ftotalMatches\x12\x1c\n" +
@@ -1961,7 +2402,7 @@ func file_trawl_federation_v1_federation_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_federation_v1_federation_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
-var file_trawl_federation_v1_federation_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_trawl_federation_v1_federation_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_trawl_federation_v1_federation_proto_goTypes = []any{
 	(OperationOutcome)(0),      // 0: trawl.federation.v1.OperationOutcome
 	(FailureCode)(0),           // 1: trawl.federation.v1.FailureCode
@@ -1981,10 +2422,17 @@ var file_trawl_federation_v1_federation_proto_goTypes = []any{
 	(*Remote)(nil),             // 15: trawl.federation.v1.Remote
 	(*SourceStatus)(nil),       // 16: trawl.federation.v1.SourceStatus
 	(*WhoResolved)(nil),        // 17: trawl.federation.v1.WhoResolved
-	(*SearchHit)(nil),          // 18: trawl.federation.v1.SearchHit
-	(*SearchSourceResult)(nil), // 19: trawl.federation.v1.SearchSourceResult
-	(*StatusResponse)(nil),     // 20: trawl.federation.v1.StatusResponse
-	(*SearchResponse)(nil),     // 21: trawl.federation.v1.SearchResponse
+	(*ResultSummary)(nil),      // 18: trawl.federation.v1.ResultSummary
+	(*TextRun)(nil),            // 19: trawl.federation.v1.TextRun
+	(*TextEvidence)(nil),       // 20: trawl.federation.v1.TextEvidence
+	(*FieldEvidence)(nil),      // 21: trawl.federation.v1.FieldEvidence
+	(*MediaEvidence)(nil),      // 22: trawl.federation.v1.MediaEvidence
+	(*RelationEvidence)(nil),   // 23: trawl.federation.v1.RelationEvidence
+	(*EvidenceFragment)(nil),   // 24: trawl.federation.v1.EvidenceFragment
+	(*SearchHit)(nil),          // 25: trawl.federation.v1.SearchHit
+	(*SearchSourceResult)(nil), // 26: trawl.federation.v1.SearchSourceResult
+	(*StatusResponse)(nil),     // 27: trawl.federation.v1.StatusResponse
+	(*SearchResponse)(nil),     // 28: trawl.federation.v1.SearchResponse
 }
 var file_trawl_federation_v1_federation_proto_depIdxs = []int32{
 	1,  // 0: trawl.federation.v1.SourceFailure.code:type_name -> trawl.federation.v1.FailureCode
@@ -2000,23 +2448,33 @@ var file_trawl_federation_v1_federation_proto_depIdxs = []int32{
 	15, // 10: trawl.federation.v1.SourceStatus.remote:type_name -> trawl.federation.v1.Remote
 	13, // 11: trawl.federation.v1.SourceStatus.databases:type_name -> trawl.federation.v1.Database
 	12, // 12: trawl.federation.v1.SourceStatus.setup_requirements:type_name -> trawl.federation.v1.SetupRequirement
-	17, // 13: trawl.federation.v1.SearchSourceResult.who_resolved:type_name -> trawl.federation.v1.WhoResolved
-	18, // 14: trawl.federation.v1.SearchSourceResult.hits:type_name -> trawl.federation.v1.SearchHit
-	0,  // 15: trawl.federation.v1.StatusResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	16, // 16: trawl.federation.v1.StatusResponse.sources:type_name -> trawl.federation.v1.SourceStatus
-	6,  // 17: trawl.federation.v1.StatusResponse.failures:type_name -> trawl.federation.v1.SourceFailure
-	7,  // 18: trawl.federation.v1.StatusResponse.skipped_sources:type_name -> trawl.federation.v1.SkippedSource
-	0,  // 19: trawl.federation.v1.SearchResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
-	2,  // 20: trawl.federation.v1.SearchResponse.order:type_name -> trawl.federation.v1.SearchOrder
-	19, // 21: trawl.federation.v1.SearchResponse.sources:type_name -> trawl.federation.v1.SearchSourceResult
-	18, // 22: trawl.federation.v1.SearchResponse.hits:type_name -> trawl.federation.v1.SearchHit
-	6,  // 23: trawl.federation.v1.SearchResponse.failures:type_name -> trawl.federation.v1.SourceFailure
-	7,  // 24: trawl.federation.v1.SearchResponse.skipped_sources:type_name -> trawl.federation.v1.SkippedSource
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	19, // 13: trawl.federation.v1.TextEvidence.runs:type_name -> trawl.federation.v1.TextRun
+	19, // 14: trawl.federation.v1.FieldEvidence.value:type_name -> trawl.federation.v1.TextRun
+	19, // 15: trawl.federation.v1.MediaEvidence.description:type_name -> trawl.federation.v1.TextRun
+	19, // 16: trawl.federation.v1.RelationEvidence.target:type_name -> trawl.federation.v1.TextRun
+	20, // 17: trawl.federation.v1.EvidenceFragment.text:type_name -> trawl.federation.v1.TextEvidence
+	21, // 18: trawl.federation.v1.EvidenceFragment.field:type_name -> trawl.federation.v1.FieldEvidence
+	22, // 19: trawl.federation.v1.EvidenceFragment.media:type_name -> trawl.federation.v1.MediaEvidence
+	23, // 20: trawl.federation.v1.EvidenceFragment.relation:type_name -> trawl.federation.v1.RelationEvidence
+	18, // 21: trawl.federation.v1.SearchHit.summary:type_name -> trawl.federation.v1.ResultSummary
+	24, // 22: trawl.federation.v1.SearchHit.evidence:type_name -> trawl.federation.v1.EvidenceFragment
+	17, // 23: trawl.federation.v1.SearchSourceResult.who_resolved:type_name -> trawl.federation.v1.WhoResolved
+	25, // 24: trawl.federation.v1.SearchSourceResult.hits:type_name -> trawl.federation.v1.SearchHit
+	0,  // 25: trawl.federation.v1.StatusResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	16, // 26: trawl.federation.v1.StatusResponse.sources:type_name -> trawl.federation.v1.SourceStatus
+	6,  // 27: trawl.federation.v1.StatusResponse.failures:type_name -> trawl.federation.v1.SourceFailure
+	7,  // 28: trawl.federation.v1.StatusResponse.skipped_sources:type_name -> trawl.federation.v1.SkippedSource
+	0,  // 29: trawl.federation.v1.SearchResponse.outcome:type_name -> trawl.federation.v1.OperationOutcome
+	2,  // 30: trawl.federation.v1.SearchResponse.order:type_name -> trawl.federation.v1.SearchOrder
+	26, // 31: trawl.federation.v1.SearchResponse.sources:type_name -> trawl.federation.v1.SearchSourceResult
+	25, // 32: trawl.federation.v1.SearchResponse.hits:type_name -> trawl.federation.v1.SearchHit
+	6,  // 33: trawl.federation.v1.SearchResponse.failures:type_name -> trawl.federation.v1.SourceFailure
+	7,  // 34: trawl.federation.v1.SearchResponse.skipped_sources:type_name -> trawl.federation.v1.SkippedSource
+	35, // [35:35] is the sub-list for method output_type
+	35, // [35:35] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_trawl_federation_v1_federation_proto_init() }
@@ -2024,14 +2482,20 @@ func file_trawl_federation_v1_federation_proto_init() {
 	if File_trawl_federation_v1_federation_proto != nil {
 		return
 	}
-	file_trawl_federation_v1_federation_proto_msgTypes[12].OneofWrappers = []any{}
+	file_trawl_federation_v1_federation_proto_msgTypes[18].OneofWrappers = []any{
+		(*EvidenceFragment_Text)(nil),
+		(*EvidenceFragment_Field)(nil),
+		(*EvidenceFragment_Media)(nil),
+		(*EvidenceFragment_Relation)(nil),
+	}
+	file_trawl_federation_v1_federation_proto_msgTypes[19].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_federation_v1_federation_proto_rawDesc), len(file_trawl_federation_v1_federation_proto_rawDesc)),
 			NumEnums:      6,
-			NumMessages:   16,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

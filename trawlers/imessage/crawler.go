@@ -19,7 +19,7 @@ import (
 
 const (
 	appID      = "imessage"
-	display    = "iMessage"
+	display    = "Messages"
 	staleAfter = 7 * 24 * time.Hour
 )
 
@@ -280,13 +280,25 @@ func searchHit(item archive.SearchResult) (trawlkit.Hit, error) {
 	if t.IsZero() && strings.TrimSpace(item.Time) != "" {
 		return trawlkit.Hit{}, fmt.Errorf("parse message time %q", item.Time)
 	}
+	who := outputField(senderName(item.FromMe, item.SenderLabel))
+	where := outputField(searchChatDisplayName(item))
+	if where == "" {
+		where = "Conversation"
+	}
+	if who == "" {
+		who = "Unknown sender"
+	}
+	label := "Message from " + who
+	if item.FromMe {
+		label = "Message sent by me"
+	}
 	return trawlkit.Hit{
 		Ref:      archive.MessageRef(item.MessageID),
 		ShortRef: item.ShortRef,
 		Time:     t,
-		Who:      outputField(senderName(item.FromMe, item.SenderLabel)),
-		Where:    outputField(searchChatDisplayName(item)),
-		Snippet:  outputField(searchSnippet(item)),
+		AnchorID: trawlkit.MatchAnchorID,
+		Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch(label, outputField(searchSnippet(item)))},
 	}, nil
 }
 

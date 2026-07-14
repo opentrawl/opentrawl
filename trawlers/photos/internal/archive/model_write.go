@@ -54,13 +54,7 @@ on conflict(id) do nothing
 	if _, err := tx.ExecContext(ctx, `delete from observation_fts where id = ?`, cardFTSID); err != nil {
 		return written, placeWritten, fmt.Errorf("clear existing model card fts: %w", err)
 	}
-	// Raw card prose, not a deduped term list: bm25 needs real term
-	// frequency to rank an asset that is about grilling above one that
-	// mentions a grill once.
-	if _, err := tx.ExecContext(ctx, `
-insert into observation_fts(id, asset_id, title, body)
-values (?, ?, ?, ?)
-`, cardFTSID, input.AssetID, "", strings.Join(cardTexts, "\n")); err != nil {
+	if _, err := tx.ExecContext(ctx, `insert into observation_fts(id, asset_id, title, body) values (?, ?, '', ?)`, cardFTSID, input.AssetID, strings.Join(cardTexts, "\n")); err != nil {
 		return written, placeWritten, fmt.Errorf("write model card fts: %w", err)
 	}
 	if err := updateClassificationQueue(ctx, tx, input.QueueID, classifyQueueStateContentClassified, "model_observations", classifiedAt); err != nil {

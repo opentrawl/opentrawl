@@ -45,12 +45,18 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 	hits := make([]trawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message)
+		who := outputField(messageWhoForFormat(message, req.Format))
+		where := outputField(messageWhereForFormat(message, req.Format))
+		if where == "" {
+			where = "WhatsApp conversation"
+		}
+		if who == "" {
+			who = "Unknown sender"
+		}
 		hits = append(hits, trawlkit.Hit{
-			Ref:     ref,
-			Time:    message.Timestamp,
-			Who:     outputField(messageWhoForFormat(message, req.Format)),
-			Where:   outputField(messageWhereForFormat(message, req.Format)),
-			Snippet: outputField(messageSnippet(message)),
+			Ref: ref, Time: message.Timestamp, AnchorID: trawlkit.MatchAnchorID,
+			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, outputField(messageSnippet(message)))},
 		})
 	}
 	return trawlkit.SearchResult{

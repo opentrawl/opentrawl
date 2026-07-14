@@ -18,7 +18,7 @@ private func count(_ id: String = "items", _ label: String = "Items", _ value: I
 private func manifest(_ id: String, _ surface: String) -> Trawl_Federation_V1_SourceManifest {
   .with {
     $0.sourceID = id
-    $0.surface = surface
+    $0.displayName = surface
     $0.branding = .with {
       $0.symbolName = "tray.full"
       $0.accentColor = "#AABBCC"
@@ -101,7 +101,7 @@ private func productSource(_ id: String, _ surface: String, _ headlines: [String
   .with {
     $0.manifest = .with {
       $0.sourceID = id
-      $0.surface = surface
+      $0.displayName = surface
       $0.headlines = headlines
       $0.capabilities = ["search", "open"]
     }
@@ -123,7 +123,7 @@ private func productSources() -> [Trawl_Federation_V1_SourceStatus] {
     productSource("notes", "Notes", ["notes", "folders", "versions"]),
     productSource("photos", "Photos", ["photos"]),
     productSource("telegram", "Telegram", ["chats", "folders", "topics"]),
-    productSource("twitter", "X", ["tweets", "bookmarks", "likes", "mentions"]),
+    productSource("twitter", "Twitter (X)", ["tweets", "bookmarks", "likes", "mentions"]),
     productSource("whatsapp", "WhatsApp", ["chats", "groups"]),
   ]
 }
@@ -134,10 +134,24 @@ private func hit(_ sourceID: String, _ ref: String, _ who: String) -> Trawl_Fede
     $0.openRef = ref
     $0.shortRef = "short-1"
     $0.timeRfc3339 = "2026-07-12T09:30:00Z"
-    $0.who = who
-    $0.where = "Synthetic place"
-    $0.calendar = "Synthetic calendar"
-    $0.snippet = "Synthetic result"
+    $0.anchorID = "match"
+    $0.summary = .with {
+      $0.title = "Synthetic place"
+      $0.subtitle = who
+    }
+    $0.evidence = [
+      .with {
+        $0.label = "Message body"
+        $0.text = .with {
+          $0.runs = [
+            .with {
+              $0.text = "Synthetic result"
+              $0.matched = true
+            }
+          ]
+        }
+      }
+    ]
     $0.allDay = true
     $0.availability = 2
     $0.unread = true
@@ -198,7 +212,7 @@ private func syntheticSync() throws {
   response.sources = productSources().map { source in
     .with {
       $0.appID = source.manifest.sourceID
-      $0.surface = source.manifest.surface
+      $0.surface = source.manifest.displayName
       $0.outcome = .complete
     }
   }
@@ -261,7 +275,7 @@ private func search(_ arguments: [String]) throws {
     response.sources = [
       Trawl_Federation_V1_SearchSourceResult.with {
         $0.sourceID = "gmail"
-        $0.surface = "Gmail"
+        $0.displayName = "Gmail"
         $0.whoResolved = .with {
           $0.who = "Avery Example"
           $0.identifiers = ["avery@example.com"]
@@ -276,11 +290,13 @@ private func search(_ arguments: [String]) throws {
   try write(response)
 }
 private func open(_ arguments: [String]) throws {
-  guard arguments.count == 2 else { exit(2) }
+  guard arguments.count == 3 else { exit(2) }
   let sourceID = arguments[0]
   let requestedRef = arguments[1]
+  let requestedAnchorID = arguments[2]
   var response = Trawl_Open_V1_OpenResponse()
   response.requestedRef = requestedRef
+  response.requestedAnchorID = requestedAnchorID
   if requestedRef == "failed" {
     response.outcome = .failed
     response.failure = failure(sourceID, "Synthetic")
@@ -316,8 +332,10 @@ private func open(_ arguments: [String]) throws {
   }
   var document = Trawl_Presentation_V1_PresentationDocument()
   document.title = "Synthetic record"
+  document.primaryAnchorID = requestedAnchorID
   document.blocks = [
     Trawl_Presentation_V1_Block.with {
+      $0.anchorID = requestedAnchorID
       $0.heading = Trawl_Presentation_V1_Heading.with { $0.text = "Synthetic heading" }
     },
     Trawl_Presentation_V1_Block.with {
@@ -361,7 +379,7 @@ private func open(_ arguments: [String]) throws {
         $0.resource = Trawl_Presentation_V1_Resource.with {
           $0.kind = kind
           $0.label = "Resource"
-          $0.ref = "synthetic:resource"
+          $0.ref = "\(sourceID):resource/example-1"
           $0.metadata = [
             .with {
               $0.label = "Type"
@@ -374,7 +392,7 @@ private func open(_ arguments: [String]) throws {
   document.actions = [
     Trawl_Presentation_V1_Action.with {
       $0.label = "Open ref"
-      $0.openRef = "synthetic:next"
+      $0.openRef = "\(sourceID):record/next"
     },
     Trawl_Presentation_V1_Action.with {
       $0.label = "Open web"
@@ -416,6 +434,20 @@ private func open(_ arguments: [String]) throws {
   response.record = record
   try write(response)
 }
+private func resource(_ arguments: [String]) throws {
+  guard arguments.count == 3, let maxBytes = UInt32(arguments[2]) else { exit(2) }
+  let sourceID = arguments[0]
+  let ref = arguments[1]
+  let data = Data("synthetic resource bytes".utf8)
+  guard sourceID == "photos", ref == "photos:resource/example-1", data.count <= Int(maxBytes)
+  else { exit(2) }
+  try write(
+    Trawl_Presentation_V1_ResourceResponse.with {
+      $0.resourceRef = ref
+      $0.contentType = "image/jpeg"
+      $0.data = data
+    })
+}
 private func evidence(_ arguments: [String]) throws {
   guard arguments.count == 2 else { exit(2) }
   let frame = try Data(contentsOf: URL(fileURLWithPath: arguments[1]))
@@ -451,6 +483,8 @@ do {
     try search(Array(arguments.dropFirst(2)))
   } else if arguments.starts(with: ["__app", "open"]) {
     try open(Array(arguments.dropFirst(2)))
+  } else if arguments.starts(with: ["__app", "resource"]) {
+    try resource(Array(arguments.dropFirst(2)))
   } else if arguments.starts(with: ["--evidence"]) {
     try evidence(Array(arguments.dropFirst()))
   } else {

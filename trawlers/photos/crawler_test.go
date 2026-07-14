@@ -243,8 +243,18 @@ func TestCrawlerSyncSearchOpenAndClassify(t *testing.T) {
 		t.Fatalf("search = %#v", search)
 	}
 	hit := search.Results[0]
-	if hit.ShortRef == "" || hit.Ref == "" || !strings.Contains(hit.Snippet, "synthetic.heic") {
+	if hit.ShortRef == "" || hit.Ref == "" || hit.AnchorID != "filename" || hit.Summary.Title == "" || len(hit.Evidence) != 1 {
 		t.Fatalf("search hit = %#v", hit)
+	}
+	filename := hit.Evidence[0]
+	filenameMatched := false
+	if filename.Field != nil {
+		for _, run := range filename.Field.Value {
+			filenameMatched = filenameMatched || run.Matched && strings.Contains(run.Text, "synthetic")
+		}
+	}
+	if filename.Label != "Original filename" || filename.Field == nil || filename.Field.Name != "filename" || !filenameMatched {
+		t.Fatalf("filename evidence = %#v", filename)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)

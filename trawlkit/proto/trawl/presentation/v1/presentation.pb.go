@@ -181,13 +181,14 @@ func (Fact_Kind) EnumDescriptor() ([]byte, []int) {
 }
 
 type PresentationDocument struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Title         string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
-	Blocks        []*Block               `protobuf:"bytes,2,rep,name=blocks,proto3" json:"blocks,omitempty"`
-	Actions       []*Action              `protobuf:"bytes,3,rep,name=actions,proto3" json:"actions,omitempty"`
-	Facts         []*Fact                `protobuf:"bytes,4,rep,name=facts,proto3" json:"facts,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Title           string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
+	Blocks          []*Block               `protobuf:"bytes,2,rep,name=blocks,proto3" json:"blocks,omitempty"`
+	Actions         []*Action              `protobuf:"bytes,3,rep,name=actions,proto3" json:"actions,omitempty"`
+	Facts           []*Fact                `protobuf:"bytes,4,rep,name=facts,proto3" json:"facts,omitempty"`
+	PrimaryAnchorId string                 `protobuf:"bytes,5,opt,name=primary_anchor_id,json=primaryAnchorId,proto3" json:"primary_anchor_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *PresentationDocument) Reset() {
@@ -248,6 +249,13 @@ func (x *PresentationDocument) GetFacts() []*Fact {
 	return nil
 }
 
+func (x *PresentationDocument) GetPrimaryAnchorId() string {
+	if x != nil {
+		return x.PrimaryAnchorId
+	}
+	return ""
+}
+
 type Block struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Content:
@@ -258,6 +266,7 @@ type Block struct {
 	//	*Block_Table
 	//	*Block_Resource
 	Content       isBlock_Content `protobuf_oneof:"content"`
+	AnchorId      string          `protobuf:"bytes,6,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -342,6 +351,13 @@ func (x *Block) GetResource() *Resource {
 		}
 	}
 	return nil
+}
+
+func (x *Block) GetAnchorId() string {
+	if x != nil {
+		return x.AnchorId
+	}
+	return ""
 }
 
 type isBlock_Content interface {
@@ -514,6 +530,7 @@ type Field struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Label         string                 `protobuf:"bytes,1,opt,name=label,proto3" json:"label,omitempty"`
 	Display       string                 `protobuf:"bytes,2,opt,name=display,proto3" json:"display,omitempty"`
+	AnchorId      string                 `protobuf:"bytes,3,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -558,6 +575,13 @@ func (x *Field) GetLabel() string {
 func (x *Field) GetDisplay() string {
 	if x != nil {
 		return x.Display
+	}
+	return ""
+}
+
+func (x *Field) GetAnchorId() string {
+	if x != nil {
+		return x.AnchorId
 	}
 	return ""
 }
@@ -618,6 +642,7 @@ type Row struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Role          Row_Role               `protobuf:"varint,1,opt,name=role,proto3,enum=trawl.presentation.v1.Row_Role" json:"role,omitempty"`
 	Cells         []*Cell                `protobuf:"bytes,2,rep,name=cells,proto3" json:"cells,omitempty"`
+	AnchorId      string                 `protobuf:"bytes,3,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -664,6 +689,13 @@ func (x *Row) GetCells() []*Cell {
 		return x.Cells
 	}
 	return nil
+}
+
+func (x *Row) GetAnchorId() string {
+	if x != nil {
+		return x.AnchorId
+	}
+	return ""
 }
 
 type Cell struct {
@@ -716,6 +748,7 @@ type Resource struct {
 	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
 	Ref           string                 `protobuf:"bytes,3,opt,name=ref,proto3" json:"ref,omitempty"`
 	Metadata      []*Field               `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty"`
+	AnchorId      string                 `protobuf:"bytes,5,opt,name=anchor_id,json=anchorId,proto3" json:"anchor_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -776,6 +809,13 @@ func (x *Resource) GetMetadata() []*Field {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *Resource) GetAnchorId() string {
+	if x != nil {
+		return x.AnchorId
+	}
+	return ""
 }
 
 type Action struct {
@@ -928,22 +968,144 @@ func (x *Fact) GetRemedy() string {
 	return ""
 }
 
+type ResourceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SourceId      string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
+	ResourceRef   string                 `protobuf:"bytes,2,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
+	MaxBytes      uint32                 `protobuf:"varint,3,opt,name=max_bytes,json=maxBytes,proto3" json:"max_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResourceRequest) Reset() {
+	*x = ResourceRequest{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourceRequest) ProtoMessage() {}
+
+func (x *ResourceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourceRequest.ProtoReflect.Descriptor instead.
+func (*ResourceRequest) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ResourceRequest) GetSourceId() string {
+	if x != nil {
+		return x.SourceId
+	}
+	return ""
+}
+
+func (x *ResourceRequest) GetResourceRef() string {
+	if x != nil {
+		return x.ResourceRef
+	}
+	return ""
+}
+
+func (x *ResourceRequest) GetMaxBytes() uint32 {
+	if x != nil {
+		return x.MaxBytes
+	}
+	return 0
+}
+
+type ResourceResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ResourceRef   string                 `protobuf:"bytes,1,opt,name=resource_ref,json=resourceRef,proto3" json:"resource_ref,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	Data          []byte                 `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResourceResponse) Reset() {
+	*x = ResourceResponse{}
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResourceResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResourceResponse) ProtoMessage() {}
+
+func (x *ResourceResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_presentation_v1_presentation_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResourceResponse.ProtoReflect.Descriptor instead.
+func (*ResourceResponse) Descriptor() ([]byte, []int) {
+	return file_trawl_presentation_v1_presentation_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ResourceResponse) GetResourceRef() string {
+	if x != nil {
+		return x.ResourceRef
+	}
+	return ""
+}
+
+func (x *ResourceResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *ResourceResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 var File_trawl_presentation_v1_presentation_proto protoreflect.FileDescriptor
 
 const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\n" +
-	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\"\xce\x01\n" +
+	"(trawl/presentation/v1/presentation.proto\x12\x15trawl.presentation.v1\"\xfa\x01\n" +
 	"\x14PresentationDocument\x12\x14\n" +
 	"\x05title\x18\x01 \x01(\tR\x05title\x124\n" +
 	"\x06blocks\x18\x02 \x03(\v2\x1c.trawl.presentation.v1.BlockR\x06blocks\x127\n" +
 	"\aactions\x18\x03 \x03(\v2\x1d.trawl.presentation.v1.ActionR\aactions\x121\n" +
-	"\x05facts\x18\x04 \x03(\v2\x1b.trawl.presentation.v1.FactR\x05facts\"\xb6\x02\n" +
+	"\x05facts\x18\x04 \x03(\v2\x1b.trawl.presentation.v1.FactR\x05facts\x12*\n" +
+	"\x11primary_anchor_id\x18\x05 \x01(\tR\x0fprimaryAnchorId\"\xd3\x02\n" +
 	"\x05Block\x12:\n" +
 	"\aheading\x18\x01 \x01(\v2\x1e.trawl.presentation.v1.HeadingH\x00R\aheading\x124\n" +
 	"\x05prose\x18\x02 \x01(\v2\x1c.trawl.presentation.v1.ProseH\x00R\x05prose\x12;\n" +
 	"\x06fields\x18\x03 \x01(\v2!.trawl.presentation.v1.FieldGroupH\x00R\x06fields\x124\n" +
 	"\x05table\x18\x04 \x01(\v2\x1c.trawl.presentation.v1.TableH\x00R\x05table\x12=\n" +
-	"\bresource\x18\x05 \x01(\v2\x1f.trawl.presentation.v1.ResourceH\x00R\bresourceB\t\n" +
+	"\bresource\x18\x05 \x01(\v2\x1f.trawl.presentation.v1.ResourceH\x00R\bresource\x12\x1b\n" +
+	"\tanchor_id\x18\x06 \x01(\tR\banchorIdB\t\n" +
 	"\acontent\"\x1d\n" +
 	"\aHeading\x12\x12\n" +
 	"\x04text\x18\x01 \x01(\tR\x04text\"\x1b\n" +
@@ -951,27 +1113,30 @@ const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\x04text\x18\x01 \x01(\tR\x04text\"B\n" +
 	"\n" +
 	"FieldGroup\x124\n" +
-	"\x06fields\x18\x01 \x03(\v2\x1c.trawl.presentation.v1.FieldR\x06fields\"7\n" +
+	"\x06fields\x18\x01 \x03(\v2\x1c.trawl.presentation.v1.FieldR\x06fields\"T\n" +
 	"\x05Field\x12\x14\n" +
 	"\x05label\x18\x01 \x01(\tR\x05label\x12\x18\n" +
-	"\adisplay\x18\x02 \x01(\tR\adisplay\"Q\n" +
+	"\adisplay\x18\x02 \x01(\tR\adisplay\x12\x1b\n" +
+	"\tanchor_id\x18\x03 \x01(\tR\banchorId\"Q\n" +
 	"\x05Table\x12\x18\n" +
 	"\acolumns\x18\x01 \x03(\tR\acolumns\x12.\n" +
-	"\x04rows\x18\x02 \x03(\v2\x1a.trawl.presentation.v1.RowR\x04rows\"\xad\x01\n" +
+	"\x04rows\x18\x02 \x03(\v2\x1a.trawl.presentation.v1.RowR\x04rows\"\xca\x01\n" +
 	"\x03Row\x123\n" +
 	"\x04role\x18\x01 \x01(\x0e2\x1f.trawl.presentation.v1.Row.RoleR\x04role\x121\n" +
-	"\x05cells\x18\x02 \x03(\v2\x1b.trawl.presentation.v1.CellR\x05cells\">\n" +
+	"\x05cells\x18\x02 \x03(\v2\x1b.trawl.presentation.v1.CellR\x05cells\x12\x1b\n" +
+	"\tanchor_id\x18\x03 \x01(\tR\banchorId\">\n" +
 	"\x04Role\x12\x14\n" +
 	"\x10ROLE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vROLE_NORMAL\x10\x01\x12\x0f\n" +
 	"\vROLE_TARGET\x10\x02\" \n" +
 	"\x04Cell\x12\x18\n" +
-	"\adisplay\x18\x01 \x01(\tR\adisplay\"\x83\x02\n" +
+	"\adisplay\x18\x01 \x01(\tR\adisplay\"\xa0\x02\n" +
 	"\bResource\x128\n" +
 	"\x04kind\x18\x01 \x01(\x0e2$.trawl.presentation.v1.Resource.KindR\x04kind\x12\x14\n" +
 	"\x05label\x18\x02 \x01(\tR\x05label\x12\x10\n" +
 	"\x03ref\x18\x03 \x01(\tR\x03ref\x128\n" +
-	"\bmetadata\x18\x04 \x03(\v2\x1c.trawl.presentation.v1.FieldR\bmetadata\"[\n" +
+	"\bmetadata\x18\x04 \x03(\v2\x1c.trawl.presentation.v1.FieldR\bmetadata\x12\x1b\n" +
+	"\tanchor_id\x18\x05 \x01(\tR\banchorId\"[\n" +
 	"\x04Kind\x12\x14\n" +
 	"\x10KIND_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tKIND_FILE\x10\x01\x12\x0e\n" +
@@ -996,7 +1161,15 @@ const file_trawl_presentation_v1_presentation_proto_rawDesc = "" +
 	"\x0fKIND_PROVENANCE\x10\x02\x12\x10\n" +
 	"\fKIND_WARNING\x10\x03\x12\x0e\n" +
 	"\n" +
-	"KIND_ERROR\x10\x04BTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
+	"KIND_ERROR\x10\x04\"n\n" +
+	"\x0fResourceRequest\x12\x1b\n" +
+	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12!\n" +
+	"\fresource_ref\x18\x02 \x01(\tR\vresourceRef\x12\x1b\n" +
+	"\tmax_bytes\x18\x03 \x01(\rR\bmaxBytes\"l\n" +
+	"\x10ResourceResponse\x12!\n" +
+	"\fresource_ref\x18\x01 \x01(\tR\vresourceRef\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\x12\x12\n" +
+	"\x04data\x18\x03 \x01(\fR\x04dataBTZRgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1;presentationv1b\x06proto3"
 
 var (
 	file_trawl_presentation_v1_presentation_proto_rawDescOnce sync.Once
@@ -1011,7 +1184,7 @@ func file_trawl_presentation_v1_presentation_proto_rawDescGZIP() []byte {
 }
 
 var file_trawl_presentation_v1_presentation_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_trawl_presentation_v1_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_trawl_presentation_v1_presentation_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_trawl_presentation_v1_presentation_proto_goTypes = []any{
 	(Row_Role)(0),                // 0: trawl.presentation.v1.Row.Role
 	(Resource_Kind)(0),           // 1: trawl.presentation.v1.Resource.Kind
@@ -1028,6 +1201,8 @@ var file_trawl_presentation_v1_presentation_proto_goTypes = []any{
 	(*Resource)(nil),             // 12: trawl.presentation.v1.Resource
 	(*Action)(nil),               // 13: trawl.presentation.v1.Action
 	(*Fact)(nil),                 // 14: trawl.presentation.v1.Fact
+	(*ResourceRequest)(nil),      // 15: trawl.presentation.v1.ResourceRequest
+	(*ResourceResponse)(nil),     // 16: trawl.presentation.v1.ResourceResponse
 }
 var file_trawl_presentation_v1_presentation_proto_depIdxs = []int32{
 	4,  // 0: trawl.presentation.v1.PresentationDocument.blocks:type_name -> trawl.presentation.v1.Block
@@ -1074,7 +1249,7 @@ func file_trawl_presentation_v1_presentation_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_presentation_v1_presentation_proto_rawDesc), len(file_trawl_presentation_v1_presentation_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

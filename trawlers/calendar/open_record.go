@@ -125,13 +125,13 @@ func projectOpenPresentation(value archive.EventDetail) *presentationv1.Presenta
 		fields = append(fields, &presentationv1.Field{Label: "Availability", Display: formatPresentationAvailability(*record.Availability)})
 	}
 	if location := formatPresentationLocation(record.Location); location != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Location", Display: location})
+		fields = append(fields, &presentationv1.Field{Label: "Location", Display: location, AnchorId: "location"})
 	}
 	if organizer := formatPresentationPerson(record.Organizer); organizer != "" {
 		fields = append(fields, &presentationv1.Field{Label: "Organizer", Display: organizer})
 	}
 	if attendees := formatPresentationAttendees(record.Attendees); attendees != "" {
-		fields = append(fields, &presentationv1.Field{Label: "Attendees", Display: attendees})
+		fields = append(fields, &presentationv1.Field{Label: "Attendees", Display: attendees, AnchorId: "participant"})
 	}
 	url := strings.TrimSpace(record.GetUrl())
 	if url != "" {
@@ -139,14 +139,15 @@ func projectOpenPresentation(value archive.EventDetail) *presentationv1.Presenta
 	}
 	appendPresentationField(&fields, "Status", record.GetStatus())
 	fields = append(fields, &presentationv1.Field{Label: "Recurring", Display: formatPresentationBool(record.HasRecurrences)})
-	blocks := make([]*presentationv1.Block, 0, 2)
+	blocks := make([]*presentationv1.Block, 0, 3)
+	blocks = append(blocks, &presentationv1.Block{AnchorId: "summary", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
 	if description := strings.TrimSpace(record.GetDescription()); description != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "description", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
 	}
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: "summary"}
 	if openrecord.ValidHTTPSURL(url) {
 		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open event link", Target: &presentationv1.Action_Url{Url: url}})
 	}

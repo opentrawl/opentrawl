@@ -30,11 +30,19 @@ func (c *Crawler) Open(ctx context.Context, req *trawlkit.Request, ref string) e
 }
 
 func (c *Crawler) loadOpenAsset(ctx context.Context, req *trawlkit.Request, ref string) (archive.OpenResult, error) {
+	anchorID := ""
+	if req != nil {
+		anchorID = req.RequestedAnchorID
+	}
+	return c.loadOpenAssetForAnchor(ctx, req, ref, anchorID)
+}
+
+func (c *Crawler) loadOpenAssetForAnchor(ctx context.Context, req *trawlkit.Request, ref, anchorID string) (archive.OpenResult, error) {
 	resolved, err := c.resolveInputRef(ctx, req, ref)
 	if err != nil {
 		return archive.OpenResult{}, err
 	}
-	result, err := archive.OpenWithStore(ctx, req.Store, resolved)
+	result, err := archive.OpenWithStoreFocused(ctx, req.Store, resolved, anchorID)
 	if err != nil {
 		return archive.OpenResult{}, archiveReadCommandError(err)
 	}

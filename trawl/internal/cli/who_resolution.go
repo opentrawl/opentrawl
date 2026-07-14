@@ -434,18 +434,3 @@ func whoExit(resolution federatedWhoResolution) error {
 	}
 	return exitErr{code: 1}
 }
-
-func searchWhoFilters(candidate WhoCandidate, sources []Source) map[string]string {
-	filters := map[string]string{}
-	for _, source := range sources {
-		if !hasCapability(source, "who") {
-			continue
-		}
-		filter := strings.TrimSpace(candidate.sourceFilters[source.ID])
-		if filter == "" {
-			continue
-		}
-		filters[source.ID] = filter
-	}
-	return filters
-}

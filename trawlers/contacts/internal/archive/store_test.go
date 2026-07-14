@@ -3,6 +3,7 @@ package archive
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -62,6 +63,34 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 	}
 	if annotated.Annotation != "Ada owns billing" || annotated.AnnotationStatedAt != "2026-07-09" {
 		t.Fatalf("annotated = %#v", annotated)
+	}
+}
+
+func TestSearchKeepsDistinctContactNoteAndSourceNameMatches(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	person := model.Person{ID: "person-example", Name: "Avery Example", Sources: map[string]model.PersonSource{"fixture": {Names: []string{"Lantern alias"}}}}
+	if err := st.SavePerson(ctx, person); err != nil {
+		t.Fatal(err)
+	}
+	for index, body := range []string{"First needle note", "Second needle note"} {
+		if err := st.SaveNote(ctx, model.Note{ID: fmt.Sprintf("note-%d", index+1), PersonID: person.ID, Body: body, OccurredAt: time.Date(2026, 7, 9+index, 10, 0, 0, 0, time.UTC)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	notes, total, err := st.Search(ctx, "needle", SearchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(notes) != 2 || notes[0].Ref != notes[1].Ref || notes[0].AnchorID == notes[1].AnchorID {
+		t.Fatalf("note matches = %#v, total=%d", notes, total)
+	}
+	alias, total, err := st.Search(ctx, "Lantern alias", SearchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 1 || len(alias) != 1 || alias[0].AnchorID != "source_name" || len(alias[0].Matches) != 1 || alias[0].Matches[0].Field != "source_name" {
+		t.Fatalf("source-name match = %#v, total=%d", alias, total)
 	}
 }
 

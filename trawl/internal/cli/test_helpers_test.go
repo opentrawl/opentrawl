@@ -659,17 +659,41 @@ func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query tr
 	hits := make([]trawlkit.Hit, 0, len(envelope.Results))
 	for _, row := range envelope.Results {
 		parsed, _ := time.Parse(time.RFC3339, row.Time)
-		hits = append(hits, trawlkit.Hit{
+		hit := trawlkit.Hit{
 			Ref:          row.Ref,
 			ShortRef:     firstNonEmpty(row.ShortRef, row.Alias),
 			Time:         parsed,
-			Who:          row.Who,
-			Where:        row.Where,
-			Calendar:     row.Calendar,
-			Snippet:      row.Snippet,
+			AnchorID:     trawlkit.MatchAnchorID,
 			AllDay:       row.AllDay,
 			Availability: row.Availability,
-		})
+		}
+		switch f.manifest.ID {
+		case "calendar":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Snippet, "Calendar event"), Subtitle: row.Calendar}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.FieldMatch("Event match", "event", row.Snippet)}
+		case "contacts":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Contact"), Subtitle: "Contact"}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.FieldMatch("Contact field", "contact", row.Snippet)}
+		case "gmail":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "(no subject)"), Subtitle: row.Who}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message body", row.Snippet)}
+		case "imessage", "telegram", "whatsapp":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "Conversation"), Subtitle: firstNonEmpty(row.Who, "Unknown sender")}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+firstNonEmpty(row.Who, "Unknown sender"), row.Snippet)}
+		case "notes":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "Note"), Subtitle: firstNonEmpty(row.Where, "Notes")}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Note passage", row.Snippet)}
+		case "photos":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Photo"), Subtitle: row.Where}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Photo match", row.Snippet)}
+		case "twitter":
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Post"), Subtitle: "Twitter (X)"}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Post text", row.Snippet)}
+		default:
+			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, row.Who, row.Snippet, "Search result")}
+			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Search match", row.Snippet)}
+		}
+		hits = append(hits, hit)
 	}
 	result := trawlkit.SearchResult{Results: hits, TotalMatches: envelope.TotalMatches, Truncated: envelope.Truncated}
 	if projected, err := federation.ProjectSearch(f.manifest, result); err == nil {
@@ -828,15 +852,37 @@ func (f *fakeSource) OpenRecord(_ context.Context, req *trawlkit.Request, ref st
 		openRef = f.manifest.ID + ":item/example-1"
 	}
 	record := &openv1.OpenRecord{
-		SourceId: f.manifest.ID,
-		OpenRef:  openRef,
-		Data:     fakeOpenData(),
-		Presentation: &presentationv1.PresentationDocument{
-			Title: firstNonEmpty(f.crawler.openHuman, "Synthetic record"),
-		},
+		SourceId:     f.manifest.ID,
+		OpenRef:      openRef,
+		Data:         fakeOpenData(),
+		Presentation: fakeOpenPresentation(f.crawler.openHuman),
 	}
 	f.crawler.evidence.open(record)
 	return record, nil
+}
+
+func fakeOpenPresentation(human string) *presentationv1.PresentationDocument {
+	human = firstNonEmpty(human, "Synthetic record")
+	title, body, found := strings.Cut(human, "\n")
+	if !found || strings.TrimSpace(body) == "" {
+		body = title
+	}
+	return &presentationv1.PresentationDocument{
+		Title:           title,
+		PrimaryAnchorId: trawlkit.MatchAnchorID,
+		Blocks: []*presentationv1.Block{{
+			AnchorId: trawlkit.MatchAnchorID,
+			Content:  &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}},
+		}},
+	}
+}
+
+func (f *fakeSource) ResolveResource(_ context.Context, _ *trawlkit.Request, request *presentationv1.ResourceRequest) (*presentationv1.ResourceResponse, error) {
+	data := []byte("synthetic resource bytes")
+	if request.GetSourceId() != f.manifest.ID || uint32(len(data)) > request.GetMaxBytes() {
+		return nil, errors.New("synthetic resource request is invalid")
+	}
+	return &presentationv1.ResourceResponse{ResourceRef: request.GetResourceRef(), ContentType: "image/jpeg", Data: data}, nil
 }
 
 func fakeOpenData() *anypb.Any {

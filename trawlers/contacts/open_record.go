@@ -18,6 +18,7 @@ import (
 type openValue struct {
 	ref    string
 	person model.Person
+	notes  []model.Note
 }
 
 var _ trawlkit.RecordOpener = (*App)(nil)
@@ -91,23 +92,58 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		title = "Contact"
 	}
 	fields := make([]*presentationv1.Field, 0, 7)
-	appendPresentationField(&fields, "Also known as", joinPresentationStrings(record.Aka))
-	appendPresentationField(&fields, "Tags", joinPresentationStrings(record.Tags))
-	appendPresentationField(&fields, "Emails", formatPresentationContactValues(record.Emails))
-	appendPresentationField(&fields, "Phones", formatPresentationContactValues(record.Phones))
-	appendPresentationField(&fields, "Addresses", formatPresentationContactValues(record.Addresses))
-	appendPresentationField(&fields, "Accounts", formatPresentationAccounts(record.Accounts))
-	appendPresentationField(&fields, "Annotation", record.GetAnnotation())
-	blocks := make([]*presentationv1.Block, 0, 1)
+	appendPresentationFieldWithAnchor(&fields, "Sort name", value.person.SortName, "sort_name")
+	appendPresentationFieldWithAnchor(&fields, "Identifier", value.person.ID, "identifier")
+	appendPresentationFieldWithAnchor(&fields, "Also known as", joinPresentationStrings(record.Aka), "aka")
+	appendPresentationFieldWithAnchor(&fields, "Tags", joinPresentationStrings(record.Tags), "tag")
+	appendPresentationFieldWithAnchor(&fields, "Emails", formatPresentationContactValues(record.Emails), "email")
+	appendPresentationFieldWithAnchor(&fields, "Phones", formatPresentationContactValues(record.Phones), "phone")
+	appendPresentationFieldWithAnchor(&fields, "Addresses", formatPresentationContactValues(record.Addresses), "address")
+	appendPresentationFieldWithAnchor(&fields, "Accounts", formatPresentationAccounts(record.Accounts), "account")
+	appendPresentationFieldWithAnchor(&fields, "Source names", formatPresentationSourceNames(value.person.Sources), "source_name")
+	appendPresentationFieldWithAnchor(&fields, "Annotation", record.GetAnnotation(), "annotation")
+	blocks := make([]*presentationv1.Block, 0, 3+len(value.notes))
+	blocks = append(blocks, &presentationv1.Block{AnchorId: "name", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
-	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if body := strings.TrimSpace(value.person.Body); body != "" {
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "body", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}}})
+	}
+	for _, note := range value.notes {
+		noteFields := make([]*presentationv1.Field, 0, 4)
+		appendPresentationField(&noteFields, "Kind", note.Kind)
+		appendPresentationField(&noteFields, "Source", note.Source)
+		appendPresentationField(&noteFields, "Topics", joinPresentationStrings(note.Topics))
+		appendPresentationField(&noteFields, "Body", note.Body)
+		if len(noteFields) > 0 {
+			blocks = append(blocks, &presentationv1.Block{
+				AnchorId: archive.NoteAnchorID(note.ID),
+				Content:  &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: noteFields}},
+			})
+		}
+	}
+	return &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: "name"}
+}
+
+func formatPresentationSourceNames(values map[string]model.PersonSource) string {
+	names := []string{}
+	for _, source := range values {
+		names = append(names, source.Names...)
+	}
+	sort.Strings(names)
+	return joinPresentationStrings(names)
 }
 
 func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {
 	if value = strings.TrimSpace(value); value != "" {
 		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value})
+	}
+}
+
+func appendPresentationFieldWithAnchor(fields *[]*presentationv1.Field, label, value, anchorID string) {
+	if value = strings.TrimSpace(value); value != "" {
+		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value, AnchorId: anchorID})
 	}
 }
 

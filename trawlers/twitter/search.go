@@ -66,12 +66,18 @@ func searchHits(results []store.SearchResult, ownerAuthorID string) []trawlkit.H
 	hits := make([]trawlkit.Hit, 0, len(results))
 	for _, result := range results {
 		ref := store.TweetRef(result.ID)
+		who := jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID)
+		if strings.TrimSpace(who) == "" {
+			who = "Post"
+		}
+		evidence := []trawlkit.EvidenceFragment{trawlkit.TextMatch("Post text", result.Snippet)}
+		if strings.TrimSpace(result.InReplyTo) != "" {
+			evidence = append(evidence, trawlkit.RelationMatch("Replying to", "reply", result.InReplyTo))
+		}
 		hits = append(hits, trawlkit.Hit{
-			Ref:     ref,
-			Time:    result.CreatedAt.Local(),
-			Who:     jsonWho(result.Who, result.AuthorID, result.InReplyTo, result.InReplyToAuthorID, ownerAuthorID),
-			Where:   result.Where,
-			Snippet: result.Snippet,
+			Ref: ref, Time: result.CreatedAt.Local(), AnchorID: trawlkit.MatchAnchorID,
+			Summary:  trawlkit.ResultSummary{Title: who, Subtitle: "Twitter (X)"},
+			Evidence: evidence,
 		})
 	}
 	return hits

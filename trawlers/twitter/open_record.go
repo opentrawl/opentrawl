@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
 	twitteropenv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/twitter/open/v1"
@@ -107,7 +108,7 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
 	if text := strings.TrimSpace(record.Tweet.Text); text != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: trawlkit.MatchAnchorID, Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: text}}})
 	}
 	blocks = append(blocks,
 		&presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Ancestors"}}},
@@ -115,7 +116,10 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		&presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Replies"}}},
 		presentationTweetTable(record.Replies),
 	)
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	if !presentationHasAnchor(blocks) {
+		blocks[0].AnchorId = trawlkit.MatchAnchorID
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: trawlkit.MatchAnchorID}
 	if record.AncestorsTruncated {
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Earlier conversation context is truncated."})
 	}
@@ -123,6 +127,15 @@ func projectOpenPresentation(value openValue) *presentationv1.PresentationDocume
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: "Replies are truncated."})
 	}
 	return document
+}
+
+func presentationHasAnchor(blocks []*presentationv1.Block) bool {
+	for _, block := range blocks {
+		if block != nil && block.AnchorId != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func appendPresentationField(fields *[]*presentationv1.Field, label, value string) {

@@ -68,6 +68,43 @@ func TestStoreSearchOpenStatus(t *testing.T) {
 	}
 }
 
+func TestSearchIdentifiesSubjectAndBodyMatches(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	_, err = st.InsertMessages(ctx, []Message{
+		{ID: "subject", Time: time.Now(), Subject: "Lantern subject", Body: "Ordinary body"},
+		{ID: "body", Time: time.Now().Add(-time.Minute), Subject: "Ordinary subject", Body: "Lantern body"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := st.Search(ctx, SearchOptions{Query: "Lantern"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 2 || result.Results[0].Matches[0].Field != "subject" || result.Results[1].Matches[0].Field != "body" {
+		t.Fatalf("matches = %#v", result.Results)
+	}
+	for _, hit := range result.Results {
+		if !searchRunsContainMatch(hit.Matches[0].Runs) {
+			t.Fatalf("unmarked match = %#v", hit)
+		}
+	}
+}
+
+func searchRunsContainMatch(runs []SearchTextRun) bool {
+	for _, run := range runs {
+		if run.Matched {
+			return true
+		}
+	}
+	return false
+}
+
 func TestSearchBoundedTotalsUseOneProbeRow(t *testing.T) {
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "gogcrawl.db"))

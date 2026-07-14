@@ -45,13 +45,14 @@ type Paths struct {
 }
 
 type Request struct {
-	Store    *store.Store
-	Paths    Paths
-	Format   output.Format
-	Out      io.Writer
-	Args     []string
-	Log      *cklog.Run
-	Progress func(Progress)
+	Store             *store.Store
+	Paths             Paths
+	Format            output.Format
+	Out               io.Writer
+	Args              []string
+	Log               *cklog.Run
+	Progress          func(Progress)
+	RequestedAnchorID string
 }
 
 type ShortRefRecord struct {

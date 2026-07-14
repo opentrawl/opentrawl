@@ -178,10 +178,14 @@ func projectOpenPresentation(value store.MessageWindow) *presentationv1.Presenta
 		if message.Sender != nil && message.Sender.State == telegramopenv1.SenderState_SENDER_STATE_AVAILABLE {
 			who = message.Sender.GetDisplayName()
 		}
-		rows = append(rows, &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: who}, {Display: message.GetText()}}})
+		row := &presentationv1.Row{Role: role, Cells: []*presentationv1.Cell{{Display: presentation.MustTimestamp(message.Time)}, {Display: who}, {Display: message.GetText()}}}
+		if message.GetIsTarget() {
+			row.AnchorId = trawlkit.MatchAnchorID
+		}
+		rows = append(rows, row)
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: rows}}})
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: trawlkit.MatchAnchorID}
 	if media := record.Message.Media; media != nil && openrecord.ValidHTTPSURL(media.GetUrl()) {
 		document.Actions = append(document.Actions, &presentationv1.Action{Label: "Open media link", Target: &presentationv1.Action_Url{Url: media.GetUrl()}})
 	}

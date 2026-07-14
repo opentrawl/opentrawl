@@ -57,7 +57,9 @@ private struct RootViewStatusClient: TrawlClient {
   func requestPhotos() async throws -> StatusResponse { fatalError() }
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse { fatalError() }
-  func open(sourceID _: String, ref _: String) async throws -> OpenResponse { fatalError() }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError()
+  }
 }
 
 @MainActor
@@ -93,7 +95,7 @@ private func productStatusWithPhotosSetup() -> Trawl_Federation_V1_StatusRespons
       source("notes", "Notes"),
       source("photos", "Photos", needsPhotosAccess: true),
       source("telegram", "Telegram"),
-      source("twitter", "X"),
+      source("twitter", "Twitter (X)"),
       source("whatsapp", "WhatsApp"),
     ]
   }
@@ -107,7 +109,7 @@ private func source(
   .with {
     $0.manifest = .with {
       $0.sourceID = id
-      $0.surface = surface
+      $0.displayName = surface
     }
     $0.state = "ok"
     if needsPhotosAccess {

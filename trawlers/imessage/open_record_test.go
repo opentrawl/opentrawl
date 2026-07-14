@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 	presentationv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/presentation/v1"
@@ -42,8 +43,8 @@ func TestOpenRecordProjection(t *testing.T) {
 	wantPresentation := &presentationv1.PresentationDocument{Title: "Project Lantern", Blocks: []*presentationv1.Block{
 		{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Participants", Display: "Avery Example, +15550001111"}}}}},
 		{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "The synthetic pickup moved to Friday."}}},
-		{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: []*presentationv1.Row{{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 13:59"}, {Display: "me"}, {Display: "That works."}}}, {Role: presentationv1.Row_ROLE_TARGET, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:00"}, {Display: "Avery Example"}, {Display: "The synthetic pickup moved to Friday."}}}, {Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:01"}, {Display: "Avery Example"}, {Display: ""}}}}}}},
-	}}
+		{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"Time", "From", "Text"}, Rows: []*presentationv1.Row{{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 13:59"}, {Display: "me"}, {Display: "That works."}}}, {Role: presentationv1.Row_ROLE_TARGET, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:00"}, {Display: "Avery Example"}, {Display: "The synthetic pickup moved to Friday."}}, AnchorId: trawlkit.MatchAnchorID}, {Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: "10 July 2026 at 14:01"}, {Display: "Avery Example"}, {Display: ""}}}}}}},
+	}, PrimaryAnchorId: trawlkit.MatchAnchorID}
 	assertOpenPresentation(t, input, projectOpenRecord(input), presentation, wantPresentation, "imessage")
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input

@@ -185,9 +185,9 @@ func TestSearchQuerylessRecencyGolden(t *testing.T) {
 		"Open: trawl open REF",
 		"More: trawl search --source imessage,telegram --after 2026-01-01 --limit 4",
 		"",
-		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", "date", "source", "who", "where", "ref", "text"),
-		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", shortLocalTestTime(t, "2026-05-14T09:00:00Z"), "Telegram", "Bob", "Ops", "telegram:msg/new", "newer filter match"),
-		fmt.Sprintf("%-16s  %-8s  %-4s  %-5s  %-16s  %s", shortLocalTestTime(t, "2026-05-12T10:00:00Z"), "Telegram", "Cara", "Ops", "telegram:msg/mid", "middle filter match"),
+		fmt.Sprintf("%-16s  %-8s  %-16s  %s", "date", "source", "ref", "text"),
+		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-14T09:00:00Z"), "Telegram", "telegram:msg/new", "Ops — Bob · Message from Bob: newer filter match"),
+		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-12T10:00:00Z"), "Telegram", "telegram:msg/mid", "Ops — Cara · Message from Cara: middle filter match"),
 	}, "\n") + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q\nwant   = %q", stdout, want)
@@ -309,9 +309,9 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		`Search "boat trip": showing 2 of 4, newest first.`,
 		"Open: trawl open REF",
 		`More: trawl search "boat trip" --source imessage,telegram --limit 4`,
-		"date              source    who    where   ref                text",
-		shortLocalTestTime(t, "2026-05-14T09:12:00Z") + "  Messages  Alice  Family  imessage:msg/8842  …the boat trip is on Saturday…",
-		shortLocalTestTime(t, "2026-05-12T10:00:00Z") + "  Telegram  Bob    -       telegram:msg/1930  …book the boat before June…",
+		"date              source    ref                text",
+		shortLocalTestTime(t, "2026-05-14T09:12:00Z") + "  Messages  imessage:msg/8842  Family — Alice · Message from Alice: …the boat trip is on Saturday…",
+		shortLocalTestTime(t, "2026-05-12T10:00:00Z") + "  Telegram  telegram:msg/1930  Conversation — Bob · Message from Bob: …book the boat before June…",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)
@@ -354,7 +354,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	if !strings.Contains(stdout, "2026-03-27  ") || strings.Contains(stdout, "2026-03-27 00:00") {
 		t.Fatalf("all-day row must show a bare date, never 00:00:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "calendar") || !strings.Contains(stdout, "Personal") || !strings.Contains(stdout, "Work") {
+	if !strings.Contains(stdout, "Calendar") || !strings.Contains(stdout, "Personal") || !strings.Contains(stdout, "Work") {
 		t.Fatalf("calendar field missing from human search rows:\n%s", stdout)
 	}
 	for _, want := range []string{
@@ -375,12 +375,12 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	calendarByRef := map[string]string{}
 	for _, row := range response.GetHits() {
 		byRef[row.GetOpenRef()] = row.GetAllDay()
-		calendarByRef[row.GetOpenRef()] = row.GetCalendar()
+		calendarByRef[row.GetOpenRef()] = row.GetSummary().GetSubtitle()
 	}
 	if !byRef["calendar:event/aaa"] || byRef["calendar:event/bbb"] || byRef["imessage:msg/1"] {
 		t.Fatalf("federated all_day bits wrong: %#v\n%s", byRef, stdout)
 	}
-	if calendarByRef["calendar:event/aaa"] != "Personal" || calendarByRef["calendar:event/bbb"] != "Work" || calendarByRef["imessage:msg/1"] != "" {
+	if calendarByRef["calendar:event/aaa"] != "Personal" || calendarByRef["calendar:event/bbb"] != "Work" || calendarByRef["imessage:msg/1"] != "Alice" {
 		t.Fatalf("federated calendar fields wrong: %#v\n%s", calendarByRef, stdout)
 	}
 	if strings.Count(stdout, "all_day") != 6 {
@@ -1020,11 +1020,11 @@ func TestSearchUnknownSource(t *testing.T) {
 // must be omitted, never rendered as a strip of dashes.
 func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
-		name:     "birdcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"twitter","display_name":"X"}`,
+		name:     "othercrawl",
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"other","display_name":"Other"}`,
 		search: `{"query":"boat","results":[
-			{"ref":"twitter:tweet/1","short_ref":"hmn42","time":"2026-05-14T09:12:00Z","who":"me","where":"","snippet":"tweet one"},
-			{"ref":"twitter:tweet/2","short_ref":"eygc4","time":"2026-05-13T09:12:00Z","who":"Anthony","where":"","snippet":"tweet two"}
+			{"ref":"other:item/1","short_ref":"hmn42","time":"2026-05-14T09:12:00Z","who":"me","where":"","snippet":"item one"},
+			{"ref":"other:item/2","short_ref":"eygc4","time":"2026-05-13T09:12:00Z","who":"Anthony","where":"","snippet":"item two"}
 		],"total_matches":2,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -1035,10 +1035,10 @@ func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if strings.Contains(stdout, "where") {
-		t.Fatalf("stdout rendered an all-empty where column:\n%s", stdout)
+	if strings.Contains(stdout, "who") || strings.Contains(stdout, "where") {
+		t.Fatalf("stdout invented universal who or where columns:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "date              source  who      ref              text") {
+	if !strings.Contains(stdout, "date              source  ref           text") {
 		t.Fatalf("stdout missing compacted header:\n%s", stdout)
 	}
 	if stderr != "" {

@@ -77,12 +77,18 @@ func searchHits(messages []store.Message) []trawlkit.Hit {
 	hits := make([]trawlkit.Hit, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message.SourcePK)
+		who := outputField(messageWho(message))
+		where := outputField(messageWhereForList(message))
+		if where == "" {
+			where = "Telegram conversation"
+		}
+		if who == "" {
+			who = "Unknown sender"
+		}
 		hits = append(hits, trawlkit.Hit{
-			Ref:     ref,
-			Time:    message.Timestamp.Local(),
-			Who:     outputField(messageWho(message)),
-			Where:   outputField(messageWhereForList(message)),
-			Snippet: outputField(messageSnippet(message)),
+			Ref: ref, Time: message.Timestamp.Local(), AnchorID: trawlkit.MatchAnchorID,
+			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, outputField(messageSnippet(message)))},
 		})
 	}
 	return hits

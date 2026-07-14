@@ -125,6 +125,78 @@ func TestValidHTTPSURL(t *testing.T) {
 	}
 }
 
+func TestValidateRequestedAnchor(t *testing.T) {
+	record := validRecord(t)
+	if err := ValidateRequestedAnchor(record, "record"); err != nil {
+		t.Fatal(err)
+	}
+	record.Presentation.Blocks[0].GetFields().Fields = append(record.Presentation.Blocks[0].GetFields().Fields, &presentationv1.Field{Label: "Other", Display: "Synthetic", AnchorId: "other"})
+	if err := ValidateRequestedAnchor(record, "other"); err != nil {
+		t.Fatalf("non-primary anchor: %v", err)
+	}
+	for _, anchor := range []string{"", "missing"} {
+		if err := ValidateRequestedAnchor(record, anchor); err == nil {
+			t.Fatalf("anchor %q was accepted", anchor)
+		}
+	}
+}
+
+func TestValidateRejectsDuplicateAndMissingPrimaryAnchors(t *testing.T) {
+	duplicate := proto.Clone(validRecord(t)).(*openv1.OpenRecord)
+	duplicate.Presentation.Blocks = append(duplicate.Presentation.Blocks, &presentationv1.Block{
+		AnchorId: "record",
+		Content:  &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "Synthetic body."}},
+	})
+	if err := Validate(duplicate); err == nil {
+		t.Fatal("duplicate primary anchor was accepted")
+	}
+
+	metadataDuplicate := proto.Clone(validRecord(t)).(*openv1.OpenRecord)
+	metadataDuplicate.Presentation.Blocks = append(metadataDuplicate.Presentation.Blocks, &presentationv1.Block{
+		Content: &presentationv1.Block_Resource{Resource: &presentationv1.Resource{
+			Kind:     presentationv1.Resource_KIND_IMAGE,
+			Label:    "Synthetic image",
+			Ref:      "notes:resource/example-1",
+			Metadata: []*presentationv1.Field{{Label: "Match", Display: "Synthetic", AnchorId: "record"}},
+		}},
+	})
+	if err := Validate(metadataDuplicate); err == nil {
+		t.Fatal("duplicate resource metadata anchor was accepted")
+	}
+
+	missing := proto.Clone(validRecord(t)).(*openv1.OpenRecord)
+	missing.Presentation.Blocks[0].AnchorId = "different"
+	if err := Validate(missing); err == nil {
+		t.Fatal("missing primary anchor was accepted")
+	}
+}
+
+func TestBoundedResourceTransport(t *testing.T) {
+	request := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "photos:resource/example-1", MaxBytes: 32}
+	response := &presentationv1.ResourceResponse{ResourceRef: request.ResourceRef, ContentType: "image/jpeg", Data: []byte("synthetic image bytes")}
+	if err := ValidateResourceResponse(request, response); err != nil {
+		t.Fatal(err)
+	}
+
+	unsafe := []struct {
+		name     string
+		request  *presentationv1.ResourceRequest
+		response *presentationv1.ResourceResponse
+	}{
+		{name: "raw path", request: &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "/tmp/example.jpg", MaxBytes: 32}, response: response},
+		{name: "remote URL", request: &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "https://example.com/example.jpg", MaxBytes: 32}, response: response},
+		{name: "oversized request", request: &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "photos:resource/example-1", MaxBytes: MaximumResourceBytes + 1}, response: response},
+		{name: "oversized response", request: request, response: &presentationv1.ResourceResponse{ResourceRef: request.ResourceRef, ContentType: "image/jpeg", Data: make([]byte, 33)}},
+	}
+	for _, test := range unsafe {
+		t.Run(test.name, func(t *testing.T) {
+			if err := ValidateResourceResponse(test.request, test.response); err == nil {
+				t.Fatal("unsafe resource transport was accepted")
+			}
+		})
+	}
+}
+
 func validRecord(t *testing.T) *openv1.OpenRecord {
 	t.Helper()
 	data, err := anypb.New(&emptypb.Empty{})
@@ -136,10 +208,11 @@ func validRecord(t *testing.T) *openv1.OpenRecord {
 		OpenRef:  "notes:note/1",
 		Data:     data,
 		Presentation: &presentationv1.PresentationDocument{
-			Title:   "Note",
-			Blocks:  []*presentationv1.Block{{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Ref", Display: "notes:note/1"}}}}}},
-			Actions: []*presentationv1.Action{{Label: "Open note", Target: &presentationv1.Action_OpenRef{OpenRef: "notes:note/1"}}},
-			Facts:   []*presentationv1.Fact{{Kind: presentationv1.Fact_KIND_WARNING, Message: "Synthetic warning."}},
+			Title:           "Note",
+			PrimaryAnchorId: "record",
+			Blocks:          []*presentationv1.Block{{AnchorId: "record", Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: []*presentationv1.Field{{Label: "Ref", Display: "notes:note/1"}}}}}},
+			Actions:         []*presentationv1.Action{{Label: "Open note", Target: &presentationv1.Action_OpenRef{OpenRef: "notes:note/1"}}},
+			Facts:           []*presentationv1.Fact{{Kind: presentationv1.Fact_KIND_WARNING, Message: "Synthetic warning."}},
 		},
 	}
 }

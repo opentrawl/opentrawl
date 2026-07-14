@@ -129,8 +129,9 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 	if len(search.Results) != 1 {
 		t.Fatalf("search results = %d, want 1", len(search.Results))
 	}
-	if !strings.Contains(search.Results[0].Snippet, "second synthetic edit") {
-		t.Fatalf("snippet = %q", search.Results[0].Snippet)
+	hit := search.Results[0]
+	if hit.AnchorID != trawlkit.MatchAnchorID || hit.Summary.Title == "" || len(hit.Evidence) != 1 || hit.Evidence[0].Text == nil || len(hit.Evidence[0].Text.Runs) != 1 || !hit.Evidence[0].Text.Runs[0].Matched || !strings.Contains(hit.Evidence[0].Text.Runs[0].Text, "second synthetic edit") {
+		t.Fatalf("search hit = %#v", hit)
 	}
 
 	var openBuf bytes.Buffer

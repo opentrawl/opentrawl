@@ -11,8 +11,9 @@ import (
 	openv1 "github.com/opentrawl/opentrawl/trawlkit/proto/trawl/open/v1"
 )
 
-func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requestedRef string) *openv1.OpenResponse {
-	response := &openv1.OpenResponse{RequestedRef: requestedRef}
+func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requestedRef, requestedAnchorID string) *openv1.OpenResponse {
+	requestedAnchorID = strings.TrimSpace(requestedAnchorID)
+	response := &openv1.OpenResponse{RequestedRef: requestedRef, RequestedAnchorId: requestedAnchorID}
 	source, found := findOpenSource(sources, selectedSourceID)
 	if !found {
 		response.Failure = &federationv1.SourceFailure{SourceId: strings.TrimSpace(selectedSourceID), Code: federationv1.FailureCode_FAILURE_CODE_NOT_FOUND, Message: fmt.Sprintf("Source %q was not found.", strings.TrimSpace(selectedSourceID)), Remedy: "trawl status"}
@@ -37,7 +38,7 @@ func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requested
 	} else if err := ctx.Err(); err != nil {
 		response.Failure = FailureForError(source.Manifest, "open", err)
 	} else {
-		record, failure := runOpen(ctx, source, trimmedRef)
+		record, failure := runOpen(ctx, source, trimmedRef, requestedAnchorID)
 		switch {
 		case failure != nil:
 			response.Failure = callbackFailure(ctx, source.Manifest, failure)
@@ -45,7 +46,9 @@ func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requested
 			response.Failure = FailureForError(source.Manifest, "open", ctx.Err())
 		case record == nil:
 			response.Failure = operationFailure(source.Manifest, "open", "source returned no record", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
-		case openrecord.Validate(record) != nil:
+		case requestedAnchorID != "" && openrecord.ValidateRequestedAnchor(record, requestedAnchorID) != nil:
+			response.Failure = operationFailure(source.Manifest, "open", "record does not contain the requested anchor", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
+		case requestedAnchorID == "" && openrecord.Validate(record) != nil:
 			response.Failure = operationFailure(source.Manifest, "open", "record is invalid", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
 		case record.SourceId != sourceID(source.Manifest):
 			response.Failure = operationFailure(source.Manifest, "open", "record source does not match selected source", federationv1.FailureCode_FAILURE_CODE_INTERNAL)
@@ -70,14 +73,14 @@ func invalidOpenRef(manifest control.Manifest, ref string) bool {
 	return prefix != sourceID(manifest)
 }
 
-func runOpen(ctx context.Context, source OpenSource, ref string) (record *openv1.OpenRecord, failure *federationv1.SourceFailure) {
+func runOpen(ctx context.Context, source OpenSource, ref, anchorID string) (record *openv1.OpenRecord, failure *federationv1.SourceFailure) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
 			record = nil
 			failure = panicFailure(source.Manifest, "open", recovered)
 		}
 	}()
-	return source.Run(ctx, ref)
+	return source.Run(ctx, ref, anchorID)
 }
 
 func findOpenSource(sources []OpenSource, wanted string) (OpenSource, bool) {

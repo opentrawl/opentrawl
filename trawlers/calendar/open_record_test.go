@@ -64,14 +64,16 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	assertExactRecord(t, record, &calendaropenv1.CalendarRecord{}, `{"ref":"calendar:event/event-1","uuid":"event-1","unique_identifier":"provider-event-1","title":"Synthetic planning","description":"Review the fixture.","description_truncated":true,"start":"2026-07-10T14:00:00+02:00","end":"2026-07-10T15:00:00+02:00","all_day":false,"calendar":"Projects","account":"example.com","availability":"1","location":{"title":"Example room","address":"1 Example Street"},"organizer":{"display_name":"Avery Example","email":"avery@example.com"},"attendees":[{"display_name":"Morgan Example","email":"morgan@example.com","rsvp_status":"accepted","role":"required","self":true,"comment":"Synthetic"}],"url":"https://example.com/event","status":"confirmed","has_recurrences":true}`)
 	presentation := projectOpenPresentation(input)
-	if presentation.Title != "Synthetic planning" || len(presentation.Blocks) != 2 || len(presentation.Actions) != 1 || len(presentation.Facts) != 1 {
+	if presentation.Title != "Synthetic planning" || len(presentation.Blocks) != 3 || len(presentation.Actions) != 1 || len(presentation.Facts) != 1 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertExactPresentation(t, presentation, `title: "Synthetic planning"
-blocks: { fields: { fields: { label: "Start" display: "10 July 2026 at 14:00" } fields: { label: "End" display: "10 July 2026 at 15:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
-blocks: { prose: { text: "Review the fixture." } }
+blocks: { heading: { text: "Synthetic planning" } anchor_id: "summary" }
+blocks: { fields: { fields: { label: "Start" display: "10 July 2026 at 14:00" } fields: { label: "End" display: "10 July 2026 at 15:00" } fields: { label: "All day" display: "No" } fields: { label: "Calendar" display: "Projects" } fields: { label: "Account" display: "example.com" } fields: { label: "Availability" display: "Free" } fields: { label: "Location" display: "Example room, 1 Example Street" anchor_id: "location" } fields: { label: "Organizer" display: "Avery Example" } fields: { label: "Attendees" display: "Morgan Example (accepted)" anchor_id: "participant" } fields: { label: "URL" display: "https://example.com/event" } fields: { label: "Status" display: "confirmed" } fields: { label: "Recurring" display: "Yes" } } }
+blocks: { prose: { text: "Review the fixture." } anchor_id: "description" }
 actions: { label: "Open event link" url: "https://example.com/event" }
-facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
+facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }
+primary_anchor_id: "summary"`)
 	assertOpenPresentation(t, "calendar", input, record, presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
@@ -113,6 +115,16 @@ facts: { kind: KIND_TRUNCATION message: "Event description is truncated." }`)
 			})
 		}
 	})
+}
+
+func TestCalendarPresentationContainsDescriptionAndParticipantSearchAnchors(t *testing.T) {
+	value := archive.EventDetail{Ref: "calendar:event/example", UUID: "example", Title: "Lantern event", Description: "Lantern description", Attendees: []archive.Attendee{{DisplayName: "Lantern participant"}}}
+	record := &openv1.OpenRecord{SourceId: "calendar", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/calendar"}, Presentation: projectOpenPresentation(value)}
+	for _, anchorID := range []string{"summary", "description", "participant"} {
+		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
+			t.Fatalf("anchor %q: %v", anchorID, err)
+		}
+	}
 }
 
 func TestOpenRecordTimestampBoundary(t *testing.T) {
@@ -160,7 +172,7 @@ func TestOpenRecordFixtureBoundary(t *testing.T) {
 	if typed.GetStart() != "2026-07-10T14:00:00.5+02:00" {
 		t.Fatalf("typed start = %q", typed.GetStart())
 	}
-	if got := record.Presentation.Blocks[0].GetFields().GetFields()[0].GetDisplay(); got != "10 July 2026 at 14:00" {
+	if got := record.Presentation.Blocks[1].GetFields().GetFields()[0].GetDisplay(); got != "10 July 2026 at 14:00" {
 		t.Fatalf("start display = %q", got)
 	}
 	setStart("not-a-timestamp")

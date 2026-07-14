@@ -104,22 +104,35 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 	}
 	fields = append(fields, &presentationv1.Field{Label: "Unread", Display: formatPresentationBool(record.Unread)})
 	blocks := make([]*presentationv1.Block, 0, 3)
+	blocks = append(blocks, &presentationv1.Block{AnchorId: "subject", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
 	if len(fields) > 0 {
 		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
 	}
 	if body := strings.TrimSpace(record.Body); body != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "body", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: body}}})
 	}
 	rows := make([]*presentationv1.Row, 0, len(record.Attachments))
-	for _, attachment := range record.Attachments {
-		rows = append(rows, &presentationv1.Row{Role: presentationv1.Row_ROLE_NORMAL, Cells: []*presentationv1.Cell{{Display: attachment.Filename}, {Display: attachment.MimeType}, {Display: presentation.Bytes(attachment.Size)}}})
+	for index, attachment := range record.Attachments {
+		rows = append(rows, &presentationv1.Row{
+			Role:     presentationv1.Row_ROLE_NORMAL,
+			AnchorId: attachmentAnchorID(index),
+			Cells:    []*presentationv1.Cell{{Display: attachment.Filename}, {Display: attachment.MimeType}, {Display: presentation.Bytes(attachment.Size)}},
+		})
 	}
 	blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Table{Table: &presentationv1.Table{Columns: []string{"File", "Type", "Bytes"}, Rows: rows}}})
-	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks}
+	primaryAnchorID := "subject"
+	if strings.TrimSpace(record.Body) != "" {
+		primaryAnchorID = "body"
+	}
+	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: primaryAnchorID}
 	if record.BodyTruncated {
 		document.Facts = append(document.Facts, &presentationv1.Fact{Kind: presentationv1.Fact_KIND_TRUNCATION, Message: fmt.Sprintf("Message body is truncated; %d characters omitted.", record.GetBodyElidedChars())})
 	}
 	return document
+}
+
+func attachmentAnchorID(index int) string {
+	return fmt.Sprintf("attachment-%d", index+1)
 }
 
 func formatPresentationAddress(name, address string) string {

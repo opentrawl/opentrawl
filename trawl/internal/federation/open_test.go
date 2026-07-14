@@ -18,14 +18,14 @@ func TestOpenPreservesRequestedRefAndValidatesReturnedRecord(t *testing.T) {
 	called := 0
 	response := Open(context.Background(), []OpenSource{{
 		Manifest: manifestFixture("notes", "Notes"),
-		Run: func(_ context.Context, ref string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+		Run: func(_ context.Context, ref, anchorID string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			called++
-			if ref != "notes:note/example-1" {
+			if ref != "notes:note/example-1" || anchorID != "" {
 				t.Fatalf("callback ref = %q", ref)
 			}
 			return validOpenRecord("notes", "notes:note/example-1"), nil
 		},
-	}}, "notes", "  notes:note/example-1  ")
+	}}, "notes", "  notes:note/example-1  ", "")
 	if called != 1 || response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || response.GetRequestedRef() != "  notes:note/example-1  " || response.GetRecord().GetOpenRef() != "notes:note/example-1" || response.GetFailure() != nil {
 		t.Fatalf("response = %#v, called=%d", response, called)
 	}
@@ -33,18 +33,18 @@ func TestOpenPreservesRequestedRefAndValidatesReturnedRecord(t *testing.T) {
 
 func TestOpenAcceptsUnqualifiedShortRefAndRejectsInvalidRefsBeforeCallback(t *testing.T) {
 	called := 0
-	source := OpenSource{Manifest: manifestFixture("notes", "Notes"), Run: func(_ context.Context, ref string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+	source := OpenSource{Manifest: manifestFixture("notes", "Notes"), Run: func(_ context.Context, ref, _ string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 		called++
 		if ref != "short-7" {
 			t.Fatalf("short ref = %q", ref)
 		}
 		return validOpenRecord("notes", "notes:note/example-1"), nil
 	}}
-	if response := Open(context.Background(), []OpenSource{source}, "notes", " short-7 "); response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || called != 1 {
+	if response := Open(context.Background(), []OpenSource{source}, "notes", " short-7 ", ""); response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_COMPLETE || called != 1 {
 		t.Fatalf("short ref response = %#v, called=%d", response, called)
 	}
 	for _, ref := range []string{"", "   ", "gmail:message/1", "other:note/1", "notes:", ":note/1"} {
-		response := Open(context.Background(), []OpenSource{source}, "notes", ref)
+		response := Open(context.Background(), []OpenSource{source}, "notes", ref, "")
 		if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED || response.GetFailure().GetCode() != federationv1.FailureCode_FAILURE_CODE_INVALID_INPUT || called != 1 {
 			t.Fatalf("ref %q response = %#v, called=%d", ref, response, called)
 		}
@@ -54,47 +54,47 @@ func TestOpenAcceptsUnqualifiedShortRefAndRejectsInvalidRefsBeforeCallback(t *te
 func TestOpenFailureShapesAndCallbackRules(t *testing.T) {
 	manifest := manifestFixture("notes", "Notes")
 	called := false
-	undeclared := Open(context.Background(), []OpenSource{{Manifest: manifest, SkipReason: "Open is not supported.", Run: func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+	undeclared := Open(context.Background(), []OpenSource{{Manifest: manifest, SkipReason: "Open is not supported.", Run: func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 		called = true
 		return nil, nil
-	}}}, "notes", "short-7")
+	}}}, "notes", "short-7", "")
 	if called || undeclared.GetFailure().GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || undeclared.GetFailure().GetMessage() != "Open is not supported." {
 		t.Fatalf("undeclared = %#v, called=%t", undeclared, called)
 	}
-	unknown := Open(context.Background(), []OpenSource{{Manifest: manifest}}, "gmail", "short-7")
+	unknown := Open(context.Background(), []OpenSource{{Manifest: manifest}}, "gmail", "short-7", "")
 	if unknown.GetFailure().GetCode() != federationv1.FailureCode_FAILURE_CODE_NOT_FOUND || unknown.GetRecord() != nil {
 		t.Fatalf("unknown = %#v", unknown)
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
 	cancelledCalls := 0
-	response := Open(cancelled, []OpenSource{{Manifest: manifest, Run: func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+	response := Open(cancelled, []OpenSource{{Manifest: manifest, Run: func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 		cancelledCalls++
 		return validOpenRecord("notes", "notes:one"), nil
-	}}}, "notes", "short-7")
+	}}}, "notes", "short-7", "")
 	if cancelledCalls != 0 || response.GetFailure().GetCode() != federationv1.FailureCode_FAILURE_CODE_CANCELLED {
 		t.Fatalf("cancelled response = %#v, calls=%d", response, cancelledCalls)
 	}
 	cases := []struct {
 		name string
-		run  func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure)
+		run  func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure)
 		want federationv1.FailureCode
 	}{
-		{"both returns failure", func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+		{"both returns failure", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			return validOpenRecord("notes", "notes:one"), &federationv1.SourceFailure{Code: federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE, Message: "unavailable"}
 		}, federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE},
-		{"nil record", func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { return nil, nil }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
-		{"panic", func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { panic("synthetic") }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
-		{"invalid record", func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+		{"nil record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { return nil, nil }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
+		{"panic", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { panic("synthetic") }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
+		{"invalid record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			return &openv1.OpenRecord{SourceId: "notes"}, nil
 		}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
-		{"foreign record", func(context.Context, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+		{"foreign record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			return validOpenRecord("gmail", "gmail:one"), nil
 		}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			response := Open(context.Background(), []OpenSource{{Manifest: manifest, Run: test.run}}, "notes", "short-7")
+			response := Open(context.Background(), []OpenSource{{Manifest: manifest, Run: test.run}}, "notes", "short-7", "")
 			if response.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED || response.GetRecord() != nil || response.GetFailure().GetCode() != test.want {
 				t.Fatalf("response = %#v", response)
 			}
@@ -135,7 +135,19 @@ func (e typedFailure) Error() string                 { return e.body.Message }
 func (e typedFailure) ErrorBody() ckoutput.ErrorBody { return e.body }
 
 func validOpenRecord(sourceID, ref string) *openv1.OpenRecord {
-	return &openv1.OpenRecord{SourceId: sourceID, OpenRef: ref, Data: &anypb.Any{TypeUrl: "type.example/Open"}, Presentation: &presentationv1.PresentationDocument{Title: "Synthetic record"}}
+	return &openv1.OpenRecord{
+		SourceId: sourceID,
+		OpenRef:  ref,
+		Data:     &anypb.Any{TypeUrl: "type.example/Open"},
+		Presentation: &presentationv1.PresentationDocument{
+			Title:           "Synthetic record",
+			PrimaryAnchorId: "match",
+			Blocks: []*presentationv1.Block{{
+				AnchorId: "match",
+				Content:  &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: "Synthetic matching passage."}},
+			}},
+		},
+	}
 }
 
 var _ control.Manifest

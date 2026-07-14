@@ -53,6 +53,53 @@ func TestSearchWhoFilterUsesRawNamesNotCleanedLabel(t *testing.T) {
 	}
 }
 
+func TestSearchIdentifiesDescriptionAndParticipantMatches(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	if _, err := st.DB().Exec(`insert into calendars(calendar_id, source_row_id, title) values ('cal', 0, 'Work')`); err != nil {
+		t.Fatal(err)
+	}
+	insertWhoEvent(t, st.DB(), "description-event", "Avery Example", "avery@example.com", 1000)
+	insertWhoEvent(t, st.DB(), "participant-event", "Avery Example", "avery@example.com", 2000)
+	if _, err := st.DB().Exec(`update events set description = 'Lantern description' where event_uid = 'description-event'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, values := range [][]any{
+		{"description-event", "Event description", "Lantern description", "", ""},
+		{"participant-event", "Event participant", "", "", "Lantern participant"},
+	} {
+		if _, err := st.DB().Exec(`insert into events_fts(event_uid, summary, description, location, participants) values (?, ?, ?, ?, ?)`, values...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	results, total, err := st.Search(ctx, "Lantern", SearchOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 2 || len(results) != 2 {
+		t.Fatalf("results = %#v, total=%d", results, total)
+	}
+	fields := map[string]string{}
+	for _, result := range results {
+		if len(result.Matches) != 1 || !calendarSearchRunsContainMatch(result.Matches[0].Runs) {
+			t.Fatalf("match = %#v", result)
+		}
+		fields[result.Ref] = result.Matches[0].Field
+	}
+	if fields[RefForUID("description-event")] != "description" || fields[RefForUID("participant-event")] != "participant" {
+		t.Fatalf("fields = %#v", fields)
+	}
+}
+
+func calendarSearchRunsContainMatch(runs []SearchTextRun) bool {
+	for _, run := range runs {
+		if run.Matched {
+			return true
+		}
+	}
+	return false
+}
+
 func openTempStore(t *testing.T) *Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "calcrawl.db")

@@ -143,6 +143,17 @@ type SearchResult struct {
 	Folder  string
 	Snippet string
 	NoteID  string
+	Matches []SearchMatch
+}
+
+type SearchMatch struct {
+	Field string
+	Runs  []SearchTextRun
+}
+
+type SearchTextRun struct {
+	Text    string
+	Matched bool
 }
 
 type AtTimeResult struct {

@@ -127,8 +127,12 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if search.TotalMatches != 3 || !search.Truncated || len(search.Results) != 2 {
 		t.Fatalf("search = %#v, want 2 of 3 truncated", search)
 	}
-	if search.Results[0].Ref != archive.RefPrefix+"m3" || search.Results[0].ShortRef == "" || search.Results[0].Who != "me (alice@example.com)" {
+	hit := search.Results[0]
+	if hit.Ref != archive.RefPrefix+"m3" || hit.ShortRef == "" || hit.AnchorID != "subject" || hit.Summary.Title == "" || hit.Summary.Subtitle != "me (alice@example.com)" {
 		t.Fatalf("search hit = %#v", search.Results[0])
+	}
+	if len(hit.Evidence) == 0 || hit.Evidence[0].Label != "Subject" || hit.Evidence[0].Field == nil || hit.Evidence[0].Field.Name != "subject" || !hasMatchedRun(hit.Evidence[0].Field.Value) {
+		t.Fatalf("search evidence = %#v", hit.Evidence)
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
@@ -239,6 +243,15 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 	if len(contacts.Contacts) != 1 || contacts.Contacts[0].DisplayName != "Alice Example" || contacts.Contacts[0].PhoneNumbers[0] != "+15550101000" {
 		t.Fatalf("contacts = %#v", contacts)
 	}
+}
+
+func hasMatchedRun(runs []trawlkit.TextRun) bool {
+	for _, run := range runs {
+		if run.Matched {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {

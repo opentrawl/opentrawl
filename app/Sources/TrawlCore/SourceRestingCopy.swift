@@ -10,7 +10,7 @@ public struct RestingSource: Sendable, Equatable, Identifiable {
 
   fileprivate init(status: SourceStatus, failure: SourceFailure? = nil, skipped: SkippedSource? = nil) {
     id = status.id
-    surface = status.manifest.surface
+    surface = status.manifest.displayName
     databaseBytes = status.databaseBytes
     if let failure {
       state = "failed"
@@ -77,7 +77,7 @@ public enum SourceRestingCopy {
   }
 
   public static func title(for source: SourceStatus) -> String {
-    "Search \(source.manifest.surface)"
+    "Search \(source.manifest.displayName)"
   }
 
   public static func detail(for source: SourceStatus) -> String? {

@@ -235,6 +235,6 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 		t.Fatalf("error JSON = %s err=%v", stdout, err)
 	}
 	if payload.GetOutcome() != federationv1.OperationOutcome_OPERATION_OUTCOME_FAILED || len(payload.GetFailures()) != 1 || payload.GetFailures()[0].GetCode() != federationv1.FailureCode_FAILURE_CODE_NOT_FOUND {
-		t.Fatalf("failure response = %#v", payload)
+		t.Fatalf("failure response = %#v", &payload)
 	}
 }

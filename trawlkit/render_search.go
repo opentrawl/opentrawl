@@ -23,14 +23,11 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			Time:     hit.Time,
 			DateOnly: hit.AllDay,
 			Source:   hit.Source,
-			Who:      hit.Who,
-			Where:    hit.Where,
-			Calendar: hit.Calendar,
 			// The reader copies a short ref, never a long machine ref. The kit
 			// fills ShortRef from the shared index; a hit with no alias yet (a
 			// source that indexes none) falls back to the full ref.
 			Ref:  firstText(hit.ShortRef, hit.Ref),
-			Text: hit.Snippet,
+			Text: SearchResultText(hit.Summary, hit.Evidence),
 		})
 	}
 	hints := []string{}
@@ -51,6 +48,51 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 		ClampText: 2,
 		Empty:     searchEmptyText(value.Query),
 	})
+}
+
+func SearchResultText(summary ResultSummary, evidence []EvidenceFragment) string {
+	title := strings.TrimSpace(summary.Title)
+	if subtitle := strings.TrimSpace(summary.Subtitle); subtitle != "" {
+		title = title + " — " + subtitle
+	}
+	detail := SearchEvidenceText(evidence)
+	if title == "" {
+		return detail
+	}
+	if detail == "" {
+		return title
+	}
+	return title + " · " + detail
+}
+
+func SearchEvidenceText(values []EvidenceFragment) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		var runs []TextRun
+		switch {
+		case value.Text != nil:
+			runs = value.Text.Runs
+		case value.Field != nil:
+			runs = value.Field.Value
+		case value.Media != nil:
+			runs = value.Media.Description
+		case value.Relation != nil:
+			runs = value.Relation.Target
+		}
+		var text strings.Builder
+		for _, run := range runs {
+			text.WriteString(run.Text)
+		}
+		label := strings.TrimSpace(value.Label)
+		content := strings.TrimSpace(text.String())
+		switch {
+		case label != "" && content != "":
+			parts = append(parts, label+": "+content)
+		case content != "":
+			parts = append(parts, content)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func narrowSearchHint(supportsWho bool) string {

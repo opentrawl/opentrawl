@@ -49,10 +49,11 @@ func TestOpenRecordProjection(t *testing.T) {
 	assertExactPresentation(t, presentation, `title: "Lantern"
 blocks: { fields: { fields: { label: "Participants" display: "Avery Example, Morgan Example" } } }
 blocks: { prose: { text: "Target" } }
-blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 13:59" } cells: { display: "Morgan Example" } cells: { display: "Before" } } rows: { role: ROLE_TARGET cells: { display: "10 July 2026 at 14:00" } cells: { display: "Avery Example" } cells: { display: "Target" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:01" } cells: { display: "Unavailable" } cells: { display: "After" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:02" } cells: { display: "Unavailable" } cells: { display: "No exported sender" } } } }
+blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 13:59" } cells: { display: "Morgan Example" } cells: { display: "Before" } } rows: { role: ROLE_TARGET cells: { display: "10 July 2026 at 14:00" } cells: { display: "Avery Example" } cells: { display: "Target" } anchor_id: "match" } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:01" } cells: { display: "Unavailable" } cells: { display: "After" } } rows: { role: ROLE_NORMAL cells: { display: "10 July 2026 at 14:02" } cells: { display: "Unavailable" } cells: { display: "No exported sender" } } } }
 actions: { label: "Open media link" url: "https://example.com/fixture" }
 actions: { label: "Open metadata link" url: "https://example.com" }
-facts: { kind: KIND_TRUNCATION message: "Earlier context is truncated." }`)
+facts: { kind: KIND_TRUNCATION message: "Earlier context is truncated." }
+primary_anchor_id: "match"`)
 	assertOpenPresentation(t, "telegram", input, got, presentation)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input

@@ -80,13 +80,14 @@ func TestOpenRecordProjection(t *testing.T) {
 	assertOpenPresentation(t, "twitter", evidenceInput, record, presentation)
 	assertExactPresentation(t, presentation, `title: "me (@avery)"
 blocks: { fields: { fields: { label: "Time" display: "10 July 2026 at 14:00" } fields: { label: "Likes" display: "4" } fields: { label: "Reposts" display: "2" } fields: { label: "Replies" display: "1" } fields: { label: "Counts as of" display: "10 July 2026 at 15:00" } } }
-blocks: { prose: { text: "RT @example synthetic text" } }
+blocks: { prose: { text: "RT @example synthetic text" } anchor_id: "match" }
 blocks: { heading: { text: "Ancestors" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: {} cells: {} cells: { display: "unavailable (not in archive)" } } } }
 blocks: { heading: { text: "Replies" } }
 blocks: { table: { columns: "Time" columns: "From" columns: "Text" rows: { role: ROLE_NORMAL cells: {} cells: { display: "Morgan Example (@morgan)" } cells: { display: "Synthetic reply." } } } }
 facts: { kind: KIND_TRUNCATION message: "Earlier conversation context is truncated." }
-facts: { kind: KIND_TRUNCATION message: "Replies are truncated." }`)
+facts: { kind: KIND_TRUNCATION message: "Replies are truncated." }
+primary_anchor_id: "match"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := input
 		blank.Tweet.AuthorName = ""

@@ -99,6 +99,7 @@ func (s *Store) Search(ctx context.Context, query string, options SearchOptions)
 			Snippet:      row.Snippet(),
 			AllDay:       row.AllDay != 0,
 			Availability: row.AvailabilityPtr(),
+			Matches:      row.SearchMatches(),
 		})
 	}
 	if err := rows.Close(); err != nil {
@@ -343,17 +344,24 @@ func valuePlaceholders(count int) string {
 func searchSQL(where string, hasQuery bool) string {
 	from := `events e`
 	order := `e.start_unix desc, e.event_uid`
+	matchColumns := `'' as summary_match, '' as description_match, '' as location_match, '' as participants_match`
 	if hasQuery {
 		from = `events_fts
 join events e on e.event_uid = events_fts.event_uid`
 		order = `rank, e.start_unix desc, e.event_uid`
+		matchColumns = `
+snippet(events_fts, 1, char(57344), char(57345), '…', 32) as summary_match,
+snippet(events_fts, 2, char(57344), char(57345), '…', 32) as description_match,
+snippet(events_fts, 3, char(57344), char(57345), '…', 32) as location_match,
+snippet(events_fts, 4, char(57344), char(57345), '…', 32) as participants_match`
 	}
 	return `
 select e.event_uid, e.uuid, e.unique_identifier, e.calendar_id, e.calendar_title,
        e.calendar_type, e.calendar_external_id, e.account_name, e.account_type,
        e.start_time, e.end_time, e.all_day, e.summary, e.description, e.status,
        e.url, e.has_recurrences, e.availability, e.organizer_name, e.organizer_email,
-       e.organizer_phone, e.location_title, e.location_address, e.attendees_json
+       e.organizer_phone, e.location_title, e.location_address, e.attendees_json,
+       ` + matchColumns + `
 from ` + from + `
 ` + where + `
 order by ` + order + `
@@ -385,6 +393,10 @@ type eventRow struct {
 	LocationTitle      string
 	LocationAddress    string
 	AttendeesJSON      string
+	SummaryMatch       string
+	DescriptionMatch   string
+	LocationMatch      string
+	ParticipantsMatch  string
 }
 
 func scanEventRow(rows *sql.Rows, row *eventRow) error {
@@ -392,7 +404,63 @@ func scanEventRow(rows *sql.Rows, row *eventRow) error {
 		&row.CalendarType, &row.CalendarExternalID, &row.AccountName, &row.AccountType,
 		&row.Start, &row.End, &row.AllDay, &row.Summary, &row.Description, &row.Status,
 		&row.URL, &row.HasRecurrences, &row.Availability, &row.OrganizerName, &row.OrganizerEmail,
-		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON)
+		&row.OrganizerPhone, &row.LocationTitle, &row.LocationAddress, &row.AttendeesJSON,
+		&row.SummaryMatch, &row.DescriptionMatch, &row.LocationMatch, &row.ParticipantsMatch)
+}
+
+func (r eventRow) SearchMatches() []SearchMatch {
+	values := []struct {
+		field string
+		value string
+	}{
+		{field: "summary", value: r.SummaryMatch},
+		{field: "description", value: r.DescriptionMatch},
+		{field: "location", value: r.LocationMatch},
+		{field: "participant", value: r.ParticipantsMatch},
+	}
+	matches := make([]SearchMatch, 0, len(values))
+	for _, value := range values {
+		runs := markedSearchRuns(value.value)
+		if len(runs) > 0 {
+			matches = append(matches, SearchMatch{Field: value.field, Runs: runs})
+		}
+	}
+	return matches
+}
+
+func markedSearchRuns(value string) []SearchTextRun {
+	const start, end = "\ue000", "\ue001"
+	if !strings.Contains(value, start) {
+		return nil
+	}
+	var runs []SearchTextRun
+	for value != "" {
+		startIndex := strings.Index(value, start)
+		if startIndex < 0 {
+			runs = appendSearchRun(runs, value, false)
+			break
+		}
+		runs = appendSearchRun(runs, value[:startIndex], false)
+		value = value[startIndex+len(start):]
+		endIndex := strings.Index(value, end)
+		if endIndex < 0 {
+			return nil
+		}
+		runs = appendSearchRun(runs, value[:endIndex], true)
+		value = value[endIndex+len(end):]
+	}
+	return runs
+}
+
+func appendSearchRun(runs []SearchTextRun, text string, matched bool) []SearchTextRun {
+	if text == "" {
+		return runs
+	}
+	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
+		runs[len(runs)-1].Text += text
+		return runs
+	}
+	return append(runs, SearchTextRun{Text: text, Matched: matched})
 }
 
 func (r eventRow) Title() string {

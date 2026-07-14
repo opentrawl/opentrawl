@@ -128,15 +128,32 @@ self-declared headline metrics, in display order — the app and
     {
       "ref": "examplecrawl:msg/8842",
       "time": "2026-05-14T09:12:00+02:00",
-      "who": "Alice",
-      "where": "Family chat",
-      "snippet": "…the boat trip is on Saturday…"
+      "anchor_id": "message",
+      "summary": {
+        "title": "Family chat",
+        "subtitle": "Alice"
+      },
+      "evidence": [
+        {
+          "label": "Message from Alice",
+          "text": {
+            "runs": [
+              {"text": "…the boat trip is on Saturday…", "matched": true}
+            ]
+          }
+        }
+      ]
     }
   ],
   "total_matches": 332,
   "truncated": true
 }
 ```
+
+Every result carries one source-owned summary, one primary anchor and labelled
+typed evidence. Evidence may be text, a structured field, bounded local media
+or a source relation. Opening the result returns the source-owned presentation
+with that anchor exactly once.
 
 `--limit N` is honored as given, on every verb that accepts it and
 in both output modes: N results come back if the archive has them.

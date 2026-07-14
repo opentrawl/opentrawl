@@ -75,7 +75,11 @@ func matchesAlias(aliases []string, want string) bool {
 }
 
 func sourceAlias(displayName string) string {
-	return strings.ToLower(strings.ReplaceAll(strings.TrimSpace(displayName), " ", ""))
+	displayName = strings.TrimSpace(displayName)
+	if open := strings.LastIndex(displayName, "("); open >= 0 && strings.HasSuffix(displayName, ")") {
+		return strings.ToLower(strings.TrimSpace(displayName[open+1 : len(displayName)-1]))
+	}
+	return strings.ToLower(strings.ReplaceAll(displayName, " ", ""))
 }
 
 func sourceHumanName(source Source) string {

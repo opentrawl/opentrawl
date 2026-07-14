@@ -3,12 +3,144 @@ package archive
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
 )
+
+func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch) {
+	anchorID := strings.TrimSpace(kind)
+	if anchorID == "" || anchorID == "asset" {
+		anchorID = "asset-details"
+	}
+	if kind == "metadata" {
+		anchorID = metadataAnchorID(matchID)
+	}
+	for _, value := range []string{title, body} {
+		if runs := markedSearchRuns(value); len(runs) > 0 {
+			return anchorID, []SearchMatch{{Field: kind, Runs: runs}}
+		}
+	}
+	return anchorID, nil
+}
+
+func metadataAnchorID(id string) string {
+	return "metadata." + base64.RawURLEncoding.EncodeToString([]byte(id))
+}
+
+func metadataIDForAnchor(anchorID string) (string, bool) {
+	const prefix = "metadata."
+	if !strings.HasPrefix(anchorID, prefix) {
+		return "", false
+	}
+	id, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(anchorID, prefix))
+	if err != nil || len(id) == 0 {
+		return "", false
+	}
+	return string(id), true
+}
+
+func markedSearchRuns(value string) []SearchTextRun {
+	const start, end = "\ue000", "\ue001"
+	if !strings.Contains(value, start) {
+		return nil
+	}
+	var runs []SearchTextRun
+	for value != "" {
+		startIndex := strings.Index(value, start)
+		if startIndex < 0 {
+			runs = appendSearchRun(runs, value, false)
+			break
+		}
+		runs = appendSearchRun(runs, value[:startIndex], false)
+		value = value[startIndex+len(start):]
+		endIndex := strings.Index(value, end)
+		if endIndex < 0 {
+			return nil
+		}
+		runs = appendSearchRun(runs, value[:endIndex], true)
+		value = value[endIndex+len(end):]
+	}
+	return runs
+}
+
+func appendSearchRun(runs []SearchTextRun, text string, matched bool) []SearchTextRun {
+	if text == "" {
+		return runs
+	}
+	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
+		runs[len(runs)-1].Text += text
+		return runs
+	}
+	return append(runs, SearchTextRun{Text: text, Matched: matched})
+}
+
+func markedSnippetMatchesAlbum(snippet, albumTitles string) bool {
+	if strings.TrimSpace(albumTitles) == "" {
+		return false
+	}
+	for _, run := range markedSearchRuns(snippet) {
+		if !run.Matched {
+			continue
+		}
+		for _, title := range strings.Split(albumTitles, "\n") {
+			if strings.Contains(strings.ToLower(title), strings.ToLower(run.Text)) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet string) (string, error) {
+	if kind == "summary" {
+		rows, err := rows(ctx, db, `
+select observation_type, value_text
+from model_observation
+where asset_id = ? and observation_type in (?, ?, ?, ?) and superseded_at is null
+order by case observation_type when ? then 1 when ? then 2 when ? then 3 else 4 end, id
+`, assetID, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR, modelObservationCardUncertainty, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR)
+		if err != nil {
+			return kind, err
+		}
+		for _, row := range rows {
+			if markedSnippetMatchesText(snippet, rowString(row, "value_text")) {
+				switch rowString(row, "observation_type") {
+				case modelObservationCardDescription:
+					return "description", nil
+				case modelObservationCardOCR:
+					return "ocr", nil
+				case modelObservationCardUncertainty:
+					return "uncertainty", nil
+				}
+			}
+		}
+	}
+	if kind == "media" {
+		rows, err := rows(ctx, db, `select original_filename from asset_resource where asset_id = ? order by id`, assetID)
+		if err != nil {
+			return kind, err
+		}
+		for _, row := range rows {
+			if markedSnippetMatchesText(snippet, rowString(row, "original_filename")) {
+				return "filenames", nil
+			}
+		}
+	}
+	return kind, nil
+}
+
+func markedSnippetMatchesText(snippet, value string) bool {
+	for _, run := range markedSearchRuns(snippet) {
+		if run.Matched && strings.Contains(strings.ToLower(value), strings.ToLower(run.Text)) {
+			return true
+		}
+	}
+	return false
+}
 
 func AssetRef(id string) string {
 	return photoscrawlRef(id)

@@ -34,7 +34,7 @@ private func parseRFC3339(_ value: String) -> Date? {
   if bytes[suffix] == 90 {
     guard suffix + 1 == bytes.count else { return nil }
   } else {
-    guard (bytes[suffix] == 43 || bytes[suffix] == 45), suffix + 6 == bytes.count,
+    guard bytes[suffix] == 43 || bytes[suffix] == 45, suffix + 6 == bytes.count,
       isDigit(bytes[suffix + 1]), isDigit(bytes[suffix + 2]), bytes[suffix + 3] == 58,
       isDigit(bytes[suffix + 4]), isDigit(bytes[suffix + 5])
     else { return nil }
@@ -48,13 +48,17 @@ private func parseRFC3339(_ value: String) -> Date? {
   let date = localDate.addingTimeInterval(TimeInterval(bytes[suffix] == 45 ? offset : -offset))
   var calendar = Calendar(identifier: .gregorian)
   calendar.timeZone = .gmt
-  let components = calendar.dateComponents([.era, .year, .month, .day, .hour, .minute, .second], from: localDate)
+  let components = calendar.dateComponents(
+    [.era, .year, .month, .day, .hour, .minute, .second], from: localDate)
   let year = number(bytes, at: 0, digits: 4)
-  let hasExpectedYear = (year == 0 && components.era == 0 && components.year == 1)
+  let hasExpectedYear =
+    (year == 0 && components.era == 0 && components.year == 1)
     || (year > 0 && components.era == 1 && components.year == year)
   guard hasExpectedYear,
-    components.month == number(bytes, at: 5, digits: 2), components.day == number(bytes, at: 8, digits: 2),
-    components.hour == number(bytes, at: 11, digits: 2), components.minute == number(bytes, at: 14, digits: 2),
+    components.month == number(bytes, at: 5, digits: 2),
+    components.day == number(bytes, at: 8, digits: 2),
+    components.hour == number(bytes, at: 11, digits: 2),
+    components.minute == number(bytes, at: 14, digits: 2),
     components.second == number(bytes, at: 17, digits: 2)
   else { return nil }
   return date
@@ -63,6 +67,24 @@ private func parseRFC3339(_ value: String) -> Date? {
 private func validateRFC3339(_ value: String) throws {
   guard value.isEmpty || parseRFC3339(value) != nil else {
     throw TrawlClientError.invalidProtobuf
+  }
+}
+
+func isCanonicalSourceRef(_ value: String, sourceID: String) -> Bool {
+  !sourceID.isEmpty && value == value.trimmingCharacters(in: .whitespacesAndNewlines)
+    && value.hasPrefix("\(sourceID):")
+    && value.dropFirst(sourceID.count + 1).contains(where: { !$0.isWhitespace })
+}
+
+func isNonBlank(_ value: String) -> Bool {
+  !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+}
+
+func isValidAnchorID(_ value: String) -> Bool {
+  guard !value.isEmpty, value.utf8.count <= 128 else { return false }
+  return value.utf8.allSatisfy {
+    ($0 >= 65 && $0 <= 90) || ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57)
+      || $0 == 45 || $0 == 46 || $0 == 95
   }
 }
 extension Trawl_Federation_V1_OperationOutcome {
@@ -113,9 +135,11 @@ extension Trawl_Federation_V1_Branding {
 }
 extension Trawl_Federation_V1_SourceManifest {
   fileprivate func model() throws -> SourceManifest {
-    guard !sourceID.isEmpty else { throw TrawlClientError.invalidProtobuf }
+    guard isNonBlank(sourceID), isNonBlank(displayName) else {
+      throw TrawlClientError.invalidProtobuf
+    }
     return SourceManifest(
-      sourceID: sourceID, surface: surface, branding: hasBranding ? branding.model() : nil,
+      sourceID: sourceID, displayName: displayName, branding: hasBranding ? branding.model() : nil,
       headlines: headlines, capabilities: capabilities)
   }
 }
@@ -230,9 +254,46 @@ extension Trawl_Federation_V1_SearchOrder {
 extension Trawl_Federation_V1_WhoResolved {
   fileprivate func model() -> WhoResolved { WhoResolved(who: who, identifiers: identifiers) }
 }
+extension Trawl_Federation_V1_TextRun {
+  fileprivate func model() throws -> SearchTextRun {
+    guard !text.isEmpty else { throw TrawlClientError.invalidProtobuf }
+    return SearchTextRun(text: text, matched: matched)
+  }
+}
+extension Trawl_Federation_V1_EvidenceFragment {
+  fileprivate func model(sourceID: String) throws -> SearchEvidence {
+    guard isNonBlank(label), let content else { throw TrawlClientError.invalidProtobuf }
+    func runs(_ values: [Trawl_Federation_V1_TextRun]) throws -> [SearchTextRun] {
+      let mapped = try values.map { try $0.model() }
+      guard !mapped.isEmpty else {
+        throw TrawlClientError.invalidProtobuf
+      }
+      return mapped
+    }
+    switch content {
+    case .text(let value): return .text(label: label, runs: try runs(value.runs))
+    case .field(let value):
+      guard isNonBlank(value.name) else { throw TrawlClientError.invalidProtobuf }
+      return .field(label: label, name: value.name, value: try runs(value.value))
+    case .media(let value):
+      guard value.resourceRef.isEmpty || isCanonicalSourceRef(value.resourceRef, sourceID: sourceID)
+      else { throw TrawlClientError.invalidProtobuf }
+      return .media(
+        label: label, resourceRef: value.resourceRef,
+        description: try runs(value.description_p))
+    case .relation(let value):
+      guard isNonBlank(value.relation) else { throw TrawlClientError.invalidProtobuf }
+      return .relation(
+        label: label, relation: value.relation, target: try runs(value.target))
+    }
+  }
+}
 extension Trawl_Federation_V1_SearchHit {
   fileprivate func model() throws -> SearchHit {
-    guard !sourceID.isEmpty, !openRef.isEmpty else { throw TrawlClientError.invalidProtobuf }
+    guard !sourceID.isEmpty, isCanonicalSourceRef(openRef, sourceID: sourceID),
+      isValidAnchorID(anchorID), hasSummary,
+      isNonBlank(summary.title), !evidence.isEmpty
+    else { throw TrawlClientError.invalidProtobuf }
     let date: Date?
     if timeRfc3339.isEmpty {
       date = nil
@@ -243,14 +304,17 @@ extension Trawl_Federation_V1_SearchHit {
     }
     return SearchHit(
       sourceID: sourceID, openRef: openRef, shortRef: shortRef, timeRFC3339: timeRfc3339,
-      time: date, who: who, where: `where`, calendar: calendar, snippet: snippet, allDay: allDay,
+      time: date, anchorID: anchorID,
+      summary: ResultSummary(title: summary.title, subtitle: summary.subtitle),
+      evidence: try evidence.map { try $0.model(sourceID: sourceID) }, allDay: allDay,
       availability: hasAvailability ? availability : nil, unread: hasUnread ? unread : nil)
   }
 }
 extension Trawl_Federation_V1_SearchSourceResult {
   fileprivate func model() throws -> SearchSourceResult {
     SearchSourceResult(
-      sourceID: sourceID, surface: surface, whoResolved: hasWhoResolved ? whoResolved.model() : nil,
+      sourceID: sourceID, displayName: displayName,
+      whoResolved: hasWhoResolved ? whoResolved.model() : nil,
       hits: try hits.map { try $0.model() }, totalMatches: totalMatches, totalIsExact: totalIsExact,
       truncated: truncated)
   }

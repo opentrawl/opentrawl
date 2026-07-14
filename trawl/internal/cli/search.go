@@ -1,21 +1,13 @@
 package cli
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckflags "github.com/opentrawl/opentrawl/trawlkit/flags"
-)
-
-const (
-	searchWorkerLimit = 4
 )
 
 type searchSortMode string
@@ -44,28 +36,25 @@ func (SearchCmd) Help() string {
 }
 
 type searchOptions struct {
-	limit       int
-	after       string
-	before      string
-	who         string
-	whoBySource map[string]string
+	limit  int
+	after  string
+	before string
 }
 
 type SearchRow struct {
-	Source string `json:"source"`
-	Ref    string `json:"ref"`
+	Source   string `json:"source"`
+	Ref      string `json:"ref"`
+	AnchorID string `json:"anchor_id"`
 	// ShortRef is human display sugar only. short-refs.md keeps trawl's
 	// federated --json on the canonical ref so agents never pick up the
 	// weaker, expiring alias; the crawler-level search contract still
 	// carries short_ref through trawlkit.Hit.
-	ShortRef     string `json:"-"`
-	Time         string `json:"time"`
-	AllDay       bool   `json:"all_day,omitempty"`
-	Who          string `json:"who"`
-	Where        string `json:"where"`
-	Calendar     string `json:"calendar,omitempty"`
-	Snippet      string `json:"snippet"`
-	Availability *int64 `json:"availability,omitempty"`
+	ShortRef     string                      `json:"-"`
+	Time         string                      `json:"time"`
+	AllDay       bool                        `json:"all_day,omitempty"`
+	Summary      trawlkit.ResultSummary      `json:"summary"`
+	Evidence     []trawlkit.EvidenceFragment `json:"evidence"`
+	Availability *int64                      `json:"availability,omitempty"`
 
 	surface         string
 	sourceShortRefs bool
@@ -82,16 +71,6 @@ type searchSourceResult struct {
 	Skipped    bool
 	SkipReason string
 	Err        error
-}
-
-type federatedSearchEnvelope struct {
-	Query          string         `json:"query"`
-	WhoResolved    *WhoCandidate  `json:"who_resolved,omitempty"`
-	FailedSources  []failedSource `json:"failed_sources,omitempty"`
-	SkippedSources []string       `json:"skipped_sources,omitempty"`
-	Results        []SearchRow    `json:"results"`
-	TotalMatches   int            `json:"total_matches"`
-	Truncated      bool           `json:"truncated"`
 }
 
 type mergedSearchResult struct {
@@ -235,18 +214,6 @@ func (r *Runtime) resolveSearchTarget(installed []Source, words []string, source
 	return strings.Join(words, " "), sources, sourceCSV, nil
 }
 
-// searchable keeps sources that declare the search capability; a
-// contact layer or an uninitialised crawler is not a search failure.
-func searchable(sources []Source) []Source {
-	var out []Source
-	for _, source := range sources {
-		if hasCapability(source, "search") {
-			out = append(out, source)
-		}
-	}
-	return out
-}
-
 func hasCapability(source Source, capability string) bool {
 	for _, candidate := range source.Capabilities {
 		if strings.EqualFold(strings.TrimSpace(candidate), capability) {
@@ -254,118 +221,6 @@ func hasCapability(source Source, capability string) bool {
 		}
 	}
 	return false
-}
-
-func emptySearchEnvelope(query string) federatedSearchEnvelope {
-	return federatedSearchEnvelope{
-		Query:         query,
-		Results:       []SearchRow{},
-		TotalMatches:  0,
-		Truncated:     false,
-		FailedSources: nil,
-	}
-}
-
-func collectSearch(r *Runtime, sources []Source, query string, options searchOptions) []searchSourceResult {
-	results := make([]searchSourceResult, len(sources))
-	workers := searchWorkerLimit
-	if len(sources) < workers {
-		workers = len(sources)
-	}
-
-	jobs := make(chan int)
-	var wg sync.WaitGroup
-	for range workers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for index := range jobs {
-				results[index] = r.searchSource(sources[index], query, options)
-			}
-		}()
-	}
-	for index := range sources {
-		jobs <- index
-	}
-	close(jobs)
-	wg.Wait()
-	return results
-}
-
-func (r *Runtime) searchSource(source Source, query string, options searchOptions) searchSourceResult {
-	result := searchSourceResult{Source: source}
-	started := r.now()
-	r.logInfo("source_start", strings.Join([]string{
-		sourceField(source),
-		"verb=search",
-	}, " "))
-	defer func() {
-		r.logSearchOutcome(source, result, started)
-	}()
-	if source.MetadataErr != nil {
-		result.Err = source.MetadataErr
-		return result
-	}
-	who := strings.TrimSpace(options.who)
-	if options.whoBySource != nil {
-		who = strings.TrimSpace(options.whoBySource[source.ID])
-	}
-	if options.who != "" && !hasCapability(source, "who") {
-		result.Skipped = true
-		result.SkipReason = "cannot_filter_who"
-		return result
-	}
-	if options.who != "" && options.whoBySource != nil && who == "" {
-		return result
-	}
-	crawlQuery, err := trawlkitSearchQuery(query, options, who)
-	if err != nil {
-		result.Err = err
-		return result
-	}
-	searcher, ok := source.Crawler.(trawlkit.Searcher)
-	if !ok {
-		result.Err = fmt.Errorf("source does not support search")
-		return result
-	}
-	var envelope trawlkit.SearchResult
-	err = r.withSourceRequest(source, "search", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var searchErr error
-		envelope, searchErr = searcher.Search(ctx, req, crawlQuery)
-		return searchErr
-	})
-	if err != nil {
-		if sourceErrorBody(err).Code == "unknown_who" {
-			return result
-		}
-		result.Err = err
-		return result
-	}
-	result.Total = envelope.TotalMatches
-	result.Truncated = envelope.Truncated
-	result.Rows = make([]SearchRow, 0, len(envelope.Results))
-	for sourceRank, item := range envelope.Results {
-		itemTime := formatSearchTime(item.Time)
-		parsed, ok := parseSearchTime(itemTime)
-		result.Rows = append(result.Rows, SearchRow{
-			Source:          source.ID,
-			Ref:             item.Ref,
-			Time:            itemTime,
-			AllDay:          item.AllDay,
-			Who:             item.Who,
-			Where:           item.Where,
-			Calendar:        item.Calendar,
-			Snippet:         item.Snippet,
-			Availability:    item.Availability,
-			ShortRef:        item.ShortRef,
-			surface:         firstNonEmpty(source.DisplayName, source.ID),
-			sourceShortRefs: hasCapability(source, "short_refs"),
-			sourceRank:      sourceRank,
-			parsedTime:      parsed,
-			timeOK:          ok,
-		})
-	}
-	return result
 }
 
 func trawlkitSearchQuery(query string, options searchOptions, who string) (trawlkit.Query, error) {
@@ -401,48 +256,6 @@ func parseSearchDateFlag(name, raw string) (time.Time, error) {
 		}
 	}
 	return parsed, nil
-}
-
-func formatSearchTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.Format(time.RFC3339)
-}
-
-func (r *Runtime) logSearchOutcome(source Source, result searchSourceResult, started time.Time) {
-	fields := []string{sourceField(source), "verb=search", elapsedField(started, r.now())}
-	switch {
-	case result.Skipped:
-		fields = append(fields, "outcome=skipped", "reason="+logQuote(result.SkipReason))
-	case result.Err != nil:
-		if isTimeoutError(result.Err) {
-			fields = append(fields, "outcome=timeout")
-		} else {
-			fields = append(fields, "outcome=error")
-		}
-		fields = append(fields, "error="+logQuote(result.Err.Error()))
-	default:
-		fields = append(fields, "outcome=ok", "results="+strconv.Itoa(len(result.Rows)), "total="+strconv.Itoa(result.Total))
-	}
-	r.logInfo("source_done", strings.Join(fields, " "))
-}
-
-func searchSourcesForResolvedWho(sources []Source, whoBySource map[string]string) []Source {
-	if whoBySource == nil {
-		return sources
-	}
-	out := make([]Source, 0, len(sources))
-	for _, source := range sources {
-		if source.MetadataErr != nil || !hasCapability(source, "who") {
-			out = append(out, source)
-			continue
-		}
-		if strings.TrimSpace(whoBySource[source.ID]) != "" {
-			out = append(out, source)
-		}
-	}
-	return out
 }
 
 func mergedSearchRows(results []searchSourceResult, limit int, sortMode searchSortMode) mergedSearchResult {

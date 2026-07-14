@@ -20,7 +20,7 @@ func TestFederatedStatusPreservesFacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projected.Manifest.SourceId != manifest.ID || projected.Manifest.Surface != manifest.DisplayName {
+	if projected.Manifest.SourceId != manifest.ID || projected.Manifest.DisplayName != manifest.DisplayName {
 		t.Fatalf("manifest identity = %#v", projected.Manifest)
 	}
 	if !proto.Equal(projected.Manifest.Branding, &federationv1.Branding{
@@ -62,7 +62,7 @@ func TestProjectStatusPinsCompleteProtobufText(t *testing.T) {
 	want := "" +
 		"manifest:  {\n" +
 		"  source_id:  \"notes\"\n" +
-		"  surface:  \"Notes\"\n" +
+		"  display_name:  \"Notes\"\n" +
 		"  branding:  {}\n" +
 		"  headlines:  \"items\"\n" +
 		"  capabilities:  \"status\"\n" +

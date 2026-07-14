@@ -1,5 +1,5 @@
-@preconcurrency import Foundation
 import Darwin
+@preconcurrency import Foundation
 import OSLog
 import SwiftProtobuf
 
@@ -8,6 +8,7 @@ public struct ProcessTrawlClient: TrawlClient {
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
   static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
+  static let maximumResourceBytes: UInt32 = 4 << 20
 
   private let binaryURL: URL
   private let searchDeadline: Duration
@@ -75,12 +76,37 @@ public struct ProcessTrawlClient: TrawlClient {
     ).model()
   }
 
-  public func open(sourceID: String, ref: String) async throws -> OpenResponse {
-    try await response(
-      arguments: ["__app", "open", sourceID, ref],
+  public func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse {
+    guard isCanonicalSourceRef(ref, sourceID: sourceID), isValidAnchorID(anchorID) else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    let result = try await response(
+      arguments: ["__app", "open", sourceID, ref, anchorID],
       deadline: operationDeadline,
       as: Trawl_Open_V1_OpenResponse.self
     ).model()
+    guard result.requestedRef == ref, result.requestedAnchorID == anchorID,
+      result.record == nil
+        || (result.record?.sourceID == sourceID && result.record?.openRef == ref)
+    else { throw TrawlClientError.invalidProtobuf }
+    return result
+  }
+
+  public func resource(sourceID: String, ref: String, maxBytes: UInt32) async throws
+    -> PresentationResourceData
+  {
+    guard maxBytes > 0, maxBytes <= Self.maximumResourceBytes,
+      isCanonicalSourceRef(ref, sourceID: sourceID)
+    else { throw TrawlClientError.invalidProtobuf }
+    let response = try await response(
+      arguments: ["__app", "resource", sourceID, ref, String(maxBytes)],
+      deadline: operationDeadline,
+      as: Trawl_Presentation_V1_ResourceResponse.self
+    )
+    guard response.resourceRef == ref, response.data.count <= Int(maxBytes) else {
+      throw TrawlClientError.invalidProtobuf
+    }
+    return try response.model()
   }
 
   private func response<Message>(
@@ -164,7 +190,7 @@ public struct ProcessTrawlClient: TrawlClient {
         throw TrawlClientError.timedOut
       }
       switch first {
-      case let .processResult(result):
+      case .processResult(let result):
         if let error = Self.unexpectedTerminationError(
           terminatedBySignal: result.terminatedBySignal,
           exitCode: result.exitCode,
@@ -336,7 +362,8 @@ private final class ProcessInvocation: @unchecked Sendable {
     let start = bytes.count
     while bytes.count - start < count {
       do {
-        let chunk = try stdout.fileHandleForReading.read(upToCount: count - (bytes.count - start)) ?? Data()
+        let chunk =
+          try stdout.fileHandleForReading.read(upToCount: count - (bytes.count - start)) ?? Data()
         guard !chunk.isEmpty else { return nil }
         bytes.append(chunk)
       } catch {
