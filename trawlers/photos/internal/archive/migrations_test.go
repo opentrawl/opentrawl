@@ -3,6 +3,9 @@ package archive
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -302,43 +305,51 @@ values ('old-card-summary', 'asset:old-schema', '', 'Old migrationterm card.')
 }
 
 func TestRunnerStoreReadsValidateOnceWithoutOpening(t *testing.T) {
-	validation := functionSource(t, "store.go", "func validateReadStore", "func ensureArchiveMigrations")
+	validation := functionSource(t, "store.go", "validateReadStore")
 	if strings.Count(validation, "db.SchemaVersion(ctx)") != 1 {
 		t.Fatalf("read store must read schema version once:\n%s", validation)
 	}
 	for _, check := range []struct {
-		path  string
-		start string
-		end   string
+		path string
+		name string
 	}{
-		{path: "query.go", start: "func SearchWithStore", end: "func search"},
-		{path: "open_query.go", start: "func OpenWithStore", end: "func open"},
+		{path: "query.go", name: "SearchWithStore"},
+		{path: "open_query.go", name: "OpenWithStoreFocused"},
 	} {
-		body := functionSource(t, check.path, check.start, check.end)
+		body := functionSource(t, check.path, check.name)
 		if strings.Count(body, "validateReadStore(ctx, db)") != 1 {
-			t.Fatalf("%s must validate the runner store once:\n%s", check.start, body)
+			t.Fatalf("%s must validate the runner store once:\n%s", check.name, body)
 		}
 		for _, forbidden := range []string{"OpenReadOnly", "openExistingArchive", "openArchive", "archiveMigrationsRequired", "ensureArchiveMigrations"} {
 			if strings.Contains(body, forbidden) {
-				t.Fatalf("%s calls %s:\n%s", check.start, forbidden, body)
+				t.Fatalf("%s calls %s:\n%s", check.name, forbidden, body)
 			}
 		}
 	}
 }
 
-func functionSource(t *testing.T, path, startMarker, endMarker string) string {
+func functionSource(t *testing.T, path, name string) string {
 	t.Helper()
 	source, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := string(source)
-	start := strings.Index(body, startMarker)
-	end := strings.Index(body, endMarker)
-	if start < 0 || end < 0 || end <= start {
-		t.Fatalf("could not inspect %s in %s", startMarker, path)
+	files := token.NewFileSet()
+	parsed, err := parser.ParseFile(files, path, source, 0)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return body[start:end]
+	for _, declaration := range parsed.Decls {
+		function, ok := declaration.(*ast.FuncDecl)
+		if !ok || function.Recv != nil || function.Name.Name != name {
+			continue
+		}
+		start := files.Position(function.Pos()).Offset
+		end := files.Position(function.End()).Offset
+		return string(source[start:end])
+	}
+	t.Fatalf("could not inspect %s in %s", name, path)
+	return ""
 }
 
 func TestEnsureArchiveMigrationsTreatsDuplicateColumnRaceAsSuccess(t *testing.T) {
