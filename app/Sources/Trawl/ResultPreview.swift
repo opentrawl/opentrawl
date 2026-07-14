@@ -3,6 +3,7 @@ import TrawlClient
 import TrawlCore
 
 struct ResultPreview: View {
+  let client: any TrawlClient
   let phase: SearchOpenPhase
   let response: OpenResponse?
   var body: some View {
@@ -14,7 +15,11 @@ struct ResultPreview: View {
       case .output:
         if let response, let record = response.record {
           PresentationDocumentView(
-            document: record.presentation, targetAnchorID: response.requestedAnchorID)
+            client: client,
+            sourceID: record.sourceID,
+            document: record.presentation,
+            targetAnchorID: response.requestedAnchorID
+          )
         } else {
           ContentUnavailableView("Result unavailable", systemImage: "exclamationmark.circle")
         }

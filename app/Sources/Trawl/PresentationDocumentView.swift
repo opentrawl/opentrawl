@@ -1,7 +1,7 @@
 import SwiftUI
 import TrawlClient
 
-private enum PresentationElementID: Hashable {
+enum PresentationElementID: Hashable {
   case anchor(String)
   case block(Int)
   case field(block: Int, field: Int)
@@ -15,6 +15,8 @@ private enum PresentationElementID: Hashable {
 }
 
 struct PresentationDocumentView: View {
+  let client: any TrawlClient
+  let sourceID: String
   let document: PresentationDocument
   let targetAnchorID: String
 
@@ -27,7 +29,12 @@ struct PresentationDocumentView: View {
             .textSelection(.enabled)
             .accessibilityLabel(document.title)
           ForEach(Array(document.blocks.enumerated()), id: \.offset) { index, block in
-            BlockView(block: block, index: index)
+            BlockView(
+              client: client,
+              sourceID: sourceID,
+              block: block,
+              index: index
+            )
           }
           ForEach(Array(document.actions.enumerated()), id: \.offset) { _, action in
             ActionView(action: action)
@@ -47,6 +54,8 @@ struct PresentationDocumentView: View {
 }
 
 private struct BlockView: View {
+  let client: any TrawlClient
+  let sourceID: String
   let block: PresentationBlock
   let index: Int
 
@@ -87,8 +96,13 @@ private struct BlockView: View {
       ResponsiveTable(columns: columns, rows: rows, blockIndex: index)
         .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     case .resource(let anchorID, let resource):
-      ResourceView(resource: resource, blockIndex: index)
-        .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
+      PresentationResourceView(
+        client: client,
+        sourceID: sourceID,
+        resource: resource,
+        blockIndex: index
+      )
+      .id(PresentationElementID.sourceAnchor(anchorID, fallback: .block(index)))
     }
   }
 }
@@ -152,7 +166,7 @@ private struct ResponsiveTable: View {
   }
 }
 
-private struct LabeledContent: View {
+struct LabeledContent: View {
   let label: String
   let value: String
 
@@ -168,55 +182,6 @@ private struct LabeledContent: View {
       Text(value)
         .textSelection(.enabled)
       Spacer(minLength: 0)
-    }
-  }
-}
-
-private struct ResourceView: View {
-  let resource: PresentationResource
-  let blockIndex: Int
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Label(resource.label, systemImage: symbol)
-        .font(.headline)
-      Text(kindLabel)
-        .font(.callout)
-        .foregroundStyle(.secondary)
-      ForEach(Array(resource.metadata.enumerated()), id: \.offset) { fieldIndex, field in
-        LabeledContent(field.label, value: field.display)
-          .font(.caption)
-          .id(
-            PresentationElementID.sourceAnchor(
-              field.anchorID,
-              fallback: .resourceField(block: blockIndex, field: fieldIndex)
-            )
-          )
-      }
-    }
-    .padding(10)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .background(.secondary.opacity(0.05), in: .rect(cornerRadius: 8))
-    .id(
-      PresentationElementID.sourceAnchor(resource.anchorID, fallback: .resource(blockIndex))
-    )
-  }
-
-  private var symbol: String {
-    switch resource.kind {
-    case .file: "doc"
-    case .image: "photo"
-    case .video: "video"
-    case .audio: "waveform"
-    }
-  }
-
-  private var kindLabel: String {
-    switch resource.kind {
-    case .file: "File"
-    case .image: "Image"
-    case .video: "Video"
-    case .audio: "Audio"
     }
   }
 }

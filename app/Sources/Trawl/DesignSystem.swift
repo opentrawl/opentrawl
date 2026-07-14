@@ -4,6 +4,7 @@ import SwiftUI
 enum TrawlDesign {
   static let minimumWindow = CGSize(width: 760, height: 560)
   static let defaultWindow = CGSize(width: 1040, height: 720)
+  static let compactSearchWidth: CGFloat = 900
   static let contentInset: CGFloat = 28
   static let panelCornerRadius: CGFloat = 22
   static let backgroundContentOpacity = 0.42
@@ -24,4 +25,8 @@ enum TrawlDesign {
       (hash ^ UInt64(byte)) &* 0x100_0000_01b3
     }
   }()
+
+  static func usesCompactSearchLayout(width: CGFloat) -> Bool {
+    width < compactSearchWidth
+  }
 }

@@ -3,6 +3,7 @@ import TrawlClient
 import TrawlCore
 
 struct SearchOverlay: View {
+  private let client: any TrawlClient
   let onDismiss: () -> Void
   let onTrafficChange: (ConstellationActivity, ConstellationTrafficEvent?) -> Void
   let onQueryChange: (String) -> Void
@@ -21,12 +22,15 @@ struct SearchOverlay: View {
     initialScope: RestingSource?,
     initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
-    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
+    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
+      _, _ in
+    },
     onQueryChange: @escaping (String) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
     self.init(
       model: SearchModel(client: client),
+      client: client,
       initialScope: initialScope,
       initialQuery: initialQuery,
       sourceStatuses: sourceStatuses,
@@ -38,13 +42,17 @@ struct SearchOverlay: View {
 
   init(
     model: SearchModel,
+    client: any TrawlClient,
     initialScope: RestingSource?,
     initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
-    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = { _, _ in },
+    onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
+      _, _ in
+    },
     onQueryChange: @escaping (String) -> Void = { _ in },
     onDismiss: @escaping () -> Void
   ) {
+    self.client = client
     self.onDismiss = onDismiss
     self.onTrafficChange = onTrafficChange
     self.onQueryChange = onQueryChange
@@ -68,10 +76,11 @@ struct SearchOverlay: View {
       .accessibilityHidden(true)
       GeometryReader { proxy in
         SearchWorkspace(
+          client: client,
           interaction: interaction,
           scope: scope,
           sourceResolver: sourceResolver,
-          isCompact: proxy.size.width < 760,
+          isCompact: TrawlDesign.usesCompactSearchLayout(width: proxy.size.width),
           model: model,
           fieldIdentity: fieldState.identity,
           focus: $focus,
@@ -173,7 +182,8 @@ struct SearchOverlay: View {
       onTrafficChange(.searching(sourceID: interaction.sourceID), nil)
     case .complete, .partial, .skipped, .failed:
       let failedSourceIDs = Set(model.failures.map(\.sourceID))
-      let requestedSourceIDs = interaction.sourceID.map { Set([$0]) }
+      let requestedSourceIDs =
+        interaction.sourceID.map { Set([$0]) }
         ?? Set(sourceStatuses.map(\.id))
       onTrafficChange(
         failedSourceIDs.isEmpty ? .idle : .failed(sourceIDs: failedSourceIDs),

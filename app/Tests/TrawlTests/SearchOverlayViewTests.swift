@@ -8,6 +8,11 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
+  @Test func minimumWindowUsesCompactSearchWhileDefaultWindowKeepsTheSplitView() {
+    #expect(TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.minimumWindow.width))
+    #expect(!TrawlDesign.usesCompactSearchLayout(width: TrawlDesign.defaultWindow.width))
+  }
+
   @MainActor
   @Test func constellationCanvasFitsWindowsAndSupportsTheMinimumProductSourceSet() {
     let windowSizes = [
@@ -108,9 +113,11 @@ struct SearchOverlayViewTests {
 
   @MainActor
   @Test func mountedSearchOverlayReturnsFocusWhenSearchStarts() async throws {
-    let model = SearchModel(client: MountedSearchClient(), debounce: .seconds(1))
+    let client = MountedSearchClient()
+    let model = SearchModel(client: client, debounce: .seconds(1))
     let overlay = SearchOverlay(
       model: model,
+      client: client,
       initialScope: nil,
       onDismiss: {}
     )
@@ -213,7 +220,8 @@ struct SearchOverlayViewTests {
       availability: nil,
       unread: nil
     )
-    let model = SearchModel(client: MountedOpenedSearchClient(hit: hit), debounce: .zero)
+    let client = MountedOpenedSearchClient(hit: hit)
+    let model = SearchModel(client: client, debounce: .zero)
     await model.search("synthetic", source: nil)
     await model.open(hit)
     #expect(model.openPhase == .output)
@@ -222,6 +230,7 @@ struct SearchOverlayViewTests {
     let host = NSHostingView(
       rootView: SearchOverlay(
         model: model,
+        client: client,
         initialScope: nil,
         initialQuery: "synthetic",
         onDismiss: { recorder.count += 1 }
@@ -247,11 +256,13 @@ struct SearchOverlayViewTests {
 
   @MainActor
   @Test func mountedSearchOverlayDismissesFromTheFocusedFieldOnEscape() async throws {
-    let model = SearchModel(client: MountedSearchClient(), debounce: .seconds(1))
+    let client = MountedSearchClient()
+    let model = SearchModel(client: client, debounce: .seconds(1))
     let recorder = EscapeRecorder()
     let host = NSHostingView(
       rootView: SearchOverlay(
         model: model,
+        client: client,
         initialScope: nil,
         onDismiss: { recorder.count += 1 }
       )
@@ -289,12 +300,18 @@ struct SearchOverlayViewTests {
 
   @MainActor
   @Test func mountedSearchOverlayDismissesFromTheBackdropAndPreservesSearchState() async throws {
-    let model = SearchModel(client: MountedSearchClient(), debounce: .seconds(1))
+    let client = MountedSearchClient()
+    let model = SearchModel(client: client, debounce: .seconds(1))
     let recorder = BackdropDismissRecorder()
     let scope = try mountedRestingSource(id: "telegram", surface: "Telegram")
     let host = NSHostingView(
-      rootView: MountedSearchDismissHarness(model: model, scope: scope, recorder: recorder)
-        .environment(SourceIconStore())
+      rootView: MountedSearchDismissHarness(
+        client: client,
+        model: model,
+        scope: scope,
+        recorder: recorder
+      )
+      .environment(SourceIconStore())
     )
     let window = NSWindow(
       contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
@@ -492,8 +509,15 @@ private struct MountedOpenedSearchClient: TrawlClient {
   func sync() async throws -> SyncResponse { fatalError() }
   func search(_: String, source _: String?) async throws -> SearchResponse {
     SearchResponse(
-      order: .recency, sources: [], hits: [hit], failures: [], skippedSources: [], outcome: .complete,
-      resultLimit: 20, truncated: false)
+      order: .recency,
+      sources: [],
+      hits: [hit],
+      failures: [],
+      skippedSources: [],
+      outcome: .complete,
+      resultLimit: 20,
+      truncated: false
+    )
   }
   func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse {
     let presentation = PresentationDocument(
@@ -567,6 +591,7 @@ private func assertHeadlineLabelFits(
 }
 
 private struct MountedSearchDismissHarness: View {
+  let client: any TrawlClient
   let model: SearchModel
   let scope: RestingSource
   let recorder: BackdropDismissRecorder
@@ -575,6 +600,7 @@ private struct MountedSearchDismissHarness: View {
   var body: some View {
     SearchOverlay(
       model: model,
+      client: client,
       initialScope: scope,
       initialQuery: query,
       onQueryChange: { query = $0 },

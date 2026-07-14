@@ -8,7 +8,7 @@ public struct ProcessTrawlClient: TrawlClient {
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
   static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
-  static let maximumResourceBytes: UInt32 = 4 << 20
+  public static let maximumResourceBytes: UInt32 = 4 << 20
 
   private let binaryURL: URL
   private let searchDeadline: Duration

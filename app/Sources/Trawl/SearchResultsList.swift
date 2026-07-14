@@ -112,9 +112,13 @@ private struct SearchResultsContext: View {
       }
       HStack(alignment: .firstTextBaseline, spacing: 10) {
         Spacer(minLength: 8)
-        if let retained = SearchResultsContextCopy.retained(phase, query: committedQuery, failure: failureGuidance) {
+        if let retained = SearchResultsContextCopy.retained(
+          phase,
+          query: committedQuery,
+          failure: failureGuidance
+        ) {
           Label(retained, systemImage: "magnifyingglass")
-            .fixedSize()
+            .fixedSize(horizontal: false, vertical: true)
         } else if resultLimit > 0 {
           Text(resultBounds)
             .fixedSize()
