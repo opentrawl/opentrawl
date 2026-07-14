@@ -42,6 +42,7 @@ type Request struct {
 	Prompt      string
 	Images      []Image
 	Temperature float64
+	Tool        *Tool
 }
 
 type Image struct {
@@ -52,6 +53,22 @@ type Image struct {
 type Response struct {
 	Text      string
 	Telemetry map[string]any
+	ToolCalls []ToolCall
+}
+
+// Tool defines one function the model must call. Tool arguments stay raw until
+// the feature that owns the schema converts them into its typed result.
+type Tool struct {
+	Name        string
+	Description string
+	Parameters  json.RawMessage
+}
+
+// ToolCall is one function invocation decoded from an OpenAI-compatible chat
+// response. Arguments are the exact JSON object supplied by the provider.
+type ToolCall struct {
+	Name      string
+	Arguments json.RawMessage
 }
 
 // ProviderRequest is the complete credential-free request identity. Body is
@@ -238,10 +255,30 @@ func (c *Client) renderNative(request Request) (ProviderRequest, error) {
 }
 
 type chatRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	Temperature float64       `json:"temperature,omitempty"`
-	Stream      bool          `json:"stream"`
+	Model       string          `json:"model"`
+	Messages    []chatMessage   `json:"messages"`
+	Temperature float64         `json:"temperature,omitempty"`
+	Stream      bool            `json:"stream"`
+	Tools       []chatTool      `json:"tools,omitempty"`
+	ToolChoice  *chatToolChoice `json:"tool_choice,omitempty"`
+}
+
+type chatTool struct {
+	Type     string       `json:"type"`
+	Function chatFunction `json:"function"`
+}
+
+type chatFunction struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Parameters  json.RawMessage `json:"parameters"`
+}
+
+type chatToolChoice struct {
+	Type     string `json:"type"`
+	Function struct {
+		Name string `json:"name"`
+	} `json:"function"`
 }
 
 type chatMessage struct {
@@ -262,7 +299,14 @@ type chatImageURL struct {
 type chatResponse struct {
 	Choices []struct {
 		Message struct {
-			Content string `json:"content"`
+			Content   string `json:"content"`
+			ToolCalls []struct {
+				Type     string `json:"type"`
+				Function struct {
+					Name      string          `json:"name"`
+					Arguments json.RawMessage `json:"arguments"`
+				} `json:"function"`
+			} `json:"tool_calls"`
 		} `json:"message"`
 	} `json:"choices"`
 	Error *struct {
@@ -288,6 +332,15 @@ func (c *Client) renderChat(request Request) (ProviderRequest, error) {
 		Temperature: request.Temperature,
 		Stream:      false,
 	}
+	if request.Tool != nil {
+		tool, err := renderTool(*request.Tool)
+		if err != nil {
+			return ProviderRequest{}, err
+		}
+		payload.Tools = []chatTool{tool}
+		payload.ToolChoice = &chatToolChoice{Type: "function"}
+		payload.ToolChoice.Function.Name = tool.Function.Name
+	}
 	endpoint, err := GenerateEndpoint(c.baseURL)
 	if err != nil {
 		return ProviderRequest{}, err
@@ -299,7 +352,29 @@ func (c *Client) Render(request Request) (ProviderRequest, error) {
 	if strings.HasSuffix(c.baseURL, "/v1") {
 		return c.renderChat(request)
 	}
+	if request.Tool != nil {
+		return ProviderRequest{}, errors.New("model tools require an OpenAI-compatible /v1 endpoint")
+	}
 	return c.renderNative(request)
+}
+
+func renderTool(tool Tool) (chatTool, error) {
+	tool.Name = strings.TrimSpace(tool.Name)
+	if tool.Name == "" {
+		return chatTool{}, errors.New("model tool name is required")
+	}
+	if len(tool.Parameters) == 0 || !json.Valid(tool.Parameters) {
+		return chatTool{}, errors.New("model tool parameters must be valid JSON")
+	}
+	var schema map[string]json.RawMessage
+	if err := json.Unmarshal(tool.Parameters, &schema); err != nil || schema == nil {
+		return chatTool{}, errors.New("model tool parameters must be a JSON object")
+	}
+	return chatTool{Type: "function", Function: chatFunction{
+		Name:        tool.Name,
+		Description: strings.TrimSpace(tool.Description),
+		Parameters:  bytes.Clone(tool.Parameters),
+	}}, nil
 }
 
 // ValidateRequest proves that a retained request is still for this configured
@@ -425,7 +500,25 @@ func Parse(request ProviderRequest, raw RawResult) (Response, error) {
 		if len(response.Choices) == 0 {
 			return Response{}, fmt.Errorf("model response contained no choices")
 		}
-		return Response{Text: strings.TrimSpace(response.Choices[0].Message.Content)}, nil
+		message := response.Choices[0].Message
+		result := Response{Text: strings.TrimSpace(message.Content)}
+		for _, call := range message.ToolCalls {
+			if call.Type != "function" {
+				return Response{}, fmt.Errorf("model response tool call type %q is not function", call.Type)
+			}
+			var arguments string
+			if err := json.Unmarshal(call.Function.Arguments, &arguments); err != nil {
+				return Response{}, fmt.Errorf("decode model tool arguments: %w", err)
+			}
+			if !json.Valid([]byte(arguments)) {
+				return Response{}, errors.New("model tool arguments must contain valid JSON")
+			}
+			result.ToolCalls = append(result.ToolCalls, ToolCall{
+				Name:      call.Function.Name,
+				Arguments: json.RawMessage(arguments),
+			})
+		}
+		return result, nil
 	}
 	var response nativeGenerateResponse
 	if err := json.Unmarshal(raw.Response, &response); err != nil {

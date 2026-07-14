@@ -154,10 +154,12 @@ func renderPreparedCardRequestFromBytes(cardInputID string, cardInputBytes []byt
 	if err != nil {
 		return preparedCardRequest{}, err
 	}
+	tool := photoCardTool()
 	request := model.Request{
 		Prompt:      prompt,
 		Images:      []model.Image{{Data: bytes.Clone(image), MIMEType: mimeType}},
 		Temperature: 0.1,
+		Tool:        &tool,
 	}
 	rendered, err := classifier.client.Render(request)
 	if err != nil {

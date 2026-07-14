@@ -338,7 +338,7 @@ func parseRetainedModelGeneration(
 		err = fmt.Errorf("%w: provider envelope: %v", errModelCardParse, err)
 	} else {
 		var parsed modelResult
-		parsed, err = classifier.parseResult(response.Text, prepared)
+		parsed, err = classifier.parseResult(response, prepared)
 		if err == nil {
 			return parsed, nil
 		}

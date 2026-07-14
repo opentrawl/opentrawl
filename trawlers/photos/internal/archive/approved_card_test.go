@@ -53,13 +53,17 @@ func TestApprovedCardBundleBindsPreparedBytesAndRetainedSuccessResumes(t *testin
 		}
 	}
 	var providerEnvelope struct {
-		Prompt string `json:"prompt"`
+		Messages []struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"messages"`
 	}
 	if err := json.Unmarshal(item.GetRequestBody(), &providerEnvelope); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(providerEnvelope.Prompt, `"provider_index":  0`) && !strings.Contains(providerEnvelope.Prompt, `"provider_index": 0`) {
-		t.Fatalf("complete CardInput ProtoJSON omitted provider index 0:\n%s", providerEnvelope.Prompt)
+	if len(providerEnvelope.Messages) != 1 || len(providerEnvelope.Messages[0].Content) == 0 || !strings.Contains(providerEnvelope.Messages[0].Content[0].Text, `"provider_index":  0`) && !strings.Contains(providerEnvelope.Messages[0].Content[0].Text, `"provider_index": 0`) {
+		t.Fatalf("complete CardInput ProtoJSON omitted provider index 0: %#v", providerEnvelope)
 	}
 	unsupported := proto.Clone(item).(*cardwire.ApprovedCardItem)
 	unsupported.PromptVersion = "photo-card-v3.0"
@@ -231,7 +235,7 @@ type approvedCardFixtureTransport struct {
 }
 
 func (t *approvedCardFixtureTransport) ValidateRequest(request model.ProviderRequest) error {
-	if request.Route() != "https://models.example.com/api/generate" || request.Model() != "fixture-model" {
+	if request.Route() != "https://models.example.com/v1/chat/completions" || request.Model() != "fixture-model" {
 		return errors.New("unexpected fixture request")
 	}
 	return nil

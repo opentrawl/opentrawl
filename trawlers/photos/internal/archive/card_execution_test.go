@@ -468,8 +468,15 @@ func fixtureCardPreparationFor(assetID string) fixtureCardPreparation {
 
 func fixtureProviderResponse(t *testing.T) *cardwire.FixtureResponse {
 	t.Helper()
-	prose := "Summary\nSynthetic harbour at dusk.\nDescription\nA synthetic ferry crosses a calm harbour under an orange sky.\nVenue plausibility\ncandidate_id: place_1_candidate_1\nverdict: plausible\nreason: The terminal is near the synthetic coordinate.\nOCR\nFERRY 12\nUncertainty\n- The distant shoreline is indistinct.\n- The ferry name is not readable."
-	body, err := json.Marshal(map[string]any{"response": prose, "done": true})
+	arguments, err := json.Marshal(map[string]any{
+		"summary": "Synthetic harbour at dusk.", "description": "A synthetic ferry crosses a calm harbour under an orange sky.",
+		"venue_plausibility": map[string]string{"candidate_id": "place_1_candidate_1", "verdict": "plausible", "reason": "The terminal is near the synthetic coordinate."},
+		"ocr_text":           "FERRY 12", "uncertainties": []string{"The distant shoreline is indistinct.", "The ferry name is not readable."},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := json.Marshal(fixtureToolResponse(string(arguments)))
 	if err != nil {
 		t.Fatal(err)
 	}

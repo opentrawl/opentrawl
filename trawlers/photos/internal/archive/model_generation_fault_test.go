@@ -60,7 +60,7 @@ func TestPhotosStopsUncertainGenerationBeforeAndAfterSend(t *testing.T) {
 			logs := &recordingClassifyLogSink{}
 			result, err := Classify(ctx, paths, ClassifyOptions{
 				Model:    "fixture-model",
-				ModelURL: server.URL,
+				ModelURL: server.URL + "/v1",
 				Now:      fixedClock("2026-07-11T10:00:00Z"),
 				LogSink:  logs,
 			})
@@ -96,7 +96,7 @@ func TestPhotosStopsUncertainGenerationBeforeAndAfterSend(t *testing.T) {
 			setModelGenerationFault(t, nil)
 			restarted, err := Classify(ctx, paths, ClassifyOptions{
 				Model:    "fixture-model",
-				ModelURL: server.URL,
+				ModelURL: server.URL + "/v1",
 				Now:      fixedClock("2026-07-11T10:05:00Z"),
 			})
 			if err != nil {
@@ -128,7 +128,7 @@ func TestPhotosResumesAfterRawResponseRetentionBeforeParse(t *testing.T) {
 	})
 	_, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-model",
-		ModelURL: server.URL,
+		ModelURL: server.URL + "/v1",
 		Now:      fixedClock("2026-07-11T10:10:00Z"),
 	})
 	if err == nil || !strings.Contains(err.Error(), "synthetic interruption after response retention") {
@@ -145,7 +145,7 @@ func TestPhotosResumesAfterRawResponseRetentionBeforeParse(t *testing.T) {
 	setModelGenerationFault(t, nil)
 	restarted, err := Classify(ctx, paths, ClassifyOptions{
 		Model:    "fixture-model",
-		ModelURL: server.URL,
+		ModelURL: server.URL + "/v1",
 		Now:      fixedClock("2026-07-11T10:15:00Z"),
 	})
 	if err != nil {
@@ -200,7 +200,7 @@ func TestPhotosRetainsHTTPTraceTimeoutAndConnectionFailures(t *testing.T) {
 			}
 			_, err := Classify(ctx, paths, ClassifyOptions{
 				Model:    "fixture-model",
-				ModelURL: server.URL,
+				ModelURL: server.URL + "/v1",
 				Now:      fixedClock("2026-07-11T10:20:00Z"),
 			})
 			cancel()
@@ -224,7 +224,7 @@ func TestPhotosRetainsHTTPTraceTimeoutAndConnectionFailures(t *testing.T) {
 
 			restarted, err := Classify(context.Background(), paths, ClassifyOptions{
 				Model:    "fixture-model",
-				ModelURL: server.URL,
+				ModelURL: server.URL + "/v1",
 				Now:      fixedClock("2026-07-11T10:25:00Z"),
 			})
 			if err != nil {
@@ -309,7 +309,7 @@ join model_generation_attempt a on a.generation_id = g.id
 	if err != nil {
 		t.Fatal(err)
 	}
-	card, err := parsePhotoCard(response.Text, false)
+	card, err := parsePhotoCardToolCall(response.ToolCalls, preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,16 +414,13 @@ func syntheticGenerationServer(t *testing.T, handler http.Handler) *httptest.Ser
 func writeSyntheticModelResponse(t *testing.T, writer http.ResponseWriter) {
 	t.Helper()
 	writer.Header().Set("X-Request-ID", "request-synthetic-fault")
-	if err := json.NewEncoder(writer).Encode(map[string]any{
-		"response": fixtureCardResponse(
-			"Synthetic card summary.",
-			"Synthetic card description with a simple fixture scene.",
-			"",
-			"Synthetic readable text",
-			"synthetic uncertainty",
-		),
-		"done": true,
-	}); err != nil {
+	if err := json.NewEncoder(writer).Encode(fixtureToolResponse(fixtureCardResponse(
+		"Synthetic card summary.",
+		"Synthetic card description with a simple fixture scene.",
+		"",
+		"Synthetic readable text",
+		"synthetic uncertainty",
+	))); err != nil {
 		t.Fatal(err)
 	}
 }

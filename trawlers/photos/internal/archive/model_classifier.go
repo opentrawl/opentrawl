@@ -14,7 +14,7 @@ import (
 const (
 	modelClassifierSource = "photo_card"
 	modelPromptVersion    = repoPrompts.PhotoCardVersion
-	modelParserVersion    = "photo-card-sections.v1"
+	modelParserVersion    = "photo-card-tool.v1"
 )
 
 type modelClassifier struct {
@@ -25,6 +25,13 @@ type modelClassifier struct {
 }
 
 func newModelClassifier(modelID, baseURL, bearerKeyEnv string) (modelClassifier, error) {
+	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if strings.HasSuffix(baseURL, "/api") {
+		baseURL = strings.TrimSuffix(baseURL, "/api")
+	}
+	if !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
+	}
 	client, err := model.New(model.Config{
 		BaseURL:      baseURL,
 		Model:        modelID,
@@ -48,8 +55,8 @@ type imageMeta struct {
 	SHA256 string
 }
 
-func (c modelClassifier) parseResult(responseText string, prepared preparedCardRequest) (modelResult, error) {
-	card, err := parsePhotoCard(responseText, true)
+func (c modelClassifier) parseResult(response model.Response, prepared preparedCardRequest) (modelResult, error) {
+	card, err := parsePhotoCardToolCall(response.ToolCalls, prepared)
 	if err != nil {
 		return modelResult{}, err
 	}
@@ -58,7 +65,6 @@ func (c modelClassifier) parseResult(responseText string, prepared preparedCardR
 	}
 	return modelResult{
 		Payload:           photoCardPayload(card),
-		RawResponse:       responseText,
 		ImageBytes:        prepared.Image.Bytes,
 		ImageSHA256:       prepared.Image.SHA256,
 		VenuePlausibility: card.VenuePlausibility,
