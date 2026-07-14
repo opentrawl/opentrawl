@@ -44,7 +44,7 @@ struct ConstellationView: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let size = canvasSize(in: geometry.size)
+      let size = Self.canvasSize(in: geometry.size)
       let layout = ConstellationLayout(
         size: size,
         sources: sources,
@@ -75,10 +75,10 @@ struct ConstellationView: View {
     }
   }
 
-  private func canvasSize(in available: CGSize) -> CGSize {
-    let maximumHeight = min(available.height, 760)
-    let width = min(available.width, maximumHeight * 1.15, 880)
-    return CGSize(width: width, height: width / 1.15)
+  static func canvasSize(in available: CGSize) -> CGSize {
+    let maximumHeight = available.height
+    let width = min(available.width * 0.9, maximumHeight * 1.15, 1_400)
+    return CGSize(width: width, height: min(width / 1.15, available.height))
   }
 }
 

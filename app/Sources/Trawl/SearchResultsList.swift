@@ -116,10 +116,8 @@ private struct SearchResultsContext: View {
   }
 
   private var partialMessage: String {
-    let result = SearchWorkspaceCopy.usefulResults(resultCount)
-    if hasTimeoutFailure { return "Some sources timed out. \(result)" }
-    guard let failureGuidance else { return "Some sources failed. \(result)" }
-    return "\(result) \(failureGuidance)"
+    if hasTimeoutFailure { return "Some sources timed out." }
+    return failureGuidance ?? "Some sources failed."
   }
 
   private var resultBounds: String {

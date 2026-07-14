@@ -67,6 +67,7 @@ struct SearchOverlay: View {
         onOpen: open,
         showsRecord: $showsRecord
       )
+      .frame(maxWidth: 1_180, maxHeight: .infinity)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     .onChange(of: model.phase) { oldPhase, newPhase in

@@ -8,6 +8,12 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
+  @Test func constellationCanvasFitsMinimumDefaultAndUltrawideWindows() {
+    for size in [CGSize(width: 704, height: 504), CGSize(width: 984, height: 664), CGSize(width: 2_400, height: 1_000)] {
+      #expect(ConstellationView.canvasSize(in: size).height <= size.height)
+    }
+  }
+
   @MainActor
   @Test func mountedSearchOverlayReturnsFocusWhenSearchStarts() async throws {
     let model = SearchModel(client: MountedSearchClient(), debounce: .seconds(1))
