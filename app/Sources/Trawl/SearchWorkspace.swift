@@ -23,6 +23,7 @@ enum SearchWorkspacePaneVisibility {
 }
 
 struct SearchWorkspace: View {
+  let client: any TrawlClient
   @Bindable var interaction: SearchInteraction
   let scope: RestingSource?
   let sourceResolver: SearchSourceResolver
@@ -58,6 +59,7 @@ struct SearchWorkspace: View {
         workspaceLayout
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
   }
 
   private var searchField: some View {
@@ -78,17 +80,23 @@ struct SearchWorkspace: View {
     if isCompact {
       if showsRecord {
         VStack(spacing: 0) {
-          HStack { Button("Back") { showsRecord = false }; Spacer() }.padding()
+          HStack {
+            Button("Back") { showsRecord = false }
+            Spacer()
+          }
+          .padding()
           Divider()
-          ResultPreview(phase: model.openPhase, response: model.openResult)
+          ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
         }
-      } else { results }
+      } else {
+        results
+      }
     } else {
       if SearchWorkspacePaneVisibility.showsRecord(for: model.openPhase) {
         HStack(spacing: 0) {
           results.frame(minWidth: 360)
           Divider()
-          ResultPreview(phase: model.openPhase, response: model.openResult)
+          ResultPreview(client: client, phase: model.openPhase, response: model.openResult)
         }
       } else {
         results
@@ -110,12 +118,16 @@ struct SearchWorkspace: View {
       onReturn: onSubmit,
       onEscape: onEscape,
       onOpen: onOpen,
-      onSelectionChanged: { hit in if !isCompact { onOpen(hit) } }
+      onSelectionChanged: { hit in
+        if !isCompact { onOpen(hit) }
+      }
     )
   }
 
   private func sourceDisplayName(for sourceID: String) -> String {
-    if sourceID == scope?.id { return scope?.surface ?? SearchSourceResolver.unavailableDisplayName }
+    if sourceID == scope?.id {
+      return scope?.surface ?? SearchSourceResolver.unavailableDisplayName
+    }
     return model.sourceDisplayName(
       for: sourceID,
       resolvedName: sourceResolver.displayName(for: sourceID)
@@ -183,18 +195,23 @@ private struct SearchField: View {
         .background(.secondary.opacity(0.14), in: Capsule())
         .fixedSize(horizontal: true, vertical: false)
       }
-      if !query.isEmpty {
-        Button(action: clearQuery) {
-          Image(systemName: "xmark.circle.fill")
-            .font(.body)
-            .foregroundStyle(.secondary)
-            .frame(width: 20, height: 20)
-            .contentShape(.circle)
+      Group {
+        if query.isEmpty {
+          Color.clear
+            .accessibilityHidden(true)
+        } else {
+          Button(action: clearQuery) {
+            Image(systemName: "xmark.circle.fill")
+              .font(.body)
+              .foregroundStyle(.secondary)
+              .contentShape(.circle)
+          }
+          .buttonStyle(.plain)
+          .help("Clear search query")
+          .accessibilityLabel("Clear search query")
         }
-        .buttonStyle(.plain)
-        .help("Clear search query")
-        .accessibilityLabel("Clear search query")
       }
+      .frame(width: 20, height: 20)
     }
     .padding(.horizontal, 13)
     .frame(height: 44)
