@@ -32,7 +32,6 @@ struct RootView: View {
           onQueryChange: { searchQuery = $0 },
           onDismiss: dismissSearch
         )
-        .padding(TrawlDesign.contentInset)
       }
     }
     .environment(iconStore)
