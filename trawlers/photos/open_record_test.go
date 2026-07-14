@@ -102,17 +102,15 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatalf("GPS-only ProtoJSON = %s", gpsJSON)
 	}
 	presentation := projectOpenPresentation(input)
-	if presentation.Title != "Synthetic square." || len(presentation.Blocks) != 6 || len(presentation.Facts) != 2 {
+	if presentation.Title != "Photo" || len(presentation.Blocks) != 4 || len(presentation.Facts) != 2 {
 		t.Fatalf("presentation = %s", prototext.Format(presentation))
 	}
 	assertOpenPresentation(t, "photos", input, record, presentation)
-	assertExactPresentation(t, presentation, `title: "Synthetic square."
-blocks: { heading: { text: "Synthetic square." } anchor_id: "asset-details" }
-blocks: { fields: { fields: { label: "Photo summary" display: "Synthetic square." anchor_id: "summary" } fields: { label: "Captured local time" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" anchor_id: "media" } fields: { label: "Place" display: "Example Square" anchor_id: "place" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" anchor_id: "known-place" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" anchor_id: "album" } fields: { label: "Original filename" display: "fixture.heic" anchor_id: "filename" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
-blocks: { heading: { text: "Photo text" } }
+	assertExactPresentation(t, presentation, `title: "Photo"
+blocks: { prose: { text: "Synthetic square." } anchor_id: "asset-details" }
 blocks: { prose: { text: "A synthetic scene." } anchor_id: "description" }
 blocks: { prose: { text: "EXAMPLE" } anchor_id: "ocr" }
-blocks: { prose: { text: "weather" } anchor_id: "uncertainty" }
+blocks: { fields: { fields: { label: "Captured local time" display: "10 July 2026 at 14:00" } fields: { label: "Media" display: "photo, 4032 x 3024, 1.5s" anchor_id: "media" } fields: { label: "Place" display: "Example Square" anchor_id: "place" } fields: { label: "GPS" display: "52.3702, 4.8952 (accuracy: 4.5 m)" } fields: { label: "Known place" display: "Example home (home), after capture" anchor_id: "known-place" } fields: { label: "Camera" display: "Example Camera" } fields: { label: "Albums" display: "Synthetic trip" anchor_id: "album" } fields: { label: "Original filename" display: "fixture.heic" anchor_id: "filename" } fields: { label: "Original size" display: "4.0 KiB" } fields: { label: "Availability" display: "local" } } }
 facts: { kind: KIND_WARNING message: "Card status: Stale · source details changed after this card was created · since 10 July 2026" }
 facts: { kind: KIND_WARNING message: "weather" }
 primary_anchor_id: "asset-details"`)
@@ -132,10 +130,32 @@ func TestPhotoPresentationContainsSemanticSearchAnchors(t *testing.T) {
 		Model:      archive.OpenModel{Summary: "Lantern summary", Description: "Lantern description", OCRText: "LANTERN", Uncertainties: []string{"Synthetic uncertainty"}},
 	}
 	record := &openv1.OpenRecord{SourceId: "photos", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/photos"}, Presentation: projectOpenPresentation(value)}
-	for _, anchorID := range []string{"asset-details", "filename", "filenames", "album", "media", "place", "address", "metadata-example", "summary", "description", "ocr", "uncertainty"} {
+	for _, anchorID := range []string{"asset-details", "filename", "album", "media", "place", "address", "metadata-example", "description", "ocr"} {
 		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
 			t.Fatalf("anchor %q: %v", anchorID, err)
 		}
+	}
+	if visible := prototext.Format(record.Presentation); !strings.Contains(visible, "alternate.heic") {
+		t.Fatalf("filename anchor omits searchable filename: %s", visible)
+	}
+}
+
+func TestPhotoPresentationShowsSummaryAndFilenameOnce(t *testing.T) {
+	value := archive.OpenResult{
+		Ref: "photos:asset/example",
+		Mechanical: archive.OpenMechanical{
+			Original:  &archive.OpenOriginal{Filename: "example.heic"},
+			Filenames: []string{"example.heic", "example.heic"},
+		},
+		Model: archive.OpenModel{Summary: "Example summary"},
+	}
+	presentation := projectOpenPresentation(value)
+	visible := prototext.Format(presentation)
+	if presentation.Title != "Photo" || strings.Count(visible, "Example summary") != 1 || strings.Count(visible, "example.heic") != 1 {
+		t.Fatalf("presentation repeats source content: %s", visible)
+	}
+	if err := openrecord.ValidateRequestedAnchor(&openv1.OpenRecord{SourceId: "photos", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/photos"}, Presentation: presentation}, "filename"); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -304,7 +324,7 @@ values (?, ?, 'fixture', ?, 'fixture', '', '')
 	}
 
 	description, _ := openSearchResult("descriptionneedle", "description")
-	_, _ = openSearchResult("summaryneedle", "summary")
+	_, _ = openSearchResult("summaryneedle", "asset-details")
 	metadata, _ := openSearchResult("beyondanchor", "metadata.YW5jaG9yLW1ldGFkYXRhLTA2NA")
 	if description.Ref != metadata.Ref {
 		t.Fatalf("search refs differ: description=%q metadata=%q", description.Ref, metadata.Ref)
@@ -399,6 +419,82 @@ create table asset_resource (
 	symlink := &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: "photos:resource/asset_resource:symlink", MaxBytes: uint32(len(media))}
 	if _, err := crawler.ResolveResource(ctx, req, symlink); err == nil {
 		t.Fatal("symlink resource was returned")
+	}
+}
+
+func TestPresentationResourceUsesVerifiedCachedCurrentStill(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	archivePath := filepath.Join(root, "photos.db")
+	st, err := store.Open(ctx, store.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if _, err := st.DB().ExecContext(ctx, `
+create table asset (
+  id text primary key,
+  source_library_id text not null,
+  local_identifier text not null,
+  modification_date text not null
+);
+create table asset_resource (
+  id text primary key,
+  asset_id text not null,
+  resource_type text not null,
+  uti text not null,
+  original_filename text not null,
+  local_path text not null,
+  file_size integer not null,
+  available_locally integer not null,
+  needs_download integer not null
+);`); err != nil {
+		t.Fatal(err)
+	}
+	assetID := "asset:cached"
+	sourceLibraryID := "source:cached"
+	localIdentifier := "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE/L0/001"
+	modificationDate := "2026-07-14T12:00:00Z"
+	if _, err := st.DB().ExecContext(ctx, `insert into asset values (?, ?, ?, ?)`, assetID, sourceLibraryID, localIdentifier, modificationDate); err != nil {
+		t.Fatal(err)
+	}
+	freshness, err := sourcephotos.CurrentStillFreshnessForModification(sourcephotos.CurrentStillModification{UnixSeconds: 1784030400})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cacheRoot := filepath.Join(root, "cache", "originals")
+	path := sourcephotos.CurrentStillCachePath(cacheRoot, sourceLibraryID, localIdentifier, freshness)
+	media := []byte("synthetic cached current still")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, media, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(media)
+	proof := fmt.Sprintf(`{"version":1,"role":"current_still","media_type":"public.jpeg","orientation":1,"pixel_width":2,"pixel_height":2,"size":%d,"sha256":"%x"}`+"\n", len(media), digest)
+	if err := os.WriteFile(path+".proof.json", []byte(proof), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	crawler := New()
+	req := &trawlkit.Request{Store: st, Paths: trawlkit.Paths{Archive: archivePath}}
+	resource, err := crawler.presentationResource(ctx, req, "photos:asset/cached")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resource == nil || resource.GetKind() != presentationv1.Resource_KIND_IMAGE || !strings.HasPrefix(resource.GetRef(), presentationCurrentResourcePrefix) {
+		t.Fatalf("cached presentation resource = %#v", resource)
+	}
+	response, err := crawler.ResolveResource(ctx, req, &presentationv1.ResourceRequest{SourceId: "photos", ResourceRef: resource.GetRef(), MaxBytes: uint32(len(media))})
+	if err != nil || !bytes.Equal(response.GetData(), media) {
+		t.Fatalf("cached presentation response = %#v, %v", response, err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if resource, err := crawler.presentationResource(ctx, req, "photos:asset/cached"); err != nil || resource != nil {
+		t.Fatalf("missing cached preview = %#v, %v", resource, err)
 	}
 }
 

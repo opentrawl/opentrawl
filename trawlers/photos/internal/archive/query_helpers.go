@@ -16,6 +16,9 @@ func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch)
 	if anchorID == "" || anchorID == "asset" {
 		anchorID = "asset-details"
 	}
+	if kind == "summary" {
+		anchorID = "asset-details"
+	}
 	if kind == "metadata" {
 		anchorID = metadataAnchorID(matchID)
 	}
@@ -126,7 +129,7 @@ order by case observation_type when ? then 1 when ? then 2 when ? then 3 else 4 
 		}
 		for _, row := range rows {
 			if markedSnippetMatchesText(snippet, rowString(row, "original_filename")) {
-				return "filenames", nil
+				return "filename", nil
 			}
 		}
 	}

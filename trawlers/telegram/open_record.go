@@ -136,6 +136,11 @@ func projectSender(value store.Message) *telegramopenv1.Sender {
 	if displayName := outputField(value.SenderName); displayName != "" {
 		sender.DisplayName = recordString(displayName)
 		sender.State = telegramopenv1.SenderState_SENDER_STATE_AVAILABLE
+		return sender
+	}
+	if conversation := messageWhere(value); conversation != "" && conversation != "Telegram chat" {
+		sender.DisplayName = recordString(conversation)
+		sender.State = telegramopenv1.SenderState_SENDER_STATE_AVAILABLE
 	}
 	return sender
 }

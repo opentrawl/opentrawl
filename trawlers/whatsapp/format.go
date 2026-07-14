@@ -63,15 +63,22 @@ func messageWhere(message store.Message) string {
 	if name := humanDisplayName(message.ChatName); name != "" {
 		return name
 	}
-	if privacyID(message.ChatJID) {
-		return unknownPrivacyParticipant
+	if !message.FromMe {
+		if name := humanDisplayName(message.SenderName); name != "" {
+			return name
+		}
 	}
-	return "Unknown chat"
+	return "WhatsApp conversation"
 }
 
 func messageWhereJSON(message store.Message) string {
 	if name := humanDisplayName(message.ChatName); name != "" {
 		return name
+	}
+	if !message.FromMe {
+		if name := humanDisplayName(message.SenderName); name != "" {
+			return name
+		}
 	}
 	if privacyID(message.ChatJID) {
 		return outputField(message.ChatJID)
