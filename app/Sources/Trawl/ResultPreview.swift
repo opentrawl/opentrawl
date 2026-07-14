@@ -9,9 +9,7 @@ struct ResultPreview: View {
     Group {
       switch phase {
       case .idle:
-        ContentUnavailableView(
-          "Choose a result", systemImage: "doc.text.magnifyingglass",
-          description: Text("Opening a result shows it here."))
+        EmptyView()
       case .loading: ProgressView("Opening result")
       case .output:
         if let response, let record = response.record {

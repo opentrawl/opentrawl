@@ -18,18 +18,10 @@ struct RootView: View {
     ZStack {
       CanvasBackground()
       home
-        .opacity(isSearching ? TrawlDesign.backgroundContentOpacity : 1)
-        .blur(radius: isSearching ? TrawlDesign.backgroundContentBlur : 0)
-        .disabled(isSearching)
+        .opacity(isSearching ? 0.18 : 1)
         .allowsHitTesting(!isSearching)
         .accessibilityHidden(isSearching)
-
       if isSearching {
-        Color.white.opacity(TrawlDesign.modalVeilOpacity)
-          .ignoresSafeArea()
-          .contentShape(.rect)
-          .onTapGesture(perform: dismissSearch)
-          .accessibilityHidden(true)
         SearchOverlay(
           client: client,
           initialScope: searchScope,
@@ -38,13 +30,9 @@ struct RootView: View {
           onDismiss: dismissSearch
         )
         .padding(TrawlDesign.contentInset)
-        .accessibilityElement(children: .contain)
-        .accessibilityAddTraits(.isModal)
-        .transition(.opacity.combined(with: .scale(scale: 0.98)))
       }
     }
     .environment(iconStore)
-    .animation(.easeOut(duration: 0.16), value: isSearching)
   }
 
   @ViewBuilder
@@ -97,7 +85,7 @@ struct RootView: View {
 
 private struct CanvasBackground: View {
   var body: some View {
-    Color.white
+    Color(nsColor: .windowBackgroundColor)
       .ignoresSafeArea()
   }
 }

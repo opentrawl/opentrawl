@@ -2,18 +2,32 @@ import SwiftUI
 import TrawlClient
 import TrawlCore
 
+enum SearchResultsContextCopy {
+  static func retained(_ phase: SearchPhase, query: String?, failure: String?) -> String? {
+    let prior = query ?? "the previous search"
+    switch phase {
+    case .loading: return "Showing results for \(prior) while searching"
+    case .timedOut: return "Showing results for \(prior). The replacement search timed out."
+    case .failed(let message): return "Showing results for \(prior). \(message)"
+    default: return nil
+    }
+  }
+}
+
 struct SearchResultsList: View {
   let phase: SearchPhase
   let results: [SearchHit]
   let sourceDisplayName: (String) -> String
   let failureGuidance: String?
   let hasTimeoutFailure: Bool
+  let committedQuery: String?
   let resultLimit: UInt32
   let title: (SearchHit) -> String
   @Binding var selectedResultID: SearchHit.ID?
   @FocusState.Binding var focus: SearchFocus?
   let onReturn: () -> Void
   let onOpen: (SearchHit) -> Void
+  let onSelectionChanged: (SearchHit) -> Void
 
   var body: some View {
     ScrollView {
@@ -23,7 +37,8 @@ struct SearchResultsList: View {
           resultCount: results.count,
           resultLimit: resultLimit,
           failureGuidance: failureGuidance,
-          hasTimeoutFailure: hasTimeoutFailure
+          hasTimeoutFailure: hasTimeoutFailure,
+          committedQuery: committedQuery
         )
         ForEach(results) { hit in
           Button {
@@ -67,6 +82,7 @@ struct SearchResultsList: View {
       } ?? (offset > 0 ? -1 : results.count)
     let nextIndex = min(max(currentIndex + offset, 0), results.count - 1)
     selectedResultID = results[nextIndex].id
+    onSelectionChanged(results[nextIndex])
   }
 }
 
@@ -76,6 +92,7 @@ private struct SearchResultsContext: View {
   let resultLimit: UInt32
   let failureGuidance: String?
   let hasTimeoutFailure: Bool
+  let committedQuery: String?
 
   var body: some View {
     HStack(alignment: .firstTextBaseline, spacing: 10) {
@@ -84,8 +101,13 @@ private struct SearchResultsContext: View {
           .lineLimit(2)
       }
       Spacer(minLength: 8)
-      Text("Top \(resultLimit == 0 ? SearchResponse.maximumResults : resultLimit)")
-        .fixedSize()
+      if let retained = SearchResultsContextCopy.retained(phase, query: committedQuery, failure: failureGuidance) {
+        Label(retained, systemImage: "magnifyingglass")
+          .fixedSize()
+      } else if resultLimit > 0 {
+        Text(resultBounds)
+          .fixedSize()
+      }
     }
     .font(.callout)
     .foregroundStyle(.secondary)
@@ -98,6 +120,11 @@ private struct SearchResultsContext: View {
     if hasTimeoutFailure { return "Some sources timed out. \(result)" }
     guard let failureGuidance else { return "Some sources failed. \(result)" }
     return "\(result) \(failureGuidance)"
+  }
+
+  private var resultBounds: String {
+    let limit = Int(resultLimit)
+    return resultCount < limit ? "Showing \(resultCount) results" : "Showing \(limit) results"
   }
 }
 

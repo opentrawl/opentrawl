@@ -328,9 +328,7 @@ private struct SourceNode: View {
         VStack(spacing: 7) {
           SourceIconBadge(
             sourceID: source.id,
-            diameter: diameter,
-            state: source.state,
-            needsAttention: source.needsAttention
+            diameter: diameter
           )
           SourceLabel(
             title: SourceRestingCopy.title(for: source),
@@ -374,27 +372,10 @@ private struct SourceNode: View {
 private struct SourceIconBadge: View {
   let sourceID: String
   let diameter: CGFloat
-  let state: String
-  let needsAttention: Bool
 
   var body: some View {
-    ZStack(alignment: .bottomTrailing) {
-      SourceIconView(sourceID: sourceID, size: diameter)
-        .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
-      if needsAttention {
-        Circle()
-          .fill(statusColour)
-          .frame(width: 12, height: 12)
-          .overlay(Circle().stroke(.white, lineWidth: 2))
-      }
-    }
-  }
-
-  private var statusColour: Color {
-    switch state {
-    case "stale": .orange
-    default: TrawlDesign.brandRed
-    }
+    SourceIconView(sourceID: sourceID, size: diameter)
+      .shadow(color: .black.opacity(0.12), radius: 9, y: 4)
   }
 }
 

@@ -33,7 +33,6 @@ struct TrawlApp: App {
         model: delegate.model,
         client: delegate.client
       )
-      .preferredColorScheme(.light)
       .frame(
         minWidth: TrawlDesign.minimumWindow.width,
         idealWidth: TrawlDesign.defaultWindow.width,

@@ -149,7 +149,7 @@ private struct SearchClient: TrawlClient {
 }
 
 @MainActor
-@Test func queryAndScopeChangesInvalidateOldSelection() async {
+@Test func queryAndScopeChangesKeepTheCommittedPageUntilReplacementArrives() async {
   let hit = canonicalHit("selected")
   let model = SearchModel(
     client: ScriptedSearchClient { _, _ in canonicalSearch([hit]) }, debounce: .zero)
@@ -157,10 +157,24 @@ private struct SearchClient: TrawlClient {
   await model.search("old", source: "gmail")
   interaction.selectedResultID = hit.id
   interaction.query = "new"
-  #expect(interaction.resultForReturn() == nil)
-  #expect(model.results.isEmpty)
+  #expect(interaction.resultForReturn() == hit)
+  #expect(model.results == [hit])
   interaction.changeScope(to: "notes")
+  #expect(interaction.selectedResultID == hit.id)
+}
+
+@MainActor
+@Test func replacementWithoutTheSelectedHitClearsTheOpenedRecord() async {
+  let old = canonicalHit("old")
+  let model = SearchModel(client: ScriptedSearchClient { query, _ in canonicalSearch(query == "old" ? [old] : []) }, debounce: .zero)
+  let interaction = SearchInteraction(model: model, sourceID: nil)
+  await model.search("old", source: nil)
+  interaction.selectedResultID = old.id
+  await model.open(old)
+  await model.search("new", source: nil)
+  interaction.reconcileCommittedResults()
   #expect(interaction.selectedResultID == nil)
+  #expect(model.openPhase == .idle)
 }
 
 @MainActor
@@ -263,7 +277,7 @@ private struct SearchClient: TrawlClient {
   #expect(field.identity == identity)
   #expect(field.focusRequest == 1)
   #expect(interaction.query == "partial")
-  #expect(model.phase == .idle)
+  #expect(model.phase == .complete)
 }
 
 @MainActor

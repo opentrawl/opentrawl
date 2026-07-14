@@ -2,15 +2,13 @@ import Foundation
 import SwiftUI
 
 enum TrawlDesign {
-  static let minimumWindow = CGSize(width: 800, height: 700)
-  static let defaultWindow = CGSize(width: 900, height: 720)
+  static let minimumWindow = CGSize(width: 760, height: 560)
+  static let defaultWindow = CGSize(width: 1040, height: 720)
   static let contentInset: CGFloat = 28
   static let panelCornerRadius: CGFloat = 22
   static let backgroundContentOpacity = 0.42
   static let backgroundContentBlur: CGFloat = 4
   static let modalVeilOpacity = 0.68
-  static let sourceMinimum: CGFloat = 50
-  static let sourceMaximum: CGFloat = 74
   static let centreSize: CGFloat = 104
   static let sourceGraphAnchorOffset: CGFloat = 27
 
