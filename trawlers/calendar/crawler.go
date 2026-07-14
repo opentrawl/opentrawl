@@ -279,12 +279,11 @@ func searchHit(result archive.SearchResult) (trawlkit.Hit, error) {
 	if title == "" {
 		title = "Calendar event"
 	}
-	anchorID := trawlkit.MatchAnchorID
 	evidence := calendarSearchEvidence(result.Matches)
+	anchorID := "summary"
 	if len(result.Matches) > 0 {
 		anchorID = result.Matches[0].Field
 	} else {
-		anchorID = "summary"
 		evidence = []trawlkit.EvidenceFragment{{Label: "Event preview", Field: &trawlkit.FieldEvidence{Name: "summary", Value: []trawlkit.TextRun{{Text: title}}}}}
 	}
 	return trawlkit.Hit{

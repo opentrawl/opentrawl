@@ -11,6 +11,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,6 +25,15 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 )
+
+const calendarTestRunSubcommand = "calendar-test-run"
+
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == calendarTestRunSubcommand {
+		os.Exit(trawlkit.Run(os.Args[2:], []trawlkit.Crawler{New()}))
+	}
+	os.Exit(m.Run())
+}
 
 func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenEvent")
@@ -425,29 +435,19 @@ func runCalcrawlWireForTest(t *testing.T, stateRoot string, args ...string) (str
 
 func runCalcrawlArgsForTest(t *testing.T, args ...string) (string, string, int) {
 	t.Helper()
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	stdoutReader, stdoutWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	stderrReader, stderrWriter, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stdout = stdoutWriter
-	os.Stderr = stderrWriter
-	code := trawlkit.Run(args, []trawlkit.Crawler{New()})
-	_ = stdoutWriter.Close()
-	_ = stderrWriter.Close()
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
 	var stdout, stderr bytes.Buffer
-	_, _ = stdout.ReadFrom(stdoutReader)
-	_, _ = stderr.ReadFrom(stderrReader)
-	_ = stdoutReader.Close()
-	_ = stderrReader.Close()
-	return stdout.String(), stderr.String(), code
+	command := exec.Command(os.Args[0], append([]string{calendarTestRunSubcommand}, args...)...)
+	command.Stdout = &stdout
+	command.Stderr = &stderr
+	err := command.Run()
+	if err == nil {
+		return stdout.String(), stderr.String(), 0
+	}
+	var exitErr *exec.ExitError
+	if !errors.As(err, &exitErr) {
+		t.Fatal(err)
+	}
+	return stdout.String(), stderr.String(), exitErr.ExitCode()
 }
 
 func fileHash(t *testing.T, path string) [32]byte {
