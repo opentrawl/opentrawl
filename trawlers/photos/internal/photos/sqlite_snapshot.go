@@ -227,7 +227,8 @@ func sqliteResources(ctx context.Context, db *sql.DB) (map[int64][]Resource, err
 	rows, err := db.QueryContext(ctx, `
 select r.ZASSET,
        coalesce(r.ZRESOURCETYPE, -1),
-       coalesce(r.ZCOMPACTUTI, a.ZUNIFORMTYPEIDENTIFIER, ''),
+       coalesce(r.ZCOMPACTUTI, ''),
+       coalesce(a.ZUNIFORMTYPEIDENTIFIER, ''),
        coalesce(aa.ZORIGINALFILENAME, a.ZFILENAME, ''),
        coalesce(r.ZDATALENGTH, 0),
        coalesce(r.ZSTABLEHASH, r.ZFINGERPRINT, ''),
@@ -248,9 +249,13 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 	out := map[int64][]Resource{}
 	for rows.Next() {
 		var assetPK, resourceType, fileSize, localAvailability, remoteAvailability, version int64
-		var uti, originalFilename, stableHash string
-		if err := rows.Scan(&assetPK, &resourceType, &uti, &originalFilename, &fileSize, &stableHash, &localAvailability, &remoteAvailability, &version); err != nil {
+		var compactUTI, assetUTI, originalFilename, stableHash string
+		if err := rows.Scan(&assetPK, &resourceType, &compactUTI, &assetUTI, &originalFilename, &fileSize, &stableHash, &localAvailability, &remoteAvailability, &version); err != nil {
 			return nil, err
+		}
+		uti := humanUTI(compactUTI)
+		if uti == "" && resourceType == 0 {
+			uti = humanUTI(assetUTI)
 		}
 		availableLocally := localAvailability > 0
 		needsDownload := !availableLocally && remoteAvailability > 0
@@ -265,7 +270,7 @@ order by r.ZASSET, r.ZRESOURCETYPE, r.ZVERSION
 			NeedsDownload:    needsDownload,
 			Metadata: map[string]any{
 				"sqlite_resource_type":    resourceType,
-				"sqlite_compact_uti":      uti,
+				"sqlite_compact_uti":      compactUTI,
 				"sqlite_version":          version,
 				"local_availability_raw":  localAvailability,
 				"remote_availability_raw": remoteAvailability,
