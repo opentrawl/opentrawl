@@ -10,6 +10,7 @@ private struct DirectedNetworkSegment {
 @MainActor
 struct ConstellationTrafficRenderer {
   let centre: CGPoint
+  let centreDiameter: CGFloat
   let segments: [NetworkSegment]
   let reduceMotion: Bool
   let scale: CGFloat
@@ -52,9 +53,11 @@ struct ConstellationTrafficRenderer {
     for index in 0..<3 {
       guard let sourceID = ambientSourceID(index: index) else { continue }
       guard let outbound = route(from: centreKey, to: sourceKey(sourceID)) else { continue }
-      let route = outbound + outbound.reversed().map {
-        DirectedNetworkSegment(segment: $0.segment, isForward: !$0.isForward)
-      }
+      let route =
+        outbound
+        + outbound.reversed().map {
+          DirectedNetworkSegment(segment: $0.segment, isForward: !$0.isForward)
+        }
       rootLayer.addSublayer(
         makePulseLayer(
           route: route,
@@ -75,7 +78,7 @@ struct ConstellationTrafficRenderer {
   ) {
     let affected = eventPlan?.affectedSourceIDs ?? activityPlan.affectedSourceIDs
     guard !affected.isEmpty else { return }
-    rootLayer.addSublayer(makeOutline(at: centre, radius: TrawlDesign.centreSize / 2 + 5))
+    rootLayer.addSublayer(makeOutline(at: centre, radius: centreDiameter / 2 + 5))
     for sourceID in affected.sorted() {
       guard let endpoint = sourceEndpoint(for: sourceID) else { continue }
       rootLayer.addSublayer(makeOutline(at: endpoint.anchor, radius: endpoint.trimRadius + 5))
@@ -95,7 +98,8 @@ struct ConstellationTrafficRenderer {
     pulse.contentsScale = scale
     pulse.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
     pulse.cornerRadius = diameter / 2
-    pulse.backgroundColor = NSColor(TrawlDesign.brandRed).withAlphaComponent(CGFloat(opacity)).cgColor
+    pulse.backgroundColor =
+      NSColor(TrawlDesign.brandRed).withAlphaComponent(CGFloat(opacity)).cgColor
     pulse.shadowColor = NSColor(TrawlDesign.brandRed).cgColor
     pulse.shadowOpacity = opacity
     pulse.shadowRadius = glow
@@ -120,7 +124,8 @@ struct ConstellationTrafficRenderer {
     position.repeatCount = repeats ? .infinity : 0
     position.isRemovedOnCompletion = !repeats
     position.fillMode = .forwards
-    position.beginTime = repeats
+    position.beginTime =
+      repeats
       ? CoreAnimationTimeline.beginTime(for: pulse)
       : pulse.convertTime(CACurrentMediaTime() + timing.delay, from: nil)
     pulse.add(position, forKey: repeats ? "opentrawl.ambient-photon" : "opentrawl.work-photon")
@@ -182,7 +187,8 @@ struct ConstellationTrafficRenderer {
     outline.strokeColor = NSColor(TrawlDesign.brandRed).cgColor
     outline.lineWidth = 2
     outline.path = CGPath(
-      ellipseIn: CGRect(x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2),
+      ellipseIn: CGRect(
+        x: point.x - radius, y: point.y - radius, width: radius * 2, height: radius * 2),
       transform: nil
     )
     return outline
@@ -213,9 +219,10 @@ struct ConstellationTrafficRenderer {
     _ directed: DirectedNetworkSegment,
     elapsed: TimeInterval
   ) -> (start: CGPoint, end: CGPoint) {
-    let offset = directed.segment.movingSourceID.map {
-      vector(ConstellationMotion(sourceID: $0).translation(elapsed: elapsed))
-    } ?? .zero
+    let offset =
+      directed.segment.movingSourceID.map {
+        vector(ConstellationMotion(sourceID: $0).translation(elapsed: elapsed))
+      } ?? .zero
     let points = directed.segment.points(sourceOffset: offset)
     return directed.isForward ? points : (points.end, points.start)
   }

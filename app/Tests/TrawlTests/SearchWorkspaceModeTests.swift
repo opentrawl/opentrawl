@@ -118,7 +118,7 @@ import Testing
   let failure = "Contacts: This source is not ready yet."
   #expect(
     SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: false)
-      == "No matches in available sources. Contacts: This source is not ready yet."
+      == "Contacts: This source is not ready yet."
   )
   #expect(
     SearchWorkspaceCopy.partialNoMatches(failureGuidance: failure, isScoped: true)
@@ -126,7 +126,7 @@ import Testing
   )
   #expect(
     SearchWorkspaceCopy.partialNoMatches(failureGuidance: nil, isScoped: false)
-      == "No matches in available sources. Some sources failed."
+      == "Some sources could not be searched."
   )
 }
 
@@ -146,7 +146,7 @@ import Testing
       skippedSources: [],
       isScoped: false,
       timeoutSeconds: 10
-    ) == "No matches in available sources."
+    ).isEmpty
   )
   #expect(
     SearchWorkspaceCopy.outcomeDetail(

@@ -15,6 +15,7 @@ struct MovingSource: Identifiable {
 
 struct ConstellationSnapshot {
   let centre: CGPoint
+  let centreDiameter: CGFloat
   let sources: [MovingSource]
   let contextNodes: [CGPoint]
   let segments: [NetworkSegment]
@@ -87,31 +88,27 @@ private struct GraphEdge: Hashable, Comparable {
   }
 }
 
-private struct Triangle {
-  let a: Int
-  let b: Int
-  let c: Int
-
-  var edges: [GraphEdge] {
-    [GraphEdge(a, b), GraphEdge(b, c), GraphEdge(c, a)]
-  }
-}
-
 struct ConstellationLayout {
   private let sources: [RestingSource]
   private let sourceBases: [CGPoint]
   private let metrics: ConstellationLayoutMetrics
   private let contextBases: [CGPoint]
   private let centreBase: CGPoint
+  private let centreDiameter: CGFloat
   private let graphEdges: [GraphEdge]
 
-  init(size: CGSize, sources: [RestingSource], meshSeed _: UInt64) {
+  init(size: CGSize, sources: [RestingSource]) {
     self.sources = sources
     let layoutMetrics = ConstellationLayoutMetrics.forSourceCount(
       sources.count,
       fitting: ConstellationPoint(x: size.width, y: size.height)
     )
     metrics = layoutMetrics
+    centreDiameter = max(
+      84,
+      min(
+        TrawlDesign.centreSize,
+        CGFloat(layoutMetrics.minimumIconDiameter / 44) * TrawlDesign.centreSize))
     let verticalOffset = -min(TrawlDesign.sourceGraphAnchorOffset, size.height * 0.035)
     centreBase = CGPoint(x: size.width / 2, y: size.height / 2 + verticalOffset)
     sourceBases = Self.makeSourceBases(
@@ -122,7 +119,6 @@ struct ConstellationLayout {
     )
     contextBases = Self.makeContextBases(sources: sourceBases, centre: centreBase)
     graphEdges = Self.makeGraphEdges(sourceCount: sources.count)
-
   }
 
   func snapshot() -> ConstellationSnapshot {
@@ -139,7 +135,7 @@ struct ConstellationLayout {
       if index == sources.count {
         return NetworkEndpoint(
           anchor: point,
-          trimRadius: TrawlDesign.centreSize / 2 + 2,
+          trimRadius: centreDiameter / 2 + 2,
           sourceID: nil
         )
       }
@@ -165,6 +161,7 @@ struct ConstellationLayout {
 
     return ConstellationSnapshot(
       centre: centreBase,
+      centreDiameter: centreDiameter,
       sources: zip(sources.indices, sources).map { index, source in
         MovingSource(
           source: source,
@@ -225,119 +222,17 @@ struct ConstellationLayout {
         edges.insert(GraphEdge(contextIndex, contextStart + (sourceIndex + 1) % sourceCount))
       }
     }
+    if sourceCount > 3 {
+      for sourceIndex in stride(from: 0, to: sourceCount, by: 3) {
+        let start = contextStart + sourceIndex
+        let end = contextStart + (sourceIndex + 2) % sourceCount
+        edges.insert(GraphEdge(start, end))
+      }
+    }
     for index in Set([0, sourceCount / 3, sourceCount * 2 / 3]) {
       edges.insert(GraphEdge(centreIndex, contextStart + index))
     }
     return edges.sorted()
   }
 
-  private static func triangulatedEdges(points: [CGPoint]) -> [GraphEdge] {
-    guard points.count > 2 else {
-      return points.count == 2 ? [GraphEdge(0, 1)] : []
-    }
-
-    var workingPoints = points
-    let bounds = points.reduce(
-      (
-        minX: CGFloat.greatestFiniteMagnitude,
-        maxX: -CGFloat.greatestFiniteMagnitude,
-        minY: CGFloat.greatestFiniteMagnitude,
-        maxY: -CGFloat.greatestFiniteMagnitude
-      )
-    ) { bounds, point in
-      (
-        min(bounds.minX, point.x), max(bounds.maxX, point.x),
-        min(bounds.minY, point.y), max(bounds.maxY, point.y)
-      )
-    }
-    let span = max(bounds.maxX - bounds.minX, bounds.maxY - bounds.minY, 1)
-    let middle = CGPoint(x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2)
-    let superVertices = [
-      CGPoint(x: middle.x - span * 20, y: middle.y - span),
-      CGPoint(x: middle.x, y: middle.y + span * 20),
-      CGPoint(x: middle.x + span * 20, y: middle.y - span),
-    ]
-    let firstSuperVertex = workingPoints.count
-    workingPoints.append(contentsOf: superVertices)
-    var triangles = [
-      Triangle(a: firstSuperVertex, b: firstSuperVertex + 1, c: firstSuperVertex + 2)
-    ]
-
-    for pointIndex in points.indices {
-      let badTriangleIndices = Set(
-        triangles.indices.filter {
-          circumcircle(of: triangles[$0], in: workingPoints, contains: workingPoints[pointIndex])
-        }
-      )
-      var edgeCounts: [GraphEdge: Int] = [:]
-      for index in badTriangleIndices {
-        for edge in triangles[index].edges {
-          edgeCounts[edge, default: 0] += 1
-        }
-      }
-      triangles = triangles.indices.compactMap { index in
-        badTriangleIndices.contains(index) ? nil : triangles[index]
-      }
-      for (edge, count) in edgeCounts where count == 1 {
-        triangles.append(Triangle(a: edge.start, b: edge.end, c: pointIndex))
-      }
-    }
-
-    let finished = triangles.filter { triangle in
-      triangle.a < firstSuperVertex && triangle.b < firstSuperVertex
-        && triangle.c < firstSuperVertex
-    }
-    return Set(finished.flatMap(\.edges)).sorted()
-  }
-
-  private static func circumcircle(
-    of triangle: Triangle,
-    in points: [CGPoint],
-    contains point: CGPoint
-  ) -> Bool {
-    let a = points[triangle.a]
-    let b = points[triangle.b]
-    let c = points[triangle.c]
-    let determinant = 2 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y))
-    guard abs(determinant) > 0.0001 else { return false }
-
-    let aSquared = a.x * a.x + a.y * a.y
-    let bSquared = b.x * b.x + b.y * b.y
-    let cSquared = c.x * c.x + c.y * c.y
-    let centre = CGPoint(
-      x: (aSquared * (b.y - c.y) + bSquared * (c.y - a.y) + cSquared * (a.y - b.y))
-        / determinant,
-      y: (aSquared * (c.x - b.x) + bSquared * (a.x - c.x) + cSquared * (b.x - a.x))
-        / determinant
-    )
-    let radiusSquared = squaredDistance(centre, a)
-    return squaredDistance(centre, point) <= radiusSquared + 0.01
-  }
-
-  private static func distance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
-    hypot(lhs.x - rhs.x, lhs.y - rhs.y)
-  }
-
-  private static func squaredDistance(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
-    let dx = lhs.x - rhs.x
-    let dy = lhs.y - rhs.y
-    return dx * dx + dy * dy
-  }
-}
-
-private struct SplitMix64 {
-  private var state: UInt64
-
-  init(seed: UInt64) {
-    state = seed
-  }
-
-  mutating func unit() -> CGFloat {
-    state &+= 0x9e37_79b9_7f4a_7c15
-    var value = state
-    value = (value ^ (value >> 30)) &* 0xbf58_476d_1ce4_e5b9
-    value = (value ^ (value >> 27)) &* 0x94d0_49bb_1331_11eb
-    value ^= value >> 31
-    return CGFloat(Double(value) / Double(UInt64.max))
-  }
 }

@@ -9,10 +9,7 @@ public enum SearchWorkspaceCopy {
     guard !isScoped else {
       return failureGuidance ?? "Some sources failed; the others returned no matches."
     }
-    guard let failureGuidance else {
-      return "No matches in available sources. Some sources failed."
-    }
-    return "No matches in available sources. \(failureGuidance)"
+    return failureGuidance ?? "Some sources could not be searched."
   }
 
   public static func skippedOutcome(for sources: [SkippedSource]) -> String {
@@ -63,7 +60,7 @@ public enum SearchWorkspaceCopy {
   ) -> String {
     switch phase {
     case .complete:
-      isScoped ? "" : "No matches in available sources."
+      ""
     case .partial:
       partialNoMatches(failureGuidance: failureGuidance, isScoped: isScoped)
     case .skipped:

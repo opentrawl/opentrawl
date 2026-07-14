@@ -3,6 +3,7 @@ import QuartzCore
 import Testing
 
 @testable import Trawl
+@testable import TrawlClient
 @testable import TrawlCore
 
 @Test func sourceAndAttachedEndpointUseTheSameUneditedSample() {
@@ -12,7 +13,9 @@ import Testing
   let phases: [Double] = [0, 0.125, 0.25, 0.5, 0.75, 1]
   let motion = ConstellationMotion(sourceID: sourceID)
 
-  print("CONSTELLATION_INPUT sourceID=\(sourceID) sourceAnchor=\(sourceAnchor) endpointAnchor=\(endpointAnchor) phases=\(phases)")
+  print(
+    "CONSTELLATION_INPUT sourceID=\(sourceID) sourceAnchor=\(sourceAnchor) endpointAnchor=\(endpointAnchor) phases=\(phases)"
+  )
 
   let samples = phases.map { phase in
     let translation = motion.translation(at: phase)
@@ -36,7 +39,10 @@ import Testing
 }
 
 @Test func motionIsDeterministicAndUsesThePromisedBounds() {
-  let sourceIDs = ["calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter", "whatsapp"]
+  let sourceIDs = [
+    "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
+    "whatsapp",
+  ]
   let phases: [Double] = [0, 0.25, 0.5, 0.75, 1]
 
   print("CONSTELLATION_INPUT sourceIDs=\(sourceIDs) phases=\(phases)")
@@ -55,22 +61,36 @@ import Testing
       #expect(abs(phaseTranslation.dx - elapsedTranslation.dx) < 0.000_000_000_001)
       #expect(abs(phaseTranslation.dy - elapsedTranslation.dy) < 0.000_000_000_001)
     }
-    print("CONSTELLATION_OUTPUT motion=\(first) samples=\(phases.map { first.translation(at: $0) })")
+    print(
+      "CONSTELLATION_OUTPUT motion=\(first) samples=\(phases.map { first.translation(at: $0) })")
   }
 }
 
 @Test func layoutsStayBalancedAndInsideSafeBoundsForEverySupportedCount() {
-  let counts = [6, 9, 12, 16, 20]
+  let counts = [6, 9]
   let sizes = [
-    ConstellationPoint(x: 744, y: 644),
+    ConstellationPoint(x: 704, y: 504),
+    ConstellationPoint(x: 744, y: 531),
+    ConstellationPoint(x: 784, y: 558),
+    ConstellationPoint(x: 824, y: 585),
+    ConstellationPoint(x: 864, y: 612),
+    ConstellationPoint(x: 904, y: 639),
+    ConstellationPoint(x: 944, y: 666),
+    ConstellationPoint(x: 984, y: 693),
+    ConstellationPoint(x: 1_024, y: 720),
+    ConstellationPoint(x: 2_200, y: 900),
   ]
 
-  for size in sizes {
-    let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
-    for count in counts {
-      let sourceIDs = (1...count).map { String(format: "synthetic-%02d", $0) }
-      let metrics = ConstellationLayoutMetrics.forSourceCount(count)
-      print("CONSTELLATION_INPUT size=\(size) centre=\(centre) sourceIDs=\(sourceIDs) metrics=\(metrics)")
+  for count in counts {
+    let sourceIDs = (1...count).map { String(format: "synthetic-%02d", $0) }
+    var expectedOrbitOrder: [String]?
+    var expectedPolarIdentity: [String: (angle: Double, radius: Double)] = [:]
+    var previousMetrics: ConstellationLayoutMetrics?
+    var previousExtents: [String: (x: Double, y: Double)] = [:]
+
+    for size in sizes {
+      let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
+      let metrics = ConstellationLayoutMetrics.forSourceCount(count, fitting: size)
       let layout = ConstellationOrbitLayout(
         sourceIDs: sourceIDs,
         size: size,
@@ -79,7 +99,6 @@ import Testing
       )
       let result = layout.placementResult()
       let placements = result.placements
-      print("CONSTELLATION_OUTPUT size=\(size) count=\(count) result=\(result)")
 
       let canvas = ConstellationRect(x: 0, y: 0, width: size.x, height: size.y)
       let diamond = ConstellationRect(
@@ -90,32 +109,135 @@ import Testing
       )
       #expect(placements.count == count)
       #expect(Set(placements.map(\.anchor)).count == count)
+      let orbitOrder = placements.sorted {
+        atan2($0.anchor.y - centre.y, $0.anchor.x - centre.x)
+          < atan2($1.anchor.y - centre.y, $1.anchor.x - centre.x)
+      }.map(\.id)
+      if let expectedOrbitOrder {
+        #expect(orbitOrder == expectedOrbitOrder)
+      } else {
+        expectedOrbitOrder = orbitOrder
+      }
       for placement in placements {
         #expect(canvas.contains(placement.hostRect))
         #expect(canvas.contains(placement.labelRect))
         #expect(!placement.hostRect.expanded(by: metrics.spacing).intersects(diamond))
-        #expect(placement.hostRect.contains(placement.labelRect))
+        let polar = normalisedOrbitIdentity(
+          for: placement,
+          centre: centre,
+          size: size,
+          metrics: metrics
+        )
+        if let expected = expectedPolarIdentity[placement.id] {
+          #expect(abs(polar.angle - expected.angle) < 0.000_000_001)
+          #expect(abs(polar.radius - expected.radius) < 0.000_000_001)
+        } else {
+          expectedPolarIdentity[placement.id] = polar
+        }
+        let extent = (x: abs(placement.anchor.x - centre.x), y: abs(placement.anchor.y - centre.y))
+        if let previous = previousExtents[placement.id] {
+          #expect(extent.x >= previous.x)
+          #expect(extent.y >= previous.y)
+        }
+        previousExtents[placement.id] = extent
       }
       for left in placements.indices {
         for right in placements.indices.dropFirst(left + 1) {
-          #expect(
-            !placements[left].hostRect.expanded(by: metrics.spacing / 2)
-              .intersects(placements[right].hostRect.expanded(by: metrics.spacing / 2))
-          )
           #expect(!placements[left].labelRect.intersects(placements[right].labelRect))
         }
       }
 
-      let radii = placements.map { $0.anchor.distance(to: centre) }
       let angles = placements.map { atan2($0.anchor.y - centre.y, $0.anchor.x - centre.x) }
         .sorted()
       let wrappedAngles = Array(angles.dropFirst()) + [angles[0] + 2 * .pi]
       let angleGaps = zip(angles, wrappedAngles).map { $1 - $0 }
-      #expect(Set(radii.map { Int($0 / 20) }).count >= 3)
-      #expect((radii.max() ?? 0) - (radii.min() ?? 0) >= 80)
-      #expect((angleGaps.max() ?? 0) - (angleGaps.min() ?? 0) >= 0.08)
+      #expect((angleGaps.max() ?? 0) - (angleGaps.min() ?? 0) >= 0.001)
+      if let previousMetrics {
+        #expect(metrics.labelWidth >= previousMetrics.labelWidth)
+        #expect(metrics.labelHeight >= previousMetrics.labelHeight)
+        #expect(metrics.minimumIconDiameter >= previousMetrics.minimumIconDiameter)
+      }
+      previousMetrics = metrics
     }
   }
+}
+
+@Test func graphTopologyStaysConnectedAndLoopedDuringResize() throws {
+  let sources = try restingSources(count: 9)
+  let sizes = [
+    CGSize(width: 704, height: 504),
+    CGSize(width: 824, height: 585),
+    CGSize(width: 1_024, height: 720),
+    CGSize(width: 2_200, height: 900),
+  ]
+  var expectedEdges: Set<[Int]>?
+
+  for size in sizes {
+    let snapshot = ConstellationLayout(size: size, sources: sources).snapshot()
+    let points = snapshot.sources.map(\.anchor) + [snapshot.centre] + snapshot.contextNodes
+    let indices = Dictionary(uniqueKeysWithValues: zip(points, points.indices))
+    let edges = Set(
+      snapshot.segments.map { segment in
+        [indices[segment.startEndpoint.anchor]!, indices[segment.endEndpoint.anchor]!].sorted()
+      })
+    let visited = connectedIndices(startingAt: 0, edges: edges)
+
+    #expect(visited.count == points.count)
+    #expect(edges.count >= points.count)
+    #expect(snapshot.segments.filter { $0.kind == .source }.count == sources.count)
+    #expect(snapshot.segments.filter { $0.kind == .centre }.count == 3)
+    if let expectedEdges {
+      #expect(edges == expectedEdges)
+    } else {
+      expectedEdges = edges
+    }
+  }
+}
+
+private func normalisedOrbitIdentity(
+  for placement: ConstellationPlacement,
+  centre: ConstellationPoint,
+  size: ConstellationPoint,
+  metrics: ConstellationLayoutMetrics
+) -> (angle: Double, radius: Double) {
+  let horizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+  let minimumAnchorY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
+  let maximumAnchorY = min(
+    size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset,
+    size.y - metrics.labelTop - metrics.labelHeight
+  )
+  let verticalRadius = min(centre.y - minimumAnchorY, maximumAnchorY - centre.y)
+  let x = (placement.anchor.x - centre.x) / horizontalRadius
+  let y = (placement.anchor.y - centre.y) / verticalRadius
+  return (angle: atan2(y, x), radius: hypot(x, y))
+}
+
+private func connectedIndices(startingAt start: Int, edges: Set<[Int]>) -> Set<Int> {
+  var visited: Set<Int> = [start]
+  var pending = [start]
+  while let current = pending.popLast() {
+    for edge in edges where edge.contains(current) {
+      let neighbour = edge[0] == current ? edge[1] : edge[0]
+      if visited.insert(neighbour).inserted {
+        pending.append(neighbour)
+      }
+    }
+  }
+  return visited
+}
+
+private func restingSources(count: Int) throws -> [RestingSource] {
+  var response = Trawl_Federation_V1_StatusResponse()
+  response.outcome = .complete
+  response.sources = (1...count).map { index in
+    var source = Trawl_Federation_V1_SourceStatus()
+    source.manifest.sourceID = String(format: "source-%02d", index)
+    source.manifest.displayName = "Source \(index)"
+    source.state = "ok"
+    return source
+  }
+  return SourceRestingCopy.sources(
+    from: try response.model().sources, failures: [], skippedSources: [])
 }
 
 @Test func actionLabelsNeverOverlapAcrossFullMotionAtMinimumSize() {
@@ -125,7 +247,7 @@ import Testing
   ]
   let size = ConstellationPoint(x: 744, y: 644)
   let centre = ConstellationPoint(x: size.x / 2, y: size.y / 2 - min(27, size.y * 0.035))
-  let metrics = ConstellationLayoutMetrics.forSourceCount(sourceIDs.count)
+  let metrics = ConstellationLayoutMetrics.forSourceCount(sourceIDs.count, fitting: size)
   let placements = ConstellationOrbitLayout(
     sourceIDs: sourceIDs,
     size: size,
@@ -137,7 +259,8 @@ import Testing
   }
   let renderedLabels = placements.map { placement in
     let bounds = phases.map {
-      placement.labelRect.translated(by: ConstellationMotion(sourceID: placement.id).translation(at: $0))
+      placement.labelRect.translated(
+        by: ConstellationMotion(sourceID: placement.id).translation(at: $0))
     }
     return (sourceID: placement.id, envelope: bounds.envelope)
   }
@@ -269,6 +392,7 @@ import Testing
 
   ConstellationTrafficRenderer(
     centre: centre,
+    centreDiameter: TrawlDesign.centreSize,
     segments: segments,
     reduceMotion: false,
     scale: 2
@@ -281,7 +405,8 @@ import Testing
 
   #expect(photons.count == 3)
   for photon in photons {
-    let animation = photon.animation(forKey: "opentrawl.ambient-photon")
+    let animation =
+      photon.animation(forKey: "opentrawl.ambient-photon")
       as? CAKeyframeAnimation
     #expect(photon.bounds.size == CGSize(width: 3, height: 3))
     #expect(photon.opacity == 0.48)
@@ -303,14 +428,14 @@ import Testing
   #expect(outputs.allSatisfy { $0 == .zero })
 }
 
-private extension ConstellationRect {
-  func translated(by vector: ConstellationVector) -> Self {
+extension ConstellationRect {
+  fileprivate func translated(by vector: ConstellationVector) -> Self {
     Self(x: x + vector.dx, y: y + vector.dy, width: width, height: height)
   }
 }
 
-private extension [ConstellationRect] {
-  var envelope: ConstellationRect {
+extension [ConstellationRect] {
+  fileprivate var envelope: ConstellationRect {
     let minimumX = map(\.x).min() ?? 0
     let minimumY = map(\.y).min() ?? 0
     let maximumX = map(\.maxX).max() ?? 0

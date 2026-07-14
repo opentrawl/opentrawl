@@ -22,6 +22,7 @@ enum CoreAnimationTimeline {
 
 struct CoreAnimationNetwork: NSViewRepresentable {
   let centre: CGPoint
+  let centreDiameter: CGFloat
   let contextNodes: [CGPoint]
   let segments: [NetworkSegment]
   let activity: ConstellationActivity
@@ -32,6 +33,7 @@ struct CoreAnimationNetwork: NSViewRepresentable {
     let view = NetworkLayerView()
     view.update(
       centre: centre,
+      centreDiameter: centreDiameter,
       contextNodes: contextNodes,
       segments: segments,
       activity: activity,
@@ -44,6 +46,7 @@ struct CoreAnimationNetwork: NSViewRepresentable {
   func updateNSView(_ view: NetworkLayerView, context: Context) {
     view.update(
       centre: centre,
+      centreDiameter: centreDiameter,
       contextNodes: contextNodes,
       segments: segments,
       activity: activity,
@@ -56,12 +59,14 @@ struct CoreAnimationNetwork: NSViewRepresentable {
 @MainActor
 final class NetworkLayerView: NSView {
   private var centre = CGPoint.zero
+  private var centreDiameter: CGFloat = TrawlDesign.centreSize
   private var contextNodes: [CGPoint] = []
   private var segments: [NetworkSegment] = []
   private var activity = ConstellationActivity.idle
   private var trafficEvent: ConstellationTrafficEvent?
   private var reduceMotion = false
   private var renderedCentre = CGPoint.zero
+  private var renderedCentreDiameter: CGFloat = 0
   private var renderedContextNodes: [CGPoint] = []
   private var renderedSegments: [NetworkSegment] = []
   private var renderedActivity = ConstellationActivity.idle
@@ -87,6 +92,7 @@ final class NetworkLayerView: NSView {
 
   func update(
     centre: CGPoint,
+    centreDiameter: CGFloat,
     contextNodes: [CGPoint],
     segments: [NetworkSegment],
     activity: ConstellationActivity,
@@ -94,6 +100,7 @@ final class NetworkLayerView: NSView {
     reduceMotion: Bool
   ) {
     self.centre = centre
+    self.centreDiameter = centreDiameter
     self.contextNodes = contextNodes
     self.segments = segments
     self.activity = activity
@@ -125,6 +132,7 @@ final class NetworkLayerView: NSView {
         || renderedScale != scale
         || renderedReduceMotion != reduceMotion
         || renderedCentre != centre
+        || renderedCentreDiameter != centreDiameter
         || renderedContextNodes != contextNodes
         || renderedSegments != segments
         || renderedActivity != activity
@@ -135,6 +143,7 @@ final class NetworkLayerView: NSView {
     renderedScale = scale
     renderedReduceMotion = reduceMotion
     renderedCentre = centre
+    renderedCentreDiameter = centreDiameter
     renderedContextNodes = contextNodes
     renderedSegments = segments
     renderedActivity = activity
@@ -149,6 +158,7 @@ final class NetworkLayerView: NSView {
     }
     ConstellationTrafficRenderer(
       centre: centre,
+      centreDiameter: centreDiameter,
       segments: segments,
       reduceMotion: reduceMotion,
       scale: scale
@@ -196,9 +206,10 @@ final class NetworkLayerView: NSView {
     node.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
     node.cornerRadius = diameter / 2
     node.position = point
-    node.backgroundColor = NSColor.labelColor.withAlphaComponent(
-      index.isMultiple(of: 5) ? 0.18 : 0.11
-    ).cgColor
+    node.backgroundColor =
+      NSColor.labelColor.withAlphaComponent(
+        index.isMultiple(of: 5) ? 0.18 : 0.11
+      ).cgColor
     return node
   }
 

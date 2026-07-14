@@ -271,23 +271,22 @@ public struct ConstellationLayoutMetrics: Sendable, Equatable {
   }
 
   public static func forSourceCount(_ count: Int, fitting size: ConstellationPoint) -> Self {
-    guard count <= 10 else { return forSourceCount(count) }
-    let scale = min(
-      max((size.x - 704) / 336, 0),
-      max((size.y - 504) / 216, 0),
-      1
-    )
-    func rounded(_ value: Double) -> Double { value.rounded() }
+    let shorterCanvasSide = min(size.x, size.y)
+    let canvasScale = min(max((shorterCanvasSide - 504) / 216, 0), 1)
+    let density = min(1, 9 / Double(max(count, 1)))
+    func scaled(_ minimum: Double, _ maximum: Double) -> Double {
+      (minimum + (maximum - minimum) * canvasScale) * density
+    }
     return Self(
-      hostSize: ConstellationPoint(x: rounded(112 + 60 * scale), y: rounded(124 + 60 * scale)),
-      hostCentreYOffset: rounded(27 + 8 * scale),
-      labelWidth: rounded(104 + 52 * scale),
-      labelTop: rounded(26 + 4 * scale),
-      labelHeight: rounded(64 + 28 * scale),
-      minimumIconDiameter: rounded(40 + 8 * scale),
-      maximumIconDiameter: rounded(48 + 20 * scale),
-      diamondClearanceRadius: rounded(48 + 18 * scale),
-      spacing: rounded(4 + 2 * scale)
+      hostSize: ConstellationPoint(x: max(48, scaled(104, 144)), y: max(54, scaled(118, 156))),
+      hostCentreYOffset: max(14, scaled(24, 30)),
+      labelWidth: max(44, scaled(96, 132)),
+      labelTop: max(14, scaled(24, 28)),
+      labelHeight: max(72, scaled(72, 76)),
+      minimumIconDiameter: max(28, scaled(36, 44)),
+      maximumIconDiameter: max(34, scaled(44, 56)),
+      diamondClearanceRadius: max(30, scaled(48, 66)),
+      spacing: max(3, scaled(4, 6))
     )
   }
 
@@ -348,14 +347,12 @@ public struct ConstellationOrbitLayout: Sendable {
   public func placementResult() -> ConstellationLayoutResult {
     guard !sourceIDs.isEmpty else { return .placements([]) }
     let orderedIDs = sourceIDs.sorted()
-    guard
-      let selected = select(
-        from: candidates(), for: orderedIDs, clearance: metrics.spacing * 2)
-        ?? select(from: gridCandidates(), for: orderedIDs, clearance: metrics.spacing)
-    else { return .unsupported(sourceCount: sourceIDs.count, size: size) }
-
-    let anchorsInOrbitOrder = selected.map(\.anchor).sorted {
-      atan2($0.y - centre.y, $0.x - centre.x) < atan2($1.y - centre.y, $1.x - centre.x)
+    let composition = normalisedComposition(for: orderedIDs)
+    let anchorsInOrbitOrder = orderedIDs.enumerated().compactMap { index, sourceID in
+      anchor(for: sourceID, polar: composition[index])
+    }
+    guard anchorsInOrbitOrder.count == orderedIDs.count else {
+      return .unsupported(sourceCount: sourceIDs.count, size: size)
     }
     let placementsByID = Dictionary(
       uniqueKeysWithValues: zip(orderedIDs, anchorsInOrbitOrder).map {
@@ -395,147 +392,37 @@ public struct ConstellationOrbitLayout: Sendable {
     )
   }
 
-  private func candidates() -> [ConstellationPoint] {
-    let minimumX = metrics.hostSize.x / 2
-    let maximumX = size.x - metrics.hostSize.x / 2
-    let minimumY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
-    let maximumY = size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset
-    guard maximumX > minimumX, maximumY > minimumY else { return [] }
-    let candidateCentre = ConstellationPoint(
-      x: (minimumX + maximumX) / 2,
-      y: (minimumY + maximumY) / 2
-    )
-    let horizontalRadius = (maximumX - minimumX) / 2
-    let verticalRadius = (maximumY - minimumY) / 2
-    let samples = max(60, sourceIDs.count * 10)
-    let rings = [1.0, 0.78, 0.58]
-    return rings.enumerated().flatMap { ringIndex, radius in
-      (0..<samples).compactMap { sample in
-        let angle =
-          2 * Double.pi * Double(sample) / Double(samples)
-          + 0.17 + Double(ringIndex) * 0.043
-        let candidate = ConstellationPoint(
-          x: candidateCentre.x + horizontalRadius * radius * superellipseCoordinate(cos(angle)),
-          y: candidateCentre.y + verticalRadius * radius * superellipseCoordinate(sin(angle))
-        )
-        return isValidCandidate(candidate) ? candidate : nil
-      }
+  private func normalisedComposition(for orderedIDs: [String]) -> [(angle: Double, radius: Double)]
+  {
+    let weights = orderedIDs.map { 0.92 + unit($0, salt: 11) * 0.16 }
+    let weightTotal = weights.reduce(0, +)
+    let gaps = weights.map { 2 * Double.pi * $0 / weightTotal }
+    var angle = -gaps[0] / 2
+    return orderedIDs.indices.map { index in
+      defer { angle += gaps[index] }
+      return (angle: angle, radius: 0.96 + unit(orderedIDs[index], salt: 13) * 0.04)
     }
   }
 
-  private func gridCandidates() -> [ConstellationPoint] {
-    let minimumX = metrics.hostSize.x / 2
-    let maximumX = size.x - metrics.hostSize.x / 2
-    let minimumY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
-    let maximumY = size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset
-    guard maximumX > minimumX, maximumY > minimumY else { return [] }
-    let maximumColumns = max(
-      1,
-      Int((maximumX - minimumX) / (metrics.hostSize.x + metrics.spacing)) + 1
+  private func anchor(
+    for sourceID: String,
+    polar: (angle: Double, radius: Double)
+  ) -> ConstellationPoint? {
+    let horizontalRadius = min(centre.x, size.x - centre.x) - metrics.hostSize.x / 2
+    let minimumAnchorY = metrics.hostSize.y / 2 - metrics.hostCentreYOffset
+    let maximumAnchorY = min(
+      size.y - metrics.hostSize.y / 2 - metrics.hostCentreYOffset,
+      size.y - metrics.labelTop - metrics.labelHeight
     )
-    let maximumRows = max(
-      1,
-      Int((maximumY - minimumY) / (metrics.hostSize.y + metrics.spacing)) + 1
+    let verticalRadius = min(centre.y - minimumAnchorY, maximumAnchorY - centre.y)
+    let anchor = ConstellationPoint(
+      x: centre.x + horizontalRadius * polar.radius * cos(polar.angle),
+      y: centre.y + verticalRadius * polar.radius * sin(polar.angle)
     )
-    var best: [ConstellationPoint] = []
-    var bestExcess = Int.max
-    var bestAspectError = Double.infinity
-    for columns in 3...max(3, maximumColumns) {
-      for rows in 3...max(3, maximumRows) {
-        let stepX = (maximumX - minimumX) / Double(columns - 1)
-        let stepY = (maximumY - minimumY) / Double(rows - 1)
-        guard stepX >= metrics.hostSize.x + metrics.spacing,
-          stepY >= metrics.hostSize.y + metrics.spacing
-        else { continue }
-        let slackX = stepX - metrics.hostSize.x - metrics.spacing
-        let slackY = stepY - metrics.hostSize.y - metrics.spacing
-        let generated = (0..<rows).flatMap { row in
-          (0..<columns).map { column in
-            let index = row * columns + column
-            let horizontalJitter =
-              column == 0 || column == columns - 1
-              ? 0
-              : (unit("candidate-\(index)", salt: 11) - 0.5) * slackX
-            let verticalJitter =
-              row == 0 || row == rows - 1
-              ? 0
-              : (unit("candidate-\(index)", salt: 13) - 0.5) * slackY
-            return ConstellationPoint(
-              x: minimumX + Double(column) * stepX + horizontalJitter,
-              y: minimumY + Double(row) * stepY + verticalJitter
-            )
-          }
-        }.filter(isValidCandidate)
-        let excess = generated.count - sourceIDs.count
-        guard excess >= 0 else { continue }
-        let aspectError = abs(Double(columns) / Double(rows) - size.x / size.y)
-        if excess < bestExcess || (excess == bestExcess && aspectError < bestAspectError) {
-          best = generated
-          bestExcess = excess
-          bestAspectError = aspectError
-        }
-      }
-    }
-    return best
-  }
-
-  private func select(
-    from candidates: [ConstellationPoint],
-    for orderedIDs: [String],
-    clearance: Double
-  ) -> [(id: String, anchor: ConstellationPoint)]? {
-    var available = candidates
-    guard available.count >= orderedIDs.count else { return nil }
-    var selected: [(id: String, anchor: ConstellationPoint)] = []
-    for sourceID in orderedIDs {
-      guard
-        let anchor = available.max(by: { lhs, rhs in
-          score(lhs, sourceID: sourceID, selected: selected)
-            < score(rhs, sourceID: sourceID, selected: selected)
-        })
-      else { return nil }
-      selected.append((sourceID, anchor))
-      available.removeAll {
-        metrics.hostRect(at: $0).expanded(by: clearance).intersects(
-          metrics.hostRect(at: anchor)
-        )
-      }
-    }
-    return selected
-  }
-
-  private func isValidCandidate(_ anchor: ConstellationPoint) -> Bool {
-    let host = metrics.hostRect(at: anchor)
-    return canvas.contains(host) && !host.expanded(by: metrics.spacing).intersects(diamond)
-  }
-
-  private func score(
-    _ candidate: ConstellationPoint,
-    sourceID: String,
-    selected: [(id: String, anchor: ConstellationPoint)]
-  ) -> Double {
-    let minimumDistance =
-      selected.map { candidate.distance(to: $0.anchor) }.min() ?? hypot(size.x, size.y)
-    let horizontalRadius = max(size.x / 2, 1)
-    let verticalRadius = max(size.y / 2, 1)
-    let radius = hypot(
-      (candidate.x - centre.x) / horizontalRadius,
-      (candidate.y - centre.y) / verticalRadius
-    )
-    let radiusBucket = Int(candidate.distance(to: centre) / 40)
-    let usedRadiusBuckets = Set(
-      selected.map { item in
-        Int(item.anchor.distance(to: centre) / 40)
-      })
-    let radialNovelty = usedRadiusBuckets.contains(radiusBucket) ? 0 : 120.0
-    let preferredRadius = 0.58 + unit(sourceID, salt: 17) * 0.34
-    let orbitScore = 1 - abs(radius - preferredRadius)
-    let tieBreak = unit("\(sourceID):\(candidate.x):\(candidate.y)", salt: 19)
-    return minimumDistance + radialNovelty + orbitScore * 80 + tieBreak * 8
-  }
-
-  private func superellipseCoordinate(_ value: Double) -> Double {
-    (value < 0 ? -1 : 1) * sqrt(abs(value))
+    guard canvas.contains(metrics.hostRect(at: anchor)),
+      !metrics.hostRect(at: anchor).expanded(by: metrics.spacing).intersects(diamond)
+    else { return nil }
+    return anchor
   }
 
   private func unit(_ value: String, salt: UInt64) -> Double {

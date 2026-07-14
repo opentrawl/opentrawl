@@ -45,23 +45,20 @@ struct ConstellationView: View {
   var body: some View {
     GeometryReader { geometry in
       let size = Self.canvasSize(in: geometry.size)
-      let layout = ConstellationLayout(
-        size: size,
-        sources: sources,
-        meshSeed: TrawlDesign.meshSeed
-      )
+      let layout = ConstellationLayout(size: size, sources: sources)
       let snapshot = layout.snapshot()
 
       ZStack(alignment: .topLeading) {
         CoreAnimationNetwork(
           centre: snapshot.centre,
+          centreDiameter: snapshot.centreDiameter,
           contextNodes: snapshot.contextNodes,
           segments: snapshot.segments,
           activity: activity,
           trafficEvent: trafficEvent,
           reduceMotion: reduceMotion
         )
-        CentreButton(action: onSelectEverything)
+        CentreButton(diameter: snapshot.centreDiameter, action: onSelectEverything)
           .position(snapshot.centre)
         ForEach(snapshot.sources) { placement in
           OrbitingSourceNode(
@@ -72,7 +69,6 @@ struct ConstellationView: View {
       }
       .frame(width: size.width, height: size.height)
       .position(x: geometry.size.width / 2, y: geometry.size.height / 2)
-      .animation(.easeOut(duration: 0.16), value: geometry.size)
     }
   }
 
@@ -281,9 +277,11 @@ private final class OrbitLayerView: NSView {
 }
 
 private struct CentreButton: View {
+  let diameter: CGFloat
   let action: @MainActor @Sendable () -> Void
 
-  nonisolated init(action: @MainActor @escaping @Sendable () -> Void) {
+  nonisolated init(diameter: CGFloat, action: @MainActor @escaping @Sendable () -> Void) {
+    self.diameter = diameter
     self.action = action
   }
 
@@ -293,11 +291,11 @@ private struct CentreButton: View {
         Image(nsImage: NSApplication.shared.applicationIconImage)
           .resizable()
           .scaledToFit()
-          .frame(width: TrawlDesign.centreSize, height: TrawlDesign.centreSize)
+          .frame(width: diameter, height: diameter)
         Text("Search everything")
           .font(.callout.weight(.semibold))
           .fixedSize()
-          .offset(y: TrawlDesign.centreSize / 2 + 4)
+          .offset(y: diameter / 2 + 4)
       }
     }
     .buttonStyle(.plain)
