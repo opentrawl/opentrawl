@@ -8,10 +8,31 @@ import Testing
 
 @Suite(.serialized)
 struct SearchOverlayViewTests {
-  @Test func constellationCanvasFitsMinimumDefaultAndUltrawideWindows() {
+  @MainActor
+  @Test func constellationCanvasFitsWindowsAndSupportsTheMinimumProductSourceSet() {
     for size in [CGSize(width: 704, height: 504), CGSize(width: 984, height: 664), CGSize(width: 2_400, height: 1_000)] {
       #expect(ConstellationView.canvasSize(in: size).height <= size.height)
     }
+
+    let canvas = ConstellationView.canvasSize(in: CGSize(width: 704, height: 504))
+    let sourceIDs = [
+      "calendar", "contacts", "gmail", "imessage", "notes", "photos", "telegram", "twitter",
+      "whatsapp", "synthetic",
+    ]
+    let centre = ConstellationPoint(
+      x: canvas.width / 2,
+      y: canvas.height / 2 - min(27, canvas.height * 0.035)
+    )
+    let layout = ConstellationOrbitLayout(
+      sourceIDs: sourceIDs,
+      size: ConstellationPoint(x: canvas.width, y: canvas.height),
+      centre: centre,
+      metrics: .forSourceCount(
+        sourceIDs.count,
+        fitting: ConstellationPoint(x: canvas.width, y: canvas.height)
+      )
+    )
+    #expect(layout.placements().count == sourceIDs.count)
   }
 
   @MainActor

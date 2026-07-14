@@ -125,6 +125,7 @@ private func productSources() -> [Trawl_Federation_V1_SourceStatus] {
     productSource("telegram", "Telegram", ["chats", "folders", "topics"]),
     productSource("twitter", "Twitter (X)", ["tweets", "bookmarks", "likes", "mentions"]),
     productSource("whatsapp", "WhatsApp", ["chats", "groups"]),
+    productSource("synthetic", "Synthetic archive", ["fixtures"]),
   ]
 }
 private func hit(_ sourceID: String, _ ref: String, _ who: String) -> Trawl_Federation_V1_SearchHit
