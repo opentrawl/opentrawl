@@ -17,6 +17,10 @@ type queryRower interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
+type contextExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
 func firstCardEligibilityForAsset(ctx context.Context, db queryRower, assetID string) (firstCardEligibility, error) {
 	var eligibility firstCardEligibility
 	if err := db.QueryRowContext(ctx, `
@@ -39,7 +43,7 @@ where id = ?
 	return eligibility, nil
 }
 
-func migrateFirstCardEligibility(ctx context.Context, db *sql.DB) error {
+func migrateFirstCardEligibility(ctx context.Context, db contextExecer) error {
 	if _, err := db.ExecContext(ctx, `
 update asset
 set first_card_blocked_at = coalesce(first_card_blocked_at, first_missing_at),

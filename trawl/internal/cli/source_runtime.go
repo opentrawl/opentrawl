@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
@@ -73,6 +74,16 @@ func (r *Runtime) withSourceRequestContext(parent context.Context, source Source
 	}
 	ctx, cancel := context.WithTimeout(parent, r.timeout)
 	defer cancel()
+	if storeAccess == sourceStoreOptional || storeAccess == sourceStoreRead {
+		if preparer, ok := source.Crawler.(trawlkit.ReadArchivePreparer); ok {
+			started := time.Now()
+			if err := preparer.PrepareReadArchive(ctx, paths.paths.Archive); err != nil {
+				_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
+				return err
+			}
+			_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
+		}
+	}
 	st, err := openSourceStore(ctx, paths.paths, storeAccess)
 	if err != nil {
 		return err

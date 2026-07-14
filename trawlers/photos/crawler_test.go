@@ -83,6 +83,73 @@ func TestStatusUsesOnlyArchiveState(t *testing.T) {
 	}
 }
 
+func TestRunnerPreparesOldArchiveForStatusSearchAndOpen(t *testing.T) {
+	ctx := context.Background()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	archivePath := filepath.Join(home, ".opentrawl", "photos", "photos.db")
+	oldSchema := strings.ReplaceAll(archive.Schema, ",\n  stale_since text,\n  stale_reason text,\n  superseded_at text", "")
+	oldSchema = strings.ReplaceAll(oldSchema, ",\n  generation_id text references model_generation(id)", "")
+	db, err := store.Open(ctx, store.Options{Path: archivePath, Schema: oldSchema, SchemaVersion: archive.SchemaVersion - 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.DB().ExecContext(ctx, `
+insert into source_library(id, library_path, snapshot_path, snapshot_created_at, photos_version, metadata_json)
+values ('source:runner-fixture', '/tmp/runner-fixture.photoslibrary', 'sqlite:crawl_snapshot/runner-fixture', '2026-07-14T10:00:00Z', 'fixture', '{}');
+insert into asset(id, local_identifier, media_type, media_subtypes, creation_date, modification_date, added_date, timezone_name,
+  width, height, duration_seconds, favorite, hidden, burst_identifier, represents_burst,
+  camera_make, camera_model, lens_model, source_library_id, metadata_json)
+values ('asset:runner-fixture', 'runner-fixture', 'image', '0', '2026-07-14T10:00:00Z', '2026-07-14T10:00:00Z',
+  '2026-07-14T10:00:00Z', 'UTC', 100, 80, 0, 0, 0, '', 0, '', '', '', 'source:runner-fixture', '{}');
+insert into model_observation(id, asset_id, observation_type, value_text, value_json, confidence, source, model_id, prompt_version, evidence_id)
+values ('observation:runner-fixture', 'asset:runner-fixture', 'card_summary', 'Synthetic runner migrationterm card.', '{}', 1.0, 'fixture', 'fixture-model', 'v1', '');
+`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := captureRun(t, []string{"status", "--json"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, `"state": "ok"`) {
+		t.Fatalf("status code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = captureRun(t, []string{"search", "migrationterm", "--json"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "photos:asset/runner-fixture") {
+		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	stdout, stderr, code = captureRun(t, []string{"open", "photos:asset/runner-fixture", "--json"})
+	if code != 0 || stderr != "" || !strings.Contains(stdout, "Synthetic runner migrationterm card.") {
+		t.Fatalf("open code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+}
+
+func TestRunnerKeepsIncompatibleArchiveError(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	archivePath := filepath.Join(home, ".opentrawl", "photos", "photos.db")
+	db, err := store.Open(context.Background(), store.Options{Path: archivePath, Schema: archive.Schema, SchemaVersion: archive.SchemaVersion + 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code := captureRun(t, []string{"search", "fixture", "--json"})
+	if code == 0 || stderr != "" {
+		t.Fatalf("search code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var envelope output.ErrorEnvelope
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatalf("search error JSON: %v\n%s", err, stdout)
+	}
+	want := output.ErrorBody{Code: "archive_incompatible", Message: "The Photos archive needs to be updated.", Remedy: "run trawl photos sync, then retry"}
+	if envelope.Error.Code != want.Code || envelope.Error.Message != want.Message || envelope.Error.Remedy != want.Remedy {
+		t.Fatalf("search error = %#v, want %#v", envelope.Error, want)
+	}
+}
+
 func TestPhotosAccessRequirementMapsAllStates(t *testing.T) {
 	for _, test := range []struct {
 		status string

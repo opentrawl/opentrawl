@@ -89,6 +89,15 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 				return executionResult{err: err}
 			}
 		}
+	} else if verb.storeMode == storeOptional || verb.storeMode == storeRead {
+		if preparer, ok := source.(ReadArchivePreparer); ok {
+			started := time.Now()
+			if err := preparer.PrepareReadArchive(ctx, paths.Paths.Archive); err != nil {
+				_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
+				return executionResult{err: err}
+			}
+			_ = runLog.Info("archive_prepare_read", fmt.Sprintf("duration_ms=%d", time.Since(started).Milliseconds()))
+		}
 	}
 	st, err := openStore(ctx, paths.Paths, verb.storeMode)
 	if err != nil {

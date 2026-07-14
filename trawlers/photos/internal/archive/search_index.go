@@ -26,37 +26,62 @@ const searchIndexVersion = 4
 // state, so an archive built by an older index version is rebuilt in place
 // from the source tables, once, on the write path.
 func ensureSearchIndex(ctx context.Context, db *store.Store, logger classifyLogger) error {
-	if _, err := db.DB().ExecContext(ctx,
+	start := time.Now()
+	rebuild := searchIndexRebuild{}
+	if err := db.WithTx(ctx, func(tx *sql.Tx) error {
+		var err error
+		rebuild, err = ensureSearchIndexTx(ctx, tx)
+		return err
+	}); err != nil {
+		return fmt.Errorf("rebuild search index: %w", err)
+	}
+	if !rebuild.needed {
+		return nil
+	}
+	logger.logPhase("search_index_rebuilt", time.Since(start),
+		fmt.Sprintf("asset_rows=%d", rebuild.assetRows),
+		fmt.Sprintf("observation_rows=%d", rebuild.observationRows),
+		fmt.Sprintf("reason=version_%d_to_%d", rebuild.current, searchIndexVersion))
+	return nil
+}
+
+type searchIndexRebuild struct {
+	needed          bool
+	current         int
+	assetRows       int64
+	observationRows int64
+}
+
+func ensureSearchIndexTx(ctx context.Context, tx *sql.Tx) (searchIndexRebuild, error) {
+	if _, err := tx.ExecContext(ctx,
 		`create table if not exists search_index_state(version integer not null)`,
 	); err != nil {
-		return fmt.Errorf("ensure search_index_state: %w", err)
+		return searchIndexRebuild{}, fmt.Errorf("ensure search_index_state: %w", err)
 	}
 	var current int
-	if err := db.DB().QueryRowContext(ctx,
+	if err := tx.QueryRowContext(ctx,
 		`select coalesce(max(version), 0) from search_index_state`,
 	).Scan(&current); err != nil {
-		return fmt.Errorf("read search index version: %w", err)
+		return searchIndexRebuild{}, fmt.Errorf("read search index version: %w", err)
 	}
 	if current >= searchIndexVersion {
 		var ddl string
-		if err := db.DB().QueryRowContext(ctx, `select sql from sqlite_master where name = 'asset_fts'`).Scan(&ddl); err == nil && strings.Contains(ddl, "porter") {
-			return nil
+		if err := tx.QueryRowContext(ctx, `select sql from sqlite_master where name = 'asset_fts'`).Scan(&ddl); err == nil && strings.Contains(ddl, "porter") {
+			return searchIndexRebuild{}, nil
 		}
 	}
-	start := time.Now()
-	var assetRows, observationRows int64
-	err := db.WithTx(ctx, func(tx *sql.Tx) error {
-		for _, stmt := range []string{
-			`drop table if exists asset_fts`,
-			`drop table if exists observation_fts`,
-			assetFTSSchema,
-			observationFTSSchema,
-		} {
-			if _, err := tx.ExecContext(ctx, stmt); err != nil {
-				return fmt.Errorf("recreate fts tables: %w", err)
-			}
+	rebuild := searchIndexRebuild{needed: true, current: current}
+	for _, stmt := range []string{
+		`drop table if exists asset_fts`,
+		`drop table if exists observation_fts`,
+		assetFTSSchema,
+		observationFTSSchema,
+	} {
+		if _, err := tx.ExecContext(ctx, stmt); err != nil {
+			return searchIndexRebuild{}, fmt.Errorf("recreate fts tables: %w", err)
 		}
-		res, err := tx.ExecContext(ctx, `
+	}
+	res, err := tx.ExecContext(ctx, `
 insert into asset_fts(id, title, body)
 select asset.id,
        coalesce((select original_filename from asset_resource r where r.asset_id = asset.id order by r.id limit 1), ''),
@@ -65,52 +90,43 @@ select asset.id,
             coalesce((select group_concat(album_title, ' ') from album_membership m where m.asset_id = asset.id), ''))
 from asset
 `)
-		if err != nil {
-			return fmt.Errorf("rebuild asset fts: %w", err)
-		}
-		assetRows, _ = res.RowsAffected()
+	if err != nil {
+		return searchIndexRebuild{}, fmt.Errorf("rebuild asset fts: %w", err)
+	}
+	rebuild.assetRows, _ = res.RowsAffected()
 
-		for _, stmt := range []string{
-			`insert into observation_fts(id, asset_id, title, body)
+	for _, stmt := range []string{
+		`insert into observation_fts(id, asset_id, title, body)
 			 select id, asset_id, label, label from metadata_observation`,
-			`insert into observation_fts(id, asset_id, title, body)
+		`insert into observation_fts(id, asset_id, title, body)
 			 select id, asset_id, '', value_text from place_observation
 			 where observation_type not in ('` + knownPlaceObservationType + `', 'poi_candidate')
 			   and superseded_at is null`,
-		} {
-			res, err := tx.ExecContext(ctx, stmt)
-			if err != nil {
-				return fmt.Errorf("rebuild observation fts: %w", err)
-			}
-			n, _ := res.RowsAffected()
-			observationRows += n
-		}
-
-		knownRows, err := rebuildKnownPlaceFTS(ctx, tx)
+	} {
+		res, err := tx.ExecContext(ctx, stmt)
 		if err != nil {
-			return err
+			return searchIndexRebuild{}, fmt.Errorf("rebuild observation fts: %w", err)
 		}
-		cardRows, err := rebuildCardFTS(ctx, tx)
-		if err != nil {
-			return err
-		}
-		observationRows += knownRows + cardRows
-		if _, err := tx.ExecContext(ctx, `delete from search_index_state`); err != nil {
-			return fmt.Errorf("clear search index version: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, `insert into search_index_state(version) values (?)`, searchIndexVersion); err != nil {
-			return fmt.Errorf("write search index version: %w", err)
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("rebuild search index: %w", err)
+		n, _ := res.RowsAffected()
+		rebuild.observationRows += n
 	}
-	logger.logPhase("search_index_rebuilt", time.Since(start),
-		fmt.Sprintf("asset_rows=%d", assetRows),
-		fmt.Sprintf("observation_rows=%d", observationRows),
-		fmt.Sprintf("reason=version_%d_to_%d", current, searchIndexVersion))
-	return nil
+
+	knownRows, err := rebuildKnownPlaceFTS(ctx, tx)
+	if err != nil {
+		return searchIndexRebuild{}, err
+	}
+	cardRows, err := rebuildCardFTS(ctx, tx)
+	if err != nil {
+		return searchIndexRebuild{}, err
+	}
+	rebuild.observationRows += knownRows + cardRows
+	if _, err := tx.ExecContext(ctx, `delete from search_index_state`); err != nil {
+		return searchIndexRebuild{}, fmt.Errorf("clear search index version: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `insert into search_index_state(version) values (?)`, searchIndexVersion); err != nil {
+		return searchIndexRebuild{}, fmt.Errorf("write search index version: %w", err)
+	}
+	return rebuild, nil
 }
 
 // Mirrors insertKnownPlaceObservation's FTS body.
