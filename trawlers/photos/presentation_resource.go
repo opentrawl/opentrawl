@@ -3,6 +3,7 @@ package photoscrawl
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"syscall"
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
+	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/openrecord"
 	"github.com/opentrawl/opentrawl/trawlkit/presentation"
@@ -21,48 +23,32 @@ import (
 var _ trawlkit.ResourceResolver = (*Crawler)(nil)
 
 const presentationResourcePrefix = "photos:resource/"
+const presentationCurrentResourcePrefix = presentationResourcePrefix + "current/"
+
+type presentationResourceCandidate struct {
+	ref         string
+	path        string
+	contentType string
+	label       string
+	size        int64
+}
 
 func (c *Crawler) presentationResource(ctx context.Context, req *trawlkit.Request, openRef string) (*presentationv1.Resource, error) {
 	assetID := archive.AssetID(openRef)
 	if assetID == "" || req == nil || req.Store == nil {
 		return nil, nil
 	}
-	var id, resourceType, uti, filename string
-	var size int64
-	err := req.Store.DB().QueryRowContext(ctx, `
-select id, resource_type, uti, original_filename, file_size
-from asset_resource
-where asset_id = ?
-  and available_locally = 1
-  and needs_download = 0
-  and trim(local_path) <> ''
-  and file_size > 0
-  and file_size <= ?
-order by case
-  when lower(resource_type) in ('photo', 'image', 'local_original') then 0
-  when lower(resource_type) = 'video' then 1
-  when lower(resource_type) = 'audio' then 2
-  else 3
-end, id
-limit 1`, assetID, openrecord.MaximumResourceBytes).Scan(&id, &resourceType, &uti, &filename, &size)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+	candidate, err := c.localPresentationResource(ctx, req, assetID)
+	if err != nil || candidate == nil {
+		if err != nil {
+			return nil, err
+		}
+		candidate, err = c.cachedCurrentPresentationResource(ctx, req, assetID)
+		if err != nil || candidate == nil {
+			return nil, err
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("select bounded presentation resource: %w", err)
-	}
-	label := strings.TrimSpace(filename)
-	if label == "" {
-		label = "Photo preview"
-	}
-	return &presentationv1.Resource{
-		Kind:  presentationResourceKind(resourceType, uti),
-		Label: label,
-		Ref:   presentationResourcePrefix + id,
-		Metadata: []*presentationv1.Field{
-			{Label: "Size", Display: presentation.Bytes(size)},
-		},
-	}, nil
+	return presentationResourceBlock(*candidate), nil
 }
 
 func (c *Crawler) ResolveResource(ctx context.Context, req *trawlkit.Request, request *presentationv1.ResourceRequest) (*presentationv1.ResourceResponse, error) {
@@ -79,17 +65,171 @@ func (c *Crawler) ResolveResource(ctx context.Context, req *trawlkit.Request, re
 	if id == "" {
 		return nil, errors.New("resource ref is invalid")
 	}
+	var candidate *presentationResourceCandidate
+	var err error
+	if strings.HasPrefix(request.GetResourceRef(), presentationCurrentResourcePrefix) {
+		assetID, decodeErr := decodePresentationCurrentResourceRef(request.GetResourceRef())
+		if decodeErr != nil {
+			return nil, decodeErr
+		}
+		candidate, err = c.cachedCurrentPresentationResource(ctx, req, assetID)
+	} else {
+		candidate, err = c.localPresentationResourceByID(ctx, req, id)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if candidate == nil {
+		return nil, errors.New("resource is unavailable")
+	}
+	return resolvePresentationResource(candidate.path, candidate.contentType, request)
+}
+
+func (c *Crawler) localPresentationResource(ctx context.Context, req *trawlkit.Request, assetID string) (*presentationResourceCandidate, error) {
+	rows, err := req.Store.DB().QueryContext(ctx, `
+select id, uti, original_filename, local_path
+from asset_resource
+where asset_id = ? and available_locally = 1 and needs_download = 0
+order by case when lower(resource_type) = 'local_original' then 0 when lower(resource_type) in ('photo', 'image') then 1 else 2 end, id`, assetID)
+	if err != nil {
+		return nil, fmt.Errorf("select local presentation resource: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id, uti, filename, path string
+		if err := rows.Scan(&id, &uti, &filename, &path); err != nil {
+			return nil, fmt.Errorf("scan local presentation resource: %w", err)
+		}
+		if candidate, ok := localPresentationResourceCandidate(presentationResourcePrefix+id, path, uti, filename); ok {
+			return &candidate, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("read local presentation resource: %w", err)
+	}
+	return nil, nil
+}
+
+func (c *Crawler) localPresentationResourceByID(ctx context.Context, req *trawlkit.Request, id string) (*presentationResourceCandidate, error) {
 	var uti, filename, path string
 	err := req.Store.DB().QueryRowContext(ctx, `
 select uti, original_filename, local_path
 from asset_resource
 where id = ? and available_locally = 1 and needs_download = 0`, id).Scan(&uti, &filename, &path)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, errors.New("resource is unavailable")
+		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("resolve presentation resource: %w", err)
+		return nil, fmt.Errorf("select local presentation resource: %w", err)
 	}
+	candidate, ok := localPresentationResourceCandidate(presentationResourcePrefix+id, path, uti, filename)
+	if !ok {
+		return nil, nil
+	}
+	return &candidate, nil
+}
+
+func localPresentationResourceCandidate(ref, path, uti, filename string) (presentationResourceCandidate, bool) {
+	contentType := presentationResourceContentType(uti, filename)
+	if !strings.HasPrefix(contentType, "image/") {
+		return presentationResourceCandidate{}, false
+	}
+	size, ok := presentationResourceFileSize(path, int64(openrecord.MaximumResourceBytes))
+	if !ok {
+		return presentationResourceCandidate{}, false
+	}
+	return presentationResourceCandidate{ref: ref, path: path, contentType: contentType, label: "Photo preview", size: size}, true
+}
+
+func (c *Crawler) cachedCurrentPresentationResource(ctx context.Context, req *trawlkit.Request, assetID string) (*presentationResourceCandidate, error) {
+	var sourceLibraryID, localIdentifier, modificationDate string
+	err := req.Store.DB().QueryRowContext(ctx, `
+select source_library_id, local_identifier, modification_date
+from asset where id = ?`, assetID).Scan(&sourceLibraryID, &localIdentifier, &modificationDate)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("select cached presentation resource: %w", err)
+	}
+	var freshness photos.CurrentStillFreshness
+	if strings.TrimSpace(modificationDate) != "" {
+		modification, err := photos.ParseCurrentStillModification(modificationDate)
+		if err != nil {
+			return nil, nil
+		}
+		freshness, err = photos.CurrentStillFreshnessForModification(modification)
+		if err != nil {
+			return nil, nil
+		}
+	} else {
+		var fingerprint string
+		err := req.Store.DB().QueryRowContext(ctx, `
+select seen.source_fingerprint
+from crawl_seen_asset seen
+join crawl_snapshot snapshot on snapshot.id = seen.last_seen_snapshot_id
+where seen.asset_id = ? and seen.source_library_id = ? and snapshot.completeness_state = 'complete'`, assetID, sourceLibraryID).Scan(&fingerprint)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, fmt.Errorf("select cached presentation freshness: %w", err)
+		}
+		freshness, err = photos.CurrentStillFreshnessForSourceFingerprint(fingerprint)
+		if err != nil {
+			return nil, nil
+		}
+	}
+	path, fact, _, ok := photos.ReadCachedCurrentStill(archivePaths(req).OriginalsCacheDir(), sourceLibraryID, localIdentifier, freshness)
+	if !ok {
+		return nil, nil
+	}
+	contentType := presentationResourceContentType(fact.MediaType, "preview")
+	if !strings.HasPrefix(contentType, "image/") {
+		return nil, nil
+	}
+	size, ok := presentationResourceFileSize(path, int64(openrecord.MaximumResourceBytes))
+	if !ok {
+		return nil, nil
+	}
+	return &presentationResourceCandidate{
+		ref:         presentationCurrentResourcePrefix + base64.RawURLEncoding.EncodeToString([]byte(assetID)),
+		path:        path,
+		contentType: contentType,
+		label:       "Photo preview",
+		size:        size,
+	}, nil
+}
+
+func decodePresentationCurrentResourceRef(ref string) (string, error) {
+	encoded := strings.TrimPrefix(ref, presentationCurrentResourcePrefix)
+	assetID, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil || strings.TrimSpace(string(assetID)) == "" {
+		return "", errors.New("resource ref is invalid")
+	}
+	return string(assetID), nil
+}
+
+func presentationResourceBlock(candidate presentationResourceCandidate) *presentationv1.Resource {
+	return &presentationv1.Resource{
+		Kind:  presentationv1.Resource_KIND_IMAGE,
+		Label: candidate.label,
+		Ref:   candidate.ref,
+		Metadata: []*presentationv1.Field{
+			{Label: "Size", Display: presentation.Bytes(candidate.size)},
+		},
+	}
+}
+
+func presentationResourceFileSize(path string, maximum int64) (int64, bool) {
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() <= 0 || info.Size() > maximum {
+		return 0, false
+	}
+	return info.Size(), true
+}
+
+func resolvePresentationResource(path, contentType string, request *presentationv1.ResourceRequest) (*presentationv1.ResourceResponse, error) {
 	before, err := os.Lstat(path)
 	if err != nil || !before.Mode().IsRegular() || before.Mode()&os.ModeSymlink != 0 || before.Size() <= 0 || before.Size() > int64(request.GetMaxBytes()) {
 		return nil, errors.New("resource is unavailable within the requested bound")
@@ -111,25 +251,7 @@ where id = ? and available_locally = 1 and needs_download = 0`, id).Scan(&uti, &
 	if len(data) == 0 || len(data) > int(request.GetMaxBytes()) {
 		return nil, errors.New("resource exceeds the requested bound")
 	}
-	contentType := presentationResourceContentType(uti, filename)
-	if contentType == "" {
-		return nil, errors.New("resource content type is unsupported")
-	}
 	return &presentationv1.ResourceResponse{ResourceRef: request.GetResourceRef(), ContentType: contentType, Data: data}, nil
-}
-
-func presentationResourceKind(resourceType, uti string) presentationv1.Resource_Kind {
-	value := strings.ToLower(strings.TrimSpace(resourceType + " " + uti))
-	switch {
-	case strings.Contains(value, "video"), strings.Contains(value, "movie"):
-		return presentationv1.Resource_KIND_VIDEO
-	case strings.Contains(value, "audio"):
-		return presentationv1.Resource_KIND_AUDIO
-	case strings.Contains(value, "photo"), strings.Contains(value, "image"), strings.Contains(value, "jpeg"), strings.Contains(value, "png"), strings.Contains(value, "heic"), strings.Contains(value, "heif"):
-		return presentationv1.Resource_KIND_IMAGE
-	default:
-		return presentationv1.Resource_KIND_FILE
-	}
 }
 
 func presentationResourceContentType(uti, filename string) string {

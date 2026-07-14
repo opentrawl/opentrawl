@@ -289,7 +289,7 @@ func TestSearchIndexRebuildPreservesSearchCandidatesAndOrder(t *testing.T) {
 	}
 	queries := []string{secondaryFilename, "albumneedle", "uncertaintyneedle", "descriptionneedle"}
 	before := searchContracts(t, ctx, db, queries)
-	for query, anchorID := range map[string]string{secondaryFilename: "filenames", "albumneedle": "album", "uncertaintyneedle": "uncertainty", "descriptionneedle": "description"} {
+	for query, anchorID := range map[string]string{secondaryFilename: "filename", "albumneedle": "album", "uncertaintyneedle": "uncertainty", "descriptionneedle": "description"} {
 		if got := before[query].Anchors; !reflect.DeepEqual(got, []string{anchorID}) {
 			t.Fatalf("search %q anchors = %#v, want %#v", query, got, []string{anchorID})
 		}

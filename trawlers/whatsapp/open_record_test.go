@@ -61,7 +61,7 @@ primary_anchor_id: "match"`)
 	t.Run("blank_title_uses_source_fallback", func(t *testing.T) {
 		blank := target
 		blank.ChatName = ""
-		if got := projectOpenPresentation(openValue{target: blank, context: []store.Message{blank}}).Title; got != "WhatsApp conversation" {
+		if got := projectOpenPresentation(openValue{target: blank, context: []store.Message{blank}}).Title; got != "Avery Example" {
 			t.Fatalf("title = %q", got)
 		}
 	})

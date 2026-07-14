@@ -264,12 +264,8 @@ func projectOpenPresentation(value archive.OpenResult) *presentationv1.Presentat
 
 func projectOpenPresentationWithResource(value archive.OpenResult, resource *presentationv1.Resource) *presentationv1.PresentationDocument {
 	record := projectOpenRecord(value)
-	title := strings.TrimSpace(record.Model.GetSummary())
-	if title == "" {
-		title = "Photo"
-	}
+	title := "Photo"
 	fields := make([]*presentationv1.Field, 0, 12)
-	appendPresentationFieldWithAnchor(&fields, "Photo summary", record.Model.GetSummary(), "summary")
 	mechanical := record.Mechanical
 	if mechanical != nil {
 		if captured := mechanical.Captured; captured != nil {
@@ -293,29 +289,33 @@ func projectOpenPresentationWithResource(value archive.OpenResult, resource *pre
 		for _, signal := range value.Mechanical.Signals {
 			appendPresentationFieldWithAnchor(&fields, "Photo signal", signal.Label, signal.AnchorID)
 		}
-		if original := mechanical.Original; original != nil {
-			if filename := strings.TrimSpace(original.GetFilename()); filename != "" {
-				fields = append(fields, &presentationv1.Field{Label: "Original filename", Display: filename, AnchorId: "filename"})
+		if filenames := presentationFilenames(mechanical.Original, value.Mechanical.Filenames); len(filenames) > 0 {
+			label := "Original filename"
+			if len(filenames) > 1 {
+				label = "Filenames"
 			}
+			fields = append(fields, &presentationv1.Field{Label: label, Display: strings.Join(filenames, "\n"), AnchorId: "filename"})
+		}
+		if original := mechanical.Original; original != nil {
 			if original.Bytes != nil {
 				fields = append(fields, &presentationv1.Field{Label: "Original size", Display: presentation.Bytes(*original.Bytes)})
 			}
 			appendPresentationField(&fields, "Availability", original.GetAvailability())
 		}
 	}
-	blocks := make([]*presentationv1.Block, 0, 5)
-	blocks = append(blocks, &presentationv1.Block{AnchorId: "asset-details", Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: title}}})
+	blocks := make([]*presentationv1.Block, 0, 4)
+	hasAssetDetails := false
 	if resource != nil {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Resource{Resource: resource}})
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "asset-details", Content: &presentationv1.Block_Resource{Resource: resource}})
+		hasAssetDetails = true
 	}
-	if filenames := strings.Join(value.Mechanical.Filenames, "\n"); strings.TrimSpace(filenames) != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "filenames", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: filenames}}})
-	}
-	if len(fields) > 0 {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}})
-	}
-	if strings.TrimSpace(record.Model.GetDescription()) != "" || strings.TrimSpace(record.Model.GetOcrText()) != "" {
-		blocks = append(blocks, &presentationv1.Block{Content: &presentationv1.Block_Heading{Heading: &presentationv1.Heading{Text: "Photo text"}}})
+	if summary := strings.TrimSpace(record.Model.GetSummary()); summary != "" {
+		block := &presentationv1.Block{Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: summary}}}
+		if !hasAssetDetails {
+			block.AnchorId = "asset-details"
+			hasAssetDetails = true
+		}
+		blocks = append(blocks, block)
 	}
 	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
 		blocks = append(blocks, &presentationv1.Block{AnchorId: "description", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
@@ -323,8 +323,12 @@ func projectOpenPresentationWithResource(value archive.OpenResult, resource *pre
 	if ocr := strings.TrimSpace(record.Model.GetOcrText()); ocr != "" {
 		blocks = append(blocks, &presentationv1.Block{AnchorId: "ocr", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
 	}
-	if uncertainties := strings.Join(record.Model.Uncertainties, "\n"); strings.TrimSpace(uncertainties) != "" {
-		blocks = append(blocks, &presentationv1.Block{AnchorId: "uncertainty", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: uncertainties}}})
+	if len(fields) > 0 {
+		block := &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}
+		if !hasAssetDetails {
+			block.AnchorId = "asset-details"
+		}
+		blocks = append(blocks, block)
 	}
 	document := &presentationv1.PresentationDocument{Title: title, Blocks: blocks, PrimaryAnchorId: "asset-details"}
 	if banner := strings.TrimSpace(record.Stale.GetBanner()); banner != "" {
@@ -351,6 +355,29 @@ func appendPresentationFieldWithAnchor(fields *[]*presentationv1.Field, label, v
 	if value = strings.TrimSpace(value); value != "" {
 		*fields = append(*fields, &presentationv1.Field{Label: label, Display: value, AnchorId: anchorID})
 	}
+}
+
+func presentationFilenames(original *photosopenv1.Original, values []string) []string {
+	result := make([]string, 0, len(values)+1)
+	seen := make(map[string]struct{}, len(values)+1)
+	appendFilename := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		if _, ok := seen[value]; ok {
+			return
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	if original != nil {
+		appendFilename(original.GetFilename())
+	}
+	for _, value := range values {
+		appendFilename(value)
+	}
+	return result
 }
 
 func formatPresentationMedia(value *photosopenv1.Media) string {
