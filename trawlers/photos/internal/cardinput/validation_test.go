@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -69,6 +70,24 @@ func TestLimitSaturatedEvidenceStopsWithoutMutatingCandidates(t *testing.T) {
 	}
 	if !bytes.Equal(after, before) {
 		t.Fatal("limit-saturated evidence changed")
+	}
+}
+
+func TestBuildRejectsMoreThanTwentyModelVisibleCandidates(t *testing.T) {
+	source, artifacts, records := fixtureInput()
+	records[1].Candidates = make([]place.EvidenceCandidate, MaxModelCandidatesPerProjection+1)
+	for index := range records[1].Candidates {
+		records[1].Candidates[index] = place.EvidenceCandidate{
+			ProviderIndex: index,
+			ProviderID:    fmt.Sprintf("synthetic-%d", index+1),
+			Name:          fmt.Sprintf("Synthetic candidate %d", index+1),
+			Source:        "synthetic",
+		}
+	}
+
+	_, err := Build(source, artifacts, records)
+	if !errors.Is(err, ErrUnsafeEvidence) {
+		t.Fatalf("error = %v, want unsafe evidence", err)
 	}
 }
 

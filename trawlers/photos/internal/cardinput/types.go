@@ -6,7 +6,10 @@ import (
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 )
 
-const SchemaVersion uint32 = 1
+const (
+	SchemaVersion                   uint32 = 1
+	MaxModelCandidatesPerProjection        = 20
+)
 
 var (
 	ErrInvalidSource      = errors.New("invalid source facts")

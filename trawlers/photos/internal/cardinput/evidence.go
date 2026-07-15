@@ -31,6 +31,17 @@ func projectEvidence(source SourceFacts, records []place.EvidenceRecord) ([]*car
 	return projections, nil
 }
 
+// ValidateModelVisibleCandidates keeps each checked place projection within
+// the fixed model-input evidence bound without changing candidate order.
+func ValidateModelVisibleCandidates(input *cardwire.CardInput) error {
+	for index, projection := range input.GetPlaces() {
+		if len(projection.GetCandidates()) > MaxModelCandidatesPerProjection {
+			return fmt.Errorf("%w: place projection %d has %d candidates, maximum is %d", ErrUnsafeEvidence, index+1, len(projection.GetCandidates()), MaxModelCandidatesPerProjection)
+		}
+	}
+	return nil
+}
+
 func validateEvidenceInput(source SourceFacts, record place.EvidenceRecord) error {
 	if source.Location == nil {
 		return fmt.Errorf("%w: evidence has no source location", ErrEvidenceMismatch)

@@ -300,6 +300,9 @@ func validateCanonicalCardInput(cardInputID string, data []byte) (cardinput.Resu
 	if input.GetSchemaVersion() != cardinput.SchemaVersion {
 		return cardinput.Result{}, errors.New("CardInput schema version is not supported")
 	}
+	if err := cardinput.ValidateModelVisibleCandidates(input); err != nil {
+		return cardinput.Result{}, err
+	}
 	if input.GetFullCurrent() == nil {
 		return cardinput.Result{}, errors.New("CardInput full-current facts are required")
 	}

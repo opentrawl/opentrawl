@@ -25,6 +25,9 @@ func Build(source SourceFacts, artifacts CheckedArtifacts, records []place.Evide
 		return Result{}, err
 	}
 	input := projectSource(source, places)
+	if err := ValidateModelVisibleCandidates(input); err != nil {
+		return Result{}, err
+	}
 	data, err := proto.MarshalOptions{Deterministic: true}.Marshal(input)
 	if err != nil {
 		return Result{}, fmt.Errorf("marshal CardInput: %w", err)
