@@ -63,10 +63,11 @@ does not mean local image models are preferred.
   This is open source software for users to understand their own Photos data.
 - Read from Apple Photos only through explicit read-only/snapshot flows.
 - Never mutate Photos, albums, metadata, faces, or iCloud state.
-- Photos image classification and classification evals use frontier cloud
-  vision models through Ollama Cloud. Direct paid Gemini API calls are not part
-  of the product path. Record exactly which image bytes and rendered context
-  cross that boundary.
+- Photos image classification and classification evals use the configured
+  frontier hosted service through one product seam. Current eligible routes
+  include Ollama Cloud and Luna through OpenAI OAuth. The product has no direct
+  API-key-per-model surface. Record exactly which image bytes and rendered
+  context cross that boundary.
 - Ollama Cloud is not a code-review or general agent-reasoning service.
   Development and adversarial review use a capable Sol/OpenAI agent or a human.
   Terra may be an agent-runtime choice when suitable; it is not a Photos model

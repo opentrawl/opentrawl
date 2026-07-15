@@ -78,10 +78,10 @@ The layers, bottom to top:
   user control stay on your machine. Local first does not mean local
   models are preferred. A feature may send an explicit, bounded input
   to its configured frontier model service when the user invokes that
-  feature. Photos image classification and its image-model evals use
-  Ollama Cloud; they do not call paid model APIs directly. Model access
-  goes through one provider seam, not a new integration surface per
-  model.
+  feature. Photos image classification and its image-model evals use the
+  configured frontier hosted service through one product seam. Current
+  eligible routes include Ollama Cloud and Luna through OpenAI OAuth; the
+  product has no direct API-key-per-model surface.
 - Federated, not unified. Each source keeps its own source-native
   database. The single entry point is a query surface, not a shared
   schema. Cross-source joins happen in derived layers, later, on top of
@@ -275,8 +275,9 @@ one verdict) will not automatically fit other surfaces — a person or a
 relationship is not a pull request. Each surface's unit of clustering
 and carding gets evaluated and tested on real archives before we adopt
 it. Photos card quality needs a frontier hosted vision model. Image
-classification and classification evals run through Ollama Cloud,
-behind the single provider seam. A small historical run favoured a
+classification and classification evals run through the configured frontier
+hosted service behind the single product seam. Current eligible routes include
+Ollama Cloud and Luna through OpenAI OAuth. A small historical run favoured a
 Gemini-class model, but it predates the current input-integrity and
 representative-sampling gates and does not choose the production model.
 Local models are not the preferred product path.
