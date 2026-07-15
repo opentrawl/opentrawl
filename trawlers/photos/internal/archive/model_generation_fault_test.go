@@ -309,13 +309,14 @@ join model_generation_attempt a on a.generation_id = g.id
 	if err != nil {
 		t.Fatal(err)
 	}
-	card, err := parsePhotoCardToolCall(response.ToolCalls, preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}})
+	prepared := preparedCardRequest{CandidateByID: map[string]preparedPlaceCandidate{}}
+	card, err := parsePhotoCardToolCall(response.ToolCalls, prepared)
 	if err != nil {
 		t.Fatal(err)
 	}
 	parserResult, err := json.MarshalIndent(map[string]any{
 		"payload":      photoCardPayload(card),
-		"observations": observationsFromCard(card),
+		"observations": observationsFromCard(card, prepared),
 	}, "", "  ")
 	if err != nil {
 		t.Fatal(err)

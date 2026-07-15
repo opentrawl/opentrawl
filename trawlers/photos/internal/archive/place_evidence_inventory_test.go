@@ -104,7 +104,7 @@ func TestPlaceEvidenceInventoryRequiresCurrentSchema(t *testing.T) {
 	closePlaceEvidenceInventoryFixture(t, db)
 
 	_, err := ReadPlaceEvidenceInventory(ctx, path, "source:fixture")
-	if err == nil || !strings.Contains(err.Error(), "schema is 13, want 14") {
+	if err == nil || !strings.Contains(err.Error(), "schema is 14, want 15") {
 		t.Fatalf("schema error = %v", err)
 	}
 }

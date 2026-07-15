@@ -5,7 +5,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -29,19 +28,19 @@ type fixtureCardPreparation struct {
 }
 
 type fixtureCardResult struct {
-	ExecutionID       string
-	Input             cardinput.Result
-	Request           model.ProviderRequest
-	RawResponse       model.RawResult
-	PromptVersion     string
-	ParserVersion     string
-	Summary           string
-	Description       string
-	OCR               string
-	Uncertainties     []string
-	VenuePlausibility venuePlausibility
-	Custody           *cardwire.CardExecutionCustody
-	Reused            bool
+	ExecutionID   string
+	Input         cardinput.Result
+	Request       model.ProviderRequest
+	RawResponse   model.RawResult
+	PromptVersion string
+	ParserVersion string
+	Summary       string
+	Description   string
+	VisibleText   string
+	Uncertainties []string
+	Location      modelLocation
+	Custody       *cardwire.CardExecutionCustody
+	Reused        bool
 }
 
 func executeFixtureCard(ctx context.Context, db *store.Store, executionID string, prepare func() (fixtureCardPreparation, error), classifier modelClassifier, fixtureBytes []byte, now time.Time) (fixtureCardResult, error) {
@@ -127,7 +126,7 @@ func executeFixtureCard(ctx context.Context, db *store.Store, executionID string
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
-	return fixtureCardResult{ExecutionID: executionID, Input: request.Input, Request: request.Request, RawResponse: raw, PromptVersion: request.PromptVersion, ParserVersion: request.ParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: request.Custody}, nil
+	return fixtureCardResult{ExecutionID: executionID, Input: request.Input, Request: request.Request, RawResponse: raw, PromptVersion: request.PromptVersion, ParserVersion: request.ParserVersion, Summary: parsed.Card.Summary, Description: parsed.Card.Description, VisibleText: parsed.Card.VisibleText, Uncertainties: parsed.Card.Uncertainties, Location: parsed.Card.Location, Custody: request.Custody}, nil
 }
 
 func finishRetainedFixtureCard(ctx context.Context, db *store.Store, executionID, generationID string, prepared preparedCardRequest, raw model.RawResult, now time.Time) (fixtureCardResult, error) {
@@ -153,7 +152,7 @@ func finishRetainedFixtureCard(ctx context.Context, db *store.Store, executionID
 	if err != nil {
 		return fixtureCardResult{}, err
 	}
-	return fixtureCardResult{ExecutionID: executionID, Input: prepared.Input, Request: prepared.Request, RawResponse: raw, PromptVersion: prepared.PromptVersion, ParserVersion: prepared.ParserVersion, Summary: parsed.Observations[0].ValueText, Description: parsed.Observations[1].ValueText, OCR: cardValue(parsed.Observations, modelObservationCardOCR), Uncertainties: cardValues(parsed.Observations, modelObservationCardUncertainty), VenuePlausibility: parsed.VenuePlausibility, Custody: prepared.Custody}, nil
+	return fixtureCardResult{ExecutionID: executionID, Input: prepared.Input, Request: prepared.Request, RawResponse: raw, PromptVersion: prepared.PromptVersion, ParserVersion: prepared.ParserVersion, Summary: parsed.Card.Summary, Description: parsed.Card.Description, VisibleText: parsed.Card.VisibleText, Uncertainties: parsed.Card.Uncertainties, Location: parsed.Card.Location, Custody: prepared.Custody}, nil
 }
 
 // validatePlaceEvidenceIdentity keeps the checked records accepted by
@@ -234,43 +233,34 @@ func readCompletedFixtureCard(ctx context.Context, db *store.Store, executionID 
 			result.Summary = value
 		case modelObservationCardDescription:
 			result.Description = value
-		case modelObservationCardOCR:
-			result.OCR = value
+		case modelObservationCardVisibleText:
+			result.VisibleText = value
 		case modelObservationCardUncertainty:
 			result.Uncertainties = append(result.Uncertainties, value)
 		}
 	}
-	var venueJSON string
-	err = db.DB().QueryRowContext(ctx, `select value_json from place_observation where generation_id = (select generation_id from card_execution where id = ?) and json_extract(value_json, '$.venue_plausibility.verdict') <> '' limit 1`, result.ExecutionID).Scan(&venueJSON)
-	if err == nil {
-		var value struct {
-			Venue venuePlausibility `json:"venue_plausibility"`
-		}
-		if err := json.Unmarshal([]byte(venueJSON), &value); err != nil {
-			return fixtureCardResult{}, false, err
-		}
-		result.VenuePlausibility = value.Venue
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	if err := rows.Err(); err != nil {
 		return fixtureCardResult{}, false, err
 	}
-	result.Reused = true
-	return result, true, rows.Err()
-}
-
-func cardValue(observations []contentObservation, kind string) string {
-	values := cardValues(observations, kind)
-	if len(values) == 0 {
-		return ""
+	if err := rows.Close(); err != nil {
+		return fixtureCardResult{}, false, err
 	}
-	return values[0]
-}
-
-func cardValues(observations []contentObservation, kind string) []string {
-	values := []string{}
-	for _, observation := range observations {
-		if observation.ObservationType == kind {
-			values = append(values, strings.TrimSpace(observation.ValueText))
+	var cardBytes []byte
+	err = db.DB().QueryRowContext(ctx, `select card from photo_card where generation_id = (select generation_id from card_execution where id = ?)`, result.ExecutionID).Scan(&cardBytes)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fixtureCardResult{}, false, fmt.Errorf("read completed typed photo card: %w", err)
+	}
+	if err == nil {
+		card := new(cardwire.PhotoCard)
+		if err := proto.Unmarshal(cardBytes, card); err != nil {
+			return fixtureCardResult{}, false, fmt.Errorf("decode completed typed photo card: %w", err)
+		}
+		result.Location = modelLocation{
+			Kind: card.GetLocation().GetKind(), CandidateID: card.GetLocation().GetCandidateId(),
+			InferredName: card.GetLocation().GetInferredName(), Confidence: card.GetLocation().GetConfidence(),
+			Reason: card.GetLocation().GetReason(),
 		}
 	}
-	return values
+	result.Reused = true
+	return result, true, nil
 }

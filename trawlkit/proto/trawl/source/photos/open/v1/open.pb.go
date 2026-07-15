@@ -1013,6 +1013,8 @@ type Model struct {
 	Description   *string                `protobuf:"bytes,4,opt,name=description,proto3,oneof" json:"description,omitempty"`
 	OcrText       *string                `protobuf:"bytes,5,opt,name=ocr_text,json=ocrText,proto3,oneof" json:"ocr_text,omitempty"`
 	Uncertainties []string               `protobuf:"bytes,6,rep,name=uncertainties,proto3" json:"uncertainties,omitempty"`
+	VisibleText   *string                `protobuf:"bytes,7,opt,name=visible_text,json=visibleText,proto3,oneof" json:"visible_text,omitempty"`
+	Location      *ModelLocation         `protobuf:"bytes,8,opt,name=location,proto3" json:"location,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1087,6 +1089,88 @@ func (x *Model) GetUncertainties() []string {
 		return x.Uncertainties
 	}
 	return nil
+}
+
+func (x *Model) GetVisibleText() string {
+	if x != nil && x.VisibleText != nil {
+		return *x.VisibleText
+	}
+	return ""
+}
+
+func (x *Model) GetLocation() *ModelLocation {
+	if x != nil {
+		return x.Location
+	}
+	return nil
+}
+
+type ModelLocation struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          *string                `protobuf:"bytes,1,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	Kind          string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Confidence    string                 `protobuf:"bytes,3,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	Reason        string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelLocation) Reset() {
+	*x = ModelLocation{}
+	mi := &file_trawl_source_photos_open_v1_open_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelLocation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelLocation) ProtoMessage() {}
+
+func (x *ModelLocation) ProtoReflect() protoreflect.Message {
+	mi := &file_trawl_source_photos_open_v1_open_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelLocation.ProtoReflect.Descriptor instead.
+func (*ModelLocation) Descriptor() ([]byte, []int) {
+	return file_trawl_source_photos_open_v1_open_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ModelLocation) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetConfidence() string {
+	if x != nil {
+		return x.Confidence
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
 }
 
 var File_trawl_source_photos_open_v1_open_proto protoreflect.FileDescriptor
@@ -1207,20 +1291,31 @@ const file_trawl_source_photos_open_v1_open_proto_rawDesc = "" +
 	"\favailability\x18\x03 \x01(\tH\x02R\favailability\x88\x01\x01B\v\n" +
 	"\t_filenameB\b\n" +
 	"\x06_bytesB\x0f\n" +
-	"\r_availability\"\xa8\x02\n" +
+	"\r_availability\"\xa9\x03\n" +
 	"\x05Model\x12*\n" +
 	"\x0eprompt_version\x18\x01 \x01(\tH\x00R\rpromptVersion\x88\x01\x01\x12\x1e\n" +
 	"\bmodel_id\x18\x02 \x01(\tH\x01R\amodelId\x88\x01\x01\x12\x1d\n" +
 	"\asummary\x18\x03 \x01(\tH\x02R\asummary\x88\x01\x01\x12%\n" +
 	"\vdescription\x18\x04 \x01(\tH\x03R\vdescription\x88\x01\x01\x12\x1e\n" +
 	"\bocr_text\x18\x05 \x01(\tH\x04R\aocrText\x88\x01\x01\x12$\n" +
-	"\runcertainties\x18\x06 \x03(\tR\runcertaintiesB\x11\n" +
+	"\runcertainties\x18\x06 \x03(\tR\runcertainties\x12&\n" +
+	"\fvisible_text\x18\a \x01(\tH\x05R\vvisibleText\x88\x01\x01\x12F\n" +
+	"\blocation\x18\b \x01(\v2*.trawl.source.photos.open.v1.ModelLocationR\blocationB\x11\n" +
 	"\x0f_prompt_versionB\v\n" +
 	"\t_model_idB\n" +
 	"\n" +
 	"\b_summaryB\x0e\n" +
 	"\f_descriptionB\v\n" +
-	"\t_ocr_textBXZVgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1;photosopenv1b\x06proto3"
+	"\t_ocr_textB\x0f\n" +
+	"\r_visible_text\"}\n" +
+	"\rModelLocation\x12\x17\n" +
+	"\x04name\x18\x01 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x03 \x01(\tR\n" +
+	"confidence\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reasonB\a\n" +
+	"\x05_nameBXZVgithub.com/opentrawl/opentrawl/trawlkit/proto/trawl/source/photos/open/v1;photosopenv1b\x06proto3"
 
 var (
 	file_trawl_source_photos_open_v1_open_proto_rawDescOnce sync.Once
@@ -1234,7 +1329,7 @@ func file_trawl_source_photos_open_v1_open_proto_rawDescGZIP() []byte {
 	return file_trawl_source_photos_open_v1_open_proto_rawDescData
 }
 
-var file_trawl_source_photos_open_v1_open_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_trawl_source_photos_open_v1_open_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_trawl_source_photos_open_v1_open_proto_goTypes = []any{
 	(*PhotosRecord)(nil),   // 0: trawl.source.photos.open.v1.PhotosRecord
 	(*Stale)(nil),          // 1: trawl.source.photos.open.v1.Stale
@@ -1251,6 +1346,7 @@ var file_trawl_source_photos_open_v1_open_proto_goTypes = []any{
 	(*Album)(nil),          // 12: trawl.source.photos.open.v1.Album
 	(*Original)(nil),       // 13: trawl.source.photos.open.v1.Original
 	(*Model)(nil),          // 14: trawl.source.photos.open.v1.Model
+	(*ModelLocation)(nil),  // 15: trawl.source.photos.open.v1.ModelLocation
 }
 var file_trawl_source_photos_open_v1_open_proto_depIdxs = []int32{
 	1,  // 0: trawl.source.photos.open.v1.PhotosRecord.stale:type_name -> trawl.source.photos.open.v1.Stale
@@ -1267,11 +1363,12 @@ var file_trawl_source_photos_open_v1_open_proto_depIdxs = []int32{
 	11, // 11: trawl.source.photos.open.v1.Mechanical.camera:type_name -> trawl.source.photos.open.v1.Camera
 	12, // 12: trawl.source.photos.open.v1.Mechanical.albums:type_name -> trawl.source.photos.open.v1.Album
 	13, // 13: trawl.source.photos.open.v1.Mechanical.original:type_name -> trawl.source.photos.open.v1.Original
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	15, // 14: trawl.source.photos.open.v1.Model.location:type_name -> trawl.source.photos.open.v1.ModelLocation
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_trawl_source_photos_open_v1_open_proto_init() }
@@ -1291,13 +1388,14 @@ func file_trawl_source_photos_open_v1_open_proto_init() {
 	file_trawl_source_photos_open_v1_open_proto_msgTypes[11].OneofWrappers = []any{}
 	file_trawl_source_photos_open_v1_open_proto_msgTypes[13].OneofWrappers = []any{}
 	file_trawl_source_photos_open_v1_open_proto_msgTypes[14].OneofWrappers = []any{}
+	file_trawl_source_photos_open_v1_open_proto_msgTypes[15].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_trawl_source_photos_open_v1_open_proto_rawDesc), len(file_trawl_source_photos_open_v1_open_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -43,7 +43,7 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	if prepareCalls != 1 || first.Reused {
 		t.Fatalf("first execution prepare=%d reused=%v", prepareCalls, first.Reused)
 	}
-	if first.Summary != "Synthetic harbour at dusk." || first.OCR != "FERRY 12" || len(first.Uncertainties) != 2 || first.VenuePlausibility.Verdict != "plausible" {
+	if first.Summary != "Synthetic harbour at dusk." || first.VisibleText != "TICKET 12" || len(first.Uncertainties) != 2 || first.Location.Kind != locationCandidate || first.Location.CandidateID != "place_1_candidate_1" {
 		t.Fatalf("canonical card fields = %+v", first)
 	}
 	var storedInput, storedRequest, storedResponse []byte
@@ -60,8 +60,49 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	if err := db.DB().QueryRowContext(ctx, `select count(*) from paid_call_claim`).Scan(&paidClaims); err != nil {
 		t.Fatal(err)
 	}
-	if observations != 5 || paidClaims != 0 {
+	if observations != 6 || paidClaims != 0 {
 		t.Fatalf("canonical observations=%d paid claims=%d", observations, paidClaims)
+	}
+	opened, err := OpenWithStore(ctx, db, "asset:fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if opened.SchemaVersion != 6 || opened.Model.VisibleText != "TICKET 12" || opened.Model.Location == nil || opened.Model.Location.Name != "Example Ferry Terminal" || opened.Model.Location.Kind != locationCandidate {
+		t.Fatalf("open v2 model = %#v", opened.Model)
+	}
+	openJSON, err := json.Marshal(opened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(openJSON), "candidate_id") || strings.Contains(string(openJSON), "place_1_candidate_1") {
+		t.Fatalf("public open leaked candidate provenance: %s", openJSON)
+	}
+	var ftsBody string
+	if err := db.DB().QueryRowContext(ctx, `select body from observation_fts where asset_id = ?`, "asset:fixture").Scan(&ftsBody); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ftsBody, "Example Ferry Terminal") || strings.Contains(ftsBody, "place_1_candidate_1") {
+		t.Fatalf("fts body=%q", ftsBody)
+	}
+	if err := ensureSearchIndex(ctx, db, classifyLogger{}); err != nil {
+		t.Fatal(err)
+	}
+	readStore, err := store.OpenReadOnly(ctx, db.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = readStore.Close() }()
+	for _, test := range []struct{ query, anchor string }{
+		{"TICKET", "visible-text"},
+		{"Terminal", "model-location"},
+	} {
+		result, err := SearchWithStore(ctx, readStore, SearchOptions{Query: test.query, Limit: 1})
+		if err != nil {
+			t.Fatalf("search %q: %v", test.query, err)
+		}
+		if len(result.Results) != 1 || result.Results[0].AnchorID != test.anchor || len(result.Results[0].Matches) != 1 || result.Results[0].Matches[0].Field != test.anchor {
+			t.Fatalf("search %q = %#v", test.query, result.Results)
+		}
 	}
 	var changesBefore, changesAfter int
 	_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&changesBefore)
@@ -73,7 +114,7 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 		t.Fatal(err)
 	}
 	_ = db.DB().QueryRowContext(ctx, `select total_changes()`).Scan(&changesAfter)
-	if !second.Reused || changesAfter != changesBefore || second.ParserVersion != modelParserVersion || second.PromptVersion != modelPromptVersion || second.OCR != first.OCR || len(second.Uncertainties) != 2 || second.VenuePlausibility.Verdict != "plausible" || second.Custody.SourceId != "source:fixture" || second.Custody.AssetId != "asset:fixture" || second.Custody.ImmutableOriginalResourceId != "resource:fixture" || second.Custody.MetadataRecordId != "metadata:fixture" || second.Custody.MetadataProjectionId != "projection:fixture" || second.Custody.FullCurrentProofSha256 != prepared.Artifacts.FullCurrent.ProofSHA256 || len(second.Custody.Evidence) != 1 || second.Custody.Evidence[0].ProviderIdentity != "synthetic-provider" || second.Custody.Evidence[0].Operation != "synthetic-nearby" || second.Custody.Evidence[0].RawResponseSha256 != prepared.Evidence[0].RawResponseSHA256 {
+	if !second.Reused || changesAfter != changesBefore || second.ParserVersion != modelParserVersion || second.PromptVersion != modelPromptVersion || second.VisibleText != first.VisibleText || second.Location != first.Location || len(second.Uncertainties) != 2 || second.Custody.SourceId != "source:fixture" || second.Custody.AssetId != "asset:fixture" || second.Custody.ImmutableOriginalResourceId != "resource:fixture" || second.Custody.MetadataRecordId != "metadata:fixture" || second.Custody.MetadataProjectionId != "projection:fixture" || second.Custody.FullCurrentProofSha256 != prepared.Artifacts.FullCurrent.ProofSHA256 || len(second.Custody.Evidence) != 1 || second.Custody.Evidence[0].ProviderIdentity != "synthetic-provider" || second.Custody.Evidence[0].Operation != "synthetic-nearby" || second.Custody.Evidence[0].RawResponseSha256 != prepared.Evidence[0].RawResponseSHA256 {
 		t.Fatalf("restart result=%+v changes=%d/%d", second, changesBefore, changesAfter)
 	}
 	wrongClient, err := newModelClassifier("fixture-model", "https://other-models.example.com", "")
@@ -139,7 +180,7 @@ func TestFixtureCardUsesCanonicalGenerationParserWriterAndRestart(t *testing.T) 
 	t.Logf("RAW CardInput protobuf:\n%s", prototext.Format(first.Input.Input))
 	t.Logf("RAW rendered provider request:\n%s", first.Request.Body())
 	t.Logf("RAW fixture response protobuf:\n%s", prototext.Format(fixture))
-	t.Logf("RAW stored card: summary=%q description=%q ocr=%q uncertainties=%q", second.Summary, second.Description, second.OCR, second.Uncertainties)
+	t.Logf("RAW stored card: summary=%q description=%q visible_text=%q uncertainties=%q", second.Summary, second.Description, second.VisibleText, second.Uncertainties)
 }
 
 func TestFixtureCardExecutionIdentityCoversInputRequestPromptAndParser(t *testing.T) {
@@ -470,8 +511,8 @@ func fixtureProviderResponse(t *testing.T) *cardwire.FixtureResponse {
 	t.Helper()
 	arguments, err := json.Marshal(map[string]any{
 		"summary": "Synthetic harbour at dusk.", "description": "A synthetic ferry crosses a calm harbour under an orange sky.",
-		"venue_plausibility": map[string]string{"candidate_id": "place_1_candidate_1", "verdict": "plausible", "reason": "The terminal is near the synthetic coordinate."},
-		"ocr_text":           "FERRY 12", "uncertainties": []string{"The distant shoreline is indistinct.", "The ferry name is not readable."},
+		"location":     map[string]string{"kind": "candidate", "candidate_id": "place_1_candidate_1", "inferred_name": "", "confidence": "high", "reason": "The terminal sign matches the supplied candidate."},
+		"visible_text": "TICKET 12", "uncertainties": []string{"The distant shoreline is indistinct.", "The ferry name is not readable."},
 	})
 	if err != nil {
 		t.Fatal(err)

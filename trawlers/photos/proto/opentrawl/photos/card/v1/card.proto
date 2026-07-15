@@ -136,6 +136,24 @@ message FixtureResponse {
   bool transmission_started = 6;
 }
 
+// PhotoCard is the parsed model result. Candidate identifiers are retained
+// only for exact provenance and are resolved against CardInput at read time.
+message PhotoCard {
+  string summary = 1;
+  string description = 2;
+  ModelLocation location = 3;
+  string visible_text = 4;
+  repeated string uncertainties = 5;
+}
+
+message ModelLocation {
+  string kind = 1;
+  string candidate_id = 2;
+  string inferred_name = 3;
+  string confidence = 4;
+  string reason = 5;
+}
+
 message CardExecutionCustody {
   string source_id = 1;
   string asset_id = 2;

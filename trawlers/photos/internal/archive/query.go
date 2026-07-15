@@ -227,6 +227,8 @@ func search(ctx context.Context, db *store.Store, opts SearchOptions) (SearchRes
   when model_observation.observation_type = '` + modelObservationCardSummary + `' then 'summary'
   when model_observation.observation_type = '` + modelObservationCardDescription + `' then 'description'
   when model_observation.observation_type = '` + modelObservationCardOCR + `' then 'ocr'
+  when model_observation.observation_type = '` + modelObservationCardVisibleText + `' then 'visible-text'
+  when model_observation.observation_type = '` + modelObservationCardLocation + `' then 'model-location'
   when metadata_observation.id is not null then 'metadata'
   else ''
 end`
@@ -238,6 +240,8 @@ end`
   when model_observation.observation_type = '` + modelObservationCardSummary + `' then 'summary'
   when model_observation.observation_type = '` + modelObservationCardDescription + `' then 'description'
   when model_observation.observation_type = '` + modelObservationCardOCR + `' then 'ocr'
+  when model_observation.observation_type = '` + modelObservationCardVisibleText + `' then 'visible-text'
+  when model_observation.observation_type = '` + modelObservationCardLocation + `' then 'model-location'
   when place_observation.id is not null then case place_observation.observation_type
     when 'address' then 'address'
     when 'known_place' then 'known-place'

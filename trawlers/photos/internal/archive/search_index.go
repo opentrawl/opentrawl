@@ -20,7 +20,7 @@ import (
 //	3: unselected poi_candidate observations leave the index; bm25 favors
 //	   short docs, so candidate business names outranked real card matches
 //	4: rebuilds use the same index documents as normal crawler writes
-const searchIndexVersion = 4
+const searchIndexVersion = 5
 
 // Search matching quality lives in the FTS index. FTS content is derived
 // state, so an archive built by an older index version is rebuilt in place
@@ -182,13 +182,14 @@ func rebuildCardFTS(ctx context.Context, tx *sql.Tx) (int64, error) {
 	rows, err := tx.QueryContext(ctx, `
 select asset_id, id, observation_type, value_text
 from model_observation
-where observation_type in (?1, ?2, ?3, ?4)
+where observation_type in (?1, ?2, ?3, ?4, ?5, ?6)
   and superseded_at is null
 order by asset_id,
-         case observation_type when ?1 then 0 when ?2 then 1 when ?3 then 2 else 3 end,
+         case observation_type when ?1 then 0 when ?2 then 1 when ?3 then 2 when ?4 then 3 when ?5 then 4 else 5 end,
          id`,
 		modelObservationCardSummary, modelObservationCardDescription,
-		modelObservationCardOCR, modelObservationCardUncertainty)
+		modelObservationCardOCR, modelObservationCardVisibleText,
+		modelObservationCardLocation, modelObservationCardUncertainty)
 	if err != nil {
 		return 0, fmt.Errorf("read card observations: %w", err)
 	}

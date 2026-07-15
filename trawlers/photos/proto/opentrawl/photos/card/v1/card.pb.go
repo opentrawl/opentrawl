@@ -1205,6 +1205,160 @@ func (x *FixtureResponse) GetTransmissionStarted() bool {
 	return false
 }
 
+// PhotoCard is the parsed model result. Candidate identifiers are retained
+// only for exact provenance and are resolved against CardInput at read time.
+type PhotoCard struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Summary       string                 `protobuf:"bytes,1,opt,name=summary,proto3" json:"summary,omitempty"`
+	Description   string                 `protobuf:"bytes,2,opt,name=description,proto3" json:"description,omitempty"`
+	Location      *ModelLocation         `protobuf:"bytes,3,opt,name=location,proto3" json:"location,omitempty"`
+	VisibleText   string                 `protobuf:"bytes,4,opt,name=visible_text,json=visibleText,proto3" json:"visible_text,omitempty"`
+	Uncertainties []string               `protobuf:"bytes,5,rep,name=uncertainties,proto3" json:"uncertainties,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PhotoCard) Reset() {
+	*x = PhotoCard{}
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PhotoCard) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PhotoCard) ProtoMessage() {}
+
+func (x *PhotoCard) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PhotoCard.ProtoReflect.Descriptor instead.
+func (*PhotoCard) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *PhotoCard) GetSummary() string {
+	if x != nil {
+		return x.Summary
+	}
+	return ""
+}
+
+func (x *PhotoCard) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *PhotoCard) GetLocation() *ModelLocation {
+	if x != nil {
+		return x.Location
+	}
+	return nil
+}
+
+func (x *PhotoCard) GetVisibleText() string {
+	if x != nil {
+		return x.VisibleText
+	}
+	return ""
+}
+
+func (x *PhotoCard) GetUncertainties() []string {
+	if x != nil {
+		return x.Uncertainties
+	}
+	return nil
+}
+
+type ModelLocation struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kind          string                 `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	CandidateId   string                 `protobuf:"bytes,2,opt,name=candidate_id,json=candidateId,proto3" json:"candidate_id,omitempty"`
+	InferredName  string                 `protobuf:"bytes,3,opt,name=inferred_name,json=inferredName,proto3" json:"inferred_name,omitempty"`
+	Confidence    string                 `protobuf:"bytes,4,opt,name=confidence,proto3" json:"confidence,omitempty"`
+	Reason        string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ModelLocation) Reset() {
+	*x = ModelLocation{}
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ModelLocation) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ModelLocation) ProtoMessage() {}
+
+func (x *ModelLocation) ProtoReflect() protoreflect.Message {
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ModelLocation.ProtoReflect.Descriptor instead.
+func (*ModelLocation) Descriptor() ([]byte, []int) {
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ModelLocation) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetCandidateId() string {
+	if x != nil {
+		return x.CandidateId
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetInferredName() string {
+	if x != nil {
+		return x.InferredName
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetConfidence() string {
+	if x != nil {
+		return x.Confidence
+	}
+	return ""
+}
+
+func (x *ModelLocation) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 type CardExecutionCustody struct {
 	state                       protoimpl.MessageState `protogen:"open.v1"`
 	SourceId                    string                 `protobuf:"bytes,1,opt,name=source_id,json=sourceId,proto3" json:"source_id,omitempty"`
@@ -1222,7 +1376,7 @@ type CardExecutionCustody struct {
 
 func (x *CardExecutionCustody) Reset() {
 	*x = CardExecutionCustody{}
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[13]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1388,7 @@ func (x *CardExecutionCustody) String() string {
 func (*CardExecutionCustody) ProtoMessage() {}
 
 func (x *CardExecutionCustody) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[13]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1401,7 @@ func (x *CardExecutionCustody) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CardExecutionCustody.ProtoReflect.Descriptor instead.
 func (*CardExecutionCustody) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{13}
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *CardExecutionCustody) GetSourceId() string {
@@ -1324,7 +1478,7 @@ type EvidenceLink struct {
 
 func (x *EvidenceLink) Reset() {
 	*x = EvidenceLink{}
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1336,7 +1490,7 @@ func (x *EvidenceLink) String() string {
 func (*EvidenceLink) ProtoMessage() {}
 
 func (x *EvidenceLink) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[14]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1349,7 +1503,7 @@ func (x *EvidenceLink) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EvidenceLink.ProtoReflect.Descriptor instead.
 func (*EvidenceLink) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{14}
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *EvidenceLink) GetProviderIdentity() string {
@@ -1388,7 +1542,7 @@ type ApprovedCardBundle struct {
 
 func (x *ApprovedCardBundle) Reset() {
 	*x = ApprovedCardBundle{}
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1400,7 +1554,7 @@ func (x *ApprovedCardBundle) String() string {
 func (*ApprovedCardBundle) ProtoMessage() {}
 
 func (x *ApprovedCardBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[15]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1413,7 +1567,7 @@ func (x *ApprovedCardBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovedCardBundle.ProtoReflect.Descriptor instead.
 func (*ApprovedCardBundle) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{15}
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ApprovedCardBundle) GetPurpose() string {
@@ -1474,7 +1628,7 @@ type ApprovedCardItem struct {
 
 func (x *ApprovedCardItem) Reset() {
 	*x = ApprovedCardItem{}
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1486,7 +1640,7 @@ func (x *ApprovedCardItem) String() string {
 func (*ApprovedCardItem) ProtoMessage() {}
 
 func (x *ApprovedCardItem) ProtoReflect() protoreflect.Message {
-	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[16]
+	mi := &file_opentrawl_photos_card_v1_card_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1499,7 +1653,7 @@ func (x *ApprovedCardItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovedCardItem.ProtoReflect.Descriptor instead.
 func (*ApprovedCardItem) Descriptor() ([]byte, []int) {
-	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{16}
+	return file_opentrawl_photos_card_v1_card_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ApprovedCardItem) GetPosition() uint32 {
@@ -1741,7 +1895,21 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\vstatus_code\x18\x04 \x01(\x05R\n" +
 	"statusCode\x12.\n" +
 	"\x13provider_request_id\x18\x05 \x01(\tR\x11providerRequestId\x121\n" +
-	"\x14transmission_started\x18\x06 \x01(\bR\x13transmissionStarted\"\xc9\x03\n" +
+	"\x14transmission_started\x18\x06 \x01(\bR\x13transmissionStarted\"\xd5\x01\n" +
+	"\tPhotoCard\x12\x18\n" +
+	"\asummary\x18\x01 \x01(\tR\asummary\x12 \n" +
+	"\vdescription\x18\x02 \x01(\tR\vdescription\x12C\n" +
+	"\blocation\x18\x03 \x01(\v2'.opentrawl.photos.card.v1.ModelLocationR\blocation\x12!\n" +
+	"\fvisible_text\x18\x04 \x01(\tR\vvisibleText\x12$\n" +
+	"\runcertainties\x18\x05 \x03(\tR\runcertainties\"\xa3\x01\n" +
+	"\rModelLocation\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12!\n" +
+	"\fcandidate_id\x18\x02 \x01(\tR\vcandidateId\x12#\n" +
+	"\rinferred_name\x18\x03 \x01(\tR\finferredName\x12\x1e\n" +
+	"\n" +
+	"confidence\x18\x04 \x01(\tR\n" +
+	"confidence\x12\x16\n" +
+	"\x06reason\x18\x05 \x01(\tR\x06reason\"\xc9\x03\n" +
 	"\x14CardExecutionCustody\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12\x19\n" +
 	"\basset_id\x18\x02 \x01(\tR\aassetId\x12C\n" +
@@ -1793,7 +1961,7 @@ func file_opentrawl_photos_card_v1_card_proto_rawDescGZIP() []byte {
 	return file_opentrawl_photos_card_v1_card_proto_rawDescData
 }
 
-var file_opentrawl_photos_card_v1_card_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_opentrawl_photos_card_v1_card_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_opentrawl_photos_card_v1_card_proto_goTypes = []any{
 	(*CardInput)(nil),            // 0: opentrawl.photos.card.v1.CardInput
 	(*ImmutableOriginal)(nil),    // 1: opentrawl.photos.card.v1.ImmutableOriginal
@@ -1808,10 +1976,12 @@ var file_opentrawl_photos_card_v1_card_proto_goTypes = []any{
 	(*PlaceCandidate)(nil),       // 10: opentrawl.photos.card.v1.PlaceCandidate
 	(*Address)(nil),              // 11: opentrawl.photos.card.v1.Address
 	(*FixtureResponse)(nil),      // 12: opentrawl.photos.card.v1.FixtureResponse
-	(*CardExecutionCustody)(nil), // 13: opentrawl.photos.card.v1.CardExecutionCustody
-	(*EvidenceLink)(nil),         // 14: opentrawl.photos.card.v1.EvidenceLink
-	(*ApprovedCardBundle)(nil),   // 15: opentrawl.photos.card.v1.ApprovedCardBundle
-	(*ApprovedCardItem)(nil),     // 16: opentrawl.photos.card.v1.ApprovedCardItem
+	(*PhotoCard)(nil),            // 13: opentrawl.photos.card.v1.PhotoCard
+	(*ModelLocation)(nil),        // 14: opentrawl.photos.card.v1.ModelLocation
+	(*CardExecutionCustody)(nil), // 15: opentrawl.photos.card.v1.CardExecutionCustody
+	(*EvidenceLink)(nil),         // 16: opentrawl.photos.card.v1.EvidenceLink
+	(*ApprovedCardBundle)(nil),   // 17: opentrawl.photos.card.v1.ApprovedCardBundle
+	(*ApprovedCardItem)(nil),     // 18: opentrawl.photos.card.v1.ApprovedCardItem
 }
 var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	1,  // 0: opentrawl.photos.card.v1.CardInput.immutable_original:type_name -> opentrawl.photos.card.v1.ImmutableOriginal
@@ -1826,13 +1996,14 @@ var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	10, // 9: opentrawl.photos.card.v1.PlaceProjection.candidates:type_name -> opentrawl.photos.card.v1.PlaceCandidate
 	4,  // 10: opentrawl.photos.card.v1.PlaceCandidate.coordinate:type_name -> opentrawl.photos.card.v1.Coordinate
 	11, // 11: opentrawl.photos.card.v1.PlaceCandidate.address:type_name -> opentrawl.photos.card.v1.Address
-	14, // 12: opentrawl.photos.card.v1.CardExecutionCustody.evidence:type_name -> opentrawl.photos.card.v1.EvidenceLink
-	16, // 13: opentrawl.photos.card.v1.ApprovedCardBundle.items:type_name -> opentrawl.photos.card.v1.ApprovedCardItem
-	14, // [14:14] is the sub-list for method output_type
-	14, // [14:14] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	14, // 12: opentrawl.photos.card.v1.PhotoCard.location:type_name -> opentrawl.photos.card.v1.ModelLocation
+	16, // 13: opentrawl.photos.card.v1.CardExecutionCustody.evidence:type_name -> opentrawl.photos.card.v1.EvidenceLink
+	18, // 14: opentrawl.photos.card.v1.ApprovedCardBundle.items:type_name -> opentrawl.photos.card.v1.ApprovedCardItem
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_card_v1_card_proto_init() }
@@ -1849,7 +2020,7 @@ func file_opentrawl_photos_card_v1_card_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_opentrawl_photos_card_v1_card_proto_rawDesc), len(file_opentrawl_photos_card_v1_card_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

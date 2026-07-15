@@ -45,7 +45,7 @@ func (c *Crawler) OpenRecord(ctx context.Context, req *trawlkit.Request, ref str
 	return record, nil
 }
 
-const sourceRecordSchemaVersion = 5
+const sourceRecordSchemaVersion = 6
 
 func projectOpenRecord(value archive.OpenResult) *photosopenv1.PhotosRecord {
 	return &photosopenv1.PhotosRecord{
@@ -245,6 +245,11 @@ func projectModel(value archive.OpenModel) *photosopenv1.Model {
 	setOptionalString(&record.Summary, value.Summary)
 	setOptionalString(&record.Description, value.Description)
 	setOptionalString(&record.OcrText, value.OCRText)
+	setOptionalString(&record.VisibleText, value.VisibleText)
+	if value.Location != nil {
+		record.Location = &photosopenv1.ModelLocation{Kind: value.Location.Kind, Confidence: value.Location.Confidence, Reason: value.Location.Reason}
+		setOptionalString(&record.Location.Name, value.Location.Name)
+	}
 	return record
 }
 
@@ -320,8 +325,18 @@ func projectOpenPresentationWithResource(value archive.OpenResult, resource *pre
 	if description := strings.TrimSpace(record.Model.GetDescription()); description != "" {
 		blocks = append(blocks, &presentationv1.Block{AnchorId: "description", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: description}}})
 	}
+	if visibleText := strings.TrimSpace(record.Model.GetVisibleText()); visibleText != "" {
+		blocks = append(blocks, &presentationv1.Block{AnchorId: "visible-text", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: visibleText}}})
+	}
 	if ocr := strings.TrimSpace(record.Model.GetOcrText()); ocr != "" {
 		blocks = append(blocks, &presentationv1.Block{AnchorId: "ocr", Content: &presentationv1.Block_Prose{Prose: &presentationv1.Prose{Text: ocr}}})
+	}
+	if location := record.Model.GetLocation(); location != nil {
+		name := strings.TrimSpace(location.GetName())
+		if name == "" {
+			name = "No useful location"
+		}
+		appendPresentationFieldWithAnchor(&fields, "Model location", name+" · "+location.GetKind()+" · "+location.GetConfidence()+"\n"+location.GetReason(), "model-location")
 	}
 	if len(fields) > 0 {
 		block := &presentationv1.Block{Content: &presentationv1.Block_Fields{Fields: &presentationv1.FieldGroup{Fields: fields}}}

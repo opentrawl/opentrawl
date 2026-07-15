@@ -20,7 +20,7 @@ func TestMigrationPaidCallLedgerPreservesVersion12GenerationRows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if version, err := upgraded.SchemaVersion(ctx); err != nil || version != 14 {
+	if version, err := upgraded.SchemaVersion(ctx); err != nil || version != SchemaVersion {
 		t.Fatalf("upgraded schema version = %d, %v", version, err)
 	}
 	after := readPaidCallMigrationRows(t, upgraded)

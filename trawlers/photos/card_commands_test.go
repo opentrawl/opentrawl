@@ -229,8 +229,8 @@ func TestCardCommandsStopBeforeWritesResumeRetainedSuccessAndReplayReadOnly(t *t
 		}
 		arguments, _ := json.Marshal(map[string]any{
 			"summary": "Synthetic card", "description": "A two-pixel synthetic image.",
-			"venue_plausibility": map[string]string{"candidate_id": "none", "verdict": "none", "reason": "No place claim."},
-			"ocr_text":           "", "uncertainties": []string{},
+			"location": map[string]string{"kind": "none", "candidate_id": "", "inferred_name": "", "confidence": "none", "reason": "No useful place."},
+			"visible_text": "", "uncertainties": []string{},
 		})
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []map[string]any{{"message": map[string]any{
 			"tool_calls": []map[string]any{{"type": "function", "function": map[string]any{"name": "submit_photo_card", "arguments": string(arguments)}}},

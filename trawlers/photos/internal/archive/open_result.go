@@ -128,7 +128,16 @@ type OpenModel struct {
 	Summary       string   `json:"summary,omitempty"`
 	Description   string   `json:"description,omitempty"`
 	OCRText       string   `json:"ocr_text,omitempty"`
+	VisibleText   string   `json:"visible_text,omitempty"`
+	Location      *OpenModelLocation `json:"location,omitempty"`
 	Uncertainties []string `json:"uncertainties,omitempty"`
+}
+
+type OpenModelLocation struct {
+	Name       string `json:"name,omitempty"`
+	Kind       string `json:"kind"`
+	Confidence string `json:"confidence"`
+	Reason     string `json:"reason"`
 }
 
 func newOpenResult(asset map[string]any, resources, locations, albums, modelObservations, placeObservations, metadataObservations []map[string]any) OpenResult {

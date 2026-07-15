@@ -113,4 +113,13 @@ message Model {
   optional string description = 4;
   optional string ocr_text = 5;
   repeated string uncertainties = 6;
+  optional string visible_text = 7;
+  ModelLocation location = 8;
+}
+
+message ModelLocation {
+  optional string name = 1;
+  string kind = 2;
+  string confidence = 3;
+  string reason = 4;
 }

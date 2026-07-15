@@ -3,9 +3,9 @@ package prompts
 import _ "embed"
 
 const (
-	PhotoCardVersion     = "photo-card-v4.0"
-	DefaultPhotoCardPath = "prompts/photo-card-v3.md"
+	PhotoCardVersion     = "photo-card-v5"
+	DefaultPhotoCardPath = "prompts/photo-card-v5.md"
 )
 
-//go:embed photo-card-v3.md
-var PhotoCardV3 string
+//go:embed photo-card-v5.md
+var PhotoCardV5 string

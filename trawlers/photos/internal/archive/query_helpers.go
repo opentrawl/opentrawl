@@ -103,9 +103,9 @@ func matchedAssetField(ctx context.Context, db *sql.DB, assetID, kind, snippet s
 		rows, err := rows(ctx, db, `
 select observation_type, value_text
 from model_observation
-where asset_id = ? and observation_type in (?, ?, ?, ?) and superseded_at is null
-order by case observation_type when ? then 1 when ? then 2 when ? then 3 else 4 end, id
-`, assetID, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR, modelObservationCardUncertainty, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR)
+where asset_id = ? and observation_type in (?, ?, ?, ?, ?, ?) and superseded_at is null
+order by case observation_type when ? then 1 when ? then 2 when ? then 3 when ? then 4 when ? then 5 else 6 end, id
+`, assetID, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR, modelObservationCardVisibleText, modelObservationCardLocation, modelObservationCardUncertainty, modelObservationCardSummary, modelObservationCardDescription, modelObservationCardOCR, modelObservationCardVisibleText, modelObservationCardLocation)
 		if err != nil {
 			return kind, err
 		}
@@ -116,6 +116,10 @@ order by case observation_type when ? then 1 when ? then 2 when ? then 3 else 4 
 					return "description", nil
 				case modelObservationCardOCR:
 					return "ocr", nil
+				case modelObservationCardVisibleText:
+					return "visible-text", nil
+				case modelObservationCardLocation:
+					return "model-location", nil
 				case modelObservationCardUncertainty:
 					return "uncertainty", nil
 				}

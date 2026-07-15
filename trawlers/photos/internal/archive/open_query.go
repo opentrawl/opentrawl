@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
+	"google.golang.org/protobuf/proto"
 )
 
 func Open(ctx context.Context, paths Paths, rowID string) (OpenResult, error) {
@@ -148,8 +150,63 @@ where asset_id = ? and id = ?
 		}
 	}
 	result := newOpenResult(asset, resources, locations, albums, modelObservations, placeObservations, metadataObservations)
+	if model, found, err := openTypedCard(ctx, db, rowID, result.Model); err != nil {
+		return OpenResult{}, err
+	} else if found {
+		result.SchemaVersion = 6
+		result.Model = model
+	}
 	result.Mechanical.SignalsTruncated = truncated
 	return result, nil
+}
+
+func openTypedCard(ctx context.Context, db *store.Store, assetID string, model OpenModel) (OpenModel, bool, error) {
+	var cardBytes, inputBytes []byte
+	err := db.DB().QueryRowContext(ctx, `
+select photo_card.card, card_execution.card_input
+from photo_card
+join card_execution on card_execution.generation_id = photo_card.generation_id
+join model_observation on model_observation.generation_id = photo_card.generation_id
+where photo_card.asset_id = ?
+  and model_observation.asset_id = ?
+  and model_observation.observation_type = ?
+  and model_observation.superseded_at is null
+limit 1`, assetID, assetID, modelObservationCardSummary).Scan(&cardBytes, &inputBytes)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model, false, nil
+	}
+	if err != nil {
+		return model, false, fmt.Errorf("read photo card: %w", err)
+	}
+	card := new(cardwire.PhotoCard)
+	input := new(cardwire.CardInput)
+	if err := proto.Unmarshal(cardBytes, card); err != nil {
+		return model, false, fmt.Errorf("decode photo card: %w", err)
+	}
+	if err := proto.Unmarshal(inputBytes, input); err != nil {
+		return model, false, fmt.Errorf("decode photo card input: %w", err)
+	}
+	name := ""
+	if card.GetLocation().GetKind() == locationCandidate {
+		candidates, _, err := candidateRegistry(input)
+		if err != nil {
+			return model, false, err
+		}
+		candidate, ok := candidates[card.GetLocation().GetCandidateId()]
+		if !ok {
+			return model, false, fmt.Errorf("photo card candidate is absent from CardInput")
+		}
+		name = candidate.Name
+	} else if card.GetLocation().GetKind() == locationInferred {
+		name = card.GetLocation().GetInferredName()
+	}
+	model.Summary = card.GetSummary()
+	model.Description = card.GetDescription()
+	model.VisibleText = card.GetVisibleText()
+	model.OCRText = ""
+	model.Uncertainties = append([]string(nil), card.GetUncertainties()...)
+	model.Location = &OpenModelLocation{Name: name, Kind: card.GetLocation().GetKind(), Confidence: card.GetLocation().GetConfidence(), Reason: card.GetLocation().GetReason()}
+	return model, true, nil
 }
 
 func hasMetadataAnchor(rows []map[string]any, anchorID string) bool {

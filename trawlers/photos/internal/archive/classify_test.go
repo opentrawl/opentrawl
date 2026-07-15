@@ -1470,35 +1470,37 @@ func openCandidateRow(name, tier string, distance float64, category, verdict str
 	}
 }
 
-func fixtureCardResponse(summary, description, venuePlausibility, ocr, uncertainty string) string {
-	venue := map[string]string{"candidate_id": "none", "verdict": venueVerdictNone, "reason": "no useful venue interpretation"}
-	for _, line := range strings.Split(venuePlausibility, "\n") {
+func fixtureCardResponse(summary, description, locationText, visibleText, uncertainty string) string {
+	location := map[string]string{"kind": locationNone, "candidate_id": "", "inferred_name": "", "confidence": "none", "reason": "no useful location"}
+	for _, line := range strings.Split(locationText, "\n") {
 		key, value, ok := strings.Cut(line, ":")
 		if !ok {
 			continue
 		}
 		switch strings.TrimSpace(key) {
 		case "candidate_id":
-			venue["candidate_id"] = strings.TrimSpace(value)
-		case "verdict":
-			venue["verdict"] = strings.TrimSpace(value)
+			location["candidate_id"] = strings.TrimSpace(value)
+			if strings.TrimSpace(value) != "" && strings.TrimSpace(value) != "none" {
+				location["kind"] = locationCandidate
+				location["confidence"] = "medium"
+			}
 		case "reason":
-			venue["reason"] = strings.TrimSpace(value)
+			location["reason"] = strings.TrimSpace(value)
 		}
 	}
-	if strings.TrimSpace(venuePlausibility) != "" && venue["reason"] == "no useful venue interpretation" {
-		venue["reason"] = strings.TrimSpace(venuePlausibility)
+	if strings.TrimSpace(locationText) != "" && location["reason"] == "no useful location" {
+		location["reason"] = strings.TrimSpace(locationText)
 	}
-	if strings.EqualFold(strings.TrimSpace(ocr), "none") {
-		ocr = ""
+	if strings.EqualFold(strings.TrimSpace(visibleText), "none") {
+		visibleText = ""
 	}
 	uncertainties := []string{}
 	if text := strings.TrimSpace(uncertainty); text != "" && !strings.EqualFold(text, "none") {
 		uncertainties = append(uncertainties, text)
 	}
 	arguments, _ := json.Marshal(map[string]any{
-		"summary": summary, "description": description, "venue_plausibility": venue,
-		"ocr_text": ocr, "uncertainties": uncertainties,
+		"summary": summary, "description": description, "location": location,
+		"visible_text": visibleText, "uncertainties": uncertainties,
 	})
 	return string(arguments)
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
 	"github.com/opentrawl/opentrawl/trawlkit/model"
 )
 
@@ -13,9 +14,15 @@ const (
 	modelObservationCardSummary     = "card_summary"
 	modelObservationCardDescription = "card_description"
 	modelObservationCardUncertainty = "card_uncertainty"
-	modelObservationCardOCR         = "card_ocr"
+	modelObservationCardOCR         = "card_ocr" // v1 only
+	modelObservationCardVisibleText = "card_visible_text"
+	modelObservationCardLocation    = "card_location"
 
-	photoCardToolName        = "submit_photo_card"
+	photoCardToolName = "submit_photo_card"
+	locationCandidate = "candidate"
+	locationInferred  = "inferred"
+	locationNone      = "none"
+
 	venueVerdictCorroborated = "corroborated"
 	venueVerdictPlausible    = "plausible"
 	venueVerdictInconsistent = "inconsistent"
@@ -28,33 +35,37 @@ var photoCardToolSchema = json.RawMessage(`{
   "properties": {
     "summary": {
       "type": "string",
-      "description": "One sentence that states the main visible subject."
+      "minLength": 1,
+      "description": "One sentence stating the main visible subject and why the image is recognisable."
     },
     "description": {
       "type": "string",
-      "description": "A grounded description of the visible evidence."
+      "minLength": 1,
+      "description": "A long, specific account of the visible scene. Separate observation from inference and do not copy mechanical metadata."
     },
-    "venue_plausibility": {
+    "location": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "candidate_id": {"type": "string", "description": "An exact supplied candidate id or none."},
-        "verdict": {"type": "string", "enum": ["corroborated", "plausible", "inconsistent", "none"]},
-        "reason": {"type": "string", "description": "A short explanation of the venue verdict."}
+        "kind": {"type": "string", "enum": ["candidate", "inferred", "none"], "description": "Whether the judgement selects a supplied candidate, names a model-inferred place, or finds no useful location."},
+        "candidate_id": {"type": "string", "description": "The exact supplied provider candidate id when kind is candidate. Use an empty string otherwise."},
+        "inferred_name": {"type": "string", "description": "The model-inferred place name when kind is inferred. Use an empty string otherwise."},
+        "confidence": {"type": "string", "enum": ["high", "medium", "low", "none"], "description": "Confidence in this location judgement. Use none only when kind is none."},
+        "reason": {"type": "string", "minLength": 1, "description": "A short statement of the visible and checked evidence for the judgement, including why no place is useful."}
       },
-      "required": ["candidate_id", "verdict", "reason"]
+      "required": ["kind", "candidate_id", "inferred_name", "confidence", "reason"]
     },
-    "ocr_text": {
+    "visible_text": {
       "type": "string",
-      "description": "Readable text from the image, or an empty string."
+      "description": "All useful readable text, preserving reading order, line breaks, repeated values and original language. Use an empty string when there is none."
     },
     "uncertainties": {
       "type": "array",
-      "items": {"type": "string"},
-      "description": "Only uncertainties that affect interpretation."
+      "items": {"type": "string", "minLength": 1},
+      "description": "Only unresolved ambiguities that would change how a person interprets the image."
     }
   },
-  "required": ["summary", "description", "venue_plausibility", "ocr_text", "uncertainties"]
+  "required": ["summary", "description", "location", "visible_text", "uncertainties"]
 }`)
 
 type contentObservation struct {
@@ -69,18 +80,30 @@ type modelResult struct {
 	Payload           map[string]any
 	ImageBytes        int64
 	ImageSHA256       string
+	Card              photoCard
+	TypedCard         *cardwire.PhotoCard
 	VenuePlausibility venuePlausibility
 	Observations      []contentObservation
 }
 
 type photoCard struct {
-	Summary           string
-	Description       string
-	VenuePlausibility venuePlausibility
-	OCRText           string
-	Uncertainties     []string
+	Summary       string
+	Description   string
+	Location      modelLocation
+	VisibleText   string
+	Uncertainties []string
 }
 
+type modelLocation struct {
+	Kind         string `json:"kind"`
+	CandidateID  string `json:"candidate_id"`
+	InferredName string `json:"inferred_name"`
+	Confidence   string `json:"confidence"`
+	Reason       string `json:"reason"`
+}
+
+// venuePlausibility remains the mechanical projection for historical v1 cards.
+// New v2 cards use modelLocation and never write model place evidence.
 type venuePlausibility struct {
 	CandidateID string `json:"candidate_id"`
 	Verdict     string `json:"verdict"`
@@ -111,7 +134,7 @@ func parsePhotoCardToolCall(calls []model.ToolCall, prepared preparedCardRequest
 	if err != nil {
 		return photoCard{}, err
 	}
-	if err := requireOnlyFields(fields, "photo card", "summary", "description", "venue_plausibility", "ocr_text", "uncertainties"); err != nil {
+	if err := requireOnlyFields(fields, "photo card", "summary", "description", "location", "visible_text", "uncertainties"); err != nil {
 		return photoCard{}, err
 	}
 	summary, err := requiredString(fields, "summary", "photo card")
@@ -122,7 +145,7 @@ func parsePhotoCardToolCall(calls []model.ToolCall, prepared preparedCardRequest
 	if err != nil {
 		return photoCard{}, err
 	}
-	ocrText, err := requiredString(fields, "ocr_text", "photo card")
+	visibleText, err := requiredString(fields, "visible_text", "photo card")
 	if err != nil {
 		return photoCard{}, err
 	}
@@ -130,46 +153,46 @@ func parsePhotoCardToolCall(calls []model.ToolCall, prepared preparedCardRequest
 	if err != nil {
 		return photoCard{}, err
 	}
-	venueFields, err := requiredObject(fields, "venue_plausibility", "photo card")
+	locationFields, err := requiredObject(fields, "location", "photo card")
 	if err != nil {
 		return photoCard{}, err
 	}
-	if err := requireOnlyFields(venueFields, "venue plausibility", "candidate_id", "verdict", "reason"); err != nil {
+	if err := requireOnlyFields(locationFields, "location", "kind", "candidate_id", "inferred_name", "confidence", "reason"); err != nil {
 		return photoCard{}, err
 	}
-	candidateID, err := requiredString(venueFields, "candidate_id", "venue plausibility")
+	kind, err := requiredString(locationFields, "kind", "location")
 	if err != nil {
 		return photoCard{}, err
 	}
-	verdict, err := requiredString(venueFields, "verdict", "venue plausibility")
+	candidateID, err := requiredString(locationFields, "candidate_id", "location")
 	if err != nil {
 		return photoCard{}, err
 	}
-	reason, err := requiredString(venueFields, "reason", "venue plausibility")
+	inferredName, err := requiredString(locationFields, "inferred_name", "location")
+	if err != nil {
+		return photoCard{}, err
+	}
+	confidence, err := requiredString(locationFields, "confidence", "location")
+	if err != nil {
+		return photoCard{}, err
+	}
+	reason, err := requiredString(locationFields, "reason", "location")
 	if err != nil {
 		return photoCard{}, err
 	}
 	if strings.TrimSpace(summary) == "" || strings.TrimSpace(description) == "" || strings.TrimSpace(reason) == "" {
-		return photoCard{}, fmt.Errorf("%w: summary, description and venue reason must not be empty", errModelCardParse)
-	}
-	if verdict != venueVerdictCorroborated && verdict != venueVerdictPlausible && verdict != venueVerdictInconsistent && verdict != venueVerdictNone {
-		return photoCard{}, fmt.Errorf("%w: unknown venue verdict %q", errModelCardParse, verdict)
-	}
-	if (candidateID == venueVerdictNone) != (verdict == venueVerdictNone) {
-		return photoCard{}, fmt.Errorf("%w: candidate_id and verdict must both be none or both name a candidate", errModelCardParse)
+		return photoCard{}, fmt.Errorf("%w: summary, description and location reason must not be empty", errModelCardParse)
 	}
 	card := photoCard{
 		Summary:       summary,
 		Description:   description,
-		OCRText:       ocrText,
+		VisibleText:   visibleText,
 		Uncertainties: uncertainties,
-		VenuePlausibility: venuePlausibility{
-			CandidateID: candidateID,
-			Verdict:     verdict,
-			Reason:      reason,
+		Location: modelLocation{
+			Kind: kind, CandidateID: candidateID, InferredName: inferredName, Confidence: confidence, Reason: reason,
 		},
 	}
-	if err := validateVenueCandidate(prepared, &card.VenuePlausibility); err != nil {
+	if err := validateModelLocation(prepared, card.Location); err != nil {
 		return photoCard{}, err
 	}
 	return card, nil
@@ -225,6 +248,9 @@ func requiredStrings(fields map[string]json.RawMessage, key, name string) ([]str
 		if !ok {
 			return nil, fmt.Errorf("%w: %s.%s[%d] must be a string", errModelCardParse, name, key, index)
 		}
+		if strings.TrimSpace(stringValue) == "" {
+			return nil, fmt.Errorf("%w: %s.%s[%d] must not be empty", errModelCardParse, name, key, index)
+		}
 		result[index] = stringValue
 	}
 	return result, nil
@@ -238,26 +264,48 @@ func requiredObject(fields map[string]json.RawMessage, key, name string) (map[st
 	return object, nil
 }
 
-func validateVenueCandidate(prepared preparedCardRequest, plausibility *venuePlausibility) error {
-	if plausibility == nil {
-		return fmt.Errorf("%w: missing venue_plausibility", errUnknownCardCandidate)
+func validateModelLocation(prepared preparedCardRequest, location modelLocation) error {
+	switch location.Kind {
+	case locationCandidate:
+		if location.CandidateID == "" || location.InferredName != "" || location.Confidence == "none" {
+			return fmt.Errorf("%w: candidate location requires an exact candidate id, no inferred name and non-none confidence", errModelCardParse)
+		}
+		if _, ok := prepared.CandidateByID[location.CandidateID]; !ok {
+			return fmt.Errorf("%w: %s", errUnknownCardCandidate, location.CandidateID)
+		}
+	case locationInferred:
+		if location.CandidateID != "" || strings.TrimSpace(location.InferredName) == "" || location.Confidence == "none" {
+			return fmt.Errorf("%w: inferred location requires a name, no candidate id and non-none confidence", errModelCardParse)
+		}
+	case locationNone:
+		if location.CandidateID != "" || location.InferredName != "" || location.Confidence != "none" {
+			return fmt.Errorf("%w: no location requires empty names and none confidence", errModelCardParse)
+		}
+	default:
+		return fmt.Errorf("%w: unknown location kind %q", errModelCardParse, location.Kind)
 	}
-	if plausibility.CandidateID == venueVerdictNone {
-		return nil
-	}
-	if _, ok := prepared.CandidateByID[plausibility.CandidateID]; !ok {
-		return fmt.Errorf("%w: %s", errUnknownCardCandidate, plausibility.CandidateID)
+	if location.Confidence != "high" && location.Confidence != "medium" && location.Confidence != "low" && location.Confidence != "none" {
+		return fmt.Errorf("%w: unknown location confidence %q", errModelCardParse, location.Confidence)
 	}
 	return nil
 }
 
-func observationsFromCard(card photoCard) []contentObservation {
+func observationsFromCard(card photoCard, prepared preparedCardRequest) []contentObservation {
 	observations := []contentObservation{
 		cardObservation(modelObservationCardSummary, card.Summary),
 		cardObservation(modelObservationCardDescription, card.Description),
 	}
-	if card.OCRText != "" {
-		observations = append(observations, cardObservation(modelObservationCardOCR, card.OCRText))
+	if card.VisibleText != "" {
+		observations = append(observations, cardObservation(modelObservationCardVisibleText, card.VisibleText))
+	}
+	locationText := card.Location.Reason
+	if card.Location.Kind == locationCandidate {
+		locationText = prepared.CandidateByID[card.Location.CandidateID].Name + "\n" + card.Location.Reason
+	} else if card.Location.Kind == locationInferred {
+		locationText = card.Location.InferredName + "\n" + card.Location.Reason
+	}
+	if locationText != "" {
+		observations = append(observations, cardObservation(modelObservationCardLocation, locationText))
 	}
 	for _, uncertainty := range card.Uncertainties {
 		observations = append(observations, cardObservation(modelObservationCardUncertainty, uncertainty))
@@ -276,11 +324,25 @@ func cardObservation(kind, text string) contentObservation {
 
 func photoCardPayload(card photoCard) map[string]any {
 	return map[string]any{
-		"summary":            card.Summary,
-		"description":        card.Description,
-		"venue_plausibility": card.VenuePlausibility,
-		"ocr_text":           card.OCRText,
-		"uncertainties":      card.Uncertainties,
+		"summary":       card.Summary,
+		"description":   card.Description,
+		"location":      card.Location,
+		"visible_text":  card.VisibleText,
+		"uncertainties": card.Uncertainties,
+	}
+}
+
+func photoCardMessage(card photoCard) *cardwire.PhotoCard {
+	return &cardwire.PhotoCard{
+		Summary:       card.Summary,
+		Description:   card.Description,
+		VisibleText:   card.VisibleText,
+		Uncertainties: append([]string(nil), card.Uncertainties...),
+		Location: &cardwire.ModelLocation{
+			Kind: card.Location.Kind, CandidateId: card.Location.CandidateID,
+			InferredName: card.Location.InferredName, Confidence: card.Location.Confidence,
+			Reason: card.Location.Reason,
+		},
 	}
 }
 

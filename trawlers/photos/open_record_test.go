@@ -46,7 +46,7 @@ func TestOpenRecordProjection(t *testing.T) {
 	}
 	t.Logf("canonical Go input: %s", inputJSON)
 	record := projectOpenRecord(input)
-	if record.SchemaVersion != 5 {
+	if record.SchemaVersion != 6 {
 		t.Fatalf("schema version = %d", record.SchemaVersion)
 	}
 	if record.Stale.GetReason() != "source details changed after this card was created" || record.Stale.GetBanner() != "Card status: Stale · source details changed after this card was created · since 10 July 2026" {
@@ -72,7 +72,7 @@ func TestOpenRecordProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("ProtoJSON: %s", data)
-	for _, fragment := range []string{`"schema_version":5`, `"ref":"photos:asset/fixture-1"`, `"horizontal_accuracy_meters":4.5`, `"albums":[{"title":"Synthetic trip"}]`} {
+	for _, fragment := range []string{`"schema_version":6`, `"ref":"photos:asset/fixture-1"`, `"horizontal_accuracy_meters":4.5`, `"albums":[{"title":"Synthetic trip"}]`} {
 		if !strings.Contains(string(data), fragment) {
 			t.Fatalf("ProtoJSON missing %q: %s", fragment, data)
 		}
@@ -82,7 +82,7 @@ func TestOpenRecordProjection(t *testing.T) {
 			t.Fatalf("removed field leaked %q", forbidden)
 		}
 	}
-	assertExactRecord(t, record, &photosopenv1.PhotosRecord{}, `{"schema_version":5,"ref":"photos:asset/fixture-1","stale":{"since":"2026-07-10T12:00:00Z","reason":"source details changed after this card was created","banner":"Card status: Stale · source details changed after this card was created · since 10 July 2026"},"mechanical":{"source":{"state":"current"},"captured":{"local":"2026-07-10T14:00:00+02:00","timezone":"Europe/Amsterdam"},"media":{"kind":"photo","width":"4032","height":"3024","duration_seconds":1.5},"place":{"name":"Example Square","latitude":52.3702,"longitude":4.8952},"gps":{"latitude":52.3702,"longitude":4.8952,"horizontal_accuracy_meters":4.5},"known_place":{"kind":"home","name":"Example home","after":true},"venue_candidates":[],"camera":{"display":"Example Camera","make":"Example","model":"C1","lens_model":"Prime","focal_length_mm":35,"focal_length_35mm":35,"aperture":2.8,"shutter_speed":"1/125","iso":"200"},"albums":[{"title":"Synthetic trip"}],"original":{"filename":"fixture.heic","bytes":"4096","availability":"local"},"flags":["favourite"]},"model":{"prompt_version":"v1","model_id":"example-model","summary":"Synthetic square.","description":"A synthetic scene.","ocr_text":"EXAMPLE","uncertainties":["weather"]}}`)
+	assertExactRecord(t, record, &photosopenv1.PhotosRecord{}, `{"schema_version":6,"ref":"photos:asset/fixture-1","stale":{"since":"2026-07-10T12:00:00Z","reason":"source details changed after this card was created","banner":"Card status: Stale · source details changed after this card was created · since 10 July 2026"},"mechanical":{"source":{"state":"current"},"captured":{"local":"2026-07-10T14:00:00+02:00","timezone":"Europe/Amsterdam"},"media":{"kind":"photo","width":"4032","height":"3024","duration_seconds":1.5},"place":{"name":"Example Square","latitude":52.3702,"longitude":4.8952},"gps":{"latitude":52.3702,"longitude":4.8952,"horizontal_accuracy_meters":4.5},"known_place":{"kind":"home","name":"Example home","after":true},"venue_candidates":[],"camera":{"display":"Example Camera","make":"Example","model":"C1","lens_model":"Prime","focal_length_mm":35,"focal_length_35mm":35,"aperture":2.8,"shutter_speed":"1/125","iso":"200"},"albums":[{"title":"Synthetic trip"}],"original":{"filename":"fixture.heic","bytes":"4096","availability":"local"},"flags":["favourite"]},"model":{"prompt_version":"v1","model_id":"example-model","summary":"Synthetic square.","description":"A synthetic scene.","ocr_text":"EXAMPLE","uncertainties":["weather"]}}`)
 	current := input
 	current.Stale = nil
 	currentRecord := projectOpenRecord(current)
@@ -127,16 +127,40 @@ func TestPhotoPresentationContainsSemanticSearchAnchors(t *testing.T) {
 	value := archive.OpenResult{
 		Ref:        "photos:asset/example",
 		Mechanical: archive.OpenMechanical{Source: archive.OpenSource{State: "current"}, Media: &archive.OpenMedia{Kind: "photo"}, Place: &archive.OpenPlace{Name: "Example place"}, Address: "1 Example Street", Albums: []archive.OpenAlbum{{Title: "Example album"}}, Signals: []archive.OpenSignal{{AnchorID: "metadata-example", Label: "screenshot_candidate"}}, Original: &archive.OpenOriginal{Filename: "example.heic"}, Filenames: []string{"example.heic", "alternate.heic"}},
-		Model:      archive.OpenModel{Summary: "Lantern summary", Description: "Lantern description", OCRText: "LANTERN", Uncertainties: []string{"Synthetic uncertainty"}},
+		Model:      archive.OpenModel{Summary: "Lantern summary", Description: "Lantern description", OCRText: "LANTERN", VisibleText: "VISIBLE LANTERN", Location: &archive.OpenModelLocation{Name: "Synthetic square", Kind: "inferred", Confidence: "medium", Reason: "The name is synthetic test data."}, Uncertainties: []string{"Synthetic uncertainty"}},
 	}
 	record := &openv1.OpenRecord{SourceId: "photos", OpenRef: value.Ref, Data: &anypb.Any{TypeUrl: "type.example/photos"}, Presentation: projectOpenPresentation(value)}
-	for _, anchorID := range []string{"asset-details", "filename", "album", "media", "place", "address", "metadata-example", "description", "ocr"} {
+	for _, anchorID := range []string{"asset-details", "filename", "album", "media", "place", "address", "metadata-example", "description", "visible-text", "ocr", "model-location"} {
 		if err := openrecord.ValidateRequestedAnchor(record, anchorID); err != nil {
 			t.Fatalf("anchor %q: %v", anchorID, err)
 		}
 	}
 	if visible := prototext.Format(record.Presentation); !strings.Contains(visible, "alternate.heic") {
 		t.Fatalf("filename anchor omits searchable filename: %s", visible)
+	}
+}
+
+func TestOpenRecordProjectsModelLocationWithoutCandidateID(t *testing.T) {
+	value := archive.OpenResult{
+		Ref: "photos:asset/fixture-typed-card",
+		Model: archive.OpenModel{
+			Summary: "Synthetic terminal.", Description: "A synthetic ferry terminal at dusk.", VisibleText: "FERRY 12",
+			Location: &archive.OpenModelLocation{Name: "Synthetic Ferry Terminal", Kind: "candidate", Confidence: "high", Reason: "The terminal sign matches the checked candidate."},
+		},
+	}
+	data, err := (protojson.MarshalOptions{UseProtoNames: true, EmitDefaultValues: true}).Marshal(projectOpenRecord(value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, fragment := range []string{`"schema_version":6`, `"visible_text":"FERRY 12"`, `"name":"Synthetic Ferry Terminal"`, `"kind":"candidate"`, `"confidence":"high"`, `"reason":"The terminal sign matches the checked candidate."`} {
+		if !strings.Contains(string(data), fragment) {
+			t.Fatalf("ProtoJSON missing %q: %s", fragment, data)
+		}
+	}
+	for _, forbidden := range []string{"candidate_id", "place_1_candidate_1"} {
+		if strings.Contains(string(data), forbidden) {
+			t.Fatalf("internal candidate identifier leaked %q: %s", forbidden, data)
+		}
 	}
 }
 

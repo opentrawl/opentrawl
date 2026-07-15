@@ -100,6 +100,17 @@ func printOpenText(w io.Writer, result archive.OpenResult) error {
 		title = openFallbackTitle(result)
 	}
 	fields := openMechanicalFields(result.Mechanical)
+	if location := result.Model.Location; location != nil {
+		value := strings.TrimSpace(location.Name)
+		if value == "" {
+			value = "No useful location"
+		}
+		value += " · " + location.Kind + " · " + location.Confidence + "\n" + location.Reason
+		fields = append(fields, render.CardField{Label: "Model location", Value: value})
+	}
+	if text := strings.TrimSpace(result.Model.VisibleText); text != "" {
+		fields = append(fields, render.CardField{Label: "Visible text", Value: text})
+	}
 	if len(result.Model.Uncertainties) > 0 {
 		fields = append(fields, render.CardField{Label: "Uncertainty", Value: strings.Join(result.Model.Uncertainties, "; ") + "."})
 	}

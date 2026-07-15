@@ -300,7 +300,7 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if observationsWritten != 3 || placesWritten != 4 {
+	if observationsWritten != 4 || placesWritten != 3 {
 		t.Fatalf("first parse wrote observations=%d places=%d", observationsWritten, placesWritten)
 	}
 	observationsWritten, placesWritten, err = write(now.Add(2 * time.Second))
@@ -355,7 +355,7 @@ func TestModelGenerationMixedPlaceProvenanceIsIdempotent(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if knownObservations != 3 || knownPlaces != 1 {
+	if knownObservations != 4 || knownPlaces != 1 {
 		t.Fatalf("known-place write observations=%d places=%d", knownObservations, knownPlaces)
 	}
 
@@ -367,7 +367,7 @@ where asset_id = ? and superseded_at is null
 `, assetID).Scan(&observations, &linked); err != nil {
 		t.Fatal(err)
 	}
-	if observations != 3 || linked != 3 {
+	if observations != 4 || linked != 4 {
 		t.Fatalf("duplicate parse observations=%d linked=%d", observations, linked)
 	}
 	type storedPlaceObservation struct {
@@ -407,7 +407,7 @@ order by p.asset_id, p.observation_type, p.value_text
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if len(stored) != 5 {
+	if len(stored) != 4 {
 		t.Fatalf("stored place observations = %#v", stored)
 	}
 	want := map[string]struct {
@@ -415,8 +415,7 @@ order by p.asset_id, p.observation_type, p.value_text
 		searchFTSRows int
 	}{
 		assetID + "|poi_candidate|Synthetic Provider Bakery":                             {generationID: "", searchFTSRows: 0},
-		assetID + "|poi_candidate|Synthetic Card Venue":                                  {generationID: decision.GenerationID, searchFTSRows: 0},
-		assetID + "|venue|Synthetic Card Venue":                                          {generationID: decision.GenerationID, searchFTSRows: 1},
+		assetID + "|poi_candidate|Synthetic Card Venue":                                  {generationID: "", searchFTSRows: 0},
 		assetID + "|address|Synthetic Provider Avenue 42, Synthetic Town, Syntheticland": {generationID: "", searchFTSRows: 1},
 		knownAssetID + "|known_place|work — Synthetic Local Workshop":                    {generationID: "", searchFTSRows: 1},
 	}

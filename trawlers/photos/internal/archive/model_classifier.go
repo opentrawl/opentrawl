@@ -14,7 +14,7 @@ import (
 const (
 	modelClassifierSource = "photo_card"
 	modelPromptVersion    = repoPrompts.PhotoCardVersion
-	modelParserVersion    = "photo-card-tool.v1"
+	modelParserVersion    = "photo-card-tool.v2"
 )
 
 type modelClassifier struct {
@@ -60,15 +60,13 @@ func (c modelClassifier) parseResult(response model.Response, prepared preparedC
 	if err != nil {
 		return modelResult{}, err
 	}
-	if err := validateVenueCandidate(prepared, &card.VenuePlausibility); err != nil {
-		return modelResult{}, err
-	}
 	return modelResult{
-		Payload:           photoCardPayload(card),
-		ImageBytes:        prepared.Image.Bytes,
-		ImageSHA256:       prepared.Image.SHA256,
-		VenuePlausibility: card.VenuePlausibility,
-		Observations:      observationsFromCard(card),
+		Payload:     photoCardPayload(card),
+		ImageBytes:  prepared.Image.Bytes,
+		ImageSHA256: prepared.Image.SHA256,
+		Card:        card,
+		TypedCard:   photoCardMessage(card),
+		Observations: observationsFromCard(card, prepared),
 	}, nil
 }
 

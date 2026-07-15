@@ -376,7 +376,7 @@ func renderCardInputPrompt(input *cardwire.CardInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	tmpl, err := template.New("photo-card").Option("missingkey=error").Parse(repoPrompts.PhotoCardV3)
+	tmpl, err := template.New("photo-card").Option("missingkey=error").Parse(repoPrompts.PhotoCardV5)
 	if err != nil {
 		return "", err
 	}

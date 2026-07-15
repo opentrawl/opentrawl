@@ -1,10 +1,10 @@
 ---
 written_by: ai
-prompt_version: photo-card-v4.0
-change_rationale: "Read complete CardInput ProtoJSON and submit one typed photo card."
+prompt_version: photo-card-v5
+change_rationale: "Return one complete typed card with grounded prose, a model location and complete visible text."
 ---
 
-# photoscrawl photo card prompt v4
+# photoscrawl photo card prompt v5
 
 Create a personal photo-library card for the supplied image.
 
@@ -32,24 +32,13 @@ indoor/outdoor setting, and interactions. Include people only as visible roles
 or counts unless the metadata gives an explicit source label. Do not identify a
 person from the image alone.
 
-Place candidates are only evidence for the separate venue plausibility result.
-Never turn a merely nearby candidate into a visual claim. A visible brand, menu,
-label or screen is not a venue name unless it supports the same listed
-candidate. For venue plausibility, choose one provider place candidate or
-`none`. Use
-`corroborated`, `plausible`, `inconsistent` or `none` as the verdict. Give one
-short reason.
-
-Use `corroborated` only when visible evidence supports the same venue name,
-storefront, sign, logo, entrance, menu, receipt, or unmistakable venue type. Use
-`plausible` when a candidate is near the GPS point and nothing visible
-contradicts that place type. Use `inconsistent` when the scene contradicts the
-place type, for example a private home meal near a registered business. Use
-`none` when no listed candidate is a useful venue interpretation.
-
-Do not use `corroborated` for a merely nearby provider candidate. Do not use
-`plausible` when the image itself points to a private, residential, vehicle,
-outdoor, office, hotel-room, or other non-matching setting.
+Give one useful location judgement from the image and checked context. Use
+`candidate` with the exact supplied id when a listed candidate fits. Use
+`inferred` with a place name when signs, text, landmarks or context support a
+place absent from candidates. Use `none` with `confidence: none` instead of
+forcing a weak claim. Never turn a merely nearby candidate into a visual claim.
+Keep candidate ids only in the location field. Give a short reason based on
+visible and checked evidence.
 
 Transcribe readable text, document fields, barcodes, QR labels, ticket numbers,
 flight or train numbers, seat, gate, route, prices, totals, dates, times, menu
@@ -58,7 +47,9 @@ items, signs, labels, and screen text as completely as the image allows.
 Group text by source when there are multiple objects. Preserve non-English text
 where legible. Mark uncertain characters with `?`.
 
-If there is no useful readable text, submit an empty OCR field.
+Put all useful readable text in `visible_text` as one string. Preserve reading
+order, line breaks, repeated values and original language. If there is no useful
+readable text, submit an empty string.
 
 Write only the uncertainties that affect interpretation. Include uncertain
 venue, document, OCR, object, event, or scene claims. Do not pad this section.

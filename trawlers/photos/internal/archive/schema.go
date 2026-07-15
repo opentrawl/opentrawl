@@ -1,6 +1,6 @@
 package archive
 
-const SchemaVersion = 14
+const SchemaVersion = 15
 
 // Porter stemming so a search for "grill" matches cards that say "grilled".
 // ensureSearchIndex rebuilds archives created before the tokenizer change.
@@ -212,6 +212,12 @@ create table if not exists card_execution (
   generation_id text not null unique references model_generation(id),
   custody blob not null,
   completed_at text not null
+);
+
+create table if not exists photo_card (
+  generation_id text primary key references model_generation(id),
+  asset_id text not null references asset(id),
+  card blob not null
 );
 
 create table if not exists paid_call_stage (

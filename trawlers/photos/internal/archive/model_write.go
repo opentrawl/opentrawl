@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"google.golang.org/protobuf/proto"
 )
 
 func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInput, classifier modelClassifier, result modelResult, prepared preparedCardRequest, classifiedAt time.Time, generationID string) (int, int, error) {
@@ -20,6 +22,15 @@ func writeModelClassification(ctx context.Context, tx *sql.Tx, input classifyInp
 	placeWritten, err := writeModelPlaceClassificationAt(ctx, tx, input, result.VenuePlausibility, prepared, generationID, classifiedAt)
 	if err != nil {
 		return 0, placeWritten, err
+	}
+	if result.TypedCard != nil {
+		cardBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(result.TypedCard)
+		if err != nil {
+			return 0, placeWritten, fmt.Errorf("marshal photo card: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `insert into photo_card(generation_id, asset_id, card) values (?, ?, ?) on conflict(generation_id) do nothing`, generationID, input.AssetID, cardBytes); err != nil {
+			return 0, placeWritten, fmt.Errorf("write photo card: %w", err)
+		}
 	}
 	written := 0
 	cardFTSID := ""
