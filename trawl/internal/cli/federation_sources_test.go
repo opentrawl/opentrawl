@@ -272,6 +272,7 @@ func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query tr
 		ShortRef: "short-7",
 		AnchorID: trawlkit.MatchAnchorID,
 		Summary:  trawlkit.ResultSummary{Title: "Synthetic note", Subtitle: "Notes"},
+		Archive:  []trawlkit.ArchiveContext{{Kind: "notes", Label: "In Notes"}},
 		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Note passage", "Synthetic note")},
 	}}, TotalMatches: 1}, nil
 }

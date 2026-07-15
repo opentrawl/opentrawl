@@ -66,6 +66,7 @@ func TestProjectSearchRoundTripsEveryEvidenceKind(t *testing.T) {
 		Results: []trawlkit.Hit{{
 			Ref: "gmail:msg/example-1", AnchorID: "body",
 			Summary: trawlkit.ResultSummary{Title: "Synthetic message"},
+			Archive: []trawlkit.ArchiveContext{{Kind: "gmail", Label: "Received"}},
 			Evidence: []trawlkit.EvidenceFragment{
 				trawlkit.TextMatch("Message body", "Synthetic message text"),
 				trawlkit.FieldMatch("Subject", "subject", "Synthetic subject"),
@@ -253,6 +254,11 @@ func TestSearchRejectsForeignHitSourceAndConflictingLimit(t *testing.T) {
 			hit.AnchorID = "matching passage"
 			return hit
 		}()},
+		{name: "missing archive context", hit: func() trawlkit.Hit {
+			hit := federationSearchHit("notes:note/example-1", "Synthetic note", "matching text", time.Time{})
+			hit.Archive = nil
+			return hit
+		}()},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			if _, err := ProjectSearch(manifestFixture("notes", "Notes"), trawlkit.SearchResult{Results: []trawlkit.Hit{test.hit}}); err == nil {
@@ -321,7 +327,7 @@ func TestSearchBoundaryEvidence(t *testing.T) {
 	oneResult := trawlkit.SearchResult{
 		WhoResolved: &trawlkit.WhoResolved{Who: "Avery Example", Identifiers: []string{"avery@example.com"}},
 		Results: []trawlkit.Hit{
-			{Ref: "gmail:message:example-1", ShortRef: "mail:1", Time: mustTime("2026-07-12T10:00:00+02:00"), AnchorID: trawlkit.MatchAnchorID, Summary: trawlkit.ResultSummary{Title: "Canal room", Subtitle: "Avery Example"}, Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message body", "Synthetic launch note"), trawlkit.FieldMatch("Mailbox", "mailbox", "Work")}, AllDay: true, Availability: &availability, Unread: &unread},
+			{Ref: "gmail:message:example-1", ShortRef: "mail:1", Time: mustTime("2026-07-12T10:00:00+02:00"), AnchorID: trawlkit.MatchAnchorID, Summary: trawlkit.ResultSummary{Title: "Canal room", Subtitle: "Avery Example"}, Archive: []trawlkit.ArchiveContext{{Kind: "gmail", Label: "Received"}}, Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message body", "Synthetic launch note"), trawlkit.FieldMatch("Mailbox", "mailbox", "Work")}, AllDay: true, Availability: &availability, Unread: &unread},
 			federationSearchHit("gmail:message:example-2", "Casey Example", "Synthetic follow-up", mustTime("2026-07-12T08:00:00Z")),
 		},
 		TotalMatches: 3,

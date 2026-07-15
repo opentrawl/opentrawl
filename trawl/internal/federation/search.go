@@ -154,6 +154,9 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 		if len(hit.Evidence) == 0 {
 			return nil, fmt.Errorf("search hit evidence is empty")
 		}
+		if len(hit.Archive) == 0 {
+			return nil, fmt.Errorf("search hit archive context is empty")
+		}
 		projected := &federationv1.SearchHit{
 			SourceId: manifest.ID,
 			OpenRef:  hit.Ref,

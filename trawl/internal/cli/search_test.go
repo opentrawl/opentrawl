@@ -186,8 +186,8 @@ func TestSearchQuerylessRecencyGolden(t *testing.T) {
 		"More: trawl search --source imessage,telegram --after 2026-01-01 --limit 4",
 		"",
 		fmt.Sprintf("%-16s  %-8s  %-16s  %s", "date", "source", "ref", "text"),
-		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-14T09:00:00Z"), "Telegram", "telegram:msg/new", "Ops — Bob · Message from Bob: newer filter match"),
-		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-12T10:00:00Z"), "Telegram", "telegram:msg/mid", "Ops — Cara · Message from Cara: middle filter match"),
+		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-14T09:00:00Z"), "Telegram", "telegram:msg/new", "Ops — Bob · Received · Message from Bob: newer filter match"),
+		fmt.Sprintf("%-16s  %-8s  %-16s  %s", shortLocalTestTime(t, "2026-05-12T10:00:00Z"), "Telegram", "telegram:msg/mid", "Ops — Cara · Received · Message from Cara: middle filter match"),
 	}, "\n") + "\n"
 	if stdout != want {
 		t.Fatalf("stdout = %q\nwant   = %q", stdout, want)
@@ -310,8 +310,8 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		"Open: trawl open REF",
 		`More: trawl search "boat trip" --source imessage,telegram --limit 4`,
 		"date              source    ref                text",
-		shortLocalTestTime(t, "2026-05-14T09:12:00Z") + "  Messages  imessage:msg/8842  Family — Alice · Message from Alice: …the boat trip is on Saturday…",
-		shortLocalTestTime(t, "2026-05-12T10:00:00Z") + "  Telegram  telegram:msg/1930  Conversation — Bob · Message from Bob: …book the boat before June…",
+		shortLocalTestTime(t, "2026-05-14T09:12:00Z") + "  Messages  imessage:msg/8842  Family — Alice · Received · Message from Alice: …the boat trip is on Saturday…",
+		shortLocalTestTime(t, "2026-05-12T10:00:00Z") + "  Telegram  telegram:msg/1930  Conversation — Bob · Received · Message from Bob: …book the boat before June…",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("stdout missing %q:\n%s", want, stdout)

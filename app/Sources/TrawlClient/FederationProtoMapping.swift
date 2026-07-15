@@ -300,12 +300,13 @@ extension Trawl_Federation_V1_ArchiveContext {
   }
 }
 extension Trawl_Federation_V1_SearchHit {
-  fileprivate func model() throws -> SearchHit {
-    guard !sourceID.isEmpty, isCanonicalSourceRef(openRef, sourceID: sourceID),
-      isValidAnchorID(anchorID), hasSummary,
-      isNonBlank(summary.title), !evidence.isEmpty,
-      archiveContext.allSatisfy({ isValidSemanticKind($0.kind) && isNonBlank($0.label) })
-    else { throw TrawlClientError.invalidProtobuf }
+	fileprivate func model() throws -> SearchHit {
+	  guard !sourceID.isEmpty, isCanonicalSourceRef(openRef, sourceID: sourceID),
+	    isValidAnchorID(anchorID), hasSummary,
+	    isNonBlank(summary.title), !evidence.isEmpty,
+	    !archiveContext.isEmpty,
+	    archiveContext.allSatisfy({ isValidSemanticKind($0.kind) && isNonBlank($0.label) })
+	  else { throw TrawlClientError.invalidProtobuf }
     let date: Date?
     if timeRfc3339.isEmpty {
       date = nil

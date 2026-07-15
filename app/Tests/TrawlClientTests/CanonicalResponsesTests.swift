@@ -155,6 +155,11 @@ import Testing
   let mapped = try response.model().hits[0]
   #expect(mapped.archiveContext == [SearchArchiveContext(kind: "source", label: "In Synthetic")])
 
+  hit = canonicalSearchHit()
+  hit.archiveContext = []
+  response.hits = [hit]
+  #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
+
   for invalidContext in [
     Trawl_Federation_V1_ArchiveContext.with {
       $0.kind = "bad kind"

@@ -670,27 +670,35 @@ func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query tr
 		switch f.manifest.ID {
 		case "calendar":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Snippet, "Calendar event"), Subtitle: row.Calendar}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "calendar", Label: "In " + firstNonEmpty(row.Calendar, "Calendar")}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.FieldMatch("Event match", "event", row.Snippet)}
 		case "contacts":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Contact"), Subtitle: "Contact"}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "source", Label: "In Contacts"}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.FieldMatch("Contact field", "contact", row.Snippet)}
 		case "gmail":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "(no subject)"), Subtitle: row.Who}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "direction", Label: "Received"}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message body", row.Snippet)}
 		case "imessage", "telegram", "whatsapp":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "Conversation"), Subtitle: firstNonEmpty(row.Who, "Unknown sender")}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "direction", Label: "Received"}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+firstNonEmpty(row.Who, "Unknown sender"), row.Snippet)}
 		case "notes":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, "Note"), Subtitle: firstNonEmpty(row.Where, "Notes")}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "notes", Label: "In " + firstNonEmpty(row.Where, "Notes")}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Note passage", row.Snippet)}
 		case "photos":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Photo"), Subtitle: row.Where}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "source", Label: "Photos library"}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Photo match", row.Snippet)}
 		case "twitter":
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Who, "Post"), Subtitle: "Twitter (X)"}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "role", Label: "Archived post"}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Post text", row.Snippet)}
 		default:
 			hit.Summary = trawlkit.ResultSummary{Title: firstNonEmpty(row.Where, row.Who, row.Snippet, "Search result")}
+			hit.Archive = []trawlkit.ArchiveContext{{Kind: "source", Label: "In " + firstNonEmpty(f.manifest.DisplayName, f.manifest.ID)}}
 			hit.Evidence = []trawlkit.EvidenceFragment{trawlkit.TextMatch("Search match", row.Snippet)}
 		}
 		hits = append(hits, hit)

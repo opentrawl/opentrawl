@@ -300,6 +300,10 @@ private func searchFrame(outcome: Trawl_Federation_V1_OperationOutcome) throws -
     $0.title = "Example"
     $0.subtitle = "Example sender"
   }
+  hit.archiveContext = [.with {
+    $0.kind = "direction"
+    $0.label = "Received"
+  }]
   hit.evidence = [
     .with {
       $0.label = "Message"

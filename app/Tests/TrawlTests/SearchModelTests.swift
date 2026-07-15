@@ -24,6 +24,10 @@ private struct SearchClient: TrawlClient {
   hit.timeRfc3339 = "2026-07-12T09:30:00Z"
   hit.anchorID = "match"
   hit.summary = .with { $0.title = "Synthetic record" }
+  hit.archiveContext = [.with {
+    $0.kind = "source"
+    $0.label = "In Synthetic"
+  }]
   hit.evidence = [
     .with {
       $0.label = "Matching text"
@@ -63,6 +67,10 @@ private struct SearchClient: TrawlClient {
   hit.openRef = "response-only:record/1"
   hit.anchorID = "match"
   hit.summary = .with { $0.title = "Synthetic record" }
+  hit.archiveContext = [.with {
+    $0.kind = "source"
+    $0.label = "In Response source"
+  }]
   hit.evidence = [
     .with {
       $0.label = "Matching text"
