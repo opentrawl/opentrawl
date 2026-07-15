@@ -29,6 +29,6 @@ linters:
 
   exclusions:
     rules:
-    - path: '(^|/)(cmd/[^/]+/.*\.go|internal/cli/.*\.go|trawlkit/(log|output|render)/.*\.go|scripts/linear/(main|cli|render|logging)\.go)$'
+    - path: '(^|/)(cmd/[^/]+/.*\.go|internal/cli/.*\.go|trawlkit/(log|output|render)/.*\.go)$'
       linters:
         - forbidigo

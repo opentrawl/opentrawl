@@ -4,49 +4,38 @@ written_by: ai
 
 # Contacts
 
-Contacts stores people in the standard OpenTrawl archive:
+Contacts stores reviewed people and identifiers in the standard local archive:
 
 ```text
 ~/.opentrawl/contacts/contacts.db
 ```
 
-The archive is local SQLite. It stores people, email addresses, phone
-numbers, addresses, source handles, notes, user annotations, search indexes
-and short refs.
+The SQLite archive can hold names, email addresses, phone numbers, postal
+addresses, source handles, notes, user annotations, search indexes and short
+refs. It is the people source in `trawl`; other crawlers do not write directly
+to its schema.
 
 ## Import
 
-Import a reviewed source into the archive:
+Import one reviewed source at a time:
 
-```bash
+```sh
 trawl contacts import apple --input contacts.ndjson
 trawl contacts import google --account ada@example.com
 trawl contacts import birdclaw --db /path/to/birdclaw.sqlite
 trawl contacts import discrawl --db /path/to/discrawl.sqlite
 ```
 
-The old cross-crawler `import contacts` path is still retired. Import one
-source at a time.
+For an existing Git-backed share, `import-legacy` performs a read-only,
+idempotent import. It does not run Git or write beside the old share:
 
-## Legacy cutover
-
-Import the old Git-backed share directory once:
-
-```bash
+```sh
 trawl contacts import-legacy --from /path/to/share
 ```
 
-Without `--from`, contacts reads the legacy `repo_path` from
-`~/.opentrawl/contacts/config.toml`; if that key is absent, it tries
-`~/.opentrawl/contacts/share`.
+## Commands
 
-The importer reads the legacy directory only. It does not run `git`, write
-files beside the legacy share, or rebuild the old derived index. Rerunning it
-upserts the same people and notes.
-
-## Use
-
-```bash
+```sh
 trawl contacts status
 trawl contacts search Ada
 trawl contacts who Ada
@@ -56,6 +45,8 @@ trawl contacts person annotate person_123 "Ada is the project accountant"
 trawl contacts contacts export
 ```
 
-`trawl contacts sync apple` and `trawl contacts sync google` remain preview
-commands. Remote address-book writes need a conflict report before they become
-active.
+Add `--json` for structured output. Remote address-book writes are not part of
+the active source contract.
+
+The archive contains private contact and annotation data. Public fixtures use
+invented people, `example.com` addresses and `+1555` phone numbers.

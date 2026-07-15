@@ -59,8 +59,8 @@ func TestStatusExitCodes(t *testing.T) {
 		{
 			// A crawler whose metadata does not parse still surfaces the
 			// canonical id, never the pre-rename binary name it happens to
-			// self-report (TRAWL-147/194 leak: a table row saying "iMessage"
-			// next to an error line saying "imsgcrawl status failed").
+			// self-report (otherwise a table row can say "iMessage" next to
+			// an error line saying "imsgcrawl status failed").
 			name: "all failed",
 			crawlers: []fakeCrawler{{
 				name:     "telecrawl",

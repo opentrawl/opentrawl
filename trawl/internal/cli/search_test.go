@@ -322,7 +322,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	}
 }
 
-// TestSearchAllDayRowsRenderDateOnly is the TRAWL-104 tripwire: a
+// TestSearchAllDayRowsRenderDateOnly protects all-day rendering: a
 // source that marks a result all_day gets a bare date in the federated
 // table, never a fake midnight, and the federated JSON carries the bit.
 func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
@@ -332,7 +332,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
 			search: `{"query":"fair","results":[
 				{"ref":"calendar:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","calendar":"Personal","snippet":"Art fair"},
-				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Josh","calendar":"Work","snippet":"fair prep call"}
+				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Avery Example","calendar":"Work","snippet":"fair prep call"}
 			],"total_matches":2,"truncated":false}`,
 		},
 		fakeCrawler{
@@ -921,8 +921,8 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	}
 }
 
-// TestSearchTimeoutIsLoudAndDistinctFromError is the regression for
-// TRAWL-58: a source that blows the per-source deadline under fan-out
+// TestSearchTimeoutIsLoudAndDistinctFromError protects timeout reporting: a
+// source that blows the per-source deadline under fan-out
 // (the photoscrawl-timed-out-during-federation case) must surface as a
 // timeout — never a silent drop, and never conflated with a plain
 // crawler error. A fake crawler is held past a short real deadline.
@@ -1015,8 +1015,8 @@ func TestSearchUnknownSource(t *testing.T) {
 	}
 }
 
-// TestSearchOmitsAllEmptyColumns is the tripwire from the TRAWL-95
-// adversarial review: a column with no values (tweets have no "where")
+// TestSearchOmitsAllEmptyColumns protects the sparse-column contract: a
+// column with no values (tweets have no "where")
 // must be omitted, never rendered as a strip of dashes.
 func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{

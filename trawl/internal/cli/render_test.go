@@ -85,7 +85,7 @@ func TestStatusHeadlineUsesFailedSummaryBeforeCounts(t *testing.T) {
 }
 
 func TestNormalizeSelfKeepsKnownIdentity(t *testing.T) {
-	if got := normalizeSelf("ME (@jjpcodes)"); got != "me (@jjpcodes)" {
+	if got := normalizeSelf("ME (@avery_example)"); got != "me (@avery_example)" {
 		t.Fatalf("normalizeSelf = %q", got)
 	}
 	if got := normalizeSelf(" me () "); got != "me" {

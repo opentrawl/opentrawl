@@ -32,7 +32,7 @@ type Store struct {
 }
 
 // DefaultPaths is the one archive path layout, from trawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/gmail (TRAWL-99).
+// dir is the fleet-wide state root, ~/.opentrawl/gmail.
 func DefaultPaths() config.Paths {
 	paths, _ := (config.App{Name: "gmail", BaseDir: "~/.opentrawl/gmail"}).DefaultPaths()
 	return paths

@@ -3,14 +3,14 @@ set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-outdir="/private/tmp/trawl-197-transcripts"
-work="/private/tmp/trawl-197-output-dump-${stamp}"
+outdir="/private/tmp/opentrawl-output-transcripts"
+work="/private/tmp/opentrawl-output-dump-${stamp}"
 home="${work}/home"
 bin="${work}/trawl"
 fixture="${work}/trawl-output-fixture"
 refs="${work}/refs.env"
 transcript="${outdir}/output-dump-${stamp}.txt"
-# Default GOCACHE to the shared user cache, not a per-lane /private/tmp dir: the
+# Default GOCACHE to the shared user cache, not a temporary /private/tmp dir: the
 # build cache only affects build speed here, never the captured output, and a
 # tmp default leaves a fresh multi-hundred-MB cache behind on every run.
 export CGO_ENABLED="${CGO_ENABLED:-1}" GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" GOCACHE="${GOCACHE:-$(env -u GOCACHE go env GOCACHE)}"

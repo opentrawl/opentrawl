@@ -503,7 +503,7 @@ func TestResolveWhoChoosesCleanPushNameAndNormalizesIdentifiers(t *testing.T) {
 }
 
 func TestResolveWhoTiedPushNamesPickStructurally(t *testing.T) {
-	// TRAWL-109: within the push-name tier, tied counts route through the
+	// Within the push-name tier, tied counts route through the
 	// trawlkit picker — mixed case beats all-lowercase, not alpha order.
 	ctx := context.Background()
 	st, err := Open(ctx, filepath.Join(t.TempDir(), "store.db"))

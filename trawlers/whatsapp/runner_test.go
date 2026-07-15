@@ -143,7 +143,7 @@ func TestRunLIDOnlyHumanOutputUsesPrivacyPlaceholder(t *testing.T) {
 }
 
 func containsHumanPrivacyPlaceholder(output string) bool {
-	// TRAWL-1 list tables can truncate the final "t"; the visible stem still
+	// List tables can truncate the final "t"; the visible stem still
 	// proves the LID was masked instead of printed raw.
 	return strings.Contains(output, "unknown participan")
 }

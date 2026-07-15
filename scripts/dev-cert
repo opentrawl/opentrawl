@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Creates the persistent OpenTrawl dev code-signing identity, once.
-# Rerunning is a no-op. See docs/tcc.md: TCC grants are keyed to the
-# signing identity, so dev builds must always sign with this exact
+# Rerunning is a no-op. TCC grants are keyed to the signing identity, so dev
+# builds must always sign with this exact
 # certificate — never ad hoc — or the app's Full Disk Access grant dies
 # on the next rebuild.
 #

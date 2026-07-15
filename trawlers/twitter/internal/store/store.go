@@ -224,10 +224,9 @@ func (s *Store) migrate(ctx context.Context) error {
 // financial ledger (the spend:<month> cursor, a monotonic count of X API
 // dollars already spent, enforced by the per-request budget guard) and
 // pagination cursors whose only re-derivation path is a paid, from-zero
-// re-crawl. Neither is data "one sync re-derives" (rules.md §1.17 only
-// permits dropping migration code for that kind of data), so every row
-// is read and rewritten before the old table is dropped. Coordinator
-// ruling on TRAWL-82 (2026-07-05) is the record of this decision.
+// re-crawl. Neither is data that one sync re-derives, so every row is read and
+// rewritten before the old table is dropped. Dropping and recreating this
+// migration would lose state that is both valuable and expensive to recover.
 //
 // currentVersion is the schema version this archive is upgrading FROM. A
 // database already at version 0 (brand new) never had the legacy table,

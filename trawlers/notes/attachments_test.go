@@ -17,7 +17,7 @@ import (
 var attachmentFileContent = []byte("test image bytes")
 
 // attachmentFixture builds a notes fixture with three attachment rows that
-// exercise every status the ticket requires: a copied file (media file
+// exercise every supported status: a copied file (media file
 // exists on disk), a missing file (ZMEDIA set, but no file anywhere under
 // Accounts/*/Media/<media-uuid>/ -- the positive control that proves
 // missing-detection actually fires), and a no-file row (ZMEDIA null,

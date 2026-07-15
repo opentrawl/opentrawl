@@ -30,7 +30,7 @@ func boolToInt(value bool) int64 {
 // ensureUnreadColumn adds messages.is_unread to archives created before this
 // column existed, and backfills it from the labels_json every row already
 // carries. Pre-v1: an additive column plus a one-time backfill beats a
-// migration framework (TRAWL-23). It runs on every Open, Use and UseExisting
+// migration framework. It runs on every Open, Use and UseExisting
 // call so both the sync path and the read paths (search, open, who, doctor)
 // self-heal at the point of use — a separate repair verb would be a design
 // bug (rule 16).

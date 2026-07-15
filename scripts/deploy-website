@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Deploys website/ to the opentrawl.sh S3 bucket and invalidates
 # CloudFront. Needs the aws CLI and an AWS profile with access to the
-# account that hosts the site infra (see the maintainer's private
-# infra repo, infra/tofu/opentrawl).
+# account that hosts the site.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 

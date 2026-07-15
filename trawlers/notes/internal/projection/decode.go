@@ -16,7 +16,7 @@ import (
 
 // TableResolver fetches the gzip'd MergableDataProto blob for a table
 // attachment, keyed by the attachment UUID. ok is false when the bytes were
-// never captured (every table in an archive written before TRAWL-210).
+// never captured (every table in an archive written before table capture).
 type TableResolver func(attachmentUUID string) (zdata []byte, ok bool)
 
 // Field numbers for the note-body message tree (see notestore.proto).

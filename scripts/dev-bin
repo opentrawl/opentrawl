@@ -10,93 +10,19 @@ bin_dir="$repo_root/.dev/bin"
 export CGO_ENABLED=1
 export GOFLAGS="-tags=sqlite_fts5"
 
-# Always build into the shared user cache, never an inherited one. Agent lanes
-# routinely `export GOCACHE=/private/tmp/<lane>-gocache` to isolate their own
-# builds; inheriting that here turns this warm sub-second no-op into a full
-# multi-hundred-MB rebuild on every shell entry, and dev-bin fires on every
-# devenv/direnv entry across ~two dozen worktrees. Those cold caches were the
-# disk-eater (free space oscillating GB->MB). `env -u GOCACHE go env GOCACHE`
-# reports the real default rather than echoing back any tmp override, so this
-# stays a warm no-op regardless of the ambient environment.
+# Always build into the shared user cache, never an inherited temporary cache.
+# `env -u GOCACHE go env GOCACHE` reports the real default rather than echoing
+# an override, so repeated shell entry remains a warm no-op.
 export GOCACHE="$(env -u GOCACHE go env GOCACHE)"
 
 mkdir -p "$bin_dir"
-
-# Auto-pull Josh's own checkout so it stops running stale code. Agents push
-# to origin/main from worktrees continuously; nothing has ever pulled his
-# checkout, so his terminal tabs lag until he pulls by hand (bitten twice).
-# Scoped tight: only runs when this checkout is on branch main (worktrees and
-# lanes sit on other branches and are left alone), and never blocks shell
-# entry — a slow or failed fetch just skips the pull and falls through to
-# the build below. The whole thing runs in a function invoked with "||
-# true": any git call here that fails in a way we didn't anticipate just
-# aborts the auto-pull, it can never abort the shell.
-pulled_note=""
-auto_pull_main_checkout() {
-  local git_dir fetch_ok behind pre_pull_head stash_before stash_after
-  # --absolute-git-dir, not --git-dir: the relative form ('.git') would make
-  # the -e checks below resolve against the invoking shell's cwd, which is
-  # not necessarily repo_root on shell entry.
-  git_dir="$(git -C "$repo_root" rev-parse --absolute-git-dir 2>/dev/null || true)"
-  if [[ -n "$git_dir" && ( -e "$git_dir/rebase-merge" || -e "$git_dir/rebase-apply" || -e "$git_dir/MERGE_HEAD" ) ]]; then
-    return 0 # a rebase or merge is already in progress (not ours to touch)
-  fi
-  [[ -n "$git_dir" && "$(git -C "$repo_root" symbolic-ref --quiet --short HEAD 2>/dev/null || true)" == "main" ]] || return 0
-
-  fetch_ok=1
-  if command -v timeout >/dev/null 2>&1; then
-    GIT_TERMINAL_PROMPT=0 timeout 5 git -C "$repo_root" fetch --quiet origin main 2>/dev/null || fetch_ok=0
-  else
-    GIT_TERMINAL_PROMPT=0 git -C "$repo_root" fetch --quiet origin main 2>/dev/null || fetch_ok=0
-  fi
-  if [[ "$fetch_ok" -eq 0 ]]; then
-    echo "dev-bin: fetch failed (offline?), skipping auto-pull"
-    return 0
-  fi
-
-  behind="$(git -C "$repo_root" rev-list --count HEAD..origin/main 2>/dev/null || echo 0)"
-  [[ "$behind" -gt 0 ]] || return 0
-
-  pre_pull_head="$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || true)"
-  [[ -n "$pre_pull_head" ]] || return 0
-  stash_before="$(git -C "$repo_root" stash list 2>/dev/null | wc -l | tr -d ' ')"
-
-  # Rebase onto the ref the fetch above just updated, rather than a second
-  # `git pull` — pull would hit the network again with no timeout around it.
-  # A successful exit is not enough: when the branch fast-forwards but the
-  # autostash re-apply conflicts, git exits 0 and leaves conflict markers in
-  # the tree (edits parked in the stash), so check for unmerged paths too.
-  if git -C "$repo_root" rebase --autostash --quiet origin/main >/dev/null 2>&1 \
-     && [[ -z "$(git -C "$repo_root" ls-files -u 2>/dev/null)" ]]; then
-    pulled_note="pulled ${behind} commit(s), "
-    return 0
-  fi
-
-  # Conflict. Never leave the tree half-migrated: put everything back the
-  # way it was and tell Josh to pull by hand.
-  if [[ -e "$git_dir/rebase-merge" || -e "$git_dir/rebase-apply" ]]; then
-    # Mid-rebase conflict; --abort also re-applies the autostash.
-    git -C "$repo_root" rebase --abort 2>/dev/null || true
-  else
-    # Fast-forwarded but the autostash re-apply conflicted: rewind to the
-    # pre-pull commit, then pop the parked autostash (only if the rebase
-    # actually added a stash entry — never touch a pre-existing user stash).
-    git -C "$repo_root" reset -q --hard "$pre_pull_head" 2>/dev/null || true
-    stash_after="$(git -C "$repo_root" stash list 2>/dev/null | wc -l | tr -d ' ')"
-    if [[ "$stash_after" -gt "$stash_before" ]]; then
-      git -C "$repo_root" stash pop --quiet 2>/dev/null || true
-    fi
-  fi
-  echo "dev-bin: behind origin/main by ${behind} commit(s), pull manually"
-}
-auto_pull_main_checkout || true
 
 target_stale() {
   local output="$1"
 
   [[ -x "$output" ]] || return 0
   [[ -n "$(find "$repo_root" \
-    \( -name .git -o -name .devenv -o -name .dev -o -name .claude \) -prune -o \
+    \( -name .git -o -name .devenv -o -name .dev \) -prune -o \
     -type f \
     -newer "$output" -print -quit)" ]]
 }
@@ -127,10 +53,9 @@ while IFS= read -r go_mod; do
     fi
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
 # Prune at any depth: .devenv holds Go module caches (root state dir, plus
-# leftover per-module state dirs from the pre-TRAWL-157 devenvs) whose
-# third-party go.mod files are not ours to build; .dev is build output;
-# .claude carries agent worktrees with full repo copies.
-done < <(find . \( -name .git -o -name .devenv -o -name .dev -o -name .claude \) -prune -o -name go.mod -print | sort)
+# leftover per-module state dirs from older devenvs) whose
+# third-party go.mod files are not ours to build; .dev is local build state.
+done < <(find . \( -name .git -o -name .devenv -o -name .dev \) -prune -o -name go.mod -print | sort)
 
 if [[ "$show_progress" -eq 1 ]]; then
   target_label="binaries"
@@ -162,8 +87,8 @@ while IFS= read -r go_mod; do
     fi
     rm -f "$log"
   done < <(find "$cmd_dir" -mindepth 1 -maxdepth 1 -type d | sort)
-done < <(find . \( -name .git -o -name .devenv -o -name .dev -o -name .claude \) -prune -o -name go.mod -print | sort)
+done < <(find . \( -name .git -o -name .devenv -o -name .dev \) -prune -o -name go.mod -print | sort)
 
 end="${EPOCHREALTIME:-$SECONDS.0}"
 elapsed="$(awk -v s="$start" -v e="$end" 'BEGIN { printf "%.1f", e - s }')"
-printf 'dev-bin: %sfresh (%ss)\n' "$pulled_note" "$elapsed"
+printf 'dev-bin: fresh (%ss)\n' "$elapsed"

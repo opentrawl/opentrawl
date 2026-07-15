@@ -10,8 +10,8 @@ import (
 // Here we assert the projection: a valid manifest maps to runtime id, and a
 // crawler whose manifest cannot be generated still surfaces the canonical
 // id and an error — never the pre-rename binary name a broken crawler might
-// self-report (TRAWL-147/194 leak: "imsgcrawl status failed" next to a
-// table row that says "iMessage").
+// self-report (otherwise a broken crawler can say "imsgcrawl status failed"
+// next to a table row that says "iMessage").
 func TestDiscoverCrawlersProjectsManifests(t *testing.T) {
 	ensureSyntheticHome(t)
 	tests := []struct {

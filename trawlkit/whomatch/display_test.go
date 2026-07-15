@@ -11,8 +11,8 @@ func TestBestDisplayNameStructuralRules(t *testing.T) {
 	}{
 		{
 			name:  "frequency wins over case quality",
-			names: map[string]int{"JOSH PALMER": 3, "Josh Palmer": 1},
-			want:  "JOSH PALMER",
+			names: map[string]int{"AVERY EXAMPLE": 3, "Avery Example": 1},
+			want:  "AVERY EXAMPLE",
 		},
 		{
 			name:        "frequency wins even for an identifier-like spelling",
@@ -34,14 +34,14 @@ func TestBestDisplayNameStructuralRules(t *testing.T) {
 		},
 		{
 			name:        "name unlike identifier beats identifier spelling on tie",
-			names:       map[string]int{"averyexample123": 1, "Josh Palmer": 1},
+			names:       map[string]int{"averyexample123": 1, "Avery Example": 1},
 			identifiers: []string{"averyexample123"},
-			want:        "Josh Palmer",
+			want:        "Avery Example",
 		},
 		{
 			name:  "no-letter spelling counts as identifier-like",
-			names: map[string]int{"+31 6 12345678": 1, "Robin": 1},
-			want:  "Robin",
+			names: map[string]int{"+1 555 0100": 1, "Casey Example": 1},
+			want:  "Casey Example",
 		},
 		{
 			name:  "mixed case beats lowercase beats caps",
@@ -55,13 +55,13 @@ func TestBestDisplayNameStructuralRules(t *testing.T) {
 		},
 		{
 			name:  "case preference beats shorter all-lower spelling",
-			names: map[string]int{"robin": 1, "Robin B": 1},
-			want:  "Robin B",
+			names: map[string]int{"casey": 1, "Casey B": 1},
+			want:  "Casey B",
 		},
 		{
 			name:  "shortest clean spelling wins",
-			names: map[string]int{"Josh Palmer (Work)": 1, "Josh Palmer": 1},
-			want:  "Josh Palmer",
+			names: map[string]int{"Avery Example (Work)": 1, "Avery Example": 1},
+			want:  "Avery Example",
 		},
 		{
 			name:  "alphabetical is the final tie-break",

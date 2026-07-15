@@ -1,158 +1,58 @@
-# ✈️ telecrawl
+---
+written_by: ai
+---
 
-Telegram archive CLI.
+# Telegram
 
-`telecrawl` reads local Telegram Desktop `tdata` archives and native Telegram
-for macOS Postbox databases, stores a searchable SQLite archive in
-`~/.opentrawl/telegram/telegram.db`.
+The Telegram crawler imports local Telegram Desktop `tdata` or native Telegram
+for macOS Postbox data into a searchable SQLite archive.
 
-It is local-first:
+## Source and storage
 
-- Normal archive/search commands do not upload data.
-- Telegram message text, chat names, sender names, contact phone numbers,
-  contact usernames, avatar path metadata, and media metadata stay local.
+On macOS, sync prefers the native Postbox store when available and otherwise
+uses Telegram Desktop:
 
-## Install
-
-Build `trawl` from the monorepo root:
-
-```bash
-scripts/dev-bin
+```text
+~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram
+~/Library/Application Support/Telegram Desktop/tdata
 ```
 
-## Setup
+The archive is `~/.opentrawl/telegram/telegram.db`; archived media is under
+`~/.opentrawl/telegram/media/`. Normal sync copies cached local media. Add
+`--fetch-media` to request missing cloud media through an existing Telegram
+session. That option does not launch Telegram or start a login flow.
 
-No language runtime setup is required. `telecrawl` imports Telegram Desktop
-`tdata` and native macOS Postbox data through `trawl`.
+Sync defaults to the latest 200 dialogs and 500 messages per dialog. Set either
+limit to `0` for no limit:
 
-## Sync
-
-```bash
-trawl telegram doctor
-trawl telegram sync
-trawl telegram status
-```
-
-Sync defaults to:
-
-- latest `200` dialogs
-- latest `500` messages per dialog
-
-Use `0` for no limit:
-
-```bash
+```sh
 trawl telegram sync --dialogs-limit 0 --messages-limit 0
 ```
 
-Add `--fetch-media` when you also want Telegram cloud media that is not cached
-locally:
+Use `--path` to import a copied source explicitly.
 
-```bash
-trawl telegram sync --dialogs-limit 0 --messages-limit 0 --fetch-media
-```
+## Commands
 
-Remote media fetches are bounded best-effort operations. Run with `-v` to see
-how many remote media candidates were attempted, downloaded, still missing,
-unavailable, timed out, or errored.
-
-Repeat syncs reuse existing archived media for the same source before remote
-fetch is attempted, so `--fetch-media` only tries media that is not already in
-the local archive.
-
-Native Postbox can tag link previews, polls, geo/live-geo, service messages, or
-deleted messages as broad media candidates. `telecrawl` archives their decoded
-message metadata separately from binary media, and only keeps them as media rows
-when Telegram returns a downloadable file.
-`metadata_json` is a local source-native Postbox payload for later rendering or
-search; it is not a cross-source schema and can contain private Telegram
-metadata.
-
-When no `--path` is provided on macOS, `telecrawl` uses the native Telegram for
-macOS Postbox store when it is available. It uses Telegram Desktop `tdata`
-otherwise. This keeps the default sync local and avoids relying on a saved
-Telegram Desktop session. No backend flag is needed. To import a copied archive
-directly:
-
-```bash
-trawl telegram sync --path "$HOME/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram"
-```
-
-Native macOS syncs include every local `account-*` database they find; if more
-than one account is present, stored chat and sender IDs are account-scoped to
-avoid collisions. They archive cached media by default and store Telegram peer
-records as contacts for message enrichment. Contacts can include phone numbers,
-usernames, and archived avatar paths when those values exist locally, and are
-visible through `trawl telegram contacts`. `--fetch-media` also uses the existing
-native Telegram session to fetch missing cloud media when account auth data is
-present; this does not launch Telegram or start a login/2FA flow.
-
-Useful reads:
-
-```bash
+```sh
+trawl telegram doctor
+trawl telegram sync
+trawl telegram status
 trawl telegram folders
 trawl telegram contacts
 trawl telegram chats --limit 20
-trawl telegram chats --folder FOLDER_ID
-trawl telegram chats --unread
 trawl telegram topics --chat CHAT_ID
-trawl telegram messages --limit 20
 trawl telegram messages --chat CHAT_ID --after 2026-01-01
-trawl telegram messages --chat CHAT_ID --topic TOPIC_ID
-trawl telegram messages --chat CHAT_ID --pinned
-trawl telegram search "query"
-trawl telegram search "query" --chat CHAT_ID --topic TOPIC_ID
+trawl telegram search "invoice"
+trawl telegram open telegram:msg/REF
 ```
 
-Telegram folders, forum topics, reply/thread IDs, pinned messages, edits,
-forwards, reactions, view/reply counts, and richer media titles are archived
-when the local source or Telegram API exposes them for the active account.
-Folder rows include explicit membership from Telegram dialog filters; dynamic
-folder rules are recorded as metadata and may not expand to every matching
-chat.
+Add `--json` for structured output. The archive preserves available folders,
+topics, replies, pins, edits, forwards, reactions and media metadata as
+source-native Telegram facts; it does not turn them into a cross-source schema.
 
-Add `--json` before the command for machine-readable output:
+## Privacy
 
-```bash
-trawl --json telecrawl status
-trawl --json telecrawl search "invoice"
-```
-
-## Data Paths
-
-Defaults:
-
-- Telegram Desktop source: `~/Library/Application Support/Telegram Desktop/tdata`
-- native macOS Postbox source:
-  `~/Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram`
-- archive DB: `~/.opentrawl/telegram/telegram.db`
-- archived media copied from local Telegram caches, plus Telegram cloud media
-  when `--fetch-media` is used: `~/.opentrawl/telegram/media/`
-
-Use a temporary home for tests:
-
-```bash
-test_home="$(mktemp -d)"
-HOME="$test_home" trawl telegram status
-```
-
-Override the Telegram source:
-
-```bash
-trawl telegram doctor --path "/path/to/tdata"
-trawl telegram sync --path "/path/to/tdata"
-trawl telegram sync --path "/path/to/6N38VWS5BX.ru.keepcoder.Telegram"
-```
-
-## Reset
-
-Remove local state:
-
-```bash
-rm -rf ~/.opentrawl/telegram
-```
-
-Remove only the archive:
-
-```bash
-rm -f ~/.opentrawl/telegram/telegram.db ~/.opentrawl/telegram/telegram.db-*
-```
+Message text, chat and sender names, phone numbers, usernames, media metadata
+and local paths remain private. Normal archive and search commands do not
+upload them. A `--fetch-media` sync makes the explicit Telegram media request
+described above.

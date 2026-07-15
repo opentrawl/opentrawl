@@ -97,7 +97,7 @@ func TestWriteListClampsText(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
-// TestWriteListClampMarksFullWidthCut is the TRAWL-119 tripwire: when the
+// TestWriteListClampMarksFullWidthCut protects full-width truncation: when the
 // last shown line of a clamped cell exactly fills the text column, the cut
 // still ends in the ellipsis marker — a full-width line must never read as a
 // complete, un-truncated cell. The text column here is 23 wide, so each
@@ -156,7 +156,7 @@ func TestWriteListClampWideRuneTokenSingleMarker(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
-// TestWriteListDateOnlyRows is the TRAWL-100 tripwire: a row carrying
+// TestWriteListDateOnlyRows protects all-day rendering: a row carrying
 // a calendar date (an all-day event) renders the date alone — never a
 // fake 00:00 — and a list of only dates does not pay for a time column.
 func TestWriteListDateOnlyRows(t *testing.T) {
@@ -214,7 +214,7 @@ func TestWriteListDateOnlyRows(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
-// TestWriteListSourceColumn is the TRAWL-102 tripwire: a row can name
+// TestWriteListSourceColumn protects federated source rendering: a row can name
 // its source (the federated trawl view) and the column sits between
 // date and who. Rows without a source stay source-free lists.
 func TestWriteListSourceColumn(t *testing.T) {
@@ -280,8 +280,8 @@ func TestWriteListCalendarColumn(t *testing.T) {
 	assertGolden(t, buf.String(), want)
 }
 
-// TestWriteListShedsRefsBeforeSqueezingDate is the TRAWL-102 degrade
-// tripwire: when the terminal cannot fit every column, refs move to a
+// TestWriteListShedsRefsBeforeSqueezingDate protects narrow-output degradation:
+// when the terminal cannot fit every column, refs move to a
 // per-row open: line — a truncated ref or timestamp is garbage, so the
 // date and ref cells are never clipped.
 func TestWriteListShedsRefsBeforeSqueezingDate(t *testing.T) {

@@ -25,7 +25,7 @@ func TestResolveWhoScalesToManyDistinctParticipants(t *testing.T) {
 	defer func() { _ = st.Close() }()
 
 	start := time.Now()
-	resolution, err := st.ResolveWho(ctx, "josh")
+	resolution, err := st.ResolveWho(ctx, "example")
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatal(err)
@@ -36,7 +36,7 @@ func TestResolveWhoScalesToManyDistinctParticipants(t *testing.T) {
 	if resolution.TotalMatches != whoScaleParticipants || resolution.Returned != whoScaleReturned || !resolution.Truncated || len(resolution.Candidates) != whoScaleReturned {
 		t.Fatalf("resolution = %#v", resolution)
 	}
-	if resolution.Candidates[0].Who != "Josh Candidate 05000" || resolution.Candidates[0].Messages != 1 {
+	if resolution.Candidates[0].Who != "Example Candidate 05000" || resolution.Candidates[0].Messages != 1 {
 		t.Fatalf("top candidate = %#v", resolution.Candidates[0])
 	}
 }
@@ -63,7 +63,7 @@ func createLargeWhoStore(t *testing.T, participantCount int) *Store {
 	for i := 1; i <= participantCount; i++ {
 		id := int64(i)
 		handle := fmt.Sprintf("+1555%06d", i)
-		name := fmt.Sprintf("Josh Candidate %05d", i)
+		name := fmt.Sprintf("Example Candidate %05d", i)
 		data.Handles = append(data.Handles, messages.Handle{
 			SourceRowID: id,
 			ID:          handle,

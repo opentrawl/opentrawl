@@ -172,8 +172,8 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	}
 }
 
-// TestOpenShortRefSurvivesEarlierErroringSource pins the TRAWL-130
-// fan-out contract: a source failing for a reason unrelated to short
+// TestOpenShortRefSurvivesEarlierErroringSource pins the fan-out contract:
+// a source failing for a reason unrelated to short
 // refs is skipped, never aborts resolution. imsgcrawl sits before
 // telecrawl in registration order, so the erroring source is hit first.
 func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
@@ -211,7 +211,7 @@ func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 }
 
 // TestOpenShortRefReportsEverySourceFailing pins the honest-failure
-// half of TRAWL-130: when no source could answer at all, the error
+// case: when no source could answer at all, the error
 // names each failed source instead of claiming the ref is unknown or
 // blaming only the first source. imsgcrawl reproduces the live wacrawl
 // shape — a contract error envelope emitted at exit 0.

@@ -8,8 +8,8 @@ import (
 	"time"
 )
 
-// TestUnreadStateIsQueryableAndFlipsOnReingest is the TRAWL-23 load-bearing
-// case: UNREAD must be a queryable fact (Status, OpenMessage, Search all
+// TestUnreadStateIsQueryableAndFlipsOnReingest protects a load-bearing case:
+// UNREAD must be a queryable fact (Status, OpenMessage, Search all
 // agree), and a message that drops the UNREAD label on a later ingest must
 // flip to read — not stay stuck at whatever it was first archived as.
 func TestUnreadStateIsQueryableAndFlipsOnReingest(t *testing.T) {
@@ -65,8 +65,7 @@ func TestUnreadStateIsQueryableAndFlipsOnReingest(t *testing.T) {
 
 	// The read transition: u1 loses the UNREAD label upstream. A re-ingest
 	// (same message ID, fresh label set) must flip the archive's flag too —
-	// this is the exact case the ticket calls out as most likely to be
-	// silently skipped.
+	// this is the transition most likely to be silently skipped.
 	if _, err := st.InsertMessages(ctx, []Message{
 		{ID: "u1", ThreadID: "t1", Time: now, FromName: "Alice", FromAddress: "alice@example.com", Subject: "Unread one", Body: "Body needle one.", Labels: []string{"INBOX"}},
 	}); err != nil {
@@ -122,7 +121,7 @@ func TestEnsureUnreadColumnBackfillsLegacyArchive(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	// Physically revert the archive to the pre-TRAWL-23 shape: drop the
+	// Physically revert the archive to the shape before unread was queryable: drop the
 	// index first (SQLite refuses to drop a column an index still covers),
 	// then drop the column itself. labels_json is untouched, exactly as a
 	// real archive synced before this change would look.

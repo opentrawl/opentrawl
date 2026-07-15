@@ -303,7 +303,7 @@ func runCLITimeout(t *testing.T, timeout time.Duration, args ...string) (string,
 
 func syntheticHome(t *testing.T) string {
 	t.Helper()
-	home, err := os.MkdirTemp("/private/tmp", "trawl-147-home-")
+	home, err := os.MkdirTemp("/private/tmp", "trawl-cli-home-")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -35,9 +35,8 @@ type Crawler struct {
 }
 
 type Config struct {
-	LibraryPath   string              `toml:"library_path"`
-	PlaceEvidence PlaceEvidenceConfig `toml:"place_evidence"`
-	CardModel     CardModelConfig     `toml:"card_model"`
+	LibraryPath string          `toml:"library_path"`
+	CardModel   CardModelConfig `toml:"card_model"`
 }
 
 var (
@@ -142,7 +141,7 @@ func (c *Crawler) classifyFlags(fs *flag.FlagSet) {
 	c.classifyLimit = trackedLimit{value: 100}
 	c.classifyModel = ""
 	fs.Var(&c.classifyLimit, "limit", "max pending assets to classify")
-	fs.StringVar(&c.classifyModel, "model", "", "Ollama-API vision model for content observations; local or cloud")
+	fs.StringVar(&c.classifyModel, "model", "", "Ollama Cloud vision model for content observations; requires OLLAMA_API_KEY")
 }
 
 func (c *Crawler) currentStillFlags(fs *flag.FlagSet) {

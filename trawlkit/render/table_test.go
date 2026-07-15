@@ -59,7 +59,7 @@ func TestWriteTableFitsNarrowTerminal(t *testing.T) {
 	}
 }
 
-// TestWriteTableElidesLongTokens is the TRAWL-120 tripwire: a wrapped
+// TestWriteTableElidesLongTokens protects long-token rendering: a wrapped
 // column too narrow for a long unbreakable token (an email, a URL) elides
 // the token on one line instead of hard-splitting it mid-word across
 // several. A reader sees one cut identifier, not scattered fragments.

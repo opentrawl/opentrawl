@@ -18,7 +18,7 @@ import (
 // except its recorded schema_migrations version, which is pinned back to
 // version. It carries one distinguishing note ("note-stale") that must never
 // appear in a rebuilt archive -- if it does, the rebuild merged old data
-// instead of doing the full fresh import the ticket requires. Returns the
+// instead of doing the required full fresh import. Returns the
 // seeded file's exact bytes so a caller can prove the parked copy is
 // untouched.
 func seedStaleArchive(t *testing.T, path string, version int) []byte {

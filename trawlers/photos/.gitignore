@@ -6,8 +6,6 @@ photoscrawl.db
 photoscrawl.db-*
 tmp/
 dist/
-docs/frontier-classification-poc.md
-docs/session-handoff-*.md
 *.photoslibrary/
 *.heic
 *.HEIC

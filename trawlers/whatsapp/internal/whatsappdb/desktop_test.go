@@ -247,7 +247,7 @@ func TestSenderSkipsResolvedJIDFallback(t *testing.T) {
 }
 
 func TestImportNeverStoresProtobufBlobsAsSenderName(t *testing.T) {
-	// Regression for TRAWL-110: the current WhatsApp Desktop schema stores
+	// The current WhatsApp Desktop schema stores
 	// base64 protobuf metadata in ZWAMESSAGE.ZPUSHNAME and
 	// ZWAGROUPMEMBER.ZFIRSTNAME. Those bytes must never land in sender_name.
 	const pushBlob = "CLrg8M8GIABIAZABAPABAtgC8sy5t8WmlAM="

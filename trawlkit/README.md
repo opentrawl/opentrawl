@@ -1,4 +1,8 @@
-# 🧱 trawlkit
+---
+written_by: ai
+---
+
+# trawlkit
 
 Shared Go infrastructure for local-first crawler archives.
 
@@ -19,7 +23,7 @@ See `AGENTS.md` for the ownership boundary.
 - `flags`: the shared `--limit` CLI flag contract, so every crawler resolves it the same way.
 - `log`: writes crawl run logs in the shared OpenTrawl grammar, so every crawler's log is diagnosable the same way.
 - `mirror`: clone/init/pull/commit/push helpers plus non-mutating fetch, immutable tags, Git-object reads, and history inspection for private snapshot repos.
-- `model`: a local Ollama-compatible model client with retry, timeout, and concurrency guardrails for extraction and classification work.
+- `model`: bounded model-request mechanics with retry, timeout and concurrency guardrails; callers own provider selection and configuration.
 - `output`: text/json/log output helpers, and the one `{"error":{code,message,remedy}}` JSON error envelope.
 - `render`: shared human-output rendering — cards, tables, lists, transcripts, status and doctor pages — so every crawler's terminal output looks like one product.
 - `shortref`: short, human-typeable aliases for a crawler's long internal refs, plus the SQLite index that resolves them back.
@@ -30,17 +34,13 @@ See `AGENTS.md` for the ownership boundary.
 
 ## Consumers
 
-- The 8 crawlers in this monorepo — `birdcrawl`, `calcrawl`, `clawdex`,
-  `gogcrawl`, `imsgcrawl`, `photoscrawl`, `telecrawl`, and `wacrawl` — plus
-  `trawl`, the cross-source CLI that fronts registered sources, consume
-  `trawlkit` through the Go workspace on `main`. There is no separate
-  per-source install or release step.
+- The registered crawlers and `trawl` consume `trawlkit` through the monorepo's
+  Go workspace. There is no separate per-source install or release step.
 - The apps keep provider schemas, auth, desktop/API parsing, privacy filters,
   and user-facing CLI contracts. `trawlkit` owns only the reusable mechanics.
 
 ## Safety
 
 Library tests use temporary directories. They do not touch a crawler's real
-archive — for most crawlers that is `~/.opentrawl/<crawler>` (for example
-`~/.opentrawl/twitter` or `~/.opentrawl/imessage`); photoscrawl instead
-uses the platform-native data/cache/state directories.
+archive under `~/.opentrawl/<crawler>` (for example `~/.opentrawl/twitter`,
+`~/.opentrawl/imessage` or `~/.opentrawl/photos`).

@@ -119,7 +119,7 @@ func buildWhoCandidates(records []whoRecord) []WhoCandidate {
 			parent[rightRoot] = leftRoot
 		}
 	}
-	// A shared mailbox is not an identity key (rules.md §1.6): an identifier
+	// A shared mailbox is not an identity key: an identifier
 	// seen alongside more than one distinct display name fronts multiple
 	// entities, so it must not union them — the named entities stay separate
 	// and a query for the shared identifier surfaces all of them as
@@ -286,8 +286,8 @@ func (r whoRecord) identifierKeys() []string {
 	return keys
 }
 
-// Display-name picking is centralized in trawlkit; the structural rules and
-// the rules.md §1.5 carve-out are documented on whomatch.BestDisplayName.
+// Display-name picking is centralized in trawlkit; its deterministic structural
+// boundary is documented on whomatch.BestDisplayName.
 func bestWhoName(names map[string]int, identifiers []string) string {
 	if who := whomatch.BestDisplayName(names, identifiers); who != "" {
 		return who
@@ -299,7 +299,7 @@ func bestWhoName(names map[string]int, identifiers []string) string {
 }
 
 // sortedNames returns the entity's raw display spellings, deduplicated and
-// ordered so the filter is stable across runs (rules.md §1.5).
+// ordered so the filter is stable across runs.
 func sortedNames(names map[string]int) []string {
 	out := make([]string, 0, len(names))
 	for value := range names {

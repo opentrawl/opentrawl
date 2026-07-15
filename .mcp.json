@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "linear": {
-      "type": "stdio",
-      "command": "go",
-      "args": ["-C", "scripts/linear", "run", ".", "mcp"]
-    }
-  }
-}

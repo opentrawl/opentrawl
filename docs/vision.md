@@ -4,289 +4,92 @@ written_by: ai
 
 # Vision
 
-The project is called OpenTrawl: a trawl net drags the deep and brings
-everything up, and the open prefix names the open-source, plugin-first
-ambition. GitHub org `opentrawl`, one monorepo, one CLI (`trawl`), one
-Mac app shipped as Trawl.
+OpenTrawl makes a person's own digital history searchable by the agents that
+work for them.
+
+The useful context already exists, but it is split across messages, mail,
+calendars, notes, photos, contacts and social archives. OpenTrawl extracts that
+history into source-native archives on the user's Mac and gives people and
+agents one bounded way to search and open it.
 
 ## North star
 
-An entire history of you, agent searchable. An agent onboards into a
-person's life with minimal steering: it can work out who the people in
-your life are, how you talk to them and where, what you did, and what is
-going on right now, by querying local archives of the services you
-actually use.
+An agent should be able to answer questions from a person's history without
+making them reconstruct that history one prompt at a time. Clean, complete
+archives should let a capable agent work out, with cited evidence:
 
-Long-horizon tests, all of the same shape — inferences an agent should
-make from the archives without being told:
+- who the important people are and where conversations with them happen;
+- what someone bought, planned, attended or discussed;
+- what changed recently across several sources; and
+- where an event, decision or object appears in the original record.
 
-- who someone's girlfriend is, and how they message her across
-  Telegram, WhatsApp and Gmail, what events they share in Calendar,
-  what notes they share, how many group chats they have in Signal
-- who the family, close friends and colleagues are, and which channel
-  each relationship lives on
-- what the person does for work, what projects are active, and what
-  changed this month
-- where they lived and travelled, what they bought, what appointments
-  recur, which social groups meet and how often
+These are outcomes of good access and evidence, not separate hand-built
+features. OpenTrawl owns the substrate; the agent does the interpretation.
 
-None of these are features to build one by one. They fall out of clean,
-complete, queryable archives plus a capable agent. Get the data out;
-the inferences follow.
+## Product shape
 
-## What the suite is
+OpenTrawl has four layers:
 
-A local-first crawler suite for macOS: one app and one CLI that let you
-authorise your services and crawl them into local, per-source SQLite
-archives that agents can query through a single entry point.
+1. Each Go crawler reads one source and owns its source-native SQLite archive,
+   authentication, privacy boundary and source-specific commands.
+2. The shared control contract gives every crawler manifest-driven status,
+   search, open and diagnostic meanings, plus sync where the source declares it.
+3. The `trawl` CLI and Mac app federate those contracts without reading crawler
+   internals.
+4. Derived artefacts may interpret records across sources, but they keep their
+   evidence and never replace the source archives as truth.
 
-The layers, bottom to top:
-
-1. Source apps: iMessage, Telegram, WhatsApp, Gmail, Calendar, Contacts,
-   Photos, X and Apple Notes today, with Signal and others later.
-2. Source crawlers: one Go package per source, registered behind
-   `trawl`. Each owns extraction, its own archive database, auth and
-   session handling, search, status and privacy policy. Each conforms
-   to the shared control contract.
-3. Control contract: a trawlkit-defined JSON contract every crawler
-   speaks: `metadata`, `status`, `sync`, `search`, `open`, `doctor` and
-   `contacts export`, all with `--json`, all bounded, all human readable.
-4. Federation surface: one CLI (`trawl`) that runs registered
-   crawlers through the contract and gives agents and humans a single
-   surface: status across everything, sync anything, search across
-   sources. One Mac app that shows the key per-crawler metrics and
-   handles authorisation. No knobs.
-5. Derived layers: daily deltas, cross-source identity joins,
-   clustering and per-thing cards, life orientation. Photos is the
-   proving ground for a card built from deterministic source facts and
-   model prose. That pipeline is not a template for other sources until
-   one complete, inspectable card passes its input, output, restart and
-   provenance gates. Derived layers build on the substrate; they never
-   reach around it into source databases. The clustering and card
-   mechanics already proven on maintainer data (clawsweeper, gitcrawl,
-   discrawl) are useful prior art, not a contract for every surface.
+Sources remain separate. Federation is a query boundary, not a universal
+schema. A message, event and photo should not be flattened into one generic
+record merely because one interface can search all three.
 
 ## Design principles
 
-- Agent first, human readable. Every output must make sense to a human
-  reading it cold; if a human can read it properly, an agent can too.
-  This goes down to the field level: every field, name and value must
-  semantically make sense — real timestamps, human names, properly
-  named keys. No machine row IDs, no raw epoch timestamps, no unbounded
-  dumps.
-- Local first, privacy by design. Archives, caches, source access and
-  user control stay on your machine. Local first does not mean local
-  models are preferred. A feature may send an explicit, bounded input
-  to its configured frontier model service when the user invokes that
-  feature. Photos image classification and its image-model evals use the
-  configured frontier hosted service through one product seam. Current
-  eligible routes include Ollama Cloud and Luna through OpenAI OAuth; the
-  product has no direct API-key-per-model surface.
-- Federated, not unified. Each source keeps its own source-native
-  database. The single entry point is a query surface, not a shared
-  schema. Cross-source joins happen in derived layers, later, on top of
-  proven per-source archives.
-- Contract first. Every crawler implements one control contract, so the
-  CLI and the app couple to that single interface, not to any crawler's
-  internals. Adding a source today means writing a Go crawler that
-  implements the contract and registering it in `trawl`, then
-  recompiling. A published, any-language plugin path is a later goal,
-  not the current build.
-- No knobs. One and only one obvious way of doing things. Defaults over
-  configuration. A settings surface is a design failure until proven
-  otherwise.
-- Secrets never in output. Auth state is reported as booleans and expiry
-  dates. No command prints tokens, cookies or key material.
-- Bounded output everywhere. Every command paginates or truncates with an
-  explicit indicator. Token budgets are a design axis, not an
-  afterthought.
-- Read only in v1. Write capability (sending messages) comes later
-  through source-specific access CLIs, behind explicit authorisation.
+- **Local first.** Source access, archives, caches and user control stay on the
+  Mac. Local first does not require local models. A model-backed operation may
+  send an explicit, bounded input through a configured product boundary when
+  the user invokes it.
+- **Read the source; do not change it.** Crawlers archive and inspect. They do
+  not send messages or write back to source apps.
+- **Human readable and agent usable.** Human output is a first-class surface.
+  Structured output uses meaningful names, real timestamps, stable refs and
+  bounded fields rather than internal row IDs or raw dumps.
+- **Source-owned meaning.** A crawler defines what matched and how its record
+  opens. Federation validates, combines and orders those records without
+  rewriting them.
+- **Evidence before inference.** Derived cards, clusters and summaries retain
+  their source refs, inputs and generation provenance. They are replaceable
+  interpretations, not canonical facts.
+- **Explicit privacy boundaries.** Secrets never appear in output. Any network
+  operation is deliberate, configured and narrow.
+- **One obvious path.** Defaults should cover ordinary use. New modes,
+  fallbacks and compatibility layers need evidence that the simpler path is
+  insufficient.
 
 ## Build for stronger models
 
-OpenTrawl follows the Bitter Lesson: general models should supply the
-intelligence, while the product gives them better access to the world.
-The durable product is source access, lossless evidence, persistent
-state, provenance and safe execution. Interpretation, judgement and
-strategy belong to the best available model. A stronger model should
-answer harder questions through the same archives and contracts,
-without a new hand-built semantic feature for each question.
+OpenTrawl follows the Bitter Lesson: general models supply the intelligence;
+the product supplies reliable access to the world.
 
-Derived artifacts such as cards, clusters and orientation reports are
-useful projections, not canonical truth. Each keeps its source
-references, complete bounded input, prompt and model version, and
-generation time. A later model can challenge or regenerate it without
-losing the underlying evidence. Recomputing may be slow or expensive,
-but it must be mechanically straightforward.
+The durable work is lossless source access, persistent state, provenance,
+bounded interfaces and safe execution. Interpretation, judgement and strategy
+belong to the best available model. A stronger model should answer harder
+questions through the same archives and contracts without a new semantic
+feature for every question.
 
-Human steering is different from model inference. A dated human
-assertion stays durable; an automatic interpretation stays replaceable.
-Do not flatten observed facts, model judgements and human corrections
-into one record. Prompts may define a task or an output contract, but
-they must not hard-code domain intelligence that a stronger model could
-discover from the evidence.
+Observed source facts, model judgements and human corrections remain distinct.
+A later model can challenge or regenerate an interpretation without losing the
+evidence or a person's dated correction.
 
-## Engineering principles
+## Architectural boundaries
 
-- Software fixes what it can fix. A printed remedy is an admission,
-  reserved for fixes that need the world to change (permissions,
-  auth, a costly sync). Derived state self-heals at the point of use;
-  diagnostics whose remedy is safe, idempotent and local are design
-  bugs. Scope warning (ratified 2026-07-03): point-of-use self-healing
-  applies to cheap derived state only — caches, indexes, lookups.
-  Model-generated artifacts snapshot their full input at generation
-  time and stay internally coherent; when their inputs change, they
-  propagate through the classification queue as batched, incremental
-  regeneration of the affected subset — never recomputed at read time,
-  never split across two moments.
+- Crawlers do not perform cross-source identity resolution.
+- Derived layers consume public source contracts, not private database schemas.
+- The current source registry is compiled into `trawl`; there is no public
+  drop-in plugin mechanism.
+- The product has no hosted copy of a user's archives.
+- Output is bounded. Long conversations and histories open around the matching
+  item and state when more exists.
 
-The bar for every line of code and every surface in this repo:
-
-- As simple as possible, but no simpler. KISS, YAGNI, less is more.
-  Prefer deleting a concept to documenting it.
-- One and only one obvious way to do each thing, with as few knobs as
-  possible. No modes, no fallbacks, no compatibility shims without
-  current evidence.
-- Human readable with no magic. Code must be self-explanatory: no magic
-  constants, one obvious job per function, boundaries in the Ousterhout
-  sense (deep modules, simple interfaces). If a reader needs a comment
-  to follow the code, rewrite the code.
-- Files under about 400 lines. Split when they grow.
-- The tree tells the story. Running `tree` should reveal what the repo
-  is and how it is organised — for humans and for agents. Structure is
-  documentation.
-- CLIs follow [clig.dev](https://clig.dev). Curated, minimal,
-  consistent surfaces; taste is a requirement, not a polish step.
-- Go for crawlers and the CLI. Swift and SwiftUI for the Mac app.
-- Trunk-based development. Small logical commits on main. Speed over
-  ceremony.
-- Facts and gates are deterministic; interpretation belongs to the
-  model. Code computes, stores and gate-checks mechanical truth (time,
-  GPS, geometry, thresholds); models own all reading of meaning,
-  phrasing and confidence of claims. Code never inspects model prose
-  to judge or route it — cognitive decisions are asked of the model
-  as structured answers and gated mechanically.
-- Deterministic checks are tripwires, not gates. Regex/contract
-  checks only remember previously discovered defects. The gate for
-  any output-shape change is an adversarial review by a model that
-  did not author the change, over raw transcripts of every affected
-  permutation, judged against the blind-person bar (a reader who
-  cannot see the source understands every field, and nothing is
-  missing they would still have to ask about).
-- Test against real inputs and outputs. Agents and tests must exercise
-  raw, unmodified, untruncated real data flows — never faked,
-  abbreviated or hand-massaged fixtures for the paths that matter. This
-  is the only way to prove the thing actually works and to catch quiet
-  degradation.
-- Agents run unimpeded. The full dev loop — build, run, test, crawl,
-  verify — works end to end with zero humans in the loop. One-time
-  human setup (a permission grant, a signing certificate) is
-  acceptable exactly once per machine; anything that recurringly needs
-  a human is a design failure. If an agent hits a wall a human must
-  clear, the wall is the bug.
-- Declarative, minimal install surface. The dev loop needs no install
-  step at all: one devenv at the monorepo root, crawlers run from
-  source, and a repo-local bin directory on the shell's PATH is where
-  `trawl` discovers dev binaries — clone, `devenv shell`, everything
-  works. For consumers the Mac app is the main method and the only
-  global install; a Homebrew tap and a Nix flake cover CLI users. No
-  ad-hoc global installs, and no `trawl install` package manager. State
-  and config live under one root with per-crawler subdirectories, not
-  scattered dotfiles, via a shared trawlkit config option.
-- Observability for free. Structured logs, run history and doctor
-  diagnostics come from trawlkit once, in one consistent, greppable,
-  agent-first shape — a crawler gets debuggability by using the
-  substrate, not by designing its own logging. Nothing leaves the
-  machine.
-
-## Now, next, later
-
-- Now: iMessage, Telegram, WhatsApp, Gmail, Calendar, Contacts, Photos,
-  X and Apple Notes, behind the federation CLI, with the new Mac app.
-- Next: Signal (research spike first), daily deltas ("what changed in
-  the last 24 hours"), write capability, and a published plugin API with
-  agent surfaces (MCP or an Executor source) as thin adapters over the
-  contract.
-- Horizon: cross-source inference: identity resolution, relationship
-  inference, life orientation reports. This is where clustering and
-  per-thing cards come in — the clawsweeper/gitcrawl pattern applied to
-  people, threads and events instead of issues and PRs. The suite's job
-  is to make this possible by shipping clean archives and contact
-  exports; the inference layer stays out of the crawlers.
-
-## Prior art and how we use it
-
-- trawlkit: the substrate. Shared SQLite, snapshot, sync-state, vector
-  and control mechanics. It is monorepo-native and carries the shared
-  contract work.
-- crawlbar: proved the control-plane idea and wrote down the control
-  protocol and a quality rubric worth keeping. Its settings-driven
-  implementation is what the new Mac app replaces.
-- imsg, wacli, gogcli, remindctl: per-service access CLIs with read and
-  write verbs. Too specific to be the entry point, exactly right as
-  adapters under crawlers and as the later write path.
-- Executor (executor.sh, MIT): an MCP gateway that normalises every tool
-  to name plus input and output schemas, with host-side credential
-  resolution and aggressive token economy. Validates our contract-first
-  design and our secrets rule. Difference: Executor is a gateway service;
-  we are local-first CLIs, so it is a v2 integration target, not a
-  dependency.
-
-### Clustering and cards: the clawsweeper pattern
-
-The earlier maintainer-data system already runs the exact inference
-pattern our horizon needs. It splits across three repos, and each half
-is reusable:
-
-- gitcrawl is the clustering engine. Every issue and PR gets an
-  embedding; edges combine cosine similarity with deterministic
-  reference links (explicit cross-references), because links catch what
-  embeddings miss; bounded union-find turns edges into clusters. The
-  governance layer is the real prize: clusters have stable
-  content-hashed identities, memberships move through a state machine
-  (active, excluded, removed), and human curation verbs (exclude,
-  include, set-canonical, merge, split, close) are stored as overrides
-  that survive every recomputation. Re-running the maths never destroys
-  human judgement.
-- clawsweeper is the per-thing card and judge. Each reviewed item gets
-  one durable card: a markdown record plus a typed JSON verdict
-  (decision, confidence, evidence with file and line references, risks,
-  suggested action) and one edit-in-place comment. An LLM judges over
-  hydrated context but is proposal-only; a deterministic apply step
-  re-checks live state before any mutation. It does not cluster itself
-  — it reads gitcrawl's SQLite snapshot by convention, proving the
-  crawl layer and the reasoning layer can stay decoupled through a
-  portable store.
-- discrawl supplies the archive-side primitives: per-message
-  embeddings, semantic and hybrid search, statistical roll-up reports,
-  and structured entity extraction over people (member profiles).
-
-Our horizon layer is this pattern generalised: gitcrawl's clustering
-and durable governance applied to people, threads and events instead
-of issues and PRs; clawsweeper-style typed cards and a proposal-only
-judge on top; per-source crawler archives underneath, exchanged
-through the same portable-SQLite seam. This one-shot orientation over
-a corpus — cluster it, card it, review it — is the same move as
-onboarding an agent into a life.
-
-One caution: what works for clawsweeper's units (one issue, one PR,
-one verdict) will not automatically fit other surfaces — a person or a
-relationship is not a pull request. Each surface's unit of clustering
-and carding gets evaluated and tested on real archives before we adopt
-it. Photos card quality needs a frontier hosted vision model. Image
-classification and classification evals run through the configured frontier
-hosted service behind the single product seam. Current eligible routes include
-Ollama Cloud and Luna through OpenAI OAuth. A small historical run favoured a
-Gemini-class model, but it predates the current input-integrity and
-representative-sampling gates and does not choose the production model.
-Local models are not the preferred product path.
-
-## Non-goals for v1
-
-- no writes to any source
-- no cloud sync or hosted service
-- no cross-source joins or identity resolution inside crawlers
-- no MCP server or gateway (the contract must make these trivial later)
-- no prompt-tuned "intelligence" layered on thin archives; get the data
-  out first
+The [control contract](contract.md) defines the crawler seam. The
+[Mac app contract](mac-app.md) defines how the human interface preserves it.

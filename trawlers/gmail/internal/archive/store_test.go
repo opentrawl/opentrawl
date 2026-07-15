@@ -279,8 +279,8 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 	defer func() { _ = st.Close() }()
 	now := time.Date(2026, 7, 2, 14, 3, 11, 0, time.UTC)
 	_, err = st.InsertMessages(ctx, []Message{
-		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Morgan Example", FromAddress: "michael.gmail@example.com", Subject: "First", Body: "First."},
-		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "  MORGAN   EXAMPLE  ", FromAddress: "michael.icloud@example.com", Subject: "Second", Body: "Second."},
+		{ID: "m1", ThreadID: "t1", Time: now, FromName: "Morgan Example", FromAddress: "morgan.one@example.com", Subject: "First", Body: "First."},
+		{ID: "m2", ThreadID: "t2", Time: now.Add(time.Minute), FromName: "  MORGAN   EXAMPLE  ", FromAddress: "morgan.two@example.com", Subject: "Second", Body: "Second."},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -296,10 +296,10 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 	if whomatch.Normalize(candidate.Who) != "morgan example" || candidate.Messages != 2 {
 		t.Fatalf("candidate = %#v", candidate)
 	}
-	if len(candidate.Identifiers) != 2 || candidate.Identifiers[0] != "michael.gmail@example.com" || candidate.Identifiers[1] != "michael.icloud@example.com" {
+	if len(candidate.Identifiers) != 2 || candidate.Identifiers[0] != "morgan.one@example.com" || candidate.Identifiers[1] != "morgan.two@example.com" {
 		t.Fatalf("identifiers = %#v", candidate.Identifiers)
 	}
-	byIdentifier, err := st.ResolveWho(ctx, "michael.icloud@example.com")
+	byIdentifier, err := st.ResolveWho(ctx, "morgan.two@example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -307,7 +307,7 @@ func TestResolveWhoMergesSameDisplayCandidates(t *testing.T) {
 		t.Fatalf("by identifier = %#v", byIdentifier)
 	}
 	identifiers := byIdentifier.Candidates[0].Identifiers
-	if len(identifiers) != 2 || identifiers[0] != "michael.icloud@example.com" || identifiers[1] != "michael.gmail@example.com" {
+	if len(identifiers) != 2 || identifiers[0] != "morgan.two@example.com" || identifiers[1] != "morgan.one@example.com" {
 		t.Fatalf("matching identifier was not first: %#v", identifiers)
 	}
 }

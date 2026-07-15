@@ -273,7 +273,7 @@ func whoWhere(who *WhoFilter) (string, []any) {
 	// The name clause is OR'd in alongside any identifiers, not mutually
 	// exclusive with them: an entity that owns an identifier on one event and
 	// reaches another only by name (a name-joined row, or a shared mailbox
-	// that stays out of the filter after TRAWL-111) needs both to reach every
+	// that stays out of the identifier filter) needs both to reach every
 	// one of its events, so who and search counts agree. It matches the raw
 	// display spellings, never its cleaned label (who.Who): the label strips
 	// "Name <email>" cruft, so two distinct entities can share one label while

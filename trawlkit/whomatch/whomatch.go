@@ -12,8 +12,8 @@
 // Latin base-letter folding. The maximum distance is 1 when the longer side is
 // 3 to 8 runes, 2 when it is 9 to 12 runes, and 3 when it is longer.
 //
-// The rules.md §1.5 structural carve-out for this package — the match ladder
-// above and display-name picking — is documented once, on BestDisplayName.
+// The structural boundary for this package — the match ladder above and
+// display-name picking — is documented once, on BestDisplayName.
 package whomatch
 
 import (

@@ -10,7 +10,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-// TestLegacySyncStateTombstonedOnce covers the TRAWL-82 migration: a writable
+// TestLegacySyncStateTombstonedOnce covers the legacy sync-state migration: a writable
 // open drops the pre-canonical key/value sync_state and creates the canonical
 // trawlkit shape, and a later open never re-drops the canonical table (so an
 // already-migrated archive keeps its markers).
@@ -47,7 +47,7 @@ insert into sync_state(key,value,updated_at) values('last_import_at','legacy',1)
 	// can't tell legacy junk from carried-forward markers; the two legacy
 	// values must have been carried into the canonical table before the
 	// drop — status.LastSource must survive the migration so the next
-	// import still preserves existing media refs (TRAWL-82 review fix).
+	// import still preserves existing media refs.
 	var rows int
 	if err := st.db.QueryRowContext(ctx, `select count(*) from sync_state`).Scan(&rows); err != nil {
 		t.Fatal(err)

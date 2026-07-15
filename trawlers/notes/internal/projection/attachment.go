@@ -5,7 +5,7 @@ import "strings"
 const utiTable = "com.apple.notes.table"
 
 // tableNotCaptured is emitted for a table whose companion CRDT blob was never
-// archived (every table synced before TRAWL-210). It is an honest, temporary
+// archived (every table synced before table capture). It is an honest, temporary
 // data gap, not a decode failure.
 const tableNotCaptured = "[table: not yet captured, run trawl notes sync to fill in]"
 

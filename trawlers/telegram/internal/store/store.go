@@ -13,8 +13,8 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/state"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 
-	// C SQLite via cgo, matching trawlkit/store after the modernc→mattn swap
-	// (TRAWL-56): the pure-Go driver ran hot paths 10-100x slower. Requires
+	// C SQLite via cgo, matching trawlkit/store after the modernc→mattn swap:
+	// the pure-Go driver ran hot paths 10-100x slower. Requires
 	// -tags sqlite_fts5; the monorepo devenv sets it via GOFLAGS.
 	_ "github.com/mattn/go-sqlite3"
 )

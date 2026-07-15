@@ -192,11 +192,11 @@
     }
   </script>
 
-  <p class="sub">OpenTrawl crawls iMessage, WhatsApp, Telegram, Gmail and
-  Calendar into SQLite archives on your Mac, with standing lists of your
-  people, purchases and events. Your AI answers from your actual history:
-  one call, no interrogation.</p>
-  <p class="privacy">Everything stays on your machine, unless you choose to send it somewhere.</p>
+  <p class="sub">OpenTrawl crawls messages, mail, calendars, contacts,
+  photos, notes and posts into separate SQLite archives on your Mac. One
+  search lets your AI answer from your actual history and open the source
+  record behind each result.</p>
+  <p class="privacy">Source access and archives stay on your machine. A remote operation runs only when you invoke it.</p>
 
   <section class="compare" aria-label="The same question, with and without the archive">
     <div class="col before">
@@ -212,8 +212,8 @@
         <div class="line you" style="animation-delay:4.7s"><span class="who">you</span><span class="msg">@#$%. that's the <span class="redact">appliance</span>. we did this last week. you already know this.</span></div>
         <div class="line" style="animation-delay:5.9s"><span class="who">ai</span><span class="msg">You're absolutely right! I don't keep context between sessions — could you paste the receipt?</span></div>
       </div>
-      <p class="tally" style="animation-delay:7s">29 tool calls. 214,545 tokens. ≈ $1. Wrong once.
-        <small>Measured, July 2026: a frontier model with mail connectors and full disk access. It pays this again for every question.</small></p>
+      <p class="tally" style="animation-delay:7s">Search the service again. Rebuild the context again.
+        <small>The next session starts with the same retrieval problem.</small></p>
     </div>
 
     <div class="col after">
@@ -221,18 +221,19 @@
       <div class="transcript">
         <div class="line you"><span class="who">you</span><span class="msg">when did i buy my <span class="redact">purchase</span> and what did it cost?</span></div>
         <div class="line"><span class="who">ai</span><span class="msg cmd">$ trawl search "<span class="redact">purchase</span>"</span></div>
-        <div class="line"><span class="who"></span><span class="msg cmd">gmail.sqlite · order confirmation · <span class="redact">shop</span> · 18 Jan 2025</span></div>
+        <div class="line"><span class="who"></span><span class="msg cmd">Search "<span class="redact">purchase</span>": showing 1 of 1, best matches first.</span></div>
+        <div class="line"><span class="who"></span><span class="msg cmd">2025-01-18 10:00 · Gmail · gmail:msg/example-1 · Order confirmation from <span class="redact">shop</span></span></div>
         <div class="line"><span class="who">ai</span><span class="msg">18 January 2025, from <span class="redact">shop</span>, for <span class="redact">price</span>. A <span class="redact">amount</span> refund landed 10 days later.</span></div>
       </div>
       <p class="tally">The archive already knew.
-        <small>One query against a local file. Crawl once; every question after is a lookup.</small></p>
+        <small>Crawl once; later questions search the local archive and retain a ref to the source record.</small></p>
     </div>
   </section>
 
   <section class="facts">
-    <p><b>It just works</b>
-    One Mac app authorises your sources and keeps the archives fresh. Ask
-    your AI anything about your life; it reads the answer.</p>
+    <p><b>One search surface</b>
+    The CLI and Mac app use the same source identities, search matches and
+    open-record contract.</p>
     <p><b>For engineers</b>
     One Go crawler and one SQLite file per source, one CLI over all of them:
     status, sync, search. Durable context your agent can grep.</p>
@@ -240,8 +241,8 @@
     Crawling and search run locally. The archives are plain SQLite files on
     your disk. Open them yourself.</p>
     <p><b>Open source</b>
-    Missing a source? Use our agent skill to write your own crawler; it
-    drops into the CLI and the app next to ours.</p>
+    The source is public. Build the CLI, crawlers and Mac app from the same
+    repository.</p>
   </section>
 
   <footer>

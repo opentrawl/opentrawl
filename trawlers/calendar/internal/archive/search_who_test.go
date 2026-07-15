@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TRAWL-122 round-2 review: the who-count/search-count fix must filter on an
+// The who-count/search-count fix must filter on an
 // entity's raw display spellings, not its cleaned label. "Bea <bea@example.com>"
 // cleans to the label "Bea"; a different person also displayed as "Bea" on a
 // different email is a separate entity. Matching the label would pull that

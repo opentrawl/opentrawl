@@ -6,7 +6,7 @@ import (
 )
 
 // TestSearchTimeBoundDateOnlyUsesLocalMidnight pins a deliberate behavior
-// change from the TRAWL-131 date-parser lift: searchTimeBound used to read
+// change from adopting the shared date parser: searchTimeBound used to read
 // a bare YYYY-MM-DD date as UTC midnight (time.Parse); it now goes through
 // trawlkit/flags.Date, which reads it as midnight in the machine's local
 // timezone, matching every other crawler's --after/--before grammar. The

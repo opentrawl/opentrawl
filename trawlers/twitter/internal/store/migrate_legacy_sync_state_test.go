@@ -10,8 +10,8 @@ import (
 	"time"
 )
 
-// TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent pins the
-// TRAWL-82 birdcrawl migration: the old sync_state(kind, cursor,
+// TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent pins the legacy
+// Twitter sync-state migration: the old sync_state(kind, cursor,
 // last_sync_at, last_result, coverage_note) table holds a real financial
 // ledger (spend:<month>) and pagination cursors that cost real X API
 // dollars to re-derive, so nothing may be lost or reset when an archive
@@ -44,10 +44,9 @@ func TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent(t *testing.T) {
 		{"spend:2026-07", "10360000", "2026-07-05T09:00:00Z", "ok", ""},
 		{"spend:2026-06", "9990000", "2026-06-30T23:59:00Z", "ok", ""},
 		{"cursor:authored", "1234567890123456789", "2026-07-05T09:00:00Z", "ok", ""},
-		// A real historical value found on the live archive: old code
-		// never overwrote coverage_note after the first insert, so an
-		// old, dead-but-real text value can still be sitting there.
-		{"archive_import", "2024-01-01T00:00:00Z", "2024-01-01T00:00:00Z", "ok", "archive dump imported through 2024-01-01T00:00:00Z"},
+		// Preserve a representative stale coverage note: old code never
+		// overwrote this field after the first insert.
+		{"archive_import", "2000-01-01T00:00:00Z", "2000-01-01T00:00:00Z", "ok", "synthetic archive imported through 2000-01-01T00:00:00Z"},
 		{"live_sync", "", "2026-07-05T09:00:00Z", "partial", ""},
 		{"auth:token_valid", "true", "2026-07-05T09:00:00Z", "true", ""},
 		{"bookmark_pass", "2026-07-01T00:00:00Z", "2026-07-01T00:00:00Z", "ok", ""},
@@ -124,7 +123,7 @@ func TestMigrateLegacySyncStatePreservesValuesAndIsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const wantCoverageNote = "archive dump imported through 2024-01-01T00:00:00Z"
+	const wantCoverageNote = "synthetic archive imported through 2000-01-01T00:00:00Z"
 	if archiveImport.CoverageNote != wantCoverageNote {
 		t.Fatalf("archive_import coverage_note = %q, want %q", archiveImport.CoverageNote, wantCoverageNote)
 	}

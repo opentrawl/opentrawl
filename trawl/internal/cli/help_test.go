@@ -9,7 +9,7 @@ import (
 )
 
 // binaryIDs are the internal module names that must never leak into any
-// human surface (TRAWL-1). The front door and --help render surface names
+// human surface. The front door and --help render surface names
 // only, so grepping the output for one of these is a defect.
 var binaryIDs = []string{"imsgcrawl", "telecrawl", "wacrawl", "gogcrawl", "calcrawl", "birdcrawl", "clawdex", "photoscrawl"}
 
@@ -109,9 +109,8 @@ func TestBareFrontDoorIsShortAndShowsSourcesBlock(t *testing.T) {
 	}
 }
 
-// The two grep contracts from the ticket: a person who types "imessage" or
-// "twitter" must find the row, case-sensitively, without knowing the
-// crawler's internal id.
+// A person who types "imessage" or "twitter" must find the row,
+// case-sensitively, without knowing the crawler's internal id.
 func TestBareFrontDoorIsGreppableByTypedName(t *testing.T) {
 	binDir := writeFakeCrawlers(t, liveSourceFakes()...)
 	t.Setenv("PATH", binDir)

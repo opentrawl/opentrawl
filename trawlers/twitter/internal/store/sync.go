@@ -10,7 +10,7 @@ import (
 	ckstate "github.com/opentrawl/opentrawl/trawlkit/state"
 )
 
-// Sync state lives in the one trawlkit state.Store (TRAWL-82), keyed by
+// Sync state lives in the one trawlkit state.Store, keyed by
 // twitter's old five-column sync_state "kind": each kind becomes three
 // canonical rows (cursor, last_result, coverage_note) sharing that kind as
 // entity_id, so the exact shape SyncState/SyncStateUpdate already expose

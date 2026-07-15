@@ -342,7 +342,7 @@ func TestWriteLogTailHumanisesFailureOutcome(t *testing.T) {
 	}
 }
 
-// TestWriteLogTailHumanisesErrorOutcome is the TRAWL-17 tripwire: the log
+// TestWriteLogTailHumanisesErrorOutcome protects human-facing outcomes: the log
 // reader canonicalizes a failed run to the "error" outcome, and the human
 // run line must read "failed", never the raw enum "error" — otherwise a
 // failed sync prints "sync error" next to another run's "sync succeeded".
@@ -368,7 +368,7 @@ func TestWriteLogTailHumanisesErrorOutcome(t *testing.T) {
 	}
 }
 
-// TestRejectedRunRendersRejected is the TRAWL-101 tripwire: a run
+// TestRejectedRunRendersRejected protects rejected-run rendering: a run
 // refused before any work ran (usage error) must read as rejected on
 // every surface that shows run outcomes, never as a success.
 func TestRejectedRunRendersRejected(t *testing.T) {

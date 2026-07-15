@@ -41,7 +41,7 @@ func invalidSchema(err error) error {
 }
 
 func (e addressBookAccessError) Error() string {
-	return fmt.Sprintf("read Apple AddressBook database %s: %v. Grant Full Disk Access to contacts, Codex or the terminal running it in System Settings > Privacy & Security > Full Disk Access, then retry", e.Path, e.Err)
+	return fmt.Sprintf("read Apple AddressBook database %s: %v. Grant Full Disk Access to OpenTrawl or the terminal running it in System Settings > Privacy & Security > Full Disk Access, then retry", e.Path, e.Err)
 }
 
 func (e addressBookAccessError) Unwrap() error {

@@ -2,7 +2,7 @@ package archive
 
 import "testing"
 
-// TRAWL-111: calendar-invite@lu.ma fronts several distinct organizers. A
+// calendar-invite@lu.ma fronts several distinct organizers. A
 // shared mailbox must not union them into one silently-picked entity; each
 // name stays its own candidate and the mailbox appears on all of them.
 func TestBuildWhoCandidatesSharedMailboxDoesNotMerge(t *testing.T) {
@@ -82,12 +82,12 @@ func TestBuildWhoCandidatesNameWordOrderVariantsStillMerge(t *testing.T) {
 // second identity: the email keeps merging.
 func TestBuildWhoCandidatesIdentifierEchoNameStillMerges(t *testing.T) {
 	records := []whoRecord{
-		{displayName: "Josh Palmer", email: "josh@example.com", lastSeen: "2026-01-01T10:00:00Z", eventUID: "event-1"},
-		{displayName: "josh@example.com", email: "josh@example.com", lastSeen: "2026-01-02T10:00:00Z", eventUID: "event-2"},
-		{displayName: "Josh Palmer <josh@example.com>", email: "josh@example.com", lastSeen: "2026-01-03T10:00:00Z", eventUID: "event-3"},
+		{displayName: "Avery Example", email: "avery@example.com", lastSeen: "2026-01-01T10:00:00Z", eventUID: "event-1"},
+		{displayName: "avery@example.com", email: "avery@example.com", lastSeen: "2026-01-02T10:00:00Z", eventUID: "event-2"},
+		{displayName: "Avery Example <avery@example.com>", email: "avery@example.com", lastSeen: "2026-01-03T10:00:00Z", eventUID: "event-3"},
 	}
 	candidates := buildWhoCandidates(records)
-	if len(candidates) != 1 || candidates[0].Who != "Josh Palmer" || candidates[0].Messages != 3 {
-		t.Fatalf("candidates = %#v, want one Josh Palmer with 3 events", candidates)
+	if len(candidates) != 1 || candidates[0].Who != "Avery Example" || candidates[0].Messages != 3 {
+		t.Fatalf("candidates = %#v, want one Avery Example with 3 events", candidates)
 	}
 }

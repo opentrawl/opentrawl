@@ -2,304 +2,178 @@
 written_by: ai
 ---
 
-# Control contract v1
+# Crawler control contract
 
-The contract every crawler implements. A crawler is a Go package that
-speaks these commands; the `trawl` CLI and the Mac app couple to this
-contract, not to any crawler's internals. Adding a source means writing
-a Go crawler that implements the contract and registering it in `trawl`,
-then recompiling. A published, any-language plugin path is a later goal
-(see vision.md), not the current build.
+Every registered crawler exposes a small, manifest-driven control surface to
+`trawl` and the Mac app. Clients depend on the declared contract, not on source
+database schemas or internal crawler packages.
 
-The Go types live in trawlkit's `control` package (manifest, status
-envelope, contact export are already there); this document is the
-authority for what v1 adds. Changes land in trawlkit.
+The executable schemas live in `trawlkit/control` and the protobuf packages
+under `trawlkit/proto/trawl`. This document explains their public meanings.
+Examples use synthetic data.
 
-All examples use synthetic data.
+## Command shape
 
-## Command grammar
-
-```
-<binary> <verb> [arguments] [flags]
-```
-
-Verbs first, flags last, `--json` available everywhere. (This fixes
-today's drift where some crawlers use `--json metadata` and others
-`metadata --json`.) Human text is the default output; it is a
-first-class surface held to the same rules as JSON.
-
-## Logging
-
-Logging is part of the tool contract. Every crawler writes an
-always-on plain text log in its state root, under `logs/`, using the
-shared trawlkit log grammar. Normal stdout and stderr stay clean:
-commands do not print log lines unless the user asks for them.
-
-Every verb accepts `-v` and `--verbose`. `-v` streams the same log
-lines to stderr while still writing the log file. `-vv` also writes
-debug detail, such as subprocess argv, per-source elapsed times and
-per-shard phase timings.
-
-The runner owns this for crawlers registered through `trawlkit.Run`.
-Those crawlers stream typed log lines to the parent over the runner
-wire, and the parent renders them only when the user asks with `-v` or
-`-vv`. Schema-v2 manifests do not declare a `verbose_logs` capability.
-Logs are a runner contract property, not a per-crawler feature flag.
-Schema-v1 crawlers that have not adopted `trawlkit.Run` still declare
-`verbose_logs` when `trawl` should forward verbose flags and stderr.
-
-Every help page ends with a diagnostics line naming the flag and log
-file, for example:
+The public source namespace is:
 
 ```text
-Diagnostics: run with -v, or read ~/.examplecrawl/logs/examplecrawl.log
+trawl <source> <verb> [arguments] [flags]
 ```
 
-The CLI QA gate checks that help text exposes this line and that
-normal command output stays free of logs.
+Human text is the default. `--json` requests the structured equivalent. Source
+names are stable product names such as `imessage`, `gmail` and `photos`; legacy
+binary names are not part of the public interface.
 
-## Required commands
+The common control vocabulary is:
 
-| command | purpose |
-|---|---|
-| `metadata --json` | identity, capabilities, contract version |
-| `status --json` | archive state, freshness, declared counts |
-| `sync --json` | crawl the source into the archive |
-| `search <query> --json` | bounded FTS over the archive |
-| `open <ref> --json` | one item, full detail |
-| `doctor --json` | diagnostics with remedies |
+| Verb | Meaning | Changes archive content |
+| --- | --- | --- |
+| `metadata` | identity, capabilities and command manifest | no |
+| `status` | archive state, freshness and declared counts | no |
+| `sync` | refresh the archive from its source, when declared | yes |
+| `search` | bounded search over the archive | no |
+| `open` | one source-owned record with bounded context | no |
+| `doctor` | diagnostics for conditions that need action | no |
 
-Optional capability: `contacts export --json` (trawlkit
-`ContactExport` shape). Declare it in metadata; v1 crawlers in this
-repo all implement it.
+The source manifest is authoritative about which capabilities exist. Most
+archive crawlers declare `sync`; a source may instead expose reviewed imports or
+source-specific refresh commands. Sources may also declare capabilities such as
+`who`, short refs, contact export or source-specific list commands. Clients
+discover these from the manifest rather than assuming them.
 
-## metadata
+## Manifest
 
-The manifest from trawlkit `control.Manifest`, plus:
+Metadata identifies the source, its display name, public aliases, capabilities,
+headlines and commands. Each command declaration includes the argument vector,
+flags, output mode and whether it mutates archive content.
 
 ```json
 {
   "schema_version": 2,
   "contract_version": 1,
-  "id": "examplecrawl",
+  "id": "example",
   "display_name": "Example",
-  "version": "0.3.0",
-  "capabilities": ["status", "sync", "search", "open", "doctor", "contacts_export"],
+  "capabilities": ["status", "sync", "search", "open", "doctor"],
   "commands": {
     "search": {
-      "argv": ["examplecrawl", "search", "QUERY", "--json"],
+      "argv": ["example", "search", "QUERY", "--json"],
       "json": true,
-      "mutates": false,
-      "flags": [{"name": "limit", "usage": "maximum results", "default": "20"}]
+      "mutates": false
     }
   }
 }
 ```
 
-## status
+## Status and diagnostics
 
-The trawlkit `control.Status` envelope. Counts are the crawler's
-self-declared headline metrics, in display order — the app and
-`trawl status` render them verbatim:
+Status reports one of `ok`, `stale`, `empty`, `error` or `missing`, with a
+short summary, freshness, source-declared counts and setup requirements. Auth
+is represented by state and expiry, never credentials.
 
 ```json
 {
-  "app_id": "examplecrawl",
+  "app_id": "example",
   "state": "ok",
-  "summary": "archive fresh",
+  "summary": "Archive is fresh.",
   "freshness": {"last_sync": "2026-07-02T14:03:11+02:00"},
   "counts": [
-    {"id": "messages", "label": "messages", "value": 12345},
-    {"id": "chats", "label": "chats", "value": 87},
-    {"id": "since", "label": "since", "value": 2014}
-  ],
-  "auth": {"authorized": true, "expires": null}
+    {"id": "messages", "label": "messages", "value": 12345}
+  ]
 }
 ```
 
-`state` is one of `ok`, `stale`, `empty`, `error`, `missing`.
+`doctor` checks only conditions that require action outside an ordinary read:
+for example, a missing source store, expired authentication or a macOS privacy
+permission. Every failed check includes a plain-language remedy.
 
-## search
+## Search matches
+
+Search returns matches, not generic records. Each hit contains:
+
+- the source and canonical ref to open;
+- a stable anchor within that record;
+- source-owned summary and archive context;
+- labelled typed evidence explaining what matched; and
+- a timestamp when the source has one.
 
 ```json
 {
   "query": "boat trip",
   "results": [
     {
-      "ref": "examplecrawl:msg/8842",
+      "ref": "example:msg/8842",
       "time": "2026-05-14T09:12:00+02:00",
       "anchor_id": "message",
-      "summary": {
-        "title": "Family chat",
-        "subtitle": "Alice"
-      },
+      "summary": {"title": "Family chat", "subtitle": "Alice Example"},
+      "archive_context": [{"kind": "messages", "label": "In Family chat"}],
       "evidence": [
         {
-          "label": "Message from Alice",
-          "text": {
-            "runs": [
-              {"text": "…the boat trip is on Saturday…", "matched": true}
-            ]
-          }
+          "label": "Message from Alice Example",
+          "text": {"runs": [{"text": "the boat trip is on Saturday", "matched": true}]}
         }
       ]
     }
   ],
-  "total_matches": 332,
-  "truncated": true
+  "total_matches": 1,
+  "truncated": false
 }
 ```
 
-Every result carries one source-owned summary, one primary anchor and labelled
-typed evidence. Evidence may be text, a structured field, bounded local media
-or a source relation. Opening the result returns the source-owned presentation
-with that anchor exactly once.
+Evidence is one of text, a structured field, bounded local media or a source
+relation. It is exact source provenance, not a fabricated explanation of a
+ranking score.
 
-`--limit N` is honored as given, on every verb that accepts it and
-in both output modes: N results come back if the archive has them.
-No hard maximum, no silent clamping — an agent that asks for 1000
-rows must never discover a different number arrived. `--limit`
-defaults to 20 on search; list verbs may choose their own default,
-but the default is the only thing a verb may choose. When a real
-constraint outside the crawler's control caps the answer (a remote
-API page limit, say), the crawler returns what it can and says so:
-human mode prints one line — `limit: returned 800 of 1000 requested
-(reason)` — and JSON carries `"limit_capped": {"requested": 1000,
-"returned": 800, "reason": "..."}`. Values below 1 are usage
-errors. `--after`/`--before` narrow by time.
+Search defaults to 20 results. If a command accepts `--limit N`, it returns N
+items when the source can provide them. An external limit must be reported with
+the number requested, the number returned and the reason. `--after` and
+`--before` use RFC 3339 timestamps or dates.
 
-v1.2 defines `--who <person>` for crawlers that declare the `who`
-capability: filter matches to one person's items — sender, recipient
-or chat member. The value may be a name or an exact identifier
-(email, phone, handle). A name resolves against the archive's
-participants before any filtering:
+Sources that declare `who` resolve a name or exact identifier before filtering.
+One match yields the exact identifiers used. Several matches return an
+`ambiguous_who` error with candidates; no match returns `unknown_who` with
+suggestions. A close spelling is a suggestion, never an automatic choice.
 
-- exactly one person: filter, and include a `who_resolved` object in
-  the envelope (`{"who": ..., "identifiers": [...]}`); human mode
-  prints one resolution line, for example `alex → Alex Jones`.
-- more than one person: no search runs. Error `ambiguous_who`
-  carries a `candidates` array — each with `who`, `identifiers`,
-  `last_seen` and message volume — so one retry with an identifier
-  cannot miss. Exit 4.
-- no person: error `unknown_who` carries `did_you_mean` candidates
-  from generous matching (prefix, substring, close spellings); when
-  nothing is close, a hint to search without `--who`. Exit 5.
+## Refs and open
 
-Close-spelling matches never count toward "exactly one": a name that
-only matches by spelling distance (a lone Dana for `--who dan`) is
-`unknown_who` with the suggestion, never an auto-resolve — explicit
-beats implicit. Exact, prefix and substring matches resolve.
+Canonical refs have the form `source:kind/id`. They remain the machine-facing
+identity across syncs. Sources that declare short refs may also show a stable
+human-typable alias. `trawl open` accepts a canonical ref or resolves a short
+ref across capable sources without guessing.
 
-Resolution is generous; filtering is exact. An ambiguous name is
-never filtered across all its matches (v1.1's blend-and-report
-`who_matched` behaviour is removed). The same rule as short refs:
-zero, one or many, never pick.
+Once assigned, a short ref is not moved or deleted. If a new ref collides with
+an existing alias, only the new alias grows beyond the collision; existing
+aliases do not change or shrink.
 
-Crawlers with the `who` capability also expose the resolver
-directly: `who <name>` returns the candidates as JSON
-(`{"query": ..., "candidates": [{"who": ..., "identifiers": [...],
-"last_seen": ..., "messages": ...}]}`) and as a plain table in human
-mode. Trawl uses this surface to resolve federated queries — joining
-same-named candidates across sources, upgraded by the person layer
-(clawdex) where it knows the person — instead of duplicating
-identity logic.
+Open returns two views of the same source record:
 
-The `<query>` argument to `search` is optional when at least one
-filter (`--who`, `--after`, `--before`) is present: a filter-only
-search lists the newest matching items. `search` with no query and
-no filters is an error.
+- a typed source-owned value for machine consumers; and
+- a required bounded presentation document for people and generic clients.
 
-Trawlkit owns the alias index and manifests always include
-`short_refs`. Aliases are assigned once and never deleted. On
-collision, new refs extend past every stored alias instead of moving
-an existing alias. The accepted costs are explicit: rows for deleted
-source items persist (opening one reports not found), and aliases
-never re-shorten after a collision has made them longer.
+The presentation grammar supports prose, fields, timelines, tables, local
+media, attachments, actions and notices. An opened conversation or history is
+centred on the requested anchor and states when more context exists.
 
-That guarantee holds once every binary writing the archive runs this code.
-Older binaries still clear aliases during sync (kind-scoped in the immediately
-prior generation, whole-table before that) and can delete or reassign aliases.
-A later sync preserves whatever state the old binary left; it does not recover
-deleted aliases for refs no longer emitted.
+## Output and failure rules
 
-Crawlers include the computed alias as `"short_ref"` on every result in their
-own `--json` output. The full `ref` stays the canonical identity; `short_ref` is
-display sugar so a federating reader (trawl) can render the short form without
-inventing its own alias length. Trawl's agent-facing `--json` still keeps short
-refs out by default.
+- Output is bounded and says when it is incomplete.
+- Human text and structured output carry the same meaning.
+- Timestamps are RFC 3339 in structured output. Human output uses readable
+  local time.
+- Secrets, tokens, cookies and credential fragments never appear in output,
+  errors or logs.
+- Structured failures include a code, message and remedy. Partial federation
+  keeps successful source results and names failed or skipped sources.
+- Read commands never sync or change source content. They may rebuild a safe
+  derived index at the point of use.
+- Public `trawl` commands do not prompt or read interactive input. Setup and
+  network effects use explicit commands or configuration.
+- Sync progress uses structured events in JSON mode and stderr in human mode.
+- `-v` streams ordinary diagnostics to stderr; `-vv` adds debug detail.
 
-A snippet is a plain text fragment: single line, whitespace
-collapsed, no highlight or match markers of any kind. The full item
-is what `open` is for.
+Process exit codes are stable: `0` means success, `1` failure, `2` invalid
+usage and `3` a partial result in which some sources failed. Person resolution
+uses `4` for `ambiguous_who` and `5` for `unknown_who`.
 
-A result whose `time` is a calendar date with no meaningful time of
-day (an all-day calendar event) carries `"all_day": true`. The field
-is optional; absent means false, and it is only meaningful alongside
-`time`. `time` stays RFC 3339 as always — `all_day` tells a reader
-the clock part is padding, so renderers show the bare date instead
-of a fake `00:00`.
-
-## open
-
-Takes a ref this crawler issued; returns the full item with its
-natural context (a message inside its thread window, a mail with its
-headers, an event with attendees). Bounded like everything else: long
-threads window around the target, never dump.
-
-`trawl open <ref>` passes through the crawler's human rendering because
-open is single-source. The crawler's human mode is authoritative for
-its own items; search remains trawl-rendered so multiple sources can be
-merged consistently.
-
-## doctor
-
-```json
-{
-  "checks": [
-    {"id": "source_store", "state": "ok"},
-    {"id": "tcc_full_disk_access", "state": "fail",
-     "message": "cannot read the source database",
-     "remedy": "grant Full Disk Access to Trawl in System Settings > Privacy"}
-  ]
-}
-```
-
-Every failing check names the exact remedy. doctor diagnoses only
-what genuinely needs the world to change: permissions, expired auth,
-a costly sync, a missing source store. A check whose remedy would be
-safe, idempotent and local is a design bug — the crawler should have
-healed that state during normal operation.
-
-## Output rules
-
-These apply to every command, both output modes:
-
-- Bounded. Nothing unbounded, ever. Defaults small, maximums hard,
-  truncation explicit with a hint for narrowing.
-- Human shaped, down to the field. RFC 3339 timestamps in local time,
-  never raw epochs. Display names alongside stable refs, never bare
-  row IDs. Field names say what the value means. If a human cannot
-  read a field cold, it does not ship.
-- Secrets never. Auth state is booleans and expiry dates. No token,
-  cookie, key or fragment thereof in any output, including errors and
-  logs.
-- Errors are structured and actionable: exit 1,
-  `{"error": {"code", "message", "remedy"}}` on stdout in JSON mode,
-  one sentence plus remedy on stderr otherwise.
-- Progress (sync) is JSONL events in JSON mode
-  (`{"event": "progress", "stage": "messages", "done": 120, "total": 900}`),
-  human progress on stderr otherwise.
-- Reads never change content. `search`, `open`, `status`, `metadata`
-  never trigger a sync, never auto-import, never touch messages,
-  contacts or events. They may refresh derived caches (indexes) at
-  the point of use, logging one line when they do — derived state
-  self-heals; there are no repair verbs.
-
-## Contract checks
-
-The test suite and `trawlkit/conformance` helpers verify command grammar,
-JSON shapes, bounds, secret patterns, read-only reads, and behaviour on
-empty and corrupt archives. These checks are the contract's tripwires —
-prose drifts, tests do not. They remember known defect classes; they are
-not the quality gate. Output changes additionally pass an adversarial
-model review of raw transcripts (see vision.md engineering principles).
+Conformance tests verify grammar, shapes, bounds, privacy tripwires, read-only
+behaviour and empty or corrupt archive handling. Source tests remain the proof
+for source-specific meanings.

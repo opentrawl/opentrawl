@@ -32,7 +32,7 @@ const (
 	ChatRefPrefix = "whatsapp:chat/"
 	ownerWhoKey   = "owner:me"
 
-	// Sync-state lives in the one trawlkit state.Store (TRAWL-82). Scalar sync
+	// Sync-state lives in the one trawlkit state.Store. Scalar sync
 	// markers sit under entity_type "sync"; the short-ref fingerprint, which is
 	// derived from the archive, sits under "derived".
 	syncSource        = "whatsapp"
@@ -318,8 +318,8 @@ func checkSchemaVersion(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// migrateSyncState tombstones the pre-state.Store key/value sync_state table
-// (TRAWL-82). Its columns collide with trawlkit/state and everything it held —
+// migrateSyncState tombstones the pre-state.Store key/value sync_state table.
+// Its columns collide with trawlkit/state and everything it held —
 // the last-import marker, source path and short-ref fingerprint — is re-derived
 // by one sync, so we drop, never map (rules §1.17). The drop only fires on a
 // pre-migration archive (no source_name column), so a canonical archive keeps

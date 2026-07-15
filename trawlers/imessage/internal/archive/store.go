@@ -20,7 +20,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-// Sync-state lives in the one trawlkit state.Store (TRAWL-82). Scalar sync
+// Sync-state lives in the one trawlkit state.Store. Scalar sync
 // markers are keyed under the "sync" entity type; derived-state bookkeeping
 // under "derived".
 const (
@@ -48,7 +48,7 @@ type SyncOptions struct {
 }
 
 // DefaultPaths is the one archive path layout, from trawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/imessage (TRAWL-99).
+// dir is the fleet-wide state root, ~/.opentrawl/imessage.
 func DefaultPaths() config.Paths {
 	paths, _ := config.App{Name: "imessage", BaseDir: "~/.opentrawl/imessage"}.DefaultPaths()
 	return paths

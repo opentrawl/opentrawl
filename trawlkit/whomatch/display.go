@@ -30,8 +30,8 @@ import (
 // swapped.
 //
 // Display-name picking is structural and ordered:
-//  1. Angle-bracket spans are stripped ("Avery E <avery@example.com>" becomes
-//     "Avery E") and spellings that become identical pool their counts. A
+//  1. Angle-bracket spans are stripped ("Avery Example <avery@example.com>"
+//     becomes "Avery Example") and spellings that become identical pool their counts. A
 //     spelling that strips to nothing is dropped.
 //  2. Highest count wins.
 //  3. A spelling that is not identifier-like (IsIdentifierLike) beats one
@@ -40,8 +40,8 @@ import (
 //  5. Fewer runes win.
 //  6. Alphabetical, case-insensitively, then exactly.
 //
-// rules.md §1.5 carve-out, documented once here for every crawler that routes
-// through whomatch: agents retry who-resolution against these rules, so the
+// This deterministic boundary is documented once here for every crawler that
+// routes through whomatch: agents retry who-resolution against these rules, so the
 // same input must give the same output every time. These rules operate on
 // string structure only: exact containment, compact character distance, one
 // adjacent swap, counts, identifier equality, bracket spans, case, and length.

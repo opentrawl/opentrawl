@@ -35,7 +35,7 @@ type Store struct {
 }
 
 // DefaultPaths is the one archive path layout, from trawlkit/config. The base
-// dir is the fleet-wide state root, ~/.opentrawl/calendar (TRAWL-99).
+// dir is the fleet-wide state root, ~/.opentrawl/calendar.
 func DefaultPaths() config.Paths {
 	paths, _ := config.App{Name: "calendar", BaseDir: "~/.opentrawl/calendar"}.DefaultPaths()
 	return paths

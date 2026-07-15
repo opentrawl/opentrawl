@@ -554,7 +554,7 @@ func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Stor
 
 func setupCalendarFixture(t *testing.T) string {
 	t.Helper()
-	home, err := os.MkdirTemp("/private/tmp", "trawl-152-calcrawl-home-")
+	home, err := os.MkdirTemp("/private/tmp", "calendar-crawler-home-")
 	if err != nil {
 		t.Fatal(err)
 	}

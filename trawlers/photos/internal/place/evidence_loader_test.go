@@ -93,18 +93,59 @@ func writeSyntheticCheckedEvidence(t *testing.T, cacheDir string, input Input, o
 	t.Helper()
 	request := []byte("GET /synthetic-reverse")
 	response := []byte(`{"synthetic":"place"}`)
-	capture := completeCapture(input, operation.ProviderIdentity, operation.Operation, operation.CoordinateVariant, operation.CredentialReference, operation.SelectionPolicy, request, response, 200, parsedEvidence{
-		address:    &Address{Formatted: "Synthetic Place", Source: "synthetic"},
-		candidates: []EvidenceCandidate{{ProviderIndex: 0, ProviderID: "synthetic-place", Name: "Synthetic Place", Source: "synthetic"}},
-	})
-	capture.record.SelectionPolicy.LimitReached = true
-	capture.record.SelectionPolicy.MoreResultsNotRequested = true
-	capture.record.StartedAt = "2026-01-01T00:00:00Z"
-	capture.record.CompletedAt = "2026-01-01T00:00:00Z"
-	capture = attachRawHeaders(capture, []byte("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"))
-	dir := filepath.Join(cacheDir, capture.record.CacheIdentity)
-	if err := writeEvidenceCapture(dir, &capture); err != nil {
+	headers := []byte("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n")
+	cacheIdentity := CheckedEvidenceCacheIdentity(input, operation, request)
+	operation.SelectionPolicy.LimitReached = true
+	operation.SelectionPolicy.MoreResultsNotRequested = true
+	record := EvidenceRecord{
+		Input:                input,
+		ProviderIdentity:     operation.ProviderIdentity,
+		Operation:            operation.Operation,
+		SelectionPolicy:      operation.SelectionPolicy,
+		CoordinateVariant:    operation.CoordinateVariant,
+		ParserVersion:        evidenceParserVersion,
+		PreAuthRequestFile:   "request.raw",
+		PreAuthRequestSHA256: evidenceDigest(request),
+		RawResponseFile:      "response.raw",
+		RawResponseSHA256:    evidenceDigest(response),
+		RawHeadersFile:       "headers.raw",
+		RawHeadersSHA256:     evidenceDigest(headers),
+		HTTPStatus:           200,
+		Address:              &Address{Formatted: "Synthetic Place", Source: "synthetic"},
+		Candidates:           []EvidenceCandidate{{ProviderIndex: 0, ProviderID: "synthetic-place", Name: "Synthetic Place", Source: "synthetic"}},
+		CompletionState:      evidenceStateComplete,
+		CacheIdentity:        cacheIdentity,
+		CredentialReference:  operation.CredentialReference,
+		StartedAt:            "2026-01-01T00:00:00Z",
+		CompletedAt:          "2026-01-01T00:00:00Z",
+	}
+	dir := filepath.Join(cacheDir, cacheIdentity)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{
+		"request.raw":  request,
+		"response.raw": response,
+		"headers.raw":  headers,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	metadata, err := json.Marshal(record)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "record.json"), metadata, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return dir
+}
+
+func syntheticEvidenceInput(latitude, longitude float64) Input {
+	return Input{
+		AssetID:  "synthetic-asset",
+		TakenAt:  "2026-01-01T00:00:00Z",
+		Location: Coordinate{Latitude: latitude, Longitude: longitude},
+	}
 }
