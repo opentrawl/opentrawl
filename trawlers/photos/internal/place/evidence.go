@@ -150,14 +150,15 @@ type CheckedOperation struct {
 type CheckedEvidenceParser func(raw []byte, status int, input Input) (*Address, []EvidenceCandidate, error)
 
 type EvidenceCandidate struct {
-	ProviderIndex int         `json:"provider_index"`
-	ProviderID    string      `json:"provider_id,omitempty"`
-	Name          string      `json:"name,omitempty"`
-	Categories    []string    `json:"categories"`
-	Coordinate    *Coordinate `json:"coordinate,omitempty"`
-	DistanceM     float64     `json:"distance_m,omitempty"`
-	Address       *Address    `json:"address,omitempty"`
-	Source        string      `json:"source,omitempty"`
+	ProviderIndex  int             `json:"provider_index"`
+	ProviderID     string          `json:"provider_id,omitempty"`
+	Name           string          `json:"name,omitempty"`
+	Categories     []string        `json:"categories"`
+	Coordinate     *Coordinate     `json:"coordinate,omitempty"`
+	DistanceM      float64         `json:"distance_m,omitempty"`
+	Address        *Address        `json:"address,omitempty"`
+	Source         string          `json:"source,omitempty"`
+	ProviderResult json.RawMessage `json:"provider_result,omitempty"`
 }
 
 type evidenceCapture struct {

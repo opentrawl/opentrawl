@@ -9,6 +9,7 @@ package cardwire
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
+	structpb "google.golang.org/protobuf/types/known/structpb"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -874,6 +875,7 @@ type PlaceCandidate struct {
 	Address        *Address               `protobuf:"bytes,7,opt,name=address,proto3" json:"address,omitempty"`
 	Source         string                 `protobuf:"bytes,8,opt,name=source,proto3" json:"source,omitempty"`
 	CandidateId    string                 `protobuf:"bytes,9,opt,name=candidate_id,json=candidateId,proto3" json:"candidate_id,omitempty"`
+	ProviderResult *structpb.Struct       `protobuf:"bytes,10,opt,name=provider_result,json=providerResult,proto3" json:"provider_result,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -969,6 +971,13 @@ func (x *PlaceCandidate) GetCandidateId() string {
 		return x.CandidateId
 	}
 	return ""
+}
+
+func (x *PlaceCandidate) GetProviderResult() *structpb.Struct {
+	if x != nil {
+		return x.ProviderResult
+	}
+	return nil
 }
 
 type Address struct {
@@ -1765,7 +1774,7 @@ var File_opentrawl_photos_card_v1_card_proto protoreflect.FileDescriptor
 
 const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\n" +
-	"#opentrawl/photos/card/v1/card.proto\x12\x18opentrawl.photos.card.v1\"\xb2\a\n" +
+	"#opentrawl/photos/card/v1/card.proto\x12\x18opentrawl.photos.card.v1\x1a\x1cgoogle/protobuf/struct.proto\"\xb2\a\n" +
 	"\tCardInput\x12%\n" +
 	"\x0eschema_version\x18\x01 \x01(\rR\rschemaVersion\x12!\n" +
 	"\fcapture_time\x18\x02 \x01(\tR\vcaptureTime\x12\x1f\n" +
@@ -1855,7 +1864,7 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\aaddress\x18\a \x01(\v2!.opentrawl.photos.card.v1.AddressR\aaddress\x12H\n" +
 	"\n" +
 	"candidates\x18\b \x03(\v2(.opentrawl.photos.card.v1.PlaceCandidateR\n" +
-	"candidates\"\xf3\x02\n" +
+	"candidates\"\xb5\x03\n" +
 	"\x0ePlaceCandidate\x12%\n" +
 	"\x0eprovider_index\x18\x01 \x01(\x05R\rproviderIndex\x12\x1f\n" +
 	"\vprovider_id\x18\x02 \x01(\tR\n" +
@@ -1870,7 +1879,9 @@ const file_opentrawl_photos_card_v1_card_proto_rawDesc = "" +
 	"\x0fdistance_meters\x18\x06 \x01(\x01R\x0edistanceMeters\x12;\n" +
 	"\aaddress\x18\a \x01(\v2!.opentrawl.photos.card.v1.AddressR\aaddress\x12\x16\n" +
 	"\x06source\x18\b \x01(\tR\x06source\x12!\n" +
-	"\fcandidate_id\x18\t \x01(\tR\vcandidateId\"\xf8\x03\n" +
+	"\fcandidate_id\x18\t \x01(\tR\vcandidateId\x12@\n" +
+	"\x0fprovider_result\x18\n" +
+	" \x01(\v2\x17.google.protobuf.StructR\x0eproviderResult\"\xf8\x03\n" +
 	"\aAddress\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\"\n" +
 	"\fthoroughfare\x18\x02 \x01(\tR\fthoroughfare\x12)\n" +
@@ -1982,6 +1993,7 @@ var file_opentrawl_photos_card_v1_card_proto_goTypes = []any{
 	(*EvidenceLink)(nil),         // 16: opentrawl.photos.card.v1.EvidenceLink
 	(*ApprovedCardBundle)(nil),   // 17: opentrawl.photos.card.v1.ApprovedCardBundle
 	(*ApprovedCardItem)(nil),     // 18: opentrawl.photos.card.v1.ApprovedCardItem
+	(*structpb.Struct)(nil),      // 19: google.protobuf.Struct
 }
 var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	1,  // 0: opentrawl.photos.card.v1.CardInput.immutable_original:type_name -> opentrawl.photos.card.v1.ImmutableOriginal
@@ -1996,14 +2008,15 @@ var file_opentrawl_photos_card_v1_card_proto_depIdxs = []int32{
 	10, // 9: opentrawl.photos.card.v1.PlaceProjection.candidates:type_name -> opentrawl.photos.card.v1.PlaceCandidate
 	4,  // 10: opentrawl.photos.card.v1.PlaceCandidate.coordinate:type_name -> opentrawl.photos.card.v1.Coordinate
 	11, // 11: opentrawl.photos.card.v1.PlaceCandidate.address:type_name -> opentrawl.photos.card.v1.Address
-	14, // 12: opentrawl.photos.card.v1.PhotoCard.location:type_name -> opentrawl.photos.card.v1.ModelLocation
-	16, // 13: opentrawl.photos.card.v1.CardExecutionCustody.evidence:type_name -> opentrawl.photos.card.v1.EvidenceLink
-	18, // 14: opentrawl.photos.card.v1.ApprovedCardBundle.items:type_name -> opentrawl.photos.card.v1.ApprovedCardItem
-	15, // [15:15] is the sub-list for method output_type
-	15, // [15:15] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	19, // 12: opentrawl.photos.card.v1.PlaceCandidate.provider_result:type_name -> google.protobuf.Struct
+	14, // 13: opentrawl.photos.card.v1.PhotoCard.location:type_name -> opentrawl.photos.card.v1.ModelLocation
+	16, // 14: opentrawl.photos.card.v1.CardExecutionCustody.evidence:type_name -> opentrawl.photos.card.v1.EvidenceLink
+	18, // 15: opentrawl.photos.card.v1.ApprovedCardBundle.items:type_name -> opentrawl.photos.card.v1.ApprovedCardItem
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_opentrawl_photos_card_v1_card_proto_init() }

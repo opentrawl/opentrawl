@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package opentrawl.photos.card.v1;
 
+import "google/protobuf/struct.proto";
+
 option go_package = "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1;cardwire";
 
 // CardInput contains only checked facts consumed by the photo-card model.
@@ -106,6 +108,7 @@ message PlaceCandidate {
   Address address = 7;
   string source = 8;
   string candidate_id = 9;
+  google.protobuf.Struct provider_result = 10;
 }
 
 message Address {

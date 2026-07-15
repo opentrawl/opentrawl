@@ -46,15 +46,32 @@ func parseAppleEvidence(raw []byte, _ int, input Input) (parsedEvidence, error) 
 		return parsedEvidence{}, fmt.Errorf("parse raw Apple response: %w", err)
 	}
 	parsed := parsedEvidence{}
-	for index, item := range result.ReverseItems {
+	for index, rawItem := range result.ReverseItems {
+		item, err := parseAppleEvidenceItem(rawItem)
+		if err != nil {
+			return parsedEvidence{}, fmt.Errorf("parse raw Apple reverse item %d: %w", index, err)
+		}
 		candidate := appleEvidenceCandidate(index, item, input)
+		candidate.ProviderResult, err = canonicalProviderResult(rawItem)
+		if err != nil {
+			return parsedEvidence{}, fmt.Errorf("canonicalize raw Apple reverse item %d: %w", index, err)
+		}
 		parsed.candidates = append(parsed.candidates, candidate)
 		if parsed.address == nil && candidate.Address != nil {
 			parsed.address = candidate.Address
 		}
 	}
-	for index, item := range result.NearbyItems {
-		parsed.candidates = append(parsed.candidates, appleEvidenceCandidate(index, item, input))
+	for index, rawItem := range result.NearbyItems {
+		item, err := parseAppleEvidenceItem(rawItem)
+		if err != nil {
+			return parsedEvidence{}, fmt.Errorf("parse raw Apple nearby item %d: %w", index, err)
+		}
+		candidate := appleEvidenceCandidate(len(result.ReverseItems)+index, item, input)
+		candidate.ProviderResult, err = canonicalProviderResult(rawItem)
+		if err != nil {
+			return parsedEvidence{}, fmt.Errorf("canonicalize raw Apple nearby item %d: %w", index, err)
+		}
+		parsed.candidates = append(parsed.candidates, candidate)
 	}
 	if len(result.ReverseItems) == 0 || parsed.address == nil {
 		return parsed, ErrProviderNoResult
@@ -66,8 +83,8 @@ func parseAppleEvidence(raw []byte, _ int, input Input) (parsedEvidence, error) 
 }
 
 type appleEvidenceResponse struct {
-	ReverseItems []appleEvidenceItem `json:"reverse_items"`
-	NearbyItems  []appleEvidenceItem `json:"nearby_items"`
+	ReverseItems []json.RawMessage `json:"reverse_items"`
+	NearbyItems  []json.RawMessage `json:"nearby_items"`
 }
 
 type appleEvidenceItem struct {
@@ -77,6 +94,14 @@ type appleEvidenceItem struct {
 	DistanceM  float64     `json:"distance_m,omitempty"`
 	Address    *Address    `json:"address,omitempty"`
 	Source     string      `json:"source,omitempty"`
+}
+
+func parseAppleEvidenceItem(raw json.RawMessage) (appleEvidenceItem, error) {
+	var item appleEvidenceItem
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return appleEvidenceItem{}, err
+	}
+	return item, nil
 }
 
 func appleEvidenceCandidate(index int, item appleEvidenceItem, input Input) EvidenceCandidate {

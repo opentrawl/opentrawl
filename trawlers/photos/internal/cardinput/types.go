@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	SchemaVersion                   uint32 = 1
-	MaxModelCandidatesPerProjection        = 20
+	SchemaVersion              uint32 = 1
+	MaxRenderedModelInputBytes        = 256 << 10
 )
 
 var (
@@ -20,6 +20,7 @@ var (
 	ErrIncompleteEvidence = errors.New("incomplete place evidence")
 	ErrMalformedEvidence  = errors.New("malformed place evidence")
 	ErrUnsafeEvidence     = errors.New("unsafe place evidence")
+	ErrModelInputTooLarge = errors.New("rendered model input exceeds evidence envelope")
 )
 
 type Result struct {

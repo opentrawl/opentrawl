@@ -66,9 +66,10 @@ func LoadCheckedEvidence(cacheDir string, input Input, operations []CheckedOpera
 			return nil, fmt.Errorf("%w: required operation", ErrCheckedEvidenceUnavailable)
 		}
 		address, candidates, err := operation.Parser(cached.response, cached.record.HTTPStatus, input)
-		if err != nil || !reflect.DeepEqual(address, cached.record.Address) || !reflect.DeepEqual(candidates, cached.record.Candidates) {
+		if err != nil || !reflect.DeepEqual(address, cached.record.Address) || !sameEvidenceCandidates(candidates, cached.record.Candidates) {
 			return nil, fmt.Errorf("%w: parsed evidence mismatch", ErrCheckedEvidenceUnavailable)
 		}
+		cached.record.Candidates = candidates
 		loaded = append(loaded, cached.record)
 	}
 	return loaded, nil
@@ -245,11 +246,28 @@ func checkedCachedCapture(cacheDir, provider, operation, variant, credentialRefe
 		return evidenceCapture{}, true, fmt.Errorf("%w: record mismatch", errEvidenceCacheIncomplete)
 	}
 	parsed, err := parser(response, record.HTTPStatus, input)
-	if err != nil || !reflect.DeepEqual(parsed.address, record.Address) || !reflect.DeepEqual(parsed.candidates, record.Candidates) {
+	if err != nil || !reflect.DeepEqual(parsed.address, record.Address) || !sameEvidenceCandidates(parsed.candidates, record.Candidates) {
 		return evidenceCapture{}, true, fmt.Errorf("%w: parser mismatch", errEvidenceCacheIncomplete)
 	}
+	record.Candidates = parsed.candidates
 	record.Cached = true
 	return evidenceCapture{record: record, request: storedRequest, response: response, headers: headers}, true, nil
+}
+
+func sameEvidenceCandidates(left, right []EvidenceCandidate) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		leftCandidate := left[index]
+		rightCandidate := right[index]
+		leftCandidate.ProviderResult = nil
+		rightCandidate.ProviderResult = nil
+		if !reflect.DeepEqual(leftCandidate, rightCandidate) {
+			return false
+		}
+	}
+	return true
 }
 
 func rawHTTPStatus(headers []byte) (int, error) {
