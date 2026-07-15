@@ -40,6 +40,7 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 			Time:     parseContractTime(result.Time),
 			AnchorID: anchorID,
 			Summary:  trawlkit.ResultSummary{Title: title, Subtitle: noteWhere(result)},
+			Archive:  []trawlkit.ArchiveContext{{Kind: "folder", Label: "In " + noteWhere(result)}},
 			Evidence: noteSearchEvidence(result.Matches),
 		})
 	}

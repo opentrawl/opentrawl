@@ -292,10 +292,19 @@ func searchHit(result archive.SearchResult) (trawlkit.Hit, error) {
 		Time:         t,
 		AnchorID:     anchorID,
 		Summary:      trawlkit.ResultSummary{Title: title, Subtitle: result.Calendar},
+		Archive:      []trawlkit.ArchiveContext{calendarArchiveContext(result.Calendar)},
 		Evidence:     evidence,
 		AllDay:       result.AllDay,
 		Availability: result.Availability,
 	}, nil
+}
+
+func calendarArchiveContext(calendar string) trawlkit.ArchiveContext {
+	calendar = strings.TrimSpace(calendar)
+	if calendar == "" {
+		return trawlkit.ArchiveContext{Kind: "calendar", Label: "In Calendar"}
+	}
+	return trawlkit.ArchiveContext{Kind: "calendar", Label: "In " + calendar}
 }
 
 func calendarSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {

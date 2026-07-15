@@ -48,8 +48,44 @@ func searchHits(results []store.SearchResult, ownerAuthorID string) []trawlkit.H
 		hits = append(hits, trawlkit.Hit{
 			Ref: ref, Time: result.CreatedAt.Local(), AnchorID: trawlkit.MatchAnchorID,
 			Summary:  trawlkit.ResultSummary{Title: who, Subtitle: "Twitter (X)"},
+			Archive:  tweetArchiveContext(result.Roles, result.AuthorID, ownerAuthorID),
 			Evidence: evidence,
 		})
 	}
 	return hits
+}
+
+func tweetArchiveContext(roles []string, authorID, ownerAuthorID string) []trawlkit.ArchiveContext {
+	seen := map[string]bool{}
+	out := make([]trawlkit.ArchiveContext, 0, len(roles)+1)
+	for _, role := range roles {
+		context, ok := tweetRoleContext(role)
+		if !ok || seen[context.Kind] {
+			continue
+		}
+		seen[context.Kind] = true
+		out = append(out, context)
+	}
+	if len(out) == 0 && strings.TrimSpace(ownerAuthorID) != "" && authorID == ownerAuthorID {
+		out = append(out, trawlkit.ArchiveContext{Kind: "your_post", Label: "Your post"})
+	}
+	if len(out) == 0 {
+		out = append(out, trawlkit.ArchiveContext{Kind: "archived_post", Label: "Archived post"})
+	}
+	return out
+}
+
+func tweetRoleContext(role string) (trawlkit.ArchiveContext, bool) {
+	switch strings.TrimSpace(role) {
+	case "authored":
+		return trawlkit.ArchiveContext{Kind: "your_post", Label: "Your post"}, true
+	case "bookmark":
+		return trawlkit.ArchiveContext{Kind: "bookmarked", Label: "Bookmarked"}, true
+	case "like":
+		return trawlkit.ArchiveContext{Kind: "liked", Label: "Liked"}, true
+	case "mention":
+		return trawlkit.ArchiveContext{Kind: "mention", Label: "Mention"}, true
+	default:
+		return trawlkit.ArchiveContext{}, false
+	}
 }

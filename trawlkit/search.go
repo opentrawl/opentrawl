@@ -31,6 +31,11 @@ type ResultSummary struct {
 	Subtitle string `json:"subtitle,omitempty"`
 }
 
+type ArchiveContext struct {
+	Kind  string `json:"kind"`
+	Label string `json:"label"`
+}
+
 const MatchAnchorID = "match"
 
 type TextRun struct {
@@ -89,6 +94,7 @@ type Hit struct {
 	Time         time.Time          `json:"time"`
 	AnchorID     string             `json:"anchor_id"`
 	Summary      ResultSummary      `json:"summary"`
+	Archive      []ArchiveContext   `json:"archive_context,omitempty"`
 	Evidence     []EvidenceFragment `json:"evidence"`
 	AllDay       bool               `json:"all_day,omitempty"`
 	Availability *int64             `json:"availability,omitempty"`

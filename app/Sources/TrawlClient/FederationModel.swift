@@ -172,6 +172,14 @@ extension SearchEvidence {
 
   public var labelledDisplayText: String { "\(label): \(displayText)" }
 }
+public struct SearchArchiveContext: Sendable, Equatable {
+  public let kind: String
+  public let label: String
+  public init(kind: String, label: String) {
+    self.kind = kind
+    self.label = label
+  }
+}
 public struct SearchHitID: Sendable, Hashable {
   public let sourceID: String
   public let openRef: String
@@ -186,12 +194,31 @@ public struct SearchHit: Sendable, Equatable, Identifiable {
   public let time: Date?
   public let anchorID: String
   public let summary: ResultSummary
+  public let archiveContext: [SearchArchiveContext]
   public let evidence: [SearchEvidence]
   public let allDay: Bool
   public let availability: Int64?
   public let unread: Bool?
   public var id: SearchHitID {
     SearchHitID(sourceID: sourceID, openRef: openRef, anchorID: anchorID)
+  }
+  public init(
+    sourceID: String, openRef: String, shortRef: String, timeRFC3339: String, time: Date?,
+    anchorID: String, summary: ResultSummary, archiveContext: [SearchArchiveContext] = [],
+    evidence: [SearchEvidence], allDay: Bool, availability: Int64?, unread: Bool?
+  ) {
+    self.sourceID = sourceID
+    self.openRef = openRef
+    self.shortRef = shortRef
+    self.timeRFC3339 = timeRFC3339
+    self.time = time
+    self.anchorID = anchorID
+    self.summary = summary
+    self.archiveContext = archiveContext
+    self.evidence = evidence
+    self.allDay = allDay
+    self.availability = availability
+    self.unread = unread
   }
 }
 public struct SearchSourceResult: Sendable, Equatable {

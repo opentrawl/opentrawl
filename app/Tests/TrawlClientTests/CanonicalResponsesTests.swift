@@ -145,6 +145,33 @@ import Testing
     ])
 }
 
+@Test func canonicalSearchMapsAndValidatesArchiveContext() throws {
+  var hit = canonicalSearchHit()
+  var response = Trawl_Federation_V1_SearchResponse()
+  response.outcome = .complete
+  response.order = .recency
+  response.hits = [hit]
+
+  let mapped = try response.model().hits[0]
+  #expect(mapped.archiveContext == [SearchArchiveContext(kind: "source", label: "In Synthetic")])
+
+  for invalidContext in [
+    Trawl_Federation_V1_ArchiveContext.with {
+      $0.kind = "bad kind"
+      $0.label = "In Synthetic"
+    },
+    Trawl_Federation_V1_ArchiveContext.with {
+      $0.kind = "source"
+      $0.label = " "
+    },
+  ] {
+    hit = canonicalSearchHit()
+    hit.archiveContext = [invalidContext]
+    response.hits = [hit]
+    #expect(throws: TrawlClientError.invalidProtobuf) { try response.model() }
+  }
+}
+
 @Test func openRejectsDuplicateMissingAndMismatchedPrimaryAnchors() {
   var duplicate = canonicalOpenResponse()
   duplicate.record.presentation.blocks.append(
@@ -729,6 +756,12 @@ private func canonicalSearchHit() -> Trawl_Federation_V1_SearchHit {
     $0.openRef = "synthetic:record/full"
     $0.anchorID = "match"
     $0.summary = .with { $0.title = "Synthetic record" }
+    $0.archiveContext = [
+      .with {
+        $0.kind = "source"
+        $0.label = "In Synthetic"
+      }
+    ]
     $0.evidence = [
       .with {
         $0.label = "Matching text"

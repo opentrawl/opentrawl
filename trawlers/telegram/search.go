@@ -89,9 +89,14 @@ func searchHits(messages []store.Message) []trawlkit.Hit {
 		if evidenceText == "" {
 			evidenceText = where
 		}
+		archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
+		if message.FromMe {
+			archiveContext = trawlkit.ArchiveContext{Kind: "sent_by_you", Label: "Sent by you"}
+		}
 		hits = append(hits, trawlkit.Hit{
 			Ref: ref, Time: message.Timestamp.Local(), AnchorID: trawlkit.MatchAnchorID,
 			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+			Archive:  []trawlkit.ArchiveContext{archiveContext},
 			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, evidenceText)},
 		})
 	}

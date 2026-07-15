@@ -188,7 +188,7 @@ func searchRowsFromResponse(sources []Source, response *federationv1.SearchRespo
 		parsed, timeOK := parseSearchTime(hit.GetTimeRfc3339())
 		rows = append(rows, SearchRow{
 			Source: hit.GetSourceId(), Ref: hit.GetOpenRef(), ShortRef: hit.GetShortRef(), Time: hit.GetTimeRfc3339(), AllDay: hit.GetAllDay(),
-			AnchorID: hit.GetAnchorId(), Summary: trawlkit.ResultSummary{Title: hit.GetSummary().GetTitle(), Subtitle: hit.GetSummary().GetSubtitle()}, Evidence: searchEvidenceFromProto(hit.GetEvidence()), Availability: hit.Availability,
+			AnchorID: hit.GetAnchorId(), Summary: trawlkit.ResultSummary{Title: hit.GetSummary().GetTitle(), Subtitle: hit.GetSummary().GetSubtitle()}, Archive: searchArchiveContextFromProto(hit.GetArchiveContext()), Evidence: searchEvidenceFromProto(hit.GetEvidence()), Availability: hit.Availability,
 			surface: sourceHumanName(source), sourceShortRefs: hasCapability(source, "short_refs"), parsedTime: parsed, timeOK: timeOK,
 		})
 	}
@@ -201,6 +201,16 @@ func searchRowsFromResponse(sources []Source, response *federationv1.SearchRespo
 		more = 0
 	}
 	return mergedSearchResult{Rows: rows, TotalMatches: total, Truncated: response.GetTruncated(), More: more}
+}
+
+func searchArchiveContextFromProto(values []*federationv1.ArchiveContext) []trawlkit.ArchiveContext {
+	out := make([]trawlkit.ArchiveContext, 0, len(values))
+	for _, value := range values {
+		if value != nil {
+			out = append(out, trawlkit.ArchiveContext{Kind: value.GetKind(), Label: value.GetLabel()})
+		}
+	}
+	return out
 }
 
 func searchEvidenceFromProto(values []*federationv1.EvidenceFragment) []trawlkit.EvidenceFragment {

@@ -187,6 +187,7 @@ struct SearchWorkspace: View {
       phase: model.phase,
       results: model.results,
       sourceDisplayName: sourceDisplayName(for:),
+      showsSourceDisplayName: scope == nil,
       failureGuidance: model.failureGuidance,
       committedQuery: model.committedInput?.query,
       resultLimit: model.resultLimit,

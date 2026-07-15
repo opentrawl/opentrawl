@@ -30,12 +30,17 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		value := title
 		evidence = []trawlkit.EvidenceFragment{{Label: "Message preview", Field: &trawlkit.FieldEvidence{Name: "subject", Value: []trawlkit.TextRun{{Text: value}}}}}
 	}
+	archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
+	if strings.EqualFold(strings.TrimSpace(hit.Who), "me") {
+		archiveContext = trawlkit.ArchiveContext{Kind: "sent", Label: "Sent"}
+	}
 	return trawlkit.Hit{
 		Ref:      hit.Ref,
 		ShortRef: hit.ShortRef,
 		Time:     t,
 		AnchorID: anchorID,
 		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Who},
+		Archive:  []trawlkit.ArchiveContext{archiveContext},
 		Evidence: evidence,
 		Unread:   &unread,
 	}, nil

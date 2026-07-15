@@ -54,9 +54,10 @@ func TestSearchEvidenceTextPreservesLabelsAndOrder(t *testing.T) {
 func TestSearchResultTextPreservesSourceOwnedSummaryAndEvidence(t *testing.T) {
 	got := SearchResultText(
 		ResultSummary{Title: "Synthetic conversation", Subtitle: "Casey Example"},
+		[]ArchiveContext{{Kind: "received", Label: "Received"}},
 		[]EvidenceFragment{TextMatch("Message from Casey Example", "Synthetic body passage")},
 	)
-	want := "Synthetic conversation — Casey Example · Message from Casey Example: Synthetic body passage"
+	want := "Synthetic conversation — Casey Example · Received · Message from Casey Example: Synthetic body passage"
 	if got != want {
 		t.Fatalf("SearchResultText() = %q, want %q", got, want)
 	}

@@ -23,6 +23,7 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 			Time:     time.Date(2026, 7, 12, 9, 30, 0, 123000000, time.FixedZone("CEST", 2*60*60)),
 			AnchorID: trawlkit.MatchAnchorID,
 			Summary:  trawlkit.ResultSummary{Title: "Synthetic launch review", Subtitle: "Work"},
+			Archive:  []trawlkit.ArchiveContext{{Kind: "calendar", Label: "In Work calendar"}},
 			Evidence: []trawlkit.EvidenceFragment{
 				trawlkit.FieldMatch("Attendee", "attendee", "Casey Example"),
 				trawlkit.FieldMatch("Location", "location", "Canal room"),
@@ -47,7 +48,7 @@ func TestFederatedSearchPreservesFacts(t *testing.T) {
 	if hit.SourceId != "calendar" || hit.OpenRef != "calendar:event/example-1" || hit.ShortRef != "cal:1" || hit.TimeRfc3339 != "2026-07-12T09:30:00.123+02:00" {
 		t.Fatalf("hit identity = %#v", hit)
 	}
-	if hit.AnchorId != trawlkit.MatchAnchorID || hit.GetSummary().GetTitle() != "Synthetic launch review" || hit.GetSummary().GetSubtitle() != "Work" || len(hit.Evidence) != 2 {
+	if hit.AnchorId != trawlkit.MatchAnchorID || hit.GetSummary().GetTitle() != "Synthetic launch review" || hit.GetSummary().GetSubtitle() != "Work" || len(hit.ArchiveContext) != 1 || hit.ArchiveContext[0].GetLabel() != "In Work calendar" || len(hit.Evidence) != 2 {
 		t.Fatalf("hit match contract = %#v", hit)
 	}
 	if hit.Availability == nil || hit.GetAvailability() != 2 || hit.Unread == nil || !hit.GetUnread() {
@@ -103,28 +104,32 @@ func TestProjectSearchPinsCompleteProtobufText(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := "" +
-		"source_id:  \"notes\"\n" +
-		"display_name:  \"Notes\"\n" +
-		"hits:  {\n" +
-		"  source_id:  \"notes\"\n" +
-		"  open_ref:  \"notes:note/example-1\"\n" +
-		"  time_rfc3339:  \"2026-07-12T09:00:00Z\"\n" +
-		"  anchor_id:  \"match\"\n" +
-		"  summary:  {\n" +
-		"    title:  \"Synthetic note\"\n" +
+		"source_id: \"notes\"\n" +
+		"display_name: \"Notes\"\n" +
+		"hits: {\n" +
+		"  source_id: \"notes\"\n" +
+		"  open_ref: \"notes:note/example-1\"\n" +
+		"  time_rfc3339: \"2026-07-12T09:00:00Z\"\n" +
+		"  anchor_id: \"match\"\n" +
+		"  summary: {\n" +
+		"    title: \"Synthetic note\"\n" +
 		"  }\n" +
-		"  evidence:  {\n" +
-		"    label:  \"Matching text\"\n" +
-		"    text:  {\n" +
-		"      runs:  {\n" +
-		"        text:  \"Synthetic note\"\n" +
-		"        matched:  true\n" +
+		"  evidence: {\n" +
+		"    label: \"Matching text\"\n" +
+		"    text: {\n" +
+		"      runs: {\n" +
+		"        text: \"Synthetic note\"\n" +
+		"        matched: true\n" +
 		"      }\n" +
 		"    }\n" +
 		"  }\n" +
+		"  archive_context: {\n" +
+		"    kind: \"notes\"\n" +
+		"    label: \"In Notes\"\n" +
+		"  }\n" +
 		"}\n" +
-		"total_matches:  1\n" +
-		"total_is_exact:  true\n"
+		"total_matches: 1\n" +
+		"total_is_exact: true\n"
 	if got := prototext.Format(projected); got != want {
 		t.Fatalf("search protobuf text changed\n--- got ---\n%s--- want ---\n%s", got, want)
 	}
@@ -368,6 +373,7 @@ func federationSearchHit(ref, title, matchingText string, at time.Time) trawlkit
 		Time:     at,
 		AnchorID: trawlkit.MatchAnchorID,
 		Summary:  trawlkit.ResultSummary{Title: title},
+		Archive:  []trawlkit.ArchiveContext{{Kind: "notes", Label: "In Notes"}},
 		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Matching text", matchingText)},
 	}
 }

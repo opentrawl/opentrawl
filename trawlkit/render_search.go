@@ -27,7 +27,7 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 			// fills ShortRef from the shared index; a hit with no alias yet (a
 			// source that indexes none) falls back to the full ref.
 			Ref:  firstText(hit.ShortRef, hit.Ref),
-			Text: SearchResultText(hit.Summary, hit.Evidence),
+			Text: SearchResultText(hit.Summary, hit.Archive, hit.Evidence),
 		})
 	}
 	hints := []string{}
@@ -50,12 +50,12 @@ func writeSearchText(w io.Writer, value searchOutput) error {
 	})
 }
 
-func SearchResultText(summary ResultSummary, evidence []EvidenceFragment) string {
+func SearchResultText(summary ResultSummary, archive []ArchiveContext, evidence []EvidenceFragment) string {
 	title := strings.TrimSpace(summary.Title)
 	if subtitle := strings.TrimSpace(summary.Subtitle); subtitle != "" {
 		title = title + " — " + subtitle
 	}
-	detail := SearchEvidenceText(evidence)
+	detail := strings.Join(nonEmptyText(SearchArchiveContextText(archive), SearchEvidenceText(evidence)), " · ")
 	if title == "" {
 		return detail
 	}
@@ -63,6 +63,16 @@ func SearchResultText(summary ResultSummary, evidence []EvidenceFragment) string
 		return title
 	}
 	return title + " · " + detail
+}
+
+func SearchArchiveContextText(values []ArchiveContext) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		if label := strings.TrimSpace(value.Label); label != "" {
+			parts = append(parts, label)
+		}
+	}
+	return strings.Join(parts, " · ")
 }
 
 func SearchEvidenceText(values []EvidenceFragment) string {
@@ -93,6 +103,16 @@ func SearchEvidenceText(values []EvidenceFragment) string {
 		}
 	}
 	return strings.Join(parts, " · ")
+}
+
+func nonEmptyText(values ...string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func narrowSearchHint(supportsWho bool) string {

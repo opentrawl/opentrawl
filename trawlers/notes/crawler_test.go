@@ -130,7 +130,7 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 		t.Fatalf("search results = %d, want 1", len(search.Results))
 	}
 	hit := search.Results[0]
-	if hit.AnchorID != trawlkit.MatchAnchorID || hit.Summary.Title == "" || len(hit.Evidence) != 1 || hit.Evidence[0].Text == nil || len(hit.Evidence[0].Text.Runs) != 1 || !hit.Evidence[0].Text.Runs[0].Matched || !strings.Contains(hit.Evidence[0].Text.Runs[0].Text, "second synthetic edit") {
+	if hit.AnchorID != "body" || hit.Summary.Title == "" || len(hit.Archive) != 1 || hit.Archive[0].Label != "In Fixture folder" || len(hit.Evidence) != 1 || hit.Evidence[0].Field == nil || !hasMatchedRunContaining(hit.Evidence[0].Field.Value, "second") {
 		t.Fatalf("search hit = %#v", hit)
 	}
 
@@ -308,6 +308,15 @@ func TestSyncSearchOpenAndAtTime(t *testing.T) {
 			}
 		})
 	}
+}
+
+func hasMatchedRunContaining(runs []trawlkit.TextRun, text string) bool {
+	for _, run := range runs {
+		if run.Matched && strings.Contains(run.Text, text) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSyncBuildsShortRefsAndOpenResolvesThem(t *testing.T) {

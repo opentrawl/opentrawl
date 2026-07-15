@@ -152,6 +152,7 @@ func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Quer
 			ShortRef: result.ShortRef,
 			AnchorID: result.AnchorID,
 			Summary:  trawlkit.ResultSummary{Title: title, Subtitle: "Contact"},
+			Archive:  []trawlkit.ArchiveContext{{Kind: "contacts", Label: "In Contacts"}},
 			Evidence: contactSearchEvidence(result.Matches),
 		})
 	}

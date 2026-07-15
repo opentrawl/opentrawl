@@ -204,6 +204,11 @@ message EvidenceFragment {
   }
 }
 
+message ArchiveContext {
+  string kind = 1;
+  string label = 2;
+}
+
 message SearchHit {
   string source_id = 1;
   string open_ref = 2;
@@ -216,6 +221,7 @@ message SearchHit {
   string anchor_id = 12;
   ResultSummary summary = 13;
   repeated EvidenceFragment evidence = 14;
+  repeated ArchiveContext archive_context = 15;
 }
 
 message SearchSourceResult {

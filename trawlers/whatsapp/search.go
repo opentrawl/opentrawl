@@ -53,9 +53,14 @@ func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawl
 		if who == "" {
 			who = "Unknown sender"
 		}
+		archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
+		if message.FromMe {
+			archiveContext = trawlkit.ArchiveContext{Kind: "sent_by_you", Label: "Sent by you"}
+		}
 		hits = append(hits, trawlkit.Hit{
 			Ref: ref, Time: message.Timestamp, AnchorID: trawlkit.MatchAnchorID,
 			Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+			Archive:  []trawlkit.ArchiveContext{archiveContext},
 			Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch("Message from "+who, outputField(messageSnippet(message)))},
 		})
 	}

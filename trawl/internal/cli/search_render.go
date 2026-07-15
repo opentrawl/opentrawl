@@ -39,7 +39,7 @@ func searchListItems(rows []SearchRow) []render.ListItem {
 			DateOnly: row.AllDay,
 			Source:   row.surface,
 			Ref:      row.Ref,
-			Text:     trawlkit.SearchResultText(row.Summary, row.Evidence),
+			Text:     trawlkit.SearchResultText(row.Summary, row.Archive, row.Evidence),
 		})
 	}
 	return items

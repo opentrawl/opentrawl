@@ -498,6 +498,7 @@ private struct MountedSearchResultsList: View {
       phase: .complete,
       results: [hit],
       sourceDisplayName: { _ in "Calendar" },
+      showsSourceDisplayName: true,
       failureGuidance: nil,
       committedQuery: nil,
       resultLimit: 20,

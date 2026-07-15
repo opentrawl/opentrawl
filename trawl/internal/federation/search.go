@@ -162,6 +162,15 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 			AnchorId: hit.AnchorID,
 			Summary:  &federationv1.ResultSummary{Title: hit.Summary.Title, Subtitle: hit.Summary.Subtitle},
 		}
+		for _, context := range hit.Archive {
+			if !validArchiveContextKind(context.Kind) {
+				return nil, fmt.Errorf("search archive context kind is invalid")
+			}
+			if strings.TrimSpace(context.Label) == "" {
+				return nil, fmt.Errorf("search archive context label is empty")
+			}
+			projected.ArchiveContext = append(projected.ArchiveContext, &federationv1.ArchiveContext{Kind: context.Kind, Label: context.Label})
+		}
 		for _, evidence := range hit.Evidence {
 			fragment, err := projectEvidence(manifest.ID, evidence)
 			if err != nil {
@@ -183,6 +192,19 @@ func ProjectSearch(manifest control.Manifest, result trawlkit.SearchResult) (*fe
 		out.Hits = append(out.Hits, projected)
 	}
 	return out, nil
+}
+
+func validArchiveContextKind(value string) bool {
+	if value == "" || value != strings.TrimSpace(value) {
+		return false
+	}
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func projectEvidence(sourceID string, evidence trawlkit.EvidenceFragment) (*federationv1.EvidenceFragment, error) {

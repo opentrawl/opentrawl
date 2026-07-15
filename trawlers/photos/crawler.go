@@ -400,8 +400,18 @@ func searchHit(hit archive.SearchHit) (trawlkit.Hit, error) {
 		Time:     capturedAt,
 		AnchorID: hit.AnchorID,
 		Summary:  trawlkit.ResultSummary{Title: title, Subtitle: hit.Where},
+		Archive:  photoArchiveContext(hit.Matches),
 		Evidence: evidence,
 	}, nil
+}
+
+func photoArchiveContext(matches []archive.SearchMatch) []trawlkit.ArchiveContext {
+	for _, match := range matches {
+		if match.Field == "album" {
+			return []trawlkit.ArchiveContext{{Kind: "album", Label: "In album"}}
+		}
+	}
+	return []trawlkit.ArchiveContext{{Kind: "library", Label: "Photos library"}}
 }
 
 func photoSearchEvidence(matches []archive.SearchMatch) []trawlkit.EvidenceFragment {

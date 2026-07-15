@@ -31,6 +31,7 @@ type SearchResult struct {
 	Where             string
 	InReplyTo         string
 	InReplyToAuthorID string
+	Roles             []string
 }
 
 func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult, int, error) {
@@ -49,7 +50,8 @@ func (s *Store) Search(ctx context.Context, filter SearchFilter) ([]SearchResult
 		return nil, 0, err
 	}
 	selectQuery := `select ` + tweetSelectColumns("t") + `,
-coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,'')
+coalesce(p.author_id,''), coalesce(p.author_name,''), coalesce(p.author_handle,''),
+coalesce((select group_concat(role, char(10)) from (select role from tweet_roles where tweet_id = t.id order by role)), '')
 from tweets_fts f
 join tweets t on t.rowid = f.rowid
 left join tweets p on p.id = t.in_reply_to_id
@@ -63,7 +65,7 @@ order by t.created_at desc, t.id desc limit ?`
 	defer func() { _ = rows.Close() }()
 	var out []SearchResult
 	for rows.Next() {
-		tweet, parentID, parentName, parentHandle, err := scanTweetWithParent(rows)
+		tweet, parentID, parentName, parentHandle, roleList, err := scanTweetWithParentAndRoles(rows)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -74,9 +76,39 @@ order by t.created_at desc, t.id desc limit ?`
 			Where:             replyWhere(tweet.InReplyToID, parentName, parentHandle),
 			InReplyTo:         replyDisplay(tweet.InReplyToID, parentName, parentHandle),
 			InReplyToAuthorID: parentID,
+			Roles:             splitRoleList(roleList),
 		})
 	}
 	return out, total, rows.Err()
+}
+
+func scanTweetWithParentAndRoles(rows *sql.Rows) (Tweet, string, string, string, string, error) {
+	var t Tweet
+	var createdAt, metricsAt, parentID, parentName, parentHandle string
+	var roleList string
+	var hasMedia int
+	err := rows.Scan(&t.ID, &createdAt, &t.AuthorID, &t.AuthorHandle, &t.AuthorName, &t.Text,
+		&t.InReplyToID, &t.ConversationID, &t.QuotedTweetID, &t.LikeCount, &t.RetweetCount,
+		&t.ReplyCount, &t.ViewCount, &t.QuoteCount, &t.BookmarkCount, &hasMedia, &t.RawJSON,
+		&t.FirstSource, &metricsAt, &parentID, &parentName, &parentHandle, &roleList)
+	if err != nil {
+		return Tweet{}, "", "", "", "", err
+	}
+	t.CreatedAt = parseStoredTime(createdAt)
+	t.MetricsFetchedAt = parseStoredTime(metricsAt)
+	t.HasMedia = hasMedia != 0
+	return t, parentID, parentName, parentHandle, roleList, nil
+}
+
+func splitRoleList(value string) []string {
+	parts := strings.Split(value, "\n")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
 }
 
 func (s *Store) ListByRole(ctx context.Context, role string, filter ListFilter) ([]SearchResult, int, error) {

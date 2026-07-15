@@ -29,6 +29,7 @@ struct SearchResultsList: View {
   let phase: SearchPhase
   let results: [SearchHit]
   let sourceDisplayName: (String) -> String
+  let showsSourceDisplayName: Bool
   let failureGuidance: String?
   let committedQuery: String?
   let resultLimit: UInt32
@@ -60,6 +61,7 @@ struct SearchResultsList: View {
                 hit: hit,
                 title: title(hit),
                 sourceDisplayName: sourceDisplayName(hit.sourceID),
+                showsSourceDisplayName: showsSourceDisplayName,
                 isSelected: selectedResultID == hit.id
               )
             }
@@ -142,12 +144,19 @@ private struct SearchResultRow: View {
   let hit: SearchHit
   let title: String
   let sourceDisplayName: String
+  let showsSourceDisplayName: Bool
   let isSelected: Bool
 
   var body: some View {
     HStack(alignment: .top, spacing: 10) {
       SourceIconView(sourceID: hit.sourceID, size: 24)
       VStack(alignment: .leading, spacing: 3) {
+        if showsSourceDisplayName {
+          Text(sourceDisplayName)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           Text(title)
             .font(.body.weight(.semibold))
@@ -163,6 +172,12 @@ private struct SearchResultRow: View {
             .font(.caption)
             .foregroundStyle(.tertiary)
           }
+        }
+        if !archiveContextText.isEmpty {
+          Text(archiveContextText)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
         }
         if !evidenceText.isEmpty {
           Text(evidenceText)
@@ -199,10 +214,17 @@ private struct SearchResultRow: View {
   }
 
   private var accessibilityLabel: String {
-    [sourceDisplayName, title, hit.summary.subtitle, formattedTime, evidenceText]
+    [
+      showsSourceDisplayName ? sourceDisplayName : nil, title, hit.summary.subtitle,
+      archiveContextText, formattedTime, evidenceText,
+    ]
       .compactMap { $0 }
       .filter { !$0.isEmpty }
       .joined(separator: ". ")
+  }
+
+  private var archiveContextText: String {
+    hit.archiveContext.map(\.label).joined(separator: " · ")
   }
 
   private var evidenceText: String {

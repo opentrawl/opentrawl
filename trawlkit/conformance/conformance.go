@@ -34,6 +34,7 @@ type searchResult struct {
 	Snippet               *string          `json:"snippet"`
 	AnchorID              *string          `json:"anchor_id"`
 	Summary               *searchSummary   `json:"summary"`
+	ArchiveContext        []archiveContext `json:"archive_context"`
 	Evidence              []searchEvidence `json:"evidence"`
 	SnippetFrontTruncated *bool            `json:"snippet_front_truncated"`
 	FrontTruncated        *bool            `json:"front_truncated"`
@@ -43,6 +44,10 @@ type searchResult struct {
 type searchSummary struct {
 	Title    *string `json:"title"`
 	Subtitle *string `json:"subtitle"`
+}
+type archiveContext struct {
+	Kind  *string `json:"kind"`
+	Label *string `json:"label"`
 }
 type searchEvidence struct {
 	Label    *string     `json:"label"`
@@ -149,6 +154,19 @@ func checkSearchResult(index int, result searchResult) []string {
 	if result.Summary == nil || result.Summary.Title == nil || strings.TrimSpace(*result.Summary.Title) == "" {
 		failures = append(failures, fmt.Sprintf("search result %d has no summary title", index))
 	}
+	if len(result.ArchiveContext) == 0 {
+		failures = append(failures, fmt.Sprintf("search result %d has no archive context", index))
+	}
+	for _, value := range result.ArchiveContext {
+		if value.Kind == nil || !validArchiveContextKind(*value.Kind) {
+			failures = append(failures, fmt.Sprintf("search result %d has invalid archive context kind", index))
+		}
+		if value.Label == nil || strings.TrimSpace(*value.Label) == "" {
+			failures = append(failures, fmt.Sprintf("search result %d has empty archive context label", index))
+		} else {
+			failures = append(failures, checkSearchText(index, "archive_context", *value.Label)...)
+		}
+	}
 	if len(result.Evidence) == 0 {
 		failures = append(failures, fmt.Sprintf("search result %d has no evidence", index))
 	}
@@ -178,6 +196,20 @@ func checkSearchText(index int, field, value string) []string {
 		}
 	}
 	return failures
+}
+
+func validArchiveContextKind(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func isTableLine(line string) bool {

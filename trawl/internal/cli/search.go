@@ -53,6 +53,7 @@ type SearchRow struct {
 	Time         string                      `json:"time"`
 	AllDay       bool                        `json:"all_day,omitempty"`
 	Summary      trawlkit.ResultSummary      `json:"summary"`
+	Archive      []trawlkit.ArchiveContext   `json:"archive_context,omitempty"`
 	Evidence     []trawlkit.EvidenceFragment `json:"evidence"`
 	Availability *int64                      `json:"availability,omitempty"`
 

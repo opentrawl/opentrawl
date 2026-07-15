@@ -87,6 +87,12 @@ func isValidAnchorID(_ value: String) -> Bool {
       || $0 == 45 || $0 == 46 || $0 == 95
   }
 }
+func isValidSemanticKind(_ value: String) -> Bool {
+  guard !value.isEmpty else { return false }
+  return value.utf8.allSatisfy {
+    ($0 >= 97 && $0 <= 122) || ($0 >= 48 && $0 <= 57) || $0 == 95
+  }
+}
 extension Trawl_Federation_V1_OperationOutcome {
   func model() throws -> OperationOutcome {
     switch self {
@@ -288,11 +294,17 @@ extension Trawl_Federation_V1_EvidenceFragment {
     }
   }
 }
+extension Trawl_Federation_V1_ArchiveContext {
+  fileprivate func model() -> SearchArchiveContext {
+    SearchArchiveContext(kind: kind, label: label)
+  }
+}
 extension Trawl_Federation_V1_SearchHit {
   fileprivate func model() throws -> SearchHit {
     guard !sourceID.isEmpty, isCanonicalSourceRef(openRef, sourceID: sourceID),
       isValidAnchorID(anchorID), hasSummary,
-      isNonBlank(summary.title), !evidence.isEmpty
+      isNonBlank(summary.title), !evidence.isEmpty,
+      archiveContext.allSatisfy({ isValidSemanticKind($0.kind) && isNonBlank($0.label) })
     else { throw TrawlClientError.invalidProtobuf }
     let date: Date?
     if timeRfc3339.isEmpty {
@@ -306,6 +318,7 @@ extension Trawl_Federation_V1_SearchHit {
       sourceID: sourceID, openRef: openRef, shortRef: shortRef, timeRFC3339: timeRfc3339,
       time: date, anchorID: anchorID,
       summary: ResultSummary(title: summary.title, subtitle: summary.subtitle),
+      archiveContext: archiveContext.map { $0.model() },
       evidence: try evidence.map { try $0.model(sourceID: sourceID) }, allDay: allDay,
       availability: hasAvailability ? availability : nil, unread: hasUnread ? unread : nil)
   }

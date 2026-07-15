@@ -289,8 +289,10 @@ func searchHit(item archive.SearchResult) (trawlkit.Hit, error) {
 		who = "Unknown sender"
 	}
 	label := "Message from " + who
+	archiveContext := trawlkit.ArchiveContext{Kind: "received", Label: "Received"}
 	if item.FromMe {
 		label = "Message sent by me"
+		archiveContext = trawlkit.ArchiveContext{Kind: "sent_by_you", Label: "Sent by you"}
 	}
 	return trawlkit.Hit{
 		Ref:      archive.MessageRef(item.MessageID),
@@ -298,6 +300,7 @@ func searchHit(item archive.SearchResult) (trawlkit.Hit, error) {
 		Time:     t,
 		AnchorID: trawlkit.MatchAnchorID,
 		Summary:  trawlkit.ResultSummary{Title: where, Subtitle: who},
+		Archive:  []trawlkit.ArchiveContext{archiveContext},
 		Evidence: []trawlkit.EvidenceFragment{trawlkit.TextMatch(label, outputField(searchSnippet(item)))},
 	}, nil
 }
