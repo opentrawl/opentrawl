@@ -157,7 +157,7 @@ struct SearchOverlayViewTests {
     let overlay = SearchOverlay(
       model: model,
       client: client,
-      initialScope: nil,
+      scope: .constant(nil),
       onDismiss: {}
     )
     let host = NSHostingView(rootView: overlay)
@@ -270,7 +270,7 @@ struct SearchOverlayViewTests {
       rootView: SearchOverlay(
         model: model,
         client: client,
-        initialScope: nil,
+        scope: .constant(nil),
         initialQuery: "synthetic",
         onDismiss: { recorder.count += 1 }
       )
@@ -302,7 +302,7 @@ struct SearchOverlayViewTests {
       rootView: SearchOverlay(
         model: model,
         client: client,
-        initialScope: nil,
+        scope: .constant(nil),
         onDismiss: { recorder.count += 1 }
       )
     )
@@ -338,7 +338,7 @@ struct SearchOverlayViewTests {
   }
 
   @MainActor
-  @Test func mountedSearchOverlayDismissesFromTheBackdropAndPreservesSearchState() async throws {
+  @Test func mountedSearchOverlayKeepsTheWorkspaceOpenWhenTheBackdropIsClicked() async throws {
     let client = MountedSearchClient()
     let model = SearchModel(client: client, debounce: .seconds(1))
     let recorder = BackdropDismissRecorder()
@@ -394,9 +394,7 @@ struct SearchOverlayViewTests {
     window.sendEvent(up)
     try await Task.sleep(for: .milliseconds(20))
 
-    #expect(recorder.count == 1)
-    #expect(recorder.query == "keep this query")
-    #expect(recorder.scopeID == "telegram")
+    #expect(recorder.count == 0)
   }
 }
 
@@ -633,15 +631,29 @@ private func assertHeadlineLabelFits(
 private struct MountedSearchDismissHarness: View {
   let client: any TrawlClient
   let model: SearchModel
-  let scope: RestingSource
+  let initialScope: RestingSource
   let recorder: BackdropDismissRecorder
   @State private var query = "keep this query"
+  @State private var scope: RestingSource?
+
+  init(
+    client: any TrawlClient,
+    model: SearchModel,
+    scope: RestingSource,
+    recorder: BackdropDismissRecorder
+  ) {
+    self.client = client
+    self.model = model
+    self.initialScope = scope
+    self.recorder = recorder
+    _scope = State(initialValue: scope)
+  }
 
   var body: some View {
     SearchOverlay(
       model: model,
       client: client,
-      initialScope: scope,
+      scope: $scope,
       initialQuery: query,
       onQueryChange: { query = $0 },
       onDismiss: { recorder.dismiss(query: query, scope: scope) }

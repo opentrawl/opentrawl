@@ -11,6 +11,7 @@ struct RootView: View {
   @State private var searchScope: RestingSource?
   @State private var searchQuery = ""
   @State private var isSearching = false
+  @State private var hasSearchWorkspace = false
   @State private var constellationActivity: ConstellationActivity = .idle
   @State private var constellationTrafficEvent: ConstellationTrafficEvent?
   @State private var trafficClearTask: Task<Void, Never>?
@@ -22,16 +23,19 @@ struct RootView: View {
         .opacity(isSearching ? 0.18 : 1)
         .allowsHitTesting(!isSearching)
         .accessibilityHidden(isSearching)
-      if isSearching {
+      if hasSearchWorkspace {
         SearchOverlay(
           client: client,
-          initialScope: searchScope,
+          scope: $searchScope,
           initialQuery: searchQuery,
           sourceStatuses: model.sources,
           onTrafficChange: presentTraffic,
           onQueryChange: { searchQuery = $0 },
           onDismiss: dismissSearch
         )
+        .opacity(isSearching ? 1 : 0)
+        .allowsHitTesting(isSearching)
+        .accessibilityHidden(!isSearching)
       }
     }
     .environment(iconStore)
@@ -60,6 +64,7 @@ struct RootView: View {
 
   private func showSearch(scope: RestingSource?) {
     searchScope = scope
+    hasSearchWorkspace = true
     isSearching = true
   }
 

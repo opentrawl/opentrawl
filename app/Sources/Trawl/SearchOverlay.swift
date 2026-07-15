@@ -9,7 +9,7 @@ struct SearchOverlay: View {
   let onQueryChange: (String) -> Void
   private let sourceStatuses: [SourceStatus]
 
-  @State private var scope: RestingSource?
+  @Binding private var scope: RestingSource?
   @State private var model: SearchModel
   @State private var interaction: SearchInteraction
   @State private var sourceResolver: SearchSourceResolver
@@ -20,7 +20,7 @@ struct SearchOverlay: View {
 
   init(
     client: any TrawlClient,
-    initialScope: RestingSource?,
+    scope: Binding<RestingSource?>,
     initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
@@ -32,7 +32,7 @@ struct SearchOverlay: View {
     self.init(
       model: SearchModel(client: client),
       client: client,
-      initialScope: initialScope,
+      scope: scope,
       initialQuery: initialQuery,
       sourceStatuses: sourceStatuses,
       onTrafficChange: onTrafficChange,
@@ -44,7 +44,7 @@ struct SearchOverlay: View {
   init(
     model: SearchModel,
     client: any TrawlClient,
-    initialScope: RestingSource?,
+    scope: Binding<RestingSource?>,
     initialQuery: String = "",
     sourceStatuses: [SourceStatus] = [],
     onTrafficChange: @escaping (ConstellationActivity, ConstellationTrafficEvent?) -> Void = {
@@ -58,9 +58,9 @@ struct SearchOverlay: View {
     self.onTrafficChange = onTrafficChange
     self.onQueryChange = onQueryChange
     self.sourceStatuses = sourceStatuses
-    _scope = State(initialValue: initialScope)
+    _scope = scope
     _model = State(initialValue: model)
-    let interaction = SearchInteraction(model: model, sourceID: initialScope?.id)
+    let interaction = SearchInteraction(model: model, sourceID: scope.wrappedValue?.id)
     interaction.query = initialQuery
     _interaction = State(initialValue: interaction)
     _sourceResolver = State(
@@ -70,11 +70,8 @@ struct SearchOverlay: View {
 
   var body: some View {
     ZStack {
-      Button(action: onDismiss) {
-        Color(nsColor: .windowBackgroundColor)
-      }
-      .buttonStyle(.plain)
-      .accessibilityHidden(true)
+      Color(nsColor: .windowBackgroundColor)
+        .accessibilityHidden(true)
       GeometryReader { proxy in
         SearchWorkspace(
           client: client,
@@ -120,6 +117,9 @@ struct SearchOverlay: View {
     .onChange(of: sourceStatuses) { _, statuses in
       sourceResolver.replace(with: statuses)
     }
+    .onChange(of: scope?.id) { _, sourceID in
+      interaction.changeScope(to: sourceID)
+    }
     .onChange(of: interaction.query) { _, query in
       onQueryChange(query)
     }
@@ -145,7 +145,6 @@ struct SearchOverlay: View {
   }
 
   private func clearScope() {
-    interaction.changeScope(to: nil)
     scope = nil
   }
 

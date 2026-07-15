@@ -173,6 +173,12 @@ private struct SearchResultRow: View {
             .foregroundStyle(.tertiary)
           }
         }
+        if !hit.summary.subtitle.isEmpty {
+          Text(hit.summary.subtitle)
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
         if !archiveContextText.isEmpty {
           Text(archiveContextText)
             .font(.callout)
@@ -183,12 +189,6 @@ private struct SearchResultRow: View {
           Text(evidenceText)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .lineLimit(2)
-        }
-        if !hit.summary.subtitle.isEmpty {
-          Text(hit.summary.subtitle)
-            .font(.callout)
-            .foregroundStyle(.tertiary)
             .lineLimit(2)
         }
       }

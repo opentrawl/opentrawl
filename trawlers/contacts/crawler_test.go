@@ -152,8 +152,11 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 		t.Fatalf("search = %#v", search)
 	}
 	match := search.Results[0]
-	if match.AnchorID != "name" || match.Summary.Title != "Ada Example" || match.Summary.Subtitle != "Contact" {
+	if match.AnchorID != "name" || match.Summary.Title != "Ada Example" || match.Summary.Subtitle != "" {
 		t.Fatalf("search match = %#v", match)
+	}
+	if len(match.Archive) != 1 || match.Archive[0].Label != "In Contacts" {
+		t.Fatalf("search archive context = %#v", match.Archive)
 	}
 	nameEvidence := match.Evidence[0]
 	matched := false

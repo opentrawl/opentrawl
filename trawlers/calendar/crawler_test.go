@@ -137,8 +137,11 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	if hit.AnchorID != "summary" {
 		t.Fatalf("search hit anchor = %q, want summary", hit.AnchorID)
 	}
-	if hit.Summary.Title != "Planning meeting - Room 1, 1 Example Street" || hit.Summary.Subtitle != "Work" {
+	if hit.Summary.Title != "Planning meeting - Room 1, 1 Example Street" || hit.Summary.Subtitle != "" {
 		t.Fatalf("search hit summary = %#v", hit.Summary)
+	}
+	if len(hit.Archive) != 1 || hit.Archive[0].Label != "In Work" {
+		t.Fatalf("search hit archive context = %#v", hit.Archive)
 	}
 	if len(hit.Evidence) == 0 || hit.Evidence[0].Label != "Title" || hit.Evidence[0].Field == nil || hit.Evidence[0].Field.Name != "summary" || !calendarHasMatchedRun(hit.Evidence[0].Field.Value) {
 		t.Fatalf("search hit evidence = %#v", hit.Evidence)

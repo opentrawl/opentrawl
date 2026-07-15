@@ -291,7 +291,7 @@ func searchHit(result archive.SearchResult) (trawlkit.Hit, error) {
 		ShortRef:     result.ShortRef,
 		Time:         t,
 		AnchorID:     anchorID,
-		Summary:      trawlkit.ResultSummary{Title: title, Subtitle: result.Calendar},
+		Summary:      trawlkit.ResultSummary{Title: title},
 		Archive:      []trawlkit.ArchiveContext{calendarArchiveContext(result.Calendar)},
 		Evidence:     evidence,
 		AllDay:       result.AllDay,

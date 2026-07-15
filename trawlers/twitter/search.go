@@ -47,7 +47,7 @@ func searchHits(results []store.SearchResult, ownerAuthorID string) []trawlkit.H
 		}
 		hits = append(hits, trawlkit.Hit{
 			Ref: ref, Time: result.CreatedAt.Local(), AnchorID: trawlkit.MatchAnchorID,
-			Summary:  trawlkit.ResultSummary{Title: who, Subtitle: "Twitter (X)"},
+			Summary:  trawlkit.ResultSummary{Title: who},
 			Archive:  tweetArchiveContext(result.Roles, result.AuthorID, ownerAuthorID),
 			Evidence: evidence,
 		})
