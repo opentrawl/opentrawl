@@ -157,11 +157,7 @@ func paidCallTestStage(
 			assetID = "asset:paid-call-" + positionText
 			insertModelGenerationTestAsset(t, db, assetID, "queue:paid-call-"+positionText, "paid-call-"+positionText)
 		}
-		request, err := client.Render(model.Request{Prompt: "synthetic paid call item " + positionText})
-		if err != nil {
-			t.Fatal(err)
-		}
-		prepared := paidCallTestPrepared(t, assetID, request, positionText)
+		prepared := paidCallTestPrepared(t, assetID, client, positionText)
 		itemID := approvedCardExecutionID(assetID, prepared)
 		item, err := newPaidCallStageItem(itemID, position, prepared)
 		if err != nil {
@@ -173,11 +169,19 @@ func paidCallTestStage(
 	return stage, requests
 }
 
-func paidCallTestPrepared(t *testing.T, assetID string, request model.ProviderRequest, suffix string) preparedCardRequest {
+func paidCallTestPrepared(t *testing.T, assetID string, client *model.Client, suffix string) preparedCardRequest {
 	t.Helper()
 	fullCurrentSHA := paidCallTestSHA("synthetic full current " + suffix)
-	inputMessage := &cardwire.CardInput{SchemaVersion: cardinput.SchemaVersion, FullCurrent: &cardwire.FullCurrent{Role: "full_current", MediaType: "public.png", SizeBytes: 1, Sha256: fullCurrentSHA}}
+	inputMessage := &cardwire.CardInput{SchemaVersion: cardinput.SchemaVersion, CaptureTime: "2026-07-11T12:00:00Z", FullCurrent: &cardwire.FullCurrent{Role: "full_current", MediaType: "public.png", SizeBytes: 1, Sha256: fullCurrentSHA}}
 	inputBytes, err := proto.MarshalOptions{Deterministic: true}.Marshal(inputMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt, err := renderCardInputPrompt(inputMessage)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := client.Render(model.Request{Prompt: prompt})
 	if err != nil {
 		t.Fatal(err)
 	}

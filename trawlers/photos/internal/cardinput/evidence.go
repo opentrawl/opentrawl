@@ -1,6 +1,7 @@
 package cardinput
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"slices"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/place"
 	cardwire "github.com/opentrawl/opentrawl/trawlers/photos/proto/opentrawl/photos/card/v1"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 func projectEvidence(source SourceFacts, records []place.EvidenceRecord) ([]*cardwire.PlaceProjection, error) {
@@ -26,20 +28,13 @@ func projectEvidence(source SourceFacts, records []place.EvidenceRecord) ([]*car
 		if err := validateCompleteRecord(record); err != nil {
 			return nil, fmt.Errorf("record %d: %w", index, err)
 		}
-		projections = append(projections, projectRecord(index, record))
+		projection, err := projectRecord(index, record)
+		if err != nil {
+			return nil, fmt.Errorf("record %d: %w", index, err)
+		}
+		projections = append(projections, projection)
 	}
 	return projections, nil
-}
-
-// ValidateModelVisibleCandidates keeps each checked place projection within
-// the fixed model-input evidence bound without changing candidate order.
-func ValidateModelVisibleCandidates(input *cardwire.CardInput) error {
-	for index, projection := range input.GetPlaces() {
-		if len(projection.GetCandidates()) > MaxModelCandidatesPerProjection {
-			return fmt.Errorf("%w: place projection %d has %d candidates, maximum is %d", ErrUnsafeEvidence, index+1, len(projection.GetCandidates()), MaxModelCandidatesPerProjection)
-		}
-	}
-	return nil
 }
 
 func validateEvidenceInput(source SourceFacts, record place.EvidenceRecord) error {
@@ -158,7 +153,7 @@ func addressHasMeaningfulFacts(address *place.Address) bool {
 	return false
 }
 
-func projectRecord(recordIndex int, record place.EvidenceRecord) *cardwire.PlaceProjection {
+func projectRecord(recordIndex int, record place.EvidenceRecord) (*cardwire.PlaceProjection, error) {
 	projection := &cardwire.PlaceProjection{
 		ProviderIdentity:     record.ProviderIdentity,
 		Operation:            record.Operation,
@@ -173,6 +168,10 @@ func projectRecord(recordIndex int, record place.EvidenceRecord) *cardwire.Place
 		if candidate.Coordinate != nil {
 			coordinate = &cardwire.Coordinate{Latitude: candidate.Coordinate.Latitude, Longitude: candidate.Coordinate.Longitude}
 		}
+		providerResult, err := projectProviderResult(candidate.ProviderResult)
+		if err != nil {
+			return nil, fmt.Errorf("candidate %d provider result: %w", candidateIndex, err)
+		}
 		projection.Candidates = append(projection.Candidates, &cardwire.PlaceCandidate{
 			ProviderIndex:  int32(candidate.ProviderIndex),
 			ProviderId:     candidate.ProviderID,
@@ -183,9 +182,46 @@ func projectRecord(recordIndex int, record place.EvidenceRecord) *cardwire.Place
 			Address:        projectAddress(candidate.Address),
 			Source:         candidate.Source,
 			CandidateId:    candidateID(recordIndex, candidateIndex),
+			ProviderResult: providerResult,
 		})
 	}
-	return projection
+	return projection, nil
+}
+
+func projectProviderResult(raw json.RawMessage) (*structpb.Struct, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var result map[string]any
+	if err := json.Unmarshal(raw, &result); err != nil || result == nil {
+		return nil, fmt.Errorf("provider result must be a JSON object")
+	}
+	removeProviderCustody(result)
+	value, err := structpb.NewStruct(result)
+	if err != nil {
+		return nil, fmt.Errorf("encode provider result: %w", err)
+	}
+	return value, nil
+}
+
+func removeProviderCustody(value map[string]any) {
+	for key, child := range value {
+		switch strings.ToLower(key) {
+		case "api_key", "apikey", "access_token", "authorization", "credential", "credential_reference", "transport", "headers", "raw_request", "raw_response":
+			delete(value, key)
+			continue
+		}
+		switch child := child.(type) {
+		case map[string]any:
+			removeProviderCustody(child)
+		case []any:
+			for _, item := range child {
+				if nested, ok := item.(map[string]any); ok {
+					removeProviderCustody(nested)
+				}
+			}
+		}
+	}
 }
 
 func candidateID(recordIndex, candidateIndex int) string {

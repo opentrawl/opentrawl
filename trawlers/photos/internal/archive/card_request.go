@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -165,6 +166,9 @@ func renderPreparedCardRequestFromBytes(cardInputID string, cardInputBytes []byt
 	if err != nil {
 		return preparedCardRequest{}, err
 	}
+	if err := validateRenderedCardInput(rendered, prompt); err != nil {
+		return preparedCardRequest{}, err
+	}
 	if err := classifier.client.ValidateRequest(rendered); err != nil {
 		return preparedCardRequest{}, err
 	}
@@ -237,6 +241,13 @@ func restorePreparedCardRequestUnchecked(item *cardwire.ApprovedCardItem) (prepa
 	if item.GetRequestSha256() != requestSHA256 {
 		return preparedCardRequest{}, errors.New("approved request digest does not match its bytes")
 	}
+	prompt, err := renderCardInputPrompt(input.Input)
+	if err != nil {
+		return preparedCardRequest{}, err
+	}
+	if err := validateRenderedCardInput(request, prompt); err != nil {
+		return preparedCardRequest{}, err
+	}
 	if err := validateCustodyForInput(custody, input, requestSHA256); err != nil {
 		return preparedCardRequest{}, err
 	}
@@ -299,9 +310,6 @@ func validateCanonicalCardInput(cardInputID string, data []byte) (cardinput.Resu
 	}
 	if input.GetSchemaVersion() != cardinput.SchemaVersion {
 		return cardinput.Result{}, errors.New("CardInput schema version is not supported")
-	}
-	if err := cardinput.ValidateModelVisibleCandidates(input); err != nil {
-		return cardinput.Result{}, err
 	}
 	if input.GetFullCurrent() == nil {
 		return cardinput.Result{}, errors.New("CardInput full-current facts are required")
@@ -387,7 +395,45 @@ func renderCardInputPrompt(input *cardwire.CardInput) (string, error) {
 	if err := tmpl.Execute(&out, map[string]string{"MetadataJSON": string(metadataJSON)}); err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(out.String()), nil
+	prompt := strings.TrimSpace(out.String())
+	if len([]byte(prompt)) > cardinput.MaxRenderedModelInputBytes {
+		return "", fmt.Errorf("%w: %d bytes, maximum is %d", cardinput.ErrModelInputTooLarge, len([]byte(prompt)), cardinput.MaxRenderedModelInputBytes)
+	}
+	return prompt, nil
+}
+
+func validateRenderedCardInput(request model.ProviderRequest, expectedPrompt string) error {
+	var payload struct {
+		Prompt   *string `json:"prompt"`
+		Messages []struct {
+			Content []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(request.Body(), &payload); err != nil {
+		return fmt.Errorf("decode rendered model input: %w", err)
+	}
+	if payload.Prompt != nil {
+		if *payload.Prompt != expectedPrompt {
+			return errors.New("rendered model input does not match CardInput evidence")
+		}
+		return nil
+	}
+	if len(payload.Messages) != 1 {
+		return errors.New("rendered model input must contain one message")
+	}
+	var prompts []string
+	for _, part := range payload.Messages[0].Content {
+		if part.Type == "text" {
+			prompts = append(prompts, part.Text)
+		}
+	}
+	if len(prompts) != 1 || prompts[0] != expectedPrompt {
+		return errors.New("rendered model input does not match CardInput evidence")
+	}
+	return nil
 }
 
 func cardRequestID(cardInputID, uti, mimeType, promptVersion string, request model.ProviderRequest) string {

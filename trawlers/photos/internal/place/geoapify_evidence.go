@@ -1,6 +1,7 @@
 package place
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -358,7 +359,7 @@ func formatEvidenceCoordinate(value float64) string {
 }
 
 type geoapifyEvidenceCollection struct {
-	Features []geoapifyEvidenceFeature `json:"features"`
+	Features []json.RawMessage `json:"features"`
 }
 
 type geoapifyEvidenceFeature struct {
@@ -409,11 +410,20 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 	}
 	parsed := parsedEvidence{}
 	useful := 0
-	for index, feature := range collection.Features {
+	for index, rawFeature := range collection.Features {
+		var feature geoapifyEvidenceFeature
+		if err := json.Unmarshal(rawFeature, &feature); err != nil {
+			return parsed, fmt.Errorf("%w: parse configured OSM feature %d: %v", errEvidenceMalformed, index, err)
+		}
 		candidate, err := geoapifyEvidenceCandidate(index, feature, input)
 		if err != nil {
 			return parsed, fmt.Errorf("%w: %v", errEvidenceMalformed, err)
 		}
+		providerResult, err := canonicalProviderResult(rawFeature)
+		if err != nil {
+			return parsed, fmt.Errorf("%w: canonicalize configured OSM feature %d: %v", errEvidenceMalformed, index, err)
+		}
+		candidate.ProviderResult = providerResult
 		if strings.TrimSpace(candidate.Name) != "" || candidate.Address != nil && strings.TrimSpace(candidate.Address.Formatted) != "" {
 			useful++
 		}
@@ -423,6 +433,14 @@ func parseGeoapifyEvidence(raw []byte, status int, input Input) (parsedEvidence,
 		return parsed, fmt.Errorf("%w: configured OSM provider returned no named or formatted candidates", errEvidenceMalformed)
 	}
 	return parsed, nil
+}
+
+func canonicalProviderResult(raw []byte) ([]byte, error) {
+	var result bytes.Buffer
+	if err := json.Compact(&result, raw); err != nil {
+		return nil, err
+	}
+	return result.Bytes(), nil
 }
 
 func geoapifyEvidenceCandidate(index int, feature geoapifyEvidenceFeature, input Input) (EvidenceCandidate, error) {

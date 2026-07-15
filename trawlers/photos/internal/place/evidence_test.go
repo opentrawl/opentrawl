@@ -96,8 +96,11 @@ func TestEvidenceRetainsRawSeparateRecordsAndReusesOnlyCompleteCache(t *testing.
 	if got := []string{appleCandidates[0].Name, appleCandidates[1].Name, appleCandidates[2].Name, appleCandidates[3].Name}; !slices.Equal(got, []string{"Example Square", "", "Example Far Museum", ""}) {
 		t.Fatalf("Apple provider order or nameless items changed: %#v", appleCandidates)
 	}
-	if got := []int{appleCandidates[0].ProviderIndex, appleCandidates[1].ProviderIndex, appleCandidates[2].ProviderIndex, appleCandidates[3].ProviderIndex}; !slices.Equal(got, []int{0, 1, 0, 1}) {
-		t.Fatalf("Apple source indexes changed: %#v", appleCandidates)
+	if got := []int{appleCandidates[0].ProviderIndex, appleCandidates[1].ProviderIndex, appleCandidates[2].ProviderIndex, appleCandidates[3].ProviderIndex}; !slices.Equal(got, []int{0, 1, 2, 3}) {
+		t.Fatalf("Apple provider indexes do not preserve result order: %#v", appleCandidates)
+	}
+	if string(appleCandidates[2].ProviderResult) != `{"name":"Example Far Museum","category":"museum","distance_m":80,"source":"apple_mapkit_local_search"}` {
+		t.Fatalf("Apple native provider result was not retained: %s", appleCandidates[2].ProviderResult)
 	}
 	if got := []string{appleCandidates[0].Source, appleCandidates[1].Source, appleCandidates[2].Source, appleCandidates[3].Source}; !slices.Equal(got, []string{"apple_mapkit_reverse", "apple_mapkit_reverse", "apple_mapkit_local_search", "apple_mapkit_local_search"}) {
 		t.Fatalf("Apple reverse and nearby boundaries merged: %#v", appleCandidates)
