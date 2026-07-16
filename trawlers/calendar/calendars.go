@@ -130,7 +130,7 @@ func hintForCalendar(row calendarRow) calendarHint {
 
 func writeCalendarsText(w io.Writer, value calendarsOutput) error {
 	if len(value.Calendars) == 0 {
-		_, err := fmt.Fprintln(w, "No calendars archived. Run trawl calendar sync.")
+		_, err := fmt.Fprintln(w, "No calendars archived. Run trawl sync calendar.")
 		return err
 	}
 	if _, err := fmt.Fprintf(w, "Calendars: showing %s of %s.\n\n", render.FormatInteger(int64(len(value.Calendars))), render.FormatInteger(int64(len(value.Calendars)))); err != nil {

@@ -56,7 +56,6 @@ trawl contacts who Ada
 trawl contacts person list
 trawl contacts person show ada@example.com
 trawl contacts person annotate person_123 "Ada is the project accountant"
-trawl contacts contacts export
 ```
 
 Use the normal text output for people and agents. Add `--json` only for scripts.

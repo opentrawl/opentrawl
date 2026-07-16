@@ -9,7 +9,7 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
-func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.Request) (*control.PeopleSnapshot, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(err)
@@ -18,7 +18,7 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 	if err != nil {
 		return nil, err
 	}
-	return &control.ContactExport{Contacts: exportContacts(contacts)}, nil
+	return &control.PeopleSnapshot{Contacts: exportContacts(contacts)}, nil
 }
 
 func exportContacts(contacts []store.Contact) []control.Contact {

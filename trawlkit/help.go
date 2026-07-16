@@ -176,9 +176,4 @@ func commandUsageName(command control.Command) string {
 	return strings.Join(parts, " ")
 }
 
-func helpCommandKey(target []string) string {
-	if len(target) >= 2 && target[0] == "contacts" && target[1] == "export" {
-		return "contacts_export"
-	}
-	return commandKey(strings.Join(target, " "))
-}
+func helpCommandKey(target []string) string { return commandKey(strings.Join(target, " ")) }

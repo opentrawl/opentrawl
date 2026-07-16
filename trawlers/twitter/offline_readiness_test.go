@@ -118,7 +118,7 @@ func TestSchemaOutdatedArchiveRequestsUpgradeWithoutReimport(t *testing.T) {
 	assertSuccess(t, statusResult, "status --json")
 	var status control.Status
 	assertJSON(t, statusResult.stdout, &status)
-	if status.State != "error" || !strings.Contains(status.Summary, archiveSchemaUpgradeMessage) || !strings.Contains(status.Summary, "run trawl twitter sync") {
+	if status.State != "error" || !strings.Contains(status.Summary, archiveSchemaUpgradeMessage) || !strings.Contains(status.Summary, "run trawl sync twitter") {
 		t.Fatalf("status = %#v, want schema upgrade remedy", status)
 	}
 	if strings.Contains(status.Summary, "import archive") {

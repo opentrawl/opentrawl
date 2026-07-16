@@ -14,17 +14,17 @@ func TestSuccessfulSourceSyncReconcilesPeopleThroughCanonicalContactsMutation(t 
 	t.Setenv("HOME", home)
 	peopleMarker := filepath.Join(t.TempDir(), "people.json")
 	contactsPrepareMarker := filepath.Join(t.TempDir(), "contacts-prepare.txt")
-	exported := &control.ContactExport{Contacts: []control.Contact{{
+	exported := &control.PeopleSnapshot{Contacts: []control.Contact{{
 		DisplayName:    "Avery Example",
 		EmailAddresses: []string{"avery@example.com"},
 		Accounts:       map[string][]string{"imessage": {"avery@example.com"}},
 	}}}
 	writeFakeCrawlers(t,
 		fakeCrawler{
-			name:          "messages",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","contacts_export"],"id":"imessage","display_name":"Messages"}`,
-			sync:          `{"state":"ok","added":1}`,
-			contactExport: exported,
+			name:           "messages",
+			metadata:       `{"schema_version":1,"contract_version":1,"capabilities":["status","sync"],"id":"imessage","display_name":"Messages"}`,
+			sync:           `{"state":"ok","added":1}`,
+			peopleSnapshot: exported,
 		},
 		fakeCrawler{
 			name:          "contacts",
@@ -43,9 +43,9 @@ func TestSuccessfulSourceSyncReconcilesPeopleThroughCanonicalContactsMutation(t 
 		t.Fatalf("People reconciliation marker: %v", err)
 	}
 	var got struct {
-		Source string                `json:"source"`
-		Export control.ContactExport `json:"export"`
-		Store  bool                  `json:"store"`
+		Source string                 `json:"source"`
+		Export control.PeopleSnapshot `json:"export"`
+		Store  bool                   `json:"store"`
 	}
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)

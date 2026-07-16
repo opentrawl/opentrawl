@@ -1,13 +1,10 @@
 package trawlkit
 
 import (
-	"context"
 	"crypto/sha256"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
 
 func TestReadVerbsNeverMutateArchive(t *testing.T) {
@@ -16,16 +13,7 @@ func TestReadVerbsNeverMutateArchive(t *testing.T) {
 	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
 	before := fileSHA256(t, archivePath)
 
-	base := &testCrawler{}
-	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{
-		testCrawler: base,
-		contactExportFn: func(ctx context.Context, req *Request) (*control.ContactExport, error) {
-			return &control.ContactExport{Contacts: []control.Contact{{
-				DisplayName:  "Ada Example",
-				PhoneNumbers: []string{"+15550100"},
-			}}}, nil
-		},
-	}}
+	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{testCrawler: &testCrawler{}}}
 
 	commands := [][]string{
 		{"metadata", "--json"},
@@ -33,7 +21,6 @@ func TestReadVerbsNeverMutateArchive(t *testing.T) {
 		{"search", "--json", "needle"},
 		{"who", "--json", "Ada"},
 		{"open", "--json", "testcrawl:1"},
-		{"contacts", "export", "--json"},
 	}
 	for _, argv := range commands {
 		code, stdout, stderr := runForTestAt(stateRoot, argv, source, runOptions{})

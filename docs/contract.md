@@ -14,7 +14,15 @@ Examples use synthetic data.
 
 ## Command shape
 
-The public source namespace is:
+Cross-source operations live at the root:
+
+```text
+trawl sync [source ...]
+trawl status [source]
+trawl search [source] <query>
+```
+
+Source namespaces expose source-native archive reads:
 
 ```text
 trawl <source> <verb> [arguments] [flags]
@@ -30,15 +38,15 @@ The common control vocabulary is:
 | --- | --- | --- |
 | `metadata` | identity, capabilities and command manifest | no |
 | `status` | archive state, freshness and declared counts | no |
-| `sync` | refresh the archive from its source, when declared | yes |
+| `sync` | refresh one or more archives through the root coordinator | yes |
 | `search` | bounded search over the archive | no |
 | `open` | one source-owned record with bounded context | no |
 
 The source manifest is authoritative about which capabilities exist. Most
-archive crawlers declare `sync`; a source may instead expose reviewed imports or
-source-specific refresh commands. Sources may also declare capabilities such as
-`who`, short refs, contact export or source-specific list commands. Clients
-discover these from the manifest rather than assuming them.
+archive crawlers declare `sync`; the root coordinator uses that capability and
+performs dependent lifecycle work such as updating People. Sources may also
+declare capabilities such as `who`, short refs or source-specific list commands.
+Clients discover these from the manifest rather than assuming them.
 
 ## Manifest
 

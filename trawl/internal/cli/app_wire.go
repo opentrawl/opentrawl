@@ -115,7 +115,7 @@ func (r *Runtime) runAppSync(args []string) error {
 	allSources := discoverCrawlers(r.ctx)
 	results := make([]SyncResult, 0, len(sources))
 	for _, source := range sources {
-		result := syncSource(r, source)
+		result := syncSource(r, source, nil)
 		if !syncResultFailed(result) {
 			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
 		}

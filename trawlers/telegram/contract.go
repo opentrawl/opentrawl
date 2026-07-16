@@ -177,9 +177,9 @@ func statusSummary(status store.Status) string {
 		return "Telegram has no messages yet."
 	case "stale":
 		if status.LastImportAt.IsZero() {
-			return "Telegram has never been synced; run trawl telegram sync to refresh."
+			return "Telegram has never been synced; run trawl sync telegram to refresh."
 		}
-		return "Telegram was synced " + agePhrase(time.Since(status.LastImportAt)) + " ago; run trawl telegram sync to refresh."
+		return "Telegram was synced " + agePhrase(time.Since(status.LastImportAt)) + " ago; run trawl sync telegram to refresh."
 	default:
 		return "Recently synced."
 	}

@@ -65,7 +65,7 @@ private struct StatusClient: TrawlClient {
 
   source.warnings = []
   source.state = "stale"
-  source.summary = "Notes were synced days ago; run trawl notes sync to refresh."
+  source.summary = "Notes were synced days ago; run trawl sync notes to refresh."
   response.sources = [source]
   let stale = try response.model().sources[0]
   #expect(SourceRestingCopy.detail(for: stale) == nil)

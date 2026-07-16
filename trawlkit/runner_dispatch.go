@@ -50,10 +50,6 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 	}
 	name := args[0]
 	rest := args[1:]
-	if name == "contacts" && len(rest) > 0 && rest[0] == "export" {
-		name = "contacts_export"
-		rest = rest[1:]
-	}
 	switch name {
 	case "metadata":
 		spine, err := supportedVerbDeclarations(source)
@@ -119,16 +115,6 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		}
 		decl := spineDeclaration(spine, name)
 		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
-	case "contacts_export":
-		if _, ok := source.(ContactExporter); !ok {
-			return targetVerb{}, usageError{err: errors.New("source does not support contacts export")}
-		}
-		spine, err := supportedVerbDeclarations(source)
-		if err != nil {
-			return targetVerb{}, err
-		}
-		decl := spineDeclaration(spine, name)
-		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
 	}
 	for _, verb := range source.Verbs() {
 		if matched, verbRest := matchBespokeVerb(verb, args); matched {
@@ -166,9 +152,6 @@ func resolvePrefixedBespokeVerb(source Crawler, args []string) (targetVerb, bool
 func (verb targetVerb) childArgs() []string {
 	if len(verb.tokens) > 0 {
 		return append([]string(nil), verb.tokens...)
-	}
-	if verb.name == "contacts_export" {
-		return []string{"contacts", "export"}
 	}
 	return []string{verb.name}
 }

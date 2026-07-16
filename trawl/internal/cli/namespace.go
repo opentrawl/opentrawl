@@ -227,7 +227,7 @@ func namespaceVerbList(source Source) []namespaceVerb {
 	verbs := make([]namespaceVerb, 0, len(source.Commands))
 	for _, command := range source.Commands {
 		invocation := commandInvocation(command)
-		if invocation == "" || firstNonFlag(strings.Fields(invocation)) == "doctor" {
+		if invocation == "" || rootOwnedNamespaceVerb(invocation) {
 			continue
 		}
 		verbs = append(verbs, namespaceVerb{Verb: invocation, Title: command.Title, Secondary: command.Secondary})
@@ -247,7 +247,7 @@ func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 	}
 	for _, command := range source.Commands {
 		prefix := fixedVerbTokens(command)
-		if len(prefix) > 0 && prefix[0] == "doctor" {
+		if len(prefix) > 0 && rootOwnedNamespaceVerb(strings.Join(prefix, " ")) {
 			continue
 		}
 		if len(prefix) > 0 && tokensHavePrefix(leading, prefix) {
@@ -255,6 +255,13 @@ func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 		}
 	}
 	return control.Command{}, false
+}
+
+// Sync is one root operation because it also owns cross-source lifecycle work
+// such as updating People. Source namespaces expose source-native reads only.
+func rootOwnedNamespaceVerb(invocation string) bool {
+	verb := firstNonFlag(strings.Fields(invocation))
+	return verb == "doctor" || verb == "sync"
 }
 
 // fixedVerbTokens is the literal command path the user must type: the

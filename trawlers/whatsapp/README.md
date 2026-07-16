@@ -29,7 +29,7 @@ import.
 ## Commands
 
 ```sh
-trawl whatsapp sync
+trawl sync whatsapp
 trawl whatsapp status
 trawl whatsapp chats --limit 20
 trawl whatsapp messages --chat CHAT_JID --after 2026-01-01

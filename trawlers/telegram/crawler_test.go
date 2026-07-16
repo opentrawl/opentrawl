@@ -188,18 +188,18 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 		t.Fatalf("missing archive error = %#v", err)
 	}
 
-	contacts, err := crawler.ContactExport(ctx, req)
+	contacts, err := crawler.PeopleSnapshot(ctx, req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if contacts == nil || len(contacts.Contacts) != 2 {
-		t.Fatalf("contact export = %+v", contacts)
+		t.Fatalf("People snapshot = %+v", contacts)
 	}
 	if got := contacts.Contacts[0]; got.DisplayName != "Alice Example" || len(got.PhoneNumbers) != 1 || got.PhoneNumbers[0] != "+15550100001" || got.Accounts["telegram"][0] != "alice_example" {
-		t.Fatalf("contact export contact = %+v", got)
+		t.Fatalf("People snapshot contact = %+v", got)
 	}
 	if got := contacts.Contacts[1]; got.DisplayName != "Bob Example" || len(got.PhoneNumbers) != 0 || got.Accounts["telegram"][0] != "bob_example" {
-		t.Fatalf("username-only contact export = %+v", got)
+		t.Fatalf("username-only People snapshot = %+v", got)
 	}
 }
 

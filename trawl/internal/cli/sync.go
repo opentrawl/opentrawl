@@ -3,6 +3,7 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -12,7 +13,7 @@ import (
 const syncStateWidth = 5
 
 type SyncCmd struct {
-	Sources []string `arg:"" optional:"" name:"source" help:"Source ids"`
+	Args []string `arg:"" optional:"" passthrough:"partial" name:"source-or-flag" help:"Source ids, followed by source-specific flags when syncing one source"`
 }
 
 type SyncResult struct {
@@ -46,12 +47,19 @@ type syncCrawlerOutcome struct {
 }
 
 func (c *SyncCmd) Run(r *Runtime) error {
-	sources, err := r.selectedSourceArgs(c.Sources)
+	sourceIDs, sourceArgs, err := splitSyncArgs(c.Args)
+	if err != nil {
+		return err
+	}
+	sources, err := r.selectedSourceArgs(sourceIDs)
 	if err != nil {
 		return err
 	}
 	if len(sources) == 0 {
 		return nil
+	}
+	if syncHelpRequested(sourceArgs) {
+		return r.writeSourceSyncHelp(sources[0], sourceArgs)
 	}
 
 	sourceWidth := syncSourceWidth(sources)
@@ -59,7 +67,7 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	allSources := discoverCrawlers(r.ctx)
 	for _, source := range sources {
 		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
-		result := syncSource(r, source)
+		result := syncSource(r, source, sourceArgs)
 		if !syncResultFailed(result) {
 			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
 		}
@@ -78,13 +86,13 @@ func (c *SyncCmd) Run(r *Runtime) error {
 	return syncExit(results)
 }
 
-func syncSource(r *Runtime, source Source) SyncResult {
+func syncSource(r *Runtime, source Source, sourceArgs []string) SyncResult {
 	started := r.logSourceStart(source, "sync")
 	if source.MetadataErr != nil {
 		r.logSourceDone(source, "sync", started, source.MetadataErr)
 		return syncFailureResult(source, "metadata failed")
 	}
-	data, stderr, err := r.runSourceSync(source)
+	data, stderr, err := r.runSourceSync(source, sourceArgs)
 	if len(stderr) > 0 {
 		_, _ = r.lockedStderr().Write(stderr)
 	}
@@ -188,8 +196,9 @@ func firstWarning(warnings []string) string {
 	return strings.TrimSpace(warnings[0])
 }
 
-func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
-	args := []string{source.ID, "sync", "--json"}
+func (r *Runtime) runSourceSync(source Source, sourceArgs []string) ([]byte, []byte, error) {
+	args := append([]string{source.ID, "sync"}, sourceArgs...)
+	args = append(args, "--json")
 	switch r.verbosity() {
 	case 1:
 		args = append([]string{"-v"}, args...)
@@ -204,6 +213,70 @@ func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
 		return out.Stdout, out.Stderr, crawlerCommandError{command: "sync", err: exitErr{code: out.Code}}
 	}
 	return out.Stdout, out.Stderr, nil
+}
+
+func syncHelpRequested(args []string) bool {
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Runtime) writeSourceSyncHelp(source Source, sourceArgs []string) error {
+	args := append([]string{source.ID, "sync"}, sourceArgs...)
+	out, err := runTrawlkitCaptured(r.ctx, args, []trawlkit.Crawler{source.Crawler})
+	if err != nil {
+		return err
+	}
+	help := canonicalSourceSyncHelp(string(out.Stdout), source.ID)
+	if _, err := io.WriteString(r.stdout, help); err != nil {
+		return err
+	}
+	if len(out.Stderr) > 0 {
+		if _, err := r.lockedStderr().Write(out.Stderr); err != nil {
+			return err
+		}
+	}
+	if out.Code != 0 {
+		return exitErr{code: out.Code}
+	}
+	return nil
+}
+
+func canonicalSourceSyncHelp(help, sourceID string) string {
+	lines := strings.SplitN(help, "\n", 2)
+	if len(lines) == 0 {
+		return help
+	}
+	if strings.HasPrefix(lines[0], "Usage: ") {
+		if index := strings.Index(lines[0], " sync"); index >= 0 {
+			lines[0] = "Usage: trawl sync " + sourceID + lines[0][index+len(" sync"):]
+		}
+	} else if index := strings.Index(lines[0], " sync:"); index >= 0 {
+		lines[0] = "trawl sync " + sourceID + lines[0][index+len(" sync"):]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func splitSyncArgs(args []string) ([]string, []string, error) {
+	firstFlag := len(args)
+	for index, arg := range args {
+		if arg == "--" || strings.HasPrefix(arg, "-") {
+			firstFlag = index
+			break
+		}
+	}
+	sources := append([]string(nil), args[:firstFlag]...)
+	sourceArgs := append([]string(nil), args[firstFlag:]...)
+	if len(sourceArgs) > 0 && sourceArgs[0] == "--" {
+		sourceArgs = sourceArgs[1:]
+	}
+	if len(sourceArgs) > 0 && len(sources) != 1 {
+		return nil, nil, usageErr{fmt.Errorf("source-specific sync flags require exactly one source")}
+	}
+	return sources, sourceArgs, nil
 }
 
 func syncFailureResult(source Source, message string) SyncResult {

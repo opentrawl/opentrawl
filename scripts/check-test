@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(git rev-parse --show-toplevel)
+cd "$root"
+
+modules=()
+while IFS= read -r module; do
+  modules+=("$module")
+done < <(
+  git ls-files |
+    sed -n -e 's#^go\.mod$#.#p' -e 's#/go\.mod$##p' |
+    sort
+)
+
+for module in "${modules[@]}"; do
+  echo "test: $module"
+  (
+    cd "$root/$module"
+    go test -p=2 ./...
+  )
+done
+
+echo "test: app"
+swift_env=(HOME="${HOME:-/tmp}" PATH="/usr/bin:/bin:/usr/sbin:/sbin")
+/usr/bin/env -i "${swift_env[@]}" /usr/bin/xcrun swift test --package-path "$root/app"
+
+echo "check-test: ok"

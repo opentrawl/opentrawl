@@ -44,6 +44,9 @@ while IFS= read -r go_mod; do
   fi
 
   while IFS= read -r target_dir; do
+    if [[ -z "$(find "$target_dir" -maxdepth 1 -name '*.go' -print -quit)" ]]; then
+      continue
+    fi
     name="$(basename "$target_dir")"
     output="$bin_dir/$name"
 
@@ -74,6 +77,9 @@ while IFS= read -r go_mod; do
   fi
 
   while IFS= read -r target_dir; do
+    if [[ -z "$(find "$target_dir" -maxdepth 1 -name '*.go' -print -quit)" ]]; then
+      continue
+    fi
     name="$(basename "$target_dir")"
     output="$bin_dir/$name"
     module_path="${module_dir#./}"

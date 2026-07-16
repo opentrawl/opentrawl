@@ -20,14 +20,13 @@ text, participants, chat metadata and attachment references. Keep it local.
 ## Commands
 
 ```sh
-trawl imessage sync
+trawl sync imessage
 trawl imessage status
 trawl imessage chats --limit 20
 trawl imessage messages --chat CHAT_ID --limit 20
 trawl imessage who "Alice Example"
 trawl imessage search "candles budget" --who "Alice Example"
 trawl imessage open imessage:msg/8831
-trawl imessage contacts export
 ```
 
 Add `--json` for structured output. List commands are bounded and state how to

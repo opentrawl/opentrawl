@@ -155,7 +155,7 @@ func TestRunnerKeepsIncompatibleArchiveError(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
 		t.Fatalf("search error JSON: %v\n%s", err, stdout)
 	}
-	want := output.ErrorBody{Code: "archive_incompatible", Message: "The Photos archive needs to be updated.", Remedy: "run trawl photos sync, then retry"}
+	want := output.ErrorBody{Code: "archive_incompatible", Message: "The Photos archive needs to be updated.", Remedy: "run trawl sync photos, then retry"}
 	if envelope.Error.Code != want.Code || envelope.Error.Message != want.Message || envelope.Error.Remedy != want.Remedy {
 		t.Fatalf("search error = %#v, want %#v", envelope.Error, want)
 	}
@@ -234,7 +234,7 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 			t.Fatalf("missing capability %q in %#v", capability, manifest.Capabilities)
 		}
 	}
-	for _, capability := range []string{"who", "contacts_export"} {
+	for _, capability := range []string{"who"} {
 		if slices.Contains(manifest.Capabilities, capability) {
 			t.Fatalf("unexpected capability %q in %#v", capability, manifest.Capabilities)
 		}
@@ -508,7 +508,7 @@ func TestStatusSearchAndOpenAgreeOnIncompatibleArchive(t *testing.T) {
 		want := commandError{
 			Code:    "archive_incompatible",
 			Message: "The Photos archive needs to be updated.",
-			Remedy:  "run trawl photos sync, then retry",
+			Remedy:  "run trawl sync photos, then retry",
 		}
 		if !ok || got != want {
 			t.Fatalf("error = %#v, want %#v", err, want)

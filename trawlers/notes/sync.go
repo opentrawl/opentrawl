@@ -431,9 +431,9 @@ func sequenceFromDescription(value string) int {
 }
 
 func sourceErr(err error) error {
-	remedy := "grant Full Disk Access, then run trawl notes sync; or run trawl notes sync --store PATH"
+	remedy := "grant Full Disk Access, then run trawl sync notes; or run trawl notes sync-store PATH --label copied-store"
 	if errors.Is(err, notesdb.ErrMalformed) {
-		remedy = "copy a complete NoteStore.sqlite and WAL pair, then run trawl notes sync --store PATH"
+		remedy = "copy a complete NoteStore.sqlite and WAL pair, then run trawl notes sync-store PATH --label copied-store"
 	}
 	return commandErr("source_unreadable", "Apple Notes store could not be read", remedy, err)
 }

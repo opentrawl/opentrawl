@@ -27,16 +27,14 @@ bytes.
 ## Commands
 
 ```sh
-trawl gmail sync
-trawl gmail sync --query "from:me" --max 25
+trawl sync gmail
 trawl gmail status
 trawl gmail search "project sync"
 trawl gmail open gmail:msg/GMAIL_MESSAGE_ID
-trawl gmail contacts export
 ```
 
-Add `--json` for structured output. Contact export uses `gog contacts list` and
-returns contacts with a display name and at least one phone number.
+Add `--json` for structured output. During sync, Gmail contributes people from
+`gog contacts list` to the shared People index.
 
 ## Privacy
 

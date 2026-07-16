@@ -56,7 +56,7 @@ type writeOnlyArchivePreparer struct {
 
 type testContactCrawler struct {
 	*testCrawler
-	contactExportFn func(context.Context, *Request) (*control.ContactExport, error)
+	peopleSnapshotFn func(context.Context, *Request) (*control.PeopleSnapshot, error)
 }
 
 type testOpenContactCrawler struct {
@@ -198,11 +198,11 @@ func (c *testSearchCrawler) Search(ctx context.Context, req *Request, q Query) (
 	}, nil
 }
 
-func (c *testContactCrawler) ContactExport(ctx context.Context, req *Request) (*control.ContactExport, error) {
-	if c.contactExportFn != nil {
-		return c.contactExportFn(ctx, req)
+func (c *testContactCrawler) PeopleSnapshot(ctx context.Context, req *Request) (*control.PeopleSnapshot, error) {
+	if c.peopleSnapshotFn != nil {
+		return c.peopleSnapshotFn(ctx, req)
 	}
-	return &control.ContactExport{Contacts: []control.Contact{{
+	return &control.PeopleSnapshot{Contacts: []control.Contact{{
 		DisplayName:  "Ada Example",
 		PhoneNumbers: []string{"+15550100"},
 	}}}, nil
@@ -1125,50 +1125,6 @@ func TestRunSpineWhoVerbDropsDelimiterBeforeArityCheck(t *testing.T) {
 	}
 }
 
-func TestRunSpineContactExportStoreNoneFreshNoArchive(t *testing.T) {
-	stateRoot := t.TempDir()
-	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
-	source := &testContactCrawler{
-		testCrawler: &testCrawler{verbs: []Verb{{
-			Name:  "contacts_export",
-			Store: StoreNone,
-		}}},
-		contactExportFn: func(ctx context.Context, req *Request) (*control.ContactExport, error) {
-			if req.Store != nil {
-				t.Fatalf("contacts_export Store = %#v, want nil", req.Store)
-			}
-			if req.Paths.Archive != archivePath {
-				t.Fatalf("contacts_export archive path = %q, want %q", req.Paths.Archive, archivePath)
-			}
-			return &control.ContactExport{Contacts: []control.Contact{{
-				DisplayName:  "Ada Example",
-				PhoneNumbers: []string{"+15550100"},
-			}}}, nil
-		},
-	}
-
-	code, stdout, stderr := runForTestAt(stateRoot, []string{"metadata", "--json"}, source, runOptions{})
-	if code != 0 {
-		t.Fatalf("metadata code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var manifest control.Manifest
-	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
-		t.Fatalf("manifest json = %s err=%v", stdout, err)
-	}
-	if got := manifest.Commands["contacts_export"].Store; got != "none" {
-		t.Fatalf("contacts_export manifest store = %q, want none", got)
-	}
-
-	code, stdout, stderr = runForTestAt(stateRoot, []string{"contacts", "export", "--json"}, source, runOptions{})
-	if code != 0 || !strings.Contains(stdout, `"contacts"`) {
-		t.Fatalf("contacts_export StoreNone code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Fatalf("contacts_export StoreNone created archive: err=%v path=%s", err, archivePath)
-	}
-	t.Logf("contacts_export_store_none_archive_exists=false archive_path=%s", archivePath)
-}
-
 func TestRunSpineSearchStoreOptionalFreshNoArchive(t *testing.T) {
 	stateRoot := t.TempDir()
 	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
@@ -1426,20 +1382,6 @@ func TestRunWhoTextUsesNeutralCountHeader(t *testing.T) {
 	}
 }
 
-func TestWriteContactsTextUsesGenericHeading(t *testing.T) {
-	var buf bytes.Buffer
-	contacts := &control.ContactExport{Contacts: []control.Contact{{
-		DisplayName:  "Ada Example",
-		PhoneNumbers: []string{"+15550100"},
-	}}}
-	if err := writeResult(&buf, ckoutput.Text, "contacts", contacts); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(buf.String(), "Contacts: showing 1 of 1.") || strings.Contains(buf.String(), "with phone numbers") {
-		t.Fatalf("contacts text is not generic:\n%s", buf.String())
-	}
-}
-
 func TestWriteResultNormalizesEmptyJSONArrays(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -1448,7 +1390,6 @@ func TestWriteResultNormalizesEmptyJSONArrays(t *testing.T) {
 		key   string
 	}{
 		{name: "search", label: "search", value: searchOutput{Query: "empty"}, key: "results"},
-		{name: "contacts", label: "contacts", value: (*control.ContactExport)(nil), key: "contacts"},
 		{name: "who", label: "who", value: whoOutput{Query: "Ada"}, key: "candidates"},
 	}
 	for _, tc := range cases {
@@ -1775,7 +1716,6 @@ func TestRunHelpDoesNotExposeInternalStateFlags(t *testing.T) {
 		{"help", "search"},
 		{"help", "who"},
 		{"help", "open"},
-		{"help", "contacts", "export"},
 	} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			code, stdout, stderr := runForTestAt(stateRoot, args, source, runOptions{})

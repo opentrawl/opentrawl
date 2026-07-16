@@ -7,7 +7,7 @@ const utiTable = "com.apple.notes.table"
 // tableNotCaptured is emitted for a table whose companion CRDT blob was never
 // archived (every table synced before table capture). It is an honest, temporary
 // data gap, not a decode failure.
-const tableNotCaptured = "[table: not yet captured, run trawl notes sync to fill in]"
+const tableNotCaptured = "[table: not yet captured, run trawl sync notes to fill in]"
 
 // imageUTIs render as a bare "[image]" marker.
 var imageUTIs = map[string]bool{

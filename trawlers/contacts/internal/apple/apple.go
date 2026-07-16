@@ -15,11 +15,11 @@ import (
 func ActionableReadError(err error) error {
 	switch sourceStateForError(err) {
 	case SourceNeedsFullDiskAccess:
-		return fmt.Errorf("Apple Contacts cannot be read; grant OpenTrawl Full Disk Access in System Settings > Privacy & Security > Full Disk Access: %w", err)
+		return fmt.Errorf("cannot read Apple Contacts; grant OpenTrawl Full Disk Access in System Settings > Privacy & Security > Full Disk Access: %w", err)
 	case SourceInvalid:
-		return fmt.Errorf("Apple Contacts data could not be read: %w", err)
+		return fmt.Errorf("could not read Apple Contacts data: %w", err)
 	default:
-		return fmt.Errorf("Apple Contacts are unavailable: %w", err)
+		return fmt.Errorf("could not access Apple Contacts: %w", err)
 	}
 }
 

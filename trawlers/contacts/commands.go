@@ -17,7 +17,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/discrawl"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/google"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/vcard"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	ckconfig "github.com/opentrawl/opentrawl/trawlkit/config"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
@@ -35,7 +34,7 @@ func peopleReconcileVerb(app *App) trawlkit.Verb {
 		Mutates:  true,
 		Store:    trawlkit.StoreRequired,
 		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&input, "input", "", "contact export file")
+			fs.StringVar(&input, "input", "", "People snapshot file")
 			fs.StringVar(&source, "source", "", "source id")
 		},
 		Run: func(ctx context.Context, req *trawlkit.Request) error {
@@ -44,13 +43,13 @@ func peopleReconcileVerb(app *App) trawlkit.Verb {
 			}
 			data, err := os.ReadFile(input)
 			if err != nil {
-				return fmt.Errorf("read contact export: %w", err)
+				return fmt.Errorf("read People snapshot: %w", err)
 			}
-			var exported control.ContactExport
-			if err := json.Unmarshal(data, &exported); err != nil {
-				return fmt.Errorf("decode contact export: %w", err)
+			var snapshot control.PeopleSnapshot
+			if err := json.Unmarshal(data, &snapshot); err != nil {
+				return fmt.Errorf("decode People snapshot: %w", err)
 			}
-			_, err = app.ReconcileContactExport(ctx, req, source, &exported)
+			_, err = app.ReconcilePeopleSnapshot(ctx, req, source, &snapshot)
 			return err
 		},
 	}
@@ -305,57 +304,6 @@ func syncGoogleVerb(app *App) trawlkit.Verb {
 				"dry_run": true,
 				"status":  "remote writes are not implemented; use import google for the local archive",
 			})
-		},
-	}
-}
-
-func exportVCardVerb() trawlkit.Verb {
-	var person, out string
-	var includeAvatars bool
-	return trawlkit.Verb{
-		Name:    "export vcard",
-		Help:    "Export vCard files.",
-		Mutates: true,
-		Store:   trawlkit.StoreRequired,
-		Flags: func(fs *flag.FlagSet) {
-			fs.StringVar(&person, "person", "", "Person query")
-			fs.BoolVar(&includeAvatars, "include-avatars", false, "Include avatar photo fields")
-			fs.StringVar(&out, "out", "", "Output .vcf path, or - for stdout")
-			fs.StringVar(&out, "o", "", "Output .vcf path, or - for stdout")
-		},
-		Run: func(ctx context.Context, req *trawlkit.Request) error {
-			if len(req.Args) > 0 {
-				return usageError(errors.New("export vcard takes flags only"))
-			}
-			if strings.TrimSpace(person) == "" {
-				return usageError(errors.New("provide --person"))
-			}
-			if strings.TrimSpace(out) == "" {
-				return usageError(errors.New("provide --out"))
-			}
-			st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-			if err != nil {
-				return archiveErr(fmt.Errorf("open archive: %w", err))
-			}
-			p, err := st.FindPerson(ctx, person)
-			if err != nil {
-				return err
-			}
-			if out == "-" {
-				return vcard.WriteWithOptions(req.Out, []model.Person{p}, vcard.Options{IncludeAvatars: includeAvatars})
-			}
-			f, err := os.Create(out)
-			if err != nil {
-				return err
-			}
-			if err := vcard.WriteWithOptions(f, []model.Person{p}, vcard.Options{IncludeAvatars: includeAvatars}); err != nil {
-				_ = f.Close()
-				return err
-			}
-			if err := f.Close(); err != nil {
-				return err
-			}
-			return writeMap(req, map[string]any{"exported": 1, "out": out})
 		},
 	}
 }

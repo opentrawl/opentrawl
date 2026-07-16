@@ -21,7 +21,7 @@ var ErrTweetNotFound = errors.New("tweet not found")
 // deliberately use OpenReadOnly so they never contend for the write lock
 // with a running sync. The remedy is the same one sync/import already
 // does on every writable open: nothing to run by hand.
-var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl twitter sync")
+var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl sync twitter")
 
 type Store struct {
 	base *ckstore.Store

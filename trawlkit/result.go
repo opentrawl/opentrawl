@@ -26,8 +26,6 @@ func writeResult(w io.Writer, format output.Format, label string, value any) err
 		return writeWhoText(w, v)
 	case chatsOutput:
 		return writeChatsText(w, v)
-	case *control.ContactExport:
-		return writeContactsText(w, v)
 	default:
 		return output.Write(w, format, label, value)
 	}
@@ -40,15 +38,6 @@ func normalizeJSONResult(value any) any {
 			v.Results = []Hit{}
 		}
 		return v
-	case *control.ContactExport:
-		if v == nil {
-			return &control.ContactExport{Contacts: []control.Contact{}}
-		}
-		out := *v
-		if out.Contacts == nil {
-			out.Contacts = []control.Contact{}
-		}
-		return &out
 	case whoOutput:
 		if v.Candidates == nil {
 			v.Candidates = []whoCandidateOutput{}

@@ -11,14 +11,13 @@ import (
 )
 
 var spineVerbKeys = map[string]struct{}{
-	"metadata":        {},
-	"status":          {},
-	"sync":            {},
-	"search":          {},
-	"open":            {},
-	"who":             {},
-	"chats":           {},
-	"contacts_export": {},
+	"metadata": {},
+	"status":   {},
+	"sync":     {},
+	"search":   {},
+	"open":     {},
+	"who":      {},
+	"chats":    {},
 }
 
 type spineVerbError struct {
@@ -193,10 +192,6 @@ func unsupportedSpineInterface(source Crawler, key string) string {
 		if _, ok := source.(ChatLister); !ok {
 			return "ChatLister"
 		}
-	case "contacts_export":
-		if _, ok := source.(ContactExporter); !ok {
-			return "ContactExporter"
-		}
 	}
 	return ""
 }
@@ -240,7 +235,7 @@ func spineDefaultStoreMode(key string) storeMode {
 		return storeOptional
 	case "sync":
 		return storeWrite
-	case "search", "open", "who", "chats", "contacts_export":
+	case "search", "open", "who", "chats":
 		return storeRead
 	default:
 		return storeRead

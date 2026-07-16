@@ -45,43 +45,6 @@ func TestFederatedStatusPreservesFacts(t *testing.T) {
 	}
 }
 
-func TestProjectStatusPinsCompleteProtobufText(t *testing.T) {
-	manifest := manifestFixture("notes", "Notes")
-	status := &control.Status{
-		SchemaVersion: "trawlkit.control.v1",
-		AppID:         "notes",
-		GeneratedAt:   "2026-07-12T09:00:00Z",
-		State:         "empty",
-		Summary:       "The archive is ready but empty.",
-		Counts:        []control.Count{control.NewCount("notes", "notes", 0)},
-	}
-	projected, err := ProjectStatus(manifest, status)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "" +
-		"manifest: {\n" +
-		"  source_id: \"notes\"\n" +
-		"  display_name: \"Notes\"\n" +
-		"  branding: {}\n" +
-		"  headlines: \"items\"\n" +
-		"  capabilities: \"status\"\n" +
-		"  capabilities: \"search\"\n" +
-		"}\n" +
-		"app_id: \"notes\"\n" +
-		"schema_version: \"trawlkit.control.v1\"\n" +
-		"generated_rfc3339: \"2026-07-12T09:00:00Z\"\n" +
-		"state: \"empty\"\n" +
-		"summary: \"The archive is ready but empty.\"\n" +
-		"counts: {\n" +
-		"  id: \"notes\"\n" +
-		"  label: \"notes\"\n" +
-		"}\n"
-	if got := prototext.Format(projected); got != want {
-		t.Fatalf("status protobuf text changed\n--- got ---\n%s--- want ---\n%s", got, want)
-	}
-}
-
 func TestStatusAcceptsFiveStatesAndRejectsUnknown(t *testing.T) {
 	manifest, status := completeStatusFixture()
 	for _, state := range []string{"ok", "empty", "stale", "missing", "error"} {

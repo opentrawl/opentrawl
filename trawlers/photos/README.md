@@ -27,7 +27,7 @@ requests and responses remain outside this public repository.
 ```sh
 trawl photos metadata --json
 trawl photos status
-trawl photos sync
+trawl sync photos
 trawl photos classify --limit 100
 trawl photos classify --model MODEL --limit 20
 trawl photos search "drone beach portugal"

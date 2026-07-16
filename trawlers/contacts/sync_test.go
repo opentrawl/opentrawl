@@ -60,7 +60,7 @@ func TestSyncAutomaticallyCreatesAndReusesApplePeopleArchive(t *testing.T) {
 	}
 }
 
-func TestReconcileContactExportGroupsSourceAccountsIntoPeople(t *testing.T) {
+func TestReconcilePeopleSnapshotGroupsSourceAccountsIntoPeople(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "contacts.db")
 	store, err := ckstore.Open(ctx, ckstore.Options{Path: path})
@@ -70,7 +70,7 @@ func TestReconcileContactExportGroupsSourceAccountsIntoPeople(t *testing.T) {
 	defer func() { _ = store.Close() }()
 	app := New()
 	req := &trawlkit.Request{Store: store, Paths: trawlkit.Paths{Archive: path}}
-	exported := &control.ContactExport{Contacts: []control.Contact{{
+	exported := &control.PeopleSnapshot{Contacts: []control.Contact{{
 		DisplayName:    "Ada Chat",
 		EmailAddresses: []string{"ada@example.com"},
 		Accounts:       map[string][]string{"telegram": {"ada_example"}},

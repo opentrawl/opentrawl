@@ -27,18 +27,18 @@ func (a *App) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncRe
 	return a.reconcileContacts(ctx, req, "apple", apple.ToSourceContacts(contacts, false))
 }
 
-// ReconcileContactExport lets the root CLI add another crawler's current
+// ReconcilePeopleSnapshot lets the root CLI add another crawler's current
 // identities to the People archive without creating a second shared import
-// protocol. The exporter remains authoritative for its own snapshot.
-func (a *App) ReconcileContactExport(ctx context.Context, req *trawlkit.Request, source string, exported *control.ContactExport) (*trawlkit.SyncReport, error) {
-	if exported == nil {
-		return nil, fmt.Errorf("%s contact export is missing", strings.TrimSpace(source))
+// protocol. The source remains authoritative for its own snapshot.
+func (a *App) ReconcilePeopleSnapshot(ctx context.Context, req *trawlkit.Request, source string, snapshot *control.PeopleSnapshot) (*trawlkit.SyncReport, error) {
+	if snapshot == nil {
+		return nil, fmt.Errorf("%s People snapshot is missing", strings.TrimSpace(source))
 	}
-	if err := control.ValidateContactExport(*exported); err != nil {
-		return nil, fmt.Errorf("invalid %s contact export: %w", strings.TrimSpace(source), err)
+	if err := control.ValidatePeopleSnapshot(*snapshot); err != nil {
+		return nil, fmt.Errorf("invalid %s People snapshot: %w", strings.TrimSpace(source), err)
 	}
-	contacts := make([]model.SourceContact, 0, len(exported.Contacts))
-	for _, contact := range exported.Contacts {
+	contacts := make([]model.SourceContact, 0, len(snapshot.Contacts))
+	for _, contact := range snapshot.Contacts {
 		emails := make([]model.ContactValue, 0, len(contact.EmailAddresses))
 		for _, email := range contact.EmailAddresses {
 			emails = append(emails, model.ContactValue{Value: email})

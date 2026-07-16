@@ -11,7 +11,7 @@ import (
 // tokens the user types (thread-export -> "threads export"). pins stands in
 // for any bespoke single-token verb; chats is now a reserved spine verb, so a
 // bespoke command may not use that key.
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search","doctor"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"doctor":{"title":"Diagnostics","argv":["imsgcrawl","doctor","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search","sync","doctor"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"sync":{"title":"Sync","argv":["imsgcrawl","sync","--json"],"json":true,"mutates":true},"doctor":{"title":"Diagnostics","argv":["imsgcrawl","doctor","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
@@ -38,8 +38,8 @@ func TestNamespaceListingHuman(t *testing.T) {
 			t.Fatalf("listing missing %q:\n%s", want, stdout)
 		}
 	}
-	if strings.Contains(stdout, "doctor") || strings.Contains(stdout, "Diagnostics") {
-		t.Fatalf("listing exposed removed diagnostics navigation:\n%s", stdout)
+	if strings.Contains(stdout, "doctor") || strings.Contains(stdout, "Diagnostics") || strings.Contains(stdout, "sync") {
+		t.Fatalf("listing exposed a root-owned command:\n%s", stdout)
 	}
 }
 
@@ -71,6 +71,9 @@ func TestNamespaceListingJSON(t *testing.T) {
 	if verbs["doctor"] {
 		t.Fatalf("JSON listing exposed removed diagnostics navigation: %#v", got.Verbs)
 	}
+	if verbs["sync"] {
+		t.Fatalf("JSON listing exposed the root-owned sync command: %#v", got.Verbs)
+	}
 }
 
 func TestNamespaceVerbPassthrough(t *testing.T) {
@@ -92,6 +95,17 @@ func TestNamespaceDoctorIsNotDispatchable(t *testing.T) {
 	}
 	if strings.Contains(stderr, "trawl doctor") {
 		t.Fatalf("removed command was offered as a remedy:\n%s", stderr)
+	}
+}
+
+func TestNamespaceSyncIsNotDispatchable(t *testing.T) {
+	setupNamespace(t)
+	stdout, stderr, code := runCLI(t, "imessage", "sync")
+	if code != 1 || stdout != "" || !strings.Contains(stderr, `iMessage has no verb "sync"`) {
+		t.Fatalf("second sync spelling code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stderr, "trawl imessage") {
+		t.Fatalf("error did not return to the source read surface:\n%s", stderr)
 	}
 }
 

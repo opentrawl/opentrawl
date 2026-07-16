@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -233,7 +234,7 @@ func TestRunSourceSyncUsesChildRoutePastReadTimeout(t *testing.T) {
 	}
 	source := discoverCrawlers(context.Background())[0]
 	started := time.Now()
-	data, stderr, err := r.runSourceSync(source)
+	data, stderr, err := r.runSourceSync(source, nil)
 	if err != nil {
 		t.Fatalf("runSourceSync err=%v stderr=%s stdout=%s", err, stderr, data)
 	}
@@ -246,5 +247,47 @@ func TestRunSourceSyncUsesChildRoutePastReadTimeout(t *testing.T) {
 	}
 	if got := outcome.Added.String(); got != "1" {
 		t.Fatalf("added = %q, want 1; stdout=%s", got, data)
+	}
+}
+
+func TestSplitSyncArgsKeepsOnePublicSyncSurfaceWithoutLosingSourceFlags(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantSources []string
+		wantFlags   []string
+		wantErr     bool
+	}{
+		{name: "all defaults"},
+		{name: "several sources", args: []string{"imessage", "telegram"}, wantSources: []string{"imessage", "telegram"}},
+		{name: "one source flags", args: []string{"telegram", "--fetch-media", "--messages-limit", "0"}, wantSources: []string{"telegram"}, wantFlags: []string{"--fetch-media", "--messages-limit", "0"}},
+		{name: "explicit separator", args: []string{"notes", "--", "--store", "/tmp/NoteStore.sqlite"}, wantSources: []string{"notes"}, wantFlags: []string{"--store", "/tmp/NoteStore.sqlite"}},
+		{name: "ambiguous flags", args: []string{"imessage", "telegram", "--fetch-media"}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sources, flags, err := splitSyncArgs(tt.args)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("splitSyncArgs(%q) err = %v, wantErr %v", tt.args, err, tt.wantErr)
+			}
+			if !slices.Equal(sources, tt.wantSources) || !slices.Equal(flags, tt.wantFlags) {
+				t.Fatalf("splitSyncArgs(%q) = (%q, %q), want (%q, %q)", tt.args, sources, flags, tt.wantSources, tt.wantFlags)
+			}
+		})
+	}
+}
+
+func TestSyncSourceHelpUsesTheRootSpelling(t *testing.T) {
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, stderr, code := runCLI(t, "sync", "telegram", "--help")
+	if code != 0 {
+		t.Fatalf("sync help code = %d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	if !strings.Contains(stdout, "trawl sync telegram: Sync the archive") {
+		t.Fatalf("sync help did not use canonical root spelling:\n%s", stdout)
+	}
+	if strings.Contains(stdout, "trawl telegram sync") {
+		t.Fatalf("sync help advertised the removed source spelling:\n%s", stdout)
 	}
 }

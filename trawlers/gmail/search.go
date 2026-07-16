@@ -2,7 +2,6 @@ package gogcrawl
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -85,35 +84,4 @@ func parseContractTime(value string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("invalid archive time %q", value)
 	}
 	return t, nil
-}
-
-func versionAtLeast(raw, minimum string) bool {
-	got := parseVersion(raw)
-	want := parseVersion(minimum)
-	for i := 0; i < len(want); i++ {
-		if got[i] > want[i] {
-			return true
-		}
-		if got[i] < want[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func parseVersion(raw string) [3]int {
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimPrefix(raw, "v")
-	if before, _, ok := strings.Cut(raw, " "); ok {
-		raw = before
-	}
-	parts := strings.Split(raw, ".")
-	var out [3]int
-	for i := 0; i < len(out) && i < len(parts); i++ {
-		value, _ := strconv.Atoi(strings.TrimFunc(parts[i], func(r rune) bool {
-			return r < '0' || r > '9'
-		}))
-		out[i] = value
-	}
-	return out
 }

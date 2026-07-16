@@ -14,8 +14,6 @@ import (
 	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
-const defaultFederatedChatLimit = 50
-
 type ChatsCmd struct {
 	With   string `name:"with" help:"Only conversations with a participant whose name matches"`
 	Unread bool   `name:"unread" help:"Only conversations with unread messages"`

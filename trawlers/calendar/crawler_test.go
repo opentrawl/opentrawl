@@ -253,7 +253,7 @@ func TestCrawlerSyncSearchOpenAndContacts(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	contacts, err := source.ContactExport(ctx, readRequest(readStore, paths))
+	contacts, err := source.PeopleSnapshot(ctx, readRequest(readStore, paths))
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)

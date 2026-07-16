@@ -27,13 +27,12 @@ Google, local and subscribed calendars. It excludes the Reminders store.
 ## Commands
 
 ```sh
-trawl calendar sync
+trawl sync calendar
 trawl calendar status
 trawl calendar search "planning" --who "Alice Example"
 trawl calendar search --who alice@example.com
 trawl calendar who alice
 trawl calendar open calendar:event/11111111-1111-1111-1111-111111111111
-trawl calendar contacts export
 ```
 
 Add `--json` for structured output. Search covers event titles, descriptions,
@@ -44,9 +43,9 @@ Human search output may show a short ref. `open` accepts the short or canonical
 ref without guessing and returns one bounded event with people, time, location,
 calendar and recurrence state.
 
-Contact export follows the shared narrow shape and therefore includes only
-people with a display name and phone number. Participant email addresses remain
-searchable even when they cannot be exported.
+During sync, Calendar contributes participants with a display name and phone
+number to the shared People index. Participant email addresses remain
+searchable even when they cannot identify a person there.
 
 ## Limits and privacy
 

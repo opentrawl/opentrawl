@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
@@ -39,7 +37,7 @@ func (c *Crawler) runContacts(ctx context.Context, req *trawlkit.Request) error 
 	})
 }
 
-func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.Request) (*control.PeopleSnapshot, error) {
 	st, err := store.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
@@ -67,11 +65,7 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 		}
 		out = append(out, control.Contact{DisplayName: contact.DisplayName, PhoneNumbers: phones, Accounts: accounts})
 	}
-	return &control.ContactExport{Contacts: out}, nil
-}
-
-type contactExport struct {
-	Contacts []exportContact `json:"contacts"`
+	return &control.PeopleSnapshot{Contacts: out}, nil
 }
 
 type exportContact struct {
@@ -96,11 +90,11 @@ func exportContacts(contacts []store.Contact) []exportContact {
 		}
 		key := exportContactKey(phone, username)
 		if current, ok := byKey[key]; ok {
-			if preferContactExportName(contact, current) {
-				contact = mergeContactExportIdentifiers(contact, current)
+			if preferPeopleSnapshotName(contact, current) {
+				contact = mergePeopleSnapshotIdentifiers(contact, current)
 				byKey[key] = contact
 			} else {
-				byKey[key] = mergeContactExportIdentifiers(current, contact)
+				byKey[key] = mergePeopleSnapshotIdentifiers(current, contact)
 			}
 		} else {
 			byKey[key] = contact
@@ -121,7 +115,7 @@ func exportContacts(contacts []store.Contact) []exportContact {
 	return out
 }
 
-func mergeContactExportIdentifiers(base, extra store.Contact) store.Contact {
+func mergePeopleSnapshotIdentifiers(base, extra store.Contact) store.Contact {
 	if strings.TrimSpace(base.Phone) == "" {
 		base.Phone = strings.TrimSpace(extra.Phone)
 	}
@@ -154,7 +148,7 @@ func cleanTelegramUsername(username string) string {
 	return strings.TrimSpace(strings.TrimPrefix(username, "@"))
 }
 
-func preferContactExportName(candidate, current store.Contact) bool {
+func preferPeopleSnapshotName(candidate, current store.Contact) bool {
 	if candidate.UpdatedAt.After(current.UpdatedAt) {
 		return true
 	}
@@ -180,62 +174,4 @@ func isTelegramServiceContact(contact store.Contact) bool {
 		sameContactText(contact.FirstName, "Telegram") &&
 		strings.TrimSpace(contact.LastName) == "" &&
 		strings.TrimSpace(contact.Username) == ""
-}
-
-func (r *runtime) printContactExport(value contactExport) error {
-	for _, contact := range value.Contacts {
-		if _, err := fmt.Fprintf(r.stdout, "%s\t%s\n", contact.DisplayName, strings.Join(contactIdentifiers(contact), ", ")); err != nil {
-			return err
-		}
-	}
-	_, err := fmt.Fprintf(r.stdout, "%s\n", countNoun(len(value.Contacts), "contact", "contacts"))
-	return err
-}
-
-func contactIdentifiers(contact exportContact) []string {
-	identifiers := make([]string, 0, len(contact.PhoneNumbers)+len(contact.Accounts))
-	for _, phone := range contact.PhoneNumbers {
-		if phone = strings.TrimSpace(phone); phone != "" {
-			identifiers = append(identifiers, phone)
-		}
-	}
-	providers := make([]string, 0, len(contact.Accounts))
-	for provider := range contact.Accounts {
-		providers = append(providers, provider)
-	}
-	sort.Strings(providers)
-	for _, provider := range providers {
-		values := append([]string(nil), contact.Accounts[provider]...)
-		sort.Strings(values)
-		for _, value := range values {
-			if identifier := accountIdentifier(provider, value); identifier != "" {
-				identifiers = append(identifiers, identifier)
-			}
-		}
-	}
-	return identifiers
-}
-
-func accountIdentifier(provider, value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	switch strings.ToLower(strings.TrimSpace(provider)) {
-	case "telegram":
-		return "@" + strings.TrimPrefix(value, "@")
-	default:
-		provider = strings.TrimSpace(provider)
-		if provider == "" {
-			return value
-		}
-		return provider + ":" + value
-	}
-}
-
-func countNoun(count int, singular, plural string) string {
-	if count == 1 {
-		return "1 " + singular
-	}
-	return strconv.Itoa(count) + " " + plural
 }

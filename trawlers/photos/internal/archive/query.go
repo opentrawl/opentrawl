@@ -439,7 +439,7 @@ func requireCurrentSearchIndex(ctx context.Context, db *sql.DB) error {
 		if err := db.QueryRowContext(ctx, `select count(*) from asset`).Scan(&assets); err == nil && assets == 0 {
 			return nil
 		}
-		return errors.New("photo search index is out of date; run 'trawl photos sync'")
+		return errors.New("photo search index is out of date; run 'trawl sync photos'")
 	}
 	return nil
 }

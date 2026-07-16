@@ -29,12 +29,12 @@ type Crawler struct {
 }
 
 var (
-	_ trawlkit.Crawler         = (*Crawler)(nil)
-	_ trawlkit.Syncer          = (*Crawler)(nil)
-	_ trawlkit.Searcher        = (*Crawler)(nil)
-	_ trawlkit.WhoMatcher      = (*Crawler)(nil)
-	_ trawlkit.Opener          = (*Crawler)(nil)
-	_ trawlkit.ContactExporter = (*Crawler)(nil)
+	_ trawlkit.Crawler                = (*Crawler)(nil)
+	_ trawlkit.Syncer                 = (*Crawler)(nil)
+	_ trawlkit.Searcher               = (*Crawler)(nil)
+	_ trawlkit.WhoMatcher             = (*Crawler)(nil)
+	_ trawlkit.Opener                 = (*Crawler)(nil)
+	_ trawlkit.PeopleSnapshotProvider = (*Crawler)(nil)
 )
 
 func New() *Crawler {
@@ -64,10 +64,6 @@ func (c *Crawler) Verbs() []trawlkit.Verb {
 				fs.StringVar(&c.syncQuery, "query", "", "Gmail search query")
 				fs.IntVar(&c.syncMax, "max", 0, "maximum Gmail messages")
 			},
-		},
-		{
-			Name:  "contacts_export",
-			Store: trawlkit.StoreNone,
 		},
 	}
 }
@@ -163,12 +159,12 @@ func (c *Crawler) Who(ctx context.Context, req *trawlkit.Request, person string)
 	return out, nil
 }
 
-func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
+func (c *Crawler) PeopleSnapshot(ctx context.Context, req *trawlkit.Request) (*control.PeopleSnapshot, error) {
 	contacts, err := c.exportContacts(ctx)
 	if err != nil {
 		return nil, commandErr("gog_contacts_failed", "gog could not list Google contacts", "run gog auth list --check --plain, then gog login <email> if auth is invalid", err)
 	}
-	return &control.ContactExport{Contacts: contacts}, nil
+	return &control.PeopleSnapshot{Contacts: contacts}, nil
 }
 
 func statusCounts(status archive.Status) []control.Count {

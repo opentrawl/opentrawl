@@ -23,8 +23,8 @@ copied or mounted `NoteStore.sqlite` explicitly.
 ## Commands
 
 ```sh
-trawl notes sync
-trawl notes sync --store /path/to/NoteStore.sqlite
+trawl sync notes
+trawl notes sync-store /path/to/NoteStore.sqlite --label copied-store
 trawl notes status
 trawl notes list --limit 20
 trawl notes list "Work"

@@ -1,0 +1,16 @@
+name: check-test
+on:
+  push:
+  pull_request:
+jobs:
+  check-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.4"
+      - run: scripts/check-test
+        env:
+          CGO_ENABLED: "1"
+          GOFLAGS: "-tags=sqlite_fts5"

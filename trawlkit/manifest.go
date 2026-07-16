@@ -69,9 +69,6 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	if _, ok := source.(ChatLister); ok {
 		caps = append(caps, "chats")
 	}
-	if _, ok := source.(ContactExporter); ok {
-		caps = append(caps, "contacts_export")
-	}
 	caps = append(caps, "short_refs")
 	for _, verb := range source.Verbs() {
 		if verb.Internal {
@@ -109,9 +106,6 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 	}
 	if _, ok := source.(Opener); ok {
 		commands["open"] = applySpineDeclaration(spineCommand("Open an item", binaryName, "open", "open", "REF"), spine, "open")
-	}
-	if _, ok := source.(ContactExporter); ok {
-		commands["contacts_export"] = applySpineDeclaration(spineCommand("Export contacts", binaryName, "contacts_export", "contacts", "export"), spine, "contacts_export")
 	}
 	for _, verb := range source.Verbs() {
 		if verb.Internal {

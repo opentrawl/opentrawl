@@ -167,7 +167,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	}
 
 	readStore = openReadStore(t, ctx, paths.Archive)
-	contacts, err := crawler.ContactExport(ctx, readRequest(readStore, paths))
+	contacts, err := crawler.PeopleSnapshot(ctx, readRequest(readStore, paths))
 	_ = readStore.Close()
 	if err != nil {
 		t.Fatal(err)
@@ -362,12 +362,12 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	}
 	// chats is now the shared trawlkit capability; the old bespoke unread verb
 	// collapsed into chats --unread.
-	for _, capability := range []string{"sync", "search", "who", "open", "contacts_export", "short_refs", "chats", "messages"} {
+	for _, capability := range []string{"sync", "search", "who", "open", "short_refs", "chats", "messages"} {
 		if !stringSliceContains(manifest.Capabilities, capability) {
 			t.Fatalf("capabilities = %#v, missing %s", manifest.Capabilities, capability)
 		}
 	}
-	for _, command := range []string{"metadata", "status", "sync", "search", "who", "open", "contacts_export", "chats", "messages"} {
+	for _, command := range []string{"metadata", "status", "sync", "search", "who", "open", "chats", "messages"} {
 		if _, ok := manifest.Commands[command]; !ok {
 			t.Fatalf("commands = %#v, missing %s", manifest.Commands, command)
 		}

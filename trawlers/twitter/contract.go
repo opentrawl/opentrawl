@@ -17,7 +17,7 @@ const (
 	defaultStatsLimit  = 10
 
 	archiveSchemaUpgradeMessage = "archive schema needs one sync to finish upgrading"
-	archiveSchemaUpgradeRemedy  = "run trawl twitter sync."
+	archiveSchemaUpgradeRemedy  = "run trawl sync twitter."
 )
 
 type statusEnvelope struct {

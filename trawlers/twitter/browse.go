@@ -16,10 +16,10 @@ type browseCommand struct {
 }
 
 var browseCommands = map[string]browseCommand{
-	"tweets":    {kind: "tweets", role: "authored", title: "Tweets", empty: "No tweets archived yet. Run 'trawl twitter sync' or 'trawl twitter import archive PATH'."},
-	"bookmarks": {kind: "bookmarks", role: "bookmark", title: "Bookmarks", empty: "No bookmarks archived yet. Run 'trawl twitter sync' or 'trawl twitter import archive PATH'."},
-	"likes":     {kind: "likes", role: "like", title: "Likes", empty: "No likes archived yet. Run 'trawl twitter sync' or 'trawl twitter import archive PATH'."},
-	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'trawl twitter sync' or 'trawl twitter import archive PATH'."},
+	"tweets":    {kind: "tweets", role: "authored", title: "Tweets", empty: "No tweets archived yet. Run 'trawl sync twitter' or 'trawl twitter import archive PATH'."},
+	"bookmarks": {kind: "bookmarks", role: "bookmark", title: "Bookmarks", empty: "No bookmarks archived yet. Run 'trawl sync twitter' or 'trawl twitter import archive PATH'."},
+	"likes":     {kind: "likes", role: "like", title: "Likes", empty: "No likes archived yet. Run 'trawl sync twitter' or 'trawl twitter import archive PATH'."},
+	"mentions":  {kind: "mentions", role: "mention", title: "Mentions", empty: "No mentions archived yet. Run 'trawl sync twitter' or 'trawl twitter import archive PATH'."},
 }
 
 func (r *runtime) runBrowse(command browseCommand, args []string) error {

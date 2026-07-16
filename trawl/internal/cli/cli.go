@@ -298,6 +298,7 @@ const trawlOutro = `The commands below run across every source. Each source is a
 
 Examples:
   trawl status                          # every source: state, freshness, counts
+  trawl sync telegram                   # refresh Telegram and update People
   trawl search "boat trip"              # all sources, newest first
   trawl chats --with anna               # conversations across messaging sources
   trawl search imessage falafel         # one source, no quotes needed

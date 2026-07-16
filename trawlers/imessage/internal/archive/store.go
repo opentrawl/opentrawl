@@ -90,7 +90,7 @@ var ErrArchiveSync = errors.New("archive sync failed")
 // ErrSchemaOutdated means the archive predates a schema addition this
 // binary's read queries need. Reads never migrate source-derived content, so
 // the remedy is one sync, which upgrades the schema.
-var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl imessage sync")
+var ErrSchemaOutdated = errors.New("archive schema predates this version; run trawl sync imessage")
 
 type archiveSyncError struct {
 	err error

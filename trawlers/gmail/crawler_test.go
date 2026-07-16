@@ -241,7 +241,7 @@ func TestCrawlerSyncSearchOpenWhoAndContacts(t *testing.T) {
 		t.Fatalf("missing archive error = %#v", err)
 	}
 
-	contacts, err := source.ContactExport(ctx, &trawlkit.Request{Paths: paths})
+	contacts, err := source.PeopleSnapshot(ctx, &trawlkit.Request{Paths: paths})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,12 +280,8 @@ func TestCrawlerStatusAndManifestFlags(t *testing.T) {
 	flags := map[string]bool{}
 	verbs := source.Verbs()
 	syncVerb, ok := verbByName(verbs, "sync")
-	if len(verbs) != 2 || !ok || syncVerb.Flags == nil {
+	if len(verbs) != 1 || !ok || syncVerb.Flags == nil {
 		t.Fatalf("verbs = %#v", verbs)
-	}
-	contactsVerb, ok := verbByName(verbs, "contacts_export")
-	if !ok || contactsVerb.Store != trawlkit.StoreNone {
-		t.Fatalf("contacts_export verb = %#v, ok=%v", contactsVerb, ok)
 	}
 	fs := flagSet("sync")
 	syncVerb.Flags(fs)
@@ -312,19 +308,16 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("metadata JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"contacts_export", "metadata", "open", "search", "status", "sync", "who"}
+	wantCommands := []string{"metadata", "open", "search", "status", "sync", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
-	wantCaps := []string{"contacts_export", "metadata", "open", "search", "short_refs", "status", "sync", "who"}
+	wantCaps := []string{"metadata", "open", "search", "short_refs", "status", "sync", "who"}
 	gotCaps := append([]string(nil), manifest.Capabilities...)
 	sort.Strings(gotCaps)
 	sort.Strings(wantCaps)
 	if !equalStrings(gotCaps, wantCaps) {
 		t.Fatalf("capabilities = %v, want %v", gotCaps, wantCaps)
-	}
-	if got := manifest.Commands["contacts_export"].Store; got != "none" {
-		t.Fatalf("contacts_export store = %q, want none", got)
 	}
 	if got := manifest.Commands["sync"].Store; got != "write" {
 		t.Fatalf("sync store = %q, want write", got)
@@ -332,27 +325,6 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	if _, ok := manifest.Commands["version"]; ok {
 		t.Fatal("version command survived in manifest")
 	}
-}
-
-func TestRunContactsExportStoreNoneFreshNoArchive(t *testing.T) {
-	installFakeGog(t)
-	stateRoot := stateRootForRun(t)
-	archivePath := archivePathForRun(stateRoot)
-	code, stdout, stderr := runGogcrawl(t, stateRoot, "contacts", "export", "--json")
-	if code != 0 {
-		t.Fatalf("contacts export code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var export control.ContactExport
-	if err := json.Unmarshal([]byte(stdout), &export); err != nil {
-		t.Fatalf("contacts export JSON: %v\n%s", err, stdout)
-	}
-	if len(export.Contacts) != 1 || export.Contacts[0].DisplayName != "Alice Example" || export.Contacts[0].PhoneNumbers[0] != "+15550101000" {
-		t.Fatalf("contacts = %#v", export.Contacts)
-	}
-	if _, err := os.Stat(archivePath); !os.IsNotExist(err) {
-		t.Fatalf("contacts export created archive: err=%v path=%s", err, archivePath)
-	}
-	t.Logf("fresh contacts export archive absent at resolved state root: path=%s", archivePath)
 }
 
 func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {

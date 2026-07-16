@@ -45,7 +45,7 @@ func (e commandError) ErrorBody() output.ErrorBody {
 }
 
 func archiveErr(err error) error {
-	return commandErr(1, "archive", err, "run trawl calendar sync")
+	return commandErr(1, "archive", err, "run trawl sync calendar")
 }
 
 func sourceErr(err error) error {

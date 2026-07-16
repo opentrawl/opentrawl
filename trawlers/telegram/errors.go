@@ -49,7 +49,7 @@ func usageErr(err error) error {
 }
 
 func archiveErr(err error) error {
-	return commandErr(1, "archive", err, "run trawl telegram sync")
+	return commandErr(1, "archive", err, "run trawl sync telegram")
 }
 
 func commandErr(code int, kind string, err error, remedy string) error {

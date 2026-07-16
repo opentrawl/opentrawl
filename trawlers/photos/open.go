@@ -55,7 +55,7 @@ func archiveReadCommandError(err error) error {
 		return commandError{
 			Code:    "archive_incompatible",
 			Message: "The Photos archive needs to be updated.",
-			Remedy:  "run trawl photos sync, then retry",
+			Remedy:  "run trawl sync photos, then retry",
 		}
 	}
 	return err

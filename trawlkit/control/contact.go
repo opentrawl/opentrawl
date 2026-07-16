@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type ContactExport struct {
+type PeopleSnapshot struct {
 	Contacts []Contact `json:"contacts"`
 }
 
@@ -16,7 +16,7 @@ type Contact struct {
 	Accounts       map[string][]string `json:"accounts,omitempty"`
 }
 
-func ValidateContactExport(value ContactExport) error {
+func ValidatePeopleSnapshot(value PeopleSnapshot) error {
 	for i, contact := range value.Contacts {
 		if strings.TrimSpace(contact.DisplayName) == "" {
 			return fmt.Errorf("contact %d display name is required", i)

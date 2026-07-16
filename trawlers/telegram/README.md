@@ -26,15 +26,17 @@ Sync defaults to the latest 200 dialogs and 500 messages per dialog. Set either
 limit to `0` for no limit:
 
 ```sh
-trawl telegram sync --dialogs-limit 0 --messages-limit 0
+trawl sync telegram --dialogs-limit 0 --messages-limit 0
 ```
 
-Use `--path` to import a copied source explicitly.
+Use `trawl sync telegram --path /path/to/copied/source` to import a copied
+source explicitly.
 
 ## Commands
 
 ```sh
-trawl telegram sync
+trawl sync telegram
+trawl sync telegram --fetch-media
 trawl telegram status
 trawl telegram folders
 trawl telegram contacts

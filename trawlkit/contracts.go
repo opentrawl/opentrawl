@@ -48,8 +48,8 @@ type ResourceResolver interface {
 	ResolveResource(ctx context.Context, req *Request, request *presentationv1.ResourceRequest) (*presentationv1.ResourceResponse, error)
 }
 
-type ContactExporter interface {
-	ContactExport(ctx context.Context, req *Request) (*control.ContactExport, error)
+type PeopleSnapshotProvider interface {
+	PeopleSnapshot(ctx context.Context, req *Request) (*control.PeopleSnapshot, error)
 }
 
 type ShortRefProvider interface {

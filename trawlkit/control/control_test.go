@@ -61,18 +61,18 @@ func TestSQLiteDatabaseStatsPathReadOnly(t *testing.T) {
 	}
 }
 
-func TestValidateContactExport(t *testing.T) {
-	valid := []ContactExport{
+func TestValidatePeopleSnapshot(t *testing.T) {
+	valid := []PeopleSnapshot{
 		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{"+15550100"}}}},
 		{Contacts: []Contact{{DisplayName: "Alice", EmailAddresses: []string{"alice@example.com"}}}},
 		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"telegram": {"alice"}}}}},
 	}
 	for _, value := range valid {
-		if err := ValidateContactExport(value); err != nil {
+		if err := ValidatePeopleSnapshot(value); err != nil {
 			t.Fatal(err)
 		}
 	}
-	invalid := []ContactExport{
+	invalid := []PeopleSnapshot{
 		{Contacts: []Contact{{PhoneNumbers: []string{"+15550100"}}}},
 		{Contacts: []Contact{{DisplayName: "Alice"}}},
 		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{""}}}},
@@ -86,8 +86,8 @@ func TestValidateContactExport(t *testing.T) {
 		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"Telegram": {"alice"}, "telegram": {"bob"}}}}},
 	}
 	for _, value := range invalid {
-		if err := ValidateContactExport(value); err == nil {
-			t.Fatalf("expected invalid contact export: %+v", value)
+		if err := ValidatePeopleSnapshot(value); err == nil {
+			t.Fatalf("expected invalid People snapshot: %+v", value)
 		}
 	}
 }

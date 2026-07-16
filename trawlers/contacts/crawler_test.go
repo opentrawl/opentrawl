@@ -97,15 +97,12 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("manifest JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"contacts_export", "export_vcard", "import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "sync_google", "who"}
+	wantCommands := []string{"import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "sync_google", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
 	if got := manifest.Paths.DefaultDatabase; !strings.HasSuffix(got, filepath.Join(".opentrawl", "contacts", "contacts.db")) {
 		t.Fatalf("default database = %q", got)
-	}
-	if got := manifest.Commands["contacts_export"].Store; got != "read" {
-		t.Fatalf("contacts_export store = %q", got)
 	}
 	if got := manifest.Commands["import"]; !got.Mutates || got.Store != "write" {
 		t.Fatalf("import command = %#v", got)
@@ -209,24 +206,6 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	}
 	if !strings.Contains(stdout, `"annotation": "Ada owns billing"`) {
 		t.Fatalf("annotate stdout = %s", stdout)
-	}
-	code, stdout, stderr = runContacts(t, home, "export", "vcard", "--person", person.ID, "--include-avatars", "--out", "-")
-	if code != 0 {
-		t.Fatalf("export vcard code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stdout, "PHOTO:data:image/png;base64,iVBORw0KGgo=") {
-		t.Fatalf("vcard stdout = %s", stdout)
-	}
-	code, stdout, stderr = runContacts(t, home, "contacts", "contacts", "export", "--json")
-	if code != 0 {
-		t.Fatalf("contacts export code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var export control.ContactExport
-	if err := json.Unmarshal([]byte(stdout), &export); err != nil {
-		t.Fatalf("contacts JSON: %v\n%s", err, stdout)
-	}
-	if len(export.Contacts) != 1 || export.Contacts[0].PhoneNumbers[0] != "+15550100" {
-		t.Fatalf("contacts = %#v", export)
 	}
 }
 

@@ -97,7 +97,7 @@ func TestCancelledCanonicalSyncReleasesChildAndSourceLock(t *testing.T) {
 	}()
 	runtime := &Runtime{ctx: ctx}
 	source := discoverCrawlers(ctx)[0]
-	if _, _, err := runtime.runSourceSync(source); err == nil {
+	if _, _, err := runtime.runSourceSync(source, nil); err == nil {
 		t.Fatal("cancelled sync returned nil error")
 	}
 	if _, err := os.Stat(prepareMarker); err != nil {

@@ -109,13 +109,13 @@ func archiveErr(err error) error {
 	switch {
 	case errors.Is(err, archive.ErrSchemaOutdated):
 		return commandErr("archive_schema_outdated",
-			"Archive is from an older build; trawl notes sync will park it and rebuild.",
-			"run trawl notes sync", err)
+			"Archive is from an older build; trawl sync notes will park it and rebuild.",
+			"run trawl sync notes", err)
 	case errors.Is(err, archive.ErrSchemaNewer):
 		return commandErr("archive_schema_newer",
 			"Archive was written by a newer build of trawl notes than this one.",
-			"update trawl notes, then run trawl notes sync", err)
+			"update trawl notes, then run trawl sync notes", err)
 	default:
-		return commandErr("archive_unreadable", "Notes archive could not be read", "run trawl notes sync", err)
+		return commandErr("archive_unreadable", "Notes archive could not be read", "run trawl sync notes", err)
 	}
 }

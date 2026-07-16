@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/vcard"
 )
 
 func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
@@ -201,7 +199,7 @@ func TestSearchKeepsDistinctContactNoteAndSourceNameMatches(t *testing.T) {
 	}
 }
 
-func TestImportContactsAvatarRoundTripsToVCard(t *testing.T) {
+func TestImportContactsRetainsAvatar(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)
 	now := time.Date(2026, 7, 9, 10, 0, 0, 0, time.UTC)
@@ -220,7 +218,6 @@ func TestImportContactsAvatarRoundTripsToVCard(t *testing.T) {
 	if !bytes.Equal(person.Avatar.Data, avatarData) || person.Avatar.MIME != "image/png" || person.Avatar.SHA256 == "" || person.Avatar.Source != "apple" {
 		t.Fatalf("avatar = %#v", person.Avatar)
 	}
-	assertVCardAvatar(t, person, avatarData)
 }
 
 func TestLegacyImportPreservesPeopleNotesAndIsIdempotent(t *testing.T) {
@@ -298,7 +295,9 @@ Discuss the handoff.
 	if len(candidates) != 1 || candidates[0].Who != "Ada Legacy" {
 		t.Fatalf("folder slug candidates = %#v", candidates)
 	}
-	assertVCardAvatar(t, person, pngBytes())
+	if !bytes.Equal(person.Avatar.Data, pngBytes()) {
+		t.Fatalf("avatar data = %x, want %x", person.Avatar.Data, pngBytes())
+	}
 	results, total, err := st.Search(ctx, "handoff", SearchOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -435,24 +434,6 @@ func writeLegacyAvatar(t *testing.T, root, slug string, data []byte) {
 	}
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
-	}
-}
-
-func assertVCardAvatar(t *testing.T, person model.Person, data []byte) {
-	t.Helper()
-	var buf bytes.Buffer
-	if err := vcard.WriteWithOptions(&buf, []model.Person{person}, vcard.Options{IncludeAvatars: true}); err != nil {
-		t.Fatal(err)
-	}
-	out := buf.String()
-	if !strings.Contains(out, "PHOTO:data:image/png;base64,") {
-		t.Fatalf("missing avatar photo: %s", out)
-	}
-	if !strings.Contains(out, "iVBORw0KGgo=") {
-		t.Fatalf("avatar bytes were not exported: %s", out)
-	}
-	if !bytes.Equal(person.Avatar.Data, data) {
-		t.Fatalf("avatar data = %x, want %x", person.Avatar.Data, data)
 	}
 }
 

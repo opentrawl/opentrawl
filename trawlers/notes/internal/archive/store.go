@@ -15,10 +15,10 @@ import (
 // ErrSchemaOutdated means the archive on disk was written by an older build:
 // its recorded schema_migrations version is behind SchemaVersion. This is a
 // single-user, local-first archive rebuilt from the source Notes store at
-// every sync, so there is no in-place migration path -- trawl notes sync
+// every sync, so there is no in-place migration path -- trawl sync notes
 // parks the old file (see parkArchiveFile) and rebuilds a fresh one from
 // scratch. Read verbs surface this error as-is; only sync parks and rebuilds.
-var ErrSchemaOutdated = errors.New("archive is from an older build; trawl notes sync will park it and rebuild")
+var ErrSchemaOutdated = errors.New("archive is from an older build; trawl sync notes will park it and rebuild")
 
 // ErrSchemaNewer means the archive on disk was written by a newer build than
 // this one supports. An old binary must never demote a newer archive, so

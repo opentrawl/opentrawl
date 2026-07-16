@@ -17,26 +17,26 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if source.ID == "contacts" {
 		return nil
 	}
-	exporter, ok := source.Crawler.(trawlkit.ContactExporter)
+	provider, ok := source.Crawler.(trawlkit.PeopleSnapshotProvider)
 	if !ok {
 		return nil
 	}
 	contacts, found := findSource(sources, "contacts")
 	if !found || contacts.Crawler == nil {
-		return fmt.Errorf("Contacts is not installed")
+		return fmt.Errorf("contacts is not installed")
 	}
-	var exported *control.ContactExport
-	if err := r.withSourceRequest(source, "contacts", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var exportErr error
-		exported, exportErr = exporter.ContactExport(ctx, req)
-		return exportErr
+	var snapshot *control.PeopleSnapshot
+	if err := r.withSourceRequest(source, "people", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
+		var snapshotErr error
+		snapshot, snapshotErr = provider.PeopleSnapshot(ctx, req)
+		return snapshotErr
 	}); err != nil {
 		return fmt.Errorf("read %s people: %w", sourceHumanName(source), err)
 	}
-	if exported == nil {
-		return fmt.Errorf("read %s people: source returned no contact snapshot", sourceHumanName(source))
+	if snapshot == nil {
+		return fmt.Errorf("read %s people: source returned no People snapshot", sourceHumanName(source))
 	}
-	input, cleanup, err := writeContactExport(exported)
+	input, cleanup, err := writePeopleSnapshot(snapshot)
 	if err != nil {
 		return fmt.Errorf("stage %s people: %w", sourceHumanName(source), err)
 	}
@@ -51,14 +51,14 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	return nil
 }
 
-func writeContactExport(exported *control.ContactExport) (string, func(), error) {
-	file, err := os.CreateTemp("", "opentrawl-contact-export-*.json")
+func writePeopleSnapshot(snapshot *control.PeopleSnapshot) (string, func(), error) {
+	file, err := os.CreateTemp("", "opentrawl-people-snapshot-*.json")
 	if err != nil {
 		return "", func() {}, err
 	}
 	path := file.Name()
 	cleanup := func() { _ = os.Remove(path) }
-	if err := json.NewEncoder(file).Encode(exported); err != nil {
+	if err := json.NewEncoder(file).Encode(snapshot); err != nil {
 		_ = file.Close()
 		cleanup()
 		return "", func() {}, err

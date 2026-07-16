@@ -315,14 +315,14 @@ func TestWriteListEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	err := WriteList(&buf, List{
 		Heading: "Bookmarks: showing 0 of 398.",
-		Hints:   []string{"Sync: trawl twitter sync"},
-		Empty:   "No bookmarks archived yet. Run 'trawl twitter sync'.",
+		Hints:   []string{"Sync: trawl sync twitter"},
+		Empty:   "No bookmarks archived yet. Run 'trawl sync twitter'.",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := strings.Join([]string{
-		"No bookmarks archived yet. Run 'trawl twitter sync'.",
+		"No bookmarks archived yet. Run 'trawl sync twitter'.",
 		"",
 	}, "\n")
 	assertGolden(t, buf.String(), want)

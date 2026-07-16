@@ -8,7 +8,6 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -38,7 +37,6 @@ var (
 	_ trawlkit.Searcher         = (*App)(nil)
 	_ trawlkit.WhoMatcher       = (*App)(nil)
 	_ trawlkit.Opener           = (*App)(nil)
-	_ trawlkit.ContactExporter  = (*App)(nil)
 	_ trawlkit.ShortRefProvider = (*App)(nil)
 )
 
@@ -54,7 +52,7 @@ func (a *App) Info() trawlkit.Info {
 		Headlines:   []string{"people"},
 		Config:      &a.cfg,
 		Privacy: control.Privacy{
-			LocalOnlyScopes: []string{"contacts", "sqlite", "contact-search", "contact-export"},
+			LocalOnlyScopes: []string{"contacts", "sqlite", "contact-search"},
 		},
 	}
 }
@@ -68,7 +66,6 @@ func (a *App) Verbs() []trawlkit.Verb {
 		importVerb(a),
 		importLegacyVerb(),
 		syncGoogleVerb(a),
-		exportVCardVerb(),
 	}
 }
 
@@ -225,51 +222,6 @@ func (a *App) loadOpenPerson(ctx context.Context, req *trawlkit.Request, ref str
 	return openValue{ref: archive.PersonRef(person.ID), person: person, notes: notes}, nil
 }
 
-func (a *App) ContactExport(ctx context.Context, req *trawlkit.Request) (*control.ContactExport, error) {
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
-	}
-	people, err := st.People(ctx)
-	if err != nil {
-		return nil, err
-	}
-	contacts := make([]control.Contact, 0, len(people))
-	for _, person := range people {
-		emails := cleanContactValues(person.Emails)
-		phones := cleanPhones(person.Phones)
-		accounts := cloneAccounts(person.Accounts)
-		if strings.TrimSpace(person.Name) == "" || (len(emails) == 0 && len(phones) == 0 && len(accounts) == 0) {
-			continue
-		}
-		contacts = append(contacts, control.Contact{
-			DisplayName:    strings.TrimSpace(person.Name),
-			EmailAddresses: emails,
-			PhoneNumbers:   phones,
-			Accounts:       accounts,
-		})
-	}
-	return &control.ContactExport{Contacts: contacts}, nil
-}
-
-func cleanContactValues(values []model.ContactValue) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if cleaned := strings.TrimSpace(value.Value); cleaned != "" {
-			out = append(out, cleaned)
-		}
-	}
-	return out
-}
-
-func cloneAccounts(accounts map[string][]string) map[string][]string {
-	out := make(map[string][]string, len(accounts))
-	for provider, values := range accounts {
-		out[provider] = append([]string(nil), values...)
-	}
-	return out
-}
-
 func (a *App) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]trawlkit.ShortRefRecord, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if errors.Is(err, archive.ErrSchemaOutdated) {
@@ -314,20 +266,6 @@ func peopleStatusSummary(count int) string {
 		return "Contacts archive has 1 person."
 	}
 	return fmt.Sprintf("Contacts archive has %s people.", formatCount(count))
-}
-
-func cleanPhones(values []model.ContactValue) []string {
-	out := make([]string, 0, len(values))
-	seen := map[string]bool{}
-	for _, value := range values {
-		phone := strings.TrimSpace(value.Value)
-		if phone == "" || seen[phone] {
-			continue
-		}
-		seen[phone] = true
-		out = append(out, phone)
-	}
-	return out
 }
 
 func archiveErr(err error) error {

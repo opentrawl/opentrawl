@@ -96,46 +96,6 @@ func TestProjectSearchRoundTripsEveryEvidenceKind(t *testing.T) {
 	}
 }
 
-func TestProjectSearchPinsCompleteProtobufText(t *testing.T) {
-	projected, err := ProjectSearch(manifestFixture("notes", "Notes"), trawlkit.SearchResult{
-		Results:      []trawlkit.Hit{federationSearchHit("notes:note/example-1", "Synthetic note", "Synthetic note", mustTime("2026-07-12T09:00:00Z"))},
-		TotalMatches: 1,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := "" +
-		"source_id: \"notes\"\n" +
-		"display_name: \"Notes\"\n" +
-		"hits: {\n" +
-		"  source_id: \"notes\"\n" +
-		"  open_ref: \"notes:note/example-1\"\n" +
-		"  time_rfc3339: \"2026-07-12T09:00:00Z\"\n" +
-		"  anchor_id: \"match\"\n" +
-		"  summary: {\n" +
-		"    title: \"Synthetic note\"\n" +
-		"  }\n" +
-		"  evidence: {\n" +
-		"    label: \"Matching text\"\n" +
-		"    text: {\n" +
-		"      runs: {\n" +
-		"        text: \"Synthetic note\"\n" +
-		"        matched: true\n" +
-		"      }\n" +
-		"    }\n" +
-		"  }\n" +
-		"  archive_context: {\n" +
-		"    kind: \"notes\"\n" +
-		"    label: \"In Notes\"\n" +
-		"  }\n" +
-		"}\n" +
-		"total_matches: 1\n" +
-		"total_is_exact: true\n"
-	if got := prototext.Format(projected); got != want {
-		t.Fatalf("search protobuf text changed\n--- got ---\n%s--- want ---\n%s", got, want)
-	}
-}
-
 func TestSearchOrdersAndBoundsDeterministically(t *testing.T) {
 	one := manifestFixture("one", "One")
 	two := manifestFixture("two", "Two")

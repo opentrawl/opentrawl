@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opentrawl/opentrawl/trawlkit/control"
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
 	"github.com/opentrawl/opentrawl/trawlkit/store"
@@ -344,17 +343,6 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 			return err
 		}
 		return writeResult(req.Out, format, "chats", newChatsOutput(chats, aliases, query.Unread, truncated, query.With))
-	case "contacts_export":
-		contacts, err := source.(ContactExporter).ContactExport(ctx, req)
-		if err != nil {
-			return err
-		}
-		if contacts != nil {
-			if err := control.ValidateContactExport(*contacts); err != nil {
-				return err
-			}
-		}
-		return writeResult(req.Out, format, "contacts", contacts)
 	}
 	if verb.bespoke == nil || verb.bespoke.Run == nil {
 		return usageError{err: fmt.Errorf("unknown verb %q", verb.name)}
