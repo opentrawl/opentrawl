@@ -43,6 +43,43 @@ func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
 }
 
+func TestOpenMoreHintPrefersTheChatShortRef(t *testing.T) {
+	ctx := context.Background()
+	archivePath := archivePathForRun(stateRootForRun(t))
+	st, err := ckstore.Open(ctx, ckstore.Options{Path: archivePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	var stdout bytes.Buffer
+	req := &trawlkit.Request{Store: st, Out: &stdout}
+	const ref = "telegram:chat/6874052333386892567"
+	_, err = req.AssignShortRefs(ctx, []trawlkit.ShortRefRecord{{Ref: ref}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliases, err := req.ShortRefAliases(ctx, []string{ref})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := &runtime{ctx: ctx, req: req, stdout: &stdout}
+	err = r.printOpen(openEnvelope{
+		Ref:           "telegram:msg/7",
+		Chat:          openChat{Ref: ref, Name: "Synthetic chat"},
+		Message:       openMessage{Time: "2026-07-16T10:00:00Z", Sender: openParticipant{DisplayName: "Alice Example"}, Text: "Synthetic message"},
+		Context:       []openMessage{{Time: "2026-07-16T10:00:00Z", Sender: openParticipant{DisplayName: "Alice Example"}, Text: "Synthetic message", IsTarget: true}},
+		ContextWindow: openWindow{BeforeTruncated: true},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "More: trawl telegram messages --chat " + aliases[ref]
+	if !strings.Contains(stdout.String(), want) || strings.Contains(stdout.String(), "--chat 6874052333386892567") {
+		t.Fatalf("rendered continuation did not use short ref %q:\n%s", want, stdout.String())
+	}
+}
+
 func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)

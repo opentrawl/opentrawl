@@ -1,6 +1,11 @@
 package messages
 
-import "testing"
+import (
+	"bytes"
+	"encoding/binary"
+	"strings"
+	"testing"
+)
 
 func TestNormalizePhoneMatchesClawdexShape(t *testing.T) {
 	for _, tc := range []struct {
@@ -40,7 +45,7 @@ func TestDecodeAttributedBody(t *testing.T) {
 		text string
 	}{
 		{name: "short", text: "Hello world"},
-		{name: "long", text: "This is a longer message that exercises the multi-byte length path in the streamtyped attributedBody decoder."},
+		{name: "long", text: strings.Repeat("This text is longer than one byte can count. ", 8)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := decodeAttributedBody(makeStreamtypedAttributedBody(tc.text))
@@ -51,13 +56,50 @@ func TestDecodeAttributedBody(t *testing.T) {
 	}
 }
 
+func TestDecodeStreamtypedLength(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		body []byte
+		want int
+		pos  int
+	}{
+		{name: "inline", body: []byte{0x7f}, want: 0x7f, pos: 1},
+		{name: "int16", body: []byte{0x81, 0x34, 0x12}, want: 0x1234, pos: 3},
+		{name: "int32", body: []byte{0x82, 0x78, 0x56, 0x34, 0x12}, want: 0x12345678, pos: 5},
+		{name: "int64", body: []byte{0x83, 0x34, 0x12, 0, 0, 0, 0, 0, 0}, want: 0x1234, pos: 9},
+		{name: "truncated", body: []byte{0x83, 1, 2}, want: 0, pos: 1},
+		{name: "overflow", body: []byte{0x83, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, want: 0, pos: 9},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, pos := decodeStreamtypedLength(tc.body, 0)
+			if got != tc.want || pos != tc.pos {
+				t.Fatalf("got (%d, %d), want (%d, %d)", got, pos, tc.want, tc.pos)
+			}
+		})
+	}
+}
+
+func TestDecodeAttributedBodyRejectsTruncatedText(t *testing.T) {
+	body := makeStreamtypedAttributedBody("short")
+	marker := bytes.Index(body, []byte("\x84\x01+"))
+	body[marker+3] = 0x7f
+	if got := decodeAttributedBody(body); got != "" {
+		t.Fatalf("decoded truncated body as %q", got)
+	}
+}
+
 func makeStreamtypedAttributedBody(text string) []byte {
 	var out []byte
 	out = append(out, "\x04\x0bstreamtyped\x81\xe8\x03\x84\x01@\x84\x84\x84"...)
 	out = append(out, "\x12NSAttributedString"...)
 	out = append(out, "\x00\x84\x84\x08NSObject\x00\x85\x92\x84\x84\x84\x08NSString\x01\x94"...)
 	out = append(out, "\x84\x01+"...)
-	out = append(out, 0x81, byte(len(text)), 0x92, 0x00)
+	if len(text) < 0x80 {
+		out = append(out, byte(len(text)))
+	} else {
+		out = append(out, 0x81)
+		out = binary.LittleEndian.AppendUint16(out, uint16(len(text)))
+	}
 	out = append(out, text...)
 	out = append(out, 0x86)
 	return out

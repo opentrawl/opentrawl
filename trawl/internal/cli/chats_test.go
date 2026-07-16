@@ -96,6 +96,54 @@ func TestFederatedChatsKeepsPartialSuccessAndReportsFailure(t *testing.T) {
 	}
 }
 
+func TestFederatedChatsTreatsMissingArchivesAsNormalAbsence(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+
+	stdout, stderr, code := runCLI(t, "chats")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if stdout != "No messaging archives found. Run trawl sync to create them.\n" {
+		t.Fatalf("unexpected human output: %q", stdout)
+	}
+
+	stdout, stderr, code = runCLI(t, "--json", "chats")
+	if code != 0 || stderr != "" {
+		t.Fatalf("JSON code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	var envelope federatedChatsOutput
+	if err := json.Unmarshal([]byte(stdout), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(envelope.UnavailableSources, ",") != "imessage,telegram,whatsapp" {
+		t.Fatalf("unavailable sources = %#v", envelope.UnavailableSources)
+	}
+}
+
+func TestFederatedChatsDoesNotCallAnAvailableEmptyArchiveMissing(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:     "imsgcrawl",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"imessage","display_name":"Messages"}`,
+		},
+		fakeCrawler{
+			name:       "telecrawl",
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","chats"],"id":"telegram","display_name":"Telegram"}`,
+			chatsError: trawlkit.NewMissingArchiveError("synthetic").Error(),
+		},
+	)
+	t.Setenv("PATH", binDir)
+
+	stdout, stderr, code := runCLI(t, "chats")
+	if code != 0 || stderr != "" {
+		t.Fatalf("code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if stdout != "No chats.\n" {
+		t.Fatalf("available empty archive was misreported: %q", stdout)
+	}
+}
+
 func TestFederatedChatsUnreadNeedsRealReadState(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:       "telecrawl",

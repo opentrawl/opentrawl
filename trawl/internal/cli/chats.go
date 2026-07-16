@@ -39,9 +39,11 @@ type federatedChat struct {
 }
 
 type federatedChatsOutput struct {
-	Chats         []federatedChat `json:"chats"`
-	Truncated     bool            `json:"truncated"`
-	FailedSources []failedSource  `json:"failed_sources,omitempty"`
+	Chats              []federatedChat `json:"chats"`
+	Truncated          bool            `json:"truncated"`
+	UnavailableSources []string        `json:"unavailable_sources,omitempty"`
+	FailedSources      []failedSource  `json:"failed_sources,omitempty"`
+	successfulSources  int
 }
 
 type chatSourceResult struct {
@@ -71,6 +73,11 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 	output := federatedChatsOutput{Chats: []federatedChat{}}
 	for result := range results {
 		if result.err != nil {
+			var missing trawlkit.MissingArchiveError
+			if errors.As(result.err, &missing) {
+				output.UnavailableSources = append(output.UnavailableSources, result.source.ID)
+				continue
+			}
 			remedy := ""
 			if errors.Is(result.err, trawlkit.ErrChatsNoReadState) {
 				remedy = "run trawl sync " + sourceCommandToken(result.source)
@@ -84,6 +91,7 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 			})
 			continue
 		}
+		output.successfulSources++
 		output.Chats = append(output.Chats, result.chats...)
 	}
 	sort.SliceStable(output.Chats, func(i, j int) bool {
@@ -94,6 +102,7 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 		output.Truncated = true
 	}
 	sort.Slice(output.FailedSources, func(i, j int) bool { return output.FailedSources[i].Source < output.FailedSources[j].Source })
+	sort.Strings(output.UnavailableSources)
 
 	if r.root.JSON {
 		if err := writeJSON(r.stdout, output); err != nil {
@@ -107,7 +116,7 @@ func (c *ChatsCmd) Run(r *Runtime) error {
 			r.reportFailedSourceFailure(failure, "chats", r.reasonDetail(failure.Reason))
 		}
 	}
-	return partialFailureExit(len(output.FailedSources), len(sources)-len(output.FailedSources))
+	return partialFailureExit(len(output.FailedSources), len(sources)-len(output.FailedSources)-len(output.UnavailableSources))
 }
 
 func chatSources(sources []Source) []Source {
@@ -199,6 +208,10 @@ func renderFederatedChats(r *Runtime, output federatedChatsOutput, unread bool) 
 	if len(output.Chats) == 0 {
 		if len(output.FailedSources) > 0 {
 			_, err := fmt.Fprintln(r.stdout, "No chats could be listed.")
+			return err
+		}
+		if len(output.UnavailableSources) > 0 && output.successfulSources == 0 {
+			_, err := fmt.Fprintln(r.stdout, "No messaging archives found. Run trawl sync to create them.")
 			return err
 		}
 		label := "No chats."

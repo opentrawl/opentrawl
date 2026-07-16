@@ -18,23 +18,32 @@ const (
 )
 
 func printMessagesText(w io.Writer, value messageListOutput) error {
+	chatHandle := value.chatHandle
+	if chatHandle == "" {
+		chatHandle = value.ChatID
+	}
 	conversation := "chat " + value.ChatID
 	if value.Chat != nil {
 		conversation = chatConversation(*value.Chat)
 	}
-	heading := fmt.Sprintf("Messages in %s (chat %s): showing %s of %s, %s.", conversation, value.ChatID, render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total), value.Order)
+	heading := fmt.Sprintf("Messages in %s (chat %s): showing %s of %s, %s.", conversation, chatHandle, render.FormatInteger(int64(value.Returned)), render.FormatInteger(value.Total), value.Order)
 	var hints []string
 	if !value.Complete {
 		hints = append(hints,
-			fmt.Sprintf("More: trawl imessage messages --chat %s --limit %d", value.ChatID, nextLimit(value.Limit, value.Total)),
+			fmt.Sprintf("More: trawl imessage messages --chat %s --limit %d", chatHandle, nextLimit(value.Limit, value.Total)),
 		)
 	}
 	hints = append(hints, "Search: trawl imessage search QUERY")
 	items := make([]render.ListItem, 0, len(value.Items))
 	for _, item := range value.Items {
+		ref := item.ShortRef
+		if ref == "" {
+			ref = item.Ref
+		}
 		items = append(items, render.ListItem{
 			Time: parseArchiveTime(item.Time),
 			Who:  senderName(item.FromMe, item.SenderLabel),
+			Ref:  ref,
 			Text: displayMessageText(item.Text, item.HasAttachments),
 		})
 	}
@@ -42,7 +51,7 @@ func printMessagesText(w io.Writer, value messageListOutput) error {
 		Heading: heading,
 		Hints:   hints,
 		Items:   items,
-		Empty:   fmt.Sprintf("No messages in chat %s.", value.ChatID),
+		Empty:   fmt.Sprintf("No messages in chat %s.", chatHandle),
 	})
 }
 

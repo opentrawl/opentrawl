@@ -30,6 +30,30 @@ func TestOpenRecordCallsItsLoaderOnce(t *testing.T) {
 	assertOpenRecordLoaderCall(t, "open_record.go", "loadOpenMessage")
 }
 
+func TestMessagesHumanOutputUsesShortRefsForRowsAndContinuation(t *testing.T) {
+	var stdout bytes.Buffer
+	err := printMessagesText(&stdout, messageListOutput{
+		listHeader: listHeader{Returned: 1, Total: 2, Limit: 1, Complete: false},
+		ChatID:     "42",
+		Order:      "newest-first",
+		chatHandle: "chatref",
+		Items: []archive.MessageRow{{
+			Ref:      "imessage:msg/7",
+			ShortRef: "msgref",
+			Time:     "2026-07-16T10:00:00Z",
+			Text:     "Synthetic message",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"(chat chatref)", "--chat chatref", "msgref", "Synthetic message"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Fatalf("human output missing %q:\n%s", want, stdout.String())
+		}
+	}
+}
+
 func assertOpenRecordLoaderCall(t *testing.T, path, loader string) {
 	t.Helper()
 	file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
@@ -287,13 +311,21 @@ func TestChatsListsConversationsWithReadState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := source.Sync(ctx, &trawlkit.Request{
+	syncReq := &trawlkit.Request{
 		Store:    writeStore,
 		Paths:    paths,
 		Format:   ckoutput.Text,
 		Out:      &bytes.Buffer{},
 		Progress: func(trawlkit.Progress) {},
-	}); err != nil {
+	}
+	if _, err := source.Sync(ctx, syncReq); err != nil {
+		t.Fatal(err)
+	}
+	records, err := source.ShortRefRecords(ctx, syncReq)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncReq.AssignShortRefs(ctx, records); err != nil {
 		t.Fatal(err)
 	}
 	if err := writeStore.Close(); err != nil {
@@ -348,6 +380,13 @@ func TestChatsListsConversationsWithReadState(t *testing.T) {
 	refOut := runImessageMessages(t, ctx, source, readStore, paths, "imessage:chat/"+group.ID)
 	if rawOut == "" || rawOut != refOut {
 		t.Fatalf("messages --chat ref must resolve identically to the raw id:\nraw=%s\nref=%s", rawOut, refOut)
+	}
+	var listed messageListOutput
+	if err := json.Unmarshal([]byte(rawOut), &listed); err != nil {
+		t.Fatal(err)
+	}
+	if len(listed.Items) == 0 || listed.Items[0].Ref == "" || listed.Items[0].ShortRef == "" {
+		t.Fatalf("messages must expose openable canonical and human refs: %s", rawOut)
 	}
 
 	// --unread returns only the chats that have unread received messages.

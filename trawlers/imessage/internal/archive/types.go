@@ -62,6 +62,8 @@ type ChatSummary struct {
 
 type MessageRow struct {
 	MessageID      string `json:"message_id"`
+	Ref            string `json:"ref,omitempty"`
+	ShortRef       string `json:"short_ref,omitempty"`
 	GUID           string `json:"guid"`
 	ChatID         string `json:"chat_id"`
 	HandleID       string `json:"handle_id,omitempty"`

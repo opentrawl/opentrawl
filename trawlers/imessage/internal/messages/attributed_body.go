@@ -2,6 +2,8 @@ package messages
 
 import (
 	"bytes"
+	"encoding/binary"
+	"math"
 	"unicode/utf16"
 	"unicode/utf8"
 )
@@ -26,7 +28,10 @@ func decodeAttributedBody(body []byte) string {
 	for pos < len(body) && (body[pos] == 0x00 || body[pos] == 0x92 || (body[pos] >= 0x80 && body[pos] <= 0xbf)) {
 		pos++
 	}
-	end := min(pos+textLen, len(body))
+	if textLen > len(body)-pos {
+		return ""
+	}
+	end := pos + textLen
 	return cleanDecodedText(body[pos:end])
 }
 
@@ -35,16 +40,34 @@ func decodeStreamtypedLength(body []byte, pos int) (int, int) {
 	if first&0x80 == 0 {
 		return int(first), pos + 1
 	}
-	width := int(first & 0x7f)
-	pos++
-	if width <= 0 || pos+width > len(body) {
-		return 0, pos
+	width := 0
+	switch first {
+	case 0x81:
+		width = 2
+	case 0x82:
+		width = 4
+	case 0x83:
+		width = 8
+	default:
+		return 0, pos + 1
 	}
-	var n int
-	for i := 0; i < width; i++ {
-		n |= int(body[pos+i]) << (8 * i)
+	start := pos + 1
+	if start+width > len(body) {
+		return 0, start
 	}
-	return n, pos + width
+	var n uint64
+	switch width {
+	case 2:
+		n = uint64(binary.LittleEndian.Uint16(body[start:]))
+	case 4:
+		n = uint64(binary.LittleEndian.Uint32(body[start:]))
+	case 8:
+		n = binary.LittleEndian.Uint64(body[start:])
+	}
+	if n > uint64(math.MaxInt) {
+		return 0, start + width
+	}
+	return int(n), start + width
 }
 
 func cleanDecodedText(raw []byte) string {

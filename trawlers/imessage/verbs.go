@@ -35,10 +35,11 @@ type listHeader struct {
 
 type messageListOutput struct {
 	listHeader
-	ChatID string               `json:"chat_id"`
-	Chat   *archive.ChatSummary `json:"chat,omitempty"`
-	Order  string               `json:"order"`
-	Items  []archive.MessageRow `json:"items"`
+	ChatID     string               `json:"chat_id"`
+	Chat       *archive.ChatSummary `json:"chat,omitempty"`
+	Order      string               `json:"order"`
+	Items      []archive.MessageRow `json:"items"`
+	chatHandle string
 }
 
 type openOutput struct {
@@ -173,6 +174,24 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 	if err != nil {
 		return err
 	}
+	refs := make([]string, 0, len(messages)+1)
+	chatRef := archive.ChatRef(chatID)
+	refs = append(refs, chatRef)
+	for index := range messages {
+		messages[index].Ref = archive.MessageRef(messages[index].MessageID)
+		refs = append(refs, messages[index].Ref)
+	}
+	aliases, err := req.ShortRefAliases(ctx, refs)
+	if err != nil {
+		return err
+	}
+	for index := range messages {
+		messages[index].ShortRef = aliases[messages[index].Ref]
+	}
+	chatHandle := aliases[chatRef]
+	if chatHandle == "" {
+		chatHandle = chatID
+	}
 	order := "newest-first"
 	if c.messages.asc {
 		order = "oldest-first"
@@ -183,6 +202,7 @@ func (c *Crawler) runMessages(ctx context.Context, req *trawlkit.Request) error 
 		Chat:       &chat,
 		Order:      order,
 		Items:      messages,
+		chatHandle: chatHandle,
 	}
 	if req.Format == output.JSON {
 		return output.Write(req.Out, req.Format, "messages", out)

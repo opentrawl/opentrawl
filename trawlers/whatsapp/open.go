@@ -235,15 +235,7 @@ func participantsForFormat(participants []string, format output.Format) []string
 	if format == output.JSON {
 		return append([]string(nil), participants...)
 	}
-	out := make([]string, 0, len(participants))
-	for _, participant := range participants {
-		label := humanParticipantLabel(participant)
-		if label == "" {
-			continue
-		}
-		out = append(out, label)
-	}
-	return out
+	return resolvedParticipantNames(participants)
 }
 
 func newOpenMessage(message store.Message, current bool, format output.Format) openMessage {

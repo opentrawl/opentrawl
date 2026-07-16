@@ -655,6 +655,9 @@ func (f *fakeSource) Chats(ctx context.Context, req *trawlkit.Request, query tra
 		if f.crawler.chatsError == trawlkit.ErrChatsNoReadState.Error() {
 			return nil, trawlkit.ErrChatsNoReadState
 		}
+		if f.crawler.chatsError == trawlkit.NewMissingArchiveError("synthetic").Error() {
+			return nil, trawlkit.NewMissingArchiveError("synthetic")
+		}
 		return nil, errors.New(f.crawler.chatsError)
 	}
 	rows := make([]trawlkit.Chat, 0, len(f.crawler.chats))

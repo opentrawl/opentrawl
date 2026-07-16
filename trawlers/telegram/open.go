@@ -102,6 +102,14 @@ func parseMessageRef(ref string) (int64, error) {
 }
 
 func (r *runtime) printOpen(value openEnvelope) error {
+	chatHandle := ""
+	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
+		var err error
+		chatHandle, err = openChatHandle(r.ctx, r.req, value.Chat.Ref)
+		if err != nil {
+			return err
+		}
+	}
 	title := value.Chat.Name
 	if span := openDateSpan(value.Context); span != "" {
 		title += ", " + span
@@ -128,8 +136,7 @@ func (r *runtime) printOpen(value openEnvelope) error {
 		return err
 	}
 	if value.ContextWindow.BeforeTruncated || value.ContextWindow.AfterTruncated {
-		chatID := value.Chat.Ref[strings.LastIndex(value.Chat.Ref, "/")+1:]
-		if _, err := fmt.Fprintf(r.stdout, "More: trawl telegram messages --chat %s\n", chatID); err != nil {
+		if _, err := fmt.Fprintf(r.stdout, "More: trawl telegram messages --chat %s\n", chatHandle); err != nil {
 			return err
 		}
 	}
@@ -150,6 +157,17 @@ func (r *runtime) printOpen(value openEnvelope) error {
 		})
 	}
 	return render.WriteTranscript(r.stdout, rows)
+}
+
+func openChatHandle(ctx context.Context, req *trawlkit.Request, ref string) (string, error) {
+	aliases, err := req.ShortRefAliases(ctx, []string{ref})
+	if err != nil {
+		return "", err
+	}
+	if alias := strings.TrimSpace(aliases[ref]); alias != "" {
+		return alias, nil
+	}
+	return ref[strings.LastIndex(ref, "/")+1:], nil
 }
 
 func openTranscriptPrefix(width int, message openMessage) string {
