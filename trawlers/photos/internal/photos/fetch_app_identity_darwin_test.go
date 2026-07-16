@@ -289,7 +289,7 @@ func newSyntheticCodeSigner(t *testing.T, identity string) syntheticCodeSigner {
 	keyPath := filepath.Join(root, "key.pem")
 	certPath := filepath.Join(root, "cert.pem")
 	p12Path := filepath.Join(root, "identity.p12")
-	keychain := fmt.Sprintf("opentrawl-trawl276-%d-%s.keychain", os.Getpid(), strings.ReplaceAll(identity, " ", "-"))
+	keychain := filepath.Join(root, strings.ReplaceAll(identity, " ", "-")+".keychain")
 	password := "synthetic-test-password"
 
 	runSyntheticCommand(t, "openssl", "req", "-new", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "2",
