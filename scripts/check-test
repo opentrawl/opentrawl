@@ -4,6 +4,10 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
+# Exact-output fixtures render local times. Pin the test process so their
+# contract is independent of the developer or CI runner's timezone.
+export TZ=Europe/Amsterdam
+
 modules=()
 while IFS= read -r module; do
   modules+=("$module")
