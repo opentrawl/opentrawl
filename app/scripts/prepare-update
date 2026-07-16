@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: app/scripts/prepare-update \
+  --release-dir DIR \
+  --notes FILE \
+  --tag TAG \
+  --private-key FILE \
+  --output DIR
+EOF
+  exit 2
+}
+
+release_dir=""
+notes=""
+tag=""
+private_key=""
+output=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --release-dir) release_dir="${2:-}"; shift 2 ;;
+    --notes) notes="${2:-}"; shift 2 ;;
+    --tag) tag="${2:-}"; shift 2 ;;
+    --private-key) private_key="${2:-}"; shift 2 ;;
+    --output) output="${2:-}"; shift 2 ;;
+    *) usage ;;
+  esac
+done
+
+[[ -n "$release_dir" && -n "$notes" && -n "$tag" && -n "$private_key" && -n "$output" ]] || usage
+[[ -f "$release_dir/OpenTrawl.dmg" ]] || {
+  echo "prepare-update: missing $release_dir/OpenTrawl.dmg" >&2
+  exit 1
+}
+[[ -s "$notes" ]] || {
+  echo "prepare-update: release notes must not be empty" >&2
+  exit 1
+}
+[[ -s "$private_key" ]] || {
+  echo "prepare-update: Sparkle private key file is missing or empty" >&2
+  exit 1
+}
+if [[ -e "$output" || -L "$output" ]]; then
+  echo "prepare-update: output already exists: $output" >&2
+  exit 1
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+app_dir="$(cd "$script_dir/.." && pwd)"
+generate_appcast="$release_dir/SparkleTools/generate_appcast"
+if [[ ! -x "$generate_appcast" ]]; then
+  generate_appcast="$(find "$app_dir/.build/artifacts" -type f -path '*/Sparkle/bin/generate_appcast' -print -quit)"
+fi
+if [[ -z "$generate_appcast" ]]; then
+  echo "prepare-update: build the app package first so Sparkle tools are available" >&2
+  exit 1
+fi
+
+mkdir -p "$output"
+cp "$release_dir/OpenTrawl.dmg" "$output/OpenTrawl.dmg"
+cp "$notes" "$output/OpenTrawl.md"
+
+download_url="https://github.com/opentrawl/opentrawl/releases/download/$tag/"
+"$generate_appcast" \
+  --ed-key-file "$private_key" \
+  --download-url-prefix "$download_url" \
+  --embed-release-notes \
+  --maximum-versions 1 \
+  --maximum-deltas 0 \
+  --link "https://github.com/opentrawl/opentrawl" \
+  "$output"
+
+[[ -s "$output/appcast.xml" ]] || {
+  echo "prepare-update: Sparkle did not produce appcast.xml" >&2
+  exit 1
+}
+grep -q 'sparkle:edSignature=' "$output/appcast.xml" || {
+  echo "prepare-update: appcast is unsigned; check that the private key matches the app public key" >&2
+  exit 1
+}
+
+echo "Prepared update assets in $output"
