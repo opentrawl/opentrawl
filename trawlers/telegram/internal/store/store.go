@@ -328,49 +328,23 @@ func (s *Store) Close() error {
 
 func (s *Store) Path() string { return s.path }
 
-func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID string, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
+// MergeObserved updates records returned by a bounded acquisition without
+// treating records absent from that acquisition as deleted from the source.
+func (s *Store) MergeObserved(ctx context.Context, stats ImportStats, contacts []Contact, chats []Chat, folders []Folder, folderChats []FolderChat, topics []Topic, participants []GroupParticipant, messages []Message) (SyncStats, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return SyncStats{}, err
 	}
 	defer rollback(tx)
-	syncStats, err := messageSyncStats(ctx, tx, messages, chatJID)
+	syncStats, err := observedMessageSyncStats(ctx, tx, messages)
 	if err != nil {
 		return SyncStats{}, err
-	}
-	chatID := parseInt64(chatJID)
-	preserveFolderState := len(folders) == 0 && len(folderChats) == 0
-	var existingFolderID string
-	if preserveFolderState {
-		_ = tx.QueryRowContext(ctx, `select coalesce(folder_id,'') from chats where id = ?`, chatID).Scan(&existingFolderID)
-	}
-	for _, q := range []struct {
-		sql  string
-		args []any
-	}{
-		{"delete from messages_fts where rowid in (select rowid from messages where chat_jid = ?)", []any{chatJID}},
-		{"delete from messages where chat_jid = ?", []any{chatJID}},
-		{"delete from topics where chat_jid = ?", []any{chatJID}},
-		{"delete from group_participants where group_jid = ?", []any{chatJID}},
-		{"delete from chats where id = ?", []any{chatID}},
-	} {
-		if _, err := tx.ExecContext(ctx, q.sql, q.args...); err != nil {
-			return SyncStats{}, err
-		}
-	}
-	if !preserveFolderState {
-		if _, err := tx.ExecContext(ctx, `delete from folder_chats where chat_jid = ?`, chatJID); err != nil {
-			return SyncStats{}, err
-		}
 	}
 	if err := insertContacts(ctx, tx, contacts); err != nil {
 		return SyncStats{}, err
 	}
 	for _, c := range chats {
-		if preserveFolderState && c.FolderID == "" {
-			c.FolderID = existingFolderID
-		}
-		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?)`,
+		if _, err := tx.ExecContext(ctx, `insert into chats(id,kind,name,username,last_message_at,unread_count,message_count,folder_id,forum) values(?,?,?,?,?,?,?,?,?) on conflict(id) do update set kind=excluded.kind, name=excluded.name, username=excluded.username, last_message_at=excluded.last_message_at, unread_count=excluded.unread_count, message_count=excluded.message_count, folder_id=excluded.folder_id, forum=excluded.forum`,
 			parseInt64(c.JID), c.Kind, c.Name, c.Username, unix(c.LastMessageAt), c.UnreadCount, c.MessageCount, c.FolderID, boolInt(c.Forum)); err != nil {
 			return SyncStats{}, err
 		}
@@ -382,13 +356,13 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 		}
 	}
 	for _, fc := range folderChats {
-		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?)`,
+		if _, err := tx.ExecContext(ctx, `insert into folder_chats(folder_id,chat_jid,position) values(?,?,?) on conflict(folder_id,chat_jid) do update set position=excluded.position`,
 			fc.FolderID, fc.ChatJID, fc.Position); err != nil {
 			return SyncStats{}, err
 		}
 	}
 	for _, t := range topics {
-		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		if _, err := tx.ExecContext(ctx, `insert into topics(chat_jid,topic_id,title,top_message_id,icon_color,icon_emoji_id,unread_count,unread_mentions_count,unread_reactions_count,pinned,closed,hidden,last_message_at) values(?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(chat_jid,topic_id) do update set title=excluded.title, top_message_id=excluded.top_message_id, icon_color=excluded.icon_color, icon_emoji_id=excluded.icon_emoji_id, unread_count=excluded.unread_count, unread_mentions_count=excluded.unread_mentions_count, unread_reactions_count=excluded.unread_reactions_count, pinned=excluded.pinned, closed=excluded.closed, hidden=excluded.hidden, last_message_at=excluded.last_message_at`,
 			t.ChatJID, t.TopicID, t.Title, t.TopMessageID, t.IconColor, t.IconEmojiID, t.UnreadCount, t.UnreadMentionsCount, t.UnreadReactionsCount, boolInt(t.Pinned), boolInt(t.Closed), boolInt(t.Hidden), unix(t.LastMessageAt)); err != nil {
 			return SyncStats{}, err
 		}
@@ -396,7 +370,7 @@ func (s *Store) UpsertChat(ctx context.Context, stats ImportStats, chatJID strin
 	if err := insertGroupParticipants(ctx, tx, participants); err != nil {
 		return SyncStats{}, err
 	}
-	if err := insertMessages(ctx, tx, messages); err != nil {
+	if err := upsertMessages(ctx, tx, messages); err != nil {
 		return SyncStats{}, err
 	}
 	now := stats.FinishedAt
@@ -540,6 +514,23 @@ func mergeGroupParticipants(participants []GroupParticipant) []GroupParticipant 
 func insertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
 	for _, m := range messages {
 		if _, err := tx.ExecContext(ctx, `insert into messages(source_pk,chat_jid,chat_name,msg_id,sender_jid,sender_name,ts,from_me,text,raw_type,message_type,media_type,media_title,media_path,media_url,media_size,metadata_type,metadata_title,metadata_url,metadata_json,starred,topic_id,reply_to_msg_id,reply_to_chat_jid,thread_id,edit_ts,forward_json,reactions_json,views,forwards,replies_count,pinned) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			m.SourcePK, m.ChatJID, m.ChatName, m.MessageID, m.SenderJID, m.SenderName, unix(m.Timestamp), boolInt(m.FromMe), m.Text, m.RawType, m.MessageType, m.MediaType, m.MediaTitle, m.MediaPath, m.MediaURL, m.MediaSize, m.MetadataType, m.MetadataTitle, m.MetadataURL, m.MetadataJSON, boolInt(m.Starred), m.TopicID, m.ReplyToID, m.ReplyToChat, m.ThreadID, unix(m.EditTime), m.ForwardJSON, m.ReactionsJSON, m.Views, m.Forwards, m.RepliesCount, boolInt(m.Pinned)); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `insert into messages_fts(rowid,text,chat,sender,media) values((select rowid from messages where source_pk=?),?,?,?,?)`,
+			m.SourcePK, strings.TrimSpace(m.Text+" "+m.MediaTitle+" "+m.MetadataTitle+" "+m.MetadataURL), m.ChatName, m.SenderName, m.MediaType); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func upsertMessages(ctx context.Context, tx *sql.Tx, messages []Message) error {
+	for _, m := range messages {
+		if _, err := tx.ExecContext(ctx, `delete from messages_fts where rowid = (select rowid from messages where source_pk = ?)`, m.SourcePK); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `insert into messages(source_pk,chat_jid,chat_name,msg_id,sender_jid,sender_name,ts,from_me,text,raw_type,message_type,media_type,media_title,media_path,media_url,media_size,metadata_type,metadata_title,metadata_url,metadata_json,starred,topic_id,reply_to_msg_id,reply_to_chat_jid,thread_id,edit_ts,forward_json,reactions_json,views,forwards,replies_count,pinned) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) on conflict(source_pk) do update set chat_jid=excluded.chat_jid, chat_name=excluded.chat_name, msg_id=excluded.msg_id, sender_jid=excluded.sender_jid, sender_name=excluded.sender_name, ts=excluded.ts, from_me=excluded.from_me, text=excluded.text, raw_type=excluded.raw_type, message_type=excluded.message_type, media_type=excluded.media_type, media_title=excluded.media_title, media_path=excluded.media_path, media_url=excluded.media_url, media_size=excluded.media_size, metadata_type=excluded.metadata_type, metadata_title=excluded.metadata_title, metadata_url=excluded.metadata_url, metadata_json=excluded.metadata_json, starred=excluded.starred, topic_id=excluded.topic_id, reply_to_msg_id=excluded.reply_to_msg_id, reply_to_chat_jid=excluded.reply_to_chat_jid, thread_id=excluded.thread_id, edit_ts=excluded.edit_ts, forward_json=excluded.forward_json, reactions_json=excluded.reactions_json, views=excluded.views, forwards=excluded.forwards, replies_count=excluded.replies_count, pinned=excluded.pinned`,
 			m.SourcePK, m.ChatJID, m.ChatName, m.MessageID, m.SenderJID, m.SenderName, unix(m.Timestamp), boolInt(m.FromMe), m.Text, m.RawType, m.MessageType, m.MediaType, m.MediaTitle, m.MediaPath, m.MediaURL, m.MediaSize, m.MetadataType, m.MetadataTitle, m.MetadataURL, m.MetadataJSON, boolInt(m.Starred), m.TopicID, m.ReplyToID, m.ReplyToChat, m.ThreadID, unix(m.EditTime), m.ForwardJSON, m.ReactionsJSON, m.Views, m.Forwards, m.RepliesCount, boolInt(m.Pinned)); err != nil {
 			return err
 		}
