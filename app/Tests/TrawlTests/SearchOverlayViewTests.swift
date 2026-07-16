@@ -186,7 +186,13 @@ struct SearchOverlayViewTests {
   }
 
   @MainActor
-  @Test func mountedSearchResultsListHandlesReturnForTheSelectedResult() {
+  @Test(
+    .disabled(
+      if: ProcessInfo.processInfo.environment["CI"] == "true",
+      "requires an interactive AppKit window-focus session"
+    )
+  )
+  func mountedSearchResultsListHandlesReturnForTheSelectedResult() {
     let hit = SearchHit(
       sourceID: "calendar",
       openRef: "calendar:event/return",
@@ -241,7 +247,13 @@ struct SearchOverlayViewTests {
   }
 
   @MainActor
-  @Test func mountedSearchOverlayClosesOpenedRecordOnEscapeWithoutDismissing() async throws {
+  @Test(
+    .disabled(
+      if: ProcessInfo.processInfo.environment["CI"] == "true",
+      "requires an interactive AppKit window-focus session"
+    )
+  )
+  func mountedSearchOverlayClosesOpenedRecordOnEscapeWithoutDismissing() async throws {
     let hit = SearchHit(
       sourceID: "calendar",
       openRef: "calendar:event/escape",
