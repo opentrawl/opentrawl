@@ -93,13 +93,15 @@ type AttachmentInsert struct {
 }
 
 type SyncBatch struct {
-	Notes        []Note
-	Bodies       []BodyInsert
-	Attachments  []AttachmentInsert
-	TableData    []TableDataInsert
-	SyncState    map[string]string
-	LastSeenAt   string
-	ReplaceNotes bool
+	Notes       []Note
+	Bodies      []BodyInsert
+	Attachments []AttachmentInsert
+	TableData   []TableDataInsert
+	SyncState   map[string]string
+	LastSeenAt  string
+	// RefreshNoteMetadata lets a current source observation update metadata for
+	// notes it contains. Unobserved archive rows are always preserved.
+	RefreshNoteMetadata bool
 }
 
 type SyncStats struct {
@@ -115,10 +117,9 @@ type SyncStats struct {
 	ArchivePath        string
 	SourcePath         string
 	SyncedAt           string
-	// SkippedNoBody counts source notes left out of the archive because they
-	// carry no readable body; SkipWarnings names why, one line per reason, so a
-	// deficient input is reported rather than archived as an empty row
-	// (engineering rules 1.15).
+	// SkippedNoBody counts source notes omitted from the current observation
+	// because they carry no readable body. SkipWarnings names why; a previously
+	// archived copy remains available.
 	SkippedNoBody int      `json:"skipped_no_body,omitempty"`
 	SkipWarnings  []string `json:"skip_warnings,omitempty"`
 }

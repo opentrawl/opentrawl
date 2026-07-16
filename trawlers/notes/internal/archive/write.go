@@ -16,14 +16,13 @@ func (s *Store) ApplySync(ctx context.Context, batch SyncBatch) (SyncStats, erro
 		SyncedAt:    batch.LastSeenAt,
 	}
 	err := s.store.WithTx(ctx, func(tx *sql.Tx) error {
-		if batch.ReplaceNotes {
-			if _, err := tx.ExecContext(ctx, "delete from notes"); err != nil {
-				return err
-			}
-		}
 		for _, note := range batch.Notes {
 			var err error
-			if batch.ReplaceNotes {
+			if batch.RefreshNoteMetadata {
+				// A current snapshot owns metadata for notes it contains, but
+				// absence from that snapshot is not evidence that an archived
+				// note was deleted. Keep unobserved archive rows until a source
+				// supplies an explicit deletion signal.
 				err = upsertNote(ctx, tx, note, batch.LastSeenAt)
 			} else {
 				err = insertNoteIfMissing(ctx, tx, note, batch.LastSeenAt)

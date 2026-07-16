@@ -76,7 +76,7 @@ func TestVersionsOrderFractionalTimesNumerically(t *testing.T) {
 	}
 }
 
-func TestSearchExcludesNotesDroppedFromTheNotesTable(t *testing.T) {
+func TestSearchKeepsNotesAbsentFromALaterSnapshot(t *testing.T) {
 	ctx := context.Background()
 	st := openArchive(t)
 	defer func() {
@@ -87,9 +87,9 @@ func TestSearchExcludesNotesDroppedFromTheNotesTable(t *testing.T) {
 	// First sync archives a note whose body holds the needle.
 	alpha := archive.Note{ID: "note-alpha", Title: "Alpha"}
 	applyBatch(t, st, alpha, []archive.BodyInsert{bodyInsert("note-alpha", "alpha needle body", notesdb.AppleDateFloat(20))})
-	// A later sync no longer lists that note (deleted at source): ReplaceNotes
-	// rewrites the notes table without it, but its recovered versions and FTS
-	// rows stay behind. Search must not surface that orphaned, blank-title note.
+	// A later snapshot does not contain that note. Snapshot absence is not
+	// deletion evidence, so the archived note and its recovered body remain
+	// part of normal search.
 	beta := archive.Note{ID: "note-beta", Title: "Beta"}
 	applyBatch(t, st, beta, []archive.BodyInsert{bodyInsert("note-beta", "beta filler body", notesdb.AppleDateFloat(30))})
 
@@ -97,8 +97,8 @@ func TestSearchExcludesNotesDroppedFromTheNotesTable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(results) != 0 || total != 0 {
-		t.Fatalf("search for orphaned note: results=%d total=%d, want 0/0", len(results), total)
+	if len(results) != 1 || total != 1 || results[0].NoteID != alpha.ID || results[0].Title != alpha.Title {
+		t.Fatalf("search for preserved note: results=%#v total=%d, want Alpha", results, total)
 	}
 }
 
@@ -136,10 +136,10 @@ func openArchive(t *testing.T) *archive.Store {
 func applyBatch(t *testing.T, st *archive.Store, note archive.Note, bodies []archive.BodyInsert) {
 	t.Helper()
 	_, err := st.ApplySync(context.Background(), archive.SyncBatch{
-		Notes:        []archive.Note{note},
-		Bodies:       bodies,
-		LastSeenAt:   notestime.Format(time.Date(2001, 1, 1, 0, 1, 0, 0, time.UTC)),
-		ReplaceNotes: true,
+		Notes:               []archive.Note{note},
+		Bodies:              bodies,
+		LastSeenAt:          notestime.Format(time.Date(2001, 1, 1, 0, 1, 0, 0, time.UTC)),
+		RefreshNoteMetadata: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -206,9 +206,9 @@ func TestSearchOrdersNotesNewestFirstAcrossRank(t *testing.T) {
 			{ID: "note-old", Title: "Old"},
 			{ID: "note-new", Title: "New"},
 		},
-		Bodies:       []archive.BodyInsert{oldBody, newBody},
-		LastSeenAt:   notestime.Format(time.Date(2025, 1, 1, 0, 1, 0, 0, time.UTC)),
-		ReplaceNotes: true,
+		Bodies:              []archive.BodyInsert{oldBody, newBody},
+		LastSeenAt:          notestime.Format(time.Date(2025, 1, 1, 0, 1, 0, 0, time.UTC)),
+		RefreshNoteMetadata: true,
 	})
 	if err != nil {
 		t.Fatal(err)

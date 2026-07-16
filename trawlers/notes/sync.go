@@ -85,7 +85,7 @@ func (c *Crawler) runSyncStore(ctx context.Context, req *trawlkit.Request) error
 	return nil
 }
 
-func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, replaceNotes bool) (archive.SyncStats, error) {
+func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourcePath, source, label string, refreshNoteMetadata bool) (archive.SyncStats, error) {
 	start := time.Now().UTC()
 	sourcePath = strings.TrimSpace(sourcePath)
 	snap, err := notesdb.SnapshotPath(ctx, sourcePath)
@@ -101,7 +101,7 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 	// before that connection opens), so this Close is always a no-op; it
 	// stays as insurance in case Use ever hands back an owned connection.
 	defer func() { _ = st.Close() }()
-	stats, err := syncSnapshot(ctx, req, st, snap, source, label, replaceNotes, start)
+	stats, err := syncSnapshot(ctx, req, st, snap, source, label, refreshNoteMetadata, start)
 	if err != nil {
 		return archive.SyncStats{}, err
 	}
@@ -117,7 +117,7 @@ func (c *Crawler) syncSource(ctx context.Context, req *trawlkit.Request, sourceP
 	return stats, nil
 }
 
-func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store, snap notesdb.Snapshot, source, detail string, replaceNotes bool, start time.Time) (archive.SyncStats, error) {
+func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store, snap notesdb.Snapshot, source, detail string, refreshNoteMetadata bool, start time.Time) (archive.SyncStats, error) {
 	var progress *cklog.Progress
 	if req.Log != nil {
 		progress = req.Log.Progress(cklog.ProgressOptions{Event: "notes_sync", Unit: "states"})
@@ -218,13 +218,13 @@ func syncSnapshot(ctx context.Context, req *trawlkit.Request, st *archive.Store,
 		return archive.SyncStats{}, err
 	}
 	stats, err := st.ApplySync(ctx, archive.SyncBatch{
-		Notes:        notes,
-		Bodies:       bodies,
-		Attachments:  attachmentInserts,
-		TableData:    tableInserts(tableData, start),
-		SyncState:    state,
-		LastSeenAt:   notestime.Format(start),
-		ReplaceNotes: replaceNotes,
+		Notes:               notes,
+		Bodies:              bodies,
+		Attachments:         attachmentInserts,
+		TableData:           tableInserts(tableData, start),
+		SyncState:           state,
+		LastSeenAt:          notestime.Format(start),
+		RefreshNoteMetadata: refreshNoteMetadata,
 	})
 	if err != nil {
 		return archive.SyncStats{}, err
@@ -358,10 +358,9 @@ func noteIDsWithBody(bodies []archive.BodyInsert) map[string]bool {
 	return set
 }
 
-// splitBodilessNotes separates the notes worth archiving from the ones the
-// source lists without any readable body. A body-less row is not a note we can
-// show, so it is reported by reason rather than stored as an empty row
-// (engineering rules 1.15).
+// splitBodilessNotes separates current notes with readable bodies from source
+// rows whose body is unavailable. A bodyless row is reported by reason rather
+// than inserted as a new empty note; any previously archived copy remains.
 func splitBodilessNotes(notes []notesdb.Note, withBody map[string]bool) (real, skipped []notesdb.Note) {
 	for _, note := range notes {
 		if withBody[note.ID] {

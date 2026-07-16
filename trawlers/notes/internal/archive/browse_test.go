@@ -28,8 +28,8 @@ func TestStatusNotesExcludesRecentlyDeleted(t *testing.T) {
 			bodyInsert("note-kept", "kept body", notestime.Format(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))),
 			bodyInsert("note-trashed", "trashed body", notestime.Format(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))),
 		},
-		LastSeenAt:   notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
-		ReplaceNotes: true,
+		LastSeenAt:          notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
+		RefreshNoteMetadata: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -72,8 +72,8 @@ func TestKnownFoldersExcludesRecentlyDeletedAndIncludesBodylessNote(t *testing.T
 			// placeholder gets no body: an unfetched iCloud note.
 			bodyInsert("note-trashed", "trashed body", notestime.Format(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC))),
 		},
-		LastSeenAt:   notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
-		ReplaceNotes: true,
+		LastSeenAt:          notestime.Format(time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)),
+		RefreshNoteMetadata: true,
 	})
 	if err != nil {
 		t.Fatal(err)
