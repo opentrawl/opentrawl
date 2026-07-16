@@ -188,7 +188,7 @@ struct SearchOverlayViewTests {
   @MainActor
   @Test(
     .disabled(
-      if: ProcessInfo.processInfo.environment["CI"] == "true",
+      if: ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true",
       "requires an interactive AppKit window-focus session"
     )
   )
@@ -249,7 +249,7 @@ struct SearchOverlayViewTests {
   @MainActor
   @Test(
     .disabled(
-      if: ProcessInfo.processInfo.environment["CI"] == "true",
+      if: ProcessInfo.processInfo.environment["GITHUB_ACTIONS"] == "true",
       "requires an interactive AppKit window-focus session"
     )
   )
