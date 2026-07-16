@@ -241,6 +241,14 @@ func TestRunSyncCreatesArchiveAtResolvedStateRoot(t *testing.T) {
 
 func TestRunSyncUsesPostboxWhenBothDefaultRootsExist(t *testing.T) {
 	stateRoot := stateRootForRun(t)
+	infoPath := filepath.Join(filepath.Dir(stateRoot), "Applications", "Telegram.app", "Contents", "Info.plist")
+	if err := os.MkdirAll(filepath.Dir(infoPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	info := `<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>ru.keepcoder.Telegram</string></dict></plist>`
+	if err := os.WriteFile(infoPath, []byte(info), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	postboxPath := telegramdesktop.DefaultPostboxPath()
 	makePostboxSourceAt(t, postboxPath)
 	tdataPath := telegramdesktop.DefaultPath()
