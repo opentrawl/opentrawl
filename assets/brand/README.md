@@ -18,6 +18,8 @@ Which asset where:
 - social: `exports/social/` — X banner 1500x500, avatar (400 for upload);
   `avatar-glass.jpg` (1024, white background) is the system-rendered Liquid
   Glass tile for GitHub and anywhere else that wants the "real app icon" look
+- disk image: `exports/dmg/background.png` — the branded drag-to-Applications
+  Finder background, generated from `src/dmg-background.svg`
 - video and print: `src/lockup.svg` (light or dark ink), or `src/mark.svg` alone
 
 Rules, learned the hard way — do not relitigate without a strong reason:

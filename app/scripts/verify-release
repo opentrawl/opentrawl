@@ -36,6 +36,7 @@ cli="$app/Contents/Helpers/trawl"
 photos="$app/Contents/Helpers/Photoscrawl Fetch.app/Contents/MacOS/photoscrawl-fetch"
 
 [[ -d "$app" && -L "$mount/Applications" && "$(readlink "$mount/Applications")" == "/Applications" ]]
+[[ -f "$mount/.DS_Store" && -f "$mount/.background/background.png" ]]
 [[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
 [[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
 [[ -d "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
