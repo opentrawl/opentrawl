@@ -44,7 +44,7 @@ func (r runner) runInProcess(ctx context.Context, source Crawler, verb targetVer
 		}
 		verb.args = args
 	}
-	if verb.spine != nil && verb.search == nil {
+	if verb.spine != nil && verb.search == nil && verb.chats == nil {
 		args, err := parseSpineFlags(*verb.spine, verb.args, verb.name == "search")
 		if err != nil {
 			return executionResult{err: err}
@@ -306,49 +306,32 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 		}
 		return writeResult(req.Out, format, "who", newWhoOutput(verb.args[0], candidates))
 	case "chats":
-		query, err := parseChatQuery(verb.args)
-		if err != nil {
-			return err
+		var query ChatQuery
+		if verb.chats != nil {
+			query = verb.chats.query
+		} else {
+			var err error
+			query, err = parseChatQuery(verb.args)
+			if err != nil {
+				return err
+			}
 		}
-		fetch := query
-		switch {
-		case query.With != "":
-			// --with filters in the kit, so the kit needs every chat, not a page:
-			// filtering a page would silently drop matches past the page edge. Fetch
-			// all, filter here, then page the survivors below. The source stays
-			// filter-free and never learns the --with rule.
-			fetch.All = true
-			fetch.Limit = 0
-		case !query.All && query.Limit > 0:
-			// Fetch one row past the page so truncation is a fact, not a guess
-			// from a full page: the extra row proves more chats exist and is
-			// never rendered. Deterministic structural choice, documented here.
-			fetch.Limit = query.Limit + 1
-		}
-		chats, err := source.(ChatLister).Chats(ctx, req, fetch)
+		result, err := executeChats(ctx, source.(ChatLister), req, query)
 		if err != nil {
 			if errors.Is(err, ErrChatsNoReadState) {
+				if verb.chats != nil {
+					return err
+				}
 				surface := firstText(source.Info().DisplayName, source.Info().Surface, source.Info().ID)
 				return output.UsageError{Err: fmt.Errorf("this %s archive has no read state, so --unread is not available here", surface)}
 			}
 			return err
 		}
-		if query.With != "" {
-			chats = filterChatsWith(chats, query.With)
+		if verb.chats != nil {
+			verb.chats.result = result
+			return nil
 		}
-		// The page cap and its one-past-the-edge truncation apply to the survivors:
-		// after --with the survivors are the full result set, so paging them is
-		// honest. --all (or the source's own --all when --with fetched everything)
-		// leaves query.All true and shows every match.
-		truncated := !query.All && query.Limit > 0 && len(chats) > query.Limit
-		if truncated {
-			chats = chats[:query.Limit]
-		}
-		aliases, err := chatShortRefs(ctx, req, chats)
-		if err != nil {
-			return err
-		}
-		return writeResult(req.Out, format, "chats", newChatsOutput(chats, aliases, query.Unread, truncated, query.With))
+		return writeResult(req.Out, format, "chats", newChatsOutput(result.Chats, result.ShortRefs, query.Unread, result.Truncated, query.With))
 	}
 	if verb.bespoke == nil || verb.bespoke.Run == nil {
 		return usageError{err: fmt.Errorf("unknown verb %q", verb.name)}
