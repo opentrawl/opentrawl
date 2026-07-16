@@ -117,12 +117,16 @@ func messageListItems(messages []store.Message, shortRefs map[string]string) []r
 	items := make([]render.ListItem, 0, len(messages))
 	for _, message := range messages {
 		ref := messageRef(message.SourcePK)
+		displayRef := shortRefs[ref]
+		if displayRef == "" {
+			displayRef = ref
+		}
 		who := messageWho(message)
 		items = append(items, render.ListItem{
 			Time:  message.Timestamp,
 			Who:   who,
 			Where: messageWhereForList(message),
-			Ref:   ref,
+			Ref:   displayRef,
 			Text:  messageText(message),
 		})
 	}

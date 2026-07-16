@@ -119,7 +119,9 @@ func (c *SearchCmd) Run(r *Runtime) error {
 		resolution := collectFederatedWho(r, searchResolverSources(installed, sources), whoInput)
 		if len(resolution.FailedSources) > 0 {
 			r.reportWhoFailures(resolution)
-			return exitErr{code: 1}
+			if len(resolution.SourcesConsulted) == 0 {
+				return exitErr{code: 1}
+			}
 		}
 		switch len(resolution.Candidates) {
 		case 0:

@@ -33,7 +33,7 @@ public enum SyncProgress: Sendable, Equatable {
 }
 
 public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
-  case helperMissing, launchFailed, timedOut, cancelled
+  case helperMissing, launchFailed, timedOut, cancelled, scopedSyncUnsupported
   case terminatedBySignal(Int32)
   case nonZeroExitBeforeFrame(Int32)
   case missingFrame, extraFrame, oversizedFrame, invalidFrame, invalidProtobuf
@@ -43,6 +43,7 @@ public enum TrawlClientError: Error, Sendable, Equatable, LocalizedError {
     case .launchFailed: "OpenTrawl could not start its bundled helper."
     case .timedOut: "OpenTrawl's helper took too long to respond."
     case .cancelled: "OpenTrawl stopped the helper request."
+    case .scopedSyncUnsupported: "This OpenTrawl client cannot sync selected sources."
     case .terminatedBySignal: "OpenTrawl's helper stopped unexpectedly."
     case .nonZeroExitBeforeFrame: "OpenTrawl's helper stopped before it returned a result."
     case .missingFrame: "OpenTrawl's helper returned no result."
@@ -58,6 +59,9 @@ public protocol TrawlClient: Sendable {
   func requestPhotos() async throws -> StatusResponse
   func sync() async throws -> SyncResponse
   func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws -> SyncResponse
+  func sync(
+    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse
   func search(_ query: String, source: String?) async throws -> SearchResponse
   func open(sourceID: String, ref: String, anchorID: String) async throws -> OpenResponse
   func resource(sourceID: String, ref: String, maxBytes: UInt32) async throws
@@ -65,6 +69,19 @@ public protocol TrawlClient: Sendable {
 }
 
 extension TrawlClient {
+  public func sync(sourceIDs: [String]) async throws -> SyncResponse {
+    try await sync(sourceIDs: sourceIDs) { _ in }
+  }
+
+  public func sync(
+    sourceIDs: [String], progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
+    if sourceIDs.isEmpty {
+      return try await sync(progress: progress)
+    }
+    throw TrawlClientError.scopedSyncUnsupported
+  }
+
   public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
     -> SyncResponse
   {

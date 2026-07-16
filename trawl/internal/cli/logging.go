@@ -49,9 +49,7 @@ func (r *Runtime) finishLogRun(err error) error {
 	if r == nil || r.log == nil {
 		return err
 	}
-	if logErr := r.log.Finish(err); err == nil && logErr != nil {
-		return logErr
-	}
+	_ = r.log.Finish(err)
 	return err
 }
 

@@ -134,6 +134,33 @@ import Testing
     ])
 }
 
+@Test func processClientSyncsOnlySelectedSources() async throws {
+  let helper = try framedHelper(commands: ["status": try statusFrame(), "sync": try syncFrame()])
+  defer { helper.remove() }
+  let progress = SyncProgressRecorder()
+  let response = try await ProcessTrawlClient(
+    binaryURL: helper.binary,
+    receiveReceipt: { receipt in
+      if receipt.arguments[1] == "sync" {
+        #expect(receipt.arguments == ["__app", "sync", "--source", "gmail"])
+      }
+    }
+  ).sync(sourceIDs: ["gmail", "gmail"]) { progress.append($0) }
+
+  #expect(response.sources.map(\.sourceID) == ["gmail"])
+  #expect(
+    progress.values == [
+      .started(sourceID: "gmail", sourceName: "Gmail"),
+      .finished(response.sources[0]),
+    ])
+}
+
+@Test func defaultClientNeverTurnsScopedSyncIntoUnscopedSideEffects() async {
+  await #expect(throws: TrawlClientError.scopedSyncUnsupported) {
+    _ = try await UnscopedTestClient().sync(sourceIDs: ["gmail"])
+  }
+}
+
 @Test func processClientCarriesTheScopedSearchArgumentsAndResponse() async throws {
   let helper = try framedHelper(commands: ["search": try searchFrame(outcome: .complete)])
   defer { helper.remove() }
@@ -270,6 +297,18 @@ private func framedHelper(commands: [String: Data], trailing: String = "") throw
       \(trailing)
       """
   )
+}
+
+private struct UnscopedTestClient: TrawlClient {
+  func status() async throws -> StatusResponse { fatalError("not used") }
+  func requestPhotos() async throws -> StatusResponse { fatalError("not used") }
+  func sync() async throws -> SyncResponse { fatalError("scoped sync must not call this") }
+  func search(_: String, source _: String?) async throws -> SearchResponse {
+    fatalError("not used")
+  }
+  func open(sourceID _: String, ref _: String, anchorID _: String) async throws -> OpenResponse {
+    fatalError("not used")
+  }
 }
 
 private func shellBytes(_ data: Data) -> String {

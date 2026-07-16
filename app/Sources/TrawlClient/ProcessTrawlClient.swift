@@ -63,10 +63,25 @@ public struct ProcessTrawlClient: TrawlClient {
   public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
     -> SyncResponse
   {
+    try await sync(sourceIDs: [], progress: progress)
+  }
+
+  public func sync(
+    sourceIDs requestedSourceIDs: [String],
+    progress: @escaping @Sendable (SyncProgress) -> Void
+  ) async throws -> SyncResponse {
     let current = try await status()
     var sources = current.sources.map { ($0.manifest.sourceID, $0.manifest.displayName) }
     for failure in current.failures where !sources.contains(where: { $0.0 == failure.sourceID }) {
       sources.append((failure.sourceID, failure.sourceName))
+    }
+    if !requestedSourceIDs.isEmpty {
+      let names = Dictionary(uniqueKeysWithValues: sources)
+      var seen = Set<String>()
+      sources = requestedSourceIDs.compactMap { sourceID in
+        guard !sourceID.isEmpty, seen.insert(sourceID).inserted else { return nil }
+        return (sourceID, names[sourceID] ?? sourceID)
+      }
     }
     var results: [SyncSourceResult] = []
     var failures: [SourceFailure] = []

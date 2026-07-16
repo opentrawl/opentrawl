@@ -41,6 +41,39 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 	}
 }
 
+func TestSearchWhoContinuesWhenOneIdentitySourceIsUnavailable(t *testing.T) {
+	binDir := writeFakeCrawlers(t,
+		fakeCrawler{
+			name:        "imsgcrawl",
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
+			searchQuery: "boat trip",
+			searchWho:   "alice@example.com",
+			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
+			whoQuery:    "Alice Example",
+			who:         `{"query":"Alice Example","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"exact","sources":["imessage"],"messages":4}]}`,
+		},
+		fakeCrawler{
+			name:     "clawdex",
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"contacts","display_name":"Contacts"}`,
+			whoQuery: "Alice Example",
+			whoExit:  1,
+		},
+	)
+	t.Setenv("PATH", binDir)
+	t.Setenv("HOME", syntheticHome(t))
+
+	stdout, stderr, code := runCLI(t, "search", "boat trip", "--who", "Alice Example")
+	if code != 3 {
+		t.Fatalf("code = %d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if !strings.Contains(stdout, "Alice Example → Alice Example (Messages)") {
+		t.Fatalf("stdout missing successful resolution:\n%s", stdout)
+	}
+	if !strings.Contains(stderr, "Contacts") {
+		t.Fatalf("stderr missing unavailable identity source:\n%s", stderr)
+	}
+}
+
 func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{

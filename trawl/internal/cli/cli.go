@@ -114,9 +114,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 			timeout:           timeout,
 			canonicalObserver: observer,
 		}
-		if err := runtime.startLogRun("namespace"); err != nil {
-			return ckoutput.WriteJSONErrorIfNeeded(stdout, jsonOut, err)
-		}
+		_ = runtime.startLogRun("namespace")
 		defer func() {
 			err = runtime.finishLogRun(err)
 		}()
@@ -136,9 +134,7 @@ func executeWithCanonicalObserver(args []string, stdout, stderr io.Writer, timeo
 		timeout:           timeout,
 		canonicalObserver: observer,
 	}
-	if err := runtime.startLogRun(commandName(args)); err != nil {
-		return ckoutput.WriteJSONErrorIfNeeded(stdout, root.JSON, err)
-	}
+	_ = runtime.startLogRun(commandName(args))
 	defer func() {
 		err = runtime.finishLogRun(err)
 	}()
