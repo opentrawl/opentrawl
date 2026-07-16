@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"path/filepath"
 	"testing"
+
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 // The who-count/search-count fix must filter on an
@@ -91,7 +93,7 @@ func TestSearchIdentifiesDescriptionAndParticipantMatches(t *testing.T) {
 	}
 }
 
-func calendarSearchRunsContainMatch(runs []SearchTextRun) bool {
+func calendarSearchRunsContainMatch(runs []store.FTS5TextRun) bool {
 	for _, run := range runs {
 		if run.Matched {
 			return true

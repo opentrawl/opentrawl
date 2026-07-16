@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit"
+	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -96,7 +97,7 @@ func TestSearchIdentifiesSubjectAndBodyMatches(t *testing.T) {
 	}
 }
 
-func searchRunsContainMatch(runs []SearchTextRun) bool {
+func searchRunsContainMatch(runs []ckstore.FTS5TextRun) bool {
 	for _, run := range runs {
 		if run.Matched {
 			return true

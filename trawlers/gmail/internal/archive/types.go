@@ -3,6 +3,7 @@ package archive
 import (
 	"time"
 
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
 )
 
@@ -81,12 +82,7 @@ type SearchHit struct {
 
 type SearchMatch struct {
 	Field string
-	Runs  []SearchTextRun
-}
-
-type SearchTextRun struct {
-	Text    string
-	Matched bool
+	Runs  []store.FTS5TextRun
 }
 
 type OpenResult struct {

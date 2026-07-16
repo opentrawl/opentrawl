@@ -10,6 +10,54 @@ import (
 
 const fts5SnippetMaxRunes = 120
 
+const (
+	fts5MatchStart = "\ue000"
+	fts5MatchEnd   = "\ue001"
+)
+
+// FTS5TextRun is a section of text returned by SQLite's FTS5 snippet function.
+type FTS5TextRun struct {
+	Text    string
+	Matched bool
+}
+
+// ParseFTS5MarkedText splits text marked with U+E000 and U+E001 by SQLite's
+// FTS5 snippet function. It returns nil when the text contains no complete
+// marked match.
+func ParseFTS5MarkedText(value string) []FTS5TextRun {
+	if !strings.Contains(value, fts5MatchStart) {
+		return nil
+	}
+	var runs []FTS5TextRun
+	for value != "" {
+		startIndex := strings.Index(value, fts5MatchStart)
+		if startIndex < 0 {
+			runs = appendFTS5TextRun(runs, value, false)
+			break
+		}
+		runs = appendFTS5TextRun(runs, value[:startIndex], false)
+		value = value[startIndex+len(fts5MatchStart):]
+		endIndex := strings.Index(value, fts5MatchEnd)
+		if endIndex < 0 {
+			return nil
+		}
+		runs = appendFTS5TextRun(runs, value[:endIndex], true)
+		value = value[endIndex+len(fts5MatchEnd):]
+	}
+	return runs
+}
+
+func appendFTS5TextRun(runs []FTS5TextRun, text string, matched bool) []FTS5TextRun {
+	if text == "" {
+		return runs
+	}
+	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
+		runs[len(runs)-1].Text += text
+		return runs
+	}
+	return append(runs, FTS5TextRun{Text: text, Matched: matched})
+}
+
 func FTS5Phrase(value string) string {
 	return `"` + strings.ReplaceAll(strings.TrimSpace(value), `"`, `""`) + `"`
 }

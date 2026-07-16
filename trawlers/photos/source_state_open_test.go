@@ -11,6 +11,7 @@ import (
 
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/photos/internal/photos"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 type staticSnapshotProvider struct {
@@ -68,7 +69,7 @@ func TestDeletedUpstreamSearchSnippetSurvivesCrawlerBoundary(t *testing.T) {
 		Time:     "2026-07-11T10:00:00Z",
 		Snippet:  "Deleted upstream · Synthetic beach card.",
 		AnchorID: "description",
-		Matches:  []archive.SearchMatch{{Field: "description", Runs: []archive.SearchTextRun{{Text: "Synthetic beach card.", Matched: true}}}},
+		Matches:  []archive.SearchMatch{{Field: "description", Runs: []store.FTS5TextRun{{Text: "Synthetic beach card.", Matched: true}}}},
 	}
 	inputJSON, err := json.Marshal(input)
 	if err != nil {
@@ -134,7 +135,7 @@ func TestStaleOpenAndSearchProjectClearly(t *testing.T) {
 		Snippet:  "Synthetic beach scene.",
 		Stale:    true,
 		AnchorID: "summary",
-		Matches:  []archive.SearchMatch{{Field: "summary", Runs: []archive.SearchTextRun{{Text: "Synthetic beach scene.", Matched: true}}}},
+		Matches:  []archive.SearchMatch{{Field: "summary", Runs: []store.FTS5TextRun{{Text: "Synthetic beach scene.", Matched: true}}}},
 	}
 	searchInputJSON, err := json.Marshal(searchInput)
 	if err != nil {

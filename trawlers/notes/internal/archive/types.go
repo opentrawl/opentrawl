@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"net/url"
 	"strings"
+
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 const (
@@ -149,12 +151,7 @@ type SearchResult struct {
 
 type SearchMatch struct {
 	Field string
-	Runs  []SearchTextRun
-}
-
-type SearchTextRun struct {
-	Text    string
-	Matched bool
+	Runs  []store.FTS5TextRun
 }
 
 type AtTimeResult struct {

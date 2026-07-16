@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -341,5 +342,53 @@ func TestFTS5Helpers(t *testing.T) {
 	}
 	if err := OptimizeFTS5(ctx, st.DB(), `bad"table`); err == nil {
 		t.Fatal("unsafe FTS table should fail")
+	}
+}
+
+func TestParseFTS5MarkedText(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  []FTS5TextRun
+	}{
+		{name: "unmarked", value: "plain text"},
+		{name: "empty"},
+		{name: "unclosed", value: "before \ue000match"},
+		{name: "complete then unclosed", value: "\ue000one\ue001 then \ue000two"},
+		{name: "empty marked span", value: "\ue000\ue001"},
+		{
+			name:  "marked with context",
+			value: "before \ue000match\ue001 after",
+			want: []FTS5TextRun{
+				{Text: "before "},
+				{Text: "match", Matched: true},
+				{Text: " after"},
+			},
+		},
+		{
+			name:  "adjacent matches",
+			value: "\ue000one\ue001\ue000two\ue001",
+			want:  []FTS5TextRun{{Text: "onetwo", Matched: true}},
+		},
+		{
+			name:  "empty match merges plain context",
+			value: "before \ue000\ue001after",
+			want:  []FTS5TextRun{{Text: "before after"}},
+		},
+		{
+			name:  "unmatched end remains context",
+			value: "\ue000match\ue001 then \ue001 plain",
+			want: []FTS5TextRun{
+				{Text: "match", Matched: true},
+				{Text: " then \ue001 plain"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ParseFTS5MarkedText(tt.value); !reflect.DeepEqual(got, tt.want) {
+				t.Fatalf("ParseFTS5MarkedText(%q) = %#v, want %#v", tt.value, got, tt.want)
+			}
+		})
 	}
 }

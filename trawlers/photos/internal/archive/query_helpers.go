@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlkit/flags"
+	"github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
 func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch) {
@@ -23,7 +24,7 @@ func photoSearchMatch(kind, matchID, title, body string) (string, []SearchMatch)
 		anchorID = metadataAnchorID(matchID)
 	}
 	for _, value := range []string{title, body} {
-		if runs := markedSearchRuns(value); len(runs) > 0 {
+		if runs := store.ParseFTS5MarkedText(value); len(runs) > 0 {
 			return anchorID, []SearchMatch{{Field: kind, Runs: runs}}
 		}
 	}
@@ -46,46 +47,11 @@ func metadataIDForAnchor(anchorID string) (string, bool) {
 	return string(id), true
 }
 
-func markedSearchRuns(value string) []SearchTextRun {
-	const start, end = "\ue000", "\ue001"
-	if !strings.Contains(value, start) {
-		return nil
-	}
-	var runs []SearchTextRun
-	for value != "" {
-		startIndex := strings.Index(value, start)
-		if startIndex < 0 {
-			runs = appendSearchRun(runs, value, false)
-			break
-		}
-		runs = appendSearchRun(runs, value[:startIndex], false)
-		value = value[startIndex+len(start):]
-		endIndex := strings.Index(value, end)
-		if endIndex < 0 {
-			return nil
-		}
-		runs = appendSearchRun(runs, value[:endIndex], true)
-		value = value[endIndex+len(end):]
-	}
-	return runs
-}
-
-func appendSearchRun(runs []SearchTextRun, text string, matched bool) []SearchTextRun {
-	if text == "" {
-		return runs
-	}
-	if len(runs) > 0 && runs[len(runs)-1].Matched == matched {
-		runs[len(runs)-1].Text += text
-		return runs
-	}
-	return append(runs, SearchTextRun{Text: text, Matched: matched})
-}
-
 func markedSnippetMatchesAlbum(snippet, albumTitles string) bool {
 	if strings.TrimSpace(albumTitles) == "" {
 		return false
 	}
-	for _, run := range markedSearchRuns(snippet) {
+	for _, run := range store.ParseFTS5MarkedText(snippet) {
 		if !run.Matched {
 			continue
 		}
@@ -141,7 +107,7 @@ order by case observation_type when ? then 1 when ? then 2 when ? then 3 when ? 
 }
 
 func markedSnippetMatchesText(snippet, value string) bool {
-	for _, run := range markedSearchRuns(snippet) {
+	for _, run := range store.ParseFTS5MarkedText(snippet) {
 		if run.Matched && strings.Contains(strings.ToLower(value), strings.ToLower(run.Text)) {
 			return true
 		}

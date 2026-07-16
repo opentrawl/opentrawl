@@ -49,12 +49,7 @@ type SearchHit struct {
 
 type SearchMatch struct {
 	Field string
-	Runs  []SearchTextRun
-}
-
-type SearchTextRun struct {
-	Text    string
-	Matched bool
+	Runs  []store.FTS5TextRun
 }
 
 const searchWhoSQL = `coalesce((
