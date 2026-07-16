@@ -304,7 +304,7 @@ func TestMigrateLegacySyncStateOnFreshDatabase(t *testing.T) {
 
 // TestOpenReadOnlyReportsOutdatedSchemaHonestly pins the fix for a real
 // regression this migration introduced: migrate() only runs on a writable
-// Open, so status/doctor (which deliberately use OpenReadOnly to avoid
+// Open, so status (which deliberately uses OpenReadOnly to avoid
 // contending with a running sync) hit the new canonical-shape queries
 // against a database still in the old shape and got a generic SQL error.
 // OpenReadOnly must instead detect the old shape — a cheap read-only

@@ -46,7 +46,7 @@ type SearchRow struct {
 	Ref      string `json:"ref"`
 	AnchorID string `json:"anchor_id"`
 	// ShortRef is human display sugar only. short-refs.md keeps trawl's
-	// federated --json on the canonical ref so agents never pick up the
+	// federated --json on the canonical ref so scripts never pick up the
 	// weaker, expiring alias; the crawler-level search contract still
 	// carries short_ref through trawlkit.Hit.
 	ShortRef     string                      `json:"-"`

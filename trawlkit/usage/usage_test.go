@@ -16,7 +16,7 @@ func TestDocRenderFull(t *testing.T) {
 			}},
 			{Title: "Maintain your archive", Commands: []Command{
 				{Name: "sync", Summary: "Update the local archive."},
-				{Name: "doctor", Summary: "Check local setup and archive health."},
+				{Name: "status", Summary: "Show archive state and freshness."},
 			}},
 		},
 		Flags: []Flag{
@@ -28,7 +28,7 @@ func TestDocRenderFull(t *testing.T) {
 			"birdcrawl search \"from:alex\"",
 		},
 		Footer: []string{
-			"Run trawl twitter doctor when setup looks wrong.",
+			"Run trawl twitter status to inspect archive readiness.",
 			"Run trawl twitter help <command> for command details.",
 		},
 	}
@@ -41,7 +41,7 @@ func TestDocRenderFull(t *testing.T) {
 		"",
 		"Maintain your archive:",
 		"  sync       Update the local archive.",
-		"  doctor     Check local setup and archive health.",
+		"  status     Show archive state and freshness.",
 		"",
 		"Global flags:",
 		"  --db PATH  Archive database path.",
@@ -51,7 +51,7 @@ func TestDocRenderFull(t *testing.T) {
 		"  birdcrawl posts --limit 20",
 		"  birdcrawl search \"from:alex\"",
 		"",
-		"Run trawl twitter doctor when setup looks wrong.",
+		"Run trawl twitter status to inspect archive readiness.",
 		"Run trawl twitter help <command> for command details.",
 		"",
 	}, "\n")

@@ -219,7 +219,7 @@ func statusFailure(status *federationv1.SourceStatus) *federationv1.SourceFailur
 		Surface:  status.Manifest.DisplayName,
 		Code:     code,
 		Message:  firstText(status.Summary, "The source is unavailable."),
-		Remedy:   "trawl doctor " + status.Manifest.SourceId,
+		Remedy:   "Complete the source setup shown by OpenTrawl, then sync again.",
 	}
 }
 

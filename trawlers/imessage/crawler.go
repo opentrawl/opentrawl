@@ -2,16 +2,11 @@ package imsgcrawl
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/imessage/internal/messages"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/whomatch"
@@ -93,14 +88,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		checkSourceStore(ctx),
-		checkArchive(ctx, req),
-		checkFullDiskAccess(),
-	}}, nil
-}
-
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
@@ -178,80 +165,6 @@ func statusCounts(status archive.Status) []control.Count {
 		control.NewCount("named_contacts", "named contacts", status.NamedContacts),
 		control.NewCount("since", "since", since),
 	}
-}
-
-func checkSourceStore(ctx context.Context) trawlkit.Check {
-	if _, err := messages.Status(ctx, messages.DefaultChatDBPath()); err != nil {
-		return trawlkit.Check{
-			ID:      "source_store",
-			State:   "fail",
-			Message: "cannot read the source database",
-			Remedy:  fullDiskAccessRemedy,
-		}
-	}
-	return trawlkit.Check{ID: "source_store", State: "ok"}
-}
-
-func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "the archive database has not been synced",
-			Remedy:  "run trawl imessage sync",
-		}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "cannot read the archive database",
-			Remedy:  "run trawl imessage sync to rebuild the archive",
-		}
-	}
-	if _, err := st.Status(ctx); err != nil {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "cannot inspect the archive database",
-			Remedy:  "run trawl imessage sync to rebuild the archive",
-		}
-	}
-	if _, err := st.Chats(ctx, archive.ChatListOptions{Limit: 1}); errors.Is(err, archive.ErrSchemaOutdated) {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "archive schema predates this version",
-			Remedy:  "run trawl imessage sync to upgrade the archive schema",
-		}
-	}
-	return trawlkit.Check{ID: "archive", State: "ok"}
-}
-
-func checkFullDiskAccess() trawlkit.Check {
-	if err := canReadDirectory(filepath.Dir(messages.DefaultChatDBPath())); err != nil {
-		return trawlkit.Check{
-			ID:      "full_disk_access",
-			State:   "fail",
-			Message: "cannot read the Messages directory",
-			Remedy:  fullDiskAccessRemedy,
-		}
-	}
-	return trawlkit.Check{ID: "full_disk_access", State: "ok"}
-}
-
-func canReadDirectory(path string) error {
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = f.Close() }()
-	_, err = f.Readdirnames(1)
-	if errors.Is(err, io.EOF) {
-		return nil
-	}
-	return err
 }
 
 func resolveArchiveWho(ctx context.Context, st *archive.Store, who string) (archive.WhoCandidate, error) {

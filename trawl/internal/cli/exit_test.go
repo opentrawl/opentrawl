@@ -23,7 +23,7 @@ func TestStatusExitCodes(t *testing.T) {
 			name: "success",
 			crawlers: []fakeCrawler{{
 				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 				status:   statusJSON("imessage", "ok"),
 			}},
 			args:       []string{"status"},
@@ -41,12 +41,12 @@ func TestStatusExitCodes(t *testing.T) {
 			crawlers: []fakeCrawler{
 				{
 					name:     "imsgcrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 					status:   statusJSON("imessage", "ok"),
 				},
 				{
 					name:       "telecrawl",
-					metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+					metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 					status:     `not-json`,
 					statusExit: 0,
 				},
@@ -92,61 +92,15 @@ func TestStatusExitCodes(t *testing.T) {
 	}
 }
 
-func TestDoctorExitCodes(t *testing.T) {
-	tests := []struct {
-		name       string
-		crawlers   []fakeCrawler
-		args       []string
-		wantCode   int
-		wantStdout string
-		wantStderr string
-	}{
-		{
-			name: "success",
-			crawlers: []fakeCrawler{{
-				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-				doctor:   `{"checks":[{"id":"source_store","state":"ok"}]}`,
-			}},
-			args:       []string{"doctor"},
-			wantCode:   0,
-			wantStdout: "Messages  ok     1 check: source store",
-		},
-		{
-			name: "failing check",
-			crawlers: []fakeCrawler{{
-				name:     "imsgcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
-				doctor:   failingDoctorJSON(),
-			}},
-			args:       []string{"doctor"},
-			wantCode:   3,
-			wantStdout: "  Remedy: grant Full Disk Access to Trawl in System Settings > Privacy",
-		},
-		{
-			name:       "requested source missing",
-			args:       []string{"doctor", "missing"},
-			wantCode:   1,
-			wantStderr: `Source "missing" was not found.`,
-		},
+func TestDoctorIsNotARootCommand(t *testing.T) {
+	stdout, stderr, code := runCLI(t, "doctor")
+	if code != 2 {
+		t.Fatalf("exit code = %d, want usage error; stdout=%s stderr=%s", code, stdout, stderr)
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			binDir := writeFakeCrawlers(t, tt.crawlers...)
-			t.Setenv("PATH", binDir)
-			t.Setenv("HOME", syntheticHome(t))
-			stdout, stderr, code := runCLI(t, tt.args...)
-			if code != tt.wantCode {
-				t.Fatalf("exit code = %d, want %d stdout=%s stderr=%s", code, tt.wantCode, stdout, stderr)
-			}
-			if tt.wantStdout != "" && !strings.Contains(stdout, tt.wantStdout) {
-				t.Fatalf("stdout missing %q:\n%s", tt.wantStdout, stdout)
-			}
-			if tt.wantStderr != "" && !strings.Contains(stderr, tt.wantStderr) {
-				t.Fatalf("stderr missing %q:\n%s", tt.wantStderr, stderr)
-			}
-		})
+	for _, output := range []string{stdout, stderr} {
+		if strings.Contains(output, "trawl doctor") {
+			t.Fatalf("removed command was offered as navigation or remedy:\n%s", output)
+		}
 	}
 }
 
@@ -154,12 +108,12 @@ func TestStatusRendersUniformUnsyncedSummary(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "wacrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"whatsapp","display_name":"WhatsApp"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"whatsapp","display_name":"WhatsApp"}`,
 			status:   `{"app_id":"whatsapp","state":"missing","summary":"WhatsApp archive is empty."}`,
 		},
 		fakeCrawler{
 			name:     "calcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"calendar","display_name":"Calendar"}`,
 			status:   `{"app_id":"calendar","state":"error","summary":"Calendar has never synced."}`,
 		},
 	)
@@ -189,7 +143,7 @@ func TestJSONErrorAndSanitisedStatus(t *testing.T) {
 	}
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		status:   string(statusJSON),
 	})
 	t.Setenv("PATH", binDir)

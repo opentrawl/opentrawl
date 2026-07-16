@@ -9,7 +9,7 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:        "imsgcrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			searchQuery: "boat trip",
 			searchWho:   "alice@example.com",
 			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
@@ -18,7 +18,7 @@ func TestSearchWhoPassesThroughToEveryCapableCrawler(t *testing.T) {
 		},
 		fakeCrawler{
 			name:        "telecrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"telegram","display_name":"Telegram"}`,
 			searchQuery: "boat trip",
 			searchWho:   "+15550001001",
 			search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
@@ -45,7 +45,7 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:        "imsgcrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			searchQuery: "boat trip",
 			searchWho:   "alice@example.com",
 			search:      `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice Example","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
@@ -54,7 +54,7 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 		},
 		fakeCrawler{
 			name:       "telecrawl",
-			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"telegram","display_name":"Telegram"}`,
 			search:     `{"error":{"code":"unknown_who","message":"No person matched \"alice@example.com\".","remedy":"retry with a suggestion or search without --who"}}`,
 			searchExit: 5,
 			whoQuery:   "alice@example.com",
@@ -86,7 +86,7 @@ func TestSearchWhoOnlyFansOutToSourcesThatResolvedPerson(t *testing.T) {
 func TestSearchWhoHumanHeadingShowsResolvedPerson(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		searchQuery: "boat trip",
 		searchWho:   "alice@example.com",
 		search:      `{"query":"boat trip","results":[{"ref":"imessage:msg/1","short_ref":"abc12","time":"2026-05-14T09:12:00Z","who":"Alice Example","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
@@ -112,7 +112,7 @@ func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:        "imsgcrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			searchQuery: "boat trip",
 			searchWho:   "alice@example.com",
 			search:      `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice Example","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
@@ -121,7 +121,7 @@ func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 		},
 		fakeCrawler{
 			name:        "telecrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"telegram","display_name":"Telegram"}`,
 			searchQuery: "boat trip",
 			searchWho:   "alice@example.com",
 			search:      `{"error":{"code":"unknown_who","message":"No person matched \"alice@example.com\".","remedy":"retry with a suggestion or search without --who"}}`,
@@ -152,7 +152,7 @@ func TestSearchWhoTreatsFannedOutUnknownWhoAsEmpty(t *testing.T) {
 func TestSearchWhoPassesThroughWithPositionalSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchQuery: "boat trip",
 		searchWho:   "alice@example.com",
 		search:      `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
@@ -175,7 +175,7 @@ func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:      "imsgcrawl",
-			metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			search:    `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1,"truncated":false}`,
 			searchWho: "alice@example.com",
 			whoQuery:  "Alice",
@@ -183,7 +183,7 @@ func TestSearchWhoSkipsSourcesWithoutCapability(t *testing.T) {
 		},
 		fakeCrawler{
 			name:       "telecrawl",
-			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			searchExit: 64,
 		},
 	)
@@ -211,7 +211,7 @@ func TestSearchWhoAmbiguousFederatedResolutionJSON(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:       "imsgcrawl",
-			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			searchExit: 99,
 			whoQuery:   "alex",
 			who: `{"query":"alex","candidates":[
@@ -221,7 +221,7 @@ func TestSearchWhoAmbiguousFederatedResolutionJSON(t *testing.T) {
 		},
 		fakeCrawler{
 			name:       "telecrawl",
-			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"telegram","display_name":"Telegram"}`,
 			searchExit: 99,
 			whoQuery:   "alex",
 			who: `{"query":"alex","candidates":[
@@ -257,7 +257,7 @@ func TestSearchWhoAmbiguousFederatedResolutionJSON(t *testing.T) {
 func TestSearchWhoAmbiguousHumanOutputCapsCandidates(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:       "imsgcrawl",
-		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchExit: 99,
 		whoQuery:   "michael",
 		who:        whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 12)),
@@ -283,7 +283,7 @@ func TestSearchWhoAmbiguousHumanOutputCapsCandidates(t *testing.T) {
 func TestSearchWhoAmbiguousJSONCapsCandidatesWithTotal(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:       "imsgcrawl",
-		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchExit: 99,
 		whoQuery:   "michael",
 		who:        whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 55)),
@@ -313,7 +313,7 @@ func TestSearchWhoAmbiguousJSONCapsCandidatesWithTotal(t *testing.T) {
 func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:       "imsgcrawl",
-		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchExit: 99,
 		whoQuery:   "alxe",
 		who:        `{"query":"alxe","candidates":[]}`,
@@ -346,7 +346,7 @@ func TestSearchWhoUnknownFederatedResolutionJSON(t *testing.T) {
 func TestSearchWhoCloseSpellingOnlyFederatedResolutionJSON(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:       "imsgcrawl",
-		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:   `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchExit: 99,
 		whoQuery:   "alxe",
 		who: `{"query":"alxe","candidates":[
@@ -385,7 +385,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "clawdex",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"contacts","display_name":"Contacts"}`,
 			whoQuery: "alex",
 			who: `{"query":"alex","candidates":[
 				{"who":"Alex Jones","identifiers":["+15550100123"],"match_quality":"prefix","sources":["imessage","whatsapp"],"last_seen":"2026-07-01T08:00:00Z","messages":20}
@@ -393,7 +393,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 		},
 		fakeCrawler{
 			name:        "imsgcrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			searchQuery: "specs",
 			searchWho:   "+1 (555) 010-0123",
 			search:      `{"query":"specs","results":[],"total_matches":0,"truncated":false}`,
@@ -404,7 +404,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 		},
 		fakeCrawler{
 			name:        "wacrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"whatsapp","display_name":"WhatsApp"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"whatsapp","display_name":"WhatsApp"}`,
 			searchQuery: "specs",
 			searchWho:   "+15550100123",
 			search:      `{"query":"specs","results":[],"total_matches":0,"truncated":false}`,
@@ -432,7 +432,7 @@ func TestSearchWhoUsesClawdexIdentifierUpgradeJoin(t *testing.T) {
 func TestSearchFilterOnlyPassesThroughWithoutQuery(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		searchNoQuery: true,
 		searchWho:     "alice@example.com",
 		search:        `{"query":"","results":[],"total_matches":0,"truncated":false}`,
@@ -457,7 +457,7 @@ func TestSearchFilterOnlyPassesThroughWithoutQuery(t *testing.T) {
 func TestSearchJSONIgnoresLegacyWhoMatched(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		search:   `{"query":"specs","results":[],"total_matches":0,"truncated":false,"who_matched":["Alex Jones","Alex Chen"]}`,
 	})
 	t.Setenv("PATH", binDir)

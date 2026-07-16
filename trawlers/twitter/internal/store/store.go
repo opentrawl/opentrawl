@@ -17,7 +17,7 @@ var ErrTweetNotFound = errors.New("tweet not found")
 
 // ErrSchemaOutdated means this archive predates schemaVersion 2 (the
 // sync_state migration) and was opened read-only, so migrate() never ran.
-// Migration writes DDL and only runs on a writable Open — status/doctor
+// Migration writes DDL and only runs on a writable Open — status
 // deliberately use OpenReadOnly so they never contend for the write lock
 // with a running sync. The remedy is the same one sync/import already
 // does on every writable open: nothing to run by hand.

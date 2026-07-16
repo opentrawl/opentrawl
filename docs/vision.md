@@ -33,7 +33,8 @@ OpenTrawl has four layers:
 1. Each Go crawler reads one source and owns its source-native SQLite archive,
    authentication, privacy boundary and source-specific commands.
 2. The shared control contract gives every crawler manifest-driven status,
-   search, open and diagnostic meanings, plus sync where the source declares it.
+   search and open meanings, plus sync where the source declares it. Normal
+   failures are actionable and every operation writes useful logs.
 3. The `trawl` CLI and Mac app federate those contracts without reading crawler
    internals.
 4. Derived artefacts may interpret records across sources, but they keep their

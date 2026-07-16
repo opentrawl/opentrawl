@@ -31,7 +31,7 @@ func boolToInt(value bool) int64 {
 // column existed, and backfills it from the labels_json every row already
 // carries. Pre-v1: an additive column plus a one-time backfill beats a
 // migration framework. It runs on every Open, Use and UseExisting
-// call so both the sync path and the read paths (search, open, who, doctor)
+// call so both the sync path and the read paths (search, open, who, status)
 // self-heal at the point of use — a separate repair verb would be a design
 // bug (rule 16).
 func ensureUnreadColumn(ctx context.Context, db *sql.DB) error {

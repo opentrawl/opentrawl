@@ -13,7 +13,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "clawdex",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"contacts","display_name":"Contacts"}`,
 			whoQuery: "dave",
 			who: `{"query":"dave","candidates":[
 				{"who":"Dave Archive","identifiers":["dave.archive@example.com"],"match_quality":"contains","sources":["gmail"],"messages":900,"last_seen":"2019-01-02T09:00:00Z"},
@@ -23,7 +23,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 		},
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 			whoQuery: "dave",
 			who: `{"query":"dave","candidates":[
 				{"who":"Dave Daily","identifiers":["+15550100001"],"match_quality":"prefix","sources":["imessage"],"messages":300,"last_seen":"2026-06-29T20:30:00Z"}
@@ -74,7 +74,7 @@ func TestWhoResolverRendersTransparentTable(t *testing.T) {
 func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		whoQuery: "alex",
 		who:      `{"query":"alex","results":[{"who":"Alex Example","messages":1}]}`,
 	})
@@ -93,7 +93,7 @@ func TestWhoRejectsLegacyResultsEnvelope(t *testing.T) {
 func TestWhoIgnoresLegacyCandidateFieldAliases(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		whoQuery: "dave",
 		who: `{"query":"dave","candidates":[
 			{"person":"Legacy Person","volume":50,"latest":"2026-06-30T20:30:00Z"},
@@ -122,7 +122,7 @@ func TestWhoTableFitsTerminalWidthWithManyIdentifiers(t *testing.T) {
 	}
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		whoQuery: "michael",
 		who: whoCandidatesJSON(t, "michael", []WhoCandidate{{
 			Who:          "Michael",
@@ -160,7 +160,7 @@ func TestWhoTableFitsTerminalWidthWithManyIdentifiers(t *testing.T) {
 func TestWhoTableCapsCandidateList(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","who"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","who"],"id":"imessage","display_name":"Messages"}`,
 		whoQuery: "michael",
 		who:      whoCandidatesJSON(t, "michael", numberedWhoCandidates("Michael", 12)),
 	})
@@ -185,7 +185,7 @@ func TestWhoTableCapsCandidateList(t *testing.T) {
 func TestWhoJSONReturnsPlainEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "clawdex",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","doctor"],"id":"contacts","display_name":"Contacts"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status"],"id":"contacts","display_name":"Contacts"}`,
 		who:      `{"query":"ali","candidates":[{"who":"Alice Example","identifiers":["alice@example.com"],"match_quality":"prefix","sources":["imessage"],"messages":4,"last_seen":"2026-06-30T20:30:00Z"}]}`,
 	})
 	t.Setenv("PATH", binDir)

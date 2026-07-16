@@ -12,12 +12,12 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			sync:     "{\"event\":\"progress\",\"stage\":\"messages\",\"done\":1,\"total\":2}\n{\"state\":\"ok\",\"added\":2}",
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			sync:     `{"state":"ok","added":89}`,
 		},
 	)
@@ -46,7 +46,7 @@ func TestSyncRunsSourcesSequentiallyAndRendersSummary(t *testing.T) {
 func TestSyncJSONWritesOneEventPerSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		sync:     `{"state":"ok","added":2}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -79,7 +79,7 @@ func TestSyncPreservesIncompleteSnapshotFailure(t *testing.T) {
 	newCrawler := func() fakeCrawler {
 		return fakeCrawler{
 			name:     "photoscrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"photos","display_name":"Photos"}`,
 			sync:     childError,
 			syncExit: 1,
 		}
@@ -148,31 +148,31 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 			crawlers: []fakeCrawler{
 				{
 					name:     "imsgcrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 					sync:     `{"state":"ok","added":2}`,
 				},
 				{
 					name:     "telecrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 					sync:     `not-json`,
 				},
 			},
 			args:       []string{"sync"},
 			wantCode:   3,
 			wantStdout: "Telegram  error  sync failed",
-			wantStderr: "Telegram sync failed.\n  Remedy: run trawl doctor telegram",
+			wantStderr: "Telegram sync failed.\n  Remedy: Review OpenTrawl's logs for this source, then sync again.",
 		},
 		{
 			name: "all failed",
 			crawlers: []fakeCrawler{{
 				name:     "telecrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 				sync:     `not-json`,
 			}},
 			args:       []string{"sync", "telegram"},
 			wantCode:   1,
 			wantStdout: "Telegram  error  sync failed",
-			wantStderr: "Telegram sync failed.\n  Remedy: run trawl doctor telegram",
+			wantStderr: "Telegram sync failed.\n  Remedy: Review OpenTrawl's logs for this source, then sync again.",
 		},
 	}
 
@@ -196,6 +196,14 @@ func TestSyncPartialAndTotalFailures(t *testing.T) {
 	}
 }
 
+func TestSyncPartialResultExitsPartial(t *testing.T) {
+	err := syncExit([]SyncResult{{State: "partial"}})
+	exit, ok := err.(exitErr)
+	if !ok || exit.code != 3 {
+		t.Fatalf("syncExit(partial) = %v, want exit 3", err)
+	}
+}
+
 func TestSyncUnknownSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t)
 	t.Setenv("PATH", binDir)
@@ -214,7 +222,7 @@ func TestRunSourceSyncUsesChildRoutePastReadTimeout(t *testing.T) {
 	t.Setenv("HOME", syntheticHome(t))
 	writeFakeCrawlers(t, fakeCrawler{
 		name:      "slow-sync",
-		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"slow-sync","display_name":"Slow sync"}`,
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"slow-sync","display_name":"Slow sync"}`,
 		sync:      `{"state":"ok","added":1}`,
 		syncSleep: "120ms",
 	})

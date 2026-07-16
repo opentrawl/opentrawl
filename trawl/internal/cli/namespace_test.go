@@ -11,7 +11,7 @@ import (
 // tokens the user types (thread-export -> "threads export"). pins stands in
 // for any bespoke single-token verb; chats is now a reserved spine verb, so a
 // bespoke command may not use that key.
-const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
+const namespaceManifest = `{"schema_version":1,"contract_version":1,"id":"imessage","display_name":"iMessage","binary":{"name":"imsgcrawl"},"capabilities":["pins","search","doctor"],"commands":{"pins":{"title":"Pins","argv":["imsgcrawl","pins","--json"],"json":true},"search":{"title":"Search","argv":["imsgcrawl","search","QUERY","--json"],"json":true},"doctor":{"title":"Diagnostics","argv":["imsgcrawl","doctor","--json"],"json":true},"thread-export":{"title":"Export threads","argv":["imsgcrawl","threads","export","--json"],"json":true},"raw":{"title":"Raw","argv":["imsgcrawl","raw"],"json":false}}}`
 
 func setupNamespace(t *testing.T) {
 	t.Helper()
@@ -37,6 +37,9 @@ func TestNamespaceListingHuman(t *testing.T) {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("listing missing %q:\n%s", want, stdout)
 		}
+	}
+	if strings.Contains(stdout, "doctor") || strings.Contains(stdout, "Diagnostics") {
+		t.Fatalf("listing exposed removed diagnostics navigation:\n%s", stdout)
 	}
 }
 
@@ -65,6 +68,9 @@ func TestNamespaceListingJSON(t *testing.T) {
 	if len(got.Verbs) < 4 {
 		t.Fatalf("verbs = %#v", got.Verbs)
 	}
+	if verbs["doctor"] {
+		t.Fatalf("JSON listing exposed removed diagnostics navigation: %#v", got.Verbs)
+	}
 }
 
 func TestNamespaceVerbPassthrough(t *testing.T) {
@@ -75,6 +81,17 @@ func TestNamespaceVerbPassthrough(t *testing.T) {
 	}
 	if strings.TrimSpace(stdout) != "verb=pins args= limit=5" {
 		t.Fatalf("passthrough stdout = %q", stdout)
+	}
+}
+
+func TestNamespaceDoctorIsNotDispatchable(t *testing.T) {
+	setupNamespace(t)
+	stdout, stderr, code := runCLI(t, "imessage", "doctor")
+	if code != 1 || stdout != "" || !strings.Contains(stderr, `iMessage has no verb "doctor"`) {
+		t.Fatalf("removed namespace command code=%d stdout=%s stderr=%s", code, stdout, stderr)
+	}
+	if strings.Contains(stderr, "trawl doctor") {
+		t.Fatalf("removed command was offered as a remedy:\n%s", stderr)
 	}
 }
 
@@ -91,7 +108,7 @@ func TestNamespaceJSONInjectedBeforeSource(t *testing.T) {
 }
 
 // A trawl global flag placed between the source and the verb must not hide
-// the verb — the agent JSON path relies on it.
+// the verb — the structured script path relies on it.
 func TestNamespaceGlobalFlagBeforeVerb(t *testing.T) {
 	setupNamespace(t)
 	stdout, stderr, code := runCLI(t, "imessage", "--json", "pins", "--limit", "5")

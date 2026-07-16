@@ -111,17 +111,27 @@ import Testing
 }
 
 @Test func processClientDecodesAFramedSyncResponse() async throws {
-  let helper = try framedHelper(commands: ["sync": try syncFrame()])
+  let helper = try framedHelper(commands: ["status": try statusFrame(), "sync": try syncFrame()])
   defer { helper.remove() }
+  let progress = SyncProgressRecorder()
   let response = try await ProcessTrawlClient(
     binaryURL: helper.binary,
     receiveReceipt: { receipt in
-      #expect(receipt.arguments == ["__app", "sync"])
+      if receipt.arguments[1] == "status" {
+        #expect(receipt.arguments == ["__app", "status"])
+      } else {
+        #expect(receipt.arguments == ["__app", "sync", "--source", "gmail"])
+      }
       #expect(!receipt.stdout.isEmpty)
     }
-  ).sync()
+  ).sync { progress.append($0) }
   #expect(response.outcome == .complete)
   #expect(response.sources.map(\.sourceID) == ["gmail"])
+  #expect(
+    progress.values == [
+      .started(sourceID: "gmail", sourceName: "Gmail"),
+      .finished(response.sources[0]),
+    ])
 }
 
 @Test func processClientCarriesTheScopedSearchArgumentsAndResponse() async throws {
@@ -222,6 +232,19 @@ private struct TemporaryHelper {
   }
 }
 
+private final class SyncProgressRecorder: @unchecked Sendable {
+  private let lock = NSLock()
+  private var recorded: [SyncProgress] = []
+
+  var values: [SyncProgress] {
+    lock.withLock { recorded }
+  }
+
+  func append(_ progress: SyncProgress) {
+    lock.withLock { recorded.append(progress) }
+  }
+}
+
 private func temporaryHelper(script: String) throws -> TemporaryHelper {
   let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
   let binary = directory.appending(path: "helper")
@@ -300,10 +323,12 @@ private func searchFrame(outcome: Trawl_Federation_V1_OperationOutcome) throws -
     $0.title = "Example"
     $0.subtitle = "Example sender"
   }
-  hit.archiveContext = [.with {
-    $0.kind = "direction"
-    $0.label = "Received"
-  }]
+  hit.archiveContext = [
+    .with {
+      $0.kind = "direction"
+      $0.label = "Received"
+    }
+  ]
   hit.evidence = [
     .with {
       $0.label = "Message"

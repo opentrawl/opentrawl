@@ -18,8 +18,6 @@ func writeResult(w io.Writer, format output.Format, label string, value any) err
 		return writeManifestText(w, v)
 	case *control.Status:
 		return render.WriteStatus(w, renderStatus(v))
-	case *Doctor:
-		return render.WriteDoctor(w, renderDoctorChecks(v), render.LogTail{})
 	case *SyncReport:
 		return writeSyncReportText(w, v)
 	case searchOutput:
@@ -42,15 +40,6 @@ func normalizeJSONResult(value any) any {
 			v.Results = []Hit{}
 		}
 		return v
-	case *Doctor:
-		if v == nil {
-			return &Doctor{Checks: []Check{}}
-		}
-		out := *v
-		if out.Checks == nil {
-			out.Checks = []Check{}
-		}
-		return &out
 	case *control.ContactExport:
 		if v == nil {
 			return &control.ContactExport{Contacts: []control.Contact{}}

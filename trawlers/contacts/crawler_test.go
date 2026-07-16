@@ -13,13 +13,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strings"
 	"testing"
 
 	_ "github.com/mattn/go-sqlite3"
-	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/apple"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/archive"
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 	"github.com/opentrawl/opentrawl/trawlkit"
@@ -99,7 +97,7 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("manifest JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"contacts_export", "doctor", "export_vcard", "import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync_apple", "sync_google", "who"}
+	wantCommands := []string{"contacts_export", "export_vcard", "import", "import_legacy", "metadata", "open", "person_annotate", "person_list", "person_show", "search", "status", "sync", "sync_google", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
@@ -112,8 +110,8 @@ func TestMetadataManifestGeneratedByRunner(t *testing.T) {
 	if got := manifest.Commands["import"]; !got.Mutates || got.Store != "write" {
 		t.Fatalf("import command = %#v", got)
 	}
-	if got := manifest.Commands["sync_apple"]; got.Mutates || got.Store != "none" {
-		t.Fatalf("sync_apple command = %#v", got)
+	if got := manifest.Commands["sync"]; !got.Mutates || got.Store != "write" {
+		t.Fatalf("sync command = %#v", got)
 	}
 }
 
@@ -229,123 +227,6 @@ func TestRunnerCommandsAgainstSyntheticArchive(t *testing.T) {
 	}
 	if len(export.Contacts) != 1 || export.Contacts[0].PhoneNumbers[0] != "+15550100" {
 		t.Fatalf("contacts = %#v", export)
-	}
-	code, stdout, stderr = runContacts(t, home, "doctor", "--json")
-	if code != 0 {
-		t.Fatalf("doctor code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	if !strings.Contains(stdout, `"id": "archive"`) || !strings.Contains(stdout, `"state": "ok"`) {
-		t.Fatalf("doctor stdout = %s", stdout)
-	}
-}
-
-func TestDoctorChecksAppleSourceBeforeArchive(t *testing.T) {
-	home := testHome(t)
-	if runtime.GOOS == "darwin" {
-		dir := filepath.Join(home, "Library", "Application Support", "AddressBook")
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(filepath.Join(dir, "AddressBook-v22.abcddb"), []byte("not sqlite"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	code, stdout, stderr := runContacts(t, home, "doctor", "--json")
-	if code != 0 {
-		t.Fatalf("doctor code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	}
-	var doctor trawlkit.Doctor
-	if err := json.Unmarshal([]byte(stdout), &doctor); err != nil {
-		t.Fatalf("doctor JSON: %v\n%s", err, stdout)
-	}
-	t.Logf("raw doctor JSON: %s", stdout)
-	t.Logf("doctor boundary: argv=%q exit=%d stderr=%q", []string{"doctor", "--json"}, code, stderr)
-	if len(doctor.Checks) != 3 {
-		t.Fatalf("doctor checks = %#v", doctor.Checks)
-	}
-	if doctor.Checks[0].ID != "apple_source" || doctor.Checks[1].ID != "archive" || doctor.Checks[2].ID != "schema" {
-		t.Fatalf("doctor check order = %#v", doctor.Checks)
-	}
-	if doctor.Checks[1].Remedy != "" || doctor.Checks[2].Remedy != "" {
-		t.Fatalf("archive remedies = %q, %q", doctor.Checks[1].Remedy, doctor.Checks[2].Remedy)
-	}
-	if runtime.GOOS == "darwin" && (doctor.Checks[0].State != "invalid" || doctor.Checks[0].Message != "Apple Contacts source is invalid") {
-		t.Fatalf("invalid Apple source check = %#v", doctor.Checks[0])
-	}
-	if strings.Contains(stdout, "sync apple") || strings.Contains(stdout, "contacts_export") {
-		t.Fatalf("doctor exposed the wrong remedy or unrelated source data: %s", stdout)
-	}
-}
-
-func TestArchiveRemediesFollowAppleSource(t *testing.T) {
-	for _, state := range []apple.SourceState{
-		apple.SourceNeedsFullDiskAccess,
-		apple.SourceUnavailable,
-		apple.SourceInvalid,
-	} {
-		present := checkArchivePresent(&trawlkit.Request{}, state)
-		schema := checkArchiveSchema(t.Context(), &trawlkit.Request{}, state)
-		if present.Remedy != "" || schema.Remedy != "" {
-			t.Fatalf("state %q remedies = %q, %q", state, present.Remedy, schema.Remedy)
-		}
-	}
-	readyPresent := checkArchivePresent(&trawlkit.Request{}, apple.SourceReady)
-	readySchema := checkArchiveSchema(t.Context(), &trawlkit.Request{}, apple.SourceReady)
-	if readyPresent.Remedy != "trawl contacts import apple" || readySchema.Remedy != "trawl contacts import apple" {
-		t.Fatalf("ready remedies = %q, %q", readyPresent.Remedy, readySchema.Remedy)
-	}
-}
-
-func TestAppleSourceCheckStates(t *testing.T) {
-	tests := []struct {
-		name           string
-		state          apple.SourceState
-		archiveMissing bool
-		wantState      string
-		wantMessage    string
-		wantRemedy     string
-	}{
-		{
-			name:           "ready for first import",
-			state:          apple.SourceReady,
-			archiveMissing: true,
-			wantState:      "ok",
-			wantMessage:    "Apple Contacts source is ready for first import",
-			wantRemedy:     "trawl contacts import apple",
-		},
-		{
-			name:        "ready with archive",
-			state:       apple.SourceReady,
-			wantState:   "ok",
-			wantMessage: "Apple Contacts source is readable",
-		},
-		{
-			name:        "needs Full Disk Access",
-			state:       apple.SourceNeedsFullDiskAccess,
-			wantState:   "fail",
-			wantMessage: "Apple Contacts needs Full Disk Access",
-			wantRemedy:  "grant Full Disk Access to Trawl or the terminal running it in System Settings > Privacy & Security > Full Disk Access",
-		},
-		{
-			name:        "unavailable",
-			state:       apple.SourceUnavailable,
-			wantState:   "missing",
-			wantMessage: "Apple Contacts source is unavailable",
-		},
-		{
-			name:        "invalid",
-			state:       apple.SourceInvalid,
-			wantState:   "invalid",
-			wantMessage: "Apple Contacts source is invalid",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			check := appleSourceCheck(tt.state, tt.archiveMissing)
-			if check.State != tt.wantState || check.Message != tt.wantMessage || check.Remedy != tt.wantRemedy {
-				t.Fatalf("check = %#v", check)
-			}
-		})
 	}
 }
 
@@ -487,11 +368,6 @@ func TestImportLegacyUsesSyntheticShareReadOnlyAndIsIdempotent(t *testing.T) {
 
 func TestSyncPreviewVerbsPreserveOutput(t *testing.T) {
 	home := testHome(t)
-	if code, stdout, stderr := runContacts(t, home, "sync", "apple", "--json"); code != 0 {
-		t.Fatalf("sync apple code=%d stdout=%s stderr=%s", code, stdout, stderr)
-	} else if !strings.Contains(stdout, `"dry_run": true`) || !strings.Contains(stdout, "use import apple") {
-		t.Fatalf("sync apple stdout = %s", stdout)
-	}
 	if code, stdout, stderr := runContacts(t, home, "sync", "google", "--account", "ada@example.com", "--json"); code != 0 {
 		t.Fatalf("sync google code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	} else if !strings.Contains(stdout, `"account": "ada@example.com"`) || !strings.Contains(stdout, "use import google") {

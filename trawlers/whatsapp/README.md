@@ -29,7 +29,6 @@ import.
 ## Commands
 
 ```sh
-trawl whatsapp doctor
 trawl whatsapp sync
 trawl whatsapp status
 trawl whatsapp chats --limit 20

@@ -4,12 +4,24 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"strings"
 
 	"github.com/opentrawl/opentrawl/trawlers/contacts/internal/model"
 )
+
+func ActionableReadError(err error) error {
+	switch sourceStateForError(err) {
+	case SourceNeedsFullDiskAccess:
+		return fmt.Errorf("Apple Contacts cannot be read; grant OpenTrawl Full Disk Access in System Settings > Privacy & Security > Full Disk Access: %w", err)
+	case SourceInvalid:
+		return fmt.Errorf("Apple Contacts data could not be read: %w", err)
+	default:
+		return fmt.Errorf("Apple Contacts are unavailable: %w", err)
+	}
+}
 
 type SourceState string
 

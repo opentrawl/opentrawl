@@ -20,8 +20,8 @@ func TestCheckHumanOutput(t *testing.T) {
 				"Local archive:",
 				"  Database: /tmp/example.db",
 				"  Last sync: 2026-07-02T14:03:11+02:00",
-				"Doctor checks:",
-				"  source_store: ok",
+				"Recent log:",
+				"  Last run: sync succeeded",
 			}, "\n"),
 		},
 		{

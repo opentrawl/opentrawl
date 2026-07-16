@@ -27,15 +27,29 @@ func exportContacts(contacts []store.Contact) []control.Contact {
 	for _, contact := range contacts {
 		name := contactDisplayName(contact)
 		phone := strings.TrimSpace(contact.Phone)
-		if name == "" || phone == "" {
+		account := strings.TrimSpace(contact.JID)
+		if account == "" {
+			account = strings.TrimSpace(contact.LID)
+		}
+		if account == "" {
+			account = strings.TrimSpace(contact.Username)
+		}
+		if name == "" || (phone == "" && account == "") {
 			continue
 		}
-		key := name + "\x00" + phone
+		key := name + "\x00" + phone + "\x00" + account
 		if _, ok := seen[key]; ok {
 			continue
 		}
 		seen[key] = struct{}{}
-		out = append(out, control.Contact{DisplayName: name, PhoneNumbers: []string{phone}})
+		exported := control.Contact{DisplayName: name}
+		if phone != "" {
+			exported.PhoneNumbers = []string{phone}
+		}
+		if account != "" {
+			exported.Accounts = map[string][]string{"whatsapp": {account}}
+		}
+		out = append(out, exported)
 	}
 	return out
 }

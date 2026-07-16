@@ -259,7 +259,7 @@ func hasMatchedRun(runs []trawlkit.TextRun) bool {
 	return false
 }
 
-func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
+func TestCrawlerStatusAndManifestFlags(t *testing.T) {
 	installFakeGog(t)
 	ctx := context.Background()
 	stateRoot := t.TempDir()
@@ -277,14 +277,6 @@ func TestCrawlerStatusDoctorAndManifestFlags(t *testing.T) {
 	if missing.State != "missing" || len(missing.Counts) != 4 {
 		t.Fatalf("missing status = %#v", missing)
 	}
-	doctor, err := source.Doctor(ctx, &trawlkit.Request{Paths: paths})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !hasCheck(doctor.Checks, "gog_binary", "ok") || !hasCheck(doctor.Checks, "gog_auth", "ok") || !hasCheck(doctor.Checks, "archive", "fail") {
-		t.Fatalf("doctor checks = %#v", doctor.Checks)
-	}
-
 	flags := map[string]bool{}
 	verbs := source.Verbs()
 	syncVerb, ok := verbByName(verbs, "sync")
@@ -320,11 +312,11 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &manifest); err != nil {
 		t.Fatalf("metadata JSON: %v\n%s", err, stdout)
 	}
-	wantCommands := []string{"contacts_export", "doctor", "metadata", "open", "search", "status", "sync", "who"}
+	wantCommands := []string{"contacts_export", "metadata", "open", "search", "status", "sync", "who"}
 	if got := sortedKeys(manifest.Commands); !equalStrings(got, wantCommands) {
 		t.Fatalf("commands = %v, want %v", got, wantCommands)
 	}
-	wantCaps := []string{"contacts_export", "doctor", "metadata", "open", "search", "short_refs", "status", "sync", "who"}
+	wantCaps := []string{"contacts_export", "metadata", "open", "search", "short_refs", "status", "sync", "who"}
 	gotCaps := append([]string(nil), manifest.Capabilities...)
 	sort.Strings(gotCaps)
 	sort.Strings(wantCaps)
@@ -408,15 +400,6 @@ func openReadStore(t *testing.T, ctx context.Context, path string) *ckstore.Stor
 		t.Fatal(err)
 	}
 	return st
-}
-
-func hasCheck(checks []trawlkit.Check, id, state string) bool {
-	for _, check := range checks {
-		if check.ID == id && check.State == state {
-			return true
-		}
-	}
-	return false
 }
 
 func verbByName(verbs []trawlkit.Verb, name string) (trawlkit.Verb, bool) {

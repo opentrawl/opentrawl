@@ -53,7 +53,7 @@ func Manifest(source Crawler) (control.Manifest, error) {
 }
 
 func capabilitiesFor(source Crawler, info Info) []string {
-	caps := []string{"metadata", "status", "doctor"}
+	caps := []string{"metadata", "status"}
 	if _, ok := source.(Syncer); ok {
 		caps = append(caps, "sync")
 	}
@@ -89,7 +89,6 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 	commands := map[string]control.Command{
 		"metadata": applySpineDeclaration(spineCommand("Show crawler metadata", binaryName, "metadata", "metadata"), spine, "metadata"),
 		"status":   applySpineDeclaration(spineCommand("Show archive status", binaryName, "status", "status"), spine, "status"),
-		"doctor":   applySpineDeclaration(spineCommand("Check archive setup", binaryName, "doctor", "doctor"), spine, "doctor"),
 	}
 	if _, ok := source.(Syncer); ok {
 		command := spineCommand("Sync the archive", binaryName, "sync", "sync")

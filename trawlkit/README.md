@@ -25,7 +25,7 @@ See `AGENTS.md` for the ownership boundary.
 - `mirror`: clone/init/pull/commit/push helpers plus non-mutating fetch, immutable tags, Git-object reads, and history inspection for private snapshot repos.
 - `model`: bounded model-request mechanics with retry, timeout and concurrency guardrails; callers own provider selection and configuration.
 - `output`: text/json/log output helpers, and the one `{"error":{code,message,remedy}}` JSON error envelope.
-- `render`: shared human-output rendering — cards, tables, lists, transcripts, status and doctor pages — so every crawler's terminal output looks like one product.
+- `render`: shared human-output rendering — cards, tables, lists, transcripts and status pages — so every crawler's terminal output looks like one product.
 - `shortref`: short, human-typeable aliases for a crawler's long internal refs, plus the SQLite index that resolves them back.
 - `state`: the one sync-state store (cursors, freshness, scalar markers), plus a cursor-shaped adapter for a crawler that already had that table layout.
 - `store`: SQLite open/read-only/transaction/query helpers plus safe FTS5 term and optimization helpers.

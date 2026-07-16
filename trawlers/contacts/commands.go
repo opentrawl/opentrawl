@@ -252,23 +252,6 @@ func defaultLegacyPath(configPath string) string {
 	return filepath.Join(home, ".opentrawl", "contacts", "share")
 }
 
-func syncAppleVerb() trawlkit.Verb {
-	return trawlkit.Verb{
-		Name:  "sync apple",
-		Help:  "Preview Apple Contacts sync.",
-		Store: trawlkit.StoreNone,
-		Run: func(_ context.Context, req *trawlkit.Request) error {
-			if len(req.Args) > 0 {
-				return usageError(errors.New("sync apple takes no arguments"))
-			}
-			return writeMap(req, map[string]any{
-				"dry_run": true,
-				"status":  "remote writes are not implemented; use import apple for the local archive",
-			})
-		},
-	}
-}
-
 func syncGoogleVerb(app *App) trawlkit.Verb {
 	var account string
 	return trawlkit.Verb{

@@ -7,13 +7,6 @@ import (
 	"path/filepath"
 )
 
-func sourceStoreChecks(string) []DoctorCheck {
-	return []DoctorCheck{
-		{ID: "source_store", State: "unsupported", Message: "not supported on this platform"},
-		{ID: "full_disk_access", State: "unsupported", Message: "not supported on this platform"},
-	}
-}
-
 func DefaultPhotosLibraryPath() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {

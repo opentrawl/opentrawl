@@ -43,8 +43,7 @@ dump_one() {
       dump_one "$crawler" "$mode" status status
       dump_one "$crawler" "$mode" search search launch --limit 3
       dump_one "$crawler" "$mode" open open "$ref"
-      dump_one "$crawler" "$mode" doctor doctor
-    done
+		done
   done
 } > "$transcript"
 

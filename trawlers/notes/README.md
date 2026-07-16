@@ -23,7 +23,6 @@ copied or mounted `NoteStore.sqlite` explicitly.
 ## Commands
 
 ```sh
-trawl notes doctor
 trawl notes sync
 trawl notes sync --store /path/to/NoteStore.sqlite
 trawl notes status

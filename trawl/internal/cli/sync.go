@@ -55,9 +55,13 @@ func (c *SyncCmd) Run(r *Runtime) error {
 
 	sourceWidth := syncSourceWidth(sources)
 	results := make([]SyncResult, 0, len(sources))
+	allSources := discoverCrawlers(r.ctx)
 	for _, source := range sources {
 		_, _ = fmt.Fprintf(r.stderr, "%s syncing…\n", sourceHumanName(source))
 		result := syncSource(r, source)
+		if !syncResultFailed(result) {
+			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
+		}
 		results = append(results, result)
 		if r.root.JSON {
 			if err := writeJSON(r.stdout, result); err != nil {
@@ -181,7 +185,6 @@ func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
 }
 
 func syncFailureResult(source Source, message string) SyncResult {
-	remedy := fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))
 	return SyncResult{
 		Event:         "sync",
 		Source:        source.ID,
@@ -192,7 +195,7 @@ func syncFailureResult(source Source, message string) SyncResult {
 		Error: &ErrorBody{
 			Code:    "sync_failed",
 			Message: message,
-			Remedy:  remedy,
+			Remedy:  "Review OpenTrawl's logs for this source, then sync again.",
 		},
 	}
 }
@@ -269,14 +272,18 @@ func syncResultFailed(result SyncResult) bool {
 func syncExit(results []SyncResult) error {
 	failures := 0
 	successes := 0
+	partials := 0
 	for _, result := range results {
 		if syncResultFailed(result) {
 			failures++
 			continue
 		}
+		if strings.EqualFold(result.State, "partial") {
+			partials++
+		}
 		successes++
 	}
-	if failures == 0 {
+	if failures == 0 && partials == 0 {
 		return nil
 	}
 	if successes > 0 {
@@ -286,7 +293,7 @@ func syncExit(results []SyncResult) error {
 }
 
 func (r *Runtime) reportSyncFailure(result SyncResult) {
-	remedy := fmt.Sprintf("run trawl doctor %s", firstNonEmpty(result.commandToken, result.Source))
+	remedy := "Review OpenTrawl's logs for this source, then sync again."
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}

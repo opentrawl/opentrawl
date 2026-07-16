@@ -45,7 +45,7 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 		return nil, archiveErr(fmt.Errorf("open archive: %w", err))
 	}
 	defer func() { _ = st.Close() }()
-	contacts, err := st.ExportContacts(ctx)
+	contacts, err := st.ListContacts(ctx, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -58,10 +58,14 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 				phones = append(phones, phone)
 			}
 		}
-		if len(phones) == 0 {
+		accounts := make(map[string][]string, len(contact.Accounts))
+		for provider, values := range contact.Accounts {
+			accounts[provider] = append([]string(nil), values...)
+		}
+		if len(phones) == 0 && len(accounts) == 0 {
 			continue
 		}
-		out = append(out, control.Contact{DisplayName: contact.DisplayName, PhoneNumbers: phones})
+		out = append(out, control.Contact{DisplayName: contact.DisplayName, PhoneNumbers: phones, Accounts: accounts})
 	}
 	return &control.ContactExport{Contacts: out}, nil
 }

@@ -104,14 +104,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		checkSourceStore(ctx),
-		checkArchivePresent(req),
-		checkArchiveSchema(ctx, req),
-	}}, nil
-}
-
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
@@ -181,59 +173,6 @@ func (c *Crawler) ContactExport(ctx context.Context, req *trawlkit.Request) (*co
 		return nil, err
 	}
 	return &control.ContactExport{Contacts: contacts}, nil
-}
-
-func checkSourceStore(ctx context.Context) trawlkit.Check {
-	if err := calendarstore.CanaryRead(ctx, calendarstore.DefaultPath()); err != nil {
-		return trawlkit.Check{
-			ID:      "source_store",
-			State:   "fail",
-			Message: "cannot read the Calendar database",
-			Remedy:  fullDiskAccessRemedy,
-		}
-	}
-	return trawlkit.Check{ID: "source_store", State: "ok"}
-}
-
-func checkArchivePresent(req *trawlkit.Request) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "archive has not been synced",
-			Remedy:  "run trawl calendar sync",
-		}
-	}
-	return trawlkit.Check{ID: "archive", State: "ok"}
-}
-
-func checkArchiveSchema(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "archive schema is not current",
-			Remedy:  "run trawl calendar sync",
-		}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "archive schema is not current",
-			Remedy:  "run trawl calendar sync",
-		}
-	}
-	if _, err := st.Status(ctx); err != nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "archive schema could not be inspected",
-			Remedy:  "run trawl calendar sync",
-		}
-	}
-	return trawlkit.Check{ID: "schema", State: "ok"}
 }
 
 func isStale(status archive.Status) bool {

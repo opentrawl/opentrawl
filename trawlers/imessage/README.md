@@ -20,7 +20,6 @@ text, participants, chat metadata and attachment references. Keep it local.
 ## Commands
 
 ```sh
-trawl imessage doctor
 trawl imessage sync
 trawl imessage status
 trawl imessage chats --limit 20

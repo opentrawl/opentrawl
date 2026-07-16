@@ -3,7 +3,6 @@ package calcrawl
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -17,18 +16,15 @@ import (
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
 
-const calendarReadinessRemedy = "grant Full Disk Access to your terminal or Trawl in System Settings > Privacy & Security > Full Disk Access"
-
 func TestCalendarReadinessTypedTranscripts(t *testing.T) {
 	cases := []struct {
 		name        string
 		fixture     func(*testing.T) calendarReadinessFixture
 		statusState string
-		sourceState string
 	}{
-		{name: "readable", fixture: readableCalendarReadinessFixture, statusState: "ok", sourceState: "ok"},
-		{name: "Full Disk Access denied", fixture: deniedCalendarReadinessFixture, statusState: "missing", sourceState: "fail"},
-		{name: "unavailable", fixture: unavailableCalendarReadinessFixture, statusState: "missing", sourceState: "fail"},
+		{name: "readable", fixture: readableCalendarReadinessFixture, statusState: "ok"},
+		{name: "Full Disk Access denied", fixture: deniedCalendarReadinessFixture, statusState: "missing"},
+		{name: "unavailable", fixture: unavailableCalendarReadinessFixture, statusState: "missing"},
 	}
 
 	for _, test := range cases {
@@ -39,7 +35,7 @@ func TestCalendarReadinessTypedTranscripts(t *testing.T) {
 				defer func() { _ = archive.Close() }()
 			}
 
-			logCalendarInputs(t, fixture, []string{"calendar", "status"}, []string{"calendar", "doctor"})
+			logCalendarInputs(t, fixture, []string{"calendar", "status"})
 			status := captureCalendarStatus(t, request)
 			if status.State != test.statusState {
 				t.Fatalf("status state = %q, want %q", status.State, test.statusState)
@@ -52,24 +48,6 @@ func TestCalendarReadinessTypedTranscripts(t *testing.T) {
 			}
 			statusOutput := renderCalendarCommand(t, fixture, "calendar", "status")
 			assertCalendarStatusRender(t, status, statusOutput)
-
-			doctor := captureCalendarDoctor(t, request)
-			sourceCheck := calendarCheck(t, doctor, "source_store")
-			if sourceCheck.State != test.sourceState {
-				t.Fatalf("source check state = %q, want %q", sourceCheck.State, test.sourceState)
-			}
-			if test.sourceState == "fail" {
-				if sourceCheck.Message != "cannot read the Calendar database" {
-					t.Fatalf("source check message = %q, want production wording", sourceCheck.Message)
-				}
-				if sourceCheck.Remedy != calendarReadinessRemedy {
-					t.Fatalf("source check remedy = %q, want production remedy", sourceCheck.Remedy)
-				}
-			} else if sourceCheck.Message != "" || sourceCheck.Remedy != "" {
-				t.Fatalf("readable source check = %#v, want no message or remedy", sourceCheck)
-			}
-			doctorOutput := renderCalendarCommand(t, fixture, "calendar", "doctor")
-			assertCalendarDoctorRender(t, sourceCheck, doctorOutput)
 		})
 	}
 }
@@ -204,20 +182,7 @@ func captureCalendarStatus(t *testing.T, request *trawlkit.Request) *control.Sta
 	return status
 }
 
-func captureCalendarDoctor(t *testing.T, request *trawlkit.Request) *trawlkit.Doctor {
-	t.Helper()
-	doctor, err := New().Doctor(context.Background(), request)
-	t.Logf("typed doctor=%#v error=%v", doctor, err)
-	if err != nil {
-		t.Fatalf("typed doctor: %v", err)
-	}
-	if doctor == nil {
-		t.Fatal("typed doctor is nil")
-	}
-	return doctor
-}
-
-func logCalendarInputs(t *testing.T, fixture calendarReadinessFixture, statusArgv, doctorArgv []string) {
+func logCalendarInputs(t *testing.T, fixture calendarReadinessFixture, statusArgv []string) {
 	t.Helper()
 	t.Logf("synthetic fixture setup=%q", fixture.stateSetup)
 	for index, statement := range calendarSchemaStatements() {
@@ -231,7 +196,7 @@ func logCalendarInputs(t *testing.T, fixture calendarReadinessFixture, statusArg
 	t.Logf("synthetic fixture identities=%#v", data.Identities)
 	t.Logf("synthetic fixture participants=%#v", data.Participants)
 	t.Logf("synthetic fixture locations=%#v", data.Locations)
-	t.Logf("synthetic input home=%q state_root=%q source_path=%q archive_path=%q config_path=%q logs_path=%q status_argv=%q doctor_argv=%q", fixture.home, fixture.stateRoot, fixture.sourcePath, fixture.paths.Archive, fixture.paths.Config, fixture.paths.Logs, statusArgv, doctorArgv)
+	t.Logf("synthetic input home=%q state_root=%q source_path=%q archive_path=%q config_path=%q logs_path=%q status_argv=%q", fixture.home, fixture.stateRoot, fixture.sourcePath, fixture.paths.Archive, fixture.paths.Config, fixture.paths.Logs, statusArgv)
 	for _, path := range []string{
 		fixture.stateRoot,
 		fixture.sourcePath,
@@ -292,31 +257,6 @@ func assertCalendarStatusRender(t *testing.T, status *control.Status, output str
 	if !strings.Contains(output, status.Summary) {
 		t.Fatalf("rendered status = %q, does not describe typed summary %q", output, status.Summary)
 	}
-}
-
-func assertCalendarDoctorRender(t *testing.T, sourceCheck trawlkit.Check, output string) {
-	t.Helper()
-	want := fmt.Sprintf("source store: %s", sourceCheck.State)
-	if sourceCheck.Message != "" {
-		want += " - " + sourceCheck.Message
-	}
-	if !strings.Contains(output, want) {
-		t.Fatalf("rendered doctor = %q, does not describe typed source check %#v", output, sourceCheck)
-	}
-	if sourceCheck.Remedy != "" && !strings.Contains(output, "Remedy: "+sourceCheck.Remedy) {
-		t.Fatalf("rendered doctor = %q, does not describe typed remedy %q", output, sourceCheck.Remedy)
-	}
-}
-
-func calendarCheck(t *testing.T, doctor *trawlkit.Doctor, id string) trawlkit.Check {
-	t.Helper()
-	for _, check := range doctor.Checks {
-		if check.ID == id {
-			return check
-		}
-	}
-	t.Fatalf("doctor check %q not found in %#v", id, doctor.Checks)
-	return trawlkit.Check{}
 }
 
 func calendarSourcePath(home string) string {

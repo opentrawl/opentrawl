@@ -8,14 +8,14 @@ import (
 )
 
 // helpAgentsBlock is the agent-facing appendix `trawl --help` carries: the
-// ref grammar, the --json contract, and one runnable search-to-open
-// transcript. imessage:msg/8842 is the same worked ref trawl's own
-// open-error remedy names, so the grammar reads identically everywhere.
+// ordinary text path, ref grammar, and one runnable search-to-open transcript.
+// JSON remains available for programs composing structured results.
 const helpAgentsBlock = `Agents:
+  Use ordinary command output: it is designed for people and agents.
   Refs are source:kind/id, for example imessage:msg/8842.
-  Add --json to any command for structured, machine-readable output.
+  Use --json only when writing a script or pipeline.
   Search, then open a hit by the ref it carries:
-    trawl search "boat trip" --json
+    trawl search "boat trip"
     trawl open imessage:msg/8842`
 
 // writeFrontDoor renders bare `trawl`: the live Sources block and the first

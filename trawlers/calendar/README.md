@@ -27,7 +27,6 @@ Google, local and subscribed calendars. It excludes the Reminders store.
 ## Commands
 
 ```sh
-trawl calendar doctor
 trawl calendar sync
 trawl calendar status
 trawl calendar search "planning" --who "Alice Example"

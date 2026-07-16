@@ -27,7 +27,6 @@ requests and responses remain outside this public repository.
 ```sh
 trawl photos metadata --json
 trawl photos status
-trawl photos doctor
 trawl photos sync
 trawl photos classify --limit 100
 trawl photos classify --model MODEL --limit 20

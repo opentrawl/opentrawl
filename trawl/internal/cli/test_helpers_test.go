@@ -49,8 +49,6 @@ type fakeCrawler struct {
 	status                string
 	statusExit            int
 	statusCalls           *int
-	doctor                string
-	doctorExit            int
 	search                string
 	searchExit            int
 	searchCalls           *int
@@ -78,6 +76,8 @@ type fakeCrawler struct {
 	sync                  string
 	syncExit              int
 	syncSleep             string
+	chats                 []trawlkit.Chat
+	chatsError            string
 }
 
 // fakeCrawlerEvidence is deliberately test-only. It records the typed
@@ -158,36 +158,36 @@ func (e *fakeCrawlerEvidence) openCall() {
 }
 
 type fakeCrawlerWire struct {
-	Name                  string `json:"name"`
-	Metadata              string `json:"metadata"`
-	MetadataExit          int    `json:"metadata_exit"`
-	Status                string `json:"status"`
-	StatusExit            int    `json:"status_exit"`
-	Doctor                string `json:"doctor"`
-	DoctorExit            int    `json:"doctor_exit"`
-	Search                string `json:"search"`
-	SearchExit            int    `json:"search_exit"`
-	SearchSleep           string `json:"search_sleep"`
-	SearchStderr          string `json:"search_stderr"`
-	SearchLimit           string `json:"search_limit"`
-	SearchQuery           string `json:"search_query"`
-	SearchNoQuery         bool   `json:"search_no_query"`
-	SearchWho             string `json:"search_who"`
-	Who                   string `json:"who"`
-	WhoExit               int    `json:"who_exit"`
-	WhoQuery              string `json:"who_query"`
-	ShortRefAlias         string `json:"short_ref_alias"`
-	Open                  string `json:"open"`
-	OpenExit              int    `json:"open_exit"`
-	OpenRef               string `json:"open_ref"`
-	OpenHuman             string `json:"open_human"`
-	OpenHumanExit         int    `json:"open_human_exit"`
-	OpenStderr            string `json:"open_stderr"`
-	OpenUnknownShortRef   bool   `json:"open_unknown_short_ref"`
-	OpenAmbiguousShortRef bool   `json:"open_ambiguous_short_ref"`
-	Sync                  string `json:"sync"`
-	SyncExit              int    `json:"sync_exit"`
-	SyncSleep             string `json:"sync_sleep"`
+	Name                  string          `json:"name"`
+	Metadata              string          `json:"metadata"`
+	MetadataExit          int             `json:"metadata_exit"`
+	Status                string          `json:"status"`
+	StatusExit            int             `json:"status_exit"`
+	Search                string          `json:"search"`
+	SearchExit            int             `json:"search_exit"`
+	SearchSleep           string          `json:"search_sleep"`
+	SearchStderr          string          `json:"search_stderr"`
+	SearchLimit           string          `json:"search_limit"`
+	SearchQuery           string          `json:"search_query"`
+	SearchNoQuery         bool            `json:"search_no_query"`
+	SearchWho             string          `json:"search_who"`
+	Who                   string          `json:"who"`
+	WhoExit               int             `json:"who_exit"`
+	WhoQuery              string          `json:"who_query"`
+	ShortRefAlias         string          `json:"short_ref_alias"`
+	Open                  string          `json:"open"`
+	OpenExit              int             `json:"open_exit"`
+	OpenRef               string          `json:"open_ref"`
+	OpenHuman             string          `json:"open_human"`
+	OpenHumanExit         int             `json:"open_human_exit"`
+	OpenStderr            string          `json:"open_stderr"`
+	OpenUnknownShortRef   bool            `json:"open_unknown_short_ref"`
+	OpenAmbiguousShortRef bool            `json:"open_ambiguous_short_ref"`
+	Sync                  string          `json:"sync"`
+	SyncExit              int             `json:"sync_exit"`
+	SyncSleep             string          `json:"sync_sleep"`
+	Chats                 []trawlkit.Chat `json:"chats"`
+	ChatsError            string          `json:"chats_error"`
 }
 
 func (f fakeCrawler) MarshalJSON() ([]byte, error) {
@@ -197,8 +197,6 @@ func (f fakeCrawler) MarshalJSON() ([]byte, error) {
 		MetadataExit:          f.metadataExit,
 		Status:                f.status,
 		StatusExit:            f.statusExit,
-		Doctor:                f.doctor,
-		DoctorExit:            f.doctorExit,
 		Search:                f.search,
 		SearchExit:            f.searchExit,
 		SearchSleep:           f.searchSleep,
@@ -222,6 +220,8 @@ func (f fakeCrawler) MarshalJSON() ([]byte, error) {
 		Sync:                  f.sync,
 		SyncExit:              f.syncExit,
 		SyncSleep:             f.syncSleep,
+		Chats:                 f.chats,
+		ChatsError:            f.chatsError,
 	})
 }
 
@@ -236,8 +236,6 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 		metadataExit:          wire.MetadataExit,
 		status:                wire.Status,
 		statusExit:            wire.StatusExit,
-		doctor:                wire.Doctor,
-		doctorExit:            wire.DoctorExit,
 		search:                wire.Search,
 		searchExit:            wire.SearchExit,
 		searchSleep:           wire.SearchSleep,
@@ -261,6 +259,8 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 		sync:                  wire.Sync,
 		syncExit:              wire.SyncExit,
 		syncSleep:             wire.SyncSleep,
+		chats:                 wire.Chats,
+		chatsError:            wire.ChatsError,
 	}
 	return nil
 }
@@ -405,9 +405,6 @@ func normaliseFakeCrawler(crawler *fakeCrawler) {
 	}
 	if crawler.status == "" && crawler.statusExit == 0 {
 		crawler.status = statusJSON(crawler.name, "ok")
-	}
-	if crawler.doctor == "" && crawler.doctorExit == 0 {
-		crawler.doctor = `{"checks":[{"id":"source_store","state":"ok"}]}`
 	}
 	if crawler.search == "" && crawler.searchExit == 0 {
 		crawler.search = searchJSON("query")
@@ -560,7 +557,7 @@ func orderedFakeCommands(manifest control.Manifest) []control.Command {
 
 func fakeSpineVerb(name string) bool {
 	switch strings.Join(strings.Fields(name), " ") {
-	case "metadata", "status", "doctor", "sync", "search", "open", "who", "contacts export":
+	case "metadata", "status", "sync", "search", "open", "who", "contacts export":
 		return true
 	default:
 		return false
@@ -589,26 +586,30 @@ func (f *fakeSource) Status(ctx context.Context, req *trawlkit.Request) (*contro
 	return &status, nil
 }
 
-func (f *fakeSource) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	_ = ctx
+func (f *fakeSource) Chats(ctx context.Context, req *trawlkit.Request, query trawlkit.ChatQuery) ([]trawlkit.Chat, error) {
 	_ = req
-	if f.crawler.doctorExit != 0 {
-		return nil, errors.New("doctor failed")
+	if f.crawler.chatsError != "" {
+		if f.crawler.chatsError == trawlkit.ErrChatsNoReadState.Error() {
+			return nil, trawlkit.ErrChatsNoReadState
+		}
+		return nil, errors.New(f.crawler.chatsError)
 	}
-	var envelope DoctorEnvelope
-	if err := decodeContractJSON([]byte(f.crawler.doctor), &envelope); err != nil {
-		return nil, err
+	rows := make([]trawlkit.Chat, 0, len(f.crawler.chats))
+	for _, chat := range f.crawler.chats {
+		if query.Unread && (chat.Unread == nil || *chat.Unread == 0) {
+			continue
+		}
+		rows = append(rows, chat)
 	}
-	checks := make([]trawlkit.Check, 0, len(envelope.Checks))
-	for _, check := range envelope.Checks {
-		checks = append(checks, trawlkit.Check{
-			ID:      check.ID,
-			State:   check.State,
-			Message: check.Message,
-			Remedy:  check.Remedy,
-		})
+	if query.Limit > 0 && len(rows) > query.Limit {
+		rows = rows[:query.Limit]
 	}
-	return &trawlkit.Doctor{Checks: checks}, nil
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		return rows, nil
+	}
 }
 
 func (f *fakeSource) search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
@@ -1038,7 +1039,7 @@ func (f *fakeSearchOpenSyncWho) Who(ctx context.Context, req *trawlkit.Request, 
 }
 
 func metadataJSON(id string) string {
-	return fmt.Sprintf(`{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":%q,"display_name":%q}`, id, id)
+	return fmt.Sprintf(`{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":%q,"display_name":%q}`, id, id)
 }
 
 func statusJSON(id, state string) string {
@@ -1047,8 +1048,4 @@ func statusJSON(id, state string) string {
 
 func searchJSON(query string) string {
 	return fmt.Sprintf(`{"query":%q,"results":[],"total_matches":0,"truncated":false}`, query)
-}
-
-func failingDoctorJSON() string {
-	return `{"checks":[{"id":"tcc_full_disk_access","state":"fail","message":"cannot read the source database","remedy":"grant Full Disk Access to Trawl in System Settings > Privacy"}]}`
 }

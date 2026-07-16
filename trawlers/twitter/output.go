@@ -22,8 +22,6 @@ func (r *runtime) print(value any) error {
 		return r.printStatus(v)
 	case spendEnvelope:
 		return r.printSpend(v)
-	case doctorOutput:
-		return r.printDoctor(v)
 	case searchEnvelope:
 		return r.printSearch(v)
 	case listEnvelope:
@@ -96,23 +94,6 @@ func statusHumanTime(value string, t time.Time) string {
 		return render.ShortLocalTime(t)
 	}
 	return value
-}
-
-func (r *runtime) printDoctor(value doctorOutput) error {
-	return render.WriteDoctor(r.stdout, doctorRenderChecks(value.Checks), value.logTail)
-}
-
-func doctorRenderChecks(checks []doctorCheck) []render.Check {
-	out := make([]render.Check, 0, len(checks))
-	for _, check := range checks {
-		out = append(out, render.Check{
-			Name:    check.ID,
-			State:   render.CheckState(check.State),
-			Message: check.Message,
-			Remedy:  check.Remedy,
-		})
-	}
-	return out
 }
 
 func (r *runtime) printSearch(value searchEnvelope) error {

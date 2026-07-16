@@ -6,13 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/alecthomas/kong"
-	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
 )
@@ -20,7 +18,7 @@ import (
 var Version = "dev"
 
 type CLI struct {
-	JSON        bool             `name:"json" help:"Write JSON to stdout"`
+	JSON        bool             `name:"json" help:"Write structured output for scripts and pipelines"`
 	Verbose     int              `short:"v" name:"verbose" type:"counter" help:"Stream diagnostics to stderr; use -vv for debug detail"`
 	VersionFlag kong.VersionFlag `name:"version" help:"Print version and exit"`
 
@@ -29,8 +27,8 @@ type CLI struct {
 	Search    SearchCmd    `cmd:"" help:"Search crawler archives"`
 	Summaries SummariesCmd `cmd:"" help:"List or read precomputed archive summaries"`
 	Who       WhoCmd       `cmd:"" help:"Resolve a person or sender identity"`
+	Chats     ChatsCmd     `cmd:"" help:"List conversations across messaging sources"`
 	Open      OpenCmd      `cmd:"" help:"Open a crawler ref"`
-	Doctor    DoctorCmd    `cmd:"" help:"Run crawler diagnostics"`
 }
 
 type Runtime struct {
@@ -46,10 +44,6 @@ type Runtime struct {
 }
 
 type StatusCmd struct {
-	Source string `arg:"" optional:"" help:"Source id"`
-}
-
-type DoctorCmd struct {
 	Source string `arg:"" optional:"" help:"Source id"`
 }
 
@@ -202,25 +196,6 @@ func (c *StatusCmd) Run(r *Runtime) error {
 	return outcomeExit(response.GetOutcome())
 }
 
-func (c *DoctorCmd) Run(r *Runtime) error {
-	sources, err := r.selectedSources(c.Source)
-	if err != nil {
-		return err
-	}
-	results := collectDoctor(r, sources)
-	if r.root.JSON {
-		if err := writeJSON(r.stdout, results); err != nil {
-			return err
-		}
-		r.reportDoctorFailures(results)
-		return doctorExit(results)
-	}
-	if err := renderDoctor(r.stdout, results); err != nil {
-		return err
-	}
-	return doctorExit(results)
-}
-
 func (r *Runtime) selectedSources(source string) ([]Source, error) {
 	sources := discoverCrawlers(r.ctx)
 	if source == "" {
@@ -231,33 +206,6 @@ func (r *Runtime) selectedSources(source string) ([]Source, error) {
 		return []Source{selected}, nil
 	}
 	return nil, r.writeSourceNotFound(source)
-}
-
-func collectDoctor(r *Runtime, sources []Source) []DoctorResult {
-	results := make([]DoctorResult, 0, len(sources))
-	for _, source := range sources {
-		checks := []DoctorCheck{}
-		if source.MetadataErr != nil {
-			checks = append(checks, DoctorCheck{
-				ID:      "metadata",
-				State:   "fail",
-				Message: "metadata --json did not return a valid crawler manifest",
-				Remedy:  "fix the crawler so metadata --json returns a non-empty id",
-			})
-		}
-		started := r.logSourceStart(source, "doctor")
-		result, err := r.doctorSource(source)
-		if err != nil {
-			r.logSourceDone(source, "doctor", started, err)
-			checks = append(checks, doctorCommandFailed(source))
-			results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
-			continue
-		}
-		r.logSourceDone(source, "doctor", started, nil, "checks="+strconv.Itoa(len(result.Checks)))
-		checks = append(checks, result.Checks...)
-		results = append(results, DoctorResult{Source: source.ID, Checks: checks, sourceInfo: source})
-	}
-	return results
 }
 
 func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnvelope, error) {
@@ -273,76 +221,6 @@ func statusEnvelopeFromControl(source Source, status *control.Status) (StatusEnv
 		return StatusEnvelope{}, err
 	}
 	return normalizeStatus(source, out), nil
-}
-
-func (r *Runtime) doctorSource(source Source) (DoctorResult, error) {
-	var doctor *trawlkit.Doctor
-	err := r.withSourceRequest(source, "doctor", sourceStoreOptional, ckoutput.JSON, io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var runErr error
-		doctor, runErr = source.Crawler.Doctor(ctx, req)
-		return runErr
-	})
-	if err != nil {
-		return DoctorResult{}, err
-	}
-	checks := []DoctorCheck{}
-	if doctor != nil {
-		for _, check := range doctor.Checks {
-			checks = append(checks, DoctorCheck{
-				ID:      check.ID,
-				State:   check.State,
-				Message: check.Message,
-				Remedy:  check.Remedy,
-			})
-		}
-	}
-	return DoctorResult{Source: source.ID, Checks: normalizeChecks(checks), sourceInfo: source}, nil
-}
-
-func normalizeChecks(checks []DoctorCheck) []DoctorCheck {
-	out := make([]DoctorCheck, 0, len(checks))
-	for _, check := range checks {
-		if check.ID == "" {
-			check.ID = "doctor"
-		}
-		if check.State == "" {
-			check.State = "fail"
-		}
-		out = append(out, check)
-	}
-	return out
-}
-
-func doctorCommandFailed(source Source) DoctorCheck {
-	return DoctorCheck{
-		ID:      "doctor",
-		State:   "fail",
-		Message: "doctor --json did not return the contract JSON",
-		Remedy:  fmt.Sprintf("fix %s so doctor --json emits diagnostic checks", source.Binary),
-	}
-}
-
-func doctorExit(results []DoctorResult) error {
-	for _, result := range results {
-		for _, check := range result.Checks {
-			if checkFailed(check) {
-				return exitErr{code: 3}
-			}
-		}
-	}
-	return nil
-}
-
-func (r *Runtime) reportDoctorFailures(results []DoctorResult) {
-	for _, result := range results {
-		for _, check := range result.Checks {
-			if !checkFailed(check) {
-				continue
-			}
-			_, _ = fmt.Fprintf(r.stderr, "%s %s failed.\n", doctorSourceName(result), humanLabel(check.ID))
-			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(check.Remedy, fmt.Sprintf("run trawl doctor %s", doctorSourceCommandToken(result))))
-		}
-	}
 }
 
 func (r *Runtime) writeError(code, message, remedy string) error {
@@ -421,12 +299,13 @@ const trawlOutro = `The commands below run across every source. Each source is a
 Examples:
   trawl status                          # every source: state, freshness, counts
   trawl search "boat trip"              # all sources, newest first
+  trawl chats --with anna               # conversations across messaging sources
   trawl search imessage falafel         # one source, no quotes needed
   trawl imessage                        # list what the iMessage crawler can do
   trawl imessage chats                  # run one source's own verb
   trawl summaries                       # precomputed answers: subscriptions, possessions, spending
   trawl open imessage:msg/8842          # expand a ref search returned
-  trawl search falafel --json           # structured output; agents, prefer this`
+  trawl search falafel --json           # structured output for scripts and pipelines`
 
 // trawlDescription is the framing text at the top of `trawl --help`: the
 // tagline and the cross-source examples. The live Sources block and the
@@ -440,7 +319,7 @@ func trawlDescription() string {
 // built-in command or an installed source — and lists the sources found,
 // so a mistyped source name reveals the namespace instead of hiding it.
 func unknownCommandErr(name string, sources []string) error {
-	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, summaries, who, open, doctor", name)
+	message := fmt.Sprintf("unknown command %q - commands are status, sync, search, summaries, who, chats, open", name)
 	if len(sources) > 0 {
 		message += "; sources are " + strings.Join(sources, ", ")
 	}

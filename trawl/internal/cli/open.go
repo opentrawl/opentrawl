@@ -46,7 +46,7 @@ func (r *Runtime) renderOpenResponse(response *openv1.OpenResponse) error {
 	if response.GetFailure() != nil {
 		failure := response.GetFailure()
 		_, _ = fmt.Fprintf(r.stderr, "%s\n", strings.TrimSpace(failure.GetMessage()))
-		if remedy := strings.TrimSpace(failure.GetRemedy()); remedy != "" {
+		if remedy := normalFailureRemedy(strings.TrimSpace(failure.GetRemedy()), "", "open"); remedy != "" {
 			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 		}
 		return exitErr{code: 1}
@@ -94,7 +94,7 @@ type shortRefMatch struct {
 // implementation, a timeout. It never aborts the fan-out on its own;
 // the other sources still get asked. It only surfaces if every source
 // in the fan-out fails this way, so the caller learns exactly what
-// broke instead of a misattributed "trawl doctor <first source>".
+// broke instead of a failure misattributed to the first source.
 type shortRefFailure struct {
 	SourceID    string
 	DisplayName string
@@ -163,11 +163,11 @@ func (r *Runtime) openShortRef(discovered []Source, adapters []federation.OpenSo
 		return r.shortRefResolutionFailed(alias, requestedRef, failures)
 	default:
 		if r.root.JSON {
-			return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_NOT_FOUND, fmt.Sprintf("Short ref %q was not found.", alias), "use a full ref from trawl search --json"))
+			return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_NOT_FOUND, fmt.Sprintf("Short ref %q was not found.", alias), "use a full ref from trawl search"))
 		}
 		return r.writeError("unknown_short_ref",
 			fmt.Sprintf("Short ref %q was not found.", alias),
-			"use a full ref from trawl search --json")
+			"use a full ref from trawl search")
 	}
 }
 
@@ -182,9 +182,9 @@ func (r *Runtime) shortRefResolutionFailed(alias, requestedRef string, failures 
 	}
 	message := fmt.Sprintf("Could not resolve short ref %q. Every source failed: %s.", alias, strings.Join(reasons, ", "))
 	if r.root.JSON {
-		return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE, message, "run trawl doctor"))
+		return r.renderOpenResponse(shortRefOpenFailure(requestedRef, federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE, message, "retry with -v to see the log location"))
 	}
-	return r.writeError("short_ref_resolution_failed", message, "run trawl doctor")
+	return r.writeError("short_ref_resolution_failed", message, "retry with -v to see the log location")
 }
 
 func validShortRefAlias(alias string) bool {

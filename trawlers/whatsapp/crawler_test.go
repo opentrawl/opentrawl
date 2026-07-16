@@ -172,7 +172,7 @@ func TestCrawlerCoreMethods(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(contacts.Contacts) != 2 || !contactPresent(contacts.Contacts, "Alice Example", "+15550222") || !contactPresent(contacts.Contacts, "Bob Example", "+15550111") {
+	if len(contacts.Contacts) != 2 || !contactPresent(contacts.Contacts, "Alice Example", "+15550222", "222@s.whatsapp.net") || !contactPresent(contacts.Contacts, "Bob Example", "+15550111", "15550111@s.whatsapp.net") {
 		t.Fatalf("contacts = %#v", contacts)
 	}
 
@@ -367,7 +367,7 @@ func TestMetadataManifestListsRegisteredVerbs(t *testing.T) {
 			t.Fatalf("capabilities = %#v, missing %s", manifest.Capabilities, capability)
 		}
 	}
-	for _, command := range []string{"metadata", "status", "doctor", "sync", "search", "who", "open", "contacts_export", "chats", "messages"} {
+	for _, command := range []string{"metadata", "status", "sync", "search", "who", "open", "contacts_export", "chats", "messages"} {
 		if _, ok := manifest.Commands[command]; !ok {
 			t.Fatalf("commands = %#v, missing %s", manifest.Commands, command)
 		}
@@ -414,9 +414,9 @@ func countPresent(counts []control.Count, id string, value int64) bool {
 	return false
 }
 
-func contactPresent(contacts []control.Contact, name, phone string) bool {
+func contactPresent(contacts []control.Contact, name, phone, account string) bool {
 	for _, contact := range contacts {
-		if contact.DisplayName == name && len(contact.PhoneNumbers) == 1 && contact.PhoneNumbers[0] == phone {
+		if contact.DisplayName == name && len(contact.PhoneNumbers) == 1 && contact.PhoneNumbers[0] == phone && len(contact.Accounts["whatsapp"]) == 1 && contact.Accounts["whatsapp"][0] == account {
 			return true
 		}
 	}

@@ -31,7 +31,7 @@ func Open(ctx context.Context, sources []OpenSource, selectedSourceID, requested
 			Surface:  sourceSurface(source.Manifest),
 			Code:     federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE,
 			Message:  source.SkipReason,
-			Remedy:   "trawl doctor " + sourceID(source.Manifest),
+			Remedy:   "Run trawl status to see why this source is unavailable.",
 		}
 	} else if source.Run == nil {
 		response.Failure = operationFailure(source.Manifest, "open", "callback is nil", federationv1.FailureCode_FAILURE_CODE_INTERNAL)

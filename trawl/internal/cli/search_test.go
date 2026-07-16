@@ -156,7 +156,7 @@ func TestSearchQuerylessRecencyGolden(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			searchNoQuery: true,
 			search: `{"query":"","results":[
 				{"ref":"imessage:msg/old","time":"2026-05-11T08:00:00Z","who":"Alice","where":"Invoices","snippet":"older filter match"}
@@ -164,7 +164,7 @@ func TestSearchQuerylessRecencyGolden(t *testing.T) {
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			searchNoQuery: true,
 			search: `{"query":"","results":[
 				{"ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},
@@ -201,7 +201,7 @@ func TestSearchQuerylessRecencyJSONGolden(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			searchNoQuery: true,
 			search: `{"query":"","results":[
 				{"ref":"imessage:msg/old","time":"2026-05-11T08:00:00Z","who":"Alice","where":"Invoices","snippet":"older filter match"}
@@ -209,7 +209,7 @@ func TestSearchQuerylessRecencyJSONGolden(t *testing.T) {
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			searchNoQuery: true,
 			search: `{"query":"","results":[
 				{"ref":"telegram:msg/new","time":"2026-05-14T09:00:00Z","who":"Bob","where":"Ops","snippet":"newer filter match"},
@@ -236,7 +236,7 @@ func TestSearchQuerylessRecencyJSONGolden(t *testing.T) {
 func TestSearchQuerylessRelevanceSortRendersLikePlainQueryless(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		searchNoQuery: true,
 		search: `{"query":"","results":[
 			{"ref":"imessage:msg/new","time":"2026-05-14T09:00:00Z","who":"Alice","where":"Invoices","snippet":"newer filter match"},
@@ -283,7 +283,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"imessage:msg/8842","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"…the boat trip is on Saturday…"},
 				{"ref":"imessage:msg/8841","time":"not-a-time","who":"","where":"","snippet":"unparsed time stays visible"}
@@ -291,7 +291,7 @@ func TestSearchMergesSortsAndTruncates(t *testing.T) {
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"telegram:msg/1930","time":"2026-05-12T10:00:00Z","who":"Bob","snippet":"…book the boat before June…"}
 			],"total_matches":1,"truncated":false}`,
@@ -329,7 +329,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "calcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"calendar","display_name":"Calendar"}`,
 			search: `{"query":"fair","results":[
 				{"ref":"calendar:event/aaa","time":"2026-03-27T00:00:00+01:00","all_day":true,"who":"me","where":"Privé","calendar":"Personal","snippet":"Art fair"},
 				{"ref":"calendar:event/bbb","time":"2026-03-26T20:00:00+01:00","all_day":false,"who":"me","where":"Avery Example","calendar":"Work","snippet":"fair prep call"}
@@ -337,7 +337,7 @@ func TestSearchAllDayRowsRenderDateOnly(t *testing.T) {
 		},
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			search: `{"query":"fair","results":[
 				{"ref":"imessage:msg/1","time":"2026-03-25T09:12:00+01:00","who":"Alice","where":"Family","snippet":"see you at the fair"}
 			],"total_matches":1,"truncated":false}`,
@@ -392,7 +392,7 @@ func TestSearchJSONHonorsLimitAboveOldCap(t *testing.T) {
 	limit := 205
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		searchLimit: strconv.Itoa(limit),
 		search:      searchResultsJSON("boat trip", limit),
 	})
@@ -422,7 +422,7 @@ func TestSearchHumanHonorsLimitAboveOldCap(t *testing.T) {
 	limit := 205
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		searchLimit: strconv.Itoa(limit),
 		search:      searchResultsJSON("boat trip", limit),
 	})
@@ -492,14 +492,14 @@ func TestSearchHumanOutputUsesFullRefsWhenEveryDisplayedRowHasShortRef(t *testin
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 			],"total_matches":1,"truncated":false}`,
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"telegram:msg/1930","alias":"q8n4c","time":"2026-05-12T10:00:00Z","who":"Bob","snippet":"Older match"}
 			],"total_matches":1,"truncated":false}`,
@@ -531,14 +531,14 @@ func TestSearchHumanOutputUsesFullRefsPerRow(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 			],"total_matches":1,"truncated":false}`,
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			search: `{"query":"boat trip","results":[
 				{"ref":"telegram:msg/1930","time":"2026-05-12T10:00:00Z","who":"Bob","snippet":"Older match"}
 			],"total_matches":1,"truncated":false}`,
@@ -570,7 +570,7 @@ func TestSearchHumanOutputUsesFullRefsPerRow(t *testing.T) {
 func TestSearchJSONPreservesCanonicalShortRef(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		search: `{"query":"boat trip","results":[
 			{"ref":"imessage:msg/8842","short_ref":"t7k3f","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 		],"total_matches":1,"truncated":false}`,
@@ -602,7 +602,7 @@ func TestSearchJSONPreservesCanonicalShortRef(t *testing.T) {
 func TestSearchJSONIncludesFederatedEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "imsgcrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		searchLimit: "1",
 		search: `{"query":"boat trip","results":[
 			{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"Example match"},
@@ -628,7 +628,7 @@ func TestSearchJSONIncludesFederatedEnvelope(t *testing.T) {
 func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		search: `{"query":"boat trip","results":[
 			{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","where":"Family","snippet":"Example match"}
 		],"total_matches":5,"truncated":true}`,
@@ -652,7 +652,7 @@ func TestSearchJSONIncludesSourceTruncation(t *testing.T) {
 func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "gogcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail","paths":{"default_logs":"~/.opentrawl/gmail/logs"}}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","verbose_logs"],"id":"gmail","display_name":"Gmail","paths":{"default_logs":"~/.opentrawl/gmail/logs"}}`,
 		search: `{"query":"boat trip","results":[
 			{"ref":"gmail:msg/m1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}
 		],"total_matches":1,"truncated":false}`,
@@ -684,7 +684,7 @@ func TestSearchVerboseLogsSourceOutcomeAndPropagates(t *testing.T) {
 func TestSearchVerboseStreamsSourceLogLines(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:         "gogcrawl",
-		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
 		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 		searchStderr: "first child line\nsecond child line\nfinal child line",
 	})
@@ -709,7 +709,7 @@ func TestSearchVerboseStreamsSourceLogLines(t *testing.T) {
 func TestSearchDoesNotForwardChildStderrWithoutVerbose(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:         "gogcrawl",
-		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
+		metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","verbose_logs"],"id":"gmail","display_name":"Gmail"}`,
 		search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 		searchStderr: "hidden child line\n",
 	})
@@ -730,13 +730,13 @@ func TestSearchVerboseConcurrentSourceLogLinesStayWhole(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:         "imsgcrawl",
-			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"imessage","display_name":"Messages"}`,
+			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","verbose_logs"],"id":"imessage","display_name":"Messages"}`,
 			search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 			searchStderr: childStderrLines("imessage", lineCount),
 		},
 		fakeCrawler{
 			name:         "telecrawl",
-			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","verbose_logs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:     `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","verbose_logs"],"id":"telegram","display_name":"Telegram"}`,
 			search:       `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 			searchStderr: childStderrLines("telegram", lineCount),
 		},
@@ -775,7 +775,7 @@ func TestSearchVerboseConcurrentSourceLogLinesStayWhole(t *testing.T) {
 func TestSearchJSONEmptyResultsEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		search:   `{"query":"boat trip","results":[],"total_matches":0,"truncated":false}`,
 	})
 	t.Setenv("PATH", binDir)
@@ -847,12 +847,12 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 			crawlers: []fakeCrawler{
 				{
 					name:     "imsgcrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 					search:   `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
 				},
 				{
 					name:     "telecrawl",
-					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+					metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 					search:   `{"query":"boat trip"}`,
 				},
 			},
@@ -864,7 +864,7 @@ func TestSearchPartialAndTotalFailures(t *testing.T) {
 			name: "all failed",
 			crawlers: []fakeCrawler{{
 				name:     "telecrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 				search:   `not-json`,
 			}},
 			wantCode:   1,
@@ -896,12 +896,12 @@ func TestSearchJSONIncludesFailedSources(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			search:   `{"query":"boat trip","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
 		},
 		fakeCrawler{
 			name:     "telecrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"telegram","display_name":"Telegram"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"telegram","display_name":"Telegram"}`,
 			search:   `not-json`,
 		},
 	)
@@ -930,12 +930,12 @@ func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			search:   `{"query":"grill","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
 		},
 		fakeCrawler{
 			name:        "photoscrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"photos","display_name":"Photos"}`,
 			searchSleep: "3",
 		},
 	)
@@ -946,7 +946,7 @@ func TestSearchTimeoutIsLoudAndDistinctFromError(t *testing.T) {
 	if code != 3 {
 		t.Fatalf("partial timeout exit = %d, want 3 stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	if !strings.Contains(stderr, "Photos search failed: command timed out\n  Remedy: trawl doctor photos") {
+	if !strings.Contains(stderr, "Photos search failed: command timed out\n  Remedy: Retry with -v to see the log location.") || strings.Contains(stderr, "doctor") {
 		t.Fatalf("stderr missing loud timeout line:\n%s", stderr)
 	}
 	if !strings.Contains(stdout, "imessage:msg/1") {
@@ -958,12 +958,12 @@ func TestSearchTimeoutJSONCarriesReason(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:     "imsgcrawl",
-			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+			metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 			search:   `{"query":"grill","results":[{"ref":"imessage:msg/1","time":"2026-05-14T09:12:00Z","who":"Alice","snippet":"Example match"}],"total_matches":1}`,
 		},
 		fakeCrawler{
 			name:        "photoscrawl",
-			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+			metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"photos","display_name":"Photos"}`,
 			searchSleep: "3",
 		},
 	)
@@ -986,7 +986,7 @@ func TestSearchTimeoutJSONCarriesReason(t *testing.T) {
 func TestSearchTotalTimeoutExitsOne(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:        "photoscrawl",
-		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"photos","display_name":"Photos"}`,
+		metadata:    `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"photos","display_name":"Photos"}`,
 		searchSleep: "3",
 	})
 	t.Setenv("PATH", binDir)
@@ -1021,7 +1021,7 @@ func TestSearchUnknownSource(t *testing.T) {
 func TestSearchOmitsAllEmptyColumns(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "othercrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"other","display_name":"Other"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"other","display_name":"Other"}`,
 		search: `{"query":"boat","results":[
 			{"ref":"other:item/1","short_ref":"hmn42","time":"2026-05-14T09:12:00Z","who":"me","where":"","snippet":"item one"},
 			{"ref":"other:item/2","short_ref":"eygc4","time":"2026-05-13T09:12:00Z","who":"Anthony","where":"","snippet":"item two"}

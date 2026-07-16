@@ -25,7 +25,12 @@ func (s *Store) Status(ctx context.Context) (Status, error) {
 		return Status{}, err
 	}
 	var updated string
-	_ = db.QueryRowContext(ctx, `select coalesce(max(updated_at), '') from people`).Scan(&updated)
+	_ = db.QueryRowContext(ctx, `
+select coalesce(max(value), '') from (
+  select updated_at as value from people
+  union all
+  select synced_at as value from source_contacts
+)`).Scan(&updated)
 	out.UpdatedAt = parseTime(updated)
 	return out, nil
 }

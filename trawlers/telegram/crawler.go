@@ -18,17 +18,12 @@ import (
 const appID = "telegram"
 
 type Crawler struct {
-	doctor doctorOptions
 	sync   syncOptions
 	search searchOptions
 
 	messages messageOptions
 	contacts listOptions
 	topics   topicsOptions
-}
-
-type doctorOptions struct {
-	Path string
 }
 
 type syncOptions struct {
@@ -107,7 +102,6 @@ func (c *Crawler) Info() trawlkit.Info {
 
 func (c *Crawler) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
-		{Name: "doctor", Flags: c.bindDoctorFlags},
 		{Name: "sync", Flags: c.bindSyncFlags},
 		{Name: "search", Flags: c.bindSearchFlags},
 		{Name: "chats"},
@@ -172,11 +166,6 @@ func (r *runtime) logDebug(event, message string) error {
 		return nil
 	}
 	return r.log.Debug(event, message)
-}
-
-func (c *Crawler) bindDoctorFlags(fs *flag.FlagSet) {
-	c.doctor = doctorOptions{}
-	fs.StringVar(&c.doctor.Path, "path", "", "Telegram data directory")
 }
 
 func (c *Crawler) bindSyncFlags(fs *flag.FlagSet) {

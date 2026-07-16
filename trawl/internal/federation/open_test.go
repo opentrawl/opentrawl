@@ -83,8 +83,12 @@ func TestOpenFailureShapesAndCallbackRules(t *testing.T) {
 		{"both returns failure", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			return validOpenRecord("notes", "notes:one"), &federationv1.SourceFailure{Code: federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE, Message: "unavailable"}
 		}, federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE},
-		{"nil record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { return nil, nil }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
-		{"panic", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) { panic("synthetic") }, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
+		{"nil record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+			return nil, nil
+		}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
+		{"panic", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
+			panic("synthetic")
+		}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
 		{"invalid record", func(context.Context, string, string) (*openv1.OpenRecord, *federationv1.SourceFailure) {
 			return &openv1.OpenRecord{SourceId: "notes"}, nil
 		}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
@@ -123,7 +127,7 @@ func TestFailureForErrorPreservesTypedErrorAndPinsCodes(t *testing.T) {
 		{typedFailure{body: ckoutput.ErrorBody{Code: "command_failed"}}, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
 		{errors.ErrUnsupported, federationv1.FailureCode_FAILURE_CODE_INTERNAL},
 	} {
-		if got := FailureForError(manifest, "open", test.err); got.GetCode() != test.want || got.GetRemedy() != "trawl doctor notes" {
+		if got := FailureForError(manifest, "open", test.err); got.GetCode() != test.want || got.GetRemedy() != "Retry with -v to see the log location." {
 			t.Fatalf("FailureForError(%v) = %#v", test.err, got)
 		}
 	}

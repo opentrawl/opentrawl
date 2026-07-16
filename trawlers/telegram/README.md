@@ -34,7 +34,6 @@ Use `--path` to import a copied source explicitly.
 ## Commands
 
 ```sh
-trawl telegram doctor
 trawl telegram sync
 trawl telegram status
 trawl telegram folders

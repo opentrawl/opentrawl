@@ -46,6 +46,15 @@ create table if not exists identifiers (
   primary key(kind, value, person_id)
 );
 
+create table if not exists source_contacts (
+  source text not null,
+  source_id text not null,
+  person_id text not null references people(id) on delete cascade,
+  contact_json text not null,
+  synced_at text not null,
+  primary key(source, source_id)
+);
+
 create table if not exists notes (
   id text primary key,
   person_id text not null references people(id) on delete cascade,
@@ -65,6 +74,7 @@ create table if not exists notes (
 
 create index if not exists idx_contact_values_person on contact_values(person_id, kind, position);
 create index if not exists idx_identifiers_person on identifiers(person_id);
+create index if not exists idx_source_contacts_person on source_contacts(person_id);
 create index if not exists idx_notes_person on notes(person_id, occurred_at);
 
 create virtual table if not exists people_fts using fts5(

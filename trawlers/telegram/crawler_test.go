@@ -26,12 +26,12 @@ func TestCrawlerVerbs(t *testing.T) {
 	}
 	// chats is a shared trawlkit capability now (ChatLister), not a bespoke
 	// verb, so it no longer appears in Verbs(); folders and topics stay.
-	for _, name := range []string{"doctor", "sync", "search", "folders", "topics", "messages", "contacts"} {
+	for _, name := range []string{"sync", "search", "folders", "topics", "messages", "contacts"} {
 		if _, ok := verbs[name]; !ok {
 			t.Fatalf("missing verb %q", name)
 		}
 	}
-	for _, name := range []string{"doctor", "sync", "search"} {
+	for _, name := range []string{"sync", "search"} {
 		verb := verbs[name]
 		if verb.Name != name || verb.Flags == nil || verb.Help != "" || verb.Run != nil || verb.Mutates || verb.Timeout != 0 || len(verb.Args) != 0 {
 			t.Fatalf("spine verb %q has invalid declaration: %+v", name, verb)
@@ -192,11 +192,14 @@ func TestCrawlerSpineMethodsUseSyntheticArchive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if contacts == nil || len(contacts.Contacts) != 1 {
+	if contacts == nil || len(contacts.Contacts) != 2 {
 		t.Fatalf("contact export = %+v", contacts)
 	}
-	if got := contacts.Contacts[0]; got.DisplayName != "Alice Example" || len(got.PhoneNumbers) != 1 || got.PhoneNumbers[0] != "+15550100001" {
+	if got := contacts.Contacts[0]; got.DisplayName != "Alice Example" || len(got.PhoneNumbers) != 1 || got.PhoneNumbers[0] != "+15550100001" || got.Accounts["telegram"][0] != "alice_example" {
 		t.Fatalf("contact export contact = %+v", got)
+	}
+	if got := contacts.Contacts[1]; got.DisplayName != "Bob Example" || len(got.PhoneNumbers) != 0 || got.Accounts["telegram"][0] != "bob_example" {
+		t.Fatalf("username-only contact export = %+v", got)
 	}
 }
 

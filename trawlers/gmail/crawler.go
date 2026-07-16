@@ -2,7 +2,6 @@ package gogcrawl
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"strings"
@@ -103,15 +102,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		c.checkGogBinary(),
-		c.checkGogVersion(ctx),
-		c.checkGogAuth(ctx),
-		checkArchive(ctx, req),
-	}}, nil
-}
-
 func (c *Crawler) Search(ctx context.Context, req *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {
 	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
 	if err != nil {
@@ -205,59 +195,4 @@ func statusState(status archive.Status) (string, string) {
 		return "stale", "Needs sync."
 	}
 	return "ok", "Recently synced."
-}
-
-func (c *Crawler) checkGogBinary() trawlkit.Check {
-	if _, err := c.gog.LookPath(); err != nil {
-		return trawlkit.Check{
-			ID:      "gog_binary",
-			State:   "fail",
-			Message: "gog is not on PATH",
-			Remedy:  "install gog and make sure your shell can run gog",
-		}
-	}
-	return trawlkit.Check{ID: "gog_binary", State: "ok"}
-}
-
-func (c *Crawler) checkGogVersion(ctx context.Context) trawlkit.Check {
-	version, err := c.gog.Version(ctx)
-	if err != nil {
-		return trawlkit.Check{ID: "gog_version", State: "fail", Message: "gog version cannot be checked", Remedy: "upgrade gogcli"}
-	}
-	if !versionAtLeast(version, minGogVersion) {
-		return trawlkit.Check{ID: "gog_version", State: "fail", Message: fmt.Sprintf("gog version %s is below %s", version, minGogVersion), Remedy: "upgrade gogcli"}
-	}
-	return trawlkit.Check{ID: "gog_version", State: "ok", Message: version}
-}
-
-func (c *Crawler) checkGogAuth(ctx context.Context) trawlkit.Check {
-	status, err := c.gog.AuthStatus(ctx)
-	if err != nil {
-		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog auth check failed", Remedy: "run gog login <email>"}
-	}
-	if !status.FoundAccount {
-		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no stored account", Remedy: "run gog login <email>"}
-	}
-	if !status.Authorized {
-		return trawlkit.Check{ID: "gog_auth", State: "fail", Message: "gog has no valid stored account", Remedy: "run gog login <email>"}
-	}
-	return trawlkit.Check{ID: "gog_auth", State: "ok"}
-}
-
-func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database has not been synced", Remedy: "run trawl gmail sync"}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		remedy := "run trawl gmail sync to rebuild the archive"
-		if errors.Is(err, archive.ErrSchemaMismatch) {
-			remedy = "remove the old archive and run trawl gmail sync"
-		}
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: remedy}
-	}
-	if _, err := st.Status(ctx); err != nil {
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl gmail sync to rebuild the archive"}
-	}
-	return trawlkit.Check{ID: "archive", State: "ok"}
 }

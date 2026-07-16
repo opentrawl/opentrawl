@@ -66,6 +66,113 @@ func TestImportContactsSearchWhoAndAnnotate(t *testing.T) {
 	}
 }
 
+func TestContactSnapshotReconcilesStaleValuesAndPreservesCorrections(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	first := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	stats, err := st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{
+		{ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "old@example.com"}}, Phones: []model.ContactValue{{Value: "+15550100"}}},
+		{ExternalID: "apple-bea", Name: "Bea Example", Phones: []model.ContactValue{{Value: "+15550200"}}},
+	}, first)
+	if err != nil || stats.Added != 2 {
+		t.Fatalf("first snapshot stats=%#v err=%v", stats, err)
+	}
+	ada, err := st.FindPerson(ctx, "old@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AnnotatePerson(ctx, ada.ID, "Ada prefers Signal", "2026-07-16"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "telegram", []model.SourceContact{{
+		ExternalID: "telegram-ada", Name: "Ada T", Phones: []model.ContactValue{{Value: "+15550100"}}, Accounts: map[string][]string{"telegram": {"ada_example"}},
+	}}, first); err != nil {
+		t.Fatal(err)
+	}
+	stats, err = st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{
+		ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "new@example.com"}},
+	}}, first.Add(time.Hour))
+	if err != nil || stats.Updated != 1 || stats.Removed != 1 {
+		t.Fatalf("replacement stats=%#v err=%v", stats, err)
+	}
+	ada, err = st.FindPerson(ctx, "new@example.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ada.Annotation != "Ada prefers Signal" || len(ada.Phones) != 1 || ada.Phones[0].Source != "telegram" {
+		t.Fatalf("preserved person = %#v", ada)
+	}
+	if _, err := st.FindPerson(ctx, "old@example.com"); err == nil {
+		t.Fatal("stale Apple email still resolves")
+	}
+	if _, err := st.FindPerson(ctx, "Bea Example"); err == nil {
+		t.Fatal("person supported only by removed Apple source still exists")
+	}
+	stats, err = st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{
+		ExternalID: "apple-ada", Name: "Ada Example", Emails: []model.ContactValue{{Value: "new@example.com"}},
+	}}, first.Add(2*time.Hour))
+	if err != nil || stats != (SnapshotStats{}) {
+		t.Fatalf("idempotent stats=%#v err=%v", stats, err)
+	}
+	unchanged, err := st.FindPerson(ctx, "new@example.com")
+	if err != nil || !unchanged.UpdatedAt.Equal(ada.UpdatedAt) {
+		t.Fatalf("idempotent person updated_at=%v want=%v err=%v", unchanged.UpdatedAt, ada.UpdatedAt, err)
+	}
+}
+
+func TestSourceContactGroupingLinkCanMoveAndMoveBack(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	if _, err := st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{ExternalID: "apple-1", Name: "Alex Example", Phones: []model.ContactValue{{Value: "+15550100"}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "telegram", []model.SourceContact{{ExternalID: "telegram-1", Name: "Alex Chat", Phones: []model.ContactValue{{Value: "+15550100"}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	grouped, err := st.FindPerson(ctx, "+15550100")
+	if err != nil {
+		t.Fatal(err)
+	}
+	separate := model.NewPerson("Separate Alex", now)
+	if err := st.SavePerson(ctx, separate); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.MoveSourceContact(ctx, "telegram", "telegram-1", separate.ID, now.Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.sourceContacts(ctx, "telegram")
+	if err != nil || len(rows) != 1 || rows[0].PersonID != separate.ID {
+		t.Fatalf("moved source rows=%#v err=%v", rows, err)
+	}
+	if err := st.MoveSourceContact(ctx, "telegram", "telegram-1", grouped.ID, now.Add(2*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	rows, err = st.sourceContacts(ctx, "telegram")
+	if err != nil || len(rows) != 1 || rows[0].PersonID != grouped.ID {
+		t.Fatalf("restored source rows=%#v err=%v", rows, err)
+	}
+}
+
+func TestExactNameDoesNotMergeContradictoryStrongIdentifiers(t *testing.T) {
+	ctx := context.Background()
+	st := openTempStore(t)
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	if _, err := st.SyncContactSnapshot(ctx, "apple", []model.SourceContact{{ExternalID: "apple-1", Name: "Sam Example", Emails: []model.ContactValue{{Value: "one@example.com"}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.SyncContactSnapshot(ctx, "google", []model.SourceContact{{ExternalID: "google-1", Name: "Sam Example", Emails: []model.ContactValue{{Value: "two@example.com"}}}}, now); err != nil {
+		t.Fatal(err)
+	}
+	people, err := st.People(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(people) != 2 {
+		t.Fatalf("people = %#v, want two distinct Sams", people)
+	}
+}
+
 func TestSearchKeepsDistinctContactNoteAndSourceNameMatches(t *testing.T) {
 	ctx := context.Background()
 	st := openTempStore(t)

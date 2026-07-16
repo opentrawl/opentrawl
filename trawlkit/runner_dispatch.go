@@ -62,7 +62,7 @@ func resolveVerb(source Crawler, args []string) (targetVerb, error) {
 		}
 		decl := spineDeclaration(spine, name)
 		return targetVerb{name: name, args: rest, spine: decl, storeMode: spineStoreMode(name, decl)}, nil
-	case "status", "doctor":
+	case "status":
 		spine, err := supportedVerbDeclarations(source)
 		if err != nil {
 			return targetVerb{}, err

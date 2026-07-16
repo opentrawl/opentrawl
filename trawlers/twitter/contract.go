@@ -10,7 +10,6 @@ import (
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/xapi"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -67,20 +66,6 @@ type spendEnvelope struct {
 	MonthlyBudgetUSD string `json:"monthly_budget_usd"`
 	RemainingUSD     string `json:"remaining_usd"`
 	LiveSyncPaused   bool   `json:"live_sync_paused,omitempty"`
-}
-
-type doctorOutput struct {
-	Checks  []doctorCheck         `json:"checks"`
-	Log     *render.DoctorLogTail `json:"log,omitempty"`
-	logTail render.LogTail        `json:"-"`
-}
-
-type doctorCheck struct {
-	ID      string `json:"id"`
-	Label   string `json:"label,omitempty"`
-	State   string `json:"state"`
-	Message string `json:"message,omitempty"`
-	Remedy  string `json:"remedy,omitempty"`
 }
 
 type searchEnvelope struct {

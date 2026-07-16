@@ -16,16 +16,7 @@ func TestReadVerbsNeverMutateArchive(t *testing.T) {
 	archivePath := filepath.Join(stateRoot, "testcrawl", "testcrawl.db")
 	before := fileSHA256(t, archivePath)
 
-	base := &testCrawler{
-		doctorFn: func(ctx context.Context, req *Request) (*Doctor, error) {
-			if os.Getenv("TRAWLKIT_READ_ONLY_NEGATIVE_WRITE") == "1" {
-				if err := appendArchiveMutation(req.Paths.Archive); err != nil {
-					return nil, err
-				}
-			}
-			return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
-		},
-	}
+	base := &testCrawler{}
 	source := &testOpenContactCrawler{testContactCrawler: &testContactCrawler{
 		testCrawler: base,
 		contactExportFn: func(ctx context.Context, req *Request) (*control.ContactExport, error) {
@@ -43,7 +34,6 @@ func TestReadVerbsNeverMutateArchive(t *testing.T) {
 		{"who", "--json", "Ada"},
 		{"open", "--json", "testcrawl:1"},
 		{"contacts", "export", "--json"},
-		{"doctor", "--json"},
 	}
 	for _, argv := range commands {
 		code, stdout, stderr := runForTestAt(stateRoot, argv, source, runOptions{})
@@ -66,16 +56,4 @@ func fileSHA256(t *testing.T, path string) [32]byte {
 		t.Fatal(err)
 	}
 	return sha256.Sum256(data)
-}
-
-func appendArchiveMutation(path string) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
-	if err != nil {
-		return err
-	}
-	if _, err := file.Write([]byte("mutation\n")); err != nil {
-		_ = file.Close()
-		return err
-	}
-	return file.Close()
 }

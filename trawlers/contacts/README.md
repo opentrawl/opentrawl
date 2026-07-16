@@ -4,20 +4,34 @@ written_by: ai
 
 # Contacts
 
-Contacts stores reviewed people and identifiers in the standard local archive:
+Contacts is OpenTrawl's People index. It stores people and identifiers in its
+own local archive:
 
 ```text
 ~/.opentrawl/contacts/contacts.db
 ```
 
-The SQLite archive can hold names, email addresses, phone numbers, postal
-addresses, source handles, notes, user annotations, search indexes and short
-refs. It is the people source in `trawl`; other crawlers do not write directly
-to its schema.
+The SQLite archive groups source identities from Apple Contacts and messaging
+archives without flattening their original records. Strong identifiers such as
+phone numbers, email addresses and source accounts connect identities. The
+grouping link can be changed without deleting the source records, and user
+annotations survive later syncs.
+
+## Sync
+
+Normal OpenTrawl sync reads Apple Contacts automatically and creates or updates
+the People archive:
+
+```sh
+trawl sync contacts
+```
+
+Later source snapshots replace only that source's values. Values from other
+sources and user annotations remain intact.
 
 ## Import
 
-Import one reviewed source at a time:
+Explicit imports remain available for files and older archives:
 
 ```sh
 trawl contacts import apple --input contacts.ndjson
@@ -45,8 +59,8 @@ trawl contacts person annotate person_123 "Ada is the project accountant"
 trawl contacts contacts export
 ```
 
-Add `--json` for structured output. Remote address-book writes are not part of
-the active source contract.
+Use the normal text output for people and agents. Add `--json` only for scripts.
+OpenTrawl never writes back to Apple Contacts or another address book.
 
 The archive contains private contact and annotation data. Public fixtures use
 invented people, `example.com` addresses and `+1555` phone numbers.

@@ -248,12 +248,6 @@ func executeVerb(ctx context.Context, source Crawler, verb targetVerb, req *Requ
 			return err
 		}
 		return writeResult(req.Out, format, "status", status)
-	case "doctor":
-		doctor, err := source.Doctor(ctx, req)
-		if err != nil {
-			return err
-		}
-		return writeResult(req.Out, format, "doctor", doctor)
 	case "sync":
 		report, syncErr := source.(Syncer).Sync(ctx, req)
 		assignErr := assignSourceShortRefs(ctx, source, req)

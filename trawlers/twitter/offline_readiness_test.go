@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/opentrawl/opentrawl/birdcrawl/internal/store"
-	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckstore "github.com/opentrawl/opentrawl/trawlkit/store"
 )
@@ -45,26 +44,11 @@ func TestImportedArchiveIsReadyWithoutLiveSync(t *testing.T) {
 			if !strings.Contains(status.Summary, "archive dump imported") {
 				t.Fatalf("status summary = %q, want local import summary", status.Summary)
 			}
-
-			doctorResult := runBirdcrawlRaw(t, stateRoot, "doctor", "--json")
-			assertSuccess(t, doctorResult, "doctor --json")
-			var doctor trawlkit.Doctor
-			assertJSON(t, doctorResult.stdout, &doctor)
-			archiveCheck := checkByID(doctor.Checks, "archive_ready")
-			if archiveCheck.State != "ok" {
-				t.Fatalf("archive readiness = %#v, want ok", archiveCheck)
-			}
-			for _, check := range doctor.Checks {
-				if strings.Contains(check.ID, "credential") || strings.Contains(check.ID, "budget") || strings.Contains(check.ID, "account") || strings.Contains(check.ID, "sync") {
-					t.Fatalf("offline doctor retained live setup check: %#v", check)
-				}
-			}
 			if len(transport.requests) != 0 {
 				t.Fatalf("offline request list = %#v, want empty", transport.requests)
 			}
 			t.Logf("import argv=%q result=%d stdout=%s stderr=%q", "import archive internal/archive/testdata/synthetic-dump --json", importResult.code, importResult.stdout, importResult.stderr)
 			t.Logf("status argv=%q result=%d stdout=%s stderr=%q", "status --json", statusResult.code, statusResult.stdout, statusResult.stderr)
-			t.Logf("doctor argv=%q result=%d stdout=%s stderr=%q requests=%#v", "doctor --json", doctorResult.code, doctorResult.stdout, doctorResult.stderr, transport.requests)
 		})
 	}
 }
@@ -94,20 +78,10 @@ func TestMissingArchiveNeedsLocalImportOffline(t *testing.T) {
 			if status.State == "ok" || !strings.Contains(status.Summary, "import an X archive dump") {
 				t.Fatalf("status = %#v, want import readiness failure", status)
 			}
-
-			doctorResult := runBirdcrawlRaw(t, stateRoot, "doctor", "--json")
-			assertSuccess(t, doctorResult, "doctor --json")
-			var doctor trawlkit.Doctor
-			assertJSON(t, doctorResult.stdout, &doctor)
-			archiveCheck := checkByID(doctor.Checks, "archive_ready")
-			if archiveCheck.State != "missing" || !strings.Contains(archiveCheck.Remedy, "import archive") {
-				t.Fatalf("archive readiness = %#v, want import remedy", archiveCheck)
-			}
 			if len(transport.requests) != 0 {
 				t.Fatalf("offline request list = %#v, want empty", transport.requests)
 			}
 			t.Logf("status argv=%q result=%d stdout=%s stderr=%q", "status --json", statusResult.code, statusResult.stdout, statusResult.stderr)
-			t.Logf("doctor argv=%q result=%d stdout=%s stderr=%q requests=%#v", "doctor --json", doctorResult.code, doctorResult.stdout, doctorResult.stderr, transport.requests)
 		})
 	}
 }
@@ -150,23 +124,10 @@ func TestSchemaOutdatedArchiveRequestsUpgradeWithoutReimport(t *testing.T) {
 	if strings.Contains(status.Summary, "import archive") {
 		t.Fatalf("status asks to re-import schema-outdated archive: %q", status.Summary)
 	}
-
-	doctorResult := runBirdcrawlRaw(t, stateRoot, "doctor", "--json")
-	assertSuccess(t, doctorResult, "doctor --json")
-	var doctor trawlkit.Doctor
-	assertJSON(t, doctorResult.stdout, &doctor)
-	archiveCheck := checkByID(doctor.Checks, "archive_ready")
-	if archiveCheck.State != "missing" || archiveCheck.Message != archiveSchemaUpgradeMessage+"." || archiveCheck.Remedy != archiveSchemaUpgradeRemedy {
-		t.Fatalf("archive readiness = %#v, want schema upgrade remedy", archiveCheck)
-	}
-	if strings.Contains(string(doctorResult.stdout), "import archive") {
-		t.Fatalf("doctor asks to re-import schema-outdated archive: %s", doctorResult.stdout)
-	}
 	if len(transport.requests) != 0 {
 		t.Fatalf("offline request list = %#v, want empty", transport.requests)
 	}
 	t.Logf("status argv=%q result=%d stdout=%s stderr=%q", "status --json", statusResult.code, statusResult.stdout, statusResult.stderr)
-	t.Logf("doctor argv=%q result=%d stdout=%s stderr=%q requests=%#v", "doctor --json", doctorResult.code, doctorResult.stdout, doctorResult.stderr, transport.requests)
 }
 
 func TestInvalidArchiveLeavesOfflineReadinessMissing(t *testing.T) {
@@ -298,15 +259,6 @@ func assertSuccess(t *testing.T, result birdcrawlResult, command string) {
 	if result.code != 0 {
 		t.Fatalf("%s exited %d\nstdout:\n%s\nstderr:\n%s", command, result.code, result.stdout, result.stderr)
 	}
-}
-
-func checkByID(checks []trawlkit.Check, id string) trawlkit.Check {
-	for _, check := range checks {
-		if check.ID == id {
-			return check
-		}
-	}
-	return trawlkit.Check{ID: id, State: "missing"}
 }
 
 func credentialsCaseName(withCredentials bool) string {

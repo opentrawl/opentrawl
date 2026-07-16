@@ -2,14 +2,11 @@ package notes
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/notes/internal/archive"
-	"github.com/opentrawl/opentrawl/trawlers/notes/internal/notesdb"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	"github.com/opentrawl/opentrawl/trawlkit/output"
@@ -165,14 +162,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return &status, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	sourcePath, sourceErr := notesdb.DefaultStorePath()
-	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		checkSourceStore(sourcePath, sourceErr),
-		checkArchive(ctx, req),
-	}}, nil
-}
-
 // statusState reports both the machine state and the human summary. The "ok"
 // summary matches the wording trawlkit's own text renderer already prints for
 // state "ok" (see render.WriteStatus) — one sentence, not two that can drift
@@ -189,52 +178,6 @@ func statusState(status archive.Status) (string, string) {
 		return "stale", "Archive is stale."
 	}
 	return "ok", "Recently synced."
-}
-
-func checkSourceStore(path string, pathErr error) trawlkit.Check {
-	if pathErr != nil {
-		return trawlkit.Check{
-			ID:      "source_store",
-			State:   "fail",
-			Message: "cannot locate the Apple Notes database",
-			Remedy:  "set HOME, then run trawl notes sync; or run trawl notes sync --store PATH",
-		}
-	}
-	if _, err := os.Stat(path); err != nil {
-		return trawlkit.Check{
-			ID:      "source_store",
-			State:   "fail",
-			Message: "cannot read the Apple Notes database",
-			Remedy:  "grant Full Disk Access, then run trawl notes sync; or run trawl notes sync --store PATH",
-		}
-	}
-	return trawlkit.Check{ID: "source_store", State: "ok"}
-}
-
-func checkArchive(ctx context.Context, req *trawlkit.Request) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive has not been synced", Remedy: "run trawl notes sync"}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		if errors.Is(err, archive.ErrSchemaNewer) {
-			// sync refuses a newer-than-binary archive outright (never
-			// parks, never demotes it), so telling the operator to sync
-			// here would just point them at another failure. The truthful
-			// remedy is to update the binary, not to run sync again.
-			return trawlkit.Check{
-				ID:      "archive",
-				State:   "fail",
-				Message: "archive was written by a newer build of trawl notes than this binary supports",
-				Remedy:  "update trawl to a build that supports this archive",
-			}
-		}
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive database cannot be read", Remedy: "run trawl notes sync"}
-	}
-	if _, err := st.Status(ctx); err != nil {
-		return trawlkit.Check{ID: "archive", State: "fail", Message: "archive status cannot be read", Remedy: "run trawl notes sync"}
-	}
-	return trawlkit.Check{ID: "archive", State: "ok"}
 }
 
 func commandErr(code, message, remedy string, err error) error {

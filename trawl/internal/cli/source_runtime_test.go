@@ -34,10 +34,6 @@ func (c *sourceRuntimeWritePreparer) Status(context.Context, *trawlkit.Request) 
 	return &status, nil
 }
 
-func (c *sourceRuntimeWritePreparer) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return &trawlkit.Doctor{}, nil
-}
-
 func (c *sourceRuntimeWritePreparer) Verbs() []trawlkit.Verb { return nil }
 
 func (c *sourceRuntimeWritePreparer) PrepareArchive(context.Context, string) error {
@@ -52,10 +48,6 @@ func (c *sourceRuntimePreparer) Info() trawlkit.Info {
 func (c *sourceRuntimePreparer) Status(context.Context, *trawlkit.Request) (*control.Status, error) {
 	status := control.NewStatus("prepared", "prepared")
 	return &status, nil
-}
-
-func (c *sourceRuntimePreparer) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return &trawlkit.Doctor{}, nil
 }
 
 func (c *sourceRuntimePreparer) Verbs() []trawlkit.Verb { return nil }

@@ -138,11 +138,60 @@ func matchContact(people []model.Person, contact model.SourceContact, matchNames
 		return -1
 	}
 	for i, person := range people {
-		if model.NormalizeName(person.Name) != "" && model.NormalizeName(person.Name) == model.NormalizeName(contact.Name) {
+		if model.NormalizeName(person.Name) != "" &&
+			model.NormalizeName(person.Name) == model.NormalizeName(contact.Name) &&
+			!strongIdentifiersContradict(person, contact) {
 			return i
 		}
 	}
 	return -1
+}
+
+func strongIdentifiersContradict(person model.Person, contact model.SourceContact) bool {
+	if valuesContradict(contactValueSet(person.Emails, model.NormalizeEmail), contactValueSet(contact.Emails, model.NormalizeEmail)) {
+		return true
+	}
+	if valuesContradict(contactValueSet(person.Phones, model.NormalizePhone), contactValueSet(contact.Phones, model.NormalizePhone)) {
+		return true
+	}
+	for service, incoming := range cleanAccounts(contact.Accounts) {
+		if valuesContradict(stringSet(person.Accounts[service]), stringSet(incoming)) {
+			return true
+		}
+	}
+	return false
+}
+
+func contactValueSet(values []model.ContactValue, normalize func(string) string) map[string]bool {
+	out := map[string]bool{}
+	for _, value := range values {
+		if normalized := normalize(value.Value); normalized != "" {
+			out[normalized] = true
+		}
+	}
+	return out
+}
+
+func stringSet(input []string) map[string]bool {
+	values := map[string]bool{}
+	for _, value := range input {
+		if key := strings.ToLower(strings.TrimSpace(value)); key != "" {
+			values[key] = true
+		}
+	}
+	return values
+}
+
+func valuesContradict(existing, incoming map[string]bool) bool {
+	if len(existing) == 0 || len(incoming) == 0 {
+		return false
+	}
+	for value := range incoming {
+		if existing[value] {
+			return false
+		}
+	}
+	return true
 }
 
 func accountsOverlap(existing map[string][]string, incoming map[string][]string) bool {

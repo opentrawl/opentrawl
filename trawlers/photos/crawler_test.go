@@ -229,7 +229,7 @@ func TestRunnerManifestListsCapabilitiesAndClassify(t *testing.T) {
 	if manifest.SchemaVersion != control.RunnerManifestVersion {
 		t.Fatalf("schema_version = %d", manifest.SchemaVersion)
 	}
-	for _, capability := range []string{"metadata", "status", "doctor", "sync", "classify", "acquire_current_still", "search", "short_refs", "open"} {
+	for _, capability := range []string{"metadata", "status", "sync", "classify", "acquire_current_still", "search", "short_refs", "open"} {
 		if !slices.Contains(manifest.Capabilities, capability) {
 			t.Fatalf("missing capability %q in %#v", capability, manifest.Capabilities)
 		}

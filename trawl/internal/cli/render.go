@@ -15,13 +15,6 @@ type StatusResult struct {
 	Status StatusEnvelope `json:"status"`
 }
 
-type DoctorResult struct {
-	Source string        `json:"source"`
-	Checks []DoctorCheck `json:"checks"`
-
-	sourceInfo Source
-}
-
 func renderStatusTable(w io.Writer, results []StatusResult, now time.Time) error {
 	if len(results) == 0 {
 		_, err := fmt.Fprintln(w, "No crawlers found.")
@@ -75,89 +68,6 @@ func renderStatusDetail(w io.Writer, result StatusResult, now time.Time) error {
 		return err
 	}
 	return nil
-}
-
-// renderDoctor is a glance first: one row per source, and each failing
-// check expands into its own block below the table so remedies never
-// ride a data line.
-func renderDoctor(w io.Writer, results []DoctorResult) error {
-	if len(results) == 0 {
-		_, err := fmt.Fprintln(w, "No crawlers found.")
-		return err
-	}
-	type failure struct {
-		source  string
-		command string
-		check   DoctorCheck
-	}
-	rows := make([][]string, 0, len(results))
-	var failures []failure
-	for _, result := range results {
-		sourceName := doctorSourceName(result)
-		commandToken := doctorSourceCommandToken(result)
-		var failedNames []string
-		names := make([]string, 0, len(result.Checks))
-		for _, check := range result.Checks {
-			names = append(names, humanLabel(check.ID))
-			if checkFailed(check) {
-				failedNames = append(failedNames, humanLabel(check.ID))
-				failures = append(failures, failure{
-					source:  sourceName,
-					command: commandToken,
-					check:   check,
-				})
-			}
-		}
-		if len(failedNames) == 0 {
-			plural := "checks"
-			if len(result.Checks) == 1 {
-				plural = "check"
-			}
-			rows = append(rows, []string{sourceName, "ok", fmt.Sprintf("%s %s: %s", render.FormatInteger(int64(len(result.Checks))), plural, strings.Join(names, ", "))})
-			continue
-		}
-		summary := fmt.Sprintf("%s failed · %s of %s ok",
-			strings.Join(failedNames, ", "),
-			render.FormatInteger(int64(len(result.Checks)-len(failedNames))),
-			render.FormatInteger(int64(len(result.Checks))))
-		rows = append(rows, []string{sourceName, "FAIL", summary})
-	}
-	if err := render.WriteTable(w, []render.TableColumn{
-		{Header: "source"},
-		{Header: "state"},
-		{Header: "checks"},
-	}, rows); err != nil {
-		return err
-	}
-	for _, failed := range failures {
-		if _, err := fmt.Fprintf(w, "\n%s %s failed: %s\n", failed.source, humanLabel(failed.check.ID), firstNonEmpty(failed.check.Message, "check failed")); err != nil {
-			return err
-		}
-		if remedy := strings.TrimSpace(failed.check.Remedy); remedy != "" {
-			if _, err := fmt.Fprintf(w, "  Remedy: %s\n", remedy); err != nil {
-				return err
-			}
-		} else if failed.command != "" {
-			if _, err := fmt.Fprintf(w, "  Remedy: run trawl doctor %s\n", failed.command); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func doctorSourceName(result DoctorResult) string {
-	if name := sourceHumanName(result.sourceInfo); name != "" {
-		return name
-	}
-	return result.Source
-}
-
-func doctorSourceCommandToken(result DoctorResult) string {
-	if token := sourceCommandToken(result.sourceInfo); token != "" {
-		return token
-	}
-	return result.Source
 }
 
 func renderDatabases(w io.Writer, status StatusEnvelope) error {

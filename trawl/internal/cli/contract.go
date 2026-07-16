@@ -117,17 +117,6 @@ type Database struct {
 	Counts    []Count `json:"counts,omitempty"`
 }
 
-type DoctorEnvelope struct {
-	Checks []DoctorCheck `json:"checks"`
-}
-
-type DoctorCheck struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Message string `json:"message,omitempty"`
-	Remedy  string `json:"remedy,omitempty"`
-}
-
 type ErrorEnvelope struct {
 	Error ErrorBody `json:"error"`
 }
@@ -175,10 +164,6 @@ func errorStatus(source Source, summary string) StatusEnvelope {
 
 func statusFailed(status StatusEnvelope) bool {
 	return status.State == "error" || status.State == "missing"
-}
-
-func checkFailed(check DoctorCheck) bool {
-	return check.State == "fail" || check.State == "error" || check.State == "missing"
 }
 
 func freshnessText(status StatusEnvelope, now time.Time) string {

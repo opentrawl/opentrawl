@@ -102,7 +102,6 @@ func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	}
 	wantCommands := []string{
 		"bookmarks",
-		"doctor",
 		"import_archive",
 		"likes",
 		"mentions",
@@ -121,7 +120,6 @@ func TestGeneratedManifestListsRunnerVerbs(t *testing.T) {
 	}
 	wantCaps := []string{
 		"bookmarks",
-		"doctor",
 		"import_archive",
 		"likes",
 		"mentions",

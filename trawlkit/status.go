@@ -1,16 +1,5 @@
 package trawlkit
 
-type Doctor struct {
-	Checks []Check `json:"checks"`
-}
-
-type Check struct {
-	ID      string `json:"id"`
-	State   string `json:"state"`
-	Message string `json:"message"`
-	Remedy  string `json:"remedy,omitempty"`
-}
-
 type SyncReport struct {
 	Added    int64    `json:"added"`
 	Updated  int64    `json:"updated"`

@@ -17,8 +17,6 @@ func (r *runtime) print(v any) error {
 	switch value := v.(type) {
 	case statusEnvelope:
 		return r.printStatus(value)
-	case doctorOutput:
-		return r.printDoctor(value)
 	case store.ImportStats:
 		if _, err := fmt.Fprintf(r.stdout, "source_path: %s\ndb_path: %s\nchats: %s\nmessages: %s\nmedia_messages: %s\nmedia_files: %s\nmedia_bytes: %s\nstarted_at: %s\nfinished_at: %s\n",
 			value.SourcePath,

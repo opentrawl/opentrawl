@@ -112,10 +112,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return c.handler(ctx, req).status(ctx)
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return c.handler(ctx, req).doctor(ctx)
-}
-
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	return c.handler(ctx, req).runSyncReport()
 }

@@ -146,7 +146,7 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
 	}
-	for _, want := range []string{"Commands:", "Sources:", "Agents:", "source:kind/id", "imessage:msg/8842", "--json"} {
+	for _, want := range []string{"Commands:", "Sources:", "Agents:", "source:kind/id", "imessage:msg/8842", "Use ordinary command output", "Use --json only when writing a script or pipeline", "chats"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("trawl --help missing %q:\n%s", want, stdout)
 		}
@@ -154,6 +154,11 @@ func TestHelpShowsFullPageAndAgentsBlock(t *testing.T) {
 	for _, id := range binaryIDs {
 		if strings.Contains(stdout, id) {
 			t.Errorf("trawl --help leaked internal binary id %q:\n%s", id, stdout)
+		}
+	}
+	for _, forbidden := range []string{"DOCTOR", "trawl doctor", "agents, prefer this"} {
+		if strings.Contains(stdout, forbidden) {
+			t.Errorf("trawl --help exposed removed or machine-first guidance %q:\n%s", forbidden, stdout)
 		}
 	}
 }

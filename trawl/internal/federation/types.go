@@ -63,7 +63,7 @@ func FailureForError(manifest control.Manifest, operation string, err error) *fe
 	}
 	remedy := body.Remedy
 	if strings.TrimSpace(remedy) == "" {
-		remedy = "trawl doctor " + sourceID(manifest)
+		remedy = "Retry with -v to see the log location."
 	}
 	return &federationv1.SourceFailure{SourceId: sourceID(manifest), Surface: sourceSurface(manifest), Code: code, Message: message, Remedy: remedy}
 }
@@ -126,7 +126,7 @@ func operationFailure(manifest control.Manifest, operation, message string, code
 		Surface:  sourceSurface(manifest),
 		Code:     code,
 		Message:  operation + " failed: " + message,
-		Remedy:   "trawl doctor " + sourceID(manifest),
+		Remedy:   "Retry with -v to see the log location.",
 	}
 }
 

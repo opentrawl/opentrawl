@@ -22,7 +22,7 @@ var (
 
 // ResolveChatArg turns whatever a reader pasted into messages --chat into the
 // raw source chat id the store queries. It accepts three shapes, so the chats
-// table and an agent's --json both feed the one flag:
+// table and a script's --json both feed the one flag:
 //   - a short ref from the chats table, resolved through the same index open
 //     and search use (the value carries no ":"),
 //   - a full source ref like "telegram:chat/42139272", and

@@ -293,7 +293,7 @@ func cliEvidenceCases() []cliEvidenceCase {
 		}},
 		{name: "search-who-resolved", args: []string{"search", "synthetic", "--who", "Alex"}, expectCallbacks: true, searchCalls: 1, crawlers: func(r *fakeCrawlerEvidence) []fakeCrawler {
 			return []fakeCrawler{
-				{name: "imsgcrawl", metadata: evidenceMetadata("imessage", "Messages", "status", "sync", "search", "open", "doctor", "who"), whoQuery: "Alex", who: `{"query":"Alex","candidates":[{"who":"Alex Example","identifiers":["alex@example.com"],"match_quality":"exact","sources":["imessage"],"messages":1}]}`, searchWho: "alex@example.com", search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
+				{name: "imsgcrawl", metadata: evidenceMetadata("imessage", "Messages", "status", "sync", "search", "open", "who"), whoQuery: "Alex", who: `{"query":"Alex","candidates":[{"who":"Alex Example","identifiers":["alex@example.com"],"match_quality":"exact","sources":["imessage"],"messages":1}]}`, searchWho: "alex@example.com", search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
 				{name: "notescrawl", metadata: evidenceMetadata("notes", "Notes", "search"), search: `{"query":"synthetic","results":[],"total_matches":0}`, searchCalls: new(int), evidence: r},
 				{name: "calendarcrawl", metadata: evidenceMetadata("calendar", "Calendar", "status"), evidence: r},
 			}

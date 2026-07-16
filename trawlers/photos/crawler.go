@@ -169,23 +169,6 @@ func (c *Crawler) Status(ctx context.Context, req *trawlkit.Request) (*control.S
 	return out, nil
 }
 
-func (c *Crawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	result, err := archive.Doctor(ctx, archivePaths(req), archive.DoctorOptions{LibraryPath: c.cfg.LibraryPath})
-	if err != nil {
-		return nil, err
-	}
-	checks := make([]trawlkit.Check, 0, len(result.Checks))
-	for _, check := range result.Checks {
-		checks = append(checks, trawlkit.Check{
-			ID:      check.ID,
-			State:   check.State,
-			Message: check.Message,
-			Remedy:  check.Remedy,
-		})
-	}
-	return &trawlkit.Doctor{Checks: checks}, nil
-}
-
 func (c *Crawler) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	libraryPath := strings.TrimSpace(c.cfg.LibraryPath)
 	if libraryPath == "" {

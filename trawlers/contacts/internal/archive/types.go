@@ -11,7 +11,7 @@ import (
 const (
 	AppID         = "contacts"
 	DisplayName   = "Contacts"
-	SchemaVersion = 1
+	SchemaVersion = 2
 )
 
 type Store struct {

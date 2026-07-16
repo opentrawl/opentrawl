@@ -7,6 +7,7 @@ public struct ProcessTrawlClient: TrawlClient {
   private static let logger = Logger(subsystem: "app.opentrawl.trawl", category: "helper")
   static let defaultSearchDeadline: Duration = .seconds(10)
   static let defaultOperationDeadline: Duration = .seconds(30)
+  static let defaultSyncSourceDeadline: Duration = .seconds(31 * 60)
   static let defaultPhotosPermissionDeadline: Duration = .seconds(310)
   public static let maximumResourceBytes: UInt32 = 4 << 20
 
@@ -56,11 +57,38 @@ public struct ProcessTrawlClient: TrawlClient {
   }
 
   public func sync() async throws -> SyncResponse {
-    try await response(
-      arguments: ["__app", "sync"],
-      deadline: operationDeadline,
-      as: Trawl_App_V1_SyncResponse.self
-    ).model()
+    try await sync { _ in }
+  }
+
+  public func sync(progress: @escaping @Sendable (SyncProgress) -> Void) async throws
+    -> SyncResponse
+  {
+    let current = try await status()
+    var sources = current.sources.map { ($0.manifest.sourceID, $0.manifest.displayName) }
+    for failure in current.failures where !sources.contains(where: { $0.0 == failure.sourceID }) {
+      sources.append((failure.sourceID, failure.sourceName))
+    }
+    var results: [SyncSourceResult] = []
+    var failures: [SourceFailure] = []
+    for (sourceID, sourceName) in sources {
+      if Task.isCancelled { throw TrawlClientError.cancelled }
+      progress(.started(sourceID: sourceID, sourceName: sourceName))
+      let response = try await response(
+        arguments: ["__app", "sync", "--source", sourceID],
+        deadline: Self.defaultSyncSourceDeadline,
+        as: Trawl_App_V1_SyncResponse.self
+      ).model()
+      results.append(contentsOf: response.sources)
+      failures.append(contentsOf: response.failures)
+      for result in response.sources {
+        progress(.finished(result))
+      }
+    }
+    let outcome: OperationOutcome =
+      failures.isEmpty
+      ? .complete
+      : results.contains(where: { $0.outcome != .failed }) ? .partial : .failed
+    return SyncResponse(sources: results, failures: failures, outcome: outcome)
   }
 
   public func search(_ query: String, source: String?) async throws -> SearchResponse {

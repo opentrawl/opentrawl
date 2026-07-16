@@ -62,15 +62,28 @@ func TestSQLiteDatabaseStatsPathReadOnly(t *testing.T) {
 }
 
 func TestValidateContactExport(t *testing.T) {
-	valid := ContactExport{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{"+15550100"}}}}
-	if err := ValidateContactExport(valid); err != nil {
-		t.Fatal(err)
+	valid := []ContactExport{
+		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{"+15550100"}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", EmailAddresses: []string{"alice@example.com"}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"telegram": {"alice"}}}}},
+	}
+	for _, value := range valid {
+		if err := ValidateContactExport(value); err != nil {
+			t.Fatal(err)
+		}
 	}
 	invalid := []ContactExport{
 		{Contacts: []Contact{{PhoneNumbers: []string{"+15550100"}}}},
 		{Contacts: []Contact{{DisplayName: "Alice"}}},
 		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{""}}}},
 		{Contacts: []Contact{{DisplayName: "Alice", PhoneNumbers: []string{"+15550100", "+15550100"}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", EmailAddresses: []string{""}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", EmailAddresses: []string{"Alice@example.com", "alice@example.com"}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"": {"alice"}}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"telegram": {}}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"telegram": {""}}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"telegram": {"Alice", "alice"}}}}},
+		{Contacts: []Contact{{DisplayName: "Alice", Accounts: map[string][]string{"Telegram": {"alice"}, "telegram": {"bob"}}}}},
 	}
 	for _, value := range invalid {
 		if err := ValidateContactExport(value); err == nil {

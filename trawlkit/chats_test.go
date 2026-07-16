@@ -345,7 +345,7 @@ func TestRunChatsTextChatColumnShowsShortRef(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("chats json code=%d stdout=%s stderr=%s", code, stdout, stderr)
 	}
-	// --json is the agent contract: the raw id and full ref stay, the short ref
+	// --json is the script contract: the raw id and full ref stay, the short ref
 	// (a human display alias) never leaks in.
 	if !strings.Contains(stdout, `"ref": "`+ref+`"`) || !strings.Contains(stdout, `"id": "15550001111-1700000000@g.us"`) {
 		t.Fatalf("json must keep the raw id and full ref:\n%s", stdout)

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawlers/telegram/internal/store"
-	"github.com/opentrawl/opentrawl/trawlkit/render"
 )
 
 const (
@@ -39,20 +38,6 @@ type countEnvelope struct {
 type authEnvelope struct {
 	Authorized bool    `json:"authorized"`
 	Expires    *string `json:"expires"`
-}
-
-type doctorOutput struct {
-	Checks  []doctorCheck         `json:"checks"`
-	Log     *render.DoctorLogTail `json:"log,omitempty"`
-	logTail render.LogTail        `json:"-"`
-}
-
-type doctorCheck struct {
-	ID      string `json:"id"`
-	Label   string `json:"label,omitempty"`
-	State   string `json:"state"`
-	Message string `json:"message,omitempty"`
-	Remedy  string `json:"remedy,omitempty"`
 }
 
 type searchEnvelope struct {

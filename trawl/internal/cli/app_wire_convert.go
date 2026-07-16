@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -70,7 +69,7 @@ func appSyncFailure(source Source, result SyncResult) *appv1.SourceFailure {
 	if result.Error != nil {
 		code = appSyncFailureCode(result.Error.Code)
 	}
-	remedy := fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))
+	remedy := "Review OpenTrawl's logs for this source, then sync again."
 	if result.Error != nil && result.Error.Remedy != "" {
 		remedy = result.Error.Remedy
 	}
@@ -89,7 +88,7 @@ func appSyncFailureCode(code string) appv1.FailureCode {
 		return appv1.FailureCode_FAILURE_CODE_INVALID_INPUT
 	case "not_found", "source_not_found", "unknown_short_ref":
 		return appv1.FailureCode_FAILURE_CODE_NOT_FOUND
-	case "internal", "command_failed", "sync_failed":
+	case "internal", "command_failed", "sync_failed", "people_sync_failed":
 		return appv1.FailureCode_FAILURE_CODE_INTERNAL
 	default:
 		return appv1.FailureCode_FAILURE_CODE_UNAVAILABLE

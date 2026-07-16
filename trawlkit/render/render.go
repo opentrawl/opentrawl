@@ -1,5 +1,4 @@
-// Package render writes shared human output for crawler status and doctor
-// commands.
+// Package render writes shared human output for crawler commands.
 package render
 
 import (
@@ -13,15 +12,6 @@ import (
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
 
-type CheckState string
-
-const (
-	CheckOK      CheckState = "ok"
-	CheckEmpty   CheckState = "empty"
-	CheckMissing CheckState = "missing"
-	CheckFail    CheckState = "fail"
-)
-
 type StatusState string
 
 const (
@@ -32,13 +22,6 @@ const (
 	StatusMissing StatusState = "missing"
 	StatusUnknown StatusState = "unknown"
 )
-
-type Check struct {
-	Name    string
-	State   CheckState
-	Message string
-	Remedy  string
-}
 
 type Status struct {
 	State     StatusState
@@ -72,55 +55,7 @@ type LogTail struct {
 	Errors          []string
 }
 
-type DoctorLogTail struct {
-	LastRun         *DoctorLogEvent  `json:"last_run,omitempty"`
-	MostRecentError *DoctorLogEvent  `json:"most_recent_error,omitempty"`
-	LogProblems     []DoctorLogEvent `json:"log_problems,omitempty"`
-}
-
-type DoctorLogEvent struct {
-	WhatHappened string `json:"what_happened"`
-	When         string `json:"when,omitempty"`
-	Remedy       string `json:"remedy,omitempty"`
-}
-
 var logFieldPattern = regexp.MustCompile(`\b([a-z][a-z0-9_]*)=("(?:\\.|[^"])*"|[^ ]+)`)
-
-func WriteDoctor(w io.Writer, checks []Check, tail LogTail) error {
-	if err := WriteChecks(w, checks); err != nil {
-		return err
-	}
-	return WriteLogTail(w, doctorLogTail(tail))
-}
-
-func WriteChecks(w io.Writer, checks []Check) error {
-	if _, err := io.WriteString(w, "Doctor checks:\n"); err != nil {
-		return err
-	}
-	for _, check := range checks {
-		if _, err := fmt.Fprintf(w, "  %s: %s", displayCheckName(check.Name), check.State); err != nil {
-			return err
-		}
-		if message := strings.TrimSpace(check.Message); message != "" {
-			if _, err := fmt.Fprintf(w, " - %s", message); err != nil {
-				return err
-			}
-		}
-		if _, err := io.WriteString(w, "\n"); err != nil {
-			return err
-		}
-		if remedy := strings.TrimSpace(check.Remedy); remedy != "" {
-			if _, err := fmt.Fprintf(w, "    Remedy: %s\n", remedy); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func displayCheckName(name string) string {
-	return displayCode(name)
-}
 
 func displayRunOutcome(outcome string) string {
 	switch strings.TrimSpace(outcome) {
@@ -195,63 +130,6 @@ func WriteLogTail(w io.Writer, tail LogTail) error {
 		}
 	}
 	return writeMessages(w, "Log errors", tail.Errors)
-}
-
-func doctorLogTail(tail LogTail) LogTail {
-	if tail.MostRecentError != nil && !cklog.IsUserFacingError(*tail.MostRecentError) {
-		tail.MostRecentError = nil
-	}
-	return tail
-}
-
-func DoctorLogTailOutput(tail LogTail) *DoctorLogTail {
-	tail = doctorLogTail(tail)
-	out := &DoctorLogTail{}
-	if tail.LastRun != nil {
-		out.LastRun = doctorLastRunOutput(*tail.LastRun)
-	}
-	if tail.MostRecentError != nil {
-		out.MostRecentError = doctorRecentErrorOutput(*tail.MostRecentError)
-	}
-	for _, err := range tail.Errors {
-		if whatHappened := strings.TrimSpace(err); whatHappened != "" {
-			out.LogProblems = append(out.LogProblems, DoctorLogEvent{WhatHappened: whatHappened})
-		}
-	}
-	if out.LastRun == nil && out.MostRecentError == nil && len(out.LogProblems) == 0 {
-		return nil
-	}
-	return out
-}
-
-func doctorLastRunOutput(run cklog.RunSummary) *DoctorLogEvent {
-	whatHappened := strings.TrimSpace(run.Command)
-	if outcome := strings.TrimSpace(run.Outcome); outcome != "" {
-		if whatHappened == "" {
-			whatHappened = "command ended with " + outcome
-		} else {
-			whatHappened += " ended with " + outcome
-		}
-	}
-	if whatHappened == "" {
-		whatHappened = "command ran"
-	}
-	return &DoctorLogEvent{
-		WhatHappened: whatHappened,
-		When:         jsonTime(firstTime(run.FinishedAt, run.StartedAt)),
-	}
-}
-
-func doctorRecentErrorOutput(line cklog.Line) *DoctorLogEvent {
-	message, remedy := logErrorMessage(line.Message)
-	if message == "" {
-		message = "error"
-	}
-	return &DoctorLogEvent{
-		WhatHappened: message,
-		When:         jsonTime(line.Timestamp),
-		Remedy:       remedy,
-	}
 }
 
 func writeSection(w io.Writer, section Section) error {
@@ -389,17 +267,9 @@ func parseLogFields(message string) map[string]string {
 	return fields
 }
 
-// formatTime is the human-mode time: short local. JSON keeps full RFC3339
-// via jsonTime — the two surfaces must never share a formatter.
+// formatTime is the human-mode time: short local.
 func formatTime(value time.Time) string {
 	return ShortLocalTime(value)
-}
-
-func jsonTime(value time.Time) string {
-	if value.IsZero() {
-		return ""
-	}
-	return value.Format(time.RFC3339)
 }
 
 func firstTime(values ...time.Time) time.Time {

@@ -28,8 +28,24 @@ direnv allow                 # or: devenv shell
 scripts/dev-bin              # builds the CLI and crawlers into .dev/bin
 ```
 
-This repository does not publish an end-user installer. The Mac app source is
-under `app/`; the CLI and crawlers can be built and used from the checkout.
+The installed Mac app includes the complete CLI at
+`/Applications/OpenTrawl.app/Contents/Helpers/trawl`; it does not require Go or
+a source checkout. The app source is under `app/`. For development, the CLI and
+crawlers can also be built and used from the checkout.
+
+## Use OpenTrawl with an agent
+
+OpenTrawl gives a coding agent searchable access to the local archive of your
+messages, notes, contacts and other supported sources. Give an agent this
+minimal instruction:
+
+> Use `/Applications/OpenTrawl.app/Contents/Helpers/trawl` to search and open my
+> local OpenTrawl archives. Run it with no arguments for a short introduction
+> and with `--help` for the complete current interface. Prefer the normal text
+> output. Use `--json` only when writing a script.
+
+An agent may suggest putting that instruction in a skill or configuration file,
+but it must ask before changing agent configuration, skills or `PATH`.
 
 ## Use the archive
 
@@ -46,8 +62,9 @@ trawl telegram              # source-specific commands
 ```
 
 `status`, `search`, `open` and source-specific read commands use existing local
-archives. `sync` is the explicit operation that refreshes them. Add `--json` to
-a command when a program or agent needs structured output.
+archives. `sync` is the explicit operation that refreshes them. Normal text is
+the interface for people and agents. `--json` exists for scripts that need to
+compose command output mechanically.
 
 Search results carry stable, source-prefixed refs such as
 `imessage:msg/8842`. `open` returns a bounded source-owned record anchored at
@@ -64,7 +81,7 @@ The current build registers these sources explicitly in Go:
 | Telegram | [`trawlers/telegram`](trawlers/telegram) | Telegram Desktop or Telegram for macOS |
 | Gmail | [`trawlers/gmail`](trawlers/gmail) | an authenticated `gog` backup |
 | Calendar | [`trawlers/calendar`](trawlers/calendar) | Apple Calendar |
-| Contacts | [`trawlers/contacts`](trawlers/contacts) | reviewed contact imports |
+| Contacts | [`trawlers/contacts`](trawlers/contacts) | Apple Contacts and identities exported by messaging sources |
 | Photos | [`trawlers/photos`](trawlers/photos) | Apple Photos |
 | Twitter (X) | [`trawlers/twitter`](trawlers/twitter) | an X archive and the X API |
 | Notes | [`trawlers/notes`](trawlers/notes) | Apple Notes |

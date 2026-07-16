@@ -34,7 +34,6 @@ type testCrawler struct {
 	cfg           *testConfig
 	verbs         []Verb
 	statusFn      func(context.Context, *Request) (*control.Status, error)
-	doctorFn      func(context.Context, *Request) (*Doctor, error)
 	searchFn      func(context.Context, *Request, Query) (SearchResult, error)
 	whoFn         func(context.Context, *Request, string) ([]whomatch.Candidate, error)
 	syncFn        func(context.Context, *Request) (*SyncReport, error)
@@ -108,13 +107,6 @@ func (c *testCrawler) Status(ctx context.Context, req *Request) (*control.Status
 	status := control.NewStatus(c.Info().ID, "ready")
 	status.State = "ok"
 	return &status, nil
-}
-
-func (c *testCrawler) Doctor(ctx context.Context, req *Request) (*Doctor, error) {
-	if c.doctorFn != nil {
-		return c.doctorFn(ctx, req)
-	}
-	return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
 }
 
 func (c *testCrawler) Verbs() []Verb {
@@ -194,10 +186,6 @@ func (c *testStatusCrawler) Status(ctx context.Context, req *Request) (*control.
 	return &status, nil
 }
 
-func (c *testStatusCrawler) Doctor(ctx context.Context, req *Request) (*Doctor, error) {
-	return &Doctor{Checks: []Check{{ID: "archive", State: "ok", Message: "archive readable"}}}, nil
-}
-
 func (c *testStatusCrawler) Verbs() []Verb {
 	return c.verbs
 }
@@ -261,7 +249,6 @@ func TestRunMetadataGeneratesManifestWithFlagsAndStateRoot(t *testing.T) {
 	for name, want := range map[string]string{
 		"metadata": "none",
 		"status":   "optional",
-		"doctor":   "optional",
 		"sync":     "write",
 		"search":   "read",
 		"who":      "read",
@@ -1461,7 +1448,6 @@ func TestWriteResultNormalizesEmptyJSONArrays(t *testing.T) {
 		key   string
 	}{
 		{name: "search", label: "search", value: searchOutput{Query: "empty"}, key: "results"},
-		{name: "doctor", label: "doctor", value: &Doctor{}, key: "checks"},
 		{name: "contacts", label: "contacts", value: (*control.ContactExport)(nil), key: "contacts"},
 		{name: "who", label: "who", value: whoOutput{Query: "Ada"}, key: "candidates"},
 	}
@@ -1785,7 +1771,6 @@ func TestRunHelpDoesNotExposeInternalStateFlags(t *testing.T) {
 		{"--help"},
 		{"help", "metadata"},
 		{"help", "status"},
-		{"help", "doctor"},
 		{"help", "sync"},
 		{"help", "search"},
 		{"help", "who"},
@@ -1850,7 +1835,6 @@ func TestRunTextOutputUsesSharedRenderers(t *testing.T) {
 	}{
 		{name: "metadata", args: []string{"metadata"}, want: "Metadata\n"},
 		{name: "status", args: []string{"status"}, want: "Status: ok\nRecently synced.\n"},
-		{name: "doctor", args: []string{"doctor"}, want: "Doctor checks:\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, stdout, _ := runForTestAt(stateRoot, tc.args, source, runOptions{})
@@ -2656,7 +2640,7 @@ func TestRunnerChildHelper(t *testing.T) {
 				if line == "" {
 					return nil, errors.New("missing odd log line")
 				}
-				if err := writeChildFrame(req.Out, childLogFrame(line)); err != nil {
+				if err := writeChildFrame(os.Stdout, childLogFrame(line)); err != nil {
 					return nil, err
 				}
 				return &SyncReport{Added: 1}, nil

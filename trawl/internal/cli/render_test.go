@@ -92,34 +92,3 @@ func TestNormalizeSelfKeepsKnownIdentity(t *testing.T) {
 		t.Fatalf("normalizeSelf empty identity = %q", got)
 	}
 }
-
-// TestRenderDoctor pins the doctor design: raw check ids never reach a
-// reader, and a remedy sits on its own labelled line below the table
-// instead of riding a data row.
-func TestRenderDoctor(t *testing.T) {
-	t.Setenv("COLUMNS", "120")
-	results := []DoctorResult{{
-		Source: "imessage",
-		Checks: []DoctorCheck{
-			{ID: "source_store", State: "ok"},
-			{
-				ID:      "tcc_full_disk_access",
-				State:   "fail",
-				Message: "cannot read the source database",
-				Remedy:  "grant Full Disk Access to Trawl in System Settings > Privacy",
-			},
-		},
-	}}
-	var out bytes.Buffer
-	if err := renderDoctor(&out, results); err != nil {
-		t.Fatal(err)
-	}
-	want := "source    state  checks\n" +
-		"imessage  FAIL   tcc full disk access failed · 1 of 2 ok\n" +
-		"\n" +
-		"imessage tcc full disk access failed: cannot read the source database\n" +
-		"  Remedy: grant Full Disk Access to Trawl in System Settings > Privacy\n"
-	if out.String() != want {
-		t.Fatalf("doctor output:\n%s\nwant:\n%s", out.String(), want)
-	}
-}

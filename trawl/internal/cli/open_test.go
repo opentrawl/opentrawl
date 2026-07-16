@@ -12,7 +12,7 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 	human := "Crawler human open\nSubject: Example item\n\nLine one.\nref: imessage:msg/8842"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:      "imsgcrawl",
-		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/8842",
 		open:      `not-json`,
 		openHuman: human,
@@ -35,7 +35,7 @@ func TestOpenPassesHumanCrawlerOutputThrough(t *testing.T) {
 func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:      "imsgcrawl",
-		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:  `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:   "imessage:msg/8842",
 		open:      `{"body":"Example body","ref":"imessage:msg/8842"}`,
 		openHuman: "human output",
@@ -59,7 +59,7 @@ func TestOpenJSONPassesCrawlerPayloadThrough(t *testing.T) {
 func TestOpenPassesFullRefToCrawler(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:     "imsgcrawl",
-		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"fake","display_name":"Fake"}`,
+		metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"fake","display_name":"Fake"}`,
 		openRef:  "fake:msg/1",
 		open:     `{"body":"Example body","ref":"fake:msg/1"}`,
 	})
@@ -90,7 +90,7 @@ func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
 			name: "whatsapp",
 			crawler: fakeCrawler{
 				name:     "wacrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"whatsapp","display_name":"WhatsApp"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"whatsapp","display_name":"WhatsApp"}`,
 				openRef:  "wacrawl:msg/group-image",
 				open:     `{"ref":"wacrawl:msg/group-image"}`,
 			},
@@ -101,7 +101,7 @@ func TestOpenRoutesLegacyFullRefPrefixes(t *testing.T) {
 			name: "calendar",
 			crawler: fakeCrawler{
 				name:     "calcrawl",
-				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"calendar","display_name":"Calendar"}`,
+				metadata: `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"calendar","display_name":"Calendar"}`,
 				openRef:  "calcrawl:event/11111111-1111-1111-1111-111111111111",
 				open:     `{"ref":"calcrawl:event/11111111-1111-1111-1111-111111111111"}`,
 			},
@@ -138,7 +138,7 @@ func TestOpenShortRefResolvesExactlyOneMatch(t *testing.T) {
 	human := "Resolved human item\nref: imessage:msg/1"
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		openRef:       "imessage:msg/1",
 		open:          `{"ref":"imessage:msg/1"}`,
@@ -181,14 +181,14 @@ func TestOpenShortRefSurvivesEarlierErroringSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
 			openExit:      1,
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			openRef:       "telegram:msg/2",
 			open:          `{"ref":"telegram:msg/2"}`,
@@ -219,13 +219,13 @@ func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"error":{"code":"command_failed","message":"record short ref fingerprint failed","remedy":""}}`,
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
 			openExit:      1,
@@ -249,8 +249,8 @@ func TestOpenShortRefReportsEverySourceFailing(t *testing.T) {
 			t.Fatalf("stderr missing %q:\n%s", want, stderr)
 		}
 	}
-	if !strings.Contains(stderr, "run trawl doctor") {
-		t.Fatalf("stderr missing a runnable doctor remedy:\n%s", stderr)
+	if !strings.Contains(stderr, "retry with -v to see the log location") || strings.Contains(stderr, "doctor") {
+		t.Fatalf("stderr missing the log-based remedy:\n%s", stderr)
 	}
 }
 
@@ -262,14 +262,14 @@ func TestOpenShortRefUnknownDespiteOneErroringSource(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `crawler crashed`,
 			openExit:      1,
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"error":{"code":"unknown_short_ref","message":"short ref was not found","remedy":"rerun search or use the full ref"}}`,
 		},
@@ -292,7 +292,7 @@ func TestOpenShortRefUnknownDespiteOneErroringSource(t *testing.T) {
 func TestOpenShortRefReportsUnknown(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		open:          `{"error":{"code":"unknown_short_ref","message":"short ref was not found","remedy":"rerun search or use the full ref"}}`,
 		openExit:      1,
@@ -316,13 +316,13 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 	binDir := writeFakeCrawlers(t,
 		fakeCrawler{
 			name:          "imsgcrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"ref":"imessage:msg/1"}`,
 		},
 		fakeCrawler{
 			name:          "telecrawl",
-			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"telegram","display_name":"Telegram"}`,
+			metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"telegram","display_name":"Telegram"}`,
 			shortRefAlias: "t7k3f",
 			open:          `{"ref":"telegram:msg/2"}`,
 		},
@@ -349,7 +349,7 @@ func TestOpenShortRefReportsAmbiguousJSON(t *testing.T) {
 func TestOpenShortRefRejectsLegacyLookupEnvelope(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor","short_refs"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","short_refs"],"id":"imessage","display_name":"Messages"}`,
 		shortRefAlias: "t7k3f",
 		open:          `{"alias":"t7k3f","refs":["imessage:msg/1"]}`,
 		openExit:      1,
@@ -391,7 +391,7 @@ func TestOpenRejectsInvalidRefs(t *testing.T) {
 func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	binDir := writeFakeCrawlers(t, fakeCrawler{
 		name:          "imsgcrawl",
-		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open","doctor"],"id":"imessage","display_name":"Messages"}`,
+		metadata:      `{"schema_version":1,"contract_version":1,"capabilities":["status","sync","search","open"],"id":"imessage","display_name":"Messages"}`,
 		openRef:       "imessage:msg/8842",
 		openHuman:     "partial crawler output",
 		openHumanExit: 7,
@@ -407,7 +407,7 @@ func TestOpenPassesCrawlerFailureThrough(t *testing.T) {
 	if stdout != "" {
 		t.Fatalf("stdout = %q, want no partial source bytes", stdout)
 	}
-	if !strings.Contains(stderr, "open failed") || !strings.Contains(stderr, "Remedy: trawl doctor imessage") {
+	if !strings.Contains(stderr, "open failed") || !strings.Contains(stderr, "Remedy: Retry with -v to see the log location.") || strings.Contains(stderr, "doctor") {
 		t.Fatalf("stderr = %q, want typed open failure", stderr)
 	}
 }

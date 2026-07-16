@@ -103,19 +103,3 @@ func shortStatusTime(value string) string {
 	}
 	return render.ShortLocalTime(t)
 }
-
-func renderDoctorChecks(doctor *Doctor) []render.Check {
-	if doctor == nil {
-		return []render.Check{{Name: "runner", State: render.CheckFail, Message: "no doctor result returned"}}
-	}
-	checks := make([]render.Check, 0, len(doctor.Checks))
-	for _, check := range doctor.Checks {
-		checks = append(checks, render.Check{
-			Name:    check.ID,
-			State:   render.CheckState(check.State),
-			Message: check.Message,
-			Remedy:  check.Remedy,
-		})
-	}
-	return checks
-}

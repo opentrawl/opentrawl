@@ -28,7 +28,7 @@ type chatsOutput struct {
 
 type chatOutput struct {
 	// ID is the raw source key messages --chat accepts; Ref is the handle a
-	// reader copies from the human table. --json carries both so an agent can
+	// reader copies from the human table. --json carries both so a script can
 	// act without re-deriving either.
 	ID               string   `json:"id"`
 	Ref              string   `json:"ref,omitempty"`
@@ -51,7 +51,7 @@ type chatOutput struct {
 // chat ref (an archive synced by an older binary), the column falls back to the
 // source's DisplayID: a safe, copyable raw id where the source vouches for one,
 // a privacy marker, or empty when the source has no handle safe to show. The
-// raw Ref and ID never reach the human column; --json keeps both for agents.
+// raw Ref and ID never reach the human column; --json keeps both for scripts.
 func newChatsOutput(chats []Chat, aliases map[string]string, unread, truncated bool, with string) chatsOutput {
 	rows := make([]chatOutput, 0, len(chats))
 	for _, chat := range chats {

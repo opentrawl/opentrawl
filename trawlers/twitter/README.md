@@ -32,7 +32,6 @@ like `twitter:tweet/1800000000000000001`.
 ## Commands
 
 ```sh
-trawl twitter doctor
 trawl twitter import archive /path/to/x-archive
 trawl twitter sync
 trawl twitter status

@@ -22,6 +22,7 @@ const (
 	appWireCommand = "__app"
 	appSearchLimit = 20
 	appFrameLimit  = 16 << 20
+	appSyncTimeout = 30 * time.Minute
 )
 
 func isAppWireCommand(args []string) bool {
@@ -40,7 +41,7 @@ func executeAppWire(args []string, stdout, stderr io.Writer, timeout time.Durati
 	case "status":
 		return runtime.runAppStatus()
 	case "sync":
-		return runtime.runAppSync()
+		return runtime.runAppSync(args[2:])
 	case "search":
 		return runtime.runAppSearch(args[2:])
 	case "open":
@@ -97,11 +98,33 @@ func (r *Runtime) runAppStatus() error {
 	return writeAppResponse(r.stdout, r.appStatusResponse(r.ctx, discoverCrawlers(r.ctx)))
 }
 
-func (r *Runtime) runAppSync() error {
+func (r *Runtime) runAppSync(args []string) error {
+	previousTimeout := r.timeout
+	r.timeout = appSyncTimeout
+	defer func() { r.timeout = previousTimeout }()
+
+	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	sourceID := flags.String("source", "", "source id")
+	if err := flags.Parse(args); err != nil || flags.NArg() != 0 {
+		return fmt.Errorf("usage: trawl %s sync [--source ID]", appWireCommand)
+	}
 	sources := discoverCrawlers(r.ctx)
+	if id := strings.TrimSpace(*sourceID); id != "" {
+		selected, ok := findSource(sources, id)
+		if !ok {
+			return fmt.Errorf("source %q was not found", id)
+		}
+		sources = []Source{selected}
+	}
+	allSources := discoverCrawlers(r.ctx)
 	results := make([]SyncResult, 0, len(sources))
 	for _, source := range sources {
-		results = append(results, r.appSyncSource(source))
+		result := r.appSyncSource(source)
+		if !syncResultFailed(result) {
+			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
+		}
+		results = append(results, result)
 	}
 	return writeAppResponse(r.stdout, appSyncResponse(sources, results))
 }
@@ -133,7 +156,7 @@ func (r *Runtime) appSyncSource(source Source) SyncResult {
 	if report != nil && len(report.Warnings) > 0 {
 		result.State = "partial"
 		result.Message = report.Warnings[0]
-		result.Error = &ErrorBody{Code: "internal", Message: report.Warnings[0], Remedy: fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))}
+		result.Error = &ErrorBody{Code: "internal", Message: report.Warnings[0], Remedy: "Review OpenTrawl's logs for this source, then sync again."}
 	}
 	return result
 }
@@ -147,7 +170,7 @@ func appSyncFailureResult(source Source, message string, err error) SyncResult {
 		body.Message = message
 	}
 	if body.Remedy == "" {
-		body.Remedy = fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source))
+		body.Remedy = "Review OpenTrawl's logs for this source, then sync again."
 	}
 	return SyncResult{
 		Event:         "sync",

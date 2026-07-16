@@ -26,13 +26,15 @@ type GoogleConfig struct {
 }
 
 type App struct {
-	cfg Config
+	cfg       Config
+	readApple func(context.Context) ([]apple.Contact, error)
 }
 
 type Crawler = App
 
 var (
 	_ trawlkit.Crawler          = (*App)(nil)
+	_ trawlkit.Syncer           = (*App)(nil)
 	_ trawlkit.Searcher         = (*App)(nil)
 	_ trawlkit.WhoMatcher       = (*App)(nil)
 	_ trawlkit.Opener           = (*App)(nil)
@@ -41,7 +43,7 @@ var (
 )
 
 func New() *App {
-	return &App{}
+	return &App{readApple: apple.ReadSystem}
 }
 
 func (a *App) Info() trawlkit.Info {
@@ -64,7 +66,6 @@ func (a *App) Verbs() []trawlkit.Verb {
 		personAnnotateVerb(),
 		importVerb(a),
 		importLegacyVerb(),
-		syncAppleVerb(),
 		syncGoogleVerb(a),
 		exportVCardVerb(),
 	}
@@ -110,15 +111,6 @@ func (a *App) Status(ctx context.Context, req *trawlkit.Request) (*control.Statu
 	status.State = "ok"
 	status.Summary = peopleStatusSummary(int(archiveStatus.People))
 	return &status, nil
-}
-
-func (a *App) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	sourceState, _ := apple.CheckSource(ctx)
-	return &trawlkit.Doctor{Checks: []trawlkit.Check{
-		appleSourceCheck(sourceState, req.Store == nil),
-		checkArchivePresent(req, sourceState),
-		checkArchiveSchema(ctx, req, sourceState),
-	}}, nil
 }
 
 func (a *App) Search(ctx context.Context, req *trawlkit.Request, q trawlkit.Query) (trawlkit.SearchResult, error) {
@@ -243,16 +235,38 @@ func (a *App) ContactExport(ctx context.Context, req *trawlkit.Request) (*contro
 	}
 	contacts := make([]control.Contact, 0, len(people))
 	for _, person := range people {
+		emails := cleanContactValues(person.Emails)
 		phones := cleanPhones(person.Phones)
-		if strings.TrimSpace(person.Name) == "" || len(phones) == 0 {
+		accounts := cloneAccounts(person.Accounts)
+		if strings.TrimSpace(person.Name) == "" || (len(emails) == 0 && len(phones) == 0 && len(accounts) == 0) {
 			continue
 		}
 		contacts = append(contacts, control.Contact{
-			DisplayName:  strings.TrimSpace(person.Name),
-			PhoneNumbers: phones,
+			DisplayName:    strings.TrimSpace(person.Name),
+			EmailAddresses: emails,
+			PhoneNumbers:   phones,
+			Accounts:       accounts,
 		})
 	}
 	return &control.ContactExport{Contacts: contacts}, nil
+}
+
+func cleanContactValues(values []model.ContactValue) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if cleaned := strings.TrimSpace(value.Value); cleaned != "" {
+			out = append(out, cleaned)
+		}
+	}
+	return out
+}
+
+func cloneAccounts(accounts map[string][]string) map[string][]string {
+	out := make(map[string][]string, len(accounts))
+	for provider, values := range accounts {
+		out[provider] = append([]string(nil), values...)
+	}
+	return out
 }
 
 func (a *App) ShortRefRecords(ctx context.Context, req *trawlkit.Request) ([]trawlkit.ShortRefRecord, error) {
@@ -292,78 +306,6 @@ func resolveOpenRef(ctx context.Context, req *trawlkit.Request, ref string) (str
 		}
 	}
 	return ref, nil
-}
-
-func checkArchivePresent(req *trawlkit.Request, sourceState apple.SourceState) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{
-			ID:      "archive",
-			State:   "fail",
-			Message: "contacts archive has not been created",
-			Remedy:  archiveImportRemedy(sourceState),
-		}
-	}
-	return trawlkit.Check{ID: "archive", State: "ok"}
-}
-
-func archiveImportRemedy(sourceState apple.SourceState) string {
-	if sourceState == apple.SourceReady {
-		return "trawl contacts import apple"
-	}
-	return ""
-}
-
-func appleSourceCheck(state apple.SourceState, archiveMissing bool) trawlkit.Check {
-	check := trawlkit.Check{ID: "apple_source"}
-	switch state {
-	case apple.SourceReady:
-		check.State = "ok"
-		check.Message = "Apple Contacts source is readable"
-		if archiveMissing {
-			check.Message = "Apple Contacts source is ready for first import"
-			check.Remedy = "trawl contacts import apple"
-		}
-	case apple.SourceNeedsFullDiskAccess:
-		check.State = "fail"
-		check.Message = "Apple Contacts needs Full Disk Access"
-		check.Remedy = "grant Full Disk Access to Trawl or the terminal running it in System Settings > Privacy & Security > Full Disk Access"
-	case apple.SourceInvalid:
-		check.State = "invalid"
-		check.Message = "Apple Contacts source is invalid"
-	default:
-		check.State = "missing"
-		check.Message = "Apple Contacts source is unavailable"
-	}
-	return check
-}
-
-func checkArchiveSchema(ctx context.Context, req *trawlkit.Request, sourceState apple.SourceState) trawlkit.Check {
-	if req.Store == nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "contacts archive schema is not current",
-			Remedy:  archiveImportRemedy(sourceState),
-		}
-	}
-	st, err := archive.UseExisting(ctx, req.Store, req.Paths.Archive)
-	if err != nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "contacts archive schema is not current",
-			Remedy:  archiveImportRemedy(sourceState),
-		}
-	}
-	if _, err := st.Status(ctx); err != nil {
-		return trawlkit.Check{
-			ID:      "schema",
-			State:   "fail",
-			Message: "contacts archive could not be inspected",
-			Remedy:  archiveImportRemedy(sourceState),
-		}
-	}
-	return trawlkit.Check{ID: "schema", State: "ok"}
 }
 
 func peopleStatusSummary(count int) string {

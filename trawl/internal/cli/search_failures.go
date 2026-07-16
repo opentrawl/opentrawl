@@ -19,13 +19,13 @@ type failedSource struct {
 
 	displayName  string
 	commandToken string
+	remedy       string
 }
 
 func (r *Runtime) reportFailedSourceFailure(source failedSource, verb, detail string) {
 	display := firstNonEmpty(source.displayName, source.Source)
-	command := firstNonEmpty(source.commandToken, source.Source)
 	_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s.\n", display, verb, detail)
-	_, _ = fmt.Fprintf(r.stderr, "  Remedy: run trawl doctor %s\n", command)
+	_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", firstNonEmpty(source.remedy, "retry with -v to see the log location"))
 }
 
 // failureReason is the stable token JSON and logs share: a source that

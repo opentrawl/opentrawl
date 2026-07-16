@@ -28,39 +28,38 @@ select
   coalesce(max(m.date), 0) as last_message
 from handles h
 left join messages m on m.handle_rowid = h.source_rowid
-where h.handle not like '%@%'
 group by h.source_rowid, h.handle, h.display_name
 `)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	byPhone := map[string]contactHandle{}
+	byIdentifier := map[string]contactHandle{}
 	order := make([]string, 0)
 	for rows.Next() {
 		var row contactHandle
 		if err := rows.Scan(&row.ID, &row.DisplayName, &row.Messages, &row.LastMessage); err != nil {
 			return nil, err
 		}
-		phoneKey := messages.NormalizePhone(row.ID)
-		if phoneKey == "" || !messages.LooksPhoneLike(row.ID) {
+		key := contactIdentifierKey(row.ID)
+		if key == "" {
 			continue
 		}
-		if current, ok := byPhone[phoneKey]; ok {
+		if current, ok := byIdentifier[key]; ok {
 			if preferContactHandle(row, current) {
-				byPhone[phoneKey] = row
+				byIdentifier[key] = row
 			}
 			continue
 		}
-		byPhone[phoneKey] = row
-		order = append(order, phoneKey)
+		byIdentifier[key] = row
+		order = append(order, key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	sort.SliceStable(order, func(i, j int) bool {
-		left := byPhone[order[i]]
-		right := byPhone[order[j]]
+		left := byIdentifier[order[i]]
+		right := byIdentifier[order[j]]
 		if left.LastMessage != right.LastMessage {
 			return left.LastMessage > right.LastMessage
 		}
@@ -68,17 +67,44 @@ group by h.source_rowid, h.handle, h.display_name
 	})
 	out := make([]control.Contact, 0, len(order))
 	for _, key := range order {
-		row := byPhone[key]
+		row := byIdentifier[key]
+		handle := strings.TrimSpace(row.ID)
 		name := strings.TrimSpace(row.DisplayName)
 		if name == "" {
-			name = strings.TrimSpace(row.ID)
+			if !messages.LooksPhoneLike(handle) && !strings.Contains(handle, "@") {
+				continue
+			}
+			name = handle
 		}
 		if name == "" {
 			continue
 		}
-		out = append(out, control.Contact{DisplayName: name, PhoneNumbers: []string{strings.TrimSpace(row.ID)}})
+		contact := control.Contact{DisplayName: name}
+		switch {
+		case messages.LooksPhoneLike(handle):
+			contact.PhoneNumbers = []string{handle}
+		case strings.Contains(handle, "@"):
+			contact.EmailAddresses = []string{strings.ToLower(handle)}
+		default:
+			contact.Accounts = map[string][]string{"imessage": {handle}}
+		}
+		out = append(out, contact)
 	}
 	return out, nil
+}
+
+func contactIdentifierKey(handle string) string {
+	handle = strings.TrimSpace(handle)
+	switch {
+	case handle == "":
+		return ""
+	case messages.LooksPhoneLike(handle):
+		return "phone:" + messages.NormalizePhone(handle)
+	case strings.Contains(handle, "@"):
+		return "email:" + strings.ToLower(handle)
+	default:
+		return "imessage:" + strings.ToLower(handle)
+	}
 }
 
 func preferContactHandle(candidate, current contactHandle) bool {

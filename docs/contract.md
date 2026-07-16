@@ -33,7 +33,6 @@ The common control vocabulary is:
 | `sync` | refresh the archive from its source, when declared | yes |
 | `search` | bounded search over the archive | no |
 | `open` | one source-owned record with bounded context | no |
-| `doctor` | diagnostics for conditions that need action | no |
 
 The source manifest is authoritative about which capabilities exist. Most
 archive crawlers declare `sync`; a source may instead expose reviewed imports or
@@ -53,7 +52,7 @@ flags, output mode and whether it mutates archive content.
   "contract_version": 1,
   "id": "example",
   "display_name": "Example",
-  "capabilities": ["status", "sync", "search", "open", "doctor"],
+  "capabilities": ["status", "sync", "search", "open"],
   "commands": {
     "search": {
       "argv": ["example", "search", "QUERY", "--json"],
@@ -64,7 +63,7 @@ flags, output mode and whether it mutates archive content.
 }
 ```
 
-## Status and diagnostics
+## Status and logs
 
 Status reports one of `ok`, `stale`, `empty`, `error` or `missing`, with a
 short summary, freshness, source-declared counts and setup requirements. Auth
@@ -82,9 +81,10 @@ is represented by state and expiry, never credentials.
 }
 ```
 
-`doctor` checks only conditions that require action outside an ordinary read:
-for example, a missing source store, expired authentication or a macOS privacy
-permission. Every failed check includes a plain-language remedy.
+Normal commands explain failures and their next action directly. `status`
+reports archive readiness and any known setup requirement. Each command also
+writes a structured run log under the source's declared logs path for deeper
+inspection; clients do not need a separate diagnostics command.
 
 ## Search matches
 

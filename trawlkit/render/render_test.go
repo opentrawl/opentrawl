@@ -2,34 +2,12 @@ package render
 
 import (
 	"bytes"
-	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	cklog "github.com/opentrawl/opentrawl/trawlkit/log"
 )
-
-func TestWriteDoctor(t *testing.T) {
-	var buf bytes.Buffer
-	err := WriteDoctor(&buf, []Check{
-		{Name: "source_store", State: CheckOK},
-		{Name: "archive", State: CheckMissing, Message: "archive has not been synced", Remedy: "run: examplecrawl sync"},
-	}, LogTail{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := strings.Join([]string{
-		"Doctor checks:",
-		"  source store: ok",
-		"  archive: missing - archive has not been synced",
-		"    Remedy: run: examplecrawl sync",
-		"",
-	}, "\n")
-	if buf.String() != want {
-		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
-	}
-}
 
 func TestWriteSearchSummaryTruncatesLongDisplayQuery(t *testing.T) {
 	t.Setenv("COLUMNS", "80")
@@ -62,142 +40,6 @@ func TestWriteWrappedFieldUsesContinuationIndent(t *testing.T) {
 		if width := DisplayWidth(line); width > 32 {
 			t.Fatalf("line %d width = %d, want <= 32:\n%s", lineNo+1, width, got)
 		}
-	}
-}
-
-func TestWriteDoctorFiltersUsageRecentError(t *testing.T) {
-	var buf bytes.Buffer
-	err := WriteDoctor(&buf, []Check{
-		{Name: "source_store", State: CheckOK},
-	}, LogTail{
-		MostRecentError: &cklog.Line{
-			Level:   cklog.LevelError,
-			Command: "search",
-			Event:   "usage_error",
-			Message: `error="search --who requires an identity" remedy="run search with --who NAME"`,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := strings.Join([]string{
-		"Doctor checks:",
-		"  source store: ok",
-		"",
-	}, "\n")
-	if buf.String() != want {
-		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
-	}
-}
-
-func TestWriteDoctorShowsWorldChangeRecentError(t *testing.T) {
-	var buf bytes.Buffer
-	err := WriteDoctor(&buf, []Check{
-		{Name: "auth", State: CheckFail, Message: "calendar permission denied"},
-	}, LogTail{
-		MostRecentError: &cklog.Line{
-			Level:   cklog.LevelError,
-			Command: "sync",
-			Event:   "permission_denied",
-			Message: `error="calendar permission denied" remedy="grant Calendar access" visibility=user`,
-		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := strings.Join([]string{
-		"Doctor checks:",
-		"  auth: fail - calendar permission denied",
-		"",
-		"Recent log:",
-		"  Most recent error: sync permission denied: calendar permission denied",
-		"    Remedy: grant Calendar access",
-		"",
-	}, "\n")
-	if buf.String() != want {
-		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
-	}
-}
-
-func TestDoctorLogTailOutputHumanizesLogJSON(t *testing.T) {
-	when := time.Date(2026, 7, 3, 10, 45, 0, 0, time.UTC)
-	out := DoctorLogTailOutput(LogTail{
-		LastRun: &cklog.RunSummary{
-			RunID:      "internal-run-id",
-			Command:    "sync",
-			Outcome:    "error",
-			LastEvent:  "run_failed",
-			FinishedAt: when,
-		},
-		MostRecentError: &cklog.Line{
-			Level:      cklog.LevelError,
-			RunID:      "internal-run-id",
-			Command:    "sync",
-			Event:      "run_failed",
-			Message:    `error="archive.db has not been synced" remedy="run trawl imessage sync" visibility=user`,
-			Timestamp:  when,
-			Visibility: cklog.VisibilityUserFacing,
-		},
-	})
-	if out == nil || out.LastRun == nil || out.MostRecentError == nil {
-		t.Fatalf("doctor log output missing fields: %#v", out)
-	}
-	data, err := json.Marshal(out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(data)
-	for _, want := range []string{
-		`"what_happened":"sync ended with error"`,
-		`"what_happened":"archive.db has not been synced"`,
-		`"when":"2026-07-03T10:45:00Z"`,
-		`"remedy":"run trawl imessage sync"`,
-	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("doctor log json = %s, missing %s", got, want)
-		}
-	}
-	for _, forbidden := range []string{"run_id", "last_event", "run_failed", "event=", "visibility"} {
-		if strings.Contains(got, forbidden) {
-			t.Fatalf("doctor log json leaked %q: %s", forbidden, got)
-		}
-	}
-}
-
-func TestDoctorLogTailOutputFiltersInternalErrors(t *testing.T) {
-	out := DoctorLogTailOutput(LogTail{
-		MostRecentError: &cklog.Line{
-			Level:      cklog.LevelError,
-			Command:    "search",
-			Event:      "usage_error",
-			Message:    `error="search --who requires an identity" remedy="run search with --who NAME" visibility=internal`,
-			Visibility: cklog.VisibilityInternal,
-		},
-	})
-	if out != nil {
-		t.Fatalf("internal doctor log output = %#v, want nil", out)
-	}
-}
-
-func TestWriteDoctorHumanizesSnakeCaseCheckNames(t *testing.T) {
-	var buf bytes.Buffer
-	err := WriteDoctor(&buf, []Check{
-		{Name: "source_store", State: CheckOK},
-		{Name: "gog_binary", State: CheckMissing},
-		{Name: "full disk access", State: CheckOK},
-	}, LogTail{})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := strings.Join([]string{
-		"Doctor checks:",
-		"  source store: ok",
-		"  gog binary: missing",
-		"  full disk access: ok",
-		"",
-	}, "\n")
-	if buf.String() != want {
-		t.Fatalf("doctor output:\n%s\nwant:\n%s", buf.String(), want)
 	}
 }
 
@@ -392,13 +234,6 @@ func TestRejectedRunRendersRejected(t *testing.T) {
 		t.Fatalf("log tail output:\n%s\nwant:\n%s", buf.String(), want)
 	}
 
-	doctor := DoctorLogTailOutput(LogTail{LastRun: &run})
-	if doctor == nil || doctor.LastRun == nil {
-		t.Fatalf("doctor output = %+v, want last run", doctor)
-	}
-	if got := doctor.LastRun.WhatHappened; got != "search ended with rejected" {
-		t.Fatalf("doctor last run = %q, want %q", got, "search ended with rejected")
-	}
 }
 
 func TestWriteStatusDefaultsBlankFields(t *testing.T) {

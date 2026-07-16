@@ -17,7 +17,7 @@ import (
 // manifest, and `trawl <source> <verb>` runs that crawler through the
 // same trawlkit registration trawl uses for top-level fan-out.
 //
-// The top-level commands (status, sync, search, who, open, doctor) are a
+// The top-level commands (status, sync, search, who, chats, open) are a
 // separate, permanent surface: they fan a single request out across every
 // discovered source and render one typed, uniform result (a status table,
 // a merged search, a who resolution). `trawl <source> <verb>` instead
@@ -44,7 +44,7 @@ func namespaceCandidate(args []string) (string, bool) {
 
 func reservedCommand(name string) bool {
 	switch name {
-	case "status", "sync", "search", "summaries", "who", "open", "doctor", "help":
+	case "status", "sync", "search", "summaries", "who", "chats", "open", "help":
 		return true
 	default:
 		return false
@@ -81,7 +81,7 @@ func (r *Runtime) dispatchNamespace(args []string, token string) error {
 	if source.MetadataErr != nil {
 		return r.writeError("crawler_unidentified",
 			fmt.Sprintf("%s did not identify itself.", sourceHumanName(source)),
-			fmt.Sprintf("run trawl doctor %s", sourceCommandToken(source)))
+			fmt.Sprintf("run trawl status %s", sourceCommandToken(source)))
 	}
 	rest := argsAfter(args, token)
 	if firstNonFlag(rest) == "" {
@@ -227,7 +227,7 @@ func namespaceVerbList(source Source) []namespaceVerb {
 	verbs := make([]namespaceVerb, 0, len(source.Commands))
 	for _, command := range source.Commands {
 		invocation := commandInvocation(command)
-		if invocation == "" {
+		if invocation == "" || firstNonFlag(strings.Fields(invocation)) == "doctor" {
 			continue
 		}
 		verbs = append(verbs, namespaceVerb{Verb: invocation, Title: command.Title, Secondary: command.Secondary})
@@ -247,6 +247,9 @@ func namespaceMatch(source Source, rest []string) (control.Command, bool) {
 	}
 	for _, command := range source.Commands {
 		prefix := fixedVerbTokens(command)
+		if len(prefix) > 0 && prefix[0] == "doctor" {
+			continue
+		}
 		if len(prefix) > 0 && tokensHavePrefix(leading, prefix) {
 			return command, true
 		}
@@ -287,7 +290,7 @@ func isPlaceholder(token string) bool {
 }
 
 // leadingLiterals returns the verb words: the run of literal tokens after
-// any trawl global flags (--json, -v) the agent sprinkled ahead of the
+// any trawl global flags (--json, -v) the caller placed ahead of the
 // verb, stopping at the first crawler flag. So `trawl imessage --json chats`
 // still finds "chats", while `chats --limit 5` stops the verb at "chats".
 func leadingLiterals(rest []string) []string {

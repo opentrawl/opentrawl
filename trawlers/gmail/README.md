@@ -27,7 +27,6 @@ bytes.
 ## Commands
 
 ```sh
-trawl gmail doctor
 trawl gmail sync
 trawl gmail sync --query "from:me" --max 25
 trawl gmail status

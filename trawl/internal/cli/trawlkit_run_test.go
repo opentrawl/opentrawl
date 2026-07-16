@@ -46,12 +46,6 @@ func (capturedRunCrawler) Status(ctx context.Context, req *trawlkit.Request) (*c
 	return &status, nil
 }
 
-func (capturedRunCrawler) Doctor(ctx context.Context, req *trawlkit.Request) (*trawlkit.Doctor, error) {
-	_ = ctx
-	_ = req
-	return &trawlkit.Doctor{}, nil
-}
-
 func (capturedRunCrawler) Verbs() []trawlkit.Verb {
 	return nil
 }

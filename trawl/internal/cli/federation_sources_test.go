@@ -162,7 +162,7 @@ func TestFederationMissingArchiveStampsSafeSourceFailure(t *testing.T) {
 		t.Fatalf("response = %#v", response)
 	}
 	failure := response.GetFailures()[0]
-	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "trawl doctor notes" || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
+	if failure.GetSourceId() != "notes" || failure.GetSurface() != "Notes" || failure.GetCode() != federationv1.FailureCode_FAILURE_CODE_UNAVAILABLE || failure.GetMessage() != "This source is not ready yet." || failure.GetRemedy() != "Retry with -v to see the log location." || strings.Contains(failure.GetMessage(), archive) || strings.Contains(failure.GetRemedy(), archive) {
 		t.Fatalf("failure = %#v", failure)
 	}
 }
@@ -228,10 +228,6 @@ func (c appStatusCrawler) Status(ctx context.Context, _ *trawlkit.Request) (*con
 	return c.status(ctx)
 }
 
-func (appStatusCrawler) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return nil, nil
-}
-
 type adapterCrawler struct {
 	id            string
 	archive       string
@@ -251,10 +247,6 @@ func (c *adapterCrawler) Verbs() []trawlkit.Verb { return nil }
 func (c *adapterCrawler) Status(context.Context, *trawlkit.Request) (*control.Status, error) {
 	c.statusCalls++
 	return &control.Status{AppID: c.id, State: "ok", Summary: "Synthetic archive is ready."}, nil
-}
-
-func (c *adapterCrawler) Doctor(context.Context, *trawlkit.Request) (*trawlkit.Doctor, error) {
-	return nil, nil
 }
 
 func (c *adapterCrawler) Search(_ context.Context, _ *trawlkit.Request, query trawlkit.Query) (trawlkit.SearchResult, error) {

@@ -641,7 +641,7 @@ func TestExplicitErrorVisibility(t *testing.T) {
 		},
 		{
 			name: "legacy line with no visibility is internal",
-			line: Line{Level: LevelError, Command: "doctor", Event: "permission_denied", Message: `error="calendar permission denied" remedy="grant Calendar access"`},
+			line: Line{Level: LevelError, Command: "status", Event: "permission_denied", Message: `error="calendar permission denied" remedy="grant Calendar access"`},
 			want: false,
 		},
 		{

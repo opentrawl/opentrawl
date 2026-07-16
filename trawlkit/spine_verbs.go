@@ -13,7 +13,6 @@ import (
 var spineVerbKeys = map[string]struct{}{
 	"metadata":        {},
 	"status":          {},
-	"doctor":          {},
 	"sync":            {},
 	"search":          {},
 	"open":            {},
@@ -169,7 +168,7 @@ func invalidSpineVerbFields(verb Verb) []string {
 
 func unsupportedSpineInterface(source Crawler, key string) string {
 	switch key {
-	case "metadata", "status", "doctor":
+	case "metadata", "status":
 		return ""
 	case "sync":
 		if _, ok := source.(Syncer); !ok {
@@ -234,7 +233,7 @@ func spineDefaultStoreMode(key string) storeMode {
 	switch key {
 	case "metadata":
 		return storeNone
-	case "status", "doctor":
+	case "status":
 		return storeOptional
 	case "sync":
 		return storeWrite

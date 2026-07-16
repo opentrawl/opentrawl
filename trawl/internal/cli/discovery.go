@@ -32,7 +32,7 @@ type Source struct {
 
 // discoverCrawlers projects the explicit trawlkit registrations into the
 // existing trawl Source shape. A crawler whose generated metadata did not
-// parse keeps its canonical id and carries the error so status and doctor
+// parse keeps its canonical id and carries the error so status
 // can surface it; the id and display name still route through
 // canonicalizeSourceID so a crawler that self-reports a pre-rename binary
 // name (imsgcrawl, telecrawl, ...) never leaks it into human-facing output.

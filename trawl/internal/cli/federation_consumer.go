@@ -164,7 +164,7 @@ func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailur
 			surface = failure.GetSourceId()
 		}
 		_, _ = fmt.Fprintf(r.stderr, "%s %s failed: %s\n", surface, verb, strings.TrimSpace(failure.GetMessage()))
-		if remedy := strings.TrimSpace(failure.GetRemedy()); remedy != "" {
+		if remedy := normalFailureRemedy(strings.TrimSpace(failure.GetRemedy()), failure.GetSourceId(), verb); remedy != "" {
 			_, _ = fmt.Fprintf(r.stderr, "  Remedy: %s\n", remedy)
 		}
 	}
@@ -175,6 +175,16 @@ func (r *Runtime) reportFederationOutcomes(failures []*federationv1.SourceFailur
 		}
 		_, _ = fmt.Fprintf(r.stderr, "%s %s skipped: %s\n", surface, verb, strings.TrimSpace(skip.GetReason()))
 	}
+}
+
+func normalFailureRemedy(remedy, source, verb string) string {
+	if remedy != "" && !strings.Contains(strings.ToLower(remedy), "doctor") {
+		return remedy
+	}
+	if verb == "status" && strings.TrimSpace(source) != "" {
+		return "run trawl sync " + source + " -v"
+	}
+	return "retry with -v to see the log location"
 }
 
 func searchRowsFromResponse(sources []Source, response *federationv1.SearchResponse) mergedSearchResult {
