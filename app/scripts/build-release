@@ -1,0 +1,283 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+usage: app/scripts/build-release \
+  --output DIR \
+  --version VERSION \
+  --build BUILD \
+  --sparkle-public-key KEY \
+  [--identity IDENTITY] \
+  [--feed-url URL] \
+  [--notarize]
+
+Builds OpenTrawl.app and a drag-to-Applications OpenTrawl.dmg. The default
+identity is ad hoc signing (-), which is useful for local structural checks.
+--notarize requires a Developer ID identity and APPLE_API_KEY_FILE,
+APPLE_API_KEY_ID, and APPLE_API_ISSUER_ID.
+EOF
+  exit 2
+}
+
+output=""
+version=""
+build=""
+sparkle_public_key=""
+identity="-"
+feed_url="https://github.com/opentrawl/opentrawl/releases/latest/download/appcast.xml"
+notarize=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --output) output="${2:-}"; shift 2 ;;
+    --version) version="${2:-}"; shift 2 ;;
+    --build) build="${2:-}"; shift 2 ;;
+    --sparkle-public-key) sparkle_public_key="${2:-}"; shift 2 ;;
+    --identity) identity="${2:-}"; shift 2 ;;
+    --feed-url) feed_url="${2:-}"; shift 2 ;;
+    --notarize) notarize=1; shift ;;
+    *) usage ;;
+  esac
+done
+
+[[ -n "$output" && -n "$version" && -n "$build" && -n "$sparkle_public_key" ]] || usage
+[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || {
+  echo "build-release: invalid version: $version" >&2
+  exit 1
+}
+[[ "$build" =~ ^[1-9][0-9]*$ ]] || {
+  echo "build-release: build must be a positive integer" >&2
+  exit 1
+}
+[[ "$feed_url" == https://* || "$feed_url" == file://* ]] || {
+  echo "build-release: feed URL must use https or file" >&2
+  exit 1
+}
+if [[ -e "$output" || -L "$output" ]]; then
+  echo "build-release: output already exists: $output" >&2
+  exit 1
+fi
+if [[ "$notarize" -eq 1 ]]; then
+  [[ "$identity" != "-" ]] || {
+    echo "build-release: --notarize requires a Developer ID identity" >&2
+    exit 1
+  }
+  : "${APPLE_API_KEY_FILE:?build-release: APPLE_API_KEY_FILE is required}"
+  : "${APPLE_API_KEY_ID:?build-release: APPLE_API_KEY_ID is required}"
+  : "${APPLE_API_ISSUER_ID:?build-release: APPLE_API_ISSUER_ID is required}"
+fi
+
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+app_dir="$(cd "$script_dir/.." && pwd)"
+repo_root="$(cd "$app_dir/.." && pwd)"
+work="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-release.XXXXXX")"
+swift_scratch="$work/swift"
+app="$work/OpenTrawl.app"
+contents="$app/Contents"
+photos_app="$contents/Helpers/Photoscrawl Fetch.app"
+photos_binary="$photos_app/Contents/MacOS/photoscrawl-fetch"
+photos_entitlements="$repo_root/trawlers/photos/cmd/photoscrawl-fetch/PhotoKit.entitlements"
+unsigned_dmg="$work/OpenTrawl-unsigned.dmg"
+dmg_stage="$work/dmg"
+commit="$(git -C "$repo_root" rev-parse --short=12 HEAD)"
+
+for command in swift go xcrun codesign otool install_name_tool diskutil ditto plutil openssl; do
+  command -v "$command" >/dev/null || {
+    echo "build-release: required command is missing: $command" >&2
+    exit 1
+  }
+done
+
+key_bytes="$(printf '%s' "$sparkle_public_key" | openssl base64 -d -A 2>/dev/null | wc -c | tr -d ' ')"
+[[ "$key_bytes" == "32" ]] || {
+  echo "build-release: Sparkle public key must be base64 for exactly 32 bytes" >&2
+  exit 1
+}
+
+mkdir -p "$output" "$contents/MacOS" "$contents/Helpers" "$contents/Frameworks" "$contents/Resources"
+
+host_swift() {
+  env -u SDKROOT -u DEVELOPER_DIR -u MACOSX_DEPLOYMENT_TARGET swift "$@"
+}
+
+echo "Building the release app"
+host_swift build \
+  --package-path "$app_dir" \
+  --scratch-path "$swift_scratch" \
+  --configuration release \
+  --arch arm64
+swift_bin="$(host_swift build \
+  --package-path "$app_dir" \
+  --scratch-path "$swift_scratch" \
+  --configuration release \
+  --arch arm64 \
+  --show-bin-path)"
+cp "$swift_bin/Trawl" "$contents/MacOS/Trawl"
+
+sparkle_framework="$(find "$swift_scratch/artifacts" -type d -path '*/macos-arm64_x86_64/Sparkle.framework' -print -quit)"
+[[ -n "$sparkle_framework" ]] || {
+  echo "build-release: SwiftPM did not produce Sparkle.framework" >&2
+  exit 1
+}
+ditto "$sparkle_framework" "$contents/Frameworks/Sparkle.framework"
+generate_appcast="$(find "$swift_scratch/artifacts" -type f -path '*/Sparkle/bin/generate_appcast' -print -quit)"
+[[ -n "$generate_appcast" ]] || {
+  echo "build-release: SwiftPM did not produce the Sparkle release tools" >&2
+  exit 1
+}
+mkdir -p "$output/SparkleTools"
+cp "$generate_appcast" "$output/SparkleTools/generate_appcast"
+chmod +x "$output/SparkleTools/generate_appcast"
+
+echo "Building the bundled CLI"
+(
+  cd "$repo_root/trawl"
+  CGO_ENABLED=1 GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
+    -trimpath \
+    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawl/internal/cli.Version=$version -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
+    -o "$contents/Helpers/trawl" \
+    ./cmd/trawl
+)
+
+echo "Building the native Photos helper"
+mkdir -p "$photos_app/Contents/MacOS"
+cp "$repo_root/trawlers/photos/cmd/photoscrawl-fetch/Info.plist" "$photos_app/Contents/Info.plist"
+plutil -replace CFBundleShortVersionString -string "$version" "$photos_app/Contents/Info.plist"
+plutil -replace CFBundleVersion -string "$build" "$photos_app/Contents/Info.plist"
+(
+  cd "$repo_root/trawlers/photos"
+  CGO_ENABLED=1 GOFLAGS="${GOFLAGS:--tags=sqlite_fts5}" go build \
+    -trimpath \
+    -ldflags "-s -w -X github.com/opentrawl/opentrawl/trawlkit.buildVersion=$version" \
+    -o "$photos_binary" \
+    ./cmd/photoscrawl-fetch
+)
+
+rewrite_and_check_libraries() {
+  local binary="$1"
+  local library
+  while IFS= read -r library; do
+    case "$library" in
+      /nix/store/*/libresolv.9.dylib|/Volumes/*/libresolv.9.dylib)
+        install_name_tool -change "$library" /usr/lib/libresolv.9.dylib "$binary"
+        ;;
+    esac
+  done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
+  while IFS= read -r library; do
+    case "$library" in
+      /usr/lib/*|/System/Library/*|@rpath/*|@loader_path/*|@executable_path/*) ;;
+      *)
+        echo "build-release: external dynamic library in $binary: $library" >&2
+        exit 1
+        ;;
+    esac
+  done < <(otool -L "$binary" | awk 'NR > 1 { print $1 }')
+}
+rewrite_and_check_libraries "$contents/Helpers/trawl"
+rewrite_and_check_libraries "$photos_binary"
+
+echo "Compiling the app icon"
+xcrun actool \
+  --output-format human-readable-text \
+  --notices \
+  --warnings \
+  --platform macosx \
+  --minimum-deployment-target 26.0 \
+  --target-device mac \
+  --app-icon OpenTrawl \
+  --output-partial-info-plist "$work/icon-info.plist" \
+  --compile "$contents/Resources" \
+  "$repo_root/assets/brand/OpenTrawl.icon"
+
+info="$contents/Info.plist"
+plutil -create xml1 "$info"
+plutil -insert CFBundleDevelopmentRegion -string en "$info"
+plutil -insert CFBundleDisplayName -string "OpenTrawl Alpha" "$info"
+plutil -insert CFBundleExecutable -string Trawl "$info"
+plutil -insert CFBundleIconName -string OpenTrawl "$info"
+plutil -insert CFBundleIdentifier -string org.opentrawl.trawl "$info"
+plutil -insert CFBundleName -string OpenTrawl "$info"
+plutil -insert CFBundlePackageType -string APPL "$info"
+plutil -insert CFBundleShortVersionString -string "$version" "$info"
+plutil -insert CFBundleVersion -string "$build" "$info"
+plutil -insert GitCommit -string "$commit" "$info"
+plutil -insert LSApplicationCategoryType -string public.app-category.utilities "$info"
+plutil -insert LSMinimumSystemVersion -string 26.0 "$info"
+plutil -insert NSHighResolutionCapable -bool true "$info"
+plutil -insert SUFeedURL -string "$feed_url" "$info"
+plutil -insert SUPublicEDKey -string "$sparkle_public_key" "$info"
+plutil -insert SUEnableAutomaticChecks -bool true "$info"
+plutil -insert SUScheduledCheckInterval -integer 86400 "$info"
+plutil -insert SUAutomaticallyUpdate -bool false "$info"
+plutil -insert SUAllowsAutomaticUpdates -bool false "$info"
+plutil -insert SUEnableSystemProfiling -bool false "$info"
+plutil -insert SUShowReleaseNotes -bool true "$info"
+plutil -insert SUVerifyUpdateBeforeExtraction -bool true "$info"
+
+chmod +x "$contents/MacOS/Trawl" "$contents/Helpers/trawl" "$photos_binary"
+xattr -cr "$app"
+
+if [[ "$identity" == "-" ]]; then
+  sign_args=(--force --sign - --options runtime --timestamp=none)
+  dmg_sign_args=(--force --sign - --timestamp=none)
+else
+  sign_args=(--force --sign "$identity" --options runtime --timestamp)
+  dmg_sign_args=(--force --sign "$identity" --timestamp)
+fi
+
+echo "Signing the app from the inside out"
+sparkle="$contents/Frameworks/Sparkle.framework"
+codesign "${sign_args[@]}" "$sparkle/Versions/B/XPCServices/Installer.xpc"
+codesign "${sign_args[@]}" --preserve-metadata=entitlements "$sparkle/Versions/B/XPCServices/Downloader.xpc"
+codesign "${sign_args[@]}" "$sparkle/Versions/B/Autoupdate"
+codesign "${sign_args[@]}" "$sparkle/Versions/B/Updater.app"
+codesign "${sign_args[@]}" "$sparkle"
+codesign "${sign_args[@]}" --entitlements "$photos_entitlements" "$photos_app"
+codesign "${sign_args[@]}" "$contents/Helpers/trawl"
+codesign "${sign_args[@]}" "$app"
+codesign --verify --deep --strict --verbose=2 "$app"
+
+if [[ "$notarize" -eq 1 ]]; then
+  echo "Notarising and stapling the app"
+  ditto -c -k --keepParent "$app" "$work/OpenTrawl.zip"
+  xcrun notarytool submit "$work/OpenTrawl.zip" \
+    --key "$APPLE_API_KEY_FILE" \
+    --key-id "$APPLE_API_KEY_ID" \
+    --issuer "$APPLE_API_ISSUER_ID" \
+    --wait
+  xcrun stapler staple "$app"
+  xcrun stapler validate "$app"
+fi
+
+echo "Creating the drag-to-Applications disk image"
+mkdir -p "$dmg_stage"
+ditto "$app" "$dmg_stage/OpenTrawl.app"
+ln -s /Applications "$dmg_stage/Applications"
+diskutil image create from \
+  --volumeName OpenTrawl \
+  --format UDZO \
+  "$dmg_stage" \
+  "$unsigned_dmg"
+codesign "${dmg_sign_args[@]}" "$unsigned_dmg"
+
+if [[ "$notarize" -eq 1 ]]; then
+  echo "Notarising and stapling the disk image"
+  xcrun notarytool submit "$unsigned_dmg" \
+    --key "$APPLE_API_KEY_FILE" \
+    --key-id "$APPLE_API_KEY_ID" \
+    --issuer "$APPLE_API_ISSUER_ID" \
+    --wait
+  xcrun stapler staple "$unsigned_dmg"
+  xcrun stapler validate "$unsigned_dmg"
+fi
+
+mv "$unsigned_dmg" "$output/OpenTrawl.dmg"
+ditto "$app" "$output/OpenTrawl.app"
+printf '%s\n' "$version" > "$output/VERSION"
+printf '%s\n' "$build" > "$output/BUILD"
+printf '%s\n' "$commit" > "$output/GIT_COMMIT"
+
+echo "Built $output/OpenTrawl.dmg"
+echo "Expanded app retained at $output/OpenTrawl.app"
+echo "Disposable build workspace retained at $work"

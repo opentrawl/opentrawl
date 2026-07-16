@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "usage: app/scripts/verify-release [--notarized] RELEASE_DIR" >&2
+  exit 2
+}
+
+notarized=0
+if [[ "${1:-}" == "--notarized" ]]; then
+  notarized=1
+  shift
+fi
+[[ $# -eq 1 ]] || usage
+release_dir="${1%/}"
+dmg="$release_dir/OpenTrawl.dmg"
+[[ -f "$dmg" ]] || {
+  echo "verify-release: missing $dmg" >&2
+  exit 1
+}
+
+mount="$(mktemp -d "${TMPDIR:-/tmp}/opentrawl-dmg.XXXXXX")"
+device=""
+detach() {
+  if [[ -n "$device" ]]; then
+    diskutil eject "$device" >/dev/null 2>&1 || true
+  fi
+}
+trap detach EXIT
+
+attach_output="$(diskutil image attach --readOnly --nobrowse --mountPoint "$mount" "$dmg")"
+device="$(printf '%s\n' "$attach_output" | awk 'NR == 1 { print $1 }')"
+app="$mount/OpenTrawl.app"
+info="$app/Contents/Info.plist"
+cli="$app/Contents/Helpers/trawl"
+
+[[ -d "$app" && -L "$mount/Applications" && "$(readlink "$mount/Applications")" == "/Applications" ]]
+[[ -x "$app/Contents/MacOS/Trawl" && -x "$cli" ]]
+[[ -d "$app/Contents/Frameworks/Sparkle.framework" ]]
+[[ -d "$app/Contents/Helpers/Photoscrawl Fetch.app" ]]
+
+[[ "$(plutil -extract CFBundleIdentifier raw -o - "$info")" == "org.opentrawl.trawl" ]]
+[[ "$(plutil -extract SUFeedURL raw -o - "$info")" == https://* ]]
+[[ "$(plutil -extract SUEnableAutomaticChecks raw -o - "$info")" == "true" ]]
+[[ "$(plutil -extract SUAutomaticallyUpdate raw -o - "$info")" == "false" ]]
+[[ "$(plutil -extract SUAllowsAutomaticUpdates raw -o - "$info")" == "false" ]]
+[[ "$(plutil -extract SUEnableSystemProfiling raw -o - "$info")" == "false" ]]
+
+codesign --verify --deep --strict --verbose=2 "$app"
+codesign --verify --strict --verbose=2 "$dmg"
+
+while IFS= read -r library; do
+  case "$library" in
+    /usr/lib/*|/System/Library/*|@rpath/*|@loader_path/*|@executable_path/*) ;;
+    *)
+      echo "verify-release: bundled CLI has an external dynamic library: $library" >&2
+      exit 1
+      ;;
+  esac
+done < <(otool -L "$cli" | awk 'NR > 1 { print $1 }')
+
+version="$(plutil -extract CFBundleShortVersionString raw -o - "$info")"
+[[ "$($cli --version)" == "$version" ]]
+"$cli" --help >/dev/null
+
+if [[ "$notarized" -eq 1 ]]; then
+  spctl --assess --type execute --verbose=2 "$app"
+  spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+  xcrun stapler validate "$app"
+  xcrun stapler validate "$dmg"
+fi
+
+echo "verify-release: OpenTrawl $version is structurally valid"

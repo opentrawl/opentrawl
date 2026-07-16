@@ -26,6 +26,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct TrawlApp: App {
   @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+  private let updates = UpdateController()
 
   var body: some Scene {
     Window("OpenTrawl", id: "main") {
@@ -46,6 +47,9 @@ struct TrawlApp: App {
     )
     .windowResizability(.contentMinSize)
     .commands {
+      CommandGroup(after: .appInfo) {
+        CheckForUpdatesCommand(updates: updates)
+      }
       CommandGroup(replacing: .newItem) {}
     }
   }

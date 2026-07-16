@@ -13,6 +13,10 @@ let package = Package(
             url: "https://github.com/apple/swift-protobuf.git",
             exact: "1.38.1"
         ),
+        .package(
+            url: "https://github.com/sparkle-project/Sparkle",
+            exact: "2.9.4"
+        ),
     ],
     targets: [
         .target(
@@ -28,7 +32,18 @@ let package = Package(
         ),
         .executableTarget(
             name: "Trawl",
-            dependencies: ["PermissionGuide", "TrawlClient", "TrawlCore"]
+            dependencies: [
+                "PermissionGuide",
+                .product(name: "Sparkle", package: "Sparkle"),
+                "TrawlClient",
+                "TrawlCore",
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@executable_path/../Frameworks",
+                ])
+            ]
         ),
         .testTarget(
             name: "TrawlClientTests",
@@ -40,7 +55,21 @@ let package = Package(
         ),
         .testTarget(
             name: "TrawlTests",
-            dependencies: ["PermissionGuide", "TrawlClient", "TrawlCore", "Trawl"]
+            dependencies: [
+                "PermissionGuide",
+                .product(name: "Sparkle", package: "Sparkle"),
+                "TrawlClient",
+                "TrawlCore",
+                "Trawl",
+            ],
+            linkerSettings: [
+                // SwiftPM links binary frameworks into executable tests but
+                // does not copy Sparkle beside the generated .xctest bundle.
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@loader_path/../../../../../../artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64",
+                ])
+            ]
         ),
     ]
 )
