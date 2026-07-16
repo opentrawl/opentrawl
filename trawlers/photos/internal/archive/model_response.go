@@ -299,9 +299,10 @@ func observationsFromCard(card photoCard, prepared preparedCardRequest) []conten
 		observations = append(observations, cardObservation(modelObservationCardVisibleText, card.VisibleText))
 	}
 	locationText := card.Location.Reason
-	if card.Location.Kind == locationCandidate {
+	switch card.Location.Kind {
+	case locationCandidate:
 		locationText = prepared.CandidateByID[card.Location.CandidateID].Name + "\n" + card.Location.Reason
-	} else if card.Location.Kind == locationInferred {
+	case locationInferred:
 		locationText = card.Location.InferredName + "\n" + card.Location.Reason
 	}
 	if locationText != "" {

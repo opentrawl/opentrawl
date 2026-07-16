@@ -26,9 +26,7 @@ type modelClassifier struct {
 
 func newModelClassifier(modelID, baseURL, bearerKeyEnv string) (modelClassifier, error) {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
-	if strings.HasSuffix(baseURL, "/api") {
-		baseURL = strings.TrimSuffix(baseURL, "/api")
-	}
+	baseURL = strings.TrimSuffix(baseURL, "/api")
 	if !strings.HasSuffix(baseURL, "/v1") {
 		baseURL += "/v1"
 	}
@@ -61,11 +59,11 @@ func (c modelClassifier) parseResult(response model.Response, prepared preparedC
 		return modelResult{}, err
 	}
 	return modelResult{
-		Payload:     photoCardPayload(card),
-		ImageBytes:  prepared.Image.Bytes,
-		ImageSHA256: prepared.Image.SHA256,
-		Card:        card,
-		TypedCard:   photoCardMessage(card),
+		Payload:      photoCardPayload(card),
+		ImageBytes:   prepared.Image.Bytes,
+		ImageSHA256:  prepared.Image.SHA256,
+		Card:         card,
+		TypedCard:    photoCardMessage(card),
 		Observations: observationsFromCard(card, prepared),
 	}, nil
 }
