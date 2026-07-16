@@ -18,11 +18,9 @@ See `AGENTS.md` for the ownership boundary.
 - `cache`: safe read-only local cache and SQLite DB/WAL/SHM snapshot helpers.
 - `config`: standard TOML config paths, opt-in platform-native runtime dirs,
   migration-safe legacy path fallback, and token diagnostics.
-- `conformance`: reusable test helpers that assert a crawler's CLI output matches the shared contract shape (human and JSON).
 - `control`: crawl app metadata, command manifests, status payloads, People snapshot contracts, and database inventory for launchers and automation.
 - `flags`: the shared `--limit` CLI flag contract, so every crawler resolves it the same way.
 - `log`: writes crawl run logs in the shared OpenTrawl grammar, so every crawler's log is diagnosable the same way.
-- `mirror`: clone/init/pull/commit/push helpers plus non-mutating fetch, immutable tags, Git-object reads, and history inspection for private snapshot repos.
 - `model`: bounded model-request mechanics with retry, timeout and concurrency guardrails; callers own provider selection and configuration.
 - `output`: text/json/log output helpers, and the one `{"error":{code,message,remedy}}` JSON error envelope.
 - `render`: shared human-output rendering — cards, tables, lists, transcripts and status pages — so every crawler's terminal output looks like one product.
