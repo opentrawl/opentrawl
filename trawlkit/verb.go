@@ -12,6 +12,9 @@ type Verb struct {
 	Args    []string
 	Flags   func(fs *flag.FlagSet)
 	Mutates bool
+	// Internal keeps implementation-only verbs out of manifests and help while
+	// still letting the runner execute them through its normal lifecycle.
+	Internal bool
 	// Secondary keeps a verb out of the primary namespace list, moving it under a
 	// "More verbs" heading. It is for the specialist verbs a reader reaches for
 	// rarely, so the main list stays about the everyday ones.

@@ -148,6 +148,9 @@ func spineVerbKey(name string) (string, bool) {
 
 func invalidSpineVerbFields(verb Verb) []string {
 	var fields []string
+	if verb.Internal {
+		fields = append(fields, "Internal")
+	}
 	if strings.TrimSpace(verb.Help) != "" {
 		fields = append(fields, "Help")
 	}

@@ -15,7 +15,7 @@ func TestRunTrawlkitCapturedRunsRealCrawler(t *testing.T) {
 	home := syntheticHome(t)
 	t.Setenv("HOME", home)
 
-	out, err := runTrawlkitCaptured([]string{"status", "--json"}, []trawlkit.Crawler{capturedRunCrawler{}})
+	out, err := runTrawlkitCaptured(context.Background(), []string{"status", "--json"}, []trawlkit.Crawler{capturedRunCrawler{}})
 	if err != nil {
 		t.Fatal(err)
 	}

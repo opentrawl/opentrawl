@@ -22,7 +22,6 @@ const (
 	appWireCommand = "__app"
 	appSearchLimit = 20
 	appFrameLimit  = 16 << 20
-	appSyncTimeout = 30 * time.Minute
 )
 
 func isAppWireCommand(args []string) bool {
@@ -99,10 +98,6 @@ func (r *Runtime) runAppStatus() error {
 }
 
 func (r *Runtime) runAppSync(args []string) error {
-	previousTimeout := r.timeout
-	r.timeout = appSyncTimeout
-	defer func() { r.timeout = previousTimeout }()
-
 	flags := flag.NewFlagSet(appWireCommand+" sync", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	sourceID := flags.String("source", "", "source id")
@@ -120,67 +115,13 @@ func (r *Runtime) runAppSync(args []string) error {
 	allSources := discoverCrawlers(r.ctx)
 	results := make([]SyncResult, 0, len(sources))
 	for _, source := range sources {
-		result := r.appSyncSource(source)
+		result := syncSource(r, source)
 		if !syncResultFailed(result) {
 			result = withPeopleSyncFailure(result, r.reconcileSourcePeople(source, allSources))
 		}
 		results = append(results, result)
 	}
 	return writeAppResponse(r.stdout, appSyncResponse(sources, results))
-}
-
-func (r *Runtime) appSyncSource(source Source) SyncResult {
-	if source.MetadataErr != nil {
-		return appSyncFailureResult(source, "metadata failed", source.MetadataErr)
-	}
-	syncer, ok := source.Crawler.(trawlkit.Syncer)
-	if !ok {
-		return appSyncFailureResult(source, "sync is unavailable", fmt.Errorf("source does not support sync"))
-	}
-	var report *trawlkit.SyncReport
-	err := r.withSourceRequest(source, "sync", sourceStoreWrite, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		var syncErr error
-		report, syncErr = syncer.Sync(ctx, req)
-		return syncErr
-	})
-	if err != nil {
-		return appSyncFailureResult(source, "sync failed", err)
-	}
-	result := SyncResult{
-		Event:         "sync",
-		Source:        source.ID,
-		State:         "ok",
-		displaySource: sourceHumanName(source),
-		commandToken:  sourceCommandToken(source),
-	}
-	if report != nil && len(report.Warnings) > 0 {
-		result.State = "partial"
-		result.Message = report.Warnings[0]
-		result.Error = &ErrorBody{Code: "internal", Message: report.Warnings[0], Remedy: "Review OpenTrawl's logs for this source, then sync again."}
-	}
-	return result
-}
-
-func appSyncFailureResult(source Source, message string, err error) SyncResult {
-	body := sourceErrorBody(err)
-	if isTimeoutError(err) {
-		body.Code = "deadline_exceeded"
-	}
-	if body.Message == "" {
-		body.Message = message
-	}
-	if body.Remedy == "" {
-		body.Remedy = "Review OpenTrawl's logs for this source, then sync again."
-	}
-	return SyncResult{
-		Event:         "sync",
-		Source:        source.ID,
-		State:         "error",
-		Message:       message,
-		Error:         &ErrorBody{Code: body.Code, Message: body.Message, Remedy: body.Remedy},
-		displaySource: sourceHumanName(source),
-		commandToken:  sourceCommandToken(source),
-	}
 }
 
 func (r *Runtime) runAppSearch(args []string) error {

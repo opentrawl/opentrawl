@@ -2,17 +2,16 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 
+	clawdex "github.com/opentrawl/opentrawl/trawlers/contacts"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 )
-
-type contactReconciler interface {
-	ReconcileContactExport(context.Context, *trawlkit.Request, string, *control.ContactExport) (*trawlkit.SyncReport, error)
-}
 
 func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if source.ID == "contacts" {
@@ -26,10 +25,6 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if !found || contacts.Crawler == nil {
 		return fmt.Errorf("Contacts is not installed")
 	}
-	reconciler, ok := contacts.Crawler.(contactReconciler)
-	if !ok {
-		return fmt.Errorf("Contacts cannot update People from %s", sourceHumanName(source))
-	}
 	var exported *control.ContactExport
 	if err := r.withSourceRequest(source, "contacts", sourceStoreRead, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
 		var exportErr error
@@ -41,13 +36,38 @@ func (r *Runtime) reconcileSourcePeople(source Source, sources []Source) error {
 	if exported == nil {
 		return fmt.Errorf("read %s people: source returned no contact snapshot", sourceHumanName(source))
 	}
-	if err := r.withSourceRequest(contacts, "sync", sourceStoreWrite, outputFormat(true), io.Discard, func(ctx context.Context, req *trawlkit.Request) error {
-		_, reconcileErr := reconciler.ReconcileContactExport(ctx, req, source.ID, exported)
-		return reconcileErr
-	}); err != nil {
-		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), err)
+	input, cleanup, err := writeContactExport(exported)
+	if err != nil {
+		return fmt.Errorf("stage %s people: %w", sourceHumanName(source), err)
+	}
+	defer cleanup()
+	out, runErr := runTrawlkitCaptured(r.ctx, []string{contacts.ID, clawdex.InternalPeopleReconcileVerb, "--source", source.ID, "--input", input, "--json"}, []trawlkit.Crawler{contacts.Crawler})
+	if runErr != nil {
+		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), runErr)
+	}
+	if out.Code != 0 {
+		return fmt.Errorf("update People from %s: %w", sourceHumanName(source), crawlerCommandError{command: "People update", err: exitErr{code: out.Code}})
 	}
 	return nil
+}
+
+func writeContactExport(exported *control.ContactExport) (string, func(), error) {
+	file, err := os.CreateTemp("", "opentrawl-contact-export-*.json")
+	if err != nil {
+		return "", func() {}, err
+	}
+	path := file.Name()
+	cleanup := func() { _ = os.Remove(path) }
+	if err := json.NewEncoder(file).Encode(exported); err != nil {
+		_ = file.Close()
+		cleanup()
+		return "", func() {}, err
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return "", func() {}, err
+	}
+	return path, cleanup, nil
 }
 
 func withPeopleSyncFailure(result SyncResult, err error) SyncResult {

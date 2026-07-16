@@ -2,7 +2,10 @@ package clawdex
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"flag"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -72,9 +75,22 @@ func TestReconcileContactExportGroupsSourceAccountsIntoPeople(t *testing.T) {
 		EmailAddresses: []string{"ada@example.com"},
 		Accounts:       map[string][]string{"telegram": {"ada_example"}},
 	}}}
-	report, err := app.ReconcileContactExport(ctx, req, "telegram", exported)
-	if err != nil || report.Added != 1 {
-		t.Fatalf("report=%#v err=%v", report, err)
+	input := filepath.Join(t.TempDir(), "export.json")
+	data, err := json.Marshal(exported)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(input, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	verb := peopleReconcileVerb(app)
+	flags := flag.NewFlagSet(verb.Name, flag.ContinueOnError)
+	verb.Flags(flags)
+	if err := flags.Parse([]string{"--source", "telegram", "--input", input}); err != nil {
+		t.Fatal(err)
+	}
+	if err := verb.Run(ctx, req); err != nil {
+		t.Fatal(err)
 	}
 	st, err := archive.UseExisting(ctx, store, path)
 	if err != nil {
@@ -86,5 +102,20 @@ func TestReconcileContactExportGroupsSourceAccountsIntoPeople(t *testing.T) {
 	}
 	if person.Accounts["telegram"][0] != "ada_example" || person.Sources["telegram"].Emails[0] != "ada@example.com" {
 		t.Fatalf("person = %#v", person)
+	}
+}
+
+func TestInternalPeopleReconciliationIsAbsentFromManifest(t *testing.T) {
+	manifest, err := trawlkit.Manifest(New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := manifest.Commands["__people_reconcile"]; ok {
+		t.Fatalf("internal People reconciliation leaked into commands: %#v", manifest.Commands)
+	}
+	for _, capability := range manifest.Capabilities {
+		if capability == "__people_reconcile" {
+			t.Fatalf("internal People reconciliation leaked into capabilities: %#v", manifest.Capabilities)
+		}
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/opentrawl/opentrawl/trawl/internal/federation"
+	clawdex "github.com/opentrawl/opentrawl/trawlers/contacts"
 	"github.com/opentrawl/opentrawl/trawlkit"
 	"github.com/opentrawl/opentrawl/trawlkit/control"
 	ckoutput "github.com/opentrawl/opentrawl/trawlkit/output"
@@ -76,6 +77,9 @@ type fakeCrawler struct {
 	sync                  string
 	syncExit              int
 	syncSleep             string
+	prepareMarker         string
+	contactExport         *control.ContactExport
+	peopleMarker          string
 	chats                 []trawlkit.Chat
 	chatsError            string
 }
@@ -158,36 +162,39 @@ func (e *fakeCrawlerEvidence) openCall() {
 }
 
 type fakeCrawlerWire struct {
-	Name                  string          `json:"name"`
-	Metadata              string          `json:"metadata"`
-	MetadataExit          int             `json:"metadata_exit"`
-	Status                string          `json:"status"`
-	StatusExit            int             `json:"status_exit"`
-	Search                string          `json:"search"`
-	SearchExit            int             `json:"search_exit"`
-	SearchSleep           string          `json:"search_sleep"`
-	SearchStderr          string          `json:"search_stderr"`
-	SearchLimit           string          `json:"search_limit"`
-	SearchQuery           string          `json:"search_query"`
-	SearchNoQuery         bool            `json:"search_no_query"`
-	SearchWho             string          `json:"search_who"`
-	Who                   string          `json:"who"`
-	WhoExit               int             `json:"who_exit"`
-	WhoQuery              string          `json:"who_query"`
-	ShortRefAlias         string          `json:"short_ref_alias"`
-	Open                  string          `json:"open"`
-	OpenExit              int             `json:"open_exit"`
-	OpenRef               string          `json:"open_ref"`
-	OpenHuman             string          `json:"open_human"`
-	OpenHumanExit         int             `json:"open_human_exit"`
-	OpenStderr            string          `json:"open_stderr"`
-	OpenUnknownShortRef   bool            `json:"open_unknown_short_ref"`
-	OpenAmbiguousShortRef bool            `json:"open_ambiguous_short_ref"`
-	Sync                  string          `json:"sync"`
-	SyncExit              int             `json:"sync_exit"`
-	SyncSleep             string          `json:"sync_sleep"`
-	Chats                 []trawlkit.Chat `json:"chats"`
-	ChatsError            string          `json:"chats_error"`
+	Name                  string                 `json:"name"`
+	Metadata              string                 `json:"metadata"`
+	MetadataExit          int                    `json:"metadata_exit"`
+	Status                string                 `json:"status"`
+	StatusExit            int                    `json:"status_exit"`
+	Search                string                 `json:"search"`
+	SearchExit            int                    `json:"search_exit"`
+	SearchSleep           string                 `json:"search_sleep"`
+	SearchStderr          string                 `json:"search_stderr"`
+	SearchLimit           string                 `json:"search_limit"`
+	SearchQuery           string                 `json:"search_query"`
+	SearchNoQuery         bool                   `json:"search_no_query"`
+	SearchWho             string                 `json:"search_who"`
+	Who                   string                 `json:"who"`
+	WhoExit               int                    `json:"who_exit"`
+	WhoQuery              string                 `json:"who_query"`
+	ShortRefAlias         string                 `json:"short_ref_alias"`
+	Open                  string                 `json:"open"`
+	OpenExit              int                    `json:"open_exit"`
+	OpenRef               string                 `json:"open_ref"`
+	OpenHuman             string                 `json:"open_human"`
+	OpenHumanExit         int                    `json:"open_human_exit"`
+	OpenStderr            string                 `json:"open_stderr"`
+	OpenUnknownShortRef   bool                   `json:"open_unknown_short_ref"`
+	OpenAmbiguousShortRef bool                   `json:"open_ambiguous_short_ref"`
+	Sync                  string                 `json:"sync"`
+	SyncExit              int                    `json:"sync_exit"`
+	SyncSleep             string                 `json:"sync_sleep"`
+	PrepareMarker         string                 `json:"prepare_marker"`
+	ContactExport         *control.ContactExport `json:"contact_export"`
+	PeopleMarker          string                 `json:"people_marker"`
+	Chats                 []trawlkit.Chat        `json:"chats"`
+	ChatsError            string                 `json:"chats_error"`
 }
 
 func (f fakeCrawler) MarshalJSON() ([]byte, error) {
@@ -220,6 +227,9 @@ func (f fakeCrawler) MarshalJSON() ([]byte, error) {
 		Sync:                  f.sync,
 		SyncExit:              f.syncExit,
 		SyncSleep:             f.syncSleep,
+		PrepareMarker:         f.prepareMarker,
+		ContactExport:         f.contactExport,
+		PeopleMarker:          f.peopleMarker,
 		Chats:                 f.chats,
 		ChatsError:            f.chatsError,
 	})
@@ -259,6 +269,9 @@ func (f *fakeCrawler) UnmarshalJSON(data []byte) error {
 		sync:                  wire.Sync,
 		syncExit:              wire.SyncExit,
 		syncSleep:             wire.SyncSleep,
+		prepareMarker:         wire.PrepareMarker,
+		contactExport:         wire.ContactExport,
+		peopleMarker:          wire.PeopleMarker,
 		chats:                 wire.Chats,
 		chatsError:            wire.ChatsError,
 	}
@@ -429,7 +442,10 @@ func newFakeSource(t *testing.T, crawler fakeCrawler) trawlkit.Crawler {
 	hasSearch := fakeHasCapability(base.manifest, "search")
 	hasOpen := fakeHasCapability(base.manifest, "open")
 	hasSync := fakeHasCapability(base.manifest, "sync")
+	hasContactExport := fakeHasCapability(base.manifest, "contacts_export")
 	switch {
+	case hasSync && hasContactExport:
+		return &fakeSyncContactExport{base}
 	case hasSearch && hasOpen && hasSync && hasWho:
 		return &fakeSearchOpenSyncWho{&fakeSearchOpenSync{base}}
 	case hasSearch && hasOpen && hasSync:
@@ -500,6 +516,38 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 	}
 	commands := orderedFakeCommands(f.manifest)
 	verbs := make([]trawlkit.Verb, 0, len(commands))
+	if f.crawler.peopleMarker != "" {
+		var input, source string
+		verbs = append(verbs, trawlkit.Verb{
+			Name:     clawdex.InternalPeopleReconcileVerb,
+			Internal: true,
+			Mutates:  true,
+			Store:    trawlkit.StoreRequired,
+			Flags: func(fs *flag.FlagSet) {
+				fs.StringVar(&input, "input", "", "contact export file")
+				fs.StringVar(&source, "source", "", "source id")
+			},
+			Run: func(_ context.Context, req *trawlkit.Request) error {
+				data, err := os.ReadFile(input)
+				if err != nil {
+					return err
+				}
+				var exported control.ContactExport
+				if err := json.Unmarshal(data, &exported); err != nil {
+					return err
+				}
+				marker, err := json.Marshal(struct {
+					Source string                `json:"source"`
+					Export control.ContactExport `json:"export"`
+					Store  bool                  `json:"store"`
+				}{Source: source, Export: exported, Store: req.Store != nil})
+				if err != nil {
+					return err
+				}
+				return os.WriteFile(f.crawler.peopleMarker, marker, 0o600)
+			},
+		})
+	}
 	for _, command := range commands {
 		tokens := fixedVerbTokens(command)
 		if len(tokens) == 0 {
@@ -540,6 +588,21 @@ func (f *fakeSource) Verbs() []trawlkit.Verb {
 		})
 	}
 	return verbs
+}
+
+func (f *fakeSource) PrepareArchive(_ context.Context, path string) error {
+	if f.crawler.prepareMarker == "" {
+		return nil
+	}
+	file, err := os.OpenFile(f.crawler.prepareMarker, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := fmt.Fprintf(file, "%s\n", path); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
 }
 
 func orderedFakeCommands(manifest control.Manifest) []control.Command {
@@ -930,6 +993,7 @@ func (f *fakeSource) sync(ctx context.Context, req *trawlkit.Request) (*trawlkit
 	report.Added = jsonNumberInt64(outcome.Added)
 	report.Updated = jsonNumberInt64(outcome.Updated)
 	report.Removed = jsonNumberInt64(outcome.Removed)
+	report.Warnings = append([]string(nil), outcome.Warnings...)
 	return &report, nil
 }
 
@@ -1030,6 +1094,16 @@ func (f *fakeSearchOpenSync) Open(ctx context.Context, req *trawlkit.Request, re
 
 func (f *fakeSearchOpenSync) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
 	return f.sync(ctx, req)
+}
+
+type fakeSyncContactExport struct{ *fakeSource }
+
+func (f *fakeSyncContactExport) Sync(ctx context.Context, req *trawlkit.Request) (*trawlkit.SyncReport, error) {
+	return f.sync(ctx, req)
+}
+
+func (f *fakeSyncContactExport) ContactExport(context.Context, *trawlkit.Request) (*control.ContactExport, error) {
+	return f.crawler.contactExport, nil
 }
 
 type fakeSearchOpenSyncWho struct{ *fakeSearchOpenSync }

@@ -111,7 +111,7 @@ func (r *Runtime) runNamespaceVerb(source Source, token string, rest []string) e
 	}
 	verb := firstNonFlag(rest)
 	started := r.logSourceStart(source, verb)
-	out, captureErr := runTrawlkitCaptured(runArgs, []trawlkit.Crawler{source.Crawler})
+	out, captureErr := runTrawlkitCaptured(r.ctx, runArgs, []trawlkit.Crawler{source.Crawler})
 	if len(out.Stdout) > 0 {
 		_, _ = r.stdout.Write(out.Stdout)
 	}

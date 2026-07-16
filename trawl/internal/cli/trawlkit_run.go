@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -18,7 +19,7 @@ type trawlkitRunOutput struct {
 	Code   int
 }
 
-func runTrawlkitCaptured(args []string, sources []trawlkit.Crawler) (trawlkitRunOutput, error) {
+func runTrawlkitCaptured(ctx context.Context, args []string, sources []trawlkit.Crawler) (trawlkitRunOutput, error) {
 	trawlkitRunMu.Lock()
 	defer trawlkitRunMu.Unlock()
 
@@ -63,7 +64,7 @@ func runTrawlkitCaptured(args []string, sources []trawlkit.Crawler) (trawlkitRun
 		os.Stdout = oldStdout
 		os.Stderr = oldStderr
 	}()
-	code := trawlkit.Run(args, sources)
+	code := trawlkit.RunContext(ctx, args, sources)
 	_ = stdoutWriter.Close()
 	_ = stderrWriter.Close()
 	wg.Wait()

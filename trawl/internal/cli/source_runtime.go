@@ -24,7 +24,6 @@ const (
 	sourceStoreNone sourceStoreAccess = iota
 	sourceStoreOptional
 	sourceStoreRead
-	sourceStoreWrite
 )
 
 type resolvedSourcePaths struct {
@@ -201,8 +200,6 @@ func openSourceStore(ctx context.Context, paths trawlkit.Paths, access sourceSto
 			return nil, trawlkit.NewMissingArchiveError(paths.Archive)
 		}
 		return ckstore.OpenReadOnly(ctx, paths.Archive)
-	case sourceStoreWrite:
-		return ckstore.Open(ctx, ckstore.Options{Path: paths.Archive})
 	default:
 		return nil, fmt.Errorf("unknown store access %d", access)
 	}

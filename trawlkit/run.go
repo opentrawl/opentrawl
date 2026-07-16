@@ -46,6 +46,17 @@ func Run(argv []string, sources []Crawler) int {
 	return r.run(argv, sources)
 }
 
+// RunContext executes the same runner lifecycle as Run and also stops the
+// isolated child when the caller's context is cancelled.
+func RunContext(ctx context.Context, argv []string, sources []Crawler) int {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	r := runner{opts: defaultRunOptions()}
+	r.opts.baseContext = ctx
+	return r.run(argv, sources)
+}
+
 func defaultRunOptions() runOptions {
 	stdout, stderr := output.StandardWriters()
 	return runOptions{

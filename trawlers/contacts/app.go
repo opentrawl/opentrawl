@@ -61,6 +61,7 @@ func (a *App) Info() trawlkit.Info {
 
 func (a *App) Verbs() []trawlkit.Verb {
 	return []trawlkit.Verb{
+		peopleReconcileVerb(a),
 		personListVerb(),
 		personShowVerb(),
 		personAnnotateVerb(),

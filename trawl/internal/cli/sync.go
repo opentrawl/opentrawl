@@ -39,6 +39,7 @@ type syncCrawlerOutcome struct {
 	Added      json.Number `json:"added,omitempty"`
 	Updated    json.Number `json:"updated,omitempty"`
 	Removed    json.Number `json:"removed,omitempty"`
+	Warnings   []string    `json:"warnings,omitempty"`
 	Counts     []Count     `json:"counts,omitempty"`
 	FinishedAt string      `json:"finished_at,omitempty"`
 	Error      *ErrorBody  `json:"error,omitempty"`
@@ -89,7 +90,7 @@ func syncSource(r *Runtime, source Source) SyncResult {
 	}
 	if err != nil {
 		r.logSourceDone(source, "sync", started, err)
-		if outcome, ok := incompleteSyncOutcome(data); ok {
+		if outcome, ok := failedSyncOutcome(data); ok {
 			return normalizeSyncOutcome(source, outcome)
 		}
 		return syncFailureResult(source, "sync failed")
@@ -129,9 +130,13 @@ func lastSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
 	return last, found
 }
 
-func incompleteSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
+func failedSyncOutcome(data []byte) (syncCrawlerOutcome, bool) {
 	outcome, ok := lastSyncOutcome(data)
-	if !ok || outcome.Error == nil || strings.TrimSpace(outcome.Error.Code) != "snapshot_incomplete" {
+	if !ok || outcome.Error == nil {
+		return syncCrawlerOutcome{}, false
+	}
+	switch strings.ToLower(strings.TrimSpace(outcome.Error.Code)) {
+	case "", "internal", "command_failed", "sync_failed":
 		return syncCrawlerOutcome{}, false
 	}
 	return outcome, true
@@ -145,10 +150,20 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 	if outcome.Error != nil && state == "ok" {
 		state = "error"
 	}
+	errorBody := outcome.Error
+	if len(outcome.Warnings) > 0 && state == "ok" {
+		state = "partial"
+		errorBody = &ErrorBody{
+			Code:    "internal",
+			Message: outcome.Warnings[0],
+			Remedy:  "Review OpenTrawl's logs for this source, then sync again.",
+		}
+	}
 	message := firstNonEmpty(
 		outcome.Message,
 		outcome.Summary,
 		syncErrorMessage(outcome.Error),
+		firstWarning(outcome.Warnings),
 		syncCountsText(outcome.Counts),
 		syncReportText(outcome),
 		syncProgressText(outcome),
@@ -160,10 +175,17 @@ func normalizeSyncOutcome(source Source, outcome syncCrawlerOutcome) SyncResult 
 		Message:       message,
 		Counts:        outcome.Counts,
 		FinishedAt:    outcome.FinishedAt,
-		Error:         outcome.Error,
+		Error:         errorBody,
 		displaySource: sourceHumanName(source),
 		commandToken:  sourceCommandToken(source),
 	}
+}
+
+func firstWarning(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(warnings[0])
 }
 
 func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
@@ -174,7 +196,7 @@ func (r *Runtime) runSourceSync(source Source) ([]byte, []byte, error) {
 	case 2:
 		args = append([]string{"-vv"}, args...)
 	}
-	out, err := runTrawlkitCaptured(args, []trawlkit.Crawler{source.Crawler})
+	out, err := runTrawlkitCaptured(r.ctx, args, []trawlkit.Crawler{source.Crawler})
 	if err != nil {
 		return nil, nil, err
 	}

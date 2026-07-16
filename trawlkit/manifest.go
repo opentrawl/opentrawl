@@ -74,6 +74,9 @@ func capabilitiesFor(source Crawler, info Info) []string {
 	}
 	caps = append(caps, "short_refs")
 	for _, verb := range source.Verbs() {
+		if verb.Internal {
+			continue
+		}
 		if _, ok := spineVerbKey(verb.Name); ok {
 			continue
 		}
@@ -111,6 +114,9 @@ func commandTable(source Crawler, binaryName string, spine map[string]Verb) map[
 		commands["contacts_export"] = applySpineDeclaration(spineCommand("Export contacts", binaryName, "contacts_export", "contacts", "export"), spine, "contacts_export")
 	}
 	for _, verb := range source.Verbs() {
+		if verb.Internal {
+			continue
+		}
 		if _, ok := spineVerbKey(verb.Name); ok {
 			continue
 		}
