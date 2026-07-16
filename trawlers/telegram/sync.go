@@ -169,28 +169,10 @@ func prepareImportResultForWrite(ctx context.Context, st *store.Store, result *t
 }
 
 func storeImportResult(ctx context.Context, st *store.Store, result *telegramdesktop.ImportResult, chatFilter string) (store.SyncStats, error) {
-	if strings.TrimSpace(chatFilter) == "" {
-		stats, err := st.ReplaceAll(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
-		if err != nil {
-			return store.SyncStats{}, err
-		}
-		return stats, nil
-	}
-	if len(result.Chats) == 0 {
+	if strings.TrimSpace(chatFilter) != "" && len(result.Chats) == 0 {
 		return store.SyncStats{}, fmt.Errorf("telegram import returned no chats for --chat %s", chatFilter)
 	}
-	var stats store.SyncStats
-	for _, chat := range result.Chats {
-		partial := importResultForChat(*result, chat.JID)
-		chatStats, err := st.UpsertChat(ctx, partial.Stats, chat.JID, partial.Contacts, partial.Chats, partial.Folders, partial.FolderChats, partial.Topics, partial.Participants, partial.Messages)
-		if err != nil {
-			return store.SyncStats{}, err
-		}
-		stats.Added += chatStats.Added
-		stats.Updated += chatStats.Updated
-		stats.Removed += chatStats.Removed
-	}
-	return stats, nil
+	return st.MergeObserved(ctx, result.Stats, result.Contacts, result.Chats, result.Folders, result.FolderChats, result.Topics, result.Participants, result.Messages)
 }
 
 func refreshImportMediaStats(result *telegramdesktop.ImportResult) {
@@ -294,37 +276,6 @@ func existingMediaRefs(ctx context.Context, st *store.Store) (string, map[int64]
 	return sourcePath, refs, nil
 }
 
-func importResultForChat(result telegramdesktop.ImportResult, chatJID string) telegramdesktop.ImportResult {
-	out := telegramdesktop.ImportResult{Stats: result.Stats, Folders: result.Folders}
-	for _, chat := range result.Chats {
-		if chat.JID == chatJID {
-			out.Chats = append(out.Chats, chat)
-		}
-	}
-	for _, folderChat := range result.FolderChats {
-		if folderChat.ChatJID == chatJID {
-			out.FolderChats = append(out.FolderChats, folderChat)
-		}
-	}
-	for _, topic := range result.Topics {
-		if topic.ChatJID == chatJID {
-			out.Topics = append(out.Topics, topic)
-		}
-	}
-	for _, participant := range result.Participants {
-		if participant.GroupJID == chatJID {
-			out.Participants = append(out.Participants, participant)
-		}
-	}
-	for _, message := range result.Messages {
-		if message.ChatJID == chatJID {
-			out.Messages = append(out.Messages, message)
-		}
-	}
-	out.Contacts = contactsForMessages(result.Contacts, out.Messages, out.Participants, chatJID)
-	return out
-}
-
 func logQuote(value string) string {
 	value = strings.Join(strings.Fields(value), " ")
 	if value == "" {
@@ -338,31 +289,4 @@ func logQuote(value string) string {
 
 func elapsedMS(value time.Duration) string {
 	return strconv.FormatInt(value.Milliseconds(), 10)
-}
-
-func contactsForMessages(contacts []store.Contact, messages []store.Message, participants []store.GroupParticipant, chatJID string) []store.Contact {
-	peerIDs := map[string]struct{}{}
-	if strings.TrimSpace(chatJID) != "" {
-		peerIDs[chatJID] = struct{}{}
-	}
-	for _, message := range messages {
-		if strings.TrimSpace(message.ChatJID) != "" {
-			peerIDs[message.ChatJID] = struct{}{}
-		}
-		if strings.TrimSpace(message.SenderJID) != "" {
-			peerIDs[message.SenderJID] = struct{}{}
-		}
-	}
-	for _, participant := range participants {
-		if strings.TrimSpace(participant.UserJID) != "" {
-			peerIDs[participant.UserJID] = struct{}{}
-		}
-	}
-	out := make([]store.Contact, 0, len(peerIDs))
-	for _, contact := range contacts {
-		if _, ok := peerIDs[contact.JID]; ok {
-			out = append(out, contact)
-		}
-	}
-	return out
 }

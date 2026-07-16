@@ -36,6 +36,23 @@ func messageSyncStats(ctx context.Context, tx *sql.Tx, messages []Message, chatJ
 	return stats, nil
 }
 
+func observedMessageSyncStats(ctx context.Context, tx *sql.Tx, messages []Message) (SyncStats, error) {
+	existing, err := syncMessages(ctx, tx, "")
+	if err != nil {
+		return SyncStats{}, err
+	}
+	var stats SyncStats
+	for _, message := range messages {
+		existingMessage, ok := existing[message.SourcePK]
+		if !ok {
+			stats.Added++
+		} else if syncMessageRecord(existingMessage) != syncMessageRecord(message) {
+			stats.Updated++
+		}
+	}
+	return stats, nil
+}
+
 func syncMessages(ctx context.Context, tx *sql.Tx, chatJID string) (map[int64]Message, error) {
 	query := `select source_pk,chat_jid,coalesce(chat_name,''),msg_id,coalesce(sender_jid,''),coalesce(sender_name,''),ts,coalesce(edit_ts,0),from_me,coalesce(text,''),raw_type,coalesce(message_type,''),coalesce(media_type,''),coalesce(media_title,''),coalesce(media_path,''),coalesce(media_url,''),coalesce(media_size,0),coalesce(metadata_type,''),coalesce(metadata_title,''),coalesce(metadata_url,''),coalesce(metadata_json,''),starred,coalesce(topic_id,''),coalesce(reply_to_msg_id,''),coalesce(reply_to_chat_jid,''),coalesce(thread_id,''),coalesce(forward_json,''),coalesce(reactions_json,''),coalesce(views,0),coalesce(forwards,0),coalesce(replies_count,0),coalesce(pinned,0) from messages`
 	args := []any{}

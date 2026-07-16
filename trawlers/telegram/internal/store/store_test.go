@@ -280,6 +280,48 @@ func TestReplaceAllReturnsSyncStats(t *testing.T) {
 	assertSyncStats(t, second, 1, 1, 1)
 }
 
+func TestMergeObservedRollsBackPartialWriteFailure(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	now := time.Date(2026, 7, 16, 10, 0, 0, 0, time.UTC)
+	st := openTestStore(t, filepath.Join(t.TempDir(), "merge-rollback.db"))
+	chat := Chat{JID: "100", Kind: "user", Name: "Alice Example", LastMessageAt: now, MessageCount: 2}
+	messages := []Message{
+		{SourcePK: 1, ChatJID: "100", ChatName: chat.Name, MessageID: "1", Timestamp: now.Add(-time.Minute), Text: "first before"},
+		{SourcePK: 2, ChatJID: "100", ChatName: chat.Name, MessageID: "2", Timestamp: now, Text: "second before"},
+	}
+	if _, err := st.ReplaceAll(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now}, nil, []Chat{chat}, nil, nil, nil, nil, messages); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.db.ExecContext(ctx, `create trigger fail_second_message before update on messages when new.source_pk = 2 begin select raise(abort, 'synthetic write failure'); end`); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedChat := chat
+	updatedChat.Name = "Changed Name"
+	updated := append([]Message(nil), messages...)
+	updated[0].Text = "first after"
+	updated[1].Text = "second after"
+	if _, err := st.MergeObserved(ctx, ImportStats{SourcePath: "/synthetic/telegram", FinishedAt: now.Add(time.Minute)}, nil, []Chat{updatedChat}, nil, nil, nil, nil, updated); err == nil {
+		t.Fatal("merge succeeded, want injected write failure")
+	}
+
+	got, err := st.Messages(ctx, MessageFilter{ChatJID: "100", Limit: 10, Asc: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Text != "first before" || got[1].Text != "second before" {
+		t.Fatalf("messages after failed merge = %#v, want both original records", got)
+	}
+	chats, err := st.ListChats(ctx, 10, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chats) != 1 || chats[0].Name != chat.Name {
+		t.Fatalf("chat after failed merge = %#v, want original metadata", chats)
+	}
+}
+
 func openTestStore(t *testing.T, path string) *Store {
 	t.Helper()
 	st, err := Open(context.Background(), path)
@@ -739,172 +781,6 @@ func TestMessagesToleratesNullableOptionalFields(t *testing.T) {
 	}
 	if messages[0].ChatName != "" || messages[0].TopicID != "" || messages[0].ForwardJSON != "" {
 		t.Fatalf("nullable fields not normalized: %#v", messages[0])
-	}
-}
-
-func TestUpsertChatPreservesUnrelatedChats(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	now := time.Date(2026, 5, 9, 3, 17, 53, 0, time.UTC)
-	later := now.Add(time.Hour)
-
-	st := openTestStore(t, filepath.Join(t.TempDir(), "upsert.db"))
-
-	chatA := Chat{JID: "-1001", Kind: "channel", Name: "Chat A", LastMessageAt: now, UnreadCount: 1, MessageCount: 1, FolderID: "1", Forum: false}
-	chatB := Chat{JID: "-1002", Kind: "group", Name: "Chat B", LastMessageAt: now, UnreadCount: 3, MessageCount: 2, FolderID: "2", Forum: true}
-	topicA := Topic{ChatJID: "-1001", TopicID: "1", Title: "Topic A", LastMessageAt: now}
-	topicB := Topic{ChatJID: "-1002", TopicID: "2", Title: "Topic B", LastMessageAt: now}
-	fcA := FolderChat{FolderID: "1", ChatJID: "-1001", Position: 0}
-	fcB := FolderChat{FolderID: "2", ChatJID: "-1002", Position: 1}
-	msgA := Message{SourcePK: 1, ChatJID: "-1001", ChatName: "Chat A", MessageID: "1", SenderJID: "10", SenderName: "Alice", Timestamp: now, Text: "hello a", MessageType: "Message"}
-	msgB1 := Message{SourcePK: 2, ChatJID: "-1002", ChatName: "Chat B", MessageID: "1", SenderJID: "20", SenderName: "Bob", Timestamp: now, Text: "hello b1", MessageType: "Message"}
-	msgB2 := Message{SourcePK: 3, ChatJID: "-1002", ChatName: "Chat B", MessageID: "2", SenderJID: "20", SenderName: "Bob", Timestamp: later, Text: "hello b2", MessageType: "Message"}
-
-	initial := ImportStats{SourcePath: "tdata", DBPath: st.Path(), Chats: 2, Messages: 3, StartedAt: now, FinishedAt: now}
-	if _, err := st.ReplaceAll(
-		ctx, initial,
-		nil,
-		[]Chat{chatA, chatB},
-		[]Folder{{ID: "1", Title: "F1"}, {ID: "2", Title: "F2"}},
-		[]FolderChat{fcA, fcB},
-		[]Topic{topicA, topicB},
-		nil,
-		[]Message{msgA, msgB1, msgB2},
-	); err != nil {
-		t.Fatal(err)
-	}
-
-	updatedChatA := Chat{JID: "-1001", Kind: "channel", Name: "Chat A Updated", LastMessageAt: later, UnreadCount: 5, MessageCount: 1, Forum: false}
-	updatedMsgA := Message{SourcePK: 4, ChatJID: "-1001", ChatName: "Chat A Updated", MessageID: "2", SenderJID: "10", SenderName: "Alice", Timestamp: later, Text: "updated a", MessageType: "Message", MediaType: "photo", MediaTitle: "pic.jpg"}
-
-	upsertStats := ImportStats{SourcePath: "tdata", DBPath: st.Path(), Chats: 1, Messages: 1, MediaMessages: 1, StartedAt: later, FinishedAt: later}
-	chatStats, err := st.UpsertChat(
-		ctx, upsertStats, "-1001",
-		nil,
-		[]Chat{updatedChatA},
-		nil, nil,
-		nil,
-		nil,
-		[]Message{updatedMsgA},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	assertSyncStats(t, chatStats, 1, 0, 1)
-
-	status, err := st.Status(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if status.Chats != 2 {
-		t.Fatalf("chats = %d, want 2 (chat B preserved)", status.Chats)
-	}
-	if status.Messages != 3 {
-		t.Fatalf("messages = %d, want 3 (2 from B + 1 updated A)", status.Messages)
-	}
-	if status.MediaMessages != 1 {
-		t.Fatalf("media_messages = %d, want 1", status.MediaMessages)
-	}
-	if status.LastImportAt != later {
-		t.Fatalf("last_import_at = %v, want %v", status.LastImportAt, later)
-	}
-
-	chats, err := st.ListChats(ctx, 10, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(chats) != 2 {
-		t.Fatalf("chats list = %d, want 2", len(chats))
-	}
-	foundA, foundB := false, false
-	for _, c := range chats {
-		switch c.JID {
-		case "-1001":
-			foundA = true
-			if c.Name != "Chat A Updated" {
-				t.Fatalf("chat A name = %q, want %q", c.Name, "Chat A Updated")
-			}
-			if c.FolderID != "1" {
-				t.Fatalf("chat A folder_id = %q, want preserved folder 1", c.FolderID)
-			}
-		case "-1002":
-			foundB = true
-			if c.Name != "Chat B" {
-				t.Fatalf("chat B name = %q, want %q", c.Name, "Chat B")
-			}
-		}
-	}
-	if !foundA || !foundB {
-		t.Fatalf("missing chats: A=%v B=%v", foundA, foundB)
-	}
-
-	msgAAll, err := st.Messages(ctx, MessageFilter{ChatJID: "-1001", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(msgAAll) != 1 || msgAAll[0].Text != "updated a" {
-		t.Fatalf("chat A messages = %d (text=%q), want 1 (updated a)", len(msgAAll), msgAAll[0].Text)
-	}
-
-	msgBAll, err := st.Messages(ctx, MessageFilter{ChatJID: "-1002", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(msgBAll) != 2 {
-		t.Fatalf("chat B messages = %d, want 2 (preserved)", len(msgBAll))
-	}
-
-	folders, err := st.ListFolders(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(folders) != 2 {
-		t.Fatalf("folders = %d, want 2", len(folders))
-	}
-
-	for folderID, wantJID := range map[string]string{"1": "-1001", "2": "-1002"} {
-		var gotJID string
-		if err := st.db.QueryRowContext(ctx, `select chat_jid from folder_chats where folder_id=?`, folderID).Scan(&gotJID); err != nil {
-			t.Fatalf("folder %s chats: %v", folderID, err)
-		}
-		if gotJID != wantJID {
-			t.Fatalf("folder %s chat = %s, want %s", folderID, gotJID, wantJID)
-		}
-	}
-
-	searchA, err := st.Search(ctx, MessageFilter{Query: "updated", ChatJID: "-1001", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(searchA) != 1 {
-		t.Fatalf("FTS 'updated' in chat A = %d, want 1", len(searchA))
-	}
-	if searchA[0].Snippet != "updated a pic.jpg Chat A Updated Alice photo" {
-		t.Fatalf("search snippet = %q, want the marker-free indexed text", searchA[0].Snippet)
-	}
-
-	searchB, err := st.Search(ctx, MessageFilter{Query: "hello", ChatJID: "-1002", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(searchB) != 2 {
-		t.Fatalf("FTS 'hello' in chat B = %d, want 2 (preserved)", len(searchB))
-	}
-
-	searchOld, err := st.Search(ctx, MessageFilter{Query: "hello a", ChatJID: "-1001", Limit: 10})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(searchOld) != 0 {
-		t.Fatalf("FTS 'hello a' in chat A = %d, want 0 (old FTS removed)", len(searchOld))
-	}
-
-	rec, ok, err := state.New(st.db).Get(ctx, syncSource, syncEntityType, syncSourcePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !ok || rec.Value != "tdata" {
-		t.Fatalf("source_path = %q ok=%v, want %q", rec.Value, ok, "tdata")
 	}
 }
 
